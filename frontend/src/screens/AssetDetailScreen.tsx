@@ -21,6 +21,7 @@ import { TypographyV2 } from '../theme/typography.v2';
 import {
   fetchCoOwnDistributions,
   fetchCoOwnAssetCorporateActions,
+  fetchMyCoOwnAssetOrders,
   listUserMarketHistory,
   cancelCoOwnOrder,
   listCoOwnAssets,
@@ -34,6 +35,7 @@ import { useToast } from '../context/ToastContext';
 import {
   useCoOwnAssetQuery,
   useCoOwnHoldingsQuery,
+  useInvalidateCoOwnAsset,
 } from '../platform/server/useCoOwnQueries';
 import { CO_OWN_FEE_RATE } from '../utils/tradeFlow';
 import { formatCoOwnIze } from '../utils/currency';
@@ -138,6 +140,7 @@ export default function AssetDetailScreen() {
   // ── Shared cache (deduplicated with AssetDueDiligenceScreen) ──
   const assetQuery = useCoOwnAssetQuery(assetId);
   const holdingsQuery = useCoOwnHoldingsQuery(currentUser?.id);
+  const invalidateCoOwnAsset = useInvalidateCoOwnAsset();
 
   const asset = assetQuery.data ?? null;
   const isLoading = assetQuery.isLoading;
@@ -328,18 +331,36 @@ export default function AssetDetailScreen() {
     setYourOpenOrdersFailed(false);
     setYourOpenOrdersLoading(true);
     setHasActiveOrders(false);
-    void listUserMarketHistory(currentUser.id, { channel: 'co-own', limit: 200 })
-      .then((page) => {
+    // P1 fix: use the dedicated asset-scoped my-orders endpoint instead of
+    // filtering a 200-item account-history window. This returns only the
+    // current user's open/partially_filled orders for this asset.
+    void fetchMyCoOwnAssetOrders(assetId, { limit: 50 })
+      .then((orders) => {
         if (cancelled) return;
-        const assetOrders = page.items.filter((item) =>
-          item.referenceId === assetId
-          && (item.status === 'open' || item.status === 'partially_filled')
-        );
+        // Map MarketCoOwnOrder to MarketHistoryItem shape so the downstream
+        // UI (AssetMarketSection) can consume the same contract.
+        const mapped: MarketHistoryItem[] = orders.map((o) => ({
+          id: `coown-order-${o.id}`,
+          channel: 'co-own',
+          action: o.side === 'buy' ? 'buy-units' : 'sell-units',
+          referenceId: assetId,
+          amountGbp: o.totalGbp,
+          units: o.units,
+          filledUnits: o.filledUnits ?? null,
+          remainingUnits: o.remainingUnits ?? null,
+          unitPriceGbp: o.unitPriceGbp,
+          feeGbp: o.feeGbp,
+          status: o.status,
+          orderType: o.orderType ?? null,
+          note: null,
+          timestamp: o.createdAt,
+          orderId: o.id,
+        }));
         // P1 #5 fix: filter out orders with pending cancels so an
         // in-flight refresh doesn't restore an order being cancelled.
         const filtered = pendingCancels.size > 0
-          ? assetOrders.filter((o) => o.orderId != null && !pendingCancels.has(o.orderId))
-          : assetOrders;
+          ? mapped.filter((o) => o.orderId != null && !pendingCancels.has(o.orderId))
+          : mapped;
         setYourOpenOrders(filtered);
         setHasActiveOrders(filtered.length > 0);
         setYourOpenOrdersLoading(false);
@@ -417,6 +438,9 @@ export default function AssetDetailScreen() {
           next.delete(orderId);
           return next;
         });
+        // Invalidate cached order book / holdings so returning views show
+        // the updated state after the cancellation.
+        invalidateCoOwnAsset(assetId, currentUser.id);
         // Refresh the badge state
         setRefreshKey((k) => k + 1);
       })
@@ -432,7 +456,7 @@ export default function AssetDetailScreen() {
         // Re-fetch to restore the removed order
         setRefreshKey((k) => k + 1);
       });
-  }, [assetId, currentUser?.id, show, yourOpenOrders, orderBook]);
+  }, [assetId, currentUser?.id, show, yourOpenOrders, orderBook, invalidateCoOwnAsset]);
 
   // Pull-to-refresh — reloads asset, order book, and holdings in parallel.
   // Bumping refreshKey also re-runs the distributions, corporate-actions,
@@ -455,23 +479,33 @@ export default function AssetDetailScreen() {
 
   // ── Hooks must run before conditional returns (Rules of Hooks) ──
 
-  // Market-data staleness computation (spec 07 §1.4)
-  // Prefer the last settled execution timestamp from the market snapshot
-  // (spec 03_COOWN §2) over asset.updatedAt — it is the most precise
-  // signal for market-data freshness.
+  // Market-data staleness computation (spec 07 §1.4). `asOf` is only the
+  // response assembly time; use the backend source watermark instead so a
+  // freshly fetched stale mark cannot appear live.
   const STALENESS_THRESHOLD_SECONDS = 24 * 60 * 60;
   const { dataStale, dataStaleAgeLabel } = React.useMemo(() => {
     if (!asset || !dataLoadedAt) return { dataStale: false, dataStaleAgeLabel: undefined };
-    const snapshotTimestamp = asset.marketSnapshot?.asOf;
-    const sourceTimestamp = snapshotTimestamp
-      ? new Date(snapshotTimestamp).getTime()
-      : asset.updatedAt
-        ? new Date(asset.updatedAt).getTime()
-        : dataLoadedAt;
-    const ageSeconds = Math.max(0, (Date.now() - sourceTimestamp) / 1000);
-    const stale = ageSeconds > STALENESS_THRESHOLD_SECONDS;
+    const snapshot = asset.marketSnapshot;
+    const hasSecondaryMarket = asset.marketStatus === 'trading'
+      || (asset.marketStatus == null && asset.availableUnits === 0);
+    const sourceTimestamp = snapshot?.sourceAsOf
+      ? new Date(snapshot.sourceAsOf).getTime()
+      : snapshot?.lastExecutionAt
+        ? new Date(snapshot.lastExecutionAt).getTime()
+        : hasSecondaryMarket && asset.updatedAt
+          ? new Date(asset.updatedAt).getTime()
+          : dataLoadedAt;
+    const ageSeconds = Number.isFinite(sourceTimestamp)
+      ? Math.max(0, (Date.now() - sourceTimestamp) / 1000)
+      : Number.POSITIVE_INFINITY;
+    const staleByStatus = snapshot?.connectionStatus === 'stale'
+      || snapshot?.connectionStatus === 'degraded'
+      || (asset.staleMarkDays != null && asset.staleMarkDays > 7);
+    const stale = staleByStatus || (hasSecondaryMarket && ageSeconds > STALENESS_THRESHOLD_SECONDS);
     if (!stale) return { dataStale: false, dataStaleAgeLabel: undefined };
-    const ageLabel = ageSeconds > 86400 * 2
+    const ageLabel = !Number.isFinite(ageSeconds)
+      ? 'age unavailable'
+      : ageSeconds > 86400 * 2
       ? `${Math.floor(ageSeconds / 86400)}d ago`
       : ageSeconds > 3600
         ? `${Math.floor(ageSeconds / 3600)}h ago`
@@ -609,7 +643,7 @@ export default function AssetDetailScreen() {
   const lastDistributionPerUnit = lastDistribution?.perUnitGbpMinor != null
     ? lastDistribution.perUnitGbpMinor / 100
     : null;
-  const feePct = Math.round(CO_OWN_FEE_RATE * 100);
+  const feePct = Math.round((asset.tradingFeeRate ?? CO_OWN_FEE_RATE) * 100);
 
   // ── Holder P&L (spec 09 upgrade) ──
   // avgEntryPriceGbp comes from the backend holdings contract.
@@ -646,6 +680,9 @@ export default function AssetDetailScreen() {
   const bestBidGbp = marketSnapshot?.bestBidGbp ?? asset.bestBidGbp ?? null;
   const bestAskGbp = marketSnapshot?.bestAskGbp ?? asset.bestAskGbp ?? null;
   const lastExecutionPriceGbp = marketSnapshot?.lastExecutionPriceGbp ?? null;
+  const lastExecutionAgeSeconds = marketSnapshot?.lastExecutionAt
+    ? Math.max(0, Math.floor((Date.now() - new Date(marketSnapshot.lastExecutionAt).getTime()) / 1000))
+    : null;
   const hasTrades = lastExecutionPriceGbp != null;
   // ── Dominant price ──
   // ONE price display in the header. During initial offering the
@@ -708,11 +745,14 @@ export default function AssetDetailScreen() {
   // Compute scroll bottom padding from dock geometry + safe area.
   const isDualActionDock =
     isHolder
+    && !isInitialOffering
     && asset.isOpen
     && availableUnits > 0
     && !holdingsError
     && !orderBookError
-    && !reconciliationActive;
+    && orderBook?.source === 'live'
+    && !reconciliationActive
+    && !(lifecycleState === 'secondaryTrading' && dataStale);
   const dockHeight = isDualActionDock
     ? DockConstants.dualActionHeight
     : DockConstants.singleActionHeight;
@@ -720,12 +760,21 @@ export default function AssetDetailScreen() {
 
   const handleTradePress = (side: 'buy' | 'sell') => {
     if (!requireAuth('purchase')) return;
+    if (isInitialOffering && side === 'sell') {
+      show('Selling opens after the initial allocation closes.', 'info');
+      return;
+    }
     if (holdingsError || yourUnits == null) {
       show('Your position is unavailable. Refresh it before trading.', 'error');
       return;
     }
-    if (orderBookError || reconciliationActive) {
+    const canBuyPrimaryOffering = isInitialOffering && side === 'buy' && availableUnits > 0;
+    if (!canBuyPrimaryOffering && (orderBookError || !orderBook || orderBook.source !== 'live' || reconciliationActive)) {
       show('The live market is unavailable while balances are reconciled.', 'error');
+      return;
+    }
+    if (lifecycleState === 'secondaryTrading' && dataStale) {
+      show('Market data is stale. Refresh before trading.', 'error');
       return;
     }
     if (!coOwnCompliance.educationCompleted) {
@@ -739,6 +788,14 @@ export default function AssetDetailScreen() {
   // Order book level tap → pre-fill the trade ticket with the selected price
   const handleSelectOrderBookLevel = (bookSide: 'bid' | 'ask', price: number) => {
     haptics.tap();
+    if (!orderBook || orderBook.source !== 'live') {
+      show('Live market data is unavailable. Refresh before trading.', 'error');
+      return;
+    }
+    if (lifecycleState === 'secondaryTrading' && dataStale) {
+      show('Market data is stale. Refresh before trading.', 'error');
+      return;
+    }
     const tradeSide: 'buy' | 'sell' = bookSide === 'ask' ? 'buy' : 'sell';
     if (!coOwnCompliance.educationCompleted) {
       setPendingTradeSide(tradeSide);
@@ -952,7 +1009,7 @@ export default function AssetDetailScreen() {
                 <Text style={[styles.offeringMetaText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
                   {allocatedPct}% allocated · {availableUnits} units left
                 </Text>
-                {asset.buyerProtection ? (
+                {asset.safeguarded && asset.safeguardingEvidenceUrl ? (
                   <View style={styles.protectedBadge}>
                     <Ionicons name="shield-checkmark" size={13} color={colors.success} />
                     <Text style={[styles.protectedBadgeText, { color: colors.success }]}>Safeguarded</Text>
@@ -965,6 +1022,8 @@ export default function AssetDetailScreen() {
               <View style={[styles.collectibleAvailabilityDot, {
                 backgroundColor: reconciliationActive
                   ? colors.warning
+                  : dataStale && lifecycleState === 'secondaryTrading'
+                    ? colors.warning
                   : asset.isOpen
                     ? colors.success
                     : colors.textMuted,
@@ -972,9 +1031,11 @@ export default function AssetDetailScreen() {
               <Text style={[styles.collectibleAvailabilityText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
                 {reconciliationActive
                   ? 'Orders paused'
-                  : asset.isOpen
-                    ? 'Market open'
-                    : 'Market closed'}
+                  : dataStale && lifecycleState === 'secondaryTrading'
+                    ? 'Market data stale'
+                    : asset.isOpen
+                      ? 'Market open'
+                      : 'Market closed'}
               </Text>
               {bestBidGbp != null && bestAskGbp != null ? (
                 <Text style={[styles.collectibleSpreadText, { color: colors.textMuted }]} maxFontSizeMultiplier={1.4}>
@@ -1053,6 +1114,9 @@ export default function AssetDetailScreen() {
             showVolume={showVolume}
             onToggleVolume={() => setShowVolume((v) => !v)}
             lastExecutionPriceGbp={lastExecutionPriceGbp}
+            lastExecutionAgeSeconds={lastExecutionAgeSeconds}
+            marketDataStale={dataStale}
+            marketDataAgeLabel={dataStaleAgeLabel}
             appraisedValuePerUnitGbp={appraisedValuePerUnitGbp}
             referenceVsAppraisalPct={referenceVsAppraisalPct}
             dossierDocuments={dossierDocuments}
@@ -1076,6 +1140,8 @@ export default function AssetDetailScreen() {
             spreadGbp={spreadGbp}
             depthStatusLabel={depthStatusLabel}
             reconciliationActive={reconciliationActive}
+            marketDataStale={dataStale}
+            marketDataAgeLabel={dataStaleAgeLabel}
             isOffline={isOffline}
             onOpenSupply={() => openSheet('supply')}
             onOpenPriceAlert={openPriceAlert}
@@ -1103,6 +1169,7 @@ export default function AssetDetailScreen() {
             availableUnits={availableUnits}
             totalUnits={totalUnits}
             holderCount={asset.holders ?? null}
+            rights={asset.rights}
             onOpenRights={() => openSheet('rights')}
             lastDistribution={lastDistribution}
             lastDistributionAmount={lastDistributionAmount}
@@ -1331,26 +1398,26 @@ export default function AssetDetailScreen() {
           );
         }
 
-        return (
-          <CommerceDetailStateDock
-            showProtectionStrip={asset.buyerProtection ?? false}
-            primaryAction={
-              isHolder
-                ? {
-                    label: 'Sell',
-                    onPress: () => handleTradePress('sell'),
-                  }
-                : {
-                    label: 'Buy units',
-                    onPress: () => handleTradePress('buy'),
-                  }
-            }
-            secondaryAction={
-              isHolder
-                ? {
-                    label: 'Buy more',
-                    onPress: () => handleTradePress('buy'),
-                  }
+         return (
+           <CommerceDetailStateDock
+             showProtectionStrip={Boolean(asset.buyerProtection && asset.buyerProtectionTermsUrl)}
+             primaryAction={
+               isHolder && !isInitialOffering
+                 ? {
+                     label: 'Sell',
+                     onPress: () => handleTradePress('sell'),
+                   }
+                 : {
+                     label: 'Buy units',
+                     onPress: () => handleTradePress('buy'),
+                   }
+             }
+             secondaryAction={
+               isHolder && !isInitialOffering
+                 ? {
+                     label: 'Buy more',
+                     onPress: () => handleTradePress('buy'),
+                   }
                 : undefined
             }
           />

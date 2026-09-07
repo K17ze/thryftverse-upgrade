@@ -5,7 +5,7 @@ import { Space, FontFamily, Radius } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { formatCoOwnIze } from '../../../utils/currency';
-import type { CoOwnCorporateAction, CoOwnDistribution } from '../../../services/marketApi';
+import type { CoOwnCorporateAction, CoOwnDistribution, MarketCoOwnAsset } from '../../../services/marketApi';
 import { CoOwnCorporateActionRow, type CoOwnCorporateActionStatus, type CoOwnCorporateActionType } from '../';
 import { CommerceDetailDisclosureRow, CommerceDetailSection } from '../../commerce/detail';
 
@@ -24,6 +24,8 @@ export interface AssetOwnershipSectionProps {
   /** Total distinct holder count from the asset contract. */
   holderCount?: number | null;
   onOpenRights: () => void;
+  /** Versioned, backend-published rights document. */
+  rights?: MarketCoOwnAsset['rights'];
   lastDistribution: CoOwnDistribution | null;
   lastDistributionAmount: number | null;
   lastDistributionDate: string | null;
@@ -89,6 +91,7 @@ export function AssetOwnershipSection({
   totalUnits,
   holderCount,
   onOpenRights,
+  rights,
   lastDistribution,
   lastDistributionAmount,
   lastDistributionDate,
@@ -106,6 +109,12 @@ export function AssetOwnershipSection({
   // Financial direction token pair — coownUp/coownDown are the documented
   // tokens for position P/L (ThemeContext), not success/warning.
   const pnlColor = isUp ? colors.coownUp : colors.coownDown;
+  const publishedRights = [
+    { label: 'Economic rights', detail: rights?.economicRights },
+    { label: 'Voting & governance', detail: rights?.votingRights },
+    { label: 'Exit & proceeds', detail: rights?.exitRights },
+    { label: 'Operating costs', detail: rights?.feeRights },
+  ].filter((row): row is { label: string; detail: string } => Boolean(row.detail));
 
   return (
     <View style={styles.container}>
@@ -190,7 +199,7 @@ export function AssetOwnershipSection({
           <View style={styles.legendItem}>
             <View style={[styles.legendColorBox, { backgroundColor: colors.success }]} />
             <Text style={[styles.legendText, { color: colors.textSecondary }]}>
-              Available Float ({availableUnits})
+              Available units ({availableUnits})
             </Text>
           </View>
         </View>
@@ -224,26 +233,21 @@ export function AssetOwnershipSection({
           </Pressable>
         }
       >
-        <View style={styles.rightRow}>
-          <Text style={[styles.rightTitle, { color: colors.textPrimary }]}>Voting & Governance</Text>
-          <Text style={[styles.rightDetail, { color: colors.textSecondary }]}>
-            1 unit = 1 vote. Voting eligibility snapshots at record date. Majority approval required for major physical maintenance or museum loan decisions.
-          </Text>
-        </View>
-
-        <View style={[styles.rightRow, styles.rightRowSeparated, { borderTopColor: colors.border }]}>
-          <Text style={[styles.rightTitle, { color: colors.textPrimary }]}>Whole-Asset Buyout & Liquidation</Text>
-          <Text style={[styles.rightDetail, { color: colors.textSecondary }]}>
-            Third-party acquisition offers require 75% supermajority approval. Net proceeds after legal escrow settle pro-rata directly into co-owners' wallets.
-          </Text>
-        </View>
-
-        <View style={[styles.rightRow, styles.rightRowSeparated, { borderTopColor: colors.border }]}>
-          <Text style={[styles.rightTitle, { color: colors.textPrimary }]}>Physical Possession</Text>
-          <Text style={[styles.rightDetail, { color: colors.textSecondary }]}>
-            Co-ownership conveys economic and beneficial title. Physical possession remains exclusively with the insured custodian to maintain authenticated provenance.
-          </Text>
-        </View>
+        {publishedRights.length > 0 ? (
+          <View>
+            {publishedRights.map((row, index) => (
+              <View
+                key={row.label}
+                style={[styles.rightRow, index > 0 && styles.rightRowSeparated, index > 0 && { borderTopColor: colors.border }]}
+              >
+                <Text style={[styles.rightTitle, { color: colors.textPrimary }]}>{row.label}</Text>
+                <Text style={[styles.rightDetail, { color: colors.textSecondary }]}>{row.detail}</Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <Text style={[styles.noDistributionText, { color: colors.textMuted }]}>Rights details not published yet.</Text>
+        )}
 
         <CommerceDetailDisclosureRow
           label="Buyout offers"
@@ -325,7 +329,7 @@ export function AssetOwnershipSection({
         ) : (
           <View style={styles.noDistributionNotice}>
             <Text style={[styles.noDistributionText, { color: colors.textMuted }]}>
-              No distributions settled yet. Any commercial yield, exhibition loan proceeds, or sale distributions settle pro-rata.
+              No distributions settled yet.
             </Text>
           </View>
         )}

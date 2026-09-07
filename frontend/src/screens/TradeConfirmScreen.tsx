@@ -24,6 +24,7 @@ import {
   CoOwnRiskDisclosure,
 } from '../components/coown';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { useInvalidateCoOwnAsset } from '../platform/server';
 import { track } from '../analytics/track';
 import { t } from '../i18n';
 
@@ -50,6 +51,7 @@ type LocalStackParamList = Omit<RootStackParamList, 'CoOwnOrderHistory'> & {
 // type-safely without editing the shared navigation types.
 type TradeConfirmRouteParams = RootStackParamList['TradeConfirm'] & {
   ticketDuration?: 'GFD' | 'GTC90';
+  feeRate?: number;
 };
 
 export default function TradeConfirmScreen({ navigation, route }: Props) {
@@ -78,6 +80,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
     previewValidUntil,
     maxReserved1ze,
     marketDataTimestamp,
+    feeRate: routeFeeRate,
     // Phase 2.5: duration (GFD / GTC90) forwarded from TradeScreen
     ticketDuration,
   } = (route.params as TradeConfirmRouteParams) ?? {};
@@ -87,6 +90,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
   const haptic = useHaptic();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
+  const invalidateCoOwnAsset = useInvalidateCoOwnAsset();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isReleasing, setIsReleasing] = useState(false);
@@ -104,6 +108,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
   }
 
   const isBuy = side === 'buy';
+  const feeRate = routeFeeRate ?? 0.01;
   // 1ZE is the canonical settlement unit. GBP is a secondary reference.
   const settlementLabel = '1ZE';
 
@@ -116,6 +121,11 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
     'TradeConfirm'
   >;
   const goOrderHistory = (params: OrderHistoryHighlightParams) => {
+    // Invalidate cached asset/orderBook/holdings so the order history screen
+    // and any returning asset-detail view show fresh data after the trade.
+    if (assetId) {
+      invalidateCoOwnAsset(assetId, currentUser?.id);
+    }
     orderHistoryNav.navigate('CoOwnOrderHistory', params);
   };
 
@@ -338,10 +348,14 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
           grossLabel={format1ze(totalValue)}
           feeLabel={format1ze(fee)}
           totalLabel={format1ze(netValue)}
-          totalCaption={isBuy ? 'Including 1% fee' : 'After 1% fee'}
+          totalCaption={isBuy
+            ? `Including ${(feeRate * 100).toFixed(2).replace(/\.00$/, '')}% fee`
+            : `After ${(feeRate * 100).toFixed(2).replace(/\.00$/, '')}% fee`}
           settlementLabel={settlementLabel}
           status="pending"
-          timestamp={`Quote ${secondsRemaining}s · market ${new Date(marketDataTimestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`}
+          timestamp={marketDataTimestamp
+            ? `Quote ${secondsRemaining}s · market ${new Date(marketDataTimestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
+            : `Quote ${secondsRemaining}s · primary allocation price`}
           maxReservedLabel={maxReservedLabel}
           marketWarning={marketWarning}
           localFiatLabel={`Reference: £${netValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} GBP`}

@@ -258,22 +258,18 @@ describe('AssetOverviewSection — ranged price history', () => {
     expect(candles![0].v).toBe(40);
   });
 
-  it('falls back to embedded candles when the history fetch rejects', async () => {
+  it('keeps non-default range visibly unavailable when the history fetch rejects', async () => {
     fetchCoOwnPriceHistory.mockRejectedValue(new Error('network down'));
     renderOverview({ candleRange: '1M', candleData: embedded });
     await act(async () => {});
-    const candles = lastChartCandles();
-    expect(candles).not.toBeNull();
-    expect(candles![0].o).toBe(10);
+    expect(candleChartRenderProps.current).toHaveLength(0);
   });
 
-  it('falls back to embedded candles when history comes back empty', async () => {
+  it('keeps non-default range visibly unavailable when history comes back empty', async () => {
     fetchCoOwnPriceHistory.mockResolvedValue({ interval: '1w', candles: [] });
     renderOverview({ candleRange: 'ALL', candleData: embedded });
     await act(async () => {});
-    const candles = lastChartCandles();
-    expect(candles).not.toBeNull();
-    expect(candles![0].o).toBe(10);
+    expect(candleChartRenderProps.current).toHaveLength(0);
   });
 
   it('never renders the previous range history under a new range while loading', async () => {
@@ -285,9 +281,10 @@ describe('AssetOverviewSection — ranged price history', () => {
     await act(async () => {});
     expect(lastChartCandles()![0].o).toBe(99);
 
-    // Switch range with a never-resolving fetch: the chart must show the
-    // embedded fallback (o: 10), never the previous range (o: 99).
+    // Switch range with a never-resolving fetch: the chart must not show the
+    // previous range (o: 99) or relabel the embedded one-week data as 1D.
     fetchCoOwnPriceHistory.mockReturnValue(new Promise(() => {}));
+    const renderCountBeforeRangeChange = candleChartRenderProps.current.length;
     await act(async () => {
       renderer.update(React.createElement(AssetOverviewSection, {
         asset: makeAsset(),
@@ -305,9 +302,7 @@ describe('AssetOverviewSection — ranged price history', () => {
         lifecycleState: 'secondaryTrading',
       }));
     });
-    const candles = lastChartCandles();
-    expect(candles).not.toBeNull();
-    expect(candles![0].o).toBe(10);
+    expect(candleChartRenderProps.current).toHaveLength(renderCountBeforeRangeChange);
   });
 });
 
@@ -680,4 +675,3 @@ describe('Position resolution state machine', () => {
     expect(result).toBe(0);
   });
 });
-

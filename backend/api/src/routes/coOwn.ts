@@ -88,9 +88,13 @@ function computeMarketStatus(
   if (hasExitAction) return 'closed';
   // An active 1ZE reconciliation pause suspends secondary trading.
   if (isReconciliationHalted) return 'paused';
+  // A failed offering is closed before allocation completes. It has no
+  // executable primary or secondary market and must not be advertised as
+  // pre-market to clients.
+  if (offeringStatus === 'failed') return 'paused';
   if (offeringStatus === 'allocated' || offeringStatus === 'closed') return 'trading';
-  // 'offering' (still allocating primary units) and 'failed' (offering closed
-  // without full allocation) both have no active secondary market yet.
+  // 'offering' is still allocating primary units; the secondary market is not
+  // active until allocation closes.
   return 'pre_market';
 }
 
@@ -2332,6 +2336,94 @@ app.get('/co-own/assets/:assetId/orders', async (request, reply) => {
     items: result.rows.map((row) => ({
       id: row.id,
       assetId: row.asset_id,
+      side: row.side,
+      orderType: row.order_type,
+      limitPriceGbp: row.limit_price_gbp === null ? null : Number(row.limit_price_gbp),
+      units: row.units,
+      remainingUnits: row.remaining_units,
+      filledUnits: row.filled_units,
+      unitPriceGbp: Number(row.unit_price_gbp),
+      feeGbp: Number(row.fee_gbp),
+      totalGbp: Number(row.total_gbp),
+      status: row.status,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    })),
+  };
+});
+
+// ---------------------------------------------------------------------------
+// GET /co-own/assets/:assetId/my-orders — authenticated, owner-scoped open
+// orders for the current user on a specific asset. This is the dedicated
+// endpoint the asset-detail screen uses instead of filtering a 200-item
+// account-history window. Only open and partially_filled orders are returned.
+// ---------------------------------------------------------------------------
+
+app.get('/co-own/assets/:assetId/my-orders', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Authentication required' };
+  }
+  const paramsSchema = z.object({ assetId: z.string().min(2) });
+  const querySchema = z.object({
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+  });
+
+  const { assetId } = paramsSchema.parse(request.params);
+  const { limit } = querySchema.parse(request.query);
+  const userId = request.authUser.userId;
+
+  const assetExists = await db.query('SELECT id FROM coOwn_assets WHERE id = $1 LIMIT 1', [assetId]);
+  if (!assetExists.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Co-Own asset not found' };
+  }
+
+  const result = await db.query<{
+    id: number;
+    side: 'buy' | 'sell';
+    order_type: CoOwnOrderType;
+    limit_price_gbp: number | string | null;
+    units: number;
+    remaining_units: number;
+    filled_units: number;
+    unit_price_gbp: number | string;
+    fee_gbp: number | string;
+    total_gbp: number | string;
+    status: CoOwnOrderStatus;
+    created_at: string;
+    updated_at: string;
+  }>(
+    `
+      SELECT
+        id,
+        side,
+        order_type,
+        limit_price_gbp,
+        units,
+        remaining_units,
+        filled_units,
+        unit_price_gbp,
+        fee_gbp,
+        total_gbp,
+        status,
+        created_at,
+        updated_at
+      FROM coOwn_orders
+      WHERE asset_id = $1
+        AND user_id = $2
+        AND status IN ('open', 'partially_filled')
+      ORDER BY created_at DESC
+      LIMIT $3
+    `,
+    [assetId, userId, limit]
+  );
+
+  return {
+    ok: true,
+    items: result.rows.map((row) => ({
+      id: row.id,
+      assetId,
       side: row.side,
       orderType: row.order_type,
       limitPriceGbp: row.limit_price_gbp === null ? null : Number(row.limit_price_gbp),
@@ -5269,6 +5361,7 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
     price_24h_ago_gbp: string | null;
     best_bid_gbp: string | null;
     best_ask_gbp: string | null;
+    order_book_updated_at: string | null;
   }>(
     `
       WITH last_trade AS (
@@ -5309,14 +5402,22 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
           AND side = 'sell'
           AND status IN ('open', 'partially_filled')
           AND remaining_units > 0
+      ),
+      order_book_mark AS (
+        SELECT MAX(updated_at) AS updated_at
+        FROM coOwn_orders
+        WHERE asset_id = $1
+          AND status IN ('open', 'partially_filled')
+          AND remaining_units > 0
       )
       SELECT
         (SELECT unit_price_gbp::text FROM last_trade) AS last_execution_price_gbp,
-        (SELECT to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') FROM last_trade) AS last_execution_at,
+        (SELECT to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') FROM last_trade) AS last_execution_at,
         (SELECT volume FROM vol_24h) AS volume_24h_gbp,
         (SELECT unit_price_gbp::text FROM price_24h_ago) AS price_24h_ago_gbp,
         (SELECT price FROM best_bid) AS best_bid_gbp,
-        (SELECT price FROM best_ask) AS best_ask_gbp
+        (SELECT price FROM best_ask) AS best_ask_gbp,
+        (SELECT to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') FROM order_book_mark) AS order_book_updated_at
     `,
     [assetId]
   );
@@ -5332,9 +5433,25 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
     marketMovePct24h = ((lastExecutionPriceGbp - price24hAgo) / price24hAgo) * 100;
   }
 
+  // `asOf` is the response assembly time. `sourceAsOf` is the newest
+  // timestamp represented by the snapshot, which is the value clients must
+  // use for freshness labels. A freshly assembled response must not make an
+  // old market mark look live.
+  const marketSourceTimes = [
+    lastMarketEventAt,
+    snap?.last_execution_at ?? null,
+    snap?.order_book_updated_at ?? null,
+  ]
+    .map((value) => (value ? new Date(value).getTime() : Number.NaN))
+    .filter((value) => Number.isFinite(value));
+  const sourceAsOf = marketSourceTimes.length > 0
+    ? new Date(Math.max(...marketSourceTimes)).toISOString()
+    : row.updated_at;
+
   const marketSnapshot = {
     version: 1,
     asOf: new Date().toISOString(),
+    sourceAsOf,
     connectionStatus: row.is_open
       ? (staleMarkDays != null && staleMarkDays > 7 ? 'stale' : 'live')
       : 'closed',
@@ -5551,6 +5668,7 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
       recourseStatus: row.recourse_status ?? 'pending',
       totalTradedValueGbp: row.total_traded_value_gbp != null ? Number(row.total_traded_value_gbp) : 0,
       activeVerificationDemands: row.active_verification_demands ?? 0,
+      tradingFeeRate: CO_OWN_TRADE_FEE_RATE,
       trustAuditEvents: trustEventsResult.rows.map((e) => ({
         eventType: e.event_type,
         createdAt: e.created_at,

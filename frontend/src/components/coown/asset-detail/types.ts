@@ -22,6 +22,11 @@ export type AssetLifecycleState =
  *    whose backend projections don't yet include the status fields.
  */
 export function deriveLifecycleState(asset: MarketCoOwnAsset): AssetLifecycleState {
+  // A failed offering can still expose available units, but the issuer has
+  // closed the allocation. Keep it paused rather than presenting a buyable
+  // primary market merely because the secondary projection is pre-market.
+  if (asset.offeringStatus === 'failed') return 'tradingPaused';
+
   // 1. Prefer marketStatus when the backend provides it.
   if (asset.marketStatus) {
     switch (asset.marketStatus) {
@@ -44,9 +49,6 @@ export function deriveLifecycleState(asset: MarketCoOwnAsset): AssetLifecycleSta
       case 'allocated':
       case 'closed':
         return 'secondaryTrading';
-      case 'failed':
-        // Still shown in the offering surface, but with a failed status.
-        return 'initialOffering';
     }
   }
 

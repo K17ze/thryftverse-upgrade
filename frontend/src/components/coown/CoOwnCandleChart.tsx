@@ -16,7 +16,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ViewStyle, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, ViewStyle, useWindowDimensions, PanResponder } from 'react-native';
 import { Canvas, Rect, Line } from '@shopify/react-native-skia';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius } from '../../theme/designTokens';
@@ -51,8 +51,8 @@ const RANGES: CoOwnCandleRange[] = ['1D', '1W', '1M', '3M', '1Y', 'ALL'];
 const CHART_HEIGHT = 140;
 const VOLUME_HEIGHT = 30;
 const CHART_PADDING = 8;
-const CANDLE_WIDTH = 6;
-const CANDLE_GAP = 2;
+const PRICE_AXIS_WIDTH = 52;
+const DATE_AXIS_HEIGHT = 18;
 
 export function CoOwnCandleChart({
   candles,
@@ -70,6 +70,7 @@ export function CoOwnCandleChart({
   const [crosshairIndex, setCrosshairIndex] = useState<number | null>(null);
 
   // Compute price range across all candles
+  // Compute price range across all candles
   const { minPrice, maxPrice, maxVolume } = useMemo(() => {
     if (candles.length === 0) {
       return { minPrice: 0, maxPrice: 1, maxVolume: 1 };
@@ -86,14 +87,71 @@ export function CoOwnCandleChart({
 
   const priceRange = maxPrice - minPrice || 1;
   const chartH = showVolume ? CHART_HEIGHT - VOLUME_HEIGHT : CHART_HEIGHT;
-  const chartW = CHART_WIDTH - CHART_PADDING * 2;
+  const chartW = CHART_WIDTH - PRICE_AXIS_WIDTH - CHART_PADDING * 2;
+  // Keep every requested range visible inside the viewport. The previous
+  // fixed 8pt slot clipped 3M histories (90 candles) after the first 52.
+  const candleSlot = candles.length > 0 ? chartW / candles.length : chartW;
+  const candleWidth = Math.max(2, Math.min(6, candleSlot * 0.72));
 
   // X position for a candle index
   const xForIndex = (i: number) => {
     if (candles.length === 0) return CHART_PADDING;
-    const step = CANDLE_WIDTH + CANDLE_GAP;
-    return CHART_PADDING + i * step;
+    return CHART_PADDING + i * candleSlot;
   };
+
+  // Drag/pan inspection: track finger movement across the chart to scrub
+  // through candles. This replaces the static tap-only inspection with a
+  // continuous crosshair that follows the touch point.
+  const updateCrosshairFromTouch = (locationX: number) => {
+    if (candles.length === 0) return;
+    const x = locationX - CHART_PADDING;
+    const index = Math.max(0, Math.min(candles.length - 1, Math.round(x / candleSlot)));
+    setCrosshairIndex(index);
+  };
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => candles.length > 0,
+        onMoveShouldSetPanResponder: () => candles.length > 0,
+        onPanResponderGrant: (evt) => {
+          updateCrosshairFromTouch(evt.nativeEvent.locationX);
+          haptics.selection();
+        },
+        onPanResponderMove: (evt) => {
+          updateCrosshairFromTouch(evt.nativeEvent.locationX);
+        },
+        onPanResponderRelease: () => {
+          // Keep the crosshair visible after release so the user can read
+          // the OHLC values without holding their finger down.
+        },
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [candles.length, candleSlot]
+  );
+
+  // Price axis labels — show 3 price levels (max, mid, min) as compact text.
+  // Rendered as RN Text outside the Skia canvas for accessibility and clarity.
+  const priceAxisLabels = useMemo(() => {
+    if (candles.length === 0) return null;
+    return {
+      top: maxPrice.toFixed(2),
+      mid: ((maxPrice + minPrice) / 2).toFixed(2),
+      bottom: minPrice.toFixed(2),
+    };
+  }, [candles.length, minPrice, maxPrice]);
+
+  // Date axis labels — show first and last candle dates so users can orient
+  // themselves without tapping. For longer ranges, also show a midpoint.
+  const dateAxisLabels = useMemo(() => {
+    if (candles.length === 0) return null;
+    const first = candles[0];
+    const last = candles[candles.length - 1];
+    return {
+      start: formatCandleDate(first.t, range),
+      end: formatCandleDate(last.t, range),
+    };
+  }, [candles, range]);
 
   // Y position for a price
   const yForPrice = (price: number) => {
@@ -114,6 +172,7 @@ export function CoOwnCandleChart({
   }, [candles, range, lastAgeSeconds]);
 
   const handleRangeChange = (r: CoOwnCandleRange) => {
+    setCrosshairIndex(null);
     onRangeChange(r);
     haptics.tap();
   };
@@ -166,80 +225,118 @@ export function CoOwnCandleChart({
         colors={colors}
       />
 
-      {/* Candle chart */}
+      {/* Candle chart with price axis and date axis */}
       <View style={styles.chartWrap}>
-        <Canvas style={{ width: CHART_WIDTH, height: showVolume ? CHART_HEIGHT : CHART_HEIGHT - VOLUME_HEIGHT }}>
-          {/* Candles */}
-          {candles.map((candle, i) => {
-            const x = xForIndex(i);
-            const isUp = candle.c >= candle.o;
-            const color = isUp ? DIRECTION_COLORS.up : DIRECTION_COLORS.down;
-            const fillColor = isUp ? DIRECTION_COLORS.upFill : DIRECTION_COLORS.downFill;
+        {/* Price axis labels (left side) */}
+        {priceAxisLabels && (
+          <View style={styles.priceAxis} pointerEvents="none">
+            <Text style={[styles.priceAxisLabel, { color: colors.textMuted }]}>{priceAxisLabels.top}</Text>
+            <Text style={[styles.priceAxisLabel, { color: colors.textMuted }]}>{priceAxisLabels.mid}</Text>
+            <Text style={[styles.priceAxisLabel, { color: colors.textMuted }]}>{priceAxisLabels.bottom}</Text>
+          </View>
+        )}
 
-            const bodyTop = yForPrice(Math.max(candle.o, candle.c));
-            const bodyBottom = yForPrice(Math.min(candle.o, candle.c));
-            const bodyHeight = Math.max(bodyBottom - bodyTop, 1);
-            const wickTop = yForPrice(candle.h);
-            const wickBottom = yForPrice(candle.l);
+        {/* Chart canvas + interaction layer */}
+        <View style={styles.canvasContainer}>
+          <Canvas style={{ width: CHART_WIDTH - PRICE_AXIS_WIDTH, height: showVolume ? CHART_HEIGHT : CHART_HEIGHT - VOLUME_HEIGHT }}>
+            {/* Candles */}
+            {candles.map((candle, i) => {
+              const x = xForIndex(i);
+              const isUp = candle.c >= candle.o;
+              const color = isUp ? DIRECTION_COLORS.up : DIRECTION_COLORS.down;
+              const fillColor = isUp ? DIRECTION_COLORS.upFill : DIRECTION_COLORS.downFill;
 
-            return (
-              <React.Fragment key={`candle-${i}`}>
-                {/* Wick (high-low line) */}
-                <Line
-                  p1={{ x: x + CANDLE_WIDTH / 2, y: wickTop }}
-                  p2={{ x: x + CANDLE_WIDTH / 2, y: wickBottom }}
-                  color={color}
-                  strokeWidth={1}
-                />
-                {/* Body */}
+              const bodyTop = yForPrice(Math.max(candle.o, candle.c));
+              const bodyBottom = yForPrice(Math.min(candle.o, candle.c));
+              const bodyHeight = Math.max(bodyBottom - bodyTop, 1);
+              const wickTop = yForPrice(candle.h);
+              const wickBottom = yForPrice(candle.l);
+
+              return (
+                <React.Fragment key={`candle-${i}`}>
+                  {/* Wick (high-low line) */}
+                  <Line
+                    p1={{ x: x + candleWidth / 2, y: wickTop }}
+                    p2={{ x: x + candleWidth / 2, y: wickBottom }}
+                    color={color}
+                    strokeWidth={1}
+                  />
+                  {/* Body */}
+                  <Rect
+                    x={x}
+                    y={bodyTop}
+                    width={candleWidth}
+                    height={bodyHeight}
+                    color={fillColor}
+                  />
+                </React.Fragment>
+              );
+            })}
+
+            {/* Volume bars */}
+            {showVolume && candles.map((candle, i) => {
+              const x = xForIndex(i);
+              const isUp = candle.c >= candle.o;
+              const volColor = isUp ? DIRECTION_COLORS.upFill : DIRECTION_COLORS.downFill;
+              const volH = (candle.v / maxVolume) * (VOLUME_HEIGHT - 4);
+              const volY = CHART_HEIGHT - volH;
+
+              return (
                 <Rect
+                  key={`vol-${i}`}
                   x={x}
-                  y={bodyTop}
-                  width={CANDLE_WIDTH}
-                  height={bodyHeight}
-                  color={fillColor}
+                  y={volY}
+                  width={candleWidth}
+                  height={volH}
+                  color={volColor}
                 />
-              </React.Fragment>
-            );
-          })}
+              );
+            })}
 
-          {/* Volume bars */}
-          {showVolume && candles.map((candle, i) => {
-            const x = xForIndex(i);
-            const isUp = candle.c >= candle.o;
-            const volColor = isUp ? DIRECTION_COLORS.upFill : DIRECTION_COLORS.downFill;
-            const volH = (candle.v / maxVolume) * (VOLUME_HEIGHT - 4);
-            const volY = CHART_HEIGHT - volH;
-
-            return (
-              <Rect
-                key={`vol-${i}`}
-                x={x}
-                y={volY}
-                width={CANDLE_WIDTH}
-                height={volH}
-                color={volColor}
+            {/* Crosshair — vertical line at selected candle */}
+            {crosshairIndex != null && candles[crosshairIndex] && (
+              <Line
+                p1={{ x: xForIndex(crosshairIndex) + candleWidth / 2, y: 0 }}
+                p2={{ x: xForIndex(crosshairIndex) + candleWidth / 2, y: CHART_HEIGHT }}
+                color={colors.textMuted}
+                strokeWidth={0.5}
               />
-            );
-          })}
-
-          {/* Crosshair — vertical line at selected candle */}
-          {crosshairIndex != null && candles[crosshairIndex] && (
-            <Line
-              p1={{ x: xForIndex(crosshairIndex) + CANDLE_WIDTH / 2, y: 0 }}
-              p2={{ x: xForIndex(crosshairIndex) + CANDLE_WIDTH / 2, y: CHART_HEIGHT }}
-              color={colors.textMuted}
-              strokeWidth={0.5}
-            />
-          )}
-        </Canvas>
+            )}
+          </Canvas>
+          {/* Transparent interaction layer with drag/pan support.
+              The pan responder lets users scrub through candles by dragging
+              their finger across the chart. */}
+          <View
+            style={StyleSheet.absoluteFill}
+            {...panResponder.panHandlers}
+            accessibilityRole="adjustable"
+            accessibilityLabel="Price chart. Drag to inspect candle values."
+            accessibilityHint="Drag your finger across the chart to see open, high, low, close and volume for each candle."
+          />
+        </View>
       </View>
+
+      {/* Date axis labels */}
+      {dateAxisLabels && (
+        <View style={styles.dateAxisRow}>
+          <Text style={[styles.dateAxisLabel, { color: colors.textMuted }]}>
+            {dateAxisLabels.start}
+          </Text>
+          <Text style={[styles.dateAxisLabel, { color: colors.textMuted }]}>
+            {dateAxisLabels.end}
+          </Text>
+        </View>
+      )}
 
       {/* Crosshair info */}
       {crosshairIndex != null && candles[crosshairIndex] && (
-        <View style={[styles.crosshairInfo, { borderColor: colors.border }]}>
-          <Text style={[styles.crosshairLabel, { color: colors.textMuted }]}>
-            O {candles[crosshairIndex].o.toFixed(2)} · H {candles[crosshairIndex].h.toFixed(2)} · L {candles[crosshairIndex].l.toFixed(2)} · C {candles[crosshairIndex].c.toFixed(2)}
+        <View
+          style={[styles.crosshairInfo, { borderColor: colors.border }]}
+          accessibilityRole="text"
+          accessibilityLabel={`Candle ${formatCandleTimestamp(candles[crosshairIndex].t)}. Open ${candles[crosshairIndex].o.toFixed(2)}, high ${candles[crosshairIndex].h.toFixed(2)}, low ${candles[crosshairIndex].l.toFixed(2)}, close ${candles[crosshairIndex].c.toFixed(2)}${showVolume ? `, volume ${candles[crosshairIndex].v}` : ''}.`}
+        >
+          <Text style={[styles.crosshairLabel, { color: colors.textMuted }]} numberOfLines={2}>
+            {formatCandleTimestamp(candles[crosshairIndex].t)} · O {candles[crosshairIndex].o.toFixed(2)} · H {candles[crosshairIndex].h.toFixed(2)} · L {candles[crosshairIndex].l.toFixed(2)} · C {candles[crosshairIndex].c.toFixed(2)}
           </Text>
           {showVolume && (
             <Text style={[styles.crosshairVol, { color: colors.textMuted }]}>
@@ -325,6 +422,31 @@ function formatAge(ageSeconds: number): string {
   return `${days}d ago`;
 }
 
+function formatCandleTimestamp(timestampMs: number): string {
+  const date = new Date(timestampMs);
+  if (!Number.isFinite(date.getTime())) return 'Unknown time';
+  return date.toLocaleString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+/** Compact date format for axis labels — adapts to the range. */
+function formatCandleDate(timestampMs: number, range: CoOwnCandleRange): string {
+  const date = new Date(timestampMs);
+  if (!Number.isFinite(date.getTime())) return '—';
+  // For 1D, show time. For 1W/1M, show day + month. For longer, show month + year.
+  if (range === '1D') {
+    return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  }
+  if (range === '1Y' || range === 'ALL') {
+    return date.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
+  }
+  return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+}
+
 const styles = StyleSheet.create({
   container: {
     borderRadius: Radius.lg,
@@ -360,8 +482,36 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   chartWrap: {
-    alignItems: 'center',
+    flexDirection: 'row',
+    alignItems: 'stretch',
     justifyContent: 'center',
+  },
+  priceAxis: {
+    width: PRICE_AXIS_WIDTH - CHART_PADDING,
+    justifyContent: 'space-between',
+    paddingVertical: CHART_PADDING,
+    paddingRight: Space.xs,
+  },
+  priceAxisLabel: {
+    fontSize: TypographyV2.meta.size - 1,
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'],
+    textAlign: 'right',
+    letterSpacing: 0.1,
+  },
+  canvasContainer: {
+    position: 'relative',
+  },
+  dateAxisRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingLeft: PRICE_AXIS_WIDTH,
+    paddingTop: 2,
+  },
+  dateAxisLabel: {
+    fontSize: TypographyV2.meta.size - 1,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: 0.1,
   },
   emptyWrap: {
     height: CHART_HEIGHT,

@@ -33,6 +33,9 @@ export interface AssetMarketSectionProps {
   spreadGbp: number | null;
   depthStatusLabel: string;
   reconciliationActive: boolean;
+  /** True when the backend source watermark is stale or degraded. */
+  marketDataStale?: boolean;
+  marketDataAgeLabel?: string;
   isOffline: boolean;
   onOpenSupply: () => void;
   onOpenPriceAlert: () => void;
@@ -62,6 +65,8 @@ export function AssetMarketSection({
   spreadGbp,
   depthStatusLabel,
   reconciliationActive,
+  marketDataStale = false,
+  marketDataAgeLabel,
   isOffline,
   onOpenPriceAlert,
   onSelectOrderBookLevel,
@@ -124,7 +129,15 @@ export function AssetMarketSection({
     : spreadGbp;
   const hasStatsStrip = movePct24h != null || volume24hGbp != null || statsSpreadGbp != null;
 
-  const isMarketOpen = asset.isOpen && !reconciliationActive && !isOffline;
+  const isSecondaryMarket = lifecycleState === 'secondaryTrading';
+  const orderBookIsLive = orderBook?.source === 'live';
+  const depthStatus = isSecondaryMarket && marketDataStale
+    ? `Stale depth${marketDataAgeLabel ? ` · ${marketDataAgeLabel}` : ''}`
+    : depthStatusLabel;
+  const isMarketOpen = asset.isOpen
+    && !reconciliationActive
+    && !isOffline
+    && !(isSecondaryMarket && marketDataStale);
   const hasBidsOrAsks =
     (orderBook?.bids && orderBook.bids.length > 0) ||
     (orderBook?.asks && orderBook.asks.length > 0);
@@ -240,6 +253,8 @@ export function AssetMarketSection({
             >
               {reconciliationActive
                 ? 'Orders paused'
+                : isSecondaryMarket && marketDataStale
+                  ? 'Market data stale'
                 : isMarketOpen
                   ? 'Market open'
                   : 'Market closed'}
@@ -247,6 +262,16 @@ export function AssetMarketSection({
           </View>
         }
       />
+
+      {/* Venue metadata — truthful market model label. Co-Own is an
+          issuer-run fractional market, not a public exchange. This line
+          makes the market model explicit so users cannot mistake it for
+          a regulated securities exchange. */}
+      <View style={styles.venueMetadataRow}>
+        <Text style={[styles.venueMetadataText, { color: colors.textMuted }]}>
+          Issuer-run fractional market · No public exchange session
+        </Text>
+      </View>
 
       {/* ── 2. Your Open Orders — inline panel (Kalshi/Polymarket parity) ──
           Shows the viewer's resting orders for THIS asset only. Each row
@@ -348,11 +373,17 @@ export function AssetMarketSection({
             <View
               style={[
                 styles.liveIndicatorDot,
-                { backgroundColor: orderBookStreaming ? colors.success : colors.textMuted },
+                {
+                  backgroundColor: isSecondaryMarket && marketDataStale
+                    ? colors.warning
+                    : orderBookStreaming
+                      ? colors.success
+                      : colors.textMuted,
+                },
               ]}
             />
             <Text style={[styles.depthStatusText, { color: colors.textSecondary }]}>
-              {depthStatusLabel}
+              {depthStatus}
             </Text>
           </View>
 
@@ -368,12 +399,12 @@ export function AssetMarketSection({
           </Pressable>
         </View>
 
-        {orderBookError ? (
+        {orderBookError || (orderBook != null && !orderBookIsLive) ? (
           <View style={[styles.errorBox, { backgroundColor: colors.surfaceAlt }]}>
             <Ionicons name="cloud-offline-outline" size={24} color={colors.warning} />
-            <Text style={[styles.errorTitle, { color: colors.textPrimary }]}>Order book unavailable</Text>
+            <Text style={[styles.errorTitle, { color: colors.textPrimary }]}>Live market unavailable</Text>
             <Text style={[styles.errorSubtitle, { color: colors.textSecondary }]}>
-              Could not synchronize live market depth.
+              {orderBookError ? 'Could not synchronize live market depth.' : 'This view is not backed by a live market snapshot.'}
             </Text>
             <Pressable
               onPress={onRetryOrderBook}
@@ -382,6 +413,24 @@ export function AssetMarketSection({
               accessibilityLabel="Retry order book"
             >
               <Text style={[styles.retryBtnText, { color: colors.brand }]}>Retry</Text>
+            </Pressable>
+          </View>
+        ) : isSecondaryMarket && marketDataStale ? (
+          <View style={[styles.emptyDepthNotice, { backgroundColor: colors.warningSubtle }]}>
+            <Ionicons name="time-outline" size={26} color={colors.warning} />
+            <Text style={[styles.emptyDepthTitle, { color: colors.textPrimary }]}>Market data is stale</Text>
+            <Text style={[styles.emptyDepthBody, { color: colors.textSecondary }]}>
+              {marketDataAgeLabel
+                ? `Last verified market source: ${marketDataAgeLabel}. Trading stays paused until a fresh snapshot arrives.`
+                : 'Trading stays paused until a fresh market snapshot arrives.'}
+            </Text>
+            <Pressable
+              onPress={onRetryOrderBook}
+              style={[styles.retryBtn, { backgroundColor: colors.surface }]}
+              accessibilityRole="button"
+              accessibilityLabel="Refresh market data"
+            >
+              <Text style={[styles.retryBtnText, { color: colors.brand }]}>Refresh</Text>
             </Pressable>
           </View>
         ) : isMarketOpen && hasBidsOrAsks ? (
@@ -459,7 +508,7 @@ export function AssetMarketSection({
             <View style={styles.ruleTextCol}>
               <Text style={[styles.ruleTitle, { color: colors.textPrimary }]}>Price Protection (Circuit Breaker)</Text>
               <Text style={[styles.ruleDesc, { color: colors.textSecondary }]}>
-                Marketable orders automatically reject if execution deviates by more than 10% from prevailing quote.
+                Protected instant orders use your maximum buy price or minimum sell price. Any quantity outside that protection is cancelled.
               </Text>
             </View>
           </View>
@@ -479,10 +528,22 @@ export function AssetMarketSection({
             <View style={styles.ruleTextCol}>
               <Text style={[styles.ruleTitle, { color: colors.textPrimary }]}>Settlement Currency</Text>
               <Text style={[styles.ruleDesc, { color: colors.textSecondary }]}>
-                All fills and distributions clear through 1ZE balance at exact 1:1 GBP backing.
+                Fills and distributions settle in 1ZE. Review the asset's settlement documents for the applicable conversion and custody terms.
               </Text>
             </View>
           </View>
+
+          {asset.tradingFeeRate != null ? (
+            <View style={styles.ruleItem}>
+              <Ionicons name="receipt-outline" size={16} color={colors.brand} />
+              <View style={styles.ruleTextCol}>
+                <Text style={[styles.ruleTitle, { color: colors.textPrimary }]}>Trading fee</Text>
+                <Text style={[styles.ruleDesc, { color: colors.textSecondary }]}>
+                  {(asset.tradingFeeRate * 100).toFixed(2).replace(/\.00$/, '')}% per execution, reflected in the order review.
+                </Text>
+              </View>
+            </View>
+          ) : null}
         </View>
       </CommerceDetailSection>
     </View>
@@ -572,6 +633,14 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     alignItems: 'baseline',
     gap: Space.xs,
+  },
+  venueMetadataRow: {
+    paddingTop: Space.xs,
+  },
+  venueMetadataText: {
+    fontSize: TypographyV2.meta.size - 1,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: 0.2,
   },
   statsLabel: {
     fontSize: TypographyV2.meta.size,

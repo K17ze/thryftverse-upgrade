@@ -348,6 +348,8 @@ export interface MarketCoOwnAsset {
   totalTradedValueGbp?: number;
   /** Number of active verification demands from unit holders. */
   activeVerificationDemands?: number;
+  /** Backend-authoritative proportional trading fee. */
+  tradingFeeRate?: number;
 }
 
 /** Trust-profile audit event (WS1, SEC Rule 17Ad-7 pattern). */
@@ -423,6 +425,9 @@ export interface CoOwnMarketSnapshot {
   version: number;
   /** Server time at which the snapshot was assembled. */
   asOf: string;
+  /** Newest source timestamp represented by the snapshot. Use this for
+   * freshness labels; `asOf` only describes response assembly time. */
+  sourceAsOf?: string | null;
   /** GAP 5: Connection status — 'live', 'stale', 'closed', or 'degraded'. */
   connectionStatus?: 'live' | 'stale' | 'closed' | 'degraded';
   /** Last settled execution price in GBP. Null when no settled trades
@@ -1378,6 +1383,7 @@ function mockCoOwnAsset(
     unitPriceGbp: opts.unitPriceGbp ?? 25,
     unitPriceStable: opts.unitPriceStable ?? 30,
     settlementMode: opts.settlementMode ?? 'ONEZE',
+    tradingFeeRate: 0.01,
     issuerJurisdiction: opts.issuerJurisdiction ?? 'United Kingdom',
     marketMovePct24h: opts.marketMovePct24h ?? null,
     holders: opts.holders ?? total - available,
@@ -1453,7 +1459,7 @@ function mockCoOwnAsset(
       economicRights: 'Pro-rata share of net proceeds on sale',
       votingRights: 'One vote per unit on major decisions',
       exitRights: 'Sell on secondary market; no redemption right',
-      feeRights: '2% transaction fee on buys and sells',
+      feeRights: '1% transaction fee on buys and sells',
     },
     riskDisclosures: {
       marketRisk: 'Asset values fluctuate; you could receive less than paid',
@@ -1467,6 +1473,7 @@ function mockCoOwnAsset(
     marketSnapshot: {
       version: 1,
       asOf: new Date().toISOString(),
+      sourceAsOf: new Date(Date.now() - 3 * 24 * 60 * 60_000).toISOString(),
       connectionStatus: 'live',
       lastExecutionPriceGbp: opts.unitPriceGbp ?? 25,
       lastExecutionAt: new Date(Date.now() - 3 * 24 * 60 * 60_000).toISOString(),
@@ -2199,6 +2206,27 @@ export async function listCoOwnAssetOrders(
     warnIfMockSuppressed('fetchCoOwnOrders', err);
     throw err;
   }
+}
+
+// ---------------------------------------------------------------------------
+// fetchMyCoOwnAssetOrders — authenticated, owner-scoped open/partially-filled
+// orders for the current user on a specific asset. This is the dedicated
+// endpoint that replaces the 200-item account-history window filter.
+// Returns only open and partially_filled orders, newest first.
+// ---------------------------------------------------------------------------
+
+export async function fetchMyCoOwnAssetOrders(
+  assetId: string,
+  options: { limit?: number } = {}
+): Promise<MarketCoOwnOrder[]> {
+  const query = toQuery({
+    limit: options.limit,
+  });
+
+  const payload = await fetchJson<ListCoOwnOrdersResponse>(
+    `/co-own/assets/${encodeURIComponent(assetId)}/my-orders${query}`
+  );
+  return payload.items;
 }
 
 export interface MarketCoOwnHolding {
