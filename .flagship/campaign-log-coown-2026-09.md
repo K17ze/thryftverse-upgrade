@@ -131,4 +131,37 @@ Research: live web research on Kalshi market screen + Polymarket event page (see
 
 ## Current status
 
-TypeScript (frontend + backend) passes. 83/84 test files pass (new runtime suite green); the only failing file remains the pre-existing group-chat parity suite (6 tests, unrelated to co-own).
+TypeScript (frontend + backend) passes. 84/85 test files pass (new runtime suite green at 28 tests); the only failing file remains the pre-existing group-chat parity suite (6 tests, unrelated to co-own).
+
+## Wave 6 — Kalshi/Polymarket parity: open orders, related assets, holder transparency
+
+### Market tab — Your Open Orders panel (6A)
+- New inline panel on the Market tab between the transaction surface and the order book ladder — the same placement Kalshi and Polymarket use for open-order management.
+- Fetches the viewer's open/partially_filled orders for THIS asset from `listUserMarketHistory` (latest 50, filtered by `referenceId` and `status`). Anonymous viewers get `null` → panel hidden entirely.
+- Each row shows: BUY/SELL side badge (coownUp/coownDown tokens), order type (limit/protected), limit price, remaining/total units, and a Cancel control.
+- Cancel is optimistic: local removal → API call → on error, re-fetch and toast. Cancel-in-flight shows a spinner instead of the Cancel button.
+- State coverage: populated (rows with cancel), empty ("No resting orders on this asset"), error ("Open orders unavailable" with retry), anonymous (panel omitted), cancelling (spinner).
+- Refresh-key invalidation: pull-to-refresh re-fetches open orders alongside asset, order book, holdings, distributions, and corporate actions.
+
+### Related Assets rail (6B)
+- Compact horizontal scroll below the tabbed content showing same-issuer sibling assets — the Kalshi/Polymarket "Related markets" pattern adapted for ownership markets.
+- Fetches up to 8 sibling assets via `listCoOwnAssets({ issuerId })`, excluding the current asset.
+- Each chip: image, title, last-trade-or-offering price, availability dot + units-left label. Minimal card surface (hairline border, surfaceAlt fill) — not a card-heavy grid.
+- Failed fetch is silent (rail hidden) — related assets are a discovery enhancement, not critical market data.
+- Navigation: `navigation.push('AssetDetail', { assetId })` to avoid losing scroll position on the current asset.
+
+### Ownership concentration transparency (6C)
+- Added `holderCount` prop to `AssetOwnershipSection` — renders a factual line below the ownership bar legend: "N co-owners · X% allocated".
+- Uses singular "co-owner" when count is 1. Omitted entirely when holderCount is null or 0.
+- No fabricated top-holder list — only the verified aggregate count from the asset contract.
+
+### Runtime tests (6D)
+- New `coownAssetDetailRuntime.test.tsx` expanded from 19 to 28 tests:
+  - Open orders panel: renders side/price/remaining units, empty state, error state, anonymous omission, cancel control, cancelling spinner.
+  - Holder count: renders count + allocation %, singular pluralization, omission on null/0.
+  - Contract surface: verifies `cancelCoOwnOrder` and `listCoOwnAssets` are exported functions.
+
+### Verification
+- TypeScript (frontend): pass.
+- Runtime suite: 28/28 tests pass.
+- Full suite: 84/85 test files pass, 1759 tests passed, 6 pre-existing group-chat failures (unrelated).

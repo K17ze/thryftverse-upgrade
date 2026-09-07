@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, FontFamily, Radius } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
@@ -9,6 +9,7 @@ import {
   listCoOwnExecutions,
   type MarketCoOwnAsset,
   type MarketCoOwnExecution,
+  type MarketHistoryItem,
   type CoOwnOrderBookSnapshot,
   type CoOwnOrderBookEntry,
 } from '../../../services/marketApi';
@@ -37,6 +38,16 @@ export interface AssetMarketSectionProps {
   onOpenPriceAlert: () => void;
   onSelectOrderBookLevel: (side: 'bid' | 'ask', price: number) => void;
   lifecycleState: AssetLifecycleState;
+  /** The viewer's open/partially_filled orders for this asset, or null while loading. */
+  yourOpenOrders?: MarketHistoryItem[] | null;
+  /** True when the open-orders fetch failed — panel shows a quiet unavailable line. */
+  yourOpenOrdersFailed?: boolean;
+  /** True while the open-orders fetch is in-flight — panel shows a loading indicator. */
+  yourOpenOrdersLoading?: boolean;
+  /** Cancel an open order by orderId. The parent handles auth, optimistic removal, and error toast. */
+  onCancelOrder?: (orderId: number) => void;
+  /** Whether a cancel is in-flight for the given orderId. */
+  cancellingOrderId?: number | null;
 }
 
 export function AssetMarketSection({
@@ -55,6 +66,11 @@ export function AssetMarketSection({
   onOpenPriceAlert,
   onSelectOrderBookLevel,
   lifecycleState,
+  yourOpenOrders = null,
+  yourOpenOrdersFailed = false,
+  yourOpenOrdersLoading = false,
+  onCancelOrder,
+  cancellingOrderId = null,
 }: AssetMarketSectionProps) {
   const { colors, isDark } = useAppTheme();
 
@@ -232,7 +248,100 @@ export function AssetMarketSection({
         }
       />
 
-      {/* ── 2. Live Order Book Ladder ── */}
+      {/* ── 2. Your Open Orders — inline panel (Kalshi/Polymarket parity) ──
+          Shows the viewer's resting orders for THIS asset only. Each row
+          carries side, type, limit price, remaining/total units, and a
+          cancel control. Loading/empty/error states are all explicit.
+          Omitted entirely for anonymous viewers (yourOpenOrders = null
+          with no failure and no loading → not rendered). */}
+      {yourOpenOrders != null || yourOpenOrdersFailed || yourOpenOrdersLoading ? (
+        <CommerceDetailSection label="Your open orders">
+          {yourOpenOrdersFailed ? (
+            <CommerceDetailUnavailableInline
+              title="Open orders unavailable"
+              body="Your resting orders could not be loaded."
+            />
+          ) : yourOpenOrdersLoading ? (
+            <View style={styles.openOrdersLoadingRow}>
+              <ActivityIndicator size="small" color={colors.textMuted} />
+            </View>
+          ) : yourOpenOrders != null && yourOpenOrders.length > 0 ? (
+            <View>
+              {yourOpenOrders.map((order, idx) => {
+                const isBuy = order.action === 'buy-units';
+                // P1 #4 fix: guard against orderId null — both must be non-null
+                const isCancelling = cancellingOrderId != null && order.orderId != null && cancellingOrderId === order.orderId;
+                const canCancel = onCancelOrder != null && order.orderId != null && !isCancelling;
+                return (
+                  <View
+                    key={order.id}
+                    style={[
+                      styles.openOrderRow,
+                      idx > 0 && { borderTopColor: colors.borderSubtle },
+                    ]}
+                  >
+                    <View style={styles.openOrderSideCol}>
+                      <View style={[
+                        styles.sideBadge,
+                        { backgroundColor: isBuy ? colors.coownUpSubtle : colors.coownDownSubtle },
+                      ]}>
+                        <Text style={[
+                          styles.sideBadgeText,
+                          { color: isBuy ? colors.coownUp : colors.coownDown },
+                        ]}>
+                          {isBuy ? 'BUY' : 'SELL'}
+                        </Text>
+                      </View>
+                      {order.orderType ? (
+                        <Text style={[styles.openOrderType, { color: colors.textMuted }]}>
+                          {order.orderType === 'protected_market' ? 'protected' : order.orderType}
+                        </Text>
+                      ) : null}
+                    </View>
+
+                    <View style={styles.openOrderDetailCol}>
+                      <Text style={[styles.openOrderPrice, { color: colors.textPrimary }]}>
+                        {order.unitPriceGbp != null ? formatCoOwnIze(order.unitPriceGbp) : '—'}
+                      </Text>
+                      <Text style={[styles.openOrderUnits, { color: colors.textSecondary }]}>
+                        {order.remainingUnits != null
+                          ? `${order.remainingUnits}/${order.units ?? order.remainingUnits} units`
+                          : `${order.units ?? '—'} units`}
+                      </Text>
+                    </View>
+
+                    {canCancel ? (
+                      <Pressable
+                        onPress={() => onCancelOrder!(order.orderId!)}
+                        hitSlop={8}
+                        style={({ pressed }) => [
+                          styles.cancelBtn,
+                          { borderColor: colors.warning },
+                          pressed && { opacity: 0.6 },
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Cancel ${isBuy ? 'buy' : 'sell'} order ${order.orderId}`}
+                      >
+                        <Text style={[styles.cancelBtnText, { color: colors.warning }]}>
+                          Cancel
+                        </Text>
+                      </Pressable>
+                    ) : isCancelling ? (
+                      <ActivityIndicator size="small" color={colors.textMuted} />
+                    ) : null}
+                  </View>
+                );
+              })}
+            </View>
+          ) : (
+            <Text style={[styles.noOpenOrdersText, { color: colors.textMuted }]}>
+              No resting orders on this asset
+            </Text>
+          )}
+        </CommerceDetailSection>
+      ) : null}
+
+      {/* ── 3. Live Order Book Ladder ── */}
       <CommerceDetailSection label="Market depth">
         <View style={styles.sectionHeaderRow}>
           <View style={styles.depthStatusRow}>
@@ -285,7 +394,7 @@ export function AssetMarketSection({
             />
           </View>
         ) : (
-          <View style={[styles.emptyDepthNotice, { backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)' }]}>
+          <View style={[styles.emptyDepthNotice, { backgroundColor: colors.surfaceAlt }]}>
             <Ionicons name="layers-outline" size={26} color={colors.textMuted} />
             <Text style={[styles.emptyDepthTitle, { color: colors.textPrimary }]}>
               {lifecycleState === 'initialOffering' ? 'Primary Offering Mode' : 'Sparse Order Book'}
@@ -547,5 +656,71 @@ const styles = StyleSheet.create({
   marketStateText: {
     fontSize: TypographyV2.caption.size,
     fontFamily: FontFamily.medium,
+  },
+  // ── Open Orders panel ──
+  openOrderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'transparent',
+    paddingVertical: Space.sm,
+  },
+  openOrderSideCol: {
+    flexDirection: 'column',
+    gap: 3,
+    minWidth: 64,
+  },
+  sideBadge: {
+    paddingHorizontal: Space.xs,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+    alignSelf: 'flex-start',
+  },
+  sideBadgeText: {
+    fontSize: 10,
+    fontFamily: FontFamily.bold,
+    letterSpacing: 0.4,
+  },
+  openOrderType: {
+    fontSize: 10,
+    fontFamily: FontFamily.regular,
+    textTransform: 'capitalize',
+  },
+  openOrderDetailCol: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: Space.sm,
+  },
+  openOrderPrice: {
+    fontSize: TypographyV2.captionElevated.size,
+    fontFamily: FontFamily.semibold,
+    fontVariant: ['tabular-nums'],
+  },
+  openOrderUnits: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+    fontVariant: ['tabular-nums'],
+  },
+  cancelBtn: {
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+  },
+  cancelBtnText: {
+    fontSize: TypographyV2.caption.size,
+    fontFamily: FontFamily.semibold,
+  },
+  noOpenOrdersText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: 18,
+    paddingVertical: Space.xs,
+  },
+  openOrdersLoadingRow: {
+    paddingVertical: Space.sm,
+    alignItems: 'center',
   },
 });

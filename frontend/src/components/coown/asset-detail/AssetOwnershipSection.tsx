@@ -21,6 +21,8 @@ export interface AssetOwnershipSectionProps {
   availableSegmentPct: number;
   availableUnits: number;
   totalUnits: number;
+  /** Total distinct holder count from the asset contract. */
+  holderCount?: number | null;
   onOpenRights: () => void;
   lastDistribution: CoOwnDistribution | null;
   lastDistributionAmount: number | null;
@@ -85,6 +87,7 @@ export function AssetOwnershipSection({
   availableSegmentPct,
   availableUnits,
   totalUnits,
+  holderCount,
   onOpenRights,
   lastDistribution,
   lastDistributionAmount,
@@ -191,6 +194,18 @@ export function AssetOwnershipSection({
             </Text>
           </View>
         </View>
+
+        {/* Holder count context — factual transparency line.
+            Polymarket shows "Top holders" and distribution; for
+            ThryftVerse the holder count and allocation concentration
+            are the ownership transparency signal. No fabricated
+            top-holder list — just the verified count. Zero holders
+            is a valid state (brand-new offering) and is shown. */}
+        {holderCount != null ? (
+          <Text style={[styles.holderCountLine, { color: colors.textMuted }]}>
+            {holderCount} {holderCount === 1 ? 'co-owner' : 'co-owners'} · {Math.round((1 - availableSegmentPct / 100) * 100)}% allocated
+          </Text>
+        ) : null}
       </View>
 
       {/* ── 3. Governance, Decisions & Exit Rules — flat section ── */}
@@ -407,6 +422,12 @@ const styles = StyleSheet.create({
   legendText: {
     fontSize: 11,
     fontFamily: FontFamily.regular,
+  },
+  holderCountLine: {
+    fontSize: 11,
+    fontFamily: FontFamily.medium,
+    marginTop: Space.xs,
+    fontVariant: ['tabular-nums'],
   },
   linkRow: {
     flexDirection: 'row',

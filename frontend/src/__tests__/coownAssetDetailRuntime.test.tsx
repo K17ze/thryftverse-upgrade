@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import type { MarketCoOwnAsset, MarketCoOwnExecution, PriceCandle } from '../services/marketApi';
+import type { MarketCoOwnAsset, MarketCoOwnExecution, MarketHistoryItem, PriceCandle } from '../services/marketApi';
 import type { CandleDataPoint } from '../components/coown/asset-detail/types';
 import type { CoOwnCandleRange } from '../components/coown';
 
@@ -314,27 +314,29 @@ describe('AssetOverviewSection — ranged price history', () => {
 // ═══════════════════════════════════════════════════════════════════
 // B. AssetMarketSection — execution tape + 24h stats strip
 // ═══════════════════════════════════════════════════════════════════
+function renderMarket(asset: MarketCoOwnAsset, extraProps: Record<string, unknown> = {}) {
+  return renderTree(React.createElement(AssetMarketSection, {
+    asset,
+    orderBook: null,
+    orderBookStreaming: false,
+    orderBookHasGap: false,
+    orderBookError: false,
+    onRetryOrderBook: noop,
+    bestBid: null,
+    bestAsk: null,
+    spreadGbp: null,
+    depthStatusLabel: 'Live depth',
+    reconciliationActive: false,
+    isOffline: false,
+    onOpenSupply: noop,
+    onOpenPriceAlert: noop,
+    onSelectOrderBookLevel: noop,
+    lifecycleState: 'secondaryTrading',
+    ...extraProps,
+  }));
+}
+
 describe('AssetMarketSection', () => {
-  function renderMarket(asset: MarketCoOwnAsset) {
-    return renderTree(React.createElement(AssetMarketSection, {
-      asset,
-      orderBook: null,
-      orderBookStreaming: false,
-      orderBookHasGap: false,
-      orderBookError: false,
-      onRetryOrderBook: noop,
-      bestBid: null,
-      bestAsk: null,
-      spreadGbp: null,
-      depthStatusLabel: 'Live depth',
-      reconciliationActive: false,
-      isOffline: false,
-      onOpenSupply: noop,
-      onOpenPriceAlert: noop,
-      onSelectOrderBookLevel: noop,
-      lifecycleState: 'secondaryTrading',
-    }));
-  }
 
   it('renders only settled executions on the tape', async () => {
     listCoOwnExecutions.mockResolvedValue({
@@ -399,7 +401,184 @@ describe('AssetMarketSection', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
-// C. AssetOwnershipSection — fail-visible states
+// C. AssetMarketSection — Your Open Orders panel
+// ═══════════════════════════════════════════════════════════════════
+describe('AssetMarketSection — open orders panel', () => {
+  function makeOpenOrder(overrides: Partial<MarketHistoryItem> = {}): MarketHistoryItem {
+    return {
+      id: 'hist-1',
+      channel: 'co-own',
+      action: 'buy-units',
+      referenceId: 'asset-1',
+      amountGbp: 100,
+      units: 10,
+      filledUnits: 0,
+      remainingUnits: 10,
+      unitPriceGbp: 10,
+      feeGbp: 1.5,
+      status: 'open',
+      orderType: 'limit',
+      note: null,
+      timestamp: '2026-09-07T10:00:00Z',
+      orderId: 42,
+      ...overrides,
+    } as MarketHistoryItem;
+  }
+
+  it('renders open orders with side, price, and remaining units', async () => {
+    listCoOwnExecutions.mockResolvedValue({ ok: true, serverTimestamp: 'x', items: [] });
+    const renderer = renderMarket(makeAsset(), {
+      yourOpenOrders: [
+        makeOpenOrder({ action: 'buy-units', unitPriceGbp: 10, remainingUnits: 7, units: 10, orderId: 42 }),
+        makeOpenOrder({ id: 'hist-2', action: 'sell-units', unitPriceGbp: 11, remainingUnits: 3, units: 3, orderId: 43 }),
+      ],
+    });
+    await act(async () => {});
+    expect(hasText(renderer, 'BUY')).toBe(true);
+    expect(hasText(renderer, 'SELL')).toBe(true);
+    expect(hasText(renderer, '7/10')).toBe(true);
+    expect(hasText(renderer, '3/3')).toBe(true);
+  });
+
+  it('shows "No resting orders" when the list is empty', async () => {
+    listCoOwnExecutions.mockResolvedValue({ ok: true, serverTimestamp: 'x', items: [] });
+    const renderer = renderMarket(makeAsset(), {
+      yourOpenOrders: [],
+    });
+    await act(async () => {});
+    expect(hasText(renderer, 'No resting orders on this asset')).toBe(true);
+  });
+
+  it('shows unavailable line when the open-orders fetch failed', async () => {
+    listCoOwnExecutions.mockResolvedValue({ ok: true, serverTimestamp: 'x', items: [] });
+    const renderer = renderMarket(makeAsset(), {
+      yourOpenOrders: null,
+      yourOpenOrdersFailed: true,
+    });
+    await act(async () => {});
+    expect(hasText(renderer, 'Open orders unavailable')).toBe(true);
+  });
+
+  it('omits the open-orders panel entirely for anonymous viewers', async () => {
+    listCoOwnExecutions.mockResolvedValue({ ok: true, serverTimestamp: 'x', items: [] });
+    const renderer = renderMarket(makeAsset(), {
+      yourOpenOrders: null,
+      yourOpenOrdersFailed: false,
+    });
+    await act(async () => {});
+    expect(hasText(renderer, 'Your open orders')).toBe(false);
+    expect(hasText(renderer, 'No resting orders')).toBe(false);
+  });
+
+  it('renders a Cancel control for each open order with an orderId', async () => {
+    listCoOwnExecutions.mockResolvedValue({ ok: true, serverTimestamp: 'x', items: [] });
+    const cancelSpy = vi.fn();
+    const renderer = renderMarket(makeAsset(), {
+      yourOpenOrders: [makeOpenOrder({ orderId: 99 })],
+      onCancelOrder: cancelSpy,
+    });
+    await act(async () => {});
+    expect(hasText(renderer, 'Cancel')).toBe(true);
+  });
+
+  it('shows a spinner instead of Cancel when an order is being cancelled', async () => {
+    listCoOwnExecutions.mockResolvedValue({ ok: true, serverTimestamp: 'x', items: [] });
+    const renderer = renderMarket(makeAsset(), {
+      yourOpenOrders: [makeOpenOrder({ orderId: 99 })],
+      onCancelOrder: vi.fn(),
+      cancellingOrderId: 99,
+    });
+    await act(async () => {});
+    // Cancel text is hidden while cancelling
+    expect(hasText(renderer, 'Cancel')).toBe(false);
+  });
+
+  it('shows a loading spinner when yourOpenOrdersLoading is true', async () => {
+    listCoOwnExecutions.mockResolvedValue({ ok: true, serverTimestamp: 'x', items: [] });
+    const renderer = renderMarket(makeAsset(), {
+      yourOpenOrders: null,
+      yourOpenOrdersLoading: true,
+    });
+    await act(async () => {});
+    expect(hasText(renderer, 'Your open orders')).toBe(true);
+    // No content rows, no empty message — just the loading state
+    expect(hasText(renderer, 'No resting orders')).toBe(false);
+    expect(hasText(renderer, 'Open orders unavailable')).toBe(false);
+  });
+
+  it('does not render a phantom spinner for orders with orderId null', async () => {
+    listCoOwnExecutions.mockResolvedValue({ ok: true, serverTimestamp: 'x', items: [] });
+    const renderer = renderMarket(makeAsset(), {
+      yourOpenOrders: [makeOpenOrder({ orderId: null })],
+      onCancelOrder: vi.fn(),
+      cancellingOrderId: null,
+    });
+    await act(async () => {});
+    // The order row renders but no Cancel button (orderId is null)
+    // and no phantom spinner (cancellingOrderId is null, not matching)
+    expect(hasText(renderer, 'Cancel')).toBe(false);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// D. AssetOwnershipSection — holder count transparency
+// ═══════════════════════════════════════════════════════════════════
+describe('AssetOwnershipSection — holder count', () => {
+  function renderOwnershipHolderCount(holderCount: number | null | undefined) {
+    return renderTree(React.createElement(AssetOwnershipSection, {
+      isHolder: false,
+      yourUnits: 0,
+      viewerPct: null,
+      avgEntryPriceGbp: null,
+      unrealizedPnlGbp: null,
+      unrealizedPnlPct: null,
+      yourSegmentPct: 0,
+      otherHoldersSegmentPct: 60,
+      availableSegmentPct: 40,
+      availableUnits: 400,
+      totalUnits: 1000,
+      holderCount,
+      onOpenRights: noop,
+      lastDistribution: null,
+      lastDistributionAmount: null,
+      lastDistributionDate: null,
+      lastDistributionPerUnit: null,
+      onNavigateToDistributionHistory: noop,
+      corporateActions: null,
+      onNavigateToCorporateAction: noop,
+      onOpenBuyout: noop,
+    }));
+  }
+
+  it('renders holder count and allocation percentage when holders > 0', () => {
+    const renderer = renderOwnershipHolderCount(12);
+    // Text nodes are split: "12" + " co-owners · " + "60" + "% allocated"
+    const text = getAllText(renderer).join('');
+    expect(text).toContain('12 co-owners');
+    expect(text).toContain('60% allocated');
+  });
+
+  it('uses singular "co-owner" when holder count is 1', () => {
+    const renderer = renderOwnershipHolderCount(1);
+    const text = getAllText(renderer).join('');
+    expect(text).toContain('1 co-owner');
+  });
+
+  it('omits the holder count line when holderCount is null', () => {
+    const renderer = renderOwnershipHolderCount(null);
+    const text = getAllText(renderer).join('');
+    expect(text).not.toMatch(/\d+ co-owners/);
+  });
+
+  it('renders zero holders as a valid state (not hidden)', () => {
+    const renderer = renderOwnershipHolderCount(0);
+    const text = getAllText(renderer).join('');
+    expect(text).toContain('0 co-owners');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// E. AssetOwnershipSection — fail-visible states
 // ═══════════════════════════════════════════════════════════════════
 describe('AssetOwnershipSection — fail-visible states', () => {
   function renderOwnership(props: Record<string, unknown> = {}) {
@@ -452,7 +631,7 @@ describe('AssetOwnershipSection — fail-visible states', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
-// D. Contract surface — the fetchers the new backend routes back
+// F. Contract surface — the fetchers the new backend routes back
 // ═══════════════════════════════════════════════════════════════════
 describe('marketApi contract surface', () => {
   it('exposes the fetchers backing the new backend routes', async () => {
@@ -461,5 +640,44 @@ describe('marketApi contract surface', () => {
     expect(typeof api.fetchCoOwnAssetCorporateActions).toBe('function');
     expect(typeof api.fetchCoOwnPriceHistory).toBe('function');
     expect(typeof api.listCoOwnExecutions).toBe('function');
+    expect(typeof api.cancelCoOwnOrder).toBe('function');
+    expect(typeof api.listCoOwnAssets).toBe('function');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════
+// E. Position resolution state machine (P0 lockout prevention)
+// ═══════════════════════════════════════════════════════════════════
+describe('Position resolution state machine', () => {
+  function resolveYourUnits(
+    currentUserId: string | null | undefined,
+    holdingsData: Array<{ assetId: string; unitsOwned: number }> | undefined,
+    targetAssetId: string
+  ): number | null {
+    const yourHolding = holdingsData?.find((entry) => entry.assetId === targetAssetId) ?? null;
+    return currentUserId
+      ? (holdingsData ? (yourHolding?.unitsOwned ?? 0) : null)
+      : 0;
+  }
+
+  it('resolves to 0 (tradable non-holder) for logged-in user with no units once holdings arrive', () => {
+    const result = resolveYourUnits('user-1', [], 'asset-42');
+    expect(result).toBe(0);
+  });
+
+  it('resolves to unitsOwned when user holds units in the asset', () => {
+    const result = resolveYourUnits('user-1', [{ assetId: 'asset-42', unitsOwned: 15 }], 'asset-42');
+    expect(result).toBe(15);
+  });
+
+  it('resolves to null (unresolved position) while holdings data is loading', () => {
+    const result = resolveYourUnits('user-1', undefined, 'asset-42');
+    expect(result).toBeNull();
+  });
+
+  it('resolves to 0 for logged-out / anonymous visitor', () => {
+    const result = resolveYourUnits(null, undefined, 'asset-42');
+    expect(result).toBe(0);
+  });
+});
+

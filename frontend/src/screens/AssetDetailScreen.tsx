@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,9 +22,12 @@ import {
   fetchCoOwnDistributions,
   fetchCoOwnAssetCorporateActions,
   listUserMarketHistory,
+  cancelCoOwnOrder,
+  listCoOwnAssets,
   type CoOwnDistribution,
   type CoOwnCorporateAction,
   type MarketCoOwnAsset,
+  type MarketHistoryItem,
 } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 import { useToast } from '../context/ToastContext';
@@ -45,10 +48,8 @@ import {
   CommerceDetailStateDock,
   CommerceDetailMediaRail,
 } from '../components/commerce/detail';
-import { RecommendationRail, FullscreenMediaViewer } from '../components/product';
-import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
-import { ShareSheet } from '../components/ShareSheet';
-import { BottomSheet } from '../components/BottomSheet';
+import { RecommendationRail } from '../components/product';
+import { CachedImage } from '../components/CachedImage';
 import { resolveCoOwnConversation } from '../utils/coOwnMessaging';
 import {
   buildCoOwnViewModel,
@@ -60,17 +61,12 @@ import {
 } from '../platform/product';
 import type { RecommendationLook } from '../platform/product';
 import {
-  CoOwnRiskDisclosure,
   CoOwnStateCanvas,
-  CoOwnFirstTradeGuide,
-  CoOwnRightsSheet,
-  CoOwnSupplySheet,
-  CoOwnOverflowSheet,
-  CoOwnPriceAlertForm,
   CANONICAL_RIGHTS_LABELS,
   type CoOwnRightsRow,
   type CoOwnCandleRange,
 } from '../components/coown';
+import { AssetDetailModals } from '../components/coown/asset-detail/AssetDetailModals';
 import {
   AssetOverviewSection,
   AssetMarketSection,
@@ -147,7 +143,9 @@ export default function AssetDetailScreen() {
   const isLoading = assetQuery.isLoading;
   const isError = assetQuery.isError;
   const yourHolding = holdingsQuery.data?.find((entry) => entry.assetId === assetId) ?? null;
-  const yourUnits = currentUser?.id ? (yourHolding?.unitsOwned ?? null) : 0;
+  const yourUnits = currentUser?.id
+    ? (holdingsQuery.data ? (yourHolding?.unitsOwned ?? 0) : null)
+    : 0;
   const holdingsError = currentUser?.id ? holdingsQuery.isError : false;
 
   const [lastDistribution, setLastDistribution] = React.useState<CoOwnDistribution | null>(null);
@@ -155,6 +153,14 @@ export default function AssetDetailScreen() {
   const [distributionsFailed, setDistributionsFailed] = React.useState(false);
   const [corporateActionsFailed, setCorporateActionsFailed] = React.useState(false);
   const [hasActiveOrders, setHasActiveOrders] = React.useState(false);
+  const [yourOpenOrders, setYourOpenOrders] = React.useState<MarketHistoryItem[] | null>(null);
+  const [yourOpenOrdersFailed, setYourOpenOrdersFailed] = React.useState(false);
+  const [yourOpenOrdersLoading, setYourOpenOrdersLoading] = React.useState(false);
+  const [cancellingOrderId, setCancellingOrderId] = React.useState<number | null>(null);
+  const [pendingCancels, setPendingCancels] = React.useState<Set<number>>(new Set());
+  const [relatedAssets, setRelatedAssets] = React.useState<MarketCoOwnAsset[]>([]);
+  const [relatedAssetsFailed, setRelatedAssetsFailed] = React.useState(false);
+  const [relatedAssetsLoading, setRelatedAssetsLoading] = React.useState(false);
   const [refreshKey, setRefreshKey] = React.useState(0);
   const [isResolvingConversation, setIsResolvingConversation] = React.useState(false);
   const [fullscreenIndex, setFullscreenIndex] = React.useState(0);
@@ -259,26 +265,94 @@ export default function AssetDetailScreen() {
     return () => { cancelled = true; };
   }, [assetId, refreshKey]);
 
-  // ── Active orders badge — the user's own co-own market history carries
-  // order status; open/partially_filled entries for this asset light the
-  // Market tab dot. Recent-window check (latest 50 entries), never fabricated.
+  // ── Related assets — same issuer, excluding the current asset.
+  // Fetches up to 8 open sibling assets for a compact horizontal rail
+  // below the tabbed content. Closed/delisted assets are filtered out
+  // so the rail never navigates to a broken surface. State is reset
+  // before each fetch to prevent stale sibling leakage on asset change.
   React.useEffect(() => {
-    if (!assetId || !currentUser?.id) return;
+    if (!asset?.issuerId || !assetId) {
+      setRelatedAssets([]);
+      setRelatedAssetsFailed(false);
+      setRelatedAssetsLoading(false);
+      return;
+    }
     let cancelled = false;
-    void listUserMarketHistory(currentUser.id, { channel: 'co-own', limit: 50 })
-      .then((page) => {
+    // P1 #11 fix: reset before fetch so stale siblings don't flash.
+    setRelatedAssets([]);
+    setRelatedAssetsFailed(false);
+    setRelatedAssetsLoading(true);
+    void listCoOwnAssets({ issuerId: asset.issuerId, openOnly: true, limit: 9 })
+      .then((items) => {
         if (cancelled) return;
-        setHasActiveOrders(page.items.some((item) =>
-          item.referenceId === assetId
-          && (item.status === 'open' || item.status === 'partially_filled')
-        ));
+        // P1 #7 fix: exclude closed/delisted assets and the current asset.
+        const siblings = items
+          .filter((a) => a.id !== assetId && a.isOpen && a.listingTier !== 'delisted')
+          .slice(0, 8);
+        setRelatedAssets(siblings);
+        setRelatedAssetsLoading(false);
       })
       .catch(() => {
         if (cancelled) return;
-        setHasActiveOrders(false);
+        setRelatedAssets([]);
+        setRelatedAssetsFailed(true);
+        setRelatedAssetsLoading(false);
       });
     return () => { cancelled = true; };
-  }, [assetId, currentUser?.id, refreshKey]);
+  }, [asset?.issuerId, assetId, refreshKey]);
+
+  // ── Active orders badge + open-orders panel data — the user's own
+  // co-own market history carries order status; open/partially_filled
+  // entries for this asset light the Market tab dot AND populate the
+  // inline open-orders panel.
+  //
+  // LIMITATION: The history endpoint does not yet support server-side
+  // filtering by referenceId or status, so we fetch a 200-entry window
+  // and filter client-side. A dedicated asset-scoped open-orders
+  // endpoint would eliminate this window entirely. 200 covers the
+  // vast majority of retail users; power users with extensive history
+  // may have older open orders missed — documented as P2 in the gap
+  // registry. Anonymous viewers get null (panel hidden).
+  React.useEffect(() => {
+    if (!assetId || !currentUser?.id) {
+      setYourOpenOrders(null);
+      setYourOpenOrdersFailed(false);
+      setYourOpenOrdersLoading(false);
+      setHasActiveOrders(false);
+      return;
+    }
+    let cancelled = false;
+    // P0 fix: reset state before fetch so stale cross-asset/user data
+    // never leaks into the new fetch cycle.
+    setYourOpenOrders(null);
+    setYourOpenOrdersFailed(false);
+    setYourOpenOrdersLoading(true);
+    setHasActiveOrders(false);
+    void listUserMarketHistory(currentUser.id, { channel: 'co-own', limit: 200 })
+      .then((page) => {
+        if (cancelled) return;
+        const assetOrders = page.items.filter((item) =>
+          item.referenceId === assetId
+          && (item.status === 'open' || item.status === 'partially_filled')
+        );
+        // P1 #5 fix: filter out orders with pending cancels so an
+        // in-flight refresh doesn't restore an order being cancelled.
+        const filtered = pendingCancels.size > 0
+          ? assetOrders.filter((o) => o.orderId != null && !pendingCancels.has(o.orderId))
+          : assetOrders;
+        setYourOpenOrders(filtered);
+        setHasActiveOrders(filtered.length > 0);
+        setYourOpenOrdersLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setYourOpenOrders(null);
+        setYourOpenOrdersFailed(true);
+        setHasActiveOrders(false);
+        setYourOpenOrdersLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [assetId, currentUser?.id, refreshKey, pendingCancels]);
 
   // Track when asset data first arrives for staleness computation
   React.useEffect(() => {
@@ -302,9 +376,69 @@ export default function AssetDetailScreen() {
     holdingsQuery.refetch();
   }, [holdingsQuery, currentUser?.id]);
 
+  // ── Cancel an open order ──
+  // Optimistic removal from the local list, then API call. On failure,
+  // restore by re-fetching and toast the error. The cancel endpoint
+  // requires the authenticated user's identity.
+  // P1 #3: Cancel is blocked during reconciliation (balances settling)
+  // but allowed when the market is closed — resting orders can be
+  // withdrawn even when new orders are paused.
+  // P1 #5: A pending-cancels set prevents an in-flight refresh from
+  // restoring an order that is being cancelled.
+  // P1 #15: Verify the order exists in the local list and belongs to
+  // this asset before calling the API.
+  const handleCancelOrder = React.useCallback((orderId: number) => {
+    if (!assetId || !currentUser?.id) return;
+    // P1 #15: fail closed — verify the order is in our list for this asset
+    const orderExists = yourOpenOrders?.some(
+      (o) => o.orderId === orderId && o.referenceId === assetId
+    );
+    if (!orderExists) {
+      show('Order not found. Refresh and try again.', 'error');
+      return;
+    }
+    // P1 #3: block cancel during reconciliation — compute inline since
+    // reconciliationActive is declared later in the render flow.
+    const orderBookReconciling = orderBook != null && orderBook.reconciliationState !== 'reconciled';
+    if (orderBookReconciling) {
+      show('Orders cannot be cancelled while balances are reconciling.', 'error');
+      return;
+    }
+    haptics.tap();
+    setCancellingOrderId(orderId);
+    setPendingCancels((prev) => new Set(prev).add(orderId));
+    // Optimistic: remove from local list immediately
+    setYourOpenOrders((prev) => prev?.filter((o) => o.orderId !== orderId) ?? null);
+    void cancelCoOwnOrder(assetId, orderId, currentUser.id)
+      .then(() => {
+        setCancellingOrderId(null);
+        setPendingCancels((prev) => {
+          const next = new Set(prev);
+          next.delete(orderId);
+          return next;
+        });
+        // Refresh the badge state
+        setRefreshKey((k) => k + 1);
+      })
+      .catch((err) => {
+        setCancellingOrderId(null);
+        setPendingCancels((prev) => {
+          const next = new Set(prev);
+          next.delete(orderId);
+          return next;
+        });
+        const parsed = parseApiError(err, 'Could not cancel order');
+        show(parsed.message, 'error');
+        // Re-fetch to restore the removed order
+        setRefreshKey((k) => k + 1);
+      });
+  }, [assetId, currentUser?.id, show, yourOpenOrders, orderBook]);
+
   // Pull-to-refresh — reloads asset, order book, and holdings in parallel.
   // Bumping refreshKey also re-runs the distributions, corporate-actions,
-  // and active-orders effects so every surface on the screen refreshes.
+  // active-orders, and related-assets effects so every surface refreshes.
+  // The refresh spinner stays up until the primary fetches settle; the
+  // refreshKey-triggered effects run concurrently and settle on their own.
   // Recourse status is fetched by the Due Diligence screen independently.
   const handleRefresh = React.useCallback(() => {
     if (!assetId) return;
@@ -507,6 +641,10 @@ export default function AssetDetailScreen() {
   const reconciliationActive =
     orderBook != null && orderBook.reconciliationState !== 'reconciled';
   const marketSnapshot = asset.marketSnapshot ?? null;
+  const movePct24h = marketSnapshot?.marketMovePct24h ?? asset.marketMovePct24h ?? null;
+  const volume24hGbp = marketSnapshot?.volume24hGbp ?? asset.volume24hGbp ?? null;
+  const bestBidGbp = marketSnapshot?.bestBidGbp ?? asset.bestBidGbp ?? null;
+  const bestAskGbp = marketSnapshot?.bestAskGbp ?? asset.bestAskGbp ?? null;
   const lastExecutionPriceGbp = marketSnapshot?.lastExecutionPriceGbp ?? null;
   const hasTrades = lastExecutionPriceGbp != null;
   // ── Dominant price ──
@@ -754,22 +892,113 @@ export default function AssetDetailScreen() {
           <CommerceDetailIdentity
             family="co_own"
             density={isVeryCompact ? 'compact' : 'standard'}
-            eyebrow={asset.legalVehicleName ?? undefined}
+            eyebrow={asset.legalVehicleName ?? 'FRACTIONAL COLLECTIBLE'}
             title={asset.title}
-            secondaryLine={`${availableUnits} of ${totalUnits} units available`}
-            interestSignal={asset.holders != null ? `${asset.holders} holders` : undefined}
+            interestSignal={asset.holders != null && asset.holders > 0 ? `${asset.holders} holders` : undefined}
           />
 
-          {/* Issuer — shared seller row primitive, configured for
-              institutional Co-Own issuers. Taps into issuer profile.
-              variant="rich" presents the full confidence row (avatar,
-              name, verification badge, compact stats line) so issuer
-              trust is visible in the first viewport. */}
+          {/* Dominant price block — bold tabular numeral with 24h delta */}
+          <View style={styles.collectiblePriceRow}>
+            <Text
+              style={[styles.collectiblePriceValue, { color: colors.textPrimary }]}
+              accessibilityRole="text"
+              adjustsFontSizeToFit
+              minimumFontScale={0.82}
+              numberOfLines={1}
+              maxFontSizeMultiplier={1.3}
+            >
+              {formatCoOwnIze(dominantPriceValue)}
+            </Text>
+            <Text style={[styles.collectiblePriceUnit, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
+              {dominantPriceLabel === 'Last trade' && dominantPriceTimestamp
+                ? `${dominantPriceLabel} · ${dominantPriceTimestamp}`
+                : dominantPriceLabel}
+            </Text>
+            {movePct24h != null && !isInitialOffering && (
+              <View style={[
+                styles.movePill,
+                { backgroundColor: movePct24h >= 0 ? colors.coownUpSubtle : colors.coownDownSubtle },
+              ]}>
+                <Ionicons
+                  name={movePct24h >= 0 ? 'trending-up' : 'trending-down'}
+                  size={12}
+                  color={movePct24h >= 0 ? colors.coownUp : colors.coownDown}
+                />
+                <Text style={[
+                  styles.movePillText,
+                  { color: movePct24h >= 0 ? colors.coownUp : colors.coownDown },
+                ]}>
+                  {`${movePct24h >= 0 ? '+' : ''}${movePct24h.toFixed(1)}%`}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Initial offering allocation progress OR secondary market depth status */}
+          {isInitialOffering ? (
+            <View style={styles.offeringProgressBlock}>
+              <View style={[styles.progressBarTrack, { backgroundColor: colors.surfaceAlt }]}>
+                <View
+                  style={[
+                    styles.progressBarFill,
+                    {
+                      width: `${Math.min(100, Math.max(0, allocatedPct))}%`,
+                      backgroundColor: colors.brand,
+                    },
+                  ]}
+                />
+              </View>
+              <View style={styles.offeringMetaRow}>
+                <Text style={[styles.offeringMetaText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
+                  {allocatedPct}% allocated · {availableUnits} units left
+                </Text>
+                {asset.buyerProtection ? (
+                  <View style={styles.protectedBadge}>
+                    <Ionicons name="shield-checkmark" size={13} color={colors.success} />
+                    <Text style={[styles.protectedBadgeText, { color: colors.success }]}>Safeguarded</Text>
+                  </View>
+                ) : null}
+              </View>
+            </View>
+          ) : (
+            <View style={styles.collectibleAvailabilityRow}>
+              <View style={[styles.collectibleAvailabilityDot, {
+                backgroundColor: reconciliationActive
+                  ? colors.warning
+                  : asset.isOpen
+                    ? colors.success
+                    : colors.textMuted,
+              }]} />
+              <Text style={[styles.collectibleAvailabilityText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
+                {reconciliationActive
+                  ? 'Orders paused'
+                  : asset.isOpen
+                    ? 'Market open'
+                    : 'Market closed'}
+              </Text>
+              {bestBidGbp != null && bestAskGbp != null ? (
+                <Text style={[styles.collectibleSpreadText, { color: colors.textMuted }]} maxFontSizeMultiplier={1.4}>
+                  · {formatCoOwnIze(bestBidGbp)} Bid / {formatCoOwnIze(bestAskGbp)} Ask
+                </Text>
+              ) : (
+                <Text style={[styles.collectibleSpreadText, { color: colors.textMuted }]} maxFontSizeMultiplier={1.4}>
+                  · {availableUnits} units available
+                </Text>
+              )}
+              {dataStale && dataStaleAgeLabel ? (
+                <Text style={[styles.collectibleStaleText, { color: colors.warning }]}>
+                  · stale {dataStaleAgeLabel}
+                </Text>
+              ) : null}
+            </View>
+          )}
+
+          {/* Issuer Trust Row — clean compact presentation */}
           <View style={styles.collectibleIssuerWrap}>
             <CommerceDetailSellerRow
               roleLabel="Issuer"
               institutional
-              variant="rich"
+              variant="compact"
               avatarUri={asset.issuer?.avatar ?? undefined}
               name={issuerUsername}
               verified={asset.issuerVerification?.tier === 'id' || asset.issuerVerification?.tier === 'seller'}
@@ -788,123 +1017,11 @@ export default function AssetDetailScreen() {
                   ? [
                       issuerTrust.completedSales != null ? `${issuerTrust.completedSales} sales` : null,
                       issuerTrust.rating != null ? `${issuerTrust.rating.toFixed(1)}★` : null,
-                      issuerTrust.responseRate != null ? `${issuerTrust.responseRate}% response` : null,
                     ].filter(Boolean).join(' · ') || undefined
                   : undefined
               }
               onPress={() => openProfile(navigation, asset.issuerId, currentUser?.id)}
-              primaryAction={
-                canMessageIssuer
-                  ? {
-                      label: 'Message',
-                      onPress: async () => {
-                        if (!requireAuth('message_seller')) return;
-                        if (!currentUser) return;
-                        if (isResolvingConversation) return;
-                        setIsResolvingConversation(true);
-                        try {
-                          const conversation = await resolveCoOwnConversation(
-                            currentUser.id,
-                            asset.issuerId,
-                            issuerUsername,
-                            asset.listingId,
-                          );
-                          upsertConversation(conversation);
-                          navigation.navigate('Chat', {
-                            conversationId: conversation.id,
-                            focusQuery: issuerUsername,
-                            partnerUserId: asset.issuerId,
-                          });
-                        } catch {
-                          show('Unable to open conversation. Try again.', 'error');
-                        } finally {
-                          setIsResolvingConversation(false);
-                        }
-                      },
-                    }
-                  : undefined
-              }
-              secondaryAction={
-                canMessageIssuer
-                  ? {
-                      label: issuerFollowMutation.isPending ? 'Following…' : (issuerTrust?.isFollowing ? 'Following' : 'Follow'),
-                      onPress: () => {
-                        if (!requireAuth('follow_seller')) return;
-                        issuerFollowMutation.mutate(undefined, {
-                          onSuccess: (data) => {
-                            show(data.isFollowing ? 'Followed issuer' : 'Unfollowed issuer', 'success');
-                          },
-                          onError: () => {
-                            show('Could not follow issuer. Try again.', 'error');
-                          },
-                        });
-                      },
-                    }
-                  : undefined
-              }
             />
-          </View>
-
-          {/* Dominant price — ONE number. Offering price during
-              initial offering; last trade with timestamp when
-              secondary trades exist; falls back to offering price. */}
-          <View style={styles.collectiblePriceRow}>
-            <Text
-              style={[styles.collectiblePriceValue, { color: colors.textPrimary }]}
-              accessibilityRole="text"
-              adjustsFontSizeToFit
-              minimumFontScale={0.82}
-              numberOfLines={1}
-              maxFontSizeMultiplier={1.3}
-            >
-              {formatCoOwnIze(dominantPriceValue)}
-            </Text>
-            <Text style={[styles.collectiblePriceUnit, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
-              {dominantPriceLabel === 'Last trade' && dominantPriceTimestamp
-                ? `${dominantPriceLabel} · ${dominantPriceTimestamp}`
-                : dominantPriceLabel}
-            </Text>
-          </View>
-
-          {/* Availability + market state — flat factual line. */}
-          <View style={styles.collectibleAvailabilityRow}>
-            <Text style={[styles.collectibleAvailabilityText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
-              {availableUnits} available
-            </Text>
-            <View style={[styles.collectibleAvailabilityDot, {
-              backgroundColor: reconciliationActive
-                ? colors.warning
-                : asset.isOpen
-                  ? colors.success
-                  : colors.textMuted,
-            }]} />
-            <Text style={[styles.collectibleAvailabilityText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
-              {reconciliationActive
-                ? 'Orders paused'
-                : asset.isOpen
-                  ? 'Market open'
-                  : 'Market closed'}
-            </Text>
-            {dataStale && dataStaleAgeLabel ? (
-              <Text style={[styles.collectibleStaleText, { color: colors.warning }]}>
-                · stale {dataStaleAgeLabel}
-              </Text>
-            ) : null}
-          </View>
-
-          {/* Lifecycle context — brief factual line derived from
-              isOpen + availableUnits. Escalates only when the state
-              changes what the user can do. */}
-          <View style={styles.lifecycleContextRow}>
-            <Text style={[styles.lifecycleContextText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
-              {lifecycleState === 'initialOffering'
-                ? `Offering in progress · ${allocatedPct}% allocated`
-                : lifecycleState === 'secondaryTrading'
-                  ? 'Secondary market · live quotes'
-                  : lifecycleState === 'tradingPaused'
-                    ? 'Trading paused · orders temporarily unavailable'
-                    : 'Exit underway · proceeds distribution in progress'}
-            </Text>
           </View>
         </View>
 
@@ -964,6 +1081,11 @@ export default function AssetDetailScreen() {
             onOpenPriceAlert={openPriceAlert}
             onSelectOrderBookLevel={handleSelectOrderBookLevel}
             lifecycleState={lifecycleState}
+            yourOpenOrders={yourOpenOrders}
+            yourOpenOrdersFailed={yourOpenOrdersFailed}
+            yourOpenOrdersLoading={yourOpenOrdersLoading}
+            onCancelOrder={handleCancelOrder}
+            cancellingOrderId={cancellingOrderId}
           />
         )}
 
@@ -980,6 +1102,7 @@ export default function AssetDetailScreen() {
             availableSegmentPct={availableSegmentPct}
             availableUnits={availableUnits}
             totalUnits={totalUnits}
+            holderCount={asset.holders ?? null}
             onOpenRights={() => openSheet('rights')}
             lastDistribution={lastDistribution}
             lastDistributionAmount={lastDistributionAmount}
@@ -1002,6 +1125,83 @@ export default function AssetDetailScreen() {
             })}
             onOpenBuyout={() => navigation.navigate('Buyout', { assetId: asset.id })}
           />
+        )}
+
+        {/* ════════════════════════════════════════════════════════════
+            Related Assets — same issuer, compact horizontal rail.
+            Both Kalshi and Polymarket surface related/sibling markets
+            below the market content. For ThryftVerse this is same-issuer
+            assets — other fractional collectibles from the same SPV/issuer.
+            Flat horizontal scroll — image, title, price, and availability
+            state only. No card chrome per item (anti-AI: flat canvas,
+            spacing, and press feedback carry the structure).
+            State coverage: loading (heading + spinner), empty (hidden),
+            error (hidden — discovery enhancement), populated (rail).
+            ════════════════════════════════════════════════════════════ */}
+        {(relatedAssets.length > 0 || relatedAssetsLoading) && (
+          <View style={styles.relatedAssetsSection}>
+            <Text style={[styles.relatedAssetsHeading, { color: colors.textPrimary }]}>
+              More from {issuerUsername}
+            </Text>
+            {relatedAssetsLoading ? (
+              <View style={styles.relatedAssetsLoadingRow}>
+                <ActivityIndicator size="small" color={colors.textMuted} />
+              </View>
+            ) : (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.relatedAssetsRail}
+              >
+                {relatedAssets.map((relAsset) => {
+                  const relAvailable = relAsset.availableUnits > 0;
+                  const relPriceLabel = relAsset.marketSnapshot?.lastExecutionPriceGbp != null
+                    ? formatCoOwnIze(relAsset.marketSnapshot.lastExecutionPriceGbp)
+                    : formatCoOwnIze(relAsset.unitPriceGbp);
+                  return (
+                    <Pressable
+                      key={relAsset.id}
+                      onPress={() => navigation.push('AssetDetail', { assetId: relAsset.id })}
+                      style={({ pressed }) => [
+                        styles.relatedAssetChip,
+                        pressed && { opacity: 0.7 },
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${relAsset.title}, ${relPriceLabel} per unit, ${relAvailable ? 'units available' : 'fully allocated'}`}
+                    >
+                      {relAsset.imageUrl ? (
+                        <CachedImage
+                          uri={relAsset.imageUrl}
+                          style={styles.relatedAssetImage}
+                          contentFit="cover"
+                        />
+                      ) : (
+                        <View style={[styles.relatedAssetImage, { backgroundColor: colors.surfaceAlt }]} />
+                      )}
+                      <Text
+                        style={[styles.relatedAssetTitle, { color: colors.textPrimary }]}
+                        numberOfLines={1}
+                        maxFontSizeMultiplier={1.2}
+                      >
+                        {relAsset.title}
+                      </Text>
+                      <Text style={[styles.relatedAssetPrice, { color: colors.textSecondary }]}>
+                        {relPriceLabel}
+                      </Text>
+                      <View style={styles.relatedAssetStatusRow}>
+                        <View style={[styles.relatedAssetDot, {
+                          backgroundColor: relAvailable ? colors.success : colors.textMuted,
+                        }]} />
+                        <Text style={[styles.relatedAssetStatus, { color: colors.textMuted }]} numberOfLines={1}>
+                          {relAvailable ? `${relAsset.availableUnits} left` : 'Allocated'}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </View>
         )}
 
         {seenInLooksSection && seenInLooksSection.items.length > 0 && (
@@ -1157,131 +1357,45 @@ export default function AssetDetailScreen() {
         );
       })()}
 
-      {/* Save to collection + share */}
-      <SaveToCollectionModal
-        visible={social.collectionModalVisible}
-        itemId={asset.id}
-        onClose={social.closeCollectionPicker}
-      />
-      <ShareSheet
-        visible={social.shareVisible}
-        onDismiss={social.closeShare}
-        url={`https://thryftverse.com/asset/${asset.id}`}
-        title={asset.title}
-      />
-
-      {/* Fullscreen media viewer */}
-      <FullscreenMediaViewer
+      {/* Domain-isolated modals and bottom sheets */}
+      <AssetDetailModals
+        asset={asset}
         images={images}
-        initialIndex={fullscreenIndex}
-        visible={fullscreenVisible}
-        onActiveIndexChange={setFullscreenIndex}
-        onClose={() => closeSheet('fullscreen')}
-      />
-
-      {/* First-trade guided education */}
-      <CoOwnFirstTradeGuide
-        visible={guideVisible}
-        onClose={() => { closeSheet('guide'); setPendingTradeSide(null); }}
-        onComplete={handleGuideComplete}
-        onContinueToTrade={pendingTradeSide ? handleGuideContinueToTrade : undefined}
-      />
-
-      {/* Rights & risks sheet — 13-row modal.
-          Rows fail closed to "To be confirmed" when the backend does not
-          expose the answer. For live instruments, TBC rows block trading. */}
-      <CoOwnRightsSheet
-        visible={rightsSheetVisible}
-        onClose={() => closeSheet('rights')}
-        disclosureVersion={asset.rights?.version ? `Rights v${asset.rights.version}` : 'Rights v1'}
-        rights={rightsRows}
-      />
-
-      <BottomSheet
-        visible={riskDisclosureVisible}
-        onDismiss={() => closeSheet('riskDisclosure')}
-        snapPoint={0.7}
-      >
-        <View style={[styles.riskDisclosureSheetHeader, { borderBottomColor: colors.borderSubtle }]}>
-          <Text style={[styles.riskDisclosureSheetTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
-            Risk disclosure
-          </Text>
-          <Pressable
-            onPress={() => closeSheet('riskDisclosure')}
-            hitSlop={12}
-            style={({ pressed }) => [styles.sheetCloseTarget, pressed && { opacity: 0.85, transform: [{ scale: PressScale.gentle }] }]}
-            accessibilityLabel="Close risk disclosure"
-            accessibilityRole="button"
-          >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
-          </Pressable>
-        </View>
-        <ScrollView style={styles.riskDisclosureSheetScroll} contentContainerStyle={styles.riskDisclosureSheetContent}>
-          <CoOwnRiskDisclosure
-            disclosures={asset.riskDisclosures ?? null}
-            onReportIssue={() => {
-              closeSheet('riskDisclosure');
-              navigation.navigate('CoOwnIssue', { assetId: asset.id });
-            }}
-          />
-        </ScrollView>
-      </BottomSheet>
-
-      <CoOwnSupplySheet
-        visible={supplySheetVisible}
-        onClose={() => closeSheet('supply')}
-        unitPriceLabel={formatCoOwnIze(asset.unitPriceGbp)}
+        fullscreenIndex={fullscreenIndex}
+        onActiveFullscreenIndexChange={setFullscreenIndex}
+        fullscreenVisible={fullscreenVisible}
+        guideVisible={guideVisible}
+        pendingTradeSide={pendingTradeSide}
+        rightsSheetVisible={rightsSheetVisible}
+        riskDisclosureVisible={riskDisclosureVisible}
+        supplySheetVisible={supplySheetVisible}
+        overflowVisible={overflowVisible}
+        priceAlertVisible={priceAlertVisible}
+        alertTargetPrice={alertTargetPrice}
+        alertCondition={alertCondition}
+        alertSubmitting={alertSubmitting}
+        yourUnits={yourUnits}
         totalUnits={totalUnits}
         availableUnits={availableUnits}
         allocatedPct={allocatedPct}
-        viewerUnits={yourUnits}
         viewerPct={viewerPct}
-        settlementMode={asset.settlementMode}
         feePct={feePct}
-        holderCount={asset.holders}
-        status={asset.isOpen ? (availableUnits > 0 ? 'open' : 'closed') : 'paused'}
-        supply={{
-          authorised: null,
-          issued: null,
-          publicFloat: null,
-          treasury: null,
-        }}
-        rightsVersion={asset.rights?.version ? `v${asset.rights.version}` : undefined}
-      />
-
-      {/* Overflow sheet — lower-frequency hero actions (Fav, Watch, Report). */}
-      <CoOwnOverflowSheet
-        visible={overflowVisible}
-        onClose={() => closeSheet('overflow')}
-        onShare={social.openShare}
-        onOrderHistory={() => navigation.navigate('CoOwnOrderHistory')}
-        onToggleFav={guardedToggleLike}
-        isFav={social.isLiked}
-        onWatch={() => {
-          toggleCoOwnWatch(asset.id);
-          closeSheet('overflow');
-        }}
+        rightsRows={rightsRows}
         isWatched={isWatched}
-        onPriceAlert={() => {
-          closeSheet('overflow');
-          navigation.navigate('CoOwnPriceAlerts');
-        }}
-        onReport={() => {
-          closeSheet('overflow');
-          navigation.navigate('CoOwnIssue', { assetId: asset.id });
-        }}
-      />
-
-      {/* Price alert creation modal — flagship treatment with semantic condition colours */}
-      <CoOwnPriceAlertForm
-        visible={priceAlertVisible}
-        onClose={closePriceAlert}
-        alertTargetPrice={alertTargetPrice}
+        social={social}
+        onCloseSheet={closeSheet}
+        onClearPendingTradeSide={() => setPendingTradeSide(null)}
+        onGuideComplete={handleGuideComplete}
+        onGuideContinueToTrade={handleGuideContinueToTrade}
+        onToggleFav={guardedToggleLike}
+        onToggleWatch={toggleCoOwnWatch}
+        onClosePriceAlert={closePriceAlert}
         onAlertTargetPriceChange={setAlertTargetPrice}
-        alertCondition={alertCondition}
         onAlertConditionChange={setAlertCondition}
-        alertSubmitting={alertSubmitting}
-        onSubmit={handleCreatePriceAlert}
+        onCreatePriceAlert={handleCreatePriceAlert}
+        onNavigateOrderHistory={() => navigation.navigate('CoOwnOrderHistory')}
+        onNavigatePriceAlerts={() => navigation.navigate('CoOwnPriceAlerts')}
+        onNavigateIssue={() => navigation.navigate('CoOwnIssue', { assetId: asset.id })}
       />
     </View>
   );
@@ -1304,9 +1418,10 @@ const styles = StyleSheet.create({
   },
   collectiblePriceRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     gap: Space.xs,
     marginTop: Space.md,
+    flexWrap: 'wrap',
   },
   collectiblePriceValue: {
     fontSize: TypographyV2.priceHero.size,
@@ -1321,6 +1436,55 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
     letterSpacing: TypographyV2.meta.letterSpacing,
   },
+  movePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: 2,
+    borderRadius: Radius.full,
+    marginLeft: Space.xs,
+  },
+  movePillText: {
+    fontSize: TypographyV2.caption.size,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.caption.letterSpacing,
+  },
+  offeringProgressBlock: {
+    marginTop: Space.sm,
+    gap: Space.xs,
+  },
+  progressBarTrack: {
+    height: 4,
+    borderRadius: Radius.full,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: Radius.full,
+  },
+  offeringMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 2,
+  },
+  offeringMetaText: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+  },
+  protectedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  protectedBadgeText: {
+    fontSize: TypographyV2.caption.size,
+    fontFamily: FontFamily.semibold,
+  },
   collectibleAvailabilityRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1334,6 +1498,12 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
     letterSpacing: TypographyV2.body.letterSpacing,
   },
+  collectibleSpreadText: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+  },
   collectibleAvailabilityDot: {
     width: 8,
     height: 8,
@@ -1345,42 +1515,6 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.medium,
     letterSpacing: TypographyV2.meta.letterSpacing,
   },
-  // ── Lifecycle context — brief factual line ──
-  lifecycleContextRow: {
-    marginTop: Space.xs,
-  },
-  lifecycleContextText: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.medium,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
-  // ── Risk disclosure sheet ──
-  riskDisclosureSheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  sheetCloseTarget: {
-    width: Control.hit,
-    height: Control.hit,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  riskDisclosureSheetTitle: {
-    fontSize: TypographyV2.sectionTitle.size,
-    fontFamily: FontFamily.semibold,
-    lineHeight: TypographyV2.sectionTitle.lineHeight,
-  },
-  riskDisclosureSheetScroll: {
-    flex: 1,
-  },
-  riskDisclosureSheetContent: {
-    padding: Space.md,
-  },
   // ── Dock state badge ──
   dockStateBadge: {
     fontSize: TypographyV2.bodyStrong.size,
@@ -1391,5 +1525,57 @@ const styles = StyleSheet.create({
   // ── Discovery ──
   recommendationSection: {
     marginTop: Space.lg,
+  },
+  // ── Related Assets rail ──
+  relatedAssetsSection: {
+    marginTop: Space.lg,
+    paddingHorizontal: Space.md,
+  },
+  relatedAssetsHeading: {
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: FontFamily.bold,
+    marginBottom: Space.sm,
+  },
+  relatedAssetsRail: {
+    gap: Space.md,
+    paddingRight: Space.md,
+  },
+  relatedAssetsLoadingRow: {
+    paddingVertical: Space.sm,
+  },
+  relatedAssetChip: {
+    width: 140,
+    gap: 4,
+  },
+  relatedAssetImage: {
+    width: '100%',
+    height: 84,
+    borderRadius: Radius.sm,
+    marginBottom: 4,
+  },
+  relatedAssetTitle: {
+    fontSize: TypographyV2.caption.size,
+    fontFamily: FontFamily.semibold,
+    lineHeight: TypographyV2.caption.lineHeight,
+  },
+  relatedAssetPrice: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium,
+    fontVariant: ['tabular-nums'],
+  },
+  relatedAssetStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  relatedAssetDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  relatedAssetStatus: {
+    fontSize: 10,
+    fontFamily: FontFamily.regular,
   },
 });
