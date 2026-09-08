@@ -227,14 +227,24 @@ export function AssetOverviewSection({
         <View style={styles.chartHeaderRow}>
           <View style={styles.chartHeaderLeft}>
             <Text style={[styles.chartHeading, { color: colors.textPrimary }]}>Price history</Text>
-            <Text style={[styles.chartSubHeading, { color: colors.textSecondary }]} numberOfLines={1}>
-              {referenceVsAppraisalPct != null
-                ? `${Math.abs(referenceVsAppraisalPct).toFixed(1)}% ${referenceVsAppraisalPct >= 0 ? 'premium' : 'discount'} to appraisal${historyLoading ? ' · loading…' : ''}`
-              : historyLoading
-                  ? 'Loading price history…'
-                  : 'Reference vs appraisal'}
-              {marketDataStale ? ` · stale${marketDataAgeLabel ? ` · ${marketDataAgeLabel}` : ''}` : ''}
-            </Text>
+            {referenceVsAppraisalPct != null ? (
+              <Text style={[styles.chartSubHeading, { color: colors.textSecondary }]} numberOfLines={1}>
+                <Text style={styles.chartSubHeadingStrong}>
+                  {`${Math.abs(referenceVsAppraisalPct).toFixed(1)}% `}
+                </Text>
+                {referenceVsAppraisalPct >= 0 ? 'premium' : 'discount'} to appraisal
+                {historyLoading ? ' · loading…' : ''}
+              </Text>
+            ) : (
+              <Text style={[styles.chartSubHeading, { color: colors.textSecondary }]} numberOfLines={1}>
+                {historyLoading ? 'Loading price history…' : 'Reference vs appraisal'}
+              </Text>
+            )}
+            {marketDataStale ? (
+              <Text style={[styles.chartStaleLine, { color: colors.warning }]} numberOfLines={1}>
+                Stale{marketDataAgeLabel ? ` · ${marketDataAgeLabel}` : ''}
+              </Text>
+            ) : null}
           </View>
           {hasChartCandles && volumeAvailable && onToggleVolume ? (
             <Pressable
@@ -384,6 +394,15 @@ const styles = StyleSheet.create({
   chartSubHeading: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
+    marginTop: 2,
+  },
+  chartSubHeadingStrong: {
+    fontFamily: FontFamily.semibold,
+    fontVariant: ['tabular-nums'],
+  },
+  chartStaleLine: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium,
     marginTop: 2,
   },
   linkRow: {
