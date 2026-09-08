@@ -149,7 +149,6 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     backgroundColor: 'transparent',
-    paddingHorizontal: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     position: 'relative',
   },
@@ -175,7 +174,7 @@ const styles = StyleSheet.create({
   },
   tabUnderline: {
     position: 'absolute',
-    bottom: -1,
+    bottom: 0,
     height: Stroke.emphasis,
     borderRadius: Radius.sm,
   },
