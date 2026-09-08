@@ -643,7 +643,6 @@ export default function AssetDetailScreen() {
     orderBook != null && orderBook.reconciliationState !== 'reconciled';
   const marketSnapshot = asset.marketSnapshot ?? null;
   const movePct24h = marketSnapshot?.marketMovePct24h ?? asset.marketMovePct24h ?? null;
-  const volume24hGbp = marketSnapshot?.volume24hGbp ?? asset.volume24hGbp ?? null;
   const bestBidGbp = marketSnapshot?.bestBidGbp ?? asset.bestBidGbp ?? null;
   const bestAskGbp = marketSnapshot?.bestAskGbp ?? asset.bestAskGbp ?? null;
   const lastExecutionPriceGbp = marketSnapshot?.lastExecutionPriceGbp ?? null;
@@ -763,7 +762,6 @@ export default function AssetDetailScreen() {
   // WS5: when the rights document has tbcReason/tbcEtaDate, surface them
   // so the user knows when to expect confirmation and why it's pending.
   const rightsTbcReason = asset.rights?.tbcReason ?? null;
-  const rightsTbcEta = asset.rights?.tbcEtaDate ?? null;
   // GAP 3 fix: when the backend has published structured rights
   // (economic/voting/exit/fee), use them instead of forcing every row
   // to TBC. The structured fields map to the canonical labels so the
