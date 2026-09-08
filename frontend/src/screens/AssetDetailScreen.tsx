@@ -282,15 +282,7 @@ export default function AssetDetailScreen() {
   // ── Active orders badge + open-orders panel data — the user's own
   // co-own market history carries order status; open/partially_filled
   // entries for this asset light the Market tab dot AND populate the
-  // inline open-orders panel.
-  //
-  // LIMITATION: The history endpoint does not yet support server-side
-  // filtering by referenceId or status, so we fetch a 200-entry window
-  // and filter client-side. A dedicated asset-scoped open-orders
-  // endpoint would eliminate this window entirely. 200 covers the
-  // vast majority of retail users; power users with extensive history
-  // may have older open orders missed — documented as P2 in the gap
-  // registry. Anonymous viewers get null (panel hidden).
+  // inline open-orders panel. Anonymous viewers get null (panel hidden).
   React.useEffect(() => {
     if (!assetId || !currentUser?.id) {
       setYourOpenOrders(null);
