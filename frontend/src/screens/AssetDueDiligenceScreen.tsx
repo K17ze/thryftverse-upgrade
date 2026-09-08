@@ -23,8 +23,6 @@ import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import {
   refreshCoOwnAppraisal,
   createVerificationDemand,
-  type MarketCoOwnAsset,
-  type CoOwnRecourseStatus,
 } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 import { useToast } from '../context/ToastContext';
@@ -121,7 +119,9 @@ export default function AssetDueDiligenceScreen() {
   const refreshing = assetQuery.isRefetching || recourseQuery.isRefetching;
 
   const yourHolding = holdingsQuery.data?.find((entry) => entry.assetId === assetId) ?? null;
-  const yourUnits = currentUser?.id ? (yourHolding?.unitsOwned ?? null) : 0;
+  const yourUnits = currentUser?.id
+    ? (holdingsQuery.data ? (yourHolding?.unitsOwned ?? 0) : null)
+    : 0;
 
   // Show error toast on fetch failure
   React.useEffect(() => {
@@ -177,7 +177,7 @@ export default function AssetDueDiligenceScreen() {
   const viewerPct = yourUnits != null && totalUnits > 0
     ? Math.round((yourUnits / totalUnits) * 100 * 10) / 10
     : null;
-  const feePct = Math.round(CO_OWN_FEE_RATE * 100);
+  const feePct = Math.round((asset.tradingFeeRate ?? CO_OWN_FEE_RATE) * 100);
 
   // Dossier evidence groups — derived from the trust profile.
   const dossierEvidenceGroups = resolveEvidenceGroups({
@@ -636,10 +636,11 @@ export default function AssetDueDiligenceScreen() {
               You own units in the asset, not the physical item.
             </Text>
           </View>
-          <CommerceDetailMetricRow
+          <CommerceDetailDisclosureRow
             label="Full-asset buyout"
-            value="Not available"
-            muted
+            summary="Submit or review buyout offers"
+            onPress={() => navigation.navigate('Buyout', { assetId: asset.id })}
+            leadingIcon="briefcase-outline"
           />
           <CommerceDetailDisclosureRow
             label="Rights"
@@ -683,7 +684,7 @@ export default function AssetDueDiligenceScreen() {
               <Ionicons name="open-outline" size={14} color={colors.brand} />
             </Pressable>
           )}
-          {asset.safeguarded && (
+          {asset.safeguarded && asset.safeguardingEvidenceUrl && (
             <CommerceDetailMetricRow
               label="Safeguarded"
               value={asset.safeguardingPartner ? `Yes · ${asset.safeguardingPartner}` : 'Yes'}
@@ -814,7 +815,7 @@ export default function AssetDueDiligenceScreen() {
                 value: asset.appraisalValueGbp,
                 currency: 'GBP',
                 valuedAt: asset.appraisalValuedAt ?? '',
-                method: 'To be confirmed',
+                method: undefined,
                 valuer: asset.appraisalValuer ?? undefined,
               } : undefined}
             />
