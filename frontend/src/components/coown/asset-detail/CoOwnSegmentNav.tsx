@@ -32,7 +32,7 @@ export function CoOwnSegmentNav({
   hasActiveOrders,
   hasUnclaimedDistributions,
 }: CoOwnSegmentNavProps) {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
 
   const handleSelect = (tab: CoOwnDetailTab) => {
     if (tab === activeTab) return;
@@ -53,10 +53,7 @@ export function CoOwnSegmentNav({
               onPress={() => handleSelect(tab.key)}
               style={({ pressed }) => [
                 styles.tabButton,
-                isActive && [
-                  styles.activeTabButton,
-                  { backgroundColor: colors.background, shadowColor: isDark ? '#000' : '#888' },
-                ],
+                isActive && { backgroundColor: colors.background },
                 pressed && { opacity: 0.85, transform: [{ scale: PressScale.gentle }] },
               ]}
               accessibilityRole="tab"
@@ -106,12 +103,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
     position: 'relative',
     gap: 4,
-  },
-  activeTabButton: {
-    elevation: 2,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.12,
-    shadowRadius: 2,
   },
   tabText: {
     fontSize: TypographyV2.body.size,
