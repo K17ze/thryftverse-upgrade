@@ -254,7 +254,6 @@ export function CoOwnValueStripSkeleton() {
 // Matches CoOwnOrderBook final geometry: 5 levels per side, deterministic row height.
 
 export function CoOwnOrderBookSkeleton() {
-  const { width } = useWindowDimensions();
   const rowH = ExchangeLayout.bookRowHeight;
   const levels = ExchangeLayout.bookVisibleLevels;
 

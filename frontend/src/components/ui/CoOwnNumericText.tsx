@@ -13,7 +13,7 @@
  */
 
 import React from 'react';
-import { Text as RNText, StyleSheet, StyleProp, TextStyle } from 'react-native';
+import { Text as RNText, StyleProp, TextStyle } from 'react-native';
 import { Numeric, FontFamily } from '../../theme/designTokens';
 import { DIRECTION_COLORS } from '../../constants/colors';
 import { useAppTheme } from '../../theme/ThemeContext';
