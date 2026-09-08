@@ -314,7 +314,6 @@ function renderMarket(asset: MarketCoOwnAsset, extraProps: Record<string, unknow
     asset,
     orderBook: null,
     orderBookStreaming: false,
-    orderBookHasGap: false,
     orderBookError: false,
     onRetryOrderBook: noop,
     bestBid: null,

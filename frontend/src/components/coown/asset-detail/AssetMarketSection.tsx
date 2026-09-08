@@ -25,7 +25,6 @@ export interface AssetMarketSectionProps {
   asset: MarketCoOwnAsset;
   orderBook: CoOwnOrderBookSnapshot | null;
   orderBookStreaming: boolean;
-  orderBookHasGap: boolean;
   orderBookError: boolean;
   onRetryOrderBook: () => void;
   bestBid: CoOwnOrderBookEntry | null;
@@ -56,7 +55,6 @@ export function AssetMarketSection({
   asset,
   orderBook,
   orderBookStreaming,
-  orderBookHasGap,
   orderBookError,
   onRetryOrderBook,
   bestBid,
@@ -226,18 +224,19 @@ export function AssetMarketSection({
           ) : undefined
         }
         headlineAside={
-          <View
-            style={[
-              styles.marketStatePill,
-              {
-                backgroundColor: reconciliationActive
-                  ? colors.warningSubtle
-                  : isMarketOpen
-                    ? colors.coownUpSubtle
-                    : colors.surfaceAlt,
-              },
-            ]}
-          >
+          <View style={styles.marketStateRow}>
+            <View
+              style={[
+                styles.marketStateDot,
+                {
+                  backgroundColor: reconciliationActive
+                    ? colors.warning
+                    : isMarketOpen
+                      ? colors.success
+                      : colors.textMuted,
+                },
+              ]}
+            />
             <Text
               style={[
                 styles.marketStateText,
@@ -376,7 +375,8 @@ export function AssetMarketSection({
           {/* Price alert action */}
           <Pressable
             onPress={onOpenPriceAlert}
-            style={styles.alertActionBtn}
+            hitSlop={8}
+            style={({ pressed }) => [styles.alertActionBtn, pressed && { opacity: 0.7 }]}
             accessibilityRole="button"
             accessibilityLabel="Set price alert"
           >
@@ -458,6 +458,18 @@ export function AssetMarketSection({
               embedded
             />
           </View>
+        ) : orderBook == null && !orderBookError && isMarketOpen ? (
+          // First snapshot still in flight — loading, not empty. A live
+          // book with zero levels arrives as a non-null snapshot with
+          // empty arrays, which falls through to the empty branch below.
+          <View style={styles.depthNoticeBlock}>
+            <Text style={[styles.depthNoticeTitle, { color: colors.textPrimary }]}>
+              Synchronizing depth…
+            </Text>
+            <Text style={[styles.depthNoticeBody, { color: colors.textSecondary }]}>
+              Waiting for the first live market snapshot.
+            </Text>
+          </View>
         ) : (
           <View style={styles.depthNoticeBlock}>
             <Text style={[styles.depthNoticeTitle, { color: colors.textPrimary }]}>
@@ -473,7 +485,16 @@ export function AssetMarketSection({
       </CommerceDetailSection>
 
       {/* ── 3. Execution tape — last settled trades ── */}
-      {executionsLoading ? null : executionsFailed ? (
+      {executionsLoading ? (
+        <CommerceDetailSection label="Recent executions">
+          <View style={styles.tapeLoadingRow}>
+            <ActivityIndicator size="small" color={colors.textMuted} />
+            <Text style={[styles.tapeLoadingText, { color: colors.textMuted }]}>
+              Loading recent trades…
+            </Text>
+          </View>
+        </CommerceDetailSection>
+      ) : executionsFailed ? (
         <CommerceDetailSection label="Recent executions">
           <CommerceDetailUnavailableInline
             title="Executions unavailable"
@@ -663,10 +684,21 @@ const styles = StyleSheet.create({
   venueMetadataRow: {
     paddingTop: Space.xs,
   },
+  tapeLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm,
+  },
+  tapeLoadingText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+  },
   venueMetadataText: {
-    fontSize: TypographyV2.meta.size - 1,
-    fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: 0.2,
+    fontSize: TypographyV2.caption.size,
+    lineHeight: TypographyV2.caption.lineHeight,
+    fontFamily: TypographyV2.caption.fontFamily,
+    letterSpacing: TypographyV2.caption.letterSpacing,
   },
   statsLabel: {
     fontSize: TypographyV2.meta.size,
@@ -743,10 +775,15 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     marginLeft: Space.md,
   },
-  marketStatePill: {
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xxs,
-    borderRadius: Radius.full,
+  marketStateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  marketStateDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   marketStateText: {
     fontSize: TypographyV2.caption.size,

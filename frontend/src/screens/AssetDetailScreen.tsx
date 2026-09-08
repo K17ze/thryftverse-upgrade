@@ -949,7 +949,6 @@ export default function AssetDetailScreen() {
             asset={asset}
             orderBook={orderBook}
             orderBookStreaming={orderBookStreaming}
-            orderBookHasGap={orderBookHasGap}
             orderBookError={orderBookError}
             onRetryOrderBook={retryOrderBook}
             bestBid={bestBid}
