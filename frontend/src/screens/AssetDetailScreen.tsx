@@ -123,7 +123,9 @@ export default function AssetDetailScreen() {
   const [lastDistribution, setLastDistribution] = React.useState<CoOwnDistribution | null>(null);
   const [corporateActions, setCorporateActions] = React.useState<CoOwnCorporateAction[] | null>(null);
   const [distributionsFailed, setDistributionsFailed] = React.useState(false);
+  const [distributionsLoading, setDistributionsLoading] = React.useState(true);
   const [corporateActionsFailed, setCorporateActionsFailed] = React.useState(false);
+  const [corporateActionsLoading, setCorporateActionsLoading] = React.useState(true);
   const [hasActiveOrders, setHasActiveOrders] = React.useState(false);
   const [yourOpenOrders, setYourOpenOrders] = React.useState<MarketHistoryItem[] | null>(null);
   const [yourOpenOrdersFailed, setYourOpenOrdersFailed] = React.useState(false);
@@ -213,16 +215,19 @@ export default function AssetDetailScreen() {
     if (!assetId) return;
     let cancelled = false;
     setDistributionsFailed(false);
+    setDistributionsLoading(true);
     void fetchCoOwnDistributions({ assetId, limit: 1 })
       .then((result) => {
         if (cancelled) return;
         setLastDistribution(result.items[0] ?? null);
         setDistributionsFailed(false);
+        setDistributionsLoading(false);
       })
       .catch(() => {
         if (cancelled) return;
         setLastDistribution(null);
         setDistributionsFailed(true);
+        setDistributionsLoading(false);
       });
     return () => { cancelled = true; };
   }, [assetId, refreshKey]);
@@ -232,16 +237,19 @@ export default function AssetDetailScreen() {
     if (!assetId) return;
     let cancelled = false;
     setCorporateActionsFailed(false);
+    setCorporateActionsLoading(true);
     void fetchCoOwnAssetCorporateActions(assetId, { limit: 3 })
       .then((items) => {
         if (cancelled) return;
         setCorporateActions(items);
         setCorporateActionsFailed(false);
+        setCorporateActionsLoading(false);
       })
       .catch(() => {
         if (cancelled) return;
         setCorporateActions(null);
         setCorporateActionsFailed(true);
+        setCorporateActionsLoading(false);
       });
     return () => { cancelled = true; };
   }, [assetId, refreshKey]);
@@ -992,8 +1000,10 @@ export default function AssetDetailScreen() {
             lastDistributionPerUnit={lastDistributionPerUnit}
             onNavigateToDistributionHistory={() => navigation.navigate('DistributionHistory', { assetId: asset.id })}
             distributionsFailed={distributionsFailed}
+            distributionsLoading={distributionsLoading}
             corporateActions={corporateActions}
             corporateActionsFailed={corporateActionsFailed}
+            corporateActionsLoading={corporateActionsLoading}
             onNavigateToCorporateAction={(action) => navigation.navigate('CorporateActionDetail', {
               assetId: asset.id,
               actionType: action.actionType,

@@ -34,10 +34,14 @@ export interface AssetOwnershipSectionProps {
   onNavigateToDistributionHistory: () => void;
   /** True when the distributions fetch failed — quiet inline line instead of rows. */
   distributionsFailed?: boolean;
+  /** True while the distributions fetch is in flight — quiet loading line. */
+  distributionsLoading?: boolean;
   /** Latest corporate actions, already limited (null = not loaded / failed). */
   corporateActions: CoOwnCorporateAction[] | null;
   /** True when the corporate actions fetch failed — events block shows a quiet unavailable line. */
   corporateActionsFailed?: boolean;
+  /** True while the corporate actions fetch is in flight. */
+  corporateActionsLoading?: boolean;
   onNavigateToCorporateAction: (action: CoOwnCorporateAction) => void;
   onOpenBuyout: () => void;
 }
@@ -89,8 +93,10 @@ export function AssetOwnershipSection({
   lastDistributionPerUnit,
   onNavigateToDistributionHistory,
   distributionsFailed,
+  distributionsLoading = false,
   corporateActions,
   corporateActionsFailed,
+  corporateActionsLoading = false,
   onNavigateToCorporateAction,
   onOpenBuyout,
 }: AssetOwnershipSectionProps) {
@@ -134,9 +140,9 @@ export function AssetOwnershipSection({
                 {avgEntryPriceGbp != null ? formatCoOwnIze(avgEntryPriceGbp * yourUnits) : '—'}
               </Text>
             </View>
-            <View style={[styles.positionMetricCol, { borderLeftColor: colors.borderSubtle }]}>
+            <View style={[styles.positionPnlCol, { borderLeftColor: colors.borderSubtle }]}>
               <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Unrealized P&L</Text>
-              <Text style={[styles.positionBigValue, { color: pnlColor }]}>
+              <Text style={[styles.positionPnlValue, { color: pnlColor }]}>
                 {unrealizedPnlGbp != null ? `${isUp ? '+' : ''}${formatCoOwnIze(unrealizedPnlGbp)}` : '—'}
               </Text>
               {unrealizedPnlPct != null ? (
@@ -249,7 +255,7 @@ export function AssetOwnershipSection({
           Latest lifecycle events as timeline rows. Omitted when nothing
           has been published; a failed fetch keeps the block with a
           quiet unavailable line. */}
-      {(corporateActions?.length || corporateActionsFailed) ? (
+      {(corporateActions?.length || corporateActionsFailed || corporateActionsLoading) ? (
         <CommerceDetailSection label="Corporate actions & events">
           {corporateActions && corporateActions.length > 0 ? (
             <View style={styles.actionList}>
@@ -272,6 +278,8 @@ export function AssetOwnershipSection({
                 );
               })}
             </View>
+          ) : corporateActionsLoading ? (
+            <Text style={[styles.noDistributionText, { color: colors.textMuted }]}>Loading events…</Text>
           ) : (
             <Text style={[styles.noDistributionText, { color: colors.textMuted }]}>Events unavailable</Text>
           )}
@@ -310,6 +318,12 @@ export function AssetOwnershipSection({
               {lastDistributionPerUnit != null
                 ? `per unit${lastDistributionAmount != null ? ` · ${formatCoOwnIze(lastDistributionAmount)} total pool` : ''}`
                 : 'Most recent payout'}
+            </Text>
+          </View>
+        ) : distributionsLoading ? (
+          <View style={styles.noDistributionNotice}>
+            <Text style={[styles.noDistributionText, { color: colors.textMuted }]}>
+              Loading distributions…
             </Text>
           </View>
         ) : distributionsFailed ? (
@@ -363,11 +377,16 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingLeft: Space.sm,
   },
+  positionPnlCol: {
+    flex: 1.4,
+    paddingLeft: Space.sm,
+  },
   metaLabel: {
-    fontSize: 11,
-    fontFamily: FontFamily.medium,
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: TypographyV2.label.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase',
-    letterSpacing: 0.3,
     marginBottom: 2,
   },
   positionBigValue: {
@@ -375,10 +394,17 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
   },
+  positionPnlValue: {
+    fontSize: TypographyV2.priceList.size,
+    lineHeight: TypographyV2.priceList.lineHeight,
+    fontFamily: FontFamily.bold,
+    fontVariant: ['tabular-nums'],
+  },
   pnlSubText: {
-    fontSize: 11,
+    fontSize: TypographyV2.caption.size,
     fontFamily: FontFamily.semibold,
     marginTop: 2,
+    fontVariant: ['tabular-nums'],
   },
   // ── Flat supply block — no card fill, hairline top border ──
   supplyBlock: {
