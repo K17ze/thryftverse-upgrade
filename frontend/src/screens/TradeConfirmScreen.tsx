@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps, NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Typography, Numeric } from '../theme/designTokens';
+import { Space } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { AppButton } from '../components/ui/AppButton';
@@ -26,7 +25,6 @@ import {
 import { useScreenCaptureProtection } from '../platform/screenCapture';
 import { useInvalidateCoOwnAsset } from '../platform/server';
 import { track } from '../analytics/track';
-import { t } from '../i18n';
 
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TradeConfirm'>;
