@@ -296,16 +296,20 @@ export function AssetOwnershipSection({
       >
         {lastDistribution ? (
           <View style={styles.distributionSummary}>
+            {/* Per-unit payout dominates — it is what each unit received.
+                Total pool and settled date ride as the supporting line. */}
             <View style={styles.distribTop}>
               <Text style={[styles.distribAmount, { color: colors.textPrimary }]}>
-                {lastDistributionAmount != null ? formatCoOwnIze(lastDistributionAmount) : '—'}
+                {lastDistributionPerUnit != null ? formatCoOwnIze(lastDistributionPerUnit) : '—'}
               </Text>
               <Text style={[styles.distribDate, { color: colors.textMuted }]}>
                 {lastDistributionDate || 'Settled'}
               </Text>
             </View>
             <Text style={[styles.distribPerUnit, { color: colors.textSecondary }]}>
-              {lastDistributionPerUnit != null ? `${formatCoOwnIze(lastDistributionPerUnit)} per unit` : 'Recent payout'}
+              {lastDistributionPerUnit != null
+                ? `per unit${lastDistributionAmount != null ? ` · ${formatCoOwnIze(lastDistributionAmount)} total pool` : ''}`
+                : 'Most recent payout'}
             </Text>
           </View>
         ) : distributionsFailed ? (
