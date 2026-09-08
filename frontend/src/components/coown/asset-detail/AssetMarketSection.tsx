@@ -421,6 +421,35 @@ export function AssetMarketSection({
           </View>
         ) : isMarketOpen && hasBidsOrAsks ? (
           <View style={styles.orderBookWrapper}>
+            {/* Top-of-book quote strip — best bid/ask with resting size and
+                the spread between them. Summarizes the ladder below the way
+                broker quote headers do. */}
+            <View style={styles.topOfBookRow}>
+              <View style={styles.tobCell}>
+                <Text style={[styles.tobLabel, { color: colors.textMuted }]}>Bid</Text>
+                <Text style={[styles.tobPrice, { color: colors.coownUp }]}>
+                  {bestBid ? formatCoOwnIze(bestBid.unitPriceGbp) : '—'}
+                </Text>
+                <Text style={[styles.tobSize, { color: colors.textMuted }]}>
+                  {bestBid ? `${bestBid.units}u` : '—'}
+                </Text>
+              </View>
+              <View style={styles.tobSpreadCell}>
+                <Text style={[styles.tobSpreadValue, { color: colors.textSecondary }]} numberOfLines={1}>
+                  {spreadGbp != null ? formatCoOwnIze(spreadGbp) : '—'}
+                </Text>
+                <Text style={[styles.tobSpreadLabel, { color: colors.textMuted }]}>spread</Text>
+              </View>
+              <View style={[styles.tobCell, styles.tobCellRight]}>
+                <Text style={[styles.tobLabel, { color: colors.textMuted }]}>Ask</Text>
+                <Text style={[styles.tobPrice, { color: colors.coownDown }]}>
+                  {bestAsk ? formatCoOwnIze(bestAsk.unitPriceGbp) : '—'}
+                </Text>
+                <Text style={[styles.tobSize, { color: colors.textMuted }]}>
+                  {bestAsk ? `${bestAsk.units}u` : '—'}
+                </Text>
+              </View>
+            </View>
             <CoOwnOrderBook
               bids={mappedBids}
               asks={mappedAsks}
@@ -455,25 +484,37 @@ export function AssetMarketSection({
       ) : tapeExecutions.length > 0 ? (
         <CommerceDetailSection label="Recent executions">
           <View>
-            {tapeExecutions.map((execution, idx) => (
-              <View
-                key={execution.id}
-                style={[styles.tapeRow, idx > 0 && { borderTopColor: colors.borderSubtle }]}
-              >
-                <Text style={[styles.tapeTime, { color: colors.textMuted }]}>
-                  {new Date(execution.executedAt).toLocaleTimeString('en-GB', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </Text>
-                <Text style={[styles.tapePrice, { color: colors.textPrimary }]}>
-                  {formatCoOwnIze(execution.unitPriceGbp)}
-                </Text>
-                <Text style={[styles.tapeUnits, { color: colors.textSecondary }]}>
-                  {execution.units} units
-                </Text>
-              </View>
-            ))}
+            {tapeExecutions.map((execution, idx) => {
+              // Uptick/downtick vs the previous settled execution — the
+              // classic tape presentation. The oldest row is neutral.
+              const prev = idx > 0 ? tapeExecutions[idx - 1] : null;
+              const tick = prev == null || execution.unitPriceGbp === prev.unitPriceGbp
+                ? 0
+                : execution.unitPriceGbp > prev.unitPriceGbp ? 1 : -1;
+              const tickColor = tick === 0
+                ? colors.textPrimary
+                : tick > 0 ? colors.coownUp : colors.coownDown;
+              return (
+                <View
+                  key={execution.id}
+                  style={[styles.tapeRow, idx > 0 && { borderTopColor: colors.borderSubtle }]}
+                >
+                  <Text style={[styles.tapeTime, { color: colors.textMuted }]}>
+                    {new Date(execution.executedAt).toLocaleTimeString('en-GB', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </Text>
+                  <Text style={[styles.tapePrice, { color: tickColor }]}>
+                    {tick > 0 ? '▲ ' : tick < 0 ? '▼ ' : ''}
+                    {formatCoOwnIze(execution.unitPriceGbp)}
+                  </Text>
+                  <Text style={[styles.tapeUnits, { color: colors.textSecondary }]}>
+                    {execution.units} units
+                  </Text>
+                </View>
+              );
+            })}
           </View>
         </CommerceDetailSection>
       ) : (
@@ -547,6 +588,49 @@ const styles = StyleSheet.create({
   },
   orderBookWrapper: {
     marginTop: Space.xs,
+  },
+  // ── Top-of-book quote strip ──
+  topOfBookRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Space.xs + 2,
+    marginBottom: Space.xs,
+  },
+  tobCell: {
+    flex: 1,
+    gap: 1,
+  },
+  tobCellRight: {
+    alignItems: 'flex-end',
+  },
+  tobLabel: {
+    fontSize: 11,
+    fontFamily: FontFamily.medium,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  tobPrice: {
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.bold,
+    fontVariant: ['tabular-nums'],
+  },
+  tobSize: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+    fontVariant: ['tabular-nums'],
+  },
+  tobSpreadCell: {
+    alignItems: 'center',
+    paddingHorizontal: Space.sm,
+  },
+  tobSpreadValue: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium,
+    fontVariant: ['tabular-nums'],
+  },
+  tobSpreadLabel: {
+    fontSize: 10,
+    fontFamily: FontFamily.regular,
   },
   // ── Flat depth notice — left-aligned text, no centered icon box ──
   depthNoticeBlock: {

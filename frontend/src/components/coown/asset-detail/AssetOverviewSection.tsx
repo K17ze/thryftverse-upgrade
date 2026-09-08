@@ -284,28 +284,23 @@ export function AssetOverviewSection({
           </View>
         )}
 
-        {/* Flat appraisal metrics — hairline-separated, no card fill */}
+        {/* Flat appraisal metrics — dominant value + supporting caption.
+            Broker hierarchy: the appraised number dominates; valuer and
+            valuation date ride one quiet caption line instead of competing
+            as equal-width cells. */}
         <View style={[styles.valuationDetailRow, { borderTopColor: colors.borderSubtle }]}>
-          <View style={styles.valuationCell}>
+          <View style={styles.valuationPrimary}>
             <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Appraised / unit</Text>
             <Text style={[styles.valuationBigNum, { color: colors.textPrimary }]}>
               {appraisedValuePerUnitGbp != null ? formatCoOwnIze(appraisedValuePerUnitGbp) : '—'}
             </Text>
           </View>
-          <View style={styles.valuationCell}>
-            <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Valuer</Text>
-            {asset.appraisalValuer ? (
-              <Text style={[styles.metaVal, { color: colors.textPrimary }]} numberOfLines={1}>
-                {asset.appraisalValuer}
-              </Text>
-            ) : (
-              <Text style={[styles.metaVal, { color: colors.textMuted }]} numberOfLines={1}>Not published</Text>
-            )}
-          </View>
-          <View style={styles.valuationCell}>
-            <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Valuation date</Text>
-            <Text style={[styles.metaVal, { color: appraisalDateLabel ? colors.textPrimary : colors.textMuted }]}>
-              {appraisalDateLabel ?? 'Not published'}
+          <View style={styles.valuationMetaCol}>
+            <Text style={[styles.valuationMetaLine, { color: colors.textSecondary }]} numberOfLines={1}>
+              {asset.appraisalValuer ?? 'Valuer not published'}
+            </Text>
+            <Text style={[styles.valuationMetaLine, { color: colors.textMuted }]} numberOfLines={1}>
+              {appraisalDateLabel ?? 'Valuation date not published'}
             </Text>
           </View>
         </View>
@@ -471,12 +466,24 @@ const styles = StyleSheet.create({
   },
   valuationDetailRow: {
     flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: Space.md,
     marginTop: Space.sm,
     paddingTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  valuationCell: {
+  valuationPrimary: {
+    flexShrink: 0,
+  },
+  valuationMetaCol: {
     flex: 1,
+    alignItems: 'flex-end',
+    gap: 2,
+  },
+  valuationMetaLine: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
   },
   valuationBigNum: {
     fontSize: TypographyV2.bodyStrong.size,

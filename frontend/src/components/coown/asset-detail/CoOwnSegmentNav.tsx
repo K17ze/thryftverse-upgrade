@@ -1,9 +1,17 @@
-import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import React, { useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, Pressable, LayoutChangeEvent } from 'react-native';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Radius, FontFamily, PressScale } from '../../../theme/designTokens';
+import { Space, Radius, FontFamily } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
+import { Stroke } from '../../../theme/designTokens';
 import { haptics } from '../../../utils/haptics';
+import { useReducedMotion } from '../../../hooks/useReducedMotion';
 
 export type CoOwnDetailTab = 'overview' | 'market' | 'ownership';
 
@@ -26,6 +34,16 @@ const TABS: TabOption[] = [
   { key: 'ownership', label: 'Ownership' },
 ];
 
+const TAB_HEIGHT = 44;
+const TIMING_CONFIG = { duration: 220, easing: Easing.out(Easing.cubic) };
+
+/**
+ * Editorial tab rail for the Co-Own detail sections — same visual language
+ * as the profile TabRail (Listings/Looks/About/Reviews) and the home feed
+ * tabs (For you/Following): text labels on the canvas, hairline bottom
+ * border, and one shared animated underline that glides between tabs.
+ * Reduced motion: instant underline assignment, no timing animation.
+ */
 export function CoOwnSegmentNav({
   activeTab,
   onTabChange,
@@ -33,38 +51,80 @@ export function CoOwnSegmentNav({
   hasUnclaimedDistributions,
 }: CoOwnSegmentNavProps) {
   const { colors } = useAppTheme();
+  const reducedMotionHook = useReducedMotion();
+  const tabWidths = useRef<Record<string, number>>({});
+  const tabOffsets = useRef<Record<string, number>>({});
+  const underlineTranslateX = useSharedValue(0);
+  const underlineWidth = useSharedValue(0);
 
-  const handleSelect = (tab: CoOwnDetailTab) => {
+  const measureTabs = useCallback(() => {
+    let offsetX = 0;
+    for (const tab of TABS) {
+      tabOffsets.current[tab.key] = offsetX;
+      offsetX += tabWidths.current[tab.key] ?? 0;
+    }
+  }, []);
+
+  const positionUnderline = useCallback((key: string) => {
+    measureTabs();
+    const tabW = tabWidths.current[key] ?? 0;
+    const offsetX = tabOffsets.current[key] ?? 0;
+    const underlineW = tabW * 0.4;
+    const targetX = offsetX + (tabW - underlineW) / 2;
+    if (reducedMotionHook) {
+      underlineTranslateX.value = targetX;
+      underlineWidth.value = underlineW;
+    } else {
+      underlineTranslateX.value = withTiming(targetX, TIMING_CONFIG);
+      underlineWidth.value = withTiming(underlineW, TIMING_CONFIG);
+    }
+  }, [measureTabs, reducedMotionHook, underlineTranslateX, underlineWidth]);
+
+  const onTabLayout = useCallback((key: string) => (e: LayoutChangeEvent) => {
+    tabWidths.current[key] = e.nativeEvent.layout.width;
+    if (key === activeTab) {
+      positionUnderline(key);
+    }
+  }, [activeTab, positionUnderline]);
+
+  const handleSelect = useCallback((tab: CoOwnDetailTab) => {
     if (tab === activeTab) return;
     haptics.selection();
+    positionUnderline(tab);
     onTabChange(tab);
-  };
+  }, [activeTab, positionUnderline, onTabChange]);
+
+  React.useEffect(() => {
+    positionUnderline(activeTab);
+  }, [activeTab, positionUnderline]);
+
+  const underlineStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: underlineTranslateX.value }],
+    width: underlineWidth.value,
+  }));
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background, borderBottomColor: colors.borderSubtle }]}>
-      <View style={[styles.segmentTrack, { backgroundColor: colors.surfaceAlt }]}>
-        {TABS.map((tab) => {
-          const isActive = activeTab === tab.key;
-          const showBadge = (tab.key === 'market' && hasActiveOrders) || (tab.key === 'ownership' && hasUnclaimedDistributions);
+    <View style={[styles.container, { borderBottomColor: colors.borderSubtle }]}>
+      {TABS.map((tab) => {
+        const isActive = activeTab === tab.key;
+        const showBadge = (tab.key === 'market' && hasActiveOrders) || (tab.key === 'ownership' && hasUnclaimedDistributions);
 
-          return (
-            <Pressable
-              key={tab.key}
-              onPress={() => handleSelect(tab.key)}
-              style={({ pressed }) => [
-                styles.tabButton,
-                isActive && { backgroundColor: colors.background },
-                pressed && { opacity: 0.85, transform: [{ scale: PressScale.gentle }] },
-              ]}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: isActive }}
-              accessibilityLabel={`${tab.label} section`}
-            >
+        return (
+          <Pressable
+            key={tab.key}
+            onLayout={onTabLayout(tab.key)}
+            onPress={() => handleSelect(tab.key)}
+            style={({ pressed }) => [styles.tabButton, pressed && { opacity: 0.6 }]}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: isActive }}
+            accessibilityLabel={`${tab.label} section`}
+          >
+            <View style={styles.tabContent}>
               <Text
                 style={[
                   styles.tabText,
                   {
-                    color: isActive ? colors.textPrimary : colors.textSecondary,
+                    color: isActive ? colors.textPrimary : colors.textMuted,
                     fontFamily: isActive ? FontFamily.semibold : FontFamily.medium,
                   },
                 ]}
@@ -75,34 +135,34 @@ export function CoOwnSegmentNav({
               {showBadge ? (
                 <View style={[styles.dotBadge, { backgroundColor: colors.brand }]} />
               ) : null}
-            </Pressable>
-          );
-        })}
-      </View>
+            </View>
+          </Pressable>
+        );
+      })}
+      {/* One shared animated underline — no remounting per tab */}
+      <Reanimated.View style={[styles.tabUnderline, { backgroundColor: colors.brand }, underlineStyle]} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  segmentTrack: {
     flexDirection: 'row',
-    borderRadius: Radius.md,
-    padding: 3,
+    backgroundColor: 'transparent',
+    paddingHorizontal: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    position: 'relative',
   },
   tabButton: {
     flex: 1,
-    flexDirection: 'row',
+    height: TAB_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Space.xs + 2,
-    borderRadius: Radius.sm,
-    position: 'relative',
-    gap: 4,
+  },
+  tabContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
   },
   tabText: {
     fontSize: TypographyV2.body.size,
@@ -112,5 +172,11 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: Radius.full,
+  },
+  tabUnderline: {
+    position: 'absolute',
+    bottom: -1,
+    height: Stroke.emphasis,
+    borderRadius: Radius.sm,
   },
 });
