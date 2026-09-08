@@ -8,7 +8,6 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Reanimated, {
   useSharedValue,
   useAnimatedScrollHandler,
-  useAnimatedStyle,
 } from 'react-native-reanimated';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
@@ -47,7 +46,6 @@ import {
   buildCoOwnViewModel,
   useProductSocialState,
   useSellerTrust,
-  useSellerFollow,
 } from '../platform/product';
 import {
   CoOwnStateCanvas,
@@ -101,7 +99,6 @@ export default function AssetDetailScreen() {
   const insets = useSafeAreaInsets();
   const { isCommerceCompact: isCompact, isVeryCompact } = useBreakpoint();
   const currentUser = useStore((state) => state.currentUser);
-  const upsertConversation = useStore((state) => state.upsertConversation);
   const isCoOwnWatched = useStore((state) => state.isCoOwnWatched);
   const toggleCoOwnWatch = useStore((state) => state.toggleCoOwnWatch);
   const { show } = useToast();
@@ -134,10 +131,8 @@ export default function AssetDetailScreen() {
   const [cancellingOrderId, setCancellingOrderId] = React.useState<number | null>(null);
   const [pendingCancels, setPendingCancels] = React.useState<Set<number>>(new Set());
   const [relatedAssets, setRelatedAssets] = React.useState<MarketCoOwnAsset[]>([]);
-  const [relatedAssetsFailed, setRelatedAssetsFailed] = React.useState(false);
   const [relatedAssetsLoading, setRelatedAssetsLoading] = React.useState(false);
   const [refreshKey, setRefreshKey] = React.useState(0);
-  const [isResolvingConversation, setIsResolvingConversation] = React.useState(false);
   const [fullscreenIndex, setFullscreenIndex] = React.useState(0);
   const [pendingTradeSide, setPendingTradeSide] = React.useState<'buy' | 'sell' | null>(null);
   const [candleRange, setCandleRange] = React.useState<CoOwnCandleRange>('1W');
@@ -259,14 +254,12 @@ export default function AssetDetailScreen() {
   React.useEffect(() => {
     if (!asset?.issuerId || !assetId) {
       setRelatedAssets([]);
-      setRelatedAssetsFailed(false);
       setRelatedAssetsLoading(false);
       return;
     }
     let cancelled = false;
     // P1 #11 fix: reset before fetch so stale siblings don't flash.
     setRelatedAssets([]);
-    setRelatedAssetsFailed(false);
     setRelatedAssetsLoading(true);
     void listCoOwnAssets({ issuerId: asset.issuerId, openOnly: true, limit: 9 })
       .then((items) => {
@@ -281,7 +274,6 @@ export default function AssetDetailScreen() {
       .catch(() => {
         if (cancelled) return;
         setRelatedAssets([]);
-        setRelatedAssetsFailed(true);
         setRelatedAssetsLoading(false);
       });
     return () => { cancelled = true; };
@@ -538,7 +530,6 @@ export default function AssetDetailScreen() {
   }, [requireAuth, social]);
 
   const { data: issuerTrust } = useSellerTrust(asset?.issuerId);
-  const issuerFollowMutation = useSellerFollow(asset?.issuerId);
 
   if (isLoading) {
     return (
@@ -587,7 +578,6 @@ export default function AssetDetailScreen() {
     || asset.issuer?.username
     || issuerTrust?.username
     || 'Issuer';
-  const canMessageIssuer = currentUser?.id !== asset.issuerId;
 
   const availableUnits = asset.availableUnits;
   const totalUnits = asset.totalUnits;

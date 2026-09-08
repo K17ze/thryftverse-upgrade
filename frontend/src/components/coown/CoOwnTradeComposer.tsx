@@ -5,7 +5,6 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, PressScale } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
-import { CoOwnNumericText } from '../ui/CoOwnNumericText';
 import { CoOwnDepthPreview } from './CoOwnDepthPreview';
 
 export type CoOwnTradeSide = 'buy' | 'sell';
@@ -53,6 +52,8 @@ export interface CoOwnTradeComposerProps {
   feeLabel: React.ReactNode;
   totalLabel: React.ReactNode;
   totalCaption: string;
+  /** Backend-authoritative proportional trading fee. */
+  feeRate?: number;
   settlementLabel: string;
   /** WS3: Escrow partner holding funds during settlement. */
   escrowPartner?: string | null;
@@ -86,6 +87,8 @@ export interface CoOwnTradeComposerProps {
   /** Phase 2.5: whether the fill estimate is from a live order book or a
       development-fallback illustrative book. Controls truth-language copy. */
   bookSource?: 'live' | 'development-fallback';
+  /** Optional interactive ticket configuration rendered above the quote summary. */
+  children?: React.ReactNode;
 }
 
 export function CoOwnTradeComposer({
@@ -99,6 +102,7 @@ export function CoOwnTradeComposer({
   feeLabel,
   totalLabel,
   totalCaption,
+  feeRate = 0.01,
   settlementLabel,
   escrowPartner,
   escrowTermsUrl,
@@ -115,6 +119,7 @@ export function CoOwnTradeComposer({
   postTradePreview,
   rightsVersion,
   bookSource,
+  children,
 }: CoOwnTradeComposerProps) {
   const { colors } = useAppTheme();
   const [detailsExpanded, setDetailsExpanded] = useState(false);
@@ -173,6 +178,9 @@ export function CoOwnTradeComposer({
         </View>
       </View>
 
+      {/* Interactive ticket configuration (order type, quantity presets, limit price, duration) */}
+      {children}
+
       {/* Quote summary */}
       <View style={styles.quoteCard}>
         <View style={styles.quoteRow}>
@@ -182,7 +190,9 @@ export function CoOwnTradeComposer({
           <View style={styles.quoteValueWrap}>{grossLabel}</View>
         </View>
         <View style={[styles.quoteRow, { borderColor: colors.border }]}>
-          <Text style={[styles.quoteLabel, { color: colors.textMuted }]} numberOfLines={1}>Fee (1%)</Text>
+          <Text style={[styles.quoteLabel, { color: colors.textMuted }]} numberOfLines={1}>
+            Fee ({(feeRate * 100).toFixed(2).replace(/\.00$/, '')}%)
+          </Text>
           <View style={styles.quoteValueWrap}>{feeLabel}</View>
         </View>
         <View style={[styles.totalRow, { borderColor: colors.border }]}>
@@ -251,7 +261,7 @@ export function CoOwnTradeComposer({
               <DetailRow label="Worst price" value={`${fillEstimate.worstPrice.toFixed(2)} 1ZE`} colors={colors} />
               <DetailRow label="Units" value={String(fillEstimate.unitsFilled)} colors={colors} />
               <DetailRow label="Gross" value={fillEstimate.gross.toFixed(2)} colors={colors} />
-              <DetailRow label="Fee (1%)" value={feeLabel} colors={colors} />
+              <DetailRow label={`Fee (${(feeRate * 100).toFixed(2).replace(/\.00$/, '')}%)`} value={feeLabel} colors={colors} />
               <DetailRow label="Total" value={totalLabel} colors={colors} emphasis />
             </View>
           )}
