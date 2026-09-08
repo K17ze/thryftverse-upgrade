@@ -165,3 +165,52 @@ TypeScript (frontend + backend) passes. 84/85 test files pass (new runtime suite
 - TypeScript (frontend): pass.
 - Runtime suite: 28/28 tests pass.
 - Full suite: 84/85 test files pass, 1759 tests passed, 6 pre-existing group-chat failures (unrelated).
+
+## Waves 24-30 (2026-09-08) — Section nav restyle + broker-grade section deepening
+
+### User direction
+- Restyle Overview/Market/Ownership navigation to the editorial tab rail used by
+  Profile (Listings/Looks/About/Reviews) and Home (For you/Following).
+- Deepen each section with properly engineered components.
+
+### Wave 24 — Editorial tab rail + market surface upgrades (d09d47f3)
+- CoOwnSegmentNav restyled from filled pill segmented control to the canonical
+  editorial tab rail: text tabs on canvas, hairline bottom border, one shared
+  animated underline (Reanimated, 220ms cubic-out, 40% tab width, brand color),
+  reduced-motion instant assignment. Notification dots + haptics retained.
+- Market: top-of-book quote strip (best bid price+size | spread | best ask
+  price+size, coownUp/coownDown, tabular numerals) above the ladder.
+- Market: execution tape prints uptick/downtick direction vs previous execution.
+- Overview: valuation row restructured from 3 equal cells to dominant appraised
+  value + right-aligned valuer/date caption column.
+
+### Wave 25 — Distribution summary hierarchy (ee3b1dfb)
+- Per-unit payout is now the dominant number; total pool + settled date as
+  supporting line.
+
+### Wave 26 — Nav underline geometry fix (bc43f317)
+- Adversarial self-review found the underline offset by the container's
+  horizontal padding; rail made full-bleed to match profile TabRail exactly.
+
+### Wave 27 — Chart header hierarchy (d996a27d)
+- Premium/discount % rendered semibold tabular; stale marker on its own
+  warning-colored line instead of a buried string suffix.
+
+### Waves 28-30 — Fresh-eyes adversarial audit fixes (249fb4ff, da2a71f2, 0b0cf8d8)
+Independent subagent audit of the three sections found 18 findings (0 P0).
+Fixed the material ones:
+- Market: dead orderBookHasGap prop removed; filled market-state pill replaced
+  with 6pt dot + text; execution tape loading row added; order book loading
+  ("Synchronizing depth...") no longer conflated with empty; Alert hitSlop +
+  press feedback; venueMetadataText on canonical caption token.
+- Overview: duplicate "Full dossier" trailing CTA removed; metaLabel on
+  TypographyV2.label token; sparse-chart body tabular numerals; chevron sizes
+  standardized to 14; doc chips hitSlop.
+- Ownership: Unrealized P&L dominates the position row (flex 1.4 + priceList
+  20pt bold); distributions and corporate actions gained explicit loading
+  states (screen tracks distributionsLoading/corporateActionsLoading);
+  metaLabel on TypographyV2.label token.
+
+### Verification (final)
+- TypeScript (frontend): pass.
+- Full suite: 85/85 test files, 1764 tests passed, 2 skipped, 0 failures.
