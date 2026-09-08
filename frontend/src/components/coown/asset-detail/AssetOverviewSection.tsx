@@ -143,21 +143,7 @@ export function AssetOverviewSection({
   return (
     <View style={styles.container}>
       {/* ── 1. Physical Asset Story & Editorial Provenance — flat section ── */}
-      <CommerceDetailSection
-        label="Physical Asset & Provenance"
-        trailing={
-          <Pressable
-            onPress={onOpenDiligence}
-            hitSlop={8}
-            style={({ pressed }) => [styles.linkRow, pressed && { opacity: 0.7 }]}
-            accessibilityRole="button"
-            accessibilityLabel="Inspect complete provenance dossier"
-          >
-            <Text style={[styles.linkText, { color: colors.brand }]}>Full dossier</Text>
-            <Ionicons name="chevron-forward" size={14} color={colors.brand} />
-          </Pressable>
-        }
-      >
+      <CommerceDetailSection label="Physical Asset & Provenance">
         <View style={styles.assetStoryWrap}>
           <Text
             style={[styles.assetStoryText, { color: colors.textSecondary }]}
@@ -196,7 +182,7 @@ export function AssetOverviewSection({
             >
               {trustFacts.join(' · ')}
             </Text>
-            <Ionicons name="chevron-forward" size={12} color={colors.textMuted} />
+            <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
           </Pressable>
         ) : null}
 
@@ -328,6 +314,7 @@ export function AssetOverviewSection({
               <Pressable
                 key={idx}
                 onPress={() => void Linking.openURL(doc.url)}
+                hitSlop={8}
                 style={({ pressed }) => [styles.docChip, pressed && { opacity: 0.7 }]}
                 accessibilityRole="link"
                 accessibilityLabel={doc.accessibilityLabel}
@@ -457,10 +444,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   metaLabel: {
-    fontSize: 11,
-    fontFamily: FontFamily.medium,
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: TypographyV2.label.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase',
-    letterSpacing: 0.3,
     marginBottom: 2,
   },
   metaVal: {
@@ -482,6 +470,7 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
     lineHeight: 18,
+    fontVariant: ['tabular-nums'],
   },
   valuationDetailRow: {
     flexDirection: 'row',
