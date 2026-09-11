@@ -88,10 +88,83 @@ function computeMarketStatus(
   if (hasExitAction) return 'closed';
   // An active 1ZE reconciliation pause suspends secondary trading.
   if (isReconciliationHalted) return 'paused';
-  if (offeringStatus === 'allocated' || offeringStatus === 'closed') return 'trading';
-  // 'offering' (still allocating primary units) and 'failed' (offering closed
-  // without full allocation) both have no active secondary market yet.
+  // A failed offering is closed before allocation completes. It has no
+  // executable primary or secondary market and must not be advertised as
+  // pre-market to clients.
+  if (offeringStatus === 'failed') return 'paused';
+  // Allocation ending is not the same as an operator-closed asset. New
+  // allocations remain open for secondary trading; an explicitly closed
+  // asset is terminal until a separate lifecycle transition reopens it.
+  if (offeringStatus === 'allocated') return 'trading';
+  if (offeringStatus === 'closed') return 'closed';
+  // 'offering' is still allocating primary units; the secondary market is not
+  // active until allocation closes.
   return 'pre_market';
+}
+
+// ── Capability policy ──
+// B10: One consistent lifecycle/capability policy across list, detail, preview,
+// and command endpoints. The policy maps the computed market status to the set
+// of capabilities a client may attempt. Command endpoints must reject with a
+// clear error message when a capability is not available in the current state.
+//
+// Capability semantics:
+//   buy          — place a buy order (preview + place)
+//   sell         — place a sell order (preview + place)
+//   cancel       — cancel an open/partially_filled resting order
+//   buyoutAccept — accept a buyout offer (intentionally allowed during exit)
+//   vote         — cast a governance vote
+//
+// Policy matrix:
+//   pre_market: buy=false, sell=false, cancel=false, buyoutAccept=false, vote=true
+//   trading:    buy=true,  sell=true,  cancel=true,  buyoutAccept=true,  vote=true
+//   paused:     buy=false, sell=false, cancel=true,  buyoutAccept=false, vote=true
+//   closed:     buy=false, sell=false, cancel=false, buyoutAccept=true,  vote=true
+
+export interface CoOwnCapabilities {
+  buy: boolean;
+  sell: boolean;
+  cancel: boolean;
+  buyoutAccept: boolean;
+  vote: boolean;
+}
+
+function resolveCoOwnCapabilities(marketStatus: CoOwnMarketStatus): CoOwnCapabilities {
+  switch (marketStatus) {
+    case 'trading':
+      return { buy: true, sell: true, cancel: true, buyoutAccept: true, vote: true };
+    case 'paused':
+      return { buy: false, sell: false, cancel: true, buyoutAccept: false, vote: true };
+    case 'closed':
+      return { buy: false, sell: false, cancel: false, buyoutAccept: true, vote: true };
+    case 'pre_market':
+    default:
+      return { buy: false, sell: false, cancel: false, buyoutAccept: false, vote: true };
+  }
+}
+
+// Checks whether a specific capability is available for an asset given its
+// market status. Returns an error object when the capability is not available,
+// or null when it is. Command endpoints use this to enforce the same policy.
+function checkCoOwnCapability(
+  marketStatus: CoOwnMarketStatus,
+  capability: keyof CoOwnCapabilities,
+): { code: string; message: string } | null {
+  const caps = resolveCoOwnCapabilities(marketStatus);
+  if (caps[capability]) {
+    return null;
+  }
+  const reasonMap: Record<keyof CoOwnCapabilities, string> = {
+    buy: 'Buying is not available in the current market state',
+    sell: 'Selling is not available in the current market state',
+    cancel: 'Cancelling orders is not available in the current market state',
+    buyoutAccept: 'Accepting buyout offers is not available in the current market state',
+    vote: 'Voting is not available in the current market state',
+  };
+  return {
+    code: 'CO_OWN_CAPABILITY_UNAVAILABLE',
+    message: reasonMap[capability],
+  };
 }
 
 // ── Dependency injection ──
@@ -373,6 +446,7 @@ function hashCoOwnOrderPayload(payload: {
   maxPriceGbp?: number | null;
   minPriceGbp?: number | null;
   reservationId?: string | null;
+  timeInForce?: string | null;
 }): string {
   return crypto
     .createHash('sha256')
@@ -384,6 +458,7 @@ function hashCoOwnOrderPayload(payload: {
       maxPriceGbp: payload.maxPriceGbp ?? null,
       minPriceGbp: payload.minPriceGbp ?? null,
       reservationId: payload.reservationId ?? null,
+      timeInForce: payload.timeInForce ?? null,
     }))
     .digest('hex');
 }
@@ -574,6 +649,7 @@ async function applyCoOwnTransfer(
         FROM coown_order_reservations
         WHERE user_id = $1
           AND status IN ('active', 'placed')
+          AND (expires_at IS NULL OR expires_at > NOW())
           AND ($2::bigint IS NULL OR placed_order_id IS DISTINCT FROM $2)
       `,
       [input.buyerId, input.buyOrderId ?? null]
@@ -758,6 +834,40 @@ async function hasActiveExitAction(assetId: string): Promise<boolean> {
   return result.rows.length > 0;
 }
 
+// B10: Resolves the market status for a single asset. This is the shared guard
+// used by preview, place, cancel, and buyout-accept handlers so they all apply
+// the same lifecycle policy. Uses the same exit-action check as
+// hasActiveExitAction (announced/executing only) so cancelled or completed exits
+// do not terminally close the market in command endpoints.
+async function resolveCoOwnMarketStatus(
+  client: { query: <T = any>(text: string, values?: any[]) => Promise<{ rows: T[]; rowCount?: number }> },
+  assetId: string,
+): Promise<{ marketStatus: CoOwnMarketStatus; isOpen: boolean }> {
+  const assetResult = await client.query<{ is_open: boolean; available_units: number }>(
+    `SELECT is_open, available_units FROM coOwn_assets WHERE id = $1 LIMIT 1`,
+    [assetId],
+  );
+  const asset = assetResult.rows[0];
+  if (!asset) {
+    return { marketStatus: 'closed', isOpen: false };
+  }
+
+  const exitResult = await client.query<{ status: string }>(
+    `SELECT status FROM coown_corporate_actions
+     WHERE asset_id = $1 AND action_type = 'exit'
+       AND status IN ('announced', 'executing')
+     LIMIT 1`,
+    [assetId],
+  );
+  const hasActiveExit = exitResult.rows.length > 0;
+
+  const haltState = await getOnezeMintBurnHaltState();
+  const offeringStatus = computeOfferingStatus(asset.is_open, asset.available_units);
+  const marketStatus = computeMarketStatus(offeringStatus, hasActiveExit, haltState.halted);
+
+  return { marketStatus, isOpen: asset.is_open };
+}
+
 // ── Co-Own route handlers ──
 
 /* ── Co-Own Price Alerts ── */
@@ -907,6 +1017,155 @@ app.patch('/co-own/price-alerts/:id', async (request, reply) => {
   };
 });
 
+/* ── Co-Own Distributions ── */
+
+// GET /co-own/distributions — list distributions.
+//
+// coown_distributions rows are per-recipient (each row is one holder's
+// payment), so the listing is identity-scoped:
+//   • Authenticated callers receive only their own distributions, optionally
+//     filtered by assetId, cursor-paginated on (created_at, id).
+//   • Anonymous callers receive per-asset aggregate facts only (total
+//     distributed, distribution count, latest per-unit rate, latest
+//     distribution date). recipient_user_id and individual amounts are never
+//     exposed on the public path.
+app.get('/co-own/distributions', async (request, reply) => {
+  const querySchema = z.object({
+    assetId: z.string().min(2).max(128).optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+    cursor: z.string().optional(),
+  });
+  const query = querySchema.parse(request.query);
+
+  const authUserId = request.authUser?.userId;
+
+  if (authUserId) {
+    // Cursor is base64-encoded "createdAt|id" (same scheme as /feed/discover)
+    // so pagination stays stable when distributions share a created_at
+    // (NOW() is transaction-scoped, so batched inserts share timestamps).
+    // created_at::text preserves microsecond precision across the round-trip.
+    let cursorCreatedAt: string | null = null;
+    let cursorId: string | null = null;
+    if (query.cursor) {
+      try {
+        const decoded = Buffer.from(query.cursor, 'base64').toString('utf-8');
+        const parts = decoded.split('|');
+        if (parts.length === 2) {
+          [cursorCreatedAt, cursorId] = parts;
+        }
+      } catch {
+        // Invalid cursor — treat as first page
+      }
+    }
+
+    const result = await db.query<{
+      id: string;
+      asset_id: string;
+      amount_gbp_minor: string | number;
+      units_at_record: string | number;
+      per_unit_gbp_minor: string | number;
+      distribution_type: string;
+      status: string;
+      reference: string | null;
+      created_at: string;
+      created_at_text: string;
+      settled_at: string | null;
+      projected_payable_date: Date | null;
+      record_date: Date | null;
+      ex_date: Date | null;
+    }>(
+      `SELECT id, asset_id, amount_gbp_minor, units_at_record, per_unit_gbp_minor,
+              distribution_type, status, reference, created_at,
+              created_at::text AS created_at_text, settled_at,
+              projected_payable_date, record_date, ex_date
+       FROM coown_distributions
+       WHERE recipient_user_id = $1
+         AND ($2::text IS NULL OR asset_id = $2)
+         AND ($3::timestamptz IS NULL OR (created_at, id) < ($3::timestamptz, $4::text))
+       ORDER BY created_at DESC, id DESC
+       LIMIT $5`,
+      [authUserId, query.assetId ?? null, cursorCreatedAt, cursorId, query.limit + 1]
+    );
+
+    // Fetch one extra row so "exactly limit rows remain" is distinguishable
+    // from "limit rows and more remain" — no empty final page.
+    const hasMore = result.rows.length > query.limit;
+    const pageRows = hasMore ? result.rows.slice(0, query.limit) : result.rows;
+    const lastRow = pageRows[pageRows.length - 1];
+
+    return {
+      ok: true,
+      scope: 'user',
+      items: pageRows.map((row) => ({
+        id: row.id,
+        assetId: row.asset_id,
+        amountGbpMinor: Number(row.amount_gbp_minor),
+        unitsAtRecord: Number(row.units_at_record),
+        perUnitGbpMinor: Number(row.per_unit_gbp_minor),
+        distributionType: row.distribution_type,
+        status: row.status,
+        reference: row.reference,
+        createdAt: row.created_at,
+        settledAt: row.settled_at,
+        projectedPayableDate: row.projected_payable_date ? row.projected_payable_date.toISOString() : null,
+        recordDate: row.record_date ? row.record_date.toISOString() : null,
+        exDate: row.ex_date ? row.ex_date.toISOString() : null,
+      })),
+      nextCursor: hasMore && lastRow
+        ? Buffer.from(`${lastRow.created_at_text}|${lastRow.id}`).toString('base64')
+        : null,
+    };
+  }
+
+  // Anonymous callers get per-asset aggregates only — never per-recipient rows.
+  // An explicit assetId must reference a real asset; unknown IDs are a 404,
+  // not a silent empty aggregate.
+  if (query.assetId) {
+    const assetExists = await db.query<{ exists: number }>(
+      `SELECT 1 FROM coOwn_assets WHERE id = $1 LIMIT 1`,
+      [query.assetId]
+    );
+    if (assetExists.rows.length === 0) {
+      reply.code(404);
+      return { ok: false, error: 'Co-Own asset not found' };
+    }
+  }
+
+  const aggregateResult = await db.query<{
+    asset_id: string;
+    total_distributed_gbp_minor: string | number;
+    distribution_count: string | number;
+    latest_per_unit_gbp_minor: string | number | null;
+    latest_distribution_at: string | null;
+  }>(
+    `SELECT asset_id,
+            COALESCE(SUM(amount_gbp_minor), 0)::bigint AS total_distributed_gbp_minor,
+            COUNT(*)::int AS distribution_count,
+            (array_agg(per_unit_gbp_minor ORDER BY created_at DESC, id DESC))[1] AS latest_per_unit_gbp_minor,
+            MAX(created_at) AS latest_distribution_at
+     FROM coown_distributions
+     WHERE ($1::text IS NULL OR asset_id = $1)
+     GROUP BY asset_id
+     ORDER BY MAX(created_at) DESC, asset_id ASC
+     LIMIT $2`,
+    [query.assetId ?? null, query.limit]
+  );
+
+  return {
+    ok: true,
+    scope: 'asset_aggregates',
+    items: [],
+    nextCursor: null,
+    aggregates: aggregateResult.rows.map((row) => ({
+      assetId: row.asset_id,
+      totalDistributedGbpMinor: Number(row.total_distributed_gbp_minor),
+      distributionCount: Number(row.distribution_count),
+      latestPerUnitGbpMinor: row.latest_per_unit_gbp_minor == null ? null : Number(row.latest_per_unit_gbp_minor),
+      latestDistributionAt: row.latest_distribution_at,
+    })),
+  };
+});
+
 /* ── Co-Own Price History (OHLCV) ── */
 
 // GET /co-own/assets/:assetId/price-history — aggregated OHLCV candles
@@ -917,10 +1176,23 @@ app.get('/co-own/assets/:assetId/price-history', async (request) => {
   const querySchema = z.object({
     interval: z.enum(['1h', '4h', '1d', '1w']).default('1d'),
     limit: z.coerce.number().int().min(1).max(500).default(100),
+    from: z.string().datetime().optional(),
+    to: z.string().datetime().optional(),
   });
-  const { interval, limit } = querySchema.parse(request.query);
+  const { interval, limit, from, to } = querySchema.parse(request.query);
 
-  // First try the pre-aggregated table
+  // Reject reversed/invalid date windows (B05).
+  if (from && to && new Date(from) > new Date(to)) {
+    return { ok: false, error: 'Invalid date range: from must precede to' };
+  }
+
+  const fromDate = from ? new Date(from) : null;
+  const toDate = to ? new Date(to) : null;
+
+  // First try the pre-aggregated table, but only if it is fresh (B05).
+  // A cache hit is only authoritative when no settled trade exists after
+  // the latest cached bucket — otherwise the cache is stale and we must
+  // fall through to real-time aggregation from coOwn_trades.
   const cached = await db.query<{
     bucket_start: string;
     open_gbp_minor: string | number;
@@ -934,12 +1206,35 @@ app.get('/co-own/assets/:assetId/price-history', async (request) => {
             volume_units, trade_count
      FROM coown_price_history
      WHERE asset_id = $1 AND interval = $2
+       ${fromDate ? 'AND bucket_start >= $4' : ''}
+       ${toDate ? 'AND bucket_start <= $5' : ''}
      ORDER BY bucket_start DESC
      LIMIT $3`,
-    [assetId, interval, limit]
+    fromDate && toDate
+      ? [assetId, interval, limit, fromDate, toDate]
+      : fromDate
+        ? [assetId, interval, limit, fromDate]
+        : toDate
+          ? [assetId, interval, limit, toDate]
+          : [assetId, interval, limit]
   );
 
-  if (cached.rows.length > 0) {
+  let cacheIsFresh = cached.rows.length > 0;
+  if (cacheIsFresh) {
+    // Check whether any settled trade is newer than the latest cached bucket.
+    const latestCachedBucket = cached.rows[0].bucket_start;
+    const newerTrade = await db.query<{ id: string }>(
+      `SELECT id FROM coOwn_trades
+       WHERE asset_id = $1 AND created_at > $2
+       LIMIT 1`,
+      [assetId, latestCachedBucket]
+    );
+    if (newerTrade.rows.length > 0) {
+      cacheIsFresh = false;
+    }
+  }
+
+  if (cacheIsFresh) {
     return {
       ok: true,
       interval,
@@ -955,13 +1250,31 @@ app.get('/co-own/assets/:assetId/price-history', async (request) => {
     };
   }
 
-  // Fallback: aggregate from executions in real-time
+  // Fallback: aggregate from canonical settled trades in coOwn_trades (B04).
+  // coOwn_trades stores unit_price_gbp in major units (GBP); the response
+  // contract uses minor units (pence), so we multiply by 100.
   const intervalClause: Record<string, string> = {
-    '1h': "date_trunc('hour', executed_at)",
-    '4h': "date_trunc('hour', executed_at) - (EXTRACT(HOUR FROM executed_at)::int % 4) * INTERVAL '1 hour'",
-    '1d': "date_trunc('day', executed_at)",
-    '1w': "date_trunc('week', executed_at)",
+    '1h': "date_trunc('hour', created_at)",
+    '4h': "date_trunc('hour', created_at) - (EXTRACT(HOUR FROM created_at)::int % 4) * INTERVAL '1 hour'",
+    '1d': "date_trunc('day', created_at)",
+    '1w': "date_trunc('week', created_at)",
   };
+
+  const dateFilterParts: string[] = [];
+  const queryParams: (string | number | Date)[] = [assetId];
+  let paramIdx = 2;
+  if (fromDate) {
+    dateFilterParts.push(`created_at >= $${paramIdx}`);
+    queryParams.push(fromDate);
+    paramIdx++;
+  }
+  if (toDate) {
+    dateFilterParts.push(`created_at <= $${paramIdx}`);
+    queryParams.push(toDate);
+    paramIdx++;
+  }
+  const dateFilter = dateFilterParts.length > 0 ? `AND ${dateFilterParts.join(' AND ')}` : '';
+  queryParams.push(limit);
 
   const result = await db.query<{
     bucket_start: string;
@@ -974,18 +1287,18 @@ app.get('/co-own/assets/:assetId/price-history', async (request) => {
   }>(
     `SELECT
        ${intervalClause[interval]} AS bucket_start,
-       (array_agg(price_gbp_minor ORDER BY executed_at ASC))[1] AS open_gbp_minor,
-       MAX(price_gbp_minor) AS high_gbp_minor,
-       MIN(price_gbp_minor) AS low_gbp_minor,
-       (array_agg(price_gbp_minor ORDER BY executed_at DESC))[1] AS close_gbp_minor,
+       (array_agg(ROUND(unit_price_gbp * 100) ORDER BY created_at ASC))[1] AS open_gbp_minor,
+       MAX(ROUND(unit_price_gbp * 100)) AS high_gbp_minor,
+       MIN(ROUND(unit_price_gbp * 100)) AS low_gbp_minor,
+       (array_agg(ROUND(unit_price_gbp * 100) ORDER BY created_at DESC))[1] AS close_gbp_minor,
        SUM(units)::int AS volume_units,
        COUNT(*)::int AS trade_count
-     FROM coown_executions
-     WHERE asset_id = $1
+     FROM coOwn_trades
+     WHERE asset_id = $1 ${dateFilter}
      GROUP BY 1
      ORDER BY bucket_start DESC
-     LIMIT $2`,
-    [assetId, limit]
+     LIMIT $${paramIdx}`,
+    queryParams
   );
 
   return {
@@ -1001,6 +1314,111 @@ app.get('/co-own/assets/:assetId/price-history', async (request) => {
       tradeCount: Number(row.trade_count),
     })),
   };
+});
+
+/* ── Co-Own Corporate Actions (public market data) ── */
+
+interface CoOwnCorporateActionRow {
+  id: string;
+  asset_id: string;
+  action_type: string;
+  title: string;
+  description: string | null;
+  per_unit_value_gbp_minor: string | number | null;
+  total_value_gbp_minor: string | number | null;
+  record_date: string | null;
+  ex_date: string | null;
+  payable_date: string | null;
+  quorum_units: string | number | null;
+  pass_threshold_pct: string | number | null;
+  voting_deadline: Date | null;
+  status: string;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+// DB row → public payload. Corporate actions are public market information;
+// the table carries every column the client contract expects (title is
+// NOT NULL in migration 103), so the mapping is a direct snake→camel pass.
+function toCorporateActionPayload(row: CoOwnCorporateActionRow) {
+  return {
+    id: row.id,
+    assetId: row.asset_id,
+    actionType: row.action_type,
+    title: row.title,
+    description: row.description,
+    perUnitValueGbpMinor: row.per_unit_value_gbp_minor == null ? null : Number(row.per_unit_value_gbp_minor),
+    totalValueGbpMinor: row.total_value_gbp_minor == null ? null : Number(row.total_value_gbp_minor),
+    recordDate: row.record_date,
+    exDate: row.ex_date,
+    payableDate: row.payable_date,
+    quorumUnits: row.quorum_units != null ? Number(row.quorum_units) : null,
+    passThresholdPct: row.pass_threshold_pct != null ? Number(row.pass_threshold_pct) : null,
+    votingDeadline: row.voting_deadline ? row.voting_deadline.toISOString() : null,
+    status: row.status,
+    metadata: row.metadata ?? null,
+    createdAt: row.created_at,
+  };
+}
+
+// GET /co-own/corporate-actions — list corporate actions across assets
+app.get('/co-own/corporate-actions', async (request) => {
+  const querySchema = z.object({
+    assetId: z.string().min(2).max(128).optional(),
+    type: z.string().trim().min(1).max(64).optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+  });
+  const { assetId, type, limit } = querySchema.parse(request.query);
+
+  const result = await db.query<CoOwnCorporateActionRow>(
+    `SELECT id, asset_id, action_type, title, description,
+            per_unit_value_gbp_minor, total_value_gbp_minor,
+            record_date, ex_date, payable_date,
+            quorum_units, pass_threshold_pct, voting_deadline,
+            status, metadata, created_at
+     FROM coown_corporate_actions
+     WHERE ($1::text IS NULL OR asset_id = $1)
+       AND ($2::text IS NULL OR action_type = $2)
+     ORDER BY created_at DESC
+     LIMIT $3`,
+    [assetId ?? null, type ?? null, limit]
+  );
+
+  return { ok: true, items: result.rows.map(toCorporateActionPayload) };
+});
+
+// GET /co-own/assets/:assetId/corporate-actions — corporate actions for one asset
+app.get('/co-own/assets/:assetId/corporate-actions', async (request, reply) => {
+  const paramsSchema = z.object({ assetId: z.string().min(2).max(128) });
+  const { assetId } = paramsSchema.parse(request.params);
+
+  const querySchema = z.object({
+    type: z.string().trim().min(1).max(64).optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+  });
+  const { type, limit } = querySchema.parse(request.query);
+
+  const assetExists = await db.query('SELECT id FROM coOwn_assets WHERE id = $1 LIMIT 1', [assetId]);
+  if (!assetExists.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Co-Own asset not found' };
+  }
+
+  const result = await db.query<CoOwnCorporateActionRow>(
+    `SELECT id, asset_id, action_type, title, description,
+            per_unit_value_gbp_minor, total_value_gbp_minor,
+            record_date, ex_date, payable_date,
+            quorum_units, pass_threshold_pct, voting_deadline,
+            status, metadata, created_at
+     FROM coown_corporate_actions
+     WHERE asset_id = $1
+       AND ($2::text IS NULL OR action_type = $2)
+     ORDER BY created_at DESC
+     LIMIT $3`,
+    [assetId, type ?? null, limit]
+  );
+
+  return { ok: true, items: result.rows.map(toCorporateActionPayload) };
 });
 
 /* ── Co-Own Governance Voting ── */
@@ -1045,11 +1463,111 @@ app.get('/co-own/corporate-actions/:actionId/votes', async (request) => {
     if (myVoteResult.rows.length > 0) myVote = myVoteResult.rows[0].vote;
   }
 
+  // U48: Return server-authoritative voting eligibility so the frontend can
+  // gate the voting form and show a reason when ineligible. Mirrors the
+  // eligibility logic in the POST /vote handler: status must be 'open', the
+  // record date must not be in the future, and the user must hold units
+  // (current holdings, or record-date reconstructed holdings when a record
+  // date is set and has passed).
+  let eligibility: {
+    eligible: boolean;
+    reason: string;
+    votingPowerUnits: number;
+    recordDate: string | null;
+    status: string;
+  } | undefined;
+
+  const actionResult = await db.query<{
+    status: string;
+    action_type: string;
+    asset_id: string;
+    record_date: string | null;
+  }>(
+    `SELECT status, action_type, asset_id, record_date
+     FROM coown_corporate_actions
+     WHERE id = $1`,
+    [actionId]
+  );
+
+  const action = actionResult.rows[0];
+  if (action) {
+    let votingPowerUnits = 0;
+    let reason = '';
+
+    if (action.action_type !== 'governance') {
+      reason = 'Voting is only available for governance actions';
+    } else if (action.status !== 'open') {
+      reason = action.status === 'completed'
+        ? 'This vote has closed'
+        : `Voting is ${action.status}`;
+    } else if (action.record_date != null) {
+      const recordDateMs = new Date(action.record_date).getTime();
+      if (Number.isFinite(recordDateMs) && recordDateMs > Date.now()) {
+        reason = 'Voting opens at the record date';
+      }
+    }
+
+    // Compute voting power only when no blocking reason so far and the user
+    // is authenticated. This mirrors the POST handler's record-date replay.
+    if (!reason && authUserId) {
+      if (action.record_date != null) {
+        const recordDateMs = new Date(action.record_date).getTime();
+        if (Number.isFinite(recordDateMs) && recordDateMs <= Date.now()) {
+          const historicalResult = await db.query<{ units: string | number }>(
+            `SELECT COALESCE(
+              SUM(CASE
+                WHEN buyer_id = $2 THEN units
+                WHEN seller_id = $2 THEN -units
+                ELSE 0
+              END), 0
+            )::bigint AS units
+             FROM coown_trades
+             WHERE asset_id = $1
+               AND (buyer_id = $2 OR seller_id = $2)
+               AND created_at <= $3`,
+            [action.asset_id, authUserId, action.record_date]
+          );
+          votingPowerUnits = Number(historicalResult.rows[0]?.units ?? 0);
+        } else {
+          const holdingsResult = await db.query<{ units: string | number }>(
+            `SELECT COALESCE(SUM(units_owned), 0)::bigint AS units
+             FROM coown_holdings
+             WHERE asset_id = $1 AND user_id = $2`,
+            [action.asset_id, authUserId]
+          );
+          votingPowerUnits = Number(holdingsResult.rows[0]?.units ?? 0);
+        }
+      } else {
+        const holdingsResult = await db.query<{ units: string | number }>(
+          `SELECT COALESCE(SUM(units_owned), 0)::bigint AS units
+           FROM coown_holdings
+           WHERE asset_id = $1 AND user_id = $2`,
+          [action.asset_id, authUserId]
+        );
+        votingPowerUnits = Number(holdingsResult.rows[0]?.units ?? 0);
+      }
+
+      if (votingPowerUnits <= 0) {
+        reason = 'You must hold units of this asset to vote';
+      }
+    }
+
+    const eligible = !reason && !!authUserId;
+    eligibility = {
+      eligible,
+      reason,
+      votingPowerUnits,
+      recordDate: action.record_date,
+      status: action.status,
+    };
+  }
+
   return {
     ok: true,
     summary,
     totalVotingPower: totalPower,
     myVote,
+    eligibility,
   };
 });
 
@@ -1109,6 +1627,16 @@ app.post('/co-own/corporate-actions/:actionId/vote', async (request, reply) => {
   if (action.status !== 'open') {
     reply.code(400);
     return { ok: false, error: 'Voting has closed for this action' };
+  }
+
+  // B10: Apply the unified capability policy for vote. Vote is available in
+  // all market states, but the check is applied for consistency so that a
+  // future policy change is enforced everywhere.
+  const { marketStatus: voteMarketStatus } = await resolveCoOwnMarketStatus(db, assetId);
+  const voteCapabilityError = checkCoOwnCapability(voteMarketStatus, 'vote');
+  if (voteCapabilityError) {
+    reply.code(423);
+    return { ok: false, error: voteCapabilityError.code, message: voteCapabilityError.message };
   }
 
   // Bug C: record-date eligibility. When a record date is set and is in the
@@ -1313,6 +1841,22 @@ app.post('/co-own/recurring-orders', async (request, reply) => {
   });
 
   const { assetId, unitsPerExecution, frequency, maxPriceGbpMinor } = bodySchema.parse(request.body ?? {});
+
+  // Validate asset exists and check buy capability
+  const assetCheck = await db.query<{ id: string }>(
+    `SELECT id FROM coOwn_assets WHERE id = $1`,
+    [assetId]
+  );
+  if (assetCheck.rows.length === 0) {
+    reply.code(404);
+    return { ok: false, error: 'Asset not found' };
+  }
+  const { marketStatus } = await resolveCoOwnMarketStatus(db, assetId);
+  const capabilityError = checkCoOwnCapability(marketStatus, 'buy');
+  if (capabilityError) {
+    reply.code(403);
+    return { ok: false, error: capabilityError };
+  }
 
   const nextExecutionDate = new Date();
   if (frequency === 'weekly') nextExecutionDate.setDate(nextExecutionDate.getDate() + 7);
@@ -1556,6 +2100,7 @@ app.get('/co-own/assets', async (request) => {
         EXISTS (
           SELECT 1 FROM coown_corporate_actions ca
           WHERE ca.asset_id = sa.id AND ca.action_type = 'exit'
+            AND ca.status IN ('announced', 'executing')
         ) AS has_exit,
         (
           SELECT t.unit_price_gbp
@@ -1575,6 +2120,7 @@ app.get('/co-own/assets', async (request) => {
         WHERE o.asset_id = sa.id
           AND o.status IN ('open', 'partially_filled')
           AND o.remaining_units > 0
+          AND (o.expires_at IS NULL OR o.expires_at > NOW())
       ) book ON TRUE
       ${whereClause}
       ORDER BY sa.volume_24h_gbp DESC, sa.created_at DESC
@@ -1592,6 +2138,7 @@ app.get('/co-own/assets', async (request) => {
     ok: true,
     items: result.rows.map((row) => {
       const offeringStatus = computeOfferingStatus(row.is_open, row.available_units);
+      const marketStatus = computeMarketStatus(offeringStatus, row.has_exit, isReconciliationHalted);
       return {
       id: row.id,
       listingId: row.listing_id,
@@ -1613,7 +2160,8 @@ app.get('/co-own/assets', async (request) => {
       askDepthUnits: Number(row.ask_depth_units),
       isOpen: row.is_open,
       offeringStatus,
-      marketStatus: computeMarketStatus(offeringStatus, row.has_exit, isReconciliationHalted),
+      marketStatus,
+      capabilities: resolveCoOwnCapabilities(marketStatus),
       lastTradePriceGbp: row.last_trade_price_gbp == null ? null : Number(row.last_trade_price_gbp),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -2063,6 +2611,8 @@ app.get('/co-own/assets/:assetId/orders', async (request, reply) => {
     status: CoOwnOrderStatus;
     created_at: string;
     updated_at: string;
+    expires_at: string | null;
+    cancel_reason: string | null;
   }>(
     `
       SELECT
@@ -2080,7 +2630,9 @@ app.get('/co-own/assets/:assetId/orders', async (request, reply) => {
         total_gbp,
         status,
         created_at,
-        updated_at
+        updated_at,
+        expires_at,
+        cancel_reason
       FROM coOwn_orders
       WHERE asset_id = $1
         AND ($2::text IS NULL OR status = $2)
@@ -2107,6 +2659,106 @@ app.get('/co-own/assets/:assetId/orders', async (request, reply) => {
       status: row.status,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+      expiresAt: row.expires_at,
+      cancelReason: row.cancel_reason,
+    })),
+  };
+});
+
+// ---------------------------------------------------------------------------
+// GET /co-own/assets/:assetId/my-orders — authenticated, owner-scoped open
+// orders for the current user on a specific asset. This is the dedicated
+// endpoint the asset-detail screen uses instead of filtering a 200-item
+// account-history window. Only open and partially_filled orders are returned.
+// ---------------------------------------------------------------------------
+
+app.get('/co-own/assets/:assetId/my-orders', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Authentication required' };
+  }
+  const paramsSchema = z.object({ assetId: z.string().min(2) });
+  const querySchema = z.object({
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+  });
+
+  const { assetId } = paramsSchema.parse(request.params);
+  const { limit } = querySchema.parse(request.query);
+  const userId = request.authUser.userId;
+
+  const assetExists = await db.query('SELECT id FROM coOwn_assets WHERE id = $1 LIMIT 1', [assetId]);
+  if (!assetExists.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Co-Own asset not found' };
+  }
+
+  const result = await db.query<{
+    id: number;
+    side: 'buy' | 'sell';
+    order_type: CoOwnOrderType;
+    limit_price_gbp: number | string | null;
+    protection_price_gbp: number | string | null;
+    units: number;
+    remaining_units: number;
+    filled_units: number;
+    unit_price_gbp: number | string;
+    fee_gbp: number | string;
+    total_gbp: number | string;
+    status: CoOwnOrderStatus;
+    created_at: string;
+    updated_at: string;
+    expires_at: string | null;
+    cancel_reason: string | null;
+  }>(
+    `
+      SELECT
+        id,
+        side,
+        order_type,
+        limit_price_gbp,
+        protection_price_gbp,
+        units,
+        remaining_units,
+        filled_units,
+        unit_price_gbp,
+        fee_gbp,
+        total_gbp,
+        status,
+        created_at::text,
+        updated_at::text,
+        expires_at::text,
+        cancel_reason
+      FROM coOwn_orders
+      WHERE asset_id = $1
+        AND user_id = $2
+        AND status IN ('open', 'partially_filled')
+        AND (expires_at IS NULL OR expires_at > NOW())
+      ORDER BY created_at DESC, id DESC
+      LIMIT $3
+    `,
+    [assetId, userId, limit]
+  );
+
+  return {
+    ok: true,
+    items: result.rows.map((row) => ({
+      id: row.id,
+      assetId,
+      side: row.side,
+      orderType: row.order_type,
+      limitPriceGbp: row.limit_price_gbp === null ? null : Number(row.limit_price_gbp),
+      protectionPriceGbp: row.protection_price_gbp === null ? null : Number(row.protection_price_gbp),
+      units: row.units,
+      remainingUnits: row.remaining_units,
+      filledUnits: row.filled_units,
+      unitPriceGbp: Number(row.unit_price_gbp),
+      feeGbp: Number(row.fee_gbp),
+      totalGbp: Number(row.total_gbp),
+      status: row.status,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      expiresAt: row.expires_at,
+      cancelReason: row.cancel_reason,
     })),
   };
 });
@@ -2150,6 +2802,7 @@ app.get('/co-own/assets/:assetId/orderbook', async (request, reply) => {
           AND side = 'buy'
           AND status IN ('open', 'partially_filled')
           AND remaining_units > 0
+          AND (expires_at IS NULL OR expires_at > NOW())
         GROUP BY side, unit_price_gbp
         ORDER BY unit_price_gbp DESC, side ASC
         LIMIT $2
@@ -2174,6 +2827,7 @@ app.get('/co-own/assets/:assetId/orderbook', async (request, reply) => {
           AND side = 'sell'
           AND status IN ('open', 'partially_filled')
           AND remaining_units > 0
+          AND (expires_at IS NULL OR expires_at > NOW())
         GROUP BY side, unit_price_gbp
         ORDER BY unit_price_gbp ASC, side ASC
         LIMIT $2
@@ -2293,6 +2947,25 @@ app.get('/co-own/assets/:assetId/executions', async (request, reply) => {
   };
 });
 
+// ── B14: Aggregate portfolio projection ──────────────────────────────
+// Returns all holdings with marks, provenance, sellable units, and
+// capabilities in one bounded query — replaces the frontend's N+1
+// per-holding detail calls.
+app.get('/co-own/portfolio', async (request, reply) => {
+  const userId = request.authUser?.userId;
+  if (!userId) {
+    return reply.code(401).send({ ok: false, error: 'Authentication required' });
+  }
+  try {
+    const { getPortfolioProjection } = await import('../lib/coOwnPortfolioProjection.js');
+    const result = await getPortfolioProjection(userId);
+    return reply.send({ ok: true, ...result });
+  } catch (error) {
+    app.log.error({ err: error }, '[co-own/portfolio] projection failed');
+    return reply.code(500).send({ ok: false, error: 'Portfolio projection failed' });
+  }
+});
+
 app.get('/co-own/assets/:assetId/holdings', async (request, reply) => {
   const paramsSchema = z.object({ assetId: z.string().min(2) });
   const querySchema = z.object({
@@ -2393,15 +3066,13 @@ app.post('/co-own/assets/:assetId/orders/preview', async (request, reply) => {
     return { ok: false, error: 'Co-Own asset is closed for trading' };
   }
 
-  if (await hasActiveExitAction(assetId)) {
+  // B10: Apply the unified capability policy. The preview endpoint must reject
+  // with the same market-state check used by the place endpoint.
+  const { marketStatus: previewMarketStatus } = await resolveCoOwnMarketStatus(db, assetId);
+  const previewCapabilityError = checkCoOwnCapability(previewMarketStatus, payload.side);
+  if (previewCapabilityError) {
     reply.code(423);
-    return { ok: false, error: 'CO_OWN_MARKET_CLOSED', message: 'This asset is in exit proceedings. Trading is closed.' };
-  }
-
-  const previewHaltState = await getOnezeMintBurnHaltState();
-  if (previewHaltState.halted) {
-    reply.code(423);
-    return { ok: false, error: 'CO_OWN_RECONCILIATION_HALT', message: 'Trading is temporarily paused for reconciliation.' };
+    return { ok: false, error: previewCapabilityError.code, message: previewCapabilityError.message };
   }
 
   const referencePriceGbp = Number(asset.unit_price_gbp);
@@ -2434,6 +3105,7 @@ app.post('/co-own/assets/:assetId/orders/preview', async (request, reply) => {
       WHERE asset_id = $1
         AND side = $2
         AND status IN ('open', 'partially_filled')
+        AND (expires_at IS NULL OR expires_at > NOW())
         AND (
           $3::numeric IS NULL
           OR ($4 = 'buy' AND unit_price_gbp <= $3)
@@ -2586,15 +3258,13 @@ app.post('/co-own/assets/:assetId/orders/reserve', async (request, reply) => {
   const payload = bodySchema.parse(request.body);
   await ensureUserExists(payload.userId);
 
-  const reserveHaltState = await getOnezeMintBurnHaltState();
-  if (reserveHaltState.halted) {
+  // B10: Apply the unified capability policy. The reserve endpoint must reject
+  // with the same market-state check used by the preview and place endpoints.
+  const { marketStatus: reserveMarketStatus } = await resolveCoOwnMarketStatus(db, assetId);
+  const reserveCapabilityError = checkCoOwnCapability(reserveMarketStatus, payload.side);
+  if (reserveCapabilityError) {
     reply.code(423);
-    return { ok: false, error: 'CO_OWN_RECONCILIATION_HALT', message: 'Trading is temporarily paused for reconciliation.' };
-  }
-
-  if (await hasActiveExitAction(assetId)) {
-    reply.code(423);
-    return { ok: false, error: 'CO_OWN_MARKET_CLOSED', message: 'This asset is in exit proceedings. Trading is closed.' };
+    return { ok: false, error: reserveCapabilityError.code, message: reserveCapabilityError.message };
   }
 
   const reservationIdempotencyHash = payload.idempotencyKey
@@ -2694,7 +3364,9 @@ app.post('/co-own/assets/:assetId/orders/reserve', async (request, reply) => {
         `
           SELECT COALESCE(SUM(reserved_1ze_units), 0)::text AS total
           FROM coown_order_reservations
-          WHERE user_id = $1 AND status IN ('active', 'placed') AND id <> $2
+          WHERE user_id = $1 AND status IN ('active', 'placed')
+            AND (expires_at IS NULL OR expires_at > NOW())
+            AND id <> $2
         `,
         [payload.userId, '']
       );
@@ -2724,6 +3396,7 @@ app.post('/co-own/assets/:assetId/orders/reserve', async (request, reply) => {
           SELECT COALESCE(SUM(reserved_units), 0) AS total
           FROM coown_order_reservations
           WHERE user_id = $1 AND asset_id = $2 AND status IN ('active', 'placed')
+            AND (expires_at IS NULL OR expires_at > NOW())
         `,
         [payload.userId, assetId]
       );
@@ -2925,6 +3598,7 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
         maxPriceGbp: payload.maxPriceGbp ?? null,
         minPriceGbp: payload.minPriceGbp ?? null,
         reservationId: payload.reservationId,
+        timeInForce: payload.timeInForce ?? null,
       })
     : null;
 
@@ -2960,7 +3634,7 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
         `
           INSERT INTO coown_order_commands (asset_id, actor_id, idempotency_key, request_hash, status)
           VALUES ($1, $2, $3, $4, 'pending')
-          ON CONFLICT (asset_id, idempotency_key) DO NOTHING
+          ON CONFLICT (asset_id, actor_id, idempotency_key) DO NOTHING
           RETURNING id, status
         `,
         [assetId, payload.userId, payload.idempotencyKey, idempotencyRequestHash]
@@ -2970,22 +3644,22 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
         const existingCommand = await client.query<{
           status: string;
           order_id: string | null;
-          response_code: number | null;
+          response_status: number | null;
           response_body: Record<string, unknown> | null;
         }>(
           `
-            SELECT status, order_id, response_code, response_body
+            SELECT status, order_id, response_status, response_body
             FROM coown_order_commands
-            WHERE asset_id = $1 AND idempotency_key = $2
+            WHERE asset_id = $1 AND actor_id = $2 AND idempotency_key = $3
             LIMIT 1
           `,
-          [assetId, payload.idempotencyKey]
+          [assetId, payload.userId, payload.idempotencyKey]
         );
 
         const existing = existingCommand.rows[0];
         if (existing && (existing.status === 'acknowledged' || existing.status === 'completed')) {
           await client.query('ROLLBACK');
-          reply.code(existing.response_code ?? 200);
+          reply.code(existing.response_status ?? 200);
           return {
             ok: true,
             status: 'acknowledged',
@@ -3043,10 +3717,14 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
       return { ok: false, error: 'Co-Own asset is closed for trading' };
     }
 
-    if (await hasActiveExitAction(assetId)) {
+    // B10: Apply the unified capability policy. The place endpoint uses the
+    // same market-status check as the preview endpoint.
+    const { marketStatus: placeMarketStatus } = await resolveCoOwnMarketStatus(client, assetId);
+    const placeCapabilityError = checkCoOwnCapability(placeMarketStatus, payload.side);
+    if (placeCapabilityError) {
       await client.query('ROLLBACK');
       reply.code(423);
-      return { ok: false, error: 'CO_OWN_MARKET_CLOSED', message: 'This asset is in exit proceedings. Trading is closed.' };
+      return { ok: false, error: placeCapabilityError.code, message: placeCapabilityError.message };
     }
 
     const reservationResult = await client.query<{
@@ -3261,6 +3939,16 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
           ? roundTo(protectionCapGbp, 4)
           : referencePriceGbp;
 
+    const orderExpiryDate = payload.timeInForce === 'GTC90'
+      ? new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
+      : (() => {
+          // GFD: end of the current trading day (UTC midnight of the next day).
+          const endOfDay = new Date();
+          endOfDay.setUTCHours(24, 0, 0, 0);
+          return endOfDay;
+        })();
+    const orderExpiresAt = orderExpiryDate.toISOString();
+
     const orderMarketSeq = await allocateMarketSequence(client, assetId);
 
     const touchedOpposingLevels = new Map<string, { side: 'buy' | 'sell'; price: number }>();
@@ -3291,11 +3979,12 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
           unit_price_gbp,
           fee_gbp,
           total_gbp,
+          expires_at,
           updated_at,
           status,
           market_sequence
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $7, 0, $8, 0, 0, NOW(), 'open', $9)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $7, 0, $8, 0, 0, $9, NOW(), 'open', $10)
         RETURNING id, side, units, remaining_units, filled_units, unit_price_gbp::text, fee_gbp::text, total_gbp::text, created_at
       `,
       [
@@ -3307,34 +3996,20 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
         payload.orderType === 'protected_market' ? (protectionCapGbp ?? null) : null,
         payload.units,
         orderPriceGbp,
+        orderExpiresAt,
         orderMarketSeq,
       ]
     );
 
     const incomingOrderId = orderResult.rows[0].id;
 
-    // ── Time-in-force / expiry ──
-    // The coOwn_orders table does not yet have an `expires_at` column, so the
-    // computed expiry is accepted and surfaced in the response (and audit
-    // trail) for now. Once the column is added, this value should be persisted
-    // and a sweeper should cancel orders past their expiry.
-    const orderExpiryDate = payload.timeInForce === 'GTC90'
-      ? new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
-      : (() => {
-          // GFD: end of the current trading day (UTC midnight of the next day).
-          const endOfDay = new Date();
-          endOfDay.setUTCHours(24, 0, 0, 0);
-          return endOfDay;
-        })();
-    const orderExpiresAt = orderExpiryDate.toISOString();
-
     await client.query(
       `
         UPDATE coown_order_reservations
-        SET status = 'placed', placed_order_id = $2, updated_at = NOW()
+        SET status = 'placed', placed_order_id = $2, expires_at = $3, updated_at = NOW()
         WHERE id = $1 AND status = 'active'
       `,
-      [payload.reservationId, incomingOrderId]
+      [payload.reservationId, incomingOrderId, orderExpiresAt]
     );
     let remainingUnits = payload.units;
     let filledUnits = 0;
@@ -3342,6 +4017,33 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
     let tradedFeeGbp = 0;
     let lastExecutionPriceGbp: number | null = null;
     let nextAvailableUnits = asset.available_units;
+
+    // Expire old resting orders inside the same transaction that reads the
+    // book. This prevents a GFD/GTC90 order from matching after its deadline
+    // and releases the exact reservation once, before liquidity is selected.
+    const expiredOrders = await client.query<{ id: number }>(
+      `
+        UPDATE coOwn_orders
+        SET remaining_units = 0, status = 'cancelled', cancel_reason = 'expired', updated_at = NOW()
+        WHERE asset_id = $1
+          AND status IN ('open', 'partially_filled')
+          AND expires_at IS NOT NULL
+          AND expires_at <= NOW()
+        RETURNING id
+      `,
+      [assetId],
+    );
+    if (expiredOrders.rows.length > 0) {
+      await client.query(
+        `
+          UPDATE coown_order_reservations
+          SET status = 'expired', reserved_1ze_units = 0, reserved_units = 0, updated_at = NOW()
+          WHERE placed_order_id = ANY($1::bigint[])
+            AND status = 'placed'
+        `,
+        [expiredOrders.rows.map((row) => row.id)],
+      );
+    }
 
     const restingOrders = await client.query<{
       id: number;
@@ -3352,7 +4054,8 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
       filled_units: number;
       unit_price_gbp: string;
       fee_gbp: string;
-      total_gbp: string;
+          total_gbp: string;
+      expires_at: string | null;
     }>(
       `
         SELECT
@@ -3364,11 +4067,13 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
           filled_units,
           unit_price_gbp::text,
           fee_gbp::text,
-          total_gbp::text
+          total_gbp::text,
+          expires_at::text
         FROM coOwn_orders
         WHERE asset_id = $1
           AND side = $2
           AND status IN ('open', 'partially_filled')
+          AND (expires_at IS NULL OR expires_at > NOW())
           AND id <> $3
           AND user_id <> $6
           AND (
@@ -3633,6 +4338,7 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
           SELECT side, unit_price_gbp::text, SUM(remaining_units)::text AS units, COUNT(*)::text AS order_count
           FROM coOwn_orders
           WHERE asset_id = $1 AND side = $2 AND status IN ('open', 'partially_filled') AND remaining_units > 0
+            AND (expires_at IS NULL OR expires_at > NOW())
             AND unit_price_gbp = ANY($3::numeric[])
           GROUP BY side, unit_price_gbp
         `,
@@ -3704,7 +4410,9 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
           unit_price_gbp = $5,
           unit_price_stable = $6,
           market_move_pct_24h = $7,
-          is_open = CASE WHEN $2 <= 0 THEN FALSE ELSE is_open END,
+          -- Selling out the primary allocation must not close the secondary
+          -- market. is_open is the explicit lifecycle switch; allocation
+          -- availability is projected separately as offeringStatus.
           updated_at = NOW()
         WHERE id = $1
         RETURNING
@@ -3809,10 +4517,10 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
       await client.query(
         `
           UPDATE coown_order_commands
-          SET status = 'acknowledged', order_id = $2, response_code = 200, response_body = $3, completed_at = NOW()
-          WHERE asset_id = $1 AND idempotency_key = $4
+          SET status = 'acknowledged', order_id = $2, response_status = 200, response_body = $3, completed_at = NOW()
+          WHERE asset_id = $1 AND actor_id = $4 AND idempotency_key = $5
         `,
-        [assetId, String(incomingOrder.rows[0].id), JSON.stringify(responseBody), payload.idempotencyKey]
+        [assetId, String(incomingOrder.rows[0].id), JSON.stringify(responseBody), payload.userId, payload.idempotencyKey]
       );
     }
 
@@ -4003,8 +4711,12 @@ app.post('/co-own/assets/:assetId/orders/:orderId/cancel', async (request, reply
   });
   const bodySchema = z.object({ userId: z.string().min(2) });
   const { assetId, orderId } = paramsSchema.parse(request.params);
-  const { userId } = bodySchema.parse(request.body);
-  resolveAuthenticatedUserId(request, userId);
+  const bodyUserId = bodySchema.parse(request.body).userId;
+  // Use the authenticated user's ID as the source of truth for ownership.
+  // The body userId is only used to validate the request matches the
+  // authenticated identity (resolveAuthenticatedUserId throws on mismatch).
+  resolveAuthenticatedUserId(request, bodyUserId);
+  const userId = request.authUser?.userId ?? bodyUserId;
 
   const client = await db.connect();
   try {
@@ -4040,12 +4752,21 @@ app.post('/co-own/assets/:assetId/orders/:orderId/cancel', async (request, reply
       return { ok: false, error: `A ${order.status} order cannot be cancelled` };
     }
 
+    // B10: Apply the unified capability policy for cancel.
+    const { marketStatus: cancelMarketStatus } = await resolveCoOwnMarketStatus(client, assetId);
+    const cancelCapabilityError = checkCoOwnCapability(cancelMarketStatus, 'cancel');
+    if (cancelCapabilityError) {
+      await client.query('ROLLBACK');
+      reply.code(423);
+      return { ok: false, error: cancelCapabilityError.code, message: cancelCapabilityError.message };
+    }
+
     const cancelMarketSeq = await allocateMarketSequence(client, assetId);
 
     await client.query(
       `
         UPDATE coOwn_orders
-        SET remaining_units = 0, status = 'cancelled', updated_at = NOW(), market_sequence = $2
+        SET remaining_units = 0, status = 'cancelled', cancel_reason = 'user', updated_at = NOW(), market_sequence = $2
         WHERE id = $1
       `,
       [orderId, cancelMarketSeq]
@@ -4059,6 +4780,22 @@ app.post('/co-own/assets/:assetId/orders/:orderId/cancel', async (request, reply
       [orderId]
     );
     await client.query('COMMIT');
+
+    // Publish a book-updated event so realtime subscribers refetch the
+    // order book snapshot. Without this, the ladder stays stale after a
+    // cancel until the next snapshot poll or reconnect.
+    publishRealtimeEvent({
+      topic: `co-own.asset:${assetId}`,
+      type: 'co-own.book-updated',
+      payload: {
+        assetId,
+        orderId,
+        reason: 'cancelled',
+      },
+      seq: true,
+      version: 1,
+    });
+
     return {
       ok: true,
       order: { id: orderId, status: 'cancelled', filledUnits: order.filled_units, remainingUnits: 0 },
@@ -4507,6 +5244,17 @@ app.post('/co-own/buyout-offers/:offerId/accept', async (request, reply) => {
       };
     }
 
+    // B10: Apply the unified capability policy for buyout_accept. This is
+    // intentionally allowed in the 'closed' (exit) state so holders can
+    // accept buyout offers during exit proceedings.
+    const { marketStatus: buyoutMarketStatus } = await resolveCoOwnMarketStatus(client, offer.asset_id);
+    const buyoutCapabilityError = checkCoOwnCapability(buyoutMarketStatus, 'buyoutAccept');
+    if (buyoutCapabilityError) {
+      await client.query('ROLLBACK');
+      reply.code(423);
+      return { ok: false, error: buyoutCapabilityError.code, message: buyoutCapabilityError.message };
+    }
+
     const remainingTarget = Math.max(0, offer.target_units - offer.accepted_units);
     const acceptedUnits = Math.min(payload.units, remainingTarget);
     if (acceptedUnits <= 0) {
@@ -4671,7 +5419,13 @@ app.post('/co-own/buyout-offers/:offerId/accept', async (request, reply) => {
     );
 
     const nextAcceptedUnits = offer.accepted_units + acceptedUnits;
-    const nextStatus = nextAcceptedUnits >= offer.target_units ? 'settled' : 'accepted';
+    // B11/U47: An offer remains accept-capable ('open') until filled or
+    // expired. A partial acceptance must NOT change the status to
+    // 'accepted' — that would cause the next holder's acceptance to be
+    // rejected with "offer is no longer open". Two holders can contribute
+    // sequentially; the offer only closes when accepted_units reaches
+    // target_units ('settled') or the deadline passes ('expired').
+    const nextStatus = nextAcceptedUnits >= offer.target_units ? 'settled' : 'open';
 
     await client.query(
       `
@@ -4952,6 +5706,12 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
     recourse_status: string | null;
     total_traded_value_gbp: string | number;
     active_verification_demands: number;
+    lockup_end_date: string | null;
+    lockup_months: number | null;
+    management_fee_pct: string | number | null;
+    performance_fee_pct: string | number | null;
+    platform_fee_pct: string | number | null;
+    sourcing_fee_gbp: string | number | null;
   }>(
     `
       SELECT
@@ -5032,6 +5792,7 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
     price_24h_ago_gbp: string | null;
     best_bid_gbp: string | null;
     best_ask_gbp: string | null;
+    order_book_updated_at: string | null;
   }>(
     `
       WITH last_trade AS (
@@ -5064,6 +5825,7 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
           AND side = 'buy'
           AND status IN ('open', 'partially_filled')
           AND remaining_units > 0
+          AND (expires_at IS NULL OR expires_at > NOW())
       ),
       best_ask AS (
         SELECT MIN(unit_price_gbp)::text AS price
@@ -5072,14 +5834,24 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
           AND side = 'sell'
           AND status IN ('open', 'partially_filled')
           AND remaining_units > 0
+          AND (expires_at IS NULL OR expires_at > NOW())
+      ),
+      order_book_mark AS (
+        SELECT MAX(updated_at) AS updated_at
+        FROM coOwn_orders
+        WHERE asset_id = $1
+          AND status IN ('open', 'partially_filled')
+          AND remaining_units > 0
+          AND (expires_at IS NULL OR expires_at > NOW())
       )
       SELECT
         (SELECT unit_price_gbp::text FROM last_trade) AS last_execution_price_gbp,
-        (SELECT to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') FROM last_trade) AS last_execution_at,
+        (SELECT to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') FROM last_trade) AS last_execution_at,
         (SELECT volume FROM vol_24h) AS volume_24h_gbp,
         (SELECT unit_price_gbp::text FROM price_24h_ago) AS price_24h_ago_gbp,
         (SELECT price FROM best_bid) AS best_bid_gbp,
-        (SELECT price FROM best_ask) AS best_ask_gbp
+        (SELECT price FROM best_ask) AS best_ask_gbp,
+        (SELECT to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') FROM order_book_mark) AS order_book_updated_at
     `,
     [assetId]
   );
@@ -5095,9 +5867,25 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
     marketMovePct24h = ((lastExecutionPriceGbp - price24hAgo) / price24hAgo) * 100;
   }
 
+  // `asOf` is the response assembly time. `sourceAsOf` is the newest
+  // timestamp represented by the snapshot, which is the value clients must
+  // use for freshness labels. A freshly assembled response must not make an
+  // old market mark look live.
+  const marketSourceTimes = [
+    lastMarketEventAt,
+    snap?.last_execution_at ?? null,
+    snap?.order_book_updated_at ?? null,
+  ]
+    .map((value) => (value ? new Date(value).getTime() : Number.NaN))
+    .filter((value) => Number.isFinite(value));
+  const sourceAsOf = marketSourceTimes.length > 0
+    ? new Date(Math.max(...marketSourceTimes)).toISOString()
+    : row.updated_at;
+
   const marketSnapshot = {
     version: 1,
     asOf: new Date().toISOString(),
+    sourceAsOf,
     connectionStatus: row.is_open
       ? (staleMarkDays != null && staleMarkDays > 7 ? 'stale' : 'live')
       : 'closed',
@@ -5226,13 +6014,14 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
       }
     : null;
 
-  // Lifecycle projection inputs: an exit corporate action marks the asset as
-  // terminally closed, and the global 1ZE reconciliation halt pauses the
-  // secondary market. lastTradePriceGbp reuses the most recent settled trade
-  // price already fetched in the market snapshot above.
+  // Lifecycle projection inputs: an active exit corporate action (announced or
+  // executing) terminally closes the secondary market. This matches the
+  // hasActiveExitAction guard used by command endpoints (line 755), so the
+  // detail endpoint and command endpoints apply the same lifecycle policy.
   const exitActionResult = await db.query<{ id: string }>(
     `SELECT id FROM coown_corporate_actions
      WHERE asset_id = $1 AND action_type = 'exit'
+       AND status IN ('announced', 'executing')
      LIMIT 1`,
     [assetId]
   );
@@ -5242,6 +6031,28 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
 
   const offeringStatus = computeOfferingStatus(row.is_open, row.available_units);
   const marketStatus = computeMarketStatus(offeringStatus, hasExitAction, haltState.halted);
+  const capabilities = resolveCoOwnCapabilities(marketStatus);
+
+  // Embed the single most recent active (status = 'open') buyout offer for
+  // this asset. The coOwn_buyout_offers table uses 'open' as the active status
+  // (not 'active' or 'pending'); there is no premium_pct or expiry_date column,
+  // so premiumPct is always null and expiry is derived from expires_at.
+  const activeBuyoutOfferResult = await db.query<{
+    offer_price_gbp: string;
+    expires_at: string | null;
+  }>(
+    `
+      SELECT offer_price_gbp::text, expires_at::text
+      FROM coOwn_buyout_offers
+      WHERE asset_id = $1
+        AND status = 'open'
+        AND (expires_at IS NULL OR expires_at > NOW())
+      ORDER BY created_at DESC
+      LIMIT 1
+    `,
+    [assetId]
+  );
+  const activeBuyoutOfferRow = activeBuyoutOfferResult.rows[0] ?? null;
 
   return {
     ok: true,
@@ -5279,6 +6090,7 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
       isOpen: row.is_open,
       offeringStatus,
       marketStatus,
+      capabilities,
       lastTradePriceGbp: lastExecutionPriceGbp,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -5314,6 +6126,20 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
       recourseStatus: row.recourse_status ?? 'pending',
       totalTradedValueGbp: row.total_traded_value_gbp != null ? Number(row.total_traded_value_gbp) : 0,
       activeVerificationDemands: row.active_verification_demands ?? 0,
+      lockupEndDate: row.lockup_end_date ? new Date(row.lockup_end_date).toISOString() : null,
+      lockupMonths: row.lockup_months ?? null,
+      feeSchedule: {
+        managementFeePct: row.management_fee_pct != null ? Number(row.management_fee_pct) : null,
+        performanceFeePct: row.performance_fee_pct != null ? Number(row.performance_fee_pct) : null,
+        platformFeePct: row.platform_fee_pct != null ? Number(row.platform_fee_pct) : null,
+        sourcingFeeGbp: row.sourcing_fee_gbp != null ? Number(row.sourcing_fee_gbp) : null,
+      },
+      activeBuyoutOffer: activeBuyoutOfferRow ? {
+        priceGbp: Number(activeBuyoutOfferRow.offer_price_gbp),
+        premiumPct: null,
+        expiry: activeBuyoutOfferRow.expires_at ? new Date(activeBuyoutOfferRow.expires_at).toISOString() : null,
+      } : null,
+      tradingFeeRate: CO_OWN_TRADE_FEE_RATE,
       trustAuditEvents: trustEventsResult.rows.map((e) => ({
         eventType: e.event_type,
         createdAt: e.created_at,

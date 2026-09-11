@@ -8,7 +8,7 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { AppButton } from '../ui/AppButton';
 import { CachedImage } from '../CachedImage';
 import { AppStatusPill } from '../ui/AppStatusPill';
-import { Meta, BodyEmphasis, Body } from '../ui/Text';
+import { Meta, BodyEmphasis } from '../ui/Text';
 
 interface CoOwnAssetCardProps {
   id: string;

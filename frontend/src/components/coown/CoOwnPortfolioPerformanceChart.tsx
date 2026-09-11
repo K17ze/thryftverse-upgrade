@@ -157,6 +157,14 @@ export function CoOwnPortfolioPerformanceChart({
           </View>
         )}
       </View>
+
+      {/* U42: This is cost-vs-value, not historical performance. Historical
+          returns require valuation records and cash flows from the backend.
+          Until those exist, this note makes the limitation explicit rather
+          than implying a time-series return. */}
+      <Text style={[styles.historicalNote, { color: colors.textMuted }]} numberOfLines={2}>
+        Historical performance requires valuation records
+      </Text>
     </View>
   );
 }
@@ -234,5 +242,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: Space.sm,
+  },
+  // U42: Historical performance limitation note
+  historicalNote: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    marginTop: Space.sm,
   },
 });

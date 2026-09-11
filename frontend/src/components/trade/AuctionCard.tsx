@@ -2,13 +2,13 @@ import React from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Stroke, Control } from '../../theme/designTokens';
+import { Space, Radius, Control } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppButton } from '../ui/AppButton';
 import { CachedImage } from '../CachedImage';
 import { AppStatusPill, type AppStatusTone } from '../ui/AppStatusPill';
-import { Meta, BodyEmphasis, Body, Headline } from '../ui/Text';
+import { Meta, BodyEmphasis, Headline } from '../ui/Text';
 
 type TimerUrgency = 'critical' | 'urgent' | 'normal';
 

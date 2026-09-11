@@ -63,7 +63,9 @@
     },
     "on": "On",
     "off": "Off",
-    "none": "None"
+    "none": "None",
+    "searchPlaceholder": "Search...",
+    "noResults": "No results found"
   },
   "home": {
     "brandTitle": "Thryftverse",
@@ -456,6 +458,16 @@
       "couldNotUpdatePriceAlert": "Could not update price alert. Try again.",
       "browseSimilar": "Browse similar",
       "manageListing": "Manage listing"
+    },
+    "shipping": {
+      "title": "Delivery",
+      "standard": "Standard",
+      "express": "Express",
+      "whoPays": "Who pays",
+      "buyerPays": "Buyer pays",
+      "sellerPays": "I pay (free)",
+      "close": "Close delivery options",
+      "closeOptions": "Close delivery options"
     }
   },
   "messaging": {
@@ -1863,6 +1875,21 @@
       "browseListings": "Browse listings",
       "addListing": "Add a listing",
       "clearFilters": "Clear filters"
+    }
+  },
+  "creator": {
+    "crop": {
+      "done": "Done",
+      "reset": "Reset",
+      "close": "Close",
+      "straighten": "Straighten",
+      "rotate": "Rotate",
+      "flipHorizontal": "Flip horizontally",
+      "flipVertical": "Flip vertically",
+      "focalPoint": "Focal point",
+      "processing": "Processing",
+      "loadError": "Couldn't load this image.",
+      "retry": "Try again"
     }
   }
 }

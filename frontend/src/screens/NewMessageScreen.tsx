@@ -12,7 +12,7 @@ import { createDmConversationOnApi, joinGroupByInviteOnApi } from '../services/c
 import { parseApiError } from '../lib/apiClient';
 import { getAvailableAgents, deployAgent, type ChatAgent } from '../services/chatAgentsApi';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, TypeStyles, Control, Stroke} from '../theme/designTokens';
+import { Space, Radius, Control, Stroke} from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
@@ -112,7 +112,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
       borderRadius: Radius.full },
     contactAvatarText: {
       fontSize: TypographyV2.bodyStrong.size,
-      fontFamily: TypeStyles.title.fontFamily,
+      fontFamily: TypographyV2.screenTitle.fontFamily,
       color: colors.textPrimary },
     rowBody: {
       flex: 1,

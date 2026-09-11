@@ -56,32 +56,30 @@ import type { Listing as CatalogListing } from '../domain';
 
 import {
   FullscreenMediaViewer,
-  ProductFamilyBadge,
   SizeGuideSheet,
   BundleUpsellRow,
   ListingQA,
   SeenInLooksRail,
 } from '../components/product';
 import {
-  CommerceMediaStage,
   CommerceStateCanvas,
   CategoryEvidence,
 } from '../components/commerce';
 import {
   CommerceDetailHeader,
-  CommerceDetailIdentity,
   CommerceDetailSection,
   CommerceDetailDisclosureRow,
   CommerceDetailMetricRow,
-  CommerceDetailStateDock,
-  CommerceDetailMediaRail,
   CommerceDetailUnavailableInline,
   CommerceDetailOfflineBanner,
-  CommerceDetailSellerRow,
   SellerInfoCard,
   ShippingReturnsInfo,
   SustainabilityImpact,
   MakeOfferSheet,
+  CommerceMediaHero,
+  CommerceIdentityBlock,
+  CommerceTrustDossier,
+  CommerceActionDock,
 } from '../components/commerce/detail';
 import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
 import {
@@ -790,7 +788,7 @@ export default function ItemDetailScreen() {
             CommerceMediaStage handles paging/zoom/fullscreen only.
             CommerceDetailMediaRail overlays the max-3-visible-controls
             (Back, Share, Save) + overflow (Fav, Watch, Report). */}
-        <CommerceMediaStage
+        <CommerceMediaHero
           images={item.images}
           category={item.category ?? undefined}
           objectId={item.id}
@@ -816,40 +814,10 @@ export default function ItemDetailScreen() {
           }}
           bigHeartOpacity={bigHeartOpacity}
           bigHeartScale={bigHeartScale}
-          showDefaultControls={false}
-          showPageIndicator={false}
           showThumbnailStrip={item.images ? item.images.length > 1 : false}
-          overlayTopContent={
-            familyStateAccent ? (
-              <View style={styles.familyBadgeOverlay}>
-                <ProductFamilyBadge
-                  family="direct"
-                  stateAccent={familyStateAccent}
-                  compact
-                />
-              </View>
-            ) : null
-          }
-        />
-        <CommerceDetailMediaRail
-          onBack={() => navigation.goBack()}
-          topInset={insets.top}
-          rightActions={[
-            {
-              icon: 'share-outline',
-              label: 'Share',
-              onPress: handleShare,
-            },
-            {
-              icon: isItemSavedAnywhere(item.id) ? 'bookmark' : 'bookmark-outline',
-              activeIcon: 'bookmark',
-              label: isItemSavedAnywhere(item.id) ? 'Saved to collection' : 'Save to collection',
-              onPress: () => { haptic.patterns.save(); setCollectionModalVisible(true); },
-              isActive: isItemSavedAnywhere(item.id),
-            },
-          ]}
+          familyStateAccent={familyStateAccent}
+          onRailSave={() => { haptic.patterns.save(); setCollectionModalVisible(true); }}
           onOverflow={() => setOverflowVisible(true)}
-          showOverflow
         />
 
         {/* ── Image pagination ──
@@ -865,107 +833,23 @@ export default function ItemDetailScreen() {
             then owns brand, identity and price. The dock is the only
             actionable repetition of that price. Per 2026 PDP research:
             the buyer sees *what* and *how much* before *who*. */}
-        <View style={styles.editorialIdentityChapter}>
-          <CommerceDetailIdentity
-            family="direct"
-            tone="canvas"
-            density={isCompactScreen ? 'compact' : 'standard'}
-            eyebrow={item.brand ?? item.category ?? undefined}
-            title={displayTitle}
-            primaryValue={formattedPrice}
-            originalValue={hasDiscount && formattedOriginal ? formattedOriginal : undefined}
-            discountBadge={hasDiscount && discountPercent ? `-${Math.round(discountPercent)}%` : undefined}
-            secondaryLine={secondaryLine}
-            interestSignal={interestSignal}
-          />
-
-          {/* ── Consolidated attribute row ──
-              Condition chip, size/category, social proof, and izeText
-              in one composed row — replaces the former 3 separate thin
-              metadata lines (socialProofLine, attributeRow, izeText)
-              that created label-everything disease. Per AGENTS.md §4:
-              "Real apps show less: the object is the label." Per 2026
-              PDP research: "The first viewport normally uses no more
-              than three type sizes and one eyebrow." */}
-          {(attributeLine || socialProofLine || priceIzeText) ? (
-            <View style={styles.attributeRow}>
-              <View style={styles.attributeLeftCluster}>
-                {/* Condition chip — condition gets a distinct visual
-                    treatment instead of blending into muted text. It
-                    is the most important attribute for second-hand
-                    buyers, so it earns its own affordance and a tap
-                    target that opens the definition. */}
-                {item.condition ? (
-                  <AnimatedPressable
-                    onPress={() => setConditionInfoVisible(true)}
-                    hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
-                    style={[
-                      styles.conditionChip,
-                      {
-                        borderColor: conditionMeta ? `${conditionMeta.color}66` : colors.borderSubtle,
-                        backgroundColor: conditionMeta ? `${conditionMeta.color}14` : 'transparent',
-                      },
-                    ]}
-                    scaleValue={0.98}
-                    hapticFeedback="light"
-                    accessibilityLabel={`Condition: ${item.condition}. Tap for definition.`}
-                    accessibilityRole="button"
-                  >
-                    <View style={[styles.conditionDot, { backgroundColor: conditionMeta?.color ?? colors.textMuted }]} />
-                    <Text style={[styles.conditionChipText, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.4}>
-                      {item.condition}
-                    </Text>
-                    <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
-                  </AnimatedPressable>
-                ) : null}
-                {(() => {
-                  const remaining = [
-                    item.size && `Size ${item.size}`,
-                    item.category,
-                  ].filter(Boolean).join(' · ');
-                  return remaining ? (
-                    <Text style={[styles.attributeText, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
-                      {remaining}
-                    </Text>
-                  ) : null;
-                })()}
-                {/* Social proof — truthful engagement signals (active
-                    offers, views) rendered as a quiet trailing element
-                    in the same row. Only included when the backend
-                    provides positive counts — never fabricated. */}
-                {socialProofLine ? (
-                  <Text style={[styles.socialProofInline, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
-                    · {socialProofLine}
-                  </Text>
-                ) : null}
-              </View>
-              {item.size && (
-                <AnimatedPressable
-                  onPress={() => setSizeGuideVisible(true)}
-                  hitSlop={8}
-                  style={styles.quietTextTarget}
-                  scaleValue={0.98}
-                  hapticFeedback="light"
-                  accessibilityLabel="View size guide"
-                  accessibilityRole="button"
-                >
-                  <Text style={[styles.sizeGuideLink, { color: colors.brand }]} maxFontSizeMultiplier={1.4}>
-                    Size guide
-                  </Text>
-                </AnimatedPressable>
-              )}
-            </View>
-          ) : null}
-
-          {/* izeText — quiet 1ZE-equivalent value on its own line
-              below the attribute row. Kept separate because it is a
-              price-adjacent fact, not an attribute. */}
-          {priceIzeText ? (
-            <Text style={[styles.izeText, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
-              {priceIzeText}
-            </Text>
-          ) : null}
-        </View>
+        <CommerceIdentityBlock
+          item={item}
+          displayTitle={displayTitle}
+          formattedPrice={formattedPrice}
+          formattedOriginal={formattedOriginal}
+          hasDiscount={hasDiscount}
+          discountPercent={discountPercent}
+          secondaryLine={secondaryLine}
+          interestSignal={interestSignal}
+          priceIzeText={priceIzeText}
+          attributeLine={attributeLine}
+          socialProofLine={socialProofLine}
+          conditionMeta={conditionMeta}
+          isCompactScreen={isCompactScreen}
+          onConditionPress={() => setConditionInfoVisible(true)}
+          onSizeGuidePress={() => setSizeGuideVisible(true)}
+        />
 
         {/* ── First-viewport seller trust row (display-only) ──
             Seller identity + verification badge + stats line appears
@@ -974,116 +858,12 @@ export default function ItemDetailScreen() {
             The full SellerInfoCard (with Follow / Message / View shop
             actions and the "More from this seller" rail) lives in Zone
             E below and is the sole profile navigation point. */}
-        {seller ? (
-          <View style={[styles.firstViewportSellerRow, { borderBottomColor: colors.borderSubtle }]}>
-            <CommerceDetailSellerRow
-              variant="rich"
-              avatarUri={seller.avatar ?? undefined}
-              name={seller.username}
-              verified={sellerVerified}
-              statsLine={sellerStatsLine}
-              ratingLine={
-                seller?.rating != null && seller.rating > 0
-                  ? (seller.reviewCount != null && seller.reviewCount > 0
-                    ? `${seller.rating.toFixed(1)} · ${seller.reviewCount} reviews`
-                    : `${seller.rating.toFixed(1)}`)
-                  : undefined
-              }
-              locationLine={seller?.location ?? undefined}
-            />
-          </View>
-        ) : null}
-
-        {/* ── Zone C — Trust facts (max 3) ──
-            Seller rating and dispatch time — the facts a buyer needs
-            to decide whether to keep reading. Condition is already
-            shown in the attribute row above, so it is not repeated
-            here. Full commerce details (protection, returns,
-            authenticity) live in the Shipping & returns section below.
-            Flat rows with hairline separators — no chips, no cards.
-            Each row is one fact with an icon + label, separated by
-            hairlines for clear scanning. */}
-        {(() => {
-          const trustRows: { icon: keyof typeof Ionicons.glyphMap; label: string; dotColor?: string }[] = [];
-          // 1. Seller rating — social proof (review count/score summary)
-          if (seller?.rating != null && seller.rating > 0) {
-            const ratingText = seller.reviewCount != null && seller.reviewCount > 0
-              ? `${seller.rating.toFixed(1)} · ${seller.reviewCount} reviews`
-              : `${seller.rating.toFixed(1)}`;
-            trustRows.push({
-              icon: 'star-outline',
-              label: ratingText,
-            });
-          }
-          // 2. Seller verification — trust badge for verified sellers
-          if (seller?.verified || seller?.verificationTier === 'seller' || seller?.verificationTier === 'id') {
-            const verifyLabel = seller.verificationTier === 'seller'
-              ? 'Trusted Seller'
-              : seller.verificationTier === 'id'
-                ? 'ID Verified'
-                : 'Verified';
-            trustRows.push({
-              icon: 'checkmark-circle-outline',
-              label: verifyLabel,
-            });
-          }
-          // 3. Response time — "Usually responds in 2h" signal
-          if (seller?.responseTimeLabel) {
-            trustRows.push({
-              icon: 'chatbubble-ellipses-outline',
-              label: seller.responseTimeLabel,
-            });
-          }
-          // 4. Dispatch time — when will it arrive?
-          if (seller?.dispatchTimeLabel) {
-            trustRows.push({
-              icon: 'car-outline',
-              label: seller.dispatchTimeLabel,
-            });
-          } else if (commerce.shippingMethod) {
-            trustRows.push({
-              icon: commerce.shippingPayer === 'seller' ? 'gift-outline' : 'car-outline',
-              label: commerce.shippingPayer === 'seller'
-                ? `Free ${commerce.shippingMethod}`
-                : commerce.shippingMethod,
-            });
-          }
-          // 5. Buyer protection fallback — per research doc M1: when no
-          // seller rating or dispatch time exists, the first viewport
-          // must still carry at least one trust signal. For a
-          // stranger-to-stranger marketplace, buyer protection / escrow
-          // is the baseline trust guarantee.
-          if (trustRows.length === 0 && commerce.protectionPolicy?.available) {
-            trustRows.push({
-              icon: 'checkmark-circle-outline',
-              label: commerce.protectionPolicy.label ?? 'Buyer Protection',
-            });
-          }
-          if (trustRows.length === 0) return null;
-          const elevated = trustRows.slice(0, 3);
-          return (
-            <View style={styles.trustFactsSection}>
-              {elevated.map((row, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.trustFactRow,
-                    i < elevated.length - 1 && { borderBottomColor: colors.borderSubtle },
-                  ]}
-                >
-                  {row.dotColor ? (
-                    <View style={[styles.trustFactDot, { backgroundColor: row.dotColor }]} />
-                  ) : (
-                    <Ionicons name={row.icon} size={16} color={colors.textSecondary} />
-                  )}
-                  <Text style={[styles.trustFactText, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
-                    {row.label}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          );
-        })()}
+        <CommerceTrustDossier
+          seller={seller}
+          sellerStatsLine={sellerStatsLine}
+          sellerVerified={sellerVerified}
+          commerce={commerce}
+        />
 
         {/* ── Zone D — Description (progressive disclosure) ──
             Description + condition + category evidence + posted date.
@@ -1518,209 +1298,34 @@ export default function ItemDetailScreen() {
           Buyer: price + Buy now + Make offer.
           Seller: Manage listing.
           Sold/unavailable: factual state + one next action. */}
-      {(() => {
-        if (capabilities.isOwner) {
-          return (
-            <CommerceDetailStateDock
-              value={formattedPrice}
-              valueLabel="Your listing"
-              thumbnailUri={item.images?.[0]}
-              primaryAction={{
-                label: t('product.manageListing'),
-                onPress: () => navigation.navigate('ManageListing', { itemId: item.id }),
-              }}
-            />
-          );
-        }
-
-        if (capabilities.isSold) {
-          return (
-            <CommerceDetailStateDock
-              stateBadge={
-                <Text style={[styles.dockStateBadge, { color: colors.success }]} maxFontSizeMultiplier={1.4}>
-                  Sold
-                </Text>
-              }
-              subtitle="This item has been sold"
-              primaryAction={{
-                label: 'More like this',
-                onPress: () => navigation.navigate('MainTabs', { screen: 'Explore' }),
-              }}
-            />
-          );
-        }
-
-        if (!capabilities.isAvailable) {
-          const unavailableCopy = (() => {
-            switch (capabilities.unavailableReason) {
-              case 'reserved':
-                return { label: 'Reserved', subtitle: 'This item is currently held for another buyer' };
-              case 'paused':
-                return { label: 'Paused', subtitle: 'The seller has paused this listing' };
-              case 'draft':
-                return { label: 'Not published', subtitle: 'This listing is not available to buy' };
-              case 'missing_price':
-                return { label: 'Price unavailable', subtitle: 'The seller has not supplied a valid price' };
-              case 'missing_seller':
-                return { label: 'Seller unavailable', subtitle: 'Seller details could not be verified' };
-              case 'status_unknown':
-                return { label: 'Status unavailable', subtitle: 'Purchase availability could not be verified' };
-              default:
-                return { label: 'Unavailable', subtitle: 'This listing is no longer available' };
-            }
-          })();
-          return (
-            <CommerceDetailStateDock
-              stateBadge={
-                <Text style={[styles.dockStateBadge, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
-                  {unavailableCopy.label}
-                </Text>
-              }
-              subtitle={unavailableCopy.subtitle}
-              primaryAction={{
-                label: t('product.browseSimilar'),
-                onPress: () => navigation.navigate('MainTabs', { screen: 'Explore' }),
-              }}
-            />
-          );
-        }
-
-        // ── Tier-adaptive dock actions ──
-        // Category-adaptive CTAs by commerce tier:
-        //   - brokered: Enquire + Request viewing (no direct buy/offer)
-        //   - specialist: Buy now + Enquire (expert review questions)
-        //   - authenticated_luxury: Buy now + Make offer (authentication
-        //     note shows in the trust strip)
-        //   - standard: Buy now + Make offer (existing behaviour)
-        // The enquiry/viewing actions open a DM conversation with the
-        // seller, following the same createDmConversationOnApi → Chat
-        // navigation pattern used by the SellerInfoCard message action.
-        const enquireAction = capabilities.canEnquire
-          ? {
-              label: 'Enquire',
-              onPress: handleEnquire,
-            }
-          : undefined;
-
-        const requestViewingAction = capabilities.canRequestViewing
-          ? {
-              label: 'Request viewing',
-              onPress: handleRequestViewing,
-            }
-          : undefined;
-
-        const buyNowAction = {
-          label: t('product.buyNow'),
-          onPress: () => {
-            if (!requireAuth('purchase')) return;
-            if (item) ProductAnalytics.checkoutStart(item.id);
-            // Do not fire a success haptic before the purchase has
-            // actually completed. "Buy now" navigates to checkout — it
-            // does not complete the purchase. A medium impact acknowledges
-            // the primary-action press; the success pattern belongs in the
-            // Checkout confirmation flow.
-            haptic.medium();
-            navigation.navigate('Checkout', { itemId: item.id });
-          },
-        };
-
-        const makeOfferAction = capabilities.canOffer
-          ? {
-              label: 'Make offer',
-              onPress: () => {
-                if (!requireAuth('purchase')) return;
-                if (item) ProductAnalytics.offerStart(item.id);
-                setMakeOfferVisible(true);
-              },
-            }
-          : undefined;
-
-        // Brokered assets: enquire + request viewing replace buy/offer.
-        if (capabilities.commerceTier === 'brokered') {
-          return (
-            <CommerceDetailStateDock
-              value={formattedPrice}
-              originalValue={hasDiscount && formattedOriginal ? formattedOriginal : undefined}
-              thumbnailUri={item.images?.[0]}
-              shippingHint={
-                commerce.shippingPayer === 'seller'
-                  ? 'Free shipping'
-                  : commerce.shippingMethod
-                    ? 'Shipping calculated at checkout'
-                    : undefined
-              }
-              commerceTier="brokered"
-              primaryAction={enquireAction}
-              secondaryAction={requestViewingAction}
-            />
-          );
-        }
-
-        // Specialist items: buy now + enquire (for expert review questions).
-        if (capabilities.commerceTier === 'specialist') {
-          return (
-            <CommerceDetailStateDock
-              value={formattedPrice}
-              originalValue={hasDiscount && formattedOriginal ? formattedOriginal : undefined}
-              thumbnailUri={item.images?.[0]}
-              shippingHint={
-                commerce.shippingPayer === 'seller'
-                  ? 'Free shipping'
-                  : commerce.shippingMethod
-                    ? 'Shipping calculated at checkout'
-                    : undefined
-              }
-              showProtectionStrip={commerce.protectionPolicy?.available ?? false}
-              commerceTier="specialist"
-              primaryAction={buyNowAction}
-              secondaryAction={enquireAction}
-            />
-          );
-        }
-
-        // Authenticated luxury: buy now + make offer; authentication
-        // note shows in the trust strip.
-        if (capabilities.commerceTier === 'authenticated_luxury') {
-          return (
-            <CommerceDetailStateDock
-              value={formattedPrice}
-              originalValue={hasDiscount && formattedOriginal ? formattedOriginal : undefined}
-              thumbnailUri={item.images?.[0]}
-              shippingHint={
-                commerce.shippingPayer === 'seller'
-                  ? 'Free shipping'
-                  : commerce.shippingMethod
-                    ? 'Shipping calculated at checkout'
-                    : undefined
-              }
-              showProtectionStrip={commerce.protectionPolicy?.available ?? false}
-              commerceTier="authenticated_luxury"
-              primaryAction={buyNowAction}
-              secondaryAction={makeOfferAction}
-            />
-          );
-        }
-
-        // Standard tier: existing buy now + make offer behaviour.
-        return (
-          <CommerceDetailStateDock
-            value={formattedPrice}
-            originalValue={hasDiscount && formattedOriginal ? formattedOriginal : undefined}
-            thumbnailUri={item.images?.[0]}
-            shippingHint={
-              commerce.shippingPayer === 'seller'
-                ? 'Free shipping'
-                : commerce.shippingMethod
-                  ? 'Shipping calculated at checkout'
-                  : undefined
-            }
-            showProtectionStrip={commerce.protectionPolicy?.available ?? false}
-            commerceTier="standard"
-            primaryAction={buyNowAction}
-            secondaryAction={makeOfferAction}
-          />
-        );
-      })()}
+      <CommerceActionDock
+        item={item}
+        capabilities={capabilities}
+        commerce={commerce}
+        formattedPrice={formattedPrice}
+        formattedOriginal={formattedOriginal}
+        hasDiscount={hasDiscount}
+        onManageListing={() => navigation.navigate('ManageListing', { itemId: item.id })}
+        onBrowseSimilar={() => navigation.navigate('MainTabs', { screen: 'Explore' })}
+        onBuyNow={() => {
+          if (!requireAuth('purchase')) return;
+          if (item) ProductAnalytics.checkoutStart(item.id);
+          // Do not fire a success haptic before the purchase has
+          // actually completed. "Buy now" navigates to checkout — it
+          // does not complete the purchase. A medium impact acknowledges
+          // the primary-action press; the success pattern belongs in the
+          // Checkout confirmation flow.
+          haptic.medium();
+          navigation.navigate('Checkout', { itemId: item.id });
+        }}
+        onMakeOffer={() => {
+          if (!requireAuth('purchase')) return;
+          if (item) ProductAnalytics.offerStart(item.id);
+          setMakeOfferVisible(true);
+        }}
+        onEnquire={handleEnquire}
+        onRequestViewing={handleRequestViewing}
+      />
 
       <FullscreenMediaViewer
         images={item.images}
@@ -2009,139 +1614,15 @@ export default function ItemDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  familyBadgeOverlay: {
-    alignSelf: 'flex-start',
-  },
-  editorialIdentityChapter: {
-    // Between-group spacing after full-bleed media. 16px (Space.md)
-    // creates a deliberate chapter break without excessive white space.
-    // The media is the product; the canvas is the author — the
-    // transition should feel deliberate but not distant.
-    paddingTop: Space.md,
-    paddingBottom: Space.sm,
-  },
-  // ── First-viewport seller trust row ──
-  // Sits on the flat canvas right after the media stage, before the
-  // price identity chapter. Horizontal padding matches the identity
-  // rhythm; no card surface — hairline-only separation per surface
-  // budget. The row itself carries its own vertical padding.
-  firstViewportSellerRow: {
-    paddingHorizontal: Space.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'transparent', // overridden inline with theme color
-  },
-  // ── Attribute row ──
-  // Rendered inside the identity's padding rhythm — no separate
-  // horizontal padding. The negative top margin pulls it closer to
-  // the identity block so it reads as part of the composition.
-  attributeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Space.sm,
-    paddingHorizontal: Space.md,
-    marginTop: 0,
-    paddingBottom: Space.sm,
-  },
-  attributeLeftCluster: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    flexShrink: 1,
-  },
-  // Condition chip — condition gets a distinct visual treatment
-  // (small surface-alt pill) instead of blending into muted text.
-  // It's the most important attribute for second-hand buyers.
-  // Compact contained control, 32px visible chrome inside 44px hit
-  // target. paddingVertical 5 gives a 26px visible height with 12px
-  // caption text — premium pill proportion.
-  conditionChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingHorizontal: Space.sm + 2,
-    paddingVertical: Space.xs + 1,
-    borderRadius: RadiusRoleValue.mediaThumbnail,
-    borderWidth: Stroke.standard,
-    borderColor: 'transparent', // overridden inline with theme color
-    flexShrink: 0,
-  },
   conditionDot: {
     width: Space.xs + 2,
     height: Space.xs + 2,
     borderRadius: (Space.xs + 2) / 2,
     flexShrink: 0,
   },
-  conditionChipText: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.semibold,
-    fontVariant: ['tabular-nums'],
-  },
-  attributeText: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.regular,
-    flexShrink: 1,
-    fontVariant: ['tabular-nums'],
-  },
-  sizeGuideLink: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold,
-    flexShrink: 0,
-  },
   quietTextTarget: {
     minHeight: Control.hit,
     justifyContent: 'center',
-  },
-  izeText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.medium,
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-    fontVariant: ['tabular-nums'],
-  },
-  // ── Social proof inline ──
-  // Quiet trailing element inside the attribute row's left cluster.
-  // Muted, single line, prefixed with "·" so it reads as a continuation
-  // of the attribute line rather than a separate metadata fragment.
-  socialProofInline: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-    flexShrink: 1,
-  },
-  // ── Trust facts (flat rows with hairline separators) ──
-  // Flat rows, no chips, no cards. Each row is one fact with icon +
-  // label, separated by hairlines. Flat canvas + hairlines are the
-  // default utility structure.
-  trustFactsSection: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
-  trustFactRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm + 2,
-    minHeight: Control.hit,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'transparent', // overridden inline with theme color
-  },
-  trustFactDot: {
-    width: Space.xs + 2,
-    height: Space.xs + 2,
-    borderRadius: (Space.xs + 2) / 2,
-    flexShrink: 0,
-  },
-  trustFactText: {
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
-    fontFamily: FontFamily.medium,
-    fontVariant: ['tabular-nums'],
-    flexShrink: 1,
   },
   // ── Seller row ──
   // The seller row is a distinct group from the identity chapter.
@@ -2342,12 +1823,6 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.sectionTitle.size,
     fontFamily: FontFamily.semibold,
     lineHeight: TypographyV2.sectionTitle.lineHeight,
-  },
-  // ── Dock state badge ──
-  dockStateBadge: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: LetterSpacing.normal,
   },
   // ── Overflow sheet (rendered inside canonical BottomSheet) ──
   overflowHeader: {

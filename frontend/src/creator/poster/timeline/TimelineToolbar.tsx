@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, LayoutChangeEvent } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSharedValue, runOnJS } from 'react-native-reanimated';
-import { Space, FontFamily } from '../../../theme/designTokens';
+import { Space, FontFamily, Radius } from '../../../theme/designTokens';
 import { IconGrammar } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { RadiusRoleValue } from '../../../theme/surfaceRadiusRules';
@@ -48,6 +48,9 @@ export interface TimelineToolbarProps {
   onReplace: () => void;
   onSpeedChange: (speed: number) => void;
   onVolumeChange: (volume: number) => void;
+  // Opens the variable speed curve editor sheet for the selected clip.
+  // When provided, the speed slider row shows a "Curve" button beside it.
+  onOpenSpeedCurve?: () => void;
 }
 
 export const TimelineToolbar = React.memo(function TimelineToolbar({
@@ -62,6 +65,7 @@ export const TimelineToolbar = React.memo(function TimelineToolbar({
   onReplace,
   onSpeedChange,
   onVolumeChange,
+  onOpenSpeedCurve,
 }: TimelineToolbarProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
@@ -121,19 +125,34 @@ export const TimelineToolbar = React.memo(function TimelineToolbar({
       </View>
 
       <View style={toolbarStyles.slidersColumn}>
-        <SliderRow
-          icon="speedometer-outline"
-          label="Speed"
-          value={selectedClip.speed}
-          min={SPEED_MIN}
-          max={SPEED_MAX}
-          step={0.25}
-          neutralValue={1}
-          formatValue={(v) => `${v.toFixed(2)}x`}
-          color={colors.brand}
-          onChange={onSpeedChange}
-          haptic={haptic}
-        />
+        <View style={toolbarStyles.sliderWithActionRow}>
+          <View style={toolbarStyles.sliderFlex}>
+            <SliderRow
+              icon="speedometer-outline"
+              label="Speed"
+              value={selectedClip.speed}
+              min={SPEED_MIN}
+              max={SPEED_MAX}
+              step={0.25}
+              neutralValue={1}
+              formatValue={(v) => `${v.toFixed(2)}x`}
+              color={colors.brand}
+              onChange={onSpeedChange}
+              haptic={haptic}
+            />
+          </View>
+          {onOpenSpeedCurve && (
+            <PressScale
+              onPress={() => { haptic.light(); onOpenSpeedCurve(); }}
+              style={toolbarStyles.curveButton}
+              accessibilityRole="button"
+              accessibilityLabel="Variable speed curve"
+              accessibilityHint="Opens the speed ramp editor for this clip"
+            >
+              <Ionicons name="analytics-outline" size={18} color={colors.brand} />
+            </PressScale>
+          )}
+        </View>
         <SliderRow
           icon="volume-medium-outline"
           label="Volume"
@@ -360,6 +379,21 @@ const toolbarStyles = StyleSheet.create({
   slidersColumn: {
     gap: Space.xs,
     paddingVertical: Space.xxs,
+  },
+  sliderWithActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  sliderFlex: {
+    flex: 1,
+  },
+  curveButton: {
+    width: TOOL_HIT,
+    height: TOOL_HIT,
+    borderRadius: Radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sliderRow: {
     flexDirection: 'row',

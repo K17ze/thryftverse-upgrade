@@ -173,6 +173,12 @@ export function useListingPublishPipeline(params: ListingPublishPipelineParams) 
       return;
     }
 
+    if (isOffline) {
+      setErrorMsg('You appear to be offline. Your listing will publish when you reconnect.');
+      haptics.warning();
+      return;
+    }
+
     if (isPublishing || isPublishingRef.current) return;
     isPublishingRef.current = true;
     setIsPublishing(true);

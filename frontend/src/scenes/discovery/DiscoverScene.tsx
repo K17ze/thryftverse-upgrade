@@ -498,7 +498,7 @@ export function DiscoverScene({
           density="compact"
           icon="search-outline"
           title="Nothing to explore yet"
-          subtitle="New items are uploaded every day. Check back soon or browse categories."
+          subtitle="New items arrive daily — check back soon or browse categories."
           ctaLabel="Browse Categories"
           onCtaPress={onBrowseCategories}
         />

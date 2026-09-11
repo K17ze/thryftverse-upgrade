@@ -117,6 +117,14 @@ interface BottomSheetProps {
    * engine sources its spring physics from useMotionConfig.
    */
   springDamping?: number;
+  /**
+   * Optional ref to the element that triggered the sheet.  When the
+   * sheet closes, screen reader focus is restored to this element
+   * (WCAG 2.2 §2.4.3).  Callers should pass the ref of the button or
+   * row that opened the sheet so the user returns to their place in
+   * the document, not to an arbitrary element (U63).
+   */
+  triggerRef?: React.RefObject<View>;
 }
 
 export function BottomSheet({
@@ -128,6 +136,7 @@ export function BottomSheet({
   topRadius,
   blurIntensity = 25,
   springDamping = 18,
+  triggerRef,
 }: BottomSheetProps) {
   void springDamping; // physics sourced from useMotionConfig (reduced-motion aware)
 
@@ -142,8 +151,8 @@ export function BottomSheet({
     topRadius: topRadius ?? baseConfig.topRadius,
   };
   const styles = React.useMemo(
-    () => createStyles(colors, variantConfig),
-    [colors, variantConfig],
+    () => createStyles(colors, isDark, variantConfig),
+    [colors, isDark, variantConfig],
   );
   const sheetHeight = screenHeight * snapPoint;
   const translateY = useSharedValue(sheetHeight);
@@ -154,7 +163,7 @@ export function BottomSheet({
   // restores it when the sheet closes. Complements `accessibilityViewIsModal`
   // which traps VoiceOver focus on iOS.
   const contentRef = React.useRef<View>(null);
-  useModalFocusManagement({ visible, contentRef });
+  useModalFocusManagement({ visible, contentRef, triggerRef });
 
   const open = useCallback(() => {
     // Subtle spring entrance — smooth, confident settle.
@@ -293,6 +302,7 @@ export function BottomSheet({
 
 const createStyles = (
   colors: ReturnType<typeof useAppTheme>['colors'],
+  isDark: boolean,
   config: SheetVariantConfig,
 ) =>
   StyleSheet.create({
@@ -306,7 +316,7 @@ const createStyles = (
       bottom: 0,
       left: 0,
       right: 0,
-      backgroundColor: colors.surface,
+      backgroundColor: colors.surfaceElevated,
       borderTopLeftRadius: config.topRadius,
       borderTopRightRadius: config.topRadius,
       // Subtle upward-cast shadow for modal separation. The Elevation token
@@ -329,10 +339,10 @@ const createStyles = (
       paddingBottom: Space.sm,
     },
     handle: {
-      width: 40,
-      height: 5,
-      borderRadius: Radius.sm,
-      backgroundColor: colors.border,
+      width: 36,
+      height: 4,
+      borderRadius: Radius.full,
+      backgroundColor: isDark ? colors.border : 'rgba(0,0,0,0.2)',
     },
     contentWrap: {
       flex: 1,

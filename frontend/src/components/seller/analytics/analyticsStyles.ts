@@ -57,6 +57,13 @@ export function createAnalyticsStyles(colors: ThemeColors) {
       gap: Space.lg,
       paddingVertical: Space.sm,
     },
+    customRangeLabel: {
+      fontSize: TypographyV2.caption.size,
+      fontFamily: TypographyV2.caption.fontFamily,
+      marginTop: Space.xs,
+      marginBottom: Space.xs,
+      fontVariant: ['tabular-nums'],
+    },
 
     // ── Flat Hero Metric ──
     heroMetricWrap: {

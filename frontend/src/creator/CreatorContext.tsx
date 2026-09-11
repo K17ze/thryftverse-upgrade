@@ -21,6 +21,8 @@ import { haptics } from '../utils/haptics';
 import type { CreatorInitialMedia } from '../navigation/types';
 import { ProjectStore, AssetRegistry, CrashJournal, PROJECT_SCHEMA_VERSION } from './core/projectStore';
 import type { ProjectPackage, ProjectType } from './core/projectStore';
+import { getSharedManager } from './core/upload/useUploadManager';
+import { useToast } from '../context/ToastContext';
 
 export interface CreatorContextValue {
   document: CreatorDocument;
@@ -66,6 +68,12 @@ export interface CreatorContextValue {
   removePage: (index: number) => void;
   reorderPages: (fromIndex: number, toIndex: number) => void;
   updatePageDuration: (index: number, durationMs: number) => void;
+  /** Insert a pre-built page at a specific index. Used by split to create
+      a new page for the second half of a split clip. */
+  insertPage: (page: CreatorPage, index: number) => void;
+  /** Update a layer on a specific page, bypassing activePageIndex. Used by
+      timeline operations that target clips on non-active pages. */
+  updateLayerOnPage: (pageIndex: number, layerId: string, updates: Partial<CreatorLayer>, label?: string) => void;
 
   undo: () => void;
   redo: () => void;
@@ -356,6 +364,29 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
       }
     })();
     return () => { mounted = false; };
+  }, []);
+
+  // ── Upload reconciliation on startup ────────────────────────────────
+  // Rehydrate any persisted upload jobs and re-queue work that was
+  // interrupted by a process death. Runs once when the creator context
+  // mounts. Only surfaces a toast when jobs were actually recovered so
+  // the user isn't spammed with "0 uploads resumed" on every open.
+  const toast = useToast();
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { resumedCount } = await getSharedManager().reconcileOnStartup();
+        if (!cancelled && resumedCount > 0) {
+          toast.show(`Resumed ${resumedCount} upload${resumedCount === 1 ? '' : 's'}`, 'info');
+        }
+      } catch {
+        // Reconciliation is best-effort — never block the composer on a
+        // store hydration failure.
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Crash recovery ─────────────────────────────────────────────────
@@ -686,6 +717,39 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
       return doc;
     });
   }, [pushHistory]);
+
+  // Insert a pre-built page at a specific index. Used by split to create
+  // a new page for the second half of a split clip, so the projector
+  // (which renders one media layer per page) can render both halves.
+  const insertPage = useCallback((page: CreatorPage, index: number) => {
+    setDocumentState((prev) => {
+      if (prev.pages.length >= MAX_PAGES) return prev;
+      const clampedIndex = Math.max(0, Math.min(index, prev.pages.length));
+      const newPages = [...prev.pages];
+      newPages.splice(clampedIndex, 0, page);
+      const doc = { ...prev, pages: newPages, updatedAt: new Date().toISOString() };
+      pushHistory(doc, 'Insert page');
+      setIsDirty(true);
+      return doc;
+    });
+  }, [pushHistory]);
+
+  // Update a layer on a specific page, bypassing activePageIndex. Used by
+  // timeline operations (split, trim, speed, volume) that target clips on
+  // non-active pages. Without this, edits silently target the wrong page.
+  const updateLayerOnPage = useCallback((
+    pageIndex: number,
+    layerId: string,
+    updates: Partial<CreatorLayer>,
+    label?: string,
+  ) => {
+    setDocumentState((prev) => {
+      const doc = updateLayerInPage(prev, pageIndex, layerId, updates);
+      pushHistory(doc, label ?? 'Update layer on page');
+      setIsDirty(true);
+      return doc;
+    });
+  }, [pushHistory, updateLayerInPage]);
 
   const removePage = useCallback((index: number) => {
     setDocumentState((prev) => {
@@ -1573,6 +1637,8 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
       removePage,
       reorderPages,
       updatePageDuration,
+      insertPage,
+      updateLayerOnPage,
       undo,
       redo,
       retryAutosave,
@@ -1644,6 +1710,8 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
       removePage,
       reorderPages,
       updatePageDuration,
+      insertPage,
+      updateLayerOnPage,
       undo,
       redo,
       retryAutosave,

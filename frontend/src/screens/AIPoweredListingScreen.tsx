@@ -16,7 +16,7 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, TypeStyles, Stroke, Control, LetterSpacing, FontFamily } from '../theme/designTokens';
+import { Space, Radius, Stroke, Control, LetterSpacing, FontFamily } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AppButton } from '../components/ui/AppButton';
@@ -28,12 +28,10 @@ import { useConnectivity } from '../hooks/useConnectivity';
 import { useStore } from '../store/useStore';
 import { useNotifications } from '../hooks/useNotifications';
 import { haptics } from '../utils/haptics';
-import { makeStableId } from '../utils/createStableId';
 import { sanitizeDecimalInput } from '../utils/currencyAuthoringFlows';
-import {
-  createListingOnApi,
-  createListingImageOnApi } from '../services/listingsApi';
 import { MediaUploadQueue } from '../services/mediaUploadQueue';
+import { executePublication } from '../services/listingPublication';
+import type { ListingMediaDraftItem } from '../utils/mediaUploadAsset';
 import { consumeEnhancementResult } from '../services/enhancementResultHandoff';
 import { SmartSellCard } from '../components/sell/SmartSellCard';
 import { ListingPreviewCard } from '../components/sell/ListingPreviewCard';
@@ -301,6 +299,14 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
     uploadQueueRef.current = new MediaUploadQueue();
   }
 
+  // Stop orphaned upload workers on unmount so background uploads don't
+  // continue after the screen is gone.
+  useEffect(() => {
+    return () => {
+      uploadQueueRef.current?.destroy();
+    };
+  }, []);
+
   const canPublish = useMemo(() => {
     return (
       photos.length > 0 &&
@@ -336,60 +342,44 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
 
     try {
       const queue = uploadQueueRef.current!;
-      const assets = photos.map((p, i) => ({
+      // Build draft media items in the shared contract shape so the
+      // publication pipeline can upload, verify, and attach them with
+      // the same idempotent/recoverable semantics as the standard sell flow.
+      const mediaDraftItems: ListingMediaDraftItem[] = photos.map((p, i) => ({
         id: `ai_photo_${Date.now()}_${i}`,
         uri: p.uri,
         fileName: p.uri.split('/').pop() || `photo_${i}.jpg`,
         mimeType: 'image/jpeg',
         kind: 'image' as const,
+        source: 'local' as const,
         width: p.width,
-        height: p.height }));
-      queue.addAssets(assets);
-      await queue.run();
-      const queueItems = queue.getItems();
-      const coverUpload = queueItems.find(
-        (item) => item.state === 'uploaded' && item.publicUrl && item.finalizationId,
+        height: p.height,
+        status: 'draft' as const,
+      }));
+
+      const result = await executePublication(
+        {
+          mode: 'sell_now',
+          mediaDraftItems,
+          title: trimmedTitle,
+          description: description.trim(),
+          priceGbp: numericPrice,
+          category: category || undefined,
+          brand: brand || undefined,
+          condition: condition || undefined,
+          shippingMethod: 'standard',
+          shippingPayer: 'buyer',
+          sellerId: currentUser.id,
+        },
+        queue,
       );
-      if (!coverUpload) {
-        throw new Error(t('publish.missingCover'));
-      }
-      const coverImage = coverUpload.publicUrl!;
-      const uploadedUrls = queueItems
-        .filter((it) => it.state === 'uploaded' && it.publicUrl)
-        .map((it) => it.publicUrl!);
 
-      const listingId = makeStableId('listing');
-      await createListingOnApi({
-        id: listingId,
-        sellerId: currentUser.id,
-        title: trimmedTitle,
-        description: description.trim(),
-        priceGbp: numericPrice,
-        imageUrl: coverImage,
-        coverFinalizationId: coverUpload.finalizationId!,
-        status: 'active',
-        category: category || undefined,
-        brand: brand || undefined,
-        condition: condition || undefined,
-        shippingMethod: 'standard',
-        shippingPayer: 'buyer',
-        materialComposition: materialComposition.trim() || undefined,
-        weightKg: weightKg ? parseFloat(weightKg) : undefined });
-
-      for (let i = 0; i < uploadedUrls.length; i++) {
-        const verifiedUpload = queueItems.find(
-          (item) => item.publicUrl === uploadedUrls[i] && item.finalizationId,
-        );
-        if (!verifiedUpload) continue;
-        await createListingImageOnApi({
-          id: `${listingId}_img_${i}`,
-          listingId,
-          imageUrl: uploadedUrls[i],
-          sortOrder: i,
-          mediaWidth: verifiedUpload.asset.width,
-          mediaHeight: verifiedUpload.asset.height,
-          finalizationId: verifiedUpload.finalizationId! });
+      if (!result.ok || !result.listingId) {
+        throw new Error(result.error || t('publish.failed'));
       }
+
+      const listingId = result.listingId;
+      const coverImage = result.context.coverImageUrl!;
 
       queue.reset();
       haptics.success();
@@ -420,7 +410,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
     } finally {
       setIsSubmitting(false);
     }
-  }, [currentUser, isOffline, photos, title, price, description, category, brand, condition, materialComposition, weightKg, navigation, smartSellPolicy, showInfo, t]);
+  }, [currentUser, isOffline, photos, title, price, description, category, brand, condition, navigation, smartSellPolicy, showInfo, t]);
 
   const numericPriceForPreview = Number(sanitizeDecimalInput(price)) || 0;
   const previewCoverUri = photoUris[0] ?? null;
@@ -1291,7 +1281,7 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.sm + 2,
       fontSize: TypographyV2.body.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       minHeight: Control.hit + Space.sm },
     fieldTextarea: {
       borderWidth: Stroke.standard,
@@ -1299,7 +1289,7 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.sm + 2,
       fontSize: TypographyV2.body.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       minHeight: Space.xxl + Space.xxl + Space.sm },
     fieldRow: {
       flexDirection: 'row' },
@@ -1314,21 +1304,21 @@ function createStyles(colors: ThemeColors) {
       minHeight: Control.hit + Space.sm },
     pickerValue: {
       fontSize: TypographyV2.body.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       flex: 1 },
     priceRangeHint: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       marginTop: Space.xs,
       marginBottom: Space.md },
     attentionHint: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       marginTop: Space.xs,
       lineHeight: TypographyV2.meta.lineHeight },
     impactHelperText: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       marginTop: Space.xs,
       lineHeight: TypographyV2.meta.lineHeight },
     // Suggestion row — inline, restrained
@@ -1347,11 +1337,11 @@ function createStyles(colors: ThemeColors) {
       flex: 1 },
     suggestionCandidate: {
       fontSize: TypographyV2.body.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       lineHeight: TypographyV2.body.lineHeight },
     suggestionEvidence: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       marginTop: Space.xxs },
     suggestionActions: {
       flexDirection: 'row',
@@ -1397,7 +1387,7 @@ function createStyles(colors: ThemeColors) {
     tagInput: {
       minWidth: Space.xxl + Space.lg - 2,
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       padding: 0 },
     // Section labels
     sectionLabelWrap: {
@@ -1431,7 +1421,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.xs },
     emptyDesc: {
       fontSize: TypographyV2.body.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textSecondary,
       textAlign: 'center',
       lineHeight: TypographyV2.body.lineHeight },
@@ -1448,7 +1438,7 @@ function createStyles(colors: ThemeColors) {
     errorText: {
       flex: 1,
       fontSize: TypographyV2.body.size,
-      fontFamily: TypeStyles.body.fontFamily },
+      fontFamily: TypographyV2.body.fontFamily },
     errorRetryBtn: {
       alignSelf: 'flex-start',
       paddingHorizontal: Space.md,
@@ -1498,4 +1488,4 @@ const pickerStyles = StyleSheet.create({
     minHeight: Control.hit },
   rowText: {
     fontSize: TypographyV2.body.size,
-    fontFamily: TypeStyles.body.fontFamily } });
+    fontFamily: TypographyV2.body.fontFamily } });

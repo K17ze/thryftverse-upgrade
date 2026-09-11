@@ -10,7 +10,7 @@ export { UploadJobStore } from './UploadJobStore';
 export { UploadManager } from './UploadManager';
 export { MultipartUploader } from './MultipartUploader';
 export { detectMimeType, deriveFileName } from './MimeDetector';
-export { useUploadManager, getSharedManager, resumeCreatorUploads } from './useUploadManager';
+export { useUploadManager, getSharedManager, resumeCreatorUploads, reconcileCreatorUploads, ensureReconciledOnStartup } from './useUploadManager';
 export type {
   UploadJob,
   UploadJobStatus,

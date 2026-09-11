@@ -110,6 +110,7 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
   const isDragging = useSharedValue(false);
   const position = useSharedValue(index * TOTAL_SIZE);
   const zIndex = useSharedValue(0);
+  const scaleSV = useSharedValue(1);
   const orderArray = itemIds ?? photos;
 
   // When props update (like after drop), update position gently
@@ -125,9 +126,13 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
 
   const panGesture = Gesture.Pan()
     .enabled(reorderEnabled)
+    .minDistance(8)
+    .activeOffsetX([-10, 10])
+    .activeOffsetY([-10, 10])
     .onStart(() => {
       isDragging.value = true;
       zIndex.value = 100;
+      scaleSV.value = withSpring(1.1, reducedMotion ? REDUCED_SPRING : spring.press);
     })
     .onUpdate((e) => {
       position.value = index * TOTAL_SIZE + e.translationX;
@@ -135,6 +140,7 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
     .onEnd((e) => {
       const newIndex = Math.max(0, Math.min(total - 1, Math.round(position.value / TOTAL_SIZE)));
       isDragging.value = false;
+      scaleSV.value = withSpring(1, reducedMotion ? REDUCED_SPRING : spring.press);
       position.value = withSpring(newIndex * TOTAL_SIZE, reducedMotion ? REDUCED_SPRING : spring.press, () => {
         zIndex.value = 0;
       });
@@ -156,7 +162,7 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
       zIndex: zIndex.value,
       transform: [
         { translateX: position.value },
-        { scale: withSpring(isDragging.value ? 1.1 : 1, reducedMotion ? REDUCED_SPRING : spring.press) }
+        { scale: scaleSV.value }
       ] };
   });
 
@@ -224,15 +230,12 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   itemWrap: {
     width: ITEM_SIZE,
     height: ITEM_SIZE,
-    borderRadius: Radius.lg,
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
+    borderRadius: Radius.md,
     overflow: 'hidden' },
   image: {
     width: '100%',
     height: '100%',
-    borderRadius: Radius.lg },
+    borderRadius: Radius.md },
   addBtn: {
     position: 'absolute',
     width: ITEM_SIZE,

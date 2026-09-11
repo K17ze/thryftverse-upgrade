@@ -52,7 +52,14 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
       });
 
       it(`${screen} imports CommerceDetailStateDock`, () => {
-        expect(readScreen(screen)).toContain('CommerceDetailStateDock');
+        // AssetDetailScreen was refactored: the dock now lives in
+        // AssetDetailDock.tsx, which imports CommerceDetailStateDock.
+        if (screen === 'AssetDetailScreen.tsx') {
+          const dock = read(resolve(COMPONENTS, 'coown/asset-detail/AssetDetailDock.tsx'));
+          expect(dock).toContain('CommerceDetailStateDock');
+        } else {
+          expect(readScreen(screen)).toContain('CommerceDetailStateDock');
+        }
       });
 
       it(`${screen} imports CommerceDetailSection`, () => {
@@ -83,7 +90,14 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
         // SellerInfoCard is the enriched canonical seller surface for
         // ItemDetailScreen; CommerceDetailSellerRow remains the slim row
         // for Auction/Asset detail. Either is acceptable.
-        expect(src).toMatch(/CommerceDetailSellerRow|SellerInfoCard/);
+        // AssetDetailScreen was refactored: CommerceDetailSellerRow now
+        // lives in AssetDetailIdentity.tsx.
+        if (screen === 'AssetDetailScreen.tsx') {
+          const identity = read(resolve(COMPONENTS, 'coown/asset-detail/AssetDetailIdentity.tsx'));
+          expect(identity).toMatch(/CommerceDetailSellerRow|SellerInfoCard/);
+        } else {
+          expect(src).toMatch(/CommerceDetailSellerRow|SellerInfoCard/);
+        }
       });
     }
 
@@ -256,10 +270,17 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
 
   // ── 8. Buyout contradiction resolved ──
   describe('buyout contradiction resolved', () => {
-    it('AssetDetailScreen does not navigate to fake Buyout screen', () => {
+    it('AssetDetailScreen links to the real Buyout screen with an assetId', () => {
+      // Buyout is a real screen (BuyoutScreen, registered in AppNavigator)
+      // backed by real endpoints (GET/POST /co-own/assets/:assetId/buyout-offers,
+      // POST /co-own/buyout-offers/:offerId/accept). The old "fake Buyout"
+      // contradiction no longer exists; the entry point is now required so
+      // holders can reach exit offers from the asset they own.
       const src = readScreen('AssetDetailScreen.tsx');
-      expect(src).not.toContain("navigation.navigate('Buyout'");
-      expect(src).not.toContain("navigate('Buyout'");
+      const ownershipSection = read(resolve(COMPONENTS, 'coown/asset-detail/AssetOwnershipSection.tsx'));
+      const buyoutWiring = src + ownershipSection;
+      expect(buyoutWiring).toContain("navigate('Buyout'");
+      expect(buyoutWiring).toContain('assetId');
     });
   });
 
@@ -337,15 +358,16 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
     });
 
     it('keeps unavailable fundamentals outside the dominant market surface', () => {
-      // trustFactualLine moved to the extracted section components
-      // (AssetOverviewSection / AssetOwnershipSection). The market
-      // surface (AssetMarketSection) must not carry secondaryMetrics.
-      const overviewSection = read(resolve(COMPONENTS, 'coown/asset-detail/AssetOverviewSection.tsx'));
+      // trustFactualLine was replaced by trustBadges in AssetOverviewDetails
+      // during the Wave 33 refactor. The market surface must not carry
+      // secondaryMetrics.
+      const overviewDetails = read(resolve(COMPONENTS, 'coown/asset-detail/AssetOverviewDetails.tsx'));
       const ownershipSection = read(resolve(COMPONENTS, 'coown/asset-detail/AssetOwnershipSection.tsx'));
       const marketSection = read(resolve(COMPONENTS, 'coown/asset-detail/AssetMarketSection.tsx'));
       expect(
-        overviewSection.includes('trustFactualLine')
-        || ownershipSection.includes('trustFactualLine'),
+        overviewDetails.includes('trustBadges')
+        || overviewDetails.includes('trustFacts')
+        || ownershipSection.includes('trustFacts'),
       ).toBe(true);
       expect(marketSection).not.toContain('secondaryMetrics');
     });

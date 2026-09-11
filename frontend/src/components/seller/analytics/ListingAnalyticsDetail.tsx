@@ -184,7 +184,7 @@ export function ListingAnalyticsDetail({ model }: { model: SellerAnalyticsModel 
               </View>
             ) : null}
 
-            {/* 5-Stat Resale Intent Cockpit (Depop / Grailed / StockX Pro Model) */}
+            {/* Listing performance */}
             {isListingLoading ? (
               <View style={styles.productStatsStrip}>
                 {[0, 1, 2, 3, 4].map((i) => (
@@ -239,24 +239,24 @@ export function ListingAnalyticsDetail({ model }: { model: SellerAnalyticsModel 
               </View>
             )}
 
-            {/* Purchase Intent Diagnostic (Depop / Grailed circular model) */}
+            {/* Purchase intent */}
             {listingAnalytics?.intentSignal === 'high_intent_price_friction' ? (
               <View style={[styles.intentCallout, { backgroundColor: colors.brandSubtle, borderColor: colors.brand }]}>
                 <AppIcon concept="tag" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
                 <Text style={[styles.intentCalloutText, { color: colors.textPrimary }]}>
-                  High buyer intent detected ({listingAnalytics.saveRate}% save rate). Buyers are saving this item but hesitating on price. A 5-10% price reduction will alert all likers and accelerate conversion.
+                  High intent ({listingAnalytics.saveRate}% save rate) — consider repricing to convert savers.
                 </Text>
               </View>
             ) : listingAnalytics?.intentSignal === 'low_affinity_photo_needed' ? (
               <View style={[styles.intentCallout, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
                 <AppIcon concept="camera" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
                 <Text style={[styles.intentCalloutText, { color: colors.textPrimary }]}>
-                  Healthy discovery clicks with low save rate. Consider refreshing cover photo or adding garment measurements to lift buyer intent.
+                  Low saves — refresh photos.
                 </Text>
               </View>
             ) : null}
 
-            {/* Market Price Benchmark Spectrum */}
+            {/* Market price spectrum */}
             {listingAnalytics?.comparables && listingAnalytics.comparables.sampleSize > 0 ? (
               (() => {
                 const comps = listingAnalytics.comparables;
@@ -297,7 +297,7 @@ export function ListingAnalyticsDetail({ model }: { model: SellerAnalyticsModel 
                     </View>
 
                     <Text style={[styles.spectrumSubtitle, { color: colors.textMuted }]}>
-                      Benchmarked against {comps.sampleSize} verified sales in{' '}
+                      {comps.sampleSize} verified sales in{' '}
                       {listingAnalytics.listing.category ?? 'this category'}
                     </Text>
 
@@ -349,7 +349,7 @@ export function ListingAnalyticsDetail({ model }: { model: SellerAnalyticsModel 
               })()
             ) : null}
 
-            {/* 1-Tap Price Velocity & Reprice (StockX Pro 3-Tier Guidance) */}
+            {/* Quick reprice */}
             {listingAnalytics && (listingAnalytics.listing.status ?? currentListingItem?.status) === 'active' ? (
               (() => {
                 const askingPrice = listingAnalytics.listing.priceGbpMinor
@@ -363,7 +363,7 @@ export function ListingAnalyticsDetail({ model }: { model: SellerAnalyticsModel 
                 return (
                   <View style={styles.quickRepriceSection}>
                     <Text style={[styles.quickRepriceTitle, { color: colors.textPrimary }]}>
-                      StockX Pro Pricing Guidance · 1-Tap Velocity Levers
+                      Quick reprice
                     </Text>
                     <View style={styles.quickRepriceRow}>
                       <Pressable

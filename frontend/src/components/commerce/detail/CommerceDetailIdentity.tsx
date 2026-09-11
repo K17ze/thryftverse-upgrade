@@ -101,6 +101,7 @@ export function CommerceDetailIdentity({
     family === 'auction' && styles.titleAuction,
     family === 'co_own' && styles.titleCoOwn,
     density === 'compact' && styles.titleCompact,
+    family === 'co_own' && density === 'compact' && styles.titleCoOwnCompact,
     isMedia && styles.titleMedia,
     { color: isMedia ? colors.scrimTextPrimary : colors.textPrimary },
   ];
@@ -255,9 +256,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     lineHeight: TypographyV2.priceHero.lineHeight - 1,
     letterSpacing: -0.4 },
   titleCoOwn: {
-    fontSize: TypographyV2.priceHero.size,
-    lineHeight: TypographyV2.priceHero.lineHeight + 1,
-    letterSpacing: -0.45 },
+    // 2026 PDP density benchmark (Instagram/Depop/StockX band): product
+    // title 18-22pt semibold. 20pt keeps the fractional title confident
+    // while freeing the first viewport for media + price + chart.
+    fontSize: TypographyV2.priceList.size,
+    lineHeight: TypographyV2.priceList.lineHeight + 4,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: -0.3 },
   titleMedia: {
     fontSize: TypographyV2.priceHero.size - 1,
     lineHeight: TypographyV2.priceHero.lineHeight - 1,
@@ -274,6 +279,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   titleCompact: {
     fontSize: TypographyV2.priceHero.size - 2,
     lineHeight: TypographyV2.priceHero.lineHeight - 1 },
+  // Co-Own compact: one step under the co_own standard (20pt) so narrow
+  // viewports tighten without falling back to the 26pt shared compact.
+  titleCoOwnCompact: {
+    fontSize: TypographyV2.priceList.size - 1,
+    lineHeight: TypographyV2.priceList.lineHeight + 3,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: -0.3 },
   // Quiet trust row under the price/identity block — one compact line,
   // height-capped, no card or badge chrome.
   trustSlot: {

@@ -68,10 +68,12 @@ export const DARK_COLORS = {
 
   // Co-Own financial truth — up/down movement only. Per Design.md
   // proposed-semantic: coown-up #1C5631, coown-down #5F1616.
-  coownUp: '#1C5631',
-  coownDown: '#5F1616',
-  coownUpSubtle: 'rgba(28,86,49,0.12)',
-  coownDownSubtle: 'rgba(95,22,22,0.12)',
+  // Dark-theme financial text needs its own readable values. The deeper
+  // hues remain reserved for light-theme text and subtle dark fills.
+  coownUp: '#8ED1A7',
+  coownDown: '#FF9B9B',
+  coownUpSubtle: 'rgba(142,209,167,0.16)',
+  coownDownSubtle: 'rgba(255,155,155,0.16)',
 
   // Semantic accent colors from Design.md proposed-semantic section.
   // Used for category icon badges and contextual accents — never decorative.
@@ -107,7 +109,7 @@ export const DARK_COLORS = {
   mediaOverlayShadow: 'rgba(0,0,0,0.6)',
 
   // Structural / utility colors (mirrors ThemeContext)
-  overlay: 'rgba(0,0,0,0.6)',
+  overlay: 'rgba(0,0,0,0.66)',
   input: '#1A1A1A',
   inputText: '#FFFFFF',
   row: '#141414',
@@ -222,7 +224,7 @@ export const LIGHT_COLORS = {
   mediaOverlayShadow: 'rgba(0,0,0,0.6)',
 
   // Structural / utility colors (mirrors ThemeContext)
-  overlay: 'rgba(0,0,0,0.4)',
+  overlay: 'rgba(0,0,0,0.44)',
   input: '#FFFFFF',
   inputText: '#000000',
   row: '#F5F5F5',

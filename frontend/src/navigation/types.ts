@@ -449,7 +449,9 @@ export type RootStackParamList = {
     reservationExpiresAt: string;
     previewValidUntil: string;
     maxReserved1ze: number;
-    marketDataTimestamp: string;
+    /** Source watermark for secondary markets; omitted for a primary offering
+     * when no order-book snapshot exists yet. */
+    marketDataTimestamp?: string;
   };
 
   // ── Auctions & Trading ── (trade confirm)

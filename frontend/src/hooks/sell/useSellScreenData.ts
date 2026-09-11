@@ -179,8 +179,15 @@ export function useSellScreenData(
   const uploadQueueRef = useRef(new MediaUploadQueue());
   const [queueState, setQueueState] = useState(uploadQueueRef.current.getState());
   useEffect(() => {
-    const unsub = uploadQueueRef.current.subscribe((s) => setQueueState(s));
-    return () => { unsub(); };
+    const queue = uploadQueueRef.current;
+    const unsub = queue.subscribe((s) => setQueueState(s));
+    return () => {
+      unsub();
+      // Stop orphaned workers from uploading in the background after the
+      // screen unmounts. The persisted snapshot is preserved so a new queue
+      // instance can restore and resume on the next mount.
+      queue.destroy();
+    };
   }, []);
 
   const currency = useCurrencyPref();

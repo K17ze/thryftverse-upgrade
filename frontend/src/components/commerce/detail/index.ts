@@ -20,6 +20,14 @@
  * Existing screens consume these primitives in place — no V2 screens.
  */
 
+export { CommerceMediaHero } from './CommerceMediaHero';
+export type { CommerceMediaHeroProps } from './CommerceMediaHero';
+export { CommerceIdentityBlock } from './CommerceIdentityBlock';
+export type { CommerceIdentityBlockProps } from './CommerceIdentityBlock';
+export { CommerceTrustDossier } from './CommerceTrustDossier';
+export type { CommerceTrustDossierProps } from './CommerceTrustDossier';
+export { CommerceActionDock } from './CommerceActionDock';
+export type { CommerceActionDockProps } from './CommerceActionDock';
 export { CommerceDetailHeader } from './CommerceDetailHeader';
 export { CommerceDetailIdentity } from './CommerceDetailIdentity';
 export { CommerceDetailTransactionSurface } from './CommerceDetailTransactionSurface';

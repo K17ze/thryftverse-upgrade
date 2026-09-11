@@ -11,7 +11,7 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { AnimatedPressable } from './AnimatedPressable';
 import { Caption, Headline } from './ui/Text';
 
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Typography } from '../theme/designTokens';
 import { Motion } from '../theme/motionTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 interface AttachmentOption {

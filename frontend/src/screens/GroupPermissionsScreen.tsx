@@ -14,7 +14,8 @@ import {
   type GroupSettings,
   type GroupSettingsCapabilities,
 } from '../services/chatApi';
-import { Control, Radius, Space, Stroke, TypeStyles } from '../theme/designTokens';
+import { Control, Radius, Space, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupPermissions'>;
 type EditablePermission = 'editGroupInfo' | 'sendMessages' | 'addMembers';
@@ -216,12 +217,18 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.xl,
     },
     stateTitle: {
-      ...TypeStyles.heading,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      fontSize: TypographyV2.sectionTitle.size,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
       color: colors.textPrimary,
       marginTop: Space.xs,
     },
     stateCopy: {
-      ...TypeStyles.body,
+      fontFamily: TypographyV2.body.fontFamily,
+      fontSize: TypographyV2.body.size,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight,
       color: colors.textMuted,
       textAlign: 'center',
     },
@@ -232,19 +239,27 @@ function createStyles(colors: ThemeColors) {
       marginTop: Space.sm,
     },
     retryText: {
-      ...TypeStyles.bodyStrong,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      fontSize: TypographyV2.bodyStrong.size,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
       color: colors.textPrimary,
     },
     intro: {
       paddingBottom: Space.xl,
     },
     introTitle: {
-      ...TypeStyles.title,
+      fontFamily: TypographyV2.screenTitle.fontFamily,
+      fontSize: TypographyV2.screenTitle.size,
+      letterSpacing: TypographyV2.screenTitle.letterSpacing,
+      lineHeight: TypographyV2.screenTitle.lineHeight,
       color: colors.textPrimary,
-      fontFamily: TypeStyles.title.fontFamily,
     },
     introCopy: {
-      ...TypeStyles.body,
+      fontFamily: TypographyV2.body.fontFamily,
+      fontSize: TypographyV2.body.size,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight,
       color: colors.textSecondary,
       marginTop: Space.sm,
       maxWidth: 520,
@@ -271,11 +286,17 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
     },
     permissionTitle: {
-      ...TypeStyles.bodyStrong,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      fontSize: TypographyV2.bodyStrong.size,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
       color: colors.textPrimary,
     },
     permissionDescription: {
-      ...TypeStyles.metadata,
+      fontFamily: TypographyV2.meta.fontFamily,
+      fontSize: TypographyV2.meta.size,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
       color: colors.textMuted,
       marginTop: Space.xs,
       maxWidth: 560,
@@ -301,14 +322,20 @@ function createStyles(colors: ThemeColors) {
       borderColor: colors.border,
     },
     scopeLabel: {
-      ...TypeStyles.bodyStrong,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      fontSize: TypographyV2.bodyStrong.size,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
       color: colors.textMuted,
     },
     scopeLabelSelected: {
       color: colors.textPrimary,
     },
     readOnlyCopy: {
-      ...TypeStyles.metadata,
+      fontFamily: TypographyV2.meta.fontFamily,
+      fontSize: TypographyV2.meta.size,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
       color: colors.textMuted,
       marginTop: Space.lg,
     },

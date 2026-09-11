@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Control, TypeStyles, PressScale } from '../../theme/designTokens';
+import { Space, Control, PressScale } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 
@@ -68,7 +68,7 @@ export function FlagshipHeader({
             {
               color: colors.textPrimary,
               fontSize: isLarge ? TypographyV2.screenTitle.size : TypographyV2.sectionTitle.size,
-              fontFamily: isLarge ? TypeStyles.title.fontFamily : TypeStyles.bodyStrong.fontFamily,
+              fontFamily: isLarge ? TypographyV2.screenTitle.fontFamily : TypographyV2.bodyStrong.fontFamily,
               lineHeight: isLarge ? TypographyV2.screenTitle.lineHeight : TypographyV2.sectionTitle.lineHeight,
               letterSpacing: isLarge ? TypographyV2.screenTitle.letterSpacing : TypographyV2.sectionTitle.letterSpacing,
               opacity: compactTitleOpacity },
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
     textAlign: 'center' },
   subtitle: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: TypeStyles.body.fontFamily,
+    fontFamily: TypographyV2.body.fontFamily,
     marginTop: Space.xs / 2,
     letterSpacing: TypographyV2.meta.letterSpacing,
     lineHeight: TypographyV2.meta.lineHeight },

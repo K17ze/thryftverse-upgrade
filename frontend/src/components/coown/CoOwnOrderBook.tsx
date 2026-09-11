@@ -2,7 +2,7 @@
  * CoOwnOrderBook — executable top-of-book + depth.
  *
  * Two columns (asks descending on top, bids descending below) with depth
- * bars from DEPTH_COLORS. Spread row in the middle. Tap a level to
+ * bars from theme direction subtles. Spread row in the middle. Tap a level to
  * pre-fill the order ticket.
  *
  * States: empty book → "No open orders" per side; halted → frozen with
@@ -15,11 +15,20 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, ExchangeLayout } from '../../theme/designTokens';
+import { Space, Radius, ExchangeLayout, FontFamily } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
-import { DEPTH_COLORS } from '../../constants/colors';
-import { CoOwnNumericText } from '../ui/CoOwnNumericText';
 
+/**
+ * Order-book row height. The shared `ExchangeLayout.bookRowHeight` token is
+ * 44pt (the canonical touch target); the order book levels are not
+ * interactive, so we tighten them to 32pt to expose more depth per viewport
+ * while keeping the 44pt hit target for the header row below.
+ */
+const BOOK_ROW_HEIGHT = 32;
+/** Fixed-width price rail — wider to accommodate larger tabular figures. */
+const PRICE_COL_WIDTH = 90;
+/** Fixed-width size rail — wider to accommodate larger tabular figures. */
+const SIZE_COL_WIDTH = 80;
 export type CoOwnBookMode = 'continuous' | 'call_auction' | 'rfq' | 'halted' | 'closed';
 
 export interface CoOwnBookLevel {
@@ -63,12 +72,11 @@ export function CoOwnOrderBook({
     },
   ];
 
-  // RFQ mode — show CTA instead of book
+  // RFQ mode — flat inline notice instead of centered icon box
   if (mode === 'rfq') {
     return (
       <View style={containerStyle}>
-        <View style={styles.rfqWrap}>
-          <Ionicons name="chatbubbles-outline" size={28} color={colors.brand} />
+        <View style={styles.rfqBlock}>
           <Text style={[styles.rfqTitle, { color: colors.textPrimary }]}>Request for quote</Text>
           <Text style={[styles.rfqSubtitle, { color: colors.textSecondary }]}>
             This instrument trades by RFQ. Request a quote from the market maker.
@@ -87,16 +95,15 @@ export function CoOwnOrderBook({
     );
   }
 
-  // Halted / closed — frozen with overlay
+  // Halted / closed — flat inline notice + frozen levels
   if (mode === 'halted' || mode === 'closed') {
     const label = mode === 'halted' ? 'Trading halted' : 'Market closed';
     return (
       <View style={containerStyle}>
-        <View style={styles.haltedWrap}>
-          <Ionicons name="pause-circle-outline" size={28} color={colors.textMuted} />
+        <View style={styles.haltedBlock}>
           <Text style={[styles.haltedTitle, { color: colors.textSecondary }]}>{label}</Text>
           <Text style={[styles.haltedSubtitle, { color: colors.textMuted }]}>
-            The order book is frozen. No new orders accepted.
+            Order book frozen. No new orders accepted.
           </Text>
         </View>
         {/* Show frozen book levels with reduced opacity */}
@@ -106,6 +113,7 @@ export function CoOwnOrderBook({
             side="ask"
             colors={colors}
             maxCumulative={getMaxCumulative(asks, bids)}
+            maxSize={getMaxSize(asks, bids)}
             onSelectLevel={undefined}
           />
           <SpreadRow
@@ -120,6 +128,7 @@ export function CoOwnOrderBook({
             side="bid"
             colors={colors}
             maxCumulative={getMaxCumulative(asks, bids)}
+            maxSize={getMaxSize(asks, bids)}
             onSelectLevel={undefined}
           />
         </View>
@@ -128,6 +137,7 @@ export function CoOwnOrderBook({
   }
 
   const maxCumulative = getMaxCumulative(asks, bids);
+  const maxSize = getMaxSize(asks, bids);
   const visibleAsks = asks.slice(0, visibleLevels);
   const visibleBids = bids.slice(0, visibleLevels);
 
@@ -136,22 +146,34 @@ export function CoOwnOrderBook({
 
   return (
     <View style={containerStyle}>
-      {/* Header */}
-      <View style={styles.headerRow}>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Order book</Text>
-        {isCallAuction && (
+      {/* Header — hidden when embedded (parent section provides the title) */}
+      {!embedded ? (
+        <View style={styles.headerRow}>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Order book</Text>
+          {isCallAuction && (
+            <View style={[styles.auctionBadge, { backgroundColor: colors.warningSubtle }]}>
+              <Ionicons name="time-outline" size={11} color={colors.warning} />
+              <Text style={[styles.auctionBadgeText, { color: colors.warning }]}>Call auction</Text>
+            </View>
+          )}
+        </View>
+      ) : isCallAuction ? (
+        <View style={styles.headerRow}>
           <View style={[styles.auctionBadge, { backgroundColor: colors.warningSubtle }]}>
             <Ionicons name="time-outline" size={11} color={colors.warning} />
             <Text style={[styles.auctionBadgeText, { color: colors.warning }]}>Call auction</Text>
           </View>
-        )}
-      </View>
+        </View>
+      ) : null}
 
-      {/* Column headers */}
+      {/* Column headers — fixed-width rails keep price/quantity columns
+          aligned across every row so depth reads as comparable columns
+          (U24). The cumulative column flexes to fill remaining space.
+          Header keeps the 44pt hit target; level rows tighten to 32pt. */}
       <View style={[styles.colHeaderRow, { borderColor: colors.border }]}>
-        <Text style={[styles.colHeader, { color: colors.textMuted }]}>Price</Text>
-        <Text style={[styles.colHeader, { color: colors.textMuted }]}>Size</Text>
-        <Text style={[styles.colHeader, { color: colors.textMuted, textAlign: 'right' }]}>Total</Text>
+        <Text style={[styles.colHeader, styles.colHeaderPrice, { color: colors.textMuted }]}>Price</Text>
+        <Text style={[styles.colHeader, styles.colHeaderSize, { color: colors.textMuted }]}>Size</Text>
+        <Text style={[styles.colHeader, { color: colors.textMuted, textAlign: 'right' }]}>Cumulative</Text>
       </View>
 
       {/* Asks (descending — highest at top) */}
@@ -160,6 +182,7 @@ export function CoOwnOrderBook({
         side="ask"
         colors={colors}
         maxCumulative={maxCumulative}
+        maxSize={maxSize}
         onSelectLevel={onSelectLevel}
         reverseOrder
       />
@@ -179,13 +202,13 @@ export function CoOwnOrderBook({
         side="bid"
         colors={colors}
         maxCumulative={maxCumulative}
+        maxSize={maxSize}
         onSelectLevel={onSelectLevel}
       />
 
-      {/* Empty state — no open orders, with honest next step */}
+      {/* Empty state — flat inline notice, no centered icon box */}
       {bids.length === 0 && asks.length === 0 && (
-        <View style={styles.emptyWrap}>
-          <Ionicons name="document-text-outline" size={20} color={colors.textMuted} />
+        <View style={styles.emptyBlock}>
           <Text style={[styles.emptyText, { color: colors.textMuted }]}>No open orders</Text>
           <Text style={[styles.emptyHint, { color: colors.textSecondary }]}>
             Place a limit order or request a quote to start trading.
@@ -203,12 +226,21 @@ function getMaxCumulative(asks: CoOwnBookLevel[], bids: CoOwnBookLevel[]): numbe
   return Math.max(askMax, bidMax, 1);
 }
 
+/** Get the max per-level size across both sides — depth bars are proportional
+ *  to each level's own size relative to the deepest level in the book. */
+function getMaxSize(asks: CoOwnBookLevel[], bids: CoOwnBookLevel[]): number {
+  const askMax = asks.reduce((m, l) => Math.max(m, l.size), 0);
+  const bidMax = bids.reduce((m, l) => Math.max(m, l.size), 0);
+  return Math.max(askMax, bidMax, 1);
+}
+
 /** Render one side of the book (asks or bids). */
 function BookSide({
   levels,
   side,
   colors,
   maxCumulative,
+  maxSize,
   onSelectLevel,
   reverseOrder,
 }: {
@@ -216,32 +248,54 @@ function BookSide({
   side: 'bid' | 'ask';
   colors: ReturnType<typeof useAppTheme>['colors'];
   maxCumulative: number;
+  maxSize: number;
   onSelectLevel?: (side: 'bid' | 'ask', price: number) => void;
   reverseOrder?: boolean;
 }) {
   // For asks, we want highest price at top (reverse of natural ascending)
   const ordered = reverseOrder ? [...levels].reverse() : levels;
-  const barColor = side === 'bid' ? DEPTH_COLORS.bidBar : DEPTH_COLORS.askBar;
-  const barEdgeColor = side === 'bid' ? DEPTH_COLORS.bidBarEdge : DEPTH_COLORS.askBarEdge;
+  // Depth bars read as structure — theme-resolved subtle fills keep them
+  // visible on both canvases (F28 static-palette reconciliation). The bar
+  // sits behind the text at 60% opacity so tabular figures stay readable.
+  const barColor = side === 'bid' ? colors.coownUpSubtle : colors.coownDownSubtle;
+  const barEdgeColor = side === 'bid' ? colors.coownUpBorder : colors.coownDownBorder;
   // Per Design.md: use coownUp/coownDown for financial truth (bid=up/buy,
   // ask=down/sell), not generic success/danger.
   const priceColor = side === 'bid' ? colors.coownUp : colors.coownDown;
 
+  // Per-side empty states are differentiated (U25): "No bids" when only
+  // asks exist, "No asks" when only bids exist, "No open orders" when the
+  // entire book is empty (handled in the main render). The side label is
+  // always shown so the user knows which side they are reading.
   if (levels.length === 0) {
     return (
-      <View style={styles.sideEmptyWrap}>
-        <Text style={[styles.sideEmptyText, { color: colors.textMuted }]}>
-          No {side === 'bid' ? 'bids' : 'asks'}
+      <View style={styles.sideWrap}>
+        <Text style={[styles.sideLabelText, { color: side === 'bid' ? colors.coownUp : colors.coownDown }]}>
+          {side === 'bid' ? 'Bids' : 'Asks'}
         </Text>
+        <View style={styles.sideEmptyWrap}>
+          <Text style={[styles.sideEmptyText, { color: colors.textMuted }]}>
+            No {side === 'bid' ? 'bids' : 'asks'}
+          </Text>
+        </View>
       </View>
     );
   }
 
   return (
     <View style={styles.sideWrap}>
+      <Text style={[styles.sideLabelText, { color: side === 'bid' ? colors.coownUp : colors.coownDown }]}>
+        {side === 'bid' ? 'Bids' : 'Asks'}
+      </Text>
       {ordered.map((level, i) => {
-        const cumulative = level.cumulative ?? level.size;
-        const depthFraction = cumulative / maxCumulative;
+        // Running cumulative total — sum of all sizes from the best
+        // price up to and including this level. Falls back to the
+        // level's own size if the API provides a precomputed
+        // `cumulative` field.
+        const cumulative = level.cumulative ?? ordered.slice(0, i + 1).reduce((sum, l) => sum + l.size, 0);
+        // Depth bars are proportional to each level's own size relative to
+        // the deepest level in the book — visual depth, not cumulative total.
+        const depthFraction = level.size / maxSize;
         const isEdge = i === ordered.length - 1;
 
         return (
@@ -249,40 +303,40 @@ function BookSide({
             key={`${side}-${level.price}-${i}`}
             onPress={() => onSelectLevel?.(side, level.price)}
             disabled={!onSelectLevel}
-            hitSlop={4}
+            hitSlop={6}
             accessibilityRole={onSelectLevel ? 'button' : undefined}
             accessibilityLabel={`${side === 'bid' ? 'Bid' : 'Ask'} ${level.price.toFixed(2)}, size ${level.size}`}
+            style={({ pressed }) => pressed && { opacity: 0.6 }}
           >
-            <View style={[styles.levelRow, { height: ExchangeLayout.bookRowHeight }]}>
-              {/* Depth bar — right-aligned for asks, left-aligned for bids */}
+            <View style={[styles.levelRow, { height: BOOK_ROW_HEIGHT, minHeight: 44 }]}>
+              {/* Depth bar — behind the text (z-index), grows from the
+                  outer edge: left for bids, right for asks. Fills the full
+                  row height at 40% opacity so figures stay readable. */}
               <View
                 style={[
-                  styles.depthBar,
-                  side === 'ask' && styles.depthBarRight,
-                  { width: `${Math.min(depthFraction * 100, 100)}%`, backgroundColor: isEdge ? barEdgeColor : barColor },
+                  side === 'ask' ? styles.depthBarRight : styles.depthBarLeft,
+                  {
+                    width: `${Math.min(depthFraction * 100, 100)}%`,
+                    backgroundColor: isEdge ? barEdgeColor : barColor,
+                    opacity: 0.4,
+                  },
                 ]}
               />
               <Text
                 style={[styles.levelPrice, { color: priceColor }]}
                 numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.7}
               >
                 {level.price.toFixed(2)}
               </Text>
               <Text
                 style={[styles.levelSize, { color: colors.textPrimary }]}
                 numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.7}
               >
                 {level.size.toLocaleString('en-GB')}
               </Text>
               <Text
                 style={[styles.levelTotal, { color: colors.textSecondary }]}
                 numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.7}
               >
                 {cumulative.toLocaleString('en-GB')}
               </Text>
@@ -392,21 +446,48 @@ const styles = StyleSheet.create({
   colHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 44,
     paddingBottom: Space.xs,
+    paddingTop: Space.xs,
+    paddingHorizontal: Space.xs,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   colHeader: {
     flex: 1,
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: 0.2,
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: TypographyV2.label.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase',
+  },
+  // Fixed-width rails so price and quantity columns align across every
+  // row — depth reads as comparable columns, not variable-width text (U24).
+  colHeaderPrice: {
+    width: PRICE_COL_WIDTH,
+    flex: 0,
+    flexShrink: 0,
+  },
+  colHeaderSize: {
+    width: SIZE_COL_WIDTH,
+    flex: 0,
+    flexShrink: 0,
+    textAlign: 'right',
   },
   sideWrap: {
     gap: 0,
   },
+  // Explicit side label — "Bids" / "Asks" — so the side is named, not
+  // just color-coded (U24).
+  sideLabelText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    paddingTop: Space.xs,
+    paddingBottom: 2,
+    paddingHorizontal: Space.xs,
+  },
   sideEmptyWrap: {
-    height: ExchangeLayout.bookRowHeight * 2,
+    height: BOOK_ROW_HEIGHT * 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -421,27 +502,41 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.xs,
     position: 'relative',
   },
-  depthBar: {
+  // Depth bars: bid side grows from left, ask side grows from right.
+  // Two mutually exclusive base styles so the absolute edge is
+  // unambiguous — no `left: undefined` override that RN may ignore.
+  depthBarLeft: {
     position: 'absolute',
     top: 0,
     bottom: 0,
     left: 0,
-    borderRadius: Radius.sm,
+    zIndex: 0,
   },
   depthBarRight: {
-    left: undefined,
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
     right: 0,
+    zIndex: 0,
   },
   levelPrice: {
-    flex: 1,
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily,
-    letterSpacing: TypographyV2.body.letterSpacing,
+    width: PRICE_COL_WIDTH,
+    flex: 0,
+    flexShrink: 0,
+    zIndex: 1,
+    fontSize: TypographyV2.numericMeta.size,
+    lineHeight: TypographyV2.numericMeta.lineHeight,
+    fontFamily: TypographyV2.numericMeta.fontFamily,
+    letterSpacing: TypographyV2.numericMeta.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   levelSize: {
-    flex: 1,
+    width: SIZE_COL_WIDTH,
+    flex: 0,
+    flexShrink: 0,
+    zIndex: 1,
     fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
     fontFamily: TypographyV2.body.fontFamily,
     letterSpacing: TypographyV2.body.letterSpacing,
     textAlign: 'right',
@@ -449,7 +544,9 @@ const styles = StyleSheet.create({
   },
   levelTotal: {
     flex: 1,
+    zIndex: 1,
     fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
     fontFamily: TypographyV2.body.fontFamily,
     letterSpacing: TypographyV2.body.letterSpacing,
     textAlign: 'right',
@@ -469,15 +566,17 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   spreadLabel: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: 0.2,
+    fontSize: TypographyV2.captionElevated.size,
+    lineHeight: TypographyV2.captionElevated.lineHeight,
+    fontFamily: TypographyV2.captionElevated.fontFamily,
+    letterSpacing: TypographyV2.captionElevated.letterSpacing,
     textTransform: 'uppercase',
   },
   spreadValue: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily,
-    letterSpacing: TypographyV2.body.letterSpacing,
+    fontSize: TypographyV2.captionElevated.size,
+    lineHeight: TypographyV2.captionElevated.lineHeight,
+    fontFamily: TypographyV2.captionElevated.fontFamily,
+    letterSpacing: TypographyV2.captionElevated.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   spreadRight: {
@@ -486,45 +585,43 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   lastLabel: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: 0.2,
+    fontSize: TypographyV2.captionElevated.size,
+    lineHeight: TypographyV2.captionElevated.lineHeight,
+    fontFamily: TypographyV2.captionElevated.fontFamily,
+    letterSpacing: TypographyV2.captionElevated.letterSpacing,
     textTransform: 'uppercase',
   },
   lastValue: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
-    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+    fontSize: TypographyV2.captionElevated.size,
+    lineHeight: TypographyV2.captionElevated.lineHeight,
+    fontFamily: TypographyV2.captionElevated.fontFamily,
+    letterSpacing: TypographyV2.captionElevated.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   lastAge: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: TypographyV2.meta.letterSpacing,
+    fontSize: TypographyV2.captionElevated.size,
+    lineHeight: TypographyV2.captionElevated.lineHeight,
+    fontFamily: TypographyV2.captionElevated.fontFamily,
+    letterSpacing: TypographyV2.captionElevated.letterSpacing,
   },
-  emptyWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  emptyBlock: {
     paddingVertical: Space.md,
-    gap: Space.xs,
+    gap: 4,
   },
   emptyText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
   },
   emptyHint: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: TypographyV2.meta.letterSpacing,
-    textAlign: 'center',
-    paddingHorizontal: Space.md,
+    lineHeight: 18,
   },
-  // RFQ state
-  rfqWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Space.lg,
-    gap: Space.sm,
+  // RFQ state — flat block
+  rfqBlock: {
+    paddingVertical: Space.md,
+    gap: Space.xs,
   },
   rfqTitle: {
     fontSize: TypographyV2.bodyStrong.size,
@@ -535,8 +632,7 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: TypographyV2.meta.letterSpacing,
-    textAlign: 'center',
-    paddingHorizontal: Space.md,
+    lineHeight: 18,
   },
   rfqBtn: {
     paddingHorizontal: Space.lg,
@@ -551,12 +647,10 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.body.size,
     fontFamily: TypographyV2.body.fontFamily,
   },
-  // Halted / closed state
-  haltedWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  // Halted / closed state — flat block
+  haltedBlock: {
     paddingVertical: Space.md,
-    gap: Space.xs,
+    gap: 4,
   },
   haltedTitle: {
     fontSize: TypographyV2.bodyStrong.size,
@@ -567,8 +661,7 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: TypographyV2.meta.letterSpacing,
-    textAlign: 'center',
-    paddingHorizontal: Space.md,
+    lineHeight: 18,
   },
   bookWrap: {
     gap: 0,

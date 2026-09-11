@@ -12,7 +12,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, TypeStyles, Control } from '../theme/designTokens';
+import { Space, Radius, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
@@ -382,12 +382,12 @@ const styles$inline = StyleSheet.create({
   requestName: {
     flex: 1,
     fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: undefined,
     letterSpacing: TypographyV2.bodyStrong.letterSpacing },
   requestTime: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: TypeStyles.body.fontFamily } });
+    fontFamily: TypographyV2.body.fontFamily } });
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
@@ -437,11 +437,11 @@ function createStyles(colors: ThemeColors) {
     listingTitle: {
       flex: 1,
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textSecondary },
     listingPrice: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textPrimary },
     // ── Primary actions ──
     requestActions: {
@@ -458,7 +458,7 @@ function createStyles(colors: ThemeColors) {
       borderColor: colors.border },
     requestDeclineText: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textPrimary },
     requestAccept: {
       flex: 1,
@@ -469,7 +469,7 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.textPrimary },
     requestAcceptText: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textInverse },
     actionDisabled: {
       opacity: 0.4 },
@@ -490,11 +490,11 @@ function createStyles(colors: ThemeColors) {
       minHeight: 36 },
     safetyLinkTextDanger: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.danger },
     safetyLinkText: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textMuted },
     safetyDivider: {
       width: 1,

@@ -12,7 +12,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, TypeStyles, Control, Stroke } from '../theme/designTokens';
+import { Space, Radius, Control, Stroke } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -424,7 +424,7 @@ function createStyles(colors: ThemeColors) {
       borderColor: colors.textPrimary },
     filterText: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textSecondary },
     filterTextActive: {
       color: colors.textInverse },

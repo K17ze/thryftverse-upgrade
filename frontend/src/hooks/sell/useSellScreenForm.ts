@@ -57,7 +57,7 @@ export interface SellScreenFormResult {
  * actions hook consume these computed values so neither duplicates the logic.
  */
 export function useSellScreenForm(params: SellScreenFormParams): SellScreenFormResult {
-  const { values, photos, soldComps, errors, errorMsg, setErrors, setErrorMsg } = params;
+  const { values, photos, soldComps, errors, setErrors } = params;
   const {
     title, desc, price, originalPrice, category, brand, size, condition,
     shippingMethod, shippingPayer, listingMode, shareCountInput, sharePriceInput,
@@ -143,13 +143,14 @@ export function useSellScreenForm(params: SellScreenFormParams): SellScreenFormR
     [originalPrice, price],
   );
 
-  // Auto-clear errors once the listing becomes publish-ready.
+  // Auto-clear field-level validation errors once the listing becomes
+  // publish-ready. Publish-stage errorMsg is intentionally NOT cleared here:
+  // it persists until the user dismisses it or attempts another publish.
   useEffect(() => {
-    if (publishReady && (errorMsg || Object.keys(errors).length > 0)) {
-      setErrorMsg(null);
+    if (publishReady && Object.keys(errors).length > 0) {
       setErrors({});
     }
-  }, [publishReady, errorMsg, errors, setErrorMsg, setErrors]);
+  }, [publishReady, errors, setErrors]);
 
   return {
     hasBasePhotos,

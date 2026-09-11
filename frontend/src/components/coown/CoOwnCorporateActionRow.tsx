@@ -9,6 +9,14 @@
  * Consolidation, Buyback, Compulsory buyout, Revaluation, Insurance
  * proceeds, Liquidation, Vote.
  *
+ * Visual treatment (AGENTS.md §4 — Surface Budget):
+ * - Flat canvas, no card chrome; hairline separator between rows.
+ * - Leading type icon (18pt, textSecondary) in a 44pt hit-target area.
+ * - Content: title (bodyStrong) + subtitle/date (meta, textMuted).
+ * - Status chip (captionElevated) colored by status, right-aligned.
+ * - Documents indicator (14pt) beside the status chip when present.
+ * - 44pt minimum hit target; tabular figures for any numbers.
+ *
  * See docs/coown/flagship-exchange-upgrade/10 §7.1.
  */
 
@@ -16,8 +24,9 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
+import { FontFamily } from '../../theme/fontFamily';
 
 export type CoOwnCorporateActionType =
   | 'distribution'
@@ -49,29 +58,34 @@ export interface CoOwnCorporateActionRowProps {
   recordDateLabel?: string;
   /** Payment date label (e.g. "Payment: 18 Feb"). */
   paymentDateLabel?: string;
+  /** Whether the action has proposal documents attached. Shows a small
+   *  document indicator next to the status chip. */
+  hasDocuments?: boolean;
   /** onPress for detail view. */
   onPress?: () => void;
 }
 
 const ACTION_CONFIG: Record<CoOwnCorporateActionType, { label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> = {
   distribution: { label: 'Distribution', icon: 'cash-outline' },
-  operating_cost: { label: 'Operating cost', icon: 'receipt-outline' },
-  new_issuance: { label: 'New issuance', icon: 'add-circle-outline' },
+  operating_cost: { label: 'Operating cost', icon: 'document-text-outline' },
+  new_issuance: { label: 'New issuance', icon: 'document-text-outline' },
   split: { label: 'Split', icon: 'git-branch-outline' },
-  consolidation: { label: 'Consolidation', icon: 'git-merge-outline' },
-  buyback: { label: 'Buyback', icon: 'arrow-undo-circle-outline' },
+  consolidation: { label: 'Consolidation', icon: 'git-branch-outline' },
+  buyback: { label: 'Buyback', icon: 'arrow-undo-outline' },
   compulsory_buyout: { label: 'Compulsory buyout', icon: 'exit-outline' },
-  revaluation: { label: 'Revaluation', icon: 'trending-up-outline' },
-  insurance_proceeds: { label: 'Insurance proceeds', icon: 'checkmark-circle-outline' },
-  liquidation: { label: 'Liquidation', icon: 'cash-outline' },
-  vote: { label: 'Vote', icon: 'ribbon-outline' },
+  revaluation: { label: 'Revaluation', icon: 'document-text-outline' },
+  insurance_proceeds: { label: 'Insurance proceeds', icon: 'shield-checkmark-outline' },
+  liquidation: { label: 'Liquidation', icon: 'exit-outline' },
+  vote: { label: 'Vote', icon: 'podium-outline' },
 };
 
-const STATUS_CONFIG: Record<CoOwnCorporateActionStatus, { label: string; color: 'success' | 'textSecondary' | 'danger' | 'warning' }> = {
-  pending: { label: 'Pending', color: 'warning' },
-  effective: { label: 'Effective', color: 'success' },
-  completed: { label: 'Completed', color: 'success' },
-  cancelled: { label: 'Cancelled', color: 'textSecondary' },
+type StatusTone = 'warning' | 'success' | 'danger' | 'neutral';
+
+const STATUS_CONFIG: Record<CoOwnCorporateActionStatus, { label: string; tone: StatusTone }> = {
+  pending: { label: 'Pending', tone: 'neutral' },
+  effective: { label: 'Effective', tone: 'warning' },
+  completed: { label: 'Completed', tone: 'success' },
+  cancelled: { label: 'Cancelled', tone: 'danger' },
 };
 
 export function CoOwnCorporateActionRow({
@@ -82,18 +96,37 @@ export function CoOwnCorporateActionRow({
   amountLabel,
   recordDateLabel,
   paymentDateLabel,
+  hasDocuments,
   onPress,
 }: CoOwnCorporateActionRowProps) {
   const { colors } = useAppTheme();
   const actionCfg = ACTION_CONFIG[type];
   const statusCfg = STATUS_CONFIG[status];
-  const statusColor = statusCfg.color === 'success'
-    ? colors.success
-    : statusCfg.color === 'danger'
-      ? colors.danger
-      : statusCfg.color === 'warning'
-        ? colors.warning
-        : colors.textSecondary;
+
+  const statusFill =
+    statusCfg.tone === 'success'
+      ? colors.successSubtle
+      : statusCfg.tone === 'danger'
+        ? colors.dangerSubtle
+        : statusCfg.tone === 'warning'
+          ? colors.warningSubtle
+          : colors.surfaceAlt;
+  const statusText =
+    statusCfg.tone === 'success'
+      ? colors.success
+      : statusCfg.tone === 'danger'
+        ? colors.danger
+        : statusCfg.tone === 'warning'
+          ? colors.warning
+          : colors.textSecondary;
+
+  const amountColor = amountLabel
+    ? amountLabel.startsWith('+')
+      ? colors.coownUp
+      : amountLabel.startsWith('−')
+        ? colors.coownDown
+        : colors.textPrimary
+    : colors.textPrimary;
 
   return (
     <Pressable
@@ -101,60 +134,47 @@ export function CoOwnCorporateActionRow({
       disabled={!onPress}
       style={({ pressed }) => [
         styles.container,
-        { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
+        { borderBottomColor: colors.borderSubtle, opacity: pressed ? 0.7 : 1 },
       ]}
       accessibilityRole={onPress ? 'button' : undefined}
       accessibilityLabel={`${actionCfg.label}, ${statusCfg.label}, ${dateLabel}. ${effectLabel}${amountLabel ? `, ${amountLabel}` : ''}${recordDateLabel ? `, ${recordDateLabel}` : ''}${paymentDateLabel ? `, ${paymentDateLabel}` : ''}`}
     >
-      {/* Icon */}
-      <Ionicons name={actionCfg.icon} size={20} color={colors.brand} />
-
-      {/* Body */}
-      <View style={styles.body}>
-        <View style={styles.headerRow}>
-          <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
-            {actionCfg.label}
-          </Text>
-          <Text style={[styles.date, { color: colors.textMuted }]} numberOfLines={1}>
-            {dateLabel}
-          </Text>
-        </View>
-        <Text style={[styles.effect, { color: colors.textSecondary }]} numberOfLines={2}>
-          {effectLabel}
-        </Text>
-        {(recordDateLabel || paymentDateLabel) && (
-          <View style={styles.datesRow}>
-            {recordDateLabel && (
-              <Text style={[styles.dateLabel, { color: colors.textMuted }]} numberOfLines={1}>
-                {recordDateLabel}
-              </Text>
-            )}
-            {paymentDateLabel && (
-              <Text style={[styles.dateLabel, { color: colors.textMuted }]} numberOfLines={1}>
-                {paymentDateLabel}
-              </Text>
-            )}
-          </View>
-        )}
+      {/* Leading type icon — 44pt hit-target area */}
+      <View style={styles.iconArea}>
+        <Ionicons name={actionCfg.icon} size={18} color={colors.textSecondary} />
       </View>
 
-      {/* Amount + status */}
+      {/* Content */}
+      <View style={styles.body}>
+        <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
+          {actionCfg.label}
+        </Text>
+        <Text style={[styles.subtitle, { color: colors.textMuted }]} numberOfLines={2}>
+          {effectLabel}
+        </Text>
+        <Text style={[styles.meta, { color: colors.textMuted }]} numberOfLines={1}>
+          {dateLabel}
+          {recordDateLabel ? `  ·  ${recordDateLabel}` : ''}
+          {paymentDateLabel ? `  ·  ${paymentDateLabel}` : ''}
+        </Text>
+      </View>
+
+      {/* Right column: amount + status chip + documents indicator */}
       <View style={styles.rightCol}>
         {amountLabel && (
-          <Text
-            style={[
-              styles.amount,
-              { color: amountLabel.startsWith('+') ? colors.coownUp : amountLabel.startsWith('−') ? colors.coownDown : colors.textPrimary },
-            ]}
-            numberOfLines={1}
-          >
+          <Text style={[styles.amount, { color: amountColor }]} numberOfLines={1}>
             {amountLabel}
           </Text>
         )}
-        <View style={[styles.statusPill, { backgroundColor: statusColor + '18' }]}>
-          <Text style={[styles.statusText, { color: statusColor }]} numberOfLines={1}>
-            {statusCfg.label}
-          </Text>
+        <View style={styles.statusRow}>
+          {hasDocuments && (
+            <Ionicons name="document-text-outline" size={14} color={colors.textMuted} />
+          )}
+          <View style={[styles.statusChip, { backgroundColor: statusFill }]}>
+            <Text style={[styles.statusText, { color: statusText }]} numberOfLines={1}>
+              {statusCfg.label}
+            </Text>
+          </View>
         </View>
       </View>
     </Pressable>
@@ -164,77 +184,70 @@ export function CoOwnCorporateActionRow({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.sm,
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    minHeight: 44,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  iconArea: {
+    width: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   body: {
     flex: 1,
-    gap: 3,
+    gap: 2,
     minWidth: 0,
   },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: Space.sm,
-  },
   title: {
-    flex: 1,
-    fontSize: TypographyV2.bodyStrong.size,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
-    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
-  date: {
+  subtitle: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: TypographyV2.meta.letterSpacing,
-    flexShrink: 0,
   },
-  effect: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight + 1,
-    fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
-  datesRow: {
-    flexDirection: 'row',
-    gap: Space.md,
-    marginTop: 2,
-  },
-  dateLabel: {
+  meta: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: TypographyV2.meta.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
   rightCol: {
     alignItems: 'flex-end',
-    gap: 4,
+    gap: Space.xs,
     flexShrink: 0,
-    minWidth: 60,
+    marginLeft: Space.sm,
   },
   amount: {
-    fontSize: TypographyV2.bodyStrong.size,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
-    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.body.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
-  statusPill: {
-    paddingHorizontal: 7,
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  statusChip: {
+    paddingHorizontal: Space.sm - 2,
     paddingVertical: 2,
     borderRadius: Radius.full,
   },
   statusText: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.3,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
 });
 

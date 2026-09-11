@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
+import { UploadProgressRing } from '../flagship/FlagshipProfileMedia';
 
 type MediaStatus = 'idle' | 'uploading' | 'failed' | 'confirmed';
 
@@ -11,6 +12,8 @@ interface ProfileMediaEditorProps {
   label: string;
   status: MediaStatus;
   error?: string | null;
+  /** Real byte progress 0–1 while status is 'uploading' — drives the determinate ring. */
+  progress?: number;
   onChange: () => void;
   onRetry: () => void;
   onRevert: () => void;
@@ -20,6 +23,7 @@ export function ProfileMediaEditor({
   label,
   status,
   error,
+  progress,
   onChange,
   onRetry,
   onRevert }: ProfileMediaEditorProps) {
@@ -30,7 +34,13 @@ export function ProfileMediaEditor({
   if (status === 'uploading') {
     return (
       <View style={styles.row}>
-        <ActivityIndicator size="small" color={colors.brand} />
+        <UploadProgressRing
+          progress={progress}
+          active
+          size={18}
+          color={colors.brand}
+          trackColor={colors.borderSubtle}
+        />
         <Text style={styles.statusText}>Uploading {label.toLowerCase()}…</Text>
       </View>
     );

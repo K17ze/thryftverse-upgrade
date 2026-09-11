@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TextInput, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, TypeStyles, Control, AvatarSize } from '../../theme/designTokens';
+import { Space, Radius, Control, AvatarSize } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
@@ -242,7 +242,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: TypographyV2.body.size,
-    fontFamily: TypeStyles.body.fontFamily,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
     paddingVertical: Space.sm - 2 },
   searchNav: {
@@ -256,7 +256,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center' },
   searchCount: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textMuted,
     minWidth: 34,
     textAlign: 'center' },
@@ -319,7 +319,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     minWidth: 0 },
   title: {
     fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textPrimary,
     letterSpacing: TypographyV2.bodyStrong.letterSpacing,
     flexShrink: 1 },
@@ -327,7 +327,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexShrink: 0 },
   subtitle: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: TypeStyles.body.fontFamily,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textMuted,
     marginTop: 1,
     letterSpacing: TypographyV2.meta.letterSpacing },

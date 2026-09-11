@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Stroke} from '../../theme/designTokens';
+import { Space, Radius, Stroke, FontFamily } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
 import { CoOwnNumericText } from '../ui/CoOwnNumericText';
@@ -10,9 +10,11 @@ import type { CoOwnPositionState as CanonicalCoOwnPositionState } from '../../da
 
 export type CoOwnPositionStatus = 'open' | 'closed' | 'paused';
 
-/** Phase 3: mark source + age for the position row. */
+/** Phase 3: mark source + age for the position row.
+ * U38: 'reference' replaces 'mid' — a reference price is NOT a
+ * bid/ask midpoint. 'nav' retained for backward compatibility. */
 export interface CoOwnPositionMark {
-  source: 'last' | 'nav' | 'mid';
+  source: 'last' | 'nav' | 'reference';
   price: number;
   ageSeconds: number | null;
   /** True if mark is stale (>24h). */
@@ -36,6 +38,10 @@ export interface CoOwnPositionCardProps {
   /** Executable sale estimate from current bid depth; may be "No current bids". */
   estimatedSaleProceedsLabel?: string;
   saleDepthLabel?: string;
+  /** U39: Partial liquidity label, e.g. "Can sell 5 of 10 units at current bid". */
+  partialLiquidityLabel?: string;
+  /** U39: Quote age label for the sale estimate, e.g. "Quote 2h old". */
+  saleQuoteAgeLabel?: string;
   avgEntryLabel?: string;
   unrealizedLabel?: string;
   realizedLabel?: string;
@@ -70,6 +76,8 @@ export interface CoOwnPositionCardProps {
   settlementState?: 'settling' | 'settled';
   /** Settlement ETA label (e.g. "ETA 2h"). */
   settlementEtaLabel?: string;
+  /** ISO date when the position lockup / holding period ends. */
+  lockupEndDate?: string | null;
 }
 
 export function CoOwnPositionCard({
@@ -81,6 +89,8 @@ export function CoOwnPositionCard({
   currentValueLabel,
   estimatedSaleProceedsLabel,
   saleDepthLabel,
+  partialLiquidityLabel,
+  saleQuoteAgeLabel,
   avgEntryLabel,
   unrealizedLabel,
   realizedLabel,
@@ -102,6 +112,7 @@ export function CoOwnPositionCard({
   portfolioWeightPct,
   settlementState,
   settlementEtaLabel,
+  lockupEndDate,
 }: CoOwnPositionCardProps) {
   const { colors } = useAppTheme();
 
@@ -109,14 +120,17 @@ export function CoOwnPositionCard({
   const statusColor = status === 'open' ? colors.success : status === 'paused' ? colors.textSecondary : colors.textMuted;
 
   // Mark source label + age
+  // U38: 'reference' is a reference price, NOT a bid/ask midpoint.
   const markSourceLabel = mark
     ? mark.source === 'last'
       ? 'Last'
       : mark.source === 'nav'
         ? 'NAV'
-        : 'Mid'
+        : 'Reference'
     : null;
-  const markAgeLabel = mark?.ageSeconds != null ? formatAge(mark.ageSeconds) : null;
+  // U38: When the reference price has no timestamp, freshness is unknown
+  // — never implied fresh. Show "unknown" instead of hiding the age.
+  const markAgeLabel = mark?.ageSeconds != null ? formatAge(mark.ageSeconds) : (mark ? 'unknown' : null);
   const isStaleMark = mark?.isStale ?? false;
   const markColor = isStaleMark ? colors.textMuted : colors.textPrimary;
 
@@ -129,6 +143,16 @@ export function CoOwnPositionCard({
   // Outstanding denominator — prefer positionState.outstandingUnits, then the
   // separate prop, then fall back to totalUnits
   const outstandingLabel = (positionState?.outstandingUnits ?? outstandingUnits ?? totalUnits).toLocaleString('en-GB');
+
+  // Lockup / holding period — only render a chip when the lockup is still
+  // in the future. Past lockups are not shown (no chrome for resolved state).
+  const lockupActive = lockupEndDate ? new Date(lockupEndDate).getTime() > Date.now() : false;
+  const lockupLabel = lockupActive
+    ? `Locked until ${new Date(lockupEndDate!).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}`
+    : null;
+  const lockupA11y = lockupActive
+    ? `Position locked until ${new Date(lockupEndDate!).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}`
+    : '';
 
   return (
     <View>
@@ -153,6 +177,17 @@ export function CoOwnPositionCard({
               <View style={styles.statusRow}>
                 <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                 <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
+                {lockupLabel && (
+                  <View
+                    style={[styles.lockupChip, { borderColor: colors.border }]}
+                    accessibilityLabel={lockupA11y}
+                  >
+                    <Ionicons name="lock-closed-outline" size={12} color={colors.textMuted} />
+                    <Text style={[styles.lockupChipText, { color: colors.textMuted }]} numberOfLines={1}>
+                      {lockupLabel}
+                    </Text>
+                  </View>
+                )}
                 {isStaleMark && (
                   <View style={[styles.staleBadge, { backgroundColor: colors.warningSubtle }]}>
                     <Text style={[styles.staleBadgeText, { color: colors.warning }]}>Stale mark</Text>
@@ -212,37 +247,60 @@ export function CoOwnPositionCard({
             </View>
           )}
 
-          <View style={[styles.valueRow, { borderColor: colors.border }]}>
-            <View style={styles.valueItem}>
-              <Text style={[styles.valueLabel, { color: colors.textMuted }]} numberOfLines={1}>Marked value</Text>
-              <Text style={[styles.valueAmount, { color: colors.textSecondary }]} numberOfLines={1}>{currentValueLabel}</Text>
-            </View>
-            {estimatedSaleProceedsLabel ? (
-              <View style={styles.valueItem}>
-                <Text style={[styles.valueLabel, { color: colors.textMuted }]} numberOfLines={1}>Est. sale proceeds</Text>
-                <Text style={[styles.valueAmount, { color: colors.textSecondary }]} numberOfLines={1}>{estimatedSaleProceedsLabel}</Text>
-                {saleDepthLabel ? (
-                  <Text style={[styles.valueLabel, { color: colors.textMuted }]} numberOfLines={1}>{saleDepthLabel}</Text>
-                ) : null}
-              </View>
-            ) : null}
-            <View style={styles.valueItem}>
-              <Text style={[styles.valueLabel, { color: colors.textMuted }]} numberOfLines={1}>Cost basis</Text>
-              <Text style={[styles.valueAmount, { color: colors.textSecondary }]} numberOfLines={1}>{avgEntryLabel ?? '—'}</Text>
+          {/* U37: Marked value hero — the dominant element. Cost/P&L and
+              units follow as concise secondary context, not equally-weighted
+              tiles. Hierarchy, not a grid. */}
+          <View style={[styles.heroRow, { borderColor: colors.border }]}>
+            <Text style={[styles.heroLabel, { color: colors.textMuted }]} numberOfLines={1}>Marked value</Text>
+            <Text style={[styles.heroValue, { color: colors.textPrimary }]} numberOfLines={1}>{currentValueLabel}</Text>
+          </View>
+
+          {/* U37: Concise cost/P&L context — compact hairline rows */}
+          <View style={styles.contextRows}>
+            <View style={[styles.contextRow, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.contextLabel, { color: colors.textSecondary }]} numberOfLines={1}>Cost basis</Text>
+              <Text style={[styles.contextValue, { color: colors.textPrimary }]} numberOfLines={1}>{avgEntryLabel ?? '—'}</Text>
             </View>
             {unrealizedLabel ? (
-              <View style={styles.valueItem}>
-                <Text style={[styles.valueLabel, { color: colors.textMuted }]} numberOfLines={1}>Unrealised</Text>
-                <Text style={[styles.valueAmount, { color: colors.textSecondary }]} numberOfLines={1}>{unrealizedLabel}</Text>
+              <View style={[styles.contextRow, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.contextLabel, { color: colors.textSecondary }]} numberOfLines={1}>Unrealised</Text>
+                <Text style={[styles.contextValue, { color: colors.textPrimary }]} numberOfLines={1}>{unrealizedLabel}</Text>
               </View>
             ) : null}
             {realizedLabel ? (
-              <View style={styles.valueItem}>
-                <Text style={[styles.valueLabel, { color: colors.textMuted }]} numberOfLines={1}>Realised</Text>
-                <Text style={[styles.valueAmount, { color: colors.textSecondary }]} numberOfLines={1}>{realizedLabel}</Text>
+              <View style={[styles.contextRow, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.contextLabel, { color: colors.textSecondary }]} numberOfLines={1}>Realised</Text>
+                <Text style={[styles.contextValue, { color: colors.textPrimary }]} numberOfLines={1}>{realizedLabel}</Text>
+              </View>
+            ) : null}
+            {estimatedSaleProceedsLabel ? (
+              <View style={[styles.contextRow, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.contextLabel, { color: colors.textSecondary }]} numberOfLines={1}>Est. sale proceeds</Text>
+                <Text style={[styles.contextValue, { color: colors.textPrimary }]} numberOfLines={1}>{estimatedSaleProceedsLabel}</Text>
               </View>
             ) : null}
           </View>
+
+          {/* U39: Partial liquidity + quote age — after the value, not as a tile */}
+          {(partialLiquidityLabel || saleDepthLabel || saleQuoteAgeLabel) && (
+            <View style={styles.liquidityRow}>
+              {partialLiquidityLabel && (
+                <Text style={[styles.liquidityText, { color: colors.textMuted }]} numberOfLines={2}>
+                  {partialLiquidityLabel}
+                </Text>
+              )}
+              {saleDepthLabel && !partialLiquidityLabel && (
+                <Text style={[styles.liquidityText, { color: colors.textMuted }]} numberOfLines={1}>
+                  {saleDepthLabel}
+                </Text>
+              )}
+              {saleQuoteAgeLabel && (
+                <Text style={[styles.liquidityText, { color: colors.textMuted }]} numberOfLines={1}>
+                  {saleQuoteAgeLabel}
+                </Text>
+              )}
+            </View>
+          )}
 
           {/* Phase 3: NAV + premium of last/NAV — the truth-telling line */}
           {navPerUnitLabel && (
@@ -303,24 +361,31 @@ export function CoOwnPositionCard({
             )}
           </View>
 
+          {/* U43: Buy/Sell are permission-aware — disabled with reason when
+              the asset is closed or has no sellable units. */}
           <View style={styles.actionRow}>
             {onBuyMore ? (
               <Pressable
-                onPress={(e) => { e.stopPropagation(); onBuyMore(); }}
-                style={[styles.buyBtn, { backgroundColor: colors.brand }]}
+                onPress={(e) => { if (status !== 'open') return; e.stopPropagation(); onBuyMore(); }}
+                style={[styles.buyBtn, { backgroundColor: colors.brand, opacity: status === 'open' ? 1 : 0.4 }]}
+                disabled={status !== 'open'}
                 accessibilityRole="button"
-                accessibilityLabel={`Buy more units of ${title}`}
+                accessibilityLabel={status === 'open' ? `Buy more units of ${title}` : `Buy unavailable — ${statusLabel}`}
+                accessibilityHint={status === 'open' ? undefined : `Item is ${statusLabel.toLowerCase()}`}
               >
-                <Text style={[styles.buyBtnText, { color: colors.background }]}>Buy more</Text>
+                <Text style={[styles.buyBtnText, { color: colors.background }]}>
+                  {status === 'open' ? 'Buy more' : statusLabel}
+                </Text>
               </Pressable>
             ) : null}
             {onSell ? (
               <Pressable
-                onPress={(e) => { e.stopPropagation(); onSell(); }}
+                onPress={(e) => { if (!sellable) return; e.stopPropagation(); onSell(); }}
                 style={[styles.sellBtn, { borderColor: colors.border, opacity: sellable ? 1 : 0.4 }]}
                 disabled={!sellable}
                 accessibilityRole="button"
                 accessibilityLabel={sellable ? `Sell units of ${title}` : `Sell unavailable for ${title}`}
+                accessibilityHint={sellable ? undefined : 'No sellable units'}
               >
                 <Text style={[styles.sellBtnText, { color: colors.textPrimary }]}>
                   {sellable ? 'Sell' : 'No sellable'}
@@ -430,29 +495,57 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
   },
-  valueRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.md,
+  // U37: Marked value hero — dominant element, larger than context rows
+  heroRow: {
     paddingTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  valueItem: {
-    flexGrow: 1,
-    flexBasis: '42%',
-    minWidth: 120,
     gap: 2,
   },
-  valueLabel: {
+  heroLabel: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: 0.2,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     textTransform: 'uppercase',
   },
-  valueAmount: {
-    fontSize: TypographyV2.bodyStrong.size,
+  heroValue: {
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: FontFamily.bold,
+    letterSpacing: -0.3,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
+  },
+  // U37: Concise cost/P&L context — compact hairline rows, not tiles
+  contextRows: {
+    gap: 0,
+  },
+  contextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.sm + 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  contextLabel: {
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+  },
+  contextValue: {
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
     fontFamily: TypographyV2.bodyStrong.fontFamily,
-    letterSpacing: -0.2,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
+  },
+  // U39: Partial liquidity + quote age
+  liquidityRow: {
+    gap: Space.xs / 2,
+    paddingTop: Space.xs,
+  },
+  liquidityText: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   ownershipBar: {
     gap: 0,
@@ -510,6 +603,23 @@ const styles = StyleSheet.create({
     marginLeft: Space.xs,
   },
   staleBadgeText: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+  },
+  // ── Lockup / holding-period chip ──
+  lockupChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginLeft: Space.xs,
+  },
+  lockupChipText: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: TypographyV2.meta.fontFamily,

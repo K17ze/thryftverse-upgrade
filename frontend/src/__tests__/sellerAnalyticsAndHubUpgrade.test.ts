@@ -414,16 +414,339 @@ describe('Seller Hub and Analytics Upgrade Verification', () => {
       const detailPath = path.resolve(__dirname, '../components/seller/analytics/ListingAnalyticsDetail.tsx');
       const detailContent = fs.readFileSync(detailPath, 'utf8');
 
-      // 5-Stat Resale Intent Cockpit
-      expect(detailContent).toContain('5-Stat Resale Intent Cockpit');
+      // Listing performance section (was verbose "5-Stat Resale Intent Cockpit")
       expect(detailContent).toContain('Save rate');
-      expect(detailContent).toContain('High buyer intent detected');
+      expect(detailContent).toContain('High intent');
 
-      // StockX Pro Pricing Guidance
-      expect(detailContent).toContain('StockX Pro Pricing Guidance');
+      // Quick reprice section (was verbose "StockX Pro Pricing Guidance · 1-Tap Velocity Levers")
+      expect(detailContent).toContain('Quick reprice');
       expect(detailContent).toContain('Sell Faster');
       expect(detailContent).toContain('Aggressive');
       expect(detailContent).toContain('Sell Now');
+
+      // Verbose AI copy must be purged
+      expect(detailContent).not.toContain('5-Stat Resale Intent Cockpit');
+      expect(detailContent).not.toContain('StockX Pro Pricing Guidance');
+      expect(detailContent).not.toContain('1-Tap Velocity Levers');
+      expect(detailContent).not.toContain('High buyer intent detected');
+    });
+  });
+
+  describe('Custom Date Range Validation', () => {
+    // Mirrors validateCustomRange from useSellerAnalytics.ts
+    function validateCustomRange(startDate: string, endDate: string): string | null {
+      const start = new Date(startDate + 'T00:00:00.000Z');
+      const end = new Date(endDate + 'T00:00:00.000Z');
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        return 'Enter valid dates';
+      }
+      const today = new Date();
+      today.setUTCHours(23, 59, 59, 999);
+      if (start > today || end > today) {
+        return 'Dates cannot be in the future';
+      }
+      const diffDays = (end.getTime() - start.getTime()) / 86400000;
+      if (diffDays < 0) {
+        return 'Start must be before end';
+      }
+      if (diffDays > 365) {
+        return 'Range cannot exceed 365 days';
+      }
+      return null;
+    }
+
+    it('accepts a valid same-day range', () => {
+      expect(validateCustomRange('2026-09-10', '2026-09-10')).toBeNull();
+    });
+
+    it('accepts a valid 30-day range', () => {
+      expect(validateCustomRange('2026-08-12', '2026-09-10')).toBeNull();
+    });
+
+    it('accepts a valid 365-day range (boundary)', () => {
+      expect(validateCustomRange('2025-09-11', '2026-09-10')).toBeNull();
+    });
+
+    it('rejects reversed dates (start after end)', () => {
+      expect(validateCustomRange('2026-09-10', '2026-09-01')).toBe('Start must be before end');
+    });
+
+    it('rejects ranges exceeding 365 days', () => {
+      expect(validateCustomRange('2024-01-01', '2026-09-10')).toBe('Range cannot exceed 365 days');
+    });
+
+    it('rejects future start dates', () => {
+      expect(validateCustomRange('2027-01-01', '2027-01-02')).toBe('Dates cannot be in the future');
+    });
+
+    it('rejects future end dates', () => {
+      expect(validateCustomRange('2026-09-01', '2027-01-01')).toBe('Dates cannot be in the future');
+    });
+
+    it('rejects malformed dates', () => {
+      expect(validateCustomRange('not-a-date', '2026-09-10')).toBe('Enter valid dates');
+      expect(validateCustomRange('2026-09-10', 'garbage')).toBe('Enter valid dates');
+    });
+  });
+
+  describe('Analytics Period Resolution (Backend Helper Mirror)', () => {
+    // Mirrors resolveAnalyticsPeriod from backend/api/src/routes/sellers.ts
+    function resolveAnalyticsPeriod(
+      input: { period: '7d' | '30d' | '90d' } | { startDate: string; endDate: string }
+    ): { start: Date; end: Date; prevStart: Date; prevEnd: Date; days: number } {
+      if ('startDate' in input) {
+        const start = new Date(input.startDate + 'T00:00:00.000Z');
+        const endExclusive = new Date(input.endDate + 'T00:00:00.000Z');
+        endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
+        const days = Math.max(1, Math.round((endExclusive.getTime() - start.getTime()) / 86400000));
+        const prevEnd = new Date(start);
+        const prevStart = new Date(start);
+        prevStart.setUTCDate(prevStart.getUTCDate() - days);
+        return { start, end: endExclusive, prevStart, prevEnd, days };
+      }
+      const periodDays = input.period === '7d' ? 7 : input.period === '90d' ? 90 : 30;
+      const end = new Date();
+      const start = new Date();
+      start.setUTCDate(start.getUTCDate() - periodDays);
+      const prevEnd = new Date(start);
+      const prevStart = new Date(start);
+      prevStart.setUTCDate(prevStart.getUTCDate() - periodDays);
+      return { start, end, prevStart, prevEnd, days: periodDays };
+    }
+
+    it('resolves 30d preset to 30-day range', () => {
+      const range = resolveAnalyticsPeriod({ period: '30d' });
+      expect(range.days).toBe(30);
+      expect(range.end.getTime() - range.start.getTime()).toBeCloseTo(30 * 86400000, -2);
+    });
+
+    it('resolves 7d preset to 7-day range', () => {
+      const range = resolveAnalyticsPeriod({ period: '7d' });
+      expect(range.days).toBe(7);
+    });
+
+    it('resolves 90d preset to 90-day range', () => {
+      const range = resolveAnalyticsPeriod({ period: '90d' });
+      expect(range.days).toBe(90);
+    });
+
+    it('resolves custom range with correct exclusive end', () => {
+      const range = resolveAnalyticsPeriod({ startDate: '2026-08-01', endDate: '2026-08-31' });
+      expect(range.days).toBe(31); // inclusive of both start and end
+      expect(range.start.toISOString()).toBe('2026-08-01T00:00:00.000Z');
+      expect(range.end.toISOString()).toBe('2026-09-01T00:00:00.000Z'); // exclusive
+    });
+
+    it('computes previous period as equal length immediately before', () => {
+      const range = resolveAnalyticsPeriod({ startDate: '2026-08-01', endDate: '2026-08-31' });
+      expect(range.prevStart.toISOString()).toBe('2026-07-01T00:00:00.000Z');
+      expect(range.prevEnd.toISOString()).toBe('2026-08-01T00:00:00.000Z'); // exclusive = start of current
+      expect(range.days).toBe(31);
+      const prevDays = Math.round((range.prevEnd.getTime() - range.prevStart.getTime()) / 86400000);
+      expect(prevDays).toBe(31); // same length as current
+    });
+
+    it('resolves same-day custom range to 1-day range', () => {
+      const range = resolveAnalyticsPeriod({ startDate: '2026-09-10', endDate: '2026-09-10' });
+      expect(range.days).toBe(1);
+      expect(range.end.toISOString()).toBe('2026-09-11T00:00:00.000Z'); // exclusive
+    });
+  });
+
+  describe('Analytics API Period Query Builder', () => {
+    // Mirrors analyticsPeriodQuery from commerceApi.ts
+    function analyticsPeriodQuery(period: '7d' | '30d' | '90d' | { startDate: string; endDate: string }): string {
+      if (typeof period === 'string') {
+        return `period=${period}`;
+      }
+      return `startDate=${encodeURIComponent(period.startDate)}&endDate=${encodeURIComponent(period.endDate)}`;
+    }
+
+    it('builds preset query string', () => {
+      expect(analyticsPeriodQuery('7d')).toBe('period=7d');
+      expect(analyticsPeriodQuery('30d')).toBe('period=30d');
+      expect(analyticsPeriodQuery('90d')).toBe('period=90d');
+    });
+
+    it('builds custom range query string', () => {
+      const qs = analyticsPeriodQuery({ startDate: '2026-08-01', endDate: '2026-08-31' });
+      expect(qs).toBe('startDate=2026-08-01&endDate=2026-08-31');
+    });
+  });
+
+  describe('Seller Analytics Custom Range UI Integration', () => {
+    it('verifies SellerAnalyticsScreen has custom range selector and sheet', () => {
+      const content = fs.readFileSync(sellerAnalyticsPath, 'utf8');
+
+      // Custom chip is present alongside presets
+      expect(content).toContain('Custom');
+      expect(content).toContain('PRESET_OPTIONS');
+
+      // Custom date range sheet is wired
+      expect(content).toContain('AnalyticsDateRangeSheet');
+      expect(content).toContain('isRangeSheetVisible');
+      expect(content).toContain('setRangeSheetVisible');
+
+      // Custom range label is shown when active
+      expect(content).toContain('customRangeLabel');
+      expect(content).toContain('formatCustomRangeLabel');
+
+      // Preset options still exist (backward compatible)
+      expect(content).toContain("'7d'");
+      expect(content).toContain("'30d'");
+      expect(content).toContain("'90d'");
+    });
+
+    it('verifies AnalyticsDateRangeSheet component exists with validation', () => {
+      const sheetPath = path.resolve(__dirname, '../components/seller/analytics/AnalyticsDateRangeSheet.tsx');
+      const sheetContent = fs.readFileSync(sheetPath, 'utf8');
+
+      // Sheet uses existing BottomSheet primitive
+      expect(sheetContent).toContain('BottomSheet');
+
+      // Has start and end date pickers
+      expect(sheetContent).toContain('AppDatePicker');
+      expect(sheetContent).toContain('startDate');
+      expect(sheetContent).toContain('endDate');
+
+      // Has quick presets inside the sheet
+      expect(sheetContent).toContain('Last 7 days');
+      expect(sheetContent).toContain('Last 30 days');
+      expect(sheetContent).toContain('Last 90 days');
+
+      // Has Apply and Cancel actions
+      expect(sheetContent).toContain('Apply');
+      expect(sheetContent).toContain('Cancel');
+
+      // Uses the validation function
+      expect(sheetContent).toContain('validateCustomRange');
+      expect(sheetContent).toContain('validationError');
+
+      // Future dates are disabled (maxDate constraint)
+      expect(sheetContent).toContain('maxDate');
+    });
+
+    it('verifies commerceApi supports AnalyticsPeriod type', () => {
+      const apiPath = path.resolve(__dirname, '../services/commerceApi.ts');
+      const apiContent = fs.readFileSync(apiPath, 'utf8');
+
+      // AnalyticsPeriod type is exported
+      expect(apiContent).toContain('AnalyticsPeriod');
+
+      // analyticsPeriodQuery helper exists
+      expect(apiContent).toContain('analyticsPeriodQuery');
+
+      // All fetch functions accept the new type
+      expect(apiContent).toContain('period: AnalyticsPeriod');
+
+      // Dead offsetDays contract is removed
+      expect(apiContent).not.toContain('offsetDays');
+    });
+
+    it('verifies useAnalyticsInsights computes periodDays and periodLabel dynamically', () => {
+      const insightsPath = path.resolve(__dirname, '../components/seller/analytics/useAnalyticsInsights.ts');
+      const insightsContent = fs.readFileSync(insightsPath, 'utf8');
+
+      // periodDays is computed via useMemo (not hardcoded)
+      expect(insightsContent).toContain('const periodDays = useMemo');
+      expect(insightsContent).toContain('typeof period');
+
+      // periodLabel is computed via useMemo
+      expect(insightsContent).toContain('const periodLabel = useMemo');
+
+      // Custom range label format
+      expect(insightsContent).toContain('toLocaleDateString');
+    });
+
+    it('verifies category mix no longer has 2% floor', () => {
+      const insightsPath = path.resolve(__dirname, '../components/seller/analytics/useAnalyticsInsights.ts');
+      const insightsContent = fs.readFileSync(insightsPath, 'utf8');
+
+      // The 2% floor (Math.max(2, ...)) must be removed
+      expect(insightsContent).not.toContain('Math.max(2,');
+      expect(insightsContent).toContain('Math.round((stats.totalGbp / totalStoreValue) * 100)');
+    });
+  });
+
+  describe('Seller Hub Gap Closures', () => {
+    it('verifies pillar tiles use 2+2 hierarchy (not 4 equal tiles)', () => {
+      const tilesPath = path.resolve(__dirname, '../components/seller/SellerPillarTiles.tsx');
+      const tilesContent = fs.readFileSync(tilesPath, 'utf8');
+
+      // All 4 destinations preserved
+      expect(tilesContent).toContain('Wallet');
+      expect(tilesContent).toContain('Orders');
+      expect(tilesContent).toContain('Analytics');
+      expect(tilesContent).toContain('Closet');
+
+      // Attention badge preserved
+      expect(tilesContent).toContain('badge');
+
+      // Primary tiles have context subtitles (Wallet balance, Orders count)
+      expect(tilesContent).toContain('walletBalanceLabel');
+      expect(tilesContent).toContain('to ship');
+
+      // Component is under 200 lines
+      const lines = tilesContent.split('\n').length;
+      expect(lines).toBeLessThan(200);
+    });
+
+    it('verifies rail item widths are unified to 104dp', () => {
+      const ordersPath = path.resolve(__dirname, '../components/seller/SellerOrdersModule.tsx');
+      const ordersContent = fs.readFileSync(ordersPath, 'utf8');
+      const thumbRailPath = path.resolve(__dirname, '../components/seller/SellerThumbRail.tsx');
+      const thumbRailContent = fs.readFileSync(thumbRailPath, 'utf8');
+
+      // Both rails should reference 104 for thumb size
+      expect(ordersContent).toContain('104');
+      expect(thumbRailContent).toContain('104');
+
+      // Neither should use the old 96 or 112 for thumb dimensions
+      // (96 was the old orders rail, 112 was the old ThumbRail)
+      // Note: we check for THUMB_SIZE or similar constants
+      expect(thumbRailContent).not.toMatch(/THUMB_SIZE\s*=\s*112/);
+      expect(thumbRailContent).not.toMatch(/THUMB_SIZE\s*=\s*96/);
+    });
+
+    it('verifies CachedImage supports focalPoint (P3-4 closure)', () => {
+      const cachedImagePath = path.resolve(__dirname, '../components/CachedImage.tsx');
+      const cachedImageContent = fs.readFileSync(cachedImagePath, 'utf8');
+
+      // focalPoint prop is supported
+      expect(cachedImageContent).toContain('focalPoint');
+      expect(cachedImageContent).toContain('contentPosition');
+    });
+  });
+
+  describe('Analytics Trajectory Chart Fixes', () => {
+    it('verifies chart is responsive (no hardcoded 300px width)', () => {
+      const chartPath = path.resolve(__dirname, '../components/seller/analytics/AnalyticsTrajectoryChart.tsx');
+      const chartContent = fs.readFileSync(chartPath, 'utf8');
+
+      // Uses onLayout for responsive width
+      expect(chartContent).toContain('onLayout');
+      expect(chartContent).toContain('containerWidth');
+
+      // Hardcoded 300 is removed from the path computation
+      expect(chartContent).not.toContain('const width = 300');
+    });
+
+    it('verifies previous period line is rendered (not just legend)', () => {
+      const chartPath = path.resolve(__dirname, '../components/seller/analytics/AnalyticsTrajectoryChart.tsx');
+      const chartContent = fs.readFileSync(chartPath, 'utf8');
+
+      // prevLinePath is computed and rendered
+      expect(chartContent).toContain('prevLinePath');
+      expect(chartContent).toContain('DashPathEffect');
+    });
+
+    it('verifies line mode has touch interaction', () => {
+      const chartPath = path.resolve(__dirname, '../components/seller/analytics/AnalyticsTrajectoryChart.tsx');
+      const chartContent = fs.readFileSync(chartPath, 'utf8');
+
+      // Touch overlay exists for line mode
+      expect(chartContent).toContain('lineTouchOverlay');
+      expect(chartContent).toContain('lineTouchZone');
     });
   });
 });

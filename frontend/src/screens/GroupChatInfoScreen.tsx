@@ -103,7 +103,10 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
 
   const [isEncryptionSheetVisible, setIsEncryptionSheetVisible] = useState(false);
   const [isThemeSheetVisible, setIsThemeSheetVisible] = useState(false);
-  const [selectedTheme, setSelectedTheme] = useState<string>('Default');
+  // Drive the picker selection from the persisted query data, not local state.
+  // Previously this was a useState that was never updated after the initial
+  // 'Default', so the checkmark was always on 'Default' even after persistence.
+  const selectedTheme = preferences.query.data?.theme ?? 'Default';
   const [isMemberSearchOpen, setIsMemberSearchOpen] = useState(false);
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
   const [isMemberSearchFocused, setIsMemberSearchFocused] = useState(false);
@@ -1336,6 +1339,11 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
         <View style={styles.sheetContent}>
           <Text style={styles.sheetTitle}>Chat Theme</Text>
           <Text style={styles.sheetSubtitle}>Customize the accent tones of this conversation on this device. Not synced to other devices.</Text>
+          {themeSaveError && (
+            <Text style={[styles.sheetSubtitle, { color: colors.danger, marginTop: 4 }]}>
+              {themeSaveError}
+            </Text>
+          )}
           {['Default', 'Emerald', 'Midnight', 'Sunset', 'Lavender', 'Cobalt'].map((theme) => {
             const isSelected = selectedTheme === theme;
             return (
@@ -1343,9 +1351,10 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
                 key={theme}
                 onPress={() => {
                   haptic.selection();
-                  setSelectedTheme(theme);
-                  setIsThemeSheetVisible(false);
-                  show(`Theme changed to ${theme}`, 'success');
+                  // P1 fix: persist theme through the mutation, not just local state.
+                  // The existing selectTheme helper calls preferences.mutation.mutateAsync
+                  // which hits /chat/conversations/{id}/preferences via saveChatTheme.
+                  void selectTheme(theme as ChatTheme);
                 }}
                 style={styles.sheetOptionRow}
                 accessibilityRole="button"

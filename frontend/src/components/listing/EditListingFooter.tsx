@@ -42,13 +42,13 @@ interface EditListingFooterProps {
 function getStageText(stage: SaveStage): string | null {
   switch (stage) {
     case 'uploading_media':
-      return 'Uploading new media…';
+      return 'Saving…';
     case 'updating_listing':
-      return 'Updating listing…';
+      return 'Saving…';
     case 'completed':
-      return 'Changes saved.';
+      return 'Saved';
     case 'failed_recoverable':
-      return 'Some media failed. Retry before saving.';
+      return "Couldn't save — Retry";
     default:
       return null;
   }
@@ -103,8 +103,9 @@ export function EditListingFooter({
             ]}
             numberOfLines={2}
             accessibilityLiveRegion="polite"
+            accessibilityLabel={errorMsg && saveStage === 'failed_recoverable' ? errorMsg : undefined}
           >
-            {errorMsg && saveStage === 'failed_recoverable' ? errorMsg : stageText}
+            {stageText}
           </Text>
         </View>
       )}

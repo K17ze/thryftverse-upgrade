@@ -14,6 +14,9 @@ export { processPushReceiptReconciliation } from './pushReceiptHandler.js';
 export { sweepExpiredAuctions } from './auctionSweepHandler.js';
 export type { AuctionSweepHandlerDeps } from './auctionSweepHandler.js';
 
+export { sweepExpiredCoOwnOrders } from './coOwnOrderExpiryHandler.js';
+export type { CoOwnOrderExpiryHandlerDeps } from './coOwnOrderExpiryHandler.js';
+
 export { runPlatformReconciliation } from './reconciliationHandler.js';
 export type { ReconciliationHandlerDeps } from './reconciliationHandler.js';
 
@@ -88,3 +91,9 @@ export type { DsarExportJobData } from './dsarExportHandler.js';
 
 export { processSellerTrustRecompute } from './sellerTrustRecomputeHandler.js';
 export type { SellerTrustRecomputeJobData } from './sellerTrustRecomputeHandler.js';
+
+export { evaluateCoOwnPriceAlerts } from './coOwnAlertEvaluatorHandler.js';
+export type { CoOwnAlertEvaluatorHandlerDeps } from './coOwnAlertEvaluatorHandler.js';
+
+export { processCoOwnDripReinvestment } from './coOwnDripExecutionHandler.js';
+export type { CoOwnDripExecutionHandlerDeps } from './coOwnDripExecutionHandler.js';

@@ -1,17 +1,5 @@
-export { CoOwnAssetHeader } from './CoOwnAssetHeader';
-export type { CoOwnAssetHeaderProps } from './CoOwnAssetHeader';
-
-export { CoOwnAssetMediaStage } from './CoOwnAssetMediaStage';
-export type { CoOwnAssetMediaStageProps } from './CoOwnAssetMediaStage';
-
-export { CoOwnAssetIdentity } from './CoOwnAssetIdentity';
-export type { CoOwnAssetIdentityProps } from './CoOwnAssetIdentity';
-
-export { CoOwnSegmentNav } from './CoOwnSegmentNav';
+export { CoOwnSegmentNav, CoOwnScrollContext, useCoOwnScroll } from './CoOwnSegmentNav';
 export type { CoOwnSegmentNavProps, CoOwnDetailTab } from './CoOwnSegmentNav';
-
-export { CoOwnActionDock } from './CoOwnActionDock';
-export type { CoOwnActionDockProps } from './CoOwnActionDock';
 
 export { AssetOverviewSection } from './AssetOverviewSection';
 export type { AssetOverviewSectionProps } from './AssetOverviewSection';
@@ -21,6 +9,15 @@ export type { AssetMarketSectionProps } from './AssetMarketSection';
 
 export { AssetOwnershipSection } from './AssetOwnershipSection';
 export type { AssetOwnershipSectionProps } from './AssetOwnershipSection';
+
+export { AssetDetailDock } from './AssetDetailDock';
+export type { AssetDetailDockProps } from './AssetDetailDock';
+
+export { RelatedAssetsRail } from './RelatedAssetsRail';
+export type { RelatedAssetsRailProps } from './RelatedAssetsRail';
+
+export { AssetDetailIdentity } from './AssetDetailIdentity';
+export type { AssetDetailIdentityProps } from './AssetDetailIdentity';
 
 export {
   deriveLifecycleState,

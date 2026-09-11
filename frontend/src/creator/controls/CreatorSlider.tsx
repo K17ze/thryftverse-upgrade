@@ -82,6 +82,12 @@ export interface CreatorSliderProps {
   onCommit?: (value: number) => void;
   /** Optional label shown above the slider. */
   label?: string;
+  /**
+   * Optional pre-formatted value label shown in the label row in place of the
+   * default numeric `displayValue` (e.g. "12 min" instead of "12.0").
+   * Opt-in — when undefined the numeric rendering is unchanged.
+   */
+  valueLabel?: string;
   /** Accessibility label for screen readers. */
   accessibilityLabel?: string;
   /** Accessibility hint for screen readers. */
@@ -113,6 +119,7 @@ export function CreatorSlider({
   onValueChange,
   onCommit,
   label,
+  valueLabel,
   accessibilityLabel,
   accessibilityHint,
   hapticAtNeutral = false,
@@ -333,7 +340,7 @@ export function CreatorSlider({
             {label}
           </Text>
           <Text style={[styles.value, { color: colors.textPrimary }]}>
-            {displayValue}
+            {valueLabel ?? displayValue}
           </Text>
         </View>
       )}

@@ -46,9 +46,28 @@ export const CURATED_BASELINE_SIGNALS: DynamicSignalChip[] = [
   { id: 'curated-luxury', label: 'Luxury', filterKey: 'luxury', kind: 'curated', score: 69, isPersonalized: false },
 ];
 
-/** Clean title-case formatting for display labels. */
-function formatSignalLabel(raw: string): string {
+/**
+ * Clean title-case formatting for display labels.
+ *
+ * Strips internal `topic-` / `topic-user-` taxonomy prefixes and kebab-case
+ * before display, so raw ids like `topic-luxury` render as `Luxury` instead
+ * of leaking the enum prefix as `Topic-luxury`. Normal labels (brands,
+ * categories, search terms) are title-cased on spaces only — hyphens in
+ * brand names (e.g. `T-Shirt`) are preserved.
+ *
+ * Exported so `YourAlgorithmScreen` and other surfaces share one humanizer
+ * instead of duplicating the logic.
+ */
+export function formatSignalLabel(raw: string): string {
   if (!raw) return '';
+  if (/^topic-[a-z0-9-]+$/i.test(raw)) {
+    return raw
+      .replace(/^topic-(user-)?/i, '')
+      .split('-')
+      .filter(Boolean)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
+  }
   return raw
     .split(' ')
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())

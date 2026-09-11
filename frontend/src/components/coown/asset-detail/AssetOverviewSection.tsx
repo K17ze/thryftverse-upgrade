@@ -1,65 +1,166 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, FontFamily, Radius, PressScale } from '../../../theme/designTokens';
+import { Space, FontFamily, PressScale } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { formatCoOwnIze } from '../../../utils/currency';
-import type { MarketCoOwnAsset } from '../../../services/marketApi';
+import { fetchCoOwnPriceHistory, type MarketCoOwnAsset, type PriceCandle } from '../../../services/marketApi';
 import {
   CommerceDetailDisclosureRow,
   CommerceDetailSection,
   CommerceDetailMetricRow,
-  CommerceDetailUnavailableInline,
 } from '../../commerce/detail';
-import { CoOwnPriceChart, CoOwnCandleChart, type CoOwnCandleRange } from '../';
+import { CoOwnCandleChart, type CoOwnCandleRange, type CoOwnChartType } from '../';
 import type { AssetLifecycleState, CandleDataPoint, DossierDocument } from './types';
 
 export interface AssetOverviewSectionProps {
   asset: MarketCoOwnAsset;
+  /** Embedded candles from the asset response — valid only for the default
+   * one-week view. Other ranges must not silently display a shorter range. */
   candleData: CandleDataPoint[];
-  hasCandleData: boolean;
   candleRange: CoOwnCandleRange;
   onCandleRangeChange: (range: CoOwnCandleRange) => void;
+  /** Active chart type (Line / Candlestick / Area). Optional — when
+   * omitted the switcher is hidden and the chart defaults to candle. */
+  chartType?: CoOwnChartType;
+  onChartTypeChange?: (type: CoOwnChartType) => void;
   showVolume: boolean;
+  onToggleVolume?: () => void;
   lastExecutionPriceGbp: number | null;
+  /** Age of the last settled trade, derived from the backend timestamp. */
+  lastExecutionAgeSeconds?: number | null;
+  /** Market-source freshness, not response assembly time. */
+  marketDataStale?: boolean;
+  marketDataAgeLabel?: string;
   appraisedValuePerUnitGbp: number | null;
   referenceVsAppraisalPct: number | null;
-  fundamentalsExpanded?: boolean;
-  onToggleFundamentals?: () => void;
-  dossierSummary: string;
   dossierDocuments: DossierDocument[];
   hasDocuments: boolean;
-  diligenceSectionExpanded?: boolean;
-  onToggleDiligence?: () => void;
   onOpenDiligence: () => void;
   onOpenRiskDisclosure: () => void;
-  onNavigateToIssue?: () => void;
   lifecycleState: AssetLifecycleState;
+}
+
+/** Range → server price-history query. All chart ranges map to a
+ * supported server interval ('1h' | '4h' | '1d' | '1w'). */
+const RANGE_HISTORY_PARAMS: Record<CoOwnCandleRange, { interval: '1h' | '4h' | '1d' | '1w'; limit: number; spanDays: number }> = {
+  '1D': { interval: '1h', limit: 48, spanDays: 1 },
+  '1W': { interval: '4h', limit: 42, spanDays: 7 },
+  '1M': { interval: '1d', limit: 30, spanDays: 30 },
+  '3M': { interval: '1d', limit: 90, spanDays: 90 },
+  '1Y': { interval: '1w', limit: 52, spanDays: 365 },
+  'ALL': { interval: '1w', limit: 52, spanDays: 365 * 5 },
+};
+
+/** Compute the explicit from/to window for a range so the server can never
+ *  silently return an arbitrary latest-N slice. The window is anchored to
+ *  "now" and extends backwards by the range's span. */
+function rangeWindow(range: CoOwnCandleRange): { from: string; to: string } {
+  const params = RANGE_HISTORY_PARAMS[range];
+  const to = new Date();
+  const from = new Date(to.getTime() - params.spanDays * 86_400_000);
+  return { from: from.toISOString(), to: to.toISOString() };
+}
+
+/** Minor-unit candles → chart points in GBP. */
+function toCandlePoints(candles: PriceCandle[]): CandleDataPoint[] {
+  return candles.map((c) => ({
+    t: new Date(c.timestamp).getTime(),
+    o: c.openGbpMinor / 100,
+    h: c.highGbpMinor / 100,
+    l: c.lowGbpMinor / 100,
+    c: c.closeGbpMinor / 100,
+    v: c.volumeUnits,
+  }));
 }
 
 export function AssetOverviewSection({
   asset,
   candleData,
-  hasCandleData,
   candleRange,
   onCandleRangeChange,
+  chartType,
+  onChartTypeChange,
   showVolume,
+  onToggleVolume,
   lastExecutionPriceGbp,
   appraisedValuePerUnitGbp,
   referenceVsAppraisalPct,
-  dossierSummary,
   dossierDocuments,
   hasDocuments,
   onOpenDiligence,
   onOpenRiskDisclosure,
   lifecycleState,
+  lastExecutionAgeSeconds = null,
+  marketDataStale = false,
+  marketDataAgeLabel,
 }: AssetOverviewSectionProps) {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
+
+  // ── Ranged price history ──
+  // The chart's range chips drive a real fetch. Only the embedded one-week
+  // response can stand in for the default range; a failed 1M/1Y/ALL request
+  // stays visibly unavailable instead of relabelling seven-day data.
+  const [historyCandles, setHistoryCandles] = React.useState<CandleDataPoint[] | null>(null);
+  const [historyRange, setHistoryRange] = React.useState<CoOwnCandleRange | null>(null);
+  const renderedRangeRef = React.useRef(candleRange);
+  const [historyLoading, setHistoryLoading] = React.useState(false);
+  const [historyFailed, setHistoryFailed] = React.useState(false);
+  // Retry nonce — incrementing this re-triggers the history fetch effect
+  // without changing the range. Used by the "Retry price history" button.
+  const [retryNonce, setRetryNonce] = React.useState(0);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setHistoryLoading(true);
+    setHistoryFailed(false);
+    // Drop the previous range's candles immediately so the chart never
+    // renders stale data under the new range label; the embedded asset
+    // candles cover the gap until the fetch resolves.
+    setHistoryCandles(null);
+    setHistoryRange(null);
+    void fetchCoOwnPriceHistory(asset.id, { ...RANGE_HISTORY_PARAMS[candleRange], ...rangeWindow(candleRange) })
+      .then(({ candles }) => {
+        if (cancelled) return;
+        // Distinguish "fetch succeeded with empty" ([]) from "fetch failed"
+        // (null). A successful empty response must NOT fall back to embedded
+        // candles — the server authoritatively says there is no data.
+        setHistoryCandles(toCandlePoints(candles));
+        setHistoryRange(candleRange);
+        setHistoryFailed(false);
+        setHistoryLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setHistoryCandles(null);
+        setHistoryRange(candleRange);
+        setHistoryFailed(true);
+        setHistoryLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [asset.id, candleRange, retryNonce]);
+
+  const retryHistory = React.useCallback(() => {
+    setRetryNonce((n) => n + 1);
+  }, []);
+
+  // Guard the first render after a range change as well as the effect-driven
+  // state update; this prevents one frame of the previous range flashing.
+  const rangeChangedThisRender = renderedRangeRef.current !== candleRange;
+  renderedRangeRef.current = candleRange;
+  const chartCandles = (!rangeChangedThisRender && historyRange === candleRange ? historyCandles : null)
+    ?? (candleRange === '1W' ? candleData : []);
+  const hasChartCandles = chartCandles.length > 0;
+  const volumeAvailable = chartCandles.some((c) => c.v > 0);
+  // "Saved history" — shown when the 1W fetch failed and the chart fell back
+  // to the embedded asset candles. The label is honest: the data is from the
+  // asset payload, not a fresh server response.
+  const usingSavedHistory = historyFailed && candleRange === '1W' && chartCandles === candleData;
 
   const appraisalDateLabel = asset.appraisalValuedAt
     ? `Valuation updated ${new Date(asset.appraisalValuedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
-    : 'Valuation on file';
+    : null;
 
   // Trust facts for the flat factual line (spec 03_COOWN §5)
   const trustFacts: string[] = [];
@@ -67,32 +168,19 @@ export function AssetOverviewSection({
   if (asset.custodyInsured) trustFacts.push('Insured custody');
   if (asset.rights?.version) trustFacts.push(`Rights v${asset.rights.version}`);
   if (asset.appraisalValueGbp != null) trustFacts.push('Appraised');
+  const hasProvenanceMeta = Boolean(asset.conditionGrade || asset.custodianName || asset.custodianLocation);
 
   return (
     <View style={styles.container}>
-      {/* ── 1. Physical Asset Story & Editorial Provenance ── */}
-      <View style={[styles.cardSurface, { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle }]}>
-        <View style={styles.sectionHeaderRow}>
-          <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>Physical Asset & Provenance</Text>
-          <Pressable
-            onPress={onOpenDiligence}
-            hitSlop={8}
-            style={({ pressed }) => [styles.linkRow, pressed && { opacity: 0.7 }]}
-            accessibilityRole="button"
-            accessibilityLabel="Inspect complete provenance dossier"
-          >
-            <Text style={[styles.linkText, { color: colors.brand }]}>Full dossier</Text>
-            <Ionicons name="chevron-forward" size={14} color={colors.brand} />
-          </Pressable>
-        </View>
-
+      {/* ── 1. Physical Asset Story & Editorial Provenance — flat section ── */}
+      <CommerceDetailSection label="Physical Asset & Provenance">
         <View style={styles.assetStoryWrap}>
           <Text
             style={[styles.assetStoryText, { color: colors.textSecondary }]}
-            numberOfLines={4}
+            numberOfLines={3}
             maxFontSizeMultiplier={1.4}
           >
-            {asset.provenance || 'Exhaustive provenance records verified by custodial partners. Title is held unencumbered by the legal SPV.'}
+            {asset.provenance ?? 'Provenance has not been published for this asset yet.'}
           </Text>
           <Pressable
             onPress={onOpenDiligence}
@@ -102,7 +190,7 @@ export function AssetOverviewSection({
             accessibilityLabel="Read full asset story"
           >
             <Text style={[styles.assetStoryLinkText, { color: colors.brand }]}>
-              Read the full story
+              {asset.provenance ? 'Read the full story' : 'Open due diligence'}
             </Text>
             <Ionicons name="chevron-forward" size={14} color={colors.brand} />
           </Pressable>
@@ -113,11 +201,10 @@ export function AssetOverviewSection({
           <Pressable
             onPress={onOpenDiligence}
             hitSlop={4}
-            style={({ pressed }) => [styles.trustFactualLine, pressed && { opacity: 0.85 }]}
+            style={({ pressed }) => [styles.trustFactualLine, { borderTopColor: colors.border }, pressed && { opacity: 0.85 }]}
             accessibilityRole="button"
             accessibilityLabel={`Trust summary: ${trustFacts.join(', ')}. Tap to view due diligence.`}
           >
-            <Ionicons name="shield-checkmark" size={14} color={colors.brand} style={styles.trustFactIcon} />
             <Text
               style={[styles.trustFactualText, { color: colors.textSecondary }]}
               numberOfLines={1}
@@ -125,172 +212,206 @@ export function AssetOverviewSection({
             >
               {trustFacts.join(' · ')}
             </Text>
-            <Ionicons name="chevron-forward" size={12} color={colors.textMuted} />
+            <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
           </Pressable>
         ) : null}
 
-        <View style={styles.provenanceMetaGrid}>
-          <View style={styles.provenanceMetaItem}>
-            <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Condition</Text>
-            <Text style={[styles.metaVal, { color: colors.textPrimary }]}>
-              {asset.conditionGrade || 'Grade A Verified'}
-            </Text>
+        {hasProvenanceMeta ? (
+          <View style={[styles.provenanceMetaGrid, { borderTopColor: colors.border }]}>
+            {asset.conditionGrade ? (
+              <View style={styles.provenanceMetaItem}>
+                <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Condition</Text>
+                <Text style={[styles.metaVal, { color: colors.textPrimary }]}>{asset.conditionGrade}</Text>
+              </View>
+            ) : null}
+            {(asset.custodianName || asset.custodianLocation) ? (
+              <View style={styles.provenanceMetaItem}>
+                <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Custody</Text>
+                <Text style={[styles.metaVal, { color: colors.textPrimary }]}>
+                  {[asset.custodianName, asset.custodianLocation].filter(Boolean).join(' · ')}
+                </Text>
+              </View>
+            ) : null}
           </View>
-          <View style={styles.provenanceMetaItem}>
-            <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Vault Custody</Text>
-            <Text style={[styles.metaVal, { color: colors.textPrimary }]}>
-              {asset.custodianName || 'Bonded Vault'} ({asset.custodianLocation || 'UK'})
-            </Text>
+        ) : null}
+      </CommerceDetailSection>
+
+      {/* ── 2. Valuation & Price Chart — flat on canvas, no card wrapper ──
+          Stock-broker pattern: chart sits directly on the surface with
+          hairline-separated metric rows below. No filled card container. */}
+      <View style={styles.chartBlock}>
+        <View style={styles.chartHeaderRow}>
+          <View style={styles.chartHeaderLeft}>
+            <Text style={[styles.chartHeading, { color: colors.textPrimary }]}>Price history</Text>
+            {referenceVsAppraisalPct != null ? (
+              <Text style={[styles.chartSubHeading, { color: colors.textSecondary }]} numberOfLines={1}>
+                <Text style={styles.chartSubHeadingStrong}>
+                  {`${Math.abs(referenceVsAppraisalPct).toFixed(1)}% `}
+                </Text>
+                {referenceVsAppraisalPct >= 0 ? 'premium' : 'discount'} to appraisal
+                {historyLoading ? ' · loading…' : ''}
+              </Text>
+            ) : (
+              <Text style={[styles.chartSubHeading, { color: colors.textSecondary }]} numberOfLines={1}>
+                {historyLoading ? 'Loading price history…' : 'Reference vs appraisal'}
+              </Text>
+            )}
+            {marketDataStale ? (
+              <Text style={[styles.chartStaleLine, { color: colors.warning }]} numberOfLines={1}>
+                Stale{marketDataAgeLabel ? ` · ${marketDataAgeLabel}` : ''}
+              </Text>
+            ) : null}
           </View>
+          {hasChartCandles && volumeAvailable && onToggleVolume ? (
+            <Pressable
+              onPress={onToggleVolume}
+              hitSlop={8}
+              style={({ pressed }) => [styles.linkRow, pressed && { opacity: 0.7 }]}
+              accessibilityRole="button"
+              accessibilityLabel={showVolume ? 'Hide volume bars' : 'Show volume bars'}
+              accessibilityState={{ selected: showVolume }}
+            >
+              <Text style={[styles.linkText, { color: showVolume ? colors.brand : colors.textMuted }]}>
+                Volume
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
-      </View>
 
-      {/* ── 2. Valuation Benchmark & Price Chart ── */}
-      <View style={[styles.cardSurface, { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle }]}>
-        <View style={styles.sectionHeaderRow}>
-          <View>
-            <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>Valuation Benchmark</Text>
-            <Text style={[styles.subHeading, { color: colors.textSecondary }]}>
-              {referenceVsAppraisalPct != null
-                ? `Reference vs appraisal · ${Math.abs(referenceVsAppraisalPct).toFixed(1)}% ${referenceVsAppraisalPct >= 0 ? 'premium' : 'discount'}`
-                : 'Reference vs appraisal benchmark'}
-            </Text>
-          </View>
+        {/* Candle chart — always mounted (F12) so range controls and retry
+            survive loading/empty/error states. The chart receives the
+            resolved candles (embedded data valid only for 1W) plus the
+            state-specific empty copy via emptyStateTitle/emptyStateBody. */}
+        <View style={styles.chartWrapper}>
+          <CoOwnCandleChart
+            candles={chartCandles}
+            range={candleRange}
+            onRangeChange={onCandleRangeChange}
+            chartType={chartType}
+            onChartTypeChange={onChartTypeChange}
+            showVolume={showVolume && volumeAvailable}
+            lastPrice={lastExecutionPriceGbp ?? undefined}
+            lastAgeSeconds={lastExecutionAgeSeconds}
+            emptyStateTitle={historyLoading
+              ? 'Loading price history…'
+              : historyFailed
+              ? 'Price history unavailable'
+              : lifecycleState === 'initialOffering'
+                ? 'Primary offering — no trade history'
+                : 'No execution history yet'}
+            emptyStateBody={historyFailed
+              ? 'Could not load price history for this range.'
+              : appraisedValuePerUnitGbp != null
+                ? `Offering price ${formatCoOwnIze(asset.unitPriceGbp)} benchmarked against appraisal of ${formatCoOwnIze(appraisedValuePerUnitGbp)}.`
+                : `Reference price ${formatCoOwnIze(asset.unitPriceGbp)}. No settled trades for this range.`}
+          />
         </View>
-
-        {/* Candle chart or sparse notice */}
-        {hasCandleData ? (
-          <View style={styles.chartWrapper}>
-            <CoOwnCandleChart
-              candles={candleData}
-              range={candleRange}
-              onRangeChange={onCandleRangeChange}
-              showVolume={showVolume}
-            />
+        {usingSavedHistory && (
+          <View style={[styles.savedHistoryRow, { borderTopColor: colors.borderSubtle }]}>
+            <Text style={[styles.savedHistoryLabel, { color: colors.textMuted }]}>
+              Saved history
+            </Text>
+            <Pressable
+              onPress={retryHistory}
+              hitSlop={8}
+              style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.7 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Retry price history"
+            >
+              <Ionicons name="refresh" size={14} color={colors.brand} />
+              <Text style={[styles.retryBtnText, { color: colors.brand }]}>Retry</Text>
+            </Pressable>
           </View>
-        ) : undefined}
-
-        {!hasCandleData && (
-          <View style={[styles.sparseChartNotice, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }]}>
-            <Ionicons name="analytics-outline" size={24} color={colors.textMuted} />
-            <Text style={[styles.sparseChartTitle, { color: colors.textPrimary }]}>
-              {lifecycleState === 'initialOffering' ? 'Primary Offering Benchmark' : 'No execution history yet'}
-            </Text>
-            <Text style={[styles.sparseChartBody, { color: colors.textSecondary }]}>
-              Offering unit price of {formatCoOwnIze(asset.unitPriceGbp)} is benchmarked against independent appraisal of {appraisedValuePerUnitGbp != null ? formatCoOwnIze(appraisedValuePerUnitGbp) : 'recorded value'}.
-            </Text>
+        )}
+        {historyFailed && !usingSavedHistory && (
+          <View style={[styles.savedHistoryRow, { borderTopColor: colors.borderSubtle }]}>
+            <Pressable
+              onPress={retryHistory}
+              hitSlop={8}
+              style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.7 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Retry price history"
+            >
+              <Ionicons name="refresh" size={14} color={colors.brand} />
+              <Text style={[styles.retryBtnText, { color: colors.brand }]}>Retry price history</Text>
+            </Pressable>
           </View>
         )}
 
+        {/* Flat appraisal metrics — dominant value + supporting caption.
+            Broker hierarchy: the appraised number dominates; valuer and
+            valuation date ride one quiet caption line instead of competing
+            as equal-width cells. */}
         <View style={[styles.valuationDetailRow, { borderTopColor: colors.borderSubtle }]}>
-          <View style={styles.valuationCell}>
-            <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Appraised Per Unit</Text>
+          <View style={styles.valuationPrimary}>
+            <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Appraised / unit</Text>
             <Text style={[styles.valuationBigNum, { color: colors.textPrimary }]}>
               {appraisedValuePerUnitGbp != null ? formatCoOwnIze(appraisedValuePerUnitGbp) : '—'}
             </Text>
           </View>
-          <View style={styles.valuationCell}>
-            <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Independent Valuer</Text>
-            <Text style={[styles.metaVal, { color: colors.textPrimary }]} numberOfLines={1}>
-              {asset.appraisalValuer || 'Accredited Appraiser'}
+          <View style={styles.valuationMetaCol}>
+            <Text style={[styles.valuationMetaLine, { color: colors.textSecondary }]} numberOfLines={1}>
+              {asset.appraisalValuer ?? 'Valuer not published'}
             </Text>
-          </View>
-          <View style={styles.valuationCell}>
-            <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Valuation Date</Text>
-            <Text style={[styles.metaVal, { color: colors.textPrimary }]}>
-              {appraisalDateLabel}
+            <Text style={[styles.valuationMetaLine, { color: colors.textMuted }]} numberOfLines={1}>
+              {appraisalDateLabel ?? 'Valuation date not published'}
             </Text>
           </View>
         </View>
       </View>
 
-      {/* ── 3. Four-Pillar Evidence Summary (Asset Dossier) ── */}
-      <CommerceDetailSection label="Asset dossier">
-        <View style={styles.evidenceGrid}>
-          {/* Pillar 1: Authenticity */}
-          <View style={[styles.evidenceItem, { backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.7)' }]}>
-            <View style={styles.evidenceTop}>
-              <Ionicons
-                name={asset.authenticityStatus === 'verified' ? 'checkmark-circle' : 'time-outline'}
-                size={18}
-                color={asset.authenticityStatus === 'verified' ? colors.success : colors.warning}
-              />
-              <Text style={[styles.evidenceLabel, { color: colors.textPrimary }]}>Authenticity</Text>
-            </View>
-            <Text style={[styles.evidenceSub, { color: colors.textSecondary }]} numberOfLines={2}>
-              {asset.authenticityStatus === 'verified'
-                ? (asset.authenticityMethod || 'Physical expert inspection')
-                : 'Pending verification'}
-            </Text>
-          </View>
-
-          {/* Pillar 2: Custody & Vault */}
-          <View style={[styles.evidenceItem, { backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.7)' }]}>
-            <View style={styles.evidenceTop}>
-              <Ionicons name="shield-checkmark" size={18} color={colors.brand} />
-              <Text style={[styles.evidenceLabel, { color: colors.textPrimary }]}>Custody</Text>
-            </View>
-            <Text style={[styles.evidenceSub, { color: colors.textSecondary }]} numberOfLines={2}>
-              {asset.custodianName || 'Bonded Vault'} · Segregated storage
-            </Text>
-          </View>
-
-          {/* Pillar 3: Insurance */}
-          <View style={[styles.evidenceItem, { backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.7)' }]}>
-            <View style={styles.evidenceTop}>
-              <Ionicons
-                name={asset.custodyInsured ? 'lock-closed' : 'alert-circle-outline'}
-                size={18}
-                color={asset.custodyInsured ? colors.success : colors.warning}
-              />
-              <Text style={[styles.evidenceLabel, { color: colors.textPrimary }]}>Insurance</Text>
-            </View>
-            <Text style={[styles.evidenceSub, { color: colors.textSecondary }]} numberOfLines={2}>
-              {asset.custodyInsured
-                ? `${asset.custodyInsurer || "Lloyd's Underwriters"} (Full coverage)`
-                : 'Standard warehouse cover'}
-            </Text>
-          </View>
-
-          {/* Pillar 4: Legal Structure */}
-          <View style={[styles.evidenceItem, { backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.7)' }]}>
-            <View style={styles.evidenceTop}>
-              <Ionicons name="document-attach-outline" size={18} color={colors.brand} />
-              <Text style={[styles.evidenceLabel, { color: colors.textPrimary }]}>SPV Legal Title</Text>
-            </View>
-            <Text style={[styles.evidenceSub, { color: colors.textSecondary }]} numberOfLines={2}>
-              {asset.legalVehicleName || 'Series LLC Entity'} · Rights v{asset.rights?.version || '1'}
-            </Text>
-          </View>
-        </View>
-
+      {/* ── 3. Due Diligence & Fees — grouped section ──
+          Replaces the 4-pillar evidence grid and the separate operating
+          expenses section. Compact tappable rows link to the full dossier
+          and risk sheet; fees are flat metric rows. */}
+      <CommerceDetailSection
+        label="Due diligence & fees"
+        trailing={
+          <Pressable
+            onPress={onOpenDiligence}
+            hitSlop={8}
+            style={({ pressed }) => pressed && { opacity: 0.7 }}
+            accessibilityRole="button"
+            accessibilityLabel="Open full due diligence"
+          >
+            <Text style={[styles.assetStoryLinkText, { color: colors.brand }]}>View all</Text>
+          </Pressable>
+        }
+      >
+        {/* Document chips — only when documents exist */}
         {hasDocuments && (
-          <View style={[styles.documentsStrip, { borderTopColor: colors.borderSubtle }]}>
+          <View style={[styles.documentsStrip, { borderTopColor: colors.border }]}>
             {dossierDocuments.map((doc, idx) => (
               <Pressable
                 key={idx}
                 onPress={() => void Linking.openURL(doc.url)}
+                hitSlop={8}
                 style={({ pressed }) => [styles.docChip, pressed && { opacity: 0.7 }]}
                 accessibilityRole="link"
                 accessibilityLabel={doc.accessibilityLabel}
               >
-                <Ionicons name="link-outline" size={12} color={colors.brand} />
-                <Text style={[styles.docChipText, { color: colors.textPrimary }]} numberOfLines={1}>
+                <Text style={[styles.docChipText, { color: colors.brand }]} numberOfLines={1}>
                   {doc.label}
                 </Text>
               </Pressable>
             ))}
           </View>
         )}
-      </CommerceDetailSection>
 
-      {/* ── 4. Operating Expenses & Risk Disclosures ── */}
-      <CommerceDetailSection label="Operating expenses">
+        {/* Fee rows — flat, no separate section */}
         <View style={styles.feeBreakdown}>
-          <CommerceDetailMetricRow label="Platform Trading Fee" value="1.5% per execution" />
-          <CommerceDetailMetricRow label="Storage & Vault Custody" value="Covered by SPV reserve" />
-          <CommerceDetailMetricRow label="Insurance Allocation" value="Included in issuance" />
-          <CommerceDetailMetricRow label="Emergency Maintenance" value="Requires majority vote" />
+          {asset.tradingFeeRate != null ? (
+            <CommerceDetailMetricRow
+              label="Platform trading fee"
+              value={`${(asset.tradingFeeRate * 100).toFixed(2).replace(/\.00$/, '')}% per execution`}
+            />
+          ) : null}
+          {asset.rights?.feeRights ? (
+            <CommerceDetailMetricRow label="Rights / operating costs" value={asset.rights.feeRights} />
+          ) : null}
+          {asset.tradingFeeRate == null && !asset.rights?.feeRights ? (
+            <Text style={[styles.unpublishedText, { color: colors.textMuted }]}>Fee schedule not published yet.</Text>
+          ) : null}
         </View>
 
         {/* Risk disclosure row opening sheet */}
@@ -306,37 +427,48 @@ export function AssetOverviewSection({
 
 const styles = StyleSheet.create({
   container: {
+    // Sections own horizontal padding (CommerceDetailSection paddingHorizontal:
+    // Space.md) — no container-level horizontal padding, otherwise content is
+    // double-inset. Vertical rhythm: container gap Space.sm + each section's
+    // own paddingTop Space.md = 24pt block-to-block.
+    paddingTop: Space.sm,
+    gap: Space.sm,
+  },
+  chartBlock: {
+    // Flat on canvas — no card fill, no border, no radius.
+    // Hairline separators define structure, not containers.
+    // Flat View (not a section) so it carries its own horizontal padding to
+    // align with the sections' 16pt inset.
     paddingHorizontal: Space.md,
-    paddingTop: Space.md,
-    gap: Space.md,
+    paddingBottom: Space.xs,
   },
-  cardSurface: {
-    borderRadius: Radius.md,
-    padding: Space.md,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  sectionHeaderRow: {
+  chartHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginBottom: Space.xs,
   },
-  sectionHeading: {
+  chartHeaderLeft: {
+    flex: 1,
+    marginRight: Space.sm,
+  },
+  chartHeading: {
     fontSize: TypographyV2.sectionTitle.size,
     fontFamily: FontFamily.bold,
   },
-  sectionTitle: {
-    fontSize: TypographyV2.sectionTitle.size,
-    fontFamily: FontFamily.bold,
-  },
-  subHeading: {
+  chartSubHeading: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
     marginTop: 2,
   },
-  headerActionText: {
-    fontSize: TypographyV2.caption.size,
+  chartSubHeadingStrong: {
     fontFamily: FontFamily.semibold,
+    fontVariant: ['tabular-nums'],
+  },
+  chartStaleLine: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium,
+    marginTop: 2,
   },
   linkRow: {
     flexDirection: 'row',
@@ -356,11 +488,6 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     letterSpacing: -0.2,
   },
-  assetStoryParagraph: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: 20,
-    fontFamily: FontFamily.regular,
-  },
   assetStoryLink: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -378,10 +505,6 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs,
     marginTop: Space.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(128,128,128,0.15)',
-  },
-  trustFactIcon: {
-    marginRight: 2,
   },
   trustFactualText: {
     fontSize: TypographyV2.caption.size,
@@ -391,17 +514,19 @@ const styles = StyleSheet.create({
   provenanceMetaGrid: {
     flexDirection: 'row',
     gap: Space.md,
-    marginTop: Space.sm,
-    paddingTop: Space.sm,
+    marginTop: Space.xs,
+    paddingTop: Space.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   provenanceMetaItem: {
     flex: 1,
   },
   metaLabel: {
-    fontSize: 11,
-    fontFamily: FontFamily.medium,
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: TypographyV2.label.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase',
-    letterSpacing: 0.3,
     marginBottom: 2,
   },
   metaVal: {
@@ -411,12 +536,9 @@ const styles = StyleSheet.create({
   chartWrapper: {
     marginVertical: Space.xs,
   },
-  sparseChartNotice: {
-    alignItems: 'center',
-    padding: Space.md,
-    borderRadius: Radius.sm,
-    marginVertical: Space.xs,
-    gap: Space.xs,
+  sparseChartBlock: {
+    paddingVertical: Space.md,
+    gap: 4,
   },
   sparseChartTitle: {
     fontSize: TypographyV2.bodyStrong.size,
@@ -425,64 +547,67 @@ const styles = StyleSheet.create({
   sparseChartBody: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
-    textAlign: 'center',
     lineHeight: 18,
+    fontVariant: ['tabular-nums'],
+  },
+  savedHistoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: Space.xs,
+    marginTop: Space.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  savedHistoryLabel: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  retryBtnText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
   },
   valuationDetailRow: {
     flexDirection: 'row',
-    marginTop: Space.sm,
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: Space.md,
+    marginTop: Space.xs,
     paddingTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  valuationCell: {
+  valuationPrimary: {
+    flexShrink: 0,
+  },
+  valuationMetaCol: {
     flex: 1,
+    alignItems: 'flex-end',
+    gap: 2,
+  },
+  valuationMetaLine: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
   },
   valuationBigNum: {
     fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
   },
-  evidenceGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.xs,
-    marginTop: Space.xs,
-  },
-  evidenceItem: {
-    width: '48.5%',
-    padding: Space.sm,
-    borderRadius: Radius.sm,
-    gap: 4,
-  },
-  evidenceTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  evidenceLabel: {
-    fontSize: TypographyV2.captionElevated.size,
-    fontFamily: FontFamily.semibold,
-  },
-  evidenceSub: {
-    fontSize: 11,
-    fontFamily: FontFamily.regular,
-    lineHeight: 14,
-  },
   documentsStrip: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Space.xs,
-    marginTop: Space.sm,
-    paddingTop: Space.sm,
+    marginTop: Space.xs,
+    paddingTop: Space.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   docChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: Space.xs + 2,
-    paddingVertical: 4,
-    borderRadius: Radius.sm,
   },
   docChipText: {
     fontSize: 11,
@@ -491,5 +616,10 @@ const styles = StyleSheet.create({
   feeBreakdown: {
     gap: Space.xs,
     marginTop: Space.xs,
+  },
+  unpublishedText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: TypographyV2.meta.lineHeight,
   },
 });

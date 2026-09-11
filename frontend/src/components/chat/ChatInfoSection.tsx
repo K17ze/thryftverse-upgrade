@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { Space, TypeStyles, Radius } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Meta } from '../ui/Text';
@@ -128,13 +128,13 @@ const styles = StyleSheet.create({
   label: {
     fontSize: TypographyV2.body.size,
     lineHeight: TypographyV2.body.lineHeight,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily },
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   subtitle: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypeStyles.body.fontFamily },
+    fontFamily: TypographyV2.body.fontFamily },
   detail: {
     maxWidth: '38%',
     fontSize: TypographyV2.meta.size,
-    fontFamily: TypeStyles.body.fontFamily,
+    fontFamily: TypographyV2.body.fontFamily,
     textAlign: 'right' } });

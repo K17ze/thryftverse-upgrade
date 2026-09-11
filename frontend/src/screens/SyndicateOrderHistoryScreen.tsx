@@ -2,7 +2,7 @@ import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, RefreshControl, Animated } from 'react-native';
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect, type RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
@@ -12,6 +12,7 @@ import {
   MarketHistoryItem,
   cancelCoOwnOrder,
   listUserMarketHistory,
+  lookupCoOwnOrderByIdempotencyKey,
 } from '../services/marketApi';
 import { CO_OWN_FEE_RATE } from '../utils/tradeFlow';
 import { useToast } from '../context/ToastContext';
@@ -27,6 +28,7 @@ import { formatCoOwnIze } from '../utils/currency';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { CoOwnStateCanvas } from '../components/coown';
+import { useInvalidateCoOwnAsset } from '../platform/server';
 import type { OrderStatus } from '../data/coOwnModels';
 import { t } from '../i18n';
 
@@ -60,6 +62,15 @@ interface HistoryEntry {
   fee: number;
   status: OrderStatus;
   filledQuantity: number;
+  // U36: Remaining unfilled units. Null when the backend does not report it
+  // (we fall back to quantity − filledQuantity at render time).
+  remainingQuantity: number | null;
+  // U36: Average execution price across fills. MarketHistoryItem does not
+  // expose this, so it is null until the backend provides it.
+  averageExecutionPrice: number | null;
+  // U36: Last update timestamp. MarketHistoryItem does not expose this, so
+  // it is null until the backend provides it.
+  updatedAt: string | null;
   createdAt: string;
   source: 'seeded' | 'ledger' | 'backend';
 }
@@ -90,6 +101,19 @@ function sortHistoryEntriesDesc(a: HistoryEntry, b: HistoryEntry) {
   const tsDiff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   if (tsDiff !== 0) return tsDiff;
   return b.id.localeCompare(a.id);
+}
+
+// U36: Derive a human-readable terminal reason from the order status. Only
+// terminal states produce a reason; open orders return null (not terminal).
+function deriveTerminalReason(status: OrderStatus): string | null {
+  switch (status) {
+    case 'filled': return 'Filled';
+    case 'partially_filled': return 'Partially filled';
+    case 'cancelled': return 'Cancelled';
+    case 'expired': return 'Expired';
+    case 'rejected': return 'Rejected';
+    default: return null;
+  }
 }
 
 function mapRemoteHistoryToEntries(history: MarketHistoryItem[]): HistoryEntry[] {
@@ -125,6 +149,12 @@ function mapRemoteHistoryToEntries(history: MarketHistoryItem[]): HistoryEntry[]
         fee: item.feeGbp ?? Number((item.amountGbp * CO_OWN_FEE_RATE).toFixed(2)),
         status,
         filledQuantity: Math.max(0, item.filledUnits ?? (status === 'filled' ? quantity : 0)),
+        // U36: remainingUnits is optional on the backend; null when absent.
+        remainingQuantity: item.remainingUnits != null ? Math.max(0, item.remainingUnits) : null,
+        // U36: MarketHistoryItem does not expose average execution price or
+        // updatedAt. Do not fabricate — label as "Not available" at render.
+        averageExecutionPrice: null,
+        updatedAt: null,
         createdAt: item.timestamp,
         source: 'backend',
       };
@@ -189,6 +219,7 @@ export default function CoOwnOrderHistoryScreen() {
   const route = useRoute<CoOwnOrderHistoryRoute>();
   const { colors } = useAppTheme();
   const { show } = useToast();
+  const invalidateCoOwnAsset = useInvalidateCoOwnAsset();
   const currentUser = useStore((state) => state.currentUser);
   const viewerId = currentUser?.id;
 
@@ -204,6 +235,15 @@ export default function CoOwnOrderHistoryScreen() {
   const listRef = React.useRef<FlashListRef<HistoryEntry>>(null);
   const [highlightedEntryId, setHighlightedEntryId] = React.useState<string | null>(null);
   const highlightConsumedRef = React.useRef(false);
+  const [recoveryStatus, setRecoveryStatus] = React.useState<
+    'idle' | 'checking' | 'processing' | 'acknowledged' | 'safe_to_retry' | 'error'
+  >('idle');
+  const [recoveredOrderId, setRecoveredOrderId] = React.useState<number | null>(null);
+  // U33: persist the recovery key locally so it survives navigation param
+  // clearing. "Check result", focus refresh, and pull-to-refresh all invoke
+  // the same exact-key reconciliation command via runReconciliation.
+  const [recoveryKey, setRecoveryKey] = React.useState<string | null>(null);
+  const [recoveryAssetId, setRecoveryAssetId] = React.useState<string | null>(null);
 
   const [sideFilter, setSideFilter] = React.useState<SideFilter>('all');
   const [dateFilter, setDateFilter] = React.useState<DateFilter>('all');
@@ -215,8 +255,17 @@ export default function CoOwnOrderHistoryScreen() {
   const [hasMoreRemote, setHasMoreRemote] = React.useState(false);
   const [nextCursor, setNextCursor] = React.useState<MarketHistoryCursor | null>(null);
   const [isLoadingMore, setIsLoadingMore] = React.useState(false);
+  // U35: A failed "load more" must not clear the cursor or hasMore — that
+  // would silently turn a transient error into a false end-of-history. The
+  // cursor/hasMore are preserved so the same page can be retried; the list
+  // footer surfaces a retry affordance while this flag is set.
+  const [loadMoreError, setLoadMoreError] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
   const [cancellingOrderId, setCancellingOrderId] = React.useState<string | null>(null);
+  // U26: orders whose cancel was definitively rejected by the server.
+  // The row stays visible with a "Cancel failed — retry" control so the
+  // user can re-attempt without losing context.
+  const [cancelFailedOrderIds, setCancelFailedOrderIds] = React.useState<Set<string>>(new Set());
   const [confirmSheet, setConfirmSheet] = React.useState<{
     visible: boolean;
     title: string;
@@ -234,6 +283,9 @@ export default function CoOwnOrderHistoryScreen() {
       return;
     }
     setIsSyncingRemote(true);
+    // A fresh sync replaces the whole list, so any prior load-more error
+    // is no longer relevant.
+    setLoadMoreError(false);
     try {
       const page = await listUserMarketHistory(viewerId, { channel: 'co-own', limit: PAGE_SIZE });
       setRemoteEntries(mapRemoteHistoryToEntries(page.items));
@@ -272,9 +324,14 @@ export default function CoOwnOrderHistoryScreen() {
       });
       setHasMoreRemote(page.pageInfo.hasMore);
       setNextCursor(page.pageInfo.nextCursor ?? null);
+      setLoadMoreError(false);
     } catch {
-      setHasMoreRemote(false);
-      setNextCursor(null);
+      // U35: Preserve the already-loaded rows, the cursor and the hasMore
+      // flag. Clearing them would silently turn a transient fetch failure
+      // into a false end-of-history. The list footer surfaces a retry
+      // affordance (driven by `loadMoreError`) so the user can re-attempt
+      // the exact same cursor-based fetch.
+      setLoadMoreError(true);
     } finally {
       setIsLoadingMore(false);
     }
@@ -291,55 +348,138 @@ export default function CoOwnOrderHistoryScreen() {
       confirmLabel: 'Cancel remaining',
       cancelLabel: 'Keep order',
       onConfirm: () => {
+        // U26: clear any prior failure marker and enter the pending state.
+        // The row stays visible with "Cancelling…" and its filled quantity
+        // retained — it is never removed before acknowledgment.
+        setCancelFailedOrderIds((prev) => {
+          if (!prev.has(item.id)) return prev;
+          const next = new Set(prev);
+          next.delete(item.id);
+          return next;
+        });
         setCancellingOrderId(item.id);
         void cancelCoOwnOrder(item.assetId, orderId, viewerId)
           .then(() => {
+            // U26: only transition to "cancelled" on explicit acknowledgment.
+            setCancellingOrderId(null);
             setRemoteEntries((previous) => previous.map((entry) => (
               entry.id === item.id ? { ...entry, status: 'cancelled' as const } : entry
             )));
+            // F21: one cancellation contract — reconcile the same cached
+            // projections the detail screen reconciles, so holdings, book
+            // and depth agree when the user returns to the asset.
+            invalidateCoOwnAsset(item.assetId, viewerId);
             show('Remaining order cancelled and reservation released.', 'success');
           })
           .catch((error) => {
             const parsed = parseApiError(error, 'Unable to cancel this order');
-            show(parsed.message, 'error');
-          })
-          .finally(() => setCancellingOrderId(null));
+            if (parsed.isNetworkError) {
+              // U26: lost response — the cancel may have succeeded but we
+              // never received the acknowledgment. Keep the row in the
+              // "Cancelling…" state so the user does not assume success or
+              // failure. A subsequent reconciliation (refresh / focus) will
+              // resolve the true state.
+              show('Checking cancel result…', 'info');
+            } else {
+              // U26: definitive rejection — show "Cancel failed — retry"
+              // with the order still visible.
+              setCancellingOrderId(null);
+              setCancelFailedOrderIds((prev) => new Set(prev).add(item.id));
+              show(parsed.message, 'error');
+            }
+          });
       },
       variant: 'danger',
     });
-  }, [show, viewerId]);
+  }, [show, viewerId, invalidateCoOwnAsset]);
 
   React.useEffect(() => { void syncRemoteHistory(); }, [syncRemoteHistory]);
 
+  // U33: persist the recovery key locally so it survives navigation param
+  // clearing. The initial reconciliation effect (below) and all manual
+  // triggers ("Check result", focus, pull-to-refresh) share this key.
+  React.useEffect(() => {
+    if (highlightIdempotencyKey && highlightAssetId && !recoveryKey) {
+      setRecoveryKey(highlightIdempotencyKey);
+      setRecoveryAssetId(highlightAssetId);
+    }
+  }, [highlightIdempotencyKey, highlightAssetId, recoveryKey]);
+
+  // U33: single exact-key reconciliation command shared by "Check result",
+  // focus refresh, and pull-to-refresh. Performs one lookup (no polling) —
+  // the initial effect below handles the exponential-backoff polling.
+  const runReconciliation = React.useCallback(async () => {
+    if (!recoveryKey || !recoveryAssetId) return;
+    setRecoveryStatus('checking');
+    try {
+      const result = await lookupCoOwnOrderByIdempotencyKey(recoveryAssetId, recoveryKey);
+      if (result.status === 'acknowledged') {
+        setRecoveredOrderId(result.order.id);
+        setRecoveryStatus('acknowledged');
+        return;
+      }
+      setRecoveryStatus(result.status);
+    } catch {
+      setRecoveryStatus('error');
+    }
+  }, [recoveryKey, recoveryAssetId]);
+
+  // Resolve an ambiguous submission by its exact operation key. A recent
+  // order is never a valid substitute. The API's 202 state is polled briefly
+  // with the same key, then remains visibly unresolved.
+  React.useEffect(() => {
+    if (!highlightIdempotencyKey || highlightOrderId || !highlightAssetId) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let attempts = 0;
+
+    const reconcile = async () => {
+      if (cancelled) return;
+      setRecoveryStatus(attempts === 0 ? 'checking' : 'processing');
+      try {
+        const result = await lookupCoOwnOrderByIdempotencyKey(
+          highlightAssetId,
+          highlightIdempotencyKey,
+        );
+        if (cancelled) return;
+        if (result.status === 'acknowledged') {
+          setRecoveredOrderId(result.order.id);
+          setRecoveryStatus('acknowledged');
+          return;
+        }
+        if (result.status === 'processing' && attempts < 5) {
+          attempts += 1;
+          setRecoveryStatus('processing');
+          timer = setTimeout(() => void reconcile(), Math.min(1000 * 2 ** (attempts - 1), 8000));
+          return;
+        }
+        setRecoveryStatus(result.status);
+      } catch {
+        if (!cancelled) setRecoveryStatus('error');
+      }
+    };
+
+    void reconcile();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [highlightAssetId, highlightIdempotencyKey, highlightOrderId]);
+
   // Consume highlight params (orderId / idempotencyKey) once the remote history
-  // has loaded. Match by orderId first; if only an idempotencyKey is present
-  // (e.g. a network-error path where no orderId was returned), fall back to the
-  // most recent entry since the user just submitted it. After consuming, clear
+  // has loaded. An idempotency key must first resolve to its authoritative order ID.
+  // Never infer a result from recency. After consuming, clear
   // the params from navigation so a later refresh does not re-highlight.
   React.useEffect(() => {
     if (highlightConsumedRef.current) return;
     if (isSyncingRemote) return;
-    if (!highlightOrderId && !highlightIdempotencyKey) return;
+    const targetOrderId = highlightOrderId
+      ? Number(highlightOrderId)
+      : recoveredOrderId;
+    if (!Number.isFinite(targetOrderId) || targetOrderId == null) return;
     if (remoteEntries.length === 0) return;
 
-    let matchId: string | null = null;
-    if (highlightOrderId) {
-      const targetOrderId = Number(highlightOrderId);
-      if (Number.isFinite(targetOrderId)) {
-        const byOrder = remoteEntries.find((e) => e.orderId === targetOrderId);
-        if (byOrder) matchId = byOrder.id;
-      }
-    }
-    if (!matchId && highlightIdempotencyKey) {
-      // Entries don't carry idempotency keys; the just-submitted order is the
-      // most recent one (remoteEntries are sorted descending by createdAt).
-      // If an assetId was also passed, prefer the most recent entry for that
-      // asset to avoid highlighting an unrelated recent order.
-      const pool = highlightAssetId
-        ? remoteEntries.filter((e) => e.assetId === highlightAssetId)
-        : remoteEntries;
-      matchId = pool[0]?.id ?? null;
-    }
+    const matchId = remoteEntries.find((e) => e.orderId === targetOrderId)?.id ?? null;
 
     if (matchId) {
       highlightConsumedRef.current = true;
@@ -351,18 +491,36 @@ export default function CoOwnOrderHistoryScreen() {
         idempotencyKey: undefined,
       });
     }
-  }, [remoteEntries, isSyncingRemote, highlightOrderId, highlightIdempotencyKey, highlightAssetId, navigation]);
+  }, [remoteEntries, isSyncingRemote, highlightOrderId, recoveredOrderId, navigation]);
 
   const handleRefresh = React.useCallback(async () => {
     setRefreshing(true);
-    await syncRemoteHistory();
+    // U33: pull-to-refresh invokes the same exact-key reconciliation
+    // command as "Check result" and focus refresh, then reloads history.
+    await Promise.all([
+      syncRemoteHistory(),
+      recoveryStatus !== 'idle' && recoveryStatus !== 'acknowledged'
+        ? runReconciliation()
+        : Promise.resolve(),
+    ]);
     setRefreshing(false);
-  }, [syncRemoteHistory]);
+  }, [syncRemoteHistory, runReconciliation, recoveryStatus]);
 
   const handleBack = React.useCallback(() => {
     if (navigation.canGoBack()) { navigation.goBack(); return; }
     navigation.navigate('CoOwnHub');
   }, [navigation]);
+
+  // U33: focus refresh invokes the same exact-key reconciliation command
+  // as "Check result" and pull-to-refresh, so returning to the screen after
+  // a lost response re-checks the result without a duplicate submission.
+  useFocusEffect(
+    React.useCallback(() => {
+      if (recoveryStatus !== 'idle' && recoveryStatus !== 'acknowledged' && recoveryKey) {
+        void runReconciliation();
+      }
+    }, [recoveryStatus, recoveryKey, runReconciliation]),
+  );
 
   const entries = React.useMemo(() => {
     const all = [...remoteEntries];
@@ -424,18 +582,65 @@ export default function CoOwnOrderHistoryScreen() {
           ? () => requestCancelOrder(item)
           : undefined}
         isCancelling={cancellingOrderId === item.id}
+        cancelFailed={cancelFailedOrderIds.has(item.id)}
         onPress={() => { haptics.tap(); navigation.navigate('AssetDetail', { assetId: item.assetId }); }}
+        // U36: multi-fill receipt detail. Only surface the expandable receipt
+        // for orders that have executed or reached a terminal state — open
+        // orders with no fills have no execution receipt to show.
+        showReceipt={item.source === 'backend' && item.status !== 'open'}
+        remainingQuantity={item.remainingQuantity != null
+          ? item.remainingQuantity
+          : Math.max(0, item.quantity - item.filledQuantity)}
+        fee={formatCoOwnIze(item.fee)}
+        averageExecutionPrice={item.averageExecutionPrice != null
+          ? formatCoOwnIze(item.averageExecutionPrice)
+          : null}
+        updatedAt={item.updatedAt}
+        terminalReason={deriveTerminalReason(item.status)}
       />
     </HighlightRowWrapper>
   ), [
     formatCoOwnIze,
     requestCancelOrder,
     cancellingOrderId,
+    cancelFailedOrderIds,
     haptics,
     navigation,
     highlightedEntryId,
     colors.brand,
   ]);
+
+  // U35: List footer. Shows a "Load more" spinner while fetching the next
+  // page, or a retry affordance when the last "load more" failed — without
+  // clearing the already-loaded rows, cursor or hasMore flag.
+  const renderListFooter = useCallback(() => {
+    if (loadMoreError) {
+      return (
+        <View style={styles.footerRetryWrap}>
+          <AnimatedPressable
+            style={[styles.footerRetryButton, { backgroundColor: colors.surfaceAlt }]}
+            onPress={() => { haptics.tap(); void loadMoreRemoteHistory(); }}
+            activeOpacity={0.72}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading more orders"
+          >
+            <Ionicons name="refresh-outline" size={15} color={colors.textSecondary} />
+            <Text style={[styles.footerRetryText, { color: colors.textSecondary }]} numberOfLines={1}>
+              Couldn’t load more — retry
+            </Text>
+          </AnimatedPressable>
+        </View>
+      );
+    }
+    if (isLoadingMore) {
+      return (
+        <View style={styles.footerLoadingWrap}>
+          <Text style={[styles.footerLoadingText, { color: colors.textMuted }]}>Loading more…</Text>
+        </View>
+      );
+    }
+    return null;
+  }, [loadMoreError, isLoadingMore, colors.surfaceAlt, colors.textSecondary, colors.textMuted, loadMoreRemoteHistory]);
 
   return (
     <FlagshipScreen
@@ -497,6 +702,48 @@ export default function CoOwnOrderHistoryScreen() {
         </AnimatedPressable>
       </View>
 
+      {recoveryStatus !== 'idle' ? (
+        <View
+          style={[styles.recoveryBanner, { backgroundColor: colors.warningSubtle, borderBottomColor: colors.border }]}
+          accessibilityRole="alert"
+        >
+          <Text style={[styles.recoveryBannerTitle, { color: colors.textPrimary }]}>
+            {recoveryStatus === 'acknowledged'
+              ? 'Order result recovered'
+              : recoveryStatus === 'safe_to_retry'
+                ? 'No order was found for that attempt'
+                : recoveryStatus === 'error'
+                  ? 'Order result needs checking'
+                  : 'Checking order result…'}
+          </Text>
+          <Text style={[styles.recoveryBannerBody, { color: colors.textSecondary }]}>
+            {recoveryStatus === 'acknowledged'
+              ? 'The highlighted row is matched to the original submission key.'
+              : recoveryStatus === 'safe_to_retry'
+                ? 'Nothing was acknowledged for this operation. Review before retrying.'
+                : recoveryStatus === 'error'
+                  ? 'We could not verify the operation yet. Check result when your connection is stable.'
+                  : 'The server has not confirmed this operation yet. Do not submit a duplicate order.'}
+          </Text>
+          {/* U33: "Check result" invokes the same exact-key reconciliation
+              command as focus refresh and pull-to-refresh. Shown for
+              unresolved states so the user can re-check without a duplicate. */}
+          {recoveryStatus === 'error' || recoveryStatus === 'safe_to_retry' || recoveryStatus === 'processing' ? (
+            <AnimatedPressable
+              style={styles.recoveryCheckButton}
+              onPress={() => { haptics.tap(); void runReconciliation(); }}
+              activeOpacity={0.72}
+              accessibilityRole="button"
+              accessibilityLabel="Check order result"
+            >
+              <Text style={[styles.recoveryCheckText, { color: colors.textPrimary }]}>
+                Check result
+              </Text>
+            </AnimatedPressable>
+          ) : null}
+        </View>
+      ) : null}
+
       <FlashList
         ref={listRef as unknown as React.Ref<FlashListRef<HistoryEntry>>}
         data={entries}
@@ -506,6 +753,7 @@ export default function CoOwnOrderHistoryScreen() {
         onEndReached={() => void loadMoreRemoteHistory()}
         onEndReachedThreshold={0.5}
         renderItem={renderOrderItem}
+        ListFooterComponent={renderListFooter}
         ListEmptyComponent={
           isSyncingRemote ? (
             <View style={styles.loadingWrap}>
@@ -637,6 +885,33 @@ const styles = StyleSheet.create({
   listContent: {
     paddingBottom: Space.xl,
   },
+  recoveryBanner: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 2,
+  },
+  recoveryBannerTitle: {
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+  },
+  recoveryBannerBody: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+  },
+  recoveryCheckButton: {
+    alignSelf: 'flex-start',
+    marginTop: Space.xs,
+    paddingVertical: Space.xs + 2,
+    paddingHorizontal: Space.sm,
+  },
+  recoveryCheckText: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+  },
   loadingWrap: {
     paddingHorizontal: Space.md,
     gap: Space.sm,
@@ -645,5 +920,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: Space.sm + 2,
+  },
+  // U35: footer retry / loading affordances
+  footerRetryWrap: {
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.md,
+    alignItems: 'center',
+  },
+  footerRetryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 1,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.md,
+  },
+  footerRetryText: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+  },
+  footerLoadingWrap: {
+    paddingVertical: Space.md,
+    alignItems: 'center',
+  },
+  footerLoadingText: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
 });

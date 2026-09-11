@@ -5,13 +5,15 @@
  * premium editorial discovery surface for Co-Own assets and curated
  * collections.
  *
- * The service calls the real backend (`/galleria/collections`). When the API
- * is unreachable (offline / dev without a running server), it falls back to
- * mock data so the UI remains functional. Mock entities carry `isDemo: true`
- * so the UI can show an honest "Demo mode" indicator (AGENTS.md §11).
+ * The service calls the real backend (`/galleria/collections`). Mock fallbacks
+ * are gated by `ENABLE_RUNTIME_MOCKS` (fixture-design mode only). In
+ * integration-truth and production modes, API failures surface as honest
+ * empty results so the UI can show truthful error/retry states instead of
+ * fabricated content.
  */
 
 import { fetchJson } from '../lib/apiClient';
+import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -81,8 +83,9 @@ export interface GalleriaCollectionDetail {
 }
 
 // ---------------------------------------------------------------------------
-// Demo flag — the UI reads this to decide whether to show a "Demo mode" badge.
-// True only when the last fetch fell back to mock data.
+// Demo flag — true only when the last fetch returned mock data (fixture-design
+// mode only). In integration-truth / production, this stays false and the UI
+// shows honest empty/error states.
 // ---------------------------------------------------------------------------
 
 export let GALLERIA_DEMO_MODE = false;
@@ -432,42 +435,56 @@ function mapApiEditorial(raw: ApiEditorialResponse['items'][number]): GalleriaEd
 /**
  * Fetch curated collections for the Galleria discovery surface.
  * Returns collections sorted by most recently published.
- * Falls back to mock data when the API is unreachable.
+ * In fixture-design mode, falls back to mock data when the API is unreachable.
+ * In integration-truth / production, re-throws the error so the UI can show
+ * an honest error/retry state instead of fabricated content.
  */
 export async function fetchGalleriaCollections(): Promise<GalleriaCollection[]> {
   try {
     const data = await fetchJson<ApiCollectionResponse>('/galleria/collections?limit=24');
     GALLERIA_DEMO_MODE = false;
     return data.items.map(mapApiCollection);
-  } catch {
-    GALLERIA_DEMO_MODE = true;
-    return [...MOCK_COLLECTIONS].sort(
-      (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
-    );
+  } catch (err) {
+    if (ENABLE_RUNTIME_MOCKS) {
+      GALLERIA_DEMO_MODE = true;
+      return [...MOCK_COLLECTIONS].sort(
+        (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
+      );
+    }
+    GALLERIA_DEMO_MODE = false;
+    throw err;
   }
 }
 
 /**
  * Fetch editorial pieces for the Galleria.
  * Returns editorials sorted by most recently published.
- * Falls back to mock data when the API is unreachable.
+ * In fixture-design mode, falls back to mock data when the API is unreachable.
+ * In integration-truth / production, re-throws the error so the UI can show
+ * an honest error/retry state.
  */
 export async function fetchGalleriaEditorials(): Promise<GalleriaEditorial[]> {
   try {
     const data = await fetchJson<ApiEditorialResponse>('/galleria/editorials?limit=24');
     GALLERIA_DEMO_MODE = false;
     return data.items.map(mapApiEditorial);
-  } catch {
-    GALLERIA_DEMO_MODE = true;
-    return [...MOCK_EDITORIALS].sort(
-      (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
-    );
+  } catch (err) {
+    if (ENABLE_RUNTIME_MOCKS) {
+      GALLERIA_DEMO_MODE = true;
+      return [...MOCK_EDITORIALS].sort(
+        (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
+      );
+    }
+    GALLERIA_DEMO_MODE = false;
+    throw err;
   }
 }
 
 /**
  * Fetch featured Co-Own assets for the Galleria discovery grid.
- * Falls back to mock data when the API is unreachable.
+ * In fixture-design mode, falls back to mock data when the API is unreachable.
+ * In integration-truth / production, re-throws the error so the UI can show
+ * an honest error/retry state.
  */
 export async function fetchFeaturedAssets(): Promise<GalleriaFeaturedAsset[]> {
   try {
@@ -488,18 +505,29 @@ export async function fetchFeaturedAssets(): Promise<GalleriaFeaturedAsset[]> {
       GALLERIA_DEMO_MODE = false;
       return assets;
     }
-    GALLERIA_DEMO_MODE = true;
-    return [...MOCK_FEATURED_ASSETS];
-  } catch {
-    GALLERIA_DEMO_MODE = true;
-    return [...MOCK_FEATURED_ASSETS];
+    // API succeeded but returned no usable assets.
+    if (ENABLE_RUNTIME_MOCKS) {
+      GALLERIA_DEMO_MODE = true;
+      return [...MOCK_FEATURED_ASSETS];
+    }
+    GALLERIA_DEMO_MODE = false;
+    return [];
+  } catch (err) {
+    if (ENABLE_RUNTIME_MOCKS) {
+      GALLERIA_DEMO_MODE = true;
+      return [...MOCK_FEATURED_ASSETS];
+    }
+    GALLERIA_DEMO_MODE = false;
+    throw err;
   }
 }
 
 /**
  * Fetch a single collection with its resolved items.
  * Returns null if the collection ID is not found.
- * Falls back to mock data when the API is unreachable.
+ * In fixture-design mode, falls back to mock data when the API is unreachable.
+ * In integration-truth / production, re-throws the error so the UI can show
+ * an honest error/retry state.
  */
 export async function fetchCollectionDetail(id: string): Promise<GalleriaCollectionDetail | null> {
   try {
@@ -509,11 +537,15 @@ export async function fetchCollectionDetail(id: string): Promise<GalleriaCollect
       collection: mapApiCollection(data.collection),
       items: data.items.map(mapApiAsset),
     };
-  } catch {
-    GALLERIA_DEMO_MODE = true;
-    const collection = MOCK_COLLECTIONS.find((c) => c.id === id) ?? null;
-    if (!collection) return null;
-    const items = MOCK_FEATURED_ASSETS.filter((a) => collection.itemIds.includes(a.id));
-    return { collection, items };
+  } catch (err) {
+    if (ENABLE_RUNTIME_MOCKS) {
+      GALLERIA_DEMO_MODE = true;
+      const collection = MOCK_COLLECTIONS.find((c) => c.id === id) ?? null;
+      if (!collection) return null;
+      const items = MOCK_FEATURED_ASSETS.filter((a) => collection.itemIds.includes(a.id));
+      return { collection, items };
+    }
+    GALLERIA_DEMO_MODE = false;
+    throw err;
   }
 }

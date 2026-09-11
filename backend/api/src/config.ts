@@ -529,6 +529,9 @@ export const config = {
   otelExporterOtlpHttpUrl:
     process.env.OTEL_EXPORTER_OTLP_HTTP_URL ?? 'http://localhost:4318/v1/traces',
   auctionSweepIntervalMs: asNumber(process.env.AUCTION_SWEEP_INTERVAL_MS, 30_000),
+  coOwnOrderExpirySweepIntervalMs: asNumber(process.env.COOWN_ORDER_EXPIRY_SWEEP_INTERVAL_MS, 30_000),
+  coOwnAlertEvaluatorIntervalMs: asNumber(process.env.COOWN_ALERT_EVALUATOR_INTERVAL_MS, 60_000),
+  coOwnDripExecutionIntervalMs: asNumber(process.env.COOWN_DRIP_EXECUTION_INTERVAL_MS, 300_000),
   onezeReconcileIntervalMs: asNumber(process.env.ONEZE_RECONCILE_INTERVAL_MS, 60 * 60 * 1000),
   onezeFxSyncEnabled: asBoolean(process.env.ONEZE_FX_SYNC_ENABLED, false),
   onezeFxSyncIntervalMs: asNumber(process.env.ONEZE_FX_SYNC_INTERVAL_MS, 24 * 60 * 60 * 1000),

@@ -162,6 +162,8 @@ services:
         condition: service_completed_successfully
       key-service:
         condition: service_healthy
+      meilisearch:
+        condition: service_healthy
     environment:
       NODE_ENV: development
       PORT: 4000
@@ -204,7 +206,7 @@ services:
       PUSH_DEFAULT_CHANNEL: ${PUSH_DEFAULT_CHANNEL:-default}
       SENTRY_DSN: ${SENTRY_DSN:-}
       SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.15}
-      OTEL_ENABLED: ${OTEL_ENABLED:-true}
+      OTEL_ENABLED: ${OTEL_ENABLED:-false}
       OTEL_EXPORTER_OTLP_HTTP_URL: ${OTEL_EXPORTER_OTLP_HTTP_URL:-http://localhost:4318/v1/traces}
       AUCTION_SWEEP_INTERVAL_MS: ${AUCTION_SWEEP_INTERVAL_MS:-30000}
       GOOGLE_OAUTH_CLIENT_IDS: ${GOOGLE_OAUTH_CLIENT_IDS:-}
@@ -217,6 +219,9 @@ services:
       PAYMENT_METADATA_HMAC_SECRET: ${PAYMENT_METADATA_HMAC_SECRET:-}
       WISE_API_KEY: ${WISE_API_KEY:-}
       WISE_WEBHOOK_SECRET: ${WISE_WEBHOOK_SECRET:-}
+      MEILISEARCH_URL: http://meilisearch:7700
+      MEILISEARCH_API_KEY: ${MEILISEARCH_API_KEY:-local-meilisearch-master-key}
+      MEILISEARCH_INDEX_PREFIX: ${MEILISEARCH_INDEX_PREFIX:-thryftverse_}
     ports:
       - "4000:4000"
     healthcheck:
@@ -266,6 +271,30 @@ services:
           cpus: '0.25'
           memory: 64M
 
+  # ── Meilisearch — full-text search engine (dev) ─────────────────────
+  meilisearch:
+    image: getmeili/meilisearch:v1.12
+    container_name: thryftverse-meilisearch
+    restart: unless-stopped
+    environment:
+      MEILI_MASTER_KEY: ${MEILISEARCH_MASTER_KEY:-local-meilisearch-master-key}
+      MEILI_ENV: development
+      MEILI_NO_ANALYTICS: "true"
+    ports:
+      - "7700:7700"
+    volumes:
+      - meili_data:/meili_data
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:7700/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
   ml-service:
     build:
       context: ./backend/ml-service
@@ -293,3 +322,4 @@ volumes:
   postgres_data:
   redis_data:
   minio_data:
+  meili_data:

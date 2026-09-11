@@ -33,7 +33,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { KeyboardStickyView } from '../platform/keyboard/KeyboardProvider';
-import { Space, Radius, TypeStyles, Control } from '../theme/designTokens';
+import { Space, Radius, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 
 import { ChatTopBar } from '../components/chat/ChatTopBar';
@@ -799,7 +799,7 @@ const createStyles = (colors: ThemeColors) =>
     retryBtnText: {
       fontSize: TypographyV2.body.size,
       lineHeight: TypographyV2.body.lineHeight,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily },
+      fontFamily: TypographyV2.bodyStrong.fontFamily },
     listContent: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,

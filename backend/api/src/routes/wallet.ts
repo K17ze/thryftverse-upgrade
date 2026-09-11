@@ -4758,11 +4758,12 @@ app.get('/wallet/1ze/:userId/position', async (request, reply) => {
     resolveCountryPricingQuoteByCurrency(db, fiatCurrency),
     getLedgerAccountBalance(db, 'user', userId, 'ize_wallet', 'IZE'),
     getPlatformIzeReserveSnapshot(db),
-    db.query<{ reserved_1ze_mg: string }>(
+    db.query<{ reserved_1ze_units: string }>(
       `
-        SELECT COALESCE(SUM(reserved_1ze_mg), 0)::text AS reserved_1ze_mg
+        SELECT COALESCE(SUM(reserved_1ze_units), 0)::text AS reserved_1ze_units
         FROM coown_order_reservations
         WHERE user_id = $1 AND status IN ('active', 'placed')
+          AND (expires_at IS NULL OR expires_at > NOW())
       `,
       [userId]
     ),
@@ -4792,7 +4793,7 @@ app.get('/wallet/1ze/:userId/position', async (request, reply) => {
     ),
     getOnezeMintBurnHaltState(),
   ]);
-  const reservedForOrdersMg = Number(reservedResult.rows[0]?.reserved_1ze_mg ?? 0);
+  const reservedForOrdersMg = Number(reservedResult.rows[0]?.reserved_1ze_units ?? 0);
   const reservedForOrders = reservedForOrdersMg / 1000;
   const redemptionInProgress = Number(redemptionResult.rows[0]?.redemption_ize ?? 0);
   const availableIze = Math.max(0, userIze - reservedForOrders);

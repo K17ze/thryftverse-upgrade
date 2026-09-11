@@ -3,6 +3,7 @@ import { View, StyleSheet, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { Space, Radius, AvatarSize, PressScale } from '../../../theme/designTokens';
+import { FontFamily } from '../../../theme/fontFamily';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { Motion } from '../../../theme/motionTokens';
 import { useHaptic } from '../../../hooks/useHaptic';
@@ -278,9 +279,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.xs },
   name: {
-    fontSize: TypographyV2.bodyStrong.size,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-    fontFamily: TypographyV2.bodyStrong.fontFamily },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.semibold },
   subtitle: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,

@@ -1,8 +1,8 @@
 ---
-version: "1.6"
+version: "1.7"
 name: "ThryftVerse Neutral Flagship Native Design System"
-benchmark-date: "2026-08-30"
-description: "A machine-readable and human-readable design contract for a media-first native social-commerce marketplace. It is calibrated against current public Pinterest, Coinbase, Corner, Instagram, Depop, Vinted, Vestiaire and Whatnot product evidence while remaining faithful to the ThryftVerse React Native codebase. v1.6 adds reference-evidence discipline plus enforceable control anatomy, navigation geometry, direct-manipulation physics, sheet continuity, dense-row alignment and media-context rules. The neutral palette remains canonical; quality comes from geometry, media integrity, hierarchy, interaction, state clarity, accessibility and performance."
+benchmark-date: "2026-09-08"
+description: "A machine-readable and human-readable design contract for a media-first native social-commerce marketplace. It is calibrated against current public Pinterest, Coinbase, Corner, Instagram, Depop, Vinted, Vestiaire and Whatnot product evidence while remaining faithful to the ThryftVerse React Native codebase. v1.6 adds reference-evidence discipline plus enforceable control anatomy, navigation geometry, direct-manipulation physics, sheet continuity, dense-row alignment and media-context rules. v1.7 registers the Co-Own detail authored patterns: the editorial section tab rail and the top-of-book quote strip, validated against September 2026 broker and fractional-ownership platform research. The neutral palette remains canonical; quality comes from geometry, media integrity, hierarchy, interaction, state clarity, accessibility and performance."
 
 implementation-status:
   current-runtime-theme: "VERIFIED — frontend/src/theme/ThemeContext.tsx currently exposes the neutral base palette and does not yet expose the proposed premium/luxury tokens below."
@@ -215,6 +215,17 @@ components:
   story-avatar:
     rounded: "{rounded.full}"
     size: "64px"
+  section-tab-rail:
+    description: "Editorial text tab rail for in-page section switching (Co-Own detail Overview/Market/Ownership; profile Listings/Looks/About/Reviews). One shared animated underline moves between tabs — no per-tab indicator remount, no filled track, no active pill."
+    backgroundColor: "transparent on page canvas"
+    height: "44px tabs"
+    active-state: "label semibold + text-primary; underline Stroke.emphasis in brand, 40% of tab width, centered"
+    inactive: "label medium + text-muted"
+    motion: "220ms cubic-out underline translate+width; reduced-motion = instant assignment"
+    notification: "6pt brand dot beside the label; never a filled pill badge"
+  top-of-book-strip:
+    description: "Broker quote header above an order-book ladder: best bid (price + resting size) | spread | best ask (price + size). Bid value uses coownUp, ask uses coownDown, spread centered and neutral. Tabular numerals throughout; flat on canvas, hairline-separated from the ladder."
+    typography: "price scale for bid/ask values; meta for sizes and spread label"
 ---
 
 ## Overview

@@ -11,6 +11,7 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { Space, Typography, DockConstants, Radius, Stroke, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { AppIcon } from '../components/common/AppIcon';
@@ -56,9 +57,32 @@ interface EditListingRouteParams {
   focus?: SectionFocus;
 }
 
+/**
+ * Resolve the media kind ('image' | 'video') from a backend media record.
+ * The canonical `ListingApiItem.media` entry only declares `{ id, url,
+ * sortOrder }`, but the backend may include a discriminator (`type`,
+ * `mediaType`, `kind`, or `contentType`). We read whichever is present
+ * and fall back to `'image'` only when none is — so videos returned by
+ * the API are not silently misclassified as images (E16).
+ */
+function resolveApiMediaKind(
+  m: { id: string; url: string; sortOrder: number },
+): 'image' | 'video' {
+  const raw =
+    (m as { type?: unknown }).type ??
+    (m as { mediaType?: unknown }).mediaType ??
+    (m as { kind?: unknown }).kind ??
+    (m as { contentType?: unknown }).contentType;
+  if (typeof raw === 'string' && raw.toLowerCase().includes('video')) {
+    return 'video';
+  }
+  return 'image';
+}
+
 export default function EditListingScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
+  const { isOffline } = useConnectivity();
   const reducedMotion = useReducedMotion();
   // Theme-aware color overrides for the static styles. The static
   // StyleSheet contains only non-color properties; colors are applied
@@ -218,7 +242,7 @@ export default function EditListingScreen() {
             id: hasMediaIds ? apiMedia[i].id : `remote_${itemId}_${i}`,
             mediaId: hasMediaIds ? apiMedia[i].id : undefined,
             uri,
-            kind: 'image' as const,
+            kind: hasMediaIds ? resolveApiMediaKind(apiMedia[i]) : ('image' as const),
             source: 'remote' as const,
             status: 'uploaded' as const,
             publicUrl: uri }));
@@ -574,6 +598,7 @@ export default function EditListingScreen() {
         for (let i = 0; i < uploadedItems.length; i++) {
           const qi = uploadedItems[i];
           const attachmentId = `${itemId}_media_${qi.id}`;
+          const draftItem = mediaItems.find((m) => m.id === qi.id);
           await createListingImageOnApi({
             id: attachmentId,
             listingId: itemId,
@@ -581,7 +606,10 @@ export default function EditListingScreen() {
             sortOrder: existingRemotePhotos.length + i,
             mediaWidth: qi.asset.width,
             mediaHeight: qi.asset.height,
-            finalizationId: qi.finalizationId! });
+            finalizationId: qi.finalizationId!,
+            focalX: draftItem?.focalPoint?.x ?? null,
+            focalY: draftItem?.focalPoint?.y ?? null,
+          });
         }
       }
 
@@ -829,7 +857,7 @@ export default function EditListingScreen() {
                       id: hasMediaIds ? apiMedia[i].id : `remote_${itemId}_${i}`,
                       mediaId: hasMediaIds ? apiMedia[i].id : undefined,
                       uri,
-                      kind: 'image' as const,
+                      kind: hasMediaIds ? resolveApiMediaKind(apiMedia[i]) : ('image' as const),
                       source: 'remote' as const,
                       status: 'uploaded' as const,
                       publicUrl: uri }));
@@ -896,6 +924,7 @@ export default function EditListingScreen() {
               reorderEnabled={true}
               lockedNote={t('listing.edit.lockedPhotos')}
               removeLabel={t('listing.edit.remove')}
+              isOffline={isOffline}
             />
           ) : (
             <ListingMediaStudio
@@ -910,6 +939,7 @@ export default function EditListingScreen() {
               reorderEnabled={true}
               canRemoveItem={() => false}
               lockedNote={t('listing.edit.noPermission')}
+              isOffline={isOffline}
             />
           )}
 

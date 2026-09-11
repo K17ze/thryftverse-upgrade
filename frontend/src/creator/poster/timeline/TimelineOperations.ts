@@ -338,6 +338,31 @@ export function setClipSpeed(
 }
 
 /**
+ * Set a clip's audio volume (0.0–1.0).
+ *
+ * The volume is clamped to the valid [0, 1] range. Volume does not affect the
+ * clip's wall-clock duration, so `durationMs` is left untouched (unlike
+ * {@link setClipSpeed}, which recomputes it). Returns a new clips array; the
+ * input is unchanged. If the clip is not found, the input array is returned
+ * as-is.
+ */
+export function setClipVolume(
+  clips: PosterClip[],
+  clipId: string,
+  volume: number,
+): PosterClip[] {
+  const idx = findClipIndex(clips, clipId);
+  if (idx < 0) return clips;
+  const clamped = clamp(volume, 0, 1);
+  const clip = clips[idx];
+  if (clamped === clip.volume) return clips;
+  const updated: PosterClip = { ...clip, volume: clamped };
+  const next = clips.slice();
+  next[idx] = updated;
+  return next;
+}
+
+/**
  * Attach a variable speed curve to a clip and recompute its duration.
  *
  * The curve is an array of `{ timeMs, speed }` control points anchored to

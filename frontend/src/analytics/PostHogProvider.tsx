@@ -85,6 +85,40 @@ function saveBootstrapFlags(posthog: PostHog): void {
 let posthogClient: PostHog | null = null;
 
 /**
+ * No-op PostHog stub used when no API key is configured (dev mode).
+ *
+ * When PostHog is not configured, the provider still wraps children in
+ * `PostHogProviderCore` with this stub so `usePostHog()` returns a safe
+ * object instead of `undefined`, which would trigger the SDK's bright-red
+ * "usePostHog was called without a PostHog client" warning banner.
+ *
+ * The singleton (`posthogClient`) stays `null` — `getPostHogClient()` and
+ * `isPostHogAvailable()` continue to signal "not active" so `track.ts`,
+ * `identify.ts`, and `performanceMonitor.ts` (which already null-guard)
+ * keep no-oping as before.
+ *
+ * The stub implements every method exercised by the codebase:
+ * `useFeatureFlag` hooks, `BootstrapFlagSaver`, `track.ts`, `identify.ts`,
+ * and the provider's own session-replay effects.
+ */
+const NOOP_POSTHOG = {
+  getFeatureFlag: () => undefined,
+  isFeatureEnabled: () => false,
+  getFeatureFlagPayload: () => undefined,
+  onFeatureFlags: () => () => {},
+  getFeatureFlags: () => ({}),
+  capture: () => {},
+  identify: () => {},
+  register: () => {},
+  reset: () => {},
+  ready: () => Promise.resolve(),
+  flush: () => Promise.resolve(),
+  startSessionRecording: () => Promise.resolve(),
+  stopSessionRecording: () => Promise.resolve(),
+  debug: () => {},
+} as unknown as PostHog;
+
+/**
  * Returns the shared PostHog client instance, or `null` when PostHog is not
  * configured (no API key / dev mode). All `track`, `identifyUser`, and
  * feature-flag helpers call this and no-op when the result is null.
@@ -236,9 +270,17 @@ export function PostHogProvider({ children }: PostHogProviderProps): React.React
     return unsubscribe;
   }, [POSTHOG_API_KEY]);
 
-  // No API key → render children directly (dev mode graceful degradation).
+  // No API key → wrap children in PostHog's context provider with a no-op
+  // client so usePostHog() returns a safe stub instead of undefined (which
+  // triggers the SDK's red "usePostHog was called without a PostHog client"
+  // warning). The singleton stays null so getPostHogClient()/isPostHogAvailable()
+  // continue to signal "not active" to track.ts/identify.ts (which null-guard).
   if (!POSTHOG_API_KEY) {
-    return <>{children}</>;
+    return (
+      <PostHogProviderCore client={NOOP_POSTHOG} autocapture={false}>
+        {children}
+      </PostHogProviderCore>
+    );
   }
 
   // Wrap children in PostHog's context provider so usePostHog() works.

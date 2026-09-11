@@ -279,6 +279,7 @@ export default function SellScreen() {
               onRemoveItem={removeItem}
               onRetryItem={handleRetryItem}
               onTransformItem={handleTransformItemWithFocal}
+              isOffline={data.isOffline}
             />
           )}
 
@@ -943,8 +944,11 @@ export default function SellScreen() {
             </View>
           )}
 
-          {/* -- error message (inline, above footer) -- */}
-          {errorMsg && publicationStage === 'idle' && (
+          {/* -- error message (inline, above footer) --
+              Rendered regardless of publicationStage so that publish
+              failures (e.g. 'failed_recoverable') surface inline, not
+              only when the pipeline is idle. */}
+          {errorMsg && (
             <View style={styles.inlineErrorRow}>
               <AppIcon name="alert-circle-outline" size={16} color="danger" opticalCenter accessible={false} />
               <Text style={[styles.inlineErrorText, themed.inlineErrorText]}>{errorMsg}</Text>

@@ -160,6 +160,6 @@ const useHotspotStyles = (colors: ThemeColors) => {
     tagTooltipImg: { width: Space.xl + 4, height: Space.xl + 4, borderRadius: Radius.md, backgroundColor: colors.surfaceAlt },
     tagTooltipText: { flex: 1, gap: Space.xxs },
     tagTooltipTitle: { fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, color: colors.scrimTextPrimary },
-    tagTooltipPrice: { fontSize: TypographyV2.meta.size - 1, fontFamily: TypographyV2.meta.fontFamily, color: colors.scrimTextSecondary },
+    tagTooltipPrice: { fontSize: TypographyV2.numericMeta.size, fontFamily: TypographyV2.numericMeta.fontFamily, color: colors.scrimTextSecondary, fontVariant: ['tabular-nums'] },
     tagTooltipSold: { fontSize: TypographyV2.meta.size - 1, fontFamily: TypographyV2.meta.fontFamily, color: colors.danger } });
 };

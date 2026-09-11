@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
-import { StyleSheet as RNStyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
@@ -41,7 +40,7 @@ export function CoOwnFeaturedAsset({
 }: CoOwnFeaturedAssetProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
-  const { width, height } = useWindowDimensions();
+  const { height } = useWindowDimensions();
   // Editorial hero: 60% of viewport height, capped at 420px for tablets
   const heroHeight = Math.min(height * 0.6, 420);
 

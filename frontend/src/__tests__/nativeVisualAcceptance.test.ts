@@ -35,10 +35,12 @@ describe('native visual acceptance QA matrix (spec 07_VISUAL)', () => {
 
     it('AssetDetailScreen does not wrap every row in separate surfaces', () => {
       // AssetDetailScreen was refactored: the identity lives in the
-      // screen while the transaction surface moved to AssetMarketSection.
+      // screen while the transaction flow goes through the dock and
+      // TradeConfirmScreen. The transaction surface was removed from
+      // the market section during the Wave 32 refactor.
       expect(assetScreen).toContain('CommerceDetailIdentity');
-      const marketSection = readComponent('coown/asset-detail/AssetMarketSection.tsx');
-      expect(marketSection).toContain('CommerceDetailTransactionSurface');
+      const dock = readComponent('coown/asset-detail/AssetDetailDock.tsx');
+      expect(dock).toContain('CommerceDetailStateDock');
     });
 
     it('ItemDetailScreen does not wrap every row in separate surfaces', () => {
@@ -92,7 +94,10 @@ describe('native visual acceptance QA matrix (spec 07_VISUAL)', () => {
     });
 
     it('asset screen uses Ionicons consistently', () => {
-      expect(assetScreen).toContain('Ionicons');
+      // Ionicons usage was moved to extracted components (AssetDetailIdentity,
+      // AssetDetailDock, etc.). Check the component tree, not just the screen.
+      const identitySrc = readComponent('coown/asset-detail/AssetDetailIdentity.tsx');
+      expect(identitySrc).toContain('Ionicons');
       expect(assetScreen).not.toContain('MaterialIcons');
       expect(assetScreen).not.toContain('FontAwesome');
     });
@@ -248,7 +253,9 @@ describe('native visual acceptance QA matrix (spec 07_VISUAL)', () => {
 
     it('fully allocated state has a real primary action', () => {
       // Per acceptance matrix: "Fully allocated state has a real action"
-      const fullyAllocatedMatch = assetScreen.match(/availableUnits === 0 && !isHolder[\s\S]*?Browse secondary/);
+      // Dock logic was extracted to AssetDetailDock.tsx
+      const dockSrc = readComponent('coown/asset-detail/AssetDetailDock.tsx');
+      const fullyAllocatedMatch = dockSrc.match(/availableUnits === 0 && !isHolder[\s\S]*?Browse secondary/);
       expect(fullyAllocatedMatch).toBeTruthy();
       expect(fullyAllocatedMatch![0]).toContain('primaryAction');
       expect(fullyAllocatedMatch![0]).toContain('Browse secondary');

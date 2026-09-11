@@ -14,7 +14,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, TypeStyles } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -316,12 +316,12 @@ const createStyles = (colors: ThemeColors) =>
     title: {
       fontSize: TypographyV2.sectionTitle.size,
       lineHeight: TypographyV2.sectionTitle.lineHeight,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       letterSpacing: TypographyV2.sectionTitle.letterSpacing },
     subtitle: {
       fontSize: TypographyV2.meta.size,
       lineHeight: TypographyV2.meta.lineHeight,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       marginTop: 2 },
     list: {
       flexGrow: 0 },
@@ -345,11 +345,11 @@ const createStyles = (colors: ThemeColors) =>
     rowLabel: {
       fontSize: TypographyV2.body.size,
       lineHeight: TypographyV2.body.lineHeight,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily },
+      fontFamily: TypographyV2.bodyStrong.fontFamily },
     rowDescription: {
       fontSize: TypographyV2.meta.size,
       lineHeight: TypographyV2.meta.lineHeight,
-      fontFamily: TypeStyles.body.fontFamily },
+      fontFamily: TypographyV2.body.fontFamily },
     addBtn: {
       paddingHorizontal: Space.smMd,
       borderRadius: Radius.full,
@@ -360,7 +360,7 @@ const createStyles = (colors: ThemeColors) =>
     addBtnText: {
       fontSize: TypographyV2.body.size,
       lineHeight: TypographyV2.body.lineHeight,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily },
+      fontFamily: TypographyV2.bodyStrong.fontFamily },
     demoNotice: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -369,7 +369,7 @@ const createStyles = (colors: ThemeColors) =>
     demoText: {
       fontSize: TypographyV2.meta.size,
       lineHeight: TypographyV2.meta.lineHeight,
-      fontFamily: TypeStyles.body.fontFamily },
+      fontFamily: TypographyV2.body.fontFamily },
     loadingState: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -379,7 +379,7 @@ const createStyles = (colors: ThemeColors) =>
     loadingText: {
       fontSize: TypographyV2.meta.size,
       lineHeight: TypographyV2.meta.lineHeight,
-      fontFamily: TypeStyles.body.fontFamily },
+      fontFamily: TypographyV2.body.fontFamily },
     emptyState: {
       alignItems: 'center',
       paddingVertical: Space.xl,
@@ -395,12 +395,12 @@ const createStyles = (colors: ThemeColors) =>
     emptyTitle: {
       fontSize: TypographyV2.sectionTitle.size,
       lineHeight: TypographyV2.sectionTitle.lineHeight,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       letterSpacing: TypographyV2.sectionTitle.letterSpacing },
     emptyBody: {
       fontSize: TypographyV2.meta.size,
       lineHeight: TypographyV2.meta.lineHeight + 2,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       textAlign: 'center' },
     retryBtn: {
       paddingHorizontal: Space.md,
@@ -413,4 +413,4 @@ const createStyles = (colors: ThemeColors) =>
     retryBtnText: {
       fontSize: TypographyV2.body.size,
       lineHeight: TypographyV2.body.lineHeight,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily } });
+      fontFamily: TypographyV2.bodyStrong.fontFamily } });

@@ -16,6 +16,7 @@ import {
   sanitizeTradePriceInput,
   sanitizeTradeQuantityInput,
   CO_OWN_FEE_RATE,
+  CO_OWN_MAX_UNITS,
   TradeSide,
   TradeEligibility,
   computeReservation,
@@ -40,7 +41,6 @@ import { Space, FontFamily, DockConstants, LetterSpacing, Numeric, Stroke} from 
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { useHaptic } from '../hooks/useHaptic';
-import { useBreakpoint } from '../hooks/useBreakpoint';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import {
   CoOwnTradeComposer,
@@ -100,7 +100,6 @@ export default function TradeScreen() {
   const { colors } = useAppTheme();
   const { show } = useToast();
   const insets = useSafeAreaInsets();
-  const { isVeryCompact: isCompact } = useBreakpoint();
   const scrollBottomPadding = Math.max(insets.bottom, Space.md) + DockConstants.singleActionHeight;
   const { isOffline } = useConnectivity();
   const featureFlags = useCoOwnFeatureFlags();
@@ -119,7 +118,9 @@ export default function TradeScreen() {
   const [isSubmittingOrder, setIsSubmittingOrder] = React.useState(false);
   const idempotencyKeyRef = useRef<string | null>(null);
   // Phase 2.5: exchange-grade order type + duration
-  const [ticketOrderType, setTicketOrderType] = React.useState<CoOwnTicketOrderType>('protected_instant');
+  const [ticketOrderType, setTicketOrderType] = React.useState<CoOwnTicketOrderType>(
+    route.params?.limitPrice ? 'limit' : 'protected_instant'
+  );
   const [ticketDuration, setTicketDuration] = React.useState<CoOwnTicketDuration>('GFD');
 
   const [asset, setAsset] = React.useState<MarketCoOwnAsset | null>(null);
@@ -210,12 +211,21 @@ export default function TradeScreen() {
   }, [tradeAssetId]);
 
   const marketPrice = asset ? asset.unitPriceGbp : 0;
+  const feeRate = asset?.tradingFeeRate ?? CO_OWN_FEE_RATE;
+  const isPrimaryOffering = Boolean(
+    asset
+    && asset.availableUnits > 0
+    && (asset.offeringStatus === 'offering'
+      || (asset.offeringStatus == null && asset.marketStatus === 'pre_market'))
+  );
   // P0.1: protected_instant is now a distinct order type — NOT mapped to 'market'.
   // The backend accepts 'protected_market' with maxPriceGbp (buy) / minPriceGbp (sell).
   const orderMode: 'market' | 'limit' = ticketOrderType === 'protected_instant' ? 'market' : 'limit';
   const bestBid = exactGbp(orderBook?.bids[0]?.unitPriceGbpStr, orderBook?.bids[0]?.unitPriceGbp) ?? 0;
   const bestAsk = exactGbp(orderBook?.asks[0]?.unitPriceGbpStr, orderBook?.asks[0]?.unitPriceGbp) ?? 0;
-  const protectedReferencePrice = side === 'buy' ? bestAsk : bestBid;
+  const protectedReferencePrice = side === 'buy'
+    ? (bestAsk > 0 ? bestAsk : isPrimaryOffering ? marketPrice : 0)
+    : bestBid;
   const protectedLimitPrice = protectedReferencePrice > 0
     ? Number((protectedReferencePrice * (side === 'buy' ? 1.02 : 0.98)).toFixed(4))
     : 0;
@@ -249,9 +259,25 @@ export default function TradeScreen() {
     return rightsRows.some((r) => r.isTbc);
   }, [asset]);
 
-  const visibleBook = React.useMemo(() => ({
-    bids: (orderBook?.bids ?? []).map((level) => ({ price: exactGbp(level.unitPriceGbpStr, level.unitPriceGbp) ?? 0, size: level.units })),
-    asks: (orderBook?.asks ?? []).map((level) => ({ price: exactGbp(level.unitPriceGbpStr, level.unitPriceGbp) ?? 0, size: level.units })) }), [orderBook]);
+  const visibleBook = React.useMemo(() => {
+    const bids = (orderBook?.bids ?? []).map((level) => ({
+      price: exactGbp(level.unitPriceGbpStr, level.unitPriceGbp) ?? 0,
+      size: level.units,
+    }));
+    const asks = (orderBook?.asks ?? []).map((level) => ({
+      price: exactGbp(level.unitPriceGbpStr, level.unitPriceGbp) ?? 0,
+      size: level.units,
+    }));
+    // During the primary offering the backend can fill from available float
+    // even when no secondary asks exist. Include that executable source in
+    // the local estimate so the ticket does not incorrectly become a
+    // concierge-only flow.
+    if (isPrimaryOffering && side === 'buy' && asset) {
+      asks.push({ price: marketPrice, size: asset.availableUnits });
+      asks.sort((a, b) => a.price - b.price);
+    }
+    return { bids, asks };
+  }, [asset, isPrimaryOffering, marketPrice, orderBook, side]);
 
   // Compute the fill estimate before the quote so that protected_instant
   // orders can use the order-book walk's average fill price as the headline
@@ -276,15 +302,16 @@ export default function TradeScreen() {
       side,
       quantityInput,
       limitPriceInput: effectiveLimitPrice > 0 ? String(effectiveLimitPrice) : '',
-      marketPrice: headlineMarketPrice }),
-    [effectiveLimitPrice, headlineMarketPrice, quantityInput, side]
+      marketPrice: headlineMarketPrice,
+      feeRate }),
+    [effectiveLimitPrice, feeRate, headlineMarketPrice, quantityInput, side]
   );
 
   const protectionPrice = quote.hasLimitPrice ? quote.limitPrice : 0;
 
   const reservation = React.useMemo(
-    () => computeReservation(side, quote.quantity, protectionPrice, DEFAULT_FEE_SCHEDULE, 0),
-    [side, quote.quantity, protectionPrice]
+    () => computeReservation(side, quote.quantity, protectionPrice, { ...DEFAULT_FEE_SCHEDULE, rate: feeRate }, 0),
+    [feeRate, side, quote.quantity, protectionPrice]
   );
 
   const depthContext = React.useMemo(() => {
@@ -321,9 +348,19 @@ export default function TradeScreen() {
     && !hasSequenceGap
     && lastSequence !== null
     && !orderBookError;
+  const isPrimaryOfferingBuy = Boolean(
+    asset
+    && isPrimaryOffering
+    && side === 'buy'
+    && asset.availableUnits > 0
+    && !isForegroundStale
+    && !orderBookError
+    && (!orderBook || (orderBook.source === 'live' && orderBook.reconciliationState === 'reconciled'))
+  );
+  const canUseMarketSource = isPrimaryOfferingBuy || marketIsAuthoritative;
   const canSubmit = isTradeSubmitEnabled({ assetFound: !!asset, eligibility, quote })
     && !hasIncompleteRights
-    && marketIsAuthoritative
+    && canUseMarketSource
     && !isOffline;
   const submitDisabledReason = React.useMemo(() => {
     if (!featureFlags.canPlaceOrders) return 'Trading temporarily unavailable';
@@ -333,17 +370,25 @@ export default function TradeScreen() {
       return `Maximum ${featureFlags.maxOrderSize} units per order`;
     }
     if (isOffline) return t('trade.error.reconnectToReview');
+    if (isPrimaryOffering && side === 'buy') {
+      if (isForegroundStale || orderBookError) return 'Primary allocation unavailable — refreshing…';
+      if (orderBook && orderBook.source !== 'live') return t('trade.error.liveDataUnavailable');
+      if (orderBook && orderBook.reconciliationState !== 'reconciled') return t('trade.error.reconciliationInProgress');
+      return null;
+    }
     if (orderBookError) return 'Live market unavailable — refreshing…';
     if (hasSequenceGap) return 'Market data interrupted — refreshing…';
     if (orderBook?.source !== 'live') return t('trade.error.liveDataUnavailable');
     if (orderBook.reconciliationState !== 'reconciled') return t('trade.error.reconciliationInProgress');
     if (!isBookFresh(orderBook, Date.now(), orderBook?.stalenessThresholdSeconds)) return t('trade.error.timestampUnavailable');
     return null;
-  }, [asset, eligibility, hasIncompleteRights, isForegroundStale, isOffline, lastSequence, orderBook, quote, orderBookError, hasSequenceGap, featureFlags.canPlaceOrders, featureFlags.maxOrderSize]);
+  }, [asset, eligibility, hasIncompleteRights, isForegroundStale, isOffline, isPrimaryOffering, lastSequence, orderBook, quote, orderBookError, side, hasSequenceGap, featureFlags.canPlaceOrders, featureFlags.maxOrderSize]);
 
   // Thin market: no opposite side → substitute "Review order" with "Request quote"
-  const isThinMarket = (side === 'buy' && visibleBook.asks.length === 0)
-    || (side === 'sell' && visibleBook.bids.length === 0);
+  const isThinMarket = !isPrimaryOffering && (
+    (side === 'buy' && visibleBook.asks.length === 0)
+    || (side === 'sell' && visibleBook.bids.length === 0)
+  );
 
   const haptic = useHaptic();
 
@@ -352,13 +397,14 @@ export default function TradeScreen() {
 
     const decision = evaluateTradeSubmit({
       orderMode, side, quantityInput, limitPriceInput: String(effectiveLimitPrice), marketPrice,
+      feeRate,
       assetFound: !!asset, eligibility, maxSellUnits: yourUnits });
 
     if (!decision.ok) { show(decision.message, 'error'); return; }
     if (!asset) { show(t('trade.error.assetNotFound'), 'error'); return; }
 
     if (!currentUser?.id) { show(t('trade.error.signInRequired'), 'error'); return; }
-    if (!marketIsAuthoritative || !orderBook) {
+    if (!canUseMarketSource || (!isPrimaryOfferingBuy && !orderBook)) {
       show(t('trade.error.liveDataPaused'), 'error');
       return;
     }
@@ -430,7 +476,10 @@ export default function TradeScreen() {
         reservationExpiresAt: reserved.expiresAt,
         previewValidUntil: preview.validUntil,
         maxReserved1ze: reserved.reserved1zeUnits / 1000,
-        marketDataTimestamp: orderBook.serverTimestamp,
+        marketDataTimestamp: orderBook?.serverTimestamp
+          ?? asset.marketSnapshot?.sourceAsOf
+          ?? asset.marketSnapshot?.asOf,
+        feeRate,
         // Phase 2.5: duration (GFD / GTC90) for resting limit orders. The
         // shared RootStackParamList is owned by another team and does not yet
         // declare this field; the cast preserves type-safety for the known
@@ -497,7 +546,9 @@ export default function TradeScreen() {
   const executableUnits = side === 'buy'
     ? visibleBook.asks.reduce((total, level) => total + level.size, 0)
     : visibleBook.bids.reduce((total, level) => total + level.size, 0);
-  const maxUnits = side === 'sell' ? Math.min(yourUnits, executableUnits || yourUnits) : executableUnits;
+  const maxUnits = side === 'sell'
+    ? Math.min(CO_OWN_MAX_UNITS, yourUnits, executableUnits || yourUnits)
+    : Math.min(CO_OWN_MAX_UNITS, executableUnits);
   // 1ZE is the canonical settlement unit. GBP/TVUSD are secondary references.
   const settlementLabel = '1ZE';
 
@@ -627,16 +678,18 @@ export default function TradeScreen() {
         <View style={[
           styles.illustrativeBanner,
           {
-            backgroundColor: marketIsAuthoritative ? colors.successSubtle : colors.warningSubtle,
-            borderColor: marketIsAuthoritative ? colors.successBorder : colors.warningBorder },
+            backgroundColor: canUseMarketSource ? colors.successSubtle : colors.warningSubtle,
+            borderColor: canUseMarketSource ? colors.successBorder : colors.warningBorder },
         ]}>
           <Ionicons
-            name={marketIsAuthoritative ? 'pulse-outline' : 'pause-circle-outline'}
+            name={canUseMarketSource ? 'pulse-outline' : 'pause-circle-outline'}
             size={14}
-            color={marketIsAuthoritative ? colors.success : colors.warning}
+            color={canUseMarketSource ? colors.success : colors.warning}
           />
           <Text style={[styles.illustrativeBannerText, { color: colors.textSecondary }]} numberOfLines={3} maxFontSizeMultiplier={2}>
-            {marketIsAuthoritative
+            {isPrimaryOfferingBuy
+              ? 'Primary allocation price · executable units available'
+              : marketIsAuthoritative
               ? `${orderBookStreaming ? 'Live depth' : 'Live snapshot'} · updated ${bookAgeSeconds}s ago`
               : orderBookError
                 ? 'Live market unavailable — refreshing…'
@@ -670,7 +723,8 @@ export default function TradeScreen() {
             grossLabel={<CoOwnNumericText value={quote.grossValue} unit="1ZE" size="priceList" align="right" showUnit={false} />}
             feeLabel={<CoOwnNumericText value={quote.fee} unit="1ZE" size="priceList" align="right" showUnit={false} />}
             totalLabel={<CoOwnNumericText value={quote.netValue} unit="1ZE" size="priceLarge" align="right" showUnit={false} />}
-            totalCaption={side === 'buy' ? 'Including 1% fee' : 'After 1% fee'}
+            totalCaption={side === 'buy' ? `Including ${(feeRate * 100).toFixed(2).replace(/\.00$/, '')}% fee` : `After ${(feeRate * 100).toFixed(2).replace(/\.00$/, '')}% fee`}
+            feeRate={feeRate}
             settlementLabel={settlementLabel}
             escrowPartner={asset?.escrowPartner ?? null}
             escrowTermsUrl={asset?.escrowTermsUrl ?? null}
@@ -695,23 +749,19 @@ export default function TradeScreen() {
             rightsVersion={asset.rights?.version ? `v${asset.rights.version}` : undefined}
             // P0.3: Pass the book source so the composer shows truth language
             bookSource={orderBookError ? 'development-fallback' : (orderBook?.source ?? 'development-fallback')}
-          />
-        </View>
-
-        {/* ── Unified order ticket ──
-            One surface containing: order type, quantity, limit price, duration,
-            and market context. Previously these were separate cards forcing the
-            user to move between editable fields and the calculated result. */}
-        <View>
-          <View style={[styles.ticketCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            {/* Order type */}
-            <Text style={[styles.inputLabel, { color: colors.textMuted }]} maxFontSizeMultiplier={1.4}>Order type</Text>
-            <AppSegmentControl
-              options={ORDER_TYPE_OPTIONS}
-              value={ticketOrderType}
-              onChange={setTicketOrderType}
-              fullWidth
-            />
+          >
+            {/* ── Unified order ticket ──
+                Integrated directly above the quote breakdown so input precedes output.
+                Flat canvas composition with hairline separators per Anti-AI policy. */}
+            <View style={styles.ticketCard}>
+              {/* Order type */}
+              <Text style={[styles.inputLabel, { color: colors.textMuted }]} maxFontSizeMultiplier={1.4}>Order type</Text>
+              <AppSegmentControl
+                options={ORDER_TYPE_OPTIONS}
+                value={ticketOrderType}
+                onChange={setTicketOrderType}
+                fullWidth
+              />
             <Text style={[styles.marketHint, { color: colors.textMuted }]} numberOfLines={3} maxFontSizeMultiplier={1.4}>
               {ticketOrderType === 'protected_instant'
                 ? `${side === 'buy' ? 'Buy' : 'Sell'} available units within your price limit. Any unfilled amount is canceled.`
@@ -732,17 +782,63 @@ export default function TradeScreen() {
                   suffix="units"
                   accessibilityLabel="Trade quantity"
                 />
-                {maxUnits > 0 && (
-                  <AnimatedPressable
-                    onPress={() => setQuantityInput(String(maxUnits))}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Set quantity to maximum ${maxUnits} units`}
-                    scaleValue={0.96}
-                    hapticFeedback="light"
-                  >
-                    <Text style={[styles.maxLink, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>Max: {maxUnits}</Text>
-                  </AnimatedPressable>
-                )}
+                <View style={styles.quickPresetRow}>
+                  {[1, 5, 10].filter((q) => q <= maxUnits || maxUnits === 0).map((preset) => (
+                    <AnimatedPressable
+                      key={preset}
+                      onPress={() => {
+                        haptic.light();
+                        setQuantityInput(String(preset));
+                      }}
+                      style={[
+                        styles.quickPresetChip,
+                        {
+                          backgroundColor: quantityInput === String(preset) ? colors.brandSubtle : colors.surfaceAlt,
+                          borderColor: quantityInput === String(preset) ? colors.brand : colors.border,
+                        },
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Set ${preset} units`}
+                      scaleValue={0.95}
+                    >
+                      <Text
+                        style={[
+                          styles.quickPresetText,
+                          { color: quantityInput === String(preset) ? colors.brand : colors.textPrimary },
+                        ]}
+                      >
+                        {preset}
+                      </Text>
+                    </AnimatedPressable>
+                  ))}
+                  {maxUnits > 0 ? (
+                    <AnimatedPressable
+                      onPress={() => {
+                        haptic.light();
+                        setQuantityInput(String(maxUnits));
+                      }}
+                      style={[
+                        styles.quickPresetChip,
+                        {
+                          backgroundColor: quantityInput === String(maxUnits) ? colors.brandSubtle : colors.surfaceAlt,
+                          borderColor: quantityInput === String(maxUnits) ? colors.brand : colors.border,
+                        },
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Set maximum ${maxUnits} units`}
+                      scaleValue={0.95}
+                    >
+                      <Text
+                        style={[
+                          styles.quickPresetText,
+                          { color: quantityInput === String(maxUnits) ? colors.brand : colors.textPrimary },
+                        ]}
+                      >
+                        Max ({maxUnits})
+                      </Text>
+                    </AnimatedPressable>
+                  ) : null}
+                </View>
               </View>
               <View style={styles.ticketContextCol}>
                 <View style={styles.contextItem}>
@@ -759,7 +855,7 @@ export default function TradeScreen() {
                 </View>
                 <View style={styles.contextItem}>
                   <Text style={[styles.contextLabel, { color: colors.textMuted }]}>Fee</Text>
-                  <Text style={[styles.contextValue, { color: colors.textPrimary }]}>1%</Text>
+                  <Text style={[styles.contextValue, { color: colors.textPrimary }]}>{(feeRate * 100).toFixed(2).replace(/\.00$/, '')}%</Text>
                 </View>
               </View>
             </View>
@@ -845,7 +941,8 @@ export default function TradeScreen() {
               </>
             )}
           </View>
-        </View>
+        </CoOwnTradeComposer>
+      </View>
 
         {/* Phase 6: Concierge CTA — shown when the market is thin (no opposite side) */}
         {visibleBook.asks.length === 0 && side === 'buy' && (
@@ -1002,11 +1099,8 @@ const styles = StyleSheet.create({
   // trustworthy. 24pt section spacing. Generous internal padding (24pt).
   // Hairline border, not heavy chrome.
   ticketCard: {
-    borderRadius: RadiusRoleValue.sheetDialog,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.lg,
-    gap: Space.md,
-    marginBottom: Space.lg },
+    paddingVertical: Space.sm,
+    gap: Space.md },
   // ── Ticket divider — hairline separator between sections ──
   // Per AGENTS.md stroke grammar: separators are hairline.
   ticketDivider: {
@@ -1070,6 +1164,25 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
     letterSpacing: LetterSpacing.wide + 0.28,
     fontVariant: ['tabular-nums'] as ['tabular-nums'] },
+  // Quick preset chips — fast, one-tap unit selection
+  quickPresetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    marginTop: Space.xs,
+    flexWrap: 'wrap',
+  },
+  quickPresetChip: {
+    paddingHorizontal: Space.sm,
+    paddingVertical: 4,
+    borderRadius: RadiusRoleValue.pillAvatar,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  quickPresetText: {
+    fontSize: TypographyV2.caption.size,
+    fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.caption.letterSpacing,
+  },
   // Max link — quiet, professional quick-fill action. Tabular-nums.
   maxLink: {
     fontSize: TypographyV2.meta.size,

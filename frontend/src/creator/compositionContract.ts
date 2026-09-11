@@ -28,6 +28,10 @@ function isLocalUri(uri: string): boolean {
 export interface ContractValidationResult {
   valid: boolean;
   errors: string[];
+  // Non-blocking warnings — the document is still publishable, but the
+  // developer should be alerted to potential issues (e.g. orphaned clip
+  // anchors that fall back to page-level timing).
+  warnings: string[];
   sanitizedDoc?: CreatorDocument;
 }
 
@@ -49,7 +53,7 @@ export function validateDocumentStructure(doc: CreatorDocument): ContractValidat
   const schemaResult = safeValidateDocument(doc);
   if (!schemaResult.success || !schemaResult.data) {
     errors.push(`Schema validation failed: ${schemaResult.error}`);
-    return { valid: false, errors };
+    return { valid: false, errors, warnings: [] };
   }
 
   const validated = schemaResult.data;
@@ -135,8 +139,44 @@ export function validateDocumentStructure(doc: CreatorDocument): ContractValidat
   return {
     valid: errors.length === 0,
     errors,
+    warnings: [],
     sanitizedDoc: errors.length === 0 ? validated : undefined,
   };
+}
+
+/**
+ * Validates that every non-media layer with a `clipId` anchor refers to a
+ * media layer that exists on the SAME page. Orphaned anchors (the clip was
+ * deleted, split, or moved to another page) are reported as WARNING-level
+ * issues — the overlay still renders at page-level timing, so publishing is
+ * not blocked, but the developer should be alerted.
+ *
+ * Returns a list of human-readable warning strings.
+ */
+function validateClipAnchors(doc: CreatorDocument): string[] {
+  const warnings: string[] = [];
+  for (const page of doc.pages) {
+    // Collect all media layer IDs on this page — these are the only valid
+    // clipId targets (a clipId binds an overlay to a media clip).
+    const mediaIdsOnPage = new Set<string>();
+    for (const layer of page.layers) {
+      if (layer.type === 'media') {
+        mediaIdsOnPage.add(layer.id);
+      }
+    }
+    for (const layer of page.layers) {
+      // Media layers themselves do not anchor to other clips.
+      if (layer.type === 'media') continue;
+      const clipId = (layer as { clipId?: string }).clipId;
+      if (!clipId) continue;
+      if (!mediaIdsOnPage.has(clipId)) {
+        warnings.push(
+          `Layer ${layer.id} on page ${page.id}: clipId '${clipId}' does not refer to a media layer on this page — overlay will fall back to page-level timing.`,
+        );
+      }
+    }
+  }
+  return warnings;
 }
 
 /**
@@ -188,9 +228,22 @@ export function validateForPublish(doc: CreatorDocument): ContractValidationResu
     }
   }
 
+  // Clip anchor validation — orphaned anchors are WARNING-level (the
+  // overlay falls back to page-level timing, so publish is not blocked).
+  const anchorWarnings = validateClipAnchors(validated);
+  if (anchorWarnings.length > 0) {
+    // Surface to the developer during publish so orphaned anchors are
+    // visible — the overlay still renders at page-level timing.
+    console.warn(
+      '[compositionContract] Orphaned clip anchors detected — overlays will fall back to page-level timing:',
+      anchorWarnings,
+    );
+  }
+
   return {
     valid: errors.length === 0,
     errors,
+    warnings: anchorWarnings,
     sanitizedDoc: errors.length === 0 ? validated : undefined,
   };
 }

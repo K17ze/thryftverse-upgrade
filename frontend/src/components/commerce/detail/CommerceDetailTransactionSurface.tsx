@@ -144,6 +144,14 @@ export function CommerceDetailTransactionSurface({
           {primaryContent}
           {headlineAside ? <View style={styles.auctionHeadlineAside}>{headlineAside}</View> : secondaryContent}
         </View>
+      ) : family === 'co_own' && headlineAside ? (
+        <>
+          <View style={styles.coOwnHeadline}>
+            {primaryContent}
+            <View style={styles.coOwnHeadlineAside}>{headlineAside}</View>
+          </View>
+          {secondaryContent}
+        </>
       ) : (
         <>
           {primaryContent}
@@ -217,9 +225,14 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.display.lineHeight + 2,
     letterSpacing: -0.8 },
   primaryValueCoOwn: {
-    fontSize: TypographyV2.display.size,
-    lineHeight: TypographyV2.display.lineHeight,
-    letterSpacing: -0.55 },
+    // Market-figure band (StockX/GOAT): 20-24pt bold tabular. 22pt matches
+    // the direct-listing identity price so one unit of value reads at one
+    // scale across commerce surfaces — the previous 32pt display size
+    // shouted next to the 22pt direct PDP price.
+    fontSize: TypographyV2.priceList.size + 2,
+    lineHeight: TypographyV2.priceList.lineHeight + 3,
+    fontFamily: TypographyV2.priceList.fontFamily,
+    letterSpacing: -0.3 },
   auctionHeadline: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -230,6 +243,15 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'flex-end',
     paddingBottom: Space.xs },
+  // Co-Own headline: price on the left, market-state pill on the right.
+  coOwnHeadline: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: Space.sm },
+  coOwnHeadlineAside: {
+    flexShrink: 0,
+    alignItems: 'flex-end' },
   secondaryRow: {
     flexDirection: 'row',
     alignItems: 'baseline',

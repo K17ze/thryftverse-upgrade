@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   useWindowDimensions,
-  ActivityIndicator,
   Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,6 +11,7 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Stroke, AvatarSize, ProfileLayout, Scrim } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
+import { UploadProgressRing, useLingeringActive } from '../flagship/FlagshipProfileMedia';
 
 const COVER_H = ProfileLayout.coverHeightEdit;
 const AVATAR_SIZE = AvatarSize.edit;
@@ -28,6 +28,10 @@ interface EditProfilePreviewProps {
   onEditAvatar: () => void;
   isUploadingCover: boolean;
   isUploadingAvatar: boolean;
+  /** Real byte progress 0–1 for the cover upload — drives the determinate ring. */
+  coverUploadProgress?: number;
+  /** Real byte progress 0–1 for the avatar upload — drives the determinate ring. */
+  avatarUploadProgress?: number;
   hasCoverError?: boolean;
   hasAvatarError?: boolean;
 }
@@ -44,11 +48,16 @@ export function EditProfilePreview({
   onEditAvatar,
   isUploadingCover,
   isUploadingAvatar,
+  coverUploadProgress,
+  avatarUploadProgress,
   hasCoverError = false,
   hasAvatarError = false }: EditProfilePreviewProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width: SCREEN_W } = useWindowDimensions();
+  // Rings linger briefly after completion so the fade reads as a transition.
+  const showCoverRing = useLingeringActive(isUploadingCover);
+  const showAvatarRing = useLingeringActive(isUploadingAvatar);
   const contextParts: string[] = [];
   if (location) contextParts.push(location);
   if (memberSince) contextParts.push(`Member since ${memberSince}`);
@@ -95,8 +104,12 @@ export function EditProfilePreview({
           accessibilityLabel="Change cover photo"
           disabled={isUploadingCover}
         >
-          {isUploadingCover ? (
-            <ActivityIndicator size="small" color={colors.textInverse} />
+          {showCoverRing ? (
+            <UploadProgressRing
+              progress={coverUploadProgress}
+              active={isUploadingCover}
+              size={28}
+            />
           ) : hasCoverError ? (
             <Ionicons name="alert-circle" size={18} color={colors.danger} />
           ) : (
@@ -130,8 +143,12 @@ export function EditProfilePreview({
             disabled={isUploadingAvatar}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            {isUploadingAvatar ? (
-              <ActivityIndicator size="small" color={colors.textInverse} />
+            {showAvatarRing ? (
+              <UploadProgressRing
+                progress={avatarUploadProgress}
+                active={isUploadingAvatar}
+                size={20}
+              />
             ) : hasAvatarError ? (
               <Ionicons name="alert-circle" size={13} color={colors.danger} />
             ) : (

@@ -10,7 +10,7 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, TextInput, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
@@ -33,6 +33,7 @@ import { AppButton } from '../components/ui/AppButton';
 import { fetchCoOwnAssetCorporateActions, fetchGovernanceVotes, castGovernanceVote, type CoOwnCorporateAction } from '../services/marketApi';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useSafeOpenURL } from '../hooks/useSafeOpenURL';
 
 type RouteT = RouteProp<RootStackParamList, 'CorporateActionDetail'>;
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -56,6 +57,55 @@ function formatDate(iso: string | null): string {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+/** Formats a voting deadline ISO string, appending a relative "closes in"
+ *  suffix when the deadline is within 7 days. Returns "—" for null. */
+function formatDeadline(iso: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  const now = new Date();
+  const diffMs = d.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  const formatted = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  if (diffDays <= 0) return `${formatted} · closed`;
+  if (diffDays === 1) return `${formatted} · closes in 1 day`;
+  if (diffDays <= 7) return `${formatted} · closes in ${diffDays} days`;
+  return formatted;
+}
+
+interface ProposalDocument {
+  title: string;
+  url: string;
+}
+
+/** Extracts proposal documents (attachments / rationale docs) from the
+ *  corporate action's metadata JSONB field. Fail-closed: returns [] when
+ *  metadata is absent or the attachments array is missing or malformed. */
+function extractDocuments(metadata: Record<string, unknown> | null): ProposalDocument[] {
+  if (!metadata) return [];
+  const raw = metadata.attachments ?? metadata.documents;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (d): d is ProposalDocument =>
+      typeof d === 'object' && d !== null &&
+      typeof (d as Record<string, unknown>).title === 'string' &&
+      typeof (d as Record<string, unknown>).url === 'string',
+  );
+}
+
+/** Extracts a finite number from metadata, or null. */
+function extractNumber(metadata: Record<string, unknown> | null, key: string): number | null {
+  if (!metadata) return null;
+  const value = metadata[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+/** Extracts a non-empty string from metadata, or null. */
+function extractString(metadata: Record<string, unknown> | null, key: string): string | null {
+  if (!metadata) return null;
+  const value = metadata[key];
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
 export default function CorporateActionDetailScreen() {
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
@@ -63,6 +113,7 @@ export default function CorporateActionDetailScreen() {
   const insets = useSafeAreaInsets();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { currencySymbol } = useFormattedPrice();
+  const openURL = useSafeOpenURL();
 
   const formatAmount = React.useCallback(
     (minor: number | null): string | null => {
@@ -95,8 +146,29 @@ export default function CorporateActionDetailScreen() {
   const [voteSummary, setVoteSummary] = React.useState<{ vote: string; votingPowerUnits: number; voteCount: number }[]>([]);
   const [totalVotingPower, setTotalVotingPower] = React.useState(0);
   const [myVote, setMyVote] = React.useState<'for' | 'against' | 'abstain' | null>(null);
+  // U49: vote fetch errors are surfaced with retry, not swallowed.
+  const [voteError, setVoteError] = React.useState<string | null>(null);
+  const [voteLoading, setVoteLoading] = React.useState(false);
+  // U49: uncertain-submit reconciliation. A network error on cast leaves
+  // the user unsure whether the vote was recorded.
+  const [voteUncertain, setVoteUncertain] = React.useState(false);
+  // U48: server-authoritative eligibility from the votes endpoint.
+  const [voteEligibility, setVoteEligibility] = React.useState<{
+    eligible: boolean;
+    reason: string;
+    votingPowerUnits: number;
+    recordDate: string | null;
+    status: string;
+  } | null>(null);
   const [voteRationale, setVoteRationale] = React.useState('');
   const [submittingVote, setSubmittingVote] = React.useState(false);
+  // Vote receipt — confirmation state shown after a successful vote cast.
+  // Auto-clears on navigation (component unmount); user-dismissable via X.
+  const [voteReceipt, setVoteReceipt] = React.useState<{
+    vote: string;
+    votingPowerUnits: number;
+    createdAt: string;
+  } | null>(null);
   const isGovernanceAction = (fetchedAction?.actionType ?? actionType) === 'governance' || (fetchedAction?.actionType ?? actionType) === 'vote';
 
   const loadAction = React.useCallback(async () => {
@@ -125,13 +197,20 @@ export default function CorporateActionDetailScreen() {
   // Load governance votes when action is a governance type
   const loadVotes = React.useCallback(async () => {
     if (!actionId || !isGovernanceAction) return;
+    setVoteLoading(true);
+    setVoteError(null);
     try {
       const result = await fetchGovernanceVotes(actionId);
       setVoteSummary(result.summary);
       setTotalVotingPower(result.totalVotingPower);
       setMyVote(result.myVote);
-    } catch {
-      // Silent — voting is supplementary
+      setVoteEligibility(result.eligibility ?? null);
+    } catch (err) {
+      // U49: surface the error with a retry affordance instead of
+      // swallowing it silently.
+      setVoteError(err instanceof Error ? err.message : 'Failed to load votes');
+    } finally {
+      setVoteLoading(false);
     }
   }, [actionId, isGovernanceAction]);
 
@@ -143,13 +222,25 @@ export default function CorporateActionDetailScreen() {
     if (!actionId || !assetId) return;
     setSubmittingVote(true);
     try {
-      await castGovernanceVote(actionId, { assetId, vote, rationale: voteRationale.trim() || undefined });
+      const result = await castGovernanceVote(actionId, { assetId, vote, rationale: voteRationale.trim() || undefined });
+      setVoteReceipt({ vote: result.vote, votingPowerUnits: result.votingPowerUnits, createdAt: result.createdAt });
       haptics.success();
       showToast('Vote submitted', 'success');
+      setVoteUncertain(false);
+      // U49: refresh the tally after voting so the user sees their vote
+      // reflected in the current results.
       await loadVotes();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to submit vote';
-      showToast(message, 'error');
+      const isNetworkError = err instanceof Error && /network|fetch|timeout/i.test(err.message);
+      if (isNetworkError) {
+        // U49: the request may have been recorded — do not claim failure.
+        setVoteUncertain(true);
+        showToast('Vote not confirmed — check back', 'info');
+      } else {
+        setVoteUncertain(false);
+        const message = err instanceof Error ? err.message : 'Failed to submit vote';
+        showToast(message, 'error');
+      }
     } finally {
       setSubmittingVote(false);
     }
@@ -172,6 +263,16 @@ export default function CorporateActionDetailScreen() {
   const displayRecordDate = fetchedAction ? formatDate(fetchedAction.recordDate) : (recordDateLabel ?? null);
   const displayPaymentDate = fetchedAction ? formatDate(fetchedAction.payableDate) : (paymentDateLabel ?? null);
   const displayTitle = fetchedAction?.title ?? actionType;
+
+  // Proposal metadata — quorum, pass threshold, voting deadline, and
+  // proposal documents are sourced from the corporate action's metadata
+  // JSONB field. All fields are optional; the UI fails closed (hides
+  // sections) when data is absent.
+  const metadata = fetchedAction?.metadata ?? null;
+  const quorumUnits = extractNumber(metadata, 'quorumUnits');
+  const passThresholdPct = extractNumber(metadata, 'passThresholdPct');
+  const votingDeadline = extractString(metadata, 'votingDeadline');
+  const proposalDocuments = React.useMemo(() => extractDocuments(metadata), [metadata]);
 
   const typedActionType = displayActionType as CoOwnCorporateActionType;
   const typedStatus = displayStatus as CoOwnCorporateActionStatus;
@@ -260,6 +361,7 @@ export default function CorporateActionDetailScreen() {
             amountLabel={displayAmountLabel ?? undefined}
             recordDateLabel={displayRecordDate ?? undefined}
             paymentDateLabel={displayPaymentDate ?? undefined}
+            hasDocuments={proposalDocuments.length > 0}
           />
         </View>
 
@@ -277,6 +379,31 @@ export default function CorporateActionDetailScreen() {
             {description}
           </Text>
         </View>
+
+        {/* Proposal documents — attachments / rationale docs from metadata */}
+        {proposalDocuments.length > 0 && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Proposal documents</Text>
+            {proposalDocuments.map((doc, index) => (
+              <Pressable
+                key={`${doc.title}-${index}`}
+                onPress={() => { haptics.tap(); openURL(doc.url, doc.title); }}
+                style={({ pressed }) => [
+                  styles.docRow,
+                  { borderColor: colors.borderSubtle, opacity: pressed ? 0.7 : 1 },
+                ]}
+                accessibilityRole="link"
+                accessibilityLabel={`Open document: ${doc.title}`}
+              >
+                <Ionicons name="document-text-outline" size={20} color={colors.textSecondary} />
+                <Text style={[styles.docTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                  {doc.title}
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </Pressable>
+            ))}
+          </View>
+        )}
 
         {/* Key dates */}
         <View style={styles.section}>
@@ -352,7 +479,127 @@ export default function CorporateActionDetailScreen() {
                 </View>
               </View>
 
-              {/* Vote results — tally bars with semantic colours */}
+              {/* Vote receipt — success confirmation after a successful cast */}
+              {voteReceipt && (
+                <View style={[styles.voteReceiptBanner, { backgroundColor: colors.successSubtle, borderColor: colors.successBorder }]}>
+                  <View style={styles.voteReceiptContent}>
+                    <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                    <View style={styles.voteReceiptText}>
+                      <Text style={[styles.voteReceiptTitle, { color: colors.success }]}>Vote recorded</Text>
+                      <Text style={[styles.voteReceiptDetail, { color: colors.textSecondary }]}>
+                        {voteReceipt.vote === 'for' ? 'For' : voteReceipt.vote === 'against' ? 'Against' : 'Abstain'} · {voteReceipt.votingPowerUnits.toLocaleString()} units applied
+                      </Text>
+                      <Text style={[styles.voteReceiptMeta, { color: colors.textMuted }]}>
+                        {formatDate(voteReceipt.createdAt)}
+                      </Text>
+                    </View>
+                  </View>
+                  <Pressable
+                    onPress={() => { haptics.tap(); setVoteReceipt(null); }}
+                    hitSlop={12}
+                    accessibilityLabel="Dismiss vote confirmation"
+                    accessibilityRole="button"
+                    style={styles.voteReceiptDismiss}
+                  >
+                    <Ionicons name="close" size={16} color={colors.textMuted} />
+                  </Pressable>
+                </View>
+              )}
+
+              {/* U48: record-date power + opening/deadline summary */}
+              {voteEligibility && (
+                <View style={[styles.voteEligibility, { borderColor: colors.borderSubtle }]}>
+                  {voteEligibility.recordDate && (
+                    <View style={styles.voteEligibilityRow}>
+                      <Text style={[styles.voteEligibilityLabel, { color: colors.textMuted }]}>Record date</Text>
+                      <Text style={[styles.voteEligibilityValue, { color: colors.textPrimary }]}>
+                        {formatDate(voteEligibility.recordDate)}
+                      </Text>
+                    </View>
+                  )}
+                  <View style={styles.voteEligibilityRow}>
+                    <Text style={[styles.voteEligibilityLabel, { color: colors.textMuted }]}>Your voting power</Text>
+                    <Text style={[styles.voteEligibilityValue, { color: colors.textPrimary }]}>
+                      {voteEligibility.votingPowerUnits.toLocaleString()} units
+                    </Text>
+                  </View>
+                  <View style={styles.voteEligibilityRow}>
+                    <Text style={[styles.voteEligibilityLabel, { color: colors.textMuted }]}>Status</Text>
+                    <Text style={[styles.voteEligibilityValue, { color: voteEligibility.status === 'open' ? colors.success : colors.textMuted }]}>
+                      {voteEligibility.status === 'open' ? 'Open' : voteEligibility.status === 'completed' ? 'Closed' : voteEligibility.status}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Quorum / pass threshold / voting deadline — sourced from
+                  corporate action metadata. Fails closed when absent. */}
+              {(quorumUnits !== null || passThresholdPct !== null || votingDeadline !== null) && (
+                <View style={[styles.voteThresholdBox, { borderColor: colors.borderSubtle }]}>
+                  <Text style={[styles.voteThresholdTitle, { color: colors.textMuted }]}>Votes needed to pass</Text>
+                  {quorumUnits !== null && (
+                    <View style={styles.voteThresholdRow}>
+                      <Text style={[styles.voteThresholdLabel, { color: colors.textMuted }]}>Quorum</Text>
+                      <Text style={[styles.voteThresholdValue, { color: colors.textPrimary }]}>
+                        {totalVotingPower.toLocaleString()} of {quorumUnits.toLocaleString()} units ({quorumUnits > 0 ? Math.min(100, (totalVotingPower / quorumUnits) * 100).toFixed(1) : '0'}%)
+                      </Text>
+                    </View>
+                  )}
+                  {passThresholdPct !== null && (
+                    <View style={styles.voteThresholdRow}>
+                      <Text style={[styles.voteThresholdLabel, { color: colors.textMuted }]}>Pass threshold</Text>
+                      <Text style={[styles.voteThresholdValue, { color: colors.textPrimary }]}>
+                        {passThresholdPct.toFixed(0)}%
+                      </Text>
+                    </View>
+                  )}
+                  {votingDeadline !== null && (
+                    <View style={styles.voteThresholdRow}>
+                      <Text style={[styles.voteThresholdLabel, { color: colors.textMuted }]}>Voting deadline</Text>
+                      <Text style={[styles.voteThresholdValue, { color: colors.textPrimary }]}>
+                        {formatDeadline(votingDeadline)}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* U48: ineligibility reason — the form stays visible but disabled */}
+              {voteEligibility && !voteEligibility.eligible && (
+                <View style={[styles.voteIneligibleNote, { backgroundColor: colors.warningSubtle }]}>
+                  <Ionicons name="lock-closed-outline" size={16} color={colors.warning} />
+                  <Text style={[styles.voteIneligibleText, { color: colors.textPrimary }]}>
+                    {voteEligibility.reason || 'You are not eligible to vote on this action.'}
+                  </Text>
+                </View>
+              )}
+
+              {/* U49: vote fetch error — surfaced with retry, not swallowed */}
+              {voteError && (
+                <View style={[styles.voteErrorBox, { borderColor: colors.borderSubtle }]}>
+                  <Text style={[styles.voteErrorText, { color: colors.danger }]}>{voteError}</Text>
+                  <AppButton
+                    title="Retry"
+                    onPress={() => { haptics.tap(); void loadVotes(); }}
+                    variant="secondary"
+                    size="sm"
+                    disabled={voteLoading}
+                    accessibilityLabel="Retry loading votes"
+                  />
+                </View>
+              )}
+
+              {/* U49: uncertain-submit reconciliation */}
+              {voteUncertain && !voteError && (
+                <View style={[styles.voteIneligibleNote, { backgroundColor: colors.warningSubtle }]}>
+                  <Ionicons name="cloud-offline-outline" size={16} color={colors.warning} />
+                  <Text style={[styles.voteIneligibleText, { color: colors.textPrimary }]}>
+                    Vote not confirmed — check back.
+                  </Text>
+                </View>
+              )}
+
+              {/* Vote results — tally bars with semantic colours (read-only) */}
               {voteSummary.length > 0 && totalVotingPower > 0 && (
                 <View style={[styles.voteResults, { borderColor: colors.borderSubtle }]} key={`votes-${myVote}-${totalVotingPower}`}>
                   <Text style={[styles.voteResultsTitle, { color: colors.textMuted }]}>Current tally</Text>
@@ -403,7 +650,7 @@ export default function CorporateActionDetailScreen() {
                 </View>
               )}
 
-              {/* Rationale input */}
+              {/* Rationale input — disabled when ineligible */}
               <Text style={[styles.inputLabel, { color: colors.textSecondary, marginTop: Space.sm }]}>
                 Rationale (optional)
               </Text>
@@ -415,10 +662,11 @@ export default function CorporateActionDetailScreen() {
                 placeholderTextColor={colors.textMuted}
                 multiline
                 maxLength={2000}
+                editable={voteEligibility?.eligible !== false}
                 accessibilityLabel="Vote rationale"
               />
 
-              {/* Vote buttons — semantic colours */}
+              {/* Vote buttons — disabled (not hidden) when ineligible */}
               <View style={styles.voteButtons}>
                 {(['for', 'against', 'abstain'] as const).map((v) => {
                   const label = v === 'for' ? 'For' : v === 'against' ? 'Against' : 'Abstain';
@@ -431,7 +679,7 @@ export default function CorporateActionDetailScreen() {
                       onPress={() => { haptics.tap(); void handleCastVote(v); }}
                       variant={variant}
                       size="sm"
-                      disabled={submittingVote}
+                      disabled={submittingVote || voteEligibility?.eligible === false}
                       icon={<Ionicons name={icon} size={16} color={variant === 'primary' ? colors.textInverse : colors.textPrimary} />}
                       style={{ flex: 1 }}
                     />
@@ -605,5 +853,118 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.md },
   voteButtons: {
     flexDirection: 'row',
-    gap: Space.sm } });
+    gap: Space.sm },
+  // U48: eligibility summary
+  voteEligibility: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.md,
+    padding: Space.sm,
+    marginBottom: Space.sm,
+    gap: Space.xs },
+  voteEligibilityRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center' },
+  voteEligibilityLabel: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
+  voteEligibilityValue: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'] },
+  // U48/U49: ineligibility + uncertain notes
+  voteIneligibleNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.md,
+    marginBottom: Space.sm },
+  voteIneligibleText: {
+    flex: 1,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight + 2 },
+  // U49: vote fetch error
+  voteErrorBox: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.md,
+    padding: Space.sm,
+    marginBottom: Space.sm,
+    gap: Space.sm,
+    alignItems: 'center' },
+  voteErrorText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
+  // Proposal documents
+  docRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    minHeight: 44 },
+  docTitle: {
+    flex: 1,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
+  // Vote receipt banner
+  voteReceiptBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.md,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.sm,
+    marginBottom: Space.sm },
+  voteReceiptContent: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.xs,
+    flex: 1 },
+  voteReceiptText: { flex: 1, gap: 2 },
+  voteReceiptTitle: {
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
+  voteReceiptDetail: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'] },
+  voteReceiptMeta: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
+  voteReceiptDismiss: {
+    padding: Space.xs,
+    minHeight: 44,
+    minWidth: 44,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  // Quorum / pass threshold / deadline
+  voteThresholdBox: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.md,
+    padding: Space.sm,
+    marginBottom: Space.sm,
+    gap: Space.xs },
+  voteThresholdTitle: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    textTransform: 'uppercase',
+    letterSpacing: LetterSpacing.caps,
+    marginBottom: Space.xs },
+  voteThresholdRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center' },
+  voteThresholdLabel: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
+  voteThresholdValue: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'] } });
 }

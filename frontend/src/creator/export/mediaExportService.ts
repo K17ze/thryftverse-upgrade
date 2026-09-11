@@ -8,16 +8,30 @@
  *   2. Returns the local file URI for upload via the existing
  *      mediaUploadPipeline.
  *
- * When the native module is NOT linked (Expo Go, web), the service
- * gracefully degrades — `isExportAvailable()` returns false and the
- * publish flow falls back to uploading the source media directly.
+ * When the native module is NOT linked but Skia IS available, the service
+ * falls back to `jsExportImage` — a pure-JS offscreen Skia renderer that
+ * handles image compositions (poster/look frames) with overlays burned in.
+ * Video export remains behind the native module gate.
+ *
+ * When neither path is available (web, Expo Go without Skia), the service
+ * returns null and the publish flow falls back to uploading source media.
  */
 import {
   isMediaExportAvailable,
+  isJsExportAvailable,
   getMediaExport,
+  jsExportImage,
   type ExportIntentRequest,
   type ExportResult,
 } from '../../../modules/thryft-media-export/src';
+// Native single-clip video export module (Nitro HybridObject contract + JS
+// wiring). The native implementation (AVFoundation / Media3 Transformer) is
+// DEFERRED — this import is safe because the module's JS side degrades
+// gracefully: `isThryftVideoExportAvailable()` returns false when the native
+// HybridObject is not linked, preserving the existing fallback behaviour.
+import {
+  isVideoExportAvailable as isThryftVideoExportAvailable,
+} from '../../../modules/thryft-video-export/src';
 import type { CreatorDocument } from '../composition';
 
 // ── Intent presets ───────────────────────────────────────────────────
@@ -89,7 +103,95 @@ const LOOK_CARD_INTENT: ExportIntentRequest = {
 // ── Public API ───────────────────────────────────────────────────────
 
 export function isExportAvailable(): boolean {
+  // Module-level probe: true if either the native Nitro module
+  // (video + image) or the JS Skia fallback (image only) is available.
+  //
+  // This does NOT account for the content being exported — the JS Skia
+  // path cannot render video sources. Prefer the content-aware helpers
+  // `isImageExportAvailable(document, pageId)` and
+  // `isVideoExportAvailable()` whenever the caller has document/page
+  // context. This function remains as a coarse module-level probe for
+  // callers that have no content context yet (e.g. deciding whether to
+  // show an export button at all).
   return isMediaExportAvailable();
+}
+
+/**
+ * Returns true if only the JS Skia fallback is available (native module
+ * not linked). Used by callers that need to distinguish the two paths —
+ * e.g. to show "image export only" vs "full video export" in the UI.
+ */
+export function isJsExportOnly(): boolean {
+  return !getMediaExport() && isJsExportAvailable();
+}
+
+/**
+ * Returns true if a video composition can be exported. The JS Skia
+ * fallback cannot render video sources — it produces a blank PNG
+ * (background only) for a video page. Video export requires the native
+ * Nitro module (AVFoundation on iOS / Media3 Transformer on Android).
+ *
+ * Use this instead of `isExportAvailable()` whenever the caller knows it
+ * is dealing with video content.
+ */
+export function isVideoExportAvailable(): boolean {
+  // Only a native module can export video. The JS Skia path has no
+  // video decoder — jsExportImage loads media via Skia.Data.fromURI which
+  // only decodes still images.
+  //
+  // Two native paths are wired:
+  //   1. ThryftMediaExport (full CreatorDocument → AVFoundation/Media3).
+  //   2. ThryftVideoExport (single-clip VideoExportRequest → AVFoundation/
+  //      Media3) — the flagship Nitro module. Its native implementation is
+  //      DEFERRED; until it is linked `isThryftVideoExportAvailable()`
+  //      returns false and this collapses to the ThryftMediaExport check,
+  //      preserving the existing behaviour.
+  return getMediaExport() !== null || isThryftVideoExportAvailable();
+}
+
+/**
+ * Returns true if an image composition can be exported for the given
+ * page. This is content-aware: the native module can export any page
+ * (image or video → image snapshot), while the JS Skia fallback can only
+ * render pages whose primary media is an image (or pages with no media
+ * at all — text/decorative-only compositions render the background +
+ * overlays correctly).
+ *
+ * Use this instead of `isExportAvailable()` whenever the caller has the
+ * document + page context. It prevents the JS fallback from
+ * over-reporting availability for video pages, which would produce a
+ * blank PNG (background only) because `jsExportImage` cannot decode a
+ * video source.
+ *
+ * @param document  The composition document.
+ * @param pageId    The page to check. If omitted, the first page is used.
+ */
+export function isImageExportAvailable(
+  document: CreatorDocument,
+  pageId?: string,
+): boolean {
+  // Native module handles all content types.
+  if (getMediaExport() !== null) return true;
+
+  // JS Skia fallback — only available for image content.
+  if (!isJsExportAvailable()) return false;
+
+  const page = pageId
+    ? document.pages.find((p) => p.id === pageId)
+    : document.pages[0];
+  if (!page) return false;
+
+  // A page with no media layers (text/decorative only) renders fine via
+  // the JS path — there is no video source to fail to decode.
+  const mediaLayers = page.layers.filter((l) => l.type === 'media');
+  if (mediaLayers.length === 0) return true;
+
+  // If ANY media layer on the page is video, the JS Skia path cannot
+  // render it — Skia.Data.fromURI only decodes still images, so a video
+  // source produces a null SkImage and the layer is skipped (blank).
+  return mediaLayers.every(
+    (l) => l.type === 'media' && l.payload.mediaType !== 'video',
+  );
 }
 
 export interface ExportOptions {
@@ -118,28 +220,48 @@ export async function exportDocumentImage(
   pageId: string,
   options?: ExportOptions,
 ): Promise<ExportedImageResult | null> {
-  const module = getMediaExport();
-  if (!module) return null;
-
   const intent = options?.quality === 'hd'
     ? { ...LOOK_CARD_INTENT, maxWidth: 1920, maxHeight: 2400 }
     : LOOK_CARD_INTENT;
 
   const jobId = `export-img-${document.id}-${Date.now()}`;
-  const result: ExportResult = await module.exportImage(
-    JSON.stringify(document),
-    pageId,
-    intent,
-    jobId,
-    options?.onProgress,
-  );
 
-  return {
-    uri: result.uri,
-    width: result.width,
-    height: result.height,
-    sizeBytes: result.sizeBytes,
-  };
+  // ── Native path (preferred — full filter + video pipeline) ──
+  const module = getMediaExport();
+  if (module) {
+    const result: ExportResult = await module.exportImage(
+      JSON.stringify(document),
+      pageId,
+      intent,
+      jobId,
+      options?.onProgress,
+    );
+    return {
+      uri: result.uri,
+      width: result.width,
+      height: result.height,
+      sizeBytes: result.sizeBytes,
+    };
+  }
+
+  // ── JS Skia fallback (image compositions only) ──
+  if (isJsExportAvailable()) {
+    const result = await jsExportImage(
+      JSON.stringify(document),
+      pageId,
+      intent,
+      jobId,
+      options?.onProgress,
+    );
+    return {
+      uri: result.uri,
+      width: result.width,
+      height: result.height,
+      sizeBytes: result.sizeBytes,
+    };
+  }
+
+  return null;
 }
 
 /**
@@ -181,24 +303,44 @@ export async function exportThumbnail(
   pageId: string,
   onProgress?: (progress: number) => void,
 ): Promise<ExportedImageResult | null> {
-  const module = getMediaExport();
-  if (!module) return null;
-
   const jobId = `export-thumb-${document.id}-${Date.now()}`;
-  const result: ExportResult = await module.exportImage(
-    JSON.stringify(document),
-    pageId,
-    THUMBNAIL_INTENT,
-    jobId,
-    onProgress,
-  );
 
-  return {
-    uri: result.uri,
-    width: result.width,
-    height: result.height,
-    sizeBytes: result.sizeBytes,
-  };
+  // ── Native path ──
+  const module = getMediaExport();
+  if (module) {
+    const result: ExportResult = await module.exportImage(
+      JSON.stringify(document),
+      pageId,
+      THUMBNAIL_INTENT,
+      jobId,
+      onProgress,
+    );
+    return {
+      uri: result.uri,
+      width: result.width,
+      height: result.height,
+      sizeBytes: result.sizeBytes,
+    };
+  }
+
+  // ── JS Skia fallback ──
+  if (isJsExportAvailable()) {
+    const result = await jsExportImage(
+      JSON.stringify(document),
+      pageId,
+      THUMBNAIL_INTENT,
+      jobId,
+      onProgress,
+    );
+    return {
+      uri: result.uri,
+      width: result.width,
+      height: result.height,
+      sizeBytes: result.sizeBytes,
+    };
+  }
+
+  return null;
 }
 
 /**

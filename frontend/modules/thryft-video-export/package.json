@@ -1,0 +1,14 @@
+﻿{
+  "name": "thryft-video-export",
+  "version": "1.0.0",
+  "description": "Nitro HybridObject module for on-device single-clip video export (trim, speed, reverse, freeze-frame, mute, overlays). iOS: AVFoundation. Android: Media3 Transformer. Three execution paths: remux / transcode / compose. JS side gracefully falls back to null when the native module is not linked.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "sideEffects": false,
+  "private": true,
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*",
+    "react-native-nitro-modules": "*"
+  }
+}

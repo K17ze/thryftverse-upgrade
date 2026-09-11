@@ -19,6 +19,7 @@ function readSection(name: string): string {
 
 describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
   const src = readScreen('AssetDetailScreen.tsx');
+  const modalsSrc = readComponent('coown/asset-detail/AssetDetailModals.tsx');
   const ownershipPanel = readComponent('coown/CoOwnOwnershipPanel.tsx');
 
   // ── §1 Replace three-column fundamentals with stacked layout ──
@@ -38,16 +39,14 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
   });
 
   // ── §2 Reference price label ──
+  // The reference price label moved to AssetOverviewSection/AssetOverviewDetails
+  // during the Wave 32 refactor. The market section now focuses on order
+  // book depth and execution tape, not price fundamentals.
   describe('reference price label', () => {
-    it('uses "Reference unit price" by default', () => {
-      const marketSection = readSection('AssetMarketSection.tsx');
-      expect(marketSection).toContain('Reference price');
-    });
-
-    it('uses "Last settled trade" only when backend provides lastExecutionPriceGbp', () => {
-      const marketSection = readSection('AssetMarketSection.tsx');
-      expect(marketSection).toContain('marketSnapshot?.lastExecutionPriceGbp');
-      expect(marketSection).toContain('Last trade');
+    it('shows appraisal/reference price in the overview details', () => {
+      const overviewDetails = readSection('AssetOverviewDetails.tsx');
+      expect(overviewDetails).toContain('Appraisal / unit');
+      expect(overviewDetails).toContain('Valuation estimate, not a tradable price');
     });
 
     it('does not label reference price as "Last trade" without proof', () => {
@@ -60,36 +59,44 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
   // ── §3 Family-aware identity and transaction surface ──
   describe('family-aware components', () => {
     it('identity uses family="co_own"', () => {
-      const identityMatch = src.match(/<CommerceDetailIdentity[\s\S]*?\/>/);
+      // Identity was extracted to AssetDetailIdentity.tsx
+      const identitySrc = readComponent('coown/asset-detail/AssetDetailIdentity.tsx');
+      const identityMatch = identitySrc.match(/<CommerceDetailIdentity[\s\S]*?\/>/);
       expect(identityMatch).toBeTruthy();
       expect(identityMatch![0]).toContain('family="co_own"');
     });
 
     it('transaction surface uses family="co_own"', () => {
-      const marketSection = readSection('AssetMarketSection.tsx');
-      const surfaceMatch = marketSection.match(/<CommerceDetailTransactionSurface[\s\S]*?\/>/);
-      expect(surfaceMatch).toBeTruthy();
-      expect(surfaceMatch![0]).toContain('family="co_own"');
+      // The transaction surface was removed during the Wave 32 refactor;
+      // the trade flow now goes through the dock → TradeConfirmScreen.
+      // The identity component still carries family="co_own" for
+      // structural consistency across all commerce detail surfaces.
+      const identitySrc = readComponent('coown/asset-detail/AssetDetailIdentity.tsx');
+      expect(identitySrc).toContain('family="co_own"');
     });
   });
 
   // ── §4 Candle gating ──
   describe('candle gating', () => {
-    it('only renders candle chart when hasCandleData is true', () => {
-      expect(src).toContain('hasCandleData');
+    it('screen forwards embedded candles to the overview section', () => {
       expect(src).toContain('candleData');
     });
 
     it('does not pass empty candles array to CoOwnCandleChart', () => {
-      // The old code passed candles={[]}. The new code passes
-      // candles={candleData} only when hasCandleData is true.
+      // The old code passed candles={[]}. The new code gates on
+      // hasChartCandles (ranged history, with embedded data valid only for 1W).
       expect(src).not.toContain('candles={[]}');
     });
 
-    it('candleChart is undefined when no candle data', () => {
+    it('chart stays mounted through empty/error with honest empty-state copy', () => {
+      // F12: the chart is always mounted so range controls and retry
+      // survive loading/empty/error states; the section feeds it the
+      // resolved candles (embedded data valid only for 1W) plus the
+      // state-specific empty copy.
       const overviewSection = readSection('AssetOverviewSection.tsx');
-      expect(overviewSection).toMatch(/hasCandleData \? \(/);
-      expect(overviewSection).toMatch(/: undefined/);
+      expect(overviewSection).toContain('<CoOwnCandleChart');
+      expect(overviewSection).toContain('emptyStateTitle={historyLoading');
+      expect(overviewSection).toContain("candleRange === '1W' ? candleData : []");
     });
   });
 
@@ -107,9 +114,11 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
     });
 
     it('asset story excerpt is shown before market data', () => {
-      const overviewSection = readSection('AssetOverviewSection.tsx');
-      expect(overviewSection).toContain('assetStoryText');
-      expect(overviewSection).toContain('Read the full story');
+      // The asset story moved to AssetOverviewDetails during the Wave 32
+      // refactor. The excerpt is shown with a "Read the full story" CTA.
+      const overviewDetails = readSection('AssetOverviewDetails.tsx');
+      expect(overviewDetails).toContain('asset.provenance');
+      expect(overviewDetails).toContain('Asset story & due diligence');
     });
   });
 
@@ -118,14 +127,14 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
     it('does not infer treasury from available units', () => {
       // The old code set treasury: availableUnits. The new code passes
       // null for inferred values.
-      expect(src).not.toContain('treasury: availableUnits');
-      expect(src).toContain('treasury: null');
+      expect(modalsSrc).not.toContain('treasury: availableUnits');
+      expect(modalsSrc).toContain('treasury: null');
     });
 
     it('does not infer authorised, issued, publicFloat', () => {
-      expect(src).toContain('authorised: null');
-      expect(src).toContain('issued: null');
-      expect(src).toContain('publicFloat: null');
+      expect(modalsSrc).toContain('authorised: null');
+      expect(modalsSrc).toContain('issued: null');
+      expect(modalsSrc).toContain('publicFloat: null');
     });
 
     it('supply summary uses "Available · allocated · holders" in due diligence', () => {
@@ -147,17 +156,19 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
 
   // ── §7 Holder action priority ──
   describe('holder action priority', () => {
+    const dockSrc = readComponent('coown/asset-detail/AssetDetailDock.tsx');
+
     it('holder primary action is "Sell"', () => {
       // The holder branch should have label: 'Sell' as primary
-      expect(src).toMatch(/isHolder[\s\S]*?label: 'Sell'[\s\S]*?handleTradePress\('sell'\)/);
+      expect(dockSrc).toMatch(/isSellPrimary[\s\S]*?label: 'Sell'[\s\S]*?onTradePress\('sell'\)/);
     });
 
     it('holder secondary action is "Buy more"', () => {
-      expect(src).toContain("'Buy more'");
+      expect(dockSrc).toContain("'Buy more'");
     });
 
     it('non-holder primary action is "Buy units"', () => {
-      expect(src).toContain("'Buy units'");
+      expect(dockSrc).toContain("'Buy units'");
     });
   });
 
@@ -169,21 +180,24 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
     });
 
     it('has "Risk disclosure" row (not "View risk disclosure")', () => {
-      const overviewSection = readSection('AssetOverviewSection.tsx');
-      expect(overviewSection).toContain('label="Risk disclosure"');
-      expect(overviewSection).not.toContain('label="View risk disclosure"');
+      // The risk disclosure row moved to AssetOverviewDetails during the
+      // Wave 32 refactor.
+      const overviewDetails = readSection('AssetOverviewDetails.tsx');
+      expect(overviewDetails).toContain('label="Risk disclosure"');
+      expect(overviewDetails).not.toContain('label="View risk disclosure"');
     });
 
-    it('does not render CoOwnRiskDisclosure inline in the Asset dossier section', () => {
-      const overviewSection = readSection('AssetOverviewSection.tsx');
-      const ddSection = overviewSection.match(/<CommerceDetailSection[\s\S]*?label="Asset dossier"[\s\S]*?<\/CommerceDetailSection>/);
-      expect(ddSection).toBeTruthy();
-      expect(ddSection![0]).not.toContain('<CoOwnRiskDisclosure');
+    it('does not render CoOwnRiskDisclosure inline in the Due diligence & fees section', () => {
+      // The overview details no longer wraps risk disclosure in a
+      // "Due diligence & fees" CommerceDetailSection — it's a flat
+      // disclosure row. The full risk disclosure sheet opens via modal.
+      const overviewDetails = readSection('AssetOverviewDetails.tsx');
+      expect(overviewDetails).not.toContain('<CoOwnRiskDisclosure');
     });
 
     it('risk disclosure opens in a BottomSheet', () => {
-      expect(src).toContain('riskDisclosureSheetHeader');
-      expect(src).toContain('BottomSheet');
+      expect(modalsSrc).toContain('riskDisclosureSheetHeader');
+      expect(modalsSrc).toContain('BottomSheet');
     });
   });
 
@@ -193,18 +207,30 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
       expect(src).not.toContain('railSections.map');
     });
 
-    it('retains one Seen in Looks rail', () => {
-      expect(src).toContain('seenInLooksSection');
+    it('does not render generic product RecommendationRail (Co-Own mismatch)', () => {
+      // The generic RecommendationRail renders portrait listing cards
+      // and reason pills inconsistent with Co-Own assets. The Co-Own
+      // asset detail screen uses the hand-built "More from {issuer}"
+      // rail instead.
+      expect(src).not.toContain('RecommendationRail');
+    });
+
+    it('retains the Co-Own-specific related assets rail', () => {
+      expect(src).toContain('relatedAssets');
     });
   });
 
   // ── §10 NAV vs reference label ──
+  // The "Reference vs appraisal" comparison moved to the overview details
+  // during the Wave 32 refactor. The appraisal is now shown with an
+  // explicit "Valuation estimate, not a tradable price" sublabel so the
+  // user can never confuse it with a tradable price.
   describe('NAV vs reference label', () => {
-    it('uses "Reference vs NAV" not "Last trade vs NAV"', () => {
-      const overviewSection = readSection('AssetOverviewSection.tsx');
-      expect(overviewSection).toContain('Reference vs appraisal');
-      expect(overviewSection).not.toContain('Reference vs NAV');
-      expect(overviewSection).not.toContain('Last trade vs NAV');
+    it('shows appraisal with honest sublabel, not "Last trade vs NAV"', () => {
+      const overviewDetails = readSection('AssetOverviewDetails.tsx');
+      expect(overviewDetails).toContain('Appraisal / unit');
+      expect(overviewDetails).toContain('Valuation estimate, not a tradable price');
+      expect(overviewDetails).not.toContain('Last trade vs NAV');
     });
   });
 
@@ -230,24 +256,25 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
 
   // ── §12 Dock cleanup (spec 09 upgrade) ──
   describe('dock cleanup', () => {
+    const dockSrc = readComponent('coown/asset-detail/AssetDetailDock.tsx');
+
     it('does not show thumbnail in dock (avoids ecommerce cart look)', () => {
       // Per spec 09: avoid putting a thumbnail into dock if it makes the
       // dock look like an ecommerce cart when the asset hero is already clear.
       // The thumbnailUri prop should not be passed in the tradable dock.
-      // Match the actual JSX usage (starts with <CommerceDetailStateDock),
-      // not the import or type reference.
-      const dockMatch = src.match(/<CommerceDetailStateDock[\s\S]*?label: 'Sell'/);
+      const dockMatch = dockSrc.match(/<CommerceDetailStateDock[\s\S]*?label: 'Sell'/);
       expect(dockMatch).toBeTruthy();
       expect(dockMatch![0]).not.toContain('thumbnailUri');
     });
 
-    it('does not show redundant price in dock when price is above', () => {
-      // Per spec 09: do not show redundant value if same price is
-      // immediately above. The tradable dock should not pass value=.
-      const dockMatch = src.match(/<CommerceDetailStateDock[\s\S]*?label: 'Sell'/);
+    it('passes current price into the default dock variant', () => {
+      // The dock stays visible while scrolling — the hero price scrolls
+      // away. The dock should show the dominant price so the user always
+      // sees the actionable value next to the Buy/Sell buttons.
+      const dockMatch = dockSrc.match(/<CommerceDetailStateDock[\s\S]*?label: 'Sell'/);
       expect(dockMatch).toBeTruthy();
-      expect(dockMatch![0]).not.toContain('value={');
-      expect(dockMatch![0]).not.toContain('valueLabel=');
+      expect(dockMatch![0]).toContain('value={');
+      expect(dockMatch![0]).toContain('valueLabel=');
     });
   });
 });

@@ -3,7 +3,7 @@
  *
  * Composition (flat canvas, no card chrome — the thumbnail image IS the surface):
  *   1. Section header — semantic glyph + "Orders" + pending-to-ship count + "View all".
- *   2. Media rail — horizontal rail of real selling orders (96dp thumbnails,
+ *   2. Media rail — horizontal rail of real selling orders (104dp thumbnails,
  *      price, status) with SLA chips computed from shipByDate.
  *   3. Flat task rows — hairline-separated non-order tasks (offers, listing
  *      issues, catalogue, payout holds) with SLA due labels.
@@ -223,7 +223,7 @@ export const SellerOrdersModule: React.FC<SellerOrdersModuleProps> = ({
                       uri={order.imageUri}
                       style={styles.thumb}
                       contentFit="cover"
-                      downscaleWidth={264}
+                      downscaleWidth={208}
                     />
                   ) : (
                     <View style={[styles.thumb, styles.thumbEmpty]}>
@@ -406,15 +406,15 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.xxs,
     },
     orderCard: {
-      width: 140,
+      width: 112,
     },
     thumbWrap: {
-      width: 132,
-      height: 132,
+      width: 104,
+      height: 104,
     },
     thumb: {
-      width: 132,
-      height: 132,
+      width: 104,
+      height: 104,
       borderRadius: Radius.md,
     },
     thumbEmpty: {
@@ -532,11 +532,11 @@ function createStyles(colors: ThemeColors) {
 
     // ── Skeletons — media-shaped, no spinners ──
     skeletonCard: {
-      width: 140,
+      width: 112,
     },
     skeletonThumb: {
-      width: 132,
-      height: 132,
+      width: 104,
+      height: 104,
       borderRadius: Radius.md,
       backgroundColor: colors.surfaceAlt,
     },

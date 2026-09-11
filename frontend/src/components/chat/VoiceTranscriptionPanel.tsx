@@ -6,7 +6,7 @@ import {
   Pressable,
   ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, TypeStyles } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -306,7 +306,7 @@ const createStyles = (colors: ThemeColors) =>
       alignSelf: 'flex-start' },
     triggerText: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textMuted },
     container: {
       flexDirection: 'row',
@@ -329,28 +329,28 @@ const createStyles = (colors: ThemeColors) =>
       gap: 2 },
     transcriptText: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textPrimary,
       lineHeight: TypographyV2.meta.lineHeight + 2 },
     derivedLabel: {
       fontSize: TypographyV2.meta.size - 1,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textMuted,
       fontStyle: 'italic' },
     mutedText: {
       flex: 1,
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textMuted },
     errorText: {
       flex: 1,
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.danger },
     warningText: {
       flex: 1,
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.warning },
     actions: {
       flexDirection: 'row',

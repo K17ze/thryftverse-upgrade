@@ -22,8 +22,8 @@ export interface SellerThumbRailProps {
   onItemPress: (id: string) => void;
 }
 
-const THUMB_SIZE = 112;
-const ITEM_WIDTH = 120;
+const THUMB_SIZE = 104;
+const ITEM_WIDTH = 112;
 
 /**
  * SellerThumbRail — flat horizontal media rail for the Seller Hub.
@@ -58,7 +58,7 @@ export const SellerThumbRail: React.FC<SellerThumbRailProps> = ({ items, onItemP
               style={styles.thumb}
               containerStyle={styles.thumbSurface}
               contentFit="cover"
-              downscaleWidth={224}
+              downscaleWidth={208}
             />
           ) : (
             <View style={[styles.thumb, styles.thumbPlaceholder]}>

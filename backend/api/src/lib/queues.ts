@@ -19,6 +19,18 @@ export interface AuctionSweepJobData {
   reason: 'interval' | 'manual';
 }
 
+export interface CoOwnOrderExpirySweepJobData {
+  reason: 'interval' | 'manual';
+}
+
+export interface CoOwnAlertEvaluatorJobData {
+  reason: 'interval' | 'manual';
+}
+
+export interface CoOwnDripExecutionJobData {
+  reason: 'interval' | 'manual';
+}
+
 export interface OnezeWithdrawalExecuteJobData {
   withdrawalId: string;
   initiatedBy: string;
@@ -182,6 +194,9 @@ type CatalogImportJobData =
 
 type InfraJobData =
   | AuctionSweepJobData
+  | CoOwnOrderExpirySweepJobData
+  | CoOwnAlertEvaluatorJobData
+  | CoOwnDripExecutionJobData
   | OnezeWithdrawalExecuteJobData
   | OnezeMintReserveJobData
   | ReconciliationJobData
@@ -197,6 +212,9 @@ type InfraJobData =
 interface QueueHandlers {
   handlePushJob: (job: PushJobData) => Promise<void>;
   handleAuctionSweepJob: (job: AuctionSweepJobData) => Promise<void>;
+  handleCoOwnOrderExpirySweepJob: (job: CoOwnOrderExpirySweepJobData) => Promise<void>;
+  handleCoOwnAlertEvaluatorJob: (job: CoOwnAlertEvaluatorJobData) => Promise<void>;
+  handleCoOwnDripExecutionJob: (job: CoOwnDripExecutionJobData) => Promise<void>;
   handleOnezeWithdrawalExecuteJob: (job: OnezeWithdrawalExecuteJobData) => Promise<void>;
   handleOnezeMintReserveJob: (job: OnezeMintReserveJobData) => Promise<void>;
   handleReconciliationJob: (job: ReconciliationJobData) => Promise<void>;
@@ -498,6 +516,12 @@ export function startBackgroundWorkers(
         try {
           if (job.name === 'auction_sweep') {
             await handlers.handleAuctionSweepJob(job.data as AuctionSweepJobData);
+          } else if (job.name === 'coown_order_expiry_sweep') {
+            await handlers.handleCoOwnOrderExpirySweepJob(job.data as CoOwnOrderExpirySweepJobData);
+          } else if (job.name === 'coown_alert_evaluator') {
+            await handlers.handleCoOwnAlertEvaluatorJob(job.data as CoOwnAlertEvaluatorJobData);
+          } else if (job.name === 'coown_drip_execution') {
+            await handlers.handleCoOwnDripExecutionJob(job.data as CoOwnDripExecutionJobData);
           } else if (job.name === 'oneze_withdraw_execute') {
             await handlers.handleOnezeWithdrawalExecuteJob(job.data as OnezeWithdrawalExecuteJobData);
           } else if (job.name === 'oneze_mint_reserve_allocate') {
@@ -908,6 +932,50 @@ export async function enqueueAuctionSweepJob(reason: 'interval' | 'manual' = 'in
     { reason },
     {
       jobId: `auction_sweep_${timeBucket}`,
+      removeOnComplete: true,
+      removeOnFail: 100,
+    }
+  );
+}
+
+export async function enqueueCoOwnOrderExpirySweepJob(reason: 'interval' | 'manual' = 'interval'): Promise<void> {
+  const timeBucket = Math.floor(Date.now() / 30_000);
+
+  await infraQueue.add(
+    'coown_order_expiry_sweep',
+    { reason },
+    {
+      jobId: `coown_order_expiry_sweep_${timeBucket}`,
+      removeOnComplete: true,
+      removeOnFail: 100,
+    }
+  );
+}
+
+export async function enqueueCoOwnAlertEvaluatorJob(reason: 'interval' | 'manual' = 'interval'): Promise<void> {
+  // Run every 60 seconds — price alert SLO is "within 2 minutes of trigger".
+  const timeBucket = Math.floor(Date.now() / 60_000);
+
+  await infraQueue.add(
+    'coown_alert_evaluator',
+    { reason },
+    {
+      jobId: `coown_alert_evaluator_${timeBucket}`,
+      removeOnComplete: true,
+      removeOnFail: 100,
+    }
+  );
+}
+
+export async function enqueueCoOwnDripExecutionJob(reason: 'interval' | 'manual' = 'interval'): Promise<void> {
+  // Run every 5 minutes — DRIP reinvestment is not latency-sensitive.
+  const timeBucket = Math.floor(Date.now() / 300_000);
+
+  await infraQueue.add(
+    'coown_drip_execution',
+    { reason },
+    {
+      jobId: `coown_drip_execution_${timeBucket}`,
       removeOnComplete: true,
       removeOnFail: 100,
     }

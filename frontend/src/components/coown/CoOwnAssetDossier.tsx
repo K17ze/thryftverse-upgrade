@@ -40,7 +40,7 @@ export interface CoOwnDossierAppraisal {
   value: number;
   currency: '1ZE' | 'GBP';
   valuedAt: string;
-  method: string;
+  method?: string;
   valuer?: string;
   rangeLow?: number;
   rangeHigh?: number;
@@ -228,7 +228,7 @@ export function CoOwnAssetDossier({
               {appraisal.valuedAt}
             </Text>
           </View>
-          <InfoRow label="Method" value={appraisal.method} colors={colors} />
+          {appraisal.method ? <InfoRow label="Method" value={appraisal.method} colors={colors} /> : null}
           {appraisal.valuer && (
             <InfoRow label="Valuer" value={appraisal.valuer} colors={colors} />
           )}

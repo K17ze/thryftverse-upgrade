@@ -55,8 +55,13 @@ export function useCoOwnRecourseQuery(assetId: string | null | undefined) {
 /** Invalidate the asset cache after a trade or mutation. */
 export function useInvalidateCoOwnAsset() {
   const queryClient = useQueryClient();
-  return (assetId: string) => {
+  return (assetId: string, userId?: string) => {
     queryClient.invalidateQueries({ queryKey: queryKeys.coOwn.asset(assetId) });
     queryClient.invalidateQueries({ queryKey: queryKeys.coOwn.orderBook(assetId) });
+    // Holdings are user-scoped — invalidate so the position/P&L refreshes
+    // after a fill or cancellation.
+    if (userId) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.coOwn.holdings(userId) });
+    }
   };
 }

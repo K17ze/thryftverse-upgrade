@@ -3,6 +3,9 @@ import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { appendDomainEvent } from '../lib/domainOutbox.js';
 import { validateCompositionDocument } from '../lib/compositionValidation.js';
+import { isCompositionNonTrivial, renderComposition } from '../lib/media/compositionRenderer.js';
+import { putBinaryObject } from '../lib/s3.js';
+import { logger } from '../lib/logger.js';
 
 /**
  * Creator publication orchestration service.
@@ -552,6 +555,232 @@ function validateMediaCoverage(
   return { ok: errors.length === 0, errors };
 }
 
+// ── Server-side composition rendering (P0-8) ──────────────────────────
+
+/**
+ * Result of burning a composition document into a flattened image. When
+ * `renderedUrl` is non-null it replaces the source upload as the canonical
+ * `media_url`; `sourceUrl` is always the original verified upload URL and
+ * is stored on `source_media_url` for reference and re-render.
+ */
+interface CompositionRenderResult {
+  /** Canonical rendered URL, or null when rendering was skipped/failed. */
+  renderedUrl: string | null;
+  /** The original source upload URL (always set). */
+  sourceUrl: string;
+}
+
+/**
+ * Result of {@link renderCompositionMedia}. When `renderFailed` is true
+ * and `nonTrivial` is true, the composition carried authored edits that
+ * would be lost if the source URL were served directly — the caller MUST
+ * abort the publication rather than silently publishing unedited media.
+ */
+interface RenderCompositionMediaResult {
+  /** Canonical rendered URL, or null when rendering was skipped/failed. */
+  renderedUrl: string | null;
+  /** True when the render threw or returned null. */
+  renderFailed?: boolean;
+  /** True when the composition is non-trivial (has authored edits). */
+  nonTrivial?: boolean;
+}
+
+/**
+ * Burn a composition document into a flattened image and upload it to S3.
+ *
+ * This runs BEFORE the publication transaction so the I/O-heavy render +
+ * upload does not hold a database transaction open. The verified source
+ * URL is still resolved inside the transaction; here we use the client-
+ * supplied `suppliedUrl` (which the transaction later proves matches the
+ * finalization receipt) as the render source.
+ *
+ * For trivial compositions (single unedited media) a render failure falls
+ * back to the source URL as before — the source IS the intended output.
+ *
+ * For non-trivial compositions (filters, text, stickers, crop, focal-point)
+ * a render failure sets `renderFailed: true, nonTrivial: true` so the
+ * caller can abort the publication instead of silently publishing the
+ * unedited source.
+ */
+async function renderCompositionMedia(
+  documentId: string,
+  compositionDocument: unknown,
+  primarySuppliedUrl: string,
+  primaryMediaType: 'image' | 'video',
+  pageIndex?: number,
+): Promise<RenderCompositionMediaResult> {
+  if (primaryMediaType === 'video') {
+    // Video composition rendering is deferred (requires FFmpeg).
+    return { renderedUrl: null };
+  }
+  const nonTrivial = isCompositionNonTrivial(compositionDocument);
+  if (!compositionDocument || !nonTrivial) {
+    return { renderedUrl: null };
+  }
+  try {
+    const rendered = await renderComposition(
+      compositionDocument,
+      primarySuppliedUrl,
+      pageIndex !== undefined ? { pageIndex } : undefined,
+    );
+    if (!rendered) {
+      // Non-trivial composition returned null — the authored edits would
+      // be lost if we fell back to source. Signal the failure so the
+      // caller can abort the publication.
+      logger.warn(
+        { documentId },
+        '[creatorPublicationService] non-trivial composition render returned null — aborting publication',
+      );
+      return { renderedUrl: null, renderFailed: true, nonTrivial: true };
+    }
+
+    const objectKey = `renders/${documentId}/composition_${crypto.randomUUID()}.jpg`;
+    const renderedUrl = await putBinaryObject(
+      objectKey,
+      rendered.buffer,
+      rendered.contentType,
+      { cacheControl: 'public, max-age=31536000, immutable' },
+    );
+    logger.info(
+      { documentId, renderedUrl, width: rendered.width, height: rendered.height },
+      '[creatorPublicationService] composition rendered and uploaded',
+    );
+    return { renderedUrl };
+  } catch (error) {
+    // Non-trivial composition render threw — the authored edits would be
+    // lost if we fell back to source. Signal the failure so the caller
+    // can abort the publication.
+    logger.warn(
+      { documentId, error: String(error) },
+      '[creatorPublicationService] non-trivial composition render failed — aborting publication',
+    );
+    return { renderedUrl: null, renderFailed: true, nonTrivial: true };
+  }
+}
+
+// ── Multi-page poster rendering ───────────────────────────────────────
+
+/**
+ * Defensively extract, for each page of a composition document, the page
+ * index and the id of its primary media layer. The backend does not import
+ * the frontend Zod schema, so an unknown/forward-compatible shape degrades
+ * to "no media layer" (the frame keeps its source URL). Returns one entry
+ * per page in document order so the index aligns with the frame `sortOrder`.
+ */
+function parseCompositionPagesForMedia(
+  doc: unknown,
+): Array<{ mediaLayerId: string | null }> {
+  if (!doc || typeof doc !== 'object') return [];
+  const root = doc as Record<string, unknown>;
+  const pages = root['pages'];
+  if (!Array.isArray(pages)) return [];
+  return pages.map((raw) => {
+    if (!raw || typeof raw !== 'object') return { mediaLayerId: null };
+    const page = raw as Record<string, unknown>;
+    const layers = Array.isArray(page['layers']) ? page['layers'] : [];
+    const mediaLayer = layers.find(
+      (l): l is Record<string, unknown> =>
+        l !== null && typeof l === 'object' && (l as Record<string, unknown>)['type'] === 'media',
+    );
+    const id = mediaLayer ? (mediaLayer['id'] as unknown) : null;
+    return { mediaLayerId: typeof id === 'string' && id.length > 0 ? id : null };
+  });
+}
+
+/**
+ * Render every image-type page of a multi-page poster composition in
+ * parallel. Each page is rendered independently via {@link renderCompositionMedia}
+ * with its own page index and the frame's source URL (resolved from the
+ * client-supplied expected media). Video frames keep their source URL —
+ * video rendering burns trim/speed only, and overlay burn-in is handled in
+ * the composition renderer.
+ *
+ * For trivial frames a render failure falls back to the source URL. For
+ * non-trivial frames a render failure sets `renderFailed: true,
+ * nonTrivial: true` so the caller can abort the publication instead of
+ * silently publishing unedited media.
+ *
+ * Returns the per-page rendered URL map plus failure flags.
+ */
+interface PosterFrameRenderOutcome {
+  /** Page index → rendered URL (null when skipped/failed). */
+  renders: Map<number, string | null>;
+  /** True when at least one non-trivial frame render failed. */
+  renderFailed: boolean;
+  /** True when the failed frame was non-trivial. */
+  nonTrivial: boolean;
+}
+
+async function renderPosterFrameCompositions(
+  documentId: string,
+  compositionDocument: unknown,
+  expectedMedia: ReadonlyArray<{
+    layerId: string;
+    role: string;
+    mediaType: 'image' | 'video';
+    suppliedUrl: string;
+  }>,
+): Promise<PosterFrameRenderOutcome> {
+  const result = new Map<number, string | null>();
+  let renderFailed = false;
+  let nonTrivial = false;
+
+  const pages = parseCompositionPagesForMedia(compositionDocument);
+  if (pages.length === 0) return { renders: result, renderFailed, nonTrivial };
+
+  // Index expected media by (layerId, role) for O(1) lookup.
+  const expectedByKey = new Map<
+    string,
+    { mediaType: 'image' | 'video'; suppliedUrl: string }
+  >();
+  for (const e of expectedMedia) {
+    expectedByKey.set(`${e.layerId}::${e.role}`, {
+      mediaType: e.mediaType,
+      suppliedUrl: e.suppliedUrl,
+    });
+  }
+
+  const tasks = pages.map(async (page, pageIndex) => {
+    if (!page.mediaLayerId) return { pageIndex, renderedUrl: null, renderFailed: false, nonTrivial: false };
+    const expected = expectedByKey.get(`${page.mediaLayerId}::primary`);
+    if (!expected || expected.mediaType !== 'image') {
+      // Video frames keep source; text frames have no media.
+      return { pageIndex, renderedUrl: null, renderFailed: false, nonTrivial: false };
+    }
+    try {
+      const render = await renderCompositionMedia(
+        documentId,
+        compositionDocument,
+        expected.suppliedUrl,
+        'image',
+        pageIndex,
+      );
+      return {
+        pageIndex,
+        renderedUrl: render.renderedUrl,
+        renderFailed: render.renderFailed ?? false,
+        nonTrivial: render.nonTrivial ?? false,
+      };
+    } catch (error) {
+      logger.warn(
+        { documentId, pageIndex, error: String(error) },
+        '[creatorPublicationService] poster page render failed — falling back to source',
+      );
+      return { pageIndex, renderedUrl: null, renderFailed: false, nonTrivial: false };
+    }
+  });
+
+  const results = await Promise.all(tasks);
+  for (const r of results) {
+    result.set(r.pageIndex, r.renderedUrl);
+    if (r.renderFailed && r.nonTrivial) {
+      renderFailed = true;
+      nonTrivial = true;
+    }
+  }
+  return { renders: result, renderFailed, nonTrivial };
+}
+
 // ── Projection creation ────────────────────────────────────────────────
 
 interface LookProjectionInput {
@@ -560,6 +789,8 @@ interface LookProjectionInput {
   title: string;
   caption: string;
   primaryMediaUrl: string;
+  /** Original source upload URL, stored on `source_media_url`. */
+  sourceMediaUrl: string | null;
   primaryMediaType: 'image' | 'video';
   primaryFinalizationId: string;
   primaryMediaAssetId: string | null;
@@ -585,17 +816,18 @@ async function createLookProjection(
   const lookId = input.documentId;
   await client.query(
     `INSERT INTO looks (
-       id, creator_id, title, caption, media_url, media_type,
+       id, creator_id, title, caption, media_url, source_media_url, media_type,
        composition_document, status, visibility,
        upload_finalization_id, media_asset_id, publication_payload_hash
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, 'published', $8, $9, $10, $11)`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, 'published', $9, $10, $11, $12)`,
     [
       lookId,
       input.creatorId,
       input.title,
       input.caption,
       input.primaryMediaUrl,
+      input.sourceMediaUrl,
       input.primaryMediaType,
       input.compositionDocument ? JSON.stringify(input.compositionDocument) : null,
       input.visibility,
@@ -642,6 +874,10 @@ interface PosterProjectionInput {
     durationMs: number;
     sortOrder: number;
     verifiedMedia: VerifiedMedia | null;
+    /** Rendered composition URL (replaces source as media_url), or null. */
+    renderedMediaUrl: string | null;
+    /** Original source URL, stored on source_media_url. */
+    sourceMediaUrl: string | null;
   }>;
 }
 
@@ -690,16 +926,17 @@ async function createPosterProjection(
   for (const frame of input.frames) {
     await client.query(
       `INSERT INTO posters (
-         id, creator_id, media_url, caption, poster_caption,
+         id, creator_id, media_url, source_media_url, caption, poster_caption,
          background_color, layout, status, expiry_hours, story_id,
          media_type, sort_order, duration_ms, upload_finalization_id,
          media_asset_id
        )
-       VALUES ($1, $2, $3, $4, $4, $5, 'single', 'published', $6, $7, $8, $9, $10, $11, $12)`,
+       VALUES ($1, $2, $3, $4, $5, $5, $6, 'single', 'published', $7, $8, $9, $10, $11, $12, $13)`,
       [
         frame.id,
         input.creatorId,
-        frame.verifiedMedia?.resolvedUrl ?? '',
+        frame.renderedMediaUrl ?? frame.verifiedMedia?.resolvedUrl ?? '',
+        frame.sourceMediaUrl,
         frame.caption,
         frame.backgroundColor,
         input.expiresInHours,
@@ -864,6 +1101,66 @@ export async function publishCreatorDocumentTransaction(
     .createHash('sha256')
     .update(JSON.stringify(command))
     .digest('hex');
+
+  // P0-8: Server-side composition rendering. Burn the composition document
+  // into a flattened image BEFORE the transaction so the I/O-heavy render +
+  // S3 upload does not hold the database transaction open. The rendered URL
+  // (when present) replaces the source upload as the canonical `media_url`;
+  // the verified source URL is stored on `source_media_url` inside the
+  // transaction.
+  //
+  // For trivial compositions (single unedited media) a render failure falls
+  // back to the source URL — the source IS the intended output. For
+  // non-trivial compositions (filters, text, stickers, crop, focal-point)
+  // a render failure ABORTS the publication with `MEDIA_RENDER_FAILED` so
+  // the unedited source is never silently published in place of the
+  // authored composition.
+  const primaryImageExpected = command.expectedMedia.find(
+    (e) => e.role === 'primary' && e.mediaType === 'image',
+  );
+  const compositionRender = command.destination === 'look' && primaryImageExpected
+    ? await renderCompositionMedia(
+        documentId,
+        command.compositionDocument,
+        primaryImageExpected.suppliedUrl,
+        'image',
+      )
+    : { renderedUrl: null as string | null };
+
+  // Abort if a non-trivial look composition render failed — publishing the
+  // unedited source would silently discard the author's edits.
+  if (compositionRender.renderFailed && compositionRender.nonTrivial) {
+    return {
+      ok: false,
+      status: 500,
+      error: 'Composition render failed — the authored edits (filters, text, stickers, crop) could not be burned into the media. Publication aborted to prevent publishing unedited source media.',
+      code: 'MEDIA_RENDER_FAILED',
+    };
+  }
+
+  // Multi-page poster: render every image-type page in parallel so
+  // secondary frames show the authored composition, not just the cover.
+  // Video frames keep their source URL (video rendering burns trim/speed
+  // only; overlay burn-in is handled in the composition renderer). Any
+  // individual page render failure falls back to source for that frame.
+  const posterFrameRenders =
+    command.destination === 'poster' && command.compositionDocument
+      ? await renderPosterFrameCompositions(
+          documentId,
+          command.compositionDocument,
+          command.expectedMedia,
+        )
+      : { renders: new Map<number, string | null>(), renderFailed: false, nonTrivial: false };
+
+  // Abort if any non-trivial poster frame render failed.
+  if (posterFrameRenders.renderFailed && posterFrameRenders.nonTrivial) {
+    return {
+      ok: false,
+      status: 500,
+      error: 'Composition render failed for one or more poster frames — the authored edits (filters, text, stickers, crop) could not be burned into the media. Publication aborted to prevent publishing unedited source media.',
+      code: 'MEDIA_RENDER_FAILED',
+    };
+  }
 
   const client = await db.connect();
   try {
@@ -1182,7 +1479,12 @@ export async function publishCreatorDocumentTransaction(
         creatorId: actorUserId,
         title: doc.metadata?.title ?? '',
         caption: doc.metadata?.caption ?? '',
-        primaryMediaUrl: primaryMedia.resolvedUrl,
+        primaryMediaUrl: compositionRender.renderedUrl ?? primaryMedia.resolvedUrl,
+        // Always preserve the original source upload URL on source_media_url,
+        // regardless of whether rendering succeeded. This ensures the
+        // source reference is never lost when the server skips rendering
+        // (trivial compositions) or when a render falls back to source.
+        sourceMediaUrl: primaryMedia.resolvedUrl,
         primaryMediaType: primaryMedia.contentType.startsWith('video/') ? 'video' : 'image',
         primaryFinalizationId: primaryMedia.finalizationId,
         primaryMediaAssetId: primaryMedia.mediaAssetId,
@@ -1205,6 +1507,16 @@ export async function publishCreatorDocumentTransaction(
         const verified = mediaLayer
           ? verifiedMediaByLayer.get(`${mediaLayer.id}::primary`) ?? null
           : null;
+        const isImage = verified
+          ? !verified.contentType.startsWith('video/')
+          : false;
+        // Render every image-type page (not just the cover) so multi-page
+        // posters show the authored composition on all frames. Each page
+        // was rendered in parallel before the transaction; a missing or
+        // failed render falls back to the source URL.
+        const renderedUrl = isImage
+          ? (posterFrameRenders.renders.get(index) ?? null)
+          : null;
         return {
           id: page.id,
           mediaType: mediaLayer
@@ -1215,6 +1527,12 @@ export async function publishCreatorDocumentTransaction(
           durationMs: page.durationMs ?? 5000,
           sortOrder: index,
           verifiedMedia: verified,
+          renderedMediaUrl: renderedUrl,
+          // Always preserve the original source upload URL on
+          // source_media_url, regardless of whether rendering succeeded.
+          // This ensures the source reference is never lost when the
+          // server skips rendering or a render falls back to source.
+          sourceMediaUrl: verified ? verified.resolvedUrl : null,
         };
       });
       targetId = await createPosterProjection(client, {
