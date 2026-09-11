@@ -383,6 +383,25 @@ export function setClipSpeedCurve(
 }
 
 /**
+ * Set the playback volume (0.0–1.0) for a clip. Volume does not affect
+ * wall-clock duration, so `durationMs` is untouched. The value is clamped
+ * to [0, 1]. Returns a new clips array.
+ */
+export function setClipVolume(
+  clips: PosterClip[],
+  clipId: string,
+  volume: number,
+): PosterClip[] {
+  const idx = findClipIndex(clips, clipId);
+  if (idx < 0) return clips;
+  const clamped = Math.max(0, Math.min(1, volume));
+  const updated: PosterClip = { ...clips[idx], volume: clamped };
+  const next = clips.slice();
+  next[idx] = updated;
+  return next;
+}
+
+/**
  * Set the crop rectangle (normalized 0..1) applied to a clip's source frame.
  *
  * The crop rect is validated: x/y >= 0, width/height > 0, and the rect stays

@@ -1864,5 +1864,11 @@
       "addListing": "Add a listing",
       "clearFilters": "Clear filters"
     }
+  },
+  "creator": {
+    "crop": {
+      "reset": "Reset",
+      "done": "Done"
+    }
   }
 }

@@ -10,6 +10,7 @@ import type { QueueUploadParams, UploadJob, UploadEventListener, ProjectProgress
  */
 let sharedStore: UploadJobStore | null = null;
 let sharedManager: UploadManager | null = null;
+let reconciliationStarted = false;
 
 export function getSharedManager(): UploadManager {
   if (!sharedStore) sharedStore = new UploadJobStore();
@@ -19,6 +20,37 @@ export function getSharedManager(): UploadManager {
 
 export async function resumeCreatorUploads(): Promise<void> {
   await getSharedManager().resumePendingJobs();
+}
+
+/**
+ * Reconcile persisted upload state on app relaunch. Returns the count of
+ * recoverable jobs (queued + uploading + initiating + stalled) so the UI
+ * can surface "N uploads resumed" truthfully. Idempotent — safe to call
+ * multiple times; only the first call transitions non-queued recoverable
+ * jobs to queued.
+ */
+export async function reconcileCreatorUploads(): Promise<{ resumedCount: number }> {
+  return getSharedManager().reconcileOnStartup();
+}
+
+/**
+ * Ensure upload reconciliation runs exactly once per JS runtime session.
+ * Called from the first `useUploadManager` mount. Subsequent calls are
+ * no-ops. Returns the resumed count (0 if already reconciled or nothing
+ * to resume). Errors are swallowed so a reconciliation failure never
+ * crashes the composer — the user can still queue new uploads.
+ */
+export async function ensureReconciledOnStartup(): Promise<{ resumedCount: number }> {
+  if (reconciliationStarted) return { resumedCount: 0 };
+  reconciliationStarted = true;
+  try {
+    return await reconcileCreatorUploads();
+  } catch {
+    // Reconciliation failure is non-fatal. Reset the flag so a later
+    // explicit retry is possible.
+    reconciliationStarted = false;
+    return { resumedCount: 0 };
+  }
 }
 
 /** Parameters accepted by the hook's `queueUpload`. */
@@ -95,6 +127,11 @@ export function useUploadManager(projectId?: string): UseUploadManagerResult {
   useEffect(() => {
     const listener: UploadEventListener = () => forceUpdate();
     const unsubscribe = manager.subscribe(listener);
+    // Reconcile persisted upload state on the first mount of any
+    // useUploadManager consumer. The guard inside ensureReconciledOnStartup
+    // makes this a no-op after the first call, so multiple consumers
+    // mounting in the same session don't trigger redundant reconciliation.
+    void ensureReconciledOnStartup();
     // Seed initial job list from the store.
     void (async () => {
       if (projectId) {

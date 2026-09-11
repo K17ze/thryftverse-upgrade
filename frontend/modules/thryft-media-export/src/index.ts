@@ -66,6 +66,17 @@ export type {
   ThumbnailResult,
 } from './ThryftMediaExport.nitro';
 
+// Canonical JS-side filter color matrices. Shared source of truth across
+// the JS export renderer, the backend SVG renderer, and the Skia preview.
+// See `./filterMatrices.ts` for the cross-renderer agreement contract.
+export {
+  IDENTITY_MATRIX,
+  FILTER_PRESET_MATRICES,
+  interpolateMatrix,
+  isIdentityMatrix,
+  multiplyMatrix,
+} from './filterMatrices';
+
 // Lazy proxy — throws on use if native module is not linked, but allows
 // imports at module load time without crashing.
 export const ThryftMediaExportModule = new Proxy(

@@ -308,6 +308,47 @@ export class UploadManager {
     await this.processQueue();
   }
 
+  /**
+   * Reconcile persisted upload state on app relaunch.
+   *
+   * The OS may kill the JS runtime while uploads are in-flight. On the next
+   * launch, persisted jobs can be left in transient states (`uploading`,
+   * `initiating`, `stalled`) that no longer have a live network request
+   * behind them. This method:
+   *
+   * 1. Hydrates the in-memory cache from AsyncStorage.
+   * 2. Counts every recoverable job (`queued`, `uploading`, `initiating`,
+   *    `stalled`) so the UI can surface "N uploads resumed" truthfully.
+   * 3. Rewrites non-`queued` recoverable jobs to `queued` and clears their
+   *    error. Already-`queued` jobs are counted but NOT mutated — they are
+   *    already in the correct state and a redundant write would pollute
+   *    the mutation history tests rely on.
+   * 4. Leaves terminal jobs (`completed`, `failed`, `paused`) untouched.
+   * 5. Kicks `processQueue()` so re-queued jobs actually start.
+   *
+   * This is JS-only reconciliation. It does NOT claim native background
+   * upload survival — a job interrupted by process death loses its
+   * in-flight bytes and restarts from the last persisted checkpoint
+   * (multipart parts with ETags are skipped by the uploader).
+   *
+   * Idempotent: a second call counts the same queued jobs and applies no
+   * further status transitions.
+   */
+  async reconcileOnStartup(): Promise<{ resumedCount: number }> {
+    await this.hydrate();
+    let resumedCount = 0;
+    const recoverable: UploadJob['status'][] = ['queued', 'uploading', 'initiating', 'stalled'];
+    for (const job of this.jobsCache.values()) {
+      if (!recoverable.includes(job.status)) continue;
+      resumedCount += 1;
+      if (job.status !== 'queued') {
+        await this.persistState(job.id, { status: 'queued', error: undefined });
+      }
+    }
+    await this.processQueue();
+    return { resumedCount };
+  }
+
   /** Stop timers and abort active work when the JS runtime is torn down. */
   dispose(): void {
     if (this.stallCheckInterval) clearInterval(this.stallCheckInterval);
