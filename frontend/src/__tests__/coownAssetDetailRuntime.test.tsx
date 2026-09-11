@@ -219,7 +219,6 @@ describe('AssetOverviewSection — ranged price history', () => {
       showVolume: false,
       lastExecutionPriceGbp: null,
       appraisedValuePerUnitGbp: null,
-      referenceVsAppraisalPct: null,
       dossierDocuments: [],
       hasDocuments: false,
       onOpenDiligence: noop,
@@ -228,23 +227,40 @@ describe('AssetOverviewSection — ranged price history', () => {
     }));
   }
 
-  it('fetches history with the mapped interval/limit for the active range', async () => {
+  it('fetches history with the mapped interval/limit and an explicit window for the active range', async () => {
     fetchCoOwnPriceHistory.mockResolvedValue({ interval: '4h', candles: [] });
     renderOverview({ candleRange: '1W' });
     await act(async () => {});
-    expect(fetchCoOwnPriceHistory).toHaveBeenCalledWith('asset-1', { interval: '4h', limit: 42 });
+    // F11: each range passes an explicit from/to window so a label can
+    // never silently return an arbitrary latest-N slice.
+    expect(fetchCoOwnPriceHistory).toHaveBeenCalledWith(
+      'asset-1',
+      expect.objectContaining({ interval: '4h', limit: 42 }),
+    );
+    const call = fetchCoOwnPriceHistory.mock.calls.at(-1)?.[1] as { from: string; to: string };
+    expect(typeof call.from).toBe('string');
+    expect(typeof call.to).toBe('string');
+    const spanDays = (new Date(call.to).getTime() - new Date(call.from).getTime()) / 86_400_000;
+    expect(spanDays).toBeGreaterThanOrEqual(6.9);
+    expect(spanDays).toBeLessThan(7.1);
   });
 
-  it('maps 1M to daily and 1D to hourly', async () => {
+  it('maps 1M to daily and 1D to hourly with bounded windows', async () => {
     fetchCoOwnPriceHistory.mockResolvedValue({ interval: '1d', candles: [] });
     renderOverview({ candleRange: '1M' });
     await act(async () => {});
-    expect(fetchCoOwnPriceHistory).toHaveBeenLastCalledWith('asset-1', { interval: '1d', limit: 30 });
+    expect(fetchCoOwnPriceHistory).toHaveBeenLastCalledWith(
+      'asset-1',
+      expect.objectContaining({ interval: '1d', limit: 30 }),
+    );
 
     fetchCoOwnPriceHistory.mockResolvedValue({ interval: '1h', candles: [] });
     renderOverview({ candleRange: '1D' });
     await act(async () => {});
-    expect(fetchCoOwnPriceHistory).toHaveBeenLastCalledWith('asset-1', { interval: '1h', limit: 48 });
+    expect(fetchCoOwnPriceHistory).toHaveBeenLastCalledWith(
+      'asset-1',
+      expect.objectContaining({ interval: '1h', limit: 48 }),
+    );
   });
 
   it('renders history candles converted from minor units to GBP', async () => {
@@ -262,14 +278,46 @@ describe('AssetOverviewSection — ranged price history', () => {
     fetchCoOwnPriceHistory.mockRejectedValue(new Error('network down'));
     renderOverview({ candleRange: '1M', candleData: embedded });
     await act(async () => {});
-    expect(candleChartRenderProps.current).toHaveLength(0);
+    // F12: the chart stays mounted through failure — its empty state owns
+    // the messaging. The data contract must still be empty, never the
+    // embedded one-week candles relabelled as another range.
+    const lastRender = candleChartRenderProps.current.at(-1);
+    expect(lastRender).toBeDefined();
+    expect(lastRender!.candles).toHaveLength(0);
   });
 
   it('keeps non-default range visibly unavailable when history comes back empty', async () => {
     fetchCoOwnPriceHistory.mockResolvedValue({ interval: '1w', candles: [] });
     renderOverview({ candleRange: 'ALL', candleData: embedded });
     await act(async () => {});
-    expect(candleChartRenderProps.current).toHaveLength(0);
+    const lastRender = candleChartRenderProps.current.at(-1);
+    expect(lastRender!.candles).toHaveLength(0);
+  });
+
+  it('honors an empty successful one-week response instead of restoring embedded candles', async () => {
+    fetchCoOwnPriceHistory.mockResolvedValue({ interval: '4h', candles: [] });
+    const renderer = renderOverview({ candleRange: '1W', candleData: embedded });
+    await act(async () => {});
+    expect(lastChartCandles()).toEqual([]);
+    expect(hasText(renderer, 'Saved history')).toBe(false);
+  });
+
+  it('labels the saved one-week history after failure and retries the live fetch', async () => {
+    fetchCoOwnPriceHistory.mockRejectedValueOnce(new Error('offline'));
+    const renderer = renderOverview({ candleRange: '1W', candleData: embedded });
+    await act(async () => {});
+    expect(lastChartCandles()).toEqual(embedded);
+    expect(hasText(renderer, 'Saved history')).toBe(true);
+    const retry = renderer.root.findAll(node =>
+      node.props.accessibilityLabel === 'Retry price history'
+      && typeof node.props.onPress === 'function')[0];
+    expect(retry).toBeDefined();
+    fetchCoOwnPriceHistory.mockResolvedValue({ interval: '4h', candles: [makePriceCandle()] });
+    await act(async () => retry.props.onPress());
+    expect(fetchCoOwnPriceHistory).toHaveBeenCalledTimes(2);
+    expect(lastChartCandles()![0].o).toBe(12.5);
+    expect(hasText(renderer, 'Saved history')).toBe(false);
+    expect(hasText(renderer, 'Retry price history')).toBe(false);
   });
 
   it('never renders the previous range history under a new range while loading', async () => {
@@ -281,10 +329,11 @@ describe('AssetOverviewSection — ranged price history', () => {
     await act(async () => {});
     expect(lastChartCandles()![0].o).toBe(99);
 
-    // Switch range with a never-resolving fetch: the chart must not show the
-    // previous range (o: 99) or relabel the embedded one-week data as 1D.
+    // Switch range with a never-resolving fetch: the chart stays mounted
+    // (F12) but must show neither the previous range (o: 99) nor the
+    // embedded one-week data relabelled as 1D — its data contract goes
+    // empty while the new range loads.
     fetchCoOwnPriceHistory.mockReturnValue(new Promise(() => {}));
-    const renderCountBeforeRangeChange = candleChartRenderProps.current.length;
     await act(async () => {
       renderer.update(React.createElement(AssetOverviewSection, {
         asset: makeAsset(),
@@ -294,7 +343,6 @@ describe('AssetOverviewSection — ranged price history', () => {
         showVolume: false,
         lastExecutionPriceGbp: null,
         appraisedValuePerUnitGbp: null,
-        referenceVsAppraisalPct: null,
         dossierDocuments: [],
         hasDocuments: false,
         onOpenDiligence: noop,
@@ -302,7 +350,10 @@ describe('AssetOverviewSection — ranged price history', () => {
         lifecycleState: 'secondaryTrading',
       }));
     });
-    expect(candleChartRenderProps.current).toHaveLength(renderCountBeforeRangeChange);
+    const lastRender = candleChartRenderProps.current.at(-1);
+    expect(lastRender).toBeDefined();
+    expect(lastRender!.range).toBe('1D');
+    expect(lastRender!.candles).toHaveLength(0);
   });
 });
 
@@ -345,6 +396,11 @@ describe('AssetMarketSection', () => {
     });
     const renderer = renderMarket(makeAsset());
     await act(async () => {});
+    // Switch to the Tape tab (default view is Ladder)
+    act(() => {
+      const tapeTab = renderer.root.findByProps({ accessibilityLabel: 'Order book view: tape' });
+      tapeTab.props.onPress();
+    });
     expect(hasText(renderer, 'Executions unavailable')).toBe(false);
     const priceHits = getAllText(renderer).filter((t) => t.includes('10.5')).length;
     expect(priceHits).toBeGreaterThanOrEqual(3);
@@ -354,6 +410,11 @@ describe('AssetMarketSection', () => {
     listCoOwnExecutions.mockRejectedValue(new Error('offline'));
     const renderer = renderMarket(makeAsset());
     await act(async () => {});
+    // Switch to the Tape tab (default view is Ladder)
+    act(() => {
+      const tapeTab = renderer.root.findByProps({ accessibilityLabel: 'Order book view: tape' });
+      tapeTab.props.onPress();
+    });
     expect(hasText(renderer, 'Executions unavailable')).toBe(true);
   });
 
@@ -429,8 +490,9 @@ describe('AssetMarketSection — open orders panel', () => {
     await act(async () => {});
     expect(hasText(renderer, 'Buy')).toBe(true);
     expect(hasText(renderer, 'Sell')).toBe(true);
-    expect(hasText(renderer, '7/10')).toBe(true);
-    expect(hasText(renderer, '3/3')).toBe(true);
+    const text = getAllText(renderer).join('');
+    expect(text).toContain('7 of 10 units left');
+    expect(text).toContain('3 of 3 units left');
   });
 
   it('shows "No resting orders" when the list is empty', async () => {
@@ -522,6 +584,7 @@ describe('AssetOwnershipSection — holder count', () => {
       isHolder: false,
       yourUnits: 0,
       viewerPct: null,
+      positionValueGbp: null,
       avgEntryPriceGbp: null,
       unrealizedPnlGbp: null,
       unrealizedPnlPct: null,
@@ -543,30 +606,47 @@ describe('AssetOwnershipSection — holder count', () => {
     }));
   }
 
-  it('renders holder count and allocation percentage when holders > 0', () => {
+  function toggleBreakdown(renderer: TestRenderer.ReactTestRenderer) {
+    const disclosure = renderer.root.findAll(node =>
+      node.props.accessibilityLabel === 'Ownership breakdown'
+      && typeof node.props.onPress === 'function')[0];
+    act(() => disclosure.props.onPress());
+    return renderer.root.findAll(node =>
+      node.props.accessibilityLabel === 'Ownership breakdown'
+      && typeof node.props.onPress === 'function')[0];
+  }
+
+  it('reveals holder count and allocated units on demand and collapses them again', () => {
     const renderer = renderOwnershipHolderCount(12);
-    // Text nodes are split: "12" + " co-owners · " + "60" + "% allocated"
+    expect(hasText(renderer, 'Co-owners')).toBe(false);
+    expect(toggleBreakdown(renderer).props.accessibilityState.expanded).toBe(true);
     const text = getAllText(renderer).join('');
-    expect(text).toContain('12 co-owners');
-    expect(text).toContain('60% allocated');
+    expect(text).toContain('Co-owners12');
+    expect(text).toContain('Allocated units600');
+    expect(toggleBreakdown(renderer).props.accessibilityState.expanded).toBe(false);
+    expect(hasText(renderer, 'Co-owners')).toBe(false);
   });
 
-  it('uses singular "co-owner" when holder count is 1', () => {
+  it('preserves a single holder in the expanded breakdown', () => {
     const renderer = renderOwnershipHolderCount(1);
+    toggleBreakdown(renderer);
     const text = getAllText(renderer).join('');
-    expect(text).toContain('1 co-owner');
+    expect(text).toContain('Co-owners1');
   });
 
   it('omits the holder count line when holderCount is null', () => {
     const renderer = renderOwnershipHolderCount(null);
+    toggleBreakdown(renderer);
     const text = getAllText(renderer).join('');
-    expect(text).not.toMatch(/\d+ co-owners/);
+    expect(text).not.toContain('Co-owners');
+    expect(text).toContain('Allocated units600');
   });
 
   it('renders zero holders as a valid state (not hidden)', () => {
     const renderer = renderOwnershipHolderCount(0);
+    toggleBreakdown(renderer);
     const text = getAllText(renderer).join('');
-    expect(text).toContain('0 co-owners');
+    expect(text).toContain('Co-owners0');
   });
 });
 
@@ -579,6 +659,7 @@ describe('AssetOwnershipSection — fail-visible states', () => {
       isHolder: true,
       yourUnits: 10,
       viewerPct: 1,
+      positionValueGbp: 90,
       avgEntryPriceGbp: 9,
       unrealizedPnlGbp: 1,
       unrealizedPnlPct: 1,
@@ -600,15 +681,15 @@ describe('AssetOwnershipSection — fail-visible states', () => {
     }));
   }
 
-  it('shows "Events unavailable" when the corporate-actions fetch failed', () => {
+  it('shows a refresh failure when the corporate-actions fetch failed', () => {
     const renderer = renderOwnership({ corporateActions: null, corporateActionsFailed: true });
-    expect(hasText(renderer, 'Events unavailable')).toBe(true);
+    expect(hasText(renderer, 'Events could not be refreshed')).toBe(true);
   });
 
   it('omits the events block entirely when actions are genuinely absent', () => {
     const renderer = renderOwnership({ corporateActions: [], corporateActionsFailed: false });
-    expect(hasText(renderer, 'Events unavailable')).toBe(false);
-    expect(hasText(renderer, 'Corporate actions')).toBe(false);
+    expect(hasText(renderer, 'Events could not be refreshed')).toBe(false);
+    expect(hasText(renderer, 'Ownership events')).toBe(false);
   });
 
   it('shows "Distribution history unavailable" when the distributions fetch failed', () => {
@@ -619,7 +700,28 @@ describe('AssetOwnershipSection — fail-visible states', () => {
   it('keeps the plain empty state when distributions simply do not exist', () => {
     const renderer = renderOwnership({ lastDistribution: null, distributionsFailed: false });
     expect(hasText(renderer, 'Distribution history unavailable')).toBe(false);
-    expect(hasText(renderer, 'No distributions settled yet')).toBe(true);
+    expect(hasText(renderer, 'No distributions yet')).toBe(true);
+  });
+
+  it('does not infer unrestricted selling when the holding period is unknown', () => {
+    const renderer = renderOwnership({ lockupEndDate: null });
+    expect(hasText(renderer, 'No lockup')).toBe(false);
+    expect(hasText(renderer, 'Lockup ended')).toBe(false);
+    expect(hasText(renderer, 'Holding period')).toBe(false);
+    expect(hasText(renderer, 'Full rights agreement')).toBe(true);
+  });
+
+  it('distinguishes unreserved units from units reserved in orders', () => {
+    const renderer = renderOwnership({ sellableUnits: 7, reservedUnits: 3 });
+    const text = getAllText(renderer).join('');
+    expect(text).toContain('Unreserved units7 units');
+    expect(text).toContain('Reserved in orders3 units');
+  });
+
+  it('keeps an unresolved position distinct from owning no units', () => {
+    const renderer = renderOwnership({ isHolder: false, yourUnits: null });
+    expect(hasText(renderer, 'Your position is unavailable')).toBe(true);
+    expect(hasText(renderer, 'You do not own units')).toBe(false);
   });
 });
 

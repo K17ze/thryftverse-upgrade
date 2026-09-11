@@ -24,6 +24,12 @@ export interface CoOwnPriceAlertFormProps {
   onAlertConditionChange: (condition: PriceAlertCondition) => void;
   alertSubmitting: boolean;
   onSubmit: () => void;
+  /** U52: Denomination currency code (e.g. "GBP"). */
+  denomination?: string;
+  /** U52: Trigger basis — what price the alert is compared against. */
+  triggerBasis?: 'last_trade' | 'reference';
+  /** U52: Current observed price in GBP major units, or null when unavailable. */
+  currentPriceGbp?: number | null;
 }
 
 export function CoOwnPriceAlertForm({
@@ -35,6 +41,9 @@ export function CoOwnPriceAlertForm({
   onAlertConditionChange,
   alertSubmitting,
   onSubmit,
+  denomination = 'GBP',
+  triggerBasis = 'last_trade',
+  currentPriceGbp = null,
 }: CoOwnPriceAlertFormProps) {
   const { colors } = useAppTheme();
   const { currencySymbol } = useFormattedPrice();
@@ -58,6 +67,26 @@ export function CoOwnPriceAlertForm({
               <Text style={[priceAlertStyles.sheetTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>Create price alert</Text>
               <Text style={[priceAlertStyles.sheetSubtitle, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
                 Get notified when the price {alertCondition === 'above' ? 'rises above' : 'drops below'} your target.
+              </Text>
+            </View>
+          </View>
+
+          {/* U52: Price semantics — denomination, trigger basis, current observed price */}
+          <View style={[priceAlertStyles.priceContext, { borderColor: colors.borderSubtle }]}>
+            <View style={priceAlertStyles.priceContextRow}>
+              <Text style={[priceAlertStyles.priceContextLabel, { color: colors.textMuted }]}>Denomination</Text>
+              <Text style={[priceAlertStyles.priceContextValue, { color: colors.textPrimary }]}>{denomination}</Text>
+            </View>
+            <View style={priceAlertStyles.priceContextRow}>
+              <Text style={[priceAlertStyles.priceContextLabel, { color: colors.textMuted }]}>Trigger basis</Text>
+              <Text style={[priceAlertStyles.priceContextValue, { color: colors.textPrimary }]}>
+                {triggerBasis === 'last_trade' ? 'Last trade price' : 'Reference price'}
+              </Text>
+            </View>
+            <View style={priceAlertStyles.priceContextRow}>
+              <Text style={[priceAlertStyles.priceContextLabel, { color: colors.textMuted }]}>Current price</Text>
+              <Text style={[priceAlertStyles.priceContextValue, { color: colors.textPrimary }]}>
+                {currentPriceGbp != null ? `${currencySymbol}${currentPriceGbp.toFixed(2)}` : '—'}
               </Text>
             </View>
           </View>
@@ -159,6 +188,31 @@ const priceAlertStyles = StyleSheet.create({
   },
   headerText: {
     flex: 1,
+  },
+  // U52: Price context panel — denomination, trigger basis, current price
+  priceContext: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: RadiusRoleValue.mediaThumbnail,
+    padding: Space.sm,
+    gap: Space.xs,
+    marginBottom: Space.lg,
+  },
+  priceContextRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  priceContextLabel: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+  },
+  priceContextValue: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   sheetTitle: {
     fontSize: TypographyV2.sectionTitle.size,

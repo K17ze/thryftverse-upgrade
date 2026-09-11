@@ -12,7 +12,7 @@ import { HoldToSubmitButton } from '../components/ui/HoldToSubmitButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 import { useToast } from '../context/ToastContext';
-import { cancelCoOwnOrderReservation, placeCoOwnOrder, lookupCoOwnOrderByIdempotencyKey } from '../services/marketApi';
+import { cancelCoOwnOrderReservation, placeCoOwnOrder, lookupCoOwnOrderByIdempotencyKey, fetchCoOwnAssetById } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 import { useStore } from '../store/useStore';
 import { makeStableId } from '../utils/createStableId';
@@ -93,6 +93,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isReleasing, setIsReleasing] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
+  const [quoteChanged, setQuoteChanged] = useState(false);
   const reservationPlacedRef = React.useRef(false);
   const reservationReleasedRef = React.useRef(false);
 
@@ -138,6 +139,14 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
     `${value.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 1ZE`
   ), []);
   const maxReservedLabel = isBuy ? format1ze(maxReserved1ze) : `${quantity} units`;
+  // U30: Protection price label for protected_market orders (max buy / min sell).
+  const protectionPriceLabel = protectionPriceGbp != null && protectionPriceGbp > 0
+    ? format1ze(protectionPriceGbp)
+    : undefined;
+  // U30: Duration label with human-readable expiry for resting limit orders.
+  const durationLabel = ticketOrderType === 'limit'
+    ? (ticketDuration === 'GTC90' ? 'GTC · 90 days' : 'GFD · end of day')
+    : undefined;
   const reservationExpiryMs = Date.parse(reservationExpiresAt);
   const previewExpiryMs = Date.parse(previewValidUntil);
   const validUntilMs = Math.min(reservationExpiryMs, previewExpiryMs);
@@ -150,6 +159,34 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
     const interval = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // U31/U32: Revalidate the reserved price against the live market before
+  // commitment. If the market has moved beyond the protection band since the
+  // reservation was made, the quote has changed and the user must return to
+  // the ticket for a fresh preview rather than committing a stale price.
+  useEffect(() => {
+    if (!assetId) return;
+    let cancelled = false;
+    const reservedPrice = protectionPriceGbp ?? limitPriceGbp ?? 0;
+    if (reservedPrice <= 0) return;
+    fetchCoOwnAssetById(assetId)
+      .then((fetchedAsset) => {
+        if (cancelled) return;
+        const currentPrice = isBuy
+          ? (fetchedAsset.bestAskGbp ?? fetchedAsset.unitPriceGbp)
+          : (fetchedAsset.bestBidGbp ?? fetchedAsset.unitPriceGbp);
+        if (!currentPrice || currentPrice <= 0) return;
+        const delta = Math.abs(currentPrice - reservedPrice) / reservedPrice;
+        if (delta > 0.02) {
+          setQuoteChanged(true);
+        }
+      })
+      .catch(() => {
+        // If we cannot fetch the live price, the reservation expiry timer
+        // still guards against stale quotes. Do not block on a fetch failure.
+      });
+    return () => { cancelled = true; };
+  }, [assetId, isBuy, limitPriceGbp, protectionPriceGbp]);
 
   const releaseReservation = React.useCallback(async () => {
     if (reservationPlacedRef.current || reservationReleasedRef.current) return;
@@ -175,6 +212,13 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
 
     if (isExpired) {
       show('This quote expired. Return to refresh the live market preview.', 'info');
+      return;
+    }
+
+    // U32: Do not auto-submit when the quote has changed since the reservation.
+    // The user must return to the ticket for a fresh preview before committing.
+    if (quoteChanged) {
+      show('Quote changed since reservation. Return to review the updated price.', 'info');
       return;
     }
 
@@ -213,19 +257,30 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
       reservationPlacedRef.current = true;
 
       if (remoteOrder.order.status === 'rejected') {
-        show('Order rejected by matching engine.', 'error');
+        // U32: Rejection — show the engine's reason so the user knows why.
+        const rejectReason = remoteOrder.order.remainingUnits != null && remoteOrder.order.remainingUnits > 0
+          ? `Order rejected by matching engine. ${remoteOrder.order.remainingUnits} units unfilled.`
+          : 'Order rejected by matching engine.';
+        show(rejectReason, 'error');
         // Definitive rejection — a genuinely new order needs a new key.
         idempotencyKeyRef.current = null;
         reservationPlacedRef.current = false;
         await releaseReservation();
         return;
       }
-      if (remoteOrder.order.status === 'open') {
-        show('Offer placed on the server order book.', 'info');
+      // U32: Distinguish immediate fill, resting balance, and partial fill
+      // with explicit quantities so the user knows the exact outcome.
+      if (remoteOrder.order.status === 'filled') {
+        const filledQty = remoteOrder.order.filledUnits ?? quantity;
+        show(`Filled immediately: ${filledQty} units executed.`, 'success');
       } else if (remoteOrder.order.status === 'partially_filled') {
-        show('Order partially filled. Remaining units are on the order book.', 'info');
+        const filledQty = remoteOrder.order.filledUnits ?? 0;
+        const restingQty = remoteOrder.order.remainingUnits ?? (quantity - filledQty);
+        show(`Partial fill: ${filledQty} units filled, ${restingQty} units resting on the book.`, 'info');
       } else {
-        show('Order executed on CO-OWN engine.', 'success');
+        // 'open' — the full quantity is resting on the order book.
+        const restingQty = remoteOrder.order.remainingUnits ?? quantity;
+        show(`Resting order: ${restingQty} units placed on the order book.`, 'info');
       }
       if (remoteOrder.aml?.alertId) show('Trade is flagged for AML review.', 'info');
       // Keep telemetry aligned with the server outcome. An open or partially
@@ -272,12 +327,12 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
             // as execution.
             if (lookup.order.status === 'rejected') {
               show('Order rejected by matching engine.', 'error');
-            } else if (lookup.order.status === 'partially_filled') {
-              show('Order partially filled. Remaining units are on the order book.', 'info');
             } else if (lookup.order.status === 'filled') {
-              show('Order executed on CO-OWN engine.', 'success');
+              show('Filled immediately. Check order history for details.', 'success');
+            } else if (lookup.order.status === 'partially_filled') {
+              show('Partial fill. Remaining units are resting on the book.', 'info');
             } else {
-              show('Offer placed on the server order book.', 'info');
+              show('Resting order placed on the server order book.', 'info');
             }
             goOrderHistory({ orderId: String(lookup.order.id), assetId });
             return;
@@ -341,6 +396,8 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
           remainingUnits={estimatedRemainingUnits}
           unitPriceLabel={quantity > 0 ? format1ze(totalValue / quantity) : format1ze(0)}
           limitPriceLabel={format1ze(limitPriceGbp)}
+          protectionPriceLabel={protectionPriceLabel}
+          durationLabel={durationLabel}
           avgFillPriceLabel={averageFillPriceGbp > 0 ? format1ze(averageFillPriceGbp) : 'No immediate fill'}
           worstPriceLabel={worstPriceGbp > 0 ? format1ze(worstPriceGbp) : 'No immediate fill'}
           grossLabel={format1ze(totalValue)}
@@ -373,6 +430,20 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
           </Text>
         </View>
 
+        {/* U32: Quote changed notice — the market has moved beyond the
+            protection band since the reservation was made. The user must
+            return to the ticket for a fresh preview before committing. */}
+        {quoteChanged && !isExpired && (
+          <View style={[styles.quoteChangedCard, { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder }]}>
+            <Text style={[styles.remainderHeader, { color: colors.warning }]}>
+              Quote changed
+            </Text>
+            <Text style={[styles.remainderText, { color: colors.textSecondary }]}>
+              The live market price has moved since this quote was reserved. Return to the ticket to review the updated price before confirming.
+            </Text>
+          </View>
+        )}
+
         {/* Risk disclosure */}
         <View style={styles.riskWrap}>
           <CoOwnRiskDisclosure />
@@ -396,10 +467,12 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
             title={isBuy ? 'Confirm buy' : 'Confirm sell'}
             iconName={isBuy ? 'arrow-up-circle-outline' : 'arrow-down-circle-outline'}
             onSubmit={handleConfirm}
-            disabled={isSubmitting || isReleasing || isExpired}
+            disabled={isSubmitting || isReleasing || isExpired || quoteChanged}
             accessibilityLabel={isExpired
               ? 'Quote expired. Return to refresh.'
-              : `${isBuy ? 'Confirm buy order' : 'Confirm sell order'}. Quote expires in ${secondsRemaining} seconds.`}
+              : quoteChanged
+                ? 'Quote changed. Return to review the updated price.'
+                : `${isBuy ? 'Confirm buy order' : 'Confirm sell order'}. Quote expires in ${secondsRemaining} seconds.`}
           />
         </View>
       </CoOwnStickyActionDock>
@@ -444,6 +517,16 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.body.lineHeight + 2,
     fontFamily: TypographyV2.body.fontFamily,
     letterSpacing: TypographyV2.body.letterSpacing,
+  },
+  // ── Quote changed card — warning surface when the market has moved ──
+  // Mirrors the remainder card grammar but uses warning semantic colors
+  // so it reads as a distinct, actionable notice — not a decorative alert.
+  quoteChangedCard: {
+    marginTop: Space.lg,
+    borderRadius: RadiusRoleValue.sheetDialog,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    gap: Space.xs,
   },
   // ── Dock row — calm, professional confirm/cancel actions ──
   // Per spec 11_COOWN: "Buy/sell action is impossible to confuse."

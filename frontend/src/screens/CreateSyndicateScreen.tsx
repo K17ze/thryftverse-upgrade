@@ -71,11 +71,13 @@ export default function CreateCoOwnScreen() {
   // Fetch issuer listings from the backend API (not mockData).
   const [issuerListings, setIssuerListings] = React.useState<ListingApiItem[]>([]);
   const [isLoadingListings, setIsLoadingListings] = React.useState(true);
+  const [listingsError, setListingsError] = React.useState(false);
 
-  React.useEffect(() => {
+  const loadListings = React.useCallback(() => {
     if (!issuerId) { setIsLoadingListings(false); return; }
     let cancelled = false;
     setIsLoadingListings(true);
+    setListingsError(false);
 
     fetchUserListingsFromApi(issuerId, { status: 'active', limit: 50 })
       .then((result) => {
@@ -88,7 +90,9 @@ export default function CreateCoOwnScreen() {
       })
       .catch(() => {
         if (cancelled) return;
-        setIssuerListings([]);
+        // Preserve any previously loaded listings; mark as error so the
+        // UI can distinguish "fetch failed" from "no listings".
+        setListingsError(true);
       })
       .finally(() => {
         if (!cancelled) setIsLoadingListings(false);
@@ -96,6 +100,10 @@ export default function CreateCoOwnScreen() {
 
     return () => { cancelled = true; };
   }, [issuerId]);
+
+  React.useEffect(() => {
+    return loadListings();
+  }, [loadListings]);
 
   const initialState = React.useMemo(
     () => getCreateCoOwnInitialState(prefill, issuerListings[0]?.id ?? ''),
@@ -115,15 +123,21 @@ export default function CreateCoOwnScreen() {
   // current tier so we can show a blocking notice before the user
   // reaches the issue button (fail fast, don't let them fill the form
   // only to hit a 403).
-  const [issuerTier, setIssuerTier] = React.useState<'email' | 'id' | 'seller' | null | 'loading'>('loading');
-  React.useEffect(() => {
+  const [issuerTier, setIssuerTier] = React.useState<'email' | 'id' | 'seller' | null | 'loading' | 'unavailable'>('loading');
+  const loadVerification = React.useCallback(() => {
     if (!issuerId) { setIssuerTier(null); return; }
     let cancelled = false;
+    setIssuerTier('loading');
     fetchIssuerVerification(issuerId)
       .then((result) => { if (!cancelled) setIssuerTier(result?.tier ?? 'email'); })
-      .catch(() => { if (!cancelled) setIssuerTier('email'); });
+      .catch(() => { if (!cancelled) setIssuerTier('unavailable'); });
     return () => { cancelled = true; };
   }, [issuerId]);
+
+  React.useEffect(() => {
+    return loadVerification();
+  }, [loadVerification]);
+
   const canIssue = issuerTier === 'id' || issuerTier === 'seller';
 
   // ── Trust profile (WS1) ──
@@ -376,6 +390,31 @@ export default function CreateCoOwnScreen() {
     );
   }
 
+  // ── Listings fetch failed (unavailable) ──
+  if (listingsError && issuerListings.length === 0) {
+    return (
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Issue Co-Own"
+            subtitle="Create a shared ownership item"
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
+        <CoOwnStateCanvas
+          variant="error"
+          title="Listings unavailable"
+          subtitle="We couldn't load your listings. Check your connection and try again."
+          actionLabel="Try again"
+          onAction={() => { haptics.tap(); loadListings(); }}
+        />
+      </FlagshipScreen>
+    );
+  }
+
   // ── Empty state (no listings) ──
   if (issuerListings.length === 0) {
     return (
@@ -434,8 +473,33 @@ export default function CreateCoOwnScreen() {
               {/* ── WS2: KYC gate ──
                   Issuers must have 'id' or 'seller' tier verification to
                   issue. Show a blocking notice before the listing selector
-                  so the user doesn't fill the form only to hit a 403. */}
-              {issuerTier !== 'loading' && !canIssue && (
+                  so the user doesn't fill the form only to hit a 403.
+                  Verification fetch failure is shown as "unavailable" with
+                  retry — not silently downgraded to email tier. */}
+              {issuerTier === 'unavailable' && (
+                <View style={[styles.kycGateCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+                  <Ionicons name="cloud-offline-outline" size={20} color={colors.warning} />
+                  <View style={styles.kycGateBody}>
+                    <Text style={[styles.kycGateTitle, { color: colors.textPrimary }]}>
+                      Verification status unavailable
+                    </Text>
+                    <Text style={[styles.kycGateText, { color: colors.textSecondary }]}>
+                      We couldn't confirm your verification tier. Check your connection and retry.
+                    </Text>
+                    <Pressable
+                      style={[styles.kycRetryBtn, { borderColor: colors.border }]}
+                      onPress={() => { haptics.tap(); loadVerification(); }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Retry verification check"
+                    >
+                      <Text style={[styles.kycRetryText, { color: colors.textPrimary }]}>
+                        Retry
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              )}
+              {issuerTier !== 'loading' && issuerTier !== 'unavailable' && !canIssue && (
                 <View style={[styles.kycGateCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
                   <Ionicons name="lock-closed-outline" size={20} color={colors.warning} />
                   <View style={styles.kycGateBody}>
@@ -1044,6 +1108,18 @@ const styles = StyleSheet.create({
   kycGateText: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
+  },
+  kycRetryBtn: {
+    alignSelf: 'flex-start',
+    paddingVertical: Space.xs,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.sm,
+    borderWidth: Stroke.standard,
+    marginTop: Space.xs,
+  },
+  kycRetryText: {
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
   },
   insuranceRow: {
     flexDirection: 'row',

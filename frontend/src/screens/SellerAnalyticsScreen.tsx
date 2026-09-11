@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { View, Text, ScrollView, RefreshControl, Pressable } from 'react-native';
 import { Space, Radius, Control } from '../theme/designTokens';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
@@ -6,7 +6,8 @@ import { EmptyState } from '../components/EmptyState';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { haptics } from '../utils/haptics';
-import { useSellerAnalytics } from '../components/seller/analytics/useSellerAnalytics';
+import { useSellerAnalytics, type Period } from '../components/seller/analytics/useSellerAnalytics';
+import { AnalyticsDateRangeSheet } from '../components/seller/analytics/AnalyticsDateRangeSheet';
 import { ListingAnalyticsDetail } from '../components/seller/analytics/ListingAnalyticsDetail';
 import { AnalyticsOverview } from '../components/seller/analytics/AnalyticsOverview';
 import { AnalyticsPortfolio } from '../components/seller/analytics/AnalyticsPortfolio';
@@ -40,16 +41,31 @@ export const SELLER_ANALYTICS_SECTIONS = {
   velocity: 'Velocity opportunities',
 } as const;
 
-const PERIOD_OPTIONS: { key: '7d' | '30d' | '90d'; label: string }[] = [
+const PRESET_OPTIONS: { key: '7d' | '30d' | '90d'; label: string }[] = [
   { key: '7d', label: '7d' },
   { key: '30d', label: '30d' },
   { key: '90d', label: '90d' },
 ];
 
+function isCustomPeriod(period: Period): period is { startDate: string; endDate: string } {
+  return typeof period !== 'string';
+}
+
+function formatCustomRangeLabel(period: { startDate: string; endDate: string }): string {
+  const start = new Date(period.startDate + 'T00:00:00.000Z');
+  const end = new Date(period.endDate + 'T00:00:00.000Z');
+  const fmt = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  return `${fmt(start)} – ${fmt(end)}`;
+}
+
 
 export default function SellerAnalyticsScreen() {
  const model = useSellerAnalytics();
  const { a11yRef, styles, colors, navigation, selectedListingId, isLoading, isError, hasZeroListings, load, isOffline, onRefresh, partialError, isRefreshing, period, setPeriod, handleListingSelect, listings } = model;
+ const [isRangeSheetVisible, setRangeSheetVisible] = useState(false);
+ const customTriggerRef = useRef<View>(null);
+
+ const isCustom = isCustomPeriod(period);
   // ── Loading state ──
   if (isLoading) {
     return (
@@ -160,9 +176,9 @@ export default function SellerAnalyticsScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
       >
-        {/* ── Period Selector — segmented control ── */}
+        {/* ── Period Selector — segmented control with custom range ── */}
         <View style={styles.periodSegmentControl}>
-          {PERIOD_OPTIONS.map((opt) => {
+          {PRESET_OPTIONS.map((opt) => {
             const isActive = period === opt.key;
             return (
               <AnimatedPressable
@@ -190,7 +206,42 @@ export default function SellerAnalyticsScreen() {
               </AnimatedPressable>
             );
           })}
+          <View ref={customTriggerRef} collapsable={false}>
+            <AnimatedPressable
+              style={[styles.periodSegmentOption, isCustom && styles.periodSegmentOptionActive]}
+              onPress={() => {
+                haptics.tap();
+                setRangeSheetVisible(true);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Custom date range"
+              accessibilityHint="Opens a date picker to select a custom analytics range"
+              accessibilityState={{ selected: isCustom }}
+              hitSlop={{ top: 4, bottom: 4 }}
+            >
+              <Text
+                style={[
+                  styles.periodSegmentText,
+                  { color: isCustom ? colors.textPrimary : colors.textMuted },
+                  isCustom && styles.periodSegmentTextActive,
+                ]}
+              >
+                Custom
+              </Text>
+            </AnimatedPressable>
+          </View>
         </View>
+
+        {/* Active custom range label — shown only when a custom range is applied */}
+        {isCustom ? (
+          <Text
+            style={[styles.customRangeLabel, { color: colors.textMuted }]}
+            accessibilityLabel={`Custom range: ${formatCustomRangeLabel(period)}`}
+            accessibilityHint="Tap Custom to change the date range"
+          >
+            {formatCustomRangeLabel(period)}
+          </Text>
+        ) : null}
 
         {/* ========================================================================= */}
         {/* VIEW A: SPECIFIC LISTING DEEP-DIVE                                        */}
@@ -206,6 +257,18 @@ export default function SellerAnalyticsScreen() {
           </>
         )}
       </ScrollView>
+
+      {/* ── Custom Date Range Bottom Sheet ── */}
+      <AnalyticsDateRangeSheet
+        visible={isRangeSheetVisible}
+        onDismiss={() => setRangeSheetVisible(false)}
+        onApply={(startDate, endDate) => {
+          setPeriod({ startDate, endDate });
+        }}
+        initialStartDate={isCustom ? period.startDate : undefined}
+        initialEndDate={isCustom ? period.endDate : undefined}
+        triggerRef={customTriggerRef as React.RefObject<View>}
+      />
     </FlagshipScreen>
   );
 }

@@ -39,14 +39,12 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
-  FlatList,
   ActivityIndicator,
   useWindowDimensions,
   Modal,
   type DimensionValue } from 'react-native';
 import { Image } from 'expo-image';
 import { FlashList, ListRenderItem } from '@shopify/flash-list';
-import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import {
@@ -54,7 +52,6 @@ import {
   Radius,
   Typography,
   Stroke,
-  Control,
   FontFamily,
   Elevation } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
@@ -67,6 +64,7 @@ import { Motion } from '../../../theme/motionTokens';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { AppIcon } from '../../../components/common/AppIcon';
 import { IconSize } from '../../../theme/iconTokens';
+import { useToast } from '../../../context/ToastContext';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -597,6 +595,7 @@ export function MediaBrowserSheet({
   const haptic = useHaptic();
   const { spring } = useMotionConfig();
   const reduceMotion = useReducedMotion();
+  const toast = useToast();
 
   // Live window width so the thumbnail grid responds to rotation and
   // multi-window changes (not frozen at module load — the former
@@ -767,6 +766,7 @@ export function MediaBrowserSheet({
         if (!allowVideos) return;
         if (asset.durationMs != null && asset.durationMs > MAX_VIDEO_DURATION_MS) {
           haptic.medium();
+          toast.show('Video is too long. Maximum 60 seconds.', 'error');
           return;
         }
       }
@@ -779,7 +779,7 @@ export function MediaBrowserSheet({
         return [...prev, asset.id];
       });
     },
-    [haptic, maxSelections, allowVideos],
+    [haptic, maxSelections, allowVideos, toast],
   );
 
   // ── Confirm selection ──
@@ -861,10 +861,10 @@ export function MediaBrowserSheet({
 
   const gridData: GridItem[] = useMemo(() => {
     const data: GridItem[] = [];
-    if (showCameraTile) data.push('camera');
+    if (showCameraTile && activeTab !== 'videos') data.push('camera');
     data.push(...filteredAssets);
     return data;
-  }, [filteredAssets, showCameraTile]);
+  }, [filteredAssets, showCameraTile, activeTab]);
 
   // ── Permission states (after all hooks) ──
   if (!status) {

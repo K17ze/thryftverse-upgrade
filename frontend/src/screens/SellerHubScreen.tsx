@@ -243,6 +243,7 @@ export default function SellerHubScreen() {
         {/* Quick-access pillar tiles — Wallet / Orders / Analytics / Closet. */}
         <SellerPillarTiles
           pendingOrdersCount={pendingOrdersCount}
+          walletBalanceLabel={money ? formatGbp(money.availableGbp) : undefined}
           onOpenWallet={handleOpenWallet}
           onOpenOrders={handleViewAllOrders}
           onOpenAnalytics={handleNavigateToAnalytics}

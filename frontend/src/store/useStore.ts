@@ -11,7 +11,7 @@ import { setSentryUser } from '../platform/monitoring/sentry';
 import { identifyUser, resetIdentity, track } from '../analytics';
 import { appStorage } from '../storage/mmkv';
 import { updateUserAccountPreferences, updateUserPostagePreferences, fetchPostagePreferences, updateUserPersonalisation, updateChatPrivacy } from '../services/accountApi';
-import { addToCoOwnWatchlist, removeFromCoOwnWatchlist } from '../services/marketApi';
+import { addToCoOwnWatchlist, removeFromCoOwnWatchlist, fetchCoOwnWatchlist } from '../services/marketApi';
 import type { ChatGroupMembershipEvent } from '../services/realtimeClient';
 import {
   fetchSystemBotsFromApi,
@@ -481,8 +481,17 @@ interface StoreState {
 
   // Co-Own asset watchlist
   coOwnWatchlist: string[];
+  /** Per-asset watch toggle status: 'pending' while the server request is
+   * in flight, 'confirmed' after success, 'failed' on error. Absent means
+   * no toggle is in progress. Local state is committed only after server
+   * acknowledgment — the UI shows the pending state instead. */
+  coOwnWatchStatus: Record<string, 'pending' | 'confirmed' | 'failed'>;
   toggleCoOwnWatch: (assetId: string) => void;
   isCoOwnWatched: (assetId: string) => boolean;
+  /** Reconcile local watchlist with the server after login. Fetches the
+   * canonical server watchlist and replaces local state so cross-device
+   * changes are reflected. Account-isolated: clears on logout. */
+  hydrateCoOwnWatchlist: () => Promise<void>;
 
   // Browse filters/search
   browseFilters: BrowseFilterState;
@@ -701,9 +710,12 @@ export const useStore = create<StoreState>()(
       username: user.username,
     });
     get().hydrateBlockedUsers().catch(() => undefined);
+    // U05: Reconcile watchlist with server on login so cross-device
+    // changes and account-isolated state are reflected.
+    get().hydrateCoOwnWatchlist().catch(() => undefined);
   },
   logout: () => {
-    set({ currentUser: null, isAuthenticated: false, twoFactorEnabled: false, biometricLoginPending: false, blockedUsers: [] });
+    set({ currentUser: null, isAuthenticated: false, twoFactorEnabled: false, biometricLoginPending: false, blockedUsers: [], coOwnWatchlist: [], coOwnWatchStatus: {} });
     persistLocalAuthSnapshot(null, false);
     // Scrub Sentry user context on logout so subsequent crashes are anonymous.
     setSentryUser(null);
@@ -1308,22 +1320,62 @@ export const useStore = create<StoreState>()(
 
   // Co-Own asset watchlist
   coOwnWatchlist: [],
-  toggleCoOwnWatch: (assetId) =>
-    set((state) => {
-      const isWatched = state.coOwnWatchlist.includes(assetId);
-      // Fire-and-forget backend sync
-      if (isWatched) {
-        void removeFromCoOwnWatchlist(assetId);
-      } else {
-        void addToCoOwnWatchlist(assetId);
-      }
-      return {
-        coOwnWatchlist: isWatched
-          ? state.coOwnWatchlist.filter((id) => id !== assetId)
-          : [...state.coOwnWatchlist, assetId],
-      };
-    }),
+  coOwnWatchStatus: {},
+  toggleCoOwnWatch: (assetId) => {
+    const isWatched = get().coOwnWatchlist.includes(assetId);
+
+    // Mark the toggle as pending immediately — the UI shows a pending
+    // state so the user knows the action is in flight. Local watchlist
+    // membership is NOT committed until the server acknowledges.
+    set((state) => ({
+      coOwnWatchStatus: { ...state.coOwnWatchStatus, [assetId]: 'pending' },
+    }));
+
+    if (isWatched) {
+      // Removing from watchlist — wait for server before removing locally
+      removeFromCoOwnWatchlist(assetId)
+        .then(() => {
+          set((state) => ({
+            coOwnWatchlist: state.coOwnWatchlist.filter((id) => id !== assetId),
+            coOwnWatchStatus: { ...state.coOwnWatchStatus, [assetId]: 'confirmed' },
+          }));
+        })
+        .catch(() => {
+          // Server failed — keep the asset in the watchlist, mark as failed
+          set((state) => ({
+            coOwnWatchStatus: { ...state.coOwnWatchStatus, [assetId]: 'failed' },
+          }));
+        });
+    } else {
+      // Adding to watchlist — wait for server before adding locally
+      addToCoOwnWatchlist(assetId)
+        .then(() => {
+          set((state) => ({
+            coOwnWatchlist: [...state.coOwnWatchlist, assetId],
+            coOwnWatchStatus: { ...state.coOwnWatchStatus, [assetId]: 'confirmed' },
+          }));
+        })
+        .catch(() => {
+          // Server failed — asset stays out of the watchlist, mark as failed
+          set((state) => ({
+            coOwnWatchStatus: { ...state.coOwnWatchStatus, [assetId]: 'failed' },
+          }));
+        });
+    }
+  },
   isCoOwnWatched: (assetId) => get().coOwnWatchlist.includes(assetId),
+  hydrateCoOwnWatchlist: async () => {
+    try {
+      const items = await fetchCoOwnWatchlist(200);
+      set({
+        coOwnWatchlist: items.map((item) => item.id),
+        coOwnWatchStatus: {},
+      });
+    } catch {
+      // Keep existing local state as fallback — the user can still
+      // browse with their last-known watchlist until reconnection.
+    }
+  },
 
   browseFilters: {
     query: '',
@@ -2557,6 +2609,7 @@ export const useStore = create<StoreState>()(
         postagePreferences: state.postagePreferences,
         personalisationPreferences: state.personalisationPreferences,
         blockedUsers: state.blockedUsers,
+        coOwnWatchlist: state.coOwnWatchlist,
         mutedConversationIds: state.mutedConversationIds,
         readReceiptsEnabled: state.readReceiptsEnabled,
         allowMessagesFrom: state.allowMessagesFrom,

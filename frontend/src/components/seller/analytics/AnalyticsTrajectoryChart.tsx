@@ -4,7 +4,7 @@ import { useAppTheme } from '../../../theme/ThemeContext';
 import { Space, Radius, FontFamily, Control } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { haptics } from '../../../utils/haptics';
-import { Canvas, Path, LinearGradient, vec, Skia } from '@shopify/react-native-skia';
+import { Canvas, Path, LinearGradient, vec, Skia, DashPathEffect } from '@shopify/react-native-skia';
 
 export interface ChartPoint {
   x: string | number;
@@ -47,6 +47,7 @@ export function AnalyticsTrajectoryChart({
   }, [points]);
 
   const [activeIndex, setActiveIndex] = useState<number>(initialIndex);
+  const [containerWidth, setContainerWidth] = useState(300);
 
   // Sync initialIndex when points array changes
   React.useEffect(() => {
@@ -83,19 +84,16 @@ export function AnalyticsTrajectoryChart({
   }, [points]);
 
   // Skia Path for Line mode
-  const { linePath, areaPath } = useMemo(() => {
-    if (viewMode !== 'line' || points.length < 2) return { linePath: null, areaPath: null };
-    const width = 300; // approximate default, scales inside View
+  const { linePath, areaPath, prevLinePath } = useMemo(() => {
+    if (viewMode !== 'line' || points.length < 2) return { linePath: null, areaPath: null, prevLinePath: null };
+    const width = containerWidth;
     const padY = 8;
     const effH = CANVAS_HEIGHT - padY * 2;
     const stepX = width / (points.length - 1);
 
     const coords = points.map((p, i) => {
       const normY = Math.max(0, Math.min(1, p.y / maxY));
-      return {
-        x: i * stepX,
-        y: padY + (1 - normY) * effH,
-      };
+      return { x: i * stepX, y: padY + (1 - normY) * effH };
     });
 
     const lPath = Skia.Path.Make();
@@ -113,8 +111,23 @@ export function AnalyticsTrajectoryChart({
     aPath.lineTo(coords[coords.length - 1].x, CANVAS_HEIGHT);
     aPath.close();
 
-    return { linePath: lPath, areaPath: aPath };
-  }, [points, viewMode, maxY]);
+    // Previous period line (dashed) — only when prevPoints has matching length
+    let pPath: ReturnType<typeof Skia.Path.Make> | null = null;
+    if (prevPoints && prevPoints.length >= 2) {
+      const prevStepX = width / (prevPoints.length - 1);
+      const prevCoords = prevPoints.map((p, i) => {
+        const normY = Math.max(0, Math.min(1, p.y / maxY));
+        return { x: i * prevStepX, y: padY + (1 - normY) * effH };
+      });
+      pPath = Skia.Path.Make();
+      pPath.moveTo(prevCoords[0].x, prevCoords[0].y);
+      for (let i = 1; i < prevCoords.length; i++) {
+        pPath.lineTo(prevCoords[i].x, prevCoords[i].y);
+      }
+    }
+
+    return { linePath: lPath, areaPath: aPath, prevLinePath: pPath };
+  }, [points, prevPoints, viewMode, maxY, containerWidth]);
 
   const dimensionName =
     activeDimension === 'sales'
@@ -146,11 +159,106 @@ export function AnalyticsTrajectoryChart({
       </View>
 
       {/* ── Main Chart Canvas Area ── */}
-      <View style={styles.canvasArea}>
-        {/* Horizontal Guidelines */}
-        <View style={[styles.guideline, { top: 0, borderBottomColor: colors.borderSubtle }]} />
-        <View style={[styles.guideline, { top: CANVAS_HEIGHT / 2, borderBottomColor: colors.borderSubtle }]} />
-        <View style={[styles.guideline, { bottom: 0, borderBottomColor: colors.border }]} />
+      <View style={styles.chartRow}>
+        <View
+          style={styles.canvasArea}
+          onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
+        >
+          {/* Horizontal Guidelines */}
+          <View style={[styles.guideline, { top: 0, borderBottomColor: colors.borderSubtle }]} />
+          <View style={[styles.guideline, { top: CANVAS_HEIGHT / 2, borderBottomColor: colors.borderSubtle }]} />
+          <View style={[styles.guideline, { bottom: 0, borderBottomColor: colors.border }]} />
+
+          {/* Interactive Data Presentation */}
+          {viewMode === 'bar' ? (
+            <View style={styles.barsContainer}>
+              {points.map((p, idx) => {
+                const isSelected = idx === activeIndex;
+                const ratio = Math.max(0, Math.min(1, p.y / maxY));
+                const barHeight = Math.max(3, Math.round(ratio * (CANVAS_HEIGHT - 12)));
+                const isZero = p.y === 0;
+
+                return (
+                  <Pressable
+                    key={idx}
+                    style={styles.barColumnHit}
+                    onPress={() => {
+                      haptics.selection();
+                      setActiveIndex(idx);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${p.x}, ${valueFormat(p.y)}`}
+                  >
+                    <View
+                      style={[
+                        styles.barPillar,
+                        {
+                          height: barHeight,
+                          backgroundColor: isSelected
+                            ? colors.brand
+                            : isZero
+                            ? colors.borderSubtle
+                            : colors.textPrimary,
+                          opacity: isZero && !isSelected ? 0.35 : 1,
+                          borderRadius: 2,
+                        },
+                        isSelected && styles.barPillarSelected,
+                      ]}
+                    />
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : (
+            /* Line View Mode */
+            <View style={styles.lineContainer}>
+              {linePath && areaPath ? (
+                <>
+                  <Canvas style={{ width: '100%', height: CANVAS_HEIGHT }}>
+                    <Path path={areaPath} opacity={0.15}>
+                      <LinearGradient
+                        start={vec(0, 0)}
+                        end={vec(0, CANVAS_HEIGHT)}
+                        colors={[colors.brand, 'transparent']}
+                      />
+                    </Path>
+                    <Path
+                      path={linePath}
+                      color={colors.brand}
+                      style="stroke"
+                      strokeWidth={2.5}
+                    />
+                    {prevLinePath ? (
+                      <Path
+                        path={prevLinePath}
+                        color={colors.textMuted}
+                        style="stroke"
+                        strokeWidth={1.5}
+                      >
+                        <DashPathEffect intervals={[6, 4]} />
+                      </Path>
+                    ) : null}
+                  </Canvas>
+                  {/* Touch overlay for line mode — invisible tap zones */}
+                  <View style={styles.lineTouchOverlay}>
+                    {points.map((p, idx) => (
+                      <Pressable
+                        key={idx}
+                        style={styles.lineTouchZone}
+                        onPress={() => {
+                          haptics.selection();
+                          setActiveIndex(idx);
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${p.x}, ${valueFormat(p.y)}`}
+                      />
+                    ))}
+                  </View>
+                </>
+              ) : null}
+            </View>
+          )}
+        </View>
 
         {/* Right Y-Axis Scale Markers */}
         <View style={styles.yAxisColumn}>
@@ -158,69 +266,6 @@ export function AnalyticsTrajectoryChart({
           <Text style={[styles.yAxisLabel, { color: colors.textMuted }]}>{yTicks[1]}</Text>
           <Text style={[styles.yAxisLabel, { color: colors.textMuted }]}>{yTicks[2]}</Text>
         </View>
-
-        {/* Interactive Data Presentation */}
-        {viewMode === 'bar' ? (
-          <View style={styles.barsContainer}>
-            {points.map((p, idx) => {
-              const isSelected = idx === activeIndex;
-              const ratio = Math.max(0, Math.min(1, p.y / maxY));
-              const barHeight = Math.max(3, Math.round(ratio * (CANVAS_HEIGHT - 12)));
-              const isZero = p.y === 0;
-
-              return (
-                <Pressable
-                  key={idx}
-                  style={styles.barColumnHit}
-                  onPress={() => {
-                    haptics.selection();
-                    setActiveIndex(idx);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${p.x}, ${valueFormat(p.y)}`}
-                >
-                  <View
-                    style={[
-                      styles.barPillar,
-                      {
-                        height: barHeight,
-                        backgroundColor: isSelected
-                          ? colors.brand
-                          : isZero
-                          ? colors.borderSubtle
-                          : colors.textPrimary,
-                        opacity: isZero && !isSelected ? 0.35 : 1,
-                        borderRadius: 2,
-                      },
-                      isSelected && styles.barPillarSelected,
-                    ]}
-                  />
-                </Pressable>
-              );
-            })}
-          </View>
-        ) : (
-          /* Line View Mode */
-          <View style={styles.lineContainer}>
-            {linePath && areaPath ? (
-              <Canvas style={{ width: '100%', height: CANVAS_HEIGHT }}>
-                <Path path={areaPath} opacity={0.15}>
-                  <LinearGradient
-                    start={vec(0, 0)}
-                    end={vec(0, CANVAS_HEIGHT)}
-                    colors={[colors.brand, 'transparent']}
-                  />
-                </Path>
-                <Path
-                  path={linePath}
-                  color={colors.brand}
-                  style="stroke"
-                  strokeWidth={2.5}
-                />
-              </Canvas>
-            ) : null}
-          </View>
-        )}
       </View>
 
       {/* ── Bottom X-Axis Benchmarks (React Native Text for 100% Reliability) ── */}
@@ -272,10 +317,14 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
+  chartRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
   canvasArea: {
     height: CANVAS_HEIGHT,
     position: 'relative',
-    marginRight: 48, // Space for right Y-axis
+    flex: 1, // take available space after Y-axis
   },
   guideline: {
     position: 'absolute',
@@ -284,13 +333,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   yAxisColumn: {
-    position: 'absolute',
-    right: -48,
-    top: 0,
-    bottom: 0,
     width: 44,
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    paddingVertical: 0,
+    marginLeft: Space.xs,
   },
   yAxisLabel: {
     fontSize: TypographyV2.meta.size - 1,
@@ -325,13 +372,20 @@ const styles = StyleSheet.create({
     height: CANVAS_HEIGHT,
     justifyContent: 'flex-end',
   },
+  lineTouchOverlay: {
+    ...StyleSheet.absoluteFill,
+    flexDirection: 'row',
+  },
+  lineTouchZone: {
+    flex: 1,
+    height: '100%',
+  },
 
   xAxisRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: Space.xs,
-    marginRight: 48,
     paddingTop: 4,
   },
   xAxisLabel: {

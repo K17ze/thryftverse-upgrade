@@ -51,7 +51,9 @@ import {
   type RenderProfileId } from './engine/renderProfiles';
 // Playback pipeline — single clock, keyframe evaluator, effect evaluator
 import type { PlaybackClock } from './core/playback/PlaybackClock';
+import type { ProjectedClip } from './core/playback';
 import { evaluateKeyframes } from './core/playback/KeyframeEvaluator';
+import { useFreezeFramePreview } from './poster/useFreezeFramePreview';
 import { keyframeEasingToReanimated, type KeyframeEasing } from './poster/keyframes/KeyframeTypes';
 import {
   evaluateCompositionEffectStack,
@@ -182,6 +184,11 @@ export interface CreatorCanvasProps {
    *  temporal visibility, keyframe evaluation, and overlay time ranges.
    *  When absent, layers render in their static (non-temporal) state. */
   currentTimeMs?: number;
+  /** The clip active at the current playhead, or null. When the active clip
+   *  has a freeze-frame edit and the playhead is inside its freeze window,
+   *  the canvas renders the decoded frozen frame as a Skia overlay on top
+   *  of the (paused) native video player — a truthful freeze preview. */
+  activeClip?: ProjectedClip | null;
   /** Optional ref that the canvas populates with the active video layer's
    *  expo-video player instance. The parent can use this to issue imperative
    *  seek / play / pause / rate commands (e.g. from a PlaybackClock video
@@ -232,6 +239,7 @@ export function CreatorCanvas({
   safeZoneBottom = 0,
   playbackClock = null,
   currentTimeMs,
+  activeClip,
   videoPlayerRef,
   manipulationActiveSV,
   onManipulationChange,
@@ -441,6 +449,7 @@ export function CreatorCanvas({
           onToggleLock={onLayerToggleLock}
           playbackClock={playbackClock}
           currentTimeMs={currentTimeMs}
+          activeClip={activeClip}
           videoPlayerRef={videoPlayerRef}
           manipulationActiveSV={manipulationActiveSV}
           onManipulationChange={onManipulationChange}
@@ -522,6 +531,10 @@ interface LayerRendererProps {
   playbackClock?: PlaybackClock | null;
   /** Current playback time (ms) — used for temporal visibility and keyframe evaluation. */
   currentTimeMs?: number;
+  /** The clip active at the playhead, or null. Used by the media layer to
+   *  render a truthful freeze-frame overlay when the playhead is inside the
+   *  active clip's freeze window. */
+  activeClip?: ProjectedClip | null;
   /** Ref populated with the active video layer's expo-video player instance. */
   videoPlayerRef?: React.MutableRefObject<VideoPlayerRef | null>;
   /** Shared value set to 1 during active gesture, 0 when idle. */
@@ -565,6 +578,7 @@ const LayerRenderer = React.memo(function LayerRenderer({
   onDelete,
   playbackClock,
   currentTimeMs,
+  activeClip,
   videoPlayerRef,
   manipulationActiveSV,
   onManipulationChange,
@@ -1074,7 +1088,7 @@ const LayerRenderer = React.memo(function LayerRenderer({
       elevation: lift * 4 };
   });
 
-  const content = renderLayerContent(layer, layer.width * canvasWidth, layer.height * canvasHeight, playbackClock, currentTimeMs, videoPlayerRef, siblingLayers, compareOriginal, resolvedLayer, documentType);
+  const content = renderLayerContent(layer, layer.width * canvasWidth, layer.height * canvasHeight, playbackClock, currentTimeMs, activeClip, videoPlayerRef, siblingLayers, compareOriginal, resolvedLayer, documentType);
 
   // Smart alignment guides: while dragging, detect when this layer's
   // left/right/centre aligns with a sibling's left/right/centre (vertical
@@ -1291,6 +1305,7 @@ function renderLayerContent(
   height: number,
   playbackClock?: PlaybackClock | null,
   currentTimeMs?: number,
+  activeClip?: ProjectedClip | null,
   videoPlayerRef?: React.MutableRefObject<VideoPlayerRef | null>,
   siblingLayers?: CreatorLayer[],
   compareOriginal?: boolean,
@@ -1304,7 +1319,7 @@ function renderLayerContent(
   const isLook = documentType === 'look';
   switch (layer.type) {
     case 'media':
-      return <MediaLayerContent layer={layer} width={width} height={height} playbackClock={playbackClock} currentTimeMs={currentTimeMs} videoPlayerRef={videoPlayerRef} siblingLayers={siblingLayers} compareOriginal={compareOriginal} resolvedLayer={resolvedLayer} />;
+      return <MediaLayerContent layer={layer} width={width} height={height} playbackClock={playbackClock} currentTimeMs={currentTimeMs} activeClip={activeClip} videoPlayerRef={videoPlayerRef} siblingLayers={siblingLayers} compareOriginal={compareOriginal} resolvedLayer={resolvedLayer} />;
     case 'text':
       return <TextLayerContent layer={layer} />;
     case 'product':
@@ -1520,6 +1535,7 @@ function MediaLayerContent({
   height,
   playbackClock,
   currentTimeMs,
+  activeClip,
   videoPlayerRef,
   siblingLayers,
   compareOriginal,
@@ -1529,6 +1545,7 @@ function MediaLayerContent({
   height: number;
   playbackClock?: PlaybackClock | null;
   currentTimeMs?: number;
+  activeClip?: ProjectedClip | null;
   videoPlayerRef?: React.MutableRefObject<VideoPlayerRef | null>;
   siblingLayers?: CreatorLayer[];
   compareOriginal?: boolean;
@@ -1539,6 +1556,19 @@ function MediaLayerContent({
   const [videoError, setVideoError] = React.useState(false);
   const hasPlaybackClock = !!playbackClock;
   const timeMs = currentTimeMs ?? 0;
+
+  // ── Freeze-frame preview ───────────────────────────────────────────
+  // When the playhead is inside this clip's freeze window, decode the
+  // frozen frame through Skia's useVideo and render it as an opaque Skia
+  // overlay on top of the (paused) native player — a truthful preview of
+  // the held frame. Only the media layer that IS the active clip activates
+  // the hook; other layers pass null so no decoder is instantiated.
+  const freezeClip = activeClip && activeClip.layerId === layer.id ? activeClip : null;
+  const { frozenFrame, isFrozen } = useFreezeFramePreview({
+    activeClip: freezeClip,
+    playheadMs: timeMs,
+    isPlaying: hasPlaybackClock ? (playbackClock?.isPlaying ?? false) : false,
+  });
 
   // ── Scene-evaluator gating ─────────────────────
   // The resolved scene carries the authoritative decision on whether this

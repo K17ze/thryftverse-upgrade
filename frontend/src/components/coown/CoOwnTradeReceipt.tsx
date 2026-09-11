@@ -20,6 +20,10 @@ export interface CoOwnTradeReceiptProps {
   remainingUnits?: number;
   unitPriceLabel: string;
   limitPriceLabel?: string;
+  /** Protection price (max/min) for protected_market orders. */
+  protectionPriceLabel?: string;
+  /** Duration label (GFD / GTC90) with human-readable expiry. */
+  durationLabel?: string;
   grossLabel: string;
   feeLabel: string;
   totalLabel: string;
@@ -59,6 +63,8 @@ const STATUS_CONFIG: Record<CoOwnReceiptStatus, { label: string; icon: React.Com
   expired: { label: 'Expired', icon: 'time-outline', positive: false },
 };
 
+const NOT_AVAILABLE = 'Not available';
+
 export function CoOwnTradeReceipt({
   imageUri,
   title,
@@ -70,6 +76,8 @@ export function CoOwnTradeReceipt({
   remainingUnits,
   unitPriceLabel,
   limitPriceLabel,
+  protectionPriceLabel,
+  durationLabel,
   grossLabel,
   feeLabel,
   totalLabel,
@@ -99,10 +107,13 @@ export function CoOwnTradeReceipt({
     `${statusCfg.label}. ${isBuy ? 'Buy' : 'Sell'} ${orderType === 'limit' ? 'limit' : 'protected instant'} order`,
     `${units} units`,
   ];
-  if (filledUnits != null) a11yParts.push(`${filledUnits} filled`);
-  if (remainingUnits != null) a11yParts.push(`${remainingUnits} remaining`);
+  if (filledUnits != null) a11yParts.push(`${filledUnits} estimated fill`);
+  if (remainingUnits != null) a11yParts.push(`${remainingUnits} unfilled remainder`);
   if (avgFillPriceLabel) a11yParts.push(`average fill ${avgFillPriceLabel}`);
   if (worstPriceLabel) a11yParts.push(`worst price ${worstPriceLabel}`);
+  if (unitPriceLabel) a11yParts.push(`unit price ${unitPriceLabel}`);
+  if (protectionPriceLabel) a11yParts.push(`protection price ${protectionPriceLabel}`);
+  if (durationLabel) a11yParts.push(`duration ${durationLabel}`);
   a11yParts.push(`gross ${grossLabel}`, `fee ${feeLabel}`, `${isBuy ? 'total cost' : 'net proceeds'} ${totalLabel}`);
   a11yParts.push(`settlement ${settlementLabel}`);
   if (maxReservedLabel) a11yParts.push(`max reserved ${maxReservedLabel}`);
@@ -164,33 +175,53 @@ export function CoOwnTradeReceipt({
           </Text>
         </View>
         <View style={[styles.receiptRow, { borderColor: colors.border }]}>
+          <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>Unit price</Text>
+          <Text style={[styles.receiptValue, { color: colors.textPrimary }]} numberOfLines={1}>
+            {unitPriceLabel || NOT_AVAILABLE}
+          </Text>
+        </View>
+        {protectionPriceLabel ? (
+          <View style={[styles.receiptRow, { borderColor: colors.border }]}>
+            <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>
+              {isBuy ? 'Max price' : 'Min price'}
+            </Text>
+            <Text style={[styles.receiptValue, { color: colors.textPrimary }]} numberOfLines={1}>
+              {protectionPriceLabel}
+            </Text>
+          </View>
+        ) : null}
+        <View style={[styles.receiptRow, { borderColor: colors.border }]}>
           <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>Units</Text>
           <CoOwnNumericText value={units} unit="units" size="price" align="right" />
         </View>
-        {filledUnits != null ? (
-          <View style={[styles.receiptRow, { borderColor: colors.border }]}>
-            <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>Filled</Text>
+        <View style={[styles.receiptRow, { borderColor: colors.border }]}>
+          <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>Estimated fill</Text>
+          {filledUnits != null ? (
             <CoOwnNumericText value={filledUnits} unit="units" size="price" align="right" />
-          </View>
-        ) : null}
-        {remainingUnits != null ? (
-          <View style={[styles.receiptRow, { borderColor: colors.border }]}>
-            <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>Remaining</Text>
+          ) : (
+            <Text style={[styles.receiptValue, { color: colors.textMuted }]} numberOfLines={1}>{NOT_AVAILABLE}</Text>
+          )}
+        </View>
+        <View style={[styles.receiptRow, { borderColor: colors.border }]}>
+          <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>Unfilled remainder</Text>
+          {remainingUnits != null ? (
             <CoOwnNumericText value={remainingUnits} unit="units" size="price" align="right" />
-          </View>
-        ) : null}
-        {avgFillPriceLabel && (
-          <View style={[styles.receiptRow, { borderColor: colors.border }]}>
-            <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>Avg fill est.</Text>
-            <Text style={[styles.receiptValue, { color: colors.textPrimary }]} numberOfLines={1}>{avgFillPriceLabel}</Text>
-          </View>
-        )}
-        {worstPriceLabel && (
-          <View style={[styles.receiptRow, { borderColor: colors.border }]}>
-            <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>Worst price</Text>
-            <Text style={[styles.receiptValue, { color: colors.textPrimary }]} numberOfLines={1}>{worstPriceLabel}</Text>
-          </View>
-        )}
+          ) : (
+            <Text style={[styles.receiptValue, { color: colors.textMuted }]} numberOfLines={1}>{NOT_AVAILABLE}</Text>
+          )}
+        </View>
+        <View style={[styles.receiptRow, { borderColor: colors.border }]}>
+          <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>Avg fill est.</Text>
+          <Text style={[styles.receiptValue, { color: avgFillPriceLabel ? colors.textPrimary : colors.textMuted }]} numberOfLines={1}>
+            {avgFillPriceLabel || NOT_AVAILABLE}
+          </Text>
+        </View>
+        <View style={[styles.receiptRow, { borderColor: colors.border }]}>
+          <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>Worst price</Text>
+          <Text style={[styles.receiptValue, { color: worstPriceLabel ? colors.textPrimary : colors.textMuted }]} numberOfLines={1}>
+            {worstPriceLabel || NOT_AVAILABLE}
+          </Text>
+        </View>
         <View style={[styles.receiptRow, { borderColor: colors.border }]}>
           <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>Gross</Text>
           <Text style={[styles.receiptValue, { color: colors.textPrimary }]} numberOfLines={1}>{grossLabel}</Text>
@@ -203,6 +234,12 @@ export function CoOwnTradeReceipt({
           <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>Settlement</Text>
           <Text style={[styles.receiptValue, { color: colors.textSecondary }]} numberOfLines={1}>{settlementLabel}</Text>
         </View>
+        {durationLabel ? (
+          <View style={[styles.receiptRow, { borderColor: colors.border }]}>
+            <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>Duration</Text>
+            <Text style={[styles.receiptValue, { color: colors.textPrimary }]} numberOfLines={1}>{durationLabel}</Text>
+          </View>
+        ) : null}
         {orderId != null ? (
           <View style={[styles.receiptRow, { borderColor: colors.border }]}>
             <Text style={[styles.receiptLabel, { color: colors.textMuted }]} numberOfLines={1}>Order ID</Text>

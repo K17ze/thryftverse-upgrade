@@ -6,7 +6,6 @@ import {
   ScrollView,
   RefreshControl,
   Pressable,
-  Linking,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -56,6 +55,7 @@ import {
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { useHaptic } from '../hooks/useHaptic';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useSafeOpenURL } from '../hooks/useSafeOpenURL';
 import { OfflineBanner } from '../components/OfflineBanner';
 
 type RouteT = RouteProp<RootStackParamList, 'AssetDueDiligence'>;
@@ -96,6 +96,7 @@ export default function AssetDueDiligenceScreen() {
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
   const { isOffline } = useConnectivity();
+  const safeOpenURL = useSafeOpenURL();
   const currentUser = useStore((state) => state.currentUser);
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
@@ -189,6 +190,7 @@ export default function AssetDueDiligenceScreen() {
   // Rights rows — fail closed to "To be confirmed" when the backend
   // hasn't published per-label rights answers.
   const rightsTbcReason = asset.rights?.tbcReason ?? null;
+  const rightsTbcEtaDate = asset.rights?.tbcEtaDate ?? null;
   const structuredRightsMap: Record<string, string | null> = {
     'Distributions': asset.rights?.economicRights ?? null,
     'Voting rights': asset.rights?.votingRights ?? null,
@@ -204,6 +206,8 @@ export default function AssetDueDiligenceScreen() {
       label,
       answer: rightsTbcReason ?? 'To be confirmed',
       isTbc: true,
+      tbcReason: rightsTbcReason,
+      tbcEtaDate: rightsTbcEtaDate,
     };
   });
 
@@ -337,8 +341,7 @@ export default function AssetDueDiligenceScreen() {
         {isOffline && <OfflineBanner onRetry={handleRefresh} />}
 
         {/* ── Evidence ──
-            Provenance story, condition, category evidence, authentication,
-            custody — presented as a dossier gallery, not settings rows. */}
+            Provenance story, condition, category evidence, authentication. */}
         <CommerceDetailSection label="Evidence" variant="editorial">
           {hasAboutAsset ? (
             <>
@@ -378,29 +381,50 @@ export default function AssetDueDiligenceScreen() {
             legalVehicleName={asset.legalVehicleName ?? null}
             legalVehicleJurisdiction={asset.legalVehicleJurisdiction ?? null}
           />
+        </CommerceDetailSection>
 
-          {/* Custody evidence — flat info, not metric rows */}
-          {(asset.custodianName || asset.custodyInsured || asset.custodianLocation) && (
-            <View style={[styles.custodyEvidence, { borderTopColor: colors.borderSubtle }]}>
-              {asset.custodianName && (
-                <View style={styles.evidenceRow}>
-                  <Ionicons name="lock-closed-outline" size={16} color={colors.textMuted} />
-                  <Text style={[styles.evidenceRowLabel, { color: colors.textSecondary }]}>
-                    {asset.custodianName}
-                    {asset.custodianLocation ? ` · ${asset.custodianLocation}` : ''}
-                  </Text>
-                </View>
+        {/* ── Custody ──
+            Concise custody facts with source/date drilldown. */}
+        <CommerceDetailSection label="Custody" divider variant="editorial">
+          {(asset.custodianName || asset.custodyInsured || asset.custodianLocation) ? (
+            <View style={styles.custodyEvidence}>
+              <CommerceDetailMetricRow
+                label="Custodian"
+                value={asset.custodianName ?? 'Not available'}
+              />
+              {asset.custodianLocation && (
+                <CommerceDetailMetricRow
+                  label="Location"
+                  value={asset.custodianLocation}
+                />
               )}
-              {asset.custodyInsured && (
-                <View style={styles.evidenceRow}>
-                  <Ionicons name="checkmark-circle-outline" size={16} color={colors.textMuted} />
-                  <Text style={[styles.evidenceRowLabel, { color: colors.textSecondary }]}>
-                    {asset.custodyInsurer ? `Insured · ${asset.custodyInsurer}` : 'Insured'}
-                    {asset.custodyCoverageGbp != null ? ` · ${formatCoOwnIze(asset.custodyCoverageGbp)}` : ''}
-                  </Text>
-                </View>
+              <CommerceDetailMetricRow
+                label="Insured"
+                value={
+                  asset.custodyInsured
+                    ? asset.custodyInsurer
+                      ? `Yes · ${asset.custodyInsurer}`
+                      : 'Yes'
+                    : 'No'
+                }
+              />
+              {asset.custodyInsured && asset.custodyCoverageGbp != null && (
+                <CommerceDetailMetricRow
+                  label="Coverage"
+                  value={formatCoOwnIze(asset.custodyCoverageGbp)}
+                />
+              )}
+              {asset.custodyPolicyRef && (
+                <CommerceDetailMetricRow
+                  label="Policy ref"
+                  value={asset.custodyPolicyRef}
+                />
               )}
             </View>
+          ) : (
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+              Custody details not available.
+            </Text>
           )}
         </CommerceDetailSection>
 
@@ -452,7 +476,7 @@ export default function AssetDueDiligenceScreen() {
                     { borderBottomColor: colors.borderSubtle },
                     pressed && { opacity: 0.5 },
                   ]}
-                  onPress={doc.isLink && doc.url ? () => Linking.openURL(doc.url!) : undefined}
+                  onPress={doc.isLink && doc.url ? () => safeOpenURL(doc.url!, doc.title) : undefined}
                   disabled={!doc.isLink || !doc.url}
                   accessibilityRole={doc.isLink && doc.url ? 'link' : undefined}
                   accessibilityLabel={doc.isLink && doc.url ? `Open ${doc.title}` : doc.title}
@@ -477,9 +501,9 @@ export default function AssetDueDiligenceScreen() {
           </CommerceDetailSection>
         ) : null}
 
-        {/* ── Valuation ──
-            Appraisal value, NAV, reference vs NAV, next report. */}
-        <CommerceDetailSection label="Valuation" divider variant="editorial">
+        {/* ── Appraisal ──
+            Appraisal value, NAV, reference vs NAV, valuer, date. */}
+        <CommerceDetailSection label="Appraisal" divider variant="editorial">
           {hasAppraisal ? (
             <>
               <View style={styles.valuationHero}>
@@ -645,14 +669,92 @@ export default function AssetDueDiligenceScreen() {
           <CommerceDetailDisclosureRow
             label="Rights"
             count={CANONICAL_RIGHTS_LABELS.length}
-            summary={asset.rights?.version ? formatRightsVersion(`v${asset.rights.version}`) : undefined}
+            summary={
+              asset.rights
+                ? asset.rights.version
+                  ? formatRightsVersion(`v${asset.rights.version}`)
+                  : 'Version not available'
+                : 'Unpublished'
+            }
             onPress={() => setRightsSheetVisible(true)}
             leadingIcon="document-text-outline"
           />
         </CommerceDetailSection>
 
-        {/* ── Fees & settlement ── */}
-        <CommerceDetailSection label="Fees & settlement" divider variant="editorial">
+        {/* ── Rights ──
+            Concise rights facts with version, key terms, and document drilldown. */}
+        <CommerceDetailSection label="Rights" divider variant="editorial">
+          <CommerceDetailMetricRow
+            label="Version"
+            value={
+              asset.rights
+                ? asset.rights.version
+                  ? `v${asset.rights.version}`
+                  : 'Version not available'
+                : 'Unpublished'
+            }
+          />
+          {asset.rights?.publishedAt && (
+            <CommerceDetailMetricRow
+              label="Published"
+              value={new Date(asset.rights.publishedAt).toLocaleDateString(undefined, {
+                year: 'numeric', month: 'short', day: 'numeric',
+              })}
+            />
+          )}
+          {asset.rights?.jurisdiction && (
+            <CommerceDetailMetricRow
+              label="Jurisdiction"
+              value={asset.rights.jurisdiction}
+            />
+          )}
+          {asset.rights?.governingLaw && (
+            <CommerceDetailMetricRow
+              label="Governing law"
+              value={asset.rights.governingLaw}
+            />
+          )}
+          {asset.rights?.economicRights && (
+            <CommerceDetailMetricRow
+              label="Distributions"
+              value={asset.rights.economicRights}
+            />
+          )}
+          {asset.rights?.votingRights && (
+            <CommerceDetailMetricRow
+              label="Voting rights"
+              value={asset.rights.votingRights}
+            />
+          )}
+          {asset.rights?.exitRights && (
+            <CommerceDetailMetricRow
+              label="Exit & proceeds"
+              value={asset.rights.exitRights}
+            />
+          )}
+          {asset.rights?.feeRights && (
+            <CommerceDetailMetricRow
+              label="Operating costs"
+              value={asset.rights.feeRights}
+            />
+          )}
+          <CommerceDetailDisclosureRow
+            label="Full rights table"
+            count={CANONICAL_RIGHTS_LABELS.length}
+            summary={
+              asset.rights
+                ? asset.rights.version
+                  ? formatRightsVersion(`v${asset.rights.version}`)
+                  : 'Version not available'
+                : 'Unpublished'
+            }
+            onPress={() => setRightsSheetVisible(true)}
+            leadingIcon="document-text-outline"
+          />
+        </CommerceDetailSection>
+
+        {/* ── Costs ── */}
+        <CommerceDetailSection label="Costs" divider variant="editorial">
           <CommerceDetailMetricRow
             label="Trading fee"
             value={`${feePct}%`}
@@ -676,7 +778,7 @@ export default function AssetDueDiligenceScreen() {
           {asset.escrowTermsUrl && (
             <Pressable
               style={({ pressed }) => [styles.linkRow, pressed && { opacity: 0.5 }]}
-              onPress={() => Linking.openURL(asset.escrowTermsUrl!)}
+              onPress={() => safeOpenURL(asset.escrowTermsUrl!, 'Escrow terms')}
               accessibilityRole="link"
               accessibilityLabel="View escrow terms"
             >
@@ -693,7 +795,7 @@ export default function AssetDueDiligenceScreen() {
           {asset.safeguardingEvidenceUrl && (
             <Pressable
               style={({ pressed }) => [styles.linkRow, pressed && { opacity: 0.5 }]}
-              onPress={() => Linking.openURL(asset.safeguardingEvidenceUrl!)}
+              onPress={() => safeOpenURL(asset.safeguardingEvidenceUrl!, 'Safeguarding evidence')}
               accessibilityRole="link"
               accessibilityLabel="View safeguarding evidence"
             >
@@ -703,9 +805,9 @@ export default function AssetDueDiligenceScreen() {
           )}
         </CommerceDetailSection>
 
-        {/* ── Seller accountability ──
+        {/* ── Recourse ──
             Recourse agreement, personal liability, verification demands. */}
-        <CommerceDetailSection label="Seller accountability" divider variant="editorial">
+        <CommerceDetailSection label="Recourse" divider variant="editorial">
           <CoOwnRecoursePanel
             recourseAgreementSigned={asset.recourseAgreementSigned ?? false}
             recourseStatus={asset.recourseStatus ?? 'pending'}
@@ -803,7 +905,7 @@ export default function AssetDueDiligenceScreen() {
         {(asset.provenance || asset.conditionGrade || asset.custodianLocation || asset.appraisalValueGbp) && (
           <CommerceDetailSection label="Asset dossier" divider variant="editorial">
             <CoOwnAssetDossier
-              provenance={asset.provenance ? [{ event: 'Provenance', date: '', note: asset.provenance }] : undefined}
+              provenance={asset.provenance ? [{ event: 'Provenance', date: '—', note: asset.provenance }] : undefined}
               condition={asset.conditionGrade ? { grade: asset.conditionGrade } : undefined}
               storage={asset.custodianLocation ? {
                 location: asset.custodianLocation,
@@ -851,7 +953,13 @@ export default function AssetDueDiligenceScreen() {
       <CoOwnRightsSheet
         visible={rightsSheetVisible}
         onClose={() => setRightsSheetVisible(false)}
-        disclosureVersion={asset.rights?.version ? `Rights v${asset.rights.version}` : 'Rights v1'}
+        disclosureVersion={
+          asset.rights
+            ? asset.rights.version
+              ? `Rights v${asset.rights.version}`
+              : 'Version not available'
+            : 'Unpublished'
+        }
         rights={rightsRows}
       />
 
@@ -1051,20 +1159,7 @@ const styles = StyleSheet.create({
     marginTop: Space.xs,
   },
   custodyEvidence: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: Space.md,
-    marginTop: Space.md,
-  },
-  evidenceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Space.xs,
-    gap: Space.sm,
-  },
-  evidenceRowLabel: {
-    flex: 1,
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
+    gap: Space.xs,
   },
   // ── Timeline ──
   timelineWrap: {

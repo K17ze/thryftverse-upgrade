@@ -2,7 +2,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { MediaUploadAsset } from '../utils/mediaUploadAsset';
-import { finalizeUpload, presignUpload, uploadToPresignedUrl } from './mediaUpload';
+import { finalizeUpload, presignUpload, uploadToPresignedUrl, type PresignResponse } from './mediaUpload';
+import {
+  MULTIPART_THRESHOLD_BYTES,
+  uploadMultipart,
+} from './mediaUploadMultipart';
 import { resizeForUpload } from '../platform/media/mediaTransforms';
 import { isAbortError } from '../platform/media/xhrUploadTransport';
 
@@ -28,6 +32,10 @@ export interface UploadQueueItem {
   retryable: boolean;
   /** Internal flag: cancellation requested while in-flight. */
   _cancelRequested?: boolean;
+  /** Internal flag: bytes already on the origin, only finalize remains on retry. */
+  _needsFinalizationOnly?: boolean;
+  /** Internal: cached presign for finalization-only retry. */
+  _presign?: PresignResponse;
 }
 
 export interface UploadQueueState {
@@ -77,6 +85,26 @@ const ITEM_STATES: readonly UploadQueueItemState[] = [
   'cancelled',
 ];
 
+/** Extract an HTTP status from an upload/API error, or undefined for a
+ *  network-level failure that never reached the server. */
+function getErrorStatus(err: unknown): number | undefined {
+  if (typeof err === 'object' && err !== null) {
+    const status = (err as { status?: number }).status;
+    if (typeof status === 'number') return status;
+  }
+  return undefined;
+}
+
+/** Classify whether an upload error is worth retrying. 4xx client errors
+ *  (except 408/429) are deterministic and must not burn the retry budget. */
+function isRetryableUploadError(err: unknown): boolean {
+  const status = getErrorStatus(err);
+  if (status === undefined) return true; // network/transport error
+  if (status === 0 || status === 408 || status === 429) return true;
+  if (status >= 500 && status < 600) return true;
+  return false;
+}
+
 function reviveSnapshotEntry(entry: unknown): UploadQueueItem | null {
   if (typeof entry !== 'object' || entry === null) return null;
   const raw = entry as Record<string, unknown>;
@@ -122,6 +150,8 @@ export class MediaUploadQueue {
   private runPromise: Promise<UploadQueueState> | null = null;
   private abortControllers = new Map<string, AbortController>();
   private lastProgressEmitMs = new Map<string, number>();
+  /** Resolves when an in-flight item reaches a terminal state after cancelItem. */
+  private cancelResolvers = new Map<string, () => void>();
   private slotResolvers: Array<() => void> = [];
   /** null = unknown (treat as reachable); only `false` gates the queue. */
   private internetReachable: boolean | null = null;
@@ -251,9 +281,17 @@ export class MediaUploadQueue {
     }
     // In-flight (preparing/uploading): request cancellation and abort the
     // transport so the in-flight XHR rejects immediately.
+    const wasInFlight = item.state === 'preparing' || item.state === 'uploading';
     item._cancelRequested = true;
     this.abortControllers.get(item.id)?.abort();
     this.emit();
+    // Wait for the worker to reach a terminal state so callers observe the
+    // final `cancelled` (or `uploaded`/`failed`) state synchronously.
+    if (wasInFlight) {
+      await new Promise<void>((resolve) => {
+        this.cancelResolvers.set(item.id, resolve);
+      });
+    }
     return true;
   }
 
@@ -322,8 +360,15 @@ export class MediaUploadQueue {
     }
     for (const resolve of this.slotResolvers) resolve();
     this.slotResolvers = [];
+    // Abort all in-flight controllers so background uploads don't continue
+    // after the queue is reset (e.g. on screen unmount).
+    for (const controller of this.abortControllers.values()) {
+      controller.abort();
+    }
     this.abortControllers.clear();
     this.lastProgressEmitMs.clear();
+    for (const resolve of this.cancelResolvers.values()) resolve();
+    this.cancelResolvers.clear();
     this.items = [];
     this.running = false;
     this.activeCount = 0;
@@ -337,6 +382,42 @@ export class MediaUploadQueue {
     this.ready = this.watchConnectivity();
     this.emit();
     await this.flushSnapshot();
+  }
+
+  /**
+   * Stop the queue without clearing items. Aborts all in-flight uploads,
+   * resolves pending cancellation promises, and tears down connectivity
+   * listeners. The persisted AsyncStorage snapshot is preserved so a new
+   * queue instance can restore and resume on the next screen mount.
+   *
+   * Use this on screen unmount to prevent orphaned workers from uploading
+   * in the background after the UI that owns them is gone.
+   */
+  destroy(): void {
+    this.connectivityGeneration++;
+    if (this.unsubscribeNetInfo) {
+      this.unsubscribeNetInfo();
+      this.unsubscribeNetInfo = null;
+    }
+    if (this.persistTimer) {
+      clearTimeout(this.persistTimer);
+      this.persistTimer = null;
+    }
+    // Abort all in-flight controllers — the fetch/XmlHttpRequest will throw
+    // an AbortError, which processItem's catch block handles as cancellation.
+    for (const controller of this.abortControllers.values()) {
+      controller.abort();
+    }
+    this.abortControllers.clear();
+    this.lastProgressEmitMs.clear();
+    for (const resolve of this.cancelResolvers.values()) resolve();
+    this.cancelResolvers.clear();
+    for (const resolve of this.slotResolvers) resolve();
+    this.slotResolvers = [];
+    this.running = false;
+    this.activeCount = 0;
+    this.completionResolver = null;
+    this.runPromise = null;
   }
 
   subscribe(listener: UploadQueueListener): () => void {
@@ -584,8 +665,56 @@ export class MediaUploadQueue {
     item.progress = 0;
     this.emit();
 
+    const { asset } = item;
+    const originalAssetUri = asset.uri;
+    const originalAssetFileName = asset.fileName;
+    const originalAssetMimeType = asset.mimeType;
+    // Temp resized file URI to delete once the bytes are on the origin.
+    let resizedTempUri: string | null = null;
+
     try {
-      const { asset } = item;
+      // A previous attempt uploaded the bytes but finalization failed: the
+      // object already exists on the origin, so retry only the finalize call
+      // instead of re-uploading the entire file.
+      if (item._needsFinalizationOnly && item._presign) {
+        const presign = item._presign;
+        if (item._cancelRequested) {
+          item.state = 'cancelled';
+          item.error = null;
+          item.retryable = false;
+          delete item._cancelRequested;
+          delete item._needsFinalizationOnly;
+          delete item._presign;
+          this.emit();
+          await this.flushSnapshot();
+          return;
+        }
+        item.state = 'uploading';
+        this.emit();
+        const finalization = await finalizeUpload({
+          objectKey: presign.key,
+          bucket: presign.bucket,
+          fileName: asset.fileName,
+          contentType: presign.contentType,
+          sizeBytes: presign.sizeBytes,
+          publicUrl: presign.publicUrl,
+          folder: 'listings',
+          scope: 'listing_media',
+          verifyObject: true,
+          signal,
+        });
+        item.state = 'uploaded';
+        item.progress = 1;
+        item.publicUrl = finalization.publicUrl;
+        item.finalizationId = finalization.id;
+        item.error = null;
+        item.retryable = false;
+        delete item._needsFinalizationOnly;
+        delete item._presign;
+        this.emit();
+        await this.flushSnapshot();
+        return;
+      }
 
       // Resize images before upload to reduce bandwidth. Videos are uploaded as-is.
       // On any resize failure, fall back to the original asset so uploads never block.
@@ -602,6 +731,7 @@ export class MediaUploadQueue {
           uploadMimeType = resized.mimeType;
           const baseName = asset.fileName.replace(/\.[^.]+$/, '') || 'media';
           uploadFileName = `${baseName}.${resized.fileExtension}`;
+          if (uploadUri !== originalAssetUri) resizedTempUri = uploadUri;
           // Reflect the resized asset on the item so downstream consumers see the
           // actual bytes that were uploaded.
           asset.uri = uploadUri;
@@ -643,65 +773,126 @@ export class MediaUploadQueue {
           sizeBytes = blob.size;
         }
       }
-      const presign = await presignUpload(
-        uploadFileName,
-        uploadMimeType,
-        'listings',
-        sizeBytes,
-        signal
-      );
+      // Large files use the S3 multipart (resumable) path so a network
+      // interruption retries only the affected part instead of restarting
+      // from byte 0. The backend's complete endpoint assembles the object
+      // and creates the finalization record, so no separate finalize call is
+      // needed. Small files keep the single-presign PUT + finalize path.
+      const useMultipart = sizeBytes >= MULTIPART_THRESHOLD_BYTES;
 
-      // If cancellation was requested while presigning, transition to cancelled and abort
-      if (item._cancelRequested) {
-        item.state = 'cancelled';
+      if (useMultipart) {
+        // If cancellation was requested before uploading, transition early.
+        if (item._cancelRequested) {
+          item.state = 'cancelled';
+          item.error = null;
+          item.retryable = false;
+          delete item._cancelRequested;
+          this.emit();
+          await this.flushSnapshot();
+          return;
+        }
+
+        item.state = 'uploading';
+        this.emit();
+
+        const multipartResult = await uploadMultipart({
+          fileUri: uploadUri,
+          fileName: uploadFileName,
+          contentType: uploadMimeType,
+          folder: 'listings',
+          sizeBytes,
+          wholeBlob: sizeProbeBlob,
+          signal,
+          onProgress: (loadedBytes, totalBytes) =>
+            this.updateProgress(item, loadedBytes, totalBytes || sizeBytes),
+        });
+
+        // If cancellation was requested mid-upload, the multipart helper
+        // aborted the session and threw an AbortError (handled by the catch
+        // block below). Reaching here means the upload completed.
+        if (item._cancelRequested) {
+          item.state = 'cancelled';
+          item.error = null;
+          item.retryable = false;
+          delete item._cancelRequested;
+          this.emit();
+          await this.flushSnapshot();
+          return;
+        }
+
+        item.state = 'uploaded';
+        item.progress = 1;
+        item.publicUrl = multipartResult.publicUrl;
+        item.finalizationId = multipartResult.finalizationId;
         item.error = null;
         item.retryable = false;
-        delete item._cancelRequested;
+      } else {
+        const presign = await presignUpload(
+          uploadFileName,
+          uploadMimeType,
+          'listings',
+          sizeBytes,
+          signal
+        );
+
+        // If cancellation was requested while presigning, transition to cancelled and abort
+        if (item._cancelRequested) {
+          item.state = 'cancelled';
+          item.error = null;
+          item.retryable = false;
+          delete item._cancelRequested;
+          this.emit();
+          await this.flushSnapshot();
+          return;
+        }
+
+        item.state = 'uploading';
         this.emit();
-        await this.flushSnapshot();
-        return;
-      }
 
-      item.state = 'uploading';
-      this.emit();
+        await uploadToPresignedUrl(presign.url, uploadUri, uploadMimeType, sizeProbeBlob, {
+          signal,
+          // RN can report a zero event.total for send({ uri }) streams — fall
+          // back to the size resolved for presign so progress never freezes.
+          onProgress: (loadedBytes, totalBytes) => this.updateProgress(item, loadedBytes, totalBytes || sizeBytes),
+        });
 
-      await uploadToPresignedUrl(presign.url, uploadUri, uploadMimeType, sizeProbeBlob, {
-        signal,
-        // RN can report a zero event.total for send({ uri }) streams — fall
-        // back to the size resolved for presign so progress never freezes.
-        onProgress: (loadedBytes, totalBytes) => this.updateProgress(item, loadedBytes, totalBytes || sizeBytes),
-      });
+        // Bytes are on the origin; cache the presign so a finalization failure
+        // can retry only the finalize call instead of re-uploading the file.
+        item._presign = presign;
 
-      // If cancellation was requested while uploading, transition to cancelled and ignore result
-      if (item._cancelRequested) {
-        item.state = 'cancelled';
+        // If cancellation was requested while uploading, transition to cancelled and ignore result
+        if (item._cancelRequested) {
+          item.state = 'cancelled';
+          item.error = null;
+          item.retryable = false;
+          delete item._cancelRequested;
+          delete item._presign;
+          this.emit();
+          await this.flushSnapshot();
+          return;
+        }
+
+        const finalization = await finalizeUpload({
+          objectKey: presign.key,
+          bucket: presign.bucket,
+          fileName: uploadFileName,
+          contentType: presign.contentType,
+          sizeBytes: presign.sizeBytes,
+          publicUrl: presign.publicUrl,
+          folder: 'listings',
+          scope: 'listing_media',
+          verifyObject: true,
+          signal,
+        });
+
+        item.state = 'uploaded';
+        item.progress = 1;
+        item.publicUrl = finalization.publicUrl;
+        item.finalizationId = finalization.id;
         item.error = null;
         item.retryable = false;
-        delete item._cancelRequested;
-        this.emit();
-        await this.flushSnapshot();
-        return;
+        delete item._presign;
       }
-
-      const finalization = await finalizeUpload({
-        objectKey: presign.key,
-        bucket: presign.bucket,
-        fileName: uploadFileName,
-        contentType: presign.contentType,
-        sizeBytes: presign.sizeBytes,
-        publicUrl: presign.publicUrl,
-        folder: 'listings',
-        scope: 'listing_media',
-        verifyObject: true,
-        signal,
-      });
-
-      item.state = 'uploaded';
-      item.progress = 1;
-      item.publicUrl = finalization.publicUrl;
-      item.finalizationId = finalization.id;
-      item.error = null;
-      item.retryable = false;
     } catch (err: unknown) {
       // Cancellation (flag or aborted transport) transitions to cancelled, not failed
       if (item._cancelRequested || isAbortError(err)) {
@@ -709,17 +900,49 @@ export class MediaUploadQueue {
         item.error = null;
         item.retryable = false;
         delete item._cancelRequested;
+        delete item._presign;
+        delete item._needsFinalizationOnly;
         this.emit();
         await this.flushSnapshot();
         return;
       }
+      // Upload landed but finalization failed: the object already exists on
+      // the origin, so the next retry only needs to re-call finalize.
+      // However, if THIS was already a finalize-only retry that failed, the
+      // cached presign may be stale (object deleted, URL expired) — clear it
+      // so the next retry does a full re-upload instead of looping on a
+      // broken finalize call.
+      if (item._presign && !item._needsFinalizationOnly) {
+        item._needsFinalizationOnly = true;
+      } else if (item._needsFinalizationOnly) {
+        delete item._presign;
+        delete item._needsFinalizationOnly;
+      }
       const message = err instanceof Error ? err.message : 'Upload failed';
       item.state = 'failed';
       item.error = message;
-      item.retryable = item.attemptCount < MAX_RETRIES;
+      item.retryable = isRetryableUploadError(err) && item.attemptCount < MAX_RETRIES;
     } finally {
+      // Clean up the temporary resized file. On a non-terminal outcome the
+      // asset is restored to its original URI so a retry re-resizes from the
+      // source rather than reading a deleted temp file.
+      if (resizedTempUri) {
+        if (item.state !== 'uploaded') {
+          asset.uri = originalAssetUri;
+          asset.fileName = originalAssetFileName;
+          asset.mimeType = originalAssetMimeType;
+        }
+        FileSystem.deleteAsync(resizedTempUri).catch(() => {
+          // Temp cleanup is best-effort.
+        });
+      }
       this.abortControllers.delete(item.id);
       this.lastProgressEmitMs.delete(item.id);
+      const resolveCancel = this.cancelResolvers.get(item.id);
+      if (resolveCancel) {
+        this.cancelResolvers.delete(item.id);
+        resolveCancel();
+      }
     }
 
     this.emit();

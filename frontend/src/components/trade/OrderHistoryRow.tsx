@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Control } from '../../theme/designTokens';
@@ -7,7 +7,7 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { AppStatusPill } from '../ui/AppStatusPill';
 import { Meta, BodyEmphasis, Body } from '../ui/Text';
-import { formatShortDateTime } from '../../utils/dateFormat';
+import { formatShortDateTime, formatFullDateTime } from '../../utils/dateFormat';
 
 export type OrderSide = 'buy' | 'sell';
 // Use the canonical OrderStatus from coOwnModels (12-state machine per spec 10 §2.1-2.2)
@@ -50,11 +50,24 @@ interface OrderHistoryRowProps {
   onPress?: () => void;
   onCancel?: () => void;
   isCancelling?: boolean;
+  /** True when the cancel request was definitively rejected by the server.
+   *  The row stays visible and the cancel control shows "Cancel failed — retry". */
+  cancelFailed?: boolean;
   issuerHandle?: string;
   issuerAvatar?: string;
   canMessageIssuer?: boolean;
   onPressIssuer?: () => void;
   onMessageIssuer?: () => void;
+  // U36: multi-fill receipt detail. When `showReceipt` is true an expandable
+  // "Receipt" affordance is rendered below the price row, revealing the
+  // executed/remaining quantities, average execution price, fees, timestamps
+  // and terminal reason. Fields the backend does not provide are labelled
+  // "Not available" rather than fabricated.
+  showReceipt?: boolean;
+  remainingQuantity?: number;
+  averageExecutionPrice?: string | null;
+  updatedAt?: string | null;
+  terminalReason?: string | null;
 }
 
 function resolveSideIcon(side: OrderSide): keyof typeof Ionicons.glyphMap {
@@ -98,19 +111,31 @@ export function OrderHistoryRow({
   filledQuantity,
   pricePerShare,
   totalAmount,
+  fee,
   status,
   timestamp,
   onPress,
   onCancel,
   isCancelling = false,
+  cancelFailed = false,
   issuerHandle,
   issuerAvatar,
   canMessageIssuer = false,
   onPressIssuer,
   onMessageIssuer,
+  showReceipt = false,
+  remainingQuantity,
+  averageExecutionPrice = null,
+  updatedAt = null,
+  terminalReason = null,
 }: OrderHistoryRowProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const [isReceiptOpen, setIsReceiptOpen] = React.useState(false);
+
+  const executed = filledQuantity ?? 0;
+  const remaining = remainingQuantity ?? Math.max(0, quantity - executed);
+  const NOT_AVAILABLE = 'Not available';
 
   return (
     <AnimatedPressable
@@ -152,16 +177,100 @@ export function OrderHistoryRow({
           <BodyEmphasis style={styles.total} numberOfLines={1}>{totalAmount}</BodyEmphasis>
         </View>
 
+        {/* U36: expandable multi-fill receipt. Explains one order across
+            fills — executed/remaining quantity, average execution, fees,
+            timestamps, terminal reason, and a route back to the exact asset. */}
+        {showReceipt ? (
+          <View style={styles.receiptWrap}>
+            <Pressable
+              style={styles.receiptToggle}
+              onPress={() => setIsReceiptOpen((prev) => !prev)}
+              accessibilityRole="button"
+              accessibilityLabel={isReceiptOpen ? 'Hide receipt details' : 'Show receipt details'}
+              accessibilityState={{ expanded: isReceiptOpen }}
+            >
+              <Meta style={styles.receiptToggleLabel}>Receipt</Meta>
+              <Ionicons
+                name={isReceiptOpen ? 'chevron-up' : 'chevron-down'}
+                size={13}
+                color={colors.textMuted}
+              />
+            </Pressable>
+
+            {isReceiptOpen ? (
+              <View style={styles.receiptDetail}>
+                <View style={styles.receiptRow}>
+                  <Meta style={styles.receiptLabel}>Executed</Meta>
+                  <Meta style={styles.receiptValue}>{executed} units</Meta>
+                </View>
+                <View style={styles.receiptRow}>
+                  <Meta style={styles.receiptLabel}>Remaining</Meta>
+                  <Meta style={styles.receiptValue}>{remaining} units</Meta>
+                </View>
+                <View style={styles.receiptRow}>
+                  <Meta style={styles.receiptLabel}>Avg execution</Meta>
+                  <Meta style={styles.receiptValue}>
+                    {averageExecutionPrice ?? NOT_AVAILABLE}
+                  </Meta>
+                </View>
+                <View style={styles.receiptRow}>
+                  <Meta style={styles.receiptLabel}>Fees</Meta>
+                  <Meta style={styles.receiptValue}>{fee ?? NOT_AVAILABLE}</Meta>
+                </View>
+                <View style={styles.receiptRow}>
+                  <Meta style={styles.receiptLabel}>Created</Meta>
+                  <Meta style={[styles.receiptValue, styles.receiptMono]}>
+                    {formatFullDateTime(timestamp)}
+                  </Meta>
+                </View>
+                <View style={styles.receiptRow}>
+                  <Meta style={styles.receiptLabel}>Updated</Meta>
+                  <Meta style={[styles.receiptValue, styles.receiptMono]}>
+                    {updatedAt ? formatFullDateTime(updatedAt) : NOT_AVAILABLE}
+                  </Meta>
+                </View>
+                <View style={styles.receiptRow}>
+                  <Meta style={styles.receiptLabel}>Reason</Meta>
+                  <Meta style={styles.receiptValue}>{terminalReason ?? NOT_AVAILABLE}</Meta>
+                </View>
+                <Pressable
+                  style={styles.receiptAssetLink}
+                  onPress={onPress}
+                  accessibilityRole="link"
+                  accessibilityLabel={`View asset ${assetTitle}`}
+                >
+                  <Meta style={styles.receiptAssetLinkText}>View asset</Meta>
+                  <Ionicons name="chevron-forward" size={12} color={colors.textSecondary} />
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
         {onCancel ? (
           <AnimatedPressable
             onPress={onCancel}
             style={styles.cancelAction}
             scaleValue={0.97}
             accessibilityRole="button"
-            accessibilityLabel={`Cancel ${side} order for ${assetTitle}`}
+            accessibilityLabel={
+              cancelFailed
+                ? `Retry cancel ${side} order for ${assetTitle}`
+                : `Cancel ${side} order for ${assetTitle}`
+            }
           >
-            <Ionicons name="close-circle-outline" size={15} color={colors.textSecondary} />
-            <Meta style={styles.cancelText}>{isCancelling ? 'Cancelling…' : 'Cancel remaining'}</Meta>
+            <Ionicons
+              name={cancelFailed ? 'alert-circle-outline' : 'close-circle-outline'}
+              size={15}
+              color={cancelFailed ? colors.danger : colors.textSecondary}
+            />
+            <Meta style={[styles.cancelText, cancelFailed && { color: colors.danger }]}>
+              {cancelFailed
+                ? 'Cancel failed — retry'
+                : isCancelling
+                  ? 'Cancelling…'
+                  : 'Cancel remaining'}
+            </Meta>
           </AnimatedPressable>
         ) : null}
 
@@ -326,5 +435,52 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   messageBtnDisabled: {
     opacity: 0.5,
+  },
+  // U36: expandable receipt
+  receiptWrap: {
+    marginTop: Space.sm,
+    paddingTop: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  receiptToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: Control.hit,
+  },
+  receiptToggleLabel: {
+    color: colors.textSecondary,
+  },
+  receiptDetail: {
+    marginTop: Space.xs,
+    gap: Space.xs,
+  },
+  receiptRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: Space.md,
+  },
+  receiptLabel: {
+    color: colors.textMuted,
+    flexShrink: 0,
+  },
+  receiptValue: {
+    textAlign: 'right',
+    flex: 1,
+  },
+  receiptMono: {
+    fontVariant: ['tabular-nums'],
+  },
+  receiptAssetLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    minHeight: Control.hit,
+    marginTop: Space.xs,
+  },
+  receiptAssetLinkText: {
+    color: colors.textSecondary,
   },
 });

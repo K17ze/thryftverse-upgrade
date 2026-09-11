@@ -1,4 +1,4 @@
-export { CoOwnSegmentNav } from './CoOwnSegmentNav';
+export { CoOwnSegmentNav, CoOwnScrollContext, useCoOwnScroll } from './CoOwnSegmentNav';
 export type { CoOwnSegmentNavProps, CoOwnDetailTab } from './CoOwnSegmentNav';
 
 export { AssetOverviewSection } from './AssetOverviewSection';

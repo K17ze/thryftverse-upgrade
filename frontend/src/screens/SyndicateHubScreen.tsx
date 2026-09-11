@@ -6,14 +6,14 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { FlashList } from '@shopify/flash-list';
+import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { fetchCoOwnHoldings, listCoOwnAssets } from '../services/marketApi';
+import { fetchCoOwnHoldings, listCoOwnAssets, fetchCoOwnWatchlist } from '../services/marketApi';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useToast } from '../context/ToastContext';
 import { useBackendData } from '../context/BackendDataContext';
@@ -68,6 +68,10 @@ interface HubAsset {
   avgEntryPriceGBP?: number;
   realizedProfitGBP?: number;
   isOpen: boolean;
+  /** Canonical backend lifecycle. Keep these fields intact instead of
+   * inferring market state from allocation or old activity. */
+  offeringStatus?: 'offering' | 'allocated' | 'failed' | 'closed';
+  marketStatus?: 'pre_market' | 'trading' | 'paused' | 'closed';
   createdAt: string;
 }
 
@@ -92,7 +96,7 @@ const SEGMENT_LABELS: Record<HubSegment, string> = {
 };
 const SORT_LABELS: Record<SortOption, string> = {
   newest: 'Newest',
-  price: 'Price',
+  price: 'Reference price',
   activity: 'Activity',
 };
 const SECTION_TITLES: Record<HubSegment, string> = {
@@ -126,6 +130,9 @@ function hasMarketActivity(asset: HubAsset): boolean {
  * dot reads as "live". 'closed' (muted) marks tradeable-but-quiet
  * assets. 'paused' (warning) marks ended/failed offerings. */
 function getStatus(asset: HubAsset): CoOwnAssetStatus {
+  if (asset.offeringStatus === 'failed' || asset.marketStatus === 'paused') return 'paused';
+  if (asset.marketStatus === 'closed' || asset.offeringStatus === 'closed') return 'closed';
+  if (asset.offeringStatus === 'offering' || asset.marketStatus === 'trading' || asset.marketStatus === 'pre_market') return 'open';
   // Offering — initial offering still accepting funds.
   if (asset.isOpen && asset.availableUnits > 0) return 'open';
   // Fully allocated — secondary market territory.
@@ -137,6 +144,11 @@ function getStatus(asset: HubAsset): CoOwnAssetStatus {
 }
 
 function getStatusLabel(asset: HubAsset): string {
+  if (asset.offeringStatus === 'offering') return 'Offering';
+  if (asset.marketStatus === 'paused') return 'Trading paused';
+  if (asset.marketStatus === 'trading') return 'Trading';
+  if (asset.offeringStatus === 'allocated' && asset.marketStatus === 'pre_market') return 'Allocated';
+  if (asset.marketStatus === 'closed' || asset.offeringStatus === 'closed') return 'Closed';
   if (asset.isOpen && asset.availableUnits > 0) return 'Offering';
   if (asset.availableUnits === 0) {
     return hasMarketActivity(asset) ? 'Trading' : 'Available to trade';
@@ -144,11 +156,24 @@ function getStatusLabel(asset: HubAsset): string {
   return asset.isOpen ? 'Available to trade' : 'Funding ended';
 }
 
+function isOfferingAsset(asset: HubAsset): boolean {
+  return asset.offeringStatus
+    ? asset.offeringStatus === 'offering'
+    : asset.isOpen && asset.availableUnits > 0;
+}
+
+function isTradingAsset(asset: HubAsset): boolean {
+  return asset.marketStatus
+    ? asset.marketStatus === 'trading'
+    : !isOfferingAsset(asset) && hasMarketActivity(asset);
+}
+
 export default function CoOwnHubScreen() {
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteProp<RootStackParamList, 'CoOwnHub'>>();
   const currentUser = useStore((state) => state.currentUser);
   const coOwnWatchlist = useStore((state) => state.coOwnWatchlist);
+  const coOwnWatchStatus = useStore((state) => state.coOwnWatchStatus);
   const toggleCoOwnWatch = useStore((state) => state.toggleCoOwnWatch);
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
@@ -164,20 +189,33 @@ export default function CoOwnHubScreen() {
   const [sortBy, setSortBy] = React.useState<SortOption>('newest');
   const [activeSegment, setActiveSegment] = React.useState<HubSegment>(normalizeInitialSegment(route.params?.initialSegment));
   const [remoteAssets, setRemoteAssets] = React.useState<HubAsset[]>([]);
+  // U03: Watched assets fetched separately via fetchCoOwnWatchlist so they
+  // remain discoverable outside the first 120 catalogue items.
+  const [watchedAssets, setWatchedAssets] = React.useState<HubAsset[]>([]);
   const [holdings, setHoldings] = React.useState<Map<string, { units: number; avgEntry: number; realized: number }>>(new Map());
   const [isSyncing, setIsSyncing] = React.useState(true);
   const [isError, setIsError] = React.useState(false);
   const [holdingsError, setHoldingsError] = React.useState(false);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
 
-  const loadData = React.useCallback(() => {
+  // U07: Preserve scroll position through detail navigation.
+  const flashListRef = React.useRef<FlashListRef<HubRow>>(null);
+  const scrollOffsetRef = React.useRef(0);
+  const hasLoadedRef = React.useRef(false);
+
+  const loadData = React.useCallback((opts?: { silent?: boolean }) => {
     // Public browsing: always fetch the marketplace catalogue so
     // unauthenticated users can explore offerings and trading activity.
     // Holdings (portfolio) are only fetched when the user is signed in —
     // auth is requested at the point of saving, funding, or trading, not
     // at the point of discovery.
     let cancelled = false;
-    setIsSyncing(true);
+    const silent = opts?.silent ?? false;
+    // U07: Don't flash the loading skeleton when we already have data
+    // (e.g., returning from AssetDetail). Only show it on first load.
+    if (!silent || remoteAssets.length === 0) {
+      setIsSyncing(true);
+    }
     setIsError(false);
     setHoldingsError(false);
 
@@ -187,13 +225,22 @@ export default function CoOwnHubScreen() {
           .catch(() => ({ items: [], failed: true }))
       : Promise.resolve({ items: [] as Awaited<ReturnType<typeof fetchCoOwnHoldings>>, failed: false });
 
+    // U03: Fetch watched assets separately so they remain discoverable
+    // outside the first 120 catalogue items. Only when authenticated.
+    const watchedPromise = actingUserId
+      ? fetchCoOwnWatchlist(200)
+          .then((items) => ({ items, failed: false }))
+          .catch(() => ({ items: [] as Awaited<ReturnType<typeof fetchCoOwnWatchlist>>, failed: true }))
+      : Promise.resolve({ items: [] as Awaited<ReturnType<typeof fetchCoOwnWatchlist>>, failed: false });
+
     Promise.all([
-      listCoOwnAssets({ limit: 120 }),
+      listCoOwnAssets({ limit: 120, search: query.trim() || undefined }),
       holdingsPromise,
+      watchedPromise,
     ])
-      .then(([items, holdingResult]) => {
+      .then(([items, holdingResult, watchedResult]) => {
         if (cancelled) return;
-        const mapped: HubAsset[] = items.map((item) => {
+        const mapItem = (item: typeof items[number]): HubAsset => {
           const linkedListing = item.listingId
             ? listings.find((listing) => listing.id === item.listingId)
             : undefined;
@@ -220,9 +267,12 @@ export default function CoOwnHubScreen() {
             holders: item.holders,
             yourUnits: 0,
             isOpen: item.isOpen,
+            offeringStatus: item.offeringStatus,
+            marketStatus: item.marketStatus,
             createdAt: item.createdAt,
           };
-        });
+        };
+        const mapped = items.map(mapItem);
         const holdingsMap = new Map<string, { units: number; avgEntry: number; realized: number }>();
         for (const holding of holdingResult.items) {
           holdingsMap.set(holding.assetId, {
@@ -234,6 +284,10 @@ export default function CoOwnHubScreen() {
         setRemoteAssets(mapped);
         setHoldings(holdingsMap);
         setHoldingsError(holdingResult.failed);
+        // U03: Watched assets are mapped separately so they're always
+        // available in the watchlist segment, even outside the first 120.
+        setWatchedAssets(watchedResult.items.map(mapItem));
+        hasLoadedRef.current = true;
       })
       .catch(() => {
         if (cancelled) return;
@@ -248,13 +302,25 @@ export default function CoOwnHubScreen() {
       });
 
     return () => { cancelled = true; };
-  }, [actingUserId, listings, show]);
+  }, [actingUserId, listings, query, remoteAssets.length, show]);
 
-  // useFocusEffect ensures the hub re-fetches co-own assets whenever the
-  // user navigates back to it (e.g., after creating a new co-own asset).
+  // U07: Re-fetch on initial focus only. On subsequent focuses (returning
+  // from AssetDetail), do a silent refresh that preserves scroll position
+  // and avoids the loading skeleton flash. The query, sort, and segment
+  // state survive navigation since they live in component state.
   useFocusEffect(
     React.useCallback(() => {
-      const cleanup = loadData();
+      const isInitial = !hasLoadedRef.current;
+      const cleanup = loadData({ silent: !isInitial });
+      // U07: Restore scroll position after data loads on return from detail.
+      if (!isInitial) {
+        requestAnimationFrame(() => {
+          flashListRef.current?.scrollToOffset({
+            offset: scrollOffsetRef.current,
+            animated: false,
+          });
+        });
+      }
       return cleanup;
     }, [loadData])
   );
@@ -279,18 +345,25 @@ export default function CoOwnHubScreen() {
   }, [loadData]);
 
   const marketAssets = React.useMemo(
-    () => remoteAssets.map((asset) => {
-      const holding = holdings.get(asset.id);
-      return holding
-        ? {
-            ...asset,
-            yourUnits: holding.units,
-            avgEntryPriceGBP: holding.avgEntry,
-            realizedProfitGBP: holding.realized,
-          }
-        : asset;
-    }),
-    [holdings, remoteAssets]
+    () => {
+      // U03: Merge watched assets (fetched separately) into the catalogue
+      // so they remain discoverable outside the first 120 fetched items.
+      // Deduplicate by id — catalogue items take precedence.
+      const catalogueIds = new Set(remoteAssets.map((a) => a.id));
+      const extraWatched = watchedAssets.filter((a) => !catalogueIds.has(a.id));
+      return [...remoteAssets, ...extraWatched].map((asset) => {
+        const holding = holdings.get(asset.id);
+        return holding
+          ? {
+              ...asset,
+              yourUnits: holding.units,
+              avgEntryPriceGBP: holding.avgEntry,
+              realizedProfitGBP: holding.realized,
+            }
+          : asset;
+      });
+    },
+    [holdings, remoteAssets, watchedAssets]
   );
 
   const yourPositions = React.useMemo(
@@ -334,12 +407,10 @@ export default function CoOwnHubScreen() {
   const segmentCounts = React.useMemo<Record<HubSegment, number>>(() => {
     return {
       // Assets in initial offering — still accepting funds.
-      offerings: marketAssets.filter((asset) => asset.isOpen && asset.availableUnits > 0).length,
-      // Fully allocated assets with secondary-market activity, or any
-      // asset that has settled trades / live orders on the book.
-      trading: marketAssets.filter((asset) =>
-        asset.availableUnits === 0 || hasMarketActivity(asset)
-      ).length,
+      offerings: marketAssets.filter(isOfferingAsset).length,
+      // Use the backend's market lifecycle. A closed/paused or merely
+      // allocated asset is not silently promoted to Trading by old activity.
+      trading: marketAssets.filter(isTradingAsset).length,
       // User's watched assets.
       watchlist: marketAssets.filter((asset) => coOwnWatchlist.includes(asset.id)).length,
     };
@@ -349,8 +420,8 @@ export default function CoOwnHubScreen() {
     const normalized = query.trim().toLowerCase();
     // Segment filter — Offerings, Trading, or Watchlist
     const segmentFiltered = marketAssets.filter((asset) => {
-      if (activeSegment === 'offerings') return asset.isOpen && asset.availableUnits > 0;
-      if (activeSegment === 'trading') return asset.availableUnits === 0 || hasMarketActivity(asset);
+      if (activeSegment === 'offerings') return isOfferingAsset(asset);
+      if (activeSegment === 'trading') return isTradingAsset(asset);
       return coOwnWatchlist.includes(asset.id);
     });
     // Search filter
@@ -397,7 +468,7 @@ export default function CoOwnHubScreen() {
     // Discovery carousel surfaces active offerings first — the primary
     // discovery intent. Falls back to the full catalogue when no
     // offerings are live so the carousel is never empty.
-    const open = marketAssets.filter((asset) => asset.isOpen && asset.availableUnits > 0);
+    const open = marketAssets.filter(isOfferingAsset);
     const source = open.length > 0 ? open : marketAssets;
     return [...source]
       .sort((a, b) => {
@@ -412,7 +483,7 @@ export default function CoOwnHubScreen() {
     const allocatedPct = asset.totalUnits > 0
       ? ((asset.totalUnits - asset.availableUnits) / asset.totalUnits) * 100
       : 0;
-    const inOffering = asset.isOpen && asset.availableUnits > 0;
+    const inOffering = isOfferingAsset(asset);
     return {
       id: asset.id,
       imageUri: asset.image,
@@ -589,7 +660,7 @@ export default function CoOwnHubScreen() {
                 <Text style={[styles.inlineStateText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>Your markets are still available. Retry to load portfolio holdings.</Text>
               </View>
               <AnimatedPressable
-                onPress={loadData}
+                onPress={() => loadData()}
                 style={[styles.inlineRetry, { borderColor: colors.border }]}
                 accessibilityRole="button"
                 accessibilityLabel="Retry loading positions"
@@ -735,16 +806,13 @@ export default function CoOwnHubScreen() {
       return (
         <View style={styles.instrumentRow}>
           {item.assets.map((asset) => {
-            const inOffering = asset.isOpen && asset.availableUnits > 0;
+            const inOffering = isOfferingAsset(asset);
             const allocatedPct = asset.totalUnits > 0
               ? Math.round(((asset.totalUnits - asset.availableUnits) / asset.totalUnits) * 100)
               : 0;
-            // Discovery tile content is tailored to the asset's lifecycle
-            // state — offering tiles surface funding progress; trading
-            // tiles surface last trade price and best bid/ask depth.
-            const availabilityLabel = inOffering
-              ? `${asset.totalUnits - asset.availableUnits}/${asset.totalUnits} funded`
-              : `${asset.availableUnits} of ${asset.totalUnits} units`;
+            // U02: One lifecycle/liquidity fact per card — offering tiles
+            // surface funding progress; trading tiles surface last trade or
+            // best bid/ask. Less urgent metadata lives on the detail screen.
             const liquidityLabel = inOffering
               ? `${allocatedPct}% funded`
               : asset.lastExecutionPriceGBP != null
@@ -752,7 +820,7 @@ export default function CoOwnHubScreen() {
                 : asset.bestBidGBP != null && asset.bestAskGBP != null
                   ? `Bid ${format1ze(asset.bestBidGBP)} · Ask ${format1ze(asset.bestAskGBP)}`
                   : asset.bestAskGBP != null
-                    ? `Ask ${format1ze(asset.bestAskGBP)} · ${asset.askDepthUnits ?? 0} units`
+                    ? `Ask ${format1ze(asset.bestAskGBP)}`
                     : 'No trades yet';
             return (
               <CoOwnInstrumentCard
@@ -761,12 +829,12 @@ export default function CoOwnHubScreen() {
                 title={asset.title}
                 categoryLabel={asset.category}
                 unitPriceLabel={format1ze(asset.unitPriceGBP)}
-                localReferenceLabel={formatLocal(asset.unitPriceGBP)}
-                availabilityLabel={availabilityLabel}
                 liquidityLabel={liquidityLabel}
+                allocatedPct={inOffering ? allocatedPct : undefined}
                 statusLabel={getStatusLabel(asset)}
                 status={getStatus(asset)}
                 isWatched={coOwnWatchlist.includes(asset.id)}
+                watchStatus={coOwnWatchStatus[asset.id]}
                 focalPoint={getCategoryFocalPoint(asset.category)}
                 onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
                 onToggleWatch={() => toggleCoOwnWatch(asset.id)}
@@ -781,27 +849,39 @@ export default function CoOwnHubScreen() {
     }
 
     if (item.kind === 'instrumentsEmpty') {
-      const title = activeSegment === 'watchlist'
-        ? 'Your watchlist is empty'
-        : activeSegment === 'trading'
-          ? 'No trading markets yet'
-          : query.trim()
-            ? 'No matching offerings'
-            : 'No active offerings';
-      const subtitle = activeSegment === 'watchlist'
-        ? 'Use the bookmark control on an instrument to keep it here.'
-        : activeSegment === 'trading'
-          ? 'Fully allocated assets with live orders will appear here.'
-          : query.trim()
-            ? 'Try a broader search or switch to the Trading tab.'
-            : 'New offerings from issuers will appear here. Try the Trading tab for live markets.';
+      // U07: Separate "no results" (search returned empty), "no watched
+      // items" (watchlist empty), and "no items in segment" (no search).
+      const hasQuery = query.trim().length > 0;
+      let title: string;
+      let subtitle: string;
+      let graphicVariant: 'search' | 'box' = 'search';
+
+      if (hasQuery) {
+        // No results from active search — distinct from an empty segment.
+        title = activeSegment === 'watchlist'
+          ? 'No watched items match'
+          : 'No matching markets';
+        subtitle = 'Try a different search term or clear the search.';
+        graphicVariant = 'search';
+      } else if (activeSegment === 'watchlist') {
+        // Watchlist is empty — no items watched at all.
+        title = 'Your watchlist is empty';
+        subtitle = 'Use the bookmark control on an instrument to keep it here.';
+        graphicVariant = 'box';
+      } else if (activeSegment === 'trading') {
+        title = 'No trading markets yet';
+        subtitle = 'Fully allocated assets with live orders will appear here.';
+      } else {
+        title = 'No active offerings';
+        subtitle = 'New offerings from issuers will appear here. Try the Trading tab for live markets.';
+      }
       return (
         <View style={styles.instrumentsEmptyWrap}>
           <CoOwnStateCanvas
             variant="empty"
             title={title}
             subtitle={subtitle}
-            emptyGraphicVariant="search"
+            emptyGraphicVariant={graphicVariant}
           />
         </View>
       );
@@ -871,7 +951,7 @@ export default function CoOwnHubScreen() {
       <FlagshipScreen
         header={<FlagshipHeader title="Co-Own" onBack={handleBack} rightAction={headerRightAction} />}
       >
-        <CoOwnStateCanvas variant="error" actionLabel="Try again" onAction={loadData} />
+        <CoOwnStateCanvas variant="error" actionLabel="Try again" onAction={() => loadData()} />
       </FlagshipScreen>
     );
   }
@@ -904,12 +984,17 @@ export default function CoOwnHubScreen() {
     >
       <CoOwnOfflineBanner isOffline={isOffline} />
       <FlashList
+        ref={flashListRef}
         data={hubRows}
         renderItem={renderRow}
         keyExtractor={(item) => item.key}
         stickyHeaderIndices={[1]}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
+        onScroll={(e) => {
+          scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}

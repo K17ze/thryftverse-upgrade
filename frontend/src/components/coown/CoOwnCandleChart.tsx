@@ -17,15 +17,21 @@
 
 import React, { useState, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, ViewStyle, useWindowDimensions, PanResponder, Pressable } from 'react-native';
-import { Canvas, Rect, Line } from '@shopify/react-native-skia';
+import { Canvas, Rect, Line, Path, Skia, LinearGradient, vec } from '@shopify/react-native-skia';
+import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
+import { FontFamily } from '../../theme/fontFamily';
 import { DIRECTION_COLORS } from '../../constants/colors';
+import { withAlpha } from '../poster/shared/colorUtils';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { haptics } from '../../utils/haptics';
 
 export type CoOwnCandleRange = '1D' | '1W' | '1M' | '3M' | '1Y' | 'ALL';
+
+/** Chart-type switcher (Line / Candlestick / Area). Defaults to candle. */
+export type CoOwnChartType = 'line' | 'candle' | 'area';
 
 export interface CoOwnCandle {
   t: number;   // timestamp (ms)
@@ -40,6 +46,11 @@ export interface CoOwnCandleChartProps {
   candles: CoOwnCandle[];
   range: CoOwnCandleRange;
   onRangeChange: (r: CoOwnCandleRange) => void;
+  /** Active chart type. Defaults to 'candle' when omitted. */
+  chartType?: CoOwnChartType;
+  /** When provided, the chart renders a compact type switcher in the
+   *  header. When omitted, the switcher is hidden (backward compatible). */
+  onChartTypeChange?: (type: CoOwnChartType) => void;
   showVolume: boolean;
   lastPrice?: number;
   lastAgeSeconds?: number | null;
@@ -57,6 +68,8 @@ export function CoOwnCandleChart({
   candles,
   range,
   onRangeChange,
+  chartType = 'candle',
+  onChartTypeChange,
   showVolume,
   lastPrice,
   lastAgeSeconds,
@@ -67,6 +80,7 @@ export function CoOwnCandleChart({
   // Per spec 03_COOWN §4: chart is width-responsive.
   const CHART_WIDTH = Math.min(Math.max(screenWidth - 32, 280), 440);
   const [crosshairIndex, setCrosshairIndex] = useState<number | null>(null);
+  const [typeMenuOpen, setTypeMenuOpen] = useState(false);
 
   // Compute price range across all candles
   const { minPrice, maxPrice, maxVolume } = useMemo(() => {
@@ -170,6 +184,38 @@ export function CoOwnCandleChart({
     return CHART_PADDING + usableH * (1 - (price - minPrice) / priceRange);
   };
 
+  // ── Line / Area chart paths (built from CLOSE prices) ──
+  // Line and area modes use candle closes connected over event-time x
+  // positions. Direction color follows the overall move (last vs first
+  // close), matching broker convention (Robinhood / TradingView mobile).
+  const { linePath, areaPath, lineColor } = useMemo(() => {
+    if (candles.length < 2) return { linePath: null, areaPath: null, lineColor: DIRECTION_COLORS.up };
+    const firstClose = candles[0].c;
+    const lastClose = candles[candles.length - 1].c;
+    const color = lastClose >= firstClose ? DIRECTION_COLORS.up : DIRECTION_COLORS.down;
+    const stroke = Skia.Path.Make();
+    candles.forEach((c, i) => {
+      const x = xForIndex(i) + candleWidth / 2;
+      const y = yForPrice(c.c);
+      if (i === 0) stroke.moveTo(x, y);
+      else stroke.lineTo(x, y);
+    });
+    // Area = stroke path closed down to the price-plot baseline.
+    const area = Skia.Path.Make();
+    candles.forEach((c, i) => {
+      const x = xForIndex(i) + candleWidth / 2;
+      const y = yForPrice(c.c);
+      if (i === 0) area.moveTo(x, y);
+      else area.lineTo(x, y);
+    });
+    const baselineY = yForPrice(minPrice);
+    area.lineTo(xForIndex(candles.length - 1) + candleWidth / 2, baselineY);
+    area.lineTo(xForIndex(0) + candleWidth / 2, baselineY);
+    area.close();
+    return { linePath: stroke, areaPath: area, lineColor: color };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candles, chartH, chartW, candleSlot, candleWidth, minPrice, maxPrice, priceRange]);
+
   // Textual summary for screen readers
   const textualSummary = useMemo(() => {
     if (candles.length === 0) return 'No candle data available for this range.';
@@ -229,13 +275,32 @@ export function CoOwnCandleChart({
         {textualSummary}
       </Text>
 
-      {/* Range chips */}
-      <RangeChips
-        ranges={RANGES}
-        activeRange={range}
-        onRangeChange={handleRangeChange}
-        colors={colors}
-      />
+      {/* Range chips + chart-type switcher */}
+      <View style={styles.headerRow}>
+        <RangeChips
+          ranges={RANGES}
+          activeRange={range}
+          onRangeChange={handleRangeChange}
+          colors={colors}
+        />
+        {onChartTypeChange && (
+          <ChartTypeSwitcher
+            chartType={chartType}
+            onChartTypeChange={(t) => {
+              onChartTypeChange(t);
+              setTypeMenuOpen(false);
+              haptics.selection();
+            }}
+            open={typeMenuOpen}
+            onToggleOpen={() => {
+              setTypeMenuOpen((v) => !v);
+              haptics.tap();
+            }}
+            onClose={() => setTypeMenuOpen(false)}
+            colors={colors}
+          />
+        )}
+      </View>
 
       {/* Candle chart with price axis and date axis */}
       <View style={styles.chartWrap}>
@@ -250,8 +315,8 @@ export function CoOwnCandleChart({
         {/* Chart canvas + interaction layer */}
         <View style={styles.canvasContainer}>
           <Canvas style={{ width: CHART_WIDTH - PRICE_AXIS_WIDTH, height: showVolume ? CHART_HEIGHT : chartH }}>
-            {/* Candles */}
-            {candles.map((candle, i) => {
+            {/* Candles (only in candle mode) */}
+            {chartType === 'candle' && candles.map((candle, i) => {
               const x = xForIndex(i);
               const isUp = candle.c >= candle.o;
               const color = isUp ? DIRECTION_COLORS.up : DIRECTION_COLORS.down;
@@ -283,6 +348,29 @@ export function CoOwnCandleChart({
                 </React.Fragment>
               );
             })}
+
+            {/* Area chart fill (rendered before the line stroke) */}
+            {chartType === 'area' && areaPath && (
+              <Path path={areaPath} style="fill">
+                <LinearGradient
+                  start={vec(0, CHART_PADDING)}
+                  end={vec(0, chartH - CHART_PADDING)}
+                  colors={[withAlpha(lineColor, 0.32), withAlpha(lineColor, 0.04)]}
+                />
+              </Path>
+            )}
+
+            {/* Line / Area stroke (close prices connected) */}
+            {(chartType === 'line' || chartType === 'area') && linePath && (
+              <Path
+                path={linePath}
+                style="stroke"
+                strokeWidth={1.5}
+                strokeJoin="round"
+                strokeCap="round"
+                color={lineColor}
+              />
+            )}
 
             {/* Volume bars */}
             {showVolume && candles.map((candle, i) => {
@@ -431,6 +519,84 @@ function RangeChips({
   );
 }
 
+const CHART_TYPE_OPTIONS: { value: CoOwnChartType; label: string }[] = [
+  { value: 'line', label: 'Line' },
+  { value: 'candle', label: 'Candlestick' },
+  { value: 'area', label: 'Area' },
+];
+
+/** Compact chart-type switcher — a settings icon that opens a small,
+ *  flat popover menu. NOT a persistent segmented control: research
+ *  (Robinhood Legend, Questrade, IBKR Mobile) shows flagship brokers
+ *  treat chart type as a settings affordance, not primary navigation. */
+function ChartTypeSwitcher({
+  chartType,
+  onChartTypeChange,
+  open,
+  onToggleOpen,
+  onClose,
+  colors,
+}: {
+  chartType: CoOwnChartType;
+  onChartTypeChange: (t: CoOwnChartType) => void;
+  open: boolean;
+  onToggleOpen: () => void;
+  onClose: () => void;
+  colors: ReturnType<typeof useAppTheme>['colors'];
+}) {
+  return (
+    <View style={styles.switcherWrap}>
+      <Pressable
+        onPress={onToggleOpen}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        accessibilityRole="button"
+        accessibilityLabel={`Chart type: ${chartType}. Tap to change.`}
+        accessibilityHint="Switch between line, candlestick, and area chart types."
+      >
+        <Ionicons name="options-outline" size={20} color={colors.textSecondary} />
+      </Pressable>
+      {open && (
+        <View style={[styles.typeMenu, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          {CHART_TYPE_OPTIONS.map((opt) => {
+            const isActive = opt.value === chartType;
+            return (
+              <Pressable
+                key={opt.value}
+                style={styles.typeMenuItem}
+                onPress={() => onChartTypeChange(opt.value)}
+                accessibilityRole="button"
+                accessibilityLabel={`Chart type: ${opt.label}`}
+                accessibilityState={{ selected: isActive }}
+              >
+                <Text
+                  style={[
+                    styles.typeMenuText,
+                    { color: isActive ? colors.textPrimary : colors.textSecondary },
+                    isActive && { fontFamily: FontFamily.semibold },
+                  ]}
+                >
+                  {opt.label}
+                </Text>
+                {isActive && (
+                  <Ionicons name="checkmark" size={16} color={colors.brand} />
+                )}
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+      {open && (
+        <Pressable
+          style={styles.typeMenuBackdrop}
+          onPress={onClose}
+          accessibilityLabel="Close chart type menu"
+          accessibilityRole="button"
+        />
+      )}
+    </View>
+  );
+}
+
 /** Format age in seconds to a human-readable string. */
 function formatAge(ageSeconds: number): string {
   if (ageSeconds < 60) return 'just now';
@@ -485,6 +651,47 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 4,
     flexWrap: 'wrap',
+    flex: 1,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: Space.xs,
+  },
+  switcherWrap: {
+    position: 'relative',
+  },
+  typeMenu: {
+    position: 'absolute',
+    top: 28,
+    right: 0,
+    minWidth: 140,
+    borderRadius: Radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: Space.xs,
+    zIndex: 10,
+  },
+  typeMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.sm,
+    minHeight: 44,
+    gap: Space.sm,
+  },
+  typeMenuText: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+  },
+  typeMenuBackdrop: {
+    position: 'absolute',
+    top: -1000,
+    left: -1000,
+    right: -1000,
+    bottom: -1000,
+    zIndex: 9,
   },
   rangeChip: {
     paddingVertical: Space.sm,

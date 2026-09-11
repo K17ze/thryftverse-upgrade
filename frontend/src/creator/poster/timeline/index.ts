@@ -34,3 +34,21 @@ export type { TimelineRulerProps } from './TimelineRuler';
 
 export { WaveformTrack } from './WaveformTrack';
 export type { WaveformTrackProps } from './WaveformTrack';
+
+// Pure timeline operations (immutable clip mutations).
+export {
+  trimClipStart,
+  trimClipEnd,
+  splitClip,
+  duplicateClip,
+  replaceClipAsset,
+  reorderClip,
+  setClipSpeed,
+  setClipSpeedCurve,
+  setClipVolume,
+  cropClip,
+  rotateClip,
+  addTransition,
+  removeTransition,
+  recomputeTotalDuration,
+} from './TimelineOperations';

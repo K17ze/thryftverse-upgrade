@@ -124,6 +124,9 @@ import {
 import {
   closeBackgroundQueues,
   enqueueAuctionSweepJob,
+  enqueueCoOwnOrderExpirySweepJob,
+  enqueueCoOwnAlertEvaluatorJob,
+  enqueueCoOwnDripExecutionJob,
   enqueueOnezeMintReserveJob,
   enqueueOutboxDrainJob,
   enqueueReconciliationJob,
@@ -277,6 +280,9 @@ import {
   processExtractionIntelligenceJob,
   processRetentionSweep,
   processPushReceiptReconciliation,
+  sweepExpiredCoOwnOrders,
+  evaluateCoOwnPriceAlerts,
+  processCoOwnDripReinvestment,
   sweepScheduledPublications,
   aggregateAnalyticsDaily,
   processBackupExpiryCheck,
@@ -312,6 +318,7 @@ import { registerOpsConsoleRoutes } from './routes/opsConsole.js';
 import { registerBotsRoutes } from './routes/bots.js';
 import { registerChatRoutes } from './routes/chat.js';
 import { registerCoOwnRoutes } from './routes/coOwn.js';
+import coOwnDepthRoutes from './routes/coOwnDepth.js';
 import { registerV2Routes } from './routes/v2.js';
 import { registerSellerRoutes } from './routes/sellers.js';
 import { registerStorefrontRoutes } from './routes/storefronts.js';
@@ -9687,6 +9694,9 @@ async function withScheduledJobGuard<T>(
 }
 
 let auctionSweepTimer: NodeJS.Timeout | null = null;
+let coOwnOrderExpirySweepTimer: NodeJS.Timeout | null = null;
+let coOwnAlertEvaluatorTimer: NodeJS.Timeout | null = null;
+let coOwnDripExecutionTimer: NodeJS.Timeout | null = null;
 let domainOutboxTimer: NodeJS.Timeout | null = null;
 
 function startDomainOutboxScheduler(): void {
@@ -9882,6 +9892,99 @@ function stopAuctionSweepScheduler(): void {
 
   clearInterval(auctionSweepTimer);
   auctionSweepTimer = null;
+}
+
+function startCoOwnOrderExpirySweepScheduler(): void {
+  if (coOwnOrderExpirySweepTimer) {
+    return;
+  }
+
+  const queueSweep = async (reason: 'interval' | 'manual') => {
+    try {
+      await enqueueCoOwnOrderExpirySweepJob(reason);
+    } catch (error) {
+      app.log.error({ err: error, reason }, 'Failed to enqueue Co-Own order expiry sweep job');
+    }
+  };
+
+  void queueSweep('interval');
+
+  coOwnOrderExpirySweepTimer = setInterval(() => {
+    void queueSweep('interval');
+  }, config.coOwnOrderExpirySweepIntervalMs);
+
+  coOwnOrderExpirySweepTimer.unref?.();
+}
+
+function stopCoOwnOrderExpirySweepScheduler(): void {
+  if (!coOwnOrderExpirySweepTimer) {
+    return;
+  }
+
+  clearInterval(coOwnOrderExpirySweepTimer);
+  coOwnOrderExpirySweepTimer = null;
+}
+
+function startCoOwnAlertEvaluatorScheduler(): void {
+  if (coOwnAlertEvaluatorTimer) {
+    return;
+  }
+
+  const queueEval = async (reason: 'interval' | 'manual') => {
+    try {
+      await enqueueCoOwnAlertEvaluatorJob(reason);
+    } catch (error) {
+      app.log.error({ err: error, reason }, 'Failed to enqueue Co-Own alert evaluator job');
+    }
+  };
+
+  void queueEval('interval');
+
+  coOwnAlertEvaluatorTimer = setInterval(() => {
+    void queueEval('interval');
+  }, config.coOwnAlertEvaluatorIntervalMs);
+
+  coOwnAlertEvaluatorTimer.unref?.();
+}
+
+function stopCoOwnAlertEvaluatorScheduler(): void {
+  if (!coOwnAlertEvaluatorTimer) {
+    return;
+  }
+
+  clearInterval(coOwnAlertEvaluatorTimer);
+  coOwnAlertEvaluatorTimer = null;
+}
+
+function startCoOwnDripExecutionScheduler(): void {
+  if (coOwnDripExecutionTimer) {
+    return;
+  }
+
+  const queueDrip = async (reason: 'interval' | 'manual') => {
+    try {
+      await enqueueCoOwnDripExecutionJob(reason);
+    } catch (error) {
+      app.log.error({ err: error, reason }, 'Failed to enqueue Co-Own DRIP execution job');
+    }
+  };
+
+  void queueDrip('interval');
+
+  coOwnDripExecutionTimer = setInterval(() => {
+    void queueDrip('interval');
+  }, config.coOwnDripExecutionIntervalMs);
+
+  coOwnDripExecutionTimer.unref?.();
+}
+
+function stopCoOwnDripExecutionScheduler(): void {
+  if (!coOwnDripExecutionTimer) {
+    return;
+  }
+
+  clearInterval(coOwnDripExecutionTimer);
+  coOwnDripExecutionTimer = null;
 }
 
 let onezeReconcileTimer: NodeJS.Timeout | null = null;
@@ -11854,6 +11957,19 @@ app.post('/ops/auctions/sweep', async (request, reply) => {
   };
 });
 
+app.post('/ops/co-own/order-expiry/sweep', async (request, reply) => {
+  const securityAdminError = ensureSecurityAdminAccess(request, reply);
+  if (securityAdminError) {
+    return securityAdminError;
+  }
+
+  await enqueueCoOwnOrderExpirySweepJob('manual');
+  return {
+    ok: true,
+    queued: true,
+  };
+});
+
 app.post('/ops/reconciliation/run', async (request, reply) => {
   const securityAdminError = ensureSecurityAdminAccess(request, reply);
   if (securityAdminError) {
@@ -13122,6 +13238,9 @@ registerCoOwnRoutes({
   ensureLedgerAccount,
   appendLedgerEntry,
 });
+
+// Co-Own market depth & trade tape (public read endpoints).
+void app.register(coOwnDepthRoutes);
 
 registerSellerRoutes({ app, db, readDb });
 
@@ -22105,6 +22224,7 @@ app.get('/wallet/1ze/:userId/position', async (request, reply) => {
         SELECT COALESCE(SUM(reserved_1ze_units), 0)::text AS reserved_1ze_units
         FROM coown_order_reservations
         WHERE user_id = $1 AND status IN ('active', 'placed')
+          AND (expires_at IS NULL OR expires_at > NOW())
       `,
       [userId]
     ),
@@ -34109,6 +34229,7 @@ app.get('/users/:userId/co-own/holdings', async (request, reply) => {
               AND o.user_id <> h.user_id
               AND o.status IN ('open', 'partially_filled')
               AND o.remaining_units > 0
+              AND (o.expires_at IS NULL OR o.expires_at > NOW())
           ) priced
         ) depth
       ) sale ON TRUE
@@ -34150,6 +34271,15 @@ const start = async () => {
         handlePushJob: processPushQueueJob,
         handleAuctionSweepJob: async ({ reason }) => {
           await sweepExpiredAuctions(reason);
+        },
+        handleCoOwnOrderExpirySweepJob: async ({ reason }) => {
+          await sweepExpiredCoOwnOrders(reason);
+        },
+        handleCoOwnAlertEvaluatorJob: async ({ reason }) => {
+          await evaluateCoOwnPriceAlerts(reason);
+        },
+        handleCoOwnDripExecutionJob: async ({ reason }) => {
+          await processCoOwnDripReinvestment(reason);
         },
         handleReconciliationJob: async ({ reason, runDate }) => {
           await runPlatformReconciliation(reason, runDate);
@@ -34238,6 +34368,9 @@ const start = async () => {
     }
 
     startAuctionSweepScheduler();
+    startCoOwnOrderExpirySweepScheduler();
+    startCoOwnAlertEvaluatorScheduler();
+    startCoOwnDripExecutionScheduler();
     startDomainOutboxScheduler();
     startRetentionSweepScheduler();
     startAnalyticsAggregationScheduler();
@@ -36123,6 +36256,9 @@ const shutdown = async () => {
   isShuttingDown = true;
 
   stopAuctionSweepScheduler();
+  stopCoOwnOrderExpirySweepScheduler();
+  stopCoOwnAlertEvaluatorScheduler();
+  stopCoOwnDripExecutionScheduler();
   stopDomainOutboxScheduler();
   stopRetentionSweepScheduler();
   stopAnalyticsAggregationScheduler();

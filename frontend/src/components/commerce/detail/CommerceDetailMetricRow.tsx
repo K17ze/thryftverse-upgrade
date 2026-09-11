@@ -21,6 +21,9 @@ export interface CommerceDetailMetricRowProps {
   /** When true, the value renders in the muted text colour (used for
    * unavailable facts). */
   muted?: boolean;
+  /** Optional explicit value colour override (e.g. financial direction
+   * tokens coownUp/coownDown). Takes precedence over `muted`. */
+  valueColor?: string;
   /** Optional trailing glyph (e.g. info icon). */
   trailing?: React.ReactNode;
   /** Optional sub-label under the value (e.g. "per unit"). */
@@ -45,6 +48,7 @@ export function CommerceDetailMetricRow({
   label,
   value,
   muted = false,
+  valueColor,
   trailing,
   subLabel,
   emphasis = false,
@@ -75,7 +79,7 @@ export function CommerceDetailMetricRow({
             style={[
               styles.value,
               emphasis && (large ? styles.valueLarge : styles.valueEmphasis),
-              { color: muted ? colors.textMuted : colors.textPrimary },
+              { color: valueColor ?? (muted ? colors.textMuted : colors.textPrimary) },
             ]}
             numberOfLines={2}
           >

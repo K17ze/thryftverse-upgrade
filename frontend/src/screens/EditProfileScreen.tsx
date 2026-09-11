@@ -314,6 +314,8 @@ export default function EditProfileScreen() {
           onEditAvatar={() => void pickAvatar()}
           isUploadingCover={cover.status === 'uploading'}
           isUploadingAvatar={avatar.status === 'uploading'}
+          coverUploadProgress={cover.progress}
+          avatarUploadProgress={avatar.progress}
           hasCoverError={cover.status === 'failed'}
           hasAvatarError={avatar.status === 'failed'}
         />

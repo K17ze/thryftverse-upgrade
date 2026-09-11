@@ -15,7 +15,6 @@
 import React from 'react';
 import { Text as RNText, StyleProp, TextStyle } from 'react-native';
 import { Numeric, FontFamily } from '../../theme/designTokens';
-import { DIRECTION_COLORS } from '../../constants/colors';
 import { useAppTheme } from '../../theme/ThemeContext';
 
 export type CoOwnNumericUnit = '1ZE' | 'units' | 'pct' | 'bps' | string;
@@ -46,24 +45,39 @@ export interface CoOwnNumericTextProps {
   locale?: string;
   style?: StyleProp<TextStyle>;
   numberOfLines?: number;
+  /**
+   * Caps the maximum font scale factor applied by the OS text-size
+   * accessibility setting.  Critical financial totals should leave this
+   * unset (or set a generous value) so the value remains readable at
+   * large text sizes — the component wraps to multiple lines rather
+   * than truncating (U62).
+   */
+  maxFontSizeMultiplier?: number;
   accessibilityLabel?: string;
 }
 
 /** True minus sign U+2212, not hyphen. */
 const MINUS = '\u2212';
 
-/** Direction glyphs — always paired with colour, never colour alone. */
+/** Direction glyphs — always paired with colour, never colour alone.
+ *  Up = ▲, Down = ▼, Flat = ▬ (U+25AC BLACK RECTANGLE).  Flat uses a
+ *  neutral bar rather than a minus sign so it cannot be confused with
+ *  a negative value (U64 — direction must not depend on colour alone). */
 const GLYPH: Record<CoOwnNumericDirection, string> = {
   up: '\u25B2',   // ▲
   down: '\u25BC', // ▼
-  flat: '\u2212', // −
+  flat: '\u25AC', // ▬
 };
 
-/** Map direction to DIRECTION_COLORS. */
-const DIRECTION_COLOR: Record<CoOwnNumericDirection, string> = {
-  up: DIRECTION_COLORS.up,
-  down: DIRECTION_COLORS.down,
-  flat: DIRECTION_COLORS.flat,
+/** Map direction to theme financial tokens — resolved per theme inside
+ * the component so dark mode gets readable values (F28). */
+const resolveDirectionColor = (
+  direction: CoOwnNumericDirection,
+  colors: { coownUp: string; coownDown: string; textMuted: string },
+): string => {
+  if (direction === 'up') return colors.coownUp;
+  if (direction === 'down') return colors.coownDown;
+  return colors.textMuted;
 };
 
 /** Default precision per unit. */
@@ -111,6 +125,7 @@ export const CoOwnNumericText: React.FC<CoOwnNumericTextProps> = ({
   locale = 'en-GB',
   style,
   numberOfLines,
+  maxFontSizeMultiplier,
   accessibilityLabel,
 }) => {
   const { colors } = useAppTheme();
@@ -119,7 +134,7 @@ export const CoOwnNumericText: React.FC<CoOwnNumericTextProps> = ({
 
   // Determine text colour
   const resolvedColor = color
-    ?? (direction ? DIRECTION_COLOR[direction] : colors.textPrimary);
+    ?? (direction ? resolveDirectionColor(direction, colors) : colors.textPrimary);
 
   // Determine whether to show glyph
   const shouldShowGlyph = showGlyph ?? (direction !== undefined);
@@ -131,7 +146,7 @@ export const CoOwnNumericText: React.FC<CoOwnNumericTextProps> = ({
   const text = `${glyph}${valueStr}${unitSuffix}`;
 
   // Build accessibility label with full words
-  const a11yDir = direction === 'up' ? 'up ' : direction === 'down' ? 'down ' : '';
+  const a11yDir = direction === 'up' ? 'up ' : direction === 'down' ? 'down ' : direction === 'flat' ? 'flat ' : '';
   const a11yLabel = accessibilityLabel ?? `${a11yDir}${valueStr}${unitSuffix}`;
 
   // Map Numeric weight to FontFamily
@@ -155,9 +170,14 @@ export const CoOwnNumericText: React.FC<CoOwnNumericTextProps> = ({
           color: resolvedColor,
           textAlign: align,
         },
+        // Re-assert tabular-nums after consumer style so a style override
+        // can never accidentally revert to proportional figures (U61 —
+        // no digit-driven layout jumps).
+        { fontVariant: ['tabular-nums'] },
         style,
       ]}
       numberOfLines={numberOfLines}
+      maxFontSizeMultiplier={maxFontSizeMultiplier}
       accessibilityLabel={a11yLabel}
       accessible
     >

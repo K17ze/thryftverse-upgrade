@@ -18,8 +18,10 @@ import {
   CommerceDetailTransactionSurface,
   CommerceDetailUnavailableInline,
 } from '../../commerce/detail';
-import { CoOwnOrderBook } from '../';
+import { CoOwnOrderBook, CoOwnDepthChart } from '../';
 import type { AssetLifecycleState } from './types';
+
+type OrderBookView = 'ladder' | 'depth' | 'tape';
 
 export interface AssetMarketSectionProps {
   asset: MarketCoOwnAsset;
@@ -83,6 +85,7 @@ export function AssetMarketSection({
   const [executions, setExecutions] = React.useState<MarketCoOwnExecution[] | null>(null);
   const [executionsLoading, setExecutionsLoading] = React.useState(true);
   const [executionsFailed, setExecutionsFailed] = React.useState(false);
+  const [orderBookView, setOrderBookView] = React.useState<OrderBookView>('ladder');
 
   const loadExecutions = React.useCallback(() => {
     let cancelled = false;
@@ -154,6 +157,29 @@ export function AssetMarketSection({
       orderCount: a.orderCount,
     })) ?? []
   ), [orderBook?.asks]);
+
+  // ── Cumulative depth for the depth chart view ──
+  // Bids sorted descending (best bid first), asks sorted ascending (best
+  // ask first). Cumulative units accumulate from the best price outward.
+  const depthBids = React.useMemo(() => {
+    let cumulative = 0;
+    return mappedBids.map((b) => {
+      cumulative += b.size;
+      return { price: b.price, cumulativeUnits: cumulative, orderCount: b.orderCount ?? 1 };
+    });
+  }, [mappedBids]);
+
+  const depthAsks = React.useMemo(() => {
+    let cumulative = 0;
+    return mappedAsks.map((a) => {
+      cumulative += a.size;
+      return { price: a.price, cumulativeUnits: cumulative, orderCount: a.orderCount ?? 1 };
+    });
+  }, [mappedAsks]);
+
+  const midPrice = bestBid && bestAsk
+    ? (bestBid.unitPriceGbp + bestAsk.unitPriceGbp) / 2
+    : null;
 
   // Reference vs execution price semantics (spec 03_COOWN §2)
   const lastExecutionPriceGbp = asset.marketSnapshot?.lastExecutionPriceGbp ?? null;
@@ -351,202 +377,239 @@ export function AssetMarketSection({
         </CommerceDetailSection>
       ) : null}
 
-      {/* ── 3. Live Order Book Ladder ── */}
-      <CommerceDetailSection label="Market depth">
-        <View style={styles.sectionHeaderRow}>
-          <View style={styles.depthStatusRow}>
-            <View
-              style={[
-                styles.liveIndicatorDot,
-                {
-                  backgroundColor: isSecondaryMarket && marketDataStale
-                    ? colors.warning
-                    : orderBookStreaming
-                      ? colors.success
-                      : colors.textMuted,
-                },
-              ]}
-            />
-            <Text style={[styles.depthStatusText, { color: colors.textSecondary }]}>
-              {depthStatus}
-            </Text>
-          </View>
-
-          {/* Price alert action */}
-          <Pressable
-            onPress={onOpenPriceAlert}
-            hitSlop={8}
-            style={({ pressed }) => [styles.alertActionBtn, pressed && { opacity: 0.7 }]}
-            accessibilityRole="button"
-            accessibilityLabel="Set price alert"
-          >
-            <Ionicons name="notifications-outline" size={14} color={colors.brand} />
-            <Text style={[styles.alertActionText, { color: colors.brand }]}>Alert</Text>
-          </Pressable>
-        </View>
-
-        {orderBookError || (orderBook != null && !orderBookIsLive) ? (
-          <View style={styles.depthNoticeBlock}>
-            <Text style={[styles.depthNoticeTitle, { color: colors.textPrimary }]}>Live market unavailable</Text>
-            <Text style={[styles.depthNoticeBody, { color: colors.textSecondary }]}>
-              {orderBookError ? 'Could not synchronize live market depth.' : 'This view is not backed by a live market snapshot.'}
-            </Text>
-            <Pressable
-              onPress={onRetryOrderBook}
-              hitSlop={8}
-              style={({ pressed }) => [styles.retryLink, pressed && { opacity: 0.7 }]}
-              accessibilityRole="button"
-              accessibilityLabel="Retry order book"
-            >
-              <Text style={[styles.retryLinkText, { color: colors.brand }]}>Retry</Text>
-            </Pressable>
-          </View>
-        ) : isSecondaryMarket && marketDataStale ? (
-          <View style={styles.depthNoticeBlock}>
-            <Text style={[styles.depthNoticeTitle, { color: colors.textPrimary }]}>Market data is stale</Text>
-            <Text style={[styles.depthNoticeBody, { color: colors.textSecondary }]}>
-              {marketDataAgeLabel
-                ? `Last verified source: ${marketDataAgeLabel}. Trading paused until a fresh snapshot arrives.`
-                : 'Trading paused until a fresh market snapshot arrives.'}
-            </Text>
-            <Pressable
-              onPress={onRetryOrderBook}
-              hitSlop={8}
-              style={({ pressed }) => [styles.retryLink, pressed && { opacity: 0.7 }]}
-              accessibilityRole="button"
-              accessibilityLabel="Refresh market data"
-            >
-              <Text style={[styles.retryLinkText, { color: colors.brand }]}>Refresh</Text>
-            </Pressable>
-          </View>
-        ) : isMarketOpen && hasBidsOrAsks ? (
-          <View style={styles.orderBookWrapper}>
-            {/* Top-of-book quote strip — best bid/ask with resting size and
-                the spread between them. Summarizes the ladder below the way
-                broker quote headers do. */}
-            <View style={styles.topOfBookRow}>
-              <View style={styles.tobCell}>
-                <Text style={[styles.tobLabel, { color: colors.textMuted }]}>Bid</Text>
-                <Text style={[styles.tobPrice, { color: colors.coownUp }]}>
-                  {bestBid ? formatCoOwnIze(bestBid.unitPriceGbp) : '—'}
-                </Text>
-                <Text style={[styles.tobSize, { color: colors.textMuted }]}>
-                  {bestBid ? `${bestBid.units}u` : '—'}
-                </Text>
-              </View>
-              <View style={styles.tobSpreadCell}>
-                <Text style={[styles.tobSpreadValue, { color: colors.textSecondary }]} numberOfLines={1}>
-                  {spreadGbp != null ? formatCoOwnIze(spreadGbp) : '—'}
-                </Text>
-                <Text style={[styles.tobSpreadLabel, { color: colors.textMuted }]}>spread</Text>
-              </View>
-              <View style={[styles.tobCell, styles.tobCellRight]}>
-                <Text style={[styles.tobLabel, { color: colors.textMuted }]}>Ask</Text>
-                <Text style={[styles.tobPrice, { color: colors.coownDown }]}>
-                  {bestAsk ? formatCoOwnIze(bestAsk.unitPriceGbp) : '—'}
-                </Text>
-                <Text style={[styles.tobSize, { color: colors.textMuted }]}>
-                  {bestAsk ? `${bestAsk.units}u` : '—'}
-                </Text>
-              </View>
-            </View>
-            <CoOwnOrderBook
-              bids={mappedBids}
-              asks={mappedAsks}
-              mode={lifecycleState === 'secondaryTrading' ? 'continuous' : 'call_auction'}
-              onSelectLevel={onSelectOrderBookLevel}
-              embedded
-            />
-          </View>
-        ) : orderBook == null && !orderBookError && isMarketOpen ? (
-          // First snapshot still in flight — loading, not empty. A live
-          // book with zero levels arrives as a non-null snapshot with
-          // empty arrays, which falls through to the empty branch below.
-          <View style={styles.depthNoticeBlock}>
-            <Text style={[styles.depthNoticeTitle, { color: colors.textPrimary }]}>
-              Synchronizing depth…
-            </Text>
-            <Text style={[styles.depthNoticeBody, { color: colors.textSecondary }]}>
-              Waiting for the first live market snapshot.
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.depthNoticeBlock}>
-            <Text style={[styles.depthNoticeTitle, { color: colors.textPrimary }]}>
-              {lifecycleState === 'initialOffering' ? 'Primary offering' : 'No bids or asks'}
-            </Text>
-            <Text style={[styles.depthNoticeBody, { color: colors.textSecondary }]}>
-              {lifecycleState === 'initialOffering'
-                ? `Initial allocation at ${formatCoOwnIze(asset.unitPriceGbp)} per unit. Secondary trading activates once distribution closes.`
-                : 'No bids or asks on the book. Place the first limit order or buy available float directly.'}
-            </Text>
-          </View>
-        )}
-      </CommerceDetailSection>
-
-      {/* ── 3. Execution tape — last settled trades ── */}
-      {executionsLoading ? (
-        <CommerceDetailSection label="Recent executions">
-          <View style={styles.tapeLoadingRow}>
-            <ActivityIndicator size="small" color={colors.textMuted} />
-            <Text style={[styles.tapeLoadingText, { color: colors.textMuted }]}>
-              Loading recent trades…
-            </Text>
-          </View>
-        </CommerceDetailSection>
-      ) : executionsFailed ? (
-        <CommerceDetailSection label="Recent executions">
-          <CommerceDetailUnavailableInline
-            title="Executions unavailable"
-            body="Recent trades could not be loaded."
-            onRetry={loadExecutions}
+      {/* ── Status row above the card (depth status + alert) ── */}
+      <View style={styles.orderBookStatusRow}>
+        <View style={styles.depthStatusRow}>
+          <View
+            style={[
+              styles.liveIndicatorDot,
+              {
+                backgroundColor: isSecondaryMarket && marketDataStale
+                  ? colors.warning
+                  : orderBookStreaming
+                    ? colors.success
+                    : colors.textMuted,
+              },
+            ]}
           />
-        </CommerceDetailSection>
-      ) : tapeExecutions.length > 0 ? (
-        <CommerceDetailSection label="Recent executions">
-          <View>
-            {tapeExecutions.map((execution, idx) => {
-              // Uptick/downtick vs the previous settled execution — the
-              // classic tape presentation. The oldest row is neutral.
-              const prev = idx > 0 ? tapeExecutions[idx - 1] : null;
-              const tick = prev == null || execution.unitPriceGbp === prev.unitPriceGbp
-                ? 0
-                : execution.unitPriceGbp > prev.unitPriceGbp ? 1 : -1;
-              const tickColor = tick === 0
-                ? colors.textPrimary
-                : tick > 0 ? colors.coownUp : colors.coownDown;
+          <Text style={[styles.depthStatusText, { color: colors.textSecondary }]}>
+            {depthStatus}
+          </Text>
+        </View>
+        <Pressable
+          onPress={onOpenPriceAlert}
+          hitSlop={8}
+          style={({ pressed }) => [styles.alertActionBtn, pressed && { opacity: 0.7 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Set price alert"
+        >
+          <Ionicons name="notifications-outline" size={14} color={colors.brand} />
+          <Text style={[styles.alertActionText, { color: colors.brand }]}>Alert</Text>
+        </Pressable>
+      </View>
+
+      {/* ── 3. Order Book card — Ladder / Depth / Tape in one rectangle ──
+          A single card wraps all three order-flow views. The segmented
+          control lives in the card header. Contents stay flat — no nested
+          cards. Hairline border + surface fill, no shadow (flat canvas). */}
+      <View style={[styles.orderBookCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+        {/* Card header: Order Book label + Ladder/Depth/Tape segmented control */}
+        <View style={[styles.orderBookCardHeader, { borderBottomColor: colors.borderSubtle }]}>
+          <Text
+            style={[styles.orderBookCardTitle, { color: colors.textPrimary }]}
+            accessibilityRole="header"
+          >
+            Order Book
+          </Text>
+          <View style={styles.orderBookTabs}>
+            {(['ladder', 'depth', 'tape'] as const).map((view) => {
+              const isActive = orderBookView === view;
               return (
-                <View
-                  key={execution.id}
-                  style={[styles.tapeRow, idx > 0 && { borderTopColor: colors.borderSubtle }]}
+                <Pressable
+                  key={view}
+                  onPress={() => setOrderBookView(view)}
+                  hitSlop={4}
+                  style={styles.orderBookTab}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Order book view: ${view}`}
+                  accessibilityState={{ selected: isActive }}
                 >
-                  <Text style={[styles.tapeTime, { color: colors.textMuted }]}>
-                    {new Date(execution.executedAt).toLocaleTimeString('en-GB', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
+                  <Text
+                    style={[
+                      styles.orderBookTabText,
+                      { color: isActive ? colors.textPrimary : colors.textSecondary },
+                      isActive && { fontFamily: FontFamily.semibold },
+                    ]}
+                  >
+                    {view === 'ladder' ? 'Ladder' : view === 'depth' ? 'Depth' : 'Tape'}
                   </Text>
-                  <Text style={[styles.tapePrice, { color: tickColor }]}>
-                    {tick > 0 ? '▲ ' : tick < 0 ? '▼ ' : ''}
-                    {formatCoOwnIze(execution.unitPriceGbp)}
-                  </Text>
-                  <Text style={[styles.tapeUnits, { color: colors.textSecondary }]}>
-                    {execution.units} units
-                  </Text>
-                </View>
+                  {isActive && <View style={[styles.orderBookTabUnderline, { backgroundColor: colors.brand }]} />}
+                </Pressable>
               );
             })}
           </View>
-        </CommerceDetailSection>
-      ) : (
-        <CommerceDetailSection label="Recent executions">
-          <View style={styles.noTradesBox}>
-            <Text style={[styles.noTradesText, { color: colors.textMuted }]}>
-              No trades yet
-            </Text>
-          </View>
-        </CommerceDetailSection>
-      )}
+        </View>
+
+        {/* Card content — flat, no nested cards.
+            The Tape view is independent of the order book state (it shows
+            settled executions, not resting liquidity). Ladder and Depth
+            are subject to the order book error/stale/sync/empty states. */}
+        <View style={styles.orderBookCardContent}>
+          {orderBookView === 'tape' ? (
+            executionsLoading ? (
+              <View style={styles.tapeLoadingRow}>
+                <ActivityIndicator size="small" color={colors.textMuted} />
+                <Text style={[styles.tapeLoadingText, { color: colors.textMuted }]}>
+                  Loading recent trades…
+                </Text>
+              </View>
+            ) : executionsFailed ? (
+              <CommerceDetailUnavailableInline
+                title="Executions unavailable"
+                body="Recent trades could not be loaded."
+                onRetry={loadExecutions}
+              />
+            ) : tapeExecutions.length > 0 ? (
+              <View>
+                {tapeExecutions.map((execution, idx) => {
+                  const prev = idx > 0 ? tapeExecutions[idx - 1] : null;
+                  const tick = prev == null || execution.unitPriceGbp === prev.unitPriceGbp
+                    ? 0
+                    : execution.unitPriceGbp > prev.unitPriceGbp ? 1 : -1;
+                  const tickColor = tick === 0
+                    ? colors.textPrimary
+                    : tick > 0 ? colors.coownUp : colors.coownDown;
+                  return (
+                    <View
+                      key={execution.id}
+                      style={[styles.tapeRow, idx > 0 && { borderTopColor: colors.borderSubtle }]}
+                    >
+                      <Text style={[styles.tapeTime, { color: colors.textMuted }]}>
+                        {new Date(execution.executedAt).toLocaleTimeString('en-GB', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </Text>
+                      <Text style={[styles.tapePrice, { color: tickColor }]}>
+                        {tick > 0 ? '▲ ' : tick < 0 ? '▼ ' : ''}
+                        {formatCoOwnIze(execution.unitPriceGbp)}
+                      </Text>
+                      <Text style={[styles.tapeUnits, { color: colors.textSecondary }]}>
+                        {execution.units} units
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : (
+              <Text style={[styles.noTradesText, { color: colors.textMuted }]}>
+                No trades yet
+              </Text>
+            )
+          ) : orderBookError || (orderBook != null && !orderBookIsLive) ? (
+            <View style={styles.depthNoticeBlock}>
+              <Text style={[styles.depthNoticeTitle, { color: colors.textPrimary }]}>Live market unavailable</Text>
+              <Text style={[styles.depthNoticeBody, { color: colors.textSecondary }]}>
+                {orderBookError ? 'Could not synchronize live market depth.' : 'This view is not backed by a live market snapshot.'}
+              </Text>
+              <Pressable
+                onPress={onRetryOrderBook}
+                hitSlop={8}
+                style={({ pressed }) => [styles.retryLink, pressed && { opacity: 0.7 }]}
+                accessibilityRole="button"
+                accessibilityLabel="Retry order book"
+              >
+                <Text style={[styles.retryLinkText, { color: colors.brand }]}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : isSecondaryMarket && marketDataStale ? (
+            <View style={styles.depthNoticeBlock}>
+              <Text style={[styles.depthNoticeTitle, { color: colors.textPrimary }]}>Market data is stale</Text>
+              <Text style={[styles.depthNoticeBody, { color: colors.textSecondary }]}>
+                {marketDataAgeLabel
+                  ? `Last verified source: ${marketDataAgeLabel}. Trading paused until a fresh snapshot arrives.`
+                  : 'Trading paused until a fresh market snapshot arrives.'}
+              </Text>
+              <Pressable
+                onPress={onRetryOrderBook}
+                hitSlop={8}
+                style={({ pressed }) => [styles.retryLink, pressed && { opacity: 0.7 }]}
+                accessibilityRole="button"
+                accessibilityLabel="Refresh market data"
+              >
+                <Text style={[styles.retryLinkText, { color: colors.brand }]}>Refresh</Text>
+              </Pressable>
+            </View>
+          ) : isMarketOpen && hasBidsOrAsks ? (
+            orderBookView === 'ladder' ? (
+              <View>
+                {/* Top-of-book quote strip */}
+                <View style={styles.topOfBookRow}>
+                  <View style={styles.tobCell}>
+                    <Text style={[styles.tobLabel, { color: colors.textMuted }]}>Bid</Text>
+                    <Text style={[styles.tobPrice, { color: colors.coownUp }]}>
+                      {bestBid ? formatCoOwnIze(bestBid.unitPriceGbp) : '—'}
+                    </Text>
+                    <Text style={[styles.tobSize, { color: colors.textMuted }]}>
+                      {bestBid ? `${bestBid.units}u` : '—'}
+                    </Text>
+                  </View>
+                  <View style={styles.tobSpreadCell}>
+                    <Text style={[styles.tobSpreadValue, { color: colors.textSecondary }]} numberOfLines={1}>
+                      {spreadGbp != null ? formatCoOwnIze(spreadGbp) : '—'}
+                    </Text>
+                    <Text style={[styles.tobSpreadLabel, { color: colors.textMuted }]}>spread</Text>
+                  </View>
+                  <View style={[styles.tobCell, styles.tobCellRight]}>
+                    <Text style={[styles.tobLabel, { color: colors.textMuted }]}>Ask</Text>
+                    <Text style={[styles.tobPrice, { color: colors.coownDown }]}>
+                      {bestAsk ? formatCoOwnIze(bestAsk.unitPriceGbp) : '—'}
+                    </Text>
+                    <Text style={[styles.tobSize, { color: colors.textMuted }]}>
+                      {bestAsk ? `${bestAsk.units}u` : '—'}
+                    </Text>
+                  </View>
+                </View>
+                <CoOwnOrderBook
+                  bids={mappedBids}
+                  asks={mappedAsks}
+                  mode={lifecycleState === 'secondaryTrading' ? 'continuous' : 'call_auction'}
+                  onSelectLevel={onSelectOrderBookLevel}
+                  embedded
+                />
+              </View>
+            ) : orderBookView === 'depth' ? (
+              <CoOwnDepthChart
+                bids={depthBids}
+                asks={depthAsks}
+                midPrice={midPrice}
+                lastPrice={lastExecutionPriceGbp}
+                compact
+              />
+            ) : null
+          ) : orderBook == null && !orderBookError && isMarketOpen ? (
+            <View style={styles.depthNoticeBlock}>
+              <Text style={[styles.depthNoticeTitle, { color: colors.textPrimary }]}>
+                Synchronizing depth…
+              </Text>
+              <Text style={[styles.depthNoticeBody, { color: colors.textSecondary }]}>
+                Waiting for the first live market snapshot.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.depthNoticeBlock}>
+              <Text style={[styles.depthNoticeTitle, { color: colors.textPrimary }]}>
+                {lifecycleState === 'initialOffering' ? 'Primary offering' : 'No bids or asks'}
+              </Text>
+              <Text style={[styles.depthNoticeBody, { color: colors.textSecondary }]}>
+                {lifecycleState === 'initialOffering'
+                  ? `Initial allocation at ${formatCoOwnIze(asset.unitPriceGbp)} per unit. Secondary trading activates once distribution closes.`
+                  : 'No bids or asks on the book. Place the first limit order or buy available float directly.'}
+              </Text>
+            </View>
+          )}
+        </View>
+      </View>
 
       {/* ── 4. Trading Rules — compact disclosure row ──
           Replaces the verbose 4-row icon+title+description list with a
@@ -583,6 +646,57 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: Space.sm,
+  },
+  // ── Order book card ──
+  orderBookStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Space.sm,
+  },
+  orderBookCard: {
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+  },
+  orderBookCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  orderBookCardTitle: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.semibold,
+  },
+  orderBookTabs: {
+    flexDirection: 'row',
+    gap: Space.sm,
+  },
+  orderBookTab: {
+    paddingVertical: Space.xs,
+    paddingHorizontal: Space.xs,
+    alignItems: 'center',
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  orderBookTabText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+  },
+  orderBookTabUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    left: Space.xs,
+    right: Space.xs,
+    height: 2,
+    borderRadius: 1,
+  },
+  orderBookCardContent: {
+    padding: Space.md,
   },
   depthStatusRow: {
     flexDirection: 'row',

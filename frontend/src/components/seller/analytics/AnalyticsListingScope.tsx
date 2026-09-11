@@ -12,7 +12,7 @@ export function AnalyticsListingScope({ model }: { model: SellerAnalyticsModel }
             {/* ── Product Scope Horizontal Rail ── */}
             <View style={styles.productRailWrap}>
               <Text style={[styles.productRailHeader, { color: colors.textMuted }]}>
-                Inspect individual piece analytics
+                By piece
               </Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.productRail}>
                 <Pressable

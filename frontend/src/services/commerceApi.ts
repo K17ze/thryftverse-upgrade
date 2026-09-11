@@ -769,6 +769,27 @@ export async function createBuyerProtectionClaim(
 
 /* ─── Seller Analytics ─── */
 
+/**
+ * Analytics period — either a preset ('7d' | '30d' | '90d') or a custom
+ * date range with inclusive ISO date strings (YYYY-MM-DD).
+ */
+export type AnalyticsPeriod =
+  | '7d'
+  | '30d'
+  | '90d'
+  | { startDate: string; endDate: string };
+
+/**
+ * Builds the query-string fragment for an analytics period parameter.
+ * Presets emit `period=7d`; custom ranges emit `startDate=…&endDate=…`.
+ */
+function analyticsPeriodQuery(period: AnalyticsPeriod): string {
+  if (typeof period === 'string') {
+    return `period=${period}`;
+  }
+  return `startDate=${encodeURIComponent(period.startDate)}&endDate=${encodeURIComponent(period.endDate)}`;
+}
+
 export interface SellerAnalyticsComparison {
   revenueGbpMinor: number;
   netSalesGbpMinor: number | null;
@@ -837,13 +858,9 @@ export interface SellerAnalytics {
 
 export async function fetchSellerAnalytics(
   sellerId: string,
-  period: '7d' | '30d' | '90d' = '30d',
-  options?: { offsetDays?: number }
+  period: AnalyticsPeriod = '30d'
 ): Promise<SellerAnalytics> {
-  const offsetDays = options?.offsetDays ?? 0;
-  const qs = offsetDays > 0
-    ? `period=${period}&offsetDays=${offsetDays}`
-    : `period=${period}`;
+  const qs = analyticsPeriodQuery(period);
   const payload = await fetchJson<{ ok: true; analytics: SellerAnalytics }>(
     `/sellers/${encodeURIComponent(sellerId)}/analytics?${qs}`
   );
@@ -865,10 +882,11 @@ export interface TopPerformerListing {
 export async function fetchTopPerformers(
   sellerId: string,
   limit: number = 10,
-  period: '7d' | '30d' | '90d' = '30d'
+  period: AnalyticsPeriod = '30d'
 ): Promise<TopPerformerListing[]> {
+  const qs = analyticsPeriodQuery(period);
   const payload = await fetchJson<{ ok: true; items: TopPerformerListing[] }>(
-    `/sellers/${encodeURIComponent(sellerId)}/analytics/top-performers?limit=${limit}&period=${period}`
+    `/sellers/${encodeURIComponent(sellerId)}/analytics/top-performers?limit=${limit}&${qs}`
   );
   return payload.items;
 }
@@ -892,10 +910,11 @@ export interface NeedsAttentionListing {
 export async function fetchNeedsAttention(
   sellerId: string,
   limit: number = 5,
-  period: '7d' | '30d' | '90d' = '30d'
+  period: AnalyticsPeriod = '30d'
 ): Promise<NeedsAttentionListing[]> {
+  const qs = analyticsPeriodQuery(period);
   const payload = await fetchJson<{ ok: true; items: NeedsAttentionListing[] }>(
-    `/sellers/${encodeURIComponent(sellerId)}/analytics/attention?limit=${limit}&period=${period}`
+    `/sellers/${encodeURIComponent(sellerId)}/analytics/attention?limit=${limit}&${qs}`
   );
   return payload.items;
 }
@@ -913,10 +932,11 @@ export interface DailyBreakdownPoint {
 
 export async function fetchDailyBreakdown(
   sellerId: string,
-  period: '7d' | '30d' | '90d' = '30d'
+  period: AnalyticsPeriod = '30d'
 ): Promise<DailyBreakdownPoint[]> {
+  const qs = analyticsPeriodQuery(period);
   const payload = await fetchJson<{ ok: true; days: DailyBreakdownPoint[] }>(
-    `/sellers/${encodeURIComponent(sellerId)}/analytics/daily?period=${period}`
+    `/sellers/${encodeURIComponent(sellerId)}/analytics/daily?${qs}`
   );
   return payload.days;
 }
@@ -966,10 +986,11 @@ export interface ListingAnalyticsData {
 export async function fetchListingAnalytics(
   sellerId: string,
   listingId: string,
-  period: '7d' | '30d' | '90d' = '30d'
+  period: AnalyticsPeriod = '30d'
 ): Promise<ListingAnalyticsData> {
+  const qs = analyticsPeriodQuery(period);
   const payload = await fetchJson<{ ok: true; analytics: ListingAnalyticsData }>(
-    `/sellers/${encodeURIComponent(sellerId)}/analytics/listing/${encodeURIComponent(listingId)}?period=${period}`
+    `/sellers/${encodeURIComponent(sellerId)}/analytics/listing/${encodeURIComponent(listingId)}?${qs}`
   );
   return payload.analytics;
 }

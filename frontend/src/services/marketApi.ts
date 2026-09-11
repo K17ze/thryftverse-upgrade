@@ -350,6 +350,26 @@ export interface MarketCoOwnAsset {
   activeVerificationDemands?: number;
   /** Backend-authoritative proportional trading fee. */
   tradingFeeRate?: number;
+  /** Wave 10/11: ISO date when the position lockup / holding period
+   * ends. Null when no lockup applies. */
+  lockupEndDate?: string | null;
+  /** Wave 10/11: Duration of the lockup period in months. Null when
+   * no lockup applies. */
+  lockupMonths?: number | null;
+  /** Wave 10/11: Fee schedule for the asset. Null when not published. */
+  feeSchedule?: {
+    managementFeePct: number | null;
+    performanceFeePct: number | null;
+    platformFeePct: number | null;
+    sourcingFeeGbp: number | null;
+  } | null;
+  /** Wave 10/11: Active buyout offer on the asset. Null when no offer
+   * is active. */
+  activeBuyoutOffer?: {
+    priceGbp: number;
+    premiumPct: number | null;
+    expiry: string | null;
+  } | null;
 }
 
 /** Trust-profile audit event (WS1, SEC Rule 17Ad-7 pattern). */
@@ -474,6 +494,9 @@ export interface MarketCoOwnOrder {
   feeGbp: number;
   totalGbp: number;
   status: 'open' | 'partially_filled' | 'filled' | 'cancelled' | 'rejected';
+  timeInForce?: 'GFD' | 'GTC90';
+  expiresAt?: string | null;
+  cancelReason?: 'user' | 'expired' | 'rejected' | 'system' | null;
   createdAt: string;
   updatedAt?: string;
 }
@@ -487,6 +510,10 @@ export interface MarketCoOwnBuyoutOffer {
   acceptedUnits: number;
   status: string;
   expiresAt: string;
+  /** U45: offer metadata. Carries the client-supplied idempotency key so a
+   * lost create response can be resolved by matching against existing
+   * offers. Optional for backward compatibility. */
+  metadata?: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -692,6 +719,13 @@ interface ListCoOwnAssetsOptions {
   openOnly?: boolean;
   issuerId?: string;
   limit?: number;
+  /** U03: Server-side search query. When the backend supports it, this
+   * filters assets server-side so the catalogue search is not limited to
+   * the first 120 fetched items. The backend may ignore unsupported params. */
+  search?: string;
+  /** U03: Cursor for pagination. When the backend supports it, this
+   * fetches the next page of results. Absent means first page. */
+  cursor?: string;
 }
 
 interface ListCoOwnAssetOrdersOptions {
@@ -732,6 +766,9 @@ interface CreateCoOwnBuyoutOfferInput {
   offerPriceGbp: number;
   targetUnits?: number;
   expiresInHours?: number;
+  /** U45: Client-supplied idempotency key. Stored in offer metadata so a
+   * lost response can be resolved by listing offers and matching the key. */
+  idempotencyKey?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -1623,6 +1660,8 @@ export async function listCoOwnAssets(
     openOnly: options.openOnly,
     issuerId: options.issuerId,
     limit: options.limit,
+    search: options.search,
+    cursor: options.cursor,
   });
   try {
     const payload = await fetchJson<ListCoOwnAssetsResponse>(`/co-own/assets${query}`);
@@ -1828,6 +1867,61 @@ export async function fetchCoOwnOrderBook(
     warnIfMockSuppressed('getCoOwnOrderBook', err);
     throw err;
   }
+}
+
+// ── Cumulative depth chart (broker-grade depth visualization) ──
+// Returns cumulative bid/ask depth for the depth-chart component.
+// Mirrors the backend GET /co-own/assets/:assetId/depth contract.
+
+export interface CoOwnDepthLevel {
+  price: number;
+  cumulativeUnits: number;
+  orderCount: number;
+}
+
+export interface CoOwnDepthSnapshot {
+  ok: true;
+  assetId: string;
+  bids: CoOwnDepthLevel[];   // sorted descending by price (best bid first)
+  asks: CoOwnDepthLevel[];   // sorted ascending by price (best ask first)
+  spreadGbp: number | null;
+  midPriceGbp: number | null;
+  lastPriceGbp: number | null;
+  timestamp: string;
+}
+
+export async function fetchCoOwnDepth(assetId: string): Promise<CoOwnDepthSnapshot> {
+  return fetchJson<CoOwnDepthSnapshot>(
+    `/co-own/assets/${encodeURIComponent(assetId)}/depth`
+  );
+}
+
+// ── Time & Sales tape (recent settled trades) ──
+// Mirrors the backend GET /co-own/assets/:assetId/trades contract.
+
+export interface CoOwnTradeTapeEntry {
+  id: number;
+  priceGbp: number;
+  units: number;
+  side: 'buy' | 'sell';   // taker side
+  timestamp: string;      // ISO
+}
+
+export interface CoOwnTradeTapeResponse {
+  ok: true;
+  assetId: string;
+  trades: CoOwnTradeTapeEntry[];
+  nextCursor: string | null;
+}
+
+export async function fetchCoOwnTradeTape(
+  assetId: string,
+  options: { limit?: number; cursor?: string } = {}
+): Promise<CoOwnTradeTapeResponse> {
+  const query = toQuery({ limit: options.limit, cursor: options.cursor });
+  return fetchJson<CoOwnTradeTapeResponse>(
+    `/co-own/assets/${encodeURIComponent(assetId)}/trades${query}`
+  );
 }
 
 export async function placeCoOwnOrder(
@@ -2178,6 +2272,70 @@ export async function createCoOwnBuyoutOffer(
   );
 }
 
+// U46: List buyout offers for an asset. Holders use this to discover and
+// respond to active offers. The backend GET endpoint returns all offers
+// (optionally filtered by status); the frontend filters to 'open' for the
+// holder-review surface.
+interface ListCoOwnBuyoutOffersResponse {
+  ok: true;
+  items: MarketCoOwnBuyoutOffer[];
+}
+
+export async function listCoOwnBuyoutOffers(
+  assetId: string,
+  options: { status?: string; limit?: number } = {}
+): Promise<MarketCoOwnBuyoutOffer[]> {
+  const query = toQuery({
+    status: options.status,
+    limit: options.limit,
+  });
+  const payload = await fetchJson<ListCoOwnBuyoutOffersResponse>(
+    `/co-own/assets/${encodeURIComponent(assetId)}/buyout-offers${query}`
+  );
+  return payload.items;
+}
+
+// U46: Accept a buyout offer (holder response). The holder commits a number
+// of their units to the bidder at the offer price. The backend records the
+// acceptance and updates the offer's accepted_units; the offer remains
+// 'open' until filled (U47).
+interface AcceptCoOwnBuyoutOfferResponse {
+  ok: true;
+  offerId: string;
+  assetId: string;
+  offer: {
+    id: string;
+    bidderUserId: string;
+    offerPriceGbp: number;
+    targetUnits: number;
+    acceptedUnits: number;
+    status: string;
+    expiresAt: string;
+  };
+  accepted: {
+    holderUserId: string;
+    units: number;
+  };
+  aml?: {
+    alertId: string;
+    status: string;
+  } | null;
+}
+
+export async function acceptCoOwnBuyoutOffer(
+  offerId: string,
+  input: { holderUserId: string; units: number; metadata?: Record<string, unknown> }
+): Promise<AcceptCoOwnBuyoutOfferResponse> {
+  return fetchJson<AcceptCoOwnBuyoutOfferResponse>(
+    `/co-own/buyout-offers/${encodeURIComponent(offerId)}/accept`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }
+  );
+}
+
 export async function listCoOwnAssetOrders(
   assetId: string,
   options: ListCoOwnAssetOrdersOptions = {}
@@ -2519,6 +2677,13 @@ export interface CoOwnDistribution {
   reference: string | null;
   createdAt: string;
   settledAt: string | null;
+  /** Wave 10/11: Projected payable date (ISO). Null when not yet
+   * projected. */
+  projectedPayableDate?: string | null;
+  /** Wave 10/11: Record date (ISO). Null when not applicable. */
+  recordDate?: string | null;
+  /** Wave 10/11: Ex-date (ISO). Null when not applicable. */
+  exDate?: string | null;
 }
 
 interface ListDistributionsResponse {
@@ -2555,6 +2720,14 @@ export interface CoOwnCorporateAction {
   status: string;
   metadata: Record<string, unknown> | null;
   createdAt: string;
+  /** Wave 10/11: Minimum units required for quorum. Null when not
+   * applicable. */
+  quorumUnits?: number | null;
+  /** Wave 10/11: Pass threshold as a percentage. Null when not
+   * applicable. */
+  passThresholdPct?: number | null;
+  /** Wave 10/11: Voting deadline (ISO date). Null when not applicable. */
+  votingDeadline?: string | null;
 }
 
 interface ListCorporateActionsResponse {
@@ -2722,9 +2895,14 @@ export interface PriceCandle {
 
 export async function fetchCoOwnPriceHistory(
   assetId: string,
-  options: { interval?: '1h' | '4h' | '1d' | '1w'; limit?: number } = {}
+  options: {
+    interval?: '1h' | '4h' | '1d' | '1w';
+    limit?: number;
+    from?: string;
+    to?: string;
+  } = {}
 ): Promise<{ interval: string; candles: PriceCandle[] }> {
-  const query = toQuery({ interval: options.interval, limit: options.limit });
+  const query = toQuery({ interval: options.interval, limit: options.limit, from: options.from, to: options.to });
   const payload = await fetchJson<{ ok: true; interval: string; candles: PriceCandle[] }>(
     `/co-own/assets/${encodeURIComponent(assetId)}/price-history${query}`
   );
@@ -2739,17 +2917,43 @@ export interface GovernanceVoteSummary {
   voteCount: number;
 }
 
+/** U48: Server-authoritative voting eligibility. The backend computes this
+ * from the corporate action's status, record date, and the authenticated
+ * user's holdings (or record-date reconstructed holdings). The frontend uses
+ * this to gate the voting form and show a reason when ineligible. */
+export interface GovernanceVoteEligibility {
+  /** Whether the authenticated user may cast a vote right now. */
+  eligible: boolean;
+  /** Human-readable reason for ineligibility (empty when eligible). */
+  reason: string;
+  /** The user's voting power at the record date (or current holdings when no
+   * record date is set). Zero when the user holds no units. */
+  votingPowerUnits: number;
+  /** The corporate action's record date (opening gate), if any. */
+  recordDate: string | null;
+  /** The corporate action's status — 'open' means voting is active. */
+  status: string;
+}
+
 export interface GovernanceVoteResult {
   summary: GovernanceVoteSummary[];
   totalVotingPower: number;
   myVote: 'for' | 'against' | 'abstain' | null;
+  /** U48: Server-authoritative eligibility. Optional for backward
+   * compatibility — older backends may omit this. */
+  eligibility?: GovernanceVoteEligibility;
 }
 
 export async function fetchGovernanceVotes(actionId: string): Promise<GovernanceVoteResult> {
   const payload = await fetchJson<{ ok: true } & GovernanceVoteResult>(
     `/co-own/corporate-actions/${encodeURIComponent(actionId)}/votes`
   );
-  return { summary: payload.summary, totalVotingPower: payload.totalVotingPower, myVote: payload.myVote };
+  return {
+    summary: payload.summary,
+    totalVotingPower: payload.totalVotingPower,
+    myVote: payload.myVote,
+    eligibility: payload.eligibility,
+  };
 }
 
 export async function castGovernanceVote(

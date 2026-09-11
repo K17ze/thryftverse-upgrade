@@ -16,6 +16,7 @@ import {
   type NeedsAttentionListing,
   type ListingAnalyticsData,
   type DailyBreakdownPoint,
+  type AnalyticsPeriod,
 } from '../../../services/commerceApi';
 import { useConnectivity } from '../../../hooks/useConnectivity';
 import { haptics } from '../../../utils/haptics';
@@ -26,9 +27,34 @@ import { useA11yAudit } from '../../../hooks/useA11yAudit';
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type SellerAnalyticsRoute = RouteProp<RootStackParamList, 'SellerAnalytics'>;
 
-export type Period = '7d' | '30d' | '90d';
+export type Period = AnalyticsPeriod;
 export type MetricDimension = 'sales' | 'orders' | 'views' | 'conversion';
 export type ChartViewMode = 'bar' | 'line';
+
+/**
+ * Custom date range validation result.
+ * Returns null when valid, or an error message describing the problem.
+ */
+export function validateCustomRange(startDate: string, endDate: string): string | null {
+  const start = new Date(startDate + 'T00:00:00.000Z');
+  const end = new Date(endDate + 'T00:00:00.000Z');
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    return 'Enter valid dates';
+  }
+  const today = new Date();
+  today.setUTCHours(23, 59, 59, 999);
+  if (start > today || end > today) {
+    return 'Dates cannot be in the future';
+  }
+  const diffDays = (end.getTime() - start.getTime()) / 86400000;
+  if (diffDays < 0) {
+    return 'Start must be before end';
+  }
+  if (diffDays > 365) {
+    return 'Range cannot exceed 365 days';
+  }
+  return null;
+}
 
 import { createAnalyticsStyles as createStyles } from './analyticsStyles';
 import { useAnalyticsInsights } from './useAnalyticsInsights';

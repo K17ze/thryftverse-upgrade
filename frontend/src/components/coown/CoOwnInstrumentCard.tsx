@@ -7,17 +7,26 @@ import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 
+/** Watch toggle status — drives the icon's pending/failed visual state.
+ * Absent means no toggle is in progress. */
+export type CoOwnWatchStatus = 'pending' | 'confirmed' | 'failed';
+
 export interface CoOwnInstrumentCardProps {
   imageUri?: string | null;
   title: string;
   categoryLabel: string;
   unitPriceLabel: string;
-  localReferenceLabel: string;
-  availabilityLabel: string;
+  /** ONE lifecycle/liquidity fact — e.g. "65% funded", "Last £85.00",
+   * "Bid £85 · Ask £90". This is the only metadata line on the card;
+   * less urgent data lives on the detail screen. */
   liquidityLabel?: string;
+  allocatedPct?: number;
   statusLabel: string;
   status: 'open' | 'closed' | 'paused';
   isWatched: boolean;
+  /** Status of the last watch toggle — 'pending' shows a dimmed icon
+   * while the server request is in flight; 'failed' shows a warning tint. */
+  watchStatus?: CoOwnWatchStatus;
   focalPoint?: { x: number; y: number };
   onPress: () => void;
   onToggleWatch: () => void;
@@ -28,12 +37,12 @@ export const CoOwnInstrumentCard = React.memo(function CoOwnInstrumentCard({
   title,
   categoryLabel,
   unitPriceLabel,
-  localReferenceLabel,
-  availabilityLabel,
   liquidityLabel,
+  allocatedPct,
   statusLabel,
   status,
   isWatched,
+  watchStatus,
   focalPoint,
   onPress,
   onToggleWatch,
@@ -46,6 +55,17 @@ export const CoOwnInstrumentCard = React.memo(function CoOwnInstrumentCard({
       ? colors.warning
       : colors.textMuted;
 
+  // Watch icon visual state — pending dims the icon, failed tints it warning.
+  const isPending = watchStatus === 'pending';
+  const isFailed = watchStatus === 'failed';
+  const watchIconColor = isPending
+    ? colors.textMuted
+    : isFailed
+      ? colors.warning
+      : isWatched
+        ? colors.textPrimary
+        : colors.textSecondary;
+
   return (
     <View style={styles.root}>
       <AnimatedPressable
@@ -54,7 +74,7 @@ export const CoOwnInstrumentCard = React.memo(function CoOwnInstrumentCard({
         scaleValue={0.985}
         activeOpacity={0.94}
         accessibilityRole="button"
-        accessibilityLabel={`${title}, ${unitPriceLabel} per unit, ${localReferenceLabel}, ${availabilityLabel}, ${liquidityLabel ?? 'Liquidity unavailable'}, ${statusLabel}`}
+        accessibilityLabel={`${title}, ${unitPriceLabel} per unit, ${liquidityLabel ?? 'Liquidity unavailable'}, ${statusLabel}`}
         accessibilityHint="Opens this market"
       >
         <CachedImage
@@ -71,6 +91,9 @@ export const CoOwnInstrumentCard = React.memo(function CoOwnInstrumentCard({
           <Text style={styles.statusText} numberOfLines={1} maxFontSizeMultiplier={1.3}>{statusLabel}</Text>
         </View>
       </AnimatedPressable>
+      {/* Watch button — independent hit area (zIndex: 2) so tapping it
+          never triggers the media button's onPress (asset navigation).
+          Scrim circle ensures contrast over light and dark images. */}
       <AnimatedPressable
         onPress={onToggleWatch}
         style={styles.watchButton}
@@ -78,13 +101,15 @@ export const CoOwnInstrumentCard = React.memo(function CoOwnInstrumentCard({
         activeOpacity={0.82}
         accessibilityRole="button"
         accessibilityLabel={isWatched ? `Remove ${title} from watchlist` : `Add ${title} to watchlist`}
-        accessibilityState={{ selected: isWatched }}
+        accessibilityState={{ selected: isWatched, busy: isPending }}
         hapticFeedback="light"
+        disabled={isPending}
       >
+        <View style={[styles.watchScrim, isWatched ? styles.watchScrimActive : null]} />
         <Ionicons
           name={isWatched ? 'bookmark' : 'bookmark-outline'}
           size={18}
-          color={isWatched ? colors.textPrimary : colors.textSecondary}
+          color={watchIconColor}
         />
       </AnimatedPressable>
       <AnimatedPressable
@@ -98,11 +123,19 @@ export const CoOwnInstrumentCard = React.memo(function CoOwnInstrumentCard({
         <Text style={[styles.category, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>{categoryLabel}</Text>
         <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={2} maxFontSizeMultiplier={1.25}>{title}</Text>
         <Text style={[styles.price, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.25}>{unitPriceLabel}</Text>
-        <Text style={[styles.localReference, { color: colors.textMuted }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82} maxFontSizeMultiplier={1.25}>{localReferenceLabel}</Text>
-        <View style={styles.availabilityRow}>
-          <Text style={[styles.availability, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>{availabilityLabel}</Text>
-          <Ionicons name="chevron-forward" size={13} color={colors.textMuted} />
-        </View>
+        {allocatedPct != null && allocatedPct > 0 && status === 'open' ? (
+          <View style={[styles.progressTrack, { backgroundColor: colors.surfaceAlt }]}>
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  width: `${Math.min(100, Math.max(0, allocatedPct))}%`,
+                  backgroundColor: colors.brand,
+                },
+              ]}
+            />
+          </View>
+        ) : null}
         {liquidityLabel ? (
           <Text style={[styles.liquidity, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{liquidityLabel}</Text>
         ) : null}
@@ -161,10 +194,24 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // Subtle scrim behind the watch icon for contrast over any image.
+  // Transparent fill with a light overlay — not a visible circle, just
+  // enough to separate the glyph from the underlying media.
+  watchScrim: {
+    position: 'absolute',
+    width: 28,
+    height: 28,
+    borderRadius: Radius.full,
+    backgroundColor: colors.overlay,
+    opacity: 0.72,
+  },
+  watchScrimActive: {
+    opacity: 0.88,
+  },
   contentButton: {
     paddingTop: Space.sm,
     gap: 2,
-    minHeight: 100,
+    minHeight: 80,
   },
   category: {
     fontSize: TypographyV2.meta.size,
@@ -186,32 +233,21 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: TypographyV2.bodyStrong.fontFamily,
     fontVariant: ['tabular-nums'],
   },
-  localReference: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily,
-    fontVariant: ['tabular-nums'],
-  },
-  availabilityRow: {
-    minHeight: 22,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Space.xs,
-    marginTop: 2,
-  },
-  availability: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily,
-    fontVariant: ['tabular-nums'],
-  },
   liquidity: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: TypographyV2.meta.fontFamily,
     fontVariant: ['tabular-nums'],
+    marginTop: 2,
+  },
+  progressTrack: {
+    height: 3,
+    borderRadius: Radius.full,
+    overflow: 'hidden',
+    marginTop: 4,
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: Radius.full,
   },
 });

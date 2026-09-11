@@ -68,6 +68,12 @@ export interface AppIconProps {
    */
   style?: StyleProp<ViewStyle | TextStyle>;
   /**
+   * Optional style applied directly to the inner Ionicons glyph (Text).
+   * Use for text-shadow / contrast that cannot reach the glyph via `style`
+   * (which targets the wrapper View).
+   */
+  glyphStyle?: StyleProp<TextStyle>;
+  /**
    * Accessibility label for screen readers.
    */
   accessibilityLabel?: string;
@@ -90,6 +96,7 @@ export const AppIcon = memo(function AppIcon({
   focused,
   opticalCenter = true,
   style,
+  glyphStyle,
   accessibilityLabel,
   accessible,
   testID,
@@ -136,6 +143,7 @@ export const AppIcon = memo(function AppIcon({
       name={resolvedGlyph as any}
       size={resolvedSize}
       color={resolvedColor}
+      style={glyphStyle}
       testID={testID}
     />
   );

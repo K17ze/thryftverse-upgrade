@@ -17,13 +17,13 @@ import {
   Modal,
   Pressable,
   ScrollView,
-  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Space, Radius, Stroke} from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
+import { useSafeOpenURL } from '../../hooks/useSafeOpenURL';
 
 export interface CoOwnRightsRow {
   label: string;
@@ -31,6 +31,31 @@ export interface CoOwnRightsRow {
   documentUri?: string;
   /** True if this row is "To be confirmed" — only acceptable for prelaunch. */
   isTbc?: boolean;
+  /** ISO date when the TBC right is expected to be confirmed. */
+  tbcEtaDate?: string | null;
+  /** Plain-language reason a right is TBC (e.g. "Pending regulatory approval"). */
+  tbcReason?: string | null;
+}
+
+/**
+ * Format a TBC ETA date as either a quarter ("Expected: Q1 2026") when the
+ * date is the first day of a quarter, or a precise date ("Expected: 15 Mar 2026").
+ * Returns null for invalid input.
+ */
+function formatTbcEta(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return null;
+  const month = d.getMonth(); // 0-indexed
+  const day = d.getDate();
+  // Quarter boundary: 1 Jan / 1 Apr / 1 Jul / 1 Oct
+  const isQuarterStart = day === 1 && (month === 0 || month === 3 || month === 6 || month === 9);
+  if (isQuarterStart) {
+    const quarter = Math.floor(month / 3) + 1;
+    return `Expected: Q${quarter} ${d.getFullYear()}`;
+  }
+  const formatted = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  return `Expected: ${formatted}`;
 }
 
 export interface CoOwnRightsSheetProps {
@@ -65,6 +90,7 @@ function RightsRowItem({
   colors: ReturnType<typeof useAppTheme>['colors'];
 }) {
   const [expanded, setExpanded] = useState(false);
+  const safeOpenURL = useSafeOpenURL();
 
   return (
     <View style={[styles.rowItem, { borderColor: colors.border }]}>
@@ -104,9 +130,23 @@ function RightsRowItem({
           <Text style={[styles.rowAnswer, { color: colors.textSecondary }]}>
             {row.answer}
           </Text>
+          {row.isTbc && (row.tbcReason || formatTbcEta(row.tbcEtaDate)) && (
+            <View style={[styles.tbcDetail, { borderColor: colors.warningSubtle, backgroundColor: colors.warningSubtle }]}>
+              {row.tbcReason && (
+                <Text style={[styles.tbcReasonText, { color: colors.warning }]}>
+                  {row.tbcReason}
+                </Text>
+              )}
+              {formatTbcEta(row.tbcEtaDate) && (
+                <Text style={[styles.tbcEtaText, { color: colors.warning }]}>
+                  {formatTbcEta(row.tbcEtaDate)}
+                </Text>
+              )}
+            </View>
+          )}
           {row.documentUri && (
             <Pressable
-              onPress={() => Linking.openURL(row.documentUri!)}
+              onPress={() => safeOpenURL(row.documentUri!, row.label)}
               style={[styles.docLink, { borderColor: colors.border }]}
               accessibilityRole="link"
               accessibilityLabel="View document"
@@ -300,6 +340,26 @@ const styles = StyleSheet.create({
   rowExpanded: {
     marginTop: Space.sm,
     gap: Space.sm,
+  },
+  tbcDetail: {
+    gap: 2,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs + 2,
+    borderRadius: Radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  tbcReasonText: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+  },
+  tbcEtaText: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
   rowAnswer: {
     fontSize: TypographyV2.body.size,

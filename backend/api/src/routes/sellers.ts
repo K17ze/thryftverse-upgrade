@@ -469,6 +469,43 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
 
   /* ── Seller Analytics ── */
 
+  // ── Period range resolver ──────────────────────────────────────────
+  // Accepts either a preset period ('7d'|'30d'|'90d') or explicit start/end
+  // dates (ISO YYYY-MM-DD). Returns Date objects for SQL parameter binding
+  // plus the previous equal-length comparison window.
+  //
+  // Upper bound is EXCLUSIVE (end of day + 1 day at 00:00:00 UTC) so the
+  // generate_series and >= / < filters produce correct inclusive day ranges.
+  function resolveAnalyticsPeriod(
+    input: { period: '7d' | '30d' | '90d' } | { startDate: string; endDate: string }
+  ): {
+    start: Date;
+    end: Date;       // exclusive upper bound
+    prevStart: Date;
+    prevEnd: Date;   // exclusive upper bound
+    days: number;
+  } {
+    if ('startDate' in input) {
+      const start = new Date(input.startDate + 'T00:00:00.000Z');
+      const endExclusive = new Date(input.endDate + 'T00:00:00.000Z');
+      endExclusive.setUTCDate(endExclusive.getUTCDate() + 1); // make exclusive
+      const days = Math.max(1, Math.round((endExclusive.getTime() - start.getTime()) / 86400000));
+      const prevEnd = new Date(start); // exclusive = start of current range
+      const prevStart = new Date(start);
+      prevStart.setUTCDate(prevStart.getUTCDate() - days);
+      return { start, end: endExclusive, prevStart, prevEnd, days };
+    }
+    // Preset path
+    const periodDays = input.period === '7d' ? 7 : input.period === '90d' ? 90 : 30;
+    const end = new Date(); // now
+    const start = new Date();
+    start.setUTCDate(start.getUTCDate() - periodDays);
+    const prevEnd = new Date(start);
+    const prevStart = new Date(start);
+    prevStart.setUTCDate(prevStart.getUTCDate() - periodDays);
+    return { start, end, prevStart, prevEnd, days: periodDays };
+  }
+
   // GET /sellers/:sellerId/analytics — seller performance dashboard data
   app.get('/sellers/:sellerId/analytics', async (request, reply) => {
     if (!request.authUser) {
@@ -484,13 +521,18 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     }
 
     const querySchema = z.object({
-      period: z.enum(['7d', '30d', '90d']).default('30d'),
-    });
-    const { period } = querySchema.parse(request.query);
-
-    const periodDays = period === '7d' ? 7 : period === '90d' ? 90 : 30;
-    const intervalStr = `${periodDays} days`;
-    const prevIntervalStr = `${periodDays * 2} days`;
+      period: z.enum(['7d', '30d', '90d']).optional(),
+      startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    }).refine(
+      (data) => !!data.period || (!!data.startDate && !!data.endDate),
+      'Either period or both startDate and endDate are required'
+    );
+    const query = querySchema.parse(request.query);
+    const range = query.period
+      ? resolveAnalyticsPeriod({ period: query.period })
+      : resolveAnalyticsPeriod({ startDate: query.startDate!, endDate: query.endDate! });
+    const { start, end, prevStart, prevEnd, days: periodDays } = range;
 
     // ── Parallel query block ──────────────────────────────────────────
     // All queries are independent — run them concurrently to eliminate
@@ -534,10 +576,10 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
             COUNT(i.id) FILTER (WHERE i.action = 'save') AS total_saves
           FROM listings l
           LEFT JOIN interactions i ON i.listing_id = l.id
-            AND i.created_at >= NOW() - $2::interval
+            AND i.created_at >= $2 AND i.created_at < $3
           WHERE l.seller_id = $1 AND l.status != 'deleted'
         `,
-        [sellerId, intervalStr]
+        [sellerId, start, end]
       ),
       // 2. Revenue and items sold from settled order facts (migration 076).
       //    paid_at is the authoritative sale timestamp.
@@ -561,9 +603,9 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
           WHERE seller_id = $1
             AND status IN ('paid', 'shipped', 'delivered')
             AND paid_at IS NOT NULL
-            AND paid_at >= NOW() - $2::interval
+            AND paid_at >= $2 AND paid_at < $3
         `,
-        [sellerId, intervalStr]
+        [sellerId, start, end]
       ),
       // 3. Reviews for the period
       readDb.query<{
@@ -573,9 +615,9 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
         `
           SELECT AVG(r.rating) AS avg_rating, COUNT(r.id) AS review_count
           FROM order_reviews r
-          WHERE r.seller_id = $1 AND r.created_at > NOW() - $2::interval
+          WHERE r.seller_id = $1 AND r.created_at >= $2 AND r.created_at < $3
         `,
-        [sellerId, intervalStr]
+        [sellerId, start, end]
       ),
       // 4. Trust projection (response rate, dispatch time)
       readDb.query<{
@@ -601,11 +643,10 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
             COUNT(i.id) FILTER (WHERE i.action = 'save') AS total_saves
           FROM listings l
           LEFT JOIN interactions i ON i.listing_id = l.id
-            AND i.created_at >= NOW() - $2::interval
-            AND i.created_at < NOW() - $3::interval
+            AND i.created_at >= $2 AND i.created_at < $3
           WHERE l.seller_id = $1
         `,
-        [sellerId, prevIntervalStr, intervalStr]
+        [sellerId, prevStart, prevEnd]
       ),
       // 6. Previous-period orders (for comparison)
       readDb.query<{
@@ -620,10 +661,9 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
           WHERE seller_id = $1
             AND status IN ('paid', 'shipped', 'delivered')
             AND paid_at IS NOT NULL
-            AND paid_at >= NOW() - $2::interval
-            AND paid_at < NOW() - $3::interval
+            AND paid_at >= $2 AND paid_at < $3
         `,
-        [sellerId, prevIntervalStr, intervalStr]
+        [sellerId, prevStart, prevEnd]
       ),
       // 7. Daily trend — current period (zero-filled via generate_series)
       //    Lower bound filter ensures orders before the period start are
@@ -632,8 +672,8 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
         `
           WITH date_range AS (
             SELECT generate_series(
-              (NOW() - $2::interval)::date,
-              NOW()::date,
+              $2::date,
+              ($3 - '1 second'::interval)::date,
               '1 day'::interval
             )::date AS d
           )
@@ -644,11 +684,11 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
             AND o.seller_id = $1
             AND o.status IN ('paid', 'shipped', 'delivered')
             AND o.paid_at IS NOT NULL
-            AND o.paid_at >= NOW() - $2::interval
+            AND o.paid_at >= $2 AND o.paid_at < $3
           GROUP BY dr.d
           ORDER BY dr.d
         `,
-        [sellerId, intervalStr]
+        [sellerId, start, end]
       ),
       // 8. Daily trend — previous period (zero-filled via generate_series)
       //    Upper bound is exclusive: the series ends one day BEFORE the
@@ -657,8 +697,8 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
         `
           WITH date_range AS (
             SELECT generate_series(
-              (NOW() - $2::interval)::date,
-              ((NOW() - $3::interval)::date - '1 day'::interval)::date,
+              $2::date,
+              ($3::date - '1 day'::interval)::date,
               '1 day'::interval
             )::date AS d
           )
@@ -669,11 +709,11 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
             AND o.seller_id = $1
             AND o.status IN ('paid', 'shipped', 'delivered')
             AND o.paid_at IS NOT NULL
-            AND o.paid_at < (NOW() - $3::interval)::date
+            AND o.paid_at >= $2 AND o.paid_at < $3
           GROUP BY dr.d
           ORDER BY dr.d
         `,
-        [sellerId, prevIntervalStr, intervalStr]
+        [sellerId, prevStart, prevEnd]
       ),
       // 9. Conversion funnel — impressions, views, saves, offers, purchases
       readDb.query<{
@@ -692,15 +732,15 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
             COUNT(DISTINCT o.id) AS purchases
           FROM listings l
           LEFT JOIN interactions i ON i.listing_id = l.id
-            AND i.created_at >= NOW() - $2::interval
+            AND i.created_at >= $2 AND i.created_at < $3
           LEFT JOIN orders o ON o.listing_id = l.id
             AND o.seller_id = $1
             AND o.status IN ('paid', 'shipped', 'delivered')
             AND o.paid_at IS NOT NULL
-            AND o.paid_at >= NOW() - $2::interval
+            AND o.paid_at >= $2 AND o.paid_at < $3
           WHERE l.seller_id = $1
         `,
-        [sellerId, intervalStr]
+        [sellerId, start, end]
       ),
     ]);
 
@@ -730,9 +770,9 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
             )
             AND source_type = 'refund'
             AND direction = 'debit'
-            AND created_at >= NOW() - $2::interval
+            AND created_at >= $2 AND created_at < $3
           `,
-          [sellerId, intervalStr]
+          [sellerId, start, end]
         ),
         readDb.query<{ fees: string | null }>(
           `
@@ -746,9 +786,9 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
             AND source_type = 'order_payment'
             AND direction = 'debit'
             AND line_type = 'platform_fee'
-            AND created_at >= NOW() - $2::interval
+            AND created_at >= $2 AND created_at < $3
           `,
-          [sellerId, intervalStr]
+          [sellerId, start, end]
         ),
         // Previous-period refunds (same account, shifted time window)
         readDb.query<{ refunds: string | null }>(
@@ -762,10 +802,9 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
             )
             AND source_type = 'refund'
             AND direction = 'debit'
-            AND created_at >= NOW() - $2::interval
-            AND created_at < NOW() - $3::interval
+            AND created_at >= $2 AND created_at < $3
           `,
-          [sellerId, prevIntervalStr, intervalStr]
+          [sellerId, prevStart, prevEnd]
         ),
         // Previous-period fees (same account, shifted time window)
         readDb.query<{ fees: string | null }>(
@@ -780,10 +819,9 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
             AND source_type = 'order_payment'
             AND direction = 'debit'
             AND line_type = 'platform_fee'
-            AND created_at >= NOW() - $2::interval
-            AND created_at < NOW() - $3::interval
+            AND created_at >= $2 AND created_at < $3
           `,
-          [sellerId, prevIntervalStr, intervalStr]
+          [sellerId, prevStart, prevEnd]
         ),
       ]);
       refundsGbpMinor = Number(refundsResult.rows[0]?.refunds ?? 0);
@@ -870,7 +908,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
         shipWithinDays: trust.ship_within_days ?? null,
         totalSales: trust.total_sales ? Number(trust.total_sales) : null,
         positiveRatingPct: trust.positive_rating_pct ? Number(trust.positive_rating_pct) : null,
-        period,
+        period: query.period,
         comparison,
         trend,
         funnel: funnelData,
@@ -894,10 +932,19 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
 
     const querySchema = z.object({
       limit: z.coerce.number().int().min(1).max(50).default(10),
-      period: z.enum(['7d', '30d', '90d']).default('30d'),
-    });
-    const { limit, period } = querySchema.parse(request.query);
-    const intervalStr = period === '7d' ? '7 days' : period === '90d' ? '90 days' : '30 days';
+      period: z.enum(['7d', '30d', '90d']).optional(),
+      startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    }).refine(
+      (data) => !!data.period || (!!data.startDate && !!data.endDate),
+      'Either period or both startDate and endDate are required'
+    );
+    const query = querySchema.parse(request.query);
+    const { limit } = query;
+    const range = query.period
+      ? resolveAnalyticsPeriod({ period: query.period })
+      : resolveAnalyticsPeriod({ startDate: query.startDate!, endDate: query.endDate! });
+    const { start, end } = range;
 
     // ── Top performers from real interaction counts ──────────────────
     // Aggregates views (view + qualified_detail_view), likes (wishlist),
@@ -921,7 +968,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
           COUNT(i.id) FILTER (WHERE i.action = 'wishlist') AS likes_count,
           COUNT(i.id) FILTER (WHERE i.action = 'save') AS saved_count
         FROM listings l
-        LEFT JOIN interactions i ON i.listing_id = l.id AND i.created_at >= NOW() - $3::interval
+        LEFT JOIN interactions i ON i.listing_id = l.id AND i.created_at >= $3 AND i.created_at < $4
         WHERE l.seller_id = $1
         GROUP BY l.id, l.title, l.price_gbp, l.status, l.created_at
         ORDER BY (
@@ -931,7 +978,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
         ) DESC
         LIMIT $2
       `,
-      [sellerId, limit, intervalStr]
+      [sellerId, limit, start, end]
     );
 
     return {
@@ -969,11 +1016,18 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     }
 
     const querySchema = z.object({
-      period: z.enum(['7d', '30d', '90d']).default('30d'),
-    });
-    const { period } = querySchema.parse(request.query);
-    const periodDays = period === '7d' ? 7 : period === '90d' ? 90 : 30;
-    const intervalStr = `${periodDays} days`;
+      period: z.enum(['7d', '30d', '90d']).optional(),
+      startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    }).refine(
+      (data) => !!data.period || (!!data.startDate && !!data.endDate),
+      'Either period or both startDate and endDate are required'
+    );
+    const query = querySchema.parse(request.query);
+    const range = query.period
+      ? resolveAnalyticsPeriod({ period: query.period })
+      : resolveAnalyticsPeriod({ startDate: query.startDate!, endDate: query.endDate! });
+    const { start, end } = range;
 
     // Zero-filled generate_series joined with interactions and orders
     const result = await readDb.query<{
@@ -986,8 +1040,8 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
       `
         WITH date_range AS (
           SELECT generate_series(
-            (NOW() - $2::interval)::date,
-            NOW()::date,
+            $2::date,
+            ($3 - '1 second'::interval)::date,
             '1 day'::interval
           )::date AS d
         ),
@@ -1000,7 +1054,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
           FROM interactions i
           JOIN listings l ON l.id = i.listing_id
           WHERE l.seller_id = $1
-            AND i.created_at >= NOW() - $2::interval
+            AND i.created_at >= $2 AND i.created_at < $3
           GROUP BY day
         ),
         daily_orders AS (
@@ -1011,7 +1065,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
           WHERE o.seller_id = $1
             AND o.status IN ('paid', 'shipped', 'delivered')
             AND o.paid_at IS NOT NULL
-            AND o.paid_at >= NOW() - $2::interval
+            AND o.paid_at >= $2 AND o.paid_at < $3
           GROUP BY day
         )
         SELECT
@@ -1025,7 +1079,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
         LEFT JOIN daily_orders dord ON dord.day = dr.d
         ORDER BY dr.d ASC
       `,
-      [sellerId, intervalStr]
+      [sellerId, start, end]
     );
 
     return {
@@ -1054,29 +1108,40 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     const querySchema = z.object({
       limit: z.coerce.number().int().min(1).max(50).default(10),
       period: z.enum(['7d', '30d', '90d']).optional(),
-    });
-    const { limit, period } = querySchema.parse(request.query);
-    const periodDays = period === '7d' ? 7 : period === '90d' ? 90 : 30;
+      startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    }).refine(
+      (data) => (!!data.startDate) === (!!data.endDate),
+      'startDate and endDate must both be provided together'
+    );
+    const query = querySchema.parse(request.query);
+    const { limit } = query;
+    const range = query.period
+      ? resolveAnalyticsPeriod({ period: query.period })
+      : (query.startDate && query.endDate)
+        ? resolveAnalyticsPeriod({ startDate: query.startDate, endDate: query.endDate })
+        : resolveAnalyticsPeriod({ period: '30d' });
+    const { start, end } = range;
 
     const result = await db.query(
       `SELECT l.id, l.title, l.image_url, l.status, l.price_gbp,
               l.category, l.brand, l.created_at,
               COUNT(i.id) FILTER (WHERE i.action IN ('view', 'qualified_detail_view')
-                AND i.created_at >= NOW() - make_interval(days => $2)) AS views,
+                AND i.created_at >= $2 AND i.created_at < $3) AS views,
               COUNT(i.id) FILTER (WHERE i.action = 'wishlist'
-                AND i.created_at >= NOW() - make_interval(days => $2)) AS likes,
+                AND i.created_at >= $2 AND i.created_at < $3) AS likes,
               COUNT(i.id) FILTER (WHERE i.action = 'offer_start'
-                AND i.created_at >= NOW() - make_interval(days => $2)) AS offers
+                AND i.created_at >= $2 AND i.created_at < $3) AS offers
        FROM listings l
        LEFT JOIN interactions i ON i.listing_id = l.id
        WHERE l.seller_id = $1 AND l.status = 'active'
        GROUP BY l.id, l.title, l.image_url, l.status, l.price_gbp,
                 l.category, l.brand, l.created_at
        HAVING COUNT(i.id) FILTER (WHERE i.action IN ('view', 'qualified_detail_view')
-                AND i.created_at >= NOW() - make_interval(days => $2)) < 10
+                AND i.created_at >= $2 AND i.created_at < $3) < 10
        ORDER BY views ASC
-       LIMIT $3`,
-      [sellerId, periodDays, limit],
+       LIMIT $4`,
+      [sellerId, start, end, limit],
     );
 
     return {
@@ -1116,10 +1181,18 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     const { listingId } = listingParamsSchema.parse(request.params);
 
     const querySchema = z.object({
-      period: z.enum(['7d', '30d', '90d']).default('30d'),
-    });
-    const { period } = querySchema.parse(request.query);
-    const periodDays = period === '7d' ? 7 : period === '90d' ? 90 : 30;
+      period: z.enum(['7d', '30d', '90d']).optional(),
+      startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    }).refine(
+      (data) => !!data.period || (!!data.startDate && !!data.endDate),
+      'Either period or both startDate and endDate are required'
+    );
+    const query = querySchema.parse(request.query);
+    const range = query.period
+      ? resolveAnalyticsPeriod({ period: query.period })
+      : resolveAnalyticsPeriod({ startDate: query.startDate!, endDate: query.endDate! });
+    const { start, end } = range;
 
     // ── Step 1: Listing identity (needed before comparables) ──────────────
     const listingResult = await readDb.query<{
@@ -1168,9 +1241,9 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
               COUNT(i.id) FILTER (WHERE i.action = 'offer_start') AS offers,
               COUNT(i.id) FILTER (WHERE i.action = 'wishlist') AS likes
             FROM interactions i
-            WHERE i.listing_id = $1 AND i.created_at >= NOW() - $2::interval
+            WHERE i.listing_id = $1 AND i.created_at >= $2 AND i.created_at < $3
           `,
-          [listingId, `${periodDays} days`]
+          [listingId, start, end]
         ),
         // 2. Price history
         readDb.query<{
@@ -1234,8 +1307,8 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
        WHERE listing_id = $1 AND seller_id = $2
          AND status IN ('paid', 'shipped', 'delivered')
          AND paid_at IS NOT NULL
-         AND paid_at >= NOW() - $3::interval`,
-      [listingId, sellerId, `${periodDays} days`]
+         AND paid_at >= $3 AND paid_at < $4`,
+      [listingId, sellerId, start, end]
     );
     const purchases = Number(purchasesResult.rows[0]?.count ?? 0);
 
@@ -1296,7 +1369,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
           changedAt: r.changed_at,
         })),
         comparables,
-        period,
+        period: query.period,
       },
     };
   });

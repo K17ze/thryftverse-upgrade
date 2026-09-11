@@ -339,6 +339,8 @@ export interface TradeQuoteInput {
   limitPriceInput: string;
   /** Authoritative unit price in GBP from the backend (NOT 1ze). */
   marketPrice: number;
+  /** Backend fee rate when available; defaults to the launch schedule. */
+  feeRate?: number;
 }
 
 export interface TradeQuote {
@@ -404,7 +406,7 @@ export function buildTradeQuote(input: TradeQuoteInput): TradeQuote {
       : input.marketPrice;
 
   const grossValue = isValidQty ? quantity * executionPrice : 0;
-  const fee = grossValue * CO_OWN_FEE_RATE;
+  const fee = grossValue * (input.feeRate ?? CO_OWN_FEE_RATE);
   const netValue = input.side === 'buy' ? grossValue + fee : grossValue - fee;
 
   return {

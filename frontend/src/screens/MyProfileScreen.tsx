@@ -42,6 +42,7 @@ import { SharedTransitionView } from '../components/SharedTransitionView';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipProfileMedia } from '../components/flagship';
+import { UploadProgressRing } from '../components/flagship/FlagshipProfileMedia';
 import { LookPreviewCard, ProfileLooksGrid } from '../components/profile';
 import { MyProfileIdentityHero } from '../components/profile/MyProfileIdentityHero';
 import { SharePassportModal } from '../components/profile/SharePassportModal';
@@ -825,6 +826,8 @@ export default function MyProfileScreen() {
           coverHeight={COVER_HEIGHT}
           isUploadingCover={coverState.status === 'uploading'}
           isUploadingAvatar={avatarState.status === 'uploading'}
+          coverUploadProgress={coverState.progress}
+          avatarUploadProgress={avatarState.progress}
           style={{ width: '100%' }}
         />
         {/* Top gradient fade — improves floating control contrast over any cover media */}
@@ -914,7 +917,11 @@ export default function MyProfileScreen() {
           >
             <View style={[styles.coverEditVisible, t.coverEditVisible]}>
               {coverState.status === 'uploading' ? (
-                <ActivityIndicator size="small" color={colors.scrimTextPrimary} />
+                <UploadProgressRing
+                  progress={coverState.progress}
+                  active={coverState.status === 'uploading'}
+                  size={28}
+                />
               ) : (
                 <Ionicons name="image-outline" size={16} color={colors.scrimTextPrimary} aria-hidden={true} />
               )}

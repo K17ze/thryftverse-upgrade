@@ -38,7 +38,7 @@ export async function xhrPutFile(
   fileUri: string,
   mimeType: string,
   opts?: XhrPutOptions
-): Promise<void> {
+): Promise<string | null> {
   const signal = opts?.signal;
   if (signal?.aborted) throw createAbortError();
 
@@ -49,7 +49,7 @@ export async function xhrPutFile(
     ? undefined
     : await fetch(fileUri, { signal }).then((response) => response.blob()));
 
-  return new Promise<void>((resolve, reject) => {
+  return new Promise<string | null>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.timeout = opts?.timeoutMs ?? 120_000;
     let settled = false;
@@ -69,7 +69,11 @@ export async function xhrPutFile(
       if (settled) return;
       settled = true;
       cleanup();
-      resolve();
+      // S3 returns the part ETag in the `ETag` response header. Multipart
+      // completion requires every part's ETag, so capture it here. Single-PUT
+      // callers ignore the resolved value.
+      const etag = xhr.getResponseHeader('ETag') ?? xhr.getResponseHeader('etag');
+      resolve(etag);
     };
     const fail = (error: Error) => {
       if (settled) return;

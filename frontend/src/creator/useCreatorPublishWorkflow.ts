@@ -59,8 +59,6 @@ import {
 import { queryClient, queryKeys } from '../platform/server';
 import { CreatorDraftService } from './drafts';
 import { useStore } from '../store/useStore';
-import { isExportAvailable, exportDocumentImage } from './export/mediaExportService';
-
 import { createPublishStyles } from './publish/CreatorPublishStyles';
 // ── Shared publish-command builder ──────────────────────────────────
 // A single pure function that constructs the PublishCommand from a
@@ -645,59 +643,6 @@ export function useCreatorPublishWorkflow({ visible, onClose, editingLookId }: C
       // of validating uploaded media and saving the canonical document.
       setPublishState({ tag: 'processing' });
       progressWidth.value = reduceMotion ? 0.75 : withSpring(0.75, spring.entrance);
-
-      // ── Export pipeline: render composition to a canonical image ──
-      // When the native export module is linked, render the first page
-      // to a PNG via Skia offscreen surface and upload it as the
-      // canonical published asset. This produces a faithful render of
-      // the authored composition (overlays, filters, layers burned in)
-      // rather than relying on the source media alone.
-      if (isExportAvailable() && workingDoc.pages.length > 0) {
-        try {
-          const firstPage = workingDoc.pages[0];
-          const exported = await exportDocumentImage(workingDoc, firstPage.id, {
-            quality: 'feed',
-            onProgress: (p) => {
-              // Map export progress into the 0.75–0.85 range
-              const mapped = 0.75 + p * 0.1;
-              progressWidth.value = reduceMotion ? mapped : withSpring(mapped, spring.entrance);
-            },
-          });
-          if (exported) {
-            // Upload the rendered image through the upload manager so
-            // it follows the same durable retry path as source media.
-            const exportAssetId = `export::${firstPage.id}`;
-            await uploadManager.queueUpload({
-              projectId: workingDoc.id,
-              assetId: exportAssetId,
-              localPath: exported.uri,
-              mimeType: 'image/png',
-              assetType: 'image',
-              maxRetries: 3,
-              folder: workingDoc.type === 'look' ? 'looks' : 'posters',
-            });
-            const exportJobs = await uploadManager.waitForCompletion();
-            const exportJob = exportJobs.find((j) => j.assetId === exportAssetId);
-            if (exportJob?.status === 'completed' && exportJob.remoteUrl) {
-              // Store the exported render URL in the document metadata
-              // so the publication orchestrator can use it as the
-              // canonical published image.
-              workingDoc = {
-                ...workingDoc,
-                metadata: {
-                  ...workingDoc.metadata,
-                  exportedRenderUrl: exportJob.remoteUrl,
-                  exportedRenderWidth: exported.width,
-                  exportedRenderHeight: exported.height,
-                },
-              };
-            }
-          }
-        } catch (exportErr) {
-          // Export failure is non-fatal — fall back to source media.
-          console.warn('Skia export failed, falling back to source media:', exportErr);
-        }
-      }
 
       const postUploadValidation = validateForPublish(workingDoc);
       if (!postUploadValidation.valid) {

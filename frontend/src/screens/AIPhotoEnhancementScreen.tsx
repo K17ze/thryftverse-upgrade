@@ -445,7 +445,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
             accessibilityRole="image"
             accessibilityLabel={
               result
-                ? `Comparison photo. ${descriptiveText}. Drag the slider to compare before and after.`
+                ? `Comparison photo. ${descriptiveText}.`
                 : 'Photo preview'
             }
           >
@@ -518,9 +518,6 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
                   {stageText}
                 </Text>
               </View>
-              <Text style={[styles.submittingHint, { color: colors.scrimTextSecondary }]}>
-                Keep the app open
-              </Text>
               <Pressable
                 onPress={handleCancelSubmit}
                 hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
@@ -706,7 +703,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
             <View style={styles.compareHint}>
               <Ionicons name="swap-horizontal" size={16} color={colors.textMuted} />
               <Text style={[styles.compareHintText, { color: colors.textMuted }]}>
-                Drag the slider to compare · {result.appliedOperationLabel}
+                {result.appliedOperationLabel}
               </Text>
               <Pressable
                 onPress={handleToggleCompare}
@@ -719,9 +716,6 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
                 </Text>
               </Pressable>
             </View>
-            <Text style={[styles.verifyText, { color: colors.textMuted }]}>
-              Review the edges around the product to ensure nothing was cut off.
-            </Text>
             <Text style={[styles.provenanceText, { color: colors.textMuted }]}>
               {disclosureLabel(result.provenance.disclosureType)} · {result.provenance.provider}
             </Text>

@@ -2,7 +2,8 @@
  * CoOwnPriceTick — restrained price-tick display.
  *
  * On price change: 120ms subtle background fade using
- * DIRECTION_COLORS.upFill/downFill on the price cell, then clear.
+ * DIRECTION-style theme fills (coownUpSubtle/coownDownSubtle) on the
+ * price cell, then clear.
  * No flash, no glow, no digit rotation (source §17.5 — Robinhood's
  * slot-machine tick is deliberately rejected).
  *
@@ -25,7 +26,6 @@ import Reanimated, {
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
-import { DIRECTION_COLORS } from '../../constants/colors';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 export type PriceTickDirection = 'up' | 'down' | 'flat';
@@ -49,10 +49,83 @@ export interface CoOwnPriceTickProps {
   showGlyph?: boolean;
   /** Show sign (+/−) on change. Default false (glyph is enough). */
   showSign?: boolean;
+  /**
+   * Caps the maximum font scale factor.  Critical price values should
+   * leave this unset so the price wraps to two lines at large text sizes
+   * rather than truncating (U62).
+   */
+  maxFontSizeMultiplier?: number;
 }
 
 const FADE_DURATION = 150;
 const FADE_HOLD = 600;
+
+/**
+ * Shared tick-flash engine — a restrained 150ms background fade in the
+ * direction fill after a price change, held 600ms, then cleared.
+ * Reduced motion: no flash. Used by CoOwnPriceTick and by live quote
+ * surfaces (top-of-book strip) that need the same tick language.
+ */
+export function usePriceTickFlash(
+  value: number | null,
+  previousValue: number | null | undefined,
+): { flashStyle: ReturnType<typeof useAnimatedStyle>; direction: PriceTickDirection; hasChanged: boolean } {
+  const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
+  const fadeOpacity = useSharedValue(0);
+  // Shared values (not refs) — the animated style worklet reads these on
+  // the UI thread. Refs passed into a worklet get serialized once and then
+  // every render-time `.current` write triggers the Worklets
+  // "tried to modify key `current`" warning and desyncs the UI thread copy.
+  const directionSV = useSharedValue<PriceTickDirection>('flat');
+  const upFillSV = useSharedValue(colors.coownUpSubtle);
+  const downFillSV = useSharedValue(colors.coownDownSubtle);
+
+  const hasChanged = previousValue != null && value != null && value !== previousValue;
+  const direction: PriceTickDirection = !hasChanged
+    ? 'flat'
+    : (value as number) > (previousValue as number)
+      ? 'up'
+      : 'down';
+
+  // Theme-resolved fills — the flash background must track the active
+  // theme so dark mode never draws a dark fill on a dark canvas (F28).
+  // Synced in an effect, never during render.
+  useEffect(() => {
+    upFillSV.value = colors.coownUpSubtle;
+    downFillSV.value = colors.coownDownSubtle;
+  }, [colors.coownUpSubtle, colors.coownDownSubtle, upFillSV, downFillSV]);
+
+  useEffect(() => {
+    if (!hasChanged || reducedMotion) return;
+    directionSV.value = direction;
+
+    fadeOpacity.value = withTiming(1, {
+      duration: FADE_DURATION,
+      easing: Easing.out(Easing.ease),
+    });
+
+    const timeout = setTimeout(() => {
+      fadeOpacity.value = withTiming(0, {
+        duration: FADE_DURATION,
+        easing: Easing.in(Easing.ease),
+      });
+    }, FADE_HOLD);
+
+    return () => clearTimeout(timeout);
+  }, [hasChanged, direction, reducedMotion, fadeOpacity, directionSV, upFillSV, downFillSV]);
+
+  const flashStyle = useAnimatedStyle(() => ({
+    backgroundColor: directionSV.value === 'up'
+      ? upFillSV.value
+      : directionSV.value === 'down'
+        ? downFillSV.value
+        : 'transparent',
+    opacity: fadeOpacity.value,
+  }));
+
+  return { flashStyle, direction, hasChanged };
+}
 
 export function CoOwnPriceTick({
   value,
@@ -64,50 +137,11 @@ export function CoOwnPriceTick({
   align = 'right',
   showGlyph = true,
   showSign = false,
+  maxFontSizeMultiplier,
 }: CoOwnPriceTickProps) {
   const { colors } = useAppTheme();
-  const reducedMotion = useReducedMotion();
 
-  const fadeOpacity = useSharedValue(0);
-  const directionRef = useRef<PriceTickDirection>('flat');
-
-  // Detect change + direction
-  const hasChanged = previousValue != null && value !== previousValue;
-  const direction: PriceTickDirection = !hasChanged
-    ? 'flat'
-    : value > (previousValue ?? value)
-      ? 'up'
-      : 'down';
-
-  useEffect(() => {
-    if (!hasChanged || reducedMotion) return;
-    directionRef.current = direction;
-
-    // Fade in the background
-    fadeOpacity.value = withTiming(1, {
-      duration: FADE_DURATION,
-      easing: Easing.out(Easing.ease),
-    });
-
-    // Fade out after hold
-    const timeout = setTimeout(() => {
-      fadeOpacity.value = withTiming(0, {
-        duration: FADE_DURATION,
-        easing: Easing.in(Easing.ease),
-      });
-    }, FADE_HOLD);
-
-    return () => clearTimeout(timeout);
-  }, [hasChanged, direction, reducedMotion, fadeOpacity]);
-
-  const animatedBgStyle = useAnimatedStyle(() => ({
-    backgroundColor: directionRef.current === 'up'
-      ? DIRECTION_COLORS.upFill
-      : directionRef.current === 'down'
-        ? DIRECTION_COLORS.downFill
-        : 'transparent',
-    opacity: fadeOpacity.value,
-  }));
+  const { flashStyle, direction, hasChanged } = usePriceTickFlash(value, previousValue);
 
   const directionColor = direction === 'up'
     ? colors.coownUp
@@ -115,7 +149,7 @@ export function CoOwnPriceTick({
       ? colors.coownDown
       : colors.textSecondary;
 
-  const glyph = direction === 'up' ? '▲' : direction === 'down' ? '▼' : '−';
+  const glyph = direction === 'up' ? '▲' : direction === 'down' ? '▼' : '▬';
   const sign = direction === 'up' ? '+' : direction === 'down' ? '−' : '';
 
   const sizeStyle = size === 'priceLarge'
@@ -133,15 +167,16 @@ export function CoOwnPriceTick({
   return (
     <View style={[styles.container, alignStyle]}>
       {label && (
-        <Text style={[styles.label, { color: colors.textMuted }]} numberOfLines={1}>
+        <Text style={[styles.label, { color: colors.textMuted }]} numberOfLines={2}>
           {label}
         </Text>
       )}
       <View style={styles.valueRow}>
-        <Reanimated.View style={[styles.tickCell, animatedBgStyle]}>
+        <Reanimated.View style={[styles.tickCell, flashStyle]}>
           <Text
             style={[sizeStyle, { color: colors.textPrimary }]}
-            numberOfLines={1}
+            numberOfLines={2}
+            maxFontSizeMultiplier={maxFontSizeMultiplier}
             accessibilityLiveRegion="polite"
             accessibilityLabel={`${label ?? 'Price'} ${value.toFixed(2)}${unit ? ` ${unit}` : ''}${hasChanged ? `, ${direction}` : ''}${ageLabel ? `, ${ageLabel}` : ''}`}
           >
@@ -156,7 +191,7 @@ export function CoOwnPriceTick({
         {showGlyph && hasChanged && (
           <Text
             style={[styles.glyph, { color: directionColor }]}
-            accessibilityLabel={direction === 'up' ? 'up' : direction === 'down' ? 'down' : 'unchanged'}
+            accessibilityLabel={direction === 'up' ? 'up' : direction === 'down' ? 'down' : 'flat'}
           >
             {glyph}
           </Text>
@@ -194,6 +229,7 @@ const styles = StyleSheet.create({
   valueRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
+    flexWrap: 'wrap',
     gap: Space.xs,
   },
   tickCell: {

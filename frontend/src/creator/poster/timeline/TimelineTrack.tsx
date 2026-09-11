@@ -44,6 +44,12 @@ export interface TimelineTrackProps {
    */
   transitionIds?: (string | null)[];
   onSelectTransition?: (boundaryIndex: number) => void;
+  /**
+   * Drag-to-reorder callback. Fired when a clip is long-pressed and dragged
+   * horizontally. The parent computes the target index from the cumulative
+   * clip widths and the drag translation.
+   */
+  onReorderClip?: (clipId: string, translationX: number) => void;
 }
 
 export const TimelineTrack = React.memo(function TimelineTrack({
@@ -56,6 +62,7 @@ export const TimelineTrack = React.memo(function TimelineTrack({
   onTrimClip,
   transitionIds,
   onSelectTransition,
+  onReorderClip,
 }: TimelineTrackProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
@@ -113,7 +120,7 @@ export const TimelineTrack = React.memo(function TimelineTrack({
       accessibilityLabel="Timeline clip track"
     >
       <View style={trackStyles.clipsRow}>
-        {clips.map((clip) => {
+        {clips.map((clip, i) => {
           const width = Math.max(24, clip.durationMs * pxPerMs - CLIP_GAP);
           return (
             <ClipThumb
@@ -123,6 +130,8 @@ export const TimelineTrack = React.memo(function TimelineTrack({
               isSelected={clip.id === selectedClipId}
               onPress={() => onSelectClip(clip.id)}
               onTrimCommit={(edge, deltaMs) => onTrimClip(clip.id, edge, deltaMs)}
+              clipIndex={i}
+              onDragReorder={onReorderClip}
             />
           );
         })}

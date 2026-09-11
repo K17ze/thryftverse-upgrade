@@ -11,7 +11,7 @@ import {
   CommerceDetailSection,
   CommerceDetailMetricRow,
 } from '../../commerce/detail';
-import { CoOwnCandleChart, type CoOwnCandleRange } from '../';
+import { CoOwnCandleChart, type CoOwnCandleRange, type CoOwnChartType } from '../';
 import type { AssetLifecycleState, CandleDataPoint, DossierDocument } from './types';
 
 export interface AssetOverviewSectionProps {
@@ -21,6 +21,10 @@ export interface AssetOverviewSectionProps {
   candleData: CandleDataPoint[];
   candleRange: CoOwnCandleRange;
   onCandleRangeChange: (range: CoOwnCandleRange) => void;
+  /** Active chart type (Line / Candlestick / Area). Optional — when
+   * omitted the switcher is hidden and the chart defaults to candle. */
+  chartType?: CoOwnChartType;
+  onChartTypeChange?: (type: CoOwnChartType) => void;
   showVolume: boolean;
   onToggleVolume?: () => void;
   lastExecutionPriceGbp: number | null;
@@ -66,6 +70,8 @@ export function AssetOverviewSection({
   candleData,
   candleRange,
   onCandleRangeChange,
+  chartType,
+  onChartTypeChange,
   showVolume,
   onToggleVolume,
   lastExecutionPriceGbp,
@@ -256,6 +262,8 @@ export function AssetOverviewSection({
               candles={chartCandles}
               range={candleRange}
               onRangeChange={onCandleRangeChange}
+              chartType={chartType}
+              onChartTypeChange={onChartTypeChange}
               showVolume={showVolume && volumeAvailable}
               lastPrice={lastExecutionPriceGbp ?? undefined}
               lastAgeSeconds={lastExecutionAgeSeconds}

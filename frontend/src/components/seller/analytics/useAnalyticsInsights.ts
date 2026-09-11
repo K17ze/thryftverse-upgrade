@@ -84,8 +84,24 @@ export function useAnalyticsInsights({ listings, selectedListingId, analytics, p
     return val != null ? val / 100 : null;
   }, [analytics]);
 
-  const periodDays = period === '7d' ? 7 : period === '90d' ? 90 : 30;
-  const periodLabel = period === '7d' ? '7 days' : period === '30d' ? '30 days' : '90 days';
+  const periodDays = useMemo(() => {
+    if (typeof period === 'string') {
+      return period === '7d' ? 7 : period === '90d' ? 90 : 30;
+    }
+    const start = new Date(period.startDate + 'T00:00:00.000Z');
+    const end = new Date(period.endDate + 'T00:00:00.000Z');
+    return Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
+  }, [period]);
+
+  const periodLabel = useMemo(() => {
+    if (typeof period === 'string') {
+      return period === '7d' ? '7 days' : period === '30d' ? '30 days' : '90 days';
+    }
+    const start = new Date(period.startDate + 'T00:00:00.000Z');
+    const end = new Date(period.endDate + 'T00:00:00.000Z');
+    const fmt = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+    return `${fmt(start)} – ${fmt(end)}`;
+  }, [period]);
 
   const formatDayLabel = (date: string): string => {
     const d = new Date(`${date}T00:00:00`);
@@ -218,7 +234,7 @@ export function useAnalyticsInsights({ listings, selectedListingId, analytics, p
         category,
         count: stats.count,
         totalGbp: stats.totalGbp,
-        pct: totalStoreValue > 0 ? Math.max(2, Math.round((stats.totalGbp / totalStoreValue) * 100)) : 0,
+        pct: totalStoreValue > 0 ? Math.round((stats.totalGbp / totalStoreValue) * 100) : 0,
         color: colorPalette[i % colorPalette.length],
       }))
       .sort((a, b) => b.totalGbp - a.totalGbp);

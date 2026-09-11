@@ -240,14 +240,18 @@ function projectOverlay(
   const overlayType = mapOverlayType(layer.type);
   if (!overlayType) return null;
 
-  // Use the layer's timeRange if present, otherwise assign to the clip's range
+  // Use the layer's timeRange if present, otherwise assign to the clip's range.
+  // The timeRange is stored in ABSOLUTE timeline coordinates (matching
+  // OverlayTrack's onMove commit and CreatorCanvas's visibility check).
+  // Previously this treated timeRange as clip-relative and added
+  // clipStartMs, causing a double-offset that made overlays appear at
+  // the wrong time during playback.
   let startMs: number;
   let endMs: number;
 
   if (layer.timeRange) {
-    // layer.timeRange is relative to the clip's start
-    startMs = clipStartMs + layer.timeRange.startMs;
-    endMs = clipStartMs + layer.timeRange.endMs;
+    startMs = layer.timeRange.startMs;
+    endMs = layer.timeRange.endMs;
   } else {
     startMs = clipStartMs;
     endMs = clipStartMs + clipDurationMs;

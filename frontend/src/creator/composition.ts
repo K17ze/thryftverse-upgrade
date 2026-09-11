@@ -442,6 +442,13 @@ const BaseLayerSchema = z.object({
       y: z.number().min(0).max(1),
     }),
   }).optional(),
+  // Clip anchor — binds this overlay/timed layer to a specific media clip
+  // so it follows the clip when the clip is reordered, trimmed, or split.
+  // When absent, the overlay's timeRange is relative to the page/clip it
+  // lives on (legacy behavior). When present, the overlay's timeRange is
+  // relative to the anchored clip's start, and the overlay moves with
+  // the clip on reorder. See PosterComposerScreen overlay derivation.
+  clipId: z.string().optional(),
 });
 
 // Adjustment layer payload — applies an effect stack as an adjustment
@@ -556,14 +563,6 @@ export const CreatorMetadataSchema = z.object({
   sourceCreatorId: z.string().optional(),
   scheduledFor: z.string().datetime().optional(),
   coverPageIndex: z.number().int().min(0).optional(),
-  // ── Exported render metadata ──
-  // When the native export pipeline renders the composition to a
-  // canonical image, these fields store the uploaded render URL and
-  // dimensions so the publication orchestrator can use it as the
-  // canonical published asset.
-  exportedRenderUrl: z.string().optional(),
-  exportedRenderWidth: z.number().int().positive().optional(),
-  exportedRenderHeight: z.number().int().positive().optional(),
 });
 
 export type CreatorMetadata = z.infer<typeof CreatorMetadataSchema>;

@@ -1879,11 +1879,18 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
         visible={instantCutVisible}
         assetUris={mediaAssetUris}
         onClose={() => setInstantCutVisible(false)}
-        onPublish={(_layoutId) => {
+        onPublish={(layoutId) => {
+          // Commit the user's selected layout to the document before
+          // entering the publish flow — otherwise the choice is silently
+          // discarded (the sheet only previews, it never applies).
+          handleLayoutSelect(layoutId as LayoutId);
           setInstantCutVisible(false);
           setShowPublish(true);
         }}
-        onOpenEditor={(_layoutId) => {
+        onOpenEditor={(layoutId) => {
+          // Commit the selected layout so the full composer opens with the
+          // user's Instant Cut choice already applied to the canvas.
+          handleLayoutSelect(layoutId as LayoutId);
           setInstantCutVisible(false);
         }}
       />

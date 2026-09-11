@@ -9,6 +9,7 @@
   "peerDependencies": {
     "react": "*",
     "react-native": "*",
-    "react-native-nitro-modules": "*"
+    "react-native-nitro-modules": "*",
+    "@shopify/react-native-skia": ">=2.0.0"
   }
 }

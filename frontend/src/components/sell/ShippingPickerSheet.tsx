@@ -4,7 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, FontFamily, Control, Stroke } from '../../theme/designTokens';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
+import { Space, Radius, FontFamily, Control } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { haptics } from '../../utils/haptics';
 
@@ -29,7 +30,8 @@ function ShippingPickerSheet({
   shippingPayer,
   onSetShippingMethod,
   onSetShippingPayer }: ShippingPickerSheetProps) {
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
+  const { t } = useAppTranslation('listing');
   const insets = useSafeAreaInsets();
 
   return (
@@ -39,43 +41,47 @@ function ShippingPickerSheet({
       transparent={true}
       onRequestClose={onClose}
     >
-      <Pressable style={[styles.shippingSheetBackdrop, { backgroundColor: colors.overlay }]} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close shipping options">
+      <Pressable
+        style={[styles.shippingSheetBackdrop, { backgroundColor: colors.overlay }]}
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel={t('shipping.closeOptions')}
+      >
         <View
-          style={[styles.shippingSheet, { backgroundColor: colors.background, paddingBottom: insets.bottom + Space.md }]}
+          style={[styles.shippingSheet, { backgroundColor: colors.surfaceElevated, paddingBottom: insets.bottom + Space.md }]}
           accessibilityViewIsModal={true}
         >
           {/* Header */}
           <View style={styles.shippingSheetHeader}>
-            <View style={[styles.shippingSheetHandle, { backgroundColor: colors.border }]} />
+            <View style={[styles.shippingSheetHandle, { backgroundColor: isDark ? colors.border : 'rgba(0,0,0,0.2)' }]} />
             <View style={styles.shippingSheetTitleRow}>
-              <Text style={[styles.shippingSheetTitle, { color: colors.textPrimary }]}>Delivery</Text>
+              <Text style={[styles.shippingSheetTitle, { color: colors.textPrimary }]}>{t('shipping.title')}</Text>
               <Pressable
                 hitSlop={Control.hit}
                 onPress={() => { onClose(); haptics.tap(); }}
                 accessibilityRole="button"
-                accessibilityLabel="Close delivery options"
+                accessibilityLabel={t('shipping.close')}
               >
                 <Ionicons name="close" size={22} color={colors.textMuted} aria-hidden={true} />
               </Pressable>
             </View>
           </View>
 
-          {/* Shipping method section */}
-          <Text style={[styles.shippingSheetSectionLabel, { color: colors.textMuted }]}>Shipping method</Text>
+          {/* Shipping method options — redundant eyebrow removed per brief */}
           {(['standard', 'express'] as const).map((m) => {
             const active = shippingMethod === m;
             return (
               <Pressable
                 key={m}
-                style={({ pressed }) => [styles.shippingSheetRow, { borderBottomColor: colors.border }, pressed && { opacity: 0.6 }]}
+                style={({ pressed }) => [styles.shippingSheetRow, { borderBottomColor: colors.borderSubtle }, pressed && { opacity: 0.6 }]}
                 onPress={() => { onSetShippingMethod(m); haptics.selection(); }}
                 accessibilityRole="radio"
-                accessibilityLabel={`Set shipping method to ${m}`}
+                accessibilityLabel={`${t('shipping.title')}: ${m === 'standard' ? t('shipping.standard') : t('shipping.express')}`}
                 accessibilityState={{ selected: active }}
               >
                 <Ionicons name={m === 'standard' ? 'car-outline' : 'flash-outline'} size={22} color={colors.textPrimary} style={{ marginRight: Space.md }} aria-hidden={true} />
                 <Text style={[styles.shippingSheetRowLabel, { color: colors.textPrimary }]}>
-                  {m === 'standard' ? 'Standard' : 'Express'}
+                  {m === 'standard' ? t('shipping.standard') : t('shipping.express')}
                 </Text>
                 <View style={[styles.shippingSheetRadioOuter, { borderColor: active ? colors.brand : colors.border }]}>
                   {active && <View style={[styles.shippingSheetRadioInner, { backgroundColor: colors.brand }]} />}
@@ -85,21 +91,21 @@ function ShippingPickerSheet({
           })}
 
           {/* Who pays section */}
-          <Text style={[styles.shippingSheetSectionLabel, { color: colors.textMuted, marginTop: Space.lg }]}>Who pays</Text>
+          <Text style={[styles.shippingSheetSectionLabel, { color: colors.textMuted, marginTop: Space.lg }]}>{t('shipping.whoPays')}</Text>
           {(['buyer', 'seller'] as const).map((p) => {
             const active = shippingPayer === p;
             return (
               <Pressable
                 key={p}
-                style={({ pressed }) => [styles.shippingSheetRow, { borderBottomColor: colors.border }, pressed && { opacity: 0.6 }]}
+                style={({ pressed }) => [styles.shippingSheetRow, { borderBottomColor: colors.borderSubtle }, pressed && { opacity: 0.6 }]}
                 onPress={() => { onSetShippingPayer(p); haptics.selection(); }}
                 accessibilityRole="radio"
-                accessibilityLabel={`Set shipping payer to ${p}`}
+                accessibilityLabel={`${t('shipping.whoPays')}: ${p === 'buyer' ? t('shipping.buyerPays') : t('shipping.sellerPays')}`}
                 accessibilityState={{ selected: active }}
               >
                 <Ionicons name={p === 'buyer' ? 'person-outline' : 'storefront-outline'} size={22} color={colors.textPrimary} style={{ marginRight: Space.md }} aria-hidden={true} />
                 <Text style={[styles.shippingSheetRowLabel, { color: colors.textPrimary }]}>
-                  {p === 'buyer' ? 'Buyer pays' : 'I pay (free)'}
+                  {p === 'buyer' ? t('shipping.buyerPays') : t('shipping.sellerPays')}
                 </Text>
                 <View style={[styles.shippingSheetRadioOuter, { borderColor: active ? colors.brand : colors.border }]}>
                   {active && <View style={[styles.shippingSheetRadioInner, { backgroundColor: colors.brand }]} />}

@@ -52,6 +52,7 @@ import {
   CANONICAL_RIGHTS_LABELS,
   type CoOwnRightsRow,
   type CoOwnCandleRange,
+  type CoOwnChartType,
 } from '../components/coown';
 import { AssetDetailModals } from '../components/coown/asset-detail/AssetDetailModals';
 import {
@@ -62,6 +63,7 @@ import {
   AssetDetailIdentity,
   RelatedAssetsRail,
   CoOwnSegmentNav,
+  CoOwnScrollContext,
   type CoOwnDetailTab,
 } from '../components/coown/asset-detail';
 import {
@@ -131,13 +133,21 @@ export default function AssetDetailScreen() {
   const [yourOpenOrdersFailed, setYourOpenOrdersFailed] = React.useState(false);
   const [yourOpenOrdersLoading, setYourOpenOrdersLoading] = React.useState(false);
   const [cancellingOrderId, setCancellingOrderId] = React.useState<number | null>(null);
-  const [pendingCancels, setPendingCancels] = React.useState<Set<number>>(new Set());
+  const [openOrdersRetryNonce, setOpenOrdersRetryNonce] = React.useState(0);
+  const retryOpenOrders = React.useCallback(() => setOpenOrdersRetryNonce(value => value + 1), []);
   const [relatedAssets, setRelatedAssets] = React.useState<MarketCoOwnAsset[]>([]);
   const [relatedAssetsLoading, setRelatedAssetsLoading] = React.useState(false);
   const [refreshKey, setRefreshKey] = React.useState(0);
   const [fullscreenIndex, setFullscreenIndex] = React.useState(0);
-  const [pendingTradeSide, setPendingTradeSide] = React.useState<'buy' | 'sell' | null>(null);
+  // F22: the pending trade intent carries the full draft (side + optional
+  // pre-selected limit price) so a first-trade education interruption
+  // never silently drops the level the user tapped in the book.
+  const [pendingTradeSide, setPendingTradeSide] = React.useState<{
+    side: 'buy' | 'sell';
+    limitPrice?: number;
+  } | null>(null);
   const [candleRange, setCandleRange] = React.useState<CoOwnCandleRange>('1W');
+  const [chartType, setChartType] = React.useState<CoOwnChartType>('candle');
   const [showVolume, setShowVolume] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState<CoOwnDetailTab>('overview');
 
@@ -207,6 +217,16 @@ export default function AssetDetailScreen() {
       scrollY.value = event.contentOffset.y;
     }
   });
+
+  // ── CoOwnScrollContext provider ──
+  // CoOwnSegmentNav calls scrollToY(navY) on tab switch to bring the
+  // segmented nav back into view. Wire the context to the ScrollView
+  // ref so the call is live instead of a no-op default.
+  const scrollRef = React.useRef<Reanimated.ScrollView>(null);
+  const scrollToY = React.useCallback((y: number) => {
+    scrollRef.current?.scrollTo({ y, animated: true });
+  }, []);
+  const coOwnScrollValue = React.useMemo(() => ({ scrollToY }), [scrollToY]);
 
   // ── Last distribution fetch — most recent distribution for this asset.
   // The unclaimed badge treats only non-settled distributions as unclaimed;
@@ -334,13 +354,8 @@ export default function AssetDetailScreen() {
           timestamp: o.createdAt,
           orderId: o.id,
         }));
-        // P1 #5 fix: filter out orders with pending cancels so an
-        // in-flight refresh doesn't restore an order being cancelled.
-        const filtered = pendingCancels.size > 0
-          ? mapped.filter((o) => o.orderId != null && !pendingCancels.has(o.orderId))
-          : mapped;
-        setYourOpenOrders(filtered);
-        setHasActiveOrders(filtered.length > 0);
+        setYourOpenOrders(mapped);
+        setHasActiveOrders(mapped.length > 0);
         setYourOpenOrdersLoading(false);
       })
       .catch(() => {
@@ -351,7 +366,7 @@ export default function AssetDetailScreen() {
         setYourOpenOrdersLoading(false);
       });
     return () => { cancelled = true; };
-  }, [assetId, currentUser?.id, refreshKey, pendingCancels]);
+  }, [assetId, currentUser?.id, refreshKey, openOrdersRetryNonce]);
 
   // Track when asset data first arrives for staleness computation
   React.useEffect(() => {
@@ -382,12 +397,10 @@ export default function AssetDetailScreen() {
   // P1 #3: Cancel is blocked during reconciliation (balances settling)
   // but allowed when the market is closed — resting orders can be
   // withdrawn even when new orders are paused.
-  // P1 #5: A pending-cancels set prevents an in-flight refresh from
-  // restoring an order that is being cancelled.
   // P1 #15: Verify the order exists in the local list and belongs to
   // this asset before calling the API.
   const handleCancelOrder = React.useCallback((orderId: number) => {
-    if (!assetId || !currentUser?.id) return;
+    if (!assetId || !currentUser?.id || cancellingOrderId != null) return;
     // P1 #15: fail closed — verify the order is in our list for this asset
     const orderExists = yourOpenOrders?.some(
       (o) => o.orderId === orderId && o.referenceId === assetId
@@ -405,17 +418,11 @@ export default function AssetDetailScreen() {
     }
     haptics.tap();
     setCancellingOrderId(orderId);
-    setPendingCancels((prev) => new Set(prev).add(orderId));
-    // Optimistic: remove from local list immediately
-    setYourOpenOrders((prev) => prev?.filter((o) => o.orderId !== orderId) ?? null);
+    // Keep the order visible until the server acknowledges cancellation.
     void cancelCoOwnOrder(assetId, orderId, currentUser.id)
       .then(() => {
         setCancellingOrderId(null);
-        setPendingCancels((prev) => {
-          const next = new Set(prev);
-          next.delete(orderId);
-          return next;
-        });
+        setYourOpenOrders(prev => prev?.filter(order => order.orderId !== orderId) ?? null);
         // Invalidate cached order book / holdings so returning views show
         // the updated state after the cancellation. Also explicitly refetch
         // the streaming order book — the stream manages its own snapshot
@@ -427,17 +434,12 @@ export default function AssetDetailScreen() {
       })
       .catch((err) => {
         setCancellingOrderId(null);
-        setPendingCancels((prev) => {
-          const next = new Set(prev);
-          next.delete(orderId);
-          return next;
-        });
         const parsed = parseApiError(err, 'Could not cancel order');
         show(parsed.message, 'error');
-        // Re-fetch to restore the removed order
+        // Reconcile the authoritative order state after a failed response.
         setRefreshKey((k) => k + 1);
       });
-  }, [assetId, currentUser?.id, show, yourOpenOrders, orderBook, invalidateCoOwnAsset, refetchOrderBook]);
+  }, [assetId, currentUser?.id, show, yourOpenOrders, orderBook, invalidateCoOwnAsset, refetchOrderBook, cancellingOrderId]);
 
   // Pull-to-refresh — reloads asset, order book, and holdings in parallel.
   // Bumping refreshKey also re-runs the distributions, corporate-actions,
@@ -463,6 +465,13 @@ export default function AssetDetailScreen() {
   // Market-data staleness computation (spec 07 §1.4). `asOf` is only the
   // response assembly time; use the backend source watermark instead so a
   // freshly fetched stale mark cannot appear live.
+  //
+  // F13: observation freshness and fact age are separate truths. A live
+  // streaming book proves the transport is fresh — an old last execution
+  // in a quiet market is an honest old fact (labelled in the identity),
+  // not a disconnected market. Only backend-declared connection states
+  // or a stale mark can flag staleness while the book streams; when no
+  // live transport exists, elapsed time remains the fallback signal.
   const STALENESS_THRESHOLD_SECONDS = 24 * 60 * 60;
   const { dataStale, dataStaleAgeLabel } = React.useMemo(() => {
     if (!asset || !dataLoadedAt) return { dataStale: false, dataStaleAgeLabel: undefined };
@@ -482,7 +491,10 @@ export default function AssetDetailScreen() {
     const staleByStatus = snapshot?.connectionStatus === 'stale'
       || snapshot?.connectionStatus === 'degraded'
       || (asset.staleMarkDays != null && asset.staleMarkDays > 7);
-    const stale = staleByStatus || (hasSecondaryMarket && ageSeconds > STALENESS_THRESHOLD_SECONDS);
+    const stale = staleByStatus
+      || (hasSecondaryMarket
+        && !orderBookStreaming
+        && ageSeconds > STALENESS_THRESHOLD_SECONDS);
     if (!stale) return { dataStale: false, dataStaleAgeLabel: undefined };
     const ageLabel = !Number.isFinite(ageSeconds)
       ? 'age unavailable'
@@ -492,7 +504,7 @@ export default function AssetDetailScreen() {
         ? `${Math.floor(ageSeconds / 3600)}h ago`
         : `${Math.floor(ageSeconds / 60)}m ago`;
     return { dataStale: true, dataStaleAgeLabel: ageLabel };
-  }, [asset, dataLoadedAt]);
+  }, [asset, dataLoadedAt, orderBookStreaming]);
 
   const supplyIsValid = React.useMemo(() => {
     if (!asset) return false;
@@ -592,9 +604,6 @@ export default function AssetDetailScreen() {
   const appraisedValuePerUnitGbp = asset.appraisalValueGbp && totalUnits > 0
     ? asset.appraisalValueGbp / totalUnits
     : null;
-  const referenceVsAppraisalPct = appraisedValuePerUnitGbp && appraisedValuePerUnitGbp > 0
-    ? ((asset.unitPriceGbp - appraisedValuePerUnitGbp) / appraisedValuePerUnitGbp) * 100
-    : null;
   const allocatedPct = totalUnits > 0 ? Math.round(((totalUnits - availableUnits) / totalUnits) * 100) : 0;
   const viewerPct = yourUnits != null && totalUnits > 0
     ? Math.round((yourUnits / totalUnits) * 100 * 10) / 10
@@ -619,21 +628,6 @@ export default function AssetDetailScreen() {
     ? lastDistribution.perUnitGbpMinor / 100
     : null;
   const feePct = Math.round((asset.tradingFeeRate ?? CO_OWN_FEE_RATE) * 100);
-
-  // ── Holder P&L (spec 09 upgrade) ──
-  // avgEntryPriceGbp comes from the backend holdings contract.
-  // Only show P&L if both entry and current value are known.
-  const avgEntryPriceGbp = yourHolding?.avgEntryPriceGbp ?? null;
-  const positionValueGbp = yourUnits != null ? asset.unitPriceGbp * yourUnits : null;
-  const positionCostGbp = avgEntryPriceGbp != null && yourUnits != null
-    ? avgEntryPriceGbp * yourUnits
-    : null;
-  const unrealizedPnlGbp = positionValueGbp != null && positionCostGbp != null
-    ? positionValueGbp - positionCostGbp
-    : null;
-  const unrealizedPnlPct = positionCostGbp != null && positionCostGbp > 0 && unrealizedPnlGbp != null
-    ? (unrealizedPnlGbp / positionCostGbp) * 100
-    : null;
 
   const bestBid = orderBook && orderBook.bids.length > 0 ? orderBook.bids[0] : null;
   const bestAsk = orderBook && orderBook.asks.length > 0 ? orderBook.asks[0] : null;
@@ -673,6 +667,26 @@ export default function AssetDetailScreen() {
     : lastExecutionPriceGbp;
   const dominantPriceTimestamp = hasTrades && !isInitialOffering && marketSnapshot?.lastExecutionAt
     ? new Date(marketSnapshot.lastExecutionAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+    : null;
+
+  // ── Holder P&L (spec 09 upgrade) ──
+  // F06: the position mark uses the SAME price the headline shows, so the
+  // detail mark and the hero price can never disagree. The basis is
+  // labelled in the ownership section — marked value is not estimated
+  // sale proceeds.
+  const avgEntryPriceGbp = yourHolding?.avgEntryPriceGbp ?? null;
+  const positionValueGbp = yourUnits != null ? dominantPriceValue * yourUnits : null;
+  const positionMarkBasis: 'last trade' | 'reference price' = hasTrades && !isInitialOffering
+    ? 'last trade'
+    : 'reference price';
+  const positionCostGbp = avgEntryPriceGbp != null && yourUnits != null
+    ? avgEntryPriceGbp * yourUnits
+    : null;
+  const unrealizedPnlGbp = positionValueGbp != null && positionCostGbp != null
+    ? positionValueGbp - positionCostGbp
+    : null;
+  const unrealizedPnlPct = positionCostGbp != null && positionCostGbp > 0 && unrealizedPnlGbp != null
+    ? (unrealizedPnlGbp / positionCostGbp) * 100
     : null;
 
   const apiCandles = asset.candles ?? [];
@@ -723,7 +737,7 @@ export default function AssetDetailScreen() {
       return;
     }
     if (!coOwnCompliance.educationCompleted) {
-      setPendingTradeSide(side);
+      setPendingTradeSide({ side });
       openSheet('guide');
       return;
     }
@@ -743,7 +757,7 @@ export default function AssetDetailScreen() {
     }
     const tradeSide: 'buy' | 'sell' = bookSide === 'ask' ? 'buy' : 'sell';
     if (!coOwnCompliance.educationCompleted) {
-      setPendingTradeSide(tradeSide);
+      setPendingTradeSide({ side: tradeSide, limitPrice: price });
       openSheet('guide');
       return;
     }
@@ -757,7 +771,11 @@ export default function AssetDetailScreen() {
 
   const handleGuideContinueToTrade = () => {
     if (pendingTradeSide) {
-      navigation.navigate('Trade', { assetId: asset.id, side: pendingTradeSide });
+      navigation.navigate('Trade', {
+        assetId: asset.id,
+        side: pendingTradeSide.side,
+        limitPrice: pendingTradeSide.limitPrice,
+      });
     }
     setPendingTradeSide(null);
   };
@@ -770,6 +788,7 @@ export default function AssetDetailScreen() {
   // WS5: when the rights document has tbcReason/tbcEtaDate, surface them
   // so the user knows when to expect confirmation and why it's pending.
   const rightsTbcReason = asset.rights?.tbcReason ?? null;
+  const rightsTbcEtaDate = asset.rights?.tbcEtaDate ?? null;
   // GAP 3 fix: when the backend has published structured rights
   // (economic/voting/exit/fee), use them instead of forcing every row
   // to TBC. The structured fields map to the canonical labels so the
@@ -789,6 +808,8 @@ export default function AssetDetailScreen() {
       label,
       answer: rightsTbcReason ?? 'To be confirmed',
       isTbc: true,
+      tbcReason: rightsTbcReason,
+      tbcEtaDate: rightsTbcEtaDate,
     };
   });
   const hasIncompleteRights = rightsRows.some((r) => r.isTbc);
@@ -821,11 +842,14 @@ export default function AssetDetailScreen() {
         }}
       />
 
+      <CoOwnScrollContext.Provider value={coOwnScrollValue}>
       <Reanimated.ScrollView
+        ref={scrollRef}
         showsVerticalScrollIndicator={false}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
         contentContainerStyle={{ paddingBottom: scrollBottomPadding }}
+        stickyHeaderIndices={[3]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -922,13 +946,19 @@ export default function AssetDetailScreen() {
             Local Section Navigation: Overview · Market · Ownership
             Spec 03_COOWN: Replaces stacked disclosure accordions with
             an authored segmented control for instant scannability.
+            Pinned via stickyHeaderIndices so tab switching stays
+            reachable while scrolling. The opaque wrapper ensures
+            scrolling content does not show through the transparent
+            nav background.
             ════════════════════════════════════════════════════════════ */}
-        <CoOwnSegmentNav
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          hasActiveOrders={hasActiveOrders}
-          hasUnclaimedDistributions={lastDistribution != null && lastDistribution.status !== 'settled'}
-        />
+        <View style={[styles.stickyNavContainer, { backgroundColor: colors.background }]}>
+          <CoOwnSegmentNav
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            hasActiveOrders={hasActiveOrders}
+            hasUnclaimedDistributions={lastDistribution != null && lastDistribution.status !== 'settled'}
+          />
+        </View>
 
         {activeTab === 'overview' && (
           <AssetOverviewSection
@@ -936,6 +966,8 @@ export default function AssetDetailScreen() {
             candleData={candleData}
             candleRange={candleRange}
             onCandleRangeChange={setCandleRange}
+            chartType={chartType}
+            onChartTypeChange={setChartType}
             showVolume={showVolume}
             onToggleVolume={() => setShowVolume((v) => !v)}
             lastExecutionPriceGbp={lastExecutionPriceGbp}
@@ -943,12 +975,12 @@ export default function AssetDetailScreen() {
             marketDataStale={dataStale}
             marketDataAgeLabel={dataStaleAgeLabel}
             appraisedValuePerUnitGbp={appraisedValuePerUnitGbp}
-            referenceVsAppraisalPct={referenceVsAppraisalPct}
             dossierDocuments={dossierDocuments}
             hasDocuments={hasDocuments}
             onOpenDiligence={() => navigation.navigate('AssetDueDiligence', { assetId: asset.id })}
             onOpenRiskDisclosure={() => openSheet('riskDisclosure')}
             lifecycleState={lifecycleState}
+            refreshKey={refreshKey}
           />
         )}
 
@@ -973,8 +1005,10 @@ export default function AssetDetailScreen() {
             yourOpenOrders={yourOpenOrders}
             yourOpenOrdersFailed={yourOpenOrdersFailed}
             yourOpenOrdersLoading={yourOpenOrdersLoading}
+            onRetryOpenOrders={retryOpenOrders}
             onCancelOrder={handleCancelOrder}
             cancellingOrderId={cancellingOrderId}
+            refreshKey={refreshKey}
           />
         )}
 
@@ -982,7 +1016,13 @@ export default function AssetDetailScreen() {
           <AssetOwnershipSection
             isHolder={isHolder}
             yourUnits={yourUnits}
+            reservedUnits={yourHolding?.reservedUnits ?? null}
+            sellableUnits={yourHolding?.reservedUnits != null
+              ? Math.max(0, yourHolding.unitsOwned - yourHolding.reservedUnits) : null}
+            holdingsLoading={Boolean(currentUser && holdingsQuery.isLoading)}
             viewerPct={viewerPct}
+            positionValueGbp={positionValueGbp}
+            positionMarkBasis={positionMarkBasis}
             avgEntryPriceGbp={avgEntryPriceGbp}
             unrealizedPnlGbp={unrealizedPnlGbp}
             unrealizedPnlPct={unrealizedPnlPct}
@@ -1016,6 +1056,11 @@ export default function AssetDetailScreen() {
               actionId: action.id,
             })}
             onOpenBuyout={() => navigation.navigate('Buyout', { assetId: asset.id })}
+            lockupEndDate={asset.lockupEndDate ?? null}
+            activeBuyoutOfferPriceGbp={asset.activeBuyoutOffer?.priceGbp ?? null}
+            activeBuyoutOfferPremiumPct={asset.activeBuyoutOffer?.premiumPct ?? null}
+            activeBuyoutOfferExpiry={asset.activeBuyoutOffer?.expiry ?? null}
+            feeSchedule={asset.feeSchedule ?? undefined}
           />
         )}
 
@@ -1038,6 +1083,7 @@ export default function AssetDetailScreen() {
         />
 
       </Reanimated.ScrollView>
+      </CoOwnScrollContext.Provider>
 
       {/* ── Zone G — Sticky action dock ──
           Extracted into AssetDetailDock — 7 state variants with the
@@ -1061,6 +1107,10 @@ export default function AssetDetailScreen() {
         onOpenSheet={openSheet}
         onNavigateOrderHistory={() => navigation.navigate('CoOwnOrderHistory')}
         onTradePress={handleTradePress}
+        openOrderCount={yourOpenOrders?.length ?? 0}
+        hasUnclaimedDistribution={lastDistribution != null && lastDistribution.status !== 'settled'}
+        onSwitchToMarket={() => setActiveTab('market')}
+        onSwitchToOwnership={() => setActiveTab('ownership')}
       />
 
       {/* Domain-isolated modals and bottom sheets */}
@@ -1080,6 +1130,19 @@ export default function AssetDetailScreen() {
         alertTargetPrice={alertTargetPrice}
         alertCondition={alertCondition}
         alertSubmitting={alertSubmitting}
+        alertDenomination="GBP"
+        alertTriggerBasis={
+          asset.lastTradePriceGbp != null || asset.marketSnapshot?.lastExecutionPriceGbp != null
+            ? 'last_trade'
+            : 'reference'
+        }
+        alertCurrentPriceGbp={
+          asset.marketSnapshot?.lastExecutionPriceGbp != null
+            ? asset.marketSnapshot.lastExecutionPriceGbp
+            : asset.lastTradePriceGbp != null
+              ? asset.lastTradePriceGbp
+              : asset.unitPriceGbp
+        }
         yourUnits={yourUnits}
         totalUnits={totalUnits}
         availableUnits={availableUnits}
@@ -1110,5 +1173,10 @@ export default function AssetDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  stickyNavContainer: {
+    // Opaque background is applied inline via colors.background so
+    // scrolling content does not show through the pinned nav. The
+    // hairline bottom border comes from CoOwnSegmentNav itself.
   },
 });

@@ -40,7 +40,7 @@ function composeMatrices(outer: readonly number[], inner: readonly number[]): nu
   return result;
 }
 
-/** Compose multiple matrices left-to-right (first applied first). */
+/** Compose multiple matrices left-to-right (first argument is the outermost/last-applied transform). */
 function composeAll(...matrices: number[][]): number[] {
   if (matrices.length === 0) return [...IDENTITY];
   return matrices.reduce((acc, m) => composeMatrices(acc, m));

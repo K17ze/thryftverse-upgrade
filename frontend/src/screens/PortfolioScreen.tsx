@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, RefreshControl, useWindowDimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
@@ -23,6 +23,7 @@ import {
   CoOwnStateCanvas,
   CoOwnPortfolioStorytelling,
   CoOwnPortfolioPerformanceChart,
+  CoOwnPortfolioAllocation,
   CoOwnOfflineBanner,
   type CoOwnPositionAction,
 } from '../components/coown';
@@ -67,12 +68,19 @@ export default function PortfolioScreen() {
   const [activePortfolioTab, setActivePortfolioTab] = React.useState<'positions' | 'insights'>('positions');
   const [isPartial, setIsPartial] = React.useState(false);
 
+  // U40: Latest-wins request token. When a focus refresh and a manual
+  // refresh overlap, the older request's result must not replace the
+  // newer one. Each load increments the token; results are discarded
+  // unless their token matches the current value.
+  const requestTokenRef = React.useRef(0);
+
   const loadPortfolio = React.useCallback((mode: 'initial' | 'refresh' = 'initial') => {
     if (!currentUser?.id) {
       setIsLoading(false);
       setRefreshing(false);
       return;
     }
+    const token = ++requestTokenRef.current;
     let cancelled = false;
     if (mode === 'refresh') setRefreshing(true);
     else setIsLoading(true);
@@ -80,20 +88,20 @@ export default function PortfolioScreen() {
 
     fetchCoOwnPortfolioPositions(currentUser.id, listings)
       .then((result) => {
-        if (cancelled) return;
+        if (cancelled || token !== requestTokenRef.current) return;
         setPositions(result.positions);
         setSummary(result.summary);
         setIsPartial(result.partial ?? false);
       })
       .catch((err) => {
-        if (cancelled) return;
+        if (cancelled || token !== requestTokenRef.current) return;
         const parsed = parseApiError(err, 'Unable to load portfolio');
         show(parsed.message, 'error');
         setIsError(true);
         setIsPartial(false);
       })
       .finally(() => {
-        if (!cancelled) {
+        if (!cancelled && token === requestTokenRef.current) {
           setIsLoading(false);
           setRefreshing(false);
         }
@@ -102,10 +110,15 @@ export default function PortfolioScreen() {
     return () => { cancelled = true; };
   }, [currentUser?.id, show, listings]);
 
-  React.useEffect(() => {
-    const cleanup = loadPortfolio();
-    return cleanup;
-  }, [loadPortfolio]);
+  // Portfolio is often left mounted behind a trade ticket. Reconcile on
+  // focus so a committed/cancelled order cannot leave an old position mark
+  // visible until a full remount or manual pull-to-refresh.
+  useFocusEffect(
+    React.useCallback(() => {
+      const cleanup = loadPortfolio();
+      return cleanup;
+    }, [loadPortfolio]),
+  );
 
   const handleRefresh = React.useCallback(() => {
     loadPortfolio('refresh');
@@ -196,6 +209,18 @@ export default function PortfolioScreen() {
     };
   }, [positions]);
 
+  // U39: Format the sale quote age from the saleProceedsAsOf timestamp.
+  const formatQuoteAge = (isoTimestamp: string): string => {
+    const ageMs = Date.now() - new Date(isoTimestamp).getTime();
+    if (isNaN(ageMs) || ageMs < 0) return 'unknown';
+    const mins = Math.floor(ageMs / 60000);
+    if (mins < 60) return `${mins}m`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h`;
+    const days = Math.floor(hours / 24);
+    return `${days}d`;
+  };
+
   const formatPositionStatus = (p: CoOwnPositionVM): 'open' | 'closed' | 'paused' => {
     if (!p.isOpen) return 'closed';
     return p.availableUnits > 0 ? 'open' : 'closed';
@@ -277,6 +302,12 @@ export default function PortfolioScreen() {
         saleDepthLabel={item.estimatedSaleProceedsGbp === null
           ? undefined
           : `Bid depth: ${item.saleDepthUnits} units`}
+        partialLiquidityLabel={item.estimatedSaleProceedsGbp === null
+          ? undefined
+          : `Can sell ${item.saleDepthUnits} of ${item.unitsOwned} units at current bid`}
+        saleQuoteAgeLabel={item.saleProceedsAsOf
+          ? `Quote ${formatQuoteAge(item.saleProceedsAsOf)} old`
+          : undefined}
         avgEntryLabel={formatFromFiat(item.avgEntryPriceGbp, 'GBP')}
         unrealizedLabel={item.unrealizedPnlGbp >= 0
           ? `+${formatFromFiat(Math.abs(item.unrealizedPnlGbp), 'GBP')}`
@@ -296,6 +327,9 @@ export default function PortfolioScreen() {
         index={index}
         positionState={item.positionState}
         settlementState={item.settlementState}
+        mark={item.mark}
+        markValueLabel={formatFromFiat(item.markedValueGbp, 'GBP')}
+        lockupEndDate={item.lockupEndDate ?? null}
       />
     );
   };
@@ -748,6 +782,22 @@ export default function PortfolioScreen() {
                 </AnimatedPressable>
                 {allocationExpanded && (
                   <>
+                    {/* Allocation donut — flagship portfolio visualization.
+                        Sits at the top of the expanded allocation section so
+                        the user sees the overall composition at a glance,
+                        with the bar breakdowns below for detail. */}
+                    {allocationBars.length > 0 && (
+                      <CoOwnPortfolioAllocation
+                        positions={positions.map((p) => ({
+                          assetId: p.assetId,
+                          title: p.title,
+                          marketValueGbp: p.currentValueGbp,
+                          category: p.category,
+                        }))}
+                        totalValueGbp={summary.totalValueGbp}
+                        groupBy="asset"
+                      />
+                    )}
                     <Text style={[styles.allocationSubtitle, { color: colors.textMuted }]}>By asset</Text>
                     <View style={styles.barsContainer}>
                       {allocationBars.map((bar) => (

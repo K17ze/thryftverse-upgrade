@@ -7,6 +7,7 @@ import {
   processPushQueueJob,
   processPushReceiptReconciliation,
   sweepExpiredAuctions,
+  sweepExpiredCoOwnOrders,
   runPlatformReconciliation,
   processDomainOutboxBatch,
   processQueuedOnezeMintReserveAllocation,
@@ -29,6 +30,8 @@ import {
   sweepScheduledPublications,
   processBackupExpiryCheck,
   processDsarExport,
+  evaluateCoOwnPriceAlerts,
+  processCoOwnDripReinvestment,
 } from './handlers/index.js';
 
 /**
@@ -55,6 +58,15 @@ async function main(): Promise<void> {
       handlePushJob: processPushQueueJob,
       handleAuctionSweepJob: async ({ reason }) => {
         await sweepExpiredAuctions(reason);
+      },
+      handleCoOwnOrderExpirySweepJob: async ({ reason }) => {
+        await sweepExpiredCoOwnOrders(reason);
+      },
+      handleCoOwnAlertEvaluatorJob: async ({ reason }) => {
+        await evaluateCoOwnPriceAlerts(reason);
+      },
+      handleCoOwnDripExecutionJob: async ({ reason }) => {
+        await processCoOwnDripReinvestment(reason);
       },
       handleReconciliationJob: async ({ reason, runDate }) => {
         await runPlatformReconciliation(reason, runDate);

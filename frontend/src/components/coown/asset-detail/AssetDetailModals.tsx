@@ -27,7 +27,8 @@ export interface AssetDetailModalsProps {
   onActiveFullscreenIndexChange: (index: number) => void;
   fullscreenVisible: boolean;
   guideVisible: boolean;
-  pendingTradeSide: 'buy' | 'sell' | null;
+  /** Full pending trade draft preserved through the education guide. */
+  pendingTradeSide: { side: 'buy' | 'sell'; limitPrice?: number } | null;
   rightsSheetVisible: boolean;
   riskDisclosureVisible: boolean;
   supplySheetVisible: boolean;
@@ -36,6 +37,12 @@ export interface AssetDetailModalsProps {
   alertTargetPrice: string;
   alertCondition: 'above' | 'below';
   alertSubmitting: boolean;
+  /** U52: Denomination currency code. */
+  alertDenomination?: string;
+  /** U52: Trigger basis for the price alert. */
+  alertTriggerBasis?: 'last_trade' | 'reference';
+  /** U52: Current observed price in GBP major units. */
+  alertCurrentPriceGbp?: number | null;
   yourUnits: number | null;
   totalUnits: number;
   availableUnits: number;
@@ -83,6 +90,9 @@ export const AssetDetailModals = React.memo(function AssetDetailModals({
   alertTargetPrice,
   alertCondition,
   alertSubmitting,
+  alertDenomination = 'GBP',
+  alertTriggerBasis = 'last_trade',
+  alertCurrentPriceGbp = null,
   yourUnits,
   totalUnits,
   availableUnits,
@@ -147,7 +157,13 @@ export const AssetDetailModals = React.memo(function AssetDetailModals({
       <CoOwnRightsSheet
         visible={rightsSheetVisible}
         onClose={() => onCloseSheet('rights')}
-        disclosureVersion={asset.rights?.version ? `Rights v${asset.rights.version}` : 'Rights v1'}
+        disclosureVersion={
+          asset.rights
+            ? asset.rights.version
+              ? `Rights v${asset.rights.version}`
+              : 'Version not available'
+            : 'Unpublished'
+        }
         rights={rightsRows}
       />
 
@@ -238,6 +254,9 @@ export const AssetDetailModals = React.memo(function AssetDetailModals({
         onAlertConditionChange={onAlertConditionChange}
         alertSubmitting={alertSubmitting}
         onSubmit={onCreatePriceAlert}
+        denomination={alertDenomination}
+        triggerBasis={alertTriggerBasis}
+        currentPriceGbp={alertCurrentPriceGbp}
       />
     </>
   );

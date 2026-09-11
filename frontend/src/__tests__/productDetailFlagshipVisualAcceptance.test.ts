@@ -358,15 +358,16 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
     });
 
     it('keeps unavailable fundamentals outside the dominant market surface', () => {
-      // trustFactualLine moved to the extracted section components
-      // (AssetOverviewSection / AssetOwnershipSection). The market
-      // surface (AssetMarketSection) must not carry secondaryMetrics.
-      const overviewSection = read(resolve(COMPONENTS, 'coown/asset-detail/AssetOverviewSection.tsx'));
+      // trustFactualLine was replaced by trustBadges in AssetOverviewDetails
+      // during the Wave 33 refactor. The market surface must not carry
+      // secondaryMetrics.
+      const overviewDetails = read(resolve(COMPONENTS, 'coown/asset-detail/AssetOverviewDetails.tsx'));
       const ownershipSection = read(resolve(COMPONENTS, 'coown/asset-detail/AssetOwnershipSection.tsx'));
       const marketSection = read(resolve(COMPONENTS, 'coown/asset-detail/AssetMarketSection.tsx'));
       expect(
-        overviewSection.includes('trustFactualLine')
-        || ownershipSection.includes('trustFactualLine'),
+        overviewDetails.includes('trustBadges')
+        || overviewDetails.includes('trustFacts')
+        || ownershipSection.includes('trustFacts'),
       ).toBe(true);
       expect(marketSection).not.toContain('secondaryMetrics');
     });

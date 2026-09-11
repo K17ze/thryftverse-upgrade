@@ -70,6 +70,50 @@ export interface SellScreenActionsResult {
 }
 
 /**
+ * Builds the `existing` media list (as `MediaUploadAsset`) from the current
+ * draft items, used as the baseline for duplicate/limit validation in
+ * `validateMediaAssets`.
+ */
+function buildExistingMediaList(
+  mediaDraftItems: ListingMediaDraftItem[],
+): MediaUploadAsset[] {
+  return mediaDraftItems.map((m) => ({
+    id: m.id,
+    uri: m.uri,
+    fileName: m.fileName ?? 'existing',
+    mimeType: m.mimeType ?? 'image/jpeg',
+    kind: m.kind,
+    fileSize: m.fileSize,
+    width: m.width,
+    height: m.height,
+    durationMs: m.durationMs,
+  }));
+}
+
+/**
+ * Runs media validation against the existing list, surfaces any validation
+ * errors via `setErrorMsg`, appends the valid assets through `appendFn`, and
+ * returns the count of appended assets. Centralises the validate → report →
+ * append flow shared by library picking and camera capture.
+ */
+function processValidatedAssets(
+  assets: MediaUploadAsset[],
+  existing: MediaUploadAsset[],
+  appendFn: (asset: MediaUploadAsset) => void,
+  setErrorMsg: (msg: string) => void,
+): number {
+  const validation = validateMediaAssets(assets, existing, { maxTotalCount: 10 });
+  if (validation.errors.length > 0) {
+    const skipped = validation.errors.map((e) => e.message).join('. ');
+    if (skipped) setErrorMsg(skipped);
+  }
+  for (const asset of validation.assets) {
+    appendFn(asset);
+  }
+  return validation.assets.length;
+}
+
+/**
  * Owns the action domain for the sell screen: all useCallback handlers for
  * image picking, tag management, autofill, picker selection, price input,
  * preview navigation, and the listing publish pipeline. Receives the data
@@ -145,6 +189,12 @@ export function useSellScreenActions(params: SellScreenActionsParams): SellScree
   /* -- photo handling -- */
   const appendPhotoAsset = useCallback((asset: MediaUploadAsset) => {
     setMediaDraftItems((prev) => {
+      // Safety net: validation in handlePickFromLibrary/handleCameraCapture is
+      // the single gatekeeper against the 10-item limit. If we are already at
+      // the limit (e.g. a race between validation and append), drop silently
+      // rather than slicing — slicing could evict a different item than the
+      // one that exceeded the budget.
+      if (prev.length >= 10) return prev;
       if (prev.some((m) => m.uri === asset.uri)) return prev;
       const draftItem: ListingMediaDraftItem = {
         id: asset.id,
@@ -158,7 +208,7 @@ export function useSellScreenActions(params: SellScreenActionsParams): SellScree
         height: asset.height,
         durationMs: asset.durationMs,
         status: 'draft' };
-      const next = [...prev, draftItem].slice(0, 10);
+      const next = [...prev, draftItem];
       // Keep photos in sync for backward compat
       setPhotos(next.map((m) => m.uri));
       if (listingMode === 'co_own' && coOwnEnabled && authPhotos.length === 0) {
@@ -182,27 +232,9 @@ export function useSellScreenActions(params: SellScreenActionsParams): SellScree
         quality: 0.9 });
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const assets = result.assets.map(convertPickerAsset);
-        const existing = mediaDraftItems.map((m) => ({
-          id: m.id,
-          uri: m.uri,
-          fileName: m.fileName ?? 'existing',
-          mimeType: m.mimeType ?? 'image/jpeg',
-          kind: m.kind,
-          fileSize: m.fileSize,
-          width: m.width,
-          height: m.height,
-          durationMs: m.durationMs }));
-        const validation = validateMediaAssets(assets, existing, { maxTotalCount: 10 });
-
-        if (validation.errors.length > 0) {
-          const skipped = validation.errors.map((e) => e.message).join('. ');
-          if (skipped) setErrorMsg(skipped);
-        }
-
-        for (const asset of validation.assets) {
-          appendPhotoAsset(asset);
-        }
-        if (validation.assets.length > 0) {
+        const existing = buildExistingMediaList(mediaDraftItems);
+        const appended = processValidatedAssets(assets, existing, appendPhotoAsset, setErrorMsg);
+        if (appended > 0) {
           haptics.success();
         }
       }
@@ -229,24 +261,9 @@ export function useSellScreenActions(params: SellScreenActionsParams): SellScree
   const handleCameraCapture = useCallback((uris: string[]) => {
     if (uris.length === 0) return;
     const assets = uris.map(convertCaptureUri);
-    const existing = mediaDraftItems.map((m) => ({
-      id: m.id,
-      uri: m.uri,
-      fileName: m.fileName ?? 'existing',
-      mimeType: m.mimeType ?? 'image/jpeg',
-      kind: m.kind,
-      fileSize: m.fileSize,
-      width: m.width,
-      height: m.height,
-      durationMs: m.durationMs }));
-    const validation = validateMediaAssets(assets, existing, { maxTotalCount: 10 });
-    if (validation.errors.length > 0) {
-      setErrorMsg(validation.errors.map((e) => e.message).join('. '));
-    }
-    for (const a of validation.assets) {
-      appendPhotoAsset(a);
-    }
-    if (validation.assets.length > 0) {
+    const existing = buildExistingMediaList(mediaDraftItems);
+    const appended = processValidatedAssets(assets, existing, appendPhotoAsset, setErrorMsg);
+    if (appended > 0) {
       haptics.success();
     }
     setCameraSheetVisible(false);

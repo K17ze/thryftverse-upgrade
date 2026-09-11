@@ -12,6 +12,7 @@ import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from './AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { useAppTranslation } from '../i18n/useAppTranslation';
 
 interface Props {
   visible: boolean;
@@ -24,12 +25,14 @@ interface Props {
 }
 
 export function BottomSheetPicker({ visible, onClose, title, options, selectedValue, onSelect, searchable }: Props) {
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
+  const { t } = useAppTranslation('common');
   const { height, width } = useWindowDimensions();
-  const styles = React.useMemo(() => createStyles(colors, width, height), [colors, width, height]);
+  const styles = React.useMemo(() => createStyles(colors, isDark, width, height), [colors, isDark, width, height]);
   const [searchQuery, setSearchQuery] = useState('');
   const [shouldRender, setShouldRender] = useState(visible);
   const translateY = useSharedValue(height);
+  const overlayOpacity = useSharedValue(0);
   const contextY = useSharedValue(0);
   const reducedMotion = useReducedMotion();
 
@@ -41,14 +44,17 @@ export function BottomSheetPicker({ visible, onClose, title, options, selectedVa
       setShouldRender(true);
       setSearchQuery('');
       translateY.value = reducedMotion ? withTiming(height * 0.4, { duration: 0 }) : height * 0.4;
+      overlayOpacity.value = reducedMotion ? withTiming(1, { duration: 0 }) : withTiming(1, { duration: 240 });
     } else if (shouldRender) {
       translateY.value = reducedMotion ? withTiming(height, { duration: 0 }) : height;
+      overlayOpacity.value = reducedMotion ? withTiming(0, { duration: 0 }) : withTiming(0, { duration: 200 });
       setShouldRender(false);
     }
-  }, [shouldRender, visible, reducedMotion, height]);
+  }, [shouldRender, visible, reducedMotion, height, translateY, overlayOpacity]);
 
   const handleClose = () => {
     translateY.value = reducedMotion ? withTiming(height, { duration: 0 }) : height;
+    overlayOpacity.value = reducedMotion ? withTiming(0, { duration: 0 }) : withTiming(0, { duration: 200 });
     onClose();
   };
 
@@ -77,11 +83,10 @@ export function BottomSheetPicker({ visible, onClose, title, options, selectedVa
   const sheetStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }] }));
 
-  const overlayStyle = useAnimatedStyle(() => {
-    return {
-      opacity: visible ? 0.6 : 0,
-      display: visible ? 'flex' : 'none' };
-  });
+  const overlayStyle = useAnimatedStyle(() => ({
+    opacity: overlayOpacity.value,
+    display: overlayOpacity.value > 0 ? 'flex' : 'none',
+  }));
 
   if (!shouldRender) {
     return null;
@@ -113,7 +118,7 @@ export function BottomSheetPicker({ visible, onClose, title, options, selectedVa
               <Ionicons name="search" size={20} color={colors.textMuted} />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Search..."
+                placeholder={t('searchPlaceholder')}
                 placeholderTextColor={colors.textMuted}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
@@ -123,7 +128,7 @@ export function BottomSheetPicker({ visible, onClose, title, options, selectedVa
 
           <ScrollView style={styles.scrollList} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             {filteredOptions.length === 0 ? (
-              <Text style={styles.noResultsText}>No results found</Text>
+              <Text style={styles.noResultsText}>{t('noResults')}</Text>
             ) : (
               filteredOptions.map((opt) => (
                 <AnimatedPressable
@@ -146,25 +151,30 @@ export function BottomSheetPicker({ visible, onClose, title, options, selectedVa
   );
 }
 
-const createStyles = (colors: ThemeColors, width: number, height: number) => StyleSheet.create({
+const createStyles = (colors: ThemeColors, isDark: boolean, width: number, height: number) => StyleSheet.create({
   sheet: {
     position: 'absolute',
     bottom: 0,
     width: width,
     height: height,
-    backgroundColor: colors.surfaceAlt,
-    borderTopLeftRadius: 36,
-    borderTopRightRadius: 36,
+    backgroundColor: colors.surfaceElevated,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
     ...Elevation.modal },
-  handleContainer: { alignItems: 'center', paddingVertical: 14 },
-  handle: { width: 44, height: 5, borderRadius: Radius.sm, backgroundColor: colors.border },
+  handleContainer: { alignItems: 'center', paddingTop: 10, paddingBottom: Space.sm },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: Radius.full,
+    backgroundColor: isDark ? colors.border : 'rgba(0,0,0,0.2)',
+  },
   header: { alignItems: 'center', marginBottom: 12 },
   headerTitle: { fontSize: TypographyV2.priceList.size, fontFamily: TypographyV2.priceList.fontFamily, color: colors.textPrimary, letterSpacing: 0.08 },
 
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: isDark ? colors.surface : colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     marginHorizontal: 20,
@@ -182,8 +192,8 @@ const createStyles = (colors: ThemeColors, width: number, height: number) => Sty
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: Space.md,
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.border },
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle },
   optionText: { fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily, color: colors.textPrimary, letterSpacing: 0.08 },
   optionTextActive: { fontFamily: TypographyV2.body.fontFamily, color: colors.brand },
 

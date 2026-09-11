@@ -35,10 +35,12 @@ describe('native visual acceptance QA matrix (spec 07_VISUAL)', () => {
 
     it('AssetDetailScreen does not wrap every row in separate surfaces', () => {
       // AssetDetailScreen was refactored: the identity lives in the
-      // screen while the transaction surface moved to AssetMarketSection.
+      // screen while the transaction flow goes through the dock and
+      // TradeConfirmScreen. The transaction surface was removed from
+      // the market section during the Wave 32 refactor.
       expect(assetScreen).toContain('CommerceDetailIdentity');
-      const marketSection = readComponent('coown/asset-detail/AssetMarketSection.tsx');
-      expect(marketSection).toContain('CommerceDetailTransactionSurface');
+      const dock = readComponent('coown/asset-detail/AssetDetailDock.tsx');
+      expect(dock).toContain('CommerceDetailStateDock');
     });
 
     it('ItemDetailScreen does not wrap every row in separate surfaces', () => {

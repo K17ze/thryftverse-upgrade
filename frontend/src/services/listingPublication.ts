@@ -198,7 +198,15 @@ export async function executePublication(
       return fail('No media uploaded successfully.');
     }
 
-    const coverMedia = resolvedMedia.find((media) => media.kind === 'image');
+    // Cover honours the user's ordering (E17): the first item in the
+    // resolved media array is the intended cover. When that item is a
+    // video — which cannot serve as a still cover image — fall back to
+    // the first image that follows it in the user's order.
+    const firstMedia = resolvedMedia[0];
+    const coverMedia =
+      firstMedia && firstMedia.kind === 'image'
+        ? firstMedia
+        : resolvedMedia.find((media) => media.kind === 'image');
     const coverImage = coverMedia
       ? ctx.uploadedMediaByAssetId[coverMedia.id] || coverMedia.publicUrl
       : undefined;
@@ -272,6 +280,8 @@ export async function executePublication(
           mediaHeight: m.height,
           mediaType: m.kind,
           finalizationId,
+          focalX: m.focalPoint?.x ?? null,
+          focalY: m.focalPoint?.y ?? null,
         });
         ctx.offlineQueued = false;
       } catch (e) {

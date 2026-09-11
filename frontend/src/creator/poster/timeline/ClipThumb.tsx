@@ -7,6 +7,7 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   runOnJS,
+  withSpring,
 } from 'react-native-reanimated';
 import { Space, FontFamily, Radius, Typography } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
@@ -40,7 +41,21 @@ export interface ClipThumbProps {
   onPress: () => void;
   /** Fired once when a trim gesture ends, with the total delta in ms. */
   onTrimCommit?: (edge: 'start' | 'end', deltaMs: number) => void;
+  /**
+   * Index of this clip in the timeline. Used for drag-to-reorder.
+   * When provided, a long-press + horizontal pan initiates a reorder drag.
+   */
+  clipIndex?: number;
+  /**
+   * Fired when a reorder drag ends. `translationX` is the total horizontal
+   * drag delta in pixels (relative to the clip's original position).
+   * The parent computes the target index from this delta.
+   */
+  onDragReorder?: (clipId: string, translationX: number) => void;
 }
+
+const DRAG_LIFT_SCALE = 1.06;
+const DRAG_LONG_PRESS_MS = 300;
 
 export const ClipThumb = React.memo(function ClipThumb({
   clip,
@@ -48,6 +63,8 @@ export const ClipThumb = React.memo(function ClipThumb({
   isSelected,
   onPress,
   onTrimCommit,
+  clipIndex,
+  onDragReorder,
 }: ClipThumbProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
@@ -59,6 +76,15 @@ export const ClipThumb = React.memo(function ClipThumb({
   // reads this on the UI thread to resize the clip 1:1 with the finger.
   // Reset to 0 on gesture end after committing the delta to the parent.
   const trimDeltaSV = useSharedValue(0);
+
+  // ── Reorder drag state (UI thread) ──────────────────────────────────
+  // dragXSV accumulates the horizontal translation during a reorder drag.
+  // isDraggingSV drives the lift animation (scale + elevation). Both are
+  // UI-thread only; the parent is notified once on gesture end.
+  const dragXSV = useSharedValue(0);
+  const isDraggingSV = useSharedValue(0);
+  const dragStartX = useSharedValue(0);
+  const canDrag = onDragReorder != null && clipIndex != null;
 
   const handleLayout = useCallback((e: LayoutChangeEvent) => {
     trackWidthSV.value = e.nativeEvent.layout.width;
@@ -122,11 +148,61 @@ export const ClipThumb = React.memo(function ClipThumb({
     [pxToMs, onTrimCommit, haptic, trimDeltaSV]
   );
 
+  // ── Reorder drag gesture (long-press + horizontal pan) ─────────────
+  // Snapchat-style direct manipulation: long-press lifts the clip, then a
+  // horizontal drag reorders it. The lift (scale + opacity) is UI-thread
+  // driven via isDraggingSV. The parent is notified once on gesture end
+  // with the total horizontal translation; the parent computes the target
+  // index from the cumulative clip widths.
+  const reorderGesture = React.useMemo(() => {
+    if (!canDrag) return null;
+    return Gesture.Pan()
+      .activateAfterLongPress(DRAG_LONG_PRESS_MS)
+      .minDistance(6)
+      .onStart(() => {
+        'worklet';
+        isDraggingSV.value = withSpring(1, { damping: 18, stiffness: 220 });
+        dragStartX.value = dragXSV.value;
+      })
+      .onChange((e) => {
+        'worklet';
+        dragXSV.value = dragStartX.value + e.translationX;
+      })
+      .onEnd(() => {
+        'worklet';
+        const totalDelta = dragXSV.value;
+        isDraggingSV.value = withSpring(0, { damping: 18, stiffness: 220 });
+        dragXSV.value = 0;
+        if (onDragReorder) runOnJS(onDragReorder)(clip.id, totalDelta);
+        runOnJS(haptic.light)();
+      })
+      .onFinalize(() => {
+        'worklet';
+        // Ensure drag state resets if gesture is interrupted/cancelled.
+        isDraggingSV.value = 0;
+        dragXSV.value = 0;
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canDrag, onDragReorder, clip.id, haptic, isDraggingSV, dragXSV, dragStartX]);
+
   // ── Animated clip width (UI thread) ─────────────────────────────────
   // For end trim: width grows/shrinks from the right edge.
   // For start trim: width grows/shrinks and the clip translates to keep
   // the right edge stable (left edge moves).
+  // During a reorder drag, the clip lifts (scale + opacity) and follows
+  // the finger horizontally without resizing.
   const clipAnimStyle = useAnimatedStyle(() => {
+    if (isDraggingSV.value > 0.01) {
+      return {
+        width: Math.max(24, width),
+        transform: [
+          { translateX: dragXSV.value },
+          { scale: 1 + (DRAG_LIFT_SCALE - 1) * isDraggingSV.value },
+        ],
+        opacity: 1 - 0.25 * isDraggingSV.value,
+        zIndex: 100,
+      };
+    }
     const visualWidth = width + trimDeltaSV.value;
     return {
       width: Math.max(24, visualWidth),
@@ -146,7 +222,7 @@ export const ClipThumb = React.memo(function ClipThumb({
   const showAudioBadge = hasAudio && (showMuted || showVolume);
   const hasBadges = showSpeed || showReversed || showFreeze || showAudioBadge;
 
-  return (
+  const clipContent = (
     <Reanimated.View
       onLayout={handleLayout}
       accessibilityLabel={`Clip, ${formatTimecode(clip.durationMs)}`}
@@ -264,6 +340,15 @@ export const ClipThumb = React.memo(function ClipThumb({
       </Pressable>
     </Reanimated.View>
   );
+
+  if (reorderGesture) {
+    return (
+      <GestureDetector gesture={reorderGesture}>
+        {clipContent}
+      </GestureDetector>
+    );
+  }
+  return clipContent;
 });
 
 const CLIP_GAP = Space.xxs; // 1pt-ish gap between clips (see TimelineTrack)

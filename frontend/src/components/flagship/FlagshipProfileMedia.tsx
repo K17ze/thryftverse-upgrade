@@ -1,8 +1,14 @@
 import React from 'react';
-import { View, Text, StyleSheet, useWindowDimensions, ViewStyle, ActivityIndicator, Pressable, Platform } from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions, ViewStyle, Pressable, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useAppTheme } from '../../theme/ThemeContext';
+import Svg, { Circle as SvgCircle } from 'react-native-svg';
+import Reanimated, {
+  useAnimatedProps,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming } from 'react-native-reanimated';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, IconGrammar, Control, Stroke, AvatarSize, ProfileLayout } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { Motion } from '../../theme/motionTokens';
@@ -21,6 +27,10 @@ interface FlagshipProfileMediaProps {
   onEditAvatar?: () => void;
   isUploadingCover?: boolean;
   isUploadingAvatar?: boolean;
+  /** Real byte progress 0–1 for the cover upload — drives the determinate ring. */
+  coverUploadProgress?: number;
+  /** Real byte progress 0–1 for the avatar upload — drives the determinate ring. */
+  avatarUploadProgress?: number;
   style?: ViewStyle;
   cacheBuster?: string;
   coverOnly?: boolean;
@@ -39,6 +49,8 @@ export function FlagshipProfileMedia({
   onEditAvatar,
   isUploadingCover = false,
   isUploadingAvatar = false,
+  coverUploadProgress,
+  avatarUploadProgress,
   style,
   cacheBuster,
   coverOnly = false,
@@ -49,6 +61,10 @@ export function FlagshipProfileMedia({
   const { colors, isDark } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width: screenWidth } = useWindowDimensions();
+  // Rings stay mounted briefly after the upload finishes so the completion
+  // fade reads as a transition, not a vanish.
+  const showCoverRing = useLingeringActive(isUploadingCover);
+  const showAvatarRing = useLingeringActive(isUploadingAvatar);
   const effectiveCover = coverVideoUri || coverUri;
   const hasCover = Boolean(effectiveCover);
   const showCoverError = coverError != null && !isUploadingCover;
@@ -113,8 +129,12 @@ export function FlagshipProfileMedia({
             accessibilityHint="Opens your photo library to choose a new cover image"
           >
             <View style={styles.editCoverVisible}>
-              {isUploadingCover ? (
-                <ActivityIndicator size="small" color={colors.scrimTextPrimary} />
+              {showCoverRing ? (
+                <UploadProgressRing
+                  progress={coverUploadProgress}
+                  active={isUploadingCover}
+                  size={28}
+                />
               ) : (
                 <Ionicons name="image-outline" size={IconGrammar.metadata} color={colors.scrimTextPrimary} />
               )}
@@ -199,8 +219,12 @@ export function FlagshipProfileMedia({
                 accessibilityRole="button"
                 accessibilityHint="Opens your camera or photo library to choose a new avatar"
               >
-                {isUploadingAvatar ? (
-                  <ActivityIndicator size="small" color={colors.scrimTextPrimary} />
+                {showAvatarRing ? (
+                  <UploadProgressRing
+                    progress={avatarUploadProgress}
+                    active={isUploadingAvatar}
+                    size={20}
+                  />
                 ) : (
                   <Ionicons name="camera" size={IconGrammar.badge} color={colors.scrimTextPrimary} />
                 )}
@@ -216,7 +240,107 @@ export function FlagshipProfileMedia({
 const DEFAULT_COVER_H = ProfileLayout.coverHeight;
 const AVATAR_SIZE = AvatarSize.xl;
 
-const createStyles = (colors: any) => StyleSheet.create({
+// ── Upload progress ring ─────────────────────────────────────────────
+// Determinate byte-progress indicator — same grammar as the creator
+// recording ring: SVG circle, round-capped arc starting at 12 o'clock,
+// driven by the transport's real progress (0–1). Fades out on completion;
+// no badge, no fake indeterminate spin.
+
+const RING_FADE_IN_MS = 120;
+const RING_FADE_OUT_MS = 220;
+
+const ReanimatedSvgCircle = Reanimated.createAnimatedComponent(SvgCircle);
+
+export interface UploadProgressRingProps {
+  /** Byte progress 0–1 from the upload transport. */
+  progress?: number;
+  /** While false the ring fades out (completion transition). */
+  active: boolean;
+  /** Outer diameter in pt (default 28). */
+  size?: number;
+  /** Arc colour (default white — legible over media). */
+  color?: string;
+  /** Background disc fill (default rgba(0,0,0,0.35)). */
+  trackColor?: string;
+  /** Screen-reader label for the ring (default 'Uploading'). */
+  accessibilityLabel?: string;
+  style?: ViewStyle;
+}
+
+export function UploadProgressRing({
+  progress = 0,
+  active,
+  size = 28,
+  color = '#FFFFFF',
+  trackColor = 'rgba(0,0,0,0.35)',
+  accessibilityLabel = 'Uploading',
+  style }: UploadProgressRingProps) {
+  const stroke = size >= 24 ? 2.5 : 2;
+  const radius = size / 2 - stroke / 2;
+  const circumference = 2 * Math.PI * radius;
+  const clamped = Math.max(0, Math.min(1, progress));
+
+  const opacity = useSharedValue(active ? 1 : 0);
+  const dashOffset = useSharedValue(circumference * (1 - clamped));
+
+  React.useEffect(() => {
+    opacity.value = withTiming(active ? 1 : 0, {
+      duration: active ? RING_FADE_IN_MS : RING_FADE_OUT_MS });
+  }, [active, opacity]);
+
+  React.useEffect(() => {
+    dashOffset.value = withTiming(circumference * (1 - clamped), { duration: 120 });
+  }, [clamped, circumference, dashOffset]);
+
+  const arcProps = useAnimatedProps(() => ({ strokeDashoffset: dashOffset.value }));
+  const fadeStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+
+  return (
+    <Reanimated.View
+      style={[{ width: size, height: size }, fadeStyle, style]}
+      pointerEvents="none"
+      accessibilityRole="progressbar"
+      accessibilityValue={{ min: 0, max: 1, now: Math.round(progress * 100) }}
+      accessibilityLabel={accessibilityLabel}
+    >
+      <Svg width={size} height={size}>
+        <SvgCircle cx={size / 2} cy={size / 2} r={radius} fill={trackColor} />
+        <ReanimatedSvgCircle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          animatedProps={arcProps}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        />
+      </Svg>
+    </Reanimated.View>
+  );
+}
+
+/**
+ * Keeps a flag true for a short window after `active` falls false — lets a
+ * progress ring fade out on completion instead of vanishing mid-frame.
+ */
+export function useLingeringActive(active: boolean, lingerMs = RING_FADE_OUT_MS + 60): boolean {
+  const [shown, setShown] = React.useState(active);
+  React.useEffect(() => {
+    if (active) {
+      setShown(true);
+      return;
+    }
+    if (!shown) return;
+    const t = setTimeout(() => setShown(false), lingerMs);
+    return () => clearTimeout(t);
+  }, [active, shown, lingerMs]);
+  return shown;
+}
+
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   root: {
     width: '100%' },
   coverWrap: {

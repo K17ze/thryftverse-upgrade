@@ -1,14 +1,22 @@
 /**
- * AssetDetailIdentity — collectible-first identity, price, and
- * availability block for the Co-Own asset detail screen.
+ * AssetDetailIdentity — compact collectible-first identity for the
+ * Co-Own asset detail screen.
  *
- * Sits directly below the media stage on clean canvas. Shows:
- *   - Asset identity (eyebrow, title, holder count)
- *   - Dominant price with 24h delta pill
- *   - Allocation progress (initial offering) or market status (secondary)
- *   - Issuer trust row
+ * Sits directly below the media stage on clean canvas. The first
+ * viewport must reach the chart, so the identity block is compressed
+ * to four rows:
+ *   1. Asset title — dominant, via the family="co_own" identity
+ *      primitive (structural consistency across commerce surfaces).
+ *   2. One-unit price — priceList bold tabular-nums, with a truthful
+ *      basis label and a 24h delta pill inline.
+ *   3. A single compact context line — condition · units,
+ *      middot-separated.
+ *   4. Issuer trust row — compact, tappable.
  *
- * No card surface — flat on canvas with hairline separator.
+ * Market state (open/closed/paused) and live availability live in the
+ * dock and overview sections — they are not repeated here. No Co-Own
+ * family badge (redundant inside Co-Own). No card surface — flat on
+ * canvas with a hairline separator.
  */
 
 import React from 'react';
@@ -49,51 +57,74 @@ export function AssetDetailIdentity({
   asset,
   isVeryCompact,
   dominantPriceValue,
-  dominantPriceLabel,
-  dominantPriceTimestamp,
   movePct24h,
   isInitialOffering,
-  allocatedPct,
-  availableUnits,
-  reconciliationActive,
-  dataStale,
-  dataStaleAgeLabel,
-  lifecycleState,
-  bestBidGbp,
-  bestAskGbp,
   issuerUsername,
   issuerTrust,
-  currentUserId,
   onPressIssuer,
 }: AssetDetailIdentityProps) {
   const { colors } = useAppTheme();
+
+  // ── Price basis (U09 + U11) ──
+  // The identity header must not silently present a reference price as
+  // the latest trade. Derive the basis directly from the asset snapshot
+  // so the label is always truthful, regardless of what the orchestrator
+  // passes as dominantPriceLabel. When a settled last execution exists,
+  // label it "Last trade" with its timestamp; otherwise label the unit
+  // price as "Reference" (or "Offering" during primary offering).
+  const marketSnapshot = asset.marketSnapshot ?? null;
+  const lastExecutionPriceGbp = marketSnapshot?.lastExecutionPriceGbp ?? null;
+  const hasSettledTrade = lastExecutionPriceGbp != null;
+  const priceBasis: string = isInitialOffering
+    ? 'Offering'
+    : hasSettledTrade
+      ? 'Last trade'
+      : 'Reference';
+  const lastTradeTimestamp = hasSettledTrade && !isInitialOffering && marketSnapshot?.lastExecutionAt
+    ? new Date(marketSnapshot.lastExecutionAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+    : null;
+
+  // ── Compact context line ──
+  // Collapse category/condition and total unit count into one
+  // middot-separated line. Market state and live availability live in
+  // the dock / overview — not repeated here. The issuer is shown in its
+  // own compact trust row below, so it is not duplicated in this line.
+  const contextLabel = asset.conditionGrade ?? asset.legalVehicleName ?? null;
+  const showUnits = asset.totalUnits > 0;
+  const unitsLabel = `${asset.totalUnits.toLocaleString('en-GB')} units`;
+  const hasContextLine = !!contextLabel || showUnits;
 
   return (
     <View style={[styles.identity, { borderBottomColor: colors.borderSubtle }]}>
       <CommerceDetailIdentity
         family="co_own"
         density={isVeryCompact ? 'compact' : 'standard'}
-        eyebrow={asset.legalVehicleName ?? 'Fractional collectible'}
         title={asset.title}
-        interestSignal={asset.holders != null && asset.holders > 0 ? `${asset.holders} holders` : undefined}
       />
 
-      {/* Dominant price block — bold tabular numeral with 24h delta */}
+      {/* Dominant one-unit price — priceList bold tabular-nums with a
+          truthful basis label and 24h delta pill inline. The price,
+          basis, and pill reflow in a flexWrap row so long values wrap
+          instead of truncating. */}
       <View style={styles.priceRow}>
         <Text
           style={[styles.priceValue, { color: colors.textPrimary }]}
           accessibilityRole="text"
           adjustsFontSizeToFit
-          minimumFontScale={0.82}
+          minimumFontScale={0.7}
           numberOfLines={1}
           maxFontSizeMultiplier={1.3}
         >
           {formatCoOwnIze(dominantPriceValue)}
         </Text>
-        <Text style={[styles.priceUnit, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
-          {dominantPriceLabel === 'Last trade' && dominantPriceTimestamp
-            ? `${dominantPriceLabel} · ${dominantPriceTimestamp}`
-            : dominantPriceLabel}
+        <Text
+          style={[styles.priceUnit, { color: colors.textSecondary }]}
+          maxFontSizeMultiplier={1.4}
+          numberOfLines={1}
+        >
+          {priceBasis === 'Last trade' && lastTradeTimestamp
+            ? `${priceBasis} · ${lastTradeTimestamp}`
+            : priceBasis}
         </Text>
         {movePct24h != null && !isInitialOffering && (
           <View style={[
@@ -102,7 +133,7 @@ export function AssetDetailIdentity({
           ]}>
             <Ionicons
               name={movePct24h >= 0 ? 'trending-up' : 'trending-down'}
-              size={12}
+              size={14}
               color={movePct24h >= 0 ? colors.coownUp : colors.coownDown}
             />
             <Text style={[
@@ -115,70 +146,30 @@ export function AssetDetailIdentity({
         )}
       </View>
 
-      {/* Initial offering allocation progress OR secondary market depth status */}
-      {isInitialOffering ? (
-        <View style={styles.offeringBlock}>
-          <View style={[styles.progressBarTrack, { backgroundColor: colors.surfaceAlt }]}>
-            <View
-              style={[
-                styles.progressBarFill,
-                {
-                  width: `${Math.min(100, Math.max(0, allocatedPct))}%`,
-                  backgroundColor: colors.brand,
-                },
-              ]}
-            />
-          </View>
-          <View style={styles.offeringMetaRow}>
-            <Text style={[styles.offeringMetaText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
-              {allocatedPct}% allocated · {availableUnits} units left
-            </Text>
-            {asset.safeguarded && asset.safeguardingEvidenceUrl ? (
-              <View style={styles.protectedBadge}>
-                <Ionicons name="shield-checkmark" size={13} color={colors.success} />
-                <Text style={[styles.protectedBadgeText, { color: colors.success }]}>Safeguarded</Text>
-              </View>
-            ) : null}
-          </View>
-        </View>
-      ) : (
-        <View style={styles.availabilityRow}>
-          <View style={[styles.availabilityDot, {
-            backgroundColor: reconciliationActive
-              ? colors.warning
-              : dataStale && lifecycleState === 'secondaryTrading'
-                ? colors.warning
-              : asset.isOpen
-                ? colors.success
-                : colors.textMuted,
-          }]} />
-          <Text style={[styles.availabilityText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
-            {reconciliationActive
-              ? 'Orders paused'
-              : dataStale && lifecycleState === 'secondaryTrading'
-                ? 'Market data stale'
-                : asset.isOpen
-                  ? 'Market open'
-                  : 'Market closed'}
-          </Text>
-          {bestBidGbp != null && bestAskGbp != null ? (
-            <Text style={[styles.spreadText, { color: colors.textMuted }]} maxFontSizeMultiplier={1.4}>
-              · {formatCoOwnIze(bestBidGbp)} Bid / {formatCoOwnIze(bestAskGbp)} Ask
-            </Text>
-          ) : (
-            <Text style={[styles.spreadText, { color: colors.textMuted }]} maxFontSizeMultiplier={1.4}>
-              · {availableUnits} units available
-            </Text>
-          )}
-          {dataStale && dataStaleAgeLabel ? (
-            <Text style={[styles.staleText, { color: colors.warning }]}>
-              · stale {dataStaleAgeLabel}
+      {/* Compact context line — condition · units. One row replaces the
+          former eyebrow context line, allocation progress block, and
+          availability/market-state row. */}
+      {hasContextLine && (
+        <Text
+          style={[styles.contextLine, { color: colors.textSecondary }]}
+          numberOfLines={1}
+          maxFontSizeMultiplier={1.4}
+        >
+          {contextLabel ? (
+            <Text style={styles.contextSegment}>{contextLabel}</Text>
+          ) : null}
+          {contextLabel && showUnits ? ' · ' : null}
+          {showUnits ? (
+            <Text style={[styles.contextSegment, styles.contextUnits]}>
+              {unitsLabel}
             </Text>
           ) : null}
-        </View>
+        </Text>
       )}
 
-      {/* Issuer Trust Row — clean compact presentation */}
+      {/* Issuer trust row — compact, tappable. The issuer lives here
+          (not in the context line) so verification and rating stay
+          visible without consuming the former multi-line block. */}
       <View style={styles.issuerWrap}>
         <CommerceDetailSellerRow
           roleLabel="Issuer"
@@ -224,19 +215,23 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
     flexWrap: 'wrap',
     gap: Space.xs,
-    marginTop: Space.sm,
+    marginTop: Space.xs,
   },
   priceValue: {
-    fontSize: TypographyV2.priceHero.size,
-    lineHeight: TypographyV2.priceHero.lineHeight,
-    fontFamily: FontFamily.bold,
-    letterSpacing: TypographyV2.priceHero.letterSpacing,
+    fontSize: TypographyV2.priceList.size,
+    lineHeight: TypographyV2.priceList.lineHeight,
+    fontFamily: TypographyV2.priceList.fontFamily,
+    letterSpacing: TypographyV2.priceList.letterSpacing,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
+    // Allow the price to shrink so the basis label can claim space in
+    // the flex row when the price is long.
+    flexShrink: 1,
   },
   priceUnit: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.medium,
     letterSpacing: TypographyV2.meta.letterSpacing,
+    flexShrink: 1,
   },
   movePill: {
     flexDirection: 'row',
@@ -251,65 +246,22 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.semibold,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
-  offeringBlock: {
-    marginTop: Space.sm,
-  },
-  progressBarTrack: {
-    height: 4,
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: 2,
-  },
-  offeringMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  contextLine: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     marginTop: Space.xs,
   },
-  offeringMetaText: {
+  contextSegment: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.medium,
-    letterSpacing: TypographyV2.meta.letterSpacing,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
-  protectedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  protectedBadgeText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold,
-  },
-  availabilityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: Space.sm,
-    flexWrap: 'wrap',
-  },
-  availabilityDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  availabilityText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.medium,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
-  spreadText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.regular,
+  contextUnits: {
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
-  staleText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.medium,
-  },
   issuerWrap: {
-    marginTop: Space.sm,
+    marginTop: Space.xs,
   },
 });
