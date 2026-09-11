@@ -54,6 +54,11 @@ export interface CoOwnCandleChartProps {
   showVolume: boolean;
   lastPrice?: number;
   lastAgeSeconds?: number | null;
+  /** Title shown when the chart has no candles (loading/empty/error states).
+   *  The chart is always mounted (F12) so range controls survive state changes. */
+  emptyStateTitle?: string;
+  /** Body copy shown beneath emptyStateTitle. */
+  emptyStateBody?: string;
   style?: ViewStyle;
 }
 
@@ -73,6 +78,8 @@ export function CoOwnCandleChart({
   showVolume,
   lastPrice,
   lastAgeSeconds,
+  emptyStateTitle,
+  emptyStateBody,
   style,
 }: CoOwnCandleChartProps) {
   const { colors } = useAppTheme();
@@ -248,11 +255,17 @@ export function CoOwnCandleChart({
         </Text>
         <View style={styles.emptyWrap}>
           <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-            No trades in this range
+            {emptyStateTitle ?? 'No trades in this range'}
           </Text>
-          <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
-            Candle chart requires trade data. Try a wider range, or place a limit order to be the first trade.
-          </Text>
+          {emptyStateBody ? (
+            <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
+              {emptyStateBody}
+            </Text>
+          ) : (
+            <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
+              Candle chart requires trade data. Try a wider range, or place a limit order to be the first trade.
+            </Text>
+          )}
         </View>
         <RangeChips
           ranges={RANGES}

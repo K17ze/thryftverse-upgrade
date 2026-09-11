@@ -61,6 +61,8 @@ export { CoOwnPortfolioStorytelling } from './CoOwnPortfolioStorytelling';
 export type { CoOwnPortfolioStorytellingProps } from './CoOwnPortfolioStorytelling';
 export { CoOwnPortfolioPerformanceChart } from './CoOwnPortfolioPerformanceChart';
 export type { CoOwnPortfolioPerformanceChartProps } from './CoOwnPortfolioPerformanceChart';
+export { CoOwnPortfolioAllocation } from './CoOwnPortfolioAllocation';
+export type { CoOwnPortfolioAllocationProps, CoOwnPortfolioAllocationSlice } from './CoOwnPortfolioAllocation';
 export { CoOwnConciergeCTA } from './CoOwnConciergeCTA';
 export type { CoOwnConciergeCTAProps, ConciergeReason } from './CoOwnConciergeCTA';
 export { CoOwnOfflineBanner } from './CoOwnOfflineBanner';

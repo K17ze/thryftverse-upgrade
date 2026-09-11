@@ -13,7 +13,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipScreen } from '../components/flagship';
 import { Video, ResizeMode } from '../components/compat/Video';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Control, TypeStyles, Radius, Elevation, Space } from '../theme/designTokens';
+import { Control, Radius, Elevation, Space } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 
@@ -156,11 +156,11 @@ function createStyles(colors: ThemeColors) {
       gap: Space.sm + Space.xs },
     errorText: {
       fontSize: TypographyV2.sectionTitle.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.scrimTextSecondary },
     errorSub: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.scrimTextTertiary },
     retryBtn: {
       marginTop: Space.sm,
@@ -171,7 +171,7 @@ function createStyles(colors: ThemeColors) {
       ...Elevation.subtle },
     retryText: {
       fontSize: TypographyV2.body.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.scrimTextPrimary },
     contextOverlay: {
       position: 'absolute',
@@ -184,14 +184,14 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.overlay },
     contextSender: {
       fontSize: TypographyV2.sectionTitle.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.scrimTextPrimary,
       textShadowColor: colors.overlay,
       textShadowOffset: { width: 0, height: 1 },
       textShadowRadius: 3 },
     contextTime: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.scrimTextSecondary,
       textShadowColor: colors.overlay,
       textShadowOffset: { width: 0, height: 1 },

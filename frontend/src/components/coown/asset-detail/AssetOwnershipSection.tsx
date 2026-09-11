@@ -537,9 +537,9 @@ export function AssetOwnershipSection({
 }
 
 const styles = StyleSheet.create({
-  container: { paddingHorizontal: Space.md, paddingVertical: Space.md, gap: Space.lg },
+  container: { paddingHorizontal: Space.md, paddingVertical: Space.md, gap: Space.sm },
   section: { gap: Space.xs },
-  separated: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: Space.lg },
+  separated: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: Space.md },
   heading: {
     fontSize: TypographyV2.body.size,
     lineHeight: TypographyV2.body.lineHeight,
@@ -564,8 +564,8 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   positionValue: {
-    fontSize: TypographyV2.priceHero.size,
-    lineHeight: TypographyV2.priceHero.lineHeight,
+    fontSize: TypographyV2.priceList.size,
+    lineHeight: TypographyV2.priceList.lineHeight,
     fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
   },
@@ -619,11 +619,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    paddingVertical: Space.sm + 2,
+    paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
     borderRadius: Radius.md,
     borderWidth: Stroke.standard,
-    minHeight: 64,
+    minHeight: 56,
   },
   offerBody: { flex: 1, gap: Space.xs },
   offerValue: {

@@ -19,7 +19,7 @@ import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 
-import { Radius, Space, Typography, Type, Stroke, Control } from '../../theme/designTokens';
+import { Radius, Space, Typography, Stroke, Control } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 

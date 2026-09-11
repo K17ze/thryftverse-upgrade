@@ -41,6 +41,7 @@ import {
   updateTopicWeight,
   removeTopic,
   addTopic } from '../services/algorithmTransparencyApi';
+import { formatSignalLabel } from '../services/algorithmicSignalsService';
 
 import { Space, Radius, Typography, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
@@ -68,16 +69,7 @@ const SUGGESTED_TOPICS = [
 
 const DEFAULT_CATEGORY = 'Category preference';
 
-/** Backend intent rows can carry raw ids ("topic-denim") — humanize for display. */
-function prettifyTopicLabel(label: string): string {
-  if (!/^topic-[a-z0-9-]+$/i.test(label)) return label;
-  return label
-    .replace(/^topic-(user-)?/i, '')
-    .split('-')
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
-}
+
 
 export default function YourAlgorithmScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
@@ -307,7 +299,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
               {removableTopics.map((tp) => (
                 <Chip
                   key={tp.id}
-                  label={prettifyTopicLabel(tp.label)}
+                  label={formatSignalLabel(tp.label)}
                   variant="active"
                   weight={tp.weight}
                   onPress={() => { haptic.selection(); setSheetTopicId(tp.id); }}
@@ -329,7 +321,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
               {lockedTopics.map((tp) => (
                 <Chip
                   key={tp.id}
-                  label={prettifyTopicLabel(tp.label)}
+                  label={formatSignalLabel(tp.label)}
                   variant="locked"
                   weight={tp.weight}
                   onPress={() => { haptic.selection(); setSheetTopicId(tp.id); }}
@@ -354,7 +346,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
             {sheetTopic && (
               <>
                 <Text style={[styles.sheetTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-                  {prettifyTopicLabel(sheetTopic.label)}
+                  {formatSignalLabel(sheetTopic.label)}
                 </Text>
 
                 {([
@@ -389,7 +381,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
                     onPress={() => void handleRemoveTopic(sheetTopic.id)}
                     disabled={pendingTopicId === sheetTopic.id}
                     accessibilityRole="button"
-                    accessibilityLabel={`${t('topics.removeTopic')} ${prettifyTopicLabel(sheetTopic.label)}`}
+                    accessibilityLabel={`${t('topics.removeTopic')} ${formatSignalLabel(sheetTopic.label)}`}
                     accessibilityState={{ disabled: pendingTopicId === sheetTopic.id }}
                   >
                     {pendingTopicId === sheetTopic.id

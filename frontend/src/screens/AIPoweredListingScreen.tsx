@@ -16,7 +16,7 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, TypeStyles, Stroke, Control, LetterSpacing, FontFamily } from '../theme/designTokens';
+import { Space, Radius, Stroke, Control, LetterSpacing, FontFamily } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AppButton } from '../components/ui/AppButton';
@@ -1281,7 +1281,7 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.sm + 2,
       fontSize: TypographyV2.body.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       minHeight: Control.hit + Space.sm },
     fieldTextarea: {
       borderWidth: Stroke.standard,
@@ -1289,7 +1289,7 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.sm + 2,
       fontSize: TypographyV2.body.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       minHeight: Space.xxl + Space.xxl + Space.sm },
     fieldRow: {
       flexDirection: 'row' },
@@ -1304,21 +1304,21 @@ function createStyles(colors: ThemeColors) {
       minHeight: Control.hit + Space.sm },
     pickerValue: {
       fontSize: TypographyV2.body.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       flex: 1 },
     priceRangeHint: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       marginTop: Space.xs,
       marginBottom: Space.md },
     attentionHint: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       marginTop: Space.xs,
       lineHeight: TypographyV2.meta.lineHeight },
     impactHelperText: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       marginTop: Space.xs,
       lineHeight: TypographyV2.meta.lineHeight },
     // Suggestion row — inline, restrained
@@ -1337,11 +1337,11 @@ function createStyles(colors: ThemeColors) {
       flex: 1 },
     suggestionCandidate: {
       fontSize: TypographyV2.body.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       lineHeight: TypographyV2.body.lineHeight },
     suggestionEvidence: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       marginTop: Space.xxs },
     suggestionActions: {
       flexDirection: 'row',
@@ -1387,7 +1387,7 @@ function createStyles(colors: ThemeColors) {
     tagInput: {
       minWidth: Space.xxl + Space.lg - 2,
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       padding: 0 },
     // Section labels
     sectionLabelWrap: {
@@ -1421,7 +1421,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.xs },
     emptyDesc: {
       fontSize: TypographyV2.body.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textSecondary,
       textAlign: 'center',
       lineHeight: TypographyV2.body.lineHeight },
@@ -1438,7 +1438,7 @@ function createStyles(colors: ThemeColors) {
     errorText: {
       flex: 1,
       fontSize: TypographyV2.body.size,
-      fontFamily: TypeStyles.body.fontFamily },
+      fontFamily: TypographyV2.body.fontFamily },
     errorRetryBtn: {
       alignSelf: 'flex-start',
       paddingHorizontal: Space.md,
@@ -1488,4 +1488,4 @@ const pickerStyles = StyleSheet.create({
     minHeight: Control.hit },
   rowText: {
     fontSize: TypographyV2.body.size,
-    fontFamily: TypeStyles.body.fontFamily } });
+    fontFamily: TypographyV2.body.fontFamily } });

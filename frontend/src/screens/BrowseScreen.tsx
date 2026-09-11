@@ -1106,7 +1106,7 @@ export default function BrowseScreen() {
             <EmptyState
               icon="bag-handle-outline"
               title="No items here yet"
-              subtitle="New listings are added every day. Check back soon or explore everything."
+              subtitle="New listings arrive daily — check back soon or explore everything."
               ctaLabel="Explore all"
               onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
             />

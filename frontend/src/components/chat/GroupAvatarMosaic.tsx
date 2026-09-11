@@ -11,7 +11,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { CachedImage } from '../CachedImage';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Radius, Space, Type, TypeStyles } from '../../theme/designTokens';
+import { Radius, Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { colorForId } from '../../utils/avatarColor';
 
 export interface MosaicMember {
@@ -166,7 +167,7 @@ export function GroupAvatarMosaic({
           <Text
             style={{
               fontSize: size * 0.22,
-              fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+              fontFamily: TypographyV2.bodyStrong.fontFamily,
               color: colors.scrimTextPrimary,
             }}
           >
@@ -197,7 +198,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   initials: {
-    fontFamily: TypeStyles.title.fontFamily,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
     letterSpacing: -0.5,
   },
 });

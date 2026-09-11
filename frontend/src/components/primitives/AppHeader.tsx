@@ -6,7 +6,6 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import {
   Space,
   Control,
-  TypeStyles,
   PressScale } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 
@@ -52,8 +51,8 @@ export function AppHeader({
       ? TypographyV2.bodyStrong.size
       : TypographyV2.sectionTitle.size;
   const titleFontFamily = isLarge
-    ? TypeStyles.title.fontFamily
-    : TypeStyles.bodyStrong.fontFamily;
+    ? TypographyV2.screenTitle.fontFamily
+    : TypographyV2.bodyStrong.fontFamily;
   const titleLineHeight = isLarge
     ? TypographyV2.screenTitle.lineHeight
     : TypographyV2.sectionTitle.lineHeight;
@@ -117,7 +116,7 @@ export function AppHeader({
                 {
                   color: colors.textSecondary,
                   fontSize: TypographyV2.meta.size,
-                  fontFamily: TypeStyles.body.fontFamily,
+                  fontFamily: TypographyV2.body.fontFamily,
                   lineHeight: TypographyV2.meta.lineHeight,
                   letterSpacing: TypographyV2.meta.letterSpacing },
               ]}

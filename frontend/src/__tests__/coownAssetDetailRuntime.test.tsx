@@ -95,6 +95,20 @@ vi.mock('@shopify/flash-list', () => ({
   FlashList: () => null,
 }));
 
+// ── gesture-handler + linear-gradient mocks: the commerce/detail barrel
+// re-exports CommerceMediaHero → CommerceMediaStage, whose build nodes
+// carry Flow syntax vitest cannot parse under node (same failure class
+// as react-native-mmkv in setup.ts). The sections never render these. ──
+vi.mock('react-native-gesture-handler', () => ({
+  GestureHandlerRootView: ({ children }: { children: React.ReactNode }) => children,
+  PanGestureHandler: () => null,
+  GestureDetector: ({ children }: { children: React.ReactNode }) => children,
+  Gesture: { Pan: () => ({ onStart: () => ({ onUpdate: () => ({ onEnd: () => ({ runOnJS: () => ({}) }) }) }) }) },
+}));
+vi.mock('expo-linear-gradient', () => ({
+  LinearGradient: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 // ── BottomSheet mock: pulls react-native-reanimated, whose build node
 // cannot parse. The barrel re-exports MakeOfferSheet which imports it. ──
 vi.mock('../components/BottomSheet', () => ({
@@ -219,6 +233,7 @@ describe('AssetOverviewSection — ranged price history', () => {
       showVolume: false,
       lastExecutionPriceGbp: null,
       appraisedValuePerUnitGbp: null,
+      referenceVsAppraisalPct: null,
       dossierDocuments: [],
       hasDocuments: false,
       onOpenDiligence: noop,
@@ -343,6 +358,7 @@ describe('AssetOverviewSection — ranged price history', () => {
         showVolume: false,
         lastExecutionPriceGbp: null,
         appraisedValuePerUnitGbp: null,
+        referenceVsAppraisalPct: null,
         dossierDocuments: [],
         hasDocuments: false,
         onOpenDiligence: noop,
@@ -491,8 +507,8 @@ describe('AssetMarketSection — open orders panel', () => {
     expect(hasText(renderer, 'Buy')).toBe(true);
     expect(hasText(renderer, 'Sell')).toBe(true);
     const text = getAllText(renderer).join('');
-    expect(text).toContain('7 of 10 units left');
-    expect(text).toContain('3 of 3 units left');
+    expect(text).toContain('7/10u');
+    expect(text).toContain('3/3u');
   });
 
   it('shows "No resting orders" when the list is empty', async () => {

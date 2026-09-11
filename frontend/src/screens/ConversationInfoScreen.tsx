@@ -17,7 +17,7 @@ import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
 import { openProductDetail } from '../platform/product/openProductDetail';
 import { useStore } from '../store/useStore';
-import { Radius, Space, TypeStyles } from '../theme/designTokens';
+import { Radius, Space } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { deleteConversationOnApi, archiveConversationOnApi } from '../services/chatApi';
 import { blockUser, unblockUser } from '../services/profileApi';
@@ -358,16 +358,16 @@ const styles = StyleSheet.create({
     height: Space.xxl + Space.xl - Space.xs,
     borderRadius: Radius.full },
   avatarText: {
-    fontFamily: TypeStyles.title.fontFamily,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
     fontSize: TypographyV2.screenTitle.size + 3 },
   displayName: {
     maxWidth: '88%',
-    fontFamily: TypeStyles.title.fontFamily,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
     fontSize: TypographyV2.screenTitle.size,
     lineHeight: TypographyV2.screenTitle.lineHeight,
     letterSpacing: TypographyV2.screenTitle.letterSpacing },
   handle: {
-    fontFamily: TypeStyles.body.fontFamily,
+    fontFamily: TypographyV2.body.fontFamily,
     fontSize: TypographyV2.meta.size,
     marginTop: Space.xs / 2 + 1 },
   quickActions: {
@@ -382,5 +382,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Space.xs / 2 + 1 },
   quickActionLabel: {
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     fontSize: TypographyV2.meta.size } });

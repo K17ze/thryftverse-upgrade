@@ -225,9 +225,14 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.display.lineHeight + 2,
     letterSpacing: -0.8 },
   primaryValueCoOwn: {
-    fontSize: TypographyV2.display.size,
-    lineHeight: TypographyV2.display.lineHeight,
-    letterSpacing: -0.55 },
+    // Market-figure band (StockX/GOAT): 20-24pt bold tabular. 22pt matches
+    // the direct-listing identity price so one unit of value reads at one
+    // scale across commerce surfaces — the previous 32pt display size
+    // shouted next to the 22pt direct PDP price.
+    fontSize: TypographyV2.priceList.size + 2,
+    lineHeight: TypographyV2.priceList.lineHeight + 3,
+    fontFamily: TypographyV2.priceList.fontFamily,
+    letterSpacing: -0.3 },
   auctionHeadline: {
     flexDirection: 'row',
     alignItems: 'flex-end',

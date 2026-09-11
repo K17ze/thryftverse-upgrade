@@ -5,7 +5,7 @@ import {
   StyleSheet,
   Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, TypeStyles } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -319,7 +319,7 @@ const createStyles = (colors: ThemeColors, isMe: boolean) =>
       gap: Space.xs },
     duration: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: isMe ? colors.scrimTextSecondary : colors.textMuted,
       fontVariant: ['tabular-nums'] },
     speedPill: {
@@ -335,5 +335,5 @@ const createStyles = (colors: ThemeColors, isMe: boolean) =>
       fontVariant: ['tabular-nums'] },
     error: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.danger } });

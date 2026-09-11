@@ -44,14 +44,24 @@ export interface AssetOverviewSectionProps {
 
 /** Range → server price-history query. All chart ranges map to a
  * supported server interval ('1h' | '4h' | '1d' | '1w'). */
-const RANGE_HISTORY_PARAMS: Record<CoOwnCandleRange, { interval: '1h' | '4h' | '1d' | '1w'; limit: number }> = {
-  '1D': { interval: '1h', limit: 48 },
-  '1W': { interval: '4h', limit: 42 },
-  '1M': { interval: '1d', limit: 30 },
-  '3M': { interval: '1d', limit: 90 },
-  '1Y': { interval: '1w', limit: 52 },
-  'ALL': { interval: '1w', limit: 52 },
+const RANGE_HISTORY_PARAMS: Record<CoOwnCandleRange, { interval: '1h' | '4h' | '1d' | '1w'; limit: number; spanDays: number }> = {
+  '1D': { interval: '1h', limit: 48, spanDays: 1 },
+  '1W': { interval: '4h', limit: 42, spanDays: 7 },
+  '1M': { interval: '1d', limit: 30, spanDays: 30 },
+  '3M': { interval: '1d', limit: 90, spanDays: 90 },
+  '1Y': { interval: '1w', limit: 52, spanDays: 365 },
+  'ALL': { interval: '1w', limit: 52, spanDays: 365 * 5 },
 };
+
+/** Compute the explicit from/to window for a range so the server can never
+ *  silently return an arbitrary latest-N slice. The window is anchored to
+ *  "now" and extends backwards by the range's span. */
+function rangeWindow(range: CoOwnCandleRange): { from: string; to: string } {
+  const params = RANGE_HISTORY_PARAMS[range];
+  const to = new Date();
+  const from = new Date(to.getTime() - params.spanDays * 86_400_000);
+  return { from: from.toISOString(), to: to.toISOString() };
+}
 
 /** Minor-unit candles → chart points in GBP. */
 function toCandlePoints(candles: PriceCandle[]): CandleDataPoint[] {
@@ -97,6 +107,9 @@ export function AssetOverviewSection({
   const renderedRangeRef = React.useRef(candleRange);
   const [historyLoading, setHistoryLoading] = React.useState(false);
   const [historyFailed, setHistoryFailed] = React.useState(false);
+  // Retry nonce — incrementing this re-triggers the history fetch effect
+  // without changing the range. Used by the "Retry price history" button.
+  const [retryNonce, setRetryNonce] = React.useState(0);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -107,10 +120,13 @@ export function AssetOverviewSection({
     // candles cover the gap until the fetch resolves.
     setHistoryCandles(null);
     setHistoryRange(null);
-    void fetchCoOwnPriceHistory(asset.id, RANGE_HISTORY_PARAMS[candleRange])
+    void fetchCoOwnPriceHistory(asset.id, { ...RANGE_HISTORY_PARAMS[candleRange], ...rangeWindow(candleRange) })
       .then(({ candles }) => {
         if (cancelled) return;
-        setHistoryCandles(candles.length > 0 ? toCandlePoints(candles) : null);
+        // Distinguish "fetch succeeded with empty" ([]) from "fetch failed"
+        // (null). A successful empty response must NOT fall back to embedded
+        // candles — the server authoritatively says there is no data.
+        setHistoryCandles(toCandlePoints(candles));
         setHistoryRange(candleRange);
         setHistoryFailed(false);
         setHistoryLoading(false);
@@ -123,7 +139,11 @@ export function AssetOverviewSection({
         setHistoryLoading(false);
       });
     return () => { cancelled = true; };
-  }, [asset.id, candleRange]);
+  }, [asset.id, candleRange, retryNonce]);
+
+  const retryHistory = React.useCallback(() => {
+    setRetryNonce((n) => n + 1);
+  }, []);
 
   // Guard the first render after a range change as well as the effect-driven
   // state update; this prevents one frame of the previous range flashing.
@@ -133,6 +153,10 @@ export function AssetOverviewSection({
     ?? (candleRange === '1W' ? candleData : []);
   const hasChartCandles = chartCandles.length > 0;
   const volumeAvailable = chartCandles.some((c) => c.v > 0);
+  // "Saved history" — shown when the 1W fetch failed and the chart fell back
+  // to the embedded asset candles. The label is honest: the data is from the
+  // asset payload, not a fresh server response.
+  const usingSavedHistory = historyFailed && candleRange === '1W' && chartCandles === candleData;
 
   const appraisalDateLabel = asset.appraisalValuedAt
     ? `Valuation updated ${new Date(asset.appraisalValuedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
@@ -153,7 +177,7 @@ export function AssetOverviewSection({
         <View style={styles.assetStoryWrap}>
           <Text
             style={[styles.assetStoryText, { color: colors.textSecondary }]}
-            numberOfLines={4}
+            numberOfLines={3}
             maxFontSizeMultiplier={1.4}
           >
             {asset.provenance ?? 'Provenance has not been published for this asset yet.'}
@@ -254,37 +278,63 @@ export function AssetOverviewSection({
           ) : null}
         </View>
 
-        {/* Candle chart or sparse notice — each range is backed by its own
-            server query; non-default failures stay explicitly unavailable. */}
-        {hasChartCandles ? (
-          <View style={styles.chartWrapper}>
-            <CoOwnCandleChart
-              candles={chartCandles}
-              range={candleRange}
-              onRangeChange={onCandleRangeChange}
-              chartType={chartType}
-              onChartTypeChange={onChartTypeChange}
-              showVolume={showVolume && volumeAvailable}
-              lastPrice={lastExecutionPriceGbp ?? undefined}
-              lastAgeSeconds={lastExecutionAgeSeconds}
-            />
-          </View>
-        ) : (
-          <View style={styles.sparseChartBlock}>
-            <Text style={[styles.sparseChartTitle, { color: colors.textPrimary }]}>
-              {historyLoading
-                ? 'Loading price history…'
-                : historyFailed
-                ? 'Price history unavailable'
-                : lifecycleState === 'initialOffering'
-                  ? 'Primary offering — no trade history'
-                  : 'No execution history yet'}
-            </Text>
-            <Text style={[styles.sparseChartBody, { color: colors.textSecondary }]}>
-              {appraisedValuePerUnitGbp != null
+        {/* Candle chart — always mounted (F12) so range controls and retry
+            survive loading/empty/error states. The chart receives the
+            resolved candles (embedded data valid only for 1W) plus the
+            state-specific empty copy via emptyStateTitle/emptyStateBody. */}
+        <View style={styles.chartWrapper}>
+          <CoOwnCandleChart
+            candles={chartCandles}
+            range={candleRange}
+            onRangeChange={onCandleRangeChange}
+            chartType={chartType}
+            onChartTypeChange={onChartTypeChange}
+            showVolume={showVolume && volumeAvailable}
+            lastPrice={lastExecutionPriceGbp ?? undefined}
+            lastAgeSeconds={lastExecutionAgeSeconds}
+            emptyStateTitle={historyLoading
+              ? 'Loading price history…'
+              : historyFailed
+              ? 'Price history unavailable'
+              : lifecycleState === 'initialOffering'
+                ? 'Primary offering — no trade history'
+                : 'No execution history yet'}
+            emptyStateBody={historyFailed
+              ? 'Could not load price history for this range.'
+              : appraisedValuePerUnitGbp != null
                 ? `Offering price ${formatCoOwnIze(asset.unitPriceGbp)} benchmarked against appraisal of ${formatCoOwnIze(appraisedValuePerUnitGbp)}.`
                 : `Reference price ${formatCoOwnIze(asset.unitPriceGbp)}. No settled trades for this range.`}
+          />
+        </View>
+        {usingSavedHistory && (
+          <View style={[styles.savedHistoryRow, { borderTopColor: colors.borderSubtle }]}>
+            <Text style={[styles.savedHistoryLabel, { color: colors.textMuted }]}>
+              Saved history
             </Text>
+            <Pressable
+              onPress={retryHistory}
+              hitSlop={8}
+              style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.7 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Retry price history"
+            >
+              <Ionicons name="refresh" size={14} color={colors.brand} />
+              <Text style={[styles.retryBtnText, { color: colors.brand }]}>Retry</Text>
+            </Pressable>
+          </View>
+        )}
+        {historyFailed && !usingSavedHistory && (
+          <View style={[styles.savedHistoryRow, { borderTopColor: colors.borderSubtle }]}>
+            <Pressable
+              onPress={retryHistory}
+              hitSlop={8}
+              style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.7 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Retry price history"
+            >
+              <Ionicons name="refresh" size={14} color={colors.brand} />
+              <Text style={[styles.retryBtnText, { color: colors.brand }]}>Retry price history</Text>
+            </Pressable>
           </View>
         )}
 
@@ -314,7 +364,20 @@ export function AssetOverviewSection({
           Replaces the 4-pillar evidence grid and the separate operating
           expenses section. Compact tappable rows link to the full dossier
           and risk sheet; fees are flat metric rows. */}
-      <CommerceDetailSection label="Due diligence & fees">
+      <CommerceDetailSection
+        label="Due diligence & fees"
+        trailing={
+          <Pressable
+            onPress={onOpenDiligence}
+            hitSlop={8}
+            style={({ pressed }) => pressed && { opacity: 0.7 }}
+            accessibilityRole="button"
+            accessibilityLabel="Open full due diligence"
+          >
+            <Text style={[styles.assetStoryLinkText, { color: colors.brand }]}>View all</Text>
+          </Pressable>
+        }
+      >
         {/* Document chips — only when documents exist */}
         {hasDocuments && (
           <View style={[styles.documentsStrip, { borderTopColor: colors.border }]}>
@@ -364,13 +427,20 @@ export function AssetOverviewSection({
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.md,
-    gap: Space.lg,
+    // Sections own horizontal padding (CommerceDetailSection paddingHorizontal:
+    // Space.md) — no container-level horizontal padding, otherwise content is
+    // double-inset. Vertical rhythm: container gap Space.sm + each section's
+    // own paddingTop Space.md = 24pt block-to-block.
+    paddingTop: Space.sm,
+    gap: Space.sm,
   },
   chartBlock: {
     // Flat on canvas — no card fill, no border, no radius.
     // Hairline separators define structure, not containers.
+    // Flat View (not a section) so it carries its own horizontal padding to
+    // align with the sections' 16pt inset.
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.xs,
   },
   chartHeaderRow: {
     flexDirection: 'row',
@@ -444,8 +514,8 @@ const styles = StyleSheet.create({
   provenanceMetaGrid: {
     flexDirection: 'row',
     gap: Space.md,
-    marginTop: Space.sm,
-    paddingTop: Space.sm,
+    marginTop: Space.xs,
+    paddingTop: Space.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   provenanceMetaItem: {
@@ -480,12 +550,33 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontVariant: ['tabular-nums'],
   },
+  savedHistoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: Space.xs,
+    marginTop: Space.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  savedHistoryLabel: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  retryBtnText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
+  },
   valuationDetailRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     gap: Space.md,
-    marginTop: Space.sm,
+    marginTop: Space.xs,
     paddingTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
@@ -510,8 +601,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Space.xs,
-    marginTop: Space.sm,
-    paddingTop: Space.sm,
+    marginTop: Space.xs,
+    paddingTop: Space.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   docChip: {

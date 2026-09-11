@@ -7,21 +7,16 @@ import {
   StatusBar,
   useWindowDimensions,
   Share,
-  Pressable,
-  ActivityIndicator } from 'react-native';
+  Pressable } from 'react-native';
 import { EmptyState } from '../components/EmptyState';
 import Reanimated, {
   useSharedValue,
-  useAnimatedScrollHandler,
-  useAnimatedStyle,
-  interpolate,
-  Extrapolation,
-  FadeIn } from 'react-native-reanimated';
+  useAnimatedScrollHandler } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Space, FontFamily, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, FontFamily, LetterSpacing } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { useStore } from '../store/useStore';
@@ -37,33 +32,25 @@ import { parseApiError } from '../lib/apiClient';
 import { setFeaturedListings } from '../services/storefrontApi';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
-import { LinearGradient } from 'expo-linear-gradient';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { FlagshipProfileMedia } from '../components/flagship';
-import { UploadProgressRing } from '../components/flagship/FlagshipProfileMedia';
-import { LookPreviewCard, ProfileLooksGrid } from '../components/profile';
 import { MyProfileIdentityHero } from '../components/profile/MyProfileIdentityHero';
 import { SharePassportModal } from '../components/profile/SharePassportModal';
 import { ProfileUtilityRail } from '../components/profile/ProfileUtilityRail';
-import { MyProfileTabRail } from '../components/profile/MyProfileTabRail';
 import { useSellerTrust, VERIFICATION_TIERS } from '../platform/product';
 import { useSellerReviewsInfinite } from '../platform/server';
-import { ReviewSummaryBlock, ProfileReviewRow } from '../components/profile/ProfileReviews';
 import { ShopRail, type ShopRailItem } from '../components/profile/ShopRail';
 import type { SellerReviewItem, SellerReviewSummary } from '../services/sellerReviewsApi';
 import { openProfile } from '../navigation/openProfile';
 import { openProductDetail } from '../platform/product/openProductDetail';
 import { useProfileMediaUpload } from '../hooks/useProfileMediaUpload';
-import { isVideoUri } from '../utils/media';
 import { fetchLooksFromApi, type LookApiItem } from '../services/looksApi';
 import { fetchPosterHighlights, type PosterHighlight } from '../services/postersApi';
 import { PosterHighlightsRail } from '../components/poster/PosterHighlightsRail';
-import { SkeletonLoader } from '../components/SkeletonLoader';
 import { OfflineBanner } from '../components/OfflineBanner';
-import { FlashList } from '@shopify/flash-list';
 import { useAppTranslation } from '../i18n/useAppTranslation';
+import { ProfileHeaderHero, CompletionGrowthPanel, StorefrontTabs } from '../components/myprofile';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -106,29 +93,10 @@ export default function MyProfileScreen() {
   // Themed style overrides — color properties extracted from module-level styles
   const t = {
     container: { backgroundColor: colors.background },
-    coverWrap: { backgroundColor: colors.surfaceAlt },
-    coverFailureText: { color: colors.scrimTextPrimary },
-    coverFailureActionText: { color: colors.scrimTextPrimary },
-    floatingHeader: { backgroundColor: colors.background, borderBottomColor: colors.border },
-    floatingHeaderTitle: { color: colors.textPrimary },
-    gridHeaderCount: { color: colors.textMuted },
-    gridHeaderAction: { color: colors.brand },
     soldText: { color: colors.scrimTextPrimary },
     gridPrice: { color: colors.textPrimary },
     gridBrand: { color: colors.textSecondary },
     gridMeta: { color: colors.textMuted },
-    listingsEmptyTitle: { color: colors.textPrimary },
-    listingsEmptyBody: { color: colors.textMuted },
-    listingsEmptyCta: { backgroundColor: colors.brand },
-    listingsEmptyCtaText: { color: colors.textInverse },
-    aboutSectionTitle: { color: colors.textPrimary },
-    aboutRow: { borderBottomColor: colors.border },
-    aboutLabel: { color: colors.textMuted },
-    aboutValue: { color: colors.textPrimary },
-    aboutEmpty: { color: colors.textMuted },
-    topUtilityVisible: { backgroundColor: colors.overlay, borderColor: colors.scrimTextTertiary },
-    coverEditVisible: { backgroundColor: colors.overlay, borderColor: colors.scrimTextTertiary },
-    coverFailure: { backgroundColor: colors.overlay },
     soldOverlay: { backgroundColor: colors.overlay },
     pinnedBadge: { backgroundColor: colors.overlay },
     statsRow: { borderBottomColor: colors.borderSubtle, borderTopColor: colors.borderSubtle },
@@ -137,23 +105,7 @@ export default function MyProfileScreen() {
     statDivider: { backgroundColor: colors.borderSubtle },
     trustBadgeText: { color: colors.textSecondary },
     trustBadgeVerified: { color: colors.success },
-    trustBadgeSep: { backgroundColor: colors.borderSubtle },
-    profileStatusPanel: { backgroundColor: colors.surfaceAlt },
-    profileStatusDivider: { backgroundColor: colors.borderSubtle },
-    completionTrack: { backgroundColor: colors.borderSubtle },
-    completionFill: { backgroundColor: colors.brand },
-    completionTitle: { color: colors.textPrimary },
-    completionPercent: { color: colors.textMuted },
-    completionCta: { backgroundColor: colors.brand },
-    completionCtaText: { color: colors.textInverse },
-    growthTitle: { color: colors.textPrimary },
-    growthRow: { borderColor: colors.borderSubtle },
-    growthRowTitle: { color: colors.textPrimary },
-    growthRowSub: { color: colors.textMuted },
-    portfolioPreview: { backgroundColor: colors.surfaceAlt },
-    portfolioLabel: { color: colors.textSecondary },
-    portfolioHoldingTitle: { color: colors.textPrimary },
-    portfolioHoldingUnits: { color: colors.textMuted } };
+    trustBadgeSep: { backgroundColor: colors.borderSubtle } };
   const tMyProfile = {
     awayBanner: { backgroundColor: colors.surfaceAlt },
     awayBannerTitle: { color: colors.textPrimary },
@@ -576,46 +528,6 @@ export default function MyProfileScreen() {
       scrollY.value = e.contentOffset.y;
     } });
 
-  const coverStyle = useAnimatedStyle(() => {
-    const translateY = interpolate(
-      scrollY.value,
-      [-100, 0, COVER_HEIGHT],
-      [-50, 0, -COVER_HEIGHT],
-      Extrapolation.CLAMP
-    );
-    const scale = interpolate(scrollY.value, [-100, 0], [1.25, 1], Extrapolation.CLAMP);
-    return { transform: [{ translateY }, { scale }] };
-  });
-
-  const coverActionStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateY: interpolate(
-          scrollY.value,
-          [0, COVER_HEIGHT],
-          [0, -COVER_HEIGHT],
-          Extrapolation.CLAMP
-        ) },
-    ] }));
-
-  const topUtilityStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(scrollY.value, [0, 80], [1, 0], Extrapolation.CLAMP);
-    const translateY = interpolate(scrollY.value, [0, 80], [0, -8], Extrapolation.CLAMP);
-    return {
-      opacity,
-      transform: [{ translateY }] };
-  });
-
-  const headerOpacityStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(
-      scrollY.value,
-      [COVER_HEIGHT - 88, COVER_HEIGHT - 44],
-      [0, 1],
-      Extrapolation.CLAMP
-    );
-    return { opacity };
-  });
-
   const handleShare = () => {
     if (!user) return;
     haptic.light();
@@ -816,126 +728,19 @@ export default function MyProfileScreen() {
 
       <OfflineBanner />
 
-      {/* ── 1. FULL-WIDTH COVER ── */}
-      <Reanimated.View style={[styles.coverWrap, t.coverWrap, coverStyle]}>
-        <FlagshipProfileMedia
-          coverUri={displayCover}
-          coverVideoUri={isVideoUri(displayCover) ? displayCover : undefined}
-          isSelf
-          coverOnly
-          coverHeight={COVER_HEIGHT}
-          isUploadingCover={coverState.status === 'uploading'}
-          isUploadingAvatar={avatarState.status === 'uploading'}
-          coverUploadProgress={coverState.progress}
-          avatarUploadProgress={avatarState.progress}
-          style={{ width: '100%' }}
-        />
-        {/* Top gradient fade — improves floating control contrast over any cover media */}
-        <LinearGradient
-          colors={['rgba(0,0,0,0.28)', 'rgba(0,0,0,0.12)', 'transparent']}
-          style={styles.coverTopFade}
-          pointerEvents="none"
-        />
-        {/* Subtle bottom fade around the avatar seam — no hard dark strip */}
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.10)']}
-          style={styles.coverBottomFade}
-          pointerEvents="none"
-        />
-      </Reanimated.View>
-
-      {/* ── 2. FLOATING PERSONALISATION, SHARE AND SETTINGS ── */}
-      <Reanimated.View pointerEvents="box-none" style={[styles.coverActionLayer, coverActionStyle]}>
-        <Reanimated.View style={[styles.topUtilityRow, { top: Math.max(insets.top + 6, 14) }, topUtilityStyle]}>
-          <AnimatedPressable
-            style={styles.topUtilityIconBtn}
-            onPress={() => { haptic.light(); navigation.navigate('Settings'); }}
-            accessibilityLabel={tt('accessibility.openSettings')}
-            accessibilityRole="button"
-            accessibilityHint={tt('accessibility.openSettingsHint')}
-          >
-            <View style={[styles.topUtilityVisible, t.topUtilityVisible]}>
-              <Ionicons name="settings-outline" size={22} color={colors.scrimTextPrimary} aria-hidden={true} />
-            </View>
-          </AnimatedPressable>
-
-          <View style={styles.topUtilityRight}>
-            <AnimatedPressable
-              style={styles.topUtilityIconBtn}
-              onPress={handleShare}
-              accessibilityLabel={tt('accessibility.shareProfile')}
-              accessibilityRole="button"
-              accessibilityHint={tt('accessibility.shareProfileHint')}
-            >
-              <View style={[styles.topUtilityVisible, t.topUtilityVisible]}>
-                <Ionicons name="share-outline" size={18} color={colors.scrimTextPrimary} aria-hidden={true} />
-              </View>
-            </AnimatedPressable>
-          </View>
-        </Reanimated.View>
-
-        {coverState.status === 'failed' ? (
-          <View style={[styles.coverFailure, t.coverFailure]}>
-            <View style={styles.coverFailureCopy}>
-              <Ionicons name="alert-circle-outline" size={16} color={colors.scrimTextPrimary} aria-hidden={true} />
-              <Text style={[styles.coverFailureText, t.coverFailureText]} numberOfLines={1} maxFontSizeMultiplier={2}>
-                {coverState.error || tt('cover.uploadFailed')}
-              </Text>
-            </View>
-            <AnimatedPressable
-              style={styles.coverFailureAction}
-              onPress={retryCover}
-              accessibilityRole="button"
-              accessibilityLabel={tt('accessibility.retryCoverUpload')}
-              hitSlop={5}
-            >
-              <Text style={[styles.coverFailureActionText, t.coverFailureActionText]}>{tt('cover.retry')}</Text>
-            </AnimatedPressable>
-            <AnimatedPressable
-              style={styles.coverFailureAction}
-              onPress={revertCover}
-              accessibilityRole="button"
-              accessibilityLabel={tt('accessibility.cancelCoverChange')}
-              hitSlop={5}
-            >
-              <Text style={[styles.coverFailureActionText, t.coverFailureActionText]}>{tt('cover.cancel')}</Text>
-            </AnimatedPressable>
-          </View>
-        ) : (
-          <AnimatedPressable
-            style={styles.coverEditTarget}
-            onPress={pickCover}
-            hapticFeedback="light"
-            disabled={coverState.status === 'uploading'}
-            accessibilityRole="button"
-            accessibilityLabel={
-              coverState.status === 'uploading'
-                ? tt('accessibility.uploadingCover')
-                : tt('accessibility.changeCover')
-            }
-            accessibilityState={{ disabled: coverState.status === 'uploading', busy: coverState.status === 'uploading' }}
-          >
-            <View style={[styles.coverEditVisible, t.coverEditVisible]}>
-              {coverState.status === 'uploading' ? (
-                <UploadProgressRing
-                  progress={coverState.progress}
-                  active={coverState.status === 'uploading'}
-                  size={28}
-                />
-              ) : (
-                <Ionicons name="image-outline" size={16} color={colors.scrimTextPrimary} aria-hidden={true} />
-              )}
-            </View>
-          </AnimatedPressable>
-        )}
-      </Reanimated.View>
-
-      {/* ── COLLAPSED SCROLL HEADER ── */}
-      <Reanimated.View style={[styles.floatingHeader, t.floatingHeader, { paddingTop: insets.top }, headerOpacityStyle]} pointerEvents="none">
-        <View style={{ flex: 1 }} />
-        <Text style={[styles.floatingHeaderTitle, t.floatingHeaderTitle]} numberOfLines={1} ellipsizeMode="tail">{user.username}</Text>
-        <View style={{ flex: 1 }} />
-      </Reanimated.View>
+      <ProfileHeaderHero
+        coverMedia={displayCover}
+        coverState={coverState}
+        avatarState={avatarState}
+        insetsTop={insets.top}
+        scrollY={scrollY}
+        username={user.username}
+        onSettings={() => { haptic.light(); navigation.navigate('Settings'); }}
+        onShare={handleShare}
+        onEditCover={pickCover}
+        onRetryCover={retryCover}
+        onRevertCover={revertCover}
+      />
 
       <Reanimated.ScrollView
         ref={scrollRef}
@@ -1024,400 +829,64 @@ export default function MyProfileScreen() {
             onPressItem={(id) => { haptic.light(); navigation.navigate('ManageListing', { itemId: id }); }}
           />
 
-          {/* ── 9. STICKY FLAT TAB RAIL ── */}
-          <MyProfileTabRail
-            tabs={tabs}
-            activeKey={activeTab}
-            onChange={(key) => setActiveTab(key as 'listings' | 'looks' | 'about' | 'reviews')}
-          />
         </View>
 
-        {/* ── 10. ACTIVE TAB CONTENT ── */}
-        <View
-          onLayout={(e) => { tabContentY.current = e.nativeEvent.layout.y; }}
-        >
+        <StorefrontTabs
+          tabs={tabs}
+          activeKey={activeTab}
+          onTabChange={(key) => setActiveTab(key)}
+          onTabContentLayout={(y) => { tabContentY.current = y; }}
+          reducedMotion={reducedMotion}
+          listings={allOwnedListings}
+          reorderMode={isReorderMode}
+          isSaving={isSavingReorder}
+          onToggleReorder={() => {
+            if (isReorderMode) {
+              void handleSaveReorder();
+            } else {
+              handleToggleReorderMode();
+            }
+          }}
+          onViewAll={() => navigation.navigate('MyListings')}
+          onStartSelling={() => navigation.navigate('Sell')}
+          onImport={() => navigation.navigate('CatalogImportStart')}
+          renderItem={renderListingItem}
+          looks={myLooks}
+          looksLoading={looksLoading}
+          looksError={looksError}
+          onRetryLooks={() => { void loadMyLooks(); }}
+          onCreateLook={() => navigation.navigate('CreatorStudio', { type: 'look' })}
+          looksNavigation={navigation}
+          coOwnHoldings={coOwnHoldings}
+          website={user.website ?? null}
+          sellerTrust={sellerTrust}
+          onViewPortfolio={() => { haptic.light(); navigation.navigate('CoOwnHub'); }}
+          reviewSummary={myReviewSummary}
+          reviewCount={myReviewCount}
+          reviewsLoading={reviewsQuery.isLoading}
+          reviewsError={reviewsQuery.error}
+          reviews={myReviews}
+          onRefetchReviews={() => { void reviewsQuery.refetch(); }}
+          onOpenReviewer={(uid) => openProfile(navigation, uid, currentUser?.id)}
+          onOpenListing={(lid) => openProductDetail(navigation, { referenceKind: 'listing', canonicalId: lid, sourceSurface: 'MyProfileReview' })}
+        />
 
-        {/* LISTINGS TAB — two-column portfolio grid */}
-        {activeTab === 'listings' && (
-          <Reanimated.View
-            key="listings"
-            entering={reducedMotion ? undefined : FadeIn.duration(200)}
-            style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}
-          >
-            {allOwnedListings.length === 0 ? (
-              <View style={styles.listingsEmpty}>
-                <Ionicons name="bag-add-outline" size={28} color={colors.textSecondary} aria-hidden={true} />
-                <Text style={[styles.listingsEmptyTitle, t.listingsEmptyTitle]}>{tt('listings.emptyTitle')}</Text>
-                <Text style={[styles.listingsEmptyBody, t.listingsEmptyBody]} maxFontSizeMultiplier={2}>
-                  {tt('listings.emptyBody')}
-                </Text>
-                <AnimatedPressable
-                  style={[styles.listingsEmptyCta, t.listingsEmptyCta]}
-                  onPress={() => navigation.navigate('Sell')}
-                  accessibilityRole="button"
-                  accessibilityLabel="Start selling"
-                  hitSlop={1}
-                >
-                  <Text style={[styles.listingsEmptyCtaText, t.listingsEmptyCtaText]}>{tt('listings.startSelling')}</Text>
-                </AnimatedPressable>
-                <AnimatedPressable
-                  style={styles.listingsEmptyImportLink}
-                  onPress={() => navigation.navigate('CatalogImportStart')}
-                  accessibilityRole="button"
-                  accessibilityLabel={tt('listings.bringOverListings')}
-                  accessibilityHint={tt('accessibility.importListingsHint')}
-                  hitSlop={8}
-                >
-                  <Text style={[styles.listingsEmptyImportText, { color: colors.brand }]} maxFontSizeMultiplier={2}>
-                    {tt('listings.bringOverListings')}
-                  </Text>
-                </AnimatedPressable>
-              </View>
-            ) : (
-              <>
-                <View style={styles.gridHeader}>
-                  <Text style={[styles.gridHeaderCount, t.gridHeaderCount]}>{tt('listings.listingsCount', { count: allOwnedListings.length })}</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.md }}>
-                    {/* G4: Reorder-mode toggle — "Edit" enters, "Done" saves & exits */}
-                    <Pressable
-                      onPress={() => {
-                        if (isReorderMode) {
-                          void handleSaveReorder();
-                        } else {
-                          handleToggleReorderMode();
-                        }
-                      }}
-                      disabled={isSavingReorder}
-                      accessibilityRole="button"
-                      accessibilityLabel={isReorderMode ? tt('listings.done') : tt('listings.editOrder')}
-                      hitSlop={13}
-                    >
-                      {isSavingReorder ? (
-                        <ActivityIndicator size="small" color={colors.brand} />
-                      ) : (
-                        <Text style={[styles.gridHeaderAction, t.gridHeaderAction]} maxFontSizeMultiplier={2}>
-                          {isReorderMode ? tt('listings.done') : tt('listings.editOrder')}
-                        </Text>
-                      )}
-                    </Pressable>
-                    {!isReorderMode ? (
-                      <Pressable
-                        onPress={() => navigation.navigate('MyListings')}
-                        accessibilityRole="button"
-                        accessibilityLabel="View all listings"
-                        hitSlop={13}
-                      >
-                        <Text style={[styles.gridHeaderAction, t.gridHeaderAction]}>{tt('listings.viewAll')}</Text>
-                      </Pressable>
-                    ) : null}
-                  </View>
-                </View>
-                <FlashList
-                  data={allOwnedListings}
-                  numColumns={3}
-                  keyExtractor={(item) => item.id}
-                  renderItem={renderListingItem}
-                  scrollEnabled={false}
-                />
-              </>
-            )}
-          </Reanimated.View>
-        )}
-
-        {/* LOOKS TAB — 2-column grid (standard profile pattern) */}
-        {activeTab === 'looks' && (
-          <Reanimated.View
-            key="looks"
-            entering={reducedMotion ? undefined : FadeIn.duration(200)}
-            style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}
-          >
-            {looksLoading ? (
-              <View style={{ paddingHorizontal: Space.md, gap: Space.md }} accessibilityLabel={tt('accessibility.loadingLooks')}>
-                <SkeletonLoader width="100%" height={360} borderRadius={RadiusRoleValue.standalonePanel} />
-                <SkeletonLoader width="100%" height={280} borderRadius={RadiusRoleValue.standalonePanel} />
-              </View>
-            ) : looksError ? (
-              <EmptyState
-                density="compact"
-                icon="cloud-offline-outline"
-                title={tt('looks.errorTitle')}
-                subtitle={tt('looks.errorSubtitle')}
-                ctaLabel={tt('looks.tryAgain')}
-                onCtaPress={() => { void loadMyLooks(); }}
-              />
-            ) : myLooks.length === 0 ? (
-              <EmptyState
-                density="compact"
-                icon="images-outline"
-                title={tt('looks.emptyTitle')}
-                subtitle={tt('looks.emptySubtitle')}
-                ctaLabel={tt('looks.createLook')}
-                onCtaPress={() => navigation.navigate('CreatorStudio', { type: 'look' })}
-              />
-            ) : (
-              <ProfileLooksGrid
-                looks={myLooks}
-                isLoading={false}
-                error={null}
-                isSelfProfile
-                onRetry={() => { void loadMyLooks(); }}
-                onCreateLook={() => navigation.navigate('CreatorStudio', { type: 'look' })}
-                navigation={navigation}
-              />
-            )}
-          </Reanimated.View>
-        )}
-
-        {/* ABOUT TAB — flat editorial layout */}
-        {/* Bio, location, and member-since are shown in the IdentityHero above.
-            The About tab shows only information NOT already visible: website,
-            shop policies, and Co-Own portfolio (recessed from the hero). */}
-        {activeTab === 'about' && (
-          <Reanimated.View
-            key="about"
-            entering={reducedMotion ? undefined : FadeIn.duration(200)}
-            style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}
-          >
-            {/* ── CO-OWN PORTFOLIO PREVIEW — recessed into About tab ── */}
-            {coOwnHoldings.length > 0 ? (
-              <AnimatedPressable
-                style={[styles.portfolioPreview, t.portfolioPreview]}
-                onPress={() => { haptic.light(); navigation.navigate('CoOwnHub'); }}
-                accessibilityRole="button"
-                accessibilityLabel={tt('accessibility.viewCoOwnPortfolio')}
-                accessibilityHint={tt('accessibility.viewCoOwnPortfolioHint')}
-              >
-                <View style={styles.portfolioHeader}>
-                  <Text style={[styles.portfolioLabel, t.portfolioLabel]}>{tt('about.coOwnPortfolio')}</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.xs / 2 }}>
-                    <Text style={[styles.portfolioHoldingUnits, t.portfolioHoldingUnits]}>{tt('about.viewAll')}</Text>
-                    <Ionicons name="chevron-forward" size={12} color={colors.textMuted} aria-hidden={true} />
-                  </View>
-                </View>
-                <View style={styles.portfolioHoldings}>
-                  {coOwnHoldings.slice(0, 3).map((h) => (
-                    <View key={h.id} style={styles.portfolioHoldingCard}>
-                      {h.image ? (
-                        <CachedImage
-                          uri={h.image}
-                          style={styles.portfolioHoldingImage}
-                          contentFit="cover"
-                        />
-                      ) : (
-                        <View style={[styles.portfolioHoldingImage, { backgroundColor: colors.surfaceAlt }]} />
-                      )}
-                      <View style={styles.portfolioHoldingInfo}>
-                        <Text style={[styles.portfolioHoldingTitle, t.portfolioHoldingTitle]} numberOfLines={1} maxFontSizeMultiplier={2}>
-                          {h.title}
-                        </Text>
-                        <Text style={[styles.portfolioHoldingUnits, t.portfolioHoldingUnits]} maxFontSizeMultiplier={2}>
-                          {h.yourUnits} {h.yourUnits === 1 ? tt('about.unit') : tt('about.units')}
-                        </Text>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              </AnimatedPressable>
-            ) : null}
-
-            {user.website ? (
-              <View style={styles.aboutContainer}>
-                <View style={[styles.aboutRow, t.aboutRow, styles.aboutRowLast]}>
-                  <Text style={[styles.aboutLabel, t.aboutLabel]}>{tt('about.website')}</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.xs }}>
-                    <Text style={[styles.aboutValue, t.aboutValue, { flexShrink: 1 }]} numberOfLines={1}>{user.website}</Text>
-                    <Ionicons name="open-outline" size={12} color={colors.textMuted} aria-hidden={true} />
-                  </View>
-                </View>
-              </View>
-            ) : null}
-
-            {/* Shop policies — canonical home for dispatch/response details.
-                Trust badges above show a compact "Replies Xh" pill; this section
-                provides the full policy context without duplicating the badge. */}
-            <View style={styles.aboutContainer}>
-              <Text style={[styles.aboutSectionTitle, t.aboutSectionTitle]}>{tt('about.shopPolicies')}</Text>
-              <View style={[styles.aboutRow, t.aboutRow]}>
-                <Text style={[styles.aboutLabel, t.aboutLabel]}>{tt('about.payments')}</Text>
-                <Text style={[styles.aboutValue, t.aboutValue]}>{tt('about.paymentsValue')}</Text>
-              </View>
-              <View style={[styles.aboutRow, t.aboutRow]}>
-                <Text style={[styles.aboutLabel, t.aboutLabel]}>{tt('about.shipping')}</Text>
-                <Text style={[styles.aboutValue, t.aboutValue]} maxFontSizeMultiplier={2}>
-                  {sellerTrust?.dispatchTimeLabel
-                    ? tt('about.shippingSeller', { label: sellerTrust.dispatchTimeLabel.toLowerCase() })
-                    : tt('about.shippingDefault')}
-                </Text>
-              </View>
-              <View style={[styles.aboutRow, t.aboutRow]}>
-                <Text style={[styles.aboutLabel, t.aboutLabel]}>{tt('about.returns')}</Text>
-                <Text style={[styles.aboutValue, t.aboutValue]}>{tt('about.returnsValue')}</Text>
-              </View>
-              {sellerTrust?.responseRate !== null && sellerTrust?.responseRate !== undefined ? (
-                <View style={[styles.aboutRow, t.aboutRow]}>
-                  <Text style={[styles.aboutLabel, t.aboutLabel]}>{tt('about.responseRate')}</Text>
-                  <Text style={[styles.aboutValue, t.aboutValue]}>{sellerTrust.responseRate}%</Text>
-                </View>
-              ) : null}
-              <View style={[styles.aboutRow, t.aboutRow, styles.aboutRowLast]}>
-                <Text style={[styles.aboutLabel, t.aboutLabel]}>{tt('about.response')}</Text>
-                <Text style={[styles.aboutValue, t.aboutValue]} maxFontSizeMultiplier={2}>
-                  {sellerTrust?.responseTimeLabel
-                    ? tt('about.responseSeller', { label: sellerTrust.responseTimeLabel.toLowerCase() })
-                    : tt('about.responseDefault')}
-                </Text>
-              </View>
-            </View>
-
-            {!user.website && !sellerTrust && (
-              <Text style={[styles.aboutEmpty, t.aboutEmpty]}>{tt('about.noDetails')}</Text>
-            )}
-          </Reanimated.View>
-        )}
-
-        {/* REVIEWS TAB — reputation summary + review rows.
-            Only rendered when the seller has reviews (the tab itself is
-            conditional on myReviewCount > 0). Owner can respond to reviews. */}
-        {activeTab === 'reviews' && (
-          <Reanimated.View
-            key="reviews"
-            entering={reducedMotion ? undefined : FadeIn.duration(200)}
-            style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}
-          >
-            {myReviewSummary && myReviewCount > 0 ? (
-              <ReviewSummaryBlock summary={myReviewSummary} />
-            ) : null}
-            {reviewsQuery.isLoading && myReviews.length === 0 ? (
-              <View style={{ paddingVertical: Space.xl, alignItems: 'center' }}>
-                <ActivityIndicator size="small" color={colors.brand} />
-              </View>
-            ) : reviewsQuery.error && myReviews.length === 0 ? (
-              <EmptyState
-                density="compact"
-                icon="cloud-offline-outline"
-                title="Couldn't load reviews"
-                subtitle="Check your connection and try again."
-                ctaLabel="Try again"
-                onCtaPress={() => { void reviewsQuery.refetch(); }}
-              />
-            ) : myReviews.length === 0 ? (
-              <EmptyState
-                density="compact"
-                icon="chatbubble-ellipses-outline"
-                title="No reviews yet"
-                subtitle="Reviews from completed orders will appear here."
-              />
-            ) : (
-              <View style={{ paddingHorizontal: Space.md }}>
-                {myReviews.map((review) => (
-                  <ProfileReviewRow
-                    key={review.id}
-                    item={review}
-                    onOpenReviewer={(uid) => openProfile(navigation, uid, currentUser?.id)}
-                    onOpenListing={(lid) => openProductDetail(navigation, { referenceKind: 'listing', canonicalId: lid, sourceSurface: 'MyProfileReview' })}
-                  />
-                ))}
-              </View>
-            )}
-          </Reanimated.View>
-        )}
-        </View>
-
-        {showCompletionPrompt || showGrowthPrompt ? (
-          <View style={[styles.profileStatusPanel, t.profileStatusPanel]}>
-            {showCompletionPrompt ? (
-              <View style={styles.completionSection}>
-                <View style={styles.completionHead}>
-                  <View style={styles.completionHeadText}>
-                    <Text style={[styles.completionTitle, t.completionTitle]}>{tt('completion.title')}</Text>
-                    <Text style={[styles.completionPercent, t.completionPercent]} maxFontSizeMultiplier={2}>
-                      {tt('completion.progress', { percent: completion.percent, done: completion.done, total: completion.total })}
-                    </Text>
-                  </View>
-                  <AnimatedPressable
-                    style={[styles.completionDismiss, { backgroundColor: `${colors.textMuted}14` }]}
-                    onPress={() => { haptic.light(); setCompletionDismissed(true); }}
-                    accessibilityRole="button"
-                    accessibilityLabel={tt('accessibility.dismissCompletion')}
-                  >
-                    <Ionicons name="close" size={16} color={colors.textMuted} aria-hidden={true} />
-                  </AnimatedPressable>
-                </View>
-                <View style={[styles.completionTrack, t.completionTrack]}>
-                  <View style={[styles.completionFill, t.completionFill, { width: `${completion.percent}%` }]} />
-                </View>
-                <AnimatedPressable
-                  style={[styles.completionCta, t.completionCta]}
-                  onPress={() => {
-                    haptic.light();
-                    navigation.navigate('EditProfile', completionCta.focus ? { focus: completionCta.focus } : {});
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel={completionCta.label}
-                >
-                  <Text style={[styles.completionCtaText, t.completionCtaText]}>{completionCta.label}</Text>
-                  <Ionicons name="chevron-forward" size={12} color={colors.textInverse} aria-hidden={true} />
-                </AnimatedPressable>
-              </View>
-            ) : null}
-
-            {showCompletionPrompt && showGrowthPrompt ? (
-              <View style={[styles.profileStatusDivider, t.profileStatusDivider]} />
-            ) : null}
-
-            {showGrowthPrompt ? (
-              <View style={styles.growthSection}>
-                <View style={styles.growthHead}>
-                  <Text style={[styles.growthTitle, t.growthTitle]}>{tt('growth.title')}</Text>
-                  <AnimatedPressable
-                    style={[styles.completionDismiss, { backgroundColor: `${colors.textMuted}14` }]}
-                    onPress={() => { haptic.light(); setGrowthDismissed(true); }}
-                    accessibilityRole="button"
-                    accessibilityLabel={tt('accessibility.dismissGrowth')}
-                  >
-                    <Ionicons name="close" size={16} color={colors.textMuted} aria-hidden={true} />
-                  </AnimatedPressable>
-                </View>
-
-                {showFirstListingGrowth ? (
-                  <AnimatedPressable
-                    style={[styles.growthRow, t.growthRow]}
-                    onPress={() => { haptic.light(); navigation.navigate('Sell'); }}
-                    accessibilityRole="button"
-                    accessibilityLabel={tt('growth.listFirstItemTitle')}
-                    accessibilityHint={tt('accessibility.listFirstItemHint')}
-                  >
-                    <View style={styles.growthRowText}>
-                      <Text style={[styles.growthRowTitle, t.growthRowTitle]}>{tt('growth.listFirstItemTitle')}</Text>
-                      <Text style={[styles.growthRowSub, t.growthRowSub]} maxFontSizeMultiplier={2}>
-                        {tt('growth.listFirstItemSub')}
-                      </Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
-                  </AnimatedPressable>
-                ) : null}
-
-                {showAudienceGrowth ? (
-                  <AnimatedPressable
-                    style={[styles.growthRow, t.growthRow, styles.growthRowLast]}
-                    onPress={() => { haptic.light(); navigation.navigate('CreatorAnalyticsDashboard'); }}
-                    accessibilityRole="button"
-                    accessibilityLabel={tt('growth.growAudienceTitle')}
-                    accessibilityHint={tt('accessibility.growAudienceHint')}
-                  >
-                    <View style={styles.growthRowText}>
-                      <Text style={[styles.growthRowTitle, t.growthRowTitle]}>{tt('growth.growAudienceTitle')}</Text>
-                      <Text style={[styles.growthRowSub, t.growthRowSub]} maxFontSizeMultiplier={2}>
-                        {tt('growth.growAudienceSub')}
-                      </Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
-                  </AnimatedPressable>
-                ) : null}
-              </View>
-            ) : null}
-          </View>
-        ) : null}
+        <CompletionGrowthPanel
+          showCompletionPrompt={showCompletionPrompt}
+          showGrowthPrompt={showGrowthPrompt}
+          completionPercent={completion.percent}
+          completionDone={completion.done}
+          completionTotal={completion.total}
+          completionCtaLabel={completionCta.label}
+          completionCtaFocus={completionCta.focus}
+          showFirstListingGrowth={showFirstListingGrowth}
+          showAudienceGrowth={showAudienceGrowth}
+          onDismissCompletion={() => { haptic.light(); setCompletionDismissed(true); }}
+          onDismissGrowth={() => { haptic.light(); setGrowthDismissed(true); }}
+          onCompleteProfile={(focus) => { haptic.light(); navigation.navigate('EditProfile', focus ? { focus } : {}); }}
+          onListFirstItem={() => { haptic.light(); navigation.navigate('Sell'); }}
+          onGrowAudience={() => { haptic.light(); navigation.navigate('CreatorAnalyticsDashboard'); }}
+        />
       </Reanimated.ScrollView>
 
       {user ? (
@@ -1464,179 +933,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, overflow: 'hidden' },
   scrollContent: { paddingBottom: Space.xxl + Space.xxl + Space.xs, overflow: 'hidden' },
 
-  // Cover
-  coverWrap: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: COVER_HEIGHT,
-    zIndex: 0,
-    overflow: 'hidden' },
-  // Cover gradient fades — match the public ProfileHero treatment for control
-  // contrast and a premium authored cover. Top fade improves floating button
-  // legibility; bottom fade softens the avatar seam.
-  coverTopFade: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 80 },
-  coverBottomFade: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 40 },
-  coverActionLayer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: COVER_HEIGHT,
-    zIndex: 8 },
-  topUtilityRow: {
-    position: 'absolute',
-    left: Space.md - 2,
-    right: Space.md - 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between' },
-  topUtilityRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs },
-  topUtilityIconBtn: {
-    width: Control.hit,
-    height: Control.hit,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  // ── Co-Own portfolio preview — flagship elevated card ──
-  portfolioPreview: {
-    marginHorizontal: Space.md,
-    marginTop: Space.md,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.md,
-    borderRadius: RadiusRoleValue.sheetDialog },
-  portfolioHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Space.md },
-  portfolioLabel: {
-    fontSize: TypographyV2.label.size,
-    fontFamily: FontFamily.bold,
-    letterSpacing: TypographyV2.label.letterSpacing },
-  portfolioHoldings: {
-    flexDirection: 'row',
-    gap: Space.md },
-  portfolioHoldingCard: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2 },
-  portfolioHoldingImage: {
-    width: 48,
-    height: 48,
-    borderRadius: RadiusRoleValue.mediaThumbnail,
-    flexShrink: 0 },
-  portfolioHoldingInfo: {
-    flexShrink: 1,
-    gap: Space.xxs },
-  portfolioHoldingTitle: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold,
-    lineHeight: TypographyV2.meta.lineHeight },
-  portfolioHoldingUnits: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.regular,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
-  topUtilityVisible: {
-    width: Space.xl - 2,
-    height: Space.xl - 2,
-    borderRadius: RadiusRoleValue.standalonePanel,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  coverEditTarget: {
-    position: 'absolute',
-    right: Space.md - 2,
-    bottom: Space.sm,
-    width: Control.hit,
-    height: Control.hit,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  coverEditVisible: {
-    width: Space.xl + 2,
-    height: Space.xl + 2,
-    borderRadius: RadiusRoleValue.dominantPanel,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  coverFailure: {
-    position: 'absolute',
-    left: Space.md - 2,
-    right: Space.md - 2,
-    bottom: Space.sm,
-    minHeight: Control.hit,
-    paddingLeft: Space.smMd,
-    paddingRight: Space.xs + 1,
-    borderRadius: RadiusRoleValue.sheetDialog,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm },
-  coverFailureCopy: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 3 },
-  coverFailureText: {
-    flexShrink: 1,
-    fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.meta.size },
-  coverFailureAction: {
-    minWidth: Space.xxl + 4,
-    minHeight: Space.xl + 2,
-    paddingHorizontal: Space.sm,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  coverFailureActionText: {
-    fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.meta.size },
-
-  // Collapsed header
-  floatingHeader: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 50,
-    elevation: 4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingBottom: Space.md,
-    borderBottomWidth: StyleSheet.hairlineWidth },
-  floatingHeaderTitle: {
-    fontSize: TypographyV2.sectionTitle.size,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.priceList.letterSpacing },
-
   // Listings grid
-  gridHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: Space.md,
-    marginBottom: Space.sm },
-  gridHeaderCount: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.medium,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
-  gridHeaderAction: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1745,72 +1042,6 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
     marginTop: 1 },
 
-  // Listings empty state — compact in-grid prompt, not full blank page
-  listingsEmpty: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Space.xl + Space.sm,
-    paddingHorizontal: Space.md,
-    gap: Space.sm },
-  listingsEmptyTitle: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: FontFamily.semibold,
-    lineHeight: TypographyV2.bodyStrong.lineHeight },
-  listingsEmptyBody: {
-    maxWidth: 280,
-    fontFamily: FontFamily.regular,
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    textAlign: 'center' },
-  listingsEmptyCta: {
-    marginTop: Space.xs + 2,
-    minHeight: Control.hit,
-    paddingHorizontal: Space.md + 2,
-    justifyContent: 'center',
-    borderRadius: RadiusRoleValue.sheetDialog },
-  listingsEmptyCtaText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.semibold },
-  listingsEmptyImportLink: {
-    marginTop: Space.sm,
-    minHeight: Control.hit,
-    justifyContent: 'center',
-    paddingHorizontal: Space.sm },
-  listingsEmptyImportText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.medium,
-    lineHeight: TypographyV2.body.lineHeight,
-    letterSpacing: TypographyV2.body.letterSpacing },
-
-  // About — flat editorial rows, flagship elevated
-  aboutContainer: {
-    paddingHorizontal: Space.md },
-  aboutSectionTitle: {
-    fontSize: TypographyV2.label.size,
-    fontFamily: FontFamily.bold,
-    letterSpacing: TypographyV2.label.letterSpacing,
-    paddingTop: Space.md + 4,
-    paddingBottom: Space.sm },
-  aboutRow: {
-    paddingVertical: Space.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: Space.xs },
-  aboutRowLast: {
-    borderBottomWidth: 0 },
-  aboutLabel: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.label.letterSpacing },
-  aboutValue: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.regular,
-    lineHeight: TypographyV2.body.lineHeight },
-  aboutEmpty: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.regular,
-    textAlign: 'center',
-    paddingVertical: Space.xl + Space.sm },
-
   // Stats row — followers / following / listings / sales
   statsRow: {
     flexDirection: 'row',
@@ -1858,98 +1089,4 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1 },
   trustBadgeSep: {
     width: StyleSheet.hairlineWidth,
-    height: Space.sm + Space.xxs },
-
-  profileStatusPanel: {
-    marginHorizontal: Space.md,
-    marginBottom: Space.md,
-    borderRadius: RadiusRoleValue.sheetDialog,
-    overflow: 'hidden' },
-  profileStatusDivider: {
-    height: StyleSheet.hairlineWidth },
-  completionSection: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.md,
-    gap: Space.md },
-  completionHead: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: Space.sm },
-  completionHeadText: {
-    flex: 1,
-    gap: Space.xs / 2 },
-  completionTitle: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
-    lineHeight: TypographyV2.bodyStrong.lineHeight },
-  completionPercent: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.medium,
-    letterSpacing: 0.1,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
-  completionDismiss: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: -Space.xs / 2,
-    marginRight: -Space.xs / 2,
-    borderRadius: RadiusRoleValue.pillAvatar },
-  completionTrack: {
-    height: 4,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    overflow: 'hidden' },
-  completionFill: {
-    height: '100%',
-    borderRadius: RadiusRoleValue.pillAvatar },
-  completionCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.xs,
-    minHeight: Control.hit,
-    borderRadius: RadiusRoleValue.mediaThumbnail,
-    paddingHorizontal: Space.md },
-  completionCtaText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: 0.1 },
-
-  growthSection: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.md,
-    gap: Space.sm },
-  growthHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Space.sm },
-  growthTitle: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
-    lineHeight: TypographyV2.bodyStrong.lineHeight },
-  growthRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Space.sm,
-    paddingVertical: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth },
-  growthRowLast: {
-    borderBottomWidth: StyleSheet.hairlineWidth },
-  growthRowText: {
-    flex: 1,
-    gap: Space.xs / 2 },
-  growthRowTitle: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.medium,
-    letterSpacing: TypographyV2.body.letterSpacing,
-    lineHeight: TypographyV2.body.lineHeight },
-  growthRowSub: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-    lineHeight: TypographyV2.meta.lineHeight } });
+    height: Space.sm + Space.xxs } });

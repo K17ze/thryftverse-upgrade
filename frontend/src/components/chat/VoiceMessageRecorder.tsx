@@ -7,7 +7,7 @@ import {
   ActivityIndicator,
   ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, TypeStyles } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -280,7 +280,7 @@ const createStyles = (colors: ThemeColors) =>
       backgroundColor: colors.danger } as ViewStyle,
     timer: {
       fontSize: TypographyV2.bodyStrong.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textPrimary,
       fontVariant: ['tabular-nums'] } as ViewStyle,
     stopBtn: {
@@ -316,12 +316,12 @@ const createStyles = (colors: ThemeColors) =>
       gap: Space.xs + 1 } as ViewStyle,
     previewDuration: {
       fontSize: TypographyV2.bodyStrong.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textPrimary,
       fontVariant: ['tabular-nums'] } as ViewStyle,
     previewHint: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textMuted } as ViewStyle,
     previewActionBtn: {
       width: 40,

@@ -27,7 +27,7 @@ import { useGroupMediaUpload } from '../hooks/useGroupMediaUpload';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AppInput } from '../components/ui/AppInput';
 import { AppButton } from '../components/ui/AppButton';
-import { Space, Radius, TypeStyles, Control } from '../theme/designTokens';
+import { Space, Radius, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { Meta, Caption, BodyEmphasis } from '../components/ui/Text';
 import { useHaptic } from '../hooks/useHaptic';
@@ -788,10 +788,10 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center' },
   selectedChipAvatarText: {
     fontSize: TypographyV2.meta.size - 1,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textPrimary },
   selectedChipText: {
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textPrimary },
   searchErrorBanner: {
     flexDirection: 'row',
@@ -831,7 +831,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center' },
   memberAvatarText: {
     fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: TypeStyles.title.fontFamily,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
     color: colors.textPrimary },
   memberTextWrap: {
     flex: 1 },
@@ -889,7 +889,7 @@ function createStyles(colors: ThemeColors) {
   sectionHeaderText: {
     fontSize: TypographyV2.meta.size,
     letterSpacing: TypographyV2.meta.letterSpacing,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textMuted,
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
@@ -927,7 +927,7 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs },
   coverPlaceholderText: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily },
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   coverUploadingOverlay: {
     position: 'absolute',
     inset: 0,
@@ -965,7 +965,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: TypographyV2.meta.size },
   removeText: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     marginTop: Space.xs / 2 },
   mediaErrorRow: {
     flexDirection: 'row',
@@ -1038,7 +1038,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center' },
   participantAvatarText: {
     fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: TypeStyles.title.fontFamily,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
     color: colors.textPrimary },
   participantTextWrap: {
     flex: 1 },
@@ -1067,7 +1067,7 @@ function createStyles(colors: ThemeColors) {
   retryText: {
     color: colors.brand,
     fontSize: TypographyV2.meta.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily },
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   stickyAction: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm },

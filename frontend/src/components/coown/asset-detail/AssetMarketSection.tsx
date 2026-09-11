@@ -639,13 +639,7 @@ export function AssetMarketSection({
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
-    gap: Space.lg,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Space.sm,
+    gap: Space.md,
   },
   // ── Order book card ──
   orderBookStatusRow: {
@@ -720,9 +714,6 @@ const styles = StyleSheet.create({
   alertActionText: {
     fontSize: TypographyV2.caption.size,
     fontFamily: FontFamily.medium,
-  },
-  orderBookWrapper: {
-    marginTop: Space.xs,
   },
   // ── Top-of-book quote strip ──
   topOfBookRow: {
@@ -858,9 +849,6 @@ const styles = StyleSheet.create({
     letterSpacing: TypographyV2.meta.letterSpacing,
     fontVariant: ['tabular-nums'],
     flexShrink: 0,
-  },
-  noTradesBox: {
-    paddingVertical: Space.sm,
   },
   noTradesText: {
     fontSize: TypographyV2.meta.size,

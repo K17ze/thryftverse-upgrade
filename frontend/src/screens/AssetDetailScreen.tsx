@@ -648,6 +648,13 @@ export default function AssetDetailScreen() {
   const bestBidGbp = marketSnapshot?.bestBidGbp ?? asset.bestBidGbp ?? null;
   const bestAskGbp = marketSnapshot?.bestAskGbp ?? asset.bestAskGbp ?? null;
   const lastExecutionPriceGbp = marketSnapshot?.lastExecutionPriceGbp ?? null;
+  // Reference-vs-appraisal percentage — the signed delta between the
+  // last settled trade price and the per-unit appraisal. Null when
+  // either value is missing. Positive = premium, negative = discount.
+  const referenceVsAppraisalPct =
+    lastExecutionPriceGbp != null && appraisedValuePerUnitGbp && appraisedValuePerUnitGbp > 0
+      ? ((lastExecutionPriceGbp - appraisedValuePerUnitGbp) / appraisedValuePerUnitGbp) * 100
+      : null;
   const lastExecutionAgeSeconds = marketSnapshot?.lastExecutionAt
     ? Math.max(0, Math.floor((Date.now() - new Date(marketSnapshot.lastExecutionAt).getTime()) / 1000))
     : null;
@@ -975,12 +982,12 @@ export default function AssetDetailScreen() {
             marketDataStale={dataStale}
             marketDataAgeLabel={dataStaleAgeLabel}
             appraisedValuePerUnitGbp={appraisedValuePerUnitGbp}
+            referenceVsAppraisalPct={referenceVsAppraisalPct}
             dossierDocuments={dossierDocuments}
             hasDocuments={hasDocuments}
             onOpenDiligence={() => navigation.navigate('AssetDueDiligence', { assetId: asset.id })}
             onOpenRiskDisclosure={() => openSheet('riskDisclosure')}
             lifecycleState={lifecycleState}
-            refreshKey={refreshKey}
           />
         )}
 
@@ -1005,10 +1012,8 @@ export default function AssetDetailScreen() {
             yourOpenOrders={yourOpenOrders}
             yourOpenOrdersFailed={yourOpenOrdersFailed}
             yourOpenOrdersLoading={yourOpenOrdersLoading}
-            onRetryOpenOrders={retryOpenOrders}
             onCancelOrder={handleCancelOrder}
             cancellingOrderId={cancellingOrderId}
-            refreshKey={refreshKey}
           />
         )}
 

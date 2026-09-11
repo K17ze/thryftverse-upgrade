@@ -146,8 +146,18 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     addPosterFrames,
     hasPendingRecovery,
     recoverCrashedProject,
+    autosaveStatus,
     dismissRecovery,
   } = useCreator();
+
+  // Autosave status derivation for the top bar.
+  const isAutosaving = autosaveStatus === 'saving';
+  const [lastAutosaveAt, setLastAutosaveAt] = useState<number | null>(null);
+  useEffect(() => {
+    if (autosaveStatus === 'saved') {
+      setLastAutosaveAt(Date.now());
+    }
+  }, [autosaveStatus]);
 
   // â”€â”€ Sheet / overlay state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // 13 mutually exclusive sheets consolidated into a single discriminated
@@ -638,6 +648,12 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
   // needed (that would double-scale and break the playhead/trim math).
   const [timelineZoomScale, setTimelineZoomScale] = useState(1);
   const zoomIndicatorOpacitySV = useSharedValue(0);
+  // UI-thread shared values for pinch-zoom. timelineScaleSV mirrors the
+  // committed timelineZoomScale but updates on the UI thread during the
+  // pinch gesture; pinchBaseScaleSV captures the scale at pinch begin so
+  // the gesture is relative to the starting zoom (not absolute).
+  const timelineScaleSV = useSharedValue(1);
+  const pinchBaseScaleSV = useSharedValue(1);
   const timelineBaseTrackWidth = screenWidth - Space.md * 2;
   const scaledTrackWidth = timelineBaseTrackWidth * timelineZoomScale;
 
@@ -1399,6 +1415,8 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         isAudioMuted={isAudioMuted}
         handleQuickSaveDraft={handleQuickSaveDraft}
         isQuickSaving={isQuickSaving}
+        isAutosaving={isAutosaving}
+        lastAutosaveAt={lastAutosaveAt}
         handleUndo={handleUndo}
         canUndo={canUndo}
         undoLabel={undoLabel}

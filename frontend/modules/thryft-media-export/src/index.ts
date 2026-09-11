@@ -159,6 +159,18 @@ export {
   multiplyMatrix,
 } from './filterMatrices';
 
+// Internal imports for the JS Skia fallback path below. The re-export
+// above is the public API; these imports are private to this module so
+// the offscreen renderer can use the same matrices without redefining
+// them (single source of truth enforced by filterMatrixAgreement.test.ts).
+import {
+  IDENTITY_MATRIX as _IDENTITY,
+  FILTER_PRESET_MATRICES as _FILTERS,
+  interpolateMatrix as _interpolate,
+  isIdentityMatrix as _isIdentity,
+  multiplyMatrix as _multiply,
+} from './filterMatrices';
+
 // Lazy proxy — throws on use if native module is not linked, but allows
 // imports at module load time without crashing.
 export const ThryftMediaExportModule = new Proxy(
@@ -280,29 +292,14 @@ interface JsDocument {
   pages: JsPage[];
 }
 
-// ── Color matrix math (self-contained, mirrors EffectEvaluator) ──
-
-const IDENTITY_MATRIX = [
-  1, 0, 0, 0, 0,
-  0, 1, 0, 0, 0,
-  0, 0, 1, 0, 0,
-  0, 0, 0, 1, 0,
-];
-
-function multiplyMatrix(a: readonly number[], b: readonly number[]): number[] {
-  const result = new Array(20).fill(0);
-  for (let row = 0; row < 4; row++) {
-    for (let col = 0; col < 5; col++) {
-      let sum = 0;
-      for (let k = 0; k < 4; k++) {
-        sum += a[row * 5 + k] * b[k * 5 + col];
-      }
-      if (col === 4) sum += a[row * 5 + 4];
-      result[row * 5 + col] = sum;
-    }
-  }
-  return result;
-}
+// ── Color matrix math ─────────────────────────────────────────────
+// IDENTITY_MATRIX, FILTER_PRESET_MATRICES, interpolateMatrix,
+// isIdentityMatrix, and multiplyMatrix are imported from
+// `./filterMatrices` (see the re-export block above). The inline
+// definitions were removed to preserve a single source of truth
+// across the JS export renderer, the backend SVG renderer, and the
+// Skia preview. The cross-renderer agreement test
+// (`filterMatrixAgreement.test.ts`) fails loudly if any copy drifts.
 
 function makeScaleMatrix(r: number, g: number, b: number, a: number): number[] {
   return [r, 0, 0, 0, 0, 0, g, 0, 0, 0, 0, 0, b, 0, 0, 0, 0, 0, a, 0];
@@ -358,89 +355,10 @@ function makeFadeMatrix(fade: number): number[] {
   ];
 }
 
-function isIdentityMatrix(m: number[]): boolean {
-  return m.every((v, i) => Math.abs(v - IDENTITY_MATRIX[i]) < 1e-6);
-}
-
-// ── Filter preset matrices (inlined from filterConfig.ts) ──────────
-// IMPORTANT: These 10 flagship filter ColorMatrix definitions are EXACT
-// copies of the `colorMatrix` field of each entry in the `FILTERS` array
-// in `frontend/src/components/poster/filters/filterConfig.ts`. They are
-// inlined here — rather than imported — to preserve the module's
-// independence (the dependency direction is app → module, never
-// module → app). If the source filter definitions in filterConfig.ts
-// change, these matrices MUST be updated to match exactly so the JS
-// export fallback produces the same visual result as the live preview.
-export const FILTER_PRESET_MATRICES: Record<string, number[]> = {
-  normal: IDENTITY_MATRIX,
-  warm: [
-    1.12, 0, 0, 0, 0.02,
-    0, 1.02, 0, 0, 0,
-    0, 0, 0.88, 0, -0.02,
-    0, 0, 0, 1, 0,
-  ],
-  cool: [
-    0.88, 0, 0, 0, -0.02,
-    0, 1.02, 0, 0, 0,
-    0, 0, 1.12, 0, 0.02,
-    0, 0, 0, 1, 0,
-  ],
-  vintage: [
-    0.575, 0.538, 0.132, 0, 0,
-    0.544, 0.480, 0.118, 0, 0,
-    0.390, 0.374, 0.092, 0, 0,
-    0, 0, 0, 1, 0,
-  ],
-  bw: [
-    0.329, 0.646, 0.125, 0, -0.05,
-    0.329, 0.646, 0.125, 0, -0.05,
-    0.329, 0.646, 0.125, 0, -0.05,
-    0, 0, 0, 1, 0,
-  ],
-  cinematic: [
-    1.15, 0, 0, 0, -0.075,
-    0, 1.15, 0, 0, -0.075,
-    0, 0, 1.20, 0, -0.10,
-    0, 0, 0, 1, 0,
-  ],
-  fade: [
-    0.82, 0.08, 0.08, 0, 0.06,
-    0.08, 0.82, 0.08, 0, 0.06,
-    0.08, 0.08, 0.82, 0, 0.06,
-    0, 0, 0, 1, 0,
-  ],
-  vivid: [
-    1.331, -0.194, -0.038, 0, -0.05,
-    -0.099, 1.236, -0.038, 0, -0.05,
-    -0.099, -0.194, 1.392, 0, -0.05,
-    0, 0, 0, 1, 0,
-  ],
-  noir: [
-    0.389, 0.763, 0.148, 0, -0.15,
-    0.389, 0.763, 0.148, 0, -0.15,
-    0.389, 0.763, 0.148, 0, -0.15,
-    0, 0, 0, 1, 0,
-  ],
-  golden: [
-    1.15, 0.05, 0, 0, 0.03,
-    0.05, 1.05, 0.02, 0, 0.01,
-    0, 0.02, 0.82, 0, -0.02,
-    0, 0, 0, 1, 0,
-  ],
-};
-
-/**
- * Interpolate between the identity matrix and a filter's target matrix
- * by intensity (0..1). At intensity 0 the result is identity (original),
- * at intensity 1 the result is the full filter effect. Mirrors
- * `interpolateColorMatrix` in filterConfig.ts exactly.
- *
- * Formula: matrix[i] = identity[i] + (target[i] - identity[i]) * intensity
- */
-export function interpolateMatrix(target: number[], intensity: number): number[] {
-  const t = Math.max(0, Math.min(1, intensity));
-  return IDENTITY_MATRIX.map((id, i) => id + (target[i] - id) * t);
-}
+// isIdentityMatrix, FILTER_PRESET_MATRICES, and interpolateMatrix are
+// imported from ./filterMatrices (see the re-export block near the top
+// of this file). The inline copies were removed to preserve a single
+// source of truth — the cross-renderer agreement test enforces parity.
 
 /**
  * Build a 4×5 color matrix from a composition adjust effect node.
@@ -448,25 +366,25 @@ export function interpolateMatrix(target: number[], intensity: number): number[]
  * produces the same color grading as the live preview.
  */
 function buildAdjustmentMatrix(adjust: JsEffectNode): number[] {
-  let matrix = [...IDENTITY_MATRIX];
+  let matrix = [..._IDENTITY];
   if (adjust.exposure) {
     const gain = Math.pow(2, adjust.exposure);
-    matrix = multiplyMatrix(matrix, makeScaleMatrix(gain, gain, gain, 1));
+    matrix = _multiply(matrix, makeScaleMatrix(gain, gain, gain, 1));
   }
   if (adjust.contrast) {
-    matrix = multiplyMatrix(matrix, makeContrastMatrix(1 + adjust.contrast));
+    matrix = _multiply(matrix, makeContrastMatrix(1 + adjust.contrast));
   }
   if (adjust.saturation) {
-    matrix = multiplyMatrix(matrix, makeSaturationMatrix(1 + adjust.saturation));
+    matrix = _multiply(matrix, makeSaturationMatrix(1 + adjust.saturation));
   }
   if (adjust.temperature) {
-    matrix = multiplyMatrix(matrix, makeTemperatureMatrix(adjust.temperature * 0.15));
+    matrix = _multiply(matrix, makeTemperatureMatrix(adjust.temperature * 0.15));
   }
   if (adjust.tint) {
-    matrix = multiplyMatrix(matrix, makeTintMatrix(adjust.tint * 0.1));
+    matrix = _multiply(matrix, makeTintMatrix(adjust.tint * 0.1));
   }
   if (adjust.fade && adjust.fade > 0) {
-    matrix = multiplyMatrix(matrix, makeFadeMatrix(adjust.fade));
+    matrix = _multiply(matrix, makeFadeMatrix(adjust.fade));
   }
   return matrix;
 }
@@ -484,22 +402,22 @@ function evaluateEffectColorMatrix(effects: JsEffectNode[] | undefined): number[
   for (const node of effects) {
     if (node.type === 'adjust') {
       const m = buildAdjustmentMatrix(node);
-      colorMatrix = colorMatrix ? multiplyMatrix(colorMatrix, m) : m;
+      colorMatrix = colorMatrix ? _multiply(colorMatrix, m) : m;
     } else if (node.type === 'filter') {
       // Look up the inlined filter preset matrix by the node's id (the
       // filter preset name). Interpolate by the node's amount (clamped
       // 0..1) and multiply into the running color matrix. Unknown or
       // retired filter IDs fail closed to identity (no effect).
-      const target = node.id ? FILTER_PRESET_MATRICES[node.id] : undefined;
+      const target = node.id ? _FILTERS[node.id] : undefined;
       if (target) {
         const intensity = clamp(node.amount ?? 0, 0, 1);
-        const m = interpolateMatrix(target, intensity);
-        colorMatrix = colorMatrix ? multiplyMatrix(colorMatrix, m) : m;
+        const m = _interpolate(target, intensity);
+        colorMatrix = colorMatrix ? _multiply(colorMatrix, m) : m;
       }
     }
     // 'blur' and 'vignette' are handled separately (image filter / overlay).
   }
-  if (colorMatrix && !isIdentityMatrix(colorMatrix)) return colorMatrix;
+  if (colorMatrix && !_isIdentity(colorMatrix)) return colorMatrix;
   return undefined;
 }
 

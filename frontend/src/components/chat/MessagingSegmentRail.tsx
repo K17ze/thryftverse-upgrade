@@ -9,7 +9,7 @@ import Reanimated, {
   interpolateColor,
 } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, TypeStyles, Radius } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { Motion } from '../../theme/motionTokens';
@@ -169,7 +169,7 @@ const SegmentLabel = React.memo(function SegmentLabel({
 
   const labelStyle = useAnimatedStyle(() => ({
     color: interpolateColor(colorAnim.value, [0, 1], [colors.textMuted, colors.textPrimary]),
-    fontFamily: isActive ? TypeStyles.bodyEmphasis.fontFamily : TypeStyles.body.fontFamily,
+    fontFamily: isActive ? TypographyV2.bodyStrong.fontFamily : TypographyV2.body.fontFamily,
   }));
 
   return (
@@ -233,7 +233,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   badgeText: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.brand,
   },
   badgeTextActive: {
