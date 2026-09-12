@@ -10,6 +10,7 @@ import {
   type ImageFeatures,
 } from '../lib/visualSimilarity.js';
 import { safeFetchMediaBuffer } from '../lib/safeRemoteMediaFetch.js';
+import { loadListingMedia } from '../lib/media/listingMediaProjection.js';
 import type { RetrievalMeta, RetrievalFallbackReason } from '../lib/retrievalMeta.js';
 import logger from '../lib/logger.js';
 
@@ -428,19 +429,17 @@ async function handleVisualSearch(
     })();
 
     // Resolve the primary image URL for each candidate (first listing_images
-    // row, falling back to the legacy l.image_url column).
+    // row, falling back to the legacy l.image_url column). The projected
+    // media items are also reused below to serve `images`/`media` on the
+    // response rows — a single media lookup covers both uses.
     const candidateIds = candidateRows.map((r) => r.id);
-    const imagesResult = candidateIds.length
-      ? await readDb.query<{ listing_id: string; image_url: string; sort_order: number }>(
-          `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
-          [candidateIds],
-        )
-      : { rows: [] };
+    const candidateMediaByListing = await loadListingMedia(readDb, candidateIds);
 
     const primaryImageByListing = new Map<string, string>();
-    for (const img of imagesResult.rows) {
-      if (!primaryImageByListing.has(img.listing_id)) {
-        primaryImageByListing.set(img.listing_id, img.image_url);
+    for (const [listingRowId, mediaItems] of candidateMediaByListing) {
+      const primary = mediaItems[0];
+      if (primary) {
+        primaryImageByListing.set(listingRowId, primary.uri);
       }
     }
     for (const row of candidateRows) {
@@ -541,22 +540,13 @@ async function handleVisualSearch(
       scoredRows = fallback.rows.map((row) => ({ ...row, similarityScore: null }));
     }
 
-    // Trim to the requested limit.
+    // Trim to the requested limit. Media rows were already loaded for the
+    // full candidate set above — reuse that map instead of re-querying.
     const trimmed = scoredRows.slice(0, payload.limit);
-    const trimmedIds = trimmed.map((r) => r.id);
-
-    const imagesResult2 = trimmedIds.length
-      ? await readDb.query<{ listing_id: string; image_url: string; sort_order: number }>(
-          `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
-          [trimmedIds],
-        )
-      : { rows: [] };
 
     const imagesByListing = new Map<string, string[]>();
-    for (const img of imagesResult2.rows) {
-      const arr = imagesByListing.get(img.listing_id) ?? [];
-      arr.push(img.image_url);
-      imagesByListing.set(img.listing_id, arr);
+    for (const [listingRowId, mediaItems] of candidateMediaByListing) {
+      imagesByListing.set(listingRowId, mediaItems.map((m) => m.uri));
     }
 
     const similarityMethod = hasImageScoring ? 'heuristic_color_features' : 'filter_only';
@@ -629,6 +619,7 @@ async function handleVisualSearch(
         priceGbp: Number(row.price_gbp),
         imageUrl: row.image_url,
         images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
+        media: candidateMediaByListing.get(row.id) ?? [],
         status: row.status,
         category: row.category,
         brand: row.brand,

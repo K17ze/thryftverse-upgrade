@@ -22,6 +22,10 @@ import {
   PRODUCT_RECOMMENDATION_POLICY_VERSION,
   scoreProductRecommendation,
 } from '../lib/productRecommendationPolicy.js';
+import {
+  loadListingMedia,
+  type ListingMediaItem,
+} from '../lib/media/listingMediaProjection.js';
 import { validateListingActivation } from '../lib/listingCategoryPolicy.js';
 import { getTaxonomyNormaliser, normaliseTaxonomyValue } from '../lib/taxonomyValidation.js';
 import { moderateListingText } from '../lib/moderation/moderationService.js';
@@ -294,41 +298,19 @@ app.get('/listings', async (request, reply) => {
   const pageRows = hasMore ? result.rows.slice(0, params.limit) : result.rows;
 
   const listingIds = pageRows.map((r) => r.id);
-  const imagesResult = listingIds.length
-      ? await readDb.query<{
-        listing_id: string;
-        image_url: string;
-        sort_order: number;
-        media_width: number | null;
-        media_height: number | null;
-      }>(
-        `SELECT
-           listing_id,
-           image_url,
-           sort_order,
-           NULLIF(to_jsonb(listing_images) ->> 'media_width', '')::integer AS media_width,
-           NULLIF(to_jsonb(listing_images) ->> 'media_height', '')::integer AS media_height
-         FROM listing_images
-         WHERE listing_id = ANY($1)
-         ORDER BY listing_id, sort_order`,
-        [listingIds]
-      )
-    : { rows: [] };
+  const mediaByListing = await loadListingMedia(readDb, listingIds);
 
   const imagesByListing = new Map<string, string[]>();
   const primaryGeometryByListing = new Map<string, { width: number; height: number } | null>();
-  for (const img of imagesResult.rows) {
-    const arr = imagesByListing.get(img.listing_id) ?? [];
-    arr.push(img.image_url);
-    imagesByListing.set(img.listing_id, arr);
-    if (!primaryGeometryByListing.has(img.listing_id)) {
-      primaryGeometryByListing.set(
-        img.listing_id,
-        img.media_width !== null && img.media_height !== null
-          ? { width: img.media_width, height: img.media_height }
-          : null,
-      );
-    }
+  for (const [listingRowId, mediaItems] of mediaByListing) {
+    imagesByListing.set(listingRowId, mediaItems.map((m) => m.uri));
+    const primary = mediaItems[0];
+    primaryGeometryByListing.set(
+      listingRowId,
+      primary && primary.width !== null && primary.height !== null
+        ? { width: primary.width, height: primary.height }
+        : null,
+    );
   }
 
   const lastRow = pageRows[pageRows.length - 1];
@@ -356,6 +338,7 @@ app.get('/listings', async (request, reply) => {
         priceGbp: Number(row.price_gbp),
         imageUrl: row.image_url,
         images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
+        media: mediaByListing.get(row.id) ?? [],
         mediaWidth: primaryGeometry?.width ?? null,
         mediaHeight: primaryGeometry?.height ?? null,
         mediaAspectRatio: primaryGeometry
@@ -868,18 +851,11 @@ app.get('/feed/home', async () => {
   );
 
   const listingIds = listingsResult.rows.map((r) => r.id);
-  const imagesResult = listingIds.length
-    ? await readDb.query<{ listing_id: string; image_url: string; sort_order: number }>(
-        `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
-        [listingIds]
-      )
-    : { rows: [] };
+  const mediaByListing = await loadListingMedia(readDb, listingIds);
 
   const imagesByListing = new Map<string, string[]>();
-  for (const img of imagesResult.rows) {
-    const arr = imagesByListing.get(img.listing_id) ?? [];
-    arr.push(img.image_url);
-    imagesByListing.set(img.listing_id, arr);
+  for (const [listingRowId, mediaItems] of mediaByListing) {
+    imagesByListing.set(listingRowId, mediaItems.map((m) => m.uri));
   }
 
   const postersResult = await readDb.query<{
@@ -923,6 +899,7 @@ app.get('/feed/home', async () => {
       priceGbp: Number(row.price_gbp),
       imageUrl: row.image_url,
       images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
+      media: mediaByListing.get(row.id) ?? [],
       status: row.status,
       category: row.category,
       brand: row.brand,
@@ -1015,18 +992,11 @@ app.get('/feed/trending', async (request) => {
   );
 
   const listingIds = result.rows.map((r) => r.id);
-  const imagesResult = listingIds.length
-    ? await readDb.query<{ listing_id: string; image_url: string; sort_order: number }>(
-        `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
-        [listingIds]
-      )
-    : { rows: [] };
+  const mediaByListing = await loadListingMedia(readDb, listingIds);
 
   const imagesByListing = new Map<string, string[]>();
-  for (const img of imagesResult.rows) {
-    const arr = imagesByListing.get(img.listing_id) ?? [];
-    arr.push(img.image_url);
-    imagesByListing.set(img.listing_id, arr);
+  for (const [listingRowId, mediaItems] of mediaByListing) {
+    imagesByListing.set(listingRowId, mediaItems.map((m) => m.uri));
   }
 
   return {
@@ -1040,6 +1010,7 @@ app.get('/feed/trending', async (request) => {
       priceGbp: Number(row.price_gbp),
       imageUrl: row.image_url,
       images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
+      media: mediaByListing.get(row.id) ?? [],
       status: row.status,
       category: row.category,
       brand: row.brand,
@@ -1253,18 +1224,11 @@ app.post('/visual-search', async (request, reply) => {
   );
 
   const listingIds = result.rows.map((r) => r.id);
-  const imagesResult = listingIds.length
-    ? await readDb.query<{ listing_id: string; image_url: string; sort_order: number }>(
-        `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
-        [listingIds]
-      )
-    : { rows: [] };
+  const mediaByListing = await loadListingMedia(readDb, listingIds);
 
   const imagesByListing = new Map<string, string[]>();
-  for (const img of imagesResult.rows) {
-    const arr = imagesByListing.get(img.listing_id) ?? [];
-    arr.push(img.image_url);
-    imagesByListing.set(img.listing_id, arr);
+  for (const [listingRowId, mediaItems] of mediaByListing) {
+    imagesByListing.set(listingRowId, mediaItems.map((m) => m.uri));
   }
 
   reply.code(200);
@@ -1282,6 +1246,7 @@ app.post('/visual-search', async (request, reply) => {
       priceGbp: Number(row.price_gbp),
       imageUrl: row.image_url,
       images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
+      media: mediaByListing.get(row.id) ?? [],
       status: row.status,
       category: row.category,
       brand: row.brand,
@@ -3008,13 +2973,7 @@ app.get('/listings/:listingId', async (request, reply) => {
     }
   }
 
-  const imagesResult = await readDb.query<{
-    image_url: string;
-    sort_order: number;
-  }>(
-    `SELECT image_url, sort_order FROM listing_images WHERE listing_id = $1 ORDER BY sort_order`,
-    [listingId]
-  );
+  const detailMedia = (await loadListingMedia(readDb, [listingId])).get(listingId) ?? [];
 
   const itemPrice = Number(row.price_gbp);
   const buyerProtectionFee = Number(Math.max(
@@ -3072,7 +3031,8 @@ app.get('/listings/:listingId', async (request, reply) => {
       description: row.description,
       priceGbp: itemPrice,
       imageUrl: row.image_url,
-      images: imagesResult.rows.map((r) => r.image_url),
+      images: detailMedia.map((m) => m.uri),
+      media: detailMedia,
       status: row.status,
       category: row.category,
       brand: row.brand,
@@ -3680,22 +3640,11 @@ app.get('/listings/:listingId/related', async (request, reply) => {
   );
 
   const listingIds = result.rows.map((r) => r.id);
-  const imagesResult = listingIds.length
-    ? await readDb.query<{
-        listing_id: string;
-        image_url: string;
-        sort_order: number;
-      }>(
-        `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
-        [listingIds]
-      )
-    : { rows: [] };
+  const mediaByListing = await loadListingMedia(readDb, listingIds);
 
   const imagesByListing = new Map<string, string[]>();
-  for (const img of imagesResult.rows) {
-    const arr = imagesByListing.get(img.listing_id) ?? [];
-    arr.push(img.image_url);
-    imagesByListing.set(img.listing_id, arr);
+  for (const [listingRowId, mediaItems] of mediaByListing) {
+    imagesByListing.set(listingRowId, mediaItems.map((m) => m.uri));
   }
 
   return {
@@ -3708,6 +3657,7 @@ app.get('/listings/:listingId/related', async (request, reply) => {
       priceGbp: Number(row.price_gbp),
       imageUrl: row.image_url,
       images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
+      media: mediaByListing.get(row.id) ?? [],
       status: row.status,
       category: row.category,
       brand: row.brand,
@@ -3825,27 +3775,21 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
     );
 
     const listingIds = result.rows.map((r) => r.id);
-    const imagesResult = listingIds.length
-      ? await readDb.query<{ listing_id: string; image_url: string; sort_order: number }>(
-          `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
-          [listingIds]
-        )
-      : { rows: [] };
+    const mediaByListing = await loadListingMedia(readDb, listingIds);
 
     const imagesByListing = new Map<string, string[]>();
-    for (const img of imagesResult.rows) {
-      const arr = imagesByListing.get(img.listing_id) ?? [];
-      arr.push(img.image_url);
-      imagesByListing.set(img.listing_id, arr);
+    for (const [listingRowId, mediaItems] of mediaByListing) {
+      imagesByListing.set(listingRowId, mediaItems.map((m) => m.uri));
     }
 
     return result.rows.map((row) => ({
       row,
       images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
+      media: mediaByListing.get(row.id) ?? [],
     }));
   };
 
-  const mapToListingItem = (candidate: { row: CandidateRow; images: string[] }) => ({
+  const mapToListingItem = (candidate: { row: CandidateRow; images: string[]; media: ListingMediaItem[] }) => ({
     id: candidate.row.id,
     sellerId: candidate.row.seller_id,
     title: candidate.row.title,
@@ -3853,6 +3797,7 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
     priceGbp: Number(candidate.row.price_gbp),
     imageUrl: candidate.row.image_url,
     images: candidate.images,
+    media: candidate.media,
     status: candidate.row.status,
     category: candidate.row.category,
     brand: candidate.row.brand,
@@ -3903,8 +3848,8 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
     }).score;
 
   const dedupeAndMap = (
-    candidates: Array<{ row: CandidateRow; images: string[] }>,
-    opts?: { scoreBy?: (c: { row: CandidateRow; images: string[] }) => number }
+    candidates: Array<{ row: CandidateRow; images: string[]; media: ListingMediaItem[] }>,
+    opts?: { scoreBy?: (c: { row: CandidateRow; images: string[]; media: ListingMediaItem[] }) => number }
   ) => {
     const filtered = candidates.filter((c) => !usedListingIds.has(c.row.id));
     if (opts?.scoreBy) {
@@ -4177,18 +4122,11 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
     );
 
     const listingIds = candidates.rows.map((r) => r.id);
-    const imagesResult = listingIds.length
-      ? await readDb.query<{ listing_id: string; image_url: string; sort_order: number }>(
-          `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
-          [listingIds]
-        )
-      : { rows: [] };
+    const mediaByListing = await loadListingMedia(readDb, listingIds);
 
     const imagesByListing = new Map<string, string[]>();
-    for (const img of imagesResult.rows) {
-      const arr = imagesByListing.get(img.listing_id) ?? [];
-      arr.push(img.image_url);
-      imagesByListing.set(img.listing_id, arr);
+    for (const [listingRowId, mediaItems] of mediaByListing) {
+      imagesByListing.set(listingRowId, mediaItems.map((m) => m.uri));
     }
 
     const mapped = candidates.rows
@@ -4196,6 +4134,7 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
       .map((row) => ({
         row,
         images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
+        media: mediaByListing.get(row.id) ?? [],
       }))
       .slice(0, limit);
 
@@ -4772,41 +4711,19 @@ app.get('/users/:userId/listings', async (request) => {
   const pageRows = hasMore ? result.rows.slice(0, limit) : result.rows;
 
   const listingIds = pageRows.map((r) => r.id);
-  const imagesResult = listingIds.length
-    ? await readDb.query<{
-        listing_id: string;
-        image_url: string;
-        sort_order: number;
-        media_width: number | null;
-        media_height: number | null;
-      }>(
-        `SELECT
-           listing_id,
-           image_url,
-           sort_order,
-           NULLIF(to_jsonb(listing_images) ->> 'media_width', '')::integer AS media_width,
-           NULLIF(to_jsonb(listing_images) ->> 'media_height', '')::integer AS media_height
-         FROM listing_images
-         WHERE listing_id = ANY($1)
-         ORDER BY listing_id, sort_order`,
-        [listingIds]
-      )
-    : { rows: [] };
+  const mediaByListing = await loadListingMedia(readDb, listingIds);
 
   const imagesByListing = new Map<string, string[]>();
   const primaryGeometryByListing = new Map<string, { width: number; height: number } | null>();
-  for (const img of imagesResult.rows) {
-    const arr = imagesByListing.get(img.listing_id) ?? [];
-    arr.push(img.image_url);
-    imagesByListing.set(img.listing_id, arr);
-    if (!primaryGeometryByListing.has(img.listing_id)) {
-      primaryGeometryByListing.set(
-        img.listing_id,
-        img.media_width !== null && img.media_height !== null
-          ? { width: img.media_width, height: img.media_height }
-          : null,
-      );
-    }
+  for (const [listingRowId, mediaItems] of mediaByListing) {
+    imagesByListing.set(listingRowId, mediaItems.map((m) => m.uri));
+    const primary = mediaItems[0];
+    primaryGeometryByListing.set(
+      listingRowId,
+      primary && primary.width !== null && primary.height !== null
+        ? { width: primary.width, height: primary.height }
+        : null,
+    );
   }
 
   const lastRow = pageRows[pageRows.length - 1];
@@ -4828,6 +4745,7 @@ app.get('/users/:userId/listings', async (request) => {
         priceGbp: Number(row.price_gbp),
         imageUrl: row.image_url,
         images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
+        media: mediaByListing.get(row.id) ?? [],
         mediaWidth: primaryGeometry?.width ?? null,
         mediaHeight: primaryGeometry?.height ?? null,
         mediaAspectRatio: primaryGeometry
@@ -4910,12 +4828,22 @@ app.post('/listing-images', async (request, reply) => {
       media_asset_id: string | null;
       media_asset_status: string | null;
       canonical_url: string | null;
+      asset_width: number | null;
+      asset_height: number | null;
+      asset_blurhash: string | null;
+      asset_focal_x: string | number | null;
+      asset_focal_y: string | number | null;
     }>(
       `SELECT finalization.public_url, finalization.content_type,
               finalization.status, finalization.owner_id,
               finalization.media_asset_id,
               asset.status AS media_asset_status,
-              asset.canonical_url
+              asset.canonical_url,
+              asset.width AS asset_width,
+              asset.height AS asset_height,
+              asset.blurhash AS asset_blurhash,
+              asset.focal_x AS asset_focal_x,
+              asset.focal_y AS asset_focal_y
        FROM upload_finalizations finalization
        LEFT JOIN media_assets asset
          ON asset.id = finalization.media_asset_id
@@ -4989,13 +4917,18 @@ app.post('/listing-images', async (request, reply) => {
         payload.listingId,
         resolvedMediaUrl,
         payload.sortOrder,
-        payload.mediaWidth ?? null,
-        payload.mediaHeight ?? null,
+        // Prefer processor-measured dimensions (post-EXIF-orientation) over
+        // client-declared values — raw file dims flip portrait↔landscape
+        // once orientation is baked in.
+        verifiedUpload.asset_width ?? payload.mediaWidth ?? null,
+        verifiedUpload.asset_height ?? payload.mediaHeight ?? null,
         payload.mediaType,
         payload.posterUrl ?? null,
-        payload.blurhash ?? null,
-        payload.focalX ?? null,
-        payload.focalY ?? null,
+        // Backfill the pipeline-computed blurhash — the client never holds
+        // it because processing finishes after upload.
+        payload.blurhash ?? verifiedUpload.asset_blurhash ?? null,
+        payload.focalX ?? (verifiedUpload.asset_focal_x == null ? null : Number(verifiedUpload.asset_focal_x)),
+        payload.focalY ?? (verifiedUpload.asset_focal_y == null ? null : Number(verifiedUpload.asset_focal_y)),
       ],
     );
     if (!attached.rowCount) {
