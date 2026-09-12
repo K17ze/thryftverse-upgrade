@@ -7,6 +7,7 @@ export default defineConfig({
       'src/__tests__/vectorSearchIntegration.test.ts',
       'src/__tests__/visualSearchRoute.test.ts',
       'src/__tests__/compositionRenderer.test.ts',
+      'src/__tests__/creatorPublicationRender.test.ts',
     ],
     exclude: ['dist/**', 'node_modules/**'],
     environment: 'node',

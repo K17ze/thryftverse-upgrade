@@ -113,7 +113,10 @@ export interface SearchApiResult {
     sellerId: string;
     title: string;
     description: string;
-    priceGbp: number;
+    /** Asking price in GBP major units — `null` when the search index row
+     *  does not carry a price. Adapters must preserve null rather than
+     *  fabricating £0. */
+    priceGbp: number | null;
     imageUrl: string | null;
     rank: number;
     createdAt: string;

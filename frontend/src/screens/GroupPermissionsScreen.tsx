@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { FlagshipHeader, FlagshipScreen } from '../components/flagship';
-import { AppIcon } from '../components/common/AppIcon';
+import { FlagshipHeader, FlagshipScreen, FlagshipState } from '../components/flagship';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { RootStackParamList } from '../navigation/types';
 import {
   fetchGroupSettingsFromApi,
@@ -48,6 +48,7 @@ export default function GroupPermissionsScreen({ navigation, route }: Props) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
+  const { isOffline } = useConnectivity();
   const requestSequence = useRef(0);
   // §37.5 fail-closed: settings start as null and render only from the
   // server row. No client-side fallback defaults that could contradict
@@ -123,19 +124,17 @@ export default function GroupPermissionsScreen({ navigation, route }: Props) {
           <ActivityIndicator color={colors.textPrimary} />
         </View>
       ) : state === 'error' ? (
-        <View style={styles.centerState}>
-          <AppIcon name="offline" size="lg" color="textMuted" accessible={false} />
-          <Text style={styles.stateTitle}>Permissions unavailable</Text>
-          <Text style={styles.stateCopy}>Check your connection, then try again.</Text>
-          <Pressable
-            onPress={() => void load()}
-            style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}
-            accessibilityRole="button"
-            accessibilityLabel="Retry loading group permissions"
-          >
-            <Text style={styles.retryText}>Retry</Text>
-          </Pressable>
-        </View>
+        <FlagshipState
+          variant={isOffline ? 'offline' : 'error'}
+          title="Permissions unavailable"
+          subtitle={
+            isOffline
+              ? 'You are offline. Reconnect to view and change group permissions.'
+              : 'Check your connection, then try again.'
+          }
+          actionLabel="Retry"
+          onAction={() => void load()}
+        />
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -215,35 +214,6 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
       gap: Space.sm,
       paddingHorizontal: Space.xl,
-    },
-    stateTitle: {
-      fontFamily: TypographyV2.sectionTitle.fontFamily,
-      fontSize: TypographyV2.sectionTitle.size,
-      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
-      lineHeight: TypographyV2.sectionTitle.lineHeight,
-      color: colors.textPrimary,
-      marginTop: Space.xs,
-    },
-    stateCopy: {
-      fontFamily: TypographyV2.body.fontFamily,
-      fontSize: TypographyV2.body.size,
-      letterSpacing: TypographyV2.body.letterSpacing,
-      lineHeight: TypographyV2.body.lineHeight,
-      color: colors.textMuted,
-      textAlign: 'center',
-    },
-    retryButton: {
-      minHeight: Control.hit,
-      justifyContent: 'center',
-      paddingHorizontal: Space.lg,
-      marginTop: Space.sm,
-    },
-    retryText: {
-      fontFamily: TypographyV2.bodyStrong.fontFamily,
-      fontSize: TypographyV2.bodyStrong.size,
-      letterSpacing: TypographyV2.bodyStrong.letterSpacing,
-      lineHeight: TypographyV2.bodyStrong.lineHeight,
-      color: colors.textPrimary,
     },
     intro: {
       paddingBottom: Space.xl,

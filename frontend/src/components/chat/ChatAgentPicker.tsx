@@ -1,26 +1,43 @@
 /**
- * ChatAgentPicker — bottom sheet for selecting an AI agent to deploy into a
- * conversation. Mirrors the ChatActionSheet presentation pattern (Modal,
- * fade, bottom-anchored sheet) so the chat surface stays consistent.
+ * ChatAgentPicker — bottom sheet for adding an AI agent to a conversation.
+ * Mirrors the ChatActionSheet presentation pattern (Modal, fade,
+ * bottom-anchored sheet) so the chat surface stays consistent.
  *
- * Two modes:
- *  - `__DEV__`: demo catalogue (chatAgentsApi) — mock agents that suggest
- *    keyword-based replies. A subtle "Demo assistants" indicator is shown.
- *  - production (`!__DEV__`): real backend deployment state fetched from
- *    GET /chat/conversations/:conversationId/bots via the store. Shows
- *    loading, error, empty and populated states truthfully — no fabricated
- *    agents.
+ * Data is always real (AGENTS.md §11 — no fabricated agents):
+ *  - Deployable agents come from the backend bot catalogue
+ *    (GET /bots/system + GET /bots) via the store.
+ *  - Already-deployed agents come from
+ *    GET /chat/conversations/:conversationId/bots.
+ *  - When `conversationId` is provided, "Choose" performs the real deploy
+ *    (POST /chat/conversations/:conversationId/bots/:botId/deploy) and then
+ *    notifies the parent via `onDeploy` for any additional bookkeeping.
+ *    The notify call is wrapped — legacy handlers that still use the demo
+ *    registry must not mask a completed deploy.
+ *
+ * States: loading skeleton matching row geometry, error + retry, empty,
+ * populated. No demo catalogue, no mock agents.
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, ScrollView, ActivityIndicator } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius } from '../../theme/designTokens';
+import { Space, Radius, Control } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { getAvailableAgents, type ChatAgent } from '../../services/chatAgentsApi';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
+import { SkeletonBlock, SkeletonCircle } from '../flagship';
+import { AgentIcon } from '../agents/AgentIcon';
+import type { ChatAgent } from '../../services/chatAgentsApi';
+import type { ChatBot, ConversationBotDeployment } from '../../domain';
+import {
+  fetchSystemBotsFromApi,
+  fetchCustomBotsFromApi,
+  fetchConversationDeploymentsFromApi,
+} from '../../services/botsApi';
+import { deployBotToConversationOnApi } from '../../services/chatApi';
 import { useStore } from '../../store/useStore';
-import type { ConversationBotDeployment } from '../../domain';
+import { useToast } from '../../context/ToastContext';
+import { useHaptic } from '../../hooks/useHaptic';
 
 // Stable empty array reference for Zustand selector fallbacks.
 // Returning `[]` inline in a useStore selector creates a new array on
@@ -31,11 +48,40 @@ const EMPTY_DEPLOYMENTS: ConversationBotDeployment[] = [];
 interface ChatAgentPickerProps {
   visible: boolean;
   onClose: () => void;
+  /**
+   * Notified after a successful deploy (or invoked as the sole handler when
+   * no `conversationId` is provided). Receives the chosen agent mapped to
+   * the legacy ChatAgent shape for backward compatibility.
+   */
   onDeploy: (agent: ChatAgent) => void;
   /** Ids already deployed — rendered as "Added" (disabled) state. */
   deployedAgentIds?: string[];
-  /** Conversation whose real backend deployment state should be shown in production. */
+  /** Conversation the agent will be deployed into. */
   conversationId?: string;
+}
+
+/** A deployable bot: published, not disabled, and runnable in this environment. */
+function isDeployable(bot: ChatBot): boolean {
+  return (
+    !bot.isDraft &&
+    !bot.isDisabled &&
+    bot.status !== 'backend-required' &&
+    bot.runtimeReady !== false
+  );
+}
+
+/** Map a real backend bot to the ChatAgent shape consumed by onDeploy. */
+function botToAgent(bot: ChatBot): ChatAgent {
+  return {
+    id: bot.id,
+    type: 'custom',
+    name: bot.name,
+    avatar: bot.icon ?? 'bulb-outline',
+    description: bot.description || bot.commandHint,
+    capabilities: bot.permissions,
+    isDemo: false,
+    isCustom: bot.type === 'custom',
+  };
 }
 
 export function ChatAgentPicker({
@@ -46,54 +92,112 @@ export function ChatAgentPicker({
   conversationId }: ChatAgentPickerProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const demoAgents = useMemo(() => (__DEV__ ? getAvailableAgents() : []), []);
-  const deployedSet = useMemo(() => new Set(deployedAgentIds), [deployedAgentIds]);
+  const { show } = useToast();
+  const haptic = useHaptic();
 
-  // Real backend deployment state (production only).
-  const loadConversationDeployments = useStore((s) => s.loadConversationDeployments);
+  const systemBots = useStore((s) => s.availableChatBots);
+  const customBots = useStore((s) => s.customBots);
+  const deployBotToConversation = useStore((s) => s.deployBotToConversation);
   const deployments = useStore((s) =>
     conversationId ? s.conversationDeployments[conversationId] ?? EMPTY_DEPLOYMENTS : EMPTY_DEPLOYMENTS,
   );
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
+  const [pendingBotId, setPendingBotId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(false);
+    try {
+      const [system, custom, conversationDeployments] = await Promise.all([
+        fetchSystemBotsFromApi(),
+        fetchCustomBotsFromApi(),
+        conversationId
+          ? fetchConversationDeploymentsFromApi(conversationId)
+          : Promise.resolve(EMPTY_DEPLOYMENTS),
+      ]);
+      useStore.setState((s) => ({
+        availableChatBots: system,
+        customBots: custom,
+        conversationDeployments: conversationId
+          ? { ...s.conversationDeployments, [conversationId]: conversationDeployments }
+          : s.conversationDeployments,
+      }));
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [conversationId]);
 
   useEffect(() => {
-    if (!visible || __DEV__ || !conversationId) return;
-    let cancelled = false;
-    setLoading(true);
-    setError(false);
-    loadConversationDeployments(conversationId)
-      .catch(() => {
-        if (!cancelled) setError(true);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [visible, conversationId, loadConversationDeployments]);
+    if (!visible) return;
+    void load();
+  }, [visible, load]);
 
-  const productionAgents = useMemo<ChatAgent[]>(
-    () => (!__DEV__ ? deployments.map(deploymentToAgent) : []),
-    [deployments],
+  const deployedSet = useMemo(
+    () =>
+      new Set([
+        ...deployedAgentIds,
+        ...deployments.map((d) => d.botId),
+      ]),
+    [deployedAgentIds, deployments],
   );
 
-  const agents = __DEV__ ? demoAgents : productionAgents;
+  const agents = useMemo(
+    () => [...systemBots, ...customBots].filter(isDeployable),
+    [systemBots, customBots],
+  );
 
-  const handleRetry = () => {
-    if (!conversationId) return;
-    setLoading(true);
-    setError(false);
-    loadConversationDeployments(conversationId)
-      .catch(() => setError(true))
-      .finally(() => setLoading(false));
+  const handleChoose = async (bot: ChatBot) => {
+    haptic.light();
+    const agent = botToAgent(bot);
+
+    // Without a target conversation the parent owns what "choose" means.
+    if (!conversationId) {
+      try {
+        onDeploy(agent);
+      } finally {
+        onClose();
+      }
+      return;
+    }
+
+    setPendingBotId(bot.id);
+    try {
+      await deployBotToConversationOnApi(conversationId, bot.id);
+      deployBotToConversation(conversationId, bot.id);
+      // Refresh deployment state so the "Added" marker stays truthful.
+      fetchConversationDeploymentsFromApi(conversationId)
+        .then((items) =>
+          useStore.setState((s) => ({
+            conversationDeployments: { ...s.conversationDeployments, [conversationId]: items },
+          })),
+        )
+        .catch(() => undefined);
+      show(`${bot.name} connected`, 'success');
+      haptic.success();
+      // Legacy handlers may still use the demo registry — a throwing
+      // callback must not mask a completed deploy.
+      try {
+        onDeploy(agent);
+      } catch {
+        // Parent bookkeeping is best-effort only.
+      }
+      onClose();
+    } catch {
+      show('Could not connect agent. Try again.', 'error');
+      haptic.medium();
+    } finally {
+      setPendingBotId(null);
+    }
   };
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" accessibilityRole="button" />
         <View
           style={[styles.sheet, { backgroundColor: colors.surface }]}
           accessibilityLabel="Add AI Agent sheet"
@@ -107,55 +211,26 @@ export function ChatAgentPicker({
             </Text>
           </View>
 
-          {__DEV__ ? (
-            <View style={styles.demoNotice}>
-              <Ionicons name="flask-outline" size={15} color={colors.textMuted} />
-              <Text style={[styles.demoText, { color: colors.textMuted }]}>
-                Demo assistants suggest mock replies
-              </Text>
-            </View>
-          ) : null}
-
-          {__DEV__ ? (
-            agents.length > 0 ? (
-              <ScrollView
-                style={styles.list}
-                contentContainerStyle={styles.listContent}
-                showsVerticalScrollIndicator={false}
-              >
-                {agents.map((agent) => {
-                  const isDeployed = deployedSet.has(agent.id);
-                  return (
-                    <AgentRow
-                      key={agent.id}
-                      agent={agent}
-                      deployed={isDeployed}
-                      onAdd={() => onDeploy(agent)}
-                    />
-                  );
-                })}
-              </ScrollView>
-            ) : (
-              <EmptyState
-                icon="chatbubble-ellipses-outline"
-                title="No agents available"
-                body="Create an agent from the Agents screen to get started."
-              />
-            )
-          ) : loading ? (
-            <View style={styles.loadingState}>
-              <ActivityIndicator size="small" color={colors.brand} />
-              <Text style={[styles.loadingText, { color: colors.textMuted }]}>
-                Loading deployed agents…
-              </Text>
+          {loading ? (
+            <View style={styles.listContent}>
+              {[0, 1, 2].map((i) => (
+                <View key={i} style={styles.skeletonRow}>
+                  <SkeletonCircle size={Control.hit} />
+                  <View style={styles.skeletonCopy}>
+                    <SkeletonBlock width="45%" height={13} />
+                    <SkeletonBlock width="70%" height={11} style={{ marginTop: Space.xs / 2 }} />
+                  </View>
+                  <SkeletonBlock width={72} height={Control.hit} radius={Radius.full} />
+                </View>
+              ))}
             </View>
           ) : error ? (
             <EmptyState
               icon="cloud-offline-outline"
               title="Couldn't load agents"
-              body="We couldn't reach the server. Pull to try again."
+              body="Check your connection and try again."
               actionLabel="Retry"
-              onAction={handleRetry}
+              onAction={() => void load()}
             />
           ) : agents.length > 0 ? (
             <ScrollView
@@ -163,14 +238,15 @@ export function ChatAgentPicker({
               contentContainerStyle={styles.listContent}
               showsVerticalScrollIndicator={false}
             >
-              {agents.map((agent) => {
-                const isDeployed = deployedSet.has(agent.id);
+              {agents.map((bot) => {
+                const isDeployed = deployedSet.has(bot.id);
                 return (
                   <AgentRow
-                    key={agent.id}
-                    agent={agent}
+                    key={bot.id}
+                    bot={bot}
                     deployed={isDeployed}
-                    onAdd={() => onDeploy(agent)}
+                    pending={pendingBotId === bot.id}
+                    onAdd={() => void handleChoose(bot)}
                   />
                 );
               })}
@@ -178,8 +254,8 @@ export function ChatAgentPicker({
           ) : (
             <EmptyState
               icon="chatbubble-ellipses-outline"
-              title="No agents deployed"
-              body="Install an agent into this conversation from the Agents screen."
+              title="No agents available"
+              body="Create an agent in Agent Studio to connect it here."
             />
           )}
         </View>
@@ -188,24 +264,14 @@ export function ChatAgentPicker({
   );
 }
 
-/** Map a real backend deployment to the ChatAgent shape consumed by onDeploy. */
-function deploymentToAgent(d: ConversationBotDeployment): ChatAgent {
-  return {
-    id: d.botId,
-    type: 'custom',
-    name: d.botName,
-    avatar: 'bulb-outline',
-    description: d.commandHint,
-    capabilities: d.permissionsSnapshot,
-    isDemo: false };
-}
-
 function AgentRow({
-  agent,
+  bot,
   deployed,
+  pending,
   onAdd }: {
-  agent: ChatAgent;
+  bot: ChatBot;
   deployed: boolean;
+  pending: boolean;
   onAdd: () => void;
 }) {
   const { colors } = useAppTheme();
@@ -214,39 +280,39 @@ function AgentRow({
   return (
     <View style={[styles.row, { borderBottomColor: colors.borderSubtle }]}>
       <View style={styles.iconTarget}>
-        <Ionicons
-          name={agent.avatar as keyof typeof Ionicons.glyphMap}
-          size={22}
-          color={colors.brand}
-        />
+        <AgentIcon category={bot.category} name={bot.name} size={22} color={colors.brand} />
       </View>
 
       <View style={styles.rowText}>
         <Text style={[styles.rowLabel, { color: colors.textPrimary }]} numberOfLines={1}>
-          {agent.name}
+          {bot.name}
         </Text>
         <Text style={[styles.rowDescription, { color: colors.textMuted }]} numberOfLines={1}>
-          {agent.description}
+          {bot.description || bot.commandHint}
         </Text>
       </View>
 
       <AnimatedPressable
         style={[styles.addBtn, { backgroundColor: deployed ? colors.surface : colors.brand }]}
         onPress={onAdd}
-        disabled={deployed}
+        disabled={deployed || pending}
         activeOpacity={0.7}
         scaleValue={deployed ? 1 : 0.94}
         hapticFeedback={deployed ? undefined : 'light'}
         accessibilityRole="button"
-        accessibilityLabel={deployed ? `${agent.name} already added` : `Add ${agent.name} agent`}
-        accessibilityHint={agent.description}
+        accessibilityLabel={deployed ? `${bot.name} already added` : `Add ${bot.name} agent`}
+        accessibilityHint={bot.description}
         accessibilityState={deployed ? { disabled: true } : undefined}
       >
-        <Text
-          style={[styles.addBtnText, { color: deployed ? colors.textMuted : colors.textInverse }]}
-        >
-          {deployed ? 'Added' : 'Choose'}
-        </Text>
+        {pending ? (
+          <ActivityIndicator size="small" color={colors.textInverse} />
+        ) : (
+          <Text
+            style={[styles.addBtnText, { color: deployed ? colors.textMuted : colors.textInverse }]}
+          >
+            {deployed ? 'Added' : 'Choose'}
+          </Text>
+        )}
       </AnimatedPressable>
     </View>
   );
@@ -258,7 +324,7 @@ function EmptyState({
   body,
   actionLabel,
   onAction }: {
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: string;
   title: string;
   body: string;
   actionLabel?: string;
@@ -270,7 +336,7 @@ function EmptyState({
   return (
     <View style={styles.emptyState}>
       <View style={[styles.emptyIcon, { backgroundColor: colors.surfaceAlt }]}>
-        <Ionicons name={icon} size={26} color={colors.textMuted} />
+        <AppIcon name={icon} size={IconSize.lg} color="textMuted" opticalCenter accessible={false} />
       </View>
       <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>{title}</Text>
       <Text style={[styles.emptyBody, { color: colors.textMuted }]}>{body}</Text>
@@ -335,8 +401,8 @@ const createStyles = (colors: ThemeColors) =>
       paddingVertical: Space.sm,
       borderBottomWidth: StyleSheet.hairlineWidth },
     iconTarget: {
-      width: 44,
-      height: 44,
+      width: Control.hit,
+      height: Control.hit,
       justifyContent: 'center',
       alignItems: 'center' },
     rowText: {
@@ -354,32 +420,21 @@ const createStyles = (colors: ThemeColors) =>
       paddingHorizontal: Space.smMd,
       borderRadius: Radius.full,
       minWidth: 72,
-      minHeight: 44,
+      minHeight: Control.hit,
       justifyContent: 'center',
       alignItems: 'center' },
     addBtnText: {
       fontSize: TypographyV2.body.size,
       lineHeight: TypographyV2.body.lineHeight,
       fontFamily: TypographyV2.bodyStrong.fontFamily },
-    demoNotice: {
+    skeletonRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-      minHeight: 32 },
-    demoText: {
-      fontSize: TypographyV2.meta.size,
-      lineHeight: TypographyV2.meta.lineHeight,
-      fontFamily: TypographyV2.body.fontFamily },
-    loadingState: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
       gap: Space.sm,
-      paddingVertical: Space.xl },
-    loadingText: {
-      fontSize: TypographyV2.meta.size,
-      lineHeight: TypographyV2.meta.lineHeight,
-      fontFamily: TypographyV2.body.fontFamily },
+      minHeight: 68,
+      paddingVertical: Space.sm },
+    skeletonCopy: {
+      flex: 1 },
     emptyState: {
       alignItems: 'center',
       paddingVertical: Space.xl,
@@ -406,7 +461,7 @@ const createStyles = (colors: ThemeColors) =>
       paddingHorizontal: Space.md,
       paddingVertical: Space.xs,
       borderRadius: Radius.full,
-      minHeight: 44,
+      minHeight: Control.hit,
       justifyContent: 'center',
       alignItems: 'center',
       marginTop: Space.xs },

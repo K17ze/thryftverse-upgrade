@@ -49,7 +49,6 @@ import { ApiRequestError } from "../../lib/apiClient";
 import { isVideoUri } from "../../utils/media";
 import { makeStableId, createStableId } from "../../utils/createStableId";
 import { t } from "../../i18n";
-import type { SuggestedReply } from "../../services/chatAgentsApi";
 import type { SupportedCurrencyCode } from "../../constants/currencies";
 import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 import type { CurrencyDisplayMode } from "../../utils/currency";
@@ -79,18 +78,6 @@ interface UseConversationMessagesOptions {
   haptic: { light: () => void; medium: () => void; success: () => void; selection: () => void };
   onOfferSent: (conversationId: string) => void;
   clearComposerState: (conversationId: string) => Promise<void>;
-  deployedChatAgents: { length: number; 0?: { name?: string; avatar?: string } };
-  getChatAgentResponse: (
-    conversationId: string,
-    text: string,
-  ) => { id: string; agentId: string; content: string };
-  getChatAgentSuggestions: (
-    conversationId: string,
-    text: string,
-  ) => SuggestedReply[];
-  setChatAgentSuggestionsExternal: (
-    suggestions: SuggestedReply[],
-  ) => void;
   navigation: {
     setParams: (params: Record<string, unknown>) => void;
     navigate: (screen: string, params?: Record<string, unknown>) => void;
@@ -137,10 +124,6 @@ export function useConversationMessages({
   haptic,
   onOfferSent,
   clearComposerState,
-  deployedChatAgents,
-  getChatAgentResponse,
-  getChatAgentSuggestions,
-  setChatAgentSuggestionsExternal,
   navigation,
   conversationUnread,
   markConversationRead,
@@ -385,6 +368,21 @@ export function useConversationMessages({
     setMessages((prev) => [...prev, next]);
   }, []);
 
+  // Patch a message already in the conversation store — used to reconcile
+  // the send lifecycle (sending → sent/failed/reconciling) and read receipts
+  // into the inbox's copy of the last message so the row's delivery glyph
+  // stays truthful. Declared before the realtime subscriptions that use it.
+  const patchStoreMessage = useCallback(
+    (
+      match: { id?: string; clientMessageId?: string },
+      patch: Partial<ConversationMessage>,
+    ) => {
+      if (!conversationId) return;
+      useStore.getState().patchConversationMessage(conversationId, match, patch);
+    },
+    [conversationId],
+  );
+
   // Realtime subscription — append incoming messages live.
   // useChatMessageEvent subscribes to the conversation's topic and invokes
   // the handler for each `chat.message.created` event. The handler is held
@@ -416,6 +414,12 @@ export function useConversationMessages({
                   ? { ...m, id: payload.id, status: "sent" as const }
                   : m,
               ),
+            );
+            // Reconcile the inbox store copy too — the optimistic append left
+            // a 'sending' row that must not linger once the server confirms.
+            patchStoreMessage(
+              { clientMessageId: payload.clientMessageId },
+              { id: payload.id, status: "sent", readStatus: "sent" },
             );
             return;
           }
@@ -527,6 +531,32 @@ export function useConversationMessages({
         if (event.userId === currentUser?.id) return; // ignore our own read
         const readAtTime = new Date(event.readAt).getTime();
         const messageIdSet = event.messageIds ? new Set(event.messageIds) : null;
+
+        // Propagate the receipt into the conversation store so the inbox row
+        // shows "Read" for the user's own last message after navigating back.
+        // Only the newest own message within the read window is patched — the
+        // inbox reads only the tail; full per-message state is reconciled by
+        // the next API sync (readBy is mapped server-side).
+        const convo = useStore.getState().conversations.find((c) => c.id === conversationId);
+        const lastOwn = convo
+          ? [...convo.messages].reverse().find((m) => m.sender === 'me')
+          : undefined;
+        if (lastOwn && lastOwn.status !== 'sending' && lastOwn.status !== 'failed') {
+          const msgTime = lastOwn.date ? new Date(lastOwn.date).getTime() : 0;
+          const inWindow = messageIdSet
+            ? messageIdSet.has(lastOwn.id)
+            : msgTime > 0 && msgTime <= readAtTime;
+          if (inWindow && lastOwn.readStatus !== 'read') {
+            patchStoreMessage(
+              { id: lastOwn.id },
+              {
+                readStatus: 'read',
+                readBy: [...new Set([...(lastOwn.readBy ?? []), event.userId])],
+              },
+            );
+          }
+        }
+
         setMessages((prev) =>
           prev.map((m) => {
             if (m.sender !== 'me') {
@@ -558,7 +588,7 @@ export function useConversationMessages({
           }),
         );
       },
-      [currentUser?.id],
+      [currentUser?.id, conversationId, patchStoreMessage],
     ),
   );
 
@@ -599,11 +629,23 @@ export function useConversationMessages({
         timestamp: "just now",
         date: next.date ?? "just now",
         type:
-          next.type === "offer" ? "offer" : next.type === "media" ? "text" : "text",
+          next.type === "offer"
+            ? "offer"
+            : next.type === "voice"
+              ? "voice"
+              : "text",
         sender: next.sender === "me" ? "me" : "other",
         mediaUri: next.mediaUri,
         mediaType: next.mediaType,
         uploadStatus: next.uploadStatus,
+        // Lifecycle fields — carried through so the inbox row can render a
+        // truthful delivery state ("Sending" / "Failed") for in-flight and
+        // failed sends, and later reconciliation can match by clientMessageId.
+        status: next.status,
+        readStatus: next.readStatus,
+        clientMessageId: next.clientMessageId,
+        voiceUri: next.voiceUri,
+        voiceDurationMs: next.voiceDurationMs,
       });
     },
     [conversationId, appendConversationMessage, currentUser?.id],
@@ -737,6 +779,10 @@ export function useConversationMessages({
               m.id === localId ? { ...m, id: serverMsg.id, status: "sent" as const } : m,
             ),
           );
+          patchStoreMessage(
+            { clientMessageId },
+            { id: serverMsg.id, status: "sent", readStatus: "sent" },
+          );
           performance.mark("chat:delivered");
         })
         .catch((err: unknown) => {
@@ -750,6 +796,7 @@ export function useConversationMessages({
                 m.id === localId ? { ...m, status: "failed" as const } : m,
               ),
             );
+            patchStoreMessage({ clientMessageId }, { status: "failed" });
             return;
           }
           // P0.2: A dropped response is an UNKNOWN outcome, not a known
@@ -763,6 +810,7 @@ export function useConversationMessages({
               m.id === localId ? { ...m, status: "reconciling" as const } : m,
             ),
           );
+          patchStoreMessage({ clientMessageId }, { status: "reconciling" });
           // P0.14: Persist to the durable outbox so the message is flushed
           // automatically when connectivity returns. The clientMessageId
           // ensures idempotent replay — the server will return the original
@@ -796,6 +844,7 @@ export function useConversationMessages({
       show,
       pushMessage,
       appendToConversationStore,
+      patchStoreMessage,
       scheduleScrollToEnd,
       clearComposerState,
       currentUser?.username,
@@ -833,6 +882,7 @@ export function useConversationMessages({
               m.id === msgId ? { ...m, uploadStatus: "failed" as const } : m,
             ),
           );
+          patchStoreMessage({ id: msgId, clientMessageId }, { uploadStatus: "failed" });
           show("Upload failed. Tap media to retry.", "error");
           return;
         }
@@ -855,6 +905,10 @@ export function useConversationMessages({
               m.id === msgId ? { ...m, id: serverMsg.id, uploadStatus: "sent" as const, mediaUri: canonicalUrl } : m,
             ),
           );
+          patchStoreMessage(
+            { id: msgId, clientMessageId },
+            { id: serverMsg.id, status: "sent", uploadStatus: "sent", mediaUri: canonicalUrl },
+          );
         })
         .catch((err: unknown) => {
           if (err instanceof ApiRequestError && err.status === 400) {
@@ -866,6 +920,10 @@ export function useConversationMessages({
               prev.map((m) =>
                 m.id === msgId ? { ...m, status: "failed" as const, uploadStatus: "sent" as const, mediaUri: canonicalUrl } : m,
               ),
+            );
+            patchStoreMessage(
+              { id: msgId, clientMessageId },
+              { status: "failed", uploadStatus: "sent", mediaUri: canonicalUrl },
             );
             return;
           }
@@ -880,6 +938,10 @@ export function useConversationMessages({
               m.id === msgId ? { ...m, status: "reconciling" as const, uploadStatus: "sent" as const, mediaUri: canonicalUrl } : m,
             ),
           );
+          patchStoreMessage(
+            { id: msgId, clientMessageId },
+            { status: "reconciling", uploadStatus: "sent", mediaUri: canonicalUrl },
+          );
           enqueueChatMessage({
             conversationId,
             clientMessageId,
@@ -893,7 +955,7 @@ export function useConversationMessages({
         requestPushPermissionWithSoftAsk("chat").catch(() => undefined);
       }
     },
-    [conversationId, show, currentUser?.id],
+    [conversationId, show, currentUser?.id, patchStoreMessage],
   );
 
   // ---------------------------------------------------------------------------
@@ -921,6 +983,7 @@ export function useConversationMessages({
               m.id === msgId ? { ...m, uploadStatus: "failed" as const } : m,
             ),
           );
+          patchStoreMessage({ id: msgId, clientMessageId }, { uploadStatus: "failed" });
           show("Voice upload failed. Tap voice message to retry.", "error");
           return;
         }
@@ -947,12 +1010,20 @@ export function useConversationMessages({
               m.id === msgId ? { ...m, id: serverMsg.id, uploadStatus: "sent" as const, voiceUri: canonicalUrl } : m,
             ),
           );
+          patchStoreMessage(
+            { id: msgId, clientMessageId },
+            { id: serverMsg.id, status: "sent", uploadStatus: "sent", voiceUri: canonicalUrl },
+          );
         })
         .catch(() => {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === msgId ? { ...m, status: "reconciling" as const, uploadStatus: "sent" as const, voiceUri: canonicalUrl } : m,
             ),
+          );
+          patchStoreMessage(
+            { id: msgId, clientMessageId },
+            { status: "reconciling", uploadStatus: "sent", voiceUri: canonicalUrl },
           );
           enqueueChatMessage({
             conversationId,
@@ -962,7 +1033,7 @@ export function useConversationMessages({
           });
         });
     },
-    [conversationId, show, currentUser?.id],
+    [conversationId, show, currentUser?.id, patchStoreMessage],
   );
 
   const createVoiceMessage = useCallback(
@@ -1077,6 +1148,10 @@ export function useConversationMessages({
                     : m,
                 ),
               );
+              patchStoreMessage(
+                { id: msgId, clientMessageId },
+                { id: serverMsg.id, status: "sent", readStatus: "sent" },
+              );
             })
             .catch(() => {
               setMessages((p) =>
@@ -1084,6 +1159,7 @@ export function useConversationMessages({
                   m.id === msgId ? { ...m, status: "failed" as const } : m,
                 ),
               );
+              patchStoreMessage({ id: msgId, clientMessageId }, { status: "failed" });
               show("Message failed to send. Tap to retry.", "error");
             });
         }, 0);
@@ -1093,9 +1169,10 @@ export function useConversationMessages({
             : m,
         );
       });
+      patchStoreMessage({ id: msgId }, { status: "sending" });
       haptic.light();
     },
-    [conversationId, show, haptic, currentUser?.id],
+    [conversationId, show, haptic, currentUser?.id, patchStoreMessage],
   );
 
   const createMediaMessage = useCallback(

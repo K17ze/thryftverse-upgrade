@@ -335,9 +335,21 @@ function apiFiltersToSearchFilters(
 
 /**
  * Fetch suggested starting queries for the empty / first-viewport state.
+ * Served by GET /search/conversational/suggestions. On failure the bundled
+ * copy of the same curated list is returned — it is static product copy, not
+ * personalised data, so there is nothing to disclose.
  */
 export async function fetchSuggestions(): Promise<SearchSuggestion[]> {
-  await delay(180);
+  try {
+    const data = await fetchJson<{ ok: boolean; items: SearchSuggestion[] }>(
+      '/search/conversational/suggestions',
+    );
+    if (Array.isArray(data.items) && data.items.length > 0) {
+      return data.items;
+    }
+  } catch {
+    // Fall back to the bundled copy of the same curated list.
+  }
   return [...MOCK_SUGGESTIONS];
 }
 
@@ -368,7 +380,9 @@ export async function startConversation(query: string): Promise<SearchConversati
   } catch {
     await delay(520);
     filters = extractFilters(query);
-    isDemo = __DEV__;
+    // Client-side keyword extraction is mock logic in every build, not just
+    // dev — flag it so the disclosure banner stays truthful in production.
+    isDemo = true;
   }
 
   const assistantMessage: ChatMessage = {
@@ -435,7 +449,7 @@ export async function continueConversation(
   } catch {
     await delay(520);
     newFilters = extractFilters(query);
-    isDemo = __DEV__;
+    isDemo = true;
   }
 
   const merged: SearchFilters = { isDemo };

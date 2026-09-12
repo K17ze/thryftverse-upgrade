@@ -87,6 +87,10 @@ export interface Moodboard {
   createdAt: string;
   /** ISO timestamp of last update. */
   updatedAt: string;
+  /** Backend user id of the board creator. */
+  creatorId: string;
+  /** The requesting user's membership role on this board, or null. */
+  viewerRole: string | null;
   /** Honest flag — true while this moodboard comes from mock data. */
   isDemo: boolean;
   /** Server revision number for optimistic-concurrency checks. */
@@ -197,6 +201,8 @@ interface ApiMoodboard {
   theme: string;
   createdAt: string;
   updatedAt: string;
+  creatorId: string;
+  viewerRole: string | null;
   revision: number;
   deletedAt: string | null;
 }
@@ -229,6 +235,8 @@ function mapApiMoodboard(raw: ApiMoodboard): Moodboard {
     theme: raw.theme,
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
+    creatorId: raw.creatorId,
+    viewerRole: raw.viewerRole ?? null,
     isDemo: false,
     revision: raw.revision,
     deletedAt: raw.deletedAt,

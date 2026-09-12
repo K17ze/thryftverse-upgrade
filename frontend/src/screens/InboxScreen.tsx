@@ -10,7 +10,7 @@ import { useNavigation, useScrollToTop, useRoute, RouteProp } from '@react-navig
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import NetInfo from '@react-native-community/netinfo';
 import { useAppTheme } from '../theme/ThemeContext';
-import type { Conversation } from '../domain';
+import type { Conversation, Message } from '../domain';
 import { RootStackParamList } from '../navigation/types';
 import { SwipeableRow } from '../components/SwipeableRow';
 import Reanimated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
@@ -26,16 +26,12 @@ import { useHaptic } from '../hooks/useHaptic';
 import { Caption } from '../components/ui/Text';
 import { AvatarRing } from '../components/chat/AvatarRing';
 import { SkeletonLoader } from '../components/SkeletonLoader';
-import { InboxConversationRow } from '../components/chat/InboxConversationRow';
+import { InboxConversationRow, type InboxDeliveryStatus } from '../components/chat/InboxConversationRow';
 import { OfflineBanner } from '../components/OfflineBanner';
-import { MessagingSegmentRail, MessagingSegment } from '../components/chat/MessagingSegmentRail';
+import { MessagingSegment } from '../components/chat/MessagingSegmentRail';
+import { formatActivityTimestamp } from '../utils/dateFormat';
 import {
   classifyConversation,
-  getCommerceStatus,
-  needsResponse,
-  hasActiveOffer,
-  needsShipment,
-  type CommerceStatusTone,
 } from '../utils/conversationClassification';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -50,6 +46,36 @@ type ConvoItem = Conversation;
 type InboxSegment = MessagingSegment | 'all' | 'unread' | 'buying' | 'selling' | 'archived' | 'groups';
 
 const AnimatedFlashList = Reanimated.createAnimatedComponent(FlashList) as unknown as React.ComponentClass<FlashListProps<Conversation>>;
+
+// Inbox timestamps arrive in mixed formats: ISO strings from the API and
+// optimistic labels like "just now" written by local appends. Render a
+// compact relative timestamp (time-of-day today, short date otherwise) and
+// pass through any non-parseable label verbatim rather than showing nothing.
+function formatInboxTimestamp(value: string): string {
+  if (!value) return '';
+  return formatActivityTimestamp(value) || value;
+}
+
+// Delivery state is only shown when it is provable: the last stored message
+// must be authored by the current user and carry a lifecycle status or read
+// receipt. A synthetic preview row (system placeholder from the list fetch)
+// or a message from the other participant yields no glyph — the row never
+// claims "sent"/"read" for state it cannot verify.
+function deriveInboxDeliveryStatus(message?: Message): InboxDeliveryStatus | undefined {
+  if (!message || message.sender !== 'me') return undefined;
+  if (message.status === 'failed' || message.uploadStatus === 'failed') return 'failed';
+  if (
+    message.status === 'sending' ||
+    message.status === 'reconciling' ||
+    message.status === 'draft' ||
+    message.uploadStatus === 'uploading'
+  ) {
+    return 'sending';
+  }
+  if (message.readStatus === 'read') return 'read';
+  if (message.readStatus === 'delivered') return 'delivered';
+  return 'sent';
+}
 
 function ListingContextThumbnail({ itemId }: { itemId: string }) {
   const { colors } = useAppTheme();
@@ -101,7 +127,7 @@ export default function InboxScreen() {
   const toggleMutedConversation = useStore((state) => state.toggleMutedConversation);
   const toggleArchivedConversation = useStore((state) => state.toggleArchivedConversation);
   const archivedIds = useStore((state) => state.archivedConversationIds);
-  useVisuallyComplete('Inbox');
+  const reportReady = useVisuallyComplete('Inbox');
   const mutedIds = useStore((state) => state.mutedConversationIds);
   const messageRequests = useStore((state) => state.messageRequests);
   const acceptMessageRequest = useStore((state) => state.acceptMessageRequest);
@@ -113,16 +139,10 @@ export default function InboxScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [syncError, setSyncError] = useState('');
   const [isOffline, setIsOffline] = useState(false);
-  // Search is behind an icon in the first viewport — expands on tap.
-  const [searchVisible, setSearchVisible] = useState(false);
-  // Secondary filters (Unread, Buying, Selling, Archived, Groups) live in a
-  // bottom sheet opened from the filter icon — keeps the first viewport calm
-  // and the Primary/Requests rail as the sole top-tier control.
-  const [filterSheetVisible, setFilterSheetVisible] = useState(false);
+  // Secondary filters (Unread, Archived, Groups) expand inline under the
+  // filter icon — keeps the first viewport calm with the All/Buying/Selling/
+  // Requests rail as the sole top-tier control.
   const [filterExpanded, setFilterExpanded] = useState(false);
-  // Seller operational quick-filters — compact chips above the list that
-  // toggle on/off. Null means no seller filter active.
-  const [sellerFilter, setSellerFilter] = useState<'needs-response' | 'active-offers' | 'ship-now' | null>(null);
   const [confirmSheet, setConfirmSheet] = useState<{
     visible: boolean;
     title: string;
@@ -174,6 +194,17 @@ export default function InboxScreen() {
     void loadConversations();
   }, []);
 
+  // Readiness milestones: 'data-ready' when the initial conversation fetch
+  // settles (isLoading flips false in loadConversations' finally — covering
+  // both success and error), 'interaction-ready' with it since the list and
+  // composer entry points are usable once the skeleton clears.
+  useEffect(() => {
+    if (!isLoading) {
+      reportReady('data-ready');
+      reportReady('interaction-ready');
+    }
+  }, [isLoading, reportReady]);
+
   // Realtime subscription — live-update inbox rows when new messages arrive
   // on any loaded conversation. useInboxMessageEvent subscribes to every
   // conversation topic currently in the store and reconciles as the list
@@ -201,13 +232,17 @@ export default function InboxScreen() {
         // optimistic send or a prior realtime event.
         const alreadyStored = existing.messages.some((m) => m.id === domainMessage.id);
 
+        // `text` is '' (not undefined) for voice/media-only payloads, so a
+        // truthy check — not `??` — is required to reach the fallbacks.
         const nextLastMessage =
-          domainMessage.text ??
+          domainMessage.text ||
           (domainMessage.mediaType === 'image'
             ? '📷 Photo'
             : domainMessage.mediaType === 'video'
               ? '🎥 Video'
-              : domainMessage.systemTitle) ??
+              : domainMessage.type === 'voice'
+                ? '🎤 Voice message'
+                : domainMessage.systemTitle) ||
           'New message';
 
         upsertConversation({
@@ -266,8 +301,6 @@ export default function InboxScreen() {
     screenRoot: { backgroundColor: colors.background },
     headerTitle: { color: colors.textPrimary },
     iconBtn: { backgroundColor: 'transparent' },
-    newMessageBtn: { backgroundColor: colors.textPrimary },
-    newMessageBtnText: { color: colors.textInverse },
     searchWrap: { backgroundColor: colors.surfaceAlt },
     rowSeparator: { backgroundColor: colors.border },
     groupAvatar: { backgroundColor: colors.surfaceAlt },
@@ -275,8 +308,6 @@ export default function InboxScreen() {
     botIndicator: { backgroundColor: colors.surface, borderColor: colors.border },
     nameText: { color: colors.textPrimary },
     snippet: { color: colors.textSecondary },
-    unreadPill: { backgroundColor: colors.textPrimary },
-    unreadPillText: { color: colors.textInverse },
     requestRowAccent: { borderLeftColor: colors.brand, backgroundColor: colors.brandSubtle },
     requestBtnDecline: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
     requestBtnDeclineText: { color: colors.textPrimary },
@@ -366,7 +397,7 @@ export default function InboxScreen() {
     });
     return ordered;
   }, [filteredByListing, searchQuery, segment, currentUser?.id, participantNameLookup, archivedIds, messageRequests]);
-  const unreadCount = useMemo(() => visibleConversations.filter((c) => c.unread).length, [visibleConversations]);
+
   const buyingUnreadCount = useMemo(
     () => conversations.filter(
       (c) => !archivedIds.includes(c.id) && !messageRequests.includes(c.id) && c.unread && classifyConversation(c, currentUser?.id).isBuying
@@ -530,7 +561,7 @@ export default function InboxScreen() {
           <View style={styles.messageBody}>
             <View style={styles.messageTop}>
               <Text style={[styles.nameText, t.nameText, styles.nameUnread]}>{displayTitle}</Text>
-              <Caption color={colors.textMuted}>{item.lastMessageTime}</Caption>
+              <Caption color={colors.textMuted}>{formatInboxTimestamp(item.lastMessageTime)}</Caption>
             </View>
             <Text style={[styles.snippet, t.snippet]} numberOfLines={1}>{item.lastMessage}</Text>
             {item.itemId && (
@@ -567,13 +598,25 @@ export default function InboxScreen() {
         </View>
       </View>
     );
+    // Delivery state is derived from the last stored message only — a
+    // conversation fresh from the list endpoint carries a synthetic preview
+    // message (sender 'system'), which yields no glyph. After a thread visit
+    // or an optimistic send the real message is present and its status /
+    // readStatus drives the check-clock-alert glyph truthfully.
+    const lastStoredMessage = item.messages.length
+      ? item.messages[item.messages.length - 1]
+      : undefined;
     const conversationRow = (
       <InboxConversationRow
         displayTitle={safeDisplayTitle}
         lastMessage={item.lastMessage ?? ''}
-        lastMessageTime={item.lastMessageTime}
+        lastMessageTime={formatInboxTimestamp(item.lastMessageTime)}
         unread={!!item.unread}
-        unreadCount={item.unread ? item.messages.filter(m => m.sender !== 'me' && !m.isSystem).length : undefined}
+        // No truthful unread count exists client-side (the list payload has
+        // no per-message read cursor), so render the plain unread dot rather
+        // than fabricate a number from message history length.
+        unreadCount={undefined}
+        deliveryStatus={deriveInboxDeliveryStatus(lastStoredMessage)}
         isPinned={!!item.isPinned}
         isMuted={isMuted}
         isGroup={isGroup}
@@ -818,7 +861,9 @@ export default function InboxScreen() {
       {isOffline && (
         <OfflineBanner message="You are offline" />
       )}
-      {!!syncError && (
+      {/* Slim sync banner only when content is on screen — with an empty
+          list the EmptyState carries the error + retry instead. */}
+      {!!syncError && visibleConversations.length > 0 && (
         <View style={[styles.errorBanner, t.errorBanner]}>
           <Ionicons name="alert-circle-outline" size={16} color={colors.danger} accessible={false} />
           <View style={styles.errorBannerCopy}>
@@ -929,6 +974,19 @@ export default function InboxScreen() {
               }
               ListEmptyComponent={
                 (() => {
+                  // A failed load with an empty list is an error state, not
+                  // "no conversations" — never let the two collapse together.
+                  if (syncError) {
+                    return (
+                      <EmptyState
+                        icon="cloud-offline-outline"
+                        title="Couldn't load messages"
+                        subtitle={isOffline ? 'You are offline. Reconnect and retry.' : 'Check your connection or retry.'}
+                        ctaLabel="Retry"
+                        onCtaPress={() => void loadConversations()}
+                      />
+                    );
+                  }
                   if (listingFilterId) {
                     return (
                       <EmptyState
@@ -1204,18 +1262,7 @@ const styles = StyleSheet.create({
     height: Space.xs,
     borderRadius: RadiusRoleValue.pillAvatar,
   },
-  newMessageBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
-    borderRadius: RadiusRoleValue.pillAvatar,
-  },
-  newMessageBtnText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.semibold,
-  },
+
   searchWrap: {
     borderRadius: RadiusRoleValue.pillAvatar,
     paddingHorizontal: Space.md,
@@ -1297,16 +1344,7 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.body.lineHeight,
     flex: 1,
   },
-  unreadPill: {
-    borderRadius: RadiusRoleValue.compactControl,
-    paddingHorizontal: Space.xs + 2,
-    paddingVertical: Space.xs / 2,
-    marginLeft: Space.xs,
-  },
-  unreadPillText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold,
-  },
+
   contextThumb: {
     width: Space.lg + Space.xs,
     height: Space.lg + Space.xs,

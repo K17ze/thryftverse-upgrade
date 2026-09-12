@@ -468,12 +468,26 @@ export default function BuyoutScreen() {
                 const unitsStr = acceptUnits[offer.id] ?? '';
                 const unitsNum = unitsStr.trim() ? parseInt(unitsStr, 10) : maxAccept;
                 const acceptTotalGbp = (offer.offerPriceGbp) * (unitsNum || 0);
+                // Premium vs the asset's reference price — derived from real
+                // contract fields so a holder sees the offer in context
+                // ("±N percent vs reference"), not an unanchored number.
+                const referencePrice = asset.unitPriceGbp;
+                const offerPremiumPct = referencePrice > 0
+                  ? ((offer.offerPriceGbp - referencePrice) / referencePrice) * 100
+                  : null;
                 return (
                   <View key={offer.id} style={[styles.offerCard, { borderColor: colors.borderSubtle }]}>
                     <View style={[styles.offerHeader, { borderBottomColor: colors.borderSubtle }]}>
-                      <Text style={[styles.offerPrice, { color: colors.textPrimary }]}>
-                        £{offer.offerPriceGbp.toFixed(2)} per unit
-                      </Text>
+                      <View style={styles.offerHeaderLeft}>
+                        <Text style={[styles.offerPrice, { color: colors.textPrimary }]}>
+                          £{offer.offerPriceGbp.toFixed(2)} per unit
+                        </Text>
+                        {offerPremiumPct != null && (
+                          <Text style={[styles.offerPremium, { color: offerPremiumPct >= 0 ? colors.success : colors.danger }]}>
+                            {offerPremiumPct >= 0 ? '+' : ''}{offerPremiumPct.toFixed(1)}% vs reference
+                          </Text>
+                        )}
+                      </View>
                       <Text style={[styles.offerStatus, { color: offerExpired ? colors.textMuted : colors.success }]}>
                         {offerExpired ? 'Expired' : 'Open'}
                       </Text>
@@ -770,9 +784,17 @@ const styles = StyleSheet.create({
     paddingBottom: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     marginBottom: Space.xs },
+  offerHeaderLeft: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2 },
   offerPrice: {
     fontSize: TypographyV2.bodyStrong.size,
     fontFamily: TypographyV2.bodyStrong.fontFamily,
+    fontVariant: ['tabular-nums'] },
+  offerPremium: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     fontVariant: ['tabular-nums'] },
   offerStatus: {
     fontSize: TypographyV2.meta.size,

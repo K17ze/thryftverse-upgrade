@@ -37,6 +37,8 @@ export interface SellerOrderPreview {
 export interface SellerOrdersModuleProps {
   orders: SellerOrderPreview[];
   isOrdersLoading?: boolean;
+  /** Orders fetch rejected — the host renders an inline retry; suppress rail + empty copy. */
+  ordersFailed?: boolean;
   tasks: SellerHubTask[];
   topTask: SellerHubTask | null;
   pendingOrdersCount: number;
@@ -115,6 +117,7 @@ function consequenceCopy(task: SellerHubTask): string {
 export const SellerOrdersModule: React.FC<SellerOrdersModuleProps> = ({
   orders,
   isOrdersLoading = false,
+  ordersFailed = false,
   tasks,
   topTask,
   pendingOrdersCount,
@@ -137,8 +140,8 @@ export const SellerOrdersModule: React.FC<SellerOrdersModuleProps> = ({
       : nonShipTasks;
   const visibleTasks = orderedTasks.slice(0, 4);
 
-  const ordersEmpty = !isOrdersLoading && orders.length === 0;
-  const showClearRow = !ordersEmpty && visibleTasks.length === 0;
+  const ordersEmpty = !isOrdersLoading && !ordersFailed && orders.length === 0;
+  const showClearRow = !ordersEmpty && !ordersFailed && visibleTasks.length === 0;
 
   return (
     <View style={styles.container}>
@@ -198,7 +201,7 @@ export const SellerOrdersModule: React.FC<SellerOrdersModuleProps> = ({
             </View>
           ))}
         </ScrollView>
-      ) : orders.length > 0 ? (
+      ) : ordersFailed ? null : orders.length > 0 ? (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -264,7 +267,7 @@ export const SellerOrdersModule: React.FC<SellerOrdersModuleProps> = ({
       ) : null}
 
       {/* ── Orders-only empty state ── */}
-      {!isOrdersLoading && orders.length === 0 ? (
+      {ordersEmpty ? (
         <View style={styles.clearRow}>
           <View style={[styles.taskIconWrap, { backgroundColor: colors.surfaceAlt }]}>
             <AppIcon concept="package" size={IconSize.xs} color="textMuted" accessible={false} />

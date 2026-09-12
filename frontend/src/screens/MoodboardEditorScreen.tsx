@@ -10,9 +10,10 @@
  *  - Selected item shows delete + layer-order controls
  *
  * Truthful UI (AGENTS.md §11):
- *  In demo mode (MOODBOARD_DEMO_MODE === true) the moodboard is stored in
- *  memory only. A persistent "Demo mode" indicator communicates this honestly.
- *  We never claim the board is shared, synced, or backed by a real backend.
+ *  Every operation flows through the real moodboards API — there is no
+ *  in-memory demo path. Sync state is reported honestly via the per-operation
+ *  status machine (syncing / synced / conflict / error); an unknown outcome
+ *  is never presented as success.
  *
  * Gestures (react-native-gesture-handler is installed — see package.json):
  *  - Pan to move an item (clamped to canvas bounds)
@@ -33,9 +34,7 @@ import {
   ActivityIndicator,
   Pressable,
   LayoutChangeEvent } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Reanimated, {
   useSharedValue,
@@ -44,13 +43,18 @@ import Reanimated, {
   runOnJS } from 'react-native-reanimated';
 
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Typography, Stroke, Control, LetterSpacing, PressScale } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { HorizontalRail } from '../components/HorizontalRail';
-import { EmptyState } from '../components/EmptyState';
+import {
+  FlagshipScreen,
+  FlagshipHeader,
+  FlagshipState } from '../components/flagship';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize, type IoniconsGlyphName, type SemanticIconName } from '../theme/iconTokens';
 import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { MoodboardCollaboratorSheet } from '../components/MoodboardCollaboratorSheet';
@@ -79,13 +83,11 @@ import {
   submitMoodboardOperation,
   publishMoodboardAsPoster,
   getThemeById,
-  MOODBOARD_DEMO_MODE,
   type Moodboard,
   type MoodboardItem,
   type MoodboardItemPosition,
   type MoodboardTheme,
   type MoodboardOperationResponse } from '../services/moodboardApi';
-import { invalidatePosterCache } from '../services/postersApi';
 import { createStableId } from '../utils/createStableId';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MoodboardEditor'>;
@@ -347,7 +349,11 @@ const CanvasItem = React.memo(function CanvasItem({
         <View
           style={[
             styles.canvasItemInner,
-            isSelected && styles.canvasItemInnerSelected,
+            { backgroundColor: colors.surfaceAlt },
+            isSelected && [
+              styles.canvasItemInnerSelected,
+              { borderColor: colors.textPrimary },
+            ],
           ]}
         >
           <CachedImage
@@ -372,7 +378,6 @@ interface PickerTileProps {
 }
 
 const PickerTile = React.memo(function PickerTile({ item, onPress }: PickerTileProps) {
-  const { colors } = useAppTheme();
   const { currencySymbol, currencyCode } = useFormattedPrice();
   return (
     <AnimatedPressable
@@ -450,7 +455,7 @@ const ThemeChip = React.memo(function ThemeChip({ theme, selected, onPress }: Th
 // Selection control button — delete / layer order
 // ---------------------------------------------------------------------------
 interface SelectionControlProps {
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: SemanticIconName | IoniconsGlyphName;
   label: string;
   hint: string;
   onPress: () => void;
@@ -478,7 +483,7 @@ const SelectionControl = React.memo(function SelectionControl({
       accessibilityLabel={label}
       accessibilityHint={hint}
     >
-      <Ionicons name={icon} size={20} color={colors.scrimTextPrimary} />
+      <AppIcon name={icon} size={IconSize.md} color={colors.scrimTextPrimary} accessible={false} />
     </AnimatedPressable>
   );
 });
@@ -487,7 +492,7 @@ const SelectionControl = React.memo(function SelectionControl({
 // Main screen
 // ---------------------------------------------------------------------------
 export default function MoodboardEditorScreen({ route, navigation }: Props) {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { isOffline } = useConnectivity();
   const insets = useSafeAreaInsets();
@@ -534,16 +539,15 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
   // ── Toast ──
   const { show } = useToast();
 
-  // Whether the current user is the board owner (for capability-gated UI).
+  // Whether the current user may perform owner-level actions — the DTO now
+  // carries creatorId and the viewer's membership role from the backend.
   const isOwner = useMemo(() => {
     if (!moodboard) return false;
-    // The creator is the owner. The membership table backfills this, but
-    // the editor only has the board DTO — the curator field is the display
-    // name, not the id. We use the board's curator field as a proxy: if
-    // the board was created by the current user, they are the owner.
-    // This is refined when the collaborator sheet loads members.
-    return true; // The editor is opened by the creator in the current flow.
-  }, [moodboard]);
+    return (
+      moodboard.creatorId === currentUserId ||
+      moodboard.viewerRole === 'owner'
+    );
+  }, [moodboard, currentUserId]);
 
   const activeTheme = useMemo(
     () => themes.find((t) => t.id === activeThemeId) ?? getThemeById(activeThemeId),
@@ -606,19 +610,6 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
     operationId: string;
     actorId: string;
   }>(moodboard ? `moodboard:${moodboard.id}` : '', 'moodboard.operation.applied');
-
-  const realtimeComment = useRealtimeEvent<{
-    boardId: string;
-    commentId: string;
-    authorId: string;
-    itemId: string | null;
-  }>(moodboard ? `moodboard:${moodboard.id}` : '', 'moodboard.comment.added');
-
-  const realtimeVersion = useRealtimeEvent<{
-    boardId: string;
-    versionId: string;
-    revision: number;
-  }>(moodboard ? `moodboard:${moodboard.id}` : '', 'moodboard.version.created');
 
   // Re-fetch the board when a remote operation is applied.
   useEffect(() => {
@@ -785,7 +776,7 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
             rotation: position.rotation,
             scale: position.scale } });
         handleOperationResponse(response);
-      } catch (error) {
+      } catch {
         // Network error or server error. The outcome is unknown if the
         // request may have reached the server — do not fabricate success.
         // The optimistic update stays visible; the status communicates the
@@ -999,16 +990,92 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
     return `Moodboard canvas with ${count} item${count === 1 ? '' : 's'}. Tap an item to select it.`;
   }, [moodboard, selectedItem]);
 
-  // ── Loading state ──
+  // ── Header actions — transparent 44pt icon targets (AGENTS.md §4) ──
+  const headerActions = (
+    <View style={styles.headerActions}>
+      {collaboratorsOnline && (
+        <View style={styles.liveIndicator}>
+          <View style={styles.liveDot} />
+        </View>
+      )}
+      <AnimatedPressable
+        style={styles.headerActionButton}
+        onPress={() => {
+          haptic.selection();
+          setCommentsItemId(undefined);
+          setCommentsSheetVisible(true);
+        }}
+        activeOpacity={0.7}
+        scaleValue={PressScale.icon}
+        hapticFeedback="light"
+        accessibilityRole="button"
+        accessibilityLabel="Comments"
+        accessibilityHint="View and add comments on this moodboard"
+      >
+        <AppIcon name="chatbubble-outline" size={IconSize.md} color="textPrimary" accessible={false} />
+      </AnimatedPressable>
+      <AnimatedPressable
+        style={styles.headerActionButton}
+        onPress={() => {
+          haptic.selection();
+          setVersionHistoryVisible(true);
+        }}
+        activeOpacity={0.7}
+        scaleValue={PressScale.icon}
+        hapticFeedback="light"
+        accessibilityRole="button"
+        accessibilityLabel="Version history"
+        accessibilityHint="View saved versions and restore"
+      >
+        <AppIcon name="time-outline" size={IconSize.md} color="textPrimary" accessible={false} />
+      </AnimatedPressable>
+      <AnimatedPressable
+        style={styles.headerActionButton}
+        onPress={() => {
+          haptic.selection();
+          setCollaboratorSheetVisible(true);
+        }}
+        activeOpacity={0.7}
+        scaleValue={PressScale.icon}
+        hapticFeedback="light"
+        accessibilityRole="button"
+        accessibilityLabel="Collaborators"
+        accessibilityHint="Invite collaborators and manage roles"
+      >
+        <AppIcon name="people-outline" size={IconSize.md} color="textPrimary" accessible={false} />
+      </AnimatedPressable>
+      <AnimatedPressable
+        style={styles.headerActionButton}
+        onPress={handlePublishAsPoster}
+        activeOpacity={0.7}
+        scaleValue={PressScale.icon}
+        hapticFeedback="light"
+        accessibilityRole="button"
+        accessibilityLabel="Publish as poster"
+        accessibilityHint="Publishes this moodboard as a poster to your feed"
+        disabled={publishing}
+      >
+        <AppIcon
+          name="share-outline"
+          size={IconSize.md}
+          color={publishing ? 'textMuted' : 'textPrimary'}
+          accessible={false}
+        />
+      </AnimatedPressable>
+    </View>
+  );
+
+  // ── Loading state — skeleton mirrors final canvas + picker geometry ──
   if (loading) {
     return (
-      <View style={styles.container}>
-        <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
-        <View style={[styles.headerRow, { marginTop: insets.top }]}>
-          <View style={styles.backButtonPlaceholder} />
-          <Text style={styles.headerTitle}>Moodboard</Text>
-          <View style={styles.backButtonPlaceholder} />
-        </View>
+      <FlagshipScreen
+        testID="moodboard-editor-screen"
+        scrollEnabled={false}
+        contentStyle={styles.screenContent}
+        header={
+          <FlagshipHeader title="Moodboard" onBack={handleGoBack} />
+        }
+      >
         <View style={styles.canvasSkeleton}>
           <PremiumSkeletonTile width="100%" height="100%" borderRadius={Radius.lg} />
         </View>
@@ -1021,124 +1088,52 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
             </View>
           ))}
         </View>
-      </View>
+      </FlagshipScreen>
     );
   }
 
   // ── Error state ──
   if (error && !moodboard) {
     return (
-      <View style={styles.stateContainer}>
-        <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
-        <EmptyState
-          icon="cloud-offline-outline"
-          title="Editor unavailable"
-          subtitle={error}
-          ctaLabel="Retry"
-          onCtaPress={() => void loadAll()}
-        />
-      </View>
+      <FlagshipScreen
+        scrollEnabled={false}
+        contentStyle={styles.screenContent}
+        header={
+          <FlagshipHeader title="Moodboard" onBack={handleGoBack} />
+        }
+      >
+        <View style={styles.stateContainer}>
+          <FlagshipState
+            variant="error"
+            icon="cloud-offline-outline"
+            title="Editor unavailable"
+            subtitle={error}
+            actionLabel="Retry"
+            onAction={() => void loadAll()}
+          />
+        </View>
+      </FlagshipScreen>
     );
   }
 
   return (
-    <GestureHandlerRootView style={styles.container}>
-      <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
-
+    <GestureHandlerRootView style={styles.rootContainer}>
+      <FlagshipScreen
+        testID="moodboard-editor-screen"
+        scrollEnabled={false}
+        contentStyle={styles.screenContent}
+        header={
+          <FlagshipHeader
+            title={moodboard?.title ?? 'Moodboard'}
+            onBack={handleGoBack}
+            rightAction={headerActions}
+          />
+        }
+      >
       {/* Offline banner */}
       {isOffline && (
         <OfflineBanner message="Offline — changes are not saved. Reconnect to persist your work." />
       )}
-
-      {/* Demo mode banner — truthful per AGENTS.md §11 */}
-      {MOODBOARD_DEMO_MODE && (
-        <View style={styles.demoBanner}>
-          <Ionicons name="information-circle-outline" size={13} color={colors.textSecondary} accessible={false} aria-hidden={true} />
-          <Text style={styles.demoBannerText}>
-            Demo mode — moodboards aren't persisted.
-          </Text>
-        </View>
-      )}
-
-      {/* ── Header ── */}
-      <View style={[styles.headerRow, { marginTop: insets.top }]}>
-        <AnimatedPressable
-          style={styles.backButton}
-          onPress={handleGoBack}
-          activeOpacity={0.7}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          accessibilityHint="Returns to the moodboard home"
-        >
-          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-        </AnimatedPressable>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {moodboard?.title ?? 'Moodboard'}
-        </Text>
-        <View style={styles.headerActions}>
-          {collaboratorsOnline && (
-            <View style={styles.liveIndicator}>
-              <View style={styles.liveDot} />
-            </View>
-          )}
-          <AnimatedPressable
-            style={styles.headerActionButton}
-            onPress={() => {
-              haptic.selection();
-              setCommentsItemId(undefined);
-              setCommentsSheetVisible(true);
-            }}
-            activeOpacity={0.7}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityRole="button"
-            accessibilityLabel="Comments"
-            accessibilityHint="View and add comments on this moodboard"
-          >
-            <Ionicons name="chatbubble-outline" size={20} color={colors.textPrimary} />
-          </AnimatedPressable>
-          <AnimatedPressable
-            style={styles.headerActionButton}
-            onPress={() => {
-              haptic.selection();
-              setVersionHistoryVisible(true);
-            }}
-            activeOpacity={0.7}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityRole="button"
-            accessibilityLabel="Version history"
-            accessibilityHint="View saved versions and restore"
-          >
-            <Ionicons name="time-outline" size={20} color={colors.textPrimary} />
-          </AnimatedPressable>
-          <AnimatedPressable
-            style={styles.headerActionButton}
-            onPress={() => {
-              haptic.selection();
-              setCollaboratorSheetVisible(true);
-            }}
-            activeOpacity={0.7}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityRole="button"
-            accessibilityLabel="Collaborators"
-            accessibilityHint="Invite collaborators and manage roles"
-          >
-            <Ionicons name="people-outline" size={20} color={colors.textPrimary} />
-          </AnimatedPressable>
-          <AnimatedPressable
-            style={styles.headerActionButton}
-            onPress={handlePublishAsPoster}
-            activeOpacity={0.7}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityRole="button"
-            accessibilityLabel="Publish as poster"
-            accessibilityHint="Publishes this moodboard as a poster to your feed"
-            disabled={publishing}
-          >
-            <Ionicons name="share-outline" size={20} color={publishing ? colors.textMuted : colors.textPrimary} />
-          </AnimatedPressable>
-        </View>
-      </View>
 
       {/* ── Canvas (top ~70%) ── */}
       <Pressable
@@ -1151,14 +1146,13 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
         {/* Empty canvas prompt */}
         {moodboard && moodboard.items.length === 0 && (
           <View style={styles.canvasEmpty} pointerEvents="box-none">
-            <EmptyState
-              density="compact"
+            <FlagshipState
+              variant="empty"
               icon="create-outline"
               title="Start your moodboard"
               subtitle="Tap a listing below to begin."
-              {...(pickerItems.length > 0
-                ? { ctaLabel: 'Add items', onCtaPress: () => void handleAddItem(pickerItems[0]) }
-                : {})}
+              actionLabel={pickerItems.length > 0 ? 'Add items' : undefined}
+              onAction={pickerItems.length > 0 ? () => void handleAddItem(pickerItems[0]) : undefined}
             />
           </View>
         )}
@@ -1263,7 +1257,7 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
           <View style={styles.savingOverlay} pointerEvents={syncStatus === 'conflict' || syncStatus === 'error' ? 'auto' : 'none'}>
             {syncStatus === 'conflict' && conflictDetail ? (
               <View style={styles.conflictCard}>
-                <Ionicons name="alert-circle-outline" size={18} color={colors.warning} />
+                <AppIcon name="alert-circle-outline" size={IconSize.sm} color={colors.warning} accessible={false} />
                 <Text style={styles.conflictText}>{conflictDetail.message}</Text>
                 <Pressable
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -1290,12 +1284,12 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
               </View>
             ) : syncStatus === 'error' ? (
               <View style={styles.errorPill}>
-                <Ionicons name="cloud-offline-outline" size={14} color={colors.textInverse} />
+                <AppIcon name="cloud-offline-outline" size={IconSize.xs} color="textInverse" accessible={false} />
                 <Text style={styles.savingText}>Couldn't sync — try again</Text>
               </View>
             ) : syncStatus === 'synced' ? (
               <View style={styles.syncedPill}>
-                <Ionicons name="checkmark" size={14} color={colors.textInverse} />
+                <AppIcon name="checkmark" size={IconSize.xs} color="textInverse" accessible={false} />
                 <Text style={styles.savingText}>Synced</Text>
               </View>
             ) : (
@@ -1394,6 +1388,7 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
           />
         </>
       )}
+      </FlagshipScreen>
     </GestureHandlerRootView>
   );
 }
@@ -1402,8 +1397,6 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
 // Static styles (no theme dependency)
 // ---------------------------------------------------------------------------
 const styles = StyleSheet.create({
-  container: {
-    flex: 1 },
   canvasItem: {
     position: 'absolute',
     top: 0,
@@ -1500,49 +1493,17 @@ function useStyles() {
   return React.useMemo(
     () =>
       StyleSheet.create({
-        container: {
-          flex: 1,
-          backgroundColor: colors.background },
+        rootContainer: {
+          flex: 1 },
+        screenContent: {
+          paddingHorizontal: 0,
+          paddingTop: 0 },
         stateContainer: {
           flex: 1,
           backgroundColor: colors.background,
           justifyContent: 'center',
           alignItems: 'center',
           paddingHorizontal: Space.lg },
-        demoBanner: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Space.xs,
-          paddingHorizontal: Space.md,
-          paddingVertical: Space.sm,
-          backgroundColor: colors.surface,
-          borderBottomWidth: Stroke.hairline,
-          borderBottomColor: colors.borderSubtle },
-        demoBannerText: {
-          fontSize: TypographyV2.meta.size,
-          fontFamily: TypographyV2.meta.fontFamily,
-          color: colors.textSecondary,
-          flex: 1 },
-        headerRow: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingHorizontal: Space.md,
-          paddingBottom: Space.sm },
-        backButton: {
-          width: Control.hit,
-          height: Control.hit,
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginLeft: -Space.xs },
-        headerTitle: {
-          fontSize: TypographyV2.sectionTitle.size,
-          lineHeight: TypographyV2.sectionTitle.lineHeight,
-          fontFamily: TypographyV2.sectionTitle.fontFamily,
-          color: colors.textPrimary,
-          letterSpacing: LetterSpacing.tight,
-          flex: 1,
-          textAlign: 'center' },
         canvas: {
           flex: 1,
           marginHorizontal: Space.md,

@@ -6,6 +6,7 @@ import { Space, Control } from '../../../theme/designTokens';
 import { FontFamily } from '../../../theme/fontFamily';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { CommerceDetailSellerRow } from './CommerceDetailSellerRow';
+import { formatShortDate } from '../../../utils/dateFormat';
 import type { SellerTrustSummary, ListingCommerceContext } from '../../../platform/product/listingDetailContract';
 
 /**
@@ -103,18 +104,41 @@ export function CommerceTrustDossier({
             label: seller.responseTimeLabel,
           });
         }
-        // 4. Dispatch time — when will it arrive?
+        // 4. Delivery — when will it arrive? Combines the seller's
+        // dispatch promise with the server-provided estimated delivery
+        // window into a single row: two truthful facts, one line. When
+        // only the estimate exists it still earns the row — delivery
+        // timing is a first-viewport decision fact.
+        const deliveryWindow = (() => {
+          const start = commerce.estimatedDeliveryStart
+            ? formatShortDate(commerce.estimatedDeliveryStart)
+            : '';
+          const end = commerce.estimatedDeliveryEnd
+            ? formatShortDate(commerce.estimatedDeliveryEnd)
+            : '';
+          if (start && end) return `${start}–${end}`;
+          return start || end || null;
+        })();
+        const deliveryEstimate = deliveryWindow ? `Est. ${deliveryWindow}` : null;
         if (seller?.dispatchTimeLabel) {
           trustRows.push({
             icon: 'car-outline',
-            label: seller.dispatchTimeLabel,
+            label: [seller.dispatchTimeLabel, deliveryEstimate].filter(Boolean).join(' · '),
           });
         } else if (commerce.shippingMethod) {
           trustRows.push({
             icon: commerce.shippingPayer === 'seller' ? 'gift-outline' : 'car-outline',
-            label: commerce.shippingPayer === 'seller'
-              ? `Free ${commerce.shippingMethod}`
-              : commerce.shippingMethod,
+            label: [
+              commerce.shippingPayer === 'seller'
+                ? `Free ${commerce.shippingMethod}`
+                : commerce.shippingMethod,
+              deliveryEstimate,
+            ].filter(Boolean).join(' · '),
+          });
+        } else if (deliveryEstimate) {
+          trustRows.push({
+            icon: 'car-outline',
+            label: `Est. delivery ${deliveryWindow}`,
           });
         }
         // 5. Buyer protection fallback — per research doc M1: when no

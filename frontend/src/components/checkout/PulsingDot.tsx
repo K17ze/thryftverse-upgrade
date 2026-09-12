@@ -11,7 +11,9 @@ import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { Motion } from '../../theme/motionTokens';
 
 // PulsingDot — replaces ActivityIndicator in buttons with a calm pulsing dot.
-// Respects reduced motion (static dot when enabled).
+// Respects reduced motion (static dot when enabled). The pulse is bounded:
+// three beats, then the dot settles at full opacity — status indication
+// without a perpetual heartbeat (audit F15).
 export function PulsingDot({
   color,
   reducedMotion,
@@ -30,7 +32,7 @@ export function PulsingDot({
         withTiming(0.3, { duration: Motion.duration.slower, easing: Easing.inOut(Easing.ease) }),
         withTiming(1, { duration: Motion.duration.slower, easing: Easing.inOut(Easing.ease) }),
       ),
-      -1,
+      3,
       false,
     );
     return () => {

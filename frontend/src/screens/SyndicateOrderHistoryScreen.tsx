@@ -192,11 +192,11 @@ function HighlightRowWrapper({
 
   const backgroundColor = fade.interpolate({
     inputRange: [0, 1],
-    outputRange: ['rgba(0,0,0,0)', `${brandColor}14`],
+    outputRange: ['transparent', `${brandColor}14`],
   });
   const borderLeftColor = fade.interpolate({
     inputRange: [0, 1],
-    outputRange: ['rgba(0,0,0,0)', brandColor],
+    outputRange: ['transparent', brandColor],
   });
 
   return (

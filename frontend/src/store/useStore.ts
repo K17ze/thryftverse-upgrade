@@ -555,6 +555,18 @@ interface StoreState {
   undeployBotFromConversation: (conversationId: string, botId: string) => void;
   appendConversationMessage: (conversationId: string, message: ConversationMessage) => void;
   replaceConversationMessages: (conversationId: string, messages: ConversationMessage[]) => void;
+  /**
+   * Patch a single stored message in place — matched by server `id` or by
+   * `clientMessageId` (the stable id that survives the optimistic→confirmed
+   * id rename). Used to reconcile send lifecycle (`sending`→`sent`/`failed`/
+   * `reconciling`) into the inbox store without touching list order or the
+   * conversation preview.
+   */
+  patchConversationMessage: (
+    conversationId: string,
+    match: { id?: string; clientMessageId?: string },
+    patch: Partial<ConversationMessage>,
+  ) => void;
   setConversationDraft: (conversationId: string, draft: string) => void;
   addMessageReaction: (conversationId: string, messageId: string, reaction: string) => void;
   removeMessageReaction: (conversationId: string, messageId: string, reaction: string) => void;
@@ -601,6 +613,8 @@ interface StoreState {
   addBuyerQuickReply: (reply: QuickReply) => void;
   updateBuyerQuickReply: (index: number, reply: QuickReply) => void;
   removeBuyerQuickReply: (index: number) => void;
+  quickRepliesLoaded: boolean;
+  quickRepliesLoadFailed: boolean;
   loadQuickRepliesFromApi: () => Promise<void>;
   addQuickReplyOnApi: (role: 'buyer' | 'seller', title: string, message: string) => Promise<QuickReply>;
   updateQuickReplyOnApi: (role: 'buyer' | 'seller', index: number, title: string, message: string) => Promise<void>;
@@ -1785,10 +1799,13 @@ export const useStore = create<StoreState>()(
           return conversation;
         }
 
+        // `text` is '' (not undefined) for media/voice-only payloads — a
+        // truthy check is required to reach the media fallbacks.
         const nextLastMessage = message.text
-          ?? (message.mediaType === 'image' ? '📷 Photo' : message.mediaType === 'video' ? '🎥 Video' : undefined)
-          ?? message.systemTitle
-          ?? (message.offerPrice ? `Offer ${message.offerPrice}` : 'New message');
+          || (message.mediaType === 'image' ? '📷 Photo' : message.mediaType === 'video' ? '🎥 Video' : undefined)
+          || (message.type === 'voice' || message.voiceUri ? '🎤 Voice message' : undefined)
+          || message.systemTitle
+          || (message.offerPrice ? `Offer ${message.offerPrice}` : 'New message');
 
         return {
           ...conversation,
@@ -1811,8 +1828,10 @@ export const useStore = create<StoreState>()(
 
         const latestMessage = messages[messages.length - 1];
         const nextLastMessage = latestMessage.text
-          ?? latestMessage.systemTitle
-          ?? (latestMessage.offerPrice ? `Offer ${latestMessage.offerPrice}` : conversation.lastMessage);
+          || (latestMessage.mediaType === 'image' ? '📷 Photo' : latestMessage.mediaType === 'video' ? '🎥 Video' : undefined)
+          || (latestMessage.type === 'voice' || latestMessage.voiceUri ? '🎤 Voice message' : undefined)
+          || latestMessage.systemTitle
+          || (latestMessage.offerPrice ? `Offer ${latestMessage.offerPrice}` : conversation.lastMessage);
 
         return {
           ...conversation,
@@ -1820,6 +1839,24 @@ export const useStore = create<StoreState>()(
           lastMessage: nextLastMessage,
           lastMessageTime: latestMessage.timestamp,
         };
+      }),
+    })),
+  patchConversationMessage: (conversationId, match, patch) =>
+    set((state) => ({
+      conversations: state.conversations.map((conversation) => {
+        if (conversation.id !== conversationId) {
+          return conversation;
+        }
+        let touched = false;
+        const nextMessages = conversation.messages.map((msg) => {
+          const hit =
+            (match.id && msg.id === match.id) ||
+            (match.clientMessageId && msg.clientMessageId === match.clientMessageId);
+          if (!hit) return msg;
+          touched = true;
+          return { ...msg, ...patch };
+        });
+        return touched ? { ...conversation, messages: nextMessages } : conversation;
       }),
     })),
   blockedUsers: [],
@@ -1984,12 +2021,7 @@ export const useStore = create<StoreState>()(
       set({ orderUpdatesInChatEnabled: previous });
     });
   },
-  sellerQuickReplies: [
-    { id: 'qr-s-1', title: 'Still available', message: 'Yes, still available!' },
-    { id: 'qr-s-2', title: 'Ship today', message: 'I can ship this today if you want to go ahead.' },
-    { id: 'qr-s-3', title: 'Thanks', message: 'Thanks for your interest! What would you like to know?' },
-    { id: 'qr-s-4', title: 'Quick sale', message: 'I can do a small discount for a quick sale.' },
-  ],
+  sellerQuickReplies: [],
   addSellerQuickReply: (reply) => set((state) => ({
     sellerQuickReplies: [...state.sellerQuickReplies, reply],
   })),
@@ -1999,12 +2031,9 @@ export const useStore = create<StoreState>()(
   removeSellerQuickReply: (index) => set((state) => ({
     sellerQuickReplies: state.sellerQuickReplies.filter((_, i) => i !== index),
   })),
-  buyerQuickReplies: [
-    { id: 'qr-b-1', title: 'Still available?', message: 'Hi, is this still available?' },
-    { id: 'qr-b-2', title: 'Make offer', message: 'Would you consider an offer on this?' },
-    { id: 'qr-b-3', title: 'More photos', message: 'Can I see more photos?' },
-    { id: 'qr-b-4', title: 'Best price', message: 'What\'s your best price?' },
-  ],
+  buyerQuickReplies: [],
+  quickRepliesLoaded: false,
+  quickRepliesLoadFailed: false,
   addBuyerQuickReply: (reply) => set((state) => ({
     buyerQuickReplies: [...state.buyerQuickReplies, reply],
   })),
@@ -2024,12 +2053,16 @@ export const useStore = create<StoreState>()(
         if (r.role === 'seller') sellerReplies.push(reply);
         else buyerReplies.push(reply);
       }
+      // Server is the source of truth — replace wholesale, including empty lists.
       set({
-        sellerQuickReplies: sellerReplies.length ? sellerReplies : get().sellerQuickReplies,
-        buyerQuickReplies: buyerReplies.length ? buyerReplies : get().buyerQuickReplies,
+        sellerQuickReplies: sellerReplies,
+        buyerQuickReplies: buyerReplies,
+        quickRepliesLoaded: true,
+        quickRepliesLoadFailed: false,
       });
     } catch {
-      // Silently keep local defaults if the API is unavailable.
+      set({ quickRepliesLoadFailed: true });
+      throw new Error('Quick replies could not be loaded');
     }
   },
   addQuickReplyOnApi: async (role, title, message) => {

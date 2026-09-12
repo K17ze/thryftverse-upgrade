@@ -18,8 +18,8 @@ import Reanimated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  useReducedMotion,
   type SharedValue } from 'react-native-reanimated';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Space, Radius, Typography, Stroke, IconGrammar, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';

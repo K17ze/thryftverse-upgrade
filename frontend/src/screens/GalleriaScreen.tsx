@@ -8,19 +8,21 @@ import {
   ImageStyle } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Stroke } from '../theme/designTokens';
+import { Space, Radius } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { HorizontalRail } from '../components/HorizontalRail';
-import { EmptyState } from '../components/EmptyState';
+import { OfflineBanner } from '../components/OfflineBanner';
+import {
+  FlagshipScreen,
+  FlagshipHeader,
+  FlagshipState,
+  FlagshipNavigationRow } from '../components/flagship';
 import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
 import { useHaptic } from '../hooks/useHaptic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -454,11 +456,8 @@ function SectionHeader({ eyebrow, title }: { eyebrow: string; title: string }) {
 // ---------------------------------------------------------------------------
 export default function GalleriaScreen() {
   const navigation = useNavigation<NavT>();
-  const { colors, isDark } = useAppTheme();
   const haptic = useHaptic();
-  const { formatFromFiat } = useFormattedPrice();
   const { isOffline } = useConnectivity();
-  const insets = useSafeAreaInsets();
   const styles = useStyles();
   const reducedMotion = useReducedMotion();
   const { t } = useAppTranslation('galleria');
@@ -568,7 +567,7 @@ export default function GalleriaScreen() {
         )}
 
         {/* ── Section 1: Hero editorial ── */}
-        {loading && editorials.length > 0 ? (
+        {loading ? (
           <HeroSkeleton />
         ) : heroEditorial ? (
           <HeroEditorialCard
@@ -636,7 +635,7 @@ export default function GalleriaScreen() {
     () => (
       <View style={{ marginHorizontal: -(MASONRY_PADDING - MASONRY_GAP / 2) }}>
         {/* ── Section 4: Editorial list ── */}
-        {loading && editorials.length > 0 ? (
+        {loading ? (
           <>
             <SectionHeader eyebrow={t('editorialList.eyebrow')} title={t('editorialList.title')} />
             <EditorialSkeleton />
@@ -659,26 +658,15 @@ export default function GalleriaScreen() {
         {/* ── Section 5: Creative Tools — Poster Studio CTA ── */}
         <View style={styles.stylingToolsWrap}>
           <SectionHeader eyebrow={t('creativeTools.eyebrow')} title={t('creativeTools.title')} />
-          <AnimatedPressable
-            style={styles.moodboardCtaCard}
+          <FlagshipNavigationRow
+            icon="edit"
+            title={t('creativeTools.posterStudio')}
+            subtitle={t('creativeTools.posterStudioSub')}
             onPress={() => { haptic.selection(); navigation.navigate('CreatorStudio', { type: 'poster', openTemplates: true }); }}
-            activeOpacity={0.92}
-            scaleValue={0.98}
-            accessibilityRole="button"
+            separator={false}
             accessibilityLabel={t('accessibility.openPosterStudio')}
             accessibilityHint={t('accessibility.posterStudioHint')}
-          >
-            <Ionicons name="create-outline" size={22} color={colors.brand} />
-            <View style={styles.moodboardCtaCopy}>
-              <Text style={styles.moodboardCtaTitle} numberOfLines={1}>
-                {t('creativeTools.posterStudio')}
-              </Text>
-              <Text style={styles.moodboardCtaSubtitle} numberOfLines={2}>
-                {t('creativeTools.posterStudioSub')}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </AnimatedPressable>
+          />
         </View>
       </View>
     ),
@@ -688,7 +676,6 @@ export default function GalleriaScreen() {
       editorials.length,
       heroEditorial,
       styles,
-      colors,
       haptic,
       navigation,
       t,
@@ -698,16 +685,26 @@ export default function GalleriaScreen() {
   // ── Error state ──
   if (error && !loading && collections.length === 0) {
     return (
-      <View style={styles.stateContainer}>
-        <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
-        <EmptyState
-          icon="cloud-offline-outline"
-          title={t('error.title')}
-          subtitle={error}
-          ctaLabel={t('error.retry')}
-          onCtaPress={() => void loadAll(false)}
-        />
-      </View>
+      <FlagshipScreen
+        scrollEnabled={false}
+        header={
+          <FlagshipHeader
+            title="Galleria"
+            onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
+            showBackButton={navigation.canGoBack()}
+          />
+        }
+      >
+        <View style={styles.stateContainer}>
+          <FlagshipState
+            variant="error"
+            title={t('error.title')}
+            subtitle={error}
+            actionLabel={t('error.retry')}
+            onAction={() => void loadAll(false)}
+          />
+        </View>
+      </FlagshipScreen>
     );
   }
 
@@ -719,30 +716,45 @@ export default function GalleriaScreen() {
     featuredAssets.length === 0
   ) {
     return (
-      <View style={styles.stateContainer}>
-        <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
-        <EmptyState
-          icon="images-outline"
-          title={t('empty.title')}
-          subtitle={t('empty.subtitle')}
-          ctaLabel={t('empty.refresh')}
-          onCtaPress={() => void loadAll(false)}
-        />
-      </View>
+      <FlagshipScreen
+        scrollEnabled={false}
+        header={
+          <FlagshipHeader
+            title="Galleria"
+            onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
+            showBackButton={navigation.canGoBack()}
+          />
+        }
+      >
+        <View style={styles.stateContainer}>
+          <FlagshipState
+            variant="empty"
+            actionIcon="image"
+            title={t('empty.title')}
+            subtitle={t('empty.subtitle')}
+            actionLabel={t('empty.refresh')}
+            onAction={() => void loadAll(false)}
+          />
+        </View>
+      </FlagshipScreen>
     );
   }
 
   return (
-    <View testID="coown-screen" style={styles.container}>
-      <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
-
+    <FlagshipScreen
+      testID="coown-screen"
+      scrollEnabled={false}
+      contentStyle={styles.screenContent}
+      header={
+        <FlagshipHeader
+          title="Galleria"
+          onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
+          showBackButton={navigation.canGoBack()}
+        />
+      }
+    >
       {/* Offline banner */}
-      {isOffline && (
-        <View style={styles.offlineBanner}>
-          <Ionicons name="cloud-offline-outline" size={14} color={colors.scrimTextPrimary} />
-          <Text style={styles.offlineBannerText}>{t('offline.banner')}</Text>
-        </View>
-      )}
+      {isOffline && <OfflineBanner message={t('offline.banner')} />}
 
       <FlashList
         data={loading ? [] : featuredAssets}
@@ -755,7 +767,7 @@ export default function GalleriaScreen() {
         ListFooterComponent={listFooter}
         contentContainerStyle={{
           paddingHorizontal: Math.max(MASONRY_PADDING - MASONRY_GAP / 2, 0),
-          paddingTop: insets.top + Space.sm,
+          paddingTop: Space.sm,
           paddingBottom: Space.xxl }}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -768,7 +780,7 @@ export default function GalleriaScreen() {
           />
         }
       />
-    </View>
+    </FlagshipScreen>
   );
 }
 
@@ -783,31 +795,9 @@ function useStyles() {
   return React.useMemo(
     () =>
       StyleSheet.create({
-        container: {
-          flex: 1,
-          backgroundColor: colors.background },
         stateContainer: {
           flex: 1,
-          backgroundColor: colors.background,
-          justifyContent: 'center',
-          alignItems: 'center',
-          paddingHorizontal: Space.lg },
-        listContent: {
-          paddingBottom: Space.xxl },
-        // ── Offline banner ──
-        offlineBanner: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Space.xs,
-          paddingHorizontal: Space.md,
-          paddingVertical: Space.sm,
-          backgroundColor: colors.surfaceAlt,
-          borderBottomWidth: Stroke.hairline,
-          borderBottomColor: colors.border },
-        offlineBannerText: {
-          fontSize: TypographyV2.meta.size,
-          fontFamily: TypographyV2.meta.fontFamily,
-          color: colors.textSecondary },
+          justifyContent: 'center' },
         // ── Honest demo indicator (AGENTS.md §11) ──
         demoBadgeRow: {
           flexDirection: 'row',
@@ -1098,35 +1088,13 @@ function useStyles() {
           height: StyleSheet.hairlineWidth,
           backgroundColor: colors.border,
           marginTop: Space.lg },
-        // ── Styling Tools — Moodboard CTA ──
+        // ── Styling Tools — Poster Studio row (FlagshipNavigationRow owns
+        //    its own padding + hairline grammar) ──
         stylingToolsWrap: {
-          paddingHorizontal: Space.md,
-          marginTop: Space.lg,
-          gap: Space.sm },
-        moodboardCtaCard: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Space.md,
-          paddingVertical: Space.md,
-          paddingHorizontal: Space.md,
-          borderRadius: Radius.lg,
-          borderWidth: Stroke.hairline,
-          borderColor: colors.border,
-          backgroundColor: colors.surface },
-        moodboardCtaCopy: {
-          flex: 1,
-          gap: Space.xs / 2 },
-        moodboardCtaTitle: {
-          fontSize: TypographyV2.bodyStrong.size,
-          lineHeight: TypographyV2.bodyStrong.lineHeight,
-          fontFamily: TypographyV2.bodyStrong.fontFamily,
-          color: colors.textPrimary,
-          letterSpacing: TypographyV2.body.letterSpacing },
-        moodboardCtaSubtitle: {
-          fontSize: TypographyV2.meta.size,
-          lineHeight: TypographyV2.meta.lineHeight,
-          fontFamily: TypographyV2.meta.fontFamily,
-          color: colors.textSecondary } }),
+          marginTop: Space.lg },
+        screenContent: {
+          paddingHorizontal: 0,
+          paddingTop: 0 } }),
     [colors, HERO_HEIGHT, FEATURED_COLLECTION_HEIGHT],
   );
 }

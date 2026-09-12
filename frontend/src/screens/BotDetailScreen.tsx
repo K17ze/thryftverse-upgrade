@@ -1,20 +1,28 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AgentIcon } from '../components/agents/AgentIcon';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 import { ChatInfoRow, ChatInfoSection } from '../components/chat/ChatInfoSection';
 import { AppButton } from '../components/ui/AppButton';
-import { Caption } from '../components/ui/Text';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
-import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import {
+  FlagshipScreen,
+  FlagshipHeader,
+  FlagshipState,
+  SkeletonBlock,
+  SkeletonCircle } from '../components/flagship';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { RootStackParamList } from '../navigation/types';
 import {
   deployBotToConversationOnApi,
   undeployBotFromConversationOnApi } from '../services/chatApi';
+import { fetchBotByIdFromApi } from '../services/botsApi';
+import type { ChatBot } from '../domain';
 import { useStore } from '../store/useStore';
 import { Radius, Space, Typography, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
@@ -28,6 +36,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
+  const { isOffline } = useConnectivity();
   const bots = useStore((state) => state.availableChatBots);
   const customBots = useStore((state) => state.customBots);
   const conversations = useStore((state) => state.conversations);
@@ -109,7 +118,42 @@ export default function BotDetailScreen({ navigation, route }: Props) {
   };
 
   const allBots = useMemo(() => [...bots, ...customBots], [bots, customBots]);
-  const bot = useMemo(() => allBots.find((item) => item.id === botId), [allBots, botId]);
+  const storeBot = useMemo(() => allBots.find((item) => item.id === botId), [allBots, botId]);
+
+  // Fallback fetch — the store may not hold this bot yet (deep link, cold
+  // start). Keeps "not found" honest: only shown after a resolved fetch miss.
+  const [fetchedBot, setFetchedBot] = useState<ChatBot | null>(null);
+  const [botLoading, setBotLoading] = useState(!storeBot);
+  const [botError, setBotError] = useState(false);
+  const [botAttempt, setBotAttempt] = useState(0);
+
+  useEffect(() => {
+    if (storeBot) {
+      setBotLoading(false);
+      setBotError(false);
+      return;
+    }
+    let cancelled = false;
+    setBotLoading(true);
+    setBotError(false);
+    fetchBotByIdFromApi(botId)
+      .then((item) => {
+        if (cancelled) return;
+        setFetchedBot(item);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setBotError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setBotLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [botId, storeBot, botAttempt]);
+
+  const bot = storeBot ?? fetchedBot ?? undefined;
   const connectedToCurrentChat = useMemo(() => {
     if (!conversationId) return false;
     return conversations
@@ -169,20 +213,43 @@ export default function BotDetailScreen({ navigation, route }: Props) {
           <FlagshipHeader title="Agent details" onBack={() => navigation.goBack()} />
         }
       >
-        <View style={styles.center}>
-          <Caption color={colors.textMuted}>Agent not found</Caption>
-          <AnimatedPressable
-            onPress={() => navigation.goBack()}
-            style={styles.backBtn}
-            activeOpacity={0.7}
-            scaleValue={0.95}
-            hapticFeedback="light"
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <Text style={styles.backBtnText}>Go back</Text>
-          </AnimatedPressable>
-        </View>
+        {botLoading ? (
+          <View style={styles.detailSkeleton}>
+            <View style={styles.skeletonIdentity}>
+              <SkeletonCircle size={Control.hit} />
+              <View style={styles.skeletonIdentityCopy}>
+                <SkeletonBlock width="55%" height={18} />
+                <SkeletonBlock width="75%" height={12} style={{ marginTop: Space.xs / 2 }} />
+              </View>
+            </View>
+            <SkeletonBlock width="100%" height={14} style={{ marginTop: Space.lg }} />
+            <SkeletonBlock width="80%" height={14} style={{ marginTop: Space.xs }} />
+            {[0, 1].map((i) => (
+              <View key={i} style={styles.skeletonSection}>
+                <SkeletonBlock width="40%" height={12} />
+                <SkeletonBlock width="100%" height={Control.hit} style={{ marginTop: Space.sm }} />
+                <SkeletonBlock width="100%" height={Control.hit} style={{ marginTop: Space.xs / 2 }} />
+              </View>
+            ))}
+          </View>
+        ) : (
+          <FlagshipState
+            variant={isOffline ? 'offline' : 'error'}
+            title={botError ? (isOffline ? "You're offline" : "Couldn't load this agent") : 'Agent not found'}
+            subtitle={
+              botError
+                ? isOffline
+                  ? 'Reconnect to load this agent.'
+                  : 'Check your connection and try again.'
+                : 'It may have been deleted or is no longer available.'
+            }
+            actionLabel={botError ? 'Try again' : undefined}
+            onAction={botError ? () => setBotAttempt((a) => a + 1) : undefined}
+            secondaryActionLabel="Go back"
+            onSecondaryAction={() => navigation.goBack()}
+            style={styles.stateWrap}
+          />
+        )}
       </FlagshipScreen>
     );
   }
@@ -272,7 +339,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel="Edit agent"
               >
-                <Ionicons name="create-outline" size={21} color={colors.textPrimary} />
+                <AppIcon name="edit" size={IconSize.md} color="textPrimary" opticalCenter accessible={false} />
               </AnimatedPressable>
             ) : undefined
           }
@@ -432,7 +499,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
 
             {playgroundError ? (
               <View style={styles.playgroundError}>
-                <Ionicons name="alert-circle-outline" size={15} color={colors.danger} />
+                <AppIcon name="alert" size={IconSize.xs} color="danger" opticalCenter accessible={false} />
                 <Text style={styles.playgroundErrorText}>{playgroundError}</Text>
               </View>
             ) : null}
@@ -465,7 +532,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
                 {playgroundLoading ? (
                   <ActivityIndicator size="small" color={colors.textPrimary} />
                 ) : (
-                  <Ionicons name="send" size={17} color={colors.textPrimary} />
+                  <AppIcon name="send" size={IconSize.sm} color="textPrimary" opticalCenter accessible={false} />
                 )}
               </AnimatedPressable>
             </View>
@@ -561,20 +628,19 @@ export default function BotDetailScreen({ navigation, route }: Props) {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  center: {
-    flex: 1,
+  stateWrap: {
+    paddingTop: Space.xxl },
+  detailSkeleton: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.md },
+  skeletonIdentity: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.md },
-  backBtn: {
-    paddingHorizontal: Space.lg,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.xxl,
-    backgroundColor: colors.textPrimary },
-  backBtnText: {
-    color: colors.background,
-    fontFamily: Typography.family.semibold,
-    fontSize: TypographyV2.body.size },
+    gap: Space.sm + Space.xs },
+  skeletonIdentityCopy: {
+    flex: 1 },
+  skeletonSection: {
+    marginTop: Space.xl },
   headerAction: {
     width: Control.hit,
     height: Control.hit,

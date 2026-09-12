@@ -82,9 +82,7 @@ import { EmptyState } from "../components/EmptyState";
 import { ChatAgentPicker } from "../components/chat/ChatAgentPicker";
 import { SuggestedRepliesBar } from "../components/chat/SuggestedRepliesBar";
 import { OfflineBanner } from "../components/OfflineBanner";
-import {
-  getAgentSuggestions as getChatAgentSuggestions,
-  getAgentResponse as getChatAgentResponse } from "../services/chatAgentsApi";
+
 
 import * as Clipboard from "expo-clipboard";
 
@@ -150,7 +148,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   const a11yRef = useRef<any>(null);
   useA11yAudit(a11yRef, 'ChatScreen');
   const { colors, isDark } = useAppTheme();
-  useVisuallyComplete('Chat');
+  const reportReady = useVisuallyComplete('Chat');
 
   const styles = useMemo(() => StyleSheet.create({
     screenRoot: {
@@ -536,7 +534,17 @@ export default function ChatScreen({ navigation, route }: Props) {
 
             status: entry.offerStatus as "pending" | "declined" | "countered" | "accepted" | "expired" | "cancelled" | undefined },
 
-          text: entry.text };
+          text: entry.text,
+
+          // Lifecycle passthrough — offer bubbles keep their send/read state
+          // across store-driven hydration resets.
+          status: entry.status,
+
+          readStatus: entry.readStatus,
+
+          readBy: entry.readBy,
+
+          clientMessageId: entry.clientMessageId };
       }
 
       return {
@@ -545,9 +553,11 @@ export default function ChatScreen({ navigation, route }: Props) {
         type:
           entry.isSystem || entry.type === "system"
             ? "system"
-            : entry.mediaUri
-              ? "media"
-              : "text",
+            : entry.type === "voice"
+              ? "voice"
+              : entry.mediaUri
+                ? "media"
+                : "text",
 
         sender,
 
@@ -578,7 +588,25 @@ export default function ChatScreen({ navigation, route }: Props) {
 
         mediaType: entry.mediaType,
 
-        uploadStatus: entry.uploadStatus };
+        uploadStatus: entry.uploadStatus,
+
+        // Lifecycle passthrough — bubbles keep pending/sent/read state and
+        // receipt data across store-driven hydration resets.
+        status: entry.status,
+
+        readStatus: entry.readStatus,
+
+        readBy: entry.readBy,
+
+        isReadByMe: entry.isReadByMe,
+
+        clientMessageId: entry.clientMessageId,
+
+        voiceUri: entry.voiceUri,
+
+        voiceDurationMs: entry.voiceDurationMs,
+
+        replyToMessageId: entry.replyToMessageId };
     });
   }, [botLookup, conversation?.messages, currentUser?.id, userLookup]);
 
@@ -630,9 +658,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     setChatAgentPickerVisible,
     deployedChatAgents,
     chatAgentSuggestions,
-    setChatAgentSuggestions,
     handleDeployChatAgent,
-    handleRemoveChatAgent,
     handleSelectChatAgentSuggestion,
     agentQuickReplies } = useConversationAgents({
     conversationId,
@@ -722,10 +748,6 @@ export default function ChatScreen({ navigation, route }: Props) {
     haptic,
     onOfferSent: () => {},
     clearComposerState: clearComposerStateOnApi,
-    deployedChatAgents,
-    getChatAgentResponse,
-    getChatAgentSuggestions,
-    setChatAgentSuggestionsExternal: setChatAgentSuggestions,
     navigation,
     isGroup,
     conversationUnread: conversation?.unread,
@@ -737,6 +759,20 @@ export default function ChatScreen({ navigation, route }: Props) {
   // created before useConversationComposer so the hook has a stable object;
   // effects inside the hook read .current after render, so this is safe).
   messagesRef.current = messages;
+
+  // Readiness milestones: 'data-ready' when messages exist (hydrated from
+  // the store or synced) or the first API sync settles/errors; a ref tracks
+  // that a sync actually began because `isSyncing` starts false before the
+  // mount sync kicks in. 'interaction-ready' lands with it — composer and
+  // list are usable once history is on screen.
+  const chatSyncBeganRef = useRef(false);
+  useEffect(() => {
+    if (isSyncing) chatSyncBeganRef.current = true;
+    if (messages.length > 0 || syncError || (chatSyncBeganRef.current && !isSyncing)) {
+      reportReady('data-ready');
+      reportReady('interaction-ready');
+    }
+  }, [messages.length, isSyncing, syncError, reportReady]);
 
   // Track which message IDs have already been rendered so only genuinely
   // new messages (added after initial load) get the bubble enter animation.

@@ -41,7 +41,7 @@ import Reanimated, {
   cancelAnimation,
   type SharedValue,
 } from 'react-native-reanimated';
-import { useReducedMotion } from 'react-native-reanimated';
+import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { AnimatedPressable } from '../../AnimatedPressable';
 import { useMotionConfig } from '../../../hooks/useMotionConfig';

@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   Pressable } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -24,26 +23,23 @@ import { searchUsers, UserSearchResult } from '../services/profileApi';
 import { parseApiError } from '../lib/apiClient';
 import { createStableId } from '../utils/createStableId';
 import { useGroupMediaUpload } from '../hooks/useGroupMediaUpload';
+import { uploadRemoteGroupPreset } from '../components/groupchat/groupPresetUpload';
+import { getAestheticPresets } from '../constants/groupAesthetics';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { AppIcon } from '../components/common/AppIcon';
 import { AppInput } from '../components/ui/AppInput';
 import { AppButton } from '../components/ui/AppButton';
 import { Space, Radius, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
-import { Meta, Caption, BodyEmphasis } from '../components/ui/Text';
+import { Caption } from '../components/ui/Text';
 import { useHaptic } from '../hooks/useHaptic';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { KeyboardAwareStickyAction } from '../platform/keyboard';
 import {
   MAX_MEMBERS,
   MIN_MEMBERS,
-  SEARCH_DEBOUNCE_MS,
-  canContinueToDetails,
-  canCreateGroup,
-  filterBlockedUsers,
-  filterSelfFromResults,
-  isSearchQueryValid,
-  toggleMemberId,
-  validateGroupTitle } from '../utils/chatGroupHelpers';
-import type { SelectableUser as HelperSelectableUser, Stage } from '../utils/chatGroupHelpers';
+  SEARCH_DEBOUNCE_MS } from '../utils/chatGroupHelpers';
+import type { Stage } from '../utils/chatGroupHelpers';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CreateGroupChat'>;
 
@@ -59,6 +55,7 @@ export default function CreateGroupChatScreen({ navigation, route }: Props) {
   const isBlockedUser = useStore((state) => state.isBlockedUser);
   const { show } = useToast();
   const haptic = useHaptic();
+  const { isOffline } = useConnectivity();
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -85,8 +82,24 @@ export default function CreateGroupChatScreen({ navigation, route }: Props) {
   // Flagship media upload — optimistic preview, client-side compression,
   // camera+gallery source, retry/revert, stale-operation guard.
   const groupMedia = useGroupMediaUpload(null, null);
-  const isUploadingPhoto = groupMedia.avatar.status === 'uploading';
-  const isUploadingCover = groupMedia.cover.status === 'uploading';
+  // Curated presets are remote URLs; the create API requires an upload
+  // receipt, so presets are downloaded and pushed through the upload
+  // pipeline before being attached to the create payload.
+  const [presetMedia, setPresetMedia] = useState<{
+    target: 'avatar' | 'cover';
+    previewUri: string;
+    remoteUrl: string | null;
+    finalizationId: string | null;
+    status: 'uploading' | 'confirmed' | 'failed';
+  } | null>(null);
+  const presetAvatar = presetMedia?.target === 'avatar' ? presetMedia : null;
+  const presetCover = presetMedia?.target === 'cover' ? presetMedia : null;
+  const isUploadingPhoto =
+    groupMedia.avatar.status === 'uploading' || presetAvatar?.status === 'uploading';
+  const isUploadingCover =
+    groupMedia.cover.status === 'uploading' || presetCover?.status === 'uploading';
+  const avatarDisplayUri = presetAvatar?.previewUri ?? groupMedia.avatarDisplayUri;
+  const coverDisplayUri = presetCover?.previewUri ?? groupMedia.coverDisplayUri;
 
   const idempotencyKeyRef = useRef<string>(createStableId('group'));
   const createAttemptRef = useRef(false);
@@ -181,6 +194,7 @@ export default function CreateGroupChatScreen({ navigation, route }: Props) {
 
   const handleMediaSourceSelect = useCallback((source: GroupMediaSource) => {
     const target = mediaSourceSheet.target;
+    setPresetMedia(null);
     if (target === 'avatar') {
       void groupMedia.pickAvatar(source);
     } else {
@@ -188,15 +202,47 @@ export default function CreateGroupChatScreen({ navigation, route }: Props) {
     }
   }, [mediaSourceSheet.target, groupMedia]);
 
+  const handleSelectPreset = useCallback((url: string) => {
+    const target = mediaSourceSheet.target;
+    setPresetMedia({
+      target,
+      previewUri: url,
+      remoteUrl: null,
+      finalizationId: null,
+      status: 'uploading',
+    });
+    uploadRemoteGroupPreset(url, target)
+      .then((uploaded) => {
+        setPresetMedia((current) =>
+          current?.target === target && current.previewUri === url
+            ? {
+                ...current,
+                remoteUrl: uploaded.publicUrl,
+                finalizationId: uploaded.finalizationId,
+                status: 'confirmed',
+              }
+            : current,
+        );
+      })
+      .catch((err) => {
+        setPresetMedia((current) =>
+          current?.target === target && current.previewUri === url ? null : current,
+        );
+        show(parseApiError(err, 'Could not apply that preset.').message, 'error');
+      });
+  }, [mediaSourceSheet.target, show]);
+
   const handleRemoveGroupPhoto = useCallback(() => {
     haptic.light();
     groupMedia.removeAvatar();
-  }, [haptic, groupMedia]);
+    if (presetMedia?.target === 'avatar') setPresetMedia(null);
+  }, [haptic, groupMedia, presetMedia?.target]);
 
   const handleRemoveCoverPhoto = useCallback(() => {
     haptic.light();
     groupMedia.removeCover();
-  }, [haptic, groupMedia]);
+    if (presetMedia?.target === 'cover') setPresetMedia(null);
+  }, [haptic, groupMedia, presetMedia?.target]);
 
   const toggleMember = (user: SelectableUser) => {
     haptic.light();
@@ -301,10 +347,12 @@ export default function CreateGroupChatScreen({ navigation, route }: Props) {
         memberIds: selectedIds,
         idempotencyKey: idempotencyKeyRef.current,
         description: description.trim() || undefined,
-        avatar: groupMedia.avatar.confirmedRemote ?? undefined,
-        avatarFinalizationId: groupMedia.avatar.finalizationId ?? undefined,
-        coverPhoto: groupMedia.cover.confirmedRemote ?? undefined,
-        coverPhotoFinalizationId: groupMedia.cover.finalizationId ?? undefined });
+        avatar: presetAvatar?.remoteUrl ?? groupMedia.avatar.confirmedRemote ?? undefined,
+        avatarFinalizationId:
+          presetAvatar?.finalizationId ?? groupMedia.avatar.finalizationId ?? undefined,
+        coverPhoto: presetCover?.remoteUrl ?? groupMedia.cover.confirmedRemote ?? undefined,
+        coverPhotoFinalizationId:
+          presetCover?.finalizationId ?? groupMedia.cover.finalizationId ?? undefined });
 
       upsertConversation(conversation);
       show('Group chat created.', 'success');
@@ -328,6 +376,7 @@ export default function CreateGroupChatScreen({ navigation, route }: Props) {
     setDescription('');
     setSelectedIds([]);
     setSelectedUsers(new Map());
+    setPresetMedia(null);
     groupMedia.removeAvatar();
     groupMedia.removeCover();
     setStage('select');
@@ -360,9 +409,9 @@ export default function CreateGroupChatScreen({ navigation, route }: Props) {
 
         <View style={[styles.checkCircle, selected && styles.checkCircleActive]}>
           {selected ? (
-            <Ionicons name="checkmark" size={18} color={colors.textInverse} />
+            <AppIcon name="check" size="sm" color="textInverse" accessible={false} />
           ) : (
-            <Ionicons name="ellipse-outline" size={22} color={colors.textMuted} />
+            <AppIcon name="ellipse-outline" size={22} color="textMuted" accessible={false} />
           )}
         </View>
       </AnimatedPressable>
@@ -380,7 +429,7 @@ export default function CreateGroupChatScreen({ navigation, route }: Props) {
             <>
               {createError ? (
                 <View style={styles.createErrorBanner}>
-                  <Ionicons name="alert-circle" size={16} color={colors.danger} />
+                  <AppIcon name="alert" variant="filled" size="sm" color="danger" accessible={false} />
                   <Text style={styles.createErrorText}>{createError}</Text>
                   <AnimatedPressable
                     onPress={handleRetryCreate}
@@ -415,19 +464,19 @@ export default function CreateGroupChatScreen({ navigation, route }: Props) {
             disabled={isUploadingCover}
             style={styles.coverSelector}
             accessibilityRole="button"
-            accessibilityLabel={groupMedia.coverDisplayUri ? 'Change cover photo' : 'Add cover photo'}
+            accessibilityLabel={coverDisplayUri ? 'Change cover photo' : 'Add cover photo'}
             accessibilityHint="Choose a wide cover image from camera or gallery"
           >
-            {groupMedia.coverDisplayUri ? (
+            {coverDisplayUri ? (
               <CachedImage
-                uri={groupMedia.coverDisplayUri}
+                uri={coverDisplayUri}
                 style={styles.coverImage}
                 contentFit="cover"
                 priority="high"
               />
             ) : (
               <View style={[styles.coverPlaceholder, { backgroundColor: colors.surfaceAlt }]}>
-                <Ionicons name="image-outline" size={24} color={colors.textMuted} />
+                <AppIcon name="image" size="lg" color="textMuted" accessible={false} />
                 <Text style={[styles.coverPlaceholderText, { color: colors.textMuted }]}>
                   {isUploadingCover ? 'Uploading…' : 'Add cover photo'}
                 </Text>
@@ -438,7 +487,7 @@ export default function CreateGroupChatScreen({ navigation, route }: Props) {
                 <ActivityIndicator size="small" color={colors.scrimTextPrimary} />
               </View>
             ) : null}
-            {groupMedia.coverDisplayUri && !isUploadingCover ? (
+            {coverDisplayUri && !isUploadingCover ? (
               <Pressable
                 style={styles.coverRemoveBtn}
                 onPress={handleRemoveCoverPhoto}
@@ -446,7 +495,7 @@ export default function CreateGroupChatScreen({ navigation, route }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel="Remove cover photo"
               >
-                <Ionicons name="close-circle" size={22} color={colors.scrimTextPrimary} />
+                <AppIcon name="close" variant="filled" size="lg" color="scrimTextPrimary" accessible={false} />
               </Pressable>
             ) : null}
           </AnimatedPressable>
@@ -462,7 +511,7 @@ export default function CreateGroupChatScreen({ navigation, route }: Props) {
             >
               <GroupAvatarMosaic
                 members={mosaicMembers}
-                groupPhoto={groupMedia.avatarDisplayUri}
+                groupPhoto={avatarDisplayUri}
                 fallbackInitials={title.trim() || 'G'}
                 groupId={idempotencyKeyRef.current}
                 size={Space.xxl + Space.xl}
@@ -473,18 +522,18 @@ export default function CreateGroupChatScreen({ navigation, route }: Props) {
                 </View>
               ) : (
                 <View style={styles.cameraBadge}>
-                  <Ionicons name="camera" size={14} color={colors.textInverse} />
+                  <AppIcon name="camera" variant="filled" size="xs" color="textInverse" accessible={false} />
                 </View>
               )}
             </AnimatedPressable>
             <Caption color={colors.textMuted} style={styles.avatarHint}>
               {isUploadingPhoto
                 ? 'Uploading photo...'
-                : groupMedia.avatarDisplayUri
+                : avatarDisplayUri
                   ? 'Tap to change photo'
                   : 'Tap to add photo · mosaic auto-generated'}
             </Caption>
-            {groupMedia.avatarDisplayUri && !isUploadingPhoto ? (
+            {avatarDisplayUri && !isUploadingPhoto ? (
               <Pressable
                 onPress={handleRemoveGroupPhoto}
                 hitSlop={8}
@@ -496,7 +545,7 @@ export default function CreateGroupChatScreen({ navigation, route }: Props) {
             ) : null}
             {groupMedia.avatar.status === 'failed' ? (
               <View style={styles.mediaErrorRow}>
-                <Ionicons name="warning-outline" size={13} color={colors.danger} />
+                <AppIcon name="warning" size="micro" color="danger" accessible={false} />
                 <Text style={[styles.mediaErrorText, { color: colors.danger }]} numberOfLines={2}>
                   {groupMedia.avatar.error}
                 </Text>
@@ -574,6 +623,8 @@ export default function CreateGroupChatScreen({ navigation, route }: Props) {
           onClose={() => setMediaSourceSheet((prev) => ({ ...prev, visible: false }))}
           onSelect={handleMediaSourceSelect}
           title={mediaSourceSheet.target === 'avatar' ? 'Group photo' : 'Cover photo'}
+          presets={getAestheticPresets(mediaSourceSheet.target)}
+          onSelectPreset={handleSelectPreset}
         />
       </FlagshipScreen>
     );
@@ -583,7 +634,7 @@ export default function CreateGroupChatScreen({ navigation, route }: Props) {
     <FlagshipScreen header={<FlagshipHeader title="New group" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
       <View style={styles.selectRoot}>
         <View style={styles.searchRow}>
-          <Ionicons name="search-outline" size={18} color={colors.textMuted} />
+          <AppIcon name="search" size="sm" color="textMuted" accessible={false} />
           <AppInput
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -605,7 +656,7 @@ export default function CreateGroupChatScreen({ navigation, route }: Props) {
               accessibilityLabel="Clear search"
               accessibilityRole="button"
             >
-              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+              <AppIcon name="close" variant="filled" size="sm" color="textMuted" accessible={false} />
             </AnimatedPressable>
           )}
         </View>
@@ -632,7 +683,7 @@ export default function CreateGroupChatScreen({ navigation, route }: Props) {
                     </View>
                   )}
                   <Text style={styles.selectedChipText} numberOfLines={1}>{displayName}</Text>
-                  <Ionicons name="close-circle" size={14} color={colors.textMuted} />
+                  <AppIcon name="close" variant="filled" size="xs" color="textMuted" accessible={false} />
                 </Pressable>
               );
             })}
@@ -642,8 +693,10 @@ export default function CreateGroupChatScreen({ navigation, route }: Props) {
 
       {searchError ? (
         <View style={styles.searchErrorBanner}>
-          <Ionicons name="alert-circle-outline" size={16} color={colors.danger} />
-          <Text style={styles.searchErrorText}>{searchError}</Text>
+          <AppIcon name="alert" size="sm" color="danger" accessible={false} />
+          <Text style={styles.searchErrorText}>
+            {isOffline ? 'You are offline. ' : ''}{searchError}
+          </Text>
           <Pressable
             onPress={() => void performSearch(searchQuery)}
             hitSlop={8}
@@ -686,7 +739,7 @@ export default function CreateGroupChatScreen({ navigation, route }: Props) {
           </ScrollView>
         ) : (
           <View style={styles.emptyWrap}>
-            <Ionicons name="search-outline" size={32} color={colors.textMuted} />
+            <AppIcon name="search" size="hero" color="textMuted" accessible={false} />
             <Caption color={colors.textMuted} style={styles.emptyText}>
               Search by username to add members to your group.
             </Caption>
@@ -706,7 +759,7 @@ export default function CreateGroupChatScreen({ navigation, route }: Props) {
         </View>
       ) : filteredResults.length === 0 ? (
         <View style={styles.emptyWrap}>
-          <Ionicons name="people-outline" size={32} color={colors.textMuted} />
+          <AppIcon name="people" size="hero" color="textMuted" accessible={false} />
           <Caption color={colors.textMuted} style={styles.emptyText}>
             {hasSearched && !searchError ? 'No users match your search.' : 'Type at least 2 characters to search.'}
           </Caption>

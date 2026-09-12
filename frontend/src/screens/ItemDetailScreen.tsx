@@ -214,7 +214,7 @@ export default function ItemDetailScreen() {
   const { isOffline } = useConnectivity();
   const reducedMotion = useReducedMotion();
   const { spring } = useMotionConfig();
-  useVisuallyComplete('ItemDetail');
+  const reportReady = useVisuallyComplete('ItemDetail');
   const [collectionModalVisible, setCollectionModalVisible] = useState(false);
   const [sizeGuideVisible, setSizeGuideVisible] = useState(false);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
@@ -250,6 +250,15 @@ export default function ItemDetailScreen() {
   const soldComps = data.soldComparables;
   const priceHistory = data.priceHistory;
   const qaSummary = data.qaSummary;
+
+  // Readiness milestones: 'data-ready' when the listing query settles
+  // (success, error, or not-found are all terminal for readiness);
+  // 'interaction-ready' once an item is actually rendered with its
+  // actionable controls. Mount alone never completes the visit.
+  React.useEffect(() => {
+    if (!data.isLoading) reportReady('data-ready');
+    if (item) reportReady('interaction-ready');
+  }, [data.isLoading, item, reportReady]);
 
   // ── Action orchestration (share, save, report, seller nav, buy-now,
   // make-offer, price-alert toggle, enquire / request viewing) ──
@@ -499,7 +508,7 @@ export default function ItemDetailScreen() {
         <CommerceStateCanvas
           state="loading"
           family="direct"
-          heroFraction={isCompactScreen ? 0.54 : 0.58}
+          heroFraction={isCompactScreen ? 0.56 : 0.6}
         />
       </View>
     );
@@ -511,6 +520,10 @@ export default function ItemDetailScreen() {
         <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
         <CommerceStateCanvas
           state="error"
+          title={isOffline ? "You're offline" : undefined}
+          message={isOffline
+            ? 'Connect to the internet to load this listing.'
+            : undefined}
           onRetry={() => data.refetch()}
         />
       </View>
@@ -638,17 +651,20 @@ export default function ItemDetailScreen() {
   ].filter(Boolean).join(' · ');
 
   // Condition colour-coding + definition. Maps each ListingCondition to a
-  // semantic accent and a plain-English definition shown on tap.
+  // semantic accent and a plain-English definition. The definition is
+  // surfaced inline in the "Item details" section (condition evidence
+  // block) and in the condition sheet — the name is rendered beside it,
+  // so the copy itself carries no redundant prefix.
   const conditionMeta = (() => {
     switch (item.condition) {
       case 'New with tags':
-        return { color: colors.success, definition: 'New: Unworn, with original tags and packaging intact.' };
+        return { color: colors.success, definition: 'Unworn, with original tags and packaging intact.' };
       case 'Very good':
-        return { color: colors.commerceTrust, definition: 'Very good: No visible flaws, minimal wear.' };
+        return { color: colors.commerceTrust, definition: 'No visible flaws; minimal signs of wear.' };
       case 'Good':
-        return { color: colors.warning, definition: 'Good: Light wear consistent with gentle use; no major flaws.' };
+        return { color: colors.warning, definition: 'Light wear consistent with gentle use; no major flaws.' };
       case 'Satisfactory':
-        return { color: colors.bronze, definition: 'Satisfactory: Visible wear or minor flaws; fully wearable.' };
+        return { color: colors.bronze, definition: 'Visible wear or minor flaws; fully wearable.' };
       default:
         return null;
     }
@@ -804,7 +820,7 @@ export default function ItemDetailScreen() {
           onDoubleTap={handleDoubleTap}
           onZoomStart={() => { if (item) ProductAnalytics.mediaZoom(item.id); }}
           onOpenFullscreen={media.openViewer}
-          heightFraction={isCompactScreen ? 0.54 : 0.58}
+          heightFraction={isCompactScreen ? 0.56 : 0.6}
           initialIndex={fullscreenIndex}
           onActiveIndexChange={(index) => {
             media.setActiveIndex(index);
@@ -826,6 +842,25 @@ export default function ItemDetailScreen() {
             the thumbnail rail is the premium 2026 pattern. */}
 
         <CommerceDetailOfflineBanner isOffline={isOffline} />
+
+        {/* ── Stale-data notice ──
+            The listing query failed while a previously resolved listing
+            is on screen (background refetch error, dropped connection).
+            The rendered content is still the last authoritative read —
+            say so plainly and offer retry instead of silently presenting
+            potentially stale price/availability as current. */}
+        {data.isError ? (
+          <View style={styles.staleNoticeWrap}>
+            <CommerceDetailUnavailableInline
+              title="Couldn't refresh listing"
+              body={isOffline
+                ? "You're offline — showing the last loaded details."
+                : 'Showing the last loaded details.'}
+              icon="refresh-outline"
+              onRetry={() => data.refetch()}
+            />
+          </View>
+        ) : null}
 
         {/* ── Zone B — Identity seam ──
             Direct keeps critical copy off arbitrary seller photography.
@@ -869,6 +904,50 @@ export default function ItemDetailScreen() {
             Description + condition + category evidence + posted date.
             Sits after trust facts, before shipping. */}
         <CommerceDetailSection label="Item details" divider variant="editorial">
+          {/* ── Condition evidence ──
+              Condition is the primary judgment fact on a second-hand
+              listing. Render the grade plus what the grade means inline —
+              the buyer should not have to open a sheet to learn what
+              "Good" means. When the listing carries more than one photo,
+              the trailing photos are the flaw/detail evidence; the jump
+              opens the fullscreen viewer on the last shot. */}
+          {item.condition ? (
+            <View
+              style={styles.conditionEvidence}
+              accessibilityLabel={`Condition: ${item.condition}${conditionMeta ? `. ${conditionMeta.definition}` : ''}`}
+            >
+              <View style={styles.conditionEvidenceHeader}>
+                <View style={[styles.conditionDot, { backgroundColor: conditionMeta?.color ?? colors.textMuted }]} />
+                <Text style={[styles.conditionEvidenceName, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.4}>
+                  {item.condition}
+                </Text>
+              </View>
+              {conditionMeta ? (
+                <Text style={[styles.conditionEvidenceDefinition, { color: colors.textSecondary }]} maxFontSizeMultiplier={2}>
+                  {conditionMeta.definition}
+                </Text>
+              ) : null}
+              {item.images && item.images.length > 1 ? (
+                <AnimatedPressable
+                  style={styles.conditionEvidenceJump}
+                  scaleValue={0.98}
+                  hapticFeedback="light"
+                  onPress={() => {
+                    // Jump to the last photo (detail/flaw shot per policy)
+                    media.openViewer(item.images!.length - 1);
+                  }}
+                  accessibilityLabel="View condition evidence photos"
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="images-outline" size={18} color={colors.brand} />
+                  <Text style={[styles.conditionEvidenceJumpText, { color: colors.brand }]} maxFontSizeMultiplier={1.4}>
+                    View condition photos
+                  </Text>
+                  <Ionicons name="chevron-forward" size={16} color={colors.brand} />
+                </AnimatedPressable>
+              ) : null}
+            </View>
+          ) : null}
           {item.description ? (
             <View style={styles.descriptionWrap}>
               {/* Full-area tap target — the entire collapsed text is
@@ -1844,6 +1923,35 @@ const styles = StyleSheet.create({
   overflowRowText: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.medium,
+  },
+  // ── Inline condition evidence ──
+  // Flat block inside "Item details": dot + grade, plain-English
+  // definition, and a quiet media-evidence jump. No card — the canvas
+  // and spacing carry the grouping.
+  conditionEvidence: {
+    gap: Space.xs,
+    paddingBottom: Space.md,
+  },
+  conditionEvidenceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  conditionEvidenceName: {
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.semibold,
+  },
+  conditionEvidenceDefinition: {
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight + Space.xs,
+    fontFamily: FontFamily.regular,
+  },
+  // ── Stale-data notice ──
+  // Horizontal padding matches the section rhythm; the inline
+  // component supplies its own vertical spacing.
+  staleNoticeWrap: {
+    paddingHorizontal: Space.md,
   },
   // ── Condition definition sheet ──
   conditionSheetWrap: {

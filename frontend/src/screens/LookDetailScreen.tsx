@@ -62,6 +62,7 @@ import {
 import { ApiRequestError } from '../lib/apiClient';
 import { CreatorCanvas } from '../creator/CreatorCanvas';
 import { safeValidateDocument, type CreatorDocument } from '../creator/composition';
+import { pageWithRenderedMedia } from '../creator/renderedViewDocument';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'LookDetail'>;
@@ -90,7 +91,8 @@ export default function LookDetailScreen() {
   const { colors } = useAppTheme();
   const { width: SCREEN_W } = useWindowDimensions();
   const styles = useMemo(() => createStyles(colors, SCREEN_W), [colors, SCREEN_W]);
-  useVisuallyComplete('LookDetail');
+  const reportReady = useVisuallyComplete('LookDetail');
+  const reportFirstMedia = useCallback(() => reportReady('first-media'), [reportReady]);
 
   const { lookId } = route.params ?? {};
 
@@ -180,6 +182,18 @@ export default function LookDetailScreen() {
   useEffect(() => {
     loadLook();
   }, [loadLook]);
+
+  // Readiness milestones: 'data-ready' when the look fetch settles
+  // (success or terminal error — isLoading flips in loadLook's finally);
+  // 'interaction-ready' once a look is on screen with its controls.
+  // 'first-media' is reported separately by the hero carousel's first
+  // image/video decode. Mount alone never completes the visit.
+  useEffect(() => {
+    if (!isLoading) {
+      reportReady('data-ready');
+      if (look) reportReady('interaction-ready');
+    }
+  }, [isLoading, look, reportReady]);
 
   useEffect(() => {
     track('look_viewed', { look_id: lookId });
@@ -519,6 +533,23 @@ export default function LookDetailScreen() {
     return candidate;
   }, [look?.compositionDocument]);
 
+  // When `look.mediaUrl` is a rendered artifact (backend burned trim/
+  // speed/overlays into it at publish), the canvas must play THAT — not
+  // the doc's raw source URI. `pageWithRenderedMedia` substitutes the
+  // artifact and keeps only live/interactive layers on top.
+  const compositionPage = useMemo(() => {
+    const page = compositionDocument?.pages[0] ?? null;
+    if (!page || !look?.mediaUrl) return page;
+    const mediaLayer = page.layers.find((l) => l.type === 'media' && !l.hidden);
+    if (!mediaLayer || mediaLayer.type !== 'media') return page;
+    if (mediaLayer.payload.mediaUri === look.mediaUrl) return page;
+    return pageWithRenderedMedia(
+      page,
+      look.mediaUrl,
+      look.mediaType === 'video' ? 'video' : 'image',
+    );
+  }, [compositionDocument, look?.mediaUrl, look?.mediaType]);
+
   const resolvedHeroAspectRatio = compositionDocument?.canvas.aspectRatio || heroAspectRatio;
   const heroHeight = SCREEN_W / resolvedHeroAspectRatio;
 
@@ -554,7 +585,7 @@ export default function LookDetailScreen() {
             >
               <CreatorCanvas
                 document={compositionDocument}
-                page={compositionDocument.pages[0]}
+                page={compositionPage!}
                 canvasWidth={SCREEN_W}
                 canvasHeight={heroHeight}
                 mode="view"
@@ -565,6 +596,7 @@ export default function LookDetailScreen() {
               pages={mediaPages}
               aspectRatio={resolvedHeroAspectRatio}
               accessibilityLabel={`Look media, ${mediaPages.length} image${mediaPages.length === 1 ? '' : 's'}`}
+              onFirstMediaLoad={reportFirstMedia}
               onFullscreenRequest={(index) => {
                 setFullscreenIndex(index);
                 setFullscreenVisible(true);
@@ -703,6 +735,8 @@ export default function LookDetailScreen() {
     followerCount, isOwner, isFollowing, handleFollow, followBusy,
     commentCount, currentUser?.id, handleShare, handleCommentPress, handleSignInRequired,
     styles,
+    // reportFirstMedia feeds the hero carousel's first-decode telemetry hook
+    reportFirstMedia,
     // navigation is used for repost attribution link — must be in deps
     navigation,
   ]);

@@ -174,6 +174,7 @@ export type RootStackParamList = {
     paymentDateLabel?: string;
     actionId?: string;
   };
+  CorporateActionVote: { actionId: string; assetId: string };
   DistributionHistory: { assetId?: string } | undefined;
 
   // ── Chat & Messaging ──
@@ -225,6 +226,7 @@ export type RootStackParamList = {
   Personalisation: { fromOnboarding?: boolean } | undefined;
   Settings: undefined;
   EditProfile: { focus?: 'avatar' | 'cover' };
+  AccountSettings: undefined;
   AccountControl: undefined;
   AccountSecurity: undefined;
   AccountSecurityRecovery: { caseId: string } | undefined;
@@ -562,6 +564,7 @@ export const ROOT_STACK_ROUTES = [
   'Buyout',
   'CoOwnOnboarding',
   'CorporateActionDetail',
+  'CorporateActionVote',
   'DistributionHistory',
   'Inbox',
   'Chat',

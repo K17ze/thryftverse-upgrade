@@ -219,7 +219,7 @@ function mapItem(row: MoodboardItemRow) {
 }
 
 function mapMoodboard(
-  row: MoodboardRow,
+  row: MoodboardRow & { viewer_role?: string | null },
   items: ReturnType<typeof mapItem>[],
 ) {
   return {
@@ -228,6 +228,8 @@ function mapMoodboard(
     description: row.description,
     curator: row.curator_name ?? row.creator_id,
     curatorAvatar: row.curator_avatar ?? '',
+    creatorId: row.creator_id,
+    viewerRole: row.viewer_role ?? null,
     items,
     coverImage: row.cover_image_url,
     isPublic: row.visibility === 'public',
@@ -485,15 +487,17 @@ export function registerMoodboardRoutes({
       const { moodboardId } = request.params;
       const viewerUserId = request.authUser?.userId ?? null;
 
-      const result = await db.query<MoodboardRow>(
+      const result = await db.query<MoodboardRow & { viewer_role: string | null }>(
         `
-          SELECT ${MOODBOARD_SELECT_COLUMNS}
+          SELECT ${MOODBOARD_SELECT_COLUMNS}, mm.role AS viewer_role
           FROM moodboards m
           LEFT JOIN users u ON u.id = m.creator_id
+          LEFT JOIN moodboard_members mm
+            ON mm.board_id = m.id AND mm.user_id = $2 AND mm.state = 'active'
           WHERE m.id = $1 AND m.deleted_at IS NULL
           LIMIT 1
         `,
-        [moodboardId]
+        [moodboardId, viewerUserId]
       );
 
       if (!result.rowCount) {

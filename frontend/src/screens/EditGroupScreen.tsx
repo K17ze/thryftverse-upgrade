@@ -6,7 +6,6 @@ import {
   Text,
   TextInput,
   View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
   fetchConversationFromApi,
@@ -28,7 +27,9 @@ import { GroupAvatarMosaic } from '../components/chat/GroupAvatarMosaic';
 import { GroupMediaSourceSheet, type GroupMediaSource } from '../components/chat/GroupMediaSourceSheet';
 import { useHaptic } from '../hooks/useHaptic';
 import { useGroupMediaUpload } from '../hooks/useGroupMediaUpload';
-import { GROUP_AESTHETIC_PRESETS, getAestheticPresets } from '../constants/groupAesthetics';
+import { getAestheticPresets } from '../constants/groupAesthetics';
+import { uploadRemoteGroupPreset } from '../components/groupchat/groupPresetUpload';
+import { AppIcon } from '../components/common/AppIcon';
 import { AppButton } from '../components/ui/AppButton';
 import { Caption, Meta } from '../components/ui/Text';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
@@ -59,12 +60,28 @@ export default function EditGroupScreen({ navigation, route }: Props) {
 
   // Flagship media upload — optimistic preview, compression, camera+gallery, retry/revert.
   const groupMedia = useGroupMediaUpload(conversation?.avatar ?? null, conversation?.coverPhoto ?? null);
-  const isUploadingPhoto = groupMedia.avatar.status === 'uploading';
-  const isUploadingCover = groupMedia.cover.status === 'uploading';
-  const avatar = groupMedia.avatar.confirmedRemote;
-  const avatarFinalizationId = groupMedia.avatar.finalizationId;
-  const coverPhoto = groupMedia.cover.confirmedRemote;
-  const coverPhotoFinalizationId = groupMedia.cover.finalizationId;
+  // Curated presets are remote URLs. The conversation API requires an upload
+  // receipt (finalizationId) for avatar/cover strings, so a selected preset is
+  // downloaded and pushed through the standard upload pipeline before save.
+  const [presetMedia, setPresetMedia] = useState<{
+    target: 'avatar' | 'cover';
+    previewUri: string;
+    remoteUrl: string | null;
+    finalizationId: string | null;
+    status: 'uploading' | 'confirmed' | 'failed';
+  } | null>(null);
+  const presetAvatar = presetMedia?.target === 'avatar' ? presetMedia : null;
+  const presetCover = presetMedia?.target === 'cover' ? presetMedia : null;
+  const isUploadingPhoto =
+    groupMedia.avatar.status === 'uploading' || presetAvatar?.status === 'uploading';
+  const isUploadingCover =
+    groupMedia.cover.status === 'uploading' || presetCover?.status === 'uploading';
+  const avatar = presetAvatar?.remoteUrl ?? groupMedia.avatar.confirmedRemote;
+  const avatarFinalizationId = presetAvatar?.finalizationId ?? groupMedia.avatar.finalizationId;
+  const coverPhoto = presetCover?.remoteUrl ?? groupMedia.cover.confirmedRemote;
+  const coverPhotoFinalizationId = presetCover?.finalizationId ?? groupMedia.cover.finalizationId;
+  const avatarDisplayUri = presetAvatar?.previewUri ?? groupMedia.avatarDisplayUri;
+  const coverDisplayUri = presetCover?.previewUri ?? groupMedia.coverDisplayUri;
   const [isCheckingResult, setIsCheckingResult] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
   const [saveIssue, setSaveIssue] = useState<string | null>(null);
@@ -125,6 +142,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
 
   const handleMediaSourceSelect = useCallback((source: GroupMediaSource) => {
     const target = mediaSourceSheet.target;
+    setPresetMedia(null);
     if (target === 'avatar') {
       void groupMedia.pickAvatar(source);
     } else {
@@ -132,6 +150,39 @@ export default function EditGroupScreen({ navigation, route }: Props) {
     }
     clearPendingSave();
   }, [mediaSourceSheet.target, groupMedia]);
+
+  const handleSelectPreset = useCallback((url: string) => {
+    const target = mediaSourceSheet.target;
+    clearPendingSave();
+    setPresetMedia({
+      target,
+      previewUri: url,
+      remoteUrl: null,
+      finalizationId: null,
+      status: 'uploading',
+    });
+    uploadRemoteGroupPreset(url, target)
+      .then((uploaded) => {
+        setPresetMedia((current) =>
+          current?.target === target && current.previewUri === url
+            ? {
+                ...current,
+                remoteUrl: uploaded.publicUrl,
+                finalizationId: uploaded.finalizationId,
+                status: 'confirmed',
+              }
+            : current,
+        );
+      })
+      .catch((err) => {
+        setPresetMedia((current) =>
+          current?.target === target && current.previewUri === url
+            ? null
+            : current,
+        );
+        show(parseApiError(err, 'Could not apply that preset.').message, 'error');
+      });
+  }, [mediaSourceSheet.target, show]);
 
   if (!conversation || conversation.type !== 'group') {
     return (
@@ -166,7 +217,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
         scrollEnabled={false}
       >
         <View style={styles.center}>
-          <Ionicons name="lock-closed-outline" size={24} color={colors.textMuted} />
+          <AppIcon name="lock" size="lg" color="textMuted" accessible={false} />
           <Caption color={colors.textMuted} style={styles.permissionCopy}>
             An owner or admin has limited group-info editing to admins.
           </Caption>
@@ -185,6 +236,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
   const handleRemovePhoto = () => {
     haptic.light();
     groupMedia.removeAvatar();
+    if (presetMedia?.target === 'avatar') setPresetMedia(null);
     clearPendingSave();
   };
 
@@ -198,6 +250,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
   const handleRemoveCoverPhoto = () => {
     haptic.light();
     groupMedia.removeCover();
+    if (presetMedia?.target === 'cover') setPresetMedia(null);
     clearPendingSave();
   };
 
@@ -229,8 +282,8 @@ export default function EditGroupScreen({ navigation, route }: Props) {
     // immediately so GroupChatInfoScreen reflects the change the instant we
     // navigate back, even before the API round-trip completes. The server
     // response below reconciles the final canonical URLs.
-    const optimisticAvatar = groupMedia.avatarDisplayUri ?? avatar;
-    const optimisticCover = groupMedia.coverDisplayUri ?? coverPhoto;
+    const optimisticAvatar = avatarDisplayUri ?? avatar;
+    const optimisticCover = coverDisplayUri ?? coverPhoto;
     const previousConversation = conversation;
     upsertConversation({
       ...conversation,
@@ -418,20 +471,20 @@ export default function EditGroupScreen({ navigation, route }: Props) {
             scaleValue={0.99}
             activeOpacity={0.85}
             accessibilityRole="button"
-            accessibilityLabel={groupMedia.coverDisplayUri ? 'Change cover photo' : 'Add cover photo'}
+            accessibilityLabel={coverDisplayUri ? 'Change cover photo' : 'Add cover photo'}
             accessibilityHint="Choose a wide cover image from camera or gallery"
             accessibilityState={{ busy: isUploadingCover, disabled: isSaving }}
           >
-            {groupMedia.coverDisplayUri ? (
+            {coverDisplayUri ? (
               <CachedImage
-                uri={groupMedia.coverDisplayUri}
+                uri={coverDisplayUri}
                 style={styles.coverImage}
                 contentFit="cover"
                 priority="high"
               />
             ) : (
               <View style={[styles.coverPlaceholder, { backgroundColor: colors.surfaceAlt }]}>
-                <Ionicons name="image-outline" size={28} color={colors.textMuted} />
+                <AppIcon name="image" size="xl" color="textMuted" accessible={false} />
                 <Text style={[styles.coverPlaceholderText, { color: colors.textMuted }]}>
                   Add cover photo
                 </Text>
@@ -442,11 +495,11 @@ export default function EditGroupScreen({ navigation, route }: Props) {
               {isUploadingCover ? (
                 <ActivityIndicator size="small" color={colors.scrimTextPrimary} />
               ) : (
-                <Ionicons name="camera" size={16} color={colors.scrimTextPrimary} />
+                <AppIcon name="camera" variant="filled" size="sm" color="scrimTextPrimary" accessible={false} />
               )}
             </View>
           </AnimatedPressable>
-          {groupMedia.coverDisplayUri ? (
+          {coverDisplayUri ? (
             <View style={styles.coverActions}>
               <AnimatedPressable
                 onPress={handlePickCoverPhoto}
@@ -487,13 +540,13 @@ export default function EditGroupScreen({ navigation, route }: Props) {
             scaleValue={0.98}
             activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityLabel={groupMedia.avatarDisplayUri ? 'Change group photo' : 'Add group photo'}
+            accessibilityLabel={avatarDisplayUri ? 'Change group photo' : 'Add group photo'}
             accessibilityHint="Choose from camera or gallery"
             accessibilityState={{ busy: isUploadingPhoto, disabled: isSaving }}
           >
             <GroupAvatarMosaic
               members={mosaicMembers}
-              groupPhoto={groupMedia.avatarDisplayUri}
+              groupPhoto={avatarDisplayUri}
               fallbackInitials={name.trim() || 'Group'}
               groupId={conversationId}
               size={96}
@@ -502,7 +555,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
               {isUploadingPhoto ? (
                 <ActivityIndicator size="small" color={colors.textInverse} />
               ) : (
-                <Ionicons name="camera" size={16} color={colors.textInverse} />
+                <AppIcon name="camera" variant="filled" size="sm" color="textInverse" accessible={false} />
               )}
             </View>
           </AnimatedPressable>
@@ -513,14 +566,14 @@ export default function EditGroupScreen({ navigation, route }: Props) {
             activeOpacity={0.65}
             scaleValue={0.98}
             accessibilityRole="button"
-            accessibilityLabel={groupMedia.avatarDisplayUri ? 'Change group photo' : 'Add group photo'}
+            accessibilityLabel={avatarDisplayUri ? 'Change group photo' : 'Add group photo'}
             accessibilityState={{ busy: isUploadingPhoto, disabled: isSaving }}
           >
             <Text style={styles.photoActionText}>
-              {isUploadingPhoto ? 'Uploading…' : groupMedia.avatarDisplayUri ? 'Change photo' : 'Add group photo'}
+              {isUploadingPhoto ? 'Uploading…' : avatarDisplayUri ? 'Change photo' : 'Add group photo'}
             </Text>
           </AnimatedPressable>
-          {groupMedia.avatarDisplayUri ? (
+          {avatarDisplayUri ? (
             <AnimatedPressable
               style={styles.removePhoto}
               onPress={handleRemovePhoto}
@@ -571,7 +624,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
 
         {saveIssue ? (
           <View style={styles.issue} accessibilityLiveRegion="polite">
-            <Ionicons name="alert-circle-outline" size={18} color={colors.warning} />
+            <AppIcon name="alert" size="sm" color="warning" accessible={false} />
             <View style={styles.issueText}>
               <Caption color={colors.textSecondary}>{saveIssue}</Caption>
               {outcomeUnknown ? (
@@ -621,7 +674,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
           {isLeaving ? (
             <ActivityIndicator size="small" color={colors.danger} />
           ) : (
-            <Ionicons name="log-out-outline" size={20} color={colors.danger} />
+            <AppIcon name="log-out-outline" size="md" color="danger" accessible={false} />
           )}
           <Text style={styles.leaveText}>{isLeaving ? 'Leaving…' : 'Leave group'}</Text>
         </AnimatedPressable>
@@ -643,18 +696,11 @@ export default function EditGroupScreen({ navigation, route }: Props) {
         onSelect={handleMediaSourceSelect}
         title={mediaSourceSheet.target === 'avatar' ? 'Group photo' : 'Cover photo'}
         presets={getAestheticPresets(mediaSourceSheet.target)}
-        onSelectPreset={(url) => {
-          if (mediaSourceSheet.target === 'avatar') {
-            groupMedia.setAvatarUrl(url);
-          } else {
-            groupMedia.setCoverUrl(url);
-          }
-          clearPendingSave();
-        }}
+        onSelectPreset={handleSelectPreset}
         canRemove={Boolean(
           mediaSourceSheet.target === 'avatar'
-            ? groupMedia.avatarDisplayUri || groupMedia.avatar.confirmedRemote
-            : groupMedia.coverDisplayUri || groupMedia.cover.confirmedRemote
+            ? avatarDisplayUri || avatar
+            : coverDisplayUri || coverPhoto
         )}
         onRemove={mediaSourceSheet.target === 'avatar' ? handleRemovePhoto : handleRemoveCoverPhoto}
       />

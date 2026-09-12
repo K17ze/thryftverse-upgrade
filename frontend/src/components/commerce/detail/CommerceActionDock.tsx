@@ -5,6 +5,7 @@ import { FontFamily, LetterSpacing } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { t } from '../../../i18n';
 import { CommerceDetailStateDock } from './CommerceDetailStateDock';
+import { formatShortDate } from '../../../utils/dateFormat';
 import type { Listing } from '../../../services/listingsApi';
 import type {
   ListingCapabilities,
@@ -56,6 +57,32 @@ export function CommerceActionDock({
 }: CommerceActionDockProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+
+  // ── Delivery estimate ──
+  // The server commerce context carries an estimated delivery window.
+  // Per Chapter 12 ("keep shipping, returns and protection adjacent to
+  // the buying decision") the estimate rides inside the dock's shipping
+  // hint so it stays visible next to the commitment action — the buyer
+  // sees *when* it arrives beside *how much* it costs.
+  const deliveryWindow = (() => {
+    const start = commerce.estimatedDeliveryStart
+      ? formatShortDate(commerce.estimatedDeliveryStart)
+      : '';
+    const end = commerce.estimatedDeliveryEnd
+      ? formatShortDate(commerce.estimatedDeliveryEnd)
+      : '';
+    if (start && end) return `${start}–${end}`;
+    return start || end || null;
+  })();
+
+  const shippingHint = [
+    commerce.shippingPayer === 'seller'
+      ? 'Free shipping'
+      : commerce.shippingMethod
+        ? 'Shipping calculated at checkout'
+        : null,
+    deliveryWindow ? `Est. ${deliveryWindow}` : null,
+  ].filter(Boolean).join(' · ') || undefined;
 
   // ── Zone I — Sticky action dock ──
   //   Buyer: price + Buy now + Make offer.
@@ -171,13 +198,7 @@ export function CommerceActionDock({
         value={formattedPrice}
         originalValue={hasDiscount && formattedOriginal ? formattedOriginal : undefined}
         thumbnailUri={item.images?.[0]}
-        shippingHint={
-          commerce.shippingPayer === 'seller'
-            ? 'Free shipping'
-            : commerce.shippingMethod
-              ? 'Shipping calculated at checkout'
-              : undefined
-        }
+        shippingHint={shippingHint}
         commerceTier="brokered"
         primaryAction={enquireAction}
         secondaryAction={requestViewingAction}
@@ -192,13 +213,7 @@ export function CommerceActionDock({
         value={formattedPrice}
         originalValue={hasDiscount && formattedOriginal ? formattedOriginal : undefined}
         thumbnailUri={item.images?.[0]}
-        shippingHint={
-          commerce.shippingPayer === 'seller'
-            ? 'Free shipping'
-            : commerce.shippingMethod
-              ? 'Shipping calculated at checkout'
-              : undefined
-        }
+        shippingHint={shippingHint}
         showProtectionStrip={commerce.protectionPolicy?.available ?? false}
         commerceTier="specialist"
         primaryAction={buyNowAction}
@@ -215,13 +230,7 @@ export function CommerceActionDock({
         value={formattedPrice}
         originalValue={hasDiscount && formattedOriginal ? formattedOriginal : undefined}
         thumbnailUri={item.images?.[0]}
-        shippingHint={
-          commerce.shippingPayer === 'seller'
-            ? 'Free shipping'
-            : commerce.shippingMethod
-              ? 'Shipping calculated at checkout'
-              : undefined
-        }
+        shippingHint={shippingHint}
         showProtectionStrip={commerce.protectionPolicy?.available ?? false}
         commerceTier="authenticated_luxury"
         primaryAction={buyNowAction}
@@ -236,13 +245,7 @@ export function CommerceActionDock({
       value={formattedPrice}
       originalValue={hasDiscount && formattedOriginal ? formattedOriginal : undefined}
       thumbnailUri={item.images?.[0]}
-      shippingHint={
-        commerce.shippingPayer === 'seller'
-          ? 'Free shipping'
-          : commerce.shippingMethod
-            ? 'Shipping calculated at checkout'
-            : undefined
-      }
+      shippingHint={shippingHint}
       showProtectionStrip={commerce.protectionPolicy?.available ?? false}
       commerceTier="standard"
       primaryAction={buyNowAction}

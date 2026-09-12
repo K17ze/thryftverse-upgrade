@@ -39,11 +39,13 @@ type Props = NativeStackScreenProps<RootStackParamList, 'VisualSearch'>;
 
 type ResultStatus = 'idle' | 'loading' | 'populated' | 'empty' | 'error' | 'offline' | 'partial';
 
-// G11: Color and style facets for visual search refinement.
-// Colors are matched against listing title/description text (honest text
-// matching, not image analysis). Styles are matched against common fashion
-// style keywords. These are client-side filters that narrow the result set
-// after the backend returns candidates.
+// G11/F08: Color and style facets for visual search refinement.
+// Facets are retrieval parameters — they are sent to the backend with the
+// search request so the SQL candidate set itself is narrowed (honest text
+// matching on title/description/brand/category, not image analysis). The
+// response returns per-facet candidate counts which are shown on the chips.
+// These lists are the shared vocabulary contract with the backend
+// (COLOR_FACET_VALUES / STYLE_FACET_VALUES in routes/visualSearch.ts).
 const COLOR_FACETS = ['Black', 'White', 'Blue', 'Red', 'Green', 'Brown', 'Grey', 'Pink', 'Beige', 'Navy'] as const;
 const STYLE_FACETS = ['Vintage', 'Minimal', 'Streetwear', 'Y2K', 'Formal', 'Casual', 'Sportswear', 'Luxury'] as const;
 
@@ -70,6 +72,13 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
   const [selectedStyle, setSelectedStyle] = useState<string | null>(null);
   const [status, setStatus] = useState<ResultStatus>('idle');
   const [results, setResults] = useState<Listing[]>([]);
+  // F08: Per-facet candidate counts returned by the backend (keyed by facet
+  // value). Null when the backend did not supply facet metadata (offline /
+  // cached fallback) so chips never show fabricated numbers.
+  const [facetCounts, setFacetCounts] = useState<{
+    colors: Record<string, number>;
+    styles: Record<string, number>;
+  } | null>(null);
   const [visualMatching, setVisualMatching] = useState(false);
   const [similarityMethod, setSimilarityMethod] = useState<string | undefined>(undefined);
   const [resultNote, setResultNote] = useState<string | undefined>(undefined);
@@ -168,6 +177,9 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
     setBrand('');
     setMinPrice('');
     setMaxPrice('');
+    setSelectedColor(null);
+    setSelectedStyle(null);
+    setFacetCounts(null);
   }, [haptic]);
 
   const buildFilterPayload = useCallback(() => {
@@ -179,9 +191,15 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
       brand: brand.trim() || undefined,
       minPrice: typeof minPriceNum === 'number' && !Number.isNaN(minPriceNum) ? minPriceNum : undefined,
       maxPrice: typeof maxPriceNum === 'number' && !Number.isNaN(maxPriceNum) ? maxPriceNum : undefined,
+      // F08: facets are retrieval parameters sent to the backend so the
+      // candidate set is narrowed server-side before ranking.
+      facets:
+        selectedColor || selectedStyle
+          ? { color: selectedColor ?? undefined, style: selectedStyle ?? undefined }
+          : undefined,
       sort: 'similarity' as const,
       limit: 48 };
-  }, [description, selectedCategory, brand, minPrice, maxPrice]);
+  }, [description, selectedCategory, brand, minPrice, maxPrice, selectedColor, selectedStyle]);
 
   // Client-side fallback filter over cached listings — mirrors BrowseScreen logic.
   const filterCachedListings = useCallback(
@@ -260,6 +278,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       if (!isMountedRef.current || mySequence !== requestSequenceRef.current) return;
       // Network/parse failure — try cached listings before declaring error.
+      setFacetCounts(null);
       const cached = filterCachedListings(payload);
       if (cached.length > 0) {
         setResults(cached);
@@ -294,22 +313,18 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
       return;
     }
 
-    // G11: Apply client-side color/style facet filtering to API results.
-    // These facets don't exist in the backend schema, so we filter after
-    // the API returns. Honest text matching on title/description.
-    const colorFilter = selectedColor?.toLowerCase() ?? '';
-    const styleFilter = selectedStyle?.toLowerCase() ?? '';
-    if (colorFilter || styleFilter) {
-      items = items.filter((listing) => {
-        const searchable = [listing.title, listing.description, listing.brand, listing.category]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase();
-        if (colorFilter && !searchable.includes(colorFilter)) return false;
-        if (styleFilter && !searchable.includes(styleFilter)) return false;
-        return true;
-      });
-    }
+    // F08: Facets are retrieval-scoped — the backend already narrowed the
+    // candidate set using the facet parameters in `payload.facets`, so no
+    // client-side post-filter is applied here. An empty `items` now means
+    // "no listings match this facet scope" — the honest empty state.
+    setFacetCounts(
+      apiResult.facets
+        ? {
+            colors: Object.fromEntries(apiResult.facets.colors.map((f) => [f.value, f.count])),
+            styles: Object.fromEntries(apiResult.facets.styles.map((f) => [f.value, f.count])),
+          }
+        : null,
+    );
 
     setResults(items);
     setVisualMatching(apiResult.visualMatching);
@@ -551,7 +566,8 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
         </ScrollView>
       )}
 
-      {/* G11: Color facet chips — client-side text matching on listing titles */}
+      {/* F08: Color facet chips — retrieval-scoped; counts come from the
+          backend response (`facetCounts`), never derived locally. */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -571,6 +587,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
         </AnimatedPressable>
         {COLOR_FACETS.map((color) => {
           const active = selectedColor === color;
+          const count = facetCounts?.colors[color];
           return (
             <AnimatedPressable
               key={`vscol-${color}`}
@@ -579,16 +596,23 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
               activeOpacity={0.85}
               hitSlop={12}
               accessibilityRole="button"
-              accessibilityLabel={`Filter by ${color}`}
+              accessibilityLabel={
+                count !== undefined
+                  ? `Filter by ${color}, ${count} item${count === 1 ? '' : 's'}`
+                  : `Filter by ${color}`
+              }
               accessibilityState={{ selected: active }}
             >
-              <Text style={[styles.categoryPillText, active && styles.categoryPillTextActive]}>{color}</Text>
+              <Text style={[styles.categoryPillText, active && styles.categoryPillTextActive]}>
+                {color}{count !== undefined ? ` · ${count}` : ''}
+              </Text>
             </AnimatedPressable>
           );
         })}
       </ScrollView>
 
-      {/* G11: Style facet chips — client-side text matching on listing titles */}
+      {/* F08: Style facet chips — retrieval-scoped; counts come from the
+          backend response (`facetCounts`), never derived locally. */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -608,6 +632,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
         </AnimatedPressable>
         {STYLE_FACETS.map((style) => {
           const active = selectedStyle === style;
+          const count = facetCounts?.styles[style];
           return (
             <AnimatedPressable
               key={`vsstyle-${style}`}
@@ -616,10 +641,16 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
               activeOpacity={0.85}
               hitSlop={12}
               accessibilityRole="button"
-              accessibilityLabel={`Filter by ${style} style`}
+              accessibilityLabel={
+                count !== undefined
+                  ? `Filter by ${style} style, ${count} item${count === 1 ? '' : 's'}`
+                  : `Filter by ${style} style`
+              }
               accessibilityState={{ selected: active }}
             >
-              <Text style={[styles.categoryPillText, active && styles.categoryPillTextActive]}>{style}</Text>
+              <Text style={[styles.categoryPillText, active && styles.categoryPillTextActive]}>
+                {style}{count !== undefined ? ` · ${count}` : ''}
+              </Text>
             </AnimatedPressable>
           );
         })}

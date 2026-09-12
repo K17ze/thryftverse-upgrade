@@ -35,8 +35,7 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  cancelAnimation,
-  useReducedMotion } from 'react-native-reanimated';
+  cancelAnimation } from 'react-native-reanimated';
 
 import {
   Space,
@@ -50,7 +49,7 @@ import { IconGrammar } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
-import { useReducedMotion as useHookReducedMotion } from '../../../hooks/useReducedMotion';
+import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { Motion } from '../../../theme/motionTokens';
 import {
   VoiceoverRecorder,
@@ -102,9 +101,7 @@ export function VoiceoverRecorderSheet({
   onConfirm }: VoiceoverRecorderSheetProps): React.ReactElement {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const hookReducedMotion = useHookReducedMotion();
-  const reanimatedReducedMotion = useReducedMotion();
-  const reducedMotion = hookReducedMotion || reanimatedReducedMotion;
+  const reducedMotion = useReducedMotion();
   const styles = useSheetStyles(colors);
 
   const recorderRef = useRef<VoiceoverRecorder | null>(null);

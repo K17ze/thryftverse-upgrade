@@ -104,7 +104,9 @@ export default function HomeScreen() {
   const followingFeed = useFollowingFeed();
   const forYouFeed = useForYouFeed();
   const { isOffline } = useConnectivity();
-  useVisuallyComplete('Home');
+  // Visit-scoped readiness: 'mounted' fires on focus; completion is derived
+  // only after the milestones reported below all land.
+  const reportReady = useVisuallyComplete('Home');
 
   // Feature flags — additive enhancements gated by PostHog. Both default to
   // false (current behaviour) when PostHog is not configured.
@@ -475,6 +477,41 @@ export default function HomeScreen() {
   const showFollowingLoading = feedMode === 'following' && followingFeed.isLoading && !followingFeed.isRefreshing;
   const showFollowingRefreshing = feedMode === 'following' && followingFeed.isRefreshing;
   const showForYouLoading = feedMode === 'foryou' && forYouFeed.isLoading && !forYouFeed.isRefreshing && forYouFeed.listings.length === 0;
+
+  // Readiness milestones: 'data-ready' once feed data has actually resolved
+  // (listings arrived, an error surfaced, or the first sync that ran has
+  // settled), 'interaction-ready' alongside it since the feed's controls are
+  // usable once content or an honest terminal state is on screen. Neither
+  // fires on mount alone — the loading flags start false, so we only treat
+  // a sync as settled after one has actually begun.
+  const feedSyncBeganRef = React.useRef(false);
+  React.useEffect(() => {
+    if (isSyncing || forYouFeed.isLoading || followingFeed.isLoading) {
+      feedSyncBeganRef.current = true;
+    }
+    const feedResolved =
+      listings.length > 0
+      || forYouFeed.listings.length > 0
+      || Boolean(lastError)
+      || Boolean(forYouFeed.error)
+      || Boolean(followingFeed.error);
+    const syncSettled =
+      feedSyncBeganRef.current && !isSyncing && !forYouFeed.isLoading && !followingFeed.isLoading;
+    if (feedResolved || syncSettled) {
+      reportReady('data-ready');
+      reportReady('interaction-ready');
+    }
+  }, [
+    isSyncing,
+    lastError,
+    listings.length,
+    forYouFeed.isLoading,
+    forYouFeed.listings.length,
+    forYouFeed.error,
+    followingFeed.isLoading,
+    followingFeed.error,
+    reportReady,
+  ]);
 
   // Posters rail injected into the feed after 4 items (2 rows in 2-column
   // grid) so the first viewport shows header + tabs + media — nothing else.

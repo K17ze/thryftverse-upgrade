@@ -60,11 +60,15 @@ function LookTile({
   look,
   template,
   onPress,
+  onMediaLoad,
   colors,
   styles }: {
   look: LookApiItem;
   template: LookTemplate;
   onPress: () => void;
+  /** Telemetry hook — invoked when the tile's media finishes decoding.
+   *  Passed only on the first tile to mark the visit's `first-media`. */
+  onMediaLoad?: () => void;
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
 }) {
@@ -90,6 +94,7 @@ function LookTile({
           cachePolicy="memory-disk"
           recyclingKey={`look-${look.id}`}
           transition={180}
+          onLoad={onMediaLoad}
         />
 
         {/* Bottom gradient scrim — guarantees text contrast across all
@@ -166,6 +171,10 @@ export default function LooksTab() {
   useScrollToTop(scrollRef);
   const haptic = useHaptic();
   const reportReady = useReadiness('LooksTab');
+  // `first-media` is reported by the first rendered tile's image decode —
+  // optional telemetry (not in the required set), so a video-first feed
+  // simply doesn't record it.
+  const reportFirstMedia = useCallback(() => reportReady('first-media'), [reportReady]);
 
   const [looks, setLooks] = useState<LookApiItem[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -315,13 +324,14 @@ export default function LooksTab() {
             look={item}
             template={template}
             onPress={() => navigation.navigate('LookDetail', { lookId: item.id })}
+            onMediaLoad={index === 0 ? reportFirstMedia : undefined}
             colors={colors}
             styles={styles}
           />
         </View>
       );
     },
-    [styles, colors, navigation],
+    [styles, colors, navigation, reportFirstMedia],
   );
 
   // Deterministic span: editorial anchors + cinematic (video / multi-layer)

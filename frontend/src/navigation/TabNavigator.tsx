@@ -165,9 +165,10 @@ const CreateTabButton = ({
       style={[tabStyles.createButton, animStyle]}
       onPressIn={() => {
         // Spring-based tap feedback — snappy, settles fast (Motion.spring.tap).
+        // Subtle 2.5% scale-down per the charter's 0.97–0.985 press range.
         // When reduced motion is on, the spring is critically damped so the
         // scale change is effectively instant.
-        scale.value = withSpring(0.9, spring.tap);
+        scale.value = withSpring(0.975, spring.tap);
       }}
       onPressOut={() => {
         scale.value = withSpring(1, spring.tap);

@@ -8,7 +8,7 @@
  * Per AGENTS.md §4 (Anti-AI design):
  *  - Flat list with hairline separators, not grey cards.
  *  - Status as colored text, not decorative badges.
- *  - One icon family (Ionicons), consistent optical size.
+ *  - One icon family (AppIcon), consistent optical size.
  *  - Loading skeleton matching final row layout.
  *  - Complete state coverage: loading, empty, error+retry, populated.
  */
@@ -22,12 +22,15 @@ import {
   Pressable,
   RefreshControl,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import {
+  FlagshipScreen,
+  FlagshipHeader,
+  SkeletonBlock,
+  SkeletonCircle } from '../components/flagship';
 import { Space, Radius, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { AppIcon } from '../components/common/AppIcon';
@@ -312,14 +315,14 @@ export default function AgentLedgerScreen({ navigation }: Props) {
                 i < 4 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth },
               ]}
             >
-              <View style={[styles.skeletonIcon, { backgroundColor: colors.surfaceAlt }]} />
+              <SkeletonCircle size={Control.chrome} />
               <View style={styles.rowBody}>
                 <View style={styles.rowHeader}>
-                  <View style={[styles.skeletonBar, { backgroundColor: colors.surfaceAlt, width: 120 }]} />
-                  <View style={[styles.skeletonBar, { backgroundColor: colors.surfaceAlt, width: 40 }]} />
+                  <SkeletonBlock width={120} height={13} />
+                  <SkeletonBlock width={40} height={12} />
                 </View>
-                <View style={[styles.skeletonBar, { backgroundColor: colors.surfaceAlt, width: 200, marginTop: Space.xs }]} />
-                <View style={[styles.skeletonBar, { backgroundColor: colors.surfaceAlt, width: 140, marginTop: Space.xs / 2 }]} />
+                <SkeletonBlock width={200} height={12} style={{ marginTop: Space.xs }} />
+                <SkeletonBlock width={140} height={12} style={{ marginTop: Space.xs / 2 }} />
               </View>
             </View>
           ))}
@@ -783,17 +786,7 @@ function createStyles(colors: ThemeColors) {
       fontFamily: TypographyV2.bodyStrong.fontFamily,
       letterSpacing: TypographyV2.body.letterSpacing,
     },
-    // Skeleton
-    skeletonIcon: {
-      width: Control.chrome,
-      height: Control.chrome,
-      borderRadius: Radius.md,
-      flexShrink: 0,
-    },
-    skeletonBar: {
-      height: 12,
-      borderRadius: Radius.sm,
-    },
+    // Empty / error state
     // Empty / error state
     stateWrap: {
       alignItems: 'center',

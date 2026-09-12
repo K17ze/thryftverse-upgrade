@@ -1,6 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -8,7 +7,7 @@ import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Radius, Space, Typography, Stroke, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
-import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { FlagshipScreen, FlagshipHeader, FlagshipState, SkeletonBlock } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
@@ -25,14 +24,10 @@ import {
   type ResponseLength,
   type Tone,
   type TriggerMode } from '../platform/agents/agentDefinition';
-import {
-  PROVIDER_CONFIGS,
-  type AIProvider,
-  type ConnectedProvider,
-  type DiscoveredModel,
-  discoverModels,
-  getConnectedProviders } from '../services/aiProviderApi';
-import { validateBotFromApi } from '../services/botsApi';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
+import { fetchBotByIdFromApi, validateBotFromApi } from '../services/botsApi';
+import { useConnectivity } from '../hooks/useConnectivity';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BotBuilder'>;
 
@@ -75,10 +70,24 @@ const RISK_GROUPS: Array<{
 ];
 
 const RISK_DOT: Record<RiskLevel, string> = {
-  low: 'checkmark-circle',
-  medium: 'create-outline',
+  low: 'check',
+  medium: 'edit',
   high: 'megaphone-outline',
-  critical: 'warning-outline' };
+  critical: 'warning' };
+
+// Agents execute on the server runtime, which supports a fixed model
+// catalogue (backend agentConfigSchema). Model ids outside this list are
+// rejected by POST /bots, PATCH /bots/:id and /bots/validate — so the
+// picker is scoped to what the deployment can actually run.
+const SUPPORTED_MODELS: Array<{
+  value: ChatAgentConfig['model'];
+  label: string;
+  detail: string;
+}> = [
+  { value: 'gpt-5.6-sol', label: 'gpt-5.6-sol', detail: '' },
+  { value: 'gpt-5.6-terra', label: 'gpt-5.6-terra', detail: 'Default for this deployment' },
+  { value: 'gpt-5.6-luna', label: 'gpt-5.6-luna', detail: '' },
+];
 
 const ACTIVE_CAPABILITIES: ReadonlySet<AgentCapability> = new Set([
   'chat.draft_reply',
@@ -91,6 +100,7 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
+  const { isOffline } = useConnectivity();
   const existingBot = useStore((state) =>
     state.customBots.find((bot) => bot.id === botId && bot.type === 'custom')
   );
@@ -115,6 +125,9 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
   const [starterTwo, setStarterTwo] = useState(legacyConfig?.starterPrompts[1] ?? '');
   const [reasoningEffort, setReasoningEffort] = useState<ChatAgentConfig['reasoningEffort']>(
     legacyConfig?.reasoningEffort ?? 'medium'
+  );
+  const [modelId, setModelId] = useState<ChatAgentConfig['model']>(
+    legacyConfig?.model ?? 'gpt-5.6-terra'
   );
 
   // Progressive disclosure — step collapse states.
@@ -167,65 +180,64 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
   );
   const [maxTurns, setMaxTurns] = useState(legacyConfig?.historyLimit ?? 16);
 
-  // --- Provider connection (dynamic model discovery) ---
-  const [connectedProviders, setConnectedProviders] = useState<ConnectedProvider[]>([]);
-  const [providersLoading, setProvidersLoading] = useState(true);
-  const [discoveredModels, setDiscoveredModels] = useState<DiscoveredModel[]>([]);
-  const [modelsLoading, setModelsLoading] = useState(false);
-  const [providerId, setProviderId] = useState<string>('');
-  const [modelId, setModelId] = useState<string>(legacyConfig?.model ?? '');
+  const [isSaving, setIsSaving] = useState(false);
 
+  // --- Edit hydration ---
+  // `existingBot` comes from the store, which may still be loading when the
+  // screen mounts. Hydrate the form once: from the store when it arrives, or
+  // directly from GET /bots/:id when the store has no copy.
+  const hydratedRef = useRef(false);
+  const [hydrating, setHydrating] = useState(Boolean(botId) && !existingBot);
+  const [hydrateError, setHydrateError] = useState(false);
+  const [hydrateAttempt, setHydrateAttempt] = useState(0);
   useEffect(() => {
+    if (!botId || hydratedRef.current) return;
     let cancelled = false;
-    (async () => {
-      try {
-        const connected = await getConnectedProviders();
-        if (cancelled) return;
-        setConnectedProviders(connected);
-        // Prefer the provider that matches the stored model when editing.
-        const initialProvider =
-          (connected.find((p) => p.provider === (existingBot?.runtimeMode as AIProvider | undefined))?.provider ??
-            connected[0]?.provider) ??
-          '';
-        setProviderId(initialProvider);
-      } catch {
-        // Non-fatal — treated as no connected providers.
-      } finally {
-        if (!cancelled) setProvidersLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
+    const hydrate = (bot: ChatBot) => {
+      if (cancelled || hydratedRef.current) return;
+      hydratedRef.current = true;
+      const config = bot.agentConfig;
+      setName(bot.name);
+      setDescription(bot.description);
+      setCommandHint(bot.commandHint);
+      setCategory(bot.category as AgentCategory);
+      setCategoryTouched(true);
+      setInstructions(config?.instructions ?? '');
+      setTriggerMode(config?.triggerMode ?? 'mention');
+      setTone(config?.tone ?? 'focused');
+      setResponseLength(config?.responseLength ?? 'balanced');
+      setStarterOne(config?.starterPrompts[0] ?? '');
+      setStarterTwo(config?.starterPrompts[1] ?? '');
+      setReasoningEffort(config?.reasoningEffort ?? 'medium');
+      setModelId(config?.model ?? 'gpt-5.6-terra');
+      const grants = buildInitialCapabilityGrants(bot.category as AgentCategory);
+      const enabled = new Set(bot.permissions);
+      setCapabilityGrants(grants.map((g) => ({ ...g, enabled: enabled.has(g.capability) })));
+      const historyLimit = config?.historyLimit ?? 16;
+      setConversationContext(historyLimit > 0);
+      setMaxTurns(historyLimit > 0 ? historyLimit : 16);
+      setStep2Open(true);
+      setStep3Open(true);
+      setStep4Open(true);
+      setHydrating(false);
     };
-  }, [existingBot?.runtimeMode]);
-
-  // Discover models for the selected provider.
-  useEffect(() => {
-    if (!providerId) {
-      setDiscoveredModels([]);
+    if (existingBot) {
+      hydrate(existingBot);
       return;
     }
-    let cancelled = false;
-    setModelsLoading(true);
-    (async () => {
-      try {
-        const models = await discoverModels(providerId as AIProvider);
-        if (cancelled) return;
-        setDiscoveredModels(models);
-        // If the current model id isn't in the discovered list, keep it as a
-        // manual entry rather than silently clearing it (truthful UI).
-      } catch {
-        if (!cancelled) setDiscoveredModels([]);
-      } finally {
-        if (!cancelled) setModelsLoading(false);
-      }
-    })();
+    fetchBotByIdFromApi(botId)
+      .then(hydrate)
+      .catch(() => {
+        if (!cancelled) {
+          setHydrateError(true);
+          setHydrating(false);
+        }
+      });
     return () => {
       cancelled = true;
     };
-  }, [providerId]);
-
-  const [isSaving, setIsSaving] = useState(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [botId, existingBot, hydrateAttempt]);
 
   const slug = useMemo(
     () => name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
@@ -322,8 +334,8 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
     commandHint: commandHint.trim() || '/ask',
     starterPrompts: [starterOne, starterTwo].map((item) => item.trim()).filter(Boolean),
     providerConnection: {
-      providerId,
-      modelId: modelId.trim() },
+      providerId: 'openai',
+      modelId },
     capabilityGrants,
     memoryPolicy: {
       conversationContext,
@@ -338,9 +350,8 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
   ): Omit<ChatBot, 'id' | 'type' | 'creatorId'> => {
     const agentConfig: ChatAgentConfig = {
       instructions: def.instructions,
-      // The legacy contract types model as a fixed union; the provider is now
-      // the source-of-truth so we cast the discovered id through the string
-      // type. The store persists the real id; the union is a legacy artefact.
+      // The model catalogue is fixed by the server runtime contract —
+      // `modelId` is already constrained to the supported enum.
       model: def.providerConnection.modelId as ChatAgentConfig['model'],
       triggerMode: def.triggerMode,
       responseLength: def.responseLength,
@@ -349,13 +360,14 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
       historyLimit: def.memoryPolicy.conversationContext ? def.memoryPolicy.maxTurns : 0,
       starterPrompts: def.starterPrompts };
     return {
-      slug: slug || existingBot?.slug || 'agent',
+      // Backend requires slug ≥ 2 chars when provided.
+      slug: slug.length >= 2 ? slug : existingBot?.slug ?? 'agent',
       name: def.name,
       description: def.description,
       commandHint: def.commandHint ?? '/ask',
       category: def.category,
       status: 'available' as const,
-      runtimeMode: def.providerConnection.providerId || 'ai',
+      runtimeMode: 'ai',
       permissions: enabledCapabilitiesToBackendPermissions(
         def.capabilityGrants.filter((g) => g.enabled && ACTIVE_CAPABILITIES.has(g.capability))
       ),
@@ -387,17 +399,60 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
       }
       navigation.goBack();
     } catch (error) {
-      show(error instanceof Error ? error.message : 'Could not save this agent.', 'error');
+      show(
+        isOffline
+          ? "You're offline. Reconnect to save this agent."
+          : error instanceof Error ? error.message : 'Could not save this agent.',
+        'error'
+      );
     } finally {
       setIsSaving(false);
     }
   };
 
+  // Edit-mode hydration: the form can't render truthfully until the bot's
+  // stored config arrives.
+  if (botId && (hydrating || (hydrateError && !hydratedRef.current))) {
+    return (
+      <FlagshipScreen
+        header={
+          <FlagshipHeader title="Edit agent" onBack={() => navigation.goBack()} />
+        }
+        scrollEnabled={false}
+      >
+        {hydrateError ? (
+          <FlagshipState
+            variant={isOffline ? 'offline' : 'error'}
+            title={isOffline ? "You're offline" : "Couldn't load this agent"}
+            subtitle={
+              isOffline
+                ? 'Reconnect to load this agent.'
+                : 'Check your connection and try again.'
+            }
+            actionLabel="Try again"
+            onAction={() => {
+              setHydrateError(false);
+              setHydrating(true);
+              setHydrateAttempt((a) => a + 1);
+            }}
+          />
+        ) : (
+          <View style={styles.hydrateWrap}>
+            <SkeletonBlock width="100%" height={156} radius={Radius.md} />
+            <SkeletonBlock width="60%" height={16} style={{ marginTop: Space.lg }} />
+            <SkeletonBlock width="100%" height={Control.hit} radius={Radius.md} style={{ marginTop: Space.sm }} />
+            <SkeletonBlock width="100%" height={Control.hit} radius={Radius.md} style={{ marginTop: Space.sm }} />
+          </View>
+        )}
+      </FlagshipScreen>
+    );
+  }
+
   return (
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title={existingBot ? 'Edit agent' : 'Create agent'}
+          title={existingBot || botId ? 'Edit agent' : 'Create agent'}
           onBack={() => navigation.goBack()}
         />
       }
@@ -504,13 +559,13 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
             />
             {triggerMode === 'mention' && slug ? (
               <View style={styles.invocationPreview}>
-                <Ionicons name="at" size={17} color={colors.textSecondary} />
+                <AppIcon name="at" size={IconSize.sm} color="textSecondary" opticalCenter accessible={false} />
                 <Text style={styles.invocationText}>People will type @{slug} followed by a request.</Text>
               </View>
             ) : null}
             {triggerMode === 'always' ? (
               <View style={styles.caution}>
-                <Ionicons name="information-circle-outline" size={17} color={colors.textSecondary} />
+                <AppIcon name="info" size={IconSize.sm} color="textSecondary" opticalCenter accessible={false} />
                 <Text style={styles.cautionText}>
                   Every-message agents can add noise and use more model capacity. Use this only when constant participation is intentional.
                 </Text>
@@ -576,71 +631,18 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
             colors={colors}
             styles={styles}
           >
-            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Provider</Text>
-            {providersLoading ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator size="small" color={colors.textSecondary} />
-                <Text style={styles.loadingText}>Checking connected providers…</Text>
-              </View>
-            ) : connectedProviders.length === 0 ? (
-              <View style={styles.caution}>
-                <Ionicons name="cloud-offline-outline" size={17} color={colors.textSecondary} />
-                <Text style={styles.cautionText}>
-                  No AI provider is connected yet. Connect one in Agent Studio to discover available models, or enter a model id manually below.
-                </Text>
-              </View>
-            ) : (
-              <ChoiceList
-                options={connectedProviders.map((p) => ({
-                  value: p.provider,
-                  label: p.config.name,
-                  detail: p.config.description }))}
-                selected={providerId}
-                onSelect={(value) => {
-                  setProviderId(value);
-                  setModelId('');
-                }}
-              />
-            )}
-
             <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Model</Text>
-            {providerId && discoveredModels.length > 0 ? (
-              <ChoiceList
-                options={discoveredModels.map((m) => ({
-                  value: m.providerModelId,
-                  label: m.displayName,
-                  detail: m.deprecated ? 'Deprecated by provider' : m.providerModelId }))}
-                selected={modelId}
-                onSelect={(value) => setModelId(value)}
-              />
-            ) : providerId && modelsLoading ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator size="small" color={colors.textSecondary} />
-                <Text style={styles.loadingText}>Discovering models from {PROVIDER_CONFIGS[providerId as AIProvider]?.name ?? 'provider'}…</Text>
-              </View>
-            ) : providerId ? (
-              <View style={styles.caution}>
-                <Ionicons name="search-outline" size={17} color={colors.textSecondary} />
-                <Text style={styles.cautionText}>
-                  No models were discovered from this provider. You can still enter a model id manually.
-                </Text>
-              </View>
-            ) : null}
-            <AppInput
-              label="Model id"
-              value={modelId}
-              onChangeText={setModelId}
-              placeholder="e.g. gpt-4o"
-              maxLength={80}
-              autoCapitalize="none"
-              autoCorrect={false}
-              helperText={
-                providerId
-                  ? 'Discovered from your connected provider.'
-                  : 'Connect a provider in Agent Studio to discover models.'
-              }
-              accessibilityLabel="Provider model id"
+            <ChoiceList
+              options={SUPPORTED_MODELS}
+              selected={modelId}
+              onSelect={(value) => setModelId(value as ChatAgentConfig['model'])}
             />
+            <View style={styles.caution}>
+              <AppIcon name="info" size={IconSize.sm} color="textSecondary" opticalCenter accessible={false} />
+              <Text style={styles.cautionText}>
+                Agents run on the server runtime. This deployment supports the models listed here.
+              </Text>
+            </View>
 
             <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>History limit</Text>
             <CapabilityRow
@@ -696,10 +698,12 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
                 <View key={group.risk} style={styles.riskGroup}>
                   <View style={styles.riskGroupHeader}>
                     <View style={styles.riskGroupTitleRow}>
-                      <Ionicons
-                        name={RISK_DOT[group.risk] as keyof typeof Ionicons.glyphMap}
-                        size={16}
-                        color={group.risk === 'critical' ? colors.danger : colors.textSecondary}
+                      <AppIcon
+                        name={RISK_DOT[group.risk]}
+                        size={IconSize.sm}
+                        color={group.risk === 'critical' ? 'danger' : 'textSecondary'}
+                        opticalCenter
+                        accessible={false}
                       />
                       <Text style={styles.riskGroupTitle}>{group.title}</Text>
                     </View>
@@ -730,10 +734,12 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
         {step5Available ? (
           <View style={styles.publishSection}>
             <View style={[styles.publishHeader, { borderBottomColor: colors.border }]}>
-              <Ionicons
+              <AppIcon
                 name={canPublish ? 'checkmark-circle' : 'ellipse-outline'}
-                size={20}
-                color={canPublish ? colors.success : colors.textMuted}
+                size={IconSize.md}
+                color={canPublish ? 'success' : 'textMuted'}
+                opticalCenter
+                accessible={false}
               />
               <Text style={[styles.publishTitle, { color: colors.textPrimary }]}>
                 {canPublish ? 'Ready to publish' : 'Save as draft'}
@@ -860,7 +866,7 @@ function CollapsibleStep({
       >
         <View style={styles.stepHeaderLeft}>
           {complete ? (
-            <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+            <AppIcon name="checkmark-circle" size={IconSize.sm} color="success" opticalCenter accessible={false} />
           ) : (
             <Text style={[styles.stepNumber, { color: colors.textMuted }]}>{stepNumber}</Text>
           )}
@@ -872,10 +878,12 @@ function CollapsibleStep({
           </View>
         </View>
         {alwaysOpen ? null : (
-          <Ionicons
-            name={isOpen ? 'chevron-up-outline' : 'chevron-down-outline'}
-            size={18}
-            color={colors.textMuted}
+          <AppIcon
+            name={isOpen ? 'chevronUp' : 'chevronDown'}
+            size={IconSize.sm}
+            color="textMuted"
+            opticalCenter
+            accessible={false}
           />
         )}
       </Pressable>
@@ -909,10 +917,12 @@ function CapabilityRow({
       <View style={[styles.permissionRow, { opacity: 0.5 }]}>
         <View style={styles.permissionCopy}>
           <View style={styles.permissionLabelRow}>
-            <Ionicons
-              name="lock-closed-outline"
-              size={22}
-              color={colors.textMuted}
+            <AppIcon
+              name="lock"
+              size={IconSize.md}
+              color="textMuted"
+              opticalCenter
+              accessible={false}
             />
             <Text style={[styles.permissionTitle, { color: colors.textMuted }]}>{label}</Text>
           </View>
@@ -936,10 +946,12 @@ function CapabilityRow({
         accessibilityState={{ checked: enabled }}
       >
         <View style={styles.permissionLabelRow}>
-          <Ionicons
+          <AppIcon
             name={enabled ? 'checkmark-circle' : 'ellipse-outline'}
-            size={22}
-            color={enabled ? (isCritical ? colors.danger : colors.textPrimary) : colors.textMuted}
+            size={IconSize.md}
+            color={enabled ? (isCritical ? 'danger' : 'textPrimary') : 'textMuted'}
+            opticalCenter
+            accessible={false}
           />
           <Text style={styles.permissionTitle}>{label}</Text>
         </View>
@@ -1032,6 +1044,9 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xxl,
     gap: Space.lg },
+  hydrateWrap: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.md },
   // Progressive disclosure — collapsible steps
   stepSection: {
     gap: Space.sm },
@@ -1173,11 +1188,6 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.regular,
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight - 1 },
-  loadingRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.xs },
-  loadingText: {
-    color: colors.textSecondary,
-    fontFamily: Typography.family.regular,
-    fontSize: TypographyV2.meta.size },
   riskGroup: { gap: Space.sm },
   riskGroupHeader: { gap: Space.xs - 2 },
   riskGroupTitleRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },

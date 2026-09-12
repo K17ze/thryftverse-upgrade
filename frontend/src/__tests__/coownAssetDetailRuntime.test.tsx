@@ -77,6 +77,7 @@ vi.mock('../components/coown', () => {
     },
     CoOwnOrderBook: (props: Record<string, unknown>) => React.createElement('CoOwnOrderBookStub', props),
     CoOwnCorporateActionRow: (props: Record<string, unknown>) => React.createElement('View', props),
+    CoOwnDepthChart: (props: Record<string, unknown>) => React.createElement('CoOwnDepthChartStub', props),
   };
 });
 
@@ -95,24 +96,123 @@ vi.mock('@shopify/flash-list', () => ({
   FlashList: () => null,
 }));
 
-// ── gesture-handler + linear-gradient mocks: the commerce/detail barrel
-// re-exports CommerceMediaHero → CommerceMediaStage, whose build nodes
-// carry Flow syntax vitest cannot parse under node (same failure class
-// as react-native-mmkv in setup.ts). The sections never render these. ──
-vi.mock('react-native-gesture-handler', () => ({
-  GestureHandlerRootView: ({ children }: { children: React.ReactNode }) => children,
-  PanGestureHandler: () => null,
-  GestureDetector: ({ children }: { children: React.ReactNode }) => children,
-  Gesture: { Pan: () => ({ onStart: () => ({ onUpdate: () => ({ onEnd: () => ({ runOnJS: () => ({}) }) }) }) }) },
-}));
-vi.mock('expo-linear-gradient', () => ({
-  LinearGradient: ({ children }: { children: React.ReactNode }) => children,
-}));
-
 // ── BottomSheet mock: pulls react-native-reanimated, whose build node
 // cannot parse. The barrel re-exports MakeOfferSheet which imports it. ──
 vi.mock('../components/BottomSheet', () => ({
   default: ({ children }: { children: React.ReactNode }) => children,
+  BottomSheet: ({ children }: { children: React.ReactNode }) => children,
+}));
+
+// ── commerce/detail barrel mock (mirrors coownDossierSheetRegression): the
+// barrel re-exports MakeOfferSheet → listingOffersApi → apiClient plus other
+// native-chained modules whose Flow source node cannot parse. The stubs
+// below preserve the rendered text contract (label/value/title) that the
+// assertions exercise — only the native-pulling module load is cut. ──
+vi.mock('../components/commerce/detail', () => {
+  const React = require('react');
+  return {
+    CommerceDetailSection: ({ label, children }: { label?: string; children?: React.ReactNode }) =>
+      React.createElement('View', null, label, children),
+    CommerceDetailUnavailableInline: ({ title, body }: { title?: string; body?: string }) =>
+      React.createElement('View', null, title, body),
+    CommerceDetailDisclosureRow: ({ label, onPress }: { label?: string; onPress?: () => void }) =>
+      React.createElement('Pressable', { onPress, accessibilityRole: 'button' }, label),
+    CommerceDetailMetricRow: ({ label, value, subLabel, trailing }: {
+      label?: string;
+      value?: React.ReactNode;
+      subLabel?: string;
+      trailing?: React.ReactNode;
+    }) => React.createElement('View', null, label, value, subLabel ?? null, trailing ?? null),
+  };
+});
+
+// ── apiClient mock: marketApi is loaded for real below (importOriginal), so
+// its apiClient dependency must be stubbed — apiClient transitively imports
+// expo-secure-store / expo-network / expo-updates via sentry, any of which
+// can resolve to RN Flow source that node cannot parse (`import typeof`).
+// The full export surface is stubbed so any transitively loaded consumer
+// still resolves its named imports. ──
+vi.mock('../lib/apiClient', () => ({
+  fetchJson: vi.fn(() => Promise.reject(new Error('fetchJson not mocked'))),
+  fetchWithAuth: vi.fn(() => Promise.reject(new Error('fetchWithAuth not mocked'))),
+  parseApiError: (error: unknown, fallback = 'Request failed') => ({
+    message: error instanceof Error ? error.message : fallback,
+    code: null,
+    status: undefined,
+    isNetworkError: false,
+    structuredDetails: null,
+  }),
+  classifyNetworkError: () => 'network',
+  getApiBaseUrl: () => 'http://localhost:4000/api/v1',
+  getRequestId: () => null,
+  isRecord: (value: unknown) => typeof value === 'object' && value !== null,
+  ApiRequestError: class ApiRequestError extends Error {
+    status?: number;
+    details?: unknown;
+    constructor(message: string, status?: number, details?: unknown) {
+      super(message);
+      this.name = 'ApiRequestError';
+      this.status = status;
+      this.details = details;
+    }
+  },
+  AuthSecureStoreUnavailableError: class AuthSecureStoreUnavailableError extends Error {},
+  getAuthSession: vi.fn(() => Promise.resolve(null)),
+  setAuthSession: vi.fn(() => Promise.resolve()),
+  clearAuthSession: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock('../lib/offlineQueue', () => ({
+  useOfflineQueue: vi.fn(() => ({ enqueue: vi.fn() })),
+  OFFLINE_WRITE_QUEUED_CODE: 499,
+}));
+
+// ── Native module mocks (mirrored from coownDossierSheetRegression so this
+// file is import-order independent of setup.ts coverage) ──
+vi.mock('expo-secure-store', () => ({
+  default: {
+    getItemAsync: vi.fn(() => Promise.resolve(null)),
+    setItemAsync: vi.fn(() => Promise.resolve()),
+    deleteItemAsync: vi.fn(() => Promise.resolve()),
+  },
+  getItemAsync: vi.fn(() => Promise.resolve(null)),
+  setItemAsync: vi.fn(() => Promise.resolve()),
+  deleteItemAsync: vi.fn(() => Promise.resolve()),
+}));
+vi.mock('expo-network', () => ({
+  default: {
+    getNetworkStateAsync: vi.fn(() => Promise.resolve({ isConnected: true, isInternetReachable: true })),
+  },
+  getNetworkStateAsync: vi.fn(() => Promise.resolve({ isConnected: true, isInternetReachable: true })),
+}));
+vi.mock('expo-constants', () => ({
+  default: {
+    expoConfig: { extra: { apiUrl: 'http://localhost' } },
+  },
+}));
+vi.mock('react-native-mmkv', () => ({
+  createMMKV: () => ({
+    set: vi.fn(),
+    getString: vi.fn(),
+    getBoolean: vi.fn(),
+    getNumber: vi.fn(),
+    contains: vi.fn(),
+    remove: vi.fn(),
+    getAllKeys: vi.fn(() => []),
+    clearAll: vi.fn(),
+    addOnValueChangedListener: vi.fn(() => ({ remove: vi.fn() })),
+  }),
+  MMKV: class {
+    set = vi.fn();
+    getString = vi.fn();
+    getBoolean = vi.fn();
+    getNumber = vi.fn();
+    contains = vi.fn();
+    remove = vi.fn();
+    getAllKeys = vi.fn(() => []);
+    clearAll = vi.fn();
+    addOnValueChangedListener = vi.fn(() => ({ remove: vi.fn() }));
+  },
 }));
 
 import { AssetOverviewSection } from '../components/coown/asset-detail/AssetOverviewSection';
@@ -234,10 +334,7 @@ describe('AssetOverviewSection — ranged price history', () => {
       lastExecutionPriceGbp: null,
       appraisedValuePerUnitGbp: null,
       referenceVsAppraisalPct: null,
-      dossierDocuments: [],
-      hasDocuments: false,
-      onOpenDiligence: noop,
-      onOpenRiskDisclosure: noop,
+      onOpenDossier: noop,
       lifecycleState: 'secondaryTrading',
     }));
   }
@@ -359,10 +456,7 @@ describe('AssetOverviewSection — ranged price history', () => {
         lastExecutionPriceGbp: null,
         appraisedValuePerUnitGbp: null,
         referenceVsAppraisalPct: null,
-        dossierDocuments: [],
-        hasDocuments: false,
-        onOpenDiligence: noop,
-        onOpenRiskDisclosure: noop,
+        onOpenDossier: noop,
         lifecycleState: 'secondaryTrading',
       }));
     });

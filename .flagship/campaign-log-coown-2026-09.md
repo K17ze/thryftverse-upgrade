@@ -1031,7 +1031,7 @@ fixed.
 - API health: OK (Redis PONG).
 - API container rebuilt with all fixes.
 
-## Wave 9 — Broker-grade market depth + portfolio visualization (2026-09-10)
+## Wave 9 ï¿½ Broker-grade market depth + portfolio visualization (2026-09-10)
 
 ### Research-driven scope
 Fresh research on flagship fractional-ownership and brokerage platforms
@@ -1043,33 +1043,33 @@ identified six high-impact upgrades over the existing Co-Own surface:
 3. Portfolio N+1 fan-out elimination via the bounded /co-own/portfolio endpoint.
 4. Portfolio allocation donut (Fidelity/Vantage/Assetico pattern).
 5. Sparkline component for position cards and watchlist rows.
-6. AssetDetailScreen decomposition — extract data and trade-intent hooks.
+6. AssetDetailScreen decomposition ï¿½ extract data and trade-intent hooks.
 
 ### Backend
 - NEW ackend/api/src/routes/coOwnDepth.ts:
-  - GET /co-own/assets/:assetId/depth — cumulative bid/ask depth, spread, mid, last.
-  - GET /co-own/assets/:assetId/trades — paginated time & sales with taker side.
+  - GET /co-own/assets/:assetId/depth ï¿½ cumulative bid/ask depth, spread, mid, last.
+  - GET /co-own/assets/:assetId/trades ï¿½ paginated time & sales with taker side.
 - Registered in ackend/api/src/index.ts.
 - Backend TypeScript: pass, 0 errors.
 - Live verification: both endpoints return 200 with seeded data.
 
-### Frontend — new components
-- CoOwnDepthChart.tsx — Skia two-sided cumulative depth area chart.
-- CoOwnTimeAndSales.tsx — flat-on-canvas trade tape with taker-side colors.
-- CoOwnSparkline.tsx — SVG inline sparkline for position cards.
-- CoOwnPortfolioAllocation.tsx — SVG donut allocation chart with legend.
-- useAssetDetailData.ts — extracted data-fetching hook (asset, holdings,
+### Frontend ï¿½ new components
+- CoOwnDepthChart.tsx ï¿½ Skia two-sided cumulative depth area chart.
+- CoOwnTimeAndSales.tsx ï¿½ flat-on-canvas trade tape with taker-side colors.
+- CoOwnSparkline.tsx ï¿½ SVG inline sparkline for position cards.
+- CoOwnPortfolioAllocation.tsx ï¿½ SVG donut allocation chart with legend.
+- useAssetDetailData.ts ï¿½ extracted data-fetching hook (asset, holdings,
   distributions, corporate actions, order book, focus refresh).
-- useAssetDetailTradeState.ts — extracted trade-intent hook (side, mode,
+- useAssetDetailTradeState.ts ï¿½ extracted trade-intent hook (side, mode,
   price, units, duration, derived estimates, book-level prefill).
 
-### Frontend — integration
-- marketApi.ts — added fetchCoOwnDepth + fetchCoOwnTradeTape.
-- AssetMarketSection.tsx — depth chart above the ladder; tape upgraded to
+### Frontend ï¿½ integration
+- marketApi.ts ï¿½ added fetchCoOwnDepth + fetchCoOwnTradeTape.
+- AssetMarketSection.tsx ï¿½ depth chart above the ladder; tape upgraded to
   use taker-side Time & Sales when available, legacy executions fallback.
-- coOwnPortfolio.ts — fetchCoOwnPortfolioPositions now tries the bounded
+- coOwnPortfolio.ts ï¿½ fetchCoOwnPortfolioPositions now tries the bounded
   /co-own/portfolio endpoint first, falls back to N+1 on failure.
-- PortfolioScreen.tsx — allocation donut at the top of the expanded
+- PortfolioScreen.tsx ï¿½ allocation donut at the top of the expanded
   allocation section in the insights tab.
 
 ### Verification
@@ -1080,18 +1080,18 @@ identified six high-impact upgrades over the existing Co-Own surface:
 - New endpoints live: /co-own/assets/:id/depth, /co-own/assets/:id/trades.
 - API container rebuilt and restarted.
 
-### Adversarial review — Wave 9 (2026-09-10)
+### Adversarial review ï¿½ Wave 9 (2026-09-10)
 
 Independent reviewer found 0 P0, 3 P1, 8 P2 issues.
 
 P1 fixes applied:
-- P1-1: Stale tapeTrades on asset switch — clear tapeTrades in loadExecutions.
-- P1-2: totalUnits contract violation in projection adapter — set to 0 (unknown) instead of unitsOwned.
-- P1-3: outstandingUnits contract violation in projection adapter — set to 0 (unknown) instead of unitsOwned.
+- P1-1: Stale tapeTrades on asset switch ï¿½ clear tapeTrades in loadExecutions.
+- P1-2: totalUnits contract violation in projection adapter ï¿½ set to 0 (unknown) instead of unitsOwned.
+- P1-3: outstandingUnits contract violation in projection adapter ï¿½ set to 0 (unknown) instead of unitsOwned.
 
 P2 fixes applied:
-- P2-1: Buyout trades taker side — added explicit 'sell' branch for both order ids NULL.
-- P2-3: Skia.Path.Make() null deref — added null guard after Make() calls.
+- P2-1: Buyout trades taker side ï¿½ added explicit 'sell' branch for both order ids NULL.
+- P2-3: Skia.Path.Make() null deref ï¿½ added null guard after Make() calls.
 
 P2 findings documented but not fixed (low impact, deferred):
 - P2-2: Order hard-deletion breaks taker side derivation (FK ON DELETE SET NULL).
@@ -1110,7 +1110,7 @@ P2 findings documented but not fixed (low impact, deferred):
 - Trades endpoint: 200 with seeded data.
 - API container rebuilt and restarted with taker-side fix.
 
-## Wave 10 — trust depth, DRIP correctness, distribution UX, exit disclosure
+## Wave 10 ï¿½ trust depth, DRIP correctness, distribution UX, exit disclosure
 
 ### Research
 - Fresh current-date research on Masterworks, Rally Rd., Lofty, Konvi, Moonfare, Schwab.
@@ -1126,14 +1126,14 @@ P2 findings documented but not fixed (low impact, deferred):
   - `markDistributionRetainedCash` helper added.
   - `resolveCurrentPriceGbp` ORDER BY tiebreaker: `created_at DESC, id DESC` (P2-1 fix).
 
-### Frontend — new components
-- `CoOwnDistributionCalendar.tsx` — vertical timeline of upcoming/recent distributions with status badges and projected personal payout.
-- `CoOwnFeeSchedule.tsx` — flat fee stack display (management, performance, platform, sourcing).
-- `CoOwnDripToggle.tsx` — per-asset DRIP enrollment toggle with projected units.
+### Frontend ï¿½ new components
+- `CoOwnDistributionCalendar.tsx` ï¿½ vertical timeline of upcoming/recent distributions with status badges and projected personal payout.
+- `CoOwnFeeSchedule.tsx` ï¿½ flat fee stack display (management, performance, platform, sourcing).
+- `CoOwnDripToggle.tsx` ï¿½ per-asset DRIP enrollment toggle with projected units.
 
-### Frontend — upgraded components
-- `CoOwnRightsSheet.tsx` — TBC rights now display `tbcReason` and `tbcEtaDate` (P1).
-- `CoOwnPositionCard.tsx` — lockup chip showing "Locked until Mon YYYY" when lockup is active (P1).
+### Frontend ï¿½ upgraded components
+- `CoOwnRightsSheet.tsx` ï¿½ TBC rights now display `tbcReason` and `tbcEtaDate` (P1).
+- `CoOwnPositionCard.tsx` ï¿½ lockup chip showing "Locked until Mon YYYY" when lockup is active (P1).
 - `AssetOwnershipSection.tsx`:
   - Holding period row ("Lockup until Mon YYYY" / "Lockup complete" / "No lockup") (P1).
   - Active buyout offer card with price, premium/discount, expiry, and CTA (P2).
@@ -1150,16 +1150,16 @@ P2 findings documented but not fixed (low impact, deferred):
 - Backend Docker image rebuilt; API health: OK (Redis PONG).
 
 ### Adversarial review
-- P0-1: Missing seller wallet credit — FIXED (issuer now credited).
-- P0-2: Distribution cash credit flow not in codebase — documented; DRIP debit is correct given external settlement credits the wallet.
-- P1-1: Insufficient balance infinite retry — FIXED (retained_cash status).
-- P1-2: DRIP statuses not handled in UI — FIXED.
-- P1-3: Stale DRIP warning — FIXED (removed).
-- P1-4: Expired buyout shows as active — FIXED (expiry check added).
-- P2-1: Price query non-deterministic ordering — FIXED (id DESC tiebreaker).
-- P2-2: formatTbcEta called 3x per render — minor, deferred.
+- P0-1: Missing seller wallet credit ï¿½ FIXED (issuer now credited).
+- P0-2: Distribution cash credit flow not in codebase ï¿½ documented; DRIP debit is correct given external settlement credits the wallet.
+- P1-1: Insufficient balance infinite retry ï¿½ FIXED (retained_cash status).
+- P1-2: DRIP statuses not handled in UI ï¿½ FIXED.
+- P1-3: Stale DRIP warning ï¿½ FIXED (removed).
+- P1-4: Expired buyout shows as active ï¿½ FIXED (expiry check added).
+- P2-1: Price query non-deterministic ordering ï¿½ FIXED (id DESC tiebreaker).
+- P2-2: formatTbcEta called 3x per render ï¿½ minor, deferred.
 
-## Wave 11 — backend contracts + screen wiring
+## Wave 11 ï¿½ backend contracts + screen wiring
 
 ### Migration 279
 - `coOwn_assets`: added `lockup_end_date`, `lockup_months`, `management_fee_pct`, `performance_fee_pct`, `platform_fee_pct`, `sourcing_fee_gbp`
@@ -1182,7 +1182,7 @@ P2 findings documented but not fixed (low impact, deferred):
 ### Frontend screen wiring
 - `AssetDetailScreen`: wired lockup/buyout props to AssetOwnershipSection; wired tbcReason/tbcEtaDate to rightsRows
 - `PortfolioScreen`: wired lockupEndDate to CoOwnPositionCard
-- `AssetDueDiligenceScreen`: fixed placeholder provenance date from '' to '—'; wired tbcReason/tbcEtaDate to rightsRows (P2-2 fix)
+- `AssetDueDiligenceScreen`: fixed placeholder provenance date from '' to 'ï¿½'; wired tbcReason/tbcEtaDate to rightsRows (P2-2 fix)
 - `coOwnPortfolio.ts`: mapped lockupEndDate in both projection and legacy paths
 
 ### DRIP handler fixes (P2-1)
@@ -1197,16 +1197,16 @@ P2 findings documented but not fixed (low impact, deferred):
 
 ### Adversarial review (Wave 11)
 - P0: 0
-- P1: 1 (portfolio projection missing lockupEndDate) — FIXED
-- P2: 3 (DRIP updated_at, due-diligence rights TBC, feeSchedule null contract) — P2-1 and P2-2 FIXED, P2-3 deferred (latent, no runtime impact)
+- P1: 1 (portfolio projection missing lockupEndDate) ï¿½ FIXED
+- P2: 3 (DRIP updated_at, due-diligence rights TBC, feeSchedule null contract) ï¿½ P2-1 and P2-2 FIXED, P2-3 deferred (latent, no runtime impact)
 
-## Wave 32 — asset detail section UI/UX upgrade
+## Wave 32 ï¿½ asset detail section UI/UX upgrade
 
 ### Problem
 User feedback: "co-own asset detail screen section still need to be upgraded and improved further still the overview, market and ownership looks too poorly engineered without proper UI/UX engineering and upgradation, still its looks too overfitted without, throwing so much unnecessary information and missing so much necessary"
 
 ### Test fixes (9 failures from previous session)
-- Updated `coownDetailFlagshipClosure.test.ts` (7 tests): reference price label, transaction surface, asset story excerpt, risk disclosure, NAV vs reference — all moved to AssetOverviewDetails during refactor
+- Updated `coownDetailFlagshipClosure.test.ts` (7 tests): reference price label, transaction surface, asset story excerpt, risk disclosure, NAV vs reference ï¿½ all moved to AssetOverviewDetails during refactor
 - Updated `nativeVisualAcceptance.test.ts` (1 test): transaction surface removed, dock check replaces it
 - Updated `productDetailFlagshipVisualAcceptance.test.ts` (1 test): trustFactualLine ? trustFacts in AssetOverviewDetails
 
@@ -1223,7 +1223,7 @@ User feedback: "co-own asset detail screen section still need to be upgraded and
 - Position value is the hero (priceHero scale, largest text)
 - P&L is a colored badge inline next to value (not a separate metric row)
 - Zero P&L is neutral (muted), not positive (P1-3 fix)
-- Buyout offers separated from corporate actions — prominent CTA block
+- Buyout offers separated from corporate actions ï¿½ prominent CTA block
 - Corporate actions in progressive disclosure "Ownership events" section
 - Rights & transfers grouped: Transfers (with prominent lockup chip), Rights, Exit
 - Distributions hero shows per-unit amount, status, date, total
@@ -1239,29 +1239,29 @@ User feedback: "co-own asset detail screen section still need to be upgraded and
 
 ### Adversarial review (Wave 32)
 - P0: 0
-- P1: 3 (tape view zero height, DetailGroup uppercase, zero P&L as positive) — ALL FIXED
-- P2: 5 (dead mode branch, unused executionsTotal, unused referenceVsAppraisalPct, double gutter, hardcoded lineHeight, unused allocation props) — 2 fixed (gutter, lineHeight), 3 deferred (cosmetic, no runtime impact)
+- P1: 3 (tape view zero height, DetailGroup uppercase, zero P&L as positive) ï¿½ ALL FIXED
+- P2: 5 (dead mode branch, unused executionsTotal, unused referenceVsAppraisalPct, double gutter, hardcoded lineHeight, unused allocation props) ï¿½ 2 fixed (gutter, lineHeight), 3 deferred (cosmetic, no runtime impact)
 
 ### Verification
 - Frontend TypeScript: pass, 0 errors
 - Frontend Vitest: 85 files, 1768 passed, 2 skipped, 0 failures
 
-## Wave 33 — visible flagship upgrades (chart hero, NAV moment, ownership bar, sticky nav)
+## Wave 33 ï¿½ visible flagship upgrades (chart hero, NAV moment, ownership bar, sticky nav)
 
 ### Problem
 User feedback: "keep going there is still non much visible improvements keep research and upgradation"
 
 ### Deep audit findings (read-only subagent)
-- P0: chart is 140pt (thumbnail, not hero) — `ExchangeLayout.chartHeroMinHeight: 220` token ignored
+- P0: chart is 140pt (thumbnail, not hero) ï¿½ `ExchangeLayout.chartHeroMinHeight: 220` token ignored
 - P1: chart wrapped in card chrome; range chips inside chart container
 - P1: asset story not prominent; trust badges too small
-- P1: appraisal/fee uses generic metric row — no NAV moment
+- P1: appraisal/fee uses generic metric row ï¿½ no NAV moment
 - P1: no key stats strip
 - P1: position hero not dominant; P&L badge too small (13pt)
 - P1: no ownership breakdown visualization (percentages passed but unused)
 - P1: distributions hero lacks status chip and yield
 - P1: corporate actions text-heavy, no icons
-- P1: segment nav not sticky — scrolls away
+- P1: segment nav not sticky ï¿½ scrolls away
 
 ### Implemented improvements
 
@@ -1294,7 +1294,7 @@ User feedback: "keep going there is still non much visible improvements keep res
 - Two-column "Cost basis | Market value" layout (Robinhood-style)
 - Added stacked ownership bar (8pt, rounded ends, coownUpSubtle/surfaceAlt/borderSubtle)
 - Bar segments: yourSegmentPct, otherHoldersSegmentPct, availableSegmentPct (previously unused)
-- Three labels with colored dots below bar: "You X% · Others Y% · Available Z%"
+- Three labels with colored dots below bar: "You X% ï¿½ Others Y% ï¿½ Available Z%"
 - Distribution status chip (successSubtle/warningSubtle)
 - Per-unit yield percentage ("X% yield on reference")
 - Corporate action fallback icon (document-text-outline)
@@ -1304,18 +1304,18 @@ User feedback: "keep going there is still non much visible improvements keep res
 #### AssetDetailScreen.tsx (sticky nav)
 - Added stickyHeaderIndices={[3]} to Reanimated.ScrollView
 - Wrapped CoOwnSegmentNav in opaque View (colors.background)
-- Nav stays pinned while scrolling — broker-platform pattern
+- Nav stays pinned while scrolling ï¿½ broker-platform pattern
 
 ### Adversarial review (Wave 33)
 - P0: 0
-- P1: 4 (grid line offset, panResponder on Pressable, Holders null safety, single-candle centering) — 3 FIXED, 1 deferred (panResponder — pre-existing, not introduced by Wave 33)
-- P2: 3 (badge clipping, CoOwnScrollContext dead, "About this asset" label-everything) — 1 FIXED (badge clipping), 2 deferred (pre-existing/subjective)
+- P1: 4 (grid line offset, panResponder on Pressable, Holders null safety, single-candle centering) ï¿½ 3 FIXED, 1 deferred (panResponder ï¿½ pre-existing, not introduced by Wave 33)
+- P2: 3 (badge clipping, CoOwnScrollContext dead, "About this asset" label-everything) ï¿½ 1 FIXED (badge clipping), 2 deferred (pre-existing/subjective)
 
 ### Verification
 - Frontend TypeScript: pass, 0 errors
 - Frontend Vitest: 85 files, 1768 passed, 2 skipped, 0 failures
 
-## Wave 34 — market surface flagship upgrades
+## Wave 34 ï¿½ market surface flagship upgrades
 
 ### Market section (AssetMarketSection.tsx)
 - Removed CommerceDetailSection card wrapper around order book
@@ -1345,19 +1345,19 @@ User feedback: "keep going there is still non much visible improvements keep res
 
 ### Adversarial review (Wave 34)
 - P0: 0
-- P1: 5 (cumulative column, hit target, depth bar alignment, side type, opacity) — 4 FIXED, 1 not an issue (side type is assignable)
-- P2: 3 (magic numbers, a11y labels, tradingPaused mode) — deferred
+- P1: 5 (cumulative column, hit target, depth bar alignment, side type, opacity) ï¿½ 4 FIXED, 1 not an issue (side type is assignable)
+- P2: 3 (magic numbers, a11y labels, tradingPaused mode) ï¿½ deferred
 
 ### Verification
 - Frontend TypeScript: pass (only pre-existing PosterComposerScreen errors)
 - Frontend Vitest: 85 files, 1768 passed, 2 skipped, 0 failures
 
-## Wave 35 — first-viewport compaction + tradingPaused fix
+## Wave 35 ï¿½ first-viewport compaction + tradingPaused fix
 
 ### Identity compaction (AssetDetailIdentity.tsx)
 - Compressed from ~6 rows to 4 rows (title, price, compact context, issuer)
 - Removed eyebrow legal vehicle line, holders row, allocation progress bar, availability row
-- Compact context line: conditionGrade · totalUnits units (meta 11pt textSecondary)
+- Compact context line: conditionGrade ï¿½ totalUnits units (meta 11pt textSecondary)
 - Price downgraded from priceHero 28pt to priceList 20pt bold tabular-nums
 - Issuer kept as compact CommerceDetailSellerRow (test requirement)
 - Props interface unchanged for parent compatibility
@@ -1365,7 +1365,7 @@ User feedback: "keep going there is still non much visible improvements keep res
 ### tradingPaused mode fix (AssetMarketSection.tsx)
 - tradingPaused now maps to 'halted' (was 'call_auction')
 - exitUnderway also maps to 'halted' (was 'call_auction')
-- initialOffering stays 'call_auction' (correct — primary offerings use call auctions)
+- initialOffering stays 'call_auction' (correct ï¿½ primary offerings use call auctions)
 - secondaryTrading stays 'continuous'
 - Explicit exhaustive mapping via CoOwnBookMode union
 
@@ -1373,7 +1373,7 @@ User feedback: "keep going there is still non much visible improvements keep res
 - Frontend TypeScript: pass, 0 errors
 - Frontend Vitest: 85 files, 1768 passed, 2 skipped, 0 failures
 
-## Wave 36 — dock badges + current price header
+## Wave 36 ï¿½ dock badges + current price header
 
 ### Dock badges (AssetDetailDock.tsx)
 - Added open orders chip: "{N} open" (surfaceAlt fill, captionElevated text)
@@ -1382,6 +1382,50 @@ User feedback: "keep going there is still non much visible improvements keep res
 - 44pt hit targets via hitSlop (separate from visible shape)
 - Tap to switch to Market/Ownership tab
 - Wired up in AssetDetailScreen.tsx with yourOpenOrders.length, lastDistribution status, setActiveTab
+
+## Wave 37 â€” Co-Own detail density upgrade (Pillars 1-4)
+
+### Research basis
+- Masterworks "Digital Asset Passport" pattern: compact metadata ribbon on main screen, full disclosures in a tappable sheet
+- 2026 mobile PDP best practice (Instagram, Pinterest): 18-22pt titles, media-first 45-50% hero, price immediately below name
+- Broker/fractional ownership evidence disclosure: top-of-book quote strip replaces redundant price hero on market tab
+
+### Pillar 1 â€” Typographic & media rescaling
+- `CommerceDetailIdentity.tsx`: Co-Own title rescaled from 28pt (priceHero) to 20pt (priceList) semibold; compact title from 26pt to 18pt
+- `CommerceDetailTransactionSurface.tsx`: `primaryValueCoOwn` rescaled from 32pt (display) to 20pt (priceList) bold tabular
+- `AssetDetailScreen.tsx`: media `heightFraction` increased from 0.26/0.28/0.30 to 0.38/0.40/0.42 (gives luxury asset visual dominance)
+- Reclaims ~110px vertical; brings nav tabs + chart into first viewport
+
+### Pillar 2 â€” Dossier ribbon + bottom sheet
+- New `CoOwnDossierRibbon.tsx`: compact 44pt horizontal chip bar (Condition Â· Custody Â· Insured Â· Fee) replacing inline provenance grid + fee section
+- New `CoOwnAssetDossierSheet` (in `AssetDetailModals.tsx`): bottom sheet at snap 0.82, reuses `CoOwnAssetDossier` component for structured provenance/condition/storage/appraisal rows, appends flat fee block + "Full due diligence" link
+- Added `'dossier'` to `AssetDetailSheetId` union in `useAssetDetailSheets.ts`
+- `AssetOverviewSection.tsx`: stripped "Physical Asset & Provenance" section (story text, trust facts, condition/custody grid) and "Due diligence & fees" section (document chips, fee rows, risk disclosure row); replaced with the ribbon
+- Eliminates ~400px of card clutter from the Overview tab
+- Removed dead styles: assetStoryWrap, assetStoryText, assetStoryLink, assetStoryLinkText, trustFactualLine, trustFactualText, provenanceMetaGrid, provenanceMetaItem, metaVal, documentsStrip, docChip, docChipText, feeBreakdown, unpublishedText
+
+### Pillar 3 â€” Market tab top-of-book quote strip
+- `AssetMarketSection.tsx`: removed `CommerceDetailTransactionSurface` (which duplicated the identity's price hero at 32ptâ†’now 20pt)
+- New flat top-of-book quote strip: best bid (price + size) | spread | best ask (price + size), with coownUp/coownDown coloring, tabular numerals
+- Compact market state + 24h stats status line below the quote strip
+- Removed unused `transactionPrimaryLabel`, `transactionPrimaryValue`, `transactionSecondaryLabel` variables
+- Removed unused `CommerceDetailTransactionSurface` import
+
+### Pillar 4 â€” Ownership consolidation
+- `AssetOwnershipSection.tsx`: removed duplicate fee schedule disclosure (CoOwnFeeSchedule component + feeEntries mapping)
+- Fees now live exclusively in the CoOwnAssetDossierSheet (Pillar 2) to eliminate cross-tab duplication
+- Removed unused `CoOwnFeeSchedule` import, `feesExpanded` state, `feeEntries`/`showFeeSchedule`/`feeScheduleEmpty` variables
+
+### Design contract
+- `Design.md` updated to v1.8: registered `asset-dossier-ribbon` and `asset-dossier-sheet` component contracts; updated benchmark-date to 2026-09-22
+
+### Verification
+- Frontend TypeScript: pass, 0 errors
+- Frontend Vitest: 1783 tests, 1772 passed, 2 skipped, 9 failed (all pre-existing â€” coownAssetDetailRuntime setup parse error, ItemDetailScreen/HomeScreen concurrent edits)
+- Hero fractions test updated to assert new 0.38/0.40/0.42 values
+- Co-Own asset-detail runtime test prop signatures updated (onOpenDossier replaces dossierDocuments/hasDocuments/onOpenDiligence/onOpenRiskDisclosure)
+- Visual QA: pending user review (no rendered screenshots inspected by agent)
+
 
 ### Current price header (AssetOverviewSection.tsx)
 - Removed generic "Price history" title
@@ -1396,7 +1440,7 @@ User feedback: "keep going there is still non much visible improvements keep res
 - Frontend TypeScript: pass, 0 errors
 - Frontend Vitest: 85 files, 1768 passed, 2 skipped, 0 failures
 
-## Wave 37 — segment nav + corporate action rows
+## Wave 37 ï¿½ segment nav + corporate action rows
 
 ### Segment nav (CoOwnSegmentNav.tsx)
 - Active tab: bodyStrong 15pt textPrimary
@@ -1419,7 +1463,7 @@ User feedback: "keep going there is still non much visible improvements keep res
 - Frontend TypeScript: pass, 0 errors
 - Frontend Vitest: 85 files, 1768 passed, 2 skipped, 0 failures
 
-## Wave 38 — anti-AI design polish (type sizes, radius budget, depth chart, wiring)
+## Wave 38 ï¿½ anti-AI design polish (type sizes, radius budget, depth chart, wiring)
 
 ### Market section (AssetMarketSection.tsx)
 - Hardcoded 22pt price ? TypographyV2.priceList (20pt) token
@@ -1462,13 +1506,13 @@ User feedback: "keep going there is still non much visible improvements keep res
 - Wired CoOwnFeeSchedule (progressive disclosure in rights/transfers)
 - Wired CoOwnDripToggle (in distributions, only when holder + supported)
 - Wired CoOwnDistributionCalendar (progressive disclosure in distributions)
-- Parent passes feeSchedule={asset.feeSchedule} (other props deferred — no backend data yet)
+- Parent passes feeSchedule={asset.feeSchedule} (other props deferred ï¿½ no backend data yet)
 
 ### Verification
 - Frontend TypeScript: pass (only pre-existing PosterComposerScreen error)
 - Frontend Vitest: 85 files, 1768 passed, 2 skipped, 0 failures
 
-## Wave 39 — final anti-AI type-size consolidation
+## Wave 39 ï¿½ final anti-AI type-size consolidation
 
 ### Segment nav (CoOwnSegmentNav.tsx)
 - Unified tab text size: bodyStrong 15 / body 14 ? body 14 for both states
@@ -1481,7 +1525,7 @@ User feedback: "keep going there is still non much visible improvements keep res
 ### Seller row (CommerceDetailSellerRow.tsx)
 - Seller name: bodyStrong 15 ? body 14 + FontFamily.semibold
 - Consolidates first viewport to 3 type sizes: priceHero 28, priceList 20, body 14, meta 11
-- (priceHero is title zone, priceList is price — body 14 + meta 11 = 2 content sizes)
+- (priceHero is title zone, priceList is price ï¿½ body 14 + meta 11 = 2 content sizes)
 
 ### First viewport type budget (after Wave 39)
 - AssetDetailIdentity: priceHero 28 (title), priceList 20 (price), body 14 (seller), meta 11 (context)
@@ -1496,7 +1540,7 @@ User feedback: "keep going there is still non much visible improvements keep res
 - Frontend TypeScript: pass, 0 errors
 - Frontend Vitest: 85 files, 1768 passed, 2 skipped, 0 failures
 
-## Wave 40 — dock chips + scroll context + market stats strip
+## Wave 40 ï¿½ dock chips + scroll context + market stats strip
 
 ### Dock chips (AssetDetailDock.tsx)
 - Chip text: captionElevated 13 ? meta 11 (quiet secondary indicators)
@@ -1518,13 +1562,13 @@ User feedback: "keep going there is still non much visible improvements keep res
 - Frontend TypeScript: pass, 0 errors
 - Frontend Vitest: 85 files, 1768 passed, 2 skipped, 0 failures
 
-## Wave 41 — final polish (radius budget, dead code, stats strip dedup)
+## Wave 41 ï¿½ final polish (radius budget, dead code, stats strip dedup)
 
 ### Chart radius (CoOwnCandleChart.tsx)
 - Retry button: Radius.md ? Radius.sm (Overview viewport now 1 non-avatar radius)
 
 ### Overview radius (AssetOverviewSection.tsx)
-- Move badge: Radius.full ? Radius.sm (stricter — entire Overview uses Radius.sm)
+- Move badge: Radius.full ? Radius.sm (stricter ï¿½ entire Overview uses Radius.sm)
 - Removed dead `referenceVsAppraisalPct` prop (declared but never used)
 - Cleaned up callers in AssetDetailScreen.tsx and coownAssetDetailRuntime.test.tsx
 
@@ -1532,7 +1576,7 @@ User feedback: "keep going there is still non much visible improvements keep res
 - Removed unused `executionsTotal` state (dead computation, never rendered)
 - Migrated retryLinkText and tapePrice: captionElevated ? numericMeta (token consistency)
 - Replaced hardcoded borderRadius: 3 with Radius.full (liveIndicatorDot, sideDot)
-- Stats strip now shows: 24h volume · Spread · Last price · 24h change %
+- Stats strip now shows: 24h volume ï¿½ Spread ï¿½ Last price ï¿½ 24h change %
   (was duplicating best bid/ask from topOfBookRow)
 - Removed redundant bottom statsStrip (was duplicating 24h change + volume)
 - Last price uses snapshot.lastExecutionPriceGbp ?? asset.lastTradePriceGbp (truthful)
@@ -1551,7 +1595,7 @@ User feedback: "keep going there is still non much visible improvements keep res
 - Frontend TypeScript: pass, 0 errors
 - Frontend Vitest: 85 files, 1768 passed, 2 skipped, 0 failures
 
-## Wave 42 — corporate action row consistency
+## Wave 42 ï¿½ corporate action row consistency
 
 ### CoOwnCorporateActionRow.tsx
 - title: bodyStrong 15 ? body 14 + FontFamily.semibold (match ownership section)
@@ -1566,10 +1610,10 @@ User feedback: "keep going there is still non much visible improvements keep res
 
 ---
 
-## Wave 38-42 Summary — anti-AI design polish complete
+## Wave 38-42 Summary ï¿½ anti-AI design polish complete
 
-### Type-size budget (AGENTS.md §4: max 3 in first viewport)
-- Identity: 4 sizes (priceHero title zone + 3 content) — acceptable
+### Type-size budget (AGENTS.md ï¿½4: max 3 in first viewport)
+- Identity: 4 sizes (priceHero title zone + 3 content) ï¿½ acceptable
 - SegmentNav: 1 size (body 14, weight/color differentiate)
 - Overview: 3 sizes (priceList 20, body 14, meta 11)
 - Market: 3 sizes (bodyStrong 15, numericMeta 13, meta 11)
@@ -1577,7 +1621,7 @@ User feedback: "keep going there is still non much visible improvements keep res
 - Dock: 3 sizes (priceList 20, bodyStrong 15, meta 11)
 - CorporateActionRow: 2 sizes (body 14, meta 11)
 
-### Radius budget (AGENTS.md §4: max 2 non-avatar per viewport)
+### Radius budget (AGENTS.md ï¿½4: max 2 non-avatar per viewport)
 - Overview: 1 radius (Radius.sm for all rounded shapes)
 - Market: 2 radii (Radius.sm for chips, Radius.full for circular dots)
 - Ownership: 2 radii (Radius.md for chips/bar/offer, Radius.full for dots)
@@ -1609,3 +1653,133 @@ User feedback: "keep going there is still non much visible improvements keep res
 - Size labels: body 14pt tabular (cumulative depth)
 - Mid line: solid borderSubtle hairline
 - Last-price line: dashed borderSubtle hairline
+
+## Wave 39 â€” dossier sheet defect closure + regression suite
+
+### Defects fixed
+- **Diligence navigation miswire**: "Full due diligence" in the dossier sheet was routing to `CoOwnIssue` (issue reporting). Fixed: added distinct `onOpenDiligence` prop wired to `navigation.navigate('AssetDueDiligence', { assetId })`. The `onNavigateIssue` prop remains exclusively for issue reporting.
+- **Missing document chips**: Escrow terms, safeguarding evidence, safeguarding terms, and buyer protection terms URLs were not surfaced in the dossier sheet. Fixed: added tappable document chips with `Linking.openURL`, rendered only when the URL exists (truthful absence).
+- **Risk disclosure unreachable from dossier**: The dossier sheet had no path to the risk disclosure sheet. Fixed: added `onOpenRiskDisclosure` prop wired to `closeSheet('dossier') + openSheet('riskDisclosure')`.
+- **Fabricated provenance timeline**: Freeform `provenance` text was being mapped to invented `{event, date, note}` timeline entries ("Acquired", "See full story"). Fixed: provenance is now rendered as an honest freeform text block; structured timeline events are not fabricated from unstructured data.
+- **Dead feeSchedule prop on Ownership**: `AssetOwnershipSection` accepted a `feeSchedule` prop but never rendered it. Fixed: removed the dead prop from the interface, destructuring, and the call site in `AssetDetailScreen`. Structured fees now render exclusively in the dossier sheet.
+- **Top-of-book missing state feedback**: The quote strip accepted `orderBookStreaming`, `orderBookError`, and `isOffline` props but did not reflect them in the UI. Fixed: added a state banner that shows "Offline", "Quote error", "Synchronizing", "Orders paused", "Market closed", or "Stale quotes" based on the actual market state. No fabricated numbers are shown during loading/error.
+- **Dossier ribbon accessibility**: The ribbon lacked a 44pt minimum hit target, accessibility hint, and decorative-icon semantics. Fixed: added `minHeight: 44`, `accessibilityHint`, `accessibilityRole="button"`, and `accessibilityElementsHidden`/`importantForAccessibility="no-hide-descendants"` on decorative chevron/shield icons.
+
+### Regression suite (coownDossierSheetRegression.test.tsx)
+- 18 tests covering: diligence navigation callback, risk disclosure callback, document chip rendering (full/partial/empty), provenance honesty (freeform text, no fabrication, omission when absent), structured fee schedule rendering (full/trading-fee-only/empty), feeSchedule prop removal from Ownership, top-of-book state banner (offline/error/synchronizing/paused/clear), and dossier ribbon accessibility (hint + minHeight).
+- Mock strategy: `marketApi` stubbed without `importOriginal` to avoid the RN Flow `import typeof` parse error that affects vitest under react-native-web alias. `commerce/detail` barrel mocked to prevent transitive `BottomSheet` â†’ `react-native-reanimated` â†’ RN Flow source loading.
+
+### Verification
+- Frontend TypeScript: pass, 0 errors
+- Frontend Vitest (targeted): 51 tests passed (18 new regression + 33 flagship closure)
+- Note: `coownAssetDetailRuntime.test.tsx` has a pre-existing vitest parse error (RN Flow `import typeof` via transitive `expo-secure-store`/`expo-network` imports through `apiClient`) that predates this wave and is not caused by these changes.
+
+## Research campaign 2026-09-11 - six-track flagship research + gap registry
+
+### Scope
+User-requested research report on upgrading the Co-Own department, current to September 2026. Deliverable is research + prioritized roadmap; no implementation without approval (brainstorming gate).
+
+### Method
+- 6 parallel research tracks: codebase archaeology (current asset-detail audit), art/auction competitors (Masterworks/Sothebys/Christies), broker UX (Robinhood/Coinbase/Webull/IBKR/Public/eToro), fractional platforms (Rally/Otis-Public/Arrived/Republic/Willow/Splint/Timeless/WatchFy/ARTEX), React Native 2026 platform research (New Arch/FlashList v2/Reanimated 4/sheets/a11y/perf/offline), financial-UX/regulatory (SEC Reg A/CF/D, Reg BI, FCA Consumer Duty/PS25-10 POP/safeguarding/decision-points/sludge).
+- All sources live web_search, July-Sep 2026; labeled DIRECT vs SECONDARY; webfetch unavailable to agents (snippet-level evidence; pixel claims deferred to device validation).
+
+### Key conclusions
+1. Remaining flagship gap is trust architecture + regulatory-fit disclosure + governance surface, not visual polish. Backend already returns legalVehicle*, safeguarding*, custody*, feeSchedule, riskDisclosures, votes endpoints - mostly unrendered.
+2. Governance is half-built: vote endpoints + quorum/pass fields exist, no UI.
+3. State coverage is ahead of all audited competitors (none expose loading/empty/error/offline/stale); next edge is freshness signaling + socket perf.
+4. 2026 industry events: Masterworks terminating PPEX (Dec 2026), Otis defunct (absorbed into Public), Yieldstreet -> Willow Wealth, Rally restructuring rumors unverified, all brokers shipped AI agent layers, Public sunset social feed.
+
+### Artifacts
+- Report: .flagship/coown-upgrade-research-report-2026-09-11.md (exec summary, current-state audit, competitor matrix, findings, 26-item gap registry, 6-wave roadmap, API implications, a11y/perf norms, verification plan, risks, source ledger)
+- Registry: .flagship/gap-registry-coown-2026-09.json (G-01..G-26, P0-P3, mapped to waves A-F)
+
+### Proposed wave order (requires approval before implementation)
+- Wave A trust composition (P0, UI-only): what-you-own card, asset prospectus sheet, protection split, risk summary + acknowledgment, fee/conflicts disclosure
+- Wave B governance (P0): open-decisions panel, CorporateActionVote screen, premiumPct fix
+- Wave C market truth + perf (P1): freshness timestamp/dot, socket batching, book virtualization, media hero + quote a11y
+- Wave D proceeds/ownership depth (P1): distribution dates + waterfall, DRIP wiring, realized/unrealized split, offline states, eligibility limits
+- Wave E lifecycle/education (P2): appropriateness + cooling-off (jurisdiction-gated), exit explainer, tax hub, readiness checklist, scenarios
+- Wave F hygiene (P2): token compliance, test-infra mocks, backend fee/premium fields
+
+## Implementation wave 2026-09-11 â€” Waves A-D + F landed (E jurisdiction-gated)
+
+### Delivery summary
+- **Wave A trust composition**: "What you own" legal-vehicle lead on Overview (adapts to spv/series_llc/llc/trust/none; honest "No separate legal vehicle declared" when absent); `CoOwnAssetProspectus` sheet (issuer, vehicle, economics, fees, conflicts, key risks); `CoOwnDossierRibbon` single-pressable metadata bar replacing ~400px of inline provenance/fee cards; asset-protection vs money-protection split in the dossier ("who holds the asset" vs "who holds the money"); quiet first-scroll risk line + active-choice "I understand" acknowledgment gating first trade (before the education guide, matching the compliance order KYC > risk > wallet > education); media hero rescaled 0.26-0.30 to 0.38-0.42 with identity title at 20pt.
+- **Wave B governance**: `CorporateActionVoteScreen` (route `CorporateActionVote` {actionId, assetId}) â€” parallel action+votes fetch, quorum meter, pass threshold, tally bars, voting-deadline countdown, server-authoritative eligibility with reason, uncertain-submit reconciliation (network error does not claim failure), change-vote support via backend upsert; "Open decisions" panel on Ownership separates actionable ballots from the passive event log; backend `premiumPct` now computed vs last-execution/unit-price mark (was always null); `tradingFeeRate` returned with documented justification.
+- **Wave C market truth + perf**: broker top-of-book strip (Bid | Spread | Ask + unit sizes) replacing the duplicated price hero; quote freshness stamp from `serverTimestamp`/`sourceAsOf` (never a fabricated "just now"); honest state labels (Offline / Quote error / Synchronizing / Orders paused / Market closed / Stale quotes); quotes muted + "last known" a11y when stale/offline; 90ms trailing-edge socket delta batching with contiguous-prefix + gap-to-resnapshot preserved; memoized `BookLevelRow` + O(n) cumulative; offline-aware open-orders and tape.
+- **Wave D proceeds + ownership**: record/ex/payable disclosures on the distribution calendar and history detail rows; honest proceeds waterfall (gross > per unit > units at record > received) with explicit "Costs and fees are not itemised" note; DRIP enrollment fetched/toggled end-to-end with projected-units estimate (only shown after a real distribution exists); offline-aware ownership failure copy; "Unrealised - excludes distributions and fees" clarifier on P&L.
+- **Wave F hygiene**: allocation palette now derived from `textPrimary`-to-`border` ramp (rank-ordered tonal identity, no hardcoded slate/taupe hexes); media scrims derived from `colors.shadow` instead of `rgba(0,0,0,...)` literals; dead `feeSchedule` prop removed from Ownership (fees live in the dossier sheet); `diagImport.test.tsx` deleted; positional media a11y labels (`mediaLabel` = "{title} photo N of M") + `accessibilityIgnoresInvertColors`.
+
+### Verification evidence
+- Frontend `tsc --noEmit`: 0 errors. Backend `tsc --noEmit`: 0 errors.
+- Focused suites: 84 tests pass â€” 76 across coownGovernanceVote, coownDistributionDepth, coownDossierSheetRegression and coownAssetDetailRuntime, plus 8 in coownPhase2Realtime.
+- Full frontend suite: 1847 passed, 9 pre-existing failures on ItemDetailScreen/HomeScreen source-grep assertions (target files identical to HEAD; commerce department, out of Co-Own scope).
+- ESLint on all changed files: 0 errors (repo i18n literal-string warning baseline unchanged).
+
+### Defects fixed during integration
+- `useMemo` hoisted above early returns in AssetDetailScreen (react-hooks/rules-of-hooks error).
+- `vi.hoisted` applied to `mockColors` in coownDistributionDepth (TDZ crash under hoisted `vi.mock` factories); `requestAnimationFrame` stubbed.
+- Dossier regression suite: `prospectusSheetVisible` prop added to four render sites; "omits fee block" assertion retargeted to unique row labels (prospectus sheet mounts a Fees section header via the always-render sheet mock).
+- `coownPhase2Realtime` source-grep updated from `applyDelta` to `queueDelta`/`flushDeltas`.
+- Restored "24h" period label on the market stats strip (bare "+1.5%" did not name the window).
+- `mediaLabel` wired into `CommerceMediaStage` at the AssetDetailScreen call site.
+
+### Notes
+- Wave E excluded by user scope (jurisdiction/legal gated).
+- G-11 partial: realized-vs-unrealized split shows the honest "Unrealised" label; a true split needs backend realized-proceeds fields.
+- Independent adversarial review could not run (agent quota exhausted); orchestrator performed a diff-level adversarial pass instead. Native device validation remains open.
+
+## Satellite-surface wave 2026-09-11 â€” Trade flow, Diligence, Buyout, Hub, Ledger, Issue, Alerts (Wave-2)
+
+### Context
+The four re-dispatched implementation agents exited with connection errors again; IDs vanished and could not be resumed. Only `CorporateActionDetailScreen` landed partial work before its agent died â€” completed and verified manually. All remaining satellite surfaces were audited and upgraded serially by the orchestrator.
+
+### CorporateActionDetailScreen (agent partial + orchestrator completion)
+- Vote casting removed and deep-linked to the dedicated `CorporateActionVote` ballot; this screen is now the read-only event record (mutation lives on the ballot).
+- Read-only governance context retained: quorum meter (`progressbar` role + live values), pass threshold, voting power, tally bars as a `polite` live region, "You voted â€¦" receipt note, "Voting closed" / ineligibility notes â€” all honest states.
+- New "Effect on your holding" section: per-unit value Ã— holder's settled units, rendered only when both contract inputs are real; `fetchCoOwnHoldings` failure degrades to hidden, never asserts zero.
+- States: loading â†’ `CoOwnStateCanvas loading`, offline-with-no-data â†’ offline canvas + retry, fetch error â†’ error canvas, not-found â†’ "Event not found" canvas with back action. Tally refreshes via `useFocusEffect` after returning from the ballot.
+- `exDate` and `totalValueGbpMinor` contract fields now rendered; `formatDate`/`formatDeadline` guard invalid dates; type eyebrow suppressed when the title is already the type label.
+
+### TradeConfirmScreen
+- Added the missing **Quote expired** dead-end surface: when the reservation lapses, a calm canvas notice names the path back ("Cancel to return to the ticket and request a fresh market preview") instead of only a greyed button.
+- Verified flagship-grade already: idempotency-key dedup with server-side `lookupCoOwnOrderByIdempotencyKey` reconciliation, uncertain-submit honesty ("check order history before trying again"), reservation release on cancel/unmount, live-market revalidation against the protection band (Â±2% â†’ return for fresh preview), BigInt-exact preview money from the wire, hold-to-submit threshold, rejection/partial/resting distinction.
+
+### TradeScreen â€” verified, no changes
+Previewâ†’reserveâ†’confirm chain with BigInt money parsing, eligibility alert with reasons, rights-incomplete gate, paper-mode banner, live-market banner with stale/sequence-gap/reconciliation truth labels + retry, thin-market concierge substitution, disabled-reason caption under the CTA (per spec: financial errors never resolve via toast alone).
+
+### AssetDueDiligenceScreen
+- Removed the leftover pre-refactor "Asset dossier" section: it duplicated Evidence/Custody/Appraisal rendered above it AND re-introduced the fabricated-structured-provenance bug (freeform `asset.provenance` wrapped into a fake dated "Provenance" event). The dedicated sections cover the same data honestly; `CoOwnAssetDossier` import removed.
+
+### BuyoutScreen
+- Offer cards now show premium vs the asset's reference price ("Â±N% vs reference", computed from real contract fields `offer.offerPriceGbp` vs `asset.unitPriceGbp`) â€” holders deciding to accept get anchored context instead of an unanchored per-unit number. `MarketCoOwnBuyoutOffer` has no premium field; the derivation is honest and documented.
+- Verified already: uncertain-submit reconciliation banner, own-bid detection, per-offer expiry, live per-unit Ã— units commitment breakdown, accept totals.
+
+### SyndicateOrderHistoryScreen
+- Interpolation literals `'rgba(0,0,0,0)'` â†’ `'transparent'` (token hygiene; animating to transparent, not a palette colour).
+
+### CoOwnIssueScreen / CoOwnPriceAlertsScreen / MarketLedgerScreen
+- `CoOwnOfflineBanner` wired on Issue + Alerts (Ledger already had it). Issue submit now fails fast offline with a draft-preserving message instead of hanging into a network-error toast.
+- Ledger verified already: remote-failure is an explicit recoverable state, local cache only when genuinely offline, reconciliation banner, memoized FlashList rows, honest "All time" window labels.
+
+### SyndicateHubScreen / PortfolioScreen â€” verified, no changes
+- Hub: sticky tab rail over FlashList, skeleton/error/empty/offline coverage, editorial section headers.
+- Portfolio: honest "No current bids" proceeds, bid-depth + partial-liquidity labels, quote-age labels, realised/unrealised P&L, mark basis, lockup dates, partial-failure state distinct from empty.
+
+### Orphaned component â€” documented decision
+- `CoOwnMarketStatusStrip` (session modes: call auction/RFQ/countdown/halt reason/next session) remains exported but unmounted: the backend `marketStatus` contract only projects `open | closed | primary_offering | paused` â€” the strip's richer session model has no contract source and mounting it would fabricate countdown/session fields. Kept in the library as the authored pattern for when session modes land; recorded as a known dormant component, not dead code to delete silently.
+
+### Test fixes this wave
+- `nativeVisualAcceptance` "asset dock has accessibility labels" retargeted to `AssetDetailDock.tsx` (the owner layer) â€” the screen now delegates all interactive a11y via `label` props; grepping the orchestrator was checking the wrong file. Intent preserved.
+- `coownFlagshipUpgrade` "BuyoutScreen does not hardcode 8% premium" â€” the new premium-vs-reference comment contained the literal "-8%" example; reworded. Guard intent preserved (no hardcoded premium).
+
+### Verification
+- `tsc --noEmit`: 0 errors.
+- ESLint on touched screens: 0 errors (i18n warning baseline unchanged).
+- Focused suites: `coownFlagshipUpgrade` + `nativeVisualAcceptance` â€” 79/80 pass; the one failure is the pre-existing `ItemDetailScreen` shared-shell baseline (commerce department, out of scope).
+- Prior focused set re-run: `coownDetailFlagshipClosure`, `coownDossierSheetRegression`, `coownP0UnknownResultLookup` all pass.
+
+### Remaining gates (unchanged)
+- Native device validation (iOS+Android, Dynamic Type, Reduce Motion, VoiceOver/TalkBack, airplane mode).
+- Visual verification of all Co-Own surfaces on device.
+- Legal/jurisdiction decisions for Wave E (appropriateness, cooling-off, eligibility limits).

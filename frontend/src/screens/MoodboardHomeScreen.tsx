@@ -8,21 +8,24 @@ import {
   ImageStyle,
   Pressable } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Control, LetterSpacing, PressScale } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { HorizontalRail } from '../components/HorizontalRail';
-import { EmptyState } from '../components/EmptyState';
+import { OfflineBanner } from '../components/OfflineBanner';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 import { AppInput } from '../components/ui/AppInput';
 import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
+import {
+  FlagshipScreen,
+  FlagshipHeader,
+  FlagshipState } from '../components/flagship';
 import { useHaptic } from '../hooks/useHaptic';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -30,7 +33,6 @@ import Reanimated, { FadeIn } from 'react-native-reanimated';
 import {
   fetchMoodboards,
   fetchPublicMoodboards,
-  MOODBOARD_DEMO_MODE,
   type Moodboard } from '../services/moodboardApi';
 import { useFeatureFlag } from '../analytics';
 
@@ -300,10 +302,9 @@ function SectionHeader({ title }: { title: string }) {
 // ---------------------------------------------------------------------------
 export default function MoodboardHomeScreen() {
   const navigation = useNavigation<NavT>();
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { isOffline } = useConnectivity();
-  const insets = useSafeAreaInsets();
   const { width: SCREEN_W } = useWindowDimensions();
   const MASONRY_COL_WIDTH =
     (SCREEN_W - MASONRY_PADDING * 2 - MASONRY_GAP * (MASONRY_COLUMN_COUNT - 1)) /
@@ -432,53 +433,6 @@ export default function MoodboardHomeScreen() {
   const listHeader = useMemo(
     () => (
       <View style={{ marginHorizontal: -(MASONRY_PADDING - MASONRY_GAP / 2) }}>
-        {/* ── Header ── */}
-        <View style={styles.headerRow}>
-          <AnimatedPressable
-            style={styles.backButton}
-            onPress={handleGoBack}
-            activeOpacity={0.7}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            accessibilityHint="Returns to the previous screen"
-          >
-            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-          </AnimatedPressable>
-          <Text style={styles.headerTitle}>Moodboards</Text>
-          <View style={styles.headerActions}>
-            <AnimatedPressable
-              style={styles.studioButton}
-              onPress={handleCreateWithPosterStudio}
-              activeOpacity={0.8}
-              scaleValue={0.96}
-              accessibilityRole="button"
-              accessibilityLabel="Create moodboard with Poster Studio"
-              accessibilityHint="Opens the Poster Creator with moodboard collage templates"
-            >
-              <Ionicons name="create-outline" size={16} color={colors.brand} />
-              <Text style={styles.studioButtonText}>Studio</Text>
-            </AnimatedPressable>
-            <AnimatedPressable
-              style={styles.createButton}
-              onPress={handleCreatePress}
-              activeOpacity={0.8}
-              scaleValue={0.96}
-              accessibilityRole="button"
-              accessibilityLabel={moodboardBetaEnabled ? 'Create a new moodboard (beta)' : 'Create a new moodboard'}
-              accessibilityHint="Opens the moodboard editor to create a new collage"
-            >
-              <Ionicons name="add" size={20} color={colors.textInverse} />
-              <Text style={styles.createButtonText}>Create</Text>
-              {moodboardBetaEnabled ? (
-                <View style={styles.betaBadge} pointerEvents="none" accessible={false}>
-                  <Text style={styles.betaBadgeText}>Beta</Text>
-                </View>
-              ) : null}
-            </AnimatedPressable>
-          </View>
-        </View>
-
         {/* ── Search ── */}
         <View style={styles.searchWrap}>
           <AppInput
@@ -492,7 +446,7 @@ export default function MoodboardHomeScreen() {
             inputContainerStyle={styles.searchInputContainer}
             inputStyle={styles.searchInput}
             prefix={
-              <Ionicons name="search-outline" size={18} color={colors.textMuted} />
+              <AppIcon name="search" size={IconSize.sm} color="textMuted" accessible={false} />
             }
             suffix={
               searchQuery.length > 0 ? (
@@ -503,7 +457,7 @@ export default function MoodboardHomeScreen() {
                   accessibilityLabel="Clear search"
                   accessibilityHint="Clears the search query"
                 >
-                  <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+                  <AppIcon name="closeCircle" size={IconSize.sm} color="textMuted" accessible={false} />
                 </Pressable>
               ) : null
             }
@@ -574,10 +528,6 @@ export default function MoodboardHomeScreen() {
       styles,
       colors,
       handleMoodboardPress,
-      handleGoBack,
-      handleCreatePress,
-      handleCreateWithPosterStudio,
-      moodboardBetaEnabled,
     ],
   );
 
@@ -604,19 +554,55 @@ export default function MoodboardHomeScreen() {
     [loading, userMoodboards.length, publicMoodboards.length, styles, colors, handleCreatePress],
   );
 
+  // ── Header actions — transparent 44pt icon targets (AGENTS.md §4) ──
+  const headerActions = (
+    <View style={styles.headerActions}>
+      <AnimatedPressable
+        style={styles.headerActionButton}
+        onPress={handleCreateWithPosterStudio}
+        activeOpacity={0.7}
+        scaleValue={PressScale.icon}
+        hapticFeedback="light"
+        accessibilityRole="button"
+        accessibilityLabel="Create moodboard with Poster Studio"
+        accessibilityHint="Opens the Poster Creator with moodboard collage templates"
+      >
+        <AppIcon name="edit" size={IconSize.md} color="textPrimary" accessible={false} />
+      </AnimatedPressable>
+      <AnimatedPressable
+        style={styles.headerActionButton}
+        onPress={handleCreatePress}
+        activeOpacity={0.7}
+        scaleValue={PressScale.icon}
+        hapticFeedback="light"
+        accessibilityRole="button"
+        accessibilityLabel={moodboardBetaEnabled ? 'Create a new moodboard (beta)' : 'Create a new moodboard'}
+        accessibilityHint="Opens the moodboard editor to create a new collage"
+      >
+        <AppIcon name="plus" size={IconSize.lg} color="textPrimary" accessible={false} />
+      </AnimatedPressable>
+    </View>
+  );
+
   // ── Error state ──
   if (error && !loading && userMoodboards.length === 0 && publicMoodboards.length === 0) {
     return (
-      <View style={styles.stateContainer}>
-        <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
-        <EmptyState
-          icon="cloud-offline-outline"
-          title="Moodboards unavailable"
-          subtitle={error}
-          ctaLabel="Retry"
-          onCtaPress={() => void loadAll(false)}
-        />
-      </View>
+      <FlagshipScreen
+        scrollEnabled={false}
+        header={
+          <FlagshipHeader title="Moodboards" onBack={handleGoBack} />
+        }
+      >
+        <View style={styles.stateContainer}>
+          <FlagshipState
+            variant="error"
+            title="Moodboards unavailable"
+            subtitle={error}
+            actionLabel="Retry"
+            onAction={() => void loadAll(false)}
+          />
+        </View>
+      </FlagshipScreen>
     );
   }
 
@@ -627,39 +613,38 @@ export default function MoodboardHomeScreen() {
     publicMoodboards.length === 0
   ) {
     return (
-      <View style={styles.stateContainer}>
-        <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
-        <EmptyState
-          icon="images-outline"
-          title="No moodboards yet"
-          subtitle="Create a collage from your listings."
-          ctaLabel="Create a moodboard"
-          onCtaPress={handleCreatePress}
-        />
-      </View>
+      <FlagshipScreen
+        scrollEnabled={false}
+        header={
+          <FlagshipHeader title="Moodboards" onBack={handleGoBack} rightAction={headerActions} />
+        }
+      >
+        <View style={styles.stateContainer}>
+          <FlagshipState
+            variant="empty"
+            actionIcon="image"
+            title="No moodboards yet"
+            subtitle="Create a collage from your listings."
+            actionLabel="Create a moodboard"
+            onAction={handleCreatePress}
+          />
+        </View>
+      </FlagshipScreen>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
-
+    <FlagshipScreen
+      testID="moodboard-home-screen"
+      scrollEnabled={false}
+      contentStyle={styles.screenContent}
+      header={
+        <FlagshipHeader title="Moodboards" onBack={handleGoBack} rightAction={headerActions} />
+      }
+    >
       {/* Offline banner */}
       {isOffline && (
-        <View style={styles.offlineBanner}>
-          <Ionicons name="cloud-offline-outline" size={14} color={colors.textInverse} accessible={false} aria-hidden={true} />
-          <Text style={styles.offlineBannerText}>Offline — moodboards aren't refreshing.</Text>
-        </View>
-      )}
-
-      {/* Demo mode banner — truthful per AGENTS.md §11 */}
-      {MOODBOARD_DEMO_MODE && (
-        <View style={styles.demoBanner}>
-          <Ionicons name="information-circle-outline" size={13} color={colors.textSecondary} accessible={false} aria-hidden={true} />
-          <Text style={styles.demoBannerText}>
-            Demo mode — moodboards are not persisted. Changes will be lost when the app restarts.
-          </Text>
-        </View>
+        <OfflineBanner message="Offline — moodboards aren't refreshing." />
       )}
 
       <FlashList
@@ -673,7 +658,7 @@ export default function MoodboardHomeScreen() {
         ListFooterComponent={listFooter}
         contentContainerStyle={{
           paddingHorizontal: Math.max(MASONRY_PADDING - MASONRY_GAP / 2, 0),
-          paddingTop: insets.top + Space.sm,
+          paddingTop: Space.sm,
           paddingBottom: Space.xxl }}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -686,7 +671,7 @@ export default function MoodboardHomeScreen() {
           />
         }
       />
-    </View>
+    </FlagshipScreen>
   );
 }
 
@@ -698,95 +683,22 @@ function useStyles() {
   return React.useMemo(
     () =>
       StyleSheet.create({
-        container: {
-          flex: 1,
-          backgroundColor: colors.background },
+        screenContent: {
+          paddingHorizontal: 0 },
         stateContainer: {
           flex: 1,
-          backgroundColor: colors.background,
           justifyContent: 'center',
           alignItems: 'center',
           paddingHorizontal: Space.lg },
-        listContent: {
-          paddingBottom: Space.xxl },
-        // ── Offline banner ──
-        offlineBanner: {
+        // ── Header actions ──
+        headerActions: {
           flexDirection: 'row',
-          alignItems: 'center',
-          gap: Space.xs,
-          paddingHorizontal: Space.md,
-          paddingVertical: Space.sm,
-          backgroundColor: colors.surfaceAlt,
-          borderBottomWidth: Stroke.hairline,
-          borderBottomColor: colors.border },
-        offlineBannerText: {
-          fontSize: TypographyV2.meta.size,
-          fontFamily: TypographyV2.meta.fontFamily,
-          color: colors.textSecondary },
-        // ── Demo banner ──
-        demoBanner: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Space.xs,
-          paddingHorizontal: Space.md,
-          paddingVertical: Space.sm,
-          backgroundColor: colors.surface,
-          borderBottomWidth: Stroke.hairline,
-          borderBottomColor: colors.borderSubtle },
-        demoBannerText: {
-          fontSize: TypographyV2.meta.size,
-          fontFamily: TypographyV2.meta.fontFamily,
-          color: colors.textSecondary,
-          flex: 1 },
-        // ── Header ──
-        headerRow: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingHorizontal: Space.md,
-          paddingBottom: Space.sm },
-        backButton: {
+          alignItems: 'center' },
+        headerActionButton: {
           width: Control.hit,
           height: Control.hit,
           alignItems: 'center',
-          justifyContent: 'center',
-          marginLeft: -Space.xs },
-        headerTitle: {
-          fontSize: TypographyV2.screenTitle.size,
-          lineHeight: TypographyV2.screenTitle.lineHeight,
-          fontFamily: TypographyV2.screenTitle.fontFamily,
-          color: colors.textPrimary,
-          letterSpacing: TypographyV2.screenTitle.letterSpacing,
-          flex: 1,
-          textAlign: 'center' },
-        headerActions: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Space.sm },
-        studioButton: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Space.xs,
-          backgroundColor: colors.brandSubtle,
-          paddingHorizontal: Space.sm + 2,
-          paddingVertical: Space.sm,
-          borderRadius: Radius.full },
-        studioButtonText: {
-          fontSize: TypographyV2.meta.size,
-          fontFamily: TypographyV2.meta.fontFamily,
-          color: colors.brand },
-        createButton: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Space.xs,
-          backgroundColor: colors.brand,
-          paddingHorizontal: Space.md,
-          paddingVertical: Space.sm,
-          borderRadius: Radius.full },
-        createButtonText: {
-          fontSize: TypographyV2.meta.size,
-          fontFamily: TypographyV2.meta.fontFamily,
-          color: colors.textInverse },
+          justifyContent: 'center' },
         // ── Search ──
         searchWrap: {
           paddingHorizontal: Space.md,
@@ -821,22 +733,6 @@ function useStyles() {
           fontFamily: TypographyV2.bodyStrong.fontFamily,
           color: colors.textInverse,
           letterSpacing: LetterSpacing.wide },
-        // Beta badge — additive indicator gated by the moodboard_beta flag.
-        // A compact label on the Create button so users know the collage
-        // tooling is in beta. Absent when the flag is off.
-        betaBadge: {
-          marginLeft: Space.xxs,
-          paddingHorizontal: Space.xs,
-          paddingVertical: 1,
-          borderRadius: Radius.sm,
-          // TODO: no textInverseSubtle token available
-          backgroundColor: `${colors.textInverse}24` },
-        betaBadgeText: {
-          fontSize: TypographyV2.meta.size,
-          lineHeight: TypographyV2.meta.lineHeight,
-          fontFamily: TypographyV2.meta.fontFamily,
-          color: colors.textInverse,
-          letterSpacing: LetterSpacing.normal },
         // ── Section wrappers ──
         sectionWrap: {
           marginBottom: Space.lg },

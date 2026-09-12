@@ -6035,8 +6035,13 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
 
   // Embed the single most recent active (status = 'open') buyout offer for
   // this asset. The coOwn_buyout_offers table uses 'open' as the active status
-  // (not 'active' or 'pending'); there is no premium_pct or expiry_date column,
-  // so premiumPct is always null and expiry is derived from expires_at.
+  // (not 'active' or 'pending'); there is no expiry_date column, so expiry is
+  // derived from expires_at. offer_price_gbp is a per-unit price (the trade
+  // path multiplies it by accepted units for the notional), so premiumPct is
+  // computed against the current reference mark: the last settled secondary
+  // execution when one exists, otherwise the asset's primary unit price —
+  // the same fallback the trade path applies for referencePriceGbp.
+  // premiumPct stays null only when no positive mark exists.
   const activeBuyoutOfferResult = await db.query<{
     offer_price_gbp: string;
     expires_at: string | null;
@@ -6053,6 +6058,11 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
     [assetId]
   );
   const activeBuyoutOfferRow = activeBuyoutOfferResult.rows[0] ?? null;
+  const buyoutMarkGbp = lastExecutionPriceGbp ?? Number(row.unit_price_gbp);
+  const buyoutPremiumPct =
+    activeBuyoutOfferRow != null && Number.isFinite(buyoutMarkGbp) && buyoutMarkGbp > 0
+      ? roundTo(((Number(activeBuyoutOfferRow.offer_price_gbp) - buyoutMarkGbp) / buyoutMarkGbp) * 100, 2)
+      : null;
 
   return {
     ok: true,
@@ -6136,9 +6146,14 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
       },
       activeBuyoutOffer: activeBuyoutOfferRow ? {
         priceGbp: Number(activeBuyoutOfferRow.offer_price_gbp),
-        premiumPct: null,
+        premiumPct: buyoutPremiumPct,
         expiry: activeBuyoutOfferRow.expires_at ? new Date(activeBuyoutOfferRow.expires_at).toISOString() : null,
       } : null,
+      // Platform-level secondary-market fee — coOwn_assets carries no
+      // per-asset trading fee column (the asset-level feeSchedule only holds
+      // management/performance/platform/sourcing fees), and the trade
+      // execution path charges the same constant. Reported here so clients
+      // can disclose the fee before order entry.
       tradingFeeRate: CO_OWN_TRADE_FEE_RATE,
       trustAuditEvents: trustEventsResult.rows.map((e) => ({
         eventType: e.event_type,

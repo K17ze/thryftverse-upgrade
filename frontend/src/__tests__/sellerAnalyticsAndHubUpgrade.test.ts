@@ -749,4 +749,45 @@ describe('Seller Hub and Analytics Upgrade Verification', () => {
       expect(chartContent).toContain('lineTouchZone');
     });
   });
+
+  describe('Seller Hub Partial-Resource States', () => {
+    it('verifies SellerHubScreen has a per-resource status state machine', () => {
+      const content = fs.readFileSync(sellerHubPath, 'utf8');
+
+      // ResourceStatus union type drives independent loading/ready/failed per resource
+      expect(content).toContain('ResourceStatus');
+      expect(content).toContain('sellingOrdersStatus');
+      expect(content).toContain('ownListingsStatus');
+      expect(content).toContain('dailyPointsStatus');
+
+      // The 'failed' status is reachable in the state machine
+      expect(content).toContain("'failed'");
+    });
+
+    it('verifies SellerHubScreen has a shared loader and per-module retry banners', () => {
+      const content = fs.readFileSync(sellerHubPath, 'utf8');
+
+      // Shared loader converts rejections into 'failed' status + null data
+      expect(content).toContain('fetchHubResource');
+
+      // Inline retry surface is rendered above each failed module
+      expect(content).toContain('SyncRetryBanner');
+
+      // Telemetry wiring exists for retry interactions
+      expect(content).toContain('telemetryContext');
+    });
+
+    it('verifies seller modules accept failure props for partial-state rendering', () => {
+      const sellerDir = path.resolve(__dirname, '../components/seller');
+      const ordersFile = fs.readFileSync(path.join(sellerDir, 'SellerOrdersModule.tsx'), 'utf8');
+      const listingsFile = fs.readFileSync(path.join(sellerDir, 'SellerListingsModule.tsx'), 'utf8');
+      const analyticsFile = fs.readFileSync(path.join(sellerDir, 'SellerAnalyticsModule.tsx'), 'utf8');
+
+      // Each module exposes a failure prop so the hub can degrade one
+      // resource without tearing down the rest of the surface
+      expect(ordersFile).toContain('ordersFailed');
+      expect(listingsFile).toContain('isFailed');
+      expect(analyticsFile).toContain('isSparklineFailed');
+    });
+  });
 });

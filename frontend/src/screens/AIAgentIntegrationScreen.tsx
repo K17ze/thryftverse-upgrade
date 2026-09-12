@@ -57,10 +57,7 @@ import {
   AIProvider,
   PROVIDER_CONFIGS,
   PROVIDER_ORDER,
-  validateKeyFormat,
-  validateBaseUrl,
   maskApiKey,
-  saveApiKey,
   removeApiKey,
   getApiKey,
   getConnectedProviders,
@@ -79,10 +76,6 @@ import { AgentIcon } from '../components/agents/AgentIcon';
 import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AIAgentIntegration'>;
-
-// Demo mode is no longer needed — testApiKey now performs a real provider
-// round-trip. This flag is kept for backward-compatible UI gating only.
-const AI_PROVIDER_DEMO_MODE = false;
 
 type ConnectionStatus = 'connected' | 'not_connected' | 'invalid';
 
@@ -365,6 +358,12 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
 
   const handleCreateConnection = async () => {
     if (connectKey.trim().length === 0) return;
+    // Custom connections target an OpenAI-compatible endpoint — the backend
+    // verifies the key against `${baseUrl}/models`, so a base URL is required.
+    if (connectProvider === 'custom' && connectBaseUrl.trim().length === 0) {
+      showToast('error', 'A base URL is required for custom endpoints.');
+      return;
+    }
     haptic.light();
     setCreatingConnection(true);
     try {
@@ -373,10 +372,6 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
         apiKey: connectKey.trim(),
         label: connectLabel.trim() || undefined,
         baseUrl: connectBaseUrl.trim() || undefined });
-      if (connectProvider !== 'openai') {
-        // Should not happen — form gates non-openai providers.
-        return;
-      }
       setShowConnectForm(false);
       setConnectKey('');
       setConnectLabel('');
@@ -456,20 +451,6 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
         />
       }
     >
-      {/* ── Demo mode indicator (truthful UI per AGENTS.md §11) ── */}
-      {AI_PROVIDER_DEMO_MODE && (
-        <View
-          style={[styles.demoBanner, { backgroundColor: colors.surfaceAlt }]}
-          accessibilityRole="header"
-          accessibilityLabel="Demo mode"
-        >
-          <AppIcon name="info" size={IconSize.sm} color="textSecondary" opticalCenter accessible={false} />
-          <Text style={styles.demoBannerText}>
-            {t('demo.banner')}
-          </Text>
-        </View>
-      )}
-
       {/* ───────────────────────────────────────────────────────────────────
           1. Status overview — flat text with colored numbers, no cards
           Loading: skeleton lines; Populated: counts as typography
@@ -707,10 +688,13 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
       {/* Inline connect form */}
       {showConnectForm ? (
         <View style={styles.connectFormBody}>
-          {/* Provider selector — OpenAI only for now */}
+          {/* Provider selector — OpenAI and custom OpenAI-compatible
+              endpoints are verified server-side. Anthropic and Gemini are
+              shown as planned: the server verification contract only
+              supports Bearer-keyed /models probes today. */}
           <View style={styles.providerSelectorWrap}>
             {(['openai', 'anthropic', 'gemini', 'custom'] as const).map((p) => {
-              const isAvailable = p === 'openai';
+              const isAvailable = p === 'openai' || p === 'custom';
               const isSelected = connectProvider === p && isAvailable;
               const label = p === 'openai' ? 'OpenAI' : p === 'anthropic' ? 'Anthropic' : p === 'gemini' ? 'Gemini' : 'Custom';
               return (
@@ -1002,7 +986,6 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
           {PROVIDER_ORDER.map((providerId, index) => {
             const config = PROVIDER_CONFIGS[providerId];
             const state = providers[providerId];
-            const isComingSoon = providerId !== 'openai';
             const status: ConnectionStatus = state.testResult?.status === 'invalid'
               ? 'invalid'
               : state.stored
@@ -1016,7 +999,6 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                 style={[
                   styles.providerRow,
                   !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth },
-                  isComingSoon && { opacity: 0.6 },
                 ]}
               >
                 {/* Provider header row */}
@@ -1039,28 +1021,24 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                     style={[
                       styles.providerStatus,
                       {
-                        color: isComingSoon
-                          ? colors.textMuted
-                          : status === 'connected'
-                            ? colors.success
-                            : status === 'invalid'
-                              ? colors.danger
-                              : colors.textMuted },
+                        color: status === 'connected'
+                          ? colors.success
+                          : status === 'invalid'
+                            ? colors.danger
+                            : colors.textMuted },
                     ]}
                     numberOfLines={1}
                   >
-                    {isComingSoon
-                      ? t('providerStatus.comingSoon')
-                      : status === 'connected'
-                        ? t('providerStatus.connected')
-                        : status === 'invalid'
-                          ? t('providerStatus.invalid')
-                          : t('providerStatus.notConnected')}
+                    {status === 'connected'
+                      ? t('providerStatus.connected')
+                      : status === 'invalid'
+                        ? t('providerStatus.invalid')
+                        : t('providerStatus.notConnected')}
                   </Text>
                 </View>
 
                 {/* Connected state — masked key + actions */}
-                {!isComingSoon && state.stored && !state.editing ? (
+                {state.stored && !state.editing ? (
                   <View style={styles.connectedBody}>
                     <View style={[styles.keyDisplay, { backgroundColor: colors.surfaceAlt }]}>
                       <AppIcon name="lock" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
@@ -1121,7 +1099,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                 ) : null}
 
                 {/* Not connected state — prompt to connect */}
-                {!isComingSoon && !state.stored && !state.editing ? (
+                {!state.stored && !state.editing ? (
                   <View style={styles.connectCta}>
                     <Text style={[styles.connectHint, { color: colors.textMuted }]}>
                       {t('provider.noKeySaved', { name: config.name })}
@@ -1136,7 +1114,7 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                 ) : null}
 
                 {/* Editing state — key input + test / cancel */}
-                {!isComingSoon && state.editing ? (
+                {state.editing ? (
                   <View style={styles.editBody}>
                     {config.supportsBaseUrl ? (
                       <View style={[styles.inputWrap, { borderColor: colors.border }]}>
@@ -1237,14 +1215,6 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
                         styles={styles}
                       />
                     </View>
-                  </View>
-                ) : null}
-
-                {isComingSoon ? (
-                  <View style={styles.connectCta}>
-                    <Text style={[styles.connectHint, { color: colors.textMuted }]}>
-                      {t('provider.comingSoon')}
-                    </Text>
                   </View>
                 ) : null}
               </View>
@@ -1394,21 +1364,6 @@ function formatRelativeTime(iso: string): string {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    demoBanner: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      borderRadius: Radius.md,
-      marginBottom: Space.md },
-    demoBannerText: {
-      fontSize: TypographyV2.meta.size,
-      fontFamily: TypographyV2.meta.fontFamily,
-      letterSpacing: TypographyV2.meta.letterSpacing,
-      lineHeight: TypographyV2.meta.lineHeight,
-      color: colors.textSecondary,
-      flex: 1 },
     summaryWrap: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,

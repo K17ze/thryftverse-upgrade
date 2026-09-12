@@ -134,8 +134,10 @@ export function deriveDynamicSignals({
     isPersonalized: false,
   });
 
-  // 1. Process explicit & inferred topics from Algorithm Transparency Profile
-  if (profile?.topics && profile.topics.length > 0) {
+  // 1. Process explicit & inferred topics from Algorithm Transparency Profile.
+  // Demo-profile topics are fabricated placeholders — they must never surface
+  // as personalised signal chips on a live surface.
+  if (profile && !profile.isDemo && profile.topics && profile.topics.length > 0) {
     for (const topic of profile.topics) {
       const normKey = normalizeFilterKey(topic.label);
       if (!normKey || normKey === 'all') continue;

@@ -354,6 +354,11 @@ const MOCK_SIGNALS: AlgorithmSignal[] = [
 // subsequent fetches within a session (mock persistence).
 let sessionTopics: AlgorithmTopic[] = MOCK_TOPICS.map((t) => ({ ...t }));
 
+// The topics from the most recent REAL backend profile fetch. Mutation
+// helpers resolve target labels from this list — never from the mock store —
+// so a real topic id is never silently "not found" or mislabelled.
+let lastRealTopics: AlgorithmTopic[] | null = null;
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -443,12 +448,15 @@ export async function fetchAlgorithmProfile(): Promise<AlgorithmTransparencyProf
       const backend = await fetchJson<BackendIntentProfile>(
         `/recommendations/intent/${encodeURIComponent(userId)}/profile`
       );
+      const profile = backendProfileToTransparencyProfile(backend);
+      lastRealTopics = profile.topics;
       setAlgorithmDemoMode(false);
-      return backendProfileToTransparencyProfile(backend);
+      return profile;
     } catch {
       // fall through to mock
     }
   }
+  lastRealTopics = null;
   setAlgorithmDemoMode(true);
   const recentInfluences = [...MOCK_SIGNALS]
     .sort((a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime())
@@ -468,27 +476,26 @@ export async function fetchAlgorithmProfile(): Promise<AlgorithmTransparencyProf
 export async function updateTopicWeight(topicId: string, weight: TopicWeight): Promise<AlgorithmTopic | null> {
   const userId = getCurrentUserId();
   if (userId && !getAlgorithmDemoMode()) {
-    try {
-      const target = sessionTopics.find((t) => t.id === topicId);
-      await fetchJson(
-        `/recommendations/intent/${encodeURIComponent(userId)}/mutate`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            idempotencyKey: `weight-${topicId}-${weight}`,
-            scope: 'topic',
-            targetId: topicId,
-            targetLabel: target?.label ?? topicId,
-            direction: mapWeightToDirection(weight),
-          }),
-        },
-      );
-      const profile = await fetchAlgorithmProfile();
-      return profile.topics.find((t) => t.id === topicId) ?? null;
-    } catch {
-      // fall through to mock
-    }
+    // Real profile: resolve the label from the real topic list, mutate via
+    // the backend, and let failures throw — silently mutating mock state
+    // would report a success that never persisted.
+    const target = lastRealTopics?.find((t) => t.id === topicId);
+    await fetchJson(
+      `/recommendations/intent/${encodeURIComponent(userId)}/mutate`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          idempotencyKey: `weight-${topicId}-${weight}`,
+          scope: 'topic',
+          targetId: topicId,
+          targetLabel: target?.label ?? topicId,
+          direction: mapWeightToDirection(weight),
+        }),
+      },
+    );
+    const profile = await fetchAlgorithmProfile();
+    return profile.topics.find((t) => t.id === topicId) ?? null;
   }
   let updated: AlgorithmTopic | null = null;
   sessionTopics = sessionTopics.map((t) => {
@@ -508,28 +515,28 @@ export async function updateTopicWeight(topicId: string, weight: TopicWeight): P
 export async function removeTopic(topicId: string): Promise<boolean> {
   const userId = getCurrentUserId();
   if (userId && !getAlgorithmDemoMode()) {
-    try {
-      const target = sessionTopics.find((t) => t.id === topicId);
-      if (!target || !target.removable) return false;
-      await fetchJson(
-        `/recommendations/intent/${encodeURIComponent(userId)}/mutate`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            idempotencyKey: `remove-${topicId}`,
-            scope: 'topic',
-            targetId: topicId,
-            targetLabel: target.label,
-            direction: 'remove',
-          }),
-        },
-      );
-      sessionTopics = sessionTopics.filter((t) => t.id !== topicId);
-      return true;
-    } catch {
-      // fall through to mock
-    }
+    // Real profile: the target must be resolved from the real topic list —
+    // sessionTopics holds mock rows whose ids never match real topic ids,
+    // which previously made every real removal return false before the API
+    // call. Backend failures throw so the UI can show an honest error.
+    const target = lastRealTopics?.find((t) => t.id === topicId);
+    if (target && !target.removable) return false;
+    await fetchJson(
+      `/recommendations/intent/${encodeURIComponent(userId)}/mutate`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          idempotencyKey: `remove-${topicId}`,
+          scope: 'topic',
+          targetId: topicId,
+          targetLabel: target?.label ?? topicId,
+          direction: 'remove',
+        }),
+      },
+    );
+    lastRealTopics = (lastRealTopics ?? []).filter((t) => t.id !== topicId);
+    return true;
   }
   const target = sessionTopics.find((t) => t.id === topicId);
   if (!target || !target.removable) return false;
@@ -543,37 +550,35 @@ export async function removeTopic(topicId: string): Promise<boolean> {
 export async function addTopic(label: string, category: string): Promise<AlgorithmTopic> {
   const userId = getCurrentUserId();
   if (userId && !getAlgorithmDemoMode()) {
-    try {
-      const topicId = `topic-user-${Date.now()}`;
-      await fetchJson(
-        `/recommendations/intent/${encodeURIComponent(userId)}/mutate`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            idempotencyKey: `add-${topicId}`,
-            scope: 'topic',
-            targetId: topicId,
-            targetLabel: label.trim(),
-            direction: 'add',
-            topicCategory: category,
-          }),
-        },
-      );
-      const profile = await fetchAlgorithmProfile();
-      return profile.topics.find((t) => t.label === label.trim()) ?? {
-        id: topicId,
-        label: label.trim(),
-        category,
-        weight: 'medium' as TopicWeight,
-        source: 'explicit' as SignalSource,
-        removable: true,
-        addedAt: new Date().toISOString(),
-        isDemo: false,
-      };
-    } catch {
-      // fall through to mock
-    }
+    // Real profile: failures throw so the UI can report the mutation did not
+    // persist instead of silently fabricating a topic in mock state.
+    const topicId = `topic-user-${Date.now()}`;
+    await fetchJson(
+      `/recommendations/intent/${encodeURIComponent(userId)}/mutate`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          idempotencyKey: `add-${topicId}`,
+          scope: 'topic',
+          targetId: topicId,
+          targetLabel: label.trim(),
+          direction: 'add',
+          topicCategory: category,
+        }),
+      },
+    );
+    const profile = await fetchAlgorithmProfile();
+    return profile.topics.find((t) => t.label === label.trim()) ?? {
+      id: topicId,
+      label: label.trim(),
+      category,
+      weight: 'medium' as TopicWeight,
+      source: 'explicit' as SignalSource,
+      removable: true,
+      addedAt: new Date().toISOString(),
+      isDemo: false,
+    };
   }
   const topic: AlgorithmTopic = {
     id: `topic-user-${Date.now()}`,
@@ -600,9 +605,10 @@ export async function fetchRecentInfluences(): Promise<AlgorithmSignal[]> {
         `/recommendations/intent/${encodeURIComponent(userId)}/profile`
       );
       const profile = backendProfileToTransparencyProfile(backend);
-      if (profile.recentInfluences.length > 0) {
-        return profile.recentInfluences;
-      }
+      // A reachable backend owns this slice — return the real list even when
+      // it is empty. Injecting mock signals here would present fabricated
+      // influences on a live profile.
+      return profile.recentInfluences;
     } catch {
       // fall through to mock
     }
@@ -622,7 +628,10 @@ export async function fetchRecentInfluences(): Promise<AlgorithmSignal[]> {
  * relying on fabricated data here.
  */
 export async function fetchFeedExplanation(itemId: string): Promise<AlgorithmFeedExplanation | null> {
-  const ranked = [...sessionTopics]
+  // Use the real topic list when a live profile has been fetched — citing
+  // mock topics on a real profile would fabricate the explanation.
+  const sourceTopics = lastRealTopics ?? sessionTopics;
+  const ranked = [...sourceTopics]
     .sort((a, b) => weightToValue(b.weight) - weightToValue(a.weight))
     .slice(0, 3);
 

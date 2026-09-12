@@ -130,7 +130,10 @@ export function AssetDetailIdentity({
           <View style={[
             styles.movePill,
             { backgroundColor: movePct24h >= 0 ? colors.coownUpSubtle : colors.coownDownSubtle },
-          ]}>
+          ]}
+            accessibilityLabel={`24 hour change ${movePct24h >= 0 ? 'up' : 'down'} ${Math.abs(movePct24h).toFixed(1)} percent`}
+            accessibilityRole="text"
+          >
             <Ionicons
               name={movePct24h >= 0 ? 'trending-up' : 'trending-down'}
               size={14}

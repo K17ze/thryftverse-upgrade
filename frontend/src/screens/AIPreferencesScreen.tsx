@@ -5,10 +5,11 @@
  * listing suggestions, photo enhancement, search autocomplete, chat agents,
  * auto-negotiation, confidence indicators, and algorithm transparency.
  *
- * Per AGENTS.md §11 (Truthful UI): preferences are persisted locally only in
- * demo mode, so a "Demo mode" indicator is always shown. We never claim the
- * toggles affect a live backend — they update the session profile and the
- * indicator makes clear the data is illustrative.
+ * Per AGENTS.md §11 (Truthful UI): preferences are persisted on-device only —
+ * the backend account-preferences endpoint does not yet support AI feature
+ * toggles, so the honesty notice is always shown (not just in demo builds).
+ * We never claim the toggles reconfigure a live backend — they record the
+ * user's choice on this device, and surfaces read them where wired.
  *
  * Anti-AI art direction (audit §01): all labels are phrased around benefit,
  * not implementation technology. No "AI" prefix on feature names — the user
@@ -43,9 +44,6 @@ import { TypographyV2 } from '../theme/typography.v2';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AIPreferences'>;
 
-// Demo mode flag — the preference service is mock in this build.
-const AI_PREFERENCES_DEMO_MODE = __DEV__;
-
 const AI_PREFS_KEY = '@thryftverse/ai_prefs';
 
 interface AIPrefs {
@@ -74,7 +72,8 @@ export default function AIPreferencesScreen({ navigation }: Props) {
 
   // Preference state — persisted to AsyncStorage so it survives app restarts.
   // The backend account-preferences endpoint does not yet support AI feature
-  // toggles, so these are device-local (truthful per AGENTS.md §11).
+  // toggles, so these are device-local in every build — the honesty notice
+  // below is always rendered, not gated on __DEV__ (truthful per AGENTS.md §11).
   const [masterEnabled, setMasterEnabled] = React.useState(DEFAULT_PREFS.masterEnabled);
   const [listingSuggestions, setListingSuggestions] = React.useState(DEFAULT_PREFS.listingSuggestions);
   const [photoEnhancement, setPhotoEnhancement] = React.useState(DEFAULT_PREFS.photoEnhancement);
@@ -160,19 +159,20 @@ export default function AIPreferencesScreen({ navigation }: Props) {
         />
       }
     >
-      {/* ── Demo mode indicator (truthful UI per AGENTS.md §11) ── */}
-      {AI_PREFERENCES_DEMO_MODE && (
-        <View
-          style={[styles.demoBanner, { backgroundColor: colors.surfaceAlt }]}
-          accessibilityRole="header"
-          accessibilityLabel="Demo mode"
-        >
-          <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
-          <Text style={styles.demoBannerText}>
-            Preferences are saved on this device only in demo mode.
-          </Text>
-        </View>
-      )}
+      {/* ── Honesty notice (truthful UI per AGENTS.md §11) ──
+          Always rendered: these toggles are device-local in every build and
+          some features are still in preview, so the notice is not a demo-only
+          indicator. */}
+      <View
+        style={[styles.demoBanner, { backgroundColor: colors.surfaceAlt }]}
+        accessibilityRole="header"
+        accessibilityLabel="Preferences saved on this device"
+      >
+        <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
+        <Text style={styles.demoBannerText}>
+          Preferences are saved on this device. Some features are in preview and may not respond to these settings yet.
+        </Text>
+      </View>
 
       {/* ── Summary — flat intro block with active count ── */}
         <View style={styles.summaryBlock}>
@@ -247,8 +247,8 @@ export default function AIPreferencesScreen({ navigation }: Props) {
           />
           <SettingsRow
             icon="trending-up-outline"
-            title="Auto-negotiate offers"
-            subtitle="Allow agents to negotiate offers on your behalf"
+            title="Offer auto-accept rules"
+            subtitle="Preview — save a floor price for incoming offers; rules are not applied to live offers yet"
             toggleValue={smartSell}
             onToggle={toggleWithHaptic(setSmartSell)}
             disabled={!masterEnabled}
@@ -283,7 +283,7 @@ export default function AIPreferencesScreen({ navigation }: Props) {
             <Text style={[styles.dataUsageTitle, { color: colors.textPrimary }]}>Data usage</Text>
           </View>
           <Text style={[styles.dataUsageBody, { color: colors.textSecondary }]}>
-            These features use your listing content, search queries and chat messages to generate suggestions. In demo mode this data stays on your device and is never sent to a server or shared with third parties. Disabling a feature stops that data from being processed for suggestions.
+            Assisted features can use your listing content, search queries and chat messages to generate suggestions. Where a server assistant is configured, the relevant content is sent to that provider to produce a response; otherwise suggestions are produced on-device from local signals such as photo file names. Turning a feature off records your preference on this device.
           </Text>
         </View>
     </FlagshipScreen>

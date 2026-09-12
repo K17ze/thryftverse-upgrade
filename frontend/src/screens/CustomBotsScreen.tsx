@@ -1,20 +1,28 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
-import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import {
+  FlagshipScreen,
+  FlagshipHeader,
+  FlagshipState,
+  SkeletonBlock,
+  SkeletonCircle } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AgentIcon } from '../components/agents/AgentIcon';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
+import { fetchCustomBotsFromApi } from '../services/botsApi';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { useHaptic } from '../hooks/useHaptic';
 import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
@@ -29,10 +37,11 @@ export default function CustomBotsScreen({ navigation }: Props) {
 
   const customBots = useStore((state) => state.customBots);
   const deleteCustomBot = useStore((state) => state.deleteCustomBot);
-  const loadBotsFromApi = useStore((state) => state.loadBotsFromApi);
   const conversations = useStore((state) => state.conversations);
+  const { isOffline } = useConnectivity();
 
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmSheet, setConfirmSheet] = useState<{
     visible: boolean;
@@ -43,14 +52,25 @@ export default function CustomBotsScreen({ navigation }: Props) {
     variant?: 'default' | 'danger';
   }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
-  useEffect(() => {
-    let cancelled = false;
+  // The store's loadBotsFromApi swallows fetch errors, so this screen fetches
+  // directly to keep an honest error + retry state, then writes the result
+  // back into the store so the rest of the app stays in sync.
+  const refresh = useCallback(async () => {
     setIsLoading(true);
-    loadBotsFromApi().finally(() => {
-      if (!cancelled) setIsLoading(false);
-    });
-    return () => { cancelled = true; };
-  }, [loadBotsFromApi]);
+    setLoadError(false);
+    try {
+      const items = await fetchCustomBotsFromApi();
+      useStore.setState({ customBots: items });
+    } catch {
+      setLoadError(true);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   const active = useMemo(() => customBots.filter((b) => !b.isDraft && !b.isDisabled), [customBots]);
   const drafts = useMemo(() => customBots.filter((b) => b.isDraft), [customBots]);
@@ -96,7 +116,7 @@ export default function CustomBotsScreen({ navigation }: Props) {
               accessibilityLabel="Create agent"
             >
               <View style={styles.createBtn}>
-                <Ionicons name="add" size={22} color={colors.textPrimary} />
+                <AppIcon name="plus" size={IconSize.lg} color="textPrimary" opticalCenter accessible={false} />
               </View>
             </AnimatedPressable>
           }
@@ -105,6 +125,12 @@ export default function CustomBotsScreen({ navigation }: Props) {
       scrollEnabled={false}
     >
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+        {isOffline && customBots.length > 0 ? (
+          <Text style={[styles.offlineNote, { color: colors.textMuted }]}>
+            Offline — showing last loaded agents.
+          </Text>
+        ) : null}
+
         {/* Active bots */}
         {active.length > 0 && (
           <Section title="PUBLISHED">
@@ -157,20 +183,35 @@ export default function CustomBotsScreen({ navigation }: Props) {
           <View style={styles.loadingContainer}>
             {[0, 1, 2].map((i) => (
               <View key={i} style={styles.skeletonRow}>
-                <View style={styles.skeletonIcon} />
+                <SkeletonCircle size={Space.xl + Space.xs} />
                 <View style={styles.skeletonCopy}>
-                  <View style={styles.skeletonLine} />
-                  <View style={[styles.skeletonLine, { width: '60%' }]} />
+                  <SkeletonBlock width="55%" height={13} />
+                  <SkeletonBlock width="60%" height={11} />
                 </View>
               </View>
             ))}
           </View>
         )}
 
-        {!isLoading && customBots.length === 0 && (
+        {!isLoading && loadError && customBots.length === 0 && (
+          <FlagshipState
+            variant={isOffline ? 'offline' : 'error'}
+            title={isOffline ? "You're offline" : "Couldn't load your agents"}
+            subtitle={
+              isOffline
+                ? 'Reconnect to see your agents.'
+                : 'Check your connection and try again.'
+            }
+            actionLabel="Try again"
+            onAction={() => void refresh()}
+            style={styles.stateWrap}
+          />
+        )}
+
+        {!isLoading && !loadError && customBots.length === 0 && (
           <View style={styles.empty}>
             <View style={styles.emptyMark}>
-              <Ionicons name="chatbubble-ellipses-outline" size={25} color={colors.textPrimary} />
+              <AppIcon name="chatbubble-ellipses-outline" size={IconSize.lg} color="textPrimary" opticalCenter accessible={false} />
             </View>
             <Text style={styles.emptyTitle}>Create an agent that works your way</Text>
             <Caption color={colors.textSecondary} style={styles.emptyText}>
@@ -278,7 +319,7 @@ function BotRow({
             accessibilityRole="button"
             accessibilityLabel="Edit agent"
           >
-            <Ionicons name="create-outline" size={20} color={colors.textSecondary} />
+            <AppIcon name="edit" size={IconSize.md} color="textSecondary" opticalCenter accessible={false} />
           </AnimatedPressable>
 
           <AnimatedPressable
@@ -290,7 +331,7 @@ function BotRow({
             accessibilityRole="button"
             accessibilityLabel="Delete agent"
           >
-            <Ionicons name="trash-outline" size={20} color={colors.danger} />
+            <AppIcon name="trash" size={IconSize.md} color="danger" opticalCenter accessible={false} />
           </AnimatedPressable>
         </View>
       </View>
@@ -315,9 +356,10 @@ function createStyles(colors: ThemeColors) {
     fontSize: TypographyV2.meta.size,
     letterSpacing: TypographyV2.meta.letterSpacing,
     marginLeft: Space.xs },
-  card: {
-    backgroundColor: colors.background,
-    gap: Space.xs / 4 },
+  offlineNote: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   rowDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
@@ -336,18 +378,11 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     gap: Space.sm,
     paddingVertical: Space.sm + 2 },
-  skeletonIcon: {
-    width: Space.xl + Space.xs,
-    height: Space.xl + Space.xs,
-    borderRadius: Radius.sm,
-    backgroundColor: colors.surfaceAlt },
   skeletonCopy: {
     flex: 1,
     gap: Space.xs },
-  skeletonLine: {
-    height: 12,
-    borderRadius: Radius.sm,
-    backgroundColor: colors.surfaceAlt },
+  stateWrap: {
+    paddingTop: Space.xxl },
   botText: {
     flex: 1,
     justifyContent: 'center',

@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { AppIcon } from '../components/common/AppIcon';
+import type { IoniconsGlyphName, SemanticIconName } from '../theme/iconTokens';
 import { CachedImage } from '../components/CachedImage';
 import { ChatInfoRow, ChatInfoSection } from '../components/chat/ChatInfoSection';
 import { FlagshipHeader, FlagshipScreen } from '../components/flagship';
@@ -216,14 +217,14 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
         </AnimatedPressable>
 
         <View style={[styles.quickActions, t.quickActions]}>
-          <QuickAction icon="person-outline" label="Profile" onPress={viewProfile} />
+          <QuickAction icon="profile" label="Profile" onPress={viewProfile} />
           <QuickAction
-            icon="images-outline"
+            icon="images"
             label="Media"
             onPress={() => navigation.navigate('SharedConversationMedia', { conversationId })}
           />
           <QuickAction
-            icon={isMuted ? 'volume-mute-outline' : 'notifications-outline'}
+            icon={isMuted ? 'notificationsOff' : 'notifications'}
             label={isMuted ? 'Unmute' : 'Mute'}
             onPress={toggleMute}
             busy={isTogglingMute}
@@ -302,7 +303,7 @@ function QuickAction({
   label,
   onPress,
   busy }: {
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: SemanticIconName | IoniconsGlyphName;
   label: string;
   onPress: () => void;
   busy?: boolean;
@@ -325,7 +326,7 @@ function QuickAction({
       {busy ? (
         <ActivityIndicator size="small" color={colors.textPrimary} />
       ) : (
-        <Ionicons name={icon} size={21} color={colors.textPrimary} />
+        <AppIcon name={icon} size="lg" color="textPrimary" accessible={false} />
       )}
       <Text style={[styles.quickActionLabel, quickThemed.quickActionLabel]}>{label}</Text>
     </AnimatedPressable>

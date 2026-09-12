@@ -115,3 +115,73 @@ BASE: 03153b2 (feat/product-detail-contract-media-device-closure)
 - Backend typecheck: clean (exit 0)
 - Backend tests: 48 compositionRenderer tests passed; 3 pre-existing test files failed (visualSearchRoute, vectorSearchIntegration, safeRemoteMediaFetch â€” unrelated to Wave 11)
 - Adversarial re-audit: all 7 Wave 11 tasks verified for truthful behavior, proper wiring, and anti-AI design compliance
+
+## Wave A â€” Publication render parity + editor timeline unification + offline uploads
+
+### A1: Video render wired into publish path âœ…
+- `renderCompositionMedia` no longer stubs out videos â€” `renderComposition` routes primary video media through `renderVideoComposition` (FFmpeg) alongside Sharp/SVG for images
+- `creatorPublicationService` selects the primary expected media regardless of image/video type; poster frames render non-trivial video pages too
+- Fail-closed: non-trivial render failure aborts publish with `MEDIA_RENDER_FAILED` (never silently publishes unedited source); source fallback preserved only for genuinely trivial docs
+- Bounded render deadline on all FFmpeg calls (`runFfmpeg` accepts `timeoutMs`, kills the child process on expiry)
+
+### A2: Backend transcode edits âœ…
+- Segment-graph model (`buildVideoSegments`): play/freeze segments â†’ per-segment FFmpeg chains â†’ `concat` graph
+- `volume=` + `afade` (in/out) applied in output time after the segment graph
+- Timed overlays gated via `enable='between(t,â€¦)'` (drawtext + sticker PNG groups)
+- Reverse: per-segment `reverse`/`areverse` + reversed concat order (bounds the frame buffer per segment)
+- Freeze: 2-frame window + `select='eq(n,0)'` + `tpad stop_mode=clone`; audio hold emits `anullsrc` silence (skip-under semantics matching preview `computeSourceTime`)
+- Speed curves: 24 piecewise-constant segments sampled at midpoints (mirrors `sampleSpeedAtPosition` incl. smooth/hold easing)
+- Bug fixes found by real-FFmpeg smoke: freeze at position 0 was silently dropped (`freezeFrameMs > 0` gate â€” now `>= 0`); second-based `trim` boundaries double-counted the shared edge frame at every segment junction (~1 frame/boundary) â€” now frame-indexed `trim=start_frame/end_frame`
+
+### A3: Timeline derivation unified âœ…
+- `usePosterTimeline` now consumes `projectTimeline` (TimelineProjector) â€” the same projection the playback clock uses â€” instead of a parallel derivation that ignored speedCurve, freeze, reverse, and image pages
+- Image pages are now timeline clips (`mediaType: 'image'`) honoring `page.durationMs` as hold time â€” matching `migrateDocumentToSequence` semantics and Instagram Edits' all-segments strip
+- Overlay anchor offsets rebase onto projected clip `timelineStartMs` + projected page spans (was raw `page.durationMs` â†’ drifted from playback under speed edits)
+- `timelineTotalDurationMs` = `projectedTimeline.totalDurationMs` (playback parity)
+- `PosterClip.speedCurve` retyped to the authored `SpeedCurve` shape (was dead `SpeedCurvePoint[]`); `TimelineOperations.recomputeDuration`/`setClipSpeedCurve` now use `SpeedCurveTypes.averageSpeed` â€” same math as the projector
+- Trim handles + trim/split ops gated to video clips (image clips have no source window)
+
+### A4: Replace preserves authored edits âœ…
+- `handlePickerAddLayer` replace branch now clamps `trimStartMs`/`trimEndMs` to the replacement `videoDurationMs` (shorter media no longer stretches the clip beyond real source)
+- Clears stale upload receipts (`mediaFinalizationId`/`mediaAssetId`/`thumbnailFinalizationId`/`thumbnailMediaAssetId`) â€” the old receipt bound to a different URL would fail server `MEDIA_RECEIPT_MISMATCH`
+- Videoâ†’image replace clears source-window fields; trim/speed/volume/effects preserved (undo restores fully)
+
+### A5: NetInfo gating in UploadManager âœ…
+- `setOnline(online)` connectivity gate (host-agnostic; `useUploadManager` wires `@react-native-community/netinfo` once for the shared singleton)
+- Going offline aborts in-flight controllers â†’ jobs unwind back to `queued` (never `failed`, never user-`paused`); `activeUploads` entries released by each `processJob` finally â†’ no double-start on fast flap
+- `processQueue` no-ops while offline; `checkStalledJobs` skips while offline; reconnect kicks the queue
+- New `connectivityChanged` event + `isOffline` on `useUploadManager` for honest "waiting for connection" UI
+- User-paused jobs stay paused across flaps (user intent â‰  connectivity)
+
+### Verification
+- Backend: `compositionRenderer.test.ts` 57/57 pass; `tsc --noEmit` clean
+- Frontend: `tsc --noEmit` clean; creator tests 25/25 (19 existing + 6 new connectivity-gate tests)
+- Real FFmpeg 9.0 smoke (`.flagship/smoke/`): reverse+freeze+volume+fades â†’ 4.000s exact; freeze@0 â†’ 4.000s; 6-segment speed curve â†’ 4.733s vs 4.667 target (Â±1 frame â‰ˆ 0.04%, was +133ms before frame-indexed trim); remux `-ss/-t/-c copy` â†’ 2.1s (keyframe tolerance, expected)
+- Known P3: remux trim is keyframe-approximate (Â±~0.1s); frame-exact trim requires transcode â€” intentional lossless/fast tradeoff
+
+## Wave B (2026-09) — Research refresh + remaining depth
+
+### B1: Sept-2026 research refresh — done.
+- `.flagship/research-waveB-2026-09.md` — current competitive bar: Instagram Edits (Aug 2026: 15-min 4K export, folders, overlay templates + clip lock; Jul: bilingual captions), Snapchat (Quick Cut + Sounds Sync for Camera Roll expanding, Director Mode timeline), RN stack (expo-video 57.0.2 for playback/thumbs, Nitro modules + react-native-video-pipeline for client export; ffmpeg-kit dead — unaffected, our FFmpeg is server-side).
+- Upload guidance: native background session (iOS NSURLSession background, Android UIDT/WorkManager) + S3 multipart/TUS resume. Our durable job store + multipart implements the resume half; native background session remains the known gap (parked — needs native module work).
+
+### B2: Publication-service render path tests — done.
+- `creatorPublicationRender.test.ts`: 9 tests mocking compositionRenderer/s3 — trivial-skip, image jpg upload, video mp4 ext, fail-closed on render null/throw, `videoPageRenderPath` single-page isolation, per-frame parallelism + trivial-video skip, aggregate renderFailed/nonTrivial propagation.
+- `__testables` export seam added to creatorPublicationService (no behavior change).
+- Learned: `backend/api/vitest.config.ts` uses an explicit `include` whitelist — new test files must be registered there.
+
+### B3: Preview parity — computeSourceTime freeze+reverse — done.
+- `computeSourceTime` now maps reversed output through a freeze-aware forward-position mapping (forwardOffset = durationMs - offset), matching the export graph's "build forward, reverse concat order" semantics. Reversed clip freeze holds the frame at the mirrored output position.
+- `useFreezeFramePreview.isInFreezeWindow` mirrors the freeze window for reversed clips (`durationMs - freezeEnd .. durationMs - freezeStart`) so the Skia held-frame overlay lands where export puts it.
+- `handleSpeedCurveChange` now writes `speed: averageSpeed(curve)` alongside `speedCurve` — payload.speed stays the effective speed for consumers that read the constant field directly.
+
+### B4: Legacy listing queue connectivity — done.
+- `mediaUploadQueue` already had NetInfo gating + durable snapshots; added proactive offline parking: on `isInternetReachable ? false`, `parkForOffline()` aborts in-flight items with `_offlineAborted` flag ? catch requeues as `pending` with attempt budget refunded (not cancelled, not failed). Preserves `_needsFinalizationOnly` checkpoint when bytes already landed.
+- User cancel during offline abort still wins (`_cancelRequested` precedence).
+
+### Multipart pipelining (Wave-B roadmap B1) — done.
+- `MultipartUploader.resume` now uploads parts through a bounded worker pool (`partConcurrency`, default 3 — S3/cellular sweet spot). Meta's segmented-upload analysis attributes >2× latency cut + ~5× failure reduction to part overlap. First exhausted part fails the session; siblings finish in-flight parts so progress checkpoints (skipped on next resume).
+
+### Viewer parity (W12-P0-1b) — done.
+- `renderedViewDocument.pageWithRenderedMedia`: when a frame's published `media_url` differs from the doc's media URI (i.e. rendered artifact exists), the viewer canvas plays the BAKED artifact — full-canvas identity geometry, all baked edit fields cleared — instead of the raw source. Static overlays already burned in are dropped; interactive/dynamic layers (vote/quiz/question/emojiSlider/link/product/look/music/mention/time/weather) stay live on top.
+- Multi-clip concat ruled unnecessary for publish: looks are contract-enforced single-page (`compositionContract.ts:81`); posters are a paged deck — every page renders its own frame artifact. Concat would matter only for a future "export poster as single video" feature.

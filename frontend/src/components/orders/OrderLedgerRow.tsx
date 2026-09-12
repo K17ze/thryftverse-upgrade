@@ -11,7 +11,6 @@ import {
   getStatusColor,
   isTerminalStatus,
   isCancelledStatus,
-  getNextActionHint,
   needsAction,
   type OrderRole,
 } from './orderCapabilities';
@@ -33,6 +32,16 @@ export interface OrderViewModel {
   shipByDate?: string | null;
   /** The exact service the buyer paid for (from the immutable snapshot). */
   serviceName?: string | null;
+  /** Authoritative delivery timestamp (ISO 8601) — evidence for delivered orders. */
+  deliveredAt?: string | null;
+  /** Human-readable ETA window from the fulfilment snapshot, e.g. "2–3 days". */
+  etaWindow?: string | null;
+  /**
+   * Capability-resolved next action for the viewer (e.g. "Track your parcel",
+   * "Dispatch this order"). Computed by the parent via resolveCapabilities so
+   * the row never reinterprets status strings. Null → no action row.
+   */
+  nextActionLabel?: string | null;
 }
 
 
@@ -51,7 +60,8 @@ function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowPr
   const cancelled = isCancelledStatus(order.status);
   const terminal = isTerminalStatus(order.status);
   const dateLabel = formatShortDate(order.createdAt);
-  const nextAction = getNextActionHint(order.status, order.role);
+  // Capability-resolved at the parent — the row never reinterprets status.
+  const nextAction = order.nextActionLabel ?? null;
   const isNeedsAction = needsAction(order.status, order.role);
 
   // Ship-by deadline urgency (seller view, paid status)
@@ -71,22 +81,36 @@ function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowPr
   if (dateLabel) contextParts.push(dateLabel);
   const contextLine = contextParts.join(' · ');
 
-  const trackingLine = order.trackingNumber
-    ? `${order.shippingProvider ? order.shippingProvider.toUpperCase() + ' · ' : ''}${order.trackingNumber}`
-    : null;
-
+  // Carrier evidence — one truthful line. Priority:
+  //   delivered/completed → authoritative delivery date (+ carrier)
+  //   in-flight           → carrier · tracking number (+ purchased ETA window)
+  //   no tracking yet     → the exact service the buyer paid for (+ ETA window)
+  // Terminal non-delivered states (cancelled/refunded/returned) show none —
+  // the status badge is the whole story.
   const statusKey = normaliseOrderStatus(order.status);
-  const ACTIVE_PROGRESS_STATUSES = new Set(['paid', 'shipped', 'in transit']);
-  const showProgress = !terminal && statusKey !== 'created' && ACTIVE_PROGRESS_STATUSES.has(statusKey);
-  const progressStages = ['paid', 'shipped', 'delivered'];
-  const currentStageIndex = progressStages.indexOf(
-    statusKey === 'in transit' ? 'shipped' : statusKey
-  );
+  const isDeliveredState = statusKey === 'delivered' || statusKey === 'completed';
+  const etaSuffix = order.etaWindow ? ` · Est. ${order.etaWindow}` : '';
+
+  let evidenceIcon: React.ComponentProps<typeof Ionicons>['name'] = 'car-outline';
+  let evidenceLine: string | null = null;
+  if (isDeliveredState && order.deliveredAt) {
+    evidenceIcon = 'checkmark-circle-outline';
+    evidenceLine = `Delivered ${formatShortDate(order.deliveredAt)}${
+      order.shippingProvider ? ` · ${order.shippingProvider.toUpperCase()}` : ''}`;
+  } else if (terminal) {
+    evidenceLine = null;
+  } else if (order.trackingNumber) {
+    evidenceLine = `${
+      order.shippingProvider ? order.shippingProvider.toUpperCase() + ' · ' : ''
+    }${order.trackingNumber}${etaSuffix}`;
+  } else if (order.serviceName) {
+    evidenceLine = `${order.serviceName}${etaSuffix}`;
+  }
 
   // Short order number for scannable reference — first 8 chars uppercased
   const shortOrderNumber = order.id.slice(0, 8).toUpperCase();
 
-  const accessibilityLabel = `Order ${shortOrderNumber}, ${order.title}, ${statusLabel}, ${formattedTotal}, ${contextLine}${trackingLine ? `, ${trackingLine}` : ''}${nextAction ? `, Next: ${nextAction}` : ''}${showDeadlineBadge ? `, Ship by ${formatShortDate(order.shipByDate!)}` : ''}`;
+  const accessibilityLabel = `Order ${shortOrderNumber}, ${order.title}, ${statusLabel}, ${formattedTotal}, ${contextLine}${evidenceLine ? `, ${evidenceLine}` : ''}${nextAction ? `, Next: ${nextAction}` : ''}${showDeadlineBadge ? `, Ship by ${formatShortDate(order.shipByDate!)}` : ''}`;
 
   return (
     <Pressable
@@ -126,9 +150,9 @@ function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowPr
           <Text style={styles.total}>{formattedTotal}</Text>
         </View>
 
-        {trackingLine && (
+        {evidenceLine && (
           <Text style={styles.tracking} numberOfLines={1}>
-            <Ionicons name="car-outline" size={11} color={colors.textMuted} /> {trackingLine}
+            <Ionicons name={evidenceIcon} size={11} color={colors.textMuted} /> {evidenceLine}
           </Text>
         )}
 
@@ -162,40 +186,12 @@ function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowPr
           </View>
         )}
 
-        {/* Next action — contextual CTA hint */}
-        {nextAction && !terminal && (
+        {/* Next action — capability-resolved hint (e.g. "Track your parcel",
+            "Dispatch this order", "Check your item"). */}
+        {nextAction && (
           <View style={styles.nextActionRow}>
             <Ionicons name="arrow-forward-circle-outline" size={12} color={colors.brand} />
             <Text style={styles.nextActionText}>{nextAction}</Text>
-          </View>
-        )}
-
-        {showProgress && currentStageIndex >= 0 && (
-          <View style={styles.progressRow}>
-            {progressStages.map((stage, i) => {
-              const isCompleted = i <= currentStageIndex;
-              return (
-                <React.Fragment key={stage}>
-                  <View
-                    style={[
-                      styles.progressDot,
-                      isCompleted && { backgroundColor: colors.textPrimary },
-                    ]}
-                  />
-                  {i < progressStages.length - 1 && (
-                    <View
-                      style={[
-                        styles.progressLine,
-                        i < currentStageIndex && { backgroundColor: colors.textPrimary },
-                      ]}
-                    />
-                  )}
-                </React.Fragment>
-              );
-            })}
-            <Text style={styles.progressLabel}>
-              {progressStages[currentStageIndex].charAt(0).toUpperCase() + progressStages[currentStageIndex].slice(1)}
-            </Text>
           </View>
         )}
       </View>
@@ -314,29 +310,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     letterSpacing: TypographyV2.meta.letterSpacing,
     color: colors.textMuted,
     marginTop: 1,
-  },
-  progressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    marginTop: Space.xs + 2,
-  },
-  progressDot: {
-    width: 6,
-    height: 6,
-    borderRadius: Radius.sm,
-    backgroundColor: colors.border,
-  },
-  progressLine: {
-    width: 16,
-    height: 1.5,
-    backgroundColor: colors.border,
-  },
-  progressLabel: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textSecondary,
-    marginLeft: Space.xs,
   },
   chevron: {
     marginTop: 2,

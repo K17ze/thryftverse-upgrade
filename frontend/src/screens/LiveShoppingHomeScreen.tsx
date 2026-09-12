@@ -1,354 +1,61 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+/**
+ * LiveShoppingHomeScreen — live commerce discovery.
+ *
+ * Flat canvas + hairlines + type hierarchy. Session media is the object;
+ * text lives on the canvas below it. Every element renders only data the
+ * session contract carries — viewer counts, watcher counts and bids render
+ * only when the backend reports them (see components/live/SessionCards).
+ *
+ * Category filtering is derived from the categories actually present in the
+ * loaded sessions — when the backend contract carries no categories the
+ * filter strip is hidden rather than rendered as a dead control.
+ */
+
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  RefreshControl,
-  useWindowDimensions } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+  RefreshControl } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
-import Reanimated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withSequence,
-  withTiming,
-  Easing } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Stroke } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { CachedImage } from '../components/CachedImage';
 import { HorizontalRail } from '../components/HorizontalRail';
 import { OfflineBanner } from '../components/OfflineBanner';
-import { EmptyState } from '../components/EmptyState';
-import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
+import {
+  FlagshipScreen,
+  FlagshipHeader,
+  FlagshipState,
+  SkeletonBlock,
+  SkeletonTextLine } from '../components/flagship';
+import {
+  LiveSessionCard,
+  UpcomingSessionRow,
+  ReplaySessionCard,
+  LIVE_CARD_WIDTH,
+  UPCOMING_THUMB_SIZE } from '../components/live/SessionCards';
 import { useHaptic } from '../hooks/useHaptic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
   fetchLiveSessions,
-  LIVE_CATEGORIES,
-  LIVE_SHOPPING_DEMO_MODE,
-  type LiveSession,
   type LiveSessionSummary } from '../services/liveShoppingApi';
 import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
-// ── Layout constants ──
-const FEATURED_CARD_WIDTH = 240;
-const FEATURED_CARD_HEIGHT = 320;
-const UPCOMING_THUMB_SIZE = 72;
+const ALL_CATEGORY = 'All';
 
-// ── Live dot ──
-function LivePulse({ size = 8, color }: { size?: number; color: string }) {
-  const reducedMotion = useReducedMotion();
-  const scale = useSharedValue(1);
-
-  useEffect(() => {
-    if (reducedMotion) {
-      scale.value = 1;
-      return;
-    }
-    // Subtle pulse: scale 1.0 → 1.3 → 1.0, looping infinitely.
-    scale.value = withRepeat(
-      withSequence(
-        withTiming(1.3, { duration: 800, easing: Easing.inOut(Easing.ease) }),
-        withTiming(1.0, { duration: 800, easing: Easing.inOut(Easing.ease) }),
-      ),
-      -1,
-    );
-  }, [reducedMotion, scale]);
-
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }] }));
-
-  return (
-    <Reanimated.View
-      style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: color }, animStyle]}
-    />
-  );
-}
-
-// ── Live badge ──
-function LiveBadge({ compact = false }: { compact?: boolean }) {
-  const styles = useStyles();
-  const { colors } = useAppTheme();
-  const { t } = useAppTranslation('liveShopping');
-  return (
-    <View style={[styles.liveBadge, compact && styles.liveBadgeCompact]}>
-      <LivePulse size={compact ? 6 : 8} color={colors.danger} />
-      <Text style={[styles.liveBadgeText, compact && styles.liveBadgeTextCompact]}>{t('live.label')}</Text>
-    </View>
-  );
-}
-
-// ── Viewer count chip ──
-function ViewerChip({ count, compact = false }: { count: number; compact?: boolean }) {
-  const styles = useStyles();
-  const { colors } = useAppTheme();
-  const formatted = count >= 1000 ? `${(count / 1000).toFixed(1)}K` : String(count);
-  return (
-    <View style={[styles.viewerChip, compact && styles.viewerChipCompact]}>
-      <Ionicons name="eye" size={16} color={colors.scrimTextPrimary} accessible={false} />
-      <Text style={[styles.viewerChipText, compact && styles.viewerChipTextCompact]}>{formatted}</Text>
-    </View>
-  );
-}
-
-// ── Featured live card (horizontal strip) ──
-const FeaturedLiveCard = React.memo(function FeaturedLiveCard({
-  session,
-  formatBid,
-  onPress }: {
-  session: LiveSession;
-  formatBid: (gbp: number) => string;
-  onPress: () => void;
-}) {
-  const styles = useStyles();
-  const { colors } = useAppTheme();
-  const { t } = useAppTranslation('liveShopping');
-  const bidLabel = session.currentBid != null ? formatBid(session.currentBid) : null;
-
-  return (
-    <AnimatedPressable
-      style={[styles.featuredCard, { width: FEATURED_CARD_WIDTH }]}
-      onPress={onPress}
-      activeOpacity={0.9}
-      scaleValue={0.98}
-      accessibilityRole="button"
-      accessibilityLabel={`${session.title} by ${session.sellerName}. ${session.viewerCount} viewers${bidLabel ? `, current bid ${bidLabel}` : ''}. Tap to watch.`}
-    >
-      <View style={styles.featuredMediaWrap}>
-        <CachedImage
-          uri={session.thumbnail}
-          style={StyleSheet.absoluteFill}
-          containerStyle={StyleSheet.absoluteFill}
-          contentFit="cover"
-          accessible={false}
-        />
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.78)']}
-          locations={[0.4, 1]}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
-        />
-        <View style={styles.featuredTopRow}>
-          <LiveBadge />
-          <ViewerChip count={session.viewerCount} />
-        </View>
-        <View style={styles.featuredBottomArea}>
-          <View style={styles.featuredSellerRow}>
-            <CachedImage
-              uri={session.sellerAvatar}
-              style={styles.featuredAvatar}
-              contentFit="cover"
-              accessible={false}
-            />
-            <View style={styles.featuredSellerText}>
-              <View style={styles.featuredNameRow}>
-                <Text style={styles.featuredSellerName} numberOfLines={1}>{session.sellerName}</Text>
-                {session.sellerVerified && (
-                  <Ionicons name="checkmark-circle" size={16} color={colors.commerceTrust} accessible={false} />
-                )}
-              </View>
-              <Text style={styles.featuredCategory}>{session.category}</Text>
-            </View>
-          </View>
-          <Text style={styles.featuredTitle} numberOfLines={2}>{session.title}</Text>
-          {bidLabel && (
-            <View style={styles.featuredBidRow}>
-              <Text style={styles.featuredBidLabel}>{t('featured.currentBid')}</Text>
-              <Text style={styles.featuredBidValue}>{bidLabel}</Text>
-            </View>
-          )}
-        </View>
-      </View>
-    </AnimatedPressable>
-  );
-});
-
-// ── Replay card (past events) ──
-const ReplayCard = React.memo(function ReplayCard({
-  session,
-  onPress }: {
-  session: LiveSession;
-  onPress: () => void;
-}) {
-  const styles = useStyles();
-  const { colors } = useAppTheme();
-  const { t } = useAppTranslation('liveShopping');
-
-  const durationLabel = (() => {
-    if (!session.startedAt || !session.endedAt) return '';
-    const start = new Date(session.startedAt).getTime();
-    const end = new Date(session.endedAt).getTime();
-    const diffMin = Math.round((end - start) / 60_000);
-    if (diffMin < 60) return `${diffMin}m`;
-    return `${Math.floor(diffMin / 60)}h ${diffMin % 60}m`;
-  })();
-
-  const endedLabel = (() => {
-    if (!session.endedAt) return '';
-    const end = new Date(session.endedAt);
-    const now = new Date();
-    const diffHr = Math.round((now.getTime() - end.getTime()) / (60 * 60 * 1000));
-    if (diffHr < 1) return t('replay.justEnded');
-    if (diffHr < 24) return t('replay.hoursAgo', { count: diffHr });
-    return t('replay.daysAgo', { count: Math.floor(diffHr / 24) });
-  })();
-
-  return (
-    <AnimatedPressable
-      style={styles.replayCard}
-      onPress={onPress}
-      activeOpacity={0.9}
-      scaleValue={0.98}
-      accessibilityRole="button"
-      accessibilityLabel={`Replay: ${session.title} by ${session.sellerName}. ${endedLabel}${durationLabel ? `, duration ${durationLabel}` : ''}. Tap to watch replay.`}
-    >
-      <View style={styles.replayThumbWrap}>
-        <CachedImage
-          uri={session.thumbnail}
-          style={StyleSheet.absoluteFill}
-          containerStyle={StyleSheet.absoluteFill}
-          contentFit="cover"
-          accessible={false}
-        />
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.6)']}
-          locations={[0.5, 1]}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
-        />
-        <View style={styles.replayPlayIcon}>
-          <Ionicons name="play" size={20} color={colors.scrimTextPrimary} accessible={false} />
-        </View>
-        {durationLabel && (
-          <View style={styles.replayDurationBadge}>
-            <Text style={styles.replayDurationText}>{durationLabel}</Text>
-          </View>
-        )}
-      </View>
-      <View style={styles.replayBody}>
-        <View style={styles.replaySellerRow}>
-          <CachedImage
-            uri={session.sellerAvatar}
-            style={styles.replayAvatar}
-            contentFit="cover"
-            accessible={false}
-          />
-          <View style={styles.replaySellerText}>
-            <View style={styles.replayNameRow}>
-              <Text style={styles.replaySellerName} numberOfLines={1}>{session.sellerName}</Text>
-              {session.sellerVerified && (
-                <Ionicons name="checkmark-circle" size={12} color={colors.brand} accessible={false} />
-              )}
-            </View>
-            <Text style={styles.replayEndedLabel}>{endedLabel}</Text>
-          </View>
-        </View>
-        <Text style={styles.replayTitle} numberOfLines={2}>{session.title}</Text>
-      </View>
-    </AnimatedPressable>
-  );
-});
-
-// ── Upcoming row ──
-const UpcomingRow = React.memo(function UpcomingRow({
-  session,
-  onNotify,
-  notified,
-  formatScheduled }: {
-  session: LiveSession;
-  onNotify: () => void;
-  notified: boolean;
-  formatScheduled: (iso: string) => string;
-}) {
-  const styles = useStyles();
-  const { colors } = useAppTheme();
-  const { t } = useAppTranslation('liveShopping');
-  const scheduledLabel = session.scheduledAt ? formatScheduled(session.scheduledAt) : '';
-
-  return (
-    <View style={styles.upcomingRow}>
-      <View
-        style={styles.upcomingRowPress}
-        accessibilityRole="image"
-        accessibilityLabel={`${session.title} by ${session.sellerName}. Scheduled ${scheduledLabel}.`}
-      >
-        <View style={styles.upcomingThumbWrap}>
-          <CachedImage
-            uri={session.thumbnail}
-            style={StyleSheet.absoluteFill}
-            containerStyle={StyleSheet.absoluteFill}
-            contentFit="cover"
-            accessible={false}
-          />
-          <View style={styles.upcomingThumbIcon}>
-            <Ionicons name="time-outline" size={16} color={colors.scrimTextPrimary} accessible={false} />
-          </View>
-        </View>
-        <View style={styles.upcomingBody}>
-          <Text style={styles.upcomingScheduled}>{scheduledLabel}</Text>
-          <View style={styles.upcomingSellerRow}>
-            <CachedImage
-              uri={session.sellerAvatar}
-              style={styles.upcomingAvatar}
-              contentFit="cover"
-              accessible={false}
-            />
-            <Text style={styles.upcomingSellerName} numberOfLines={1}>{session.sellerName}</Text>
-            {session.sellerVerified && (
-              <Ionicons name="checkmark-circle" size={14} color={colors.brand} accessible={false} />
-            )}
-          </View>
-          <Text style={styles.upcomingTitle} numberOfLines={2}>{session.title}</Text>
-          <View style={styles.upcomingMetaRow}>
-            <Ionicons name="people-outline" size={16} color={styles.upcomingMetaText.color} accessible={false} />
-            <Text style={styles.upcomingMetaText}>{session.watchers} {t('upcoming.waiting')}</Text>
-          </View>
-        </View>
-      </View>
-      <AnimatedPressable
-        style={[
-          styles.notifyBtn,
-          notified && styles.notifyBtnActive,
-        ]}
-        onPress={onNotify}
-        activeOpacity={0.8}
-        scaleValue={0.95}
-        hapticFeedback="selection"
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        accessibilityRole="button"
-        accessibilityLabel={notified ? `Notifications on for ${session.title}` : `Notify me when ${session.title} starts`}
-      >
-        <Ionicons
-          name={notified ? 'notifications' : 'notifications-outline'}
-          size={16}
-          color={notified ? colors.scrimTextPrimary : styles.notifyBtnText.color}
-          accessible={false}
-        />
-        <Text style={[styles.notifyBtnText, notified && styles.notifyBtnTextActive]}>
-          {notified ? t('upcoming.notified') : t('upcoming.notifyMe')}
-        </Text>
-      </AnimatedPressable>
-    </View>
-  );
-});
-
-// ── Category pill ──
-const CategoryPill = React.memo(function CategoryPill({
+// ── Category tab (flat underline strip — text, not pills) ────────────────────
+const CategoryTab = React.memo(function CategoryTab({
   label,
   selected,
-  onPress }: {
+  onPress,
+}: {
   label: string;
   selected: boolean;
   onPress: () => void;
@@ -356,86 +63,125 @@ const CategoryPill = React.memo(function CategoryPill({
   const { colors } = useAppTheme();
   return (
     <AnimatedPressable
-      style={[
-        styles.categoryPill,
-        {
-          backgroundColor: selected ? colors.brand : 'transparent',
-          borderColor: selected ? colors.brand : colors.border },
-      ]}
+      style={styles.categoryTab}
       onPress={onPress}
-      activeOpacity={0.8}
-      scaleValue={0.97}
       hapticFeedback="selection"
+      scaleValue={0.97}
       accessibilityRole="tab"
       accessibilityState={{ selected }}
       accessibilityLabel={`${label} category${selected ? ', selected' : ''}`}
     >
       <Text
         style={[
-          styles.categoryPillText,
-          { color: selected ? colors.background : colors.textPrimary },
+          styles.categoryTabText,
+          { color: selected ? colors.textPrimary : colors.textMuted },
         ]}
       >
         {label}
       </Text>
+      <View
+        style={[
+          styles.categoryTabRule,
+          { backgroundColor: selected ? colors.brand : 'transparent' },
+        ]}
+      />
     </AnimatedPressable>
   );
 });
 
-// ── Skeleton for featured strip ──
-function FeaturedSkeleton() {
+// ── Section header — title + count, type hierarchy only ──────────────────────
+function SectionHeader({ title, meta }: { title: string; meta?: string }) {
+  const styles = useSectionStyles();
   return (
-    <HorizontalRail contentContainerStyle={{ paddingHorizontal: Space.md, gap: Space.md }}>
-      {Array.from({ length: 3 }).map((_, i) => (
-        <PremiumSkeletonTile
-          key={`featured-skel-${i}`}
-          width={FEATURED_CARD_WIDTH}
-          height={FEATURED_CARD_HEIGHT}
-          borderRadius={Radius.lg}
-        />
-      ))}
-    </HorizontalRail>
+    <View style={styles.sectionHeader}>
+      <Text style={styles.sectionTitle} accessibilityRole="header">{title}</Text>
+      {meta ? <Text style={styles.sectionMeta}>{meta}</Text> : null}
+    </View>
   );
 }
 
-// ── Skeleton for upcoming list ──
-function UpcomingSkeleton() {
-  const styles = useStyles();
+function useSectionStyles() {
+  const { colors } = useAppTheme();
+  return React.useMemo(
+    () =>
+      StyleSheet.create({
+        sectionHeader: {
+          flexDirection: 'row',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          paddingHorizontal: Space.md,
+          marginBottom: Space.sm },
+        sectionTitle: {
+          fontSize: TypographyV2.sectionTitle.size,
+          fontFamily: TypographyV2.sectionTitle.fontFamily,
+          letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+          color: colors.textPrimary },
+        sectionMeta: {
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
+          color: colors.textMuted,
+          fontVariant: ['tabular-nums'] } }),
+    [colors],
+  );
+}
+
+// ── Loading skeleton — matches the final layout geometry ─────────────────────
+function LiveHomeSkeleton() {
+  const { colors } = useAppTheme();
   return (
-    <View style={{ paddingHorizontal: Space.md, gap: Space.sm }}>
-      {Array.from({ length: 4 }).map((_, i) => (
-        <View key={`upcoming-skel-${i}`} style={styles.upcomingRow}>
-          <PremiumSkeletonTile width={UPCOMING_THUMB_SIZE} height={UPCOMING_THUMB_SIZE} borderRadius={Radius.md} />
-          <View style={{ flex: 1, gap: 6 }}>
-            <PremiumSkeletonTile width="60%" height={12} borderRadius={Radius.sm} />
-            <PremiumSkeletonTile width="90%" height={16} borderRadius={Radius.sm} />
-            <PremiumSkeletonTile width="40%" height={12} borderRadius={Radius.sm} />
+    <View style={{ gap: Space.lg, paddingTop: Space.md }}>
+      <View style={{ flexDirection: 'row', paddingHorizontal: Space.md, gap: Space.md }}>
+        {Array.from({ length: 3 }).map((_, i) => (
+          <View key={`live-skel-${i}`} style={{ width: LIVE_CARD_WIDTH }}>
+            <SkeletonBlock width={LIVE_CARD_WIDTH} height={220} radius={Radius.lg} />
+            <View style={{ paddingTop: Space.sm, gap: Space.xs }}>
+              <SkeletonTextLine width="60%" height={12} />
+              <SkeletonTextLine width="90%" height={16} />
+            </View>
           </View>
-        </View>
-      ))}
+        ))}
+      </View>
+      <View style={{ paddingHorizontal: Space.md }}>
+        {Array.from({ length: 3 }).map((_, i) => (
+          <View
+            key={`upcoming-skel-${i}`}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: Space.sm,
+              paddingVertical: Space.sm,
+              borderBottomWidth: StyleSheet.hairlineWidth,
+              borderBottomColor: colors.border }}
+          >
+            <SkeletonBlock width={UPCOMING_THUMB_SIZE} height={UPCOMING_THUMB_SIZE} radius={Radius.md} />
+            <View style={{ flex: 1, gap: Space.xs }}>
+              <SkeletonTextLine width="40%" height={11} />
+              <SkeletonTextLine width="80%" height={16} />
+              <SkeletonTextLine width="55%" height={11} />
+            </View>
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
 
 // ── Main screen ──
 export default function LiveShoppingHomeScreen() {
-  const { colors, isDark } = useAppTheme();
-  const insets = useSafeAreaInsets();
+  const { colors } = useAppTheme();
   const styles = useStyles();
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
   const { formatFromFiat } = useFormattedPrice();
-  const { width } = useWindowDimensions();
   const { t } = useAppTranslation('liveShopping');
 
   const [summary, setSummary] = useState<LiveSessionSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  const [notifiedIds, setNotifiedIds] = useState<Set<string>>(new Set());
+  const [selectedCategory, setSelectedCategory] = useState<string>(ALL_CATEGORY);
 
-  const load = useCallback(async (category: string, isRefresh = false) => {
+  const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) {
       setRefreshing(true);
     } else {
@@ -443,7 +189,7 @@ export default function LiveShoppingHomeScreen() {
     }
     setError(null);
     try {
-      const result = await fetchLiveSessions({ category });
+      const result = await fetchLiveSessions();
       setSummary(result);
     } catch (e) {
       setError(e instanceof Error ? e.message : t('error.loadFailed'));
@@ -451,23 +197,43 @@ export default function LiveShoppingHomeScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
-    load(selectedCategory);
-  }, [load, selectedCategory]);
+    void load();
+  }, [load]);
+
+  // Categories are derived from what the contract actually returns — the
+  // backend session model carries no category today, so on real data the
+  // strip collapses to "All" and is hidden instead of being a dead control.
+  const categories = useMemo(() => {
+    if (!summary) return [ALL_CATEGORY];
+    const seen = new Set<string>();
+    for (const session of summary.sessions) {
+      if (session.category && session.category !== ALL_CATEGORY) {
+        seen.add(session.category);
+      }
+    }
+    return [ALL_CATEGORY, ...Array.from(seen).sort()];
+  }, [summary]);
+
+  const filteredSessions = useMemo(() => {
+    const sessions = summary?.sessions ?? [];
+    if (selectedCategory === ALL_CATEGORY) return sessions;
+    return sessions.filter((s) => s.category === selectedCategory);
+  }, [summary, selectedCategory]);
 
   const liveSessions = useMemo(
-    () => summary?.sessions.filter((s) => s.status === 'live') ?? [],
-    [summary],
+    () => filteredSessions.filter((s) => s.status === 'live'),
+    [filteredSessions],
   );
   const upcomingSessions = useMemo(
-    () => summary?.sessions.filter((s) => s.status === 'upcoming') ?? [],
-    [summary],
+    () => filteredSessions.filter((s) => s.status === 'upcoming'),
+    [filteredSessions],
   );
   const endedSessions = useMemo(
-    () => summary?.sessions.filter((s) => s.status === 'ended') ?? [],
-    [summary],
+    () => filteredSessions.filter((s) => s.status === 'ended'),
+    [filteredSessions],
   );
 
   const formatBid = useCallback(
@@ -477,8 +243,7 @@ export default function LiveShoppingHomeScreen() {
 
   const formatScheduled = useCallback((iso: string) => {
     const date = new Date(iso);
-    const now = new Date();
-    const diffMs = date.getTime() - now.getTime();
+    const diffMs = date.getTime() - Date.now();
     const diffMin = Math.round(diffMs / 60_000);
     const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     if (diffMin <= 0) return t('upcoming.startingSoon');
@@ -490,22 +255,6 @@ export default function LiveShoppingHomeScreen() {
     return t('scheduled.inDays', { day: dayStr, time: timeStr });
   }, [t]);
 
-  const handleNotify = useCallback(
-    (sessionId: string) => {
-      haptic.selection();
-      setNotifiedIds((prev) => {
-        const next = new Set(prev);
-        if (next.has(sessionId)) {
-          next.delete(sessionId);
-        } else {
-          next.add(sessionId);
-        }
-        return next;
-      });
-    },
-    [haptic],
-  );
-
   const handleCategoryPress = useCallback(
     (cat: string) => {
       haptic.selection();
@@ -514,148 +263,136 @@ export default function LiveShoppingHomeScreen() {
     [haptic],
   );
 
+  const openSession = useCallback(
+    (sessionId: string) => {
+      navigation.navigate('LiveStreamViewer', { sessionId });
+    },
+    [navigation],
+  );
+
   const handleRetry = useCallback(() => {
-    load(selectedCategory);
-  }, [load, selectedCategory]);
+    void load();
+  }, [load]);
 
   const showLoading = loading && !summary;
   const showError = !loading && error && !summary;
-  const showEmpty = !loading && !error && summary && summary.sessions.length === 0;
-  const showContent = !loading && !error && summary && summary.sessions.length > 0;
+  const showEmpty = !loading && !error && summary != null && summary.sessions.length === 0;
+  const showContent = !loading && !error && summary != null && summary.sessions.length > 0;
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
+    <FlagshipScreen
+      testID="live-shopping-screen"
+      header={
+        <FlagshipHeader
+          title={t('header.title')}
+          onBack={() => navigation.goBack()}
+        />
+      }
+      scrollEnabled={false}
+      contentStyle={styles.contentFlush}
+    >
+      <OfflineBanner onRetry={handleRetry} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingTop: insets.top + Space.sm, paddingBottom: Space.xxl }}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => load(selectedCategory, true)}
+            onRefresh={() => void load(true)}
             tintColor={colors.brand}
           />
         }
       >
-        {/* ── Offline banner ── */}
-        <OfflineBanner onRetry={handleRetry} />
-
-        {/* ── Header ── */}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.headerTitle} accessibilityRole="header">{t('header.title')}</Text>
-            <LivePulse size={10} color={colors.danger} />
-            {LIVE_SHOPPING_DEMO_MODE && (
-              <View style={styles.demoPill} accessible={false}>
-                <Text style={styles.demoPillText}>{t('live.demo')}</Text>
-              </View>
-            )}
-          </View>
-        </View>
-
-        {/* ── Category filter ── */}
-        <HorizontalRail
-          contentContainerStyle={{ paddingHorizontal: Space.md, gap: Space.sm, paddingVertical: 2 }}
-          accessibilityLabel="Live shopping categories"
-        >
-          {LIVE_CATEGORIES.map((cat) => (
-            <CategoryPill
-              key={cat}
-              label={cat}
-              selected={selectedCategory === cat}
-              onPress={() => handleCategoryPress(cat)}
-            />
-          ))}
-        </HorizontalRail>
-
-        {/* ── Loading state ── */}
-        {showLoading && (
-          <View style={{ gap: Space.lg, paddingTop: Space.md }}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{t('sections.liveNow')}</Text>
-            </View>
-            <FeaturedSkeleton />
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{t('sections.comingUp')}</Text>
-            </View>
-            <UpcomingSkeleton />
+        {/* ── Category filter — only when the contract carries categories ── */}
+        {showContent && categories.length > 1 && (
+          <View style={[styles.categoryStrip, { borderBottomColor: colors.border }]}>
+            <HorizontalRail
+              contentContainerStyle={styles.categoryStripContent}
+              accessibilityLabel="Live shopping categories"
+            >
+              {categories.map((cat) => (
+                <CategoryTab
+                  key={cat}
+                  label={cat}
+                  selected={selectedCategory === cat}
+                  onPress={() => handleCategoryPress(cat)}
+                />
+              ))}
+            </HorizontalRail>
           </View>
         )}
 
-        {/* ── Error state ── */}
+        {/* ── Loading ── */}
+        {showLoading && <LiveHomeSkeleton />}
+
+        {/* ── Error ── */}
         {showError && (
-          <View style={{ paddingTop: Space.xxl }}>
-            <EmptyState
-              icon="cloud-offline-outline"
-              title={t('error.title')}
-              subtitle={error ?? t('error.subtitle')}
-              ctaLabel={t('error.retry')}
-              onCtaPress={handleRetry}
-            />
-          </View>
+          <FlagshipState
+            variant="error"
+            title={t('error.title')}
+            subtitle={error ?? t('error.subtitle')}
+            actionLabel={t('error.retry')}
+            onAction={handleRetry}
+          />
         )}
 
-        {/* ── Empty state ── */}
+        {/* ── Empty ── */}
         {showEmpty && (
-          <View style={{ paddingTop: Space.xxl }}>
-            <EmptyState
-              icon="videocam-outline"
-              title={t('empty.title')}
-              subtitle={t('empty.subtitle')}
-              ctaLabel={t('empty.goToSellerHub')}
-              onCtaPress={() => navigation.navigate('MyListings')}
-            />
-          </View>
+          <FlagshipState
+            variant="empty"
+            icon="videocam-outline"
+            title={t('empty.title')}
+            subtitle={t('empty.subtitle')}
+            actionLabel={t('empty.goToSellerHub')}
+            onAction={() => navigation.navigate('MyListings')}
+          />
         )}
 
-        {/* ── Populated content ── */}
+        {/* ── Populated ── */}
         {showContent && (
-          <View style={{ gap: Space.lg, paddingTop: Space.md }}>
-            {/* Featured live strip */}
+          <View style={styles.sectionsWrap}>
+            {/* Live now — dominant media rail */}
             {liveSessions.length > 0 ? (
               <View>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>{t('sections.liveNow')}</Text>
-                  <Text style={styles.sectionCount}>{t('sections.streaming', { count: liveSessions.length })}</Text>
-                </View>
+                <SectionHeader
+                  title={t('sections.liveNow')}
+                  meta={t('sections.streaming', { count: liveSessions.length })}
+                />
                 <HorizontalRail
-                  contentContainerStyle={{ paddingHorizontal: Space.md, gap: Space.md }}
+                  contentContainerStyle={styles.railContent}
                   decelerationRate="fast"
-                  snapToInterval={FEATURED_CARD_WIDTH + Space.md}
+                  snapToInterval={LIVE_CARD_WIDTH + Space.md}
                   accessibilityLabel="Live now sessions"
                 >
                   {liveSessions.map((session) => (
-                    <FeaturedLiveCard
+                    <LiveSessionCard
                       key={session.id}
                       session={session}
                       formatBid={formatBid}
-                      onPress={() => navigation.navigate('LiveStreamViewer', { sessionId: session.id })}
+                      onPress={() => openSession(session.id)}
                     />
                   ))}
                 </HorizontalRail>
               </View>
             ) : (
               <View style={styles.noLiveStrip}>
-                <Ionicons name="radio-button-off" size={20} color={colors.textMuted} accessible={false} />
                 <Text style={styles.noLiveText}>{t('noLive.text')}</Text>
               </View>
             )}
 
-            {/* Upcoming section */}
+            {/* Coming up — flat hairline list */}
             {upcomingSessions.length > 0 && (
               <View>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>{t('sections.comingUp')}</Text>
-                  <Text style={styles.sectionCount}>{t('sections.scheduled', { count: upcomingSessions.length })}</Text>
-                </View>
-                <View style={{ paddingHorizontal: Space.md, gap: Space.xs }}>
-                  {upcomingSessions.map((session, index) => (
-                    <UpcomingRow
+                <SectionHeader
+                  title={t('sections.comingUp')}
+                  meta={t('sections.scheduled', { count: upcomingSessions.length })}
+                />
+                <View style={styles.upcomingList}>
+                  {upcomingSessions.map((session) => (
+                    <UpcomingSessionRow
                       key={session.id}
                       session={session}
-                      onNotify={() => handleNotify(session.id)}
-                      notified={notifiedIds.has(session.id)}
                       formatScheduled={formatScheduled}
                     />
                   ))}
@@ -663,23 +400,23 @@ export default function LiveShoppingHomeScreen() {
               </View>
             )}
 
-            {/* Past events / replays */}
+            {/* Past events — replay rail */}
             {endedSessions.length > 0 && (
               <View>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>{t('sections.pastEvents')}</Text>
-                  <Text style={styles.sectionCount}>{t('sections.replays', { count: endedSessions.length })}</Text>
-                </View>
+                <SectionHeader
+                  title={t('sections.pastEvents')}
+                  meta={t('sections.replays', { count: endedSessions.length })}
+                />
                 <HorizontalRail
-                  contentContainerStyle={{ paddingHorizontal: Space.md, gap: Space.md }}
+                  contentContainerStyle={styles.railContent}
                   decelerationRate="fast"
                   accessibilityLabel="Past event replays"
                 >
                   {endedSessions.map((session) => (
-                    <ReplayCard
+                    <ReplaySessionCard
                       key={session.id}
                       session={session}
-                      onPress={() => navigation.navigate('LiveStreamViewer', { sessionId: session.id })}
+                      onPress={() => openSession(session.id)}
                     />
                   ))}
                 </HorizontalRail>
@@ -688,21 +425,24 @@ export default function LiveShoppingHomeScreen() {
           </View>
         )}
       </ScrollView>
-    </View>
+    </FlagshipScreen>
   );
 }
 
 // ── Static styles (no theme-dependent values) ──
 const styles = StyleSheet.create({
-  categoryPill: {
-    paddingVertical: Space.sm - 1,
-    paddingHorizontal: Space.md - 2,
-    borderRadius: Radius.full,
-    borderWidth: Stroke.standard },
-  categoryPillText: {
+  categoryTab: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: Space.smMd },
+  categoryTabText: {
     fontSize: TypographyV2.body.size,
     fontFamily: TypographyV2.body.fontFamily,
-    letterSpacing: -0.1 } });
+    letterSpacing: TypographyV2.body.letterSpacing },
+  categoryTabRule: {
+    height: Stroke.emphasis,
+    marginTop: Space.xs,
+    borderRadius: Stroke.emphasis / 2 } });
 
 // ── Theme-aware styles factory ──
 function useStyles() {
@@ -710,326 +450,31 @@ function useStyles() {
   return React.useMemo(
     () =>
       StyleSheet.create({
-        header: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
+        contentFlush: {
+          paddingHorizontal: 0,
+          paddingTop: 0 },
+        scrollContent: {
+          paddingBottom: Space.xxl },
+        categoryStrip: {
+          borderBottomWidth: StyleSheet.hairlineWidth },
+        categoryStripContent: {
+          paddingHorizontal: Space.xs,
+          gap: Space.xs },
+        sectionsWrap: {
+          gap: Space.lg,
+          paddingTop: Space.md },
+        railContent: {
           paddingHorizontal: Space.md,
-          paddingBottom: Space.sm },
-        headerLeft: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Space.sm },
-        headerTitle: {
-          fontSize: TypographyV2.priceHero.size,
-          fontFamily: TypographyV2.priceHero.fontFamily,
-          letterSpacing: -0.8,
-          color: colors.textPrimary },
-        demoPill: {
-          paddingHorizontal: Space.xs + 2,
-          paddingVertical: 2,
-          borderRadius: Radius.sm,
-          backgroundColor: colors.warningSubtle,
-          borderWidth: StyleSheet.hairlineWidth,
-          borderColor: colors.warningBorder },
-        demoPillText: {
-          fontSize: TypographyV2.meta.size - 2,
-          fontFamily: TypographyV2.meta.fontFamily,
-          letterSpacing: TypographyV2.label.letterSpacing,
-          color: colors.warning },
-        sectionHeader: {
-          flexDirection: 'row',
-          alignItems: 'baseline',
-          justifyContent: 'space-between',
-          paddingHorizontal: Space.md,
-          marginBottom: Space.sm },
-        sectionTitle: {
-          fontSize: TypographyV2.priceList.size,
-          fontFamily: TypographyV2.priceList.fontFamily,
-          letterSpacing: TypographyV2.sectionTitle.letterSpacing,
-          color: colors.textPrimary },
-        sectionCount: {
-          fontSize: TypographyV2.meta.size,
-          fontFamily: TypographyV2.meta.fontFamily,
-          color: colors.textMuted,
-          fontVariant: ['tabular-nums'] },
+          gap: Space.md },
+        upcomingList: {
+          paddingHorizontal: Space.md },
         noLiveStrip: {
-          flexDirection: 'row',
           alignItems: 'center',
-          justifyContent: 'center',
-          gap: Space.sm,
           paddingVertical: Space.lg },
         noLiveText: {
           fontSize: TypographyV2.body.size,
           fontFamily: TypographyV2.body.fontFamily,
-          color: colors.textMuted },
-        // Featured card
-        featuredCard: {
-          borderRadius: Radius.lg,
-          overflow: 'hidden' },
-        featuredMediaWrap: {
-          width: '100%',
-          height: FEATURED_CARD_HEIGHT },
-        featuredTopRow: {
-          position: 'absolute',
-          top: Space.sm,
-          left: Space.sm,
-          right: Space.sm,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between' },
-        liveBadge: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Space.xs,
-          paddingHorizontal: Space.sm,
-          paddingVertical: Space.xs,
-          borderRadius: Radius.full,
-          backgroundColor: colors.danger },
-        liveBadgeCompact: {
-          paddingHorizontal: Space.xs + 2,
-          paddingVertical: Space.xs / 2 + 1,
-          gap: Space.xs / 2 + 1 },
-        liveBadgeText: {
-          fontSize: TypographyV2.meta.size,
-          fontFamily: TypographyV2.meta.fontFamily,
-          letterSpacing: TypographyV2.label.letterSpacing,
-          color: colors.scrimTextPrimary },
-        liveBadgeTextCompact: {
-          fontSize: TypographyV2.meta.size - 2,
-          letterSpacing: 0.4 },
-        viewerChip: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Space.xs,
-          paddingHorizontal: Space.sm,
-          paddingVertical: Space.xs,
-          borderRadius: Radius.full,
-          backgroundColor: colors.overlay },
-        viewerChipCompact: {
-          paddingHorizontal: Space.xs + 2,
-          paddingVertical: Space.xs / 2 + 1,
-          gap: Space.xs / 2 + 1 },
-        viewerChipText: {
-          fontSize: TypographyV2.meta.size,
-          fontFamily: TypographyV2.meta.fontFamily,
-          color: colors.scrimTextPrimary,
-          letterSpacing: -0.1,
-          fontVariant: ['tabular-nums'] },
-        viewerChipTextCompact: {
-          fontSize: TypographyV2.meta.size - 1,
-          fontVariant: ['tabular-nums'] },
-        featuredBottomArea: {
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          padding: Space.sm + 2,
-          gap: Space.xs + 2 },
-        featuredSellerRow: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Space.xs },
-        featuredAvatar: {
-          width: Space.lg + 4,
-          height: Space.lg + 4,
-          borderRadius: Radius.xl },
-        featuredSellerText: {
-          flex: 1,
-          gap: Space.xs / 4 },
-        featuredNameRow: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Space.xs },
-        featuredSellerName: {
-          fontSize: TypographyV2.meta.size,
-          fontFamily: TypographyV2.meta.fontFamily,
-          color: colors.scrimTextPrimary,
-          letterSpacing: -0.1 },
-        featuredCategory: {
-          fontSize: TypographyV2.meta.size,
-          fontFamily: TypographyV2.meta.fontFamily,
-          color: colors.scrimTextSecondary,
-          letterSpacing: 0.2 },
-        featuredTitle: {
-          fontSize: TypographyV2.body.size,
-          fontFamily: TypographyV2.body.fontFamily,
-          color: colors.scrimTextPrimary,
-          letterSpacing: TypographyV2.body.letterSpacing,
-          lineHeight: TypographyV2.body.lineHeight },
-        featuredBidRow: {
-          flexDirection: 'row',
-          alignItems: 'baseline',
-          justifyContent: 'space-between',
-          marginTop: Space.xs / 2 },
-        featuredBidLabel: {
-          fontSize: TypographyV2.label.size,
-          lineHeight: TypographyV2.label.lineHeight,
-          fontFamily: TypographyV2.label.fontFamily,
-          color: colors.scrimTextSecondary,
-          letterSpacing: TypographyV2.label.letterSpacing },
-        featuredBidValue: {
-          fontSize: TypographyV2.priceList.size,
-          lineHeight: TypographyV2.priceList.lineHeight,
-          fontFamily: TypographyV2.priceList.fontFamily,
-          color: colors.scrimTextPrimary,
-          letterSpacing: TypographyV2.priceList.letterSpacing,
-          fontVariant: ['tabular-nums'] },
-        // Upcoming row
-        upcomingRow: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Space.sm,
-          paddingVertical: Space.sm,
-          borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: colors.border },
-        upcomingRowPress: {
-          flex: 1,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Space.sm },
-        upcomingThumbWrap: {
-          width: UPCOMING_THUMB_SIZE,
-          height: UPCOMING_THUMB_SIZE,
-          borderRadius: Radius.md,
-          overflow: 'hidden' },
-        upcomingThumbIcon: {
-          position: 'absolute',
-          bottom: Space.xs,
-          right: Space.xs },
-        upcomingBody: {
-          flex: 1,
-          gap: Space.xs / 2 },
-        upcomingScheduled: {
-          fontSize: TypographyV2.meta.size,
-          fontFamily: TypographyV2.meta.fontFamily,
-          color: colors.brand,
-          letterSpacing: -0.1,
-          fontVariant: ['tabular-nums'] },
-        upcomingSellerRow: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Space.xs },
-        upcomingAvatar: {
-          width: Space.lg,
-          height: Space.lg,
-          borderRadius: Radius.full },
-        upcomingSellerName: {
-          fontSize: TypographyV2.meta.size,
-          fontFamily: TypographyV2.meta.fontFamily,
-          color: colors.textSecondary,
-          letterSpacing: -0.1 },
-        upcomingTitle: {
-          fontSize: TypographyV2.bodyStrong.size,
-          fontFamily: TypographyV2.bodyStrong.fontFamily,
-          color: colors.textPrimary,
-          letterSpacing: TypographyV2.bodyStrong.letterSpacing,
-          lineHeight: TypographyV2.bodyStrong.lineHeight },
-        upcomingMetaRow: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Space.xs,
-          marginTop: Space.xs / 2 },
-        upcomingMetaText: {
-          fontSize: TypographyV2.meta.size,
-          fontFamily: TypographyV2.meta.fontFamily,
-          color: colors.textMuted,
-          letterSpacing: TypographyV2.meta.letterSpacing,
-          fontVariant: ['tabular-nums'] },
-        notifyBtn: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Space.xs / 2 + 1,
-          paddingHorizontal: Space.smMd,
-          paddingVertical: Space.sm,
-          borderRadius: Radius.full,
-          borderWidth: Stroke.standard,
-          borderColor: colors.border,
-          backgroundColor: 'transparent' },
-        notifyBtnActive: {
-          backgroundColor: colors.brand,
-          borderColor: colors.brand },
-        notifyBtnText: {
-          fontSize: TypographyV2.meta.size,
-          fontFamily: TypographyV2.meta.fontFamily,
-          color: colors.textPrimary,
-          letterSpacing: -0.1 },
-        notifyBtnTextActive: {
-          color: colors.background },
-        endedHint: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: Space.xs,
-          paddingVertical: Space.md },
-        endedHintText: {
-          fontSize: TypographyV2.meta.size,
-          fontFamily: TypographyV2.meta.fontFamily,
-          color: colors.textMuted,
-          fontVariant: ['tabular-nums'] },
-        // ── Replay card ──
-        replayCard: {
-          width: FEATURED_CARD_WIDTH,
-          borderRadius: Radius.lg,
-          overflow: 'hidden',
-          backgroundColor: colors.surface,
-          borderWidth: Stroke.hairline,
-          borderColor: colors.border },
-        replayThumbWrap: {
-          width: '100%',
-          height: 180,
-          position: 'relative' },
-        replayPlayIcon: {
-          position: 'absolute',
-          bottom: Space.sm,
-          left: Space.sm },
-        replayDurationBadge: {
-          position: 'absolute',
-          bottom: Space.sm,
-          right: Space.sm,
-          backgroundColor: colors.overlay,
-          paddingHorizontal: Space.xs + 2,
-          paddingVertical: Space.xs / 2 + 1,
-          borderRadius: Radius.sm },
-        replayDurationText: {
-          fontSize: TypographyV2.meta.size,
-          fontFamily: TypographyV2.meta.fontFamily,
-          color: colors.scrimTextPrimary,
-          fontVariant: ['tabular-nums'] },
-        replayBody: {
-          padding: Space.sm,
-          gap: Space.xs },
-        replaySellerRow: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Space.xs },
-        replayAvatar: {
-          width: Space.lg + 2,
-          height: Space.lg + 2,
-          borderRadius: Radius.full },
-        replaySellerText: {
-          flex: 1,
-          gap: Space.xs / 4 },
-        replayNameRow: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Space.xs / 2 },
-        replaySellerName: {
-          fontSize: TypographyV2.meta.size,
-          fontFamily: TypographyV2.meta.fontFamily,
-          color: colors.textPrimary,
-          letterSpacing: -0.1,
-          flexShrink: 1 },
-        replayEndedLabel: {
-          fontSize: TypographyV2.meta.size,
-          fontFamily: TypographyV2.meta.fontFamily,
-          color: colors.textMuted },
-        replayTitle: {
-          fontSize: TypographyV2.body.size,
-          fontFamily: TypographyV2.body.fontFamily,
-          color: colors.textPrimary,
-          letterSpacing: TypographyV2.body.letterSpacing,
-          lineHeight: TypographyV2.body.lineHeight } }),
+          color: colors.textMuted } }),
     [colors],
   );
 }

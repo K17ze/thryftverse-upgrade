@@ -8,9 +8,10 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useBackendData } from '../context/BackendDataContext';
 import { searchUsers, UserSearchResult } from '../services/profileApi';
-import { createDmConversationOnApi, joinGroupByInviteOnApi } from '../services/chatApi';
+import { createDmConversationOnApi, createGroupConversationOnApi, deployBotToConversationOnApi, joinGroupByInviteOnApi } from '../services/chatApi';
 import { parseApiError } from '../lib/apiClient';
-import { getAvailableAgents, deployAgent, type ChatAgent } from '../services/chatAgentsApi';
+import type { ChatAgent } from '../services/chatAgentsApi';
+import { ChatAgentPicker } from '../components/chat/ChatAgentPicker';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Radius, Control, Stroke} from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
@@ -20,7 +21,6 @@ import { CachedImage } from '../components/CachedImage';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
 import { EmptyState } from '../components/EmptyState';
-import { ChatAgentPicker } from '../components/chat/ChatAgentPicker';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'NewMessage'>;
@@ -137,11 +137,11 @@ export default function NewMessageScreen({ navigation, route }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
   const [remoteResults, setRemoteResults] = useState<UserSearchResult[]>([]);
   const [isSearchingRemote, setIsSearchingRemote] = useState(false);
-  const [agentPickerVisible, setAgentPickerVisible] = useState(false);
   const [isJoiningGroup, setIsJoiningGroup] = useState(false);
   const [joinModalVisible, setJoinModalVisible] = useState(false);
   const [joinLinkInput, setJoinLinkInput] = useState('');
-  const availableAgents = useMemo(() => getAvailableAgents(), []);
+  const [agentPickerVisible, setAgentPickerVisible] = useState(false);
+  const [isStartingAgentChat, setIsStartingAgentChat] = useState(false);
 
   // Join a group via invite link. Opens a cross-platform modal with a
   // text input for pasting the invite link. Works on both iOS and Android.
@@ -173,47 +173,28 @@ export default function NewMessageScreen({ navigation, route }: Props) {
     }
   }, [joinLinkInput, navigation, show, upsertConversation]);
 
-  // Start a direct chat with an AI agent. Creates a local demo conversation
-  // (AGENTS.md §11 — truthful: the agent is demo-mode, clearly labelled).
-  // NOTE: This conversation ID is locally generated for demo-mode agent chats.
-  // It is NOT a backend conversation ID and is only reachable when
-  // CHAT_AGENTS_DEMO_MODE is active. The conversation is marked isDemo.
-  const handleStartAgentChat = useCallback((agent: ChatAgent) => {
+  // Start a direct chat with an AI assistant — the REAL path, not the old
+  // demo: create a solo group conversation (the caller becomes its owner),
+  // deploy the published bot into it via POST /chat/conversations/:id/bots/:botId/deploy,
+  // then open it. Deployed AI bots reply through the backend's enqueueAgentRun
+  // pipeline, which fires on every message in the conversation.
+  const handleStartAgentChat = useCallback(async (agent: ChatAgent) => {
     haptic.light();
-    const conversationId = `agent_dm_${agent.id}`;
-    // Deploy the agent via the chatAgentsApi so ChatScreen picks it up
-    // and generates suggestions/responses for this conversation.
-    deployAgent(conversationId, agent.type);
-    const existing = conversations.find((c) => c.id === conversationId);
-    if (existing) {
-      navigation.navigate('Chat', { conversationId, partnerUserId: agent.id });
+    setIsStartingAgentChat(true);
+    try {
+      const convo = await createGroupConversationOnApi({
+        title: agent.name,
+        memberIds: [] });
+      await deployBotToConversationOnApi(convo.id, agent.id);
+      upsertConversation(convo);
       setAgentPickerVisible(false);
-      return;
+      navigation.navigate('GroupChat', { groupId: convo.id, groupName: convo.title ?? agent.name });
+    } catch (err) {
+      show(parseApiError(err, 'Could not start the assistant. Try again.').message, 'error');
+    } finally {
+      setIsStartingAgentChat(false);
     }
-    const now = new Date().toISOString();
-    upsertConversation({
-      id: conversationId,
-      type: 'dm',
-      title: agent.name,
-      avatar: undefined,
-      participantIds: [currentUser?.id ?? 'me', agent.id],
-      participantProfiles: [
-        { id: agent.id, username: agent.name, displayName: agent.name },
-      ],
-      botIds: [agent.id],
-      lastMessage: `Chat with ${agent.name} — demo mode`,
-      lastMessageTime: now,
-      unread: false,
-      messages: [{
-        id: `agent_intro_${Date.now()}`,
-        senderId: agent.id,
-        text: `Hi! I'm ${agent.name}, your AI assistant.`,
-        timestamp: now,
-        botId: agent.id,
-        isDemo: true }] });
-    navigation.navigate('Chat', { conversationId, partnerUserId: agent.id });
-    setAgentPickerVisible(false);
-  }, [conversations, currentUser?.id, haptic, navigation, upsertConversation]);
+  }, [haptic, navigation, show, upsertConversation]);
 
   const recentContacts = useMemo<ContactItem[]>(() => {
     const seen = new Set<string>();
@@ -439,12 +420,10 @@ export default function NewMessageScreen({ navigation, route }: Props) {
             )}
           </AnimatedPressable>
 
-          {/* Chat with AI assistant — deploy a demo AI agent into a direct chat */}
+          {/* Chat with AI assistant — real deployed bots, not demo agents */}
           <AnimatedPressable
             style={styles.quickActionRow}
-            onPress={() => {
-              setAgentPickerVisible(true);
-            }}
+            onPress={() => setAgentPickerVisible(true)}
             activeOpacity={0.85}
             scaleValue={0.98}
             hapticFeedback="light"
@@ -459,7 +438,11 @@ export default function NewMessageScreen({ navigation, route }: Props) {
               <BodyEmphasis numberOfLines={1}>Chat with AI assistant</BodyEmphasis>
               <Caption color={colors.textMuted} numberOfLines={1}>Shopping, style and offer guidance</Caption>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            {isStartingAgentChat ? (
+              <ActivityIndicator size="small" color={colors.brand} />
+            ) : (
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            )}
           </AnimatedPressable>
 
           {/* Message requests (only if there are any) */}
@@ -543,12 +526,12 @@ export default function NewMessageScreen({ navigation, route }: Props) {
         ) : null
       )}
 
-      {/* AI Agent Picker — choose an AI assistant to start a direct chat with */}
+      {/* AI Agent Picker — real published bots; picking one creates a solo
+          group conversation and deploys the bot into it. */}
       <ChatAgentPicker
         visible={agentPickerVisible}
         onClose={() => setAgentPickerVisible(false)}
-        onDeploy={handleStartAgentChat}
-        deployedAgentIds={[]}
+        onDeploy={(agent) => { void handleStartAgentChat(agent); }}
       />
 
       {/* Join-by-link modal — cross-platform (iOS + Android) */}

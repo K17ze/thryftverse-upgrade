@@ -1,17 +1,25 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AgentIcon } from '../components/agents/AgentIcon';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 import { EmptyState } from '../components/EmptyState';
-import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import {
+  FlagshipScreen,
+  FlagshipHeader,
+  FlagshipState,
+  SkeletonBlock,
+  SkeletonCircle } from '../components/flagship';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { Space, Radius, Typography, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { fetchAiCapability, type AiCapabilitySummary } from '../services/aiTruthApi';
+import { fetchCustomBotsFromApi, fetchSystemBotsFromApi } from '../services/botsApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BotDirectory'>;
 type AgentCategory =
@@ -39,7 +47,7 @@ export default function BotDirectoryScreen({ navigation }: Props) {
   const [selectedCategory, setSelectedCategory] = useState<AgentCategory>('all');
   const systemAgents = useStore((state) => state.availableChatBots);
   const customAgents = useStore((state) => state.customBots);
-  const loadBotsFromApi = useStore((state) => state.loadBotsFromApi);
+  const { isOffline } = useConnectivity();
 
   // P0-9: Honest AI capability labeling. The header subtitle reflects
   // the actual capability level — "AI specialists" only when a real
@@ -48,13 +56,32 @@ export default function BotDirectoryScreen({ navigation }: Props) {
   // never market heuristic baselines as trained ML.
   const [aiCapability, setAiCapability] = useState<AiCapabilitySummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   useEffect(() => {
     fetchAiCapability().then(setAiCapability).catch(() => undefined);
   }, []);
 
+  // The store's loadBotsFromApi swallows fetch errors, so this screen fetches
+  // directly to keep an honest error + retry state, then writes back.
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(false);
+    try {
+      const [system, custom] = await Promise.all([
+        fetchSystemBotsFromApi(),
+        fetchCustomBotsFromApi(),
+      ]);
+      useStore.setState({ availableChatBots: system, customBots: custom });
+    } catch {
+      setLoadError(true);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    void loadBotsFromApi().finally(() => setIsLoading(false));
-  }, [loadBotsFromApi]);
+    void refresh();
+  }, [refresh]);
 
   const publishedCount = customAgents.filter(
     (agent) => !agent.isDraft && !agent.isDisabled
@@ -87,7 +114,7 @@ export default function BotDirectoryScreen({ navigation }: Props) {
                   : 'Create a specialist agent'
               }
             >
-              <Ionicons name="add" size={22} color={colors.textPrimary} />
+              <AppIcon name="plus" size={IconSize.lg} color="textPrimary" opticalCenter accessible={false} />
             </AnimatedPressable>
           }
         />
@@ -108,7 +135,7 @@ export default function BotDirectoryScreen({ navigation }: Props) {
           accessibilityHint="View and manage your custom agents"
         >
           <View style={styles.leadingIcon}>
-            <Ionicons name="person-outline" size={24} color={colors.textPrimary} />
+            <AppIcon name="profile" size={IconSize.lg} color="textPrimary" opticalCenter accessible={false} />
           </View>
           <View style={styles.yourAgentsCopy}>
             <Text style={styles.yourAgentsTitle}>Your agents</Text>
@@ -118,7 +145,7 @@ export default function BotDirectoryScreen({ navigation }: Props) {
                 : 'Create a private agent'}
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={19} color={colors.textMuted} />
+          <AppIcon name="forward" size={IconSize.md} color="textMuted" opticalCenter accessible={false} />
         </AnimatedPressable>
 
         <View style={styles.sectionIntro} accessible={false} />
@@ -154,14 +181,27 @@ export default function BotDirectoryScreen({ navigation }: Props) {
           <View style={styles.list}>
             {[0, 1, 2, 3].map((i) => (
               <View key={i} style={styles.skeletonRow}>
-                <View style={styles.skeletonIcon} />
+                <SkeletonCircle size={Control.hit} />
                 <View style={styles.skeletonCopy}>
-                  <View style={styles.skeletonLine} />
-                  <View style={[styles.skeletonLine, { width: '70%' }]} />
+                  <SkeletonBlock width="55%" height={14} />
+                  <SkeletonBlock width="70%" height={12} />
                 </View>
               </View>
             ))}
           </View>
+        ) : loadError && filteredAgents.length === 0 ? (
+          <FlagshipState
+            variant={isOffline ? 'offline' : 'error'}
+            title={isOffline ? "You're offline" : "Couldn't load agents"}
+            subtitle={
+              isOffline
+                ? 'Reconnect to browse agents.'
+                : 'Check your connection and try again.'
+            }
+            actionLabel="Try again"
+            onAction={() => void refresh()}
+            style={styles.stateWrap}
+          />
         ) : filteredAgents.length === 0 ? (
           <EmptyState
             icon="chatbubble-ellipses-outline"
@@ -208,7 +248,7 @@ export default function BotDirectoryScreen({ navigation }: Props) {
                       </Text>
                     </View>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                  <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
                 </AnimatedPressable>
                 {index < filteredAgents.length - 1 ? <View style={styles.divider} /> : null}
               </View>
@@ -335,16 +375,9 @@ function createStyles(colors: ThemeColors) {
     gap: Space.md,
     paddingVertical: Space.smMd,
     minHeight: Space.xxl + Space.xxl + Space.sm },
-  skeletonIcon: {
-    width: Control.chromeCompact,
-    height: Control.hit,
-    borderRadius: Radius.sm,
-    backgroundColor: colors.surfaceAlt },
   skeletonCopy: {
     flex: 1,
     gap: Space.xs },
-  skeletonLine: {
-    height: 12,
-    borderRadius: Radius.sm,
-    backgroundColor: colors.surfaceAlt } });
+  stateWrap: {
+    paddingTop: Space.xxl } });
 }

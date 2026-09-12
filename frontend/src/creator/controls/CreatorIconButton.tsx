@@ -33,7 +33,7 @@ import Reanimated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
-import { useReducedMotion } from 'react-native-reanimated';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 import { CreatorGlyph, type CreatorGlyphName } from './CreatorGlyph';
 import { Control, Radius } from '../../theme/designTokens';

@@ -9,8 +9,8 @@ import Reanimated, {
   withSpring,
   withTiming,
   runOnJS,
-  useReducedMotion,
   type SharedValue } from 'react-native-reanimated';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Space, Radius, Typography, Control, Stroke, Elevation } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { IconGrammar } from '../theme/designTokens';

@@ -70,6 +70,9 @@ interface MediaPageProps {
   item: ProductMediaItem;
   width: number;
   height: number;
+  /** Screen-reader stem for the photo, e.g. "{asset title} photo" or a
+   *  positional "Photo 2 of 4" when no authored alt text exists. */
+  mediaLabel?: string;
   onDoubleTap?: () => void;
   sharedTransitionTag?: string;
   onZoomStart?: () => void;
@@ -80,6 +83,7 @@ function MediaPage({
   item,
   width,
   height,
+  mediaLabel,
   onDoubleTap,
   sharedTransitionTag,
   onZoomStart,
@@ -199,7 +203,8 @@ function MediaPage({
         style={[subComponentStyles.page, { width, height }, animStyle]}
         accessible
         accessibilityRole="imagebutton"
-        accessibilityLabel={`${item.altText ?? 'Listing image'}. Open fullscreen.`}
+        accessibilityLabel={`${item.altText ?? mediaLabel ?? 'Listing image'}. Open fullscreen.`}
+        accessibilityIgnoresInvertColors
         onAccessibilityTap={onOpenFullscreen}
       >
         {failed || !item.uri ? (
@@ -265,11 +270,14 @@ function VideoPage({
   width,
   height,
   isActive,
+  mediaLabel,
   onOpenFullscreen }: {
   item: ProductMediaItem;
   width: number;
   height: number;
   isActive: boolean;
+  /** Screen-reader stem for the video, matching MediaPage. */
+  mediaLabel?: string;
   onOpenFullscreen?: () => void;
 }) {
   // Pause video when the page is offscreen (scrolled away) or the app
@@ -473,7 +481,8 @@ function VideoPage({
   return (
     <View
       style={[subComponentStyles.page, { width, height }]}
-      accessibilityLabel={item.altText ?? 'Product video'}
+      accessibilityLabel={item.altText ?? mediaLabel ?? 'Product video'}
+      accessibilityIgnoresInvertColors
     >
       <VideoView
         player={player}
@@ -727,6 +736,13 @@ export interface CommerceMediaStageProps {
    * centre-top for shoes, centre for bags) instead of blind cover.
    */
   category?: string | null;
+  /**
+   * Human-readable subject for screen-reader labels on the media pages,
+   * e.g. the asset or listing title. Rendered as "{mediaLabel} photo N of
+   * M" (or "... video N of M") when an item has no authored altText.
+   * Optional — callers without a title get the positional fallback.
+   */
+  mediaLabel?: string;
 }
 
 export function CommerceMediaStage({
@@ -758,7 +774,8 @@ export function CommerceMediaStage({
   onActiveIndexChange,
   initialIndex = 0,
   showPageIndicator = true,
-  category }: CommerceMediaStageProps) {
+  category,
+  mediaLabel }: CommerceMediaStageProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -924,12 +941,20 @@ export function CommerceMediaStage({
         viewabilityConfig={viewabilityConfig.current}
         renderItem={({ item, index }) =>
           item.kind === 'video' ? (
-            <VideoPage item={item} width={screenWidth} height={heroHeight} isActive={index === activeIndex} onOpenFullscreen={() => { dismissZoomHint(); onOpenFullscreen(index); }} />
+            <VideoPage
+              item={item}
+              width={screenWidth}
+              height={heroHeight}
+              isActive={index === activeIndex}
+              mediaLabel={mediaLabel ? `${mediaLabel} video ${index + 1} of ${mediaItems.length}` : `Video ${index + 1} of ${mediaItems.length}`}
+              onOpenFullscreen={() => { dismissZoomHint(); onOpenFullscreen(index); }}
+            />
           ) : (
             <MediaPage
               item={item}
               width={screenWidth}
               height={heroHeight}
+              mediaLabel={mediaLabel ? `${mediaLabel} photo ${index + 1} of ${mediaItems.length}` : `Photo ${index + 1} of ${mediaItems.length}`}
               onDoubleTap={onDoubleTap}
               sharedTransitionTag={index === 0 && objectId ? `image-${objectId}-0` : undefined}
               onZoomStart={() => { dismissZoomHint(); onZoomStart?.(); }}

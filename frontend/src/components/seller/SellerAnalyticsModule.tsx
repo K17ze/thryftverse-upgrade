@@ -42,6 +42,8 @@ export interface SellerAnalyticsModuleProps {
   sparkline: SellerSparklinePoint[] | null;
   /** True while the sparkline series is loading — renders the chart skeleton. */
   isSparklineLoading?: boolean;
+  /** Daily-views fetch rejected — the host renders an inline retry; suppress the no-data note. */
+  isSparklineFailed?: boolean;
   /** Money formatter from the host screen; must handle null/undefined. */
   formatMoney: (value: number | null | undefined) => string;
   /** Opens the full analytics screen. */
@@ -68,6 +70,7 @@ export const SellerAnalyticsModule: React.FC<SellerAnalyticsModuleProps> = ({
   completeness,
   sparkline,
   isSparklineLoading = false,
+  isSparklineFailed = false,
   formatMoney,
   onPress,
 }) => {
@@ -156,7 +159,7 @@ export const SellerAnalyticsModule: React.FC<SellerAnalyticsModuleProps> = ({
           xAxisFormat={() => ''}
           accessibilitySummary={`Daily store views across ${sparklineSeries[0].data.length} days`}
         />
-      ) : (
+      ) : isSparklineFailed ? null : (
         <Text style={[styles.noTraffic, { color: colors.textMuted }]}>
           Not enough views yet for a chart
         </Text>

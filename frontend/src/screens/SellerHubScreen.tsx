@@ -11,6 +11,7 @@ import { FlagshipScreen, FlagshipHeader, FlagshipState, SellerHubSkeleton } from
 import { AppIcon } from '../components/common/AppIcon';
 import { IconSize } from '../theme/iconTokens';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import {
@@ -45,6 +46,29 @@ import {
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
+/** Per-resource fetch lifecycle — replaces the overloaded `data === null` signal. */
+type ResourceStatus = 'loading' | 'ready' | 'failed';
+
+/** Runs one hub resource fetch and drives its status. Never rejects — a
+ *  rejected promise becomes 'failed' + null data, rendered as an inline
+ *  retry row instead of an indefinite skeleton. */
+async function fetchHubResource<T>(
+  label: string,
+  fetcher: () => Promise<T>,
+  setData: (value: T | null) => void,
+  setStatus: (status: ResourceStatus) => void,
+): Promise<void> {
+  setStatus('loading');
+  try {
+    setData(await fetcher());
+    setStatus('ready');
+  } catch (err: unknown) {
+    console.warn(`[SellerHub] ${label} fetch failed:`, err instanceof Error ? err.message : err);
+    setData(null);
+    setStatus('failed');
+  }
+}
+
 export default function SellerHubScreen() {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -60,54 +84,59 @@ export default function SellerHubScreen() {
   const [sellingOrders, setSellingOrders] = useState<CommerceUserOrder[] | null>(null);
   const [ownListings, setOwnListings] = useState<ListingApiItem[] | null>(null);
   const [dailyPoints, setDailyPoints] = useState<DailyBreakdownPoint[] | null>(null);
-  const [isSparklineLoading, setSparklineLoading] = useState(true);
+  const [sellingOrdersStatus, setSellingOrdersStatus] = useState<ResourceStatus>('loading');
+  const [ownListingsStatus, setOwnListingsStatus] = useState<ResourceStatus>('loading');
+  const [dailyPointsStatus, setDailyPointsStatus] = useState<ResourceStatus>('loading');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [importError, setImportError] = useState(false);
 
+  // Single-resource loaders — reused by load(), pull-to-refresh, and each
+  // module's inline retry. Each resets its status to 'loading' on entry.
+  const loadOrders = useCallback(() => {
+    const userId = currentUser?.id;
+    if (!userId) return Promise.resolve();
+    return fetchHubResource('orders', async () => (await listUserOrders(userId, { role: 'seller', limit: 6 })).items, setSellingOrders, setSellingOrdersStatus);
+  }, [currentUser?.id]);
+  const loadOwnListings = useCallback(() => {
+    const userId = currentUser?.id;
+    if (!userId) return Promise.resolve();
+    return fetchHubResource('own listings', async () => (await fetchUserListingsFromApi(userId, { limit: 6 })).items, setOwnListings, setOwnListingsStatus);
+  }, [currentUser?.id]);
+  const loadDailyPoints = useCallback(() => {
+    const userId = currentUser?.id;
+    if (!userId) return Promise.resolve();
+    return fetchHubResource('daily breakdown', () => fetchDailyBreakdown(userId, '30d'), setDailyPoints, setDailyPointsStatus);
+  }, [currentUser?.id]);
+
   const load = useCallback(async () => {
     if (!currentUser?.id) return;
     try {
-      const [hubOverview, ordersResult, ownListingsResult, daily, importResult] = await Promise.all([
+      const [hubOverview, importResult] = await Promise.all([
         fetchSellerHubOverview(),
-        listUserOrders(currentUser.id, { role: 'seller', limit: 6 }).catch((err: unknown) => {
-          console.warn('[SellerHub] orders fetch failed:', err instanceof Error ? err.message : err);
-          return null;
-        }),
-        fetchUserListingsFromApi(currentUser.id, { limit: 6 }).catch((err: unknown) => {
-          console.warn('[SellerHub] own listings fetch failed:', err instanceof Error ? err.message : err);
-          return null;
-        }),
-        fetchDailyBreakdown(currentUser.id, '30d').catch((err: unknown) => {
-          console.warn('[SellerHub] daily breakdown fetch failed:', err instanceof Error ? err.message : err);
-          return null;
-        }),
         fetchImportBatches()
           .then((batches) => ({ batches, error: false }))
           .catch(() => ({ batches: [] as BatchSummaryDTO[], error: true })),
+        // Never reject — a failed rail gets an inline retry, not a screen error.
+        loadOrders(),
+        loadOwnListings(),
+        loadDailyPoints(),
       ]);
       setOverview(hubOverview);
-      setSellingOrders(ordersResult ? ordersResult.items : null);
-      setOwnListings(ownListingsResult ? ownListingsResult.items : null);
-      setDailyPoints(daily);
-      setSparklineLoading(false);
-      // P1 fix: propagate import batch data and error flag into state.
-      // Previously the 5th promise result was dropped, leaving importBatches
-      // empty and importError hardcoded false — the catalog import task
-      // was unreachable and failures were invisible.
+      // P1 fix: propagate import batch data and error flag into state —
+      // dropping it left the catalog import task unreachable and failures invisible.
       setImportBatches(importResult.batches);
       setImportError(importResult.error);
       setLoadError(false);
     } catch {
       setLoadError(true);
     }
-  }, [currentUser?.id]);
+  }, [currentUser?.id, loadOrders, loadOwnListings, loadDailyPoints]);
 
   useEffect(() => {
     let mounted = true;
     setIsLoading(true);
-    setSparklineLoading(true);
     load().finally(() => {
       if (mounted) setIsLoading(false);
     });
@@ -240,34 +269,17 @@ export default function SellerHubScreen() {
           </View>
         )}
 
-        {/* Quick-access pillar tiles — Wallet / Orders / Analytics / Closet. */}
-        <SellerPillarTiles
-          pendingOrdersCount={pendingOrdersCount}
-          walletBalanceLabel={money ? formatGbp(money.availableGbp) : undefined}
-          onOpenWallet={handleOpenWallet}
-          onOpenOrders={handleViewAllOrders}
-          onOpenAnalytics={handleNavigateToAnalytics}
-          onOpenCloset={handleNavigateToCloset}
-        />
-
-        {/* Pillar 1 - Wallet: liquidity posture. */}
-        <SellerExecutiveHero
-          money={money}
-          formatMoney={formatGbp}
-          onOpenWallet={handleOpenWallet}
-        />
-
-        {/* Evidenced reputation — renders only when the backend owns a
-            trust row; silent otherwise. No badge without a tier. */}
-        <SellerTrustStrip
-          trust={trust ?? null}
-          stale={freshness.trust?.state !== 'fresh'}
-        />
-
-        {/* Pillar 2 - Orders: media rail + task queue. */}
+        {/* Zone 1 · The work — orders to dispatch (media rail with SLA
+            chips), then the flat task queue (offers, listing issues,
+            payout holds, imports). Failed fetch → inline retry. */}
+        {sellingOrdersStatus === 'failed' && (
+          <SyncRetryBanner message="Couldn't load orders." onRetry={() => void loadOrders()}
+            telemetryContext="seller_hub_orders" containerStyle={styles.resourceErrorBanner} />
+        )}
         <SellerOrdersModule
           orders={orderPreviews}
-          isOrdersLoading={sellingOrders === null}
+          isOrdersLoading={sellingOrdersStatus === 'loading' && sellingOrders === null}
+          ordersFailed={sellingOrdersStatus === 'failed'}
           tasks={pillarTasks}
           topTask={pillarTopTask}
           pendingOrdersCount={pendingOrdersCount}
@@ -280,19 +292,64 @@ export default function SellerHubScreen() {
           onViewAllOrders={handleViewAllOrders}
         />
 
-        {/* Pillar 3 - Analytics: net sales, trend, sparkline. */}
+        {/* Zone 2 · The money — liquidity posture once the work is clear. */}
+        <SellerExecutiveHero
+          money={money}
+          formatMoney={formatGbp}
+          onOpenWallet={handleOpenWallet}
+        />
+
+        {/* Evidenced reputation — quiet row under the money panel;
+            renders only when the backend owns a trust row. */}
+        <SellerTrustStrip
+          trust={trust ?? null}
+          stale={freshness.trust?.state !== 'fresh'}
+        />
+
+        {/* Zone 3 · Destinations — quick-access grid demoted below the
+            work and the money: Wallet / Orders / Analytics / Closet. */}
+        <SellerPillarTiles
+          pendingOrdersCount={pendingOrdersCount}
+          walletBalanceLabel={money ? formatGbp(money.availableGbp) : undefined}
+          onOpenWallet={handleOpenWallet}
+          onOpenOrders={handleViewAllOrders}
+          onOpenAnalytics={handleNavigateToAnalytics}
+          onOpenCloset={handleNavigateToCloset}
+        />
+
+        {/* Catalog: the seller's live listings rail. */}
+        {ownListingsStatus === 'failed' && (
+          <SyncRetryBanner message="Couldn't load your listings." onRetry={() => void loadOwnListings()}
+            telemetryContext="seller_hub_listings" containerStyle={styles.resourceErrorBanner} />
+        )}
+        <SellerListingsModule
+          activeCount={inventory.active}
+          listedValueLabel={inventory.listedValueGbp > 0 ? `${formatGbp(inventory.listedValueGbp)} listed` : null}
+          items={listingRailItems}
+          onViewAll={handleNavigateToListings}
+          onItemPress={handleOpenItem}
+          isLoading={ownListingsStatus === 'loading' && ownListings === null}
+          isFailed={ownListingsStatus === 'failed'}
+        />
+
+        {/* Performance: net sales, trend, traffic sparkline. */}
+        {dailyPointsStatus === 'failed' && (
+          <SyncRetryBanner message="Couldn't load store views." onRetry={() => void loadDailyPoints()}
+            telemetryContext="seller_hub_views" containerStyle={styles.resourceErrorBanner} />
+        )}
         <SellerAnalyticsModule
           netSalesGbp={businessPulse?.netSalesGbp ?? null}
           trendPct={businessPulse?.netSalesPrevPeriodPct ?? null}
           orders30d={businessPulse?.orders ?? null}
           completeness={businessPulse?.completeness ?? null}
           sparkline={sparkline}
-          isSparklineLoading={isSparklineLoading}
+          isSparklineLoading={dailyPointsStatus === 'loading' && dailyPoints === null}
+          isSparklineFailed={dailyPointsStatus === 'failed'}
           formatMoney={formatGbp}
           onPress={handleNavigateToAnalytics}
         />
 
-        {/* Pillar 4 - Closet: saved pieces rail. */}
+        {/* Closet: saved pieces rail — the least operational destination. */}
         <SellerClosetModule
           savedCount={savedItemsCount}
           items={savedRailItems}
@@ -301,17 +358,8 @@ export default function SellerHubScreen() {
           isLoading={false}
         />
 
-        {/* Catalog: the seller's live listings rail. */}
-        <SellerListingsModule
-          activeCount={inventory.active}
-          listedValueLabel={inventory.listedValueGbp > 0 ? `${formatGbp(inventory.listedValueGbp)} listed` : null}
-          items={listingRailItems}
-          onViewAll={handleNavigateToListings}
-          onItemPress={handleOpenItem}
-          isLoading={ownListings === null}
-        />
-
-        {/* Near-winners: views without sales. Null/empty renders nothing. */}
+        {/* Zone 4 · Growth — near-winners (views without sales); null
+            or empty renders nothing. Sits last. */}
         <SellerOpportunitiesModule
           opportunities={opportunities ?? null}
           formatMoney={formatGbp}
@@ -342,5 +390,6 @@ function createStyles(colors: ThemeColors) {
       borderBottomColor: colors.border,
     },
     importErrorText: { fontSize: TypographyV2.caption.size, fontFamily: FontFamily.regular, flex: 1 },
+    resourceErrorBanner: { marginHorizontal: Space.md, marginTop: Space.lg },
   });
 }

@@ -218,6 +218,7 @@ export default function CheckoutScreen() {
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [shippingError, setShippingError] = useState<string | null>(null);
   const [orderError, setOrderError] = useState<string | null>(null);
+  const [isCheckingPaymentStatus, setIsCheckingPaymentStatus] = useState(false);
   const { showError, showInfo } = useNotifications();
   const { formatFromFiat } = useFormattedPrice();
 
@@ -226,6 +227,7 @@ export default function CheckoutScreen() {
   const orderIdempotencyKeyRef = useRef<string | null>(null);
   const pendingIntentIdRef = useRef<string | null>(null);
   const isSubmittingRef = useRef(false);
+  const isCheckingStatusRef = useRef(false);
   const appStateRef = useRef(AppState.currentState);
   const isMountedRef = useRef(true);
   const paymentAttemptRef = useRef(0);
@@ -236,7 +238,10 @@ export default function CheckoutScreen() {
   const item = listings.find((l) => l.id === itemId);
 
   const isSubmitting = stage === 'creating_order' || stage === 'opening_payment' || stage === 'authenticating' || stage === 'awaiting_payment';
-  const isInteractionLocked = isSubmitting || isCancellingOrder;
+  // unknown_outcome locks checkout interactions: the intent may already be
+  // committed server-side, so the Pay button must stay disabled until
+  // reconciliation resolves (audit F11).
+  const isInteractionLocked = isSubmitting || isCancellingOrder || stage === 'unknown_outcome';
 
   const [confirmSheet, setConfirmSheet] = useState<{
     visible: boolean;
@@ -889,6 +894,66 @@ export default function CheckoutScreen() {
     setHasAttemptedPay,
   ]);
 
+  // --- Manual payment-status check (unknown_outcome recovery, audit F11) ---
+  // A single authoritative status fetch — NOT a retry. Blindly re-submitting
+  // here could double-charge: the original intent may already be committed
+  // server-side. The reconciliation poll from the original attempt keeps
+  // running in the background; this gives the user an explicit, safe way to
+  // ask "what happened?" while they wait.
+  const handleCheckPaymentStatus = useCallback(async () => {
+    const intentId = pendingIntentIdRef.current;
+    if (!intentId || isCheckingStatusRef.current) return;
+
+    haptics.tap();
+    isCheckingStatusRef.current = true;
+    setIsCheckingPaymentStatus(true);
+    const attemptId = paymentAttemptRef.current;
+
+    try {
+      const latest = await getPaymentIntentStatus(intentId);
+      if (!isMountedRef.current || paymentAttemptRef.current !== attemptId) {
+        return;
+      }
+      const status = latest.status.trim().toLowerCase();
+      if (status === 'succeeded') {
+        setStage('payment_succeeded');
+        pendingIntentIdRef.current = null;
+        if (item) {
+          track('purchase_completed', {
+            item_id: item.id,
+            total: item.price + calculatePlatformChargeGbp(item.price) + postageOption.priceFromGbp,
+            payment_method: savedPaymentMethod?.type ?? 'wallet',
+          });
+        }
+        handleSettlementNavigation('succeeded', createdOrderIdRef.current ?? '', attemptId);
+      } else if (status === 'failed' || status === 'cancelled') {
+        setStage('payment_failed');
+        pendingIntentIdRef.current = null;
+        setOrderError('Payment could not be completed. Try again.');
+        showError('Payment failed', 'Payment could not be completed. Try again.');
+      } else {
+        // Still in flight at the gateway — keep the unknown_outcome banner.
+        showInfo('Still checking', 'Your bank has not confirmed the payment yet. Please do not retry.');
+      }
+    } catch {
+      if (isMountedRef.current && paymentAttemptRef.current === attemptId) {
+        showInfo('Still checking', 'We could not confirm the payment yet. We will keep checking.');
+      }
+    } finally {
+      isCheckingStatusRef.current = false;
+      if (isMountedRef.current) {
+        setIsCheckingPaymentStatus(false);
+      }
+    }
+  }, [
+    handleSettlementNavigation,
+    item,
+    postageOption.priceFromGbp,
+    savedPaymentMethod?.type,
+    showError,
+    showInfo,
+  ]);
+
   // --- Address selection change ---
   const handleAddressPress = useCallback(async () => {
     haptics.tap();
@@ -1009,7 +1074,7 @@ export default function CheckoutScreen() {
 
   // --- Close handler ---
   const handleClose = useCallback(() => {
-    if (isSubmitting) {
+    if (isSubmitting || stage === 'unknown_outcome') {
       setConfirmSheet({
         visible: true,
         title: 'Payment in progress',
@@ -1026,7 +1091,7 @@ export default function CheckoutScreen() {
       return;
     }
     navigation.goBack();
-  }, [isSubmitting, navigation]);
+  }, [isSubmitting, stage, navigation]);
 
   // --- AppState resume handling ---
   useEffect(() => {
@@ -1321,7 +1386,9 @@ export default function CheckoutScreen() {
       ? 'Retry payment'
       : stage === 'payment_pending'
         ? 'Waiting for confirmation'
-        : useOnezePayment
+        : stage === 'unknown_outcome'
+          ? 'Checking payment'
+          : useOnezePayment
           ? `Pay ${Math.ceil(GROSS_TOTAL).toLocaleString()} 1ZE`
           : walletAvailable
             ? 'Pay with card'
@@ -1631,6 +1698,15 @@ export default function CheckoutScreen() {
             label={STAGE_LABELS[stage]}
             colors={colors}
             reducedMotion={reducedMotionEnabled}
+            actionLabel={
+              stage === 'unknown_outcome'
+                ? isCheckingPaymentStatus
+                  ? 'Checking…'
+                  : 'Check payment status'
+                : undefined
+            }
+            onAction={stage === 'unknown_outcome' ? handleCheckPaymentStatus : undefined}
+            actionDisabled={isCheckingPaymentStatus}
           />
         ) : null}
 

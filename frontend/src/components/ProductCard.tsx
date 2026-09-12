@@ -604,6 +604,13 @@ function ProductDiscoveryTileBase({
   const tileStyles = React.useMemo(() => createTileStyles(colors), [colors]);
   useRenderTrace('ProductDiscoveryTile', { itemId: item.id, isSaved, aspectRatio });
   const ratio = aspectRatio ?? resolveListingMediaAspectRatio(item);
+  // Truthful price: the tile never fabricates £0. A null price (e.g. a
+  // search result whose index row carries no price) renders no price line;
+  // the accessibility label states the honest state.
+  const priceLabel =
+    item.price != null && Number.isFinite(item.price)
+      ? formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })
+      : null;
   // Use getListingCoverUri to always pick an image (not a video) — ExpoImage
   // cannot render video URIs, and the discovery tile is image-only.
   const primaryImage = getListingCoverUri(item.images ?? [], '');
@@ -644,7 +651,7 @@ function ProductDiscoveryTileBase({
       hapticFeedback="light"
       style={tileStyles.container}
       accessibilityRole="button"
-      accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}${isSaved ? ', Saved' : ''}`}
+      accessibilityLabel={`${item.title}, ${priceLabel ?? 'price unavailable'}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}${isSaved ? ', Saved' : ''}`}
       accessibilityHint="Opens item details"
       testID={testID}
     >
@@ -686,7 +693,9 @@ function ProductDiscoveryTileBase({
       </View>
       <View style={tileStyles.info}>
         <Text style={tileStyles.title} numberOfLines={1}>{item.title}</Text>
-        <Text style={tileStyles.price}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
+        {priceLabel ? (
+          <Text style={tileStyles.price}>{priceLabel}</Text>
+        ) : null}
       </View>
     </AnimatedPressable>
   );

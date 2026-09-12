@@ -285,6 +285,7 @@ export default function AppNavigator() {
       <Stack.Screen name="AssetLeaderboard" getComponent={() => require('../screens/AssetLeaderboardScreen').default} />
       <Stack.Screen name="Buyout" getComponent={() => require('../screens/BuyoutScreen').default} />
       <Stack.Screen name="CorporateActionDetail" getComponent={() => require('../screens/CorporateActionDetailScreen').default} />
+      <Stack.Screen name="CorporateActionVote" getComponent={() => require('../screens/CorporateActionVoteScreen').default} />
       <Stack.Screen name="DistributionHistory" getComponent={() => require('../screens/DistributionHistoryScreen').default} />
       <Stack.Screen name="CoOwnOnboarding" getComponent={() => require('../screens/SyndicateOnboardingScreen').default} options={modalScreenOptions} />
 
@@ -315,6 +316,7 @@ export default function AppNavigator() {
       {/* ── Settings & Account ── (profile, preferences, privacy, verification) */}
       <Stack.Screen name="Settings" getComponent={withScreenErrorBoundary(() => require('../screens/SettingsScreen').default, 'Settings')} />
       <Stack.Screen name="EditProfile" getComponent={() => require('../screens/EditProfileScreen').default} options={modalScreenOptions} />
+      <Stack.Screen name="AccountSettings" getComponent={() => require('../screens/AccountSettingsScreen').default} />
       <Stack.Screen name="AccountControl" getComponent={() => require('../screens/AccountControlScreen').default} />
       <Stack.Screen name="SavedAddresses" getComponent={() => require('../screens/SavedAddressesScreen').default} />
       <Stack.Screen name="Payments" getComponent={() => require('../screens/PaymentsScreen').default} />

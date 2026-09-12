@@ -20,11 +20,20 @@ import { TypographyV2 } from '../../theme/typography.v2';
 
 export interface CoOwnDistributionCalendarEntry {
   id: string;
-  /** ISO date. */
+  /** ISO date — the primary timeline date (payable or announcement). */
   date: string;
   perUnitGbp: number;
   totalPoolGbp: number;
   status: 'scheduled' | 'pending' | 'settled' | 'reversed';
+  /** ISO record date — ownership snapshot for eligibility. Rendered only
+   * when the backend supplies it (CoOwnDistribution.recordDate). */
+  recordDate?: string | null;
+  /** ISO ex-date — first date new buyers are no longer entitled to this
+   * distribution. Rendered only when supplied (CoOwnDistribution.exDate). */
+  exDate?: string | null;
+  /** ISO payable date — actual or projected payment date. Rendered only
+   * when supplied (CoOwnDistribution.projectedPayableDate / settledAt). */
+  payableDate?: string | null;
 }
 
 export interface CoOwnDistributionCalendarProps {
@@ -120,12 +129,21 @@ export function CoOwnDistributionCalendar({
         // Settled entries disclose the actual per-unit amount paid.
         const showActualPerUnit = entry.status === 'settled';
 
+        // Record / ex / payable disclosures — each rendered only when the
+        // payload carries it; never fabricated.
+        const dateDetailParts = [
+          entry.recordDate ? `Record date ${formatDate(entry.recordDate)}` : null,
+          entry.exDate ? `Ex date ${formatDate(entry.exDate)}` : null,
+          entry.payableDate ? `Payable ${formatDate(entry.payableDate)}` : null,
+        ].filter((part): part is string => part != null);
+
         const a11yParts = [
           formatDate(entry.date),
           `${formatGbp(entry.perUnitGbp)} per unit`,
           `pool ${formatGbp(entry.totalPoolGbp)}`,
           cfg.label,
           projectedGbp != null ? `you ${formatGbp(projectedGbp)}` : '',
+          ...dateDetailParts,
         ].filter(Boolean);
 
         return (
@@ -144,6 +162,16 @@ export function CoOwnDistributionCalendar({
                   {cfg.label}
                 </Text>
               </View>
+              {dateDetailParts.map((part) => (
+                <Text
+                  key={part}
+                  style={[styles.dateMeta, { color: colors.textMuted }]}
+                  numberOfLines={1}
+                  maxFontSizeMultiplier={1.3}
+                >
+                  {part}
+                </Text>
+              ))}
             </View>
 
             <View style={styles.amountCol}>
@@ -209,6 +237,13 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: TypographyV2.meta.letterSpacing,
+  },
+  dateMeta: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
   amountCol: {
     alignItems: 'flex-end',

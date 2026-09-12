@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   Pressable } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
 import { useStore } from '../store/useStore';
@@ -15,11 +14,14 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
+import { AppIcon } from '../components/common/AppIcon';
+import { CachedImage } from '../components/CachedImage';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { ActionSheet } from '../components/sheets/ActionSheet';
 import { useHaptic } from '../hooks/useHaptic';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { useToast } from '../context/ToastContext';
 import { Caption, BodyEmphasis } from '../components/ui/Text';
 import {
@@ -43,6 +45,7 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
   const { colors, isDark } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
+  const { isOffline } = useConnectivity();
   const { show } = useToast();
 
   const conversations = useStore((state) => state.conversations);
@@ -109,6 +112,14 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
     return map;
   }, [conversation?.participantProfiles, currentUser]);
 
+  const participantAvatarLookup = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const profile of conversation?.participantProfiles ?? []) {
+      if (profile.avatar) map.set(profile.id, profile.avatar);
+    }
+    return map;
+  }, [conversation?.participantProfiles]);
+
   const currentRole: MemberRole | undefined = useMemo(() => {
     if (!currentUser?.id) return undefined;
     if (conversation?.ownerId === currentUser.id) return 'owner';
@@ -159,10 +170,11 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
       return {
         id,
         name,
+        avatar: id === currentUser?.id ? currentUser?.avatar ?? null : participantAvatarLookup.get(id) ?? null,
         isMe: id === currentUser?.id,
         role };
     });
-  }, [conversation, currentUser?.id, participantNameLookup]);
+  }, [conversation, currentUser?.id, participantNameLookup, participantAvatarLookup]);
 
   const filteredMembers = useMemo(() => {
     if (!searchQuery.trim()) return members;
@@ -536,7 +548,7 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
             style={styles.addRow}
           >
             <View style={[styles.addAvatar, { backgroundColor: colors.brandSubtle }]}>
-              <Ionicons name="person-add-outline" size={20} color={colors.brand} />
+              <AppIcon name="follow" size="md" color="brand" accessible={false} />
             </View>
             <BodyEmphasis style={{ color: colors.brand }}>Add members</BodyEmphasis>
           </AnimatedPressable>
@@ -576,7 +588,9 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
             )}
 
             {!isSearching && searchError ? (
-              <Caption color={colors.danger} style={styles.searchStatusText}>{searchError}</Caption>
+              <Caption color={colors.danger} style={styles.searchStatusText}>
+                {isOffline ? 'You are offline. ' : ''}{searchError}
+              </Caption>
             ) : null}
 
             {!isSearching && hasSearched && searchResults.length === 0 && !searchError ? (
@@ -605,7 +619,9 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
                           <Caption color={colors.textMuted} numberOfLines={1}>@{user.username}</Caption>
                         </View>
                         <View style={[styles.selectCircle, isSelected && { backgroundColor: colors.brand, borderColor: colors.brand }]}>
-                          <Ionicons name="checkmark" size={16} color={colors.surface} />
+                          {isSelected ? (
+                            <AppIcon name="check" size="sm" color="surface" accessible={false} />
+                          ) : null}
                         </View>
                       </AnimatedPressable>
                       {idx < searchResults.length - 1 && <View style={styles.memberDivider} />}
@@ -640,7 +656,7 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
         {/* Member list */}
         {filteredMembers.length === 0 ? (
           <View style={styles.emptyWrapV2}>
-            <Ionicons name="people-outline" size={32} color={colors.textMuted} />
+            <AppIcon name="people" size="hero" color="textMuted" accessible={false} />
             <Caption color={colors.textMuted} style={styles.emptyTextV2}>No members match your search.</Caption>
           </View>
         ) : (
@@ -664,9 +680,13 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
                       style={styles.memberRowContent}
                     >
                       <View style={[styles.memberAvatarV2, { backgroundColor: colors.surfaceAlt }]}>
-                        <Text style={styles.memberAvatarTextV2}>
-                          {member.name.slice(0, 2).toUpperCase()}
-                        </Text>
+                        {member.avatar ? (
+                          <CachedImage uri={member.avatar} style={styles.memberAvatarImg} contentFit="cover" />
+                        ) : (
+                          <Text style={styles.memberAvatarTextV2}>
+                            {member.name.slice(0, 2).toUpperCase()}
+                          </Text>
+                        )}
                       </View>
                       <View style={styles.memberTextV2}>
                         <View style={styles.nameRowV2}>
@@ -677,7 +697,7 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
                           <Caption color={colors.textMuted}>{member.isMe ? 'You · Group creator' : 'Group creator'}</Caption>
                         )}
                       </View>
-                      <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+                      <AppIcon name="forward" size="md" color="textMuted" accessible={false} />
                     </AnimatedPressable>
 
                     {member.isMe ? (
@@ -806,7 +826,11 @@ function createStyles(colors: ThemeColors) {
     height: Control.hit,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center' },
+    alignItems: 'center',
+    overflow: 'hidden' },
+  memberAvatarImg: {
+    width: '100%',
+    height: '100%' },
   memberAvatarTextV2: {
     fontSize: TypographyV2.body.size,
     fontFamily: TypographyV2.body.fontFamily,

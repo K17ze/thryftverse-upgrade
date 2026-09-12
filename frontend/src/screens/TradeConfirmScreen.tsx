@@ -50,6 +50,10 @@ type LocalStackParamList = Omit<RootStackParamList, 'CoOwnOrderHistory'> & {
 type TradeConfirmRouteParams = RootStackParamList['TradeConfirm'] & {
   ticketDuration?: 'GFD' | 'GTC90';
   feeRate?: number;
+  /** Optional float figures (units) forwarded by the ticket for the
+   * hold-to-submit policy. Not yet declared in the shared nav types. */
+  publicFloatUnits?: number;
+  circulatingUnits?: number;
 };
 
 export default function TradeConfirmScreen({ navigation, route }: Props) {
@@ -79,6 +83,9 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
     maxReserved1ze,
     marketDataTimestamp,
     feeRate: routeFeeRate,
+    // F13: optional float figures (units) for the hold-to-submit policy
+    publicFloatUnits: routePublicFloatUnits,
+    circulatingUnits: routeCirculatingUnits,
     // Phase 2.5: duration (GFD / GTC90) forwarded from TradeScreen
     ticketDuration,
   } = (route.params as TradeConfirmRouteParams) ?? {};
@@ -94,6 +101,11 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
   const [isReleasing, setIsReleasing] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
   const [quoteChanged, setQuoteChanged] = useState(false);
+  // F12/F13: contract-truth fields recovered from the authoritative asset
+  // record when the route params do not carry them (see fetchMarketData).
+  const [fetchedFeeRate, setFetchedFeeRate] = useState<number | null>(null);
+  const [fetchedFloatUnits, setFetchedFloatUnits] = useState<number | null>(null);
+  const [isRefreshingQuote, setIsRefreshingQuote] = useState(false);
   const reservationPlacedRef = React.useRef(false);
   const reservationReleasedRef = React.useRef(false);
 
@@ -107,7 +119,17 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
   }
 
   const isBuy = side === 'buy';
-  const feeRate = routeFeeRate ?? 0.01;
+  // F12: the fee rate presented to the user must be sourced, never
+  // assumed. Prefer the rate forwarded with the quote; when the route
+  // param is absent or invalid, fall back to the backend's per-asset
+  // tradingFeeRate recovered by fetchMarketData. If neither is
+  // available the fee is genuinely unknown — it is displayed as
+  // unavailable and the commitment action is blocked (commitBlocked).
+  const routeFeeRateValid = typeof routeFeeRate === 'number'
+    && Number.isFinite(routeFeeRate)
+    && routeFeeRate >= 0;
+  const feeRate = routeFeeRateValid ? (routeFeeRate as number) : fetchedFeeRate;
+  const feeUnavailable = feeRate == null;
   // 1ZE is the canonical settlement unit. GBP is a secondary reference.
   const settlementLabel = '1ZE';
 
@@ -128,17 +150,53 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
     orderHistoryNav.navigate('CoOwnOrderHistory', params);
   };
 
-  // Hold-to-submit threshold: orders > 5,000 1ZE OR > 5% of public float.
-  // We don't have public float in route params, so use total value as proxy.
-  // 1ZE ≈ 1 GBP for threshold purposes (conservative).
-  const requireHold = netValue > 5000;
+  // Hold-to-submit threshold (spec 05): orders > 5,000 1ZE notional OR
+  // orders representing > 5% of public float require hold-to-submit.
+  // Public float is not modelled as a distinct field on the asset; the
+  // outstanding supply (totalUnits) is the denominator used elsewhere
+  // for ownership share, so it serves as the float proxy here — either
+  // forwarded via route params or recovered by fetchMarketData.
+  // totalUnits can overstate the true float (treasury/locked units are
+  // included), so the 5% dimension can under-trigger but never
+  // over-triggers. When no float figure is available at all, only the
+  // value band is evaluated and holdReasonLabel names what was checked.
+  const routeFloatUnits = [routePublicFloatUnits, routeCirculatingUnits]
+    .find((v): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0);
+  const floatUnits = routeFloatUnits ?? fetchedFloatUnits ?? 0;
+  const exceedsValueBand = Number.isFinite(netValue) && netValue > 5000;
+  // The float dimension is evaluated as both a unit share and a notional
+  // share — they diverge when the average fill price differs from the
+  // reference unit price. 1ZE ≈ 1 GBP for threshold purposes.
+  const referenceUnitPrice = quantity > 0 && Number.isFinite(totalValue) && totalValue > 0
+    ? totalValue / quantity
+    : 0;
+  const floatNotional1ze = floatUnits * referenceUnitPrice;
+  const exceedsFloatBand = floatUnits > 0 && (
+    quantity > 0.05 * floatUnits
+    || (floatNotional1ze > 0 && netValue > 0.05 * floatNotional1ze)
+  );
+  const requireHold = exceedsValueBand || exceedsFloatBand;
+  // Honest hold copy: the label names the check that actually fired —
+  // a float-share trigger is described as such, while a value-only
+  // trigger (or an unchecked float dimension) is a "high-value order",
+  // not a complete policy evaluation.
+  const holdReasonLabel = exceedsFloatBand
+    ? 'Large order relative to asset supply — press and hold to confirm.'
+    : 'High-value order — press and hold to confirm.';
 
   // Per spec 05 §3.2: receipt must show max reserved (full obligation).
   // For buys: total including fee. For sells: units being sold.
+  // Never render a non-finite amount as if it were a real figure — a
+  // missing quote field reads as an em-dash placeholder, and the
+  // commitment path is separately blocked by `commitBlocked`.
   const format1ze = React.useCallback((value: number) => (
-    `${value.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 1ZE`
+    Number.isFinite(value)
+      ? `${value.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 1ZE`
+      : '— 1ZE'
   ), []);
-  const maxReservedLabel = isBuy ? format1ze(maxReserved1ze) : `${quantity} units`;
+  const maxReservedLabel = isBuy
+    ? format1ze(maxReserved1ze)
+    : `${Number.isFinite(quantity) ? quantity : '—'} units`;
   // U30: Protection price label for protected_market orders (max buy / min sell).
   const protectionPriceLabel = protectionPriceGbp != null && protectionPriceGbp > 0
     ? format1ze(protectionPriceGbp)
@@ -155,38 +213,85 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
     : 0;
   const isExpired = secondsRemaining <= 0;
 
+  // F12: a financial commitment requires a complete quote — priced,
+  // totalled, and time-bounded. Any missing required field means the
+  // preview cannot be presented as authoritative, so the commitment
+  // action is blocked alongside the unknown-fee case.
+  const quoteComplete =
+    Number.isFinite(quantity) && quantity > 0
+    && Number.isFinite(totalValue) && totalValue >= 0
+    && Number.isFinite(netValue) && netValue >= 0
+    && Number.isFinite(fee) && fee >= 0
+    && ((limitPriceGbp ?? 0) > 0
+      || (protectionPriceGbp ?? 0) > 0
+      || averageFillPriceGbp > 0)
+    && Number.isFinite(validUntilMs);
+  const commitBlocked = feeUnavailable || !quoteComplete;
+
   useEffect(() => {
     const interval = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // U31/U32: Revalidate the reserved price against the live market before
-  // commitment. If the market has moved beyond the protection band since the
-  // reservation was made, the quote has changed and the user must return to
-  // the ticket for a fresh preview rather than committing a stale price.
+  // U31/U32 + F12/F13: fetch the authoritative asset record on mount.
+  // It supplies three contract-truth inputs the route params cannot
+  // guarantee:
+  //   1. tradingFeeRate — fee-rate recovery when the ticket did not
+  //      forward one (F12: a missing rate is never fabricated).
+  //   2. totalUnits — outstanding supply, the public-float denominator
+  //      for the hold-to-submit policy (F13).
+  //   3. best bid/ask — revalidates the reserved price before commit.
+  // The quote-change check is directional: only movement AGAINST the
+  // order invalidates the quote (price up for a buy, down for a sell).
+  // Favorable movement benefits the user and deliberately distant limit
+  // prices are not rejection reasons, so symmetric detection is wrong.
+  const mountedRef = React.useRef(true);
   useEffect(() => {
-    if (!assetId) return;
-    let cancelled = false;
-    const reservedPrice = protectionPriceGbp ?? limitPriceGbp ?? 0;
-    if (reservedPrice <= 0) return;
-    fetchCoOwnAssetById(assetId)
-      .then((fetchedAsset) => {
-        if (cancelled) return;
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const fetchMarketData = React.useCallback(async (): Promise<boolean> => {
+    if (!assetId) return false;
+    try {
+      const fetchedAsset = await fetchCoOwnAssetById(assetId);
+      if (!mountedRef.current) return true;
+      if (
+        fetchedAsset.tradingFeeRate != null
+        && Number.isFinite(fetchedAsset.tradingFeeRate)
+        && fetchedAsset.tradingFeeRate >= 0
+      ) {
+        setFetchedFeeRate(fetchedAsset.tradingFeeRate);
+      }
+      if (Number.isFinite(fetchedAsset.totalUnits) && fetchedAsset.totalUnits > 0) {
+        setFetchedFloatUnits(fetchedAsset.totalUnits);
+      }
+      const reservedPrice = protectionPriceGbp ?? limitPriceGbp ?? 0;
+      if (reservedPrice > 0) {
         const currentPrice = isBuy
           ? (fetchedAsset.bestAskGbp ?? fetchedAsset.unitPriceGbp)
           : (fetchedAsset.bestBidGbp ?? fetchedAsset.unitPriceGbp);
-        if (!currentPrice || currentPrice <= 0) return;
-        const delta = Math.abs(currentPrice - reservedPrice) / reservedPrice;
-        if (delta > 0.02) {
-          setQuoteChanged(true);
+        if (currentPrice && currentPrice > 0) {
+          const adverseDelta = isBuy
+            ? (currentPrice - reservedPrice) / reservedPrice
+            : (reservedPrice - currentPrice) / reservedPrice;
+          if (adverseDelta > 0.02) {
+            setQuoteChanged(true);
+          }
         }
-      })
-      .catch(() => {
-        // If we cannot fetch the live price, the reservation expiry timer
-        // still guards against stale quotes. Do not block on a fetch failure.
-      });
-    return () => { cancelled = true; };
+      }
+      return true;
+    } catch {
+      // If the live fetch fails, the reservation expiry timer still
+      // guards against stale quotes; a missing fee rate simply stays
+      // unavailable and commitment remains blocked until a retry lands.
+      return false;
+    }
   }, [assetId, isBuy, limitPriceGbp, protectionPriceGbp]);
+
+  useEffect(() => {
+    void fetchMarketData();
+  }, [fetchMarketData]);
 
   const releaseReservation = React.useCallback(async () => {
     if (reservationPlacedRef.current || reservationReleasedRef.current) return;
@@ -219,6 +324,18 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
     // The user must return to the ticket for a fresh preview before committing.
     if (quoteChanged) {
       show('Quote changed since reservation. Return to review the updated price.', 'info');
+      return;
+    }
+
+    // F12: never commit a financial transaction with an unknown fee or an
+    // incomplete quote — the receipt would misrepresent the obligation.
+    // Defence in depth: the button is also disabled via commitBlocked.
+    if (feeUnavailable) {
+      show('Fee unavailable — refresh the quote before confirming.', 'info');
+      return;
+    }
+    if (!quoteComplete) {
+      show('This quote is incomplete. Return to the ticket for a fresh market preview.', 'info');
       return;
     }
 
@@ -364,6 +481,20 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
     navigation.goBack();
   };
 
+  // F12: explicit retry path — re-fetch the asset record so a missing
+  // fee rate (or the float denominator) can be recovered without leaving
+  // the screen. If the rate is still unknown afterwards, the only
+  // remaining path is a fresh quote from the ticket.
+  const handleRetryQuoteData = async () => {
+    if (isRefreshingQuote) return;
+    setIsRefreshingQuote(true);
+    const ok = await fetchMarketData();
+    setIsRefreshingQuote(false);
+    if (!ok) {
+      show('Unable to refresh quote data. Return to the ticket for a fresh quote.', 'info');
+    }
+  };
+
   const handleBack = handleCancel;
 
   return (
@@ -394,7 +525,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
           units={quantity}
           filledUnits={estimatedFilledUnits}
           remainingUnits={estimatedRemainingUnits}
-          unitPriceLabel={quantity > 0 ? format1ze(totalValue / quantity) : format1ze(0)}
+          unitPriceLabel={quantity > 0 ? format1ze(totalValue / quantity) : '— 1ZE'}
           limitPriceLabel={format1ze(limitPriceGbp)}
           protectionPriceLabel={protectionPriceLabel}
           durationLabel={durationLabel}
@@ -403,9 +534,11 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
           grossLabel={format1ze(totalValue)}
           feeLabel={format1ze(fee)}
           totalLabel={format1ze(netValue)}
-          totalCaption={isBuy
-            ? `Including ${(feeRate * 100).toFixed(2).replace(/\.00$/, '')}% fee`
-            : `After ${(feeRate * 100).toFixed(2).replace(/\.00$/, '')}% fee`}
+          totalCaption={feeUnavailable
+            ? 'Fee unavailable — refresh quote'
+            : isBuy
+              ? `Including ${((feeRate as number) * 100).toFixed(2).replace(/\.00$/, '')}% fee`
+              : `After ${((feeRate as number) * 100).toFixed(2).replace(/\.00$/, '')}% fee`}
           settlementLabel={settlementLabel}
           status="pending"
           timestamp={marketDataTimestamp
@@ -413,7 +546,9 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
             : `Quote ${secondsRemaining}s · primary allocation price`}
           maxReservedLabel={maxReservedLabel}
           marketWarning={marketWarning}
-          localFiatLabel={`Reference: £${netValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} GBP`}
+          localFiatLabel={Number.isFinite(netValue)
+            ? `Reference: £${netValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} GBP`
+            : 'Reference: unavailable'}
           localFiatSource="Settlement in 1ZE"
         />
 
@@ -430,6 +565,19 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
           </Text>
         </View>
 
+        {/* Quote expired — a disabled button alone dead-ends the user.
+            Name the path back to a fresh quote explicitly. */}
+        {isExpired && (
+          <View style={[styles.quoteChangedCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle }]}>
+            <Text style={[styles.remainderHeader, { color: colors.textPrimary }]}>
+              Quote expired
+            </Text>
+            <Text style={[styles.remainderText, { color: colors.textSecondary }]}>
+              This reservation has lapsed. Cancel to return to the ticket and request a fresh market preview.
+            </Text>
+          </View>
+        )}
+
         {/* U32: Quote changed notice — the market has moved beyond the
             protection band since the reservation was made. The user must
             return to the ticket for a fresh preview before committing. */}
@@ -439,8 +587,36 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
               Quote changed
             </Text>
             <Text style={[styles.remainderText, { color: colors.textSecondary }]}>
-              The live market price has moved since this quote was reserved. Return to the ticket to review the updated price before confirming.
+              The live market price has moved against this quote since it was reserved. Return to the ticket to review the updated price before confirming.
             </Text>
+          </View>
+        )}
+
+        {/* F12: Fee unavailable / incomplete quote — never present an
+            unknown fee as authoritative, and never dead-end the user:
+            the retry path re-fetches the asset record, and failing that
+            the ticket produces a fresh quote. */}
+        {commitBlocked && !isExpired && (
+          <View style={[styles.quoteChangedCard, { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder }]}>
+            <Text style={[styles.remainderHeader, { color: colors.warning }]}>
+              {feeUnavailable ? 'Fee unavailable' : 'Quote incomplete'}
+            </Text>
+            <Text style={[styles.remainderText, { color: colors.textSecondary }]}>
+              {feeUnavailable
+                ? 'The fee rate for this quote could not be confirmed. You cannot commit to an order with an unknown fee — retry, or return to the ticket for a fresh quote.'
+                : 'This quote is missing required fields and cannot be committed. Return to the ticket for a fresh market preview.'}
+            </Text>
+            {feeUnavailable && (
+              <AppButton
+                title="Retry quote data"
+                variant="secondary"
+                size="sm"
+                onPress={handleRetryQuoteData}
+                loading={isRefreshingQuote}
+                style={styles.retryBtn}
+                accessibilityLabel="Retry fetching quote data"
+              />
+            )}
           </View>
         )}
 
@@ -467,12 +643,18 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
             title={isBuy ? 'Confirm buy' : 'Confirm sell'}
             iconName={isBuy ? 'arrow-up-circle-outline' : 'arrow-down-circle-outline'}
             onSubmit={handleConfirm}
-            disabled={isSubmitting || isReleasing || isExpired || quoteChanged}
+            disabled={isSubmitting || isReleasing || isExpired || quoteChanged || commitBlocked}
             accessibilityLabel={isExpired
               ? 'Quote expired. Return to refresh.'
               : quoteChanged
                 ? 'Quote changed. Return to review the updated price.'
-                : `${isBuy ? 'Confirm buy order' : 'Confirm sell order'}. Quote expires in ${secondsRemaining} seconds.`}
+                : feeUnavailable
+                  ? 'Fee unavailable. Refresh quote data before confirming.'
+                  : !quoteComplete
+                    ? 'Quote incomplete. Return to the ticket for a fresh preview.'
+                    : requireHold
+                      ? `${isBuy ? 'Confirm buy order' : 'Confirm sell order'}. ${holdReasonLabel} Quote expires in ${secondsRemaining} seconds.`
+                      : `${isBuy ? 'Confirm buy order' : 'Confirm sell order'}. Quote expires in ${secondsRemaining} seconds.`}
           />
         </View>
       </CoOwnStickyActionDock>
@@ -527,6 +709,11 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
     gap: Space.xs,
+  },
+  // ── Retry — compact secondary action inside the fee-unavailable card ──
+  retryBtn: {
+    alignSelf: 'flex-start',
+    marginTop: Space.xs,
   },
   // ── Dock row — calm, professional confirm/cancel actions ──
   // Per spec 11_COOWN: "Buy/sell action is impossible to confuse."

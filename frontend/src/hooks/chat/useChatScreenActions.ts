@@ -284,7 +284,9 @@ export function useChatScreenActions({
             setChatAgentPickerVisible(true);
           } else {
             const msgText = selectedMessage.text ?? "";
-            const agentName = deployedChatAgents[0]?.name ?? "";
+            // Backend mention alias: @botName with whitespace stripped
+            // (matchAgentInvocation lowercases and strips spaces the same way).
+            const agentName = (deployedChatAgents[0]?.name ?? "").replace(/\s+/g, "");
             setInput(`@${agentName} ${msgText}`.trim());
           }
           break;

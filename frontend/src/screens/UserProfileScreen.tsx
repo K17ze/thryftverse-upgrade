@@ -125,7 +125,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const { requireAuth } = useSignupWall();
   const { colors, isDark } = useAppTheme();
   const haptic = useHaptic();
-  useVisuallyComplete('UserProfile');
+  const reportReady = useVisuallyComplete('UserProfile');
 
   // Themed color aliases - keep JSX readable, match old module-level consts
   const BG = colors.background;
@@ -257,6 +257,18 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const publicProfile = publicProfileQuery.data ?? null;
   const profileAggregate = publicProfileQuery.aggregate ?? null;
   const isLoadingProfile = publicProfileQuery.isLoading;
+
+  // Readiness milestones: 'data-ready' when the profile query settles
+  // (data or terminal error); 'interaction-ready' alongside it — the
+  // header/follow controls render once loading clears. When the query is
+  // disabled (no userId) there is nothing to load and readiness reports
+  // immediately, which is accurate.
+  useEffect(() => {
+    if (!isLoadingProfile) {
+      reportReady('data-ready');
+      reportReady('interaction-ready');
+    }
+  }, [isLoadingProfile, reportReady]);
   const profileError = publicProfileQuery.error ? 'Unable to load profile. Tap to retry.' : null;
   const stats: PublicProfileStats | null = profileAggregate?.stats ?? null;
   const viewer: PublicProfileViewer | null = profileAggregate?.viewer ?? null;

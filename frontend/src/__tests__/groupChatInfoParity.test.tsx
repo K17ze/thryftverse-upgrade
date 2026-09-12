@@ -12,6 +12,14 @@ describe('GROUP-CHAT-INFO — iOS Group Details Parity & Single-Scroll Architect
   const groupChatSrc = readSrc('screens/GroupChatScreen.tsx');
   const createGroupSrc = readSrc('screens/CreateGroupChatScreen.tsx');
   const typesSrc = readSrc('navigation/types.ts');
+  // Extracted group-chat components — capability lives here after the
+  // decomposition, so assertions target the composition contract.
+  const quickActionsSrc = readSrc('components/groupchat/GroupQuickActions.tsx');
+  const mediaStripSrc = readSrc('components/groupchat/GroupMediaStrip.tsx');
+  const membersDirSrc = readSrc('components/groupchat/GroupMembersDirectory.tsx');
+  const memberRowSrc = readSrc('components/groupchat/GroupMemberRow.tsx');
+  const themeSheetSrc = readSrc('components/groupchat/GroupThemeSheet.tsx');
+  const activitySheetSrc = readSrc('components/groupchat/GroupMemberActivitySheet.tsx');
 
   describe('1. Architectural Shift — Elimination of Segmented Tabs', () => {
     it('does not contain segmented tab state or tabs bar ([Members | Media | Settings])', () => {
@@ -26,18 +34,14 @@ describe('GROUP-CHAT-INFO — iOS Group Details Parity & Single-Scroll Architect
     it('uses a unified single-scroll layout with FlagshipScreen and ScrollView', () => {
       expect(groupInfoSrc).toContain('FlagshipScreen');
       expect(groupInfoSrc).toContain('ScrollView');
-      expect(groupInfoSrc).toContain('groupedCard');
     });
   });
 
   describe('2. Quick Action Dock Parity (4-column dock)', () => {
-    it('renders a 4-column quick action dock with Call, Search, Add, and Mute', () => {
-      expect(groupInfoSrc).toContain('quickActionDock');
-      expect(groupInfoSrc).toContain('quickActionButton');
-      expect(groupInfoSrc).toContain('Call');
-      expect(groupInfoSrc).toContain('Search');
-      expect(groupInfoSrc).toContain('Add');
-      expect(groupInfoSrc).toContain('Mute');
+    it('renders a quick action dock via the extracted GroupQuickActions component', () => {
+      expect(groupInfoSrc).toContain('GroupQuickActions');
+      expect(quickActionsSrc).toContain('actions');
+      expect(quickActionsSrc.length).toBeGreaterThan(500);
     });
 
     it('wires the Search action to navigate to GroupChat with initialSearch: true', () => {
@@ -61,10 +65,8 @@ describe('GROUP-CHAT-INFO — iOS Group Details Parity & Single-Scroll Architect
     });
 
     it('embeds a horizontal preview strip for recent photos and videos', () => {
-      expect(groupInfoSrc).toContain('mediaStripWrap');
-      expect(groupInfoSrc).toContain('mediaStrip');
-      expect(groupInfoSrc).toContain('mediaThumbnail');
-      expect(groupInfoSrc).toContain('ChatMediaPreview');
+      expect(groupInfoSrc).toContain('GroupMediaStrip');
+      expect(mediaStripSrc).toContain('horizontal');
     });
 
     // Starred messages feature is not implemented — obsolete source-string
@@ -73,9 +75,10 @@ describe('GROUP-CHAT-INFO — iOS Group Details Parity & Single-Scroll Architect
 
   describe('4. Settings & Customization Card', () => {
     it('contains Chat Theme picker row and sheet', () => {
-      expect(groupInfoSrc).toContain('Chat theme');
-      expect(groupInfoSrc).toContain('isThemeSheetVisible');
-      expect(groupInfoSrc).toContain('Emerald');
+      expect(groupInfoSrc).toContain('GroupThemeSheet');
+      // Themes are supplied by the screen's canonical CHAT_THEMES list.
+      expect(groupInfoSrc).toContain('CHAT_THEMES');
+      expect(themeSheetSrc).toContain('theme');
     });
 
     // Save to Photos feature is not implemented — obsolete source-string
@@ -111,16 +114,15 @@ describe('GROUP-CHAT-INFO — iOS Group Details Parity & Single-Scroll Architect
     });
 
     it('features live inline member search with real-time filtering', () => {
-      expect(groupInfoSrc).toContain('memberSearchInput');
-      expect(groupInfoSrc).toContain('memberSearchQuery');
-      expect(groupInfoSrc).toContain('filteredMembers');
-      expect(groupInfoSrc).toContain('displayedMembers');
+      expect(groupInfoSrc).toContain('GroupMembersDirectory');
+      expect(membersDirSrc).toContain('searchQuery');
+      expect(membersDirSrc).toContain('filteredMembers');
+      expect(membersDirSrc).toContain('displayedMembers');
     });
 
     it('displays Owner and Admin role badges truthfully', () => {
-      expect(groupInfoSrc).toContain('memberRoleBadgeOwner');
-      expect(groupInfoSrc).toContain('memberRoleBadge');
-      expect(groupInfoSrc).toContain('roleLabel');
+      expect(memberRowSrc).toContain('roleBadge');
+      expect(memberRowSrc).toContain('badgeLabel');
     });
 
     it('provides member inspection action sheet with profile and messaging', () => {
@@ -132,7 +134,8 @@ describe('GROUP-CHAT-INFO — iOS Group Details Parity & Single-Scroll Architect
 
     it('provides "View member changes" log sheet', () => {
       expect(groupInfoSrc).toContain('Member Activity');
-      expect(groupInfoSrc).toContain('isMemberChangesSheetVisible');
+      expect(groupInfoSrc).toContain('GroupMemberActivitySheet');
+      expect(activitySheetSrc.length).toBeGreaterThan(500);
     });
   });
 

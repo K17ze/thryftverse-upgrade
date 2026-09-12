@@ -63,9 +63,14 @@ export function CoOwnFeaturedAsset({
             </View>
           )}
 
-          {/* Gradient overlay for text legibility on any image */}
+          {/* Gradient overlay for text legibility on any image. The
+              Gradients export carries no scrim ramp, so stops derive from
+              colors.shadow — the theme's scrim base ('#000000' in both
+              themes; media scrims stay dark-on-image regardless of theme,
+              matching the mediaOverlayScrim token contract). Hex-alpha
+              suffixes follow the `${token}4D` pattern in gradients.ts. */}
           <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.45)', 'rgba(0,0,0,0.78)']}
+            colors={[`${colors.shadow}00`, `${colors.shadow}73`, `${colors.shadow}C7`]}
             locations={[0, 0.55, 1]}
             style={styles.gradientOverlay}
             pointerEvents="none"

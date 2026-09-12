@@ -412,6 +412,33 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
       // picker's brand-new layer (with default trim/speed/volume) would
       // silently discard all the user's editing work.
       if (editingLayer.type === 'media' && layer.type === 'media') {
+        // Clamp the preserved trim window to the replacement media's
+        // duration. A replace can bring in shorter media — keeping a
+        // trimEndMs past the new duration would stretch the projected
+        // clip beyond real source content.
+        const newVideoDuration = layer.payload.mediaType === 'video'
+          ? (layer.payload.videoDurationMs ?? undefined)
+          : undefined;
+        let trimStartMs = editingLayer.payload.trimStartMs;
+        let trimEndMs = editingLayer.payload.trimEndMs;
+        if (newVideoDuration != null && newVideoDuration > 0) {
+          if (trimStartMs != null && trimStartMs >= newVideoDuration) {
+            trimStartMs = 0;
+          }
+          if (trimEndMs != null && trimEndMs > newVideoDuration) {
+            trimEndMs = newVideoDuration;
+          }
+          if (trimStartMs != null && trimEndMs != null && trimEndMs <= trimStartMs) {
+            trimStartMs = 0;
+            trimEndMs = newVideoDuration;
+          }
+        } else if (layer.payload.mediaType !== 'video') {
+          // Replacing with a still image — source-window fields are
+          // meaningless; clear them so playback treats this as a static
+          // page with the authored hold duration.
+          trimStartMs = undefined;
+          trimEndMs = undefined;
+        }
         const preserved: CreatorLayer = {
           ...editingLayer,
           // Keep the original id so selection and timeline stay valid.
@@ -422,6 +449,15 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
             mediaUri: layer.payload.mediaUri,
             mediaType: layer.payload.mediaType,
             videoDurationMs: layer.payload.videoDurationMs,
+            trimStartMs,
+            trimEndMs,
+            // Stale upload receipts belong to the replaced media — clear
+            // them so publish re-uploads/re-finalizes the new source
+            // rather than binding the old receipt to a different URL.
+            mediaFinalizationId: undefined,
+            mediaAssetId: undefined,
+            thumbnailFinalizationId: undefined,
+            thumbnailMediaAssetId: undefined,
             // Clear the thumbnail so it regenerates for the new media.
             thumbnailUri: undefined,
           },

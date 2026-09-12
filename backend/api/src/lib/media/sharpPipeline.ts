@@ -14,7 +14,6 @@
  * @packageDocumentation
  */
 
-import { createHash } from 'node:crypto';
 import sharp from 'sharp';
 import { logger } from '../logger.js';
 
@@ -30,7 +29,12 @@ export interface ImageDerivative {
 export interface ImageDerivativeSet {
   derivatives: ImageDerivative[];
   lqip: string;
-  blurhash: string;
+  /**
+   * Decodable BlurHash placeholder string (https://blurha.sh), or null when
+   * the source pixels could not be encoded. Consumers pass this straight to
+   * `expo-image`'s `placeholder={{ blurhash }}` prop.
+   */
+  blurhash: string | null;
 }
 
 const RESPONSIVE_WIDTHS = [200, 400, 800, 1200, 2000] as const;
@@ -56,14 +60,26 @@ function variantName(width: number, format: 'jpeg' | 'webp' | 'avif'): string {
 export async function generateImageDerivatives(
   inputBuffer: Buffer,
 ): Promise<ImageDerivativeSet> {
-  const source = sharp(inputBuffer, { failOn: 'none' });
-  const metadata = await source.metadata();
-  const sourceWidth = metadata.width ?? 0;
-  const sourceHeight = metadata.height ?? 0;
+  // Decode + read metadata from the raw input first — metadata() reports
+  // pre-rotation dimensions, so the EXIF-corrected ladder is sized against
+  // `autoOrient` values (which account for orientation tags 5–8 swapping
+  // width/height).
+  const probe = sharp(inputBuffer, { failOn: 'none' });
+  const metadata = await probe.metadata();
+  const sourceWidth = metadata.autoOrient?.width ?? metadata.width ?? 0;
+  const sourceHeight = metadata.autoOrient?.height ?? metadata.height ?? 0;
 
   if (sourceWidth === 0 || sourceHeight === 0) {
     throw new Error('sharp could not decode image dimensions from the source buffer');
   }
+
+  // Derivative pipeline: .rotate() applies the EXIF orientation before
+  // resizing (and drops the Orientation tag), .keepIccProfile() carries the
+  // embedded colour profile into every output so storefront imagery keeps
+  // its authored colour instead of collapsing to sRGB.
+  const source = sharp(inputBuffer, { failOn: 'none' })
+    .rotate()
+    .keepIccProfile();
 
   const derivatives: ImageDerivative[] = [];
   const targetWidths: number[] = RESPONSIVE_WIDTHS.filter((width) => width <= sourceWidth);
@@ -137,21 +153,24 @@ export async function generateImageDerivatives(
     buffer: avifBuffer,
   });
 
-  // LQIP — 20px-wide blurred JPEG encoded as a base64 data URI.
-  const lqipBuffer = await source
-    .clone()
+  // LQIP — 20px-wide blurred JPEG encoded as a base64 data URI. The ICC
+  // profile is deliberately not embedded here: at 20px the blurred pixels
+  // carry no useful colour fidelity and the profile would dominate the
+  // payload size.
+  const lqipBuffer = await sharp(inputBuffer, { failOn: 'none' })
+    .rotate()
     .resize({ width: LQIP_WIDTH, withoutEnlargement: true })
     .blur(5)
     .jpeg({ quality: 60 })
     .toBuffer();
   const lqip = `data:image/jpeg;base64,${lqipBuffer.toString('base64')}`;
 
-  // Blurhash placeholder — a compact perceptual hash of the LQIP. We use a
-  // deterministic short hash derived from the LQIP pixels so consumers can
-  // render a placeholder without decoding the full image. This is a
-  // best-effort fallback; a full BlurHash implementation can be layered in
-  // later without changing the contract.
-  const blurhash = computeBlurhashPlaceholder(lqipBuffer);
+  // BlurHash — a real, decodable perceptual placeholder encoded from
+  // orientation-corrected pixels at thumbnail resolution. The previous
+  // implementation stored a truncated SHA-256 hex string in this field,
+  // which no BlurHash decoder can render; the contract now carries a
+  // genuine BlurHash (or null when encoding is impossible).
+  const blurhash = await encodeBlurHashFromBuffer(inputBuffer);
 
   logger.info(
     {
@@ -171,19 +190,32 @@ export async function generateImageDerivatives(
  * source object to protect uploader privacy. The public URL serves this
  * cleaned object.
  *
- * sharp discards all input metadata (EXIF, IPTC, XMP, ICC profiles) by
- * default when producing a new output buffer, so re-encoding through sharp
- * yields a clean image. The output format matches the input content type so
- * the object key extension and S3 Content-Type remain valid. Returns the
- * original buffer reference unchanged when the format cannot be re-encoded
- * without changing type (e.g. HEIC when libheif output is unavailable).
+ * sharp discards all input metadata (EXIF, IPTC, XMP) by default when
+ * producing a new output buffer, so re-encoding through sharp yields a
+ * privacy-clean image. Two behaviours are layered on top of the re-encode:
+ *
+ *   - `.rotate()` bakes the EXIF orientation into the pixels before the
+ *     Orientation tag is discarded. Without it, phone-shot photos whose
+ *     camera stored rotation in EXIF (portrait shots in particular) serve
+ *     sideways pixels on the public URL.
+ *   - `.keepIccProfile()` carries the embedded ICC colour profile into the
+ *     output. ICC is colour management, not personal data, so preserving it
+ *     does not weaken the EXIF strip — and condition-evidence imagery keeps
+ *     its authored colour.
+ *
+ * The output format matches the input content type so the object key
+ * extension and S3 Content-Type remain valid. Returns the original buffer
+ * reference unchanged when the format cannot be re-encoded without changing
+ * type (e.g. HEIC when libheif output is unavailable).
  */
 export async function stripImageExif(
   sourceBuffer: Buffer,
   contentType: string,
 ): Promise<Buffer> {
   const normalized = contentType.split(';')[0]?.trim().toLowerCase() ?? '';
-  const image = sharp(sourceBuffer, { failOn: 'none' });
+  const image = sharp(sourceBuffer, { failOn: 'none' })
+    .rotate()
+    .keepIccProfile();
 
   if (normalized === 'image/png') {
     return image.png().toBuffer();
@@ -205,12 +237,149 @@ export async function stripImageExif(
   return image.jpeg({ quality: 95 }).toBuffer();
 }
 
+// ── BlurHash encoding ────────────────────────────────────────────────────
+//
+// Compact, decodable perceptual placeholder (https://blurha.sh). The encoder
+// below follows the reference algorithm: pixel data is decomposed into
+// cosine-basis components (4×3 by default), the DC component is stored as
+// sRGB, AC components are quantised against a shared maximum, and the result
+// is serialised to a short Base83 string consumable directly by
+// `expo-image`'s `placeholder={{ blurhash }}` prop.
+
+const BASE83_ALPHABET =
+  '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz#$%*+,-.:;=?@[]^_{|}~';
+
+function encodeBase83(value: number, length: number): string {
+  let result = '';
+  for (let i = 1; i <= length; i += 1) {
+    const digit = Math.floor(value / 83 ** (length - i)) % 83;
+    result += BASE83_ALPHABET[digit];
+  }
+  return result;
+}
+
+function sRGBToLinear(value: number): number {
+  const v = value / 255;
+  if (v <= 0.04045) return v / 12.92;
+  return ((v + 0.055) / 1.055) ** 2.4;
+}
+
+function linearTosRGB(value: number): number {
+  const v = Math.max(0, Math.min(1, value));
+  if (v <= 0.0031308) return Math.round(v * 12.92 * 255 + 0.5);
+  return Math.round((1.055 * v ** (1 / 2.4) - 0.055) * 255 + 0.5);
+}
+
+function signPow(value: number, exponent: number): number {
+  return Math.sign(value) * Math.abs(value) ** exponent;
+}
+
+function encodeBlurHashDC(r: number, g: number, b: number): number {
+  return (linearTosRGB(r) << 16) + (linearTosRGB(g) << 8) + linearTosRGB(b);
+}
+
+function encodeBlurHashAC(
+  r: number,
+  g: number,
+  b: number,
+  maximumValue: number,
+): number {
+  const quantise = (channel: number): number =>
+    Math.max(
+      0,
+      Math.min(18, Math.floor(signPow(channel / maximumValue, 0.5) * 9 + 9.5)),
+    );
+  return quantise(r) * 19 * 19 + quantise(g) * 19 + quantise(b);
+}
+
 /**
- * Computes a compact perceptual placeholder hash from a downscaled image
- * buffer. This is not a full BlurHash implementation but a stable
- * representation suitable for placeholder rendering and deduplication.
+ * Encodes an RGBA pixel buffer as a BlurHash string. `pixels` must contain
+ * 4 bytes per pixel in RGBA order; alpha is ignored per the spec.
  */
-function computeBlurhashPlaceholder(buffer: Buffer): string {
-  const hash = createHash('sha256').update(buffer).digest('hex');
-  return hash.slice(0, 32);
+export function encodeBlurHash(
+  pixels: Uint8Array,
+  width: number,
+  height: number,
+  componentX = 4,
+  componentY = 3,
+): string {
+  if (width <= 0 || height <= 0 || pixels.length < width * height * 4) {
+    throw new Error('encodeBlurHash received an undersized pixel buffer');
+  }
+
+  const factors: Array<[number, number, number]> = [];
+  for (let y = 0; y < componentY; y += 1) {
+    for (let x = 0; x < componentX; x += 1) {
+      const normalisation = x === 0 && y === 0 ? 1 : 2;
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      for (let j = 0; j < height; j += 1) {
+        const rowOffset = j * width * 4;
+        const cosY = Math.cos((Math.PI * y * j) / height);
+        for (let i = 0; i < width; i += 1) {
+          const basis = Math.cos((Math.PI * x * i) / width) * cosY;
+          const offset = rowOffset + i * 4;
+          r += basis * sRGBToLinear(pixels[offset]);
+          g += basis * sRGBToLinear(pixels[offset + 1]);
+          b += basis * sRGBToLinear(pixels[offset + 2]);
+        }
+      }
+      const scale = normalisation / (width * height);
+      factors.push([r * scale, g * scale, b * scale]);
+    }
+  }
+
+  const dc = factors[0];
+  const ac = factors.slice(1);
+
+  const sizeFlag = componentX - 1 + (componentY - 1) * 9;
+  let hash = encodeBase83(sizeFlag, 1);
+
+  let maximumValue = 1;
+  if (ac.length > 0) {
+    const actualMaximumValue = ac.reduce(
+      (max, [r, g, b]) => Math.max(max, Math.abs(r), Math.abs(g), Math.abs(b)),
+      0,
+    );
+    const quantisedMaximumValue = Math.max(
+      0,
+      Math.min(82, Math.floor(actualMaximumValue * 166 - 0.5)),
+    );
+    maximumValue = (quantisedMaximumValue + 1) / 166;
+    hash += encodeBase83(quantisedMaximumValue, 1);
+  } else {
+    hash += encodeBase83(0, 1);
+  }
+
+  hash += encodeBase83(encodeBlurHashDC(dc[0], dc[1], dc[2]), 4);
+  for (const [r, g, b] of ac) {
+    hash += encodeBase83(encodeBlurHashAC(r, g, b, maximumValue), 2);
+  }
+  return hash;
+}
+
+const BLURHASH_SAMPLE_WIDTH = 32;
+
+/**
+ * Produces a decodable BlurHash for the supplied source image. Returns null
+ * (rather than throwing) when the pixels cannot be decoded — the field is a
+ * progressive-enhancement placeholder, never a hard dependency.
+ */
+async function encodeBlurHashFromBuffer(inputBuffer: Buffer): Promise<string | null> {
+  try {
+    const { data, info } = await sharp(inputBuffer, { failOn: 'none' })
+      .rotate()
+      .resize({ width: BLURHASH_SAMPLE_WIDTH, withoutEnlargement: true })
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    return encodeBlurHash(new Uint8Array(data), info.width, info.height);
+  } catch (error) {
+    logger.warn(
+      { err: error },
+      '[sharpPipeline] blurhash encode failed — continuing without placeholder',
+    );
+    return null;
+  }
 }

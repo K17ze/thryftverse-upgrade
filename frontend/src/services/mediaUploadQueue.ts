@@ -36,6 +36,10 @@ export interface UploadQueueItem {
   _needsFinalizationOnly?: boolean;
   /** Internal: cached presign for finalization-only retry. */
   _presign?: PresignResponse;
+  /** Internal flag: the in-flight attempt was aborted by a connectivity
+   *  drop (not a user cancel). The catch path requeues as 'pending'
+   *  instead of 'cancelled'/'failed'. */
+  _offlineAborted?: boolean;
 }
 
 export interface UploadQueueState {
@@ -504,6 +508,7 @@ export class MediaUploadQueue {
       this.unsubscribeNetInfo = NetInfo.addEventListener((state) => {
         if (state.isInternetReachable === false) {
           this.internetReachable = false;
+          this.parkForOffline();
           return;
         }
         if (state.isInternetReachable === true && this.internetReachable === false) {
@@ -513,6 +518,25 @@ export class MediaUploadQueue {
       });
     } catch {
       // NetInfo is unavailable on web/test runtimes — the queue runs un-gated.
+    }
+  }
+
+  /**
+   * Connectivity dropped: abort in-flight attempts proactively so they
+   * requeue immediately instead of hanging until the transport times out.
+   * The `_offlineAborted` flag tells processItem's catch to park the item
+   * as 'pending' — a drop is not a user cancel and not a failure, so the
+   * attempt budget is refunded. The owning workers unwind themselves and
+   * release their slots; `resumeAfterOffline` restarts the loop on
+   * reconnect.
+   */
+  private parkForOffline(): void {
+    for (const [itemId, controller] of this.abortControllers) {
+      const item = this.items.find((i) => i.id === itemId);
+      if (item && !item._cancelRequested) {
+        item._offlineAborted = true;
+      }
+      controller.abort();
     }
   }
 
@@ -894,6 +918,24 @@ export class MediaUploadQueue {
         delete item._presign;
       }
     } catch (err: unknown) {
+      // A connectivity drop aborts the transport with the same AbortError a
+      // user cancel produces — distinguish by _offlineAborted (set in
+      // parkForOffline). Offline-parked items requeue as 'pending' with the
+      // attempt refunded; an explicit user cancel during the abort still wins.
+      if (item._offlineAborted && !item._cancelRequested) {
+        delete item._offlineAborted;
+        // If the bytes already landed (presign cached post-PUT), the retry
+        // only needs the finalize call — same checkpoint as a real failure.
+        if (item._presign && !item._needsFinalizationOnly) {
+          item._needsFinalizationOnly = true;
+        }
+        item.state = 'pending';
+        item.attemptCount = Math.max(0, item.attemptCount - 1);
+        item.error = null;
+        this.emit();
+        await this.flushSnapshot();
+        return;
+      }
       // Cancellation (flag or aborted transport) transitions to cancelled, not failed
       if (item._cancelRequested || isAbortError(err)) {
         item.state = 'cancelled';

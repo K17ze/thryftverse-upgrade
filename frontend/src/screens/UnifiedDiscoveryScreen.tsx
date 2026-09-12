@@ -4,12 +4,11 @@
  *
  * Combines into ONE personalised surface:
  *  - Search bar (transitions to text-search results on submit)
- *  - Personalised greeting + category pills
+ *  - Category pills driven by the user's real intent signals
  *  - Hero editorial (from Galleria)
  *  - For You personalised listings masonry (useForYouFeed + discoveryFeedAssembly)
  *  - Curated collections rail (from Galleria)
  *  - Looks, moodboards, pulse integrated into the heterogeneous feed
- *  - Featured assets masonry (from Galleria)
  *
  * Design principles (AGENTS.md §4):
  *  - Media-as-color: real imagery is the primary visual anchor
@@ -26,16 +25,12 @@ import {
   StyleSheet,
   Pressable,
   ActivityIndicator,
-  ScrollView,
-  useWindowDimensions } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+  ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { RootStackParamList } from '../navigation/types';
-import { useStore } from '../store/useStore';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useForYouFeed } from '../hooks/useForYouFeed';
@@ -46,10 +41,11 @@ import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
-import { EmptyState } from '../components/EmptyState';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { MasonrySkeleton } from '../components/skeletons/MasonrySkeleton';
-import { FlagshipHeader, FlagshipScreen } from '../components/flagship';
+import { FlagshipHeader, FlagshipScreen, FlagshipState } from '../components/flagship';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
 import { HorizontalRail } from '../components/HorizontalRail';
 
@@ -60,10 +56,8 @@ import { fetchPublicMoodboards, type Moodboard } from '../services/moodboardApi'
 import {
   fetchGalleriaCollections,
   fetchGalleriaEditorials,
-  fetchFeaturedAssets,
   type GalleriaCollection,
-  type GalleriaEditorial,
-  type GalleriaFeaturedAsset } from '../services/galleriaApi';
+  type GalleriaEditorial } from '../services/galleriaApi';
 import { searchListingsFromApi } from '../services/feedApi';
 import { searchUsers, type UserSearchResult } from '../services/profileApi';
 import { buildListingFeedUnit, type DiscoveryFeedUnit } from '../contracts/discoveryFeedUnit';
@@ -71,6 +65,7 @@ import type { DiscoveryListingSummary } from '../contracts/DiscoveryListingSumma
 import { openProductDetail } from '../platform/product/openProductDetail';
 import { useDynamicAlgorithmSignals } from '../hooks/useDynamicAlgorithmSignals';
 import { matchesSignal, type DynamicSignalChip } from '../services/algorithmicSignalsService';
+import { getAlgorithmDemoMode } from '../services/algorithmTransparencyApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'UnifiedDiscovery'>;
 
@@ -81,17 +76,15 @@ type CategoryPill = string;
 const SEARCH_DEBOUNCE_MS = 180;
 
 export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
-  const { colors, isDark } = useAppTheme();
-  const { width: windowWidth } = useWindowDimensions();
+  const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { isOffline } = useConnectivity();
-  const currentUser = useStore((state) => state.currentUser);
   const { listings: backendListings, refreshListings, isSyncing, lastError } = useBackendData();
   const forYouFeed = useForYouFeed();
 
   // ── Search state ──
   const [query, setQuery] = useState(route.params?.initialQuery ?? '');
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [, setIsSearchFocused] = useState(false);
   const [searchRetryCount, setSearchRetryCount] = useState(0);
   const normalizedQuery = query.trim().toLowerCase();
 
@@ -100,10 +93,18 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
   const { signals: dynamicCategorySignals, selectSignal: boostCategorySignal } = useDynamicAlgorithmSignals({ surface: 'discovery' });
 
   const categoryPills = useMemo<DynamicSignalChip[]>(() => {
+    // Truthful UI (AGENTS.md §11): when the intent profile could not be
+    // fetched and the service fell back to illustrative topics, profile-
+    // derived chips would fabricate personalization. Profile-derived chips
+    // carry a `topicId`; chips derived from real local signals (recommendation
+    // items, wishlist brands, recent searches) do not and stay visible.
+    const algorithmIsDemo = getAlgorithmDemoMode();
     return [
       { id: 'all', label: 'All', filterKey: 'all', kind: 'all', score: 100, isPersonalized: false },
       { id: 'new', label: 'New', filterKey: 'new', kind: 'curated', score: 98, isPersonalized: false },
-      ...dynamicCategorySignals.filter((s) => s.filterKey !== 'all'),
+      ...dynamicCategorySignals.filter(
+        (s) => s.filterKey !== 'all' && !(algorithmIsDemo && s.topicId != null),
+      ),
     ];
   }, [dynamicCategorySignals]);
 
@@ -133,7 +134,6 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
   const [moodboards, setMoodboards] = useState<Moodboard[]>([]);
   const [collections, setCollections] = useState<GalleriaCollection[]>([]);
   const [editorials, setEditorials] = useState<GalleriaEditorial[]>([]);
-  const [featuredAssets, setFeaturedAssets] = useState<GalleriaFeaturedAsset[]>([]);
   const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(true);
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
 
@@ -148,30 +148,16 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
   const scrollRef = useRef<any>(null);
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  // ── Greeting based on time of day ──
-  const greeting = useMemo(() => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
-    return 'Good evening';
-  }, []);
-
-  const firstName = useMemo(() => {
-    const name = currentUser?.displayName ?? currentUser?.username ?? '';
-    return name.split(' ')[0] || name;
-  }, [currentUser?.displayName, currentUser?.username]);
-
   // ── Load all discovery content ──
   const loadDiscoveryContent = useCallback(async () => {
     setIsDiscoveryLoading(true);
     setDiscoveryError(null);
-    const [looksRes, postersRes, moodboardsRes, colsRes, edsRes, assetsRes] = await Promise.allSettled([
+    const [looksRes, postersRes, moodboardsRes, colsRes, edsRes] = await Promise.allSettled([
       fetchLooksFromApi({ status: 'published', sort: 'foryou', limit: 6 }),
       fetchPosterStories({ active: true, limit: 4 }),
       fetchPublicMoodboards(),
       fetchGalleriaCollections(),
       fetchGalleriaEditorials(),
-      fetchFeaturedAssets(),
     ]);
 
     let fulfilled = 0;
@@ -183,7 +169,6 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
     }
     if (colsRes.status === 'fulfilled') { setCollections(colsRes.value); fulfilled++; }
     if (edsRes.status === 'fulfilled') { setEditorials(edsRes.value); fulfilled++; }
-    if (assetsRes.status === 'fulfilled') { setFeaturedAssets(assetsRes.value); fulfilled++; }
 
     // If every discovery endpoint failed, surface an error state.
     if (fulfilled === 0) {
@@ -207,9 +192,17 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
       return;
     }
 
+    // Scope is user-controlled — this effect must never override an explicit
+    // Items/People selection. When the People scope is active, the
+    // people-search effect below owns the query; item results stay cached so
+    // toggling back to Items is instant.
+    if (searchScope !== 'items') {
+      setIsSearching(false);
+      return;
+    }
+
     let cancelled = false;
     setIsSearching(true);
-    setSearchScope('items');
 
     const timer = setTimeout(() => {
       searchListingsFromApi(normalizedQuery, 50)
@@ -229,9 +222,15 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
                 brand: item.brand ?? null,
                 size: item.size ?? null,
                 condition: null,
-                price: Number(item.priceGbp ?? 0),
+                // Truthful commerce facts: a missing/invalid price stays null
+                // (the tile omits the price line) rather than a fabricated £0.
+                price: typeof item.priceGbp === 'number' && Number.isFinite(item.priceGbp)
+                  ? item.priceGbp
+                  : null,
                 images: item.imageUrl ? [item.imageUrl] : [],
-                likes: 0,
+                // The search API returns no engagement counts — null means
+                // "unknown", not a factual "0 likes".
+                likes: null,
                 sellerId: item.sellerId,
                 category: item.category ?? '',
                 createdAt: item.createdAt },
@@ -253,7 +252,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
     }, SEARCH_DEBOUNCE_MS);
 
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [normalizedQuery, searchRetryCount]);
+  }, [normalizedQuery, searchScope, searchRetryCount]);
 
   // ── People search ──
   useEffect(() => {
@@ -349,7 +348,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
     }
   }, [normalizedQuery, haptic]);
 
-  const hasAnyContent = personalisedListings.length > 0 || looks.length > 0 || posters.length > 0 || moodboards.length > 0 || featuredAssets.length > 0;
+  const hasAnyContent = personalisedListings.length > 0 || looks.length > 0 || posters.length > 0 || moodboards.length > 0;
   const showLoadingSkeleton = !hasAnyContent && (isDiscoveryLoading || forYouFeed.isLoading || (isSyncing && !lastError));
   const showError = !hasAnyContent && (Boolean(lastError) || Boolean(discoveryError)) && !isSyncing && !isDiscoveryLoading && !forYouFeed.isLoading;
   const showEmpty = !hasAnyContent && !isSyncing && !lastError && !isDiscoveryLoading && !forYouFeed.isLoading;
@@ -379,7 +378,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
               accessibilityLabel="Visual search"
               accessibilityRole="button"
             >
-              <Ionicons name="camera-outline" size={21} color={colors.textPrimary} />
+              <AppIcon name="camera-outline" size={IconSize.md} color="textPrimary" accessible={false} />
             </AnimatedPressable>
           </View>
         }
@@ -437,25 +436,19 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
             showEmpty={showEmpty}
             showFilteredEmpty={showFilteredEmpty}
             isOffline={isOffline}
-            greeting={greeting}
-            firstName={firstName}
             activeCategory={activeCategory}
             onCategoryChange={handleCategoryChange}
             categoryPills={categoryPills}
             heroEditorial={heroEditorial}
             collections={collections}
-            featuredAssets={featuredAssets}
             onListingPress={handleListingPress}
             onLookPress={handleLookPress}
             onPosterPress={handlePosterPress}
             onMoodboardPress={handleMoodboardPress}
             onCollectionPress={handleCollectionPress}
             onRefresh={handleRefresh}
-            isRefreshing={forYouFeed.isRefreshing || isSyncing}
             scrollRef={scrollRef}
-            colors={colors}
             styles={styles}
-            windowWidth={windowWidth}
           />
         )}
       </View>
@@ -474,62 +467,49 @@ function DiscoveryFeedView({
   showEmpty,
   showFilteredEmpty,
   isOffline,
-  greeting,
-  firstName,
   activeCategory,
   onCategoryChange,
   categoryPills,
   heroEditorial,
   collections,
-  featuredAssets,
   onListingPress,
   onLookPress,
   onPosterPress,
   onMoodboardPress,
   onCollectionPress,
   onRefresh,
-  isRefreshing,
   scrollRef,
-  colors,
-  styles,
-  windowWidth }: {
+  styles }: {
   units: DiscoveryFeedUnit[];
   isLoading: boolean;
   showError: boolean;
   showEmpty: boolean;
   showFilteredEmpty: boolean;
   isOffline: boolean;
-  greeting: string;
-  firstName: string;
   activeCategory: CategoryPill;
   onCategoryChange: (c: CategoryPill) => void;
   categoryPills: DynamicSignalChip[];
   heroEditorial?: GalleriaEditorial;
   collections: GalleriaCollection[];
-  featuredAssets: GalleriaFeaturedAsset[];
   onListingPress: (listing: DiscoveryListingSummary) => void;
   onLookPress: (id: string) => void;
   onPosterPress: (id: string) => void;
   onMoodboardPress: (id: string) => void;
   onCollectionPress: (id: string) => void;
   onRefresh: () => void;
-  isRefreshing: boolean;
   scrollRef: React.MutableRefObject<any>;
-  colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
-  windowWidth: number;
 }) {
   if (showError) {
     return (
       <View style={styles.stateWrap}>
-        <EmptyState
-          density="compact"
+        <FlagshipState
+          variant="error"
           icon="cloud-offline-outline"
-          iconColor={colors.danger}
           title="Discovery unavailable"
           subtitle="We couldn't load discovery right now. Check your connection and try again."
-          ctaLabel="Retry"
-          onCtaPress={onRefresh}
+          actionLabel="Retry"
+          onAction={onRefresh}
         />
       </View>
     );
@@ -538,13 +518,13 @@ function DiscoveryFeedView({
   if (showFilteredEmpty) {
     return (
       <View style={styles.stateWrap}>
-        <EmptyState
-          density="compact"
+        <FlagshipState
+          variant="empty"
           icon="bag-handle-outline"
           title={`No ${activeCategory.toLowerCase()} items yet`}
           subtitle="Try another category or check back soon."
-          ctaLabel="Browse all"
-          onCtaPress={() => onCategoryChange('All')}
+          actionLabel="Browse all"
+          onAction={() => onCategoryChange('All')}
         />
       </View>
     );
@@ -553,13 +533,13 @@ function DiscoveryFeedView({
   if (showEmpty) {
     return (
       <View style={styles.stateWrap}>
-        <EmptyState
-          density="compact"
+        <FlagshipState
+          variant="empty"
           icon="search-outline"
           title="Nothing to explore yet"
           subtitle="New items are uploaded every day. Check back soon."
-          ctaLabel="Refresh"
-          onCtaPress={onRefresh}
+          actionLabel="Refresh"
+          onAction={onRefresh}
         />
       </View>
     );
@@ -761,19 +741,19 @@ function SearchResultsView({
           </View>
         ) : searchError && units.length === 0 ? (
           <View style={styles.stateWrap}>
-            <EmptyState
-              density="compact"
+            <FlagshipState
+              variant="error"
               icon="cloud-offline-outline"
               title="Search unavailable"
               subtitle={searchError}
-              ctaLabel="Retry"
-              onCtaPress={onRetry}
+              actionLabel="Retry"
+              onAction={onRetry}
             />
           </View>
         ) : units.length === 0 ? (
           <View style={styles.stateWrap}>
-            <EmptyState
-              density="compact"
+            <FlagshipState
+              variant="empty"
               icon="search-outline"
               title="No items found"
               subtitle="Try a different search term or browse discovery instead."
@@ -797,8 +777,8 @@ function SearchResultsView({
           </View>
         ) : peopleResults.length === 0 ? (
           <View style={styles.stateWrap}>
-            <EmptyState
-              density="compact"
+            <FlagshipState
+              variant="empty"
               icon="people-outline"
               title="No people found"
               subtitle="Try searching by username or display name."
@@ -900,7 +880,7 @@ function PeopleResultRow({
         />
       ) : (
         <View style={[styles.peopleAvatarFallback, { backgroundColor: colors.surfaceAlt }]}>
-          <Ionicons name="person" size={18} color={colors.textMuted} />
+          <AppIcon name="person" variant="filled" size={IconSize.sm} color="textMuted" accessible={false} />
         </View>
       )}
       <View style={styles.peopleInfo}>
@@ -913,7 +893,7 @@ function PeopleResultRow({
           </Text>
         )}
       </View>
-      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      <AppIcon name="chevron-forward" size={IconSize.sm} color="textMuted" accessible={false} />
     </AnimatedPressable>
   );
 }
@@ -949,16 +929,6 @@ function createStyles(colors: ThemeColors) {
       paddingBottom: Space.sm },
     searchBar: {
       flex: 1 },
-    // Greeting
-    greetingWrap: {
-      paddingHorizontal: Space.md,
-      paddingTop: Space.sm,
-      paddingBottom: Space.xs },
-    greetingText: {
-      fontSize: TypographyV2.screenTitle.size,
-      fontFamily: FontFamily.bold,
-      color: colors.textPrimary,
-      lineHeight: TypographyV2.screenTitle.lineHeight },
     // Category pills
     categoryBar: {
       paddingVertical: Space.xs },

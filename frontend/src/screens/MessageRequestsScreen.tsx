@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ActivityIndicator } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -15,17 +14,17 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { AppIcon } from '../components/common/AppIcon';
+import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { useHaptic } from '../hooks/useHaptic';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { AvatarRing } from '../components/chat/AvatarRing';
 import { CachedImage } from '../components/CachedImage';
 import { Caption } from '../components/ui/Text';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
-import { EmptyState } from '../components/EmptyState';
 import { ConversationListSkeleton } from '../components/skeletons/ConversationListSkeleton';
 import { useBackendData } from '../context/BackendDataContext';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { blockUser } from '../services/profileApi';
 import { deleteConversationOnApi, acceptMessageRequestOnApi } from '../services/chatApi';
 import { useAppTranslation } from '../i18n/useAppTranslation';
@@ -38,6 +37,7 @@ export default function MessageRequestsScreen() {
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
   const haptic = useHaptic();
+  const { isOffline } = useConnectivity();
   const { formatFromFiat } = useFormattedPrice();
   const { colors } = useAppTheme();
   const { t } = useAppTranslation('messaging');
@@ -228,7 +228,7 @@ export default function MessageRequestsScreen() {
                 <CachedImage uri={listing.images[0]} style={styles.listingThumb} contentFit="cover" />
               ) : (
                 <View style={styles.listingThumbPlaceholder}>
-                  <Ionicons name="bag-handle-outline" size={14} color={colors.textMuted} />
+                  <AppIcon name="bag" size="xs" color="textMuted" accessible={false} />
                 </View>
               )}
               <Text style={styles.listingTitle} numberOfLines={1}>{listing.title}</Text>
@@ -247,7 +247,7 @@ export default function MessageRequestsScreen() {
               activeOpacity={0.85}
               scaleValue={0.96}
               hapticFeedback="light"
-              disabled={isPending}
+              disabled={isPending || isOffline}
               accessibilityRole="button"
               accessibilityLabel={t('requests.deleteMessageRequest')}
               accessibilityState={{ busy: isPending && pendingAction === 'delete', disabled: isPending }}
@@ -260,7 +260,7 @@ export default function MessageRequestsScreen() {
               activeOpacity={0.85}
               scaleValue={0.96}
               hapticFeedback="medium"
-              disabled={isPending}
+              disabled={isPending || isOffline}
               accessibilityRole="button"
               accessibilityLabel={t('requests.acceptMessageRequest')}
               accessibilityState={{ busy: isPending && pendingAction === 'accept', disabled: isPending }}
@@ -278,13 +278,13 @@ export default function MessageRequestsScreen() {
               activeOpacity={0.7}
               scaleValue={0.96}
               hapticFeedback="medium"
-              disabled={isPending}
+              disabled={isPending || isOffline}
               accessibilityRole="button"
               accessibilityLabel={t('common.blockWithName', { name: displayTitle })}
-              accessibilityState={{ busy: isPending && pendingAction === 'block', disabled: isPending }}
+              accessibilityState={{ busy: isPending && pendingAction === 'block', disabled: isPending || isOffline }}
               style={styles.safetyLink}
             >
-              <Ionicons name="ban-outline" size={13} color={colors.danger} />
+              <AppIcon name="ban" size="micro" color="danger" accessible={false} />
               <Text style={styles.safetyLinkTextDanger}>{t('common.block')}</Text>
             </AnimatedPressable>
             <View style={styles.safetyDivider} />
@@ -298,7 +298,7 @@ export default function MessageRequestsScreen() {
               accessibilityLabel={t('common.reportWithName', { name: displayTitle })}
               style={styles.safetyLink}
             >
-              <Ionicons name="flag-outline" size={13} color={colors.textMuted} />
+              <AppIcon name="flag" size="micro" color="textMuted" accessible={false} />
               <Text style={styles.safetyLinkText}>{t('common.report')}</Text>
             </AnimatedPressable>
           </View>
@@ -312,18 +312,23 @@ export default function MessageRequestsScreen() {
   const showEmpty = !showLoading && requestConversations.length === 0;
 
   return (
-    <SafeAreaView edges={['top']} style={styles.screenRoot}>
-      <ScreenHeader
-        title={t('requests.title')}
-        onBack={() => navigation.goBack()}
-        style={{
-          borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: colors.border }}
-      />
+    <FlagshipScreen
+      header={<FlagshipHeader title={t('requests.title')} onBack={() => navigation.goBack()} />}
+      scrollEnabled={false}
+    >
+      {isOffline ? (
+        <View style={styles.offlineNotice}>
+          <AppIcon name="cloud-offline-outline" size="sm" color="textMuted" accessible={false} />
+          <Caption color={colors.textMuted} style={styles.offlineNoticeText}>
+            You are offline. Actions will be available when you reconnect.
+          </Caption>
+        </View>
+      ) : null}
       {showLoading ? (
         <ConversationListSkeleton count={5} />
       ) : showEmpty ? (
-        <EmptyState
+        <FlagshipState
+          variant="empty"
           icon="mail-outline"
           title={t('requests.noRequests')}
           subtitle={t('requests.noRequestsSubtitle')}
@@ -346,7 +351,7 @@ export default function MessageRequestsScreen() {
         variant={confirmSheet.variant ?? 'danger'}
         onConfirm={confirmSheet.onConfirm}
       />
-    </SafeAreaView>
+    </FlagshipScreen>
   );
 }
 
@@ -394,6 +399,16 @@ function createStyles(colors: ThemeColors) {
     screenRoot: {
       flex: 1,
       backgroundColor: colors.background },
+    offlineNotice: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.xs + 2,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle },
+    offlineNoticeText: {
+      flex: 1 },
     listContent: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,

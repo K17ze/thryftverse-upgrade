@@ -132,11 +132,13 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
     it('AssetDetailScreen uses compact flagship hero fractions', () => {
       const src = readScreen('AssetDetailScreen.tsx');
       expect(src).toContain('useBreakpoint');
-      // Media height reduced from 0.5-0.58 to 0.26-0.30 for a
-      // collectible-first identity-on-clean-canvas composition.
-      expect(src).toContain('isVeryCompact ? 0.3');
-      expect(src).toContain('isCompact ? 0.28');
-      expect(src).toContain(': 0.26');
+      // Pillar 1 (v1.8): media height increased from 0.26-0.30 to
+      // 0.38-0.42 to give the luxury asset visual dominance per
+      // September 2026 Masterworks/Instagram/Pinterest PDP density
+      // research. The identity block was rescaled to 20pt to compensate.
+      expect(src).toContain('isVeryCompact ? 0.42');
+      expect(src).toContain('isCompact ? 0.40');
+      expect(src).toContain(': 0.38');
       expect(src).not.toContain(': 0.65');
     });
 

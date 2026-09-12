@@ -257,7 +257,7 @@ async function processImageAsset(
   derivatives: InternalProcessingResult['derivatives'];
   manifestDerivatives: MediaAssetManifest['derivatives'];
   lqip: string;
-  blurhash: string;
+  blurhash: string | null;
   canonicalUrl: string;
 }> {
   const { derivatives: imageDerivatives, lqip, blurhash } = await generateImageDerivatives(sourceBuffer);

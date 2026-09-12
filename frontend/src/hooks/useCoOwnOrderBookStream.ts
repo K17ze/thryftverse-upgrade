@@ -48,6 +48,16 @@ export interface CoOwnOrderBookDelta {
 // screen that remains mounted underneath it.
 const topicRefCounts = new Map<string, number>();
 
+/**
+ * Socket→state batching window. Book deltas can arrive many times per
+ * second during active markets; applying each one as its own setState
+ * forces a full quote-strip + ladder re-render per message. Buffering
+ * deltas and flushing on a trailing ~90ms edge keeps the UI at ~11
+ * renders/second worst-case while remaining visually real-time.
+ * Sequence-gap detection is preserved inside the flush — see flushDeltas.
+ */
+const DELTA_FLUSH_MS = 90;
+
 function retainTopic(client: { subscribe: (topics: string[]) => void; unsubscribe: (topics: string[]) => void }, topic: string) {
   const current = topicRefCounts.get(topic) ?? 0;
   if (current === 0) client.subscribe([topic]);
@@ -74,6 +84,18 @@ export function useCoOwnOrderBookStream(assetId: string | null) {
   const [isForegroundStale, setIsForegroundStale] = useState(false);
   const lastSequenceRef = useRef<number | null>(null);
   const snapshotRequestRef = useRef(0);
+  // Delta buffer — flushed on a trailing ~90ms edge (DELTA_FLUSH_MS) so a
+  // burst of socket messages collapses into a single setState.
+  const pendingDeltasRef = useRef<CoOwnOrderBookDelta[]>([]);
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearPendingDeltas = useCallback(() => {
+    pendingDeltasRef.current = [];
+    if (flushTimerRef.current !== null) {
+      clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+  }, []);
 
   // Fetch a fresh REST snapshot
   const fetchSnapshot = useCallback(async () => {
@@ -84,6 +106,9 @@ export function useCoOwnOrderBookStream(assetId: string | null) {
       // A previous asset's request may settle after navigation has already
       // switched instruments. Never let that response repaint this book.
       if (requestId !== snapshotRequestRef.current) return;
+      // A canonical snapshot supersedes every buffered delta — anything
+      // still queued predates or gaps around the new sequence baseline.
+      pendingDeltasRef.current = [];
       setOrderBook(snapshot);
       lastSequenceRef.current = snapshot.snapshotSequence;
       setLastSequence(snapshot.snapshotSequence);
@@ -98,73 +123,100 @@ export function useCoOwnOrderBookStream(assetId: string | null) {
     }
   }, [assetId]);
 
-  // Apply a delta to the current book
-  const applyDelta = useCallback((delta: CoOwnOrderBookDelta) => {
+  // Flush buffered deltas in a single state update. Applies only the
+  // contiguous prefix in sequence order; the first gap discards the rest
+  // and triggers the canonical resnapshot (reconnect always resnapshots).
+  const flushDeltas = useCallback(() => {
+    flushTimerRef.current = null;
+    const pending = pendingDeltasRef.current;
+    pendingDeltasRef.current = [];
+    if (pending.length === 0) return;
     if (lastSequenceRef.current === null) return; // No snapshot yet
 
-    const expected = lastSequenceRef.current + 1;
-    if (delta.sequence < expected) {
-      // Duplicate or out-of-order — discard
-      return;
+    // Deltas may arrive out of order inside one flush window — sort by
+    // sequence before taking the contiguous prefix.
+    pending.sort((a, b) => a.sequence - b.sequence);
+    let expected = lastSequenceRef.current + 1;
+    const applicable: CoOwnOrderBookDelta[] = [];
+    let gapDetected = false;
+    for (const delta of pending) {
+      if (delta.sequence < expected) continue;      // Duplicate / out-of-order
+      if (delta.sequence > expected) { gapDetected = true; break; }
+      applicable.push(delta);
+      expected = delta.sequence + 1;
     }
-    if (delta.sequence > expected) {
-      // Gap detected — re-fetch snapshot
+
+    if (applicable.length > 0) {
+      const lastApplied = applicable[applicable.length - 1];
+      lastSequenceRef.current = lastApplied.sequence;
+      setLastSequence(lastApplied.sequence);
+      setOrderBook(prev => {
+        if (!prev) return prev;
+        const bids = [...prev.bids];
+        const asks = [...prev.asks];
+        let serverTimestamp = prev.serverTimestamp;
+        for (const delta of applicable) {
+          for (const change of delta.changes) {
+            const target = change.side === 'buy' ? bids : asks;
+            const existingIdx = target.findIndex(
+              l => l.unitPriceGbp === change.priceGbp
+            );
+            if (change.units === 0) {
+              // Level removed
+              if (existingIdx >= 0) target.splice(existingIdx, 1);
+            } else if (existingIdx >= 0) {
+              // Level updated
+              target[existingIdx] = {
+                ...target[existingIdx],
+                units: change.units,
+                orderCount: change.orderCount,
+                ...(change.priceGbpStr ? { unitPriceGbpStr: change.priceGbpStr } : {}),
+              };
+            } else {
+              // New level — insert in price order
+              target.push({
+                side: change.side,
+                unitPriceGbp: change.priceGbp,
+                ...(change.priceGbpStr ? { unitPriceGbpStr: change.priceGbpStr } : {}),
+                units: change.units,
+                orderCount: change.orderCount,
+              });
+            }
+          }
+          serverTimestamp = delta.serverTimestamp;
+        }
+        // Re-sort: bids descending, asks ascending
+        bids.sort((a, b) => b.unitPriceGbp - a.unitPriceGbp);
+        asks.sort((a, b) => a.unitPriceGbp - b.unitPriceGbp);
+        return {
+          ...prev,
+          bids,
+          asks,
+          snapshotSequence: lastApplied.sequence,
+          eventSequence: lastApplied.sequence,
+          serverTimestamp,
+        };
+      });
+    }
+
+    if (gapDetected) {
+      // Gap detected — re-fetch canonical snapshot
       setHasGap(true);
       void fetchSnapshot();
-      return;
     }
-
-    // Apply delta — update changed price levels
-    setOrderBook(prev => {
-      if (!prev) return prev;
-      const bids = [...prev.bids];
-      const asks = [...prev.asks];
-      for (const change of delta.changes) {
-        const target = change.side === 'buy' ? bids : asks;
-        const existingIdx = target.findIndex(
-          l => l.unitPriceGbp === change.priceGbp
-        );
-        if (change.units === 0) {
-          // Level removed
-          if (existingIdx >= 0) target.splice(existingIdx, 1);
-        } else if (existingIdx >= 0) {
-          // Level updated
-          target[existingIdx] = {
-            ...target[existingIdx],
-            units: change.units,
-            orderCount: change.orderCount,
-            ...(change.priceGbpStr ? { unitPriceGbpStr: change.priceGbpStr } : {}),
-          };
-        } else {
-          // New level — insert in price order
-          target.push({
-            side: change.side,
-            unitPriceGbp: change.priceGbp,
-            ...(change.priceGbpStr ? { unitPriceGbpStr: change.priceGbpStr } : {}),
-            units: change.units,
-            orderCount: change.orderCount,
-          });
-        }
-      }
-      // Re-sort: bids descending, asks ascending
-      bids.sort((a, b) => b.unitPriceGbp - a.unitPriceGbp);
-      asks.sort((a, b) => a.unitPriceGbp - b.unitPriceGbp);
-
-      lastSequenceRef.current = delta.sequence;
-      setLastSequence(delta.sequence);
-      return {
-        ...prev,
-        bids,
-        asks,
-        snapshotSequence: delta.sequence,
-        eventSequence: delta.sequence,
-        serverTimestamp: delta.serverTimestamp,
-      };
-    });
   }, [fetchSnapshot]);
+
+  // Queue a delta into the batch buffer; flush on the trailing edge.
+  const queueDelta = useCallback((delta: CoOwnOrderBookDelta) => {
+    pendingDeltasRef.current.push(delta);
+    if (flushTimerRef.current === null) {
+      flushTimerRef.current = setTimeout(flushDeltas, DELTA_FLUSH_MS);
+    }
+  }, [flushDeltas]);
 
   // Realtime subscription
   useEffect(() => {
+    clearPendingDeltas();
     if (!assetId) {
       snapshotRequestRef.current += 1;
       setOrderBook(null);
@@ -203,7 +255,7 @@ export function useCoOwnOrderBookStream(assetId: string | null) {
     const unsubscribe = realtimeClient.on<CoOwnOrderBookDelta>(topic, (envelope) => {
       if (cancelled) return;
       if (envelope.type === 'co-own.book-delta' && envelope.payload) {
-        applyDelta({
+        queueDelta({
           ...envelope.payload,
           sequence: envelope.seq ?? envelope.payload.sequence,
         });
@@ -229,12 +281,13 @@ export function useCoOwnOrderBookStream(assetId: string | null) {
 
     return () => {
       cancelled = true;
+      clearPendingDeltas();
       unsubscribe();
       unsubscribeState();
       unsubscribeResnapshot();
       releaseTopic();
     };
-  }, [assetId, applyDelta, fetchSnapshot, realtimeClient]);
+  }, [assetId, queueDelta, clearPendingDeltas, fetchSnapshot, realtimeClient]);
 
   // Foreground revalidation
   useEffect(() => {

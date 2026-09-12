@@ -13,7 +13,9 @@ export type AssetDetailSheetId =
   | 'rights'
   | 'overflow'
   | 'supply'
-  | 'riskDisclosure';
+  | 'riskDisclosure'
+  | 'dossier'
+  | 'prospectus';
 
 /**
  * Inline disclosure expansion ids — independent collapsible sections
@@ -33,6 +35,8 @@ export interface AssetDetailSheetsState {
   overflowVisible: boolean;
   supplySheetVisible: boolean;
   riskDisclosureVisible: boolean;
+  dossierSheetVisible: boolean;
+  prospectusSheetVisible: boolean;
   // Inline expansions (independent)
   orderBookExpanded: boolean;
   fundamentalsExpanded: boolean;
@@ -114,6 +118,8 @@ export function useAssetDetailSheets(): UseAssetDetailSheetsResult {
     overflowVisible: activeSheet === 'overflow',
     supplySheetVisible: activeSheet === 'supply',
     riskDisclosureVisible: activeSheet === 'riskDisclosure',
+    dossierSheetVisible: activeSheet === 'dossier',
+    prospectusSheetVisible: activeSheet === 'prospectus',
     orderBookExpanded,
     fundamentalsExpanded,
     marketSectionExpanded,

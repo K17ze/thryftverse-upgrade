@@ -176,6 +176,18 @@ export default function SupportConversationScreen({ navigation, route }: Props) 
   const canRequestHandoff = ownershipState === 'ai_active';
   const title = conversation?.title ?? 'Support';
 
+  // Header subtitle reflects who actually owns the conversation — never
+  // claims an AI assistant is answering after a human handoff or closure.
+  // 'awaiting_customer' is set by human operators awaiting a reply.
+  const headerSubtitle =
+    ownershipState === 'ai_active'
+      ? 'AI assistant'
+      : ownershipState === 'human_queued'
+        ? 'Waiting for a specialist'
+        : ownershipState === 'human_active' || ownershipState === 'awaiting_customer'
+          ? 'Support specialist'
+          : 'Resolved';
+
   const effectiveContextKind: SupportContextKind =
     conversation?.contextKind ?? (contextKind as SupportContextKind | undefined) ?? 'general';
   const effectiveContextId = conversation?.contextId ?? contextId ?? null;
@@ -649,7 +661,7 @@ export default function SupportConversationScreen({ navigation, route }: Props) 
       header={
         <FlagshipHeader
           title={title}
-          subtitle="AI assistant"
+          subtitle={headerSubtitle}
           onBack={() => navigation.goBack()}
           rightAction={headerRightAction}
         />

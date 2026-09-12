@@ -16,7 +16,11 @@
  *
  * Migration order:
  *   1. This file defines the canonical roles.
- *   2. designTokens.ts `Type` already mirrors these roles as aliases.
+ *   2. designTokens.ts `Type` mirrors these roles — every role name that
+ *      exists in both maps resolves to identical size/lineHeight/weight/
+ *      letterSpacing (aligned under defect F04). Legacy-only `Type` keys
+ *      (`title`, `subtitle`, `bodyLarge`, `price`, `metaElevated`, …) are
+ *      semantic aliases mapped via LEGACY_TO_V2_MAP below.
  *   3. Flagship routes migrate first; legacy aliases are deleted only after
  *      screenshot parity.
  *

@@ -221,7 +221,16 @@ export function mapApiMessageToConversationMessage(
     editVersion: payload.editVersion ?? undefined,
     editedAt: payload.editedAt ?? undefined,
     deletedForEveryoneAt: payload.deletedForEveryoneAt ?? undefined,
-    readStatus: 'sent',
+    // Read receipts: the API returns the durable per-message readBy set. For
+    // the sender's own messages, "read" is truthful only when another
+    // participant appears in it — the backend never reports a distinct
+    // "delivered" receipt, so we claim sent until proven read.
+    readBy: payload.readBy ?? undefined,
+    isReadByMe: payload.isReadByMe ?? undefined,
+    readStatus:
+      isMine && (payload.readBy ?? []).some((uid) => uid !== currentUserId)
+        ? 'read'
+        : 'sent',
     mediaUri: typeof meta.mediaUri === 'string' ? meta.mediaUri : undefined,
     mediaType: meta.mediaType === 'image' || meta.mediaType === 'video' ? meta.mediaType : undefined,
     voiceUri: typeof meta.mediaUri === 'string' && isVoice ? meta.mediaUri : undefined,

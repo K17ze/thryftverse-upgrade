@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   View,
   Text,
   TextInput,
@@ -9,7 +10,6 @@ import {
   Platform,
   Pressable,
   ScrollView } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -18,8 +18,9 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Control, Stroke } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
-import { EmptyState } from '../components/EmptyState';
+import { AppIcon } from '../components/common/AppIcon';
+import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { useHaptic } from '../hooks/useHaptic';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 
@@ -32,17 +33,36 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
   const { role } = route.params;
   const { show } = useToast();
   const haptic = useHaptic();
+  const { isOffline } = useConnectivity();
   const { colors } = useAppTheme();
 
   const replies = useStore((s) => (role === 'seller' ? s.sellerQuickReplies : s.buyerQuickReplies));
+  const quickRepliesLoaded = useStore((s) => s.quickRepliesLoaded);
+  const quickRepliesLoadFailed = useStore((s) => s.quickRepliesLoadFailed);
   const addReplyOnApi = useStore((s) => s.addQuickReplyOnApi);
   const updateReplyOnApi = useStore((s) => s.updateQuickReplyOnApi);
   const removeReplyOnApi = useStore((s) => s.removeQuickReplyOnApi);
   const loadQuickRepliesFromApi = useStore((s) => s.loadQuickRepliesFromApi);
+  const [loading, setLoading] = useState(!quickRepliesLoaded);
 
   useEffect(() => {
-    void loadQuickRepliesFromApi();
+    let mounted = true;
+    setLoading(true);
+    loadQuickRepliesFromApi()
+      .catch(() => {})
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => { mounted = false; };
   }, [loadQuickRepliesFromApi]);
+
+  const retryLoad = () => {
+    haptic.light();
+    setLoading(true);
+    loadQuickRepliesFromApi()
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -158,23 +178,46 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
               onPress={openAdd}
               scaleValue={0.9}
               hapticFeedback="medium"
+              disabled={loading || quickRepliesLoadFailed}
               accessibilityLabel="Add quick reply"
               accessibilityRole="button"
+              accessibilityState={{ disabled: loading || quickRepliesLoadFailed }}
               style={styles.addHeaderBtn}
             >
-              <Ionicons name="add" size={Control.icon} color={colors.textPrimary} />
+              <AppIcon name="add" size="md" color="textPrimary" accessible={false} />
             </AnimatedPressable>
           }
         />
       }
     >
-      {replies.length === 0 ? (
-        <EmptyState
+      {isOffline ? (
+        <View style={styles.offlineNotice}>
+          <AppIcon name="cloud-offline-outline" size="sm" color="textMuted" accessible={false} />
+          <Text style={styles.offlineNoticeText}>
+            You are offline. Changes will save when you reconnect.
+          </Text>
+        </View>
+      ) : null}
+      {loading ? (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator size="small" color={colors.textMuted} />
+        </View>
+      ) : quickRepliesLoadFailed ? (
+        <FlagshipState
+          variant="error"
+          title="Couldn't load quick replies"
+          subtitle="Check your connection and try again."
+          actionLabel="Retry"
+          onAction={retryLoad}
+        />
+      ) : replies.length === 0 ? (
+        <FlagshipState
+          variant="empty"
           icon="chatbubble-ellipses-outline"
-          title="No quick replies yet — add one to save time"
-          subtitle="Save reusable replies for common buyer questions and reply faster in chat."
-          ctaLabel="Add your first reply"
-          onCtaPress={openAdd}
+          title="No quick replies yet"
+          subtitle="Save reusable replies for common questions and reply faster in chat."
+          actionLabel="Add your first reply"
+          onAction={openAdd}
         />
       ) : (
         <View style={styles.list}>
@@ -203,7 +246,7 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
                     accessibilityRole="button"
                     style={styles.iconBtn}
                   >
-                    <Ionicons name="create-outline" size={20} color={colors.textSecondary} />
+                    <AppIcon name="create" size="md" color="textSecondary" accessible={false} />
                   </AnimatedPressable>
                   <AnimatedPressable
                     onPress={() => handleDelete(index)}
@@ -213,7 +256,7 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
                     accessibilityRole="button"
                     style={styles.iconBtn}
                   >
-                    <Ionicons name="trash-outline" size={20} color={colors.danger} />
+                    <AppIcon name="trash" size="md" color="danger" accessible={false} />
                   </AnimatedPressable>
                 </View>
                 {index < replies.length - 1 && <View style={styles.divider} />}
@@ -248,7 +291,7 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
                 accessibilityRole="button"
                 style={styles.modalCloseBtn}
               >
-                <Ionicons name="close" size={20} color={colors.textSecondary} />
+                <AppIcon name="close" size="md" color="textSecondary" accessible={false} />
               </AnimatedPressable>
             </View>
 
@@ -344,6 +387,24 @@ function createStyles(colors: ThemeColors) {
       height: Control.hit,
       alignItems: 'center',
       justifyContent: 'center' },
+    offlineNotice: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.xs + 2,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border },
+    offlineNoticeText: {
+      flex: 1,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
+    loadingWrap: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: Space.xxl },
     list: {
       borderTopWidth: StyleSheet.hairlineWidth,
       borderBottomWidth: StyleSheet.hairlineWidth,

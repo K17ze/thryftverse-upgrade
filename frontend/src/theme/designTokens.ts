@@ -103,22 +103,31 @@ export const LetterSpacing = {
 // One weight delta is normally enough to express hierarchy.
 // Prices and financial quantities use tabular figures (see Numeric below).
 // ============================================================================
+/**
+ * @deprecated Use `TypographyV2` from `./typography.v2` — it is the canonical
+ * semantic type contract. `Type` is a backward-compatibility alias kept during
+ * migration: every role that exists in both maps resolves to identical
+ * size/lineHeight/weight/letterSpacing (aligned under defect F04). Legacy-only
+ * keys (`title`, `subtitle`, `bodyLarge`, `price`, `metaElevated`, …) are
+ * semantic aliases mapped via `LEGACY_TO_V2_MAP` in typography.v2.ts.
+ * Do not add new roles here — add them to `TypographyV2`.
+ */
 export const Type = {
   // ── Display / campaign ──
-  /** 24/30/700 — Auth hero, empty state titles, rare campaign statement */
-  display: { size: 24, lineHeight: 30, weight: '700', letterSpacing: -0.5 },
-  /** 28/34/700 — Hero campaign statements, splash headlines */
+  /** 32/38/700 — Auth hero, empty state titles, rare campaign statement (mirrors TypographyV2.display) */
+  display: { size: 32, lineHeight: 38, weight: '700', letterSpacing: -0.5 },
+  /** 28/34/700 — Hero campaign statements, splash headlines (mirrors TypographyV2.hero) */
   hero: { size: 28, lineHeight: 34, weight: '700', letterSpacing: -0.5 },
 
   // ── Screen identity ──
-  /** 20/26/700 — Hero titles, screen headers, profile names */
-  title: { size: 20, lineHeight: 26, weight: '700', letterSpacing: -0.6 },
-  /** 20/26/700 — Semantic alias: screen identity (maps to title) */
-  screenTitle: { size: 20, lineHeight: 26, weight: '700', letterSpacing: -0.6 },
+  /** 24/32/700 — Hero titles, screen headers, profile names (mirrors TypographyV2.screenTitle) */
+  title: { size: 24, lineHeight: 32, weight: '700', letterSpacing: -0.6 },
+  /** 24/32/700 — Semantic alias: screen identity (mirrors TypographyV2.screenTitle) */
+  screenTitle: { size: 24, lineHeight: 32, weight: '700', letterSpacing: -0.6 },
 
   // ── Section / item titles ──
-  /** 17/22/600 — Section titles, card headers, product names, feed item titles */
-  heading: { size: 17, lineHeight: 22, weight: '600', letterSpacing: -0.4 },
+  /** 17/24/600 — Section titles, card headers, product names, feed item titles (mirrors TypographyV2.sectionTitle) */
+  heading: { size: 17, lineHeight: 24, weight: '600', letterSpacing: -0.4 },
   /** 17/24/600 — Section titles, card headers, product names */
   subtitle: { size: 17, lineHeight: 24, weight: '600', letterSpacing: -0.4 },
   /** 17/24/600 — Semantic alias: major section (maps to subtitle) */
@@ -147,10 +156,10 @@ export const Type = {
   priceHero: { size: 28, lineHeight: 32, weight: '700', letterSpacing: -0.5 },
 
   // ── Caption / metadata ──
-  /** 12/16/400 — Captions, metadata, timestamps, hints */
-  caption: { size: 12, lineHeight: 16, weight: '400', letterSpacing: 0 },
-  /** 13/18/400 — Metadata, timestamps, hints (elevated) */
-  captionElevated: { size: 13, lineHeight: 18, weight: '400', letterSpacing: 0.1 },
+  /** 12/16/400 — Captions, metadata, timestamps, hints (mirrors TypographyV2.caption) */
+  caption: { size: 12, lineHeight: 16, weight: '400', letterSpacing: 0.1 },
+  /** 13/18/500 — Metadata, timestamps, hints (elevated) (mirrors TypographyV2.captionElevated) */
+  captionElevated: { size: 13, lineHeight: 18, weight: '500', letterSpacing: 0 },
   /** 11/14/500 — Small metadata, seller handles */
   meta: { size: 11, lineHeight: 14, weight: '500', letterSpacing: 0.15 },
   /** 11/14/600 — Labels, badges, section headers (elevated) */
@@ -191,9 +200,9 @@ export const TypeStyles: { [key: string]: import('react-native').TextStyle } = {
     lineHeight: TypographyV2.display.lineHeight },
   hero: {
     fontFamily: FontFamily.bold,
-    fontSize: TypographyV2.display.size,
-    letterSpacing: TypographyV2.display.letterSpacing,
-    lineHeight: TypographyV2.display.lineHeight },
+    fontSize: TypographyV2.hero.size,
+    letterSpacing: TypographyV2.hero.letterSpacing,
+    lineHeight: TypographyV2.hero.lineHeight },
   heading: {
     fontFamily: FontFamily.bold,
     fontSize: TypographyV2.sectionTitle.size,
@@ -221,9 +230,9 @@ export const TypeStyles: { [key: string]: import('react-native').TextStyle } = {
     lineHeight: TypographyV2.bodyStrong.lineHeight },
   caption: {
     fontFamily: FontFamily.regular,
-    fontSize: TypographyV2.meta.size,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-    lineHeight: TypographyV2.meta.lineHeight },
+    fontSize: TypographyV2.caption.size,
+    letterSpacing: TypographyV2.caption.letterSpacing,
+    lineHeight: TypographyV2.caption.lineHeight },
   metadata: {
     fontFamily: FontFamily.medium,
     fontSize: TypographyV2.meta.size,
@@ -381,7 +390,7 @@ export const Numeric = {
   priceLarge: {
     ...Type.priceLarge,
     fontVariant: ['tabular-nums'] as ['tabular-nums'] },
-  // Hero portfolio / wallet value (24/30/700)
+  // Hero portfolio / wallet value (32/38/700)
   display: {
     ...Type.display,
     fontVariant: ['tabular-nums'] as ['tabular-nums'] },

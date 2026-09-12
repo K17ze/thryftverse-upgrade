@@ -157,7 +157,8 @@ export type UploadEvent =
   | { type: 'jobConfirming'; job: UploadJob }
   | { type: 'jobComplete'; job: UploadJob }
   | { type: 'jobFailed'; job: UploadJob; error: string }
-  | { type: 'allComplete'; projectId: string };
+  | { type: 'allComplete'; projectId: string }
+  | { type: 'connectivityChanged'; online: boolean };
 
 /**
  * Parameters accepted by `UploadManager.queueUpload`. Fields that the

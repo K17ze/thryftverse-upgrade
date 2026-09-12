@@ -87,3 +87,11 @@ frontend/.maestro/screenshots/
 # Local agent skill packs (third-party tooling data: csv catalogs, py scripts, md refs)
 # Kept on disk for local agent tooling; not tracked in the repo
 .agents/
+
+# Browser/device smoke-run artifacts (MCP session logs, page dumps, screenshots)
+.playwright-mcp/
+output/
+.flagship/smoke/
+.flagship/*.png
+.flagship/*.xml
+.flagship/*.tsv

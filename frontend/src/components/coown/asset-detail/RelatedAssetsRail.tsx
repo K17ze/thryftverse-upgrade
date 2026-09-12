@@ -69,9 +69,16 @@ export function RelatedAssetsRail({
                     uri={relAsset.imageUrl}
                     style={styles.image}
                     contentFit="cover"
+                    accessibilityElementsHidden
                   />
                 ) : (
-                  <View style={[styles.image, { backgroundColor: colors.surfaceAlt }]} />
+                  // Decorative placeholder — the chip's Pressable label
+                  // already carries title, price, and availability.
+                  <View
+                    style={[styles.image, { backgroundColor: colors.surfaceAlt }]}
+                    accessibilityElementsHidden
+                    importantForAccessibility="no-hide-descendants"
+                  />
                 )}
                 <Text
                   style={[styles.title, { color: colors.textPrimary }]}

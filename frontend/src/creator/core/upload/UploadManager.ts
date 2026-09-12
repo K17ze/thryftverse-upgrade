@@ -110,6 +110,14 @@ export class UploadManager {
    *  could be cleared if the manager is ever torn down. */
   private stallCheckInterval: ReturnType<typeof setInterval> | undefined;
   private hydrationPromise: Promise<void> | null = null;
+  /** Connectivity gate — while false no new jobs start and in-flight
+   *  uploads are aborted back to 'queued' so they resume on reconnect.
+   *  Defaults true; the host wires real NetInfo state via `setOnline`. */
+  private isOnline = true;
+  /** Job ids whose in-flight attempts were aborted by a connectivity drop
+   *  (as opposed to a user pause or cancel). `processJob` consults this so
+   *  the unwinding attempt leaves the job 'queued' instead of 'failed'. */
+  private readonly offlineAborted = new Set<string>();
 
   constructor(
     jobStore: UploadJobStore,
@@ -219,11 +227,52 @@ export class UploadManager {
   }
 
   /**
+   * Current connectivity gate state. Updated by the host's NetInfo wiring
+   * via {@link setOnline}; while `false` the queue is parked.
+   */
+  get online(): boolean {
+    return this.isOnline;
+  }
+
+  /**
+   * Update the connectivity gate.
+   *
+   * - **Going offline** — every in-flight upload's AbortController fires;
+   *   its owning `processJob` unwinds and leaves the job `queued` (waiting
+   *   for connectivity — not `paused`, which is user intent, and not
+   *   `failed`, which is a real error). The `activeUploads` entries are
+   *   removed by each `processJob`'s `finally` block, so a reconnect that
+   *   lands mid-unwind can never start a duplicate attempt: `pickNextJob`
+   *   still skips the job until the old attempt releases its slot.
+   * - **Coming online** — the queue is kicked so parked jobs resume from
+   *   their last checkpoint (multipart parts with ETags are skipped by the
+   *   uploader; single-PUT jobs restart the byte stream honestly).
+   */
+  setOnline(online: boolean): void {
+    if (online === this.isOnline) return;
+    this.isOnline = online;
+    this.emit({ type: 'connectivityChanged', online });
+    if (!online) {
+      for (const [jobId, controller] of this.activeUploads) {
+        this.offlineAborted.add(jobId);
+        controller.abort();
+        const job = this.jobsCache.get(jobId);
+        if (job && job.status !== 'completed' && job.status !== 'failed') {
+          void this.persistState(jobId, { status: 'queued', error: undefined });
+        }
+      }
+      return;
+    }
+    void this.processQueue();
+  }
+
+  /**
    * Start processing queued jobs up to `maxConcurrent`. Safe to call
    * repeatedly; concurrent calls are coalesced via the `processing` flag.
+   * No-ops while offline — jobs stay `queued` until connectivity returns.
    */
   async processQueue(): Promise<void> {
-    if (this.processing) return;
+    if (this.processing || !this.isOnline) return;
     this.processing = true;
     try {
       await this.hydrate();
@@ -481,9 +530,12 @@ export class UploadManager {
         // If the job was paused while the upload was in flight (pauseJob
         // aborted the controller), the catch block below already set the
         // status to 'paused'. Don't overwrite it with 'failed' here — the
-        // user intentionally paused, not the network failing.
+        // user intentionally paused, not the network failing. Likewise a
+        // connectivity drop aborts the attempt but leaves the job 'queued'
+        // so it resumes on reconnect — never a failure.
         const current = this.jobsCache.get(job.id);
-        if (current?.status === 'paused') {
+        if (current?.status === 'paused' || this.offlineAborted.has(job.id)) {
+          this.offlineAborted.delete(job.id);
           return;
         }
         await this.persistState(job.id, {
@@ -499,9 +551,11 @@ export class UploadManager {
       // pauseJob calls controller.abort() and sets status to 'paused'.
       // The AbortError surfaces here — check the current job status before
       // marking it failed. If the user paused, leave the paused status
-      // intact and exit quietly.
+      // intact and exit quietly. A connectivity abort (setOnline(false))
+      // is the same shape — the job stays 'queued' for auto-resume.
       const current = this.jobsCache.get(job.id);
-      if (current?.status === 'paused') {
+      if (current?.status === 'paused' || this.offlineAborted.has(job.id)) {
+        this.offlineAborted.delete(job.id);
         return;
       }
       const message = err instanceof Error ? err.message : 'Unknown upload error';
@@ -884,6 +938,9 @@ export class UploadManager {
    * transitions it back to 'uploading'.
    */
   private checkStalledJobs(): void {
+    // While offline there are no in-flight uploads to stall — jobs aborted
+    // by the connectivity drop are already requeued as 'queued'.
+    if (!this.isOnline) return;
     const now = Date.now();
     for (const job of this.jobsCache.values()) {
       if (job.status !== 'uploading') continue;

@@ -3,7 +3,7 @@ import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { appendDomainEvent } from '../lib/domainOutbox.js';
 import { validateCompositionDocument } from '../lib/compositionValidation.js';
-import { isCompositionNonTrivial, renderComposition } from '../lib/media/compositionRenderer.js';
+import { getVideoRenderPath, isCompositionNonTrivial, renderComposition } from '../lib/media/compositionRenderer.js';
 import { putBinaryObject } from '../lib/s3.js';
 import { logger } from '../lib/logger.js';
 
@@ -609,10 +609,6 @@ async function renderCompositionMedia(
   primaryMediaType: 'image' | 'video',
   pageIndex?: number,
 ): Promise<RenderCompositionMediaResult> {
-  if (primaryMediaType === 'video') {
-    // Video composition rendering is deferred (requires FFmpeg).
-    return { renderedUrl: null };
-  }
   const nonTrivial = isCompositionNonTrivial(compositionDocument);
   if (!compositionDocument || !nonTrivial) {
     return { renderedUrl: null };
@@ -628,13 +624,14 @@ async function renderCompositionMedia(
       // be lost if we fell back to source. Signal the failure so the
       // caller can abort the publication.
       logger.warn(
-        { documentId },
+        { documentId, primaryMediaType },
         '[creatorPublicationService] non-trivial composition render returned null — aborting publication',
       );
       return { renderedUrl: null, renderFailed: true, nonTrivial: true };
     }
 
-    const objectKey = `renders/${documentId}/composition_${crypto.randomUUID()}.jpg`;
+    const ext = rendered.contentType === 'video/mp4' ? 'mp4' : 'jpg';
+    const objectKey = `renders/${documentId}/composition_${crypto.randomUUID()}.${ext}`;
     const renderedUrl = await putBinaryObject(
       objectKey,
       rendered.buffer,
@@ -642,7 +639,7 @@ async function renderCompositionMedia(
       { cacheControl: 'public, max-age=31536000, immutable' },
     );
     logger.info(
-      { documentId, renderedUrl, width: rendered.width, height: rendered.height },
+      { documentId, renderedUrl, width: rendered.width, height: rendered.height, primaryMediaType },
       '[creatorPublicationService] composition rendered and uploaded',
     );
     return { renderedUrl };
@@ -688,12 +685,30 @@ function parseCompositionPagesForMedia(
 }
 
 /**
- * Render every image-type page of a multi-page poster composition in
+ * Classify one poster page's video render path. Builds a single-page
+ * document so {@link getVideoRenderPath} sees only that page's media layer
+ * and overlays — an unedited frame keeps the cheap source path even when
+ * sibling frames carry authored edits.
+ */
+function videoPageRenderPath(
+  doc: unknown,
+  pageIndex: number,
+): 'trivial' | 'remux' | 'transcode' {
+  if (!doc || typeof doc !== 'object') return 'transcode';
+  const root = doc as Record<string, unknown>;
+  const pages = Array.isArray(root['pages']) ? root['pages'] : [];
+  const page = pages[pageIndex];
+  if (!page) return 'transcode';
+  return getVideoRenderPath({ ...root, pages: [page] });
+}
+
+/**
+ * Render every non-trivial page of a multi-page poster composition in
  * parallel. Each page is rendered independently via {@link renderCompositionMedia}
  * with its own page index and the frame's source URL (resolved from the
- * client-supplied expected media). Video frames keep their source URL —
- * video rendering burns trim/speed only, and overlay burn-in is handled in
- * the composition renderer.
+ * client-supplied expected media). Video frames with authored edits
+ * (trim, speed, reverse, freeze, speed curve, volume, fades, overlays)
+ * render through FFmpeg; unedited video frames keep the source URL.
  *
  * For trivial frames a render failure falls back to the source URL. For
  * non-trivial frames a render failure sets `renderFailed: true,
@@ -743,16 +758,23 @@ async function renderPosterFrameCompositions(
   const tasks = pages.map(async (page, pageIndex) => {
     if (!page.mediaLayerId) return { pageIndex, renderedUrl: null, renderFailed: false, nonTrivial: false };
     const expected = expectedByKey.get(`${page.mediaLayerId}::primary`);
-    if (!expected || expected.mediaType !== 'image') {
-      // Video frames keep source; text frames have no media.
+    if (!expected) {
+      // Text frames have no media.
       return { pageIndex, renderedUrl: null, renderFailed: false, nonTrivial: false };
+    }
+    if (expected.mediaType === 'video') {
+      // Per-page classification: an unedited video frame keeps the source
+      // URL (cheapest path); only non-trivial frames enter the render.
+      if (videoPageRenderPath(compositionDocument, pageIndex) === 'trivial') {
+        return { pageIndex, renderedUrl: null, renderFailed: false, nonTrivial: false };
+      }
     }
     try {
       const render = await renderCompositionMedia(
         documentId,
         compositionDocument,
         expected.suppliedUrl,
-        'image',
+        expected.mediaType,
         pageIndex,
       );
       return {
@@ -1115,15 +1137,15 @@ export async function publishCreatorDocumentTransaction(
   // a render failure ABORTS the publication with `MEDIA_RENDER_FAILED` so
   // the unedited source is never silently published in place of the
   // authored composition.
-  const primaryImageExpected = command.expectedMedia.find(
-    (e) => e.role === 'primary' && e.mediaType === 'image',
+  const primaryExpected = command.expectedMedia.find(
+    (e) => e.role === 'primary',
   );
-  const compositionRender = command.destination === 'look' && primaryImageExpected
+  const compositionRender = command.destination === 'look' && primaryExpected
     ? await renderCompositionMedia(
         documentId,
         command.compositionDocument,
-        primaryImageExpected.suppliedUrl,
-        'image',
+        primaryExpected.suppliedUrl,
+        primaryExpected.mediaType,
       )
     : { renderedUrl: null as string | null };
 
@@ -1138,11 +1160,11 @@ export async function publishCreatorDocumentTransaction(
     };
   }
 
-  // Multi-page poster: render every image-type page in parallel so
+  // Multi-page poster: render every non-trivial page in parallel so
   // secondary frames show the authored composition, not just the cover.
-  // Video frames keep their source URL (video rendering burns trim/speed
-  // only; overlay burn-in is handled in the composition renderer). Any
-  // individual page render failure falls back to source for that frame.
+  // Video frames with authored edits render through FFmpeg (trim, speed,
+  // reverse, freeze, speed curve, volume, fades, timed overlays); unedited
+  // video frames keep their source URL via the cheapest-path classifier.
   const posterFrameRenders =
     command.destination === 'poster' && command.compositionDocument
       ? await renderPosterFrameCompositions(
@@ -1681,3 +1703,6 @@ export async function publishCreatorDocumentTransaction(
     client.release();
   }
 }
+
+/** Test seam — internal render helpers. Not part of the public API. */
+export const __testables = { renderCompositionMedia, renderPosterFrameCompositions, videoPageRenderPath };

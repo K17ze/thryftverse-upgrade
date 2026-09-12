@@ -1,18 +1,14 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, Linking } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, FontFamily, PressScale } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { formatCoOwnIze } from '../../../utils/currency';
 import { fetchCoOwnPriceHistory, type MarketCoOwnAsset, type PriceCandle } from '../../../services/marketApi';
-import {
-  CommerceDetailDisclosureRow,
-  CommerceDetailSection,
-  CommerceDetailMetricRow,
-} from '../../commerce/detail';
 import { CoOwnCandleChart, type CoOwnCandleRange, type CoOwnChartType } from '../';
-import type { AssetLifecycleState, CandleDataPoint, DossierDocument } from './types';
+import { CoOwnDossierRibbon } from './CoOwnDossierRibbon';
+import type { AssetLifecycleState, CandleDataPoint } from './types';
 
 export interface AssetOverviewSectionProps {
   asset: MarketCoOwnAsset;
@@ -35,10 +31,16 @@ export interface AssetOverviewSectionProps {
   marketDataAgeLabel?: string;
   appraisedValuePerUnitGbp: number | null;
   referenceVsAppraisalPct: number | null;
-  dossierDocuments: DossierDocument[];
-  hasDocuments: boolean;
-  onOpenDiligence: () => void;
-  onOpenRiskDisclosure: () => void;
+  /** Pillar 2: Opens the unified asset dossier sheet (provenance,
+   *  custody, valuation, fees). Replaces the former onOpenDiligence +
+   *  onOpenRiskDisclosure inline sections. */
+  onOpenDossier: () => void;
+  /** Wave A: Opens the asset prospectus sheet (issuer, legal vehicle,
+   *  economics, fees, conflicts, key risks, documents). */
+  onOpenProspectus?: () => void;
+  /** Wave A: Opens the risk disclosure sheet from the risk summary
+   *  line under the "What you own" block. */
+  onOpenRiskDisclosure?: () => void;
   lifecycleState: AssetLifecycleState;
 }
 
@@ -87,9 +89,8 @@ export function AssetOverviewSection({
   lastExecutionPriceGbp,
   appraisedValuePerUnitGbp,
   referenceVsAppraisalPct,
-  dossierDocuments,
-  hasDocuments,
-  onOpenDiligence,
+  onOpenDossier,
+  onOpenProspectus,
   onOpenRiskDisclosure,
   lifecycleState,
   lastExecutionAgeSeconds = null,
@@ -162,79 +163,143 @@ export function AssetOverviewSection({
     ? `Valuation updated ${new Date(asset.appraisalValuedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
     : null;
 
-  // Trust facts for the flat factual line (spec 03_COOWN §5)
-  const trustFacts: string[] = [];
-  if (asset.authenticityStatus === 'verified') trustFacts.push('Authenticated');
-  if (asset.custodyInsured) trustFacts.push('Insured custody');
-  if (asset.rights?.version) trustFacts.push(`Rights v${asset.rights.version}`);
-  if (asset.appraisalValueGbp != null) trustFacts.push('Appraised');
-  const hasProvenanceMeta = Boolean(asset.conditionGrade || asset.custodianName || asset.custodianLocation);
+  // ── Wave A: "What you own" — the legal wrapper stated plainly ──
+  // Competitor benchmark (Masterworks, Arrived, Rally): the SPV wrapper
+  // is first-scroll content, not buried in a document. The lead line
+  // adapts to what the contract actually publishes; when the vehicle
+  // is declared 'none' we say so rather than implying a wrapper.
+  const vehicleTypeLabel = asset.legalVehicleType === 'spv'
+    ? 'SPV'
+    : asset.legalVehicleType === 'series_llc'
+      ? 'Series LLC'
+      : asset.legalVehicleType === 'llc'
+        ? 'LLC'
+        : asset.legalVehicleType === 'trust'
+          ? 'trust'
+          : null;
+  const ownershipLead = asset.legalVehicleName
+    ? `You are buying units of ${asset.legalVehicleName} that owns this asset.`
+    : vehicleTypeLabel
+      ? `You are buying units in a ${vehicleTypeLabel} that owns this asset.`
+      : asset.legalVehicleType === 'none'
+        ? 'You are buying units in this asset. No separate legal vehicle has been declared.'
+        : 'You are buying units of a single-asset vehicle that owns this asset.';
+  const vehicleRowValue = asset.legalVehicleType === 'none'
+    ? 'None declared'
+    : [asset.legalVehicleName, vehicleTypeLabel, asset.legalVehicleJurisdiction]
+        .filter(Boolean)
+        .join(' · ') || null;
+  const governingLawValue = [
+    asset.rights?.governingLaw,
+    asset.rights?.jurisdiction,
+  ].filter(Boolean).join(' · ') || null;
 
   return (
     <View style={styles.container}>
-      {/* ── 1. Physical Asset Story & Editorial Provenance — flat section ── */}
-      <CommerceDetailSection label="Physical Asset & Provenance">
-        <View style={styles.assetStoryWrap}>
-          <Text
-            style={[styles.assetStoryText, { color: colors.textSecondary }]}
-            numberOfLines={3}
-            maxFontSizeMultiplier={1.4}
-          >
-            {asset.provenance ?? 'Provenance has not been published for this asset yet.'}
-          </Text>
-          <Pressable
-            onPress={onOpenDiligence}
-            hitSlop={8}
-            style={({ pressed }) => [styles.assetStoryLink, pressed && { opacity: 0.85, transform: [{ scale: PressScale.gentle }] }]}
-            accessibilityRole="button"
-            accessibilityLabel="Read full asset story"
-          >
-            <Text style={[styles.assetStoryLinkText, { color: colors.brand }]}>
-              {asset.provenance ? 'Read the full story' : 'Open due diligence'}
-            </Text>
-            <Ionicons name="chevron-forward" size={14} color={colors.brand} />
-          </Pressable>
-        </View>
+      {/* ── 1. Asset Dossier Ribbon — compact chip bar ──
+          Pillar 2: replaces the former "Physical Asset & Provenance"
+          section (story text, trust facts, condition/custody grid) and
+          the "Due diligence & fees" section. One tappable ribbon opens
+          the unified dossier sheet. Eliminates ~400px of card clutter. */}
+      <CoOwnDossierRibbon asset={asset} onOpenDossier={onOpenDossier} />
 
-        {/* Flat factual trust line */}
-        {trustFacts.length > 0 ? (
-          <Pressable
-            onPress={onOpenDiligence}
-            hitSlop={4}
-            style={({ pressed }) => [styles.trustFactualLine, { borderTopColor: colors.border }, pressed && { opacity: 0.85 }]}
-            accessibilityRole="button"
-            accessibilityLabel={`Trust summary: ${trustFacts.join(', ')}. Tap to view due diligence.`}
-          >
-            <Text
-              style={[styles.trustFactualText, { color: colors.textSecondary }]}
-              numberOfLines={1}
-              maxFontSizeMultiplier={1.3}
-            >
-              {trustFacts.join(' · ')}
+      {/* ── 1b. What you own — the legal wrapper, stated plainly.
+          First-scroll trust composition: the buyer sees what the unit
+          legally is before the chart. Flat rows, hairline separators;
+          every row renders only when the contract supplies data. */}
+      <View style={[styles.ownBlock, { borderTopColor: colors.borderSubtle }]}>
+        <Text style={[styles.ownLead, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
+          {ownershipLead}
+        </Text>
+        {vehicleRowValue ? (
+          <View style={styles.ownRow}>
+            <Text style={[styles.ownRowLabel, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>
+              Legal vehicle
             </Text>
-            <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
-          </Pressable>
-        ) : null}
-
-        {hasProvenanceMeta ? (
-          <View style={[styles.provenanceMetaGrid, { borderTopColor: colors.border }]}>
-            {asset.conditionGrade ? (
-              <View style={styles.provenanceMetaItem}>
-                <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Condition</Text>
-                <Text style={[styles.metaVal, { color: colors.textPrimary }]}>{asset.conditionGrade}</Text>
-              </View>
-            ) : null}
-            {(asset.custodianName || asset.custodianLocation) ? (
-              <View style={styles.provenanceMetaItem}>
-                <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Custody</Text>
-                <Text style={[styles.metaVal, { color: colors.textPrimary }]}>
-                  {[asset.custodianName, asset.custodianLocation].filter(Boolean).join(' · ')}
-                </Text>
-              </View>
-            ) : null}
+            <Text style={[styles.ownRowValue, { color: colors.textSecondary }]} numberOfLines={2} maxFontSizeMultiplier={1.3}>
+              {vehicleRowValue}
+            </Text>
           </View>
         ) : null}
-      </CommerceDetailSection>
+        {governingLawValue ? (
+          <View style={styles.ownRow}>
+            <Text style={[styles.ownRowLabel, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>
+              Governing law
+            </Text>
+            <Text style={[styles.ownRowValue, { color: colors.textSecondary }]} numberOfLines={2} maxFontSizeMultiplier={1.3}>
+              {governingLawValue}
+            </Text>
+          </View>
+        ) : null}
+        {asset.rights && asset.rights.transferable != null ? (
+          <View style={styles.ownRow}>
+            <Text style={[styles.ownRowLabel, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>
+              Transferability
+            </Text>
+            <Text style={[styles.ownRowValue, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>
+              {asset.rights.transferable ? 'Transferable' : 'Not transferable'}
+            </Text>
+          </View>
+        ) : null}
+        {onOpenProspectus ? (
+          <Pressable
+            onPress={onOpenProspectus}
+            hitSlop={8}
+            style={({ pressed }) => [styles.ownLink, pressed && { opacity: 0.7 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Ownership rights and prospectus"
+            accessibilityHint="Opens the asset prospectus with issuer, legal vehicle, economics, fees, conflicts and key risks."
+          >
+            <Text style={[styles.ownLinkText, { color: colors.brand }]} maxFontSizeMultiplier={1.3}>
+              Ownership rights & prospectus
+            </Text>
+            <Ionicons
+              name="chevron-forward"
+              size={14}
+              color={colors.brand}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            />
+          </Pressable>
+        ) : null}
+      </View>
+
+      {/* ── 1c. Risk summary — one honest line, typographically quiet.
+          Not a banner card: muted text, hairline top border, small
+          warning glyph. Taps through to the full risk disclosure. */}
+      {onOpenRiskDisclosure ? (
+        <Pressable
+          onPress={onOpenRiskDisclosure}
+          hitSlop={8}
+          style={({ pressed }) => [styles.riskLine, { borderTopColor: colors.borderSubtle }, pressed && { opacity: 0.7 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Risk warning: you could lose all the money you invest. Open the full risk disclosure."
+        >
+          <Ionicons
+            name="warning-outline"
+            size={14}
+            color={colors.textMuted}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          />
+          <Text style={[styles.riskLineText, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>
+            You could lose all the money you invest. Units are illiquid and not protected by deposit-guarantee schemes.
+          </Text>
+        </Pressable>
+      ) : (
+        <View style={[styles.riskLine, { borderTopColor: colors.borderSubtle }]}>
+          <Ionicons
+            name="warning-outline"
+            size={14}
+            color={colors.textMuted}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          />
+          <Text style={[styles.riskLineText, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>
+            You could lose all the money you invest. Units are illiquid and not protected by deposit-guarantee schemes.
+          </Text>
+        </View>
+      )}
 
       {/* ── 2. Valuation & Price Chart — flat on canvas, no card wrapper ──
           Stock-broker pattern: chart sits directly on the surface with
@@ -360,67 +425,11 @@ export function AssetOverviewSection({
         </View>
       </View>
 
-      {/* ── 3. Due Diligence & Fees — grouped section ──
-          Replaces the 4-pillar evidence grid and the separate operating
-          expenses section. Compact tappable rows link to the full dossier
-          and risk sheet; fees are flat metric rows. */}
-      <CommerceDetailSection
-        label="Due diligence & fees"
-        trailing={
-          <Pressable
-            onPress={onOpenDiligence}
-            hitSlop={8}
-            style={({ pressed }) => pressed && { opacity: 0.7 }}
-            accessibilityRole="button"
-            accessibilityLabel="Open full due diligence"
-          >
-            <Text style={[styles.assetStoryLinkText, { color: colors.brand }]}>View all</Text>
-          </Pressable>
-        }
-      >
-        {/* Document chips — only when documents exist */}
-        {hasDocuments && (
-          <View style={[styles.documentsStrip, { borderTopColor: colors.border }]}>
-            {dossierDocuments.map((doc, idx) => (
-              <Pressable
-                key={idx}
-                onPress={() => void Linking.openURL(doc.url)}
-                hitSlop={8}
-                style={({ pressed }) => [styles.docChip, pressed && { opacity: 0.7 }]}
-                accessibilityRole="link"
-                accessibilityLabel={doc.accessibilityLabel}
-              >
-                <Text style={[styles.docChipText, { color: colors.brand }]} numberOfLines={1}>
-                  {doc.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
-
-        {/* Fee rows — flat, no separate section */}
-        <View style={styles.feeBreakdown}>
-          {asset.tradingFeeRate != null ? (
-            <CommerceDetailMetricRow
-              label="Platform trading fee"
-              value={`${(asset.tradingFeeRate * 100).toFixed(2).replace(/\.00$/, '')}% per execution`}
-            />
-          ) : null}
-          {asset.rights?.feeRights ? (
-            <CommerceDetailMetricRow label="Rights / operating costs" value={asset.rights.feeRights} />
-          ) : null}
-          {asset.tradingFeeRate == null && !asset.rights?.feeRights ? (
-            <Text style={[styles.unpublishedText, { color: colors.textMuted }]}>Fee schedule not published yet.</Text>
-          ) : null}
-        </View>
-
-        {/* Risk disclosure row opening sheet */}
-        <CommerceDetailDisclosureRow
-          label="Risk disclosure"
-          onPress={onOpenRiskDisclosure}
-          summary="Inspect market and capital risks"
-        />
-      </CommerceDetailSection>
+      {/* ── 3. Due diligence & fees — now in the dossier sheet ──
+          Pillar 2: the former "Due diligence & fees" section (document
+          chips, fee rows, risk disclosure row) is consolidated into the
+          CoOwnAssetDossierSheet opened via the ribbon above. The chart
+          is now the dominant first-viewport content. */}
     </View>
   );
 }
@@ -479,48 +488,12 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
   },
-  assetStoryWrap: {
-    gap: Space.xs,
-  },
-  assetStoryText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.regular,
-    lineHeight: 22,
-    letterSpacing: -0.2,
-  },
-  assetStoryLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    marginTop: 2,
-  },
-  assetStoryLinkText: {
-    fontSize: TypographyV2.captionElevated.size,
-    fontFamily: FontFamily.semibold,
-  },
-  trustFactualLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: Space.xs,
-    marginTop: Space.xs,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  trustFactualText: {
-    fontSize: TypographyV2.caption.size,
-    fontFamily: FontFamily.medium,
-    flex: 1,
-  },
-  provenanceMetaGrid: {
-    flexDirection: 'row',
-    gap: Space.md,
-    marginTop: Space.xs,
-    paddingTop: Space.xs,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  provenanceMetaItem: {
-    flex: 1,
-  },
+  // Pillar 2: removed assetStoryWrap, assetStoryText, assetStoryLink,
+  // assetStoryLinkText, trustFactualLine, trustFactualText,
+  // provenanceMetaGrid, provenanceMetaItem, metaVal, documentsStrip,
+  // docChip, docChipText, feeBreakdown, unpublishedText — the former
+  // provenance/condition/custody/fee sections now live in the
+  // CoOwnAssetDossierSheet. metaLabel is retained for the appraisal row.
   metaLabel: {
     fontSize: TypographyV2.label.size,
     lineHeight: TypographyV2.label.lineHeight,
@@ -528,10 +501,6 @@ const styles = StyleSheet.create({
     letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase',
     marginBottom: 2,
-  },
-  metaVal: {
-    fontSize: TypographyV2.captionElevated.size,
-    fontFamily: FontFamily.semibold,
   },
   chartWrapper: {
     marginVertical: Space.xs,
@@ -597,29 +566,68 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
   },
-  documentsStrip: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  // Wave A — "What you own" + risk summary. Flat on canvas, hairline
+  // separators, aligned to the sections' 16pt inset like chartBlock.
+  ownBlock: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    paddingBottom: Space.xs,
     gap: Space.xs,
-    marginTop: Space.xs,
-    paddingTop: Space.xs,
-    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  docChip: {
+  ownLead: {
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.body.letterSpacing,
+  },
+  ownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: Space.md,
+    minHeight: 20,
+  },
+  ownRowLabel: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 4,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    flexShrink: 0,
+  },
+  ownRowValue: {
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
+    textAlign: 'right',
+    flex: 1,
+  },
+  ownLink: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  docChipText: {
-    fontSize: 11,
-    fontFamily: FontFamily.medium,
-  },
-  feeBreakdown: {
     gap: Space.xs,
-    marginTop: Space.xs,
+    minHeight: 44,
+    marginTop: 2,
   },
-  unpublishedText: {
+  ownLinkText: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.semibold,
+  },
+  riskLine: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.xs,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    paddingBottom: Space.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    minHeight: 44,
+  },
+  riskLineText: {
+    flex: 1,
     fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.regular,
-    lineHeight: TypographyV2.meta.lineHeight,
+    lineHeight: TypographyV2.meta.lineHeight + 4,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
 });

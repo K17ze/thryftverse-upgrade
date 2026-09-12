@@ -1,24 +1,36 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
   StyleSheet,
   View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AgentIcon } from '../components/agents/AgentIcon';
-import { FlagshipHeader, FlagshipScreen } from '../components/flagship';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
+import {
+  FlagshipHeader,
+  FlagshipScreen,
+  FlagshipState,
+  SkeletonBlock,
+  SkeletonCircle } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { BodyEmphasis, Caption, Meta } from '../components/ui/Text';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { RootStackParamList } from '../navigation/types';
 import {
   deployBotToConversationOnApi,
   undeployBotFromConversationOnApi } from '../services/chatApi';
+import {
+  fetchConversationDeploymentsFromApi,
+  fetchCustomBotsFromApi,
+  fetchSystemBotsFromApi } from '../services/botsApi';
+import type { ConversationBotDeployment } from '../domain';
 import { useStore } from '../store/useStore';
 import { Space, Radius, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
@@ -46,6 +58,10 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
   const customBots = useStore((state) => state.customBots);
   const deployBotToConversation = useStore((state) => state.deployBotToConversation);
   const undeployBotFromConversation = useStore((state) => state.undeployBotFromConversation);
+  const { isOffline } = useConnectivity();
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [deployments, setDeployments] = useState<ConversationBotDeployment[]>([]);
   const [pendingBotId, setPendingBotId] = useState<string | null>(null);
   const [confirmSheet, setConfirmSheet] = useState<{
     visible: boolean;
@@ -56,11 +72,51 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
     variant?: 'default' | 'danger';
   }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
+  // Load the real bot catalogue + this conversation's deployments. The
+  // store's loader swallows errors, so fetch directly for honest
+  // error + retry, then write results back into the store.
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(false);
+    try {
+      const [system, custom, convDeployments] = await Promise.all([
+        fetchSystemBotsFromApi(),
+        fetchCustomBotsFromApi(),
+        fetchConversationDeploymentsFromApi(conversationId),
+      ]);
+      useStore.setState((s) => ({
+        availableChatBots: system,
+        customBots: custom,
+        conversationDeployments: {
+          ...s.conversationDeployments,
+          [conversationId]: convDeployments } }));
+      setDeployments(convDeployments);
+    } catch {
+      setLoadError(true);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [conversationId]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
   const conversation = useMemo(
     () => conversations.find((item) => item.id === conversationId),
     [conversations, conversationId]
   );
-  const deployedBotIds = conversation?.botIds ?? [];
+  // Deployed = server-reported installs ∪ locally tracked botIds.
+  const deployedBotIds = useMemo(
+    () =>
+      Array.from(
+        new Set([
+          ...(conversation?.botIds ?? []),
+          ...deployments.map((d) => d.botId),
+        ])
+      ),
+    [conversation?.botIds, deployments]
+  );
   const allBots = useMemo(() => [...bots, ...customBots], [bots, customBots]);
   const deployedBots = useMemo(
     () => allBots.filter((bot) => deployedBotIds.includes(bot.id)),
@@ -93,6 +149,9 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
         try {
           await undeployBotFromConversationOnApi(conversationId, botId);
           undeployBotFromConversation(conversationId, botId);
+          fetchConversationDeploymentsFromApi(conversationId)
+            .then(setDeployments)
+            .catch(() => undefined);
           show(`${botName} removed`, 'info');
         } catch {
           show('Failed to remove agent. Try again.', 'error');
@@ -108,6 +167,9 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
     try {
       await deployBotToConversationOnApi(conversationId, botId);
       deployBotToConversation(conversationId, botId);
+      fetchConversationDeploymentsFromApi(conversationId)
+        .then(setDeployments)
+        .catch(() => undefined);
       show('Agent connected', 'success');
     } catch {
       show('Failed to connect agent. Try again.', 'error');
@@ -144,7 +206,7 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
               accessibilityLabel="Your agents"
             >
               <View style={styles.headerAction}>
-                <Ionicons name="person-outline" size={21} color={colors.textPrimary} />
+                <AppIcon name="profile" size={IconSize.md} color="textPrimary" opticalCenter accessible={false} />
               </View>
             </AnimatedPressable>
           }
@@ -153,6 +215,34 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
       scrollEnabled={false}
     >
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+        {isLoading ? (
+          <View>
+            {[0, 1, 2].map((i) => (
+              <View key={i} style={styles.skeletonRow}>
+                <SkeletonCircle size={Space.xl + Space.xs} />
+                <View style={styles.skeletonCopy}>
+                  <SkeletonBlock width="50%" height={13} />
+                  <SkeletonBlock width="75%" height={11} style={{ marginTop: Space.xs / 2 }} />
+                  <SkeletonBlock width="60%" height={11} style={{ marginTop: Space.xs / 2 }} />
+                </View>
+                <SkeletonBlock width={Control.hit} height={Control.hit} radius={Radius.full} />
+              </View>
+            ))}
+          </View>
+        ) : loadError ? (
+          <FlagshipState
+            variant={isOffline ? 'offline' : 'error'}
+            title={isOffline ? "You're offline" : "Couldn't load agents"}
+            subtitle={
+              isOffline
+                ? 'Reconnect to manage chat agents.'
+                : 'Check your connection and try again.'
+            }
+            actionLabel="Try again"
+            onAction={() => void refresh()}
+          />
+        ) : (
+          <>
         {deployedBots.length > 0 && (
           <AgentSection
             title="CONNECTED TO THIS CHAT"
@@ -175,6 +265,8 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
             title="No agents configured"
             subtitle="No agents are ready to connect."
           />
+        )}
+          </>
         )}
       </ScrollView>
       <ConfirmationSheet
@@ -293,10 +385,12 @@ function AgentRow({
             accessibilityLabel={`${deployed ? 'Remove' : 'Connect'} ${bot.name}`}
           >
             <View style={styles.rowAction}>
-              <Ionicons
-                name={deployed ? 'remove' : 'add'}
-                size={deployed ? 20 : 21}
-                color={deployed ? colors.danger : colors.textPrimary}
+              <AppIcon
+                name={deployed ? 'remove' : 'plus'}
+                size={deployed ? IconSize.sm : IconSize.md}
+                color={deployed ? 'danger' : 'textPrimary'}
+                opticalCenter
+                accessible={false}
               />
             </View>
           </AnimatedPressable>
@@ -353,6 +447,13 @@ function createStyles(colors: ThemeColors) {
     height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center' },
+  skeletonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    paddingVertical: Space.md },
+  skeletonCopy: {
+    flex: 1 },
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,

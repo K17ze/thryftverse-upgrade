@@ -269,6 +269,11 @@ export function useChatScreenData({
           text: entry.text,
           date: entry.timestamp,
           timestamp: entry.timestamp,
+          // Lifecycle passthrough — keep send/read state across hydration resets.
+          status: entry.status,
+          readStatus: entry.readStatus,
+          readBy: entry.readBy,
+          clientMessageId: entry.clientMessageId,
         };
       }
 
@@ -280,6 +285,10 @@ export function useChatScreenData({
           senderId: resolvedSenderId,
           senderLabel,
           timestamp: entry.timestamp,
+          status: entry.status,
+          readStatus: entry.readStatus,
+          readBy: entry.readBy,
+          clientMessageId: entry.clientMessageId,
           listing: entry.listing ?? (linkedListing ? {
             id: linkedListing.id,
             title: linkedListing.title,
@@ -302,9 +311,11 @@ export function useChatScreenData({
         type:
           entry.isSystem || entry.type === "system"
             ? ("system" as const)
-            : entry.mediaUri
-              ? ("media" as const)
-              : ("text" as const),
+            : entry.type === "voice"
+              ? ("voice" as const)
+              : entry.mediaUri
+                ? ("media" as const)
+                : ("text" as const),
         sender,
         senderId: resolvedSenderId,
         senderLabel,
@@ -322,6 +333,16 @@ export function useChatScreenData({
         mediaUri: entry.mediaUri,
         mediaType: entry.mediaType,
         uploadStatus: entry.uploadStatus,
+        // Lifecycle passthrough — keep send/read state, receipts and voice
+        // payloads across store-driven hydration resets.
+        status: entry.status,
+        readStatus: entry.readStatus,
+        readBy: entry.readBy,
+        isReadByMe: entry.isReadByMe,
+        clientMessageId: entry.clientMessageId,
+        voiceUri: entry.voiceUri,
+        voiceDurationMs: entry.voiceDurationMs,
+        replyToMessageId: entry.replyToMessageId,
       };
     });
   }, [botLookup, conversation?.messages, conversation?.participantProfiles, currentUser?.id, linkedListing, userLookup, t]);

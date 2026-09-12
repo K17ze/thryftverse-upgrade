@@ -1,11 +1,19 @@
 /**
- * LiveStreamSellerScreen — broadcaster experience
+ * LiveStreamSellerScreen — broadcaster experience.
  *
- * Pre-stream setup → live broadcast → post-stream summary
+ * Three phases: setup → live → summary.
  *
- * Per AGENTS.md §11 (Truthful UI):
- * - Demo mode is clearly labeled
- * - Camera preview is a placeholder until real WebRTC is wired
+ * Truthful UI (AGENTS §11):
+ * - Lots are the seller's real active listings, scheduled onto the session
+ *   through the backend lot engine — no demo lots, no simulated go-live.
+ * - The camera surface is a local framing preview (BroadcastPreview). Video
+ *   publishing to the LiveKit room is not wired in the shared streaming
+ *   layer yet, so the surface is labelled as a preview, not a broadcast.
+ * - Session lifecycle goes through the real backend routes
+ *   (components/live/liveBroadcastApi). When session creation fails, the
+ *   screen reports the error — it never pretends to be live.
+ * - Viewer count, chat and bid events come from realtime subscriptions.
+ *   Metrics that are not reported (likes, earnings mid-stream) are omitted.
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -13,1042 +21,1151 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
-  Pressable,
   TextInput,
   FlatList,
-  Image,
-  useWindowDimensions,
-  StatusBar,
   ScrollView,
-  ActivityIndicator } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+  StatusBar,
+  ActivityIndicator,
+  useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useConnectivity } from '../hooks/useConnectivity';
+import { useStore } from '../store/useStore';
 import { Space, Radius, Control, Stroke } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
+import { AnimatedPressable } from '../components/AnimatedPressable';
+import { CachedImage } from '../components/CachedImage';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
+import { OfflineBanner } from '../components/OfflineBanner';
 import {
-  LIVE_SHOPPING_DEMO_MODE,
-  connectToStream,
-  disconnectFromStream,
-  subscribeToViewerCount,
-  subscribeToStreamEvents,
-  advanceToNextLot,
-  endCurrentLot,
-  endLiveStream,
-  createLiveStream,
+  FlagshipScreen,
+  FlagshipHeader,
+  FlagshipState,
+  FlagshipMetricLine,
+  SkeletonBlock,
+  SkeletonTextLine } from '../components/flagship';
+import { BroadcastPreview } from '../components/live/BroadcastPreview';
+import { LiveBadge } from '../components/live/LiveBadge';
+import { useLiveKitRoom } from '../platform/streaming';
+import { fetchUserListingsFromApi, type ListingApiItem } from '../services/listingsApi';
+import {
+  createBroadcastSession,
+  startBroadcastSession,
+  endBroadcastSession,
+  fetchBroadcastSession,
+  fetchBroadcastHostToken,
+  type BroadcastSession } from '../components/live/liveBroadcastApi';
+import {
+  scheduleLot,
   openLot,
   closeLot,
   cancelLot,
   settleLot,
-  type StreamEndEventPayload,
-  type LotSoldEventPayload,
+  fetchSessionLots,
+  setCurrentLot,
+  subscribeToChat,
+  subscribeToViewerCount,
+  subscribeToStreamEvents,
+  fetchStreamChatHistory,
+  type LiveLotAggregate,
+  type LiveStreamChatMessage,
   type LotStatus,
   type LotSettlementStatus } from '../services/liveShoppingApi';
 
+// ---------------------------------------------------------------------------
+// Types & helpers
+// ---------------------------------------------------------------------------
+
 type SellerPhase = 'setup' | 'live' | 'summary';
 
-interface LotItem {
-  id: string;
-  title: string;
-  imageUri: string;
-  startingPrice: number;
-  status: 'upcoming' | 'active' | 'sold' | 'passed';
-}
-
-const DEMO_LOTS: LotItem[] = [
-  { id: 'lot_1', title: 'Vintage Leather Jacket', imageUri: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=200', startingPrice: 30, status: 'active' },
-  { id: 'lot_2', title: 'Designer Sunglasses', imageUri: 'https://images.unsplash.com/photo-1572635196237-14b3f281509f?w=200', startingPrice: 20, status: 'upcoming' },
-  { id: 'lot_3', title: 'Retro Sneakers', imageUri: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=200', startingPrice: 40, status: 'upcoming' },
-  { id: 'lot_4', title: 'Silk Scarf', imageUri: 'https://images.unsplash.com/photo-1601924994987-69e26d50dc26?w=200', startingPrice: 15, status: 'upcoming' },
-];
-
 type LiveStreamSellerRoute = RouteProp<RootStackParamList, 'LiveStreamSeller'>;
+type NavT = NativeStackNavigationProp<RootStackParamList>;
 
-function sellerLotStatusLabel(status: LotStatus, soldAmount: number | null, currencySymbol: string): string {
+function lotStatusLabel(status: LotStatus): string {
   switch (status) {
-    case 'scheduled':
-      return 'Scheduled';
-    case 'open':
-      return 'Open for bidding';
-    case 'closing':
-      return 'Closing soon';
-    case 'sold':
-      return soldAmount != null ? `Sold for ${currencySymbol}${soldAmount}` : 'Sold';
-    case 'passed':
-      return 'Passed';
-    case 'cancelled':
-      return 'Cancelled';
+    case 'scheduled': return 'Scheduled';
+    case 'open': return 'Open for bidding';
+    case 'closing': return 'Closing soon';
+    case 'sold': return 'Sold';
+    case 'passed': return 'Passed';
+    case 'cancelled': return 'Cancelled';
   }
 }
 
-function sellerLotStatusBg(status: LotStatus, colors: ThemeColors): string {
+function lotStatusColor(status: LotStatus, colors: ThemeColors): string {
   switch (status) {
-    case 'scheduled':
-      return colors.surfaceAlt;
-    case 'open':
-    case 'sold':
-      return colors.successSubtle;
-    case 'closing':
-      return colors.warningSubtle;
-    case 'passed':
-    case 'cancelled':
-      return colors.surfaceAlt;
-  }
-}
-
-function sellerLotStatusFg(status: LotStatus, colors: ThemeColors): string {
-  switch (status) {
-    case 'scheduled':
-      return colors.textSecondary;
     case 'open':
     case 'sold':
       return colors.success;
     case 'closing':
       return colors.warning;
-    case 'passed':
-    case 'cancelled':
+    case 'scheduled':
+      return colors.textSecondary;
+    default:
       return colors.textMuted;
   }
 }
 
-function settlementStatusLabel(status: LotSettlementStatus): string {
+function settlementLabel(status: LotSettlementStatus | null): string | null {
   switch (status) {
-    case 'none':
-      return '';
-    case 'settling':
-      return 'Settling...';
-    case 'order_created':
-      return 'Order created';
-    case 'payment_reserved':
-      return 'Payment pending';
-    case 'payment_failed':
-      return 'Payment failed';
-    case 'completed':
-      return 'Completed';
+    case 'settling': return 'Settling…';
+    case 'order_created': return 'Order created';
+    case 'payment_reserved': return 'Payment pending';
+    case 'payment_failed': return 'Payment failed';
+    case 'completed': return 'Completed';
+    default: return null;
   }
 }
 
+function formatClock(totalSeconds: number): string {
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
 export function LiveStreamSellerScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavT>();
   const route = useRoute<LiveStreamSellerRoute>();
   const { colors } = useAppTheme();
   const haptic = useHaptic();
+  const { show } = useToast();
   const { currencySymbol, formatFromFiat } = useFormattedPrice();
+  const { isOffline } = useConnectivity();
   const insets = useSafeAreaInsets();
-  const { width: SCREEN_WIDTH } = useWindowDimensions();
-  const styles = useMemo(() => createStyles(colors, SCREEN_WIDTH), [colors, SCREEN_WIDTH]);
+  const { height: SCREEN_HEIGHT } = useWindowDimensions();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const currentUser = useStore((s) => s.currentUser);
 
-  const isDemo = LIVE_SHOPPING_DEMO_MODE;
+  const resumeSessionId = route.params?.sessionId;
+
+  // ── Phase & setup state ──
   const [phase, setPhase] = useState<SellerPhase>('setup');
   const [title, setTitle] = useState('');
-  const [lots, setLots] = useState<LotItem[]>(isDemo ? DEMO_LOTS : []);
-  const [viewerCount, setViewerCount] = useState(0);
-  const [currentLotIndex, setCurrentLotIndex] = useState(0);
-  const [liveDuration, setLiveDuration] = useState(0);
-  const [totalSales, setTotalSales] = useState(0);
-  const [lotsSold, setLotsSold] = useState(0);
+  const [listings, setListings] = useState<ListingApiItem[] | null>(null);
+  const [listingsLoading, setListingsLoading] = useState(true);
+  const [listingsError, setListingsError] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [goingLive, setGoingLive] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
+
+  // ── Live state ──
+  const [session, setSession] = useState<BroadcastSession | null>(null);
+  const [lots, setLots] = useState<LiveLotAggregate[]>([]);
+  const [currentLotIndex, setCurrentLotIndex] = useState(0);
+  const [viewerCount, setViewerCount] = useState(0);
+  const [messages, setMessages] = useState<LiveStreamChatMessage[]>([]);
+  const [liveSeconds, setLiveSeconds] = useState(0);
+  const [lotsSold, setLotsSold] = useState(0);
+  const [totalSalesMinor, setTotalSalesMinor] = useState(0);
+  const [lotActionPending, setLotActionPending] = useState(false);
   const [endingStream, setEndingStream] = useState(false);
   const [endError, setEndError] = useState<string | null>(null);
-  const [lotActionPending, setLotActionPending] = useState(false);
-  const [currentLotStatus, setCurrentLotStatus] = useState<LotStatus>('scheduled');
-  const [settlementStatus, setSettlementStatus] = useState<LotSettlementStatus>('none');
+  const [settlementStatus, setSettlementStatus] = useState<LotSettlementStatus | null>(null);
   const [settlePending, setSettlePending] = useState(false);
-  const [soldAmount, setSoldAmount] = useState<number | null>(null);
+  const [hostCredentials, setHostCredentials] = useState<{ wsUrl: string; token: string } | null>(null);
 
-  const streamIdRef = useRef<string | null>(null);
+  const startedAtRef = useRef<number>(0);
+  const chatListRef = useRef<FlatList<LiveStreamChatMessage>>(null);
+  const sessionId = session?.roomId ?? null;
 
-  // ── Duration timer — ticks every second while live ──
+  // Host joins the LiveKit room with the host token. Publishing camera
+  // frames requires publish controls in the shared streaming layer — a
+  // known backend/frontend gap; the room join still keeps presence real.
+  const liveKit = useLiveKitRoom(hostCredentials?.wsUrl ?? null, hostCredentials?.token ?? null);
+
+  const currentLot = lots[currentLotIndex] ?? null;
+  const selectedListings = useMemo(
+    () => (listings ?? []).filter((l) => selectedIds.includes(l.id)),
+    [listings, selectedIds],
+  );
+
+  // ── Load the seller's active listings for lot selection ──
+  const loadListings = useCallback(async () => {
+    if (!currentUser?.id) {
+      setListings([]);
+      setListingsLoading(false);
+      return;
+    }
+    setListingsLoading(true);
+    setListingsError(null);
+    try {
+      const res = await fetchUserListingsFromApi(currentUser.id, { status: 'active', limit: 50 });
+      setListings(res.items ?? []);
+    } catch (e) {
+      setListingsError(e instanceof Error ? e.message : 'Could not load your listings');
+    } finally {
+      setListingsLoading(false);
+    }
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    void loadListings();
+  }, [loadListings]);
+
+  // ── Resume an in-progress session when the route carries one ──
+  useEffect(() => {
+    if (!resumeSessionId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const existing = await fetchBroadcastSession(resumeSessionId);
+        if (cancelled || !existing || existing.status !== 'live') return;
+        const { lots: existingLots } = await fetchSessionLots(resumeSessionId);
+        if (cancelled) return;
+        setSession(existing);
+        setLots(existingLots.sort((a, b) => a.lotNumber - b.lotNumber));
+        setPhase('live');
+        startedAtRef.current = existing.startedAt ? new Date(existing.startedAt).getTime() : Date.now();
+        try {
+          const token = await fetchBroadcastHostToken(resumeSessionId);
+          if (!cancelled) setHostCredentials({ wsUrl: token.wsUrl, token: token.token });
+        } catch {
+          // Host token failure degrades to chat/lot-only control — honest,
+          // the preview label below already says video is local-only.
+        }
+      } catch {
+        // Resume is best-effort; seller stays on setup.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [resumeSessionId]);
+
+  // ── Elapsed timer while live ──
   useEffect(() => {
     if (phase !== 'live') return;
     const interval = setInterval(() => {
-      setLiveDuration((prev) => prev + 1);
+      setLiveSeconds(Math.max(0, Math.floor((Date.now() - startedAtRef.current) / 1000)));
     }, 1000);
     return () => clearInterval(interval);
   }, [phase]);
 
-  // ── Real-time subscriptions during live phase ──
+  // ── Realtime subscriptions while live ──
   useEffect(() => {
-    if (phase !== 'live' || !streamIdRef.current) return;
-    const sid = streamIdRef.current;
+    if (phase !== 'live' || !sessionId) return;
 
-    const unsubViewer = subscribeToViewerCount(sid, (payload) => {
+    let cancelled = false;
+    void fetchStreamChatHistory(sessionId).then((history) => {
+      if (!cancelled) setMessages(history);
+    }).catch(() => {});
+
+    const unsubChat = subscribeToChat(sessionId, (payload) => {
+      setMessages((prev) => [...prev.slice(-80), payload.message]);
+    });
+    const unsubViewers = subscribeToViewerCount(sessionId, (payload) => {
       setViewerCount(payload.count);
     });
-
-    const unsubEvents = subscribeToStreamEvents(sid, (event) => {
+    const unsubEvents = subscribeToStreamEvents(sessionId, (event) => {
       if (event.type === 'lot_sold') {
-        const payload = event.payload as LotSoldEventPayload;
-        setTotalSales((prev) => prev + payload.finalPrice);
-        setLotsSold((prev) => prev + 1);
+        const payload = event.payload as { finalPrice?: number };
+        const finalPrice = payload.finalPrice;
+        if (typeof finalPrice === 'number') {
+          setTotalSalesMinor((prev) => prev + Math.round(finalPrice * 100));
+          setLotsSold((prev) => prev + 1);
+        }
       }
     });
 
     return () => {
-      unsubViewer();
+      cancelled = true;
+      unsubChat();
+      unsubViewers();
       unsubEvents();
     };
-  }, [phase]);
+  }, [phase, sessionId]);
 
-  // ── Cleanup on unmount ──
-  useEffect(() => {
-    return () => {
-      if (streamIdRef.current) {
-        disconnectFromStream(streamIdRef.current);
-      }
-    };
-  }, []);
+  // ── Actions ──
+
+  const toggleListing = useCallback((listingId: string) => {
+    haptic.selection();
+    setSelectedIds((prev) =>
+      prev.includes(listingId) ? prev.filter((id) => id !== listingId) : [...prev, listingId]);
+  }, [haptic]);
 
   const handleGoLive = useCallback(async () => {
+    if (selectedListings.length === 0 || goingLive) return;
     haptic.medium();
     setGoingLive(true);
     setSetupError(null);
     try {
-      // Create a stream via the service layer, then connect to it.
-      const result = await createLiveStream({
-        sellerId: 'me',
-        sellerName: 'You',
-        title: title.trim() || 'Live Auction',
-        lotListingIds: lots.map((l) => l.id) });
-      if (!result.success || !result.stream) {
-        setGoingLive(false);
-        setSetupError(result.error || 'Could not start stream.');
-        return;
+      // 1. Create the session on the backend.
+      const created = await createBroadcastSession({
+        title: title.trim() || 'Live auction' });
+      // 2. Schedule the selected listings as real lots.
+      const scheduled: LiveLotAggregate[] = [];
+      for (let i = 0; i < selectedListings.length; i += 1) {
+        const listing = selectedListings[i];
+        const lot = await scheduleLot(created.roomId, {
+          listingId: listing.id,
+          lotNumber: i + 1,
+          startPriceMinor: Math.round((listing.priceGbp ?? 0) * 100) });
+        scheduled.push(lot);
       }
-      streamIdRef.current = result.stream.id;
-      await connectToStream(result.stream.id);
-      setPhase('live');
+      // 3. Point viewers at the first lot.
+      try {
+        await setCurrentLot(created.roomId, scheduled[0].listingId, scheduled[0].lotNumber);
+      } catch {
+        // Current-lot is best-effort; the seller can still open bidding.
+      }
+      // 4. Host token → join the LiveKit room (presence; publishing is a
+      //    shared-layer gap — see file header).
+      try {
+        const token = await fetchBroadcastHostToken(created.roomId);
+        setHostCredentials({ wsUrl: token.wsUrl, token: token.token });
+      } catch {
+        // Degrade honestly: lots/chat still work without media.
+      }
+      // 5. Flip the session to live.
+      const started = await startBroadcastSession(created.roomId);
+      setSession(started);
+      setLots(scheduled);
+      setCurrentLotIndex(0);
       setViewerCount(0);
-      setCurrentLotStatus('scheduled');
-      setSettlementStatus('none');
-      setSoldAmount(null);
-    } catch {
+      setMessages([]);
+      setLotsSold(0);
+      setTotalSalesMinor(0);
+      setSettlementStatus(null);
+      startedAtRef.current = started.startedAt
+        ? new Date(started.startedAt).getTime()
+        : Date.now();
+      setPhase('live');
+      haptic.success();
+    } catch (e) {
+      setSetupError(e instanceof Error ? e.message : 'Could not start the stream — try again.');
+      haptic.error();
+    } finally {
       setGoingLive(false);
-      setSetupError('Network error — try again.');
     }
-  }, [haptic, title, lots]);
-
-  const handleEndStream = useCallback(async () => {
-    haptic.medium();
-    if (!streamIdRef.current) {
-      setPhase('summary');
-      return;
-    }
-    setEndingStream(true);
-    try {
-      const result = await endLiveStream(streamIdRef.current);
-      if (result.success && result.summary) {
-        setViewerCount(result.summary.totalViewers);
-        setLotsSold(result.summary.lotsSold);
-        setTotalSales(result.summary.totalSales);
-      }
-    } catch {
-      setEndError('Stream end status unknown — check your stream history.');
-    }
-    setEndingStream(false);
-    setPhase('summary');
-  }, [haptic]);
-
-  const handleNextLot = useCallback(async () => {
-    if (!streamIdRef.current) return;
-    setLotActionPending(true);
-    haptic.light();
-    try {
-      // Sell the current lot, then advance to the next.
-      await endCurrentLot(streamIdRef.current);
-      const advanceResult = await advanceToNextLot(streamIdRef.current);
-      if (advanceResult.success) {
-        setLots((prev) => prev.map((lot, i) => {
-          if (i === currentLotIndex) return { ...lot, status: 'sold' as const };
-          if (i === currentLotIndex + 1) return { ...lot, status: 'active' as const };
-          return lot;
-        }));
-        setCurrentLotIndex((i) => Math.min(i + 1, lots.length - 1));
-        setCurrentLotStatus('scheduled');
-        setSettlementStatus('none');
-        setSoldAmount(null);
-      }
-    } catch {
-      // Service error — don't mutate local state
-    }
-    setLotActionPending(false);
-  }, [currentLotIndex, lots.length, haptic]);
-
-  const handleSkipLot = useCallback(async () => {
-    if (!streamIdRef.current) return;
-    setLotActionPending(true);
-    haptic.light();
-    try {
-      const result = await advanceToNextLot(streamIdRef.current);
-      if (result.success) {
-        setLots((prev) => prev.map((lot, i) => {
-          if (i === currentLotIndex) return { ...lot, status: 'passed' as const };
-          if (i === currentLotIndex + 1) return { ...lot, status: 'active' as const };
-          return lot;
-        }));
-        setCurrentLotIndex((i) => Math.min(i + 1, lots.length - 1));
-        setCurrentLotStatus('scheduled');
-        setSettlementStatus('none');
-        setSoldAmount(null);
-      }
-    } catch {
-      // Service error — don't mutate local state
-    }
-    setLotActionPending(false);
-  }, [currentLotIndex, haptic]);
+  }, [selectedListings, goingLive, haptic, title]);
 
   const handleOpenLot = useCallback(async () => {
-    if (!streamIdRef.current) return;
+    if (!sessionId || !currentLot || lotActionPending) return;
     setLotActionPending(true);
     haptic.medium();
     try {
-      const currentLot = lots[currentLotIndex];
-      if (!currentLot) return;
-      await openLot(streamIdRef.current, currentLot.id);
-      setCurrentLotStatus('open');
-      setSettlementStatus('none');
-      setSoldAmount(null);
+      const updated = await openLot(sessionId, currentLot.id);
+      setLots((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
+      setSettlementStatus(null);
     } catch {
-      // Service error — don't mutate local state
+      show('Could not open bidding — try again.', 'error');
+      haptic.error();
+    } finally {
+      setLotActionPending(false);
     }
-    setLotActionPending(false);
-  }, [currentLotIndex, lots, haptic]);
+  }, [sessionId, currentLot, lotActionPending, haptic, show]);
 
   const handleCloseLot = useCallback(async () => {
-    if (!streamIdRef.current) return;
+    if (!sessionId || !currentLot || lotActionPending) return;
     setLotActionPending(true);
     haptic.medium();
     try {
-      const currentLot = lots[currentLotIndex];
-      if (!currentLot) return;
-      const result = await closeLot(streamIdRef.current, currentLot.id);
-      setCurrentLotStatus(result.status);
-      setSettlementStatus(result.settlementStatus);
-      if (result.status === 'sold') {
-        setSoldAmount(result.highBidMinor / 100);
+      const result = await closeLot(sessionId, currentLot.id);
+      setLots((prev) => prev.map((l) => (l.id === result.id ? { ...l, ...result } : l)));
+      setSettlementStatus(result.settlementStatus ?? null);
+      if (result.status === 'sold' && result.highBidMinor > 0) {
+        setLotsSold((prev) => prev + 1);
+        setTotalSalesMinor((prev) => prev + result.highBidMinor);
       }
+      haptic.success();
     } catch {
-      // Service error — don't mutate local state
+      show('Could not close the lot — try again.', 'error');
+      haptic.error();
+    } finally {
+      setLotActionPending(false);
     }
-    setLotActionPending(false);
-  }, [currentLotIndex, lots, haptic]);
+  }, [sessionId, currentLot, lotActionPending, haptic, show]);
 
   const handleCancelLot = useCallback(async () => {
-    if (!streamIdRef.current) return;
+    if (!sessionId || !currentLot || lotActionPending) return;
     setLotActionPending(true);
     haptic.light();
     try {
-      const currentLot = lots[currentLotIndex];
-      if (!currentLot) return;
-      await cancelLot(streamIdRef.current, currentLot.id);
-      setCurrentLotStatus('cancelled');
+      const updated = await cancelLot(sessionId, currentLot.id);
+      setLots((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
     } catch {
-      // Service error — don't mutate local state
+      show('Could not cancel the lot — try again.', 'error');
+      haptic.error();
+    } finally {
+      setLotActionPending(false);
     }
-    setLotActionPending(false);
-  }, [currentLotIndex, lots, haptic]);
+  }, [sessionId, currentLot, lotActionPending, haptic, show]);
+
+  const handleNextLot = useCallback(async () => {
+    if (!sessionId || lotActionPending) return;
+    const nextIndex = currentLotIndex + 1;
+    const next = lots[nextIndex];
+    if (!next) return;
+    setLotActionPending(true);
+    haptic.light();
+    try {
+      await setCurrentLot(sessionId, next.listingId, next.lotNumber);
+      setCurrentLotIndex(nextIndex);
+      setSettlementStatus(null);
+    } catch {
+      show('Could not move to the next lot — try again.', 'error');
+      haptic.error();
+    } finally {
+      setLotActionPending(false);
+    }
+  }, [sessionId, lots, currentLotIndex, lotActionPending, haptic, show]);
 
   const handleSettleLot = useCallback(async () => {
-    if (!streamIdRef.current) return;
-    const currentLot = lots[currentLotIndex];
-    if (!currentLot) return;
+    if (!sessionId || !currentLot || settlePending) return;
     setSettlePending(true);
     haptic.medium();
     try {
-      const result = await settleLot(streamIdRef.current, currentLot.id);
+      const result = await settleLot(sessionId, currentLot.id);
       setSettlementStatus(result.status);
       haptic.success();
     } catch {
-      // Service error — don't mutate local state
+      show('Could not settle the lot — try again.', 'error');
+      haptic.error();
+    } finally {
+      setSettlePending(false);
     }
-    setSettlePending(false);
-  }, [currentLotIndex, lots, haptic]);
+  }, [sessionId, currentLot, settlePending, haptic, show]);
 
-  // ── Setup phase ──
-  if (phase === 'setup') {
+  const handleEndStream = useCallback(async () => {
+    if (endingStream) return;
+    haptic.medium();
+    setEndingStream(true);
+    setEndError(null);
+    try {
+      if (sessionId) {
+        await endBroadcastSession(sessionId);
+      }
+      setPhase('summary');
+    } catch {
+      // Honest unknown outcome — the session may already be closed server-
+      // side. Surface the error and stay on the live surface so the seller
+      // can retry rather than fabricating a clean end.
+      setEndError('End of stream could not be confirmed — check before going live again.');
+      haptic.error();
+    } finally {
+      setEndingStream(false);
+    }
+  }, [sessionId, endingStream, haptic]);
+
+  const renderChatMessage = useCallback(({ item }: { item: LiveStreamChatMessage }) => {
+    const isSystem = item.type === 'system' || item.type === 'bid' || item.type === 'purchase';
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <StatusBar barStyle="dark-content" />
-        <SafeAreaView style={styles.safeArea} edges={['top']}>
-          <View style={styles.header}>
-            <Pressable onPress={() => navigation.goBack()} style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]} accessibilityRole="button" accessibilityLabel="Go back">
-              <Ionicons name="close" size={24} color={colors.textPrimary} accessible={false} />
-            </Pressable>
-            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Go live</Text>
-            <View style={{ width: Control.hit }} />
+      <View style={[styles.chatRow, { borderBottomColor: colors.border }]}>
+        {isSystem ? (
+          <Text style={[styles.chatSystemText, { color: colors.textMuted }]} numberOfLines={2}>
+            {item.message}
+          </Text>
+        ) : (
+          <Text style={styles.chatLine} numberOfLines={2}>
+            <Text style={[styles.chatSender, { color: colors.textMuted }]}>
+              {item.userName}{'  '}
+            </Text>
+            <Text style={[styles.chatText, { color: colors.textPrimary }]}>{item.message}</Text>
+          </Text>
+        )}
+      </View>
+    );
+  }, [colors, styles]);
+
+  // =========================================================================
+  // SETUP PHASE
+  // =========================================================================
+
+  if (phase === 'setup') {
+    const showListingsLoading = listingsLoading && listings == null;
+    const showListingsError = !listingsLoading && listingsError != null;
+    const showListingsEmpty = !listingsLoading && !listingsError && listings != null && listings.length === 0;
+
+    return (
+      <FlagshipScreen
+        testID="live-seller-setup"
+        header={
+          <FlagshipHeader
+            title="Go live"
+            onBack={() => navigation.goBack()}
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={styles.flushContent}
+        stickyFooter={
+          <View style={[styles.footer, { paddingBottom: insets.bottom || Space.sm }]}>
+            {setupError ? (
+              <Text style={[styles.footerError, { color: colors.danger }]}>{setupError}</Text>
+            ) : null}
+            <AnimatedPressable
+              onPress={handleGoLive}
+              disabled={selectedIds.length === 0 || goingLive || isOffline}
+              style={[
+                styles.goLiveBtn,
+                { backgroundColor: colors.danger },
+                (selectedIds.length === 0 || goingLive || isOffline) && { opacity: 0.45 },
+              ]}
+              hapticFeedback="medium"
+              accessibilityRole="button"
+              accessibilityLabel="Go live"
+              accessibilityState={{ disabled: selectedIds.length === 0 || goingLive || isOffline, busy: goingLive }}
+            >
+              {goingLive ? (
+                <ActivityIndicator size="small" color={colors.textInverse} />
+              ) : (
+                <Text style={[styles.goLiveBtnText, { color: colors.textInverse }]}>Go live</Text>
+              )}
+            </AnimatedPressable>
+          </View>
+        }
+      >
+        <OfflineBanner onRetry={loadListings} />
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.setupScroll}
+        >
+          {/* Local camera preview — honest label, real device feed */}
+          <BroadcastPreview
+            active
+            facing="back"
+            height={Math.round(SCREEN_HEIGHT * 0.32)}
+            accessibilityLabel="Local camera preview"
+          />
+          <Text style={[styles.previewCaption, { color: colors.textMuted }]}>
+            Camera preview — check framing before you go live
+          </Text>
+
+          {/* Stream title */}
+          <View style={styles.fieldGroup}>
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Stream title</Text>
+            <TextInput
+              style={[styles.titleInput, { color: colors.textPrimary, borderBottomColor: colors.border }]}
+              placeholder="e.g. Vintage finds live auction"
+              placeholderTextColor={colors.textMuted}
+              value={title}
+              onChangeText={(text) => { setTitle(text); setSetupError(null); }}
+              maxLength={60}
+              accessibilityLabel="Stream title"
+            />
           </View>
 
-          <ScrollView style={styles.setupScroll} contentContainerStyle={styles.setupContent}>
-            {/* Demo banner */}
-            {isDemo && (
-              <View style={[styles.demoBanner, { backgroundColor: colors.warningSubtle }]} accessibilityRole="header">
-                <Ionicons name="flask-outline" size={16} color={colors.warning} accessible={false} />
-                <Text style={[styles.demoBannerText, { color: colors.warning }]}>Demo mode — sample lots loaded</Text>
-              </View>
-            )}
-
-            {/* Camera preview placeholder */}
-            <View style={[styles.cameraPreview, { backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name="videocam-outline" size={40} color={colors.textMuted} accessible={false} />
-              <Text style={[styles.cameraPreviewText, { color: colors.textMuted }]}>
-                {isDemo ? 'Camera preview unavailable in demo mode' : 'Camera preview'}
+          {/* Lot selection — real active listings */}
+          <View style={styles.fieldGroup}>
+            <View style={styles.lotHeaderRow}>
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+                Lots{selectedIds.length > 0 ? ` · ${selectedIds.length} selected` : ''}
               </Text>
             </View>
 
-            {/* Title input */}
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Stream title</Text>
-              <TextInput
-                style={[styles.titleInput, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.border }]}
-                placeholder="e.g. Vintage Finds Live Auction"
-                placeholderTextColor={colors.textMuted}
-                value={title}
-                onChangeText={(text) => {
-                  setTitle(text);
-                  setSetupError(null);
-                }}
-                maxLength={60}
-              />
-            </View>
-
-            {/* Lot selection */}
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Lots ({lots.length})</Text>
-              {lots.length > 0 ? (
-                <FlatList
-                  data={lots}
-                  keyExtractor={(item) => item.id}
-                  renderItem={({ item, index }) => (
-                    <View style={[styles.lotRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                      <Text style={[styles.lotNumber, { color: colors.textMuted }]}>#{index + 1}</Text>
-                      <Image source={{ uri: item.imageUri }} style={styles.lotImage} accessible={false} />
-                      <View style={styles.lotInfo}>
-                        <Text style={[styles.lotTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.title}</Text>
-                        <Text style={[styles.lotPrice, { color: colors.textSecondary }]}>Start: {currencySymbol}{item.startingPrice}</Text>
-                      </View>
-                      <Ionicons name="reorder-three-outline" size={20} color={colors.textMuted} accessible={false} />
+            {showListingsLoading && (
+              <View>
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <View key={`lot-skel-${i}`} style={[styles.lotSelectRow, { borderBottomColor: colors.border }]}>
+                    <SkeletonBlock width={48} height={48} radius={Radius.md} />
+                    <View style={styles.lotSelectInfo}>
+                      <SkeletonTextLine width="65%" height={14} />
+                      <SkeletonTextLine width="30%" height={12} />
                     </View>
-                  )}
-                  scrollEnabled={false}
-                />
-              ) : (
-                <View style={[styles.emptyLots, { borderColor: colors.border }]}>
-                  <Ionicons name="bag-handle-outline" size={28} color={colors.textMuted} accessible={false} />
-                  <Text style={[styles.emptyLotsText, { color: colors.textSecondary }]}>No lots added yet</Text>
-                </View>
-              )}
-            </View>
-          </ScrollView>
-
-          <View style={[styles.setupFooter, { paddingBottom: insets.bottom || Space.md }]}>
-            {setupError && (
-              <View style={[styles.setupErrorBanner, { backgroundColor: colors.dangerSubtle }]}>
-                <Ionicons name="alert-circle-outline" size={16} color={colors.danger} accessible={false} />
-                <Text style={[styles.setupErrorText, { color: colors.danger }]}>{setupError}</Text>
+                  </View>
+                ))}
               </View>
             )}
-            <Pressable
-              onPress={handleGoLive}
-              disabled={lots.length === 0 || goingLive}
-              style={({ pressed }) => [styles.goLiveBtn, (lots.length === 0 || goingLive) && styles.goLiveBtnDisabled, pressed && { opacity: 0.85 }]}
-              accessibilityRole="button"
-              accessibilityLabel="Go live now"
-              accessibilityState={{ disabled: lots.length === 0 || goingLive, busy: goingLive }}
-            >
-              {goingLive ? (
-                <ActivityIndicator size="small" color={colors.textPrimary} />
-              ) : (
-                <>
-                  <View style={styles.liveDot} />
-                  <Text style={styles.goLiveBtnText}>Go live now</Text>
-                </>
-              )}
-            </Pressable>
+
+            {showListingsError && (
+              <FlagshipState
+                variant={isOffline ? 'offline' : 'error'}
+                title="Listings unavailable"
+                subtitle={listingsError ?? undefined}
+                actionLabel="Try again"
+                onAction={loadListings}
+              />
+            )}
+
+            {showListingsEmpty && (
+              <FlagshipState
+                variant="empty"
+                icon="pricetag-outline"
+                title="No active listings"
+                subtitle="List an item first — only your active listings can be sold live."
+                actionLabel="Create a listing"
+                onAction={() => navigation.navigate('Sell')}
+              />
+            )}
+
+            {listings != null && listings.length > 0 && (
+              <View>
+                {listings.map((listing) => {
+                  const selected = selectedIds.includes(listing.id);
+                  const order = selectedIds.indexOf(listing.id);
+                  return (
+                    <AnimatedPressable
+                      key={listing.id}
+                      onPress={() => toggleListing(listing.id)}
+                      style={[styles.lotSelectRow, { borderBottomColor: colors.border }]}
+                      hapticFeedback="selection"
+                      scaleValue={0.99}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: selected }}
+                      accessibilityLabel={`${listing.title}, ${currencySymbol}${listing.priceGbp}`}
+                    >
+                      {listing.imageUrl || listing.images?.[0] ? (
+                        <CachedImage
+                          uri={listing.imageUrl ?? listing.images[0]}
+                          style={styles.lotSelectThumb}
+                          contentFit="cover"
+                          accessible={false}
+                        />
+                      ) : (
+                        <View style={[styles.lotSelectThumb, styles.lotSelectThumbFallback, { backgroundColor: colors.surfaceAlt }]}>
+                          <AppIcon name="image" size={IconSize.sm} color="textMuted" accessible={false} />
+                        </View>
+                      )}
+                      <View style={styles.lotSelectInfo}>
+                        <Text style={[styles.lotSelectTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                          {listing.title}
+                        </Text>
+                        <Text style={[styles.lotSelectPrice, { color: colors.textSecondary }]}>
+                          {formatFromFiat(listing.priceGbp, 'GBP')}
+                        </Text>
+                      </View>
+                      {selected ? (
+                        <View style={[styles.lotOrderMark, { borderColor: colors.brand }]}>
+                          <Text style={[styles.lotOrderText, { color: colors.brand }]}>{order + 1}</Text>
+                        </View>
+                      ) : (
+                        <View style={[styles.lotOrderMark, { borderColor: colors.border }]} />
+                      )}
+                    </AnimatedPressable>
+                  );
+                })}
+              </View>
+            )}
           </View>
-        </SafeAreaView>
-      </View>
+        </ScrollView>
+      </FlagshipScreen>
     );
   }
 
-  // ── Live phase ──
-  if (phase === 'live') {
-    const currentLot = lots[currentLotIndex];
-    return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <StatusBar barStyle="light-content" />
-        <View style={{ paddingTop: insets.top }}>
-          {/* Camera preview (small) */}
-          <View style={styles.sellerCameraPreview}>
-            <Ionicons name="videocam" size={24} color={colors.textMuted} accessible={false} />
-            <Text style={styles.sellerCameraText}>{isDemo ? 'Demo broadcast' : 'Broadcasting'}</Text>
-            <View style={[styles.liveBadgeSmall, isDemo && { backgroundColor: colors.warning }]} accessible={false}>
-              <View style={[styles.liveDot, isDemo && { backgroundColor: colors.textPrimary }]} />
-              <Text style={styles.liveBadgeTextSmall}>{isDemo ? 'Demo' : 'Live'}</Text>
-            </View>
-          </View>
+  // =========================================================================
+  // SUMMARY PHASE
+  // =========================================================================
 
-          {/* Stats bar */}
-          <View style={styles.sellerStatsBar}>
-            <View style={styles.sellerStat}>
-              <Ionicons name="eye-outline" size={14} color={colors.textSecondary} accessible={false} />
-              <Text style={styles.sellerStatText}>{viewerCount} viewers</Text>
-            </View>
-            <View style={styles.sellerStat}>
-              <Ionicons name="time-outline" size={14} color={colors.textSecondary} accessible={false} />
-              <Text style={styles.sellerStatText}>{Math.floor(liveDuration / 60)}:{(liveDuration % 60).toString().padStart(2, '0')}</Text>
-            </View>
-            <Pressable
+  if (phase === 'summary') {
+    return (
+      <FlagshipScreen
+        testID="live-seller-summary"
+        header={<FlagshipHeader title="Stream ended" onBack={() => navigation.goBack()} />}
+        scrollEnabled={false}
+        contentStyle={styles.flushContent}
+      >
+        <View style={styles.summaryWrap}>
+          <AppIcon name="check" variant="filled" size={IconSize.display} color="success" accessible={false} />
+          <Text style={[styles.summaryTitle, { color: colors.textPrimary }]} accessibilityRole="header">
+            Stream ended
+          </Text>
+          <View style={styles.summaryStats}>
+            <FlagshipMetricLine
+              label="Viewers"
+              value={String(viewerCount)}
+              separated
+            />
+            <FlagshipMetricLine
+              label="Lots sold"
+              value={String(lotsSold)}
+              separated
+            />
+            <FlagshipMetricLine
+              label="Total sales"
+              value={formatFromFiat(totalSalesMinor / 100, 'GBP') ?? ''}
+              separated
+            />
+          </View>
+          <AnimatedPressable
+            onPress={() => navigation.goBack()}
+            style={[styles.goLiveBtn, { backgroundColor: colors.brand }]}
+            hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel="Done"
+          >
+            <Text style={[styles.goLiveBtnText, { color: colors.textInverse }]}>Done</Text>
+          </AnimatedPressable>
+        </View>
+      </FlagshipScreen>
+    );
+  }
+
+  // =========================================================================
+  // LIVE PHASE
+  // =========================================================================
+
+  const nextLot = lots[currentLotIndex + 1] ?? null;
+  const remainingLots = lots.filter((l) => l.status === 'scheduled').length;
+  const canOpen = currentLot?.status === 'scheduled';
+  const canClose = currentLot?.status === 'open' || currentLot?.status === 'closing';
+  const lotClosed = currentLot != null && ['sold', 'passed', 'cancelled'].includes(currentLot.status);
+  const needsSettle = currentLot?.status === 'sold' && (settlementStatus == null || settlementStatus === 'none');
+  const allDone = lotClosed && !nextLot;
+
+  return (
+    <FlagshipScreen
+      testID="live-seller-live"
+      header={
+        <FlagshipHeader
+          title={session?.title || 'Live'}
+          subtitle={session?.status === 'live' ? undefined : 'Starting…'}
+          rightAction={
+            <AnimatedPressable
               onPress={handleEndStream}
               disabled={endingStream}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={({ pressed }) => [styles.endStreamBtn, pressed && { opacity: 0.7 }, endingStream && { opacity: 0.6 }]}
+              style={styles.endHit}
+              hapticFeedback="medium"
               accessibilityRole="button"
               accessibilityLabel="End stream"
               accessibilityState={{ busy: endingStream }}
             >
               {endingStream ? (
-                <ActivityIndicator size="small" color={colors.textPrimary} />
+                <ActivityIndicator size="small" color={colors.danger} />
               ) : (
-                <Text style={styles.endStreamBtnText}>End</Text>
+                <Text style={[styles.endText, { color: colors.danger }]}>End</Text>
               )}
-            </Pressable>
-          </View>
-
-          {/* Current lot */}
-          <View style={styles.sellerCurrentLot}>
-            <Image source={{ uri: currentLot?.imageUri }} style={styles.sellerLotImage} accessible={false} />
-            <View style={styles.sellerLotInfo}>
-              <Text style={styles.sellerLotTitle} numberOfLines={1}>{currentLot?.title}</Text>
-              <Text style={styles.sellerLotPrice}>{formatFromFiat(currentLot?.startingPrice ?? 0, 'GBP')}</Text>
-              <View
-                style={[
-                  styles.sellerLotStatusBadge,
-                  { backgroundColor: sellerLotStatusBg(currentLotStatus, colors) },
-                ]}
-              >
-                <Text style={[styles.sellerLotStatusText, { color: sellerLotStatusFg(currentLotStatus, colors) }]}>
-                  {sellerLotStatusLabel(currentLotStatus, soldAmount, currencySymbol)}
+            </AnimatedPressable>
+          }
+        />
+      }
+      scrollEnabled={false}
+      contentStyle={styles.flushContent}
+    >
+      <View style={styles.liveWrap}>
+        {/* Camera — dominant object. Local preview only; publishing is a
+            shared-layer gap, so the label stays honest. */}
+        <View style={styles.previewWrap}>
+          <BroadcastPreview
+            active
+            facing="back"
+            height={Math.round(SCREEN_HEIGHT * 0.3)}
+            accessibilityLabel="Local camera preview"
+          />
+          <View style={styles.liveChromeRow}>
+            <LiveBadge compact label="Live" />
+            <View style={styles.liveMetaCluster}>
+              <View style={styles.liveMetaItem}>
+                <AppIcon name="eye" size={IconSize.xs} color="textSecondary" accessible={false} />
+                <Text style={[styles.liveMetaText, { color: colors.textSecondary }]}>
+                  {viewerCount}
+                </Text>
+              </View>
+              <View style={styles.liveMetaItem}>
+                <AppIcon name="clock" size={IconSize.xs} color="textSecondary" accessible={false} />
+                <Text style={[styles.liveMetaText, { color: colors.textSecondary }]}>
+                  {formatClock(liveSeconds)}
                 </Text>
               </View>
             </View>
           </View>
+          <Text style={[styles.previewCaption, { color: colors.textMuted }]}>
+            {liveKit.state === 'connected'
+              ? 'Local preview — camera publishing is not wired in this build'
+              : 'Local camera preview'}
+          </Text>
+          {endError ? (
+            <Text style={[styles.footerError, { color: colors.danger, paddingHorizontal: 0 }]}>
+              {endError}
+            </Text>
+          ) : null}
+        </View>
 
-          {/* Lot management */}
-          <View style={styles.sellerLotActions}>
-            {currentLotStatus === 'scheduled' && (
-              <Pressable
-                onPress={handleOpenLot}
-                disabled={lotActionPending}
-                style={({ pressed }) => [styles.nextLotBtn, { backgroundColor: colors.success }, pressed && { opacity: 0.85 }, lotActionPending && { opacity: 0.6 }]}
-                accessibilityRole="button"
-                accessibilityLabel="Open lot for bidding"
-                accessibilityState={{ busy: lotActionPending }}
-              >
-                {lotActionPending ? (
-                  <ActivityIndicator size="small" color={colors.textPrimary} />
-                ) : (
-                  <Text style={styles.nextLotBtnText}>Open lot</Text>
-                )}
-              </Pressable>
-            )}
-            {(currentLotStatus === 'open' || currentLotStatus === 'closing') && (
-              <>
-                <Pressable
-                  onPress={handleCancelLot}
+        {/* Lot command — flat panel, status + real actions */}
+        {currentLot ? (
+          <View style={[styles.lotPanel, { borderColor: colors.border }]}>
+            <View style={styles.lotPanelTop}>
+              {currentLot.snapshot?.imageUrl ? (
+                <CachedImage
+                  uri={currentLot.snapshot.imageUrl}
+                  style={styles.lotPanelThumb}
+                  contentFit="cover"
+                  accessible={false}
+                />
+              ) : null}
+              <View style={styles.lotPanelInfo}>
+                <Text style={[styles.lotPanelTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                  {currentLot.snapshot?.title ?? `Lot ${currentLot.lotNumber}`}
+                </Text>
+                <View style={styles.lotPanelMetaRow}>
+                  <Text style={[styles.lotPanelPrice, { color: colors.textPrimary }]}>
+                    {formatFromFiat((currentLot.highBidMinor > 0 ? currentLot.highBidMinor : currentLot.startPriceMinor) / 100, 'GBP')}
+                  </Text>
+                  <Text style={[styles.lotPanelStatus, { color: lotStatusColor(currentLot.status, colors) }]}>
+                    {lotStatusLabel(currentLot.status)}
+                  </Text>
+                </View>
+                {settlementLabel(settlementStatus) ? (
+                  <Text style={[styles.lotPanelSettle, { color: colors.textSecondary }]}>
+                    {settlementLabel(settlementStatus)}
+                  </Text>
+                ) : null}
+              </View>
+              <Text style={[styles.lotPanelIndex, { color: colors.textMuted }]}>
+                {currentLotIndex + 1}/{lots.length}
+              </Text>
+            </View>
+
+            {/* Actions — real lot engine transitions only */}
+            <View style={styles.lotActionsRow}>
+              {canOpen && (
+                <AnimatedPressable
+                  onPress={handleOpenLot}
                   disabled={lotActionPending}
-                  style={({ pressed }) => [styles.skipLotBtn, pressed && { opacity: 0.7 }, lotActionPending && { opacity: 0.5 }]}
+                  style={[styles.lotActionBtn, { backgroundColor: colors.brand }]}
+                  hapticFeedback="medium"
                   accessibilityRole="button"
-                  accessibilityLabel="Cancel current lot"
-                  accessibilityState={{ busy: lotActionPending }}
-                >
-                  <Text style={styles.skipLotBtnText}>Cancel</Text>
-                </Pressable>
-                <Pressable
-                  onPress={handleCloseLot}
-                  disabled={lotActionPending}
-                  style={({ pressed }) => [styles.nextLotBtn, pressed && { opacity: 0.85 }, lotActionPending && { opacity: 0.6 }]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Close lot and determine winner"
+                  accessibilityLabel="Open bidding"
                   accessibilityState={{ busy: lotActionPending }}
                 >
                   {lotActionPending ? (
-                    <ActivityIndicator size="small" color={colors.textPrimary} />
+                    <ActivityIndicator size="small" color={colors.textInverse} />
                   ) : (
-                    <Text style={styles.nextLotBtnText}>Close lot</Text>
+                    <Text style={[styles.lotActionText, { color: colors.textInverse }]}>Open bidding</Text>
                   )}
-                </Pressable>
-              </>
-            )}
-            {currentLotStatus === 'sold' && (
-              <>
-                <Pressable
-                  onPress={handleNextLot}
-                  disabled={lotActionPending}
-                  style={({ pressed }) => [styles.skipLotBtn, pressed && { opacity: 0.7 }, lotActionPending && { opacity: 0.5 }]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Go to next lot"
-                  accessibilityState={{ busy: lotActionPending }}
-                >
-                  <Text style={styles.skipLotBtnText}>Next →</Text>
-                </Pressable>
-                <Pressable
+                </AnimatedPressable>
+              )}
+              {canClose && (
+                <>
+                  <AnimatedPressable
+                    onPress={handleCloseLot}
+                    disabled={lotActionPending}
+                    style={[styles.lotActionBtn, { backgroundColor: colors.brand }]}
+                    hapticFeedback="medium"
+                    accessibilityRole="button"
+                    accessibilityLabel="Close lot"
+                    accessibilityState={{ busy: lotActionPending }}
+                  >
+                    {lotActionPending ? (
+                      <ActivityIndicator size="small" color={colors.textInverse} />
+                    ) : (
+                      <Text style={[styles.lotActionText, { color: colors.textInverse }]}>Close lot</Text>
+                    )}
+                  </AnimatedPressable>
+                  <AnimatedPressable
+                    onPress={handleCancelLot}
+                    disabled={lotActionPending}
+                    style={[styles.lotActionGhost, { borderColor: colors.border }]}
+                    hapticFeedback="light"
+                    accessibilityRole="button"
+                    accessibilityLabel="Cancel lot"
+                  >
+                    <Text style={[styles.lotActionGhostText, { color: colors.textSecondary }]}>Cancel</Text>
+                  </AnimatedPressable>
+                </>
+              )}
+              {lotClosed && needsSettle && (
+                <AnimatedPressable
                   onPress={handleSettleLot}
-                  disabled={settlePending || settlementStatus !== 'none' && settlementStatus !== 'payment_failed'}
-                  style={({ pressed }) => [styles.nextLotBtn, { backgroundColor: colors.success }, pressed && { opacity: 0.85 }, (settlePending || (settlementStatus !== 'none' && settlementStatus !== 'payment_failed')) && { opacity: 0.6 }]}
+                  disabled={settlePending}
+                  style={[styles.lotActionBtn, { backgroundColor: colors.brand }]}
+                  hapticFeedback="medium"
                   accessibilityRole="button"
-                  accessibilityLabel="Create order for sold lot"
+                  accessibilityLabel="Settle lot"
                   accessibilityState={{ busy: settlePending }}
                 >
                   {settlePending ? (
-                    <ActivityIndicator size="small" color={colors.textPrimary} />
+                    <ActivityIndicator size="small" color={colors.textInverse} />
                   ) : (
-                    <Text style={styles.nextLotBtnText}>Create order</Text>
+                    <Text style={[styles.lotActionText, { color: colors.textInverse }]}>Settle</Text>
                   )}
-                </Pressable>
-              </>
-            )}
-            {(currentLotStatus === 'passed' || currentLotStatus === 'cancelled') && (
-              <Pressable
-                onPress={handleNextLot}
-                disabled={lotActionPending}
-                style={({ pressed }) => [styles.nextLotBtn, pressed && { opacity: 0.85 }, lotActionPending && { opacity: 0.6 }]}
-                accessibilityRole="button"
-                accessibilityLabel="Go to next lot"
-                accessibilityState={{ busy: lotActionPending }}
-              >
-                {lotActionPending ? (
-                  <ActivityIndicator size="small" color={colors.textPrimary} />
-                ) : (
-                  <Text style={styles.nextLotBtnText}>Next →</Text>
-                )}
-              </Pressable>
-            )}
-          </View>
+                </AnimatedPressable>
+              )}
+              {lotClosed && nextLot && (
+                <AnimatedPressable
+                  onPress={handleNextLot}
+                  disabled={lotActionPending}
+                  style={[styles.lotActionBtn, { backgroundColor: colors.brand }]}
+                  hapticFeedback="medium"
+                  accessibilityRole="button"
+                  accessibilityLabel={`Next lot: ${nextLot.snapshot?.title ?? `Lot ${nextLot.lotNumber}`}`}
+                  accessibilityState={{ busy: lotActionPending }}
+                >
+                  {lotActionPending ? (
+                    <ActivityIndicator size="small" color={colors.textInverse} />
+                  ) : (
+                    <Text style={[styles.lotActionText, { color: colors.textInverse }]}>
+                      Next lot
+                    </Text>
+                  )}
+                </AnimatedPressable>
+              )}
+              {allDone && (
+                <AnimatedPressable
+                  onPress={handleEndStream}
+                  disabled={endingStream}
+                  style={[styles.lotActionBtn, { backgroundColor: colors.danger }]}
+                  hapticFeedback="medium"
+                  accessibilityRole="button"
+                  accessibilityLabel="End stream"
+                  accessibilityState={{ busy: endingStream }}
+                >
+                  <Text style={[styles.lotActionText, { color: colors.textInverse }]}>End stream</Text>
+                </AnimatedPressable>
+              )}
+            </View>
 
-          {/* Settlement status */}
-          {currentLotStatus === 'sold' && settlementStatus !== 'none' && (
-            <View style={styles.settlementRow}>
-              <Text style={[styles.settlementLabel, { color: colors.textSecondary }]}>
-                {settlementStatusLabel(settlementStatus)}
+            {remainingLots > 0 && (
+              <Text style={[styles.queueText, { color: colors.textMuted }]}>
+                {remainingLots} lot{remainingLots === 1 ? '' : 's'} in queue
               </Text>
-            </View>
-          )}
-
-          {/* Upcoming lots */}
-          <Text style={styles.upcomingLabel}>Up next</Text>
-          <FlatList
-            data={lots.slice(currentLotIndex + 1, currentLotIndex + 4)}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <View style={styles.upcomingLotRow}>
-                <Image source={{ uri: item.imageUri }} style={styles.upcomingLotImage} accessible={false} />
-                <Text style={styles.upcomingLotTitle} numberOfLines={1}>{item.title}</Text>
-                <Text style={styles.upcomingLotPrice}>{formatFromFiat(item.startingPrice, 'GBP')}</Text>
-              </View>
             )}
-            scrollEnabled={false}
-          />
-        </View>
+          </View>
+        ) : null}
+
+        {/* Chat — flat list with hairlines, read-only for the host */}
+        <FlatList
+          ref={chatListRef}
+          data={messages}
+          keyExtractor={(item) => item.id}
+          renderItem={renderChatMessage}
+          style={styles.chatList}
+          contentContainerStyle={styles.chatListContent}
+          onContentSizeChange={() => chatListRef.current?.scrollToEnd({ animated: false })}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <Text style={[styles.chatEmptyText, { color: colors.textMuted }]}>
+              Viewer chat appears here
+            </Text>
+          }
+        />
       </View>
-    );
-  }
-
-  // ── Summary phase ──
-  return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle="dark-content" />
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <View style={styles.summaryContainer}>
-          <Ionicons name="checkmark-circle" size={48} color={colors.success} accessible={false} />
-          <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>Stream ended</Text>
-
-          {endError && (
-            <View style={[styles.summaryWarningBanner, { backgroundColor: colors.warningSubtle }]}>
-              <Ionicons name="alert-circle-outline" size={16} color={colors.warning} accessible={false} />
-              <Text style={[styles.summaryWarningText, { color: colors.warning }]}>{endError}</Text>
-            </View>
-          )}
-
-          {isDemo && (
-            <View style={[styles.summaryDemoBadge, { backgroundColor: colors.warningSubtle }]}>
-              <Ionicons name="flask-outline" size={14} color={colors.warning} accessible={false} />
-              <Text style={[styles.summaryDemoText, { color: colors.warning }]}>Demo mode — mock figures</Text>
-            </View>
-          )}
-
-          <View style={[styles.summaryStats, { backgroundColor: colors.surface }]}>
-            <View style={styles.summaryStatItem}>
-              <Text style={[styles.summaryStatValue, { color: colors.textPrimary }]}>{viewerCount}</Text>
-              <Text style={[styles.summaryStatLabel, { color: colors.textSecondary }]}>Peak viewers</Text>
-            </View>
-            <View style={[styles.summaryStatDivider, { backgroundColor: colors.border }]} />
-            <View style={styles.summaryStatItem}>
-              <Text style={[styles.summaryStatValue, { color: colors.textPrimary }]}>{lotsSold}</Text>
-              <Text style={[styles.summaryStatLabel, { color: colors.textSecondary }]}>Lots sold</Text>
-            </View>
-            <View style={[styles.summaryStatDivider, { backgroundColor: colors.border }]} />
-            <View style={styles.summaryStatItem}>
-              <Text style={[styles.summaryStatValue, { color: colors.textPrimary }]}>{formatFromFiat(totalSales, 'GBP')}</Text>
-              <Text style={[styles.summaryStatLabel, { color: colors.textSecondary }]}>Total sales</Text>
-            </View>
-          </View>
-
-          <View style={styles.summaryActions}>
-            <Pressable
-              onPress={() => navigation.goBack()}
-              style={({ pressed }) => [styles.summaryDoneBtn, { backgroundColor: colors.brand }, pressed && { opacity: 0.85 }]}
-              accessibilityRole="button"
-              accessibilityLabel="Done"
-            >
-              <Text style={styles.summaryDoneBtnText}>Done</Text>
-            </Pressable>
-          </View>
-        </View>
-      </SafeAreaView>
-    </View>
+    </FlagshipScreen>
   );
 }
 
-const createStyles = (colors: ThemeColors, screenWidth: number) => StyleSheet.create({
-  container: { flex: 1 },
-  safeArea: { flex: 1 },
+// ---------------------------------------------------------------------------
+// Styles
+// ---------------------------------------------------------------------------
+
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  flushContent: {
+    paddingHorizontal: 0,
+    paddingTop: 0 },
   // ── Setup ──
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  setupScroll: {
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm },
-  backBtn: {
-    width: Control.hit,
-    height: Control.hit,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  headerTitle: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily },
-  setupScroll: { flex: 1 },
-  setupContent: {
-    paddingHorizontal: Space.md,
+    paddingTop: Space.md,
     paddingBottom: Space.xl,
-    gap: Space.lg },
-  cameraPreview: {
-    width: '100%',
-    aspectRatio: 9 / 16,
-    borderRadius: Radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.xs,
-    maxHeight: 300 },
-  cameraPreviewText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily },
-  inputGroup: { gap: Space.xs + 2 },
-  inputLabel: {
+    gap: Space.sm },
+  previewCaption: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
+    fontFamily: TypographyV2.meta.fontFamily,
+    textAlign: 'center' },
+  fieldGroup: {
+    gap: Space.xs,
+    marginTop: Space.sm },
+  fieldLabel: {
+    fontSize: TypographyV2.label.size,
+    fontFamily: TypographyV2.label.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing },
   titleInput: {
-    height: Space.xl + Space.sm + 6,
-    paddingHorizontal: Space.md,
-    borderRadius: Radius.lg,
-    borderWidth: Stroke.standard,
+    minHeight: Control.hit,
+    borderBottomWidth: Stroke.standard,
     fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily },
-  lotRow: {
+    fontFamily: TypographyV2.body.fontFamily,
+    paddingVertical: Space.xs },
+  lotHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between' },
+  lotSelectRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs + 2,
+    minHeight: Control.hit + Space.sm,
+    paddingVertical: Space.xs,
+    borderBottomWidth: StyleSheet.hairlineWidth },
+  lotSelectThumb: {
+    width: Space.xxl,
+    height: Space.xxl,
     borderRadius: Radius.md,
-    borderWidth: Stroke.hairline,
-    marginBottom: Space.xs },
-  lotNumber: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    fontVariant: ['tabular-nums'],
-    minWidth: Space.lg },
-  lotImage: {
-    width: Space.xl + Space.xs,
-    height: Space.xl + Space.xs,
-    borderRadius: Radius.sm,
-    backgroundColor: colors.border },
-  lotInfo: { flex: 1, gap: Space.xs / 4 },
-  lotTitle: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily },
-  lotPrice: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-  demoBanner: {
-    flexDirection: 'row',
+    overflow: 'hidden' },
+  lotSelectThumbFallback: {
     alignItems: 'center',
-    gap: Space.xs + 2,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.md },
-  demoBannerText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-  emptyLots: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.xs,
-    paddingVertical: Space.xl,
-    borderRadius: Radius.lg,
-    borderWidth: Stroke.hairline,
-    borderStyle: 'dashed' },
-  emptyLotsText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily },
-  setupFooter: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.md },
-  setupErrorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.md,
-    marginBottom: Space.md },
-  setupErrorText: {
+    justifyContent: 'center' },
+  lotSelectInfo: {
     flex: 1,
+    gap: 2 },
+  lotSelectTitle: {
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
+  lotSelectPrice: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-  goLiveBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.xs + 2,
-    paddingVertical: Space.md + 2,
-    borderRadius: Radius.xxl,
-    backgroundColor: colors.danger,
-    minHeight: Control.hit + 4 },
-  goLiveBtnDisabled: {
-    opacity: 0.4 },
-  goLiveBtnText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily,
-    color: colors.scrimTextPrimary },
-  liveDot: {
-    width: Space.sm,
-    height: Space.sm,
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'] },
+  lotOrderMark: {
+    width: IconSize.lg,
+    height: IconSize.lg,
     borderRadius: Radius.full,
-    backgroundColor: colors.textPrimary },
-  // ── Live ──
-  sellerCameraPreview: {
-    width: screenWidth,
-    height: Space.xxl * 4 + Space.sm,
-    backgroundColor: colors.surfaceAlt,
+    borderWidth: Stroke.emphasis,
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.xs },
-  sellerCameraText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textMuted },
-  liveBadgeSmall: {
-    position: 'absolute',
-    top: Space.sm,
-    left: Space.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs / 2,
-    backgroundColor: colors.danger,
-    paddingHorizontal: Space.xs + 2,
-    paddingVertical: Space.xs / 2 + 1,
-    borderRadius: Radius.sm },
-  liveBadgeTextSmall: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.scrimTextPrimary },
-  sellerStatsBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
+    justifyContent: 'center' },
+  lotOrderText: {
+    fontSize: TypographyV2.caption.size,
+    fontFamily: TypographyV2.caption.fontFamily,
+    fontVariant: ['tabular-nums'] },
+  footer: {
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    backgroundColor: colors.surface },
-  sellerStat: {
+    paddingTop: Space.sm,
+    gap: Space.xs },
+  footerError: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    textAlign: 'center' },
+  goLiveBtn: {
+    minHeight: Control.hit,
+    borderRadius: Radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  goLiveBtnText: {
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
+  // ── Live ──
+  liveWrap: {
+    flex: 1 },
+  previewWrap: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.xs,
+    gap: Space.xs },
+  liveChromeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between' },
+  liveMetaCluster: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md },
+  liveMetaItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2 },
-  sellerStatText: {
+  liveMetaText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textSecondary },
-  endStreamBtn: {
-    marginLeft: 'auto',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.xs + 2,
-    borderRadius: Radius.sm,
-    backgroundColor: colors.danger },
-  endStreamBtnText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.scrimTextPrimary },
-  sellerCurrentLot: {
+    fontVariant: ['tabular-nums'] },
+  endHit: {
+    minWidth: Control.hit,
+    minHeight: Control.hit,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  endText: {
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
+  // ── Lot panel ──
+  lotPanel: {
+    marginHorizontal: Space.md,
+    marginTop: Space.sm,
+    padding: Space.sm,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: Space.sm },
+  lotPanelTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderTopWidth: Stroke.hairline,
-    borderTopColor: colors.border },
-  sellerLotImage: {
-    width: Space.xxl + Space.xl,
-    height: Space.xxl + Space.xl,
-    borderRadius: Radius.md,
-    backgroundColor: colors.surfaceAlt },
-  sellerLotInfo: { flex: 1, gap: Space.xs / 2 },
-  sellerLotTitle: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily,
-    color: colors.textPrimary },
-  sellerLotPrice: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily,
-    color: colors.textPrimary },
-  sellerLotStatusBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs / 2 + 1,
-    borderRadius: Radius.sm,
-    marginTop: Space.xs / 2 },
-  sellerLotStatusText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
+    gap: Space.sm },
+  lotPanelThumb: {
+    width: Space.xxl,
+    height: Space.xxl,
+    borderRadius: Radius.md },
+  lotPanelInfo: {
+    flex: 1,
+    gap: 2 },
+  lotPanelTitle: {
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
+  lotPanelMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: Space.sm },
+  lotPanelPrice: {
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: TypographyV2.priceList.fontFamily,
+    fontVariant: ['tabular-nums'] },
+  lotPanelStatus: {
+    fontSize: TypographyV2.label.size,
+    fontFamily: TypographyV2.label.fontFamily,
     letterSpacing: TypographyV2.label.letterSpacing },
-  settlementRow: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.xs },
-  settlementLabel: {
+  lotPanelSettle: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily },
-  sellerLotActions: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm },
-  skipLotBtn: {
-    flex: 1,
-    paddingVertical: Space.md,
-    borderRadius: Radius.lg,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: 'center',
-    minHeight: Control.hit,
-    justifyContent: 'center' },
-  skipLotBtnText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily,
-    color: colors.textPrimary },
-  nextLotBtn: {
-    flex: 2,
-    paddingVertical: Space.md,
-    borderRadius: Radius.lg,
-    backgroundColor: colors.danger,
-    alignItems: 'center',
-    minHeight: Control.hit,
-    justifyContent: 'center' },
-  nextLotBtnText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily,
-    color: colors.scrimTextPrimary },
-  upcomingLabel: {
+  lotPanelIndex: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textMuted,
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.xs },
-  upcomingLotRow: {
+    fontVariant: ['tabular-nums'] },
+  lotActionsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.xs + 2 },
-  upcomingLotImage: {
-    width: Space.xl + Space.xs,
-    height: Space.xl + Space.xs,
-    borderRadius: Radius.sm,
-    backgroundColor: colors.surfaceAlt },
-  upcomingLotTitle: {
+    gap: Space.sm },
+  lotActionBtn: {
     flex: 1,
+    minHeight: Control.hit,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  lotActionText: {
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
+  lotActionGhost: {
+    minHeight: Control.hit,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.md,
+    borderWidth: Stroke.standard,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  lotActionGhostText: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
+  queueText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    textAlign: 'center' },
+  // ── Chat ──
+  chatList: {
+    flex: 1,
+    marginTop: Space.sm },
+  chatListContent: {
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.lg },
+  chatRow: {
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth },
+  chatLine: {
+    flexShrink: 1 },
+  chatSender: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
+  chatText: {
     fontSize: TypographyV2.body.size,
     fontFamily: TypographyV2.body.fontFamily,
-    color: colors.textPrimary },
-  upcomingLotPrice: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily,
-    color: colors.textSecondary },
+    lineHeight: TypographyV2.body.lineHeight },
+  chatSystemText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontStyle: 'italic' },
+  chatEmptyText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    textAlign: 'center',
+    paddingVertical: Space.lg },
   // ── Summary ──
-  summaryContainer: {
+  summaryWrap: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Space.xl,
     gap: Space.md },
   summaryTitle: {
-    fontSize: TypographyV2.screenTitle.size,
-    fontFamily: TypographyV2.screenTitle.fontFamily },
-  summaryWarningBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.md,
-    width: '100%' },
-  summaryWarningText: {
-    flex: 1,
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-  summaryDemoBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingHorizontal: Space.sm + 2,
-    paddingVertical: Space.xs + 2,
-    borderRadius: Radius.full },
-  summaryDemoText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   summaryStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: Radius.lg,
-    paddingVertical: Space.lg,
-    width: '100%' },
-  summaryStatItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: Space.xs / 2 },
-  summaryStatValue: {
-    fontSize: TypographyV2.screenTitle.size,
-    fontFamily: TypographyV2.screenTitle.fontFamily },
-  summaryStatLabel: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-  summaryStatDivider: {
-    width: Stroke.hairline,
-    height: Space.xxl + Space.xs },
-  summaryActions: {
     width: '100%',
-    paddingTop: Space.md },
-  summaryDoneBtn: {
-    paddingVertical: Space.md + 2,
-    borderRadius: Radius.xxl,
-    alignItems: 'center',
-    minHeight: Control.hit + 4,
-    justifyContent: 'center' },
-  summaryDoneBtnText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily,
-    color: colors.textPrimary } });
+    marginTop: Space.sm,
+    marginBottom: Space.sm } });
