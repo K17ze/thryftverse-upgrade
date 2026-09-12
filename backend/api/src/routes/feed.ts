@@ -1,6 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
+import {
+  loadListingMedia,
+  type ListingMediaItem,
+} from '../lib/media/listingMediaProjection.js';
 
 type FeedRouteDependencies = {
   app: FastifyInstance;
@@ -28,6 +32,8 @@ export type ListingSummary = {
   priceGbp: number;
   imageUrl: string | null;
   images: string[];
+  /** Canonical media records — derivatives, blurhash/LQIP, focal point. */
+  media: ListingMediaItem[];
   status: string;
   category: string | null;
   brand: string | null;
@@ -224,18 +230,11 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
     }
 
     const listingIds = listingsResult.rows.map((r) => r.id);
-    const imagesResult = listingIds.length
-      ? await readDb.query<{ listing_id: string; image_url: string; sort_order: number }>(
-          `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
-          [listingIds]
-        )
-      : { rows: [] };
+    const mediaByListing = await loadListingMedia(readDb, listingIds);
 
     const imagesByListing = new Map<string, string[]>();
-    for (const img of imagesResult.rows) {
-      const arr = imagesByListing.get(img.listing_id) ?? [];
-      arr.push(img.image_url);
-      imagesByListing.set(img.listing_id, arr);
+    for (const [listingRowId, mediaItems] of mediaByListing) {
+      imagesByListing.set(listingRowId, mediaItems.map((m) => m.uri));
     }
 
     const postersResult = await readDb.query<{
@@ -293,6 +292,7 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
           priceGbp: Number(row.price_gbp),
           imageUrl: row.image_url,
           images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
+          media: mediaByListing.get(row.id) ?? [],
           status: row.status,
           category: row.category,
           brand: row.brand,
@@ -408,18 +408,11 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
     );
 
     const listingIds = result.rows.map((r) => r.id);
-    const imagesResult = listingIds.length
-      ? await readDb.query<{ listing_id: string; image_url: string; sort_order: number }>(
-          `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
-          [listingIds]
-        )
-      : { rows: [] };
+    const mediaByListing = await loadListingMedia(readDb, listingIds);
 
     const imagesByListing = new Map<string, string[]>();
-    for (const img of imagesResult.rows) {
-      const arr = imagesByListing.get(img.listing_id) ?? [];
-      arr.push(img.image_url);
-      imagesByListing.set(img.listing_id, arr);
+    for (const [listingRowId, mediaItems] of mediaByListing) {
+      imagesByListing.set(listingRowId, mediaItems.map((m) => m.uri));
     }
 
     return {
@@ -433,6 +426,7 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
         priceGbp: Number(row.price_gbp),
         imageUrl: row.image_url,
         images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
+        media: mediaByListing.get(row.id) ?? [],
         status: row.status,
         category: row.category,
         brand: row.brand,

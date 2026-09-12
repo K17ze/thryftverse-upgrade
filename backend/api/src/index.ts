@@ -17596,12 +17596,22 @@ app.post('/listing-images', async (request, reply) => {
       media_asset_id: string | null;
       media_asset_status: string | null;
       canonical_url: string | null;
+      asset_blurhash: string | null;
+      asset_width: number | null;
+      asset_height: number | null;
+      asset_focal_x: string | number | null;
+      asset_focal_y: string | number | null;
     }>(
       `SELECT finalization.public_url, finalization.content_type,
               finalization.status, finalization.owner_id,
               finalization.media_asset_id,
               asset.status AS media_asset_status,
-              asset.canonical_url
+              asset.canonical_url,
+              asset.blurhash AS asset_blurhash,
+              asset.width AS asset_width,
+              asset.height AS asset_height,
+              asset.focal_x AS asset_focal_x,
+              asset.focal_y AS asset_focal_y
        FROM upload_finalizations finalization
        LEFT JOIN media_assets asset
          ON asset.id = finalization.media_asset_id
@@ -17675,13 +17685,18 @@ app.post('/listing-images', async (request, reply) => {
         payload.listingId,
         resolvedMediaUrl,
         payload.sortOrder,
-        payload.mediaWidth ?? null,
-        payload.mediaHeight ?? null,
+        // Prefer processor-measured dimensions (post-EXIF-orientation) over
+        // the client-declared values — the client reports the file's raw
+        // dims, which flip portrait↔landscape when orientation is baked in.
+        verifiedUpload.asset_width ?? payload.mediaWidth ?? null,
+        verifiedUpload.asset_height ?? payload.mediaHeight ?? null,
         payload.mediaType,
         payload.posterUrl ?? null,
-        payload.blurhash ?? null,
-        payload.focalX ?? null,
-        payload.focalY ?? null,
+        // Backfill the blurhash the media pipeline computed — the client
+        // never holds it because processing finishes after upload.
+        payload.blurhash ?? verifiedUpload.asset_blurhash ?? null,
+        payload.focalX ?? (verifiedUpload.asset_focal_x == null ? null : Number(verifiedUpload.asset_focal_x)),
+        payload.focalY ?? (verifiedUpload.asset_focal_y == null ? null : Number(verifiedUpload.asset_focal_y)),
       ],
     );
     if (!attached.rowCount) {
