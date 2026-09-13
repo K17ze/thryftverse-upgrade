@@ -355,7 +355,10 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
         onRequestClose={() => setSheetTopicId(null)}
       >
         <Pressable style={styles.sheetScrim} onPress={() => setSheetTopicId(null)}>
-          <Pressable style={[styles.sheet, { backgroundColor: colors.surface }]} onPress={() => {}}>
+          <View
+            style={[styles.sheet, { backgroundColor: colors.surface }]}
+            onStartShouldSetResponder={() => true}
+          >
             {sheetTopic && (
               <>
                 <Text style={[styles.sheetTitle, { color: colors.textPrimary }]} numberOfLines={1}>
@@ -415,7 +418,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
                 )}
               </>
             )}
-          </Pressable>
+          </View>
         </Pressable>
       </Modal>
     </FlagshipScreen>

@@ -28,6 +28,10 @@ import type {
   ListingCommerceContext,
   ListingEngagementSummary,
 } from './listingDetailContract';
+import type {
+  ListingMediaDerivative,
+  ListingMediaRecord,
+} from '../../contracts/listingMedia';
 import {
   buildCapabilities,
   buildCommerceContext,
@@ -57,6 +61,14 @@ export interface ProductMediaItem {
    * CachedImage renders the blurhash placeholder while the full image
    * loads, then crossfades. */
   blurhash?: string | null;
+  /** 20px blurred-JPEG data URI from the media pipeline — a lower-fidelity
+   *  placeholder used when no blurhash exists. */
+  lqip?: string | null;
+  /** Pre-rendered responsive rendition ladder (`media_derivatives`). When
+   *  present, `CachedImage` serves a sized file instead of transforming the
+   *  canonical URL — works on S3/MinIO origins where CDN resize params are
+   *  a no-op. */
+  derivatives?: ListingMediaDerivative[];
 }
 
 export type ViewerRole =
@@ -253,6 +265,35 @@ export function mediaFromUris(uris: string[]): ProductMediaItem[] {
     .map((uri) => ({ uri, kind: isVideo(uri) ? 'video' : 'image' }));
 }
 
+/**
+ * Project canonical `media[]` records (`ListingMediaRecord`, served by
+ * every listing read) into `ProductMediaItem`s. Carries placeholder
+ * (blurhash/LQIP), derivative ladder, geometry and art direction that
+ * `mediaFromUris` cannot express.
+ */
+export function mediaFromRecords(records: ListingMediaRecord[]): ProductMediaItem[] {
+  return records
+    .slice()
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((record) => ({
+      id: record.id,
+      uri: record.uri,
+      kind: record.kind,
+      posterUri: record.poster,
+      posterVerifiedAt: record.posterVerifiedAt,
+      width: record.width,
+      height: record.height,
+      focalPoint: record.focalPoint,
+      // `fit` is left undefined unless an authored focal point exists —
+      // CommerceMediaStage defaults to 'cover', matching the previous
+      // flat-URI behaviour exactly. No visual change.
+      ...(record.focalPoint ? { fit: 'cover' as const } : {}),
+      blurhash: record.blurhash,
+      lqip: record.lqip,
+      derivatives: record.derivatives,
+    }));
+}
+
 // ── Attribute derivation (authoritative fields only) ─────────────────────────
 
 function buildDirectAttributes(
@@ -400,7 +441,13 @@ export function buildDirectViewModel(input: DirectAdapterInput): ProductDetailVi
     condition: listing.condition ?? null,
     conditionLabel: listing.condition ?? null,
     size: listing.size ?? null,
-    media: mediaFromUris(listing.images ?? []),
+    // Prefer the canonical media[] records — they carry blurhash/LQIP
+    // placeholders, the derivative ladder and focal point that flat
+    // `images` URIs cannot express. Fall back to flat URIs for payloads
+    // that predate the media contract.
+    media: listing.media?.length
+      ? mediaFromRecords(listing.media)
+      : mediaFromUris(listing.images ?? []),
     seller: seller ?? null,
     issuer: null,
     engagement: buildEngagementSummary(listing),
@@ -478,12 +525,19 @@ export function buildAuctionViewModel(input: AuctionAdapterInput): ProductDetail
           uri: item.url,
           kind: item.type,
           posterUri: item.posterUrl,
+          posterVerifiedAt: item.posterVerifiedAt ?? null,
           width: item.width,
           height: item.height,
           focalPoint: item.focalX != null && item.focalY != null
             ? { x: item.focalX, y: item.focalY }
             : null,
-          fit: item.focalX != null && item.focalY != null ? 'cover' : 'contain',
+          // `fit` is left undefined unless an authored focal point exists —
+          // CommerceMediaStage defaults to 'cover', matching mediaFromRecords
+          // and every other media path.
+          ...(item.focalX != null && item.focalY != null ? { fit: 'cover' as const } : {}),
+          blurhash: item.blurhash ?? null,
+          lqip: item.lqip ?? null,
+          derivatives: item.derivatives ?? [],
           altText: `${auction.title} ${item.type}`,
         }))
     : mediaFromUris(auction.imageUrl ? [auction.imageUrl] : []);

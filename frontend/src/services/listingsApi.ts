@@ -5,6 +5,7 @@ import {
   friendlyBackendError,
 } from './listingMapper';
 import type { DisplayReadyListing } from './listingMapper';
+import type { ListingMediaRecord } from '../contracts/listingMedia';
 import type { SupportedCurrencyCode } from '../constants/currencies';
 
 export interface ListingSeller {
@@ -53,6 +54,10 @@ export interface Listing {
   originalPrice?: number;
   priceWithProtection?: number;
   images: string[];
+  /** Canonical media records (derivatives, blurhash/LQIP, focal point,
+   *  poster). Supplements the flat `images` array — prefer this when a
+   *  consumer needs placeholders, sized renditions or art direction. */
+  media?: ListingMediaRecord[];
   mediaAspectRatio?: number | null;
   mediaWidth?: number | null;
   mediaHeight?: number | null;
@@ -85,6 +90,9 @@ interface ApiListingRow {
   priceGbp: number;
   imageUrl: string | null;
   images: string[];
+  /** Canonical media records served alongside the flat `images` array —
+   *  derivatives, blurhash/LQIP placeholders, focal point, poster. */
+  media?: ListingMediaRecord[];
   mediaAspectRatio?: number | null;
   mediaWidth?: number | null;
   mediaHeight?: number | null;
@@ -426,9 +434,10 @@ export interface ListingApiItem {
   engagement?: ListingEngagementSummaryApi | null;
   /** Pinned/featured listing — shown first in the Shop grid when true. */
   featured?: boolean | null;
-  /** Backend media records with stable IDs — used by the edit flow to build
-   *  `attachmentOrder` and `removedAttachmentIds` manifests. */
-  media?: Array<{ id: string; url: string; sortOrder: number }>;
+  /** Canonical media records with stable IDs — used by the edit flow to build
+   *  `attachmentOrder` and `removedAttachmentIds` manifests. Carries the
+   *  full media contract (derivatives, blurhash/LQIP, focal point, poster). */
+  media?: ListingMediaRecord[];
 }
 
 export interface ListingSoldComparables {

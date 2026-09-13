@@ -9,6 +9,7 @@ import {
   invalidateSearchCache,
   trackQueryFrequency,
   getHotQueries,
+  getHotQueryLabels,
   setHotQueryResult,
   getHotQueryResult,
   refreshHotQueryCache,
@@ -333,6 +334,26 @@ test('getHotQueries filters queries below frequency threshold', async () => {
 
   const hot = await getHotQueries(redis, 10);
   assert.equal(hot.length, 0);
+});
+
+test('getHotQueryLabels returns human-readable normalized query text', async () => {
+  const redis = createMockRedis();
+  for (let i = 0; i < HOT_QUERY_FREQUENCY_THRESHOLD + 1; i++) {
+    await trackQueryFrequency(redis, '  Vintage Denim  ');
+  }
+
+  const labels = await getHotQueryLabels(redis, 10);
+  assert.equal(labels.length, 1);
+  assert.equal(labels[0].query, 'vintage denim');
+  assert.equal(labels[0].frequency, HOT_QUERY_FREQUENCY_THRESHOLD + 1);
+});
+
+test('getHotQueryLabels returns empty when no query crosses the threshold', async () => {
+  const redis = createMockRedis();
+  await trackQueryFrequency(redis, 'tracked once');
+
+  const labels = await getHotQueryLabels(redis, 10);
+  assert.deepEqual(labels, []);
 });
 
 test('setHotQueryResult and getHotQueryResult work as a pair', async () => {

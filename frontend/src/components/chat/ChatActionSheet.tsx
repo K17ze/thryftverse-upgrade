@@ -16,6 +16,8 @@ interface ChatActionSheetProps {
   hasLinkedListing?: boolean;
   isSeller?: boolean;
   hideDocument?: boolean;
+  /** Hides "Share listing" where no listing-share send path exists (DM chat). */
+  hideShareListing?: boolean;
 }
 
 interface ActionDef {
@@ -34,6 +36,7 @@ export function ChatActionSheet({
   hasLinkedListing = false,
   isSeller = false,
   hideDocument = false,
+  hideShareListing = false,
 }: ChatActionSheetProps) {
   const { colors } = useAppTheme();
   const { t } = useAppTranslation('messaging');
@@ -68,7 +71,7 @@ export function ChatActionSheet({
             },
           ]
         : []),
-      ...(hasLinkedListing
+      ...(hasLinkedListing && !hideShareListing
         ? [
             {
               id: "share_listing" as ChatAction,
@@ -84,7 +87,7 @@ export function ChatActionSheet({
         label: t('agentPicker.addAssistant'),
         description: t('agentPicker.addAssistantDescription') },
     ],
-    [t, hasLinkedListing, isSeller, hideDocument],
+    [t, hasLinkedListing, isSeller, hideDocument, hideShareListing],
   );
 
   return (

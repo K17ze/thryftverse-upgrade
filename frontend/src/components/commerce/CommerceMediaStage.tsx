@@ -228,7 +228,9 @@ function MediaPage({
             <CachedImage
               key={retryKey}
               uri={item.uri}
+              previewUri={item.blurhash ? undefined : (item.lqip ?? undefined)}
               blurhash={item.blurhash ?? undefined}
+              derivatives={item.derivatives}
               style={subComponentStyles.image}
               containerStyle={subComponentStyles.image}
               contentFit={item.fit ?? 'cover'}
@@ -242,7 +244,9 @@ function MediaPage({
             <CachedImage
               key={retryKey}
               uri={item.uri}
+              previewUri={item.blurhash ? undefined : (item.lqip ?? undefined)}
               blurhash={item.blurhash ?? undefined}
+              derivatives={item.derivatives}
               style={subComponentStyles.image}
               containerStyle={subComponentStyles.image}
               contentFit={item.fit ?? 'cover'}
@@ -491,13 +495,24 @@ function VideoPage({
         nativeControls={false}
       />
 
-      {/* Poster image shown until video starts playing */}
+      {/* Poster image shown until video starts playing — honour the media
+          contract's focal point so the placeholder crops the same way the
+          poster renders on focal-aware surfaces (no focal-crop shift on
+          crossfade). */}
       {showPoster && item.posterUri && (
         <View pointerEvents="none" style={StyleSheet.absoluteFill}>
           <ExpoImage
             source={{ uri: item.posterUri }}
             style={StyleSheet.absoluteFill}
             contentFit={item.fit === 'cover' ? 'cover' : 'contain'}
+            contentPosition={
+              item.focalPoint
+                ? {
+                    top: `${Math.round(item.focalPoint.y * 100)}%`,
+                    left: `${Math.round(item.focalPoint.x * 100)}%`,
+                  }
+                : undefined
+            }
             cachePolicy="memory-disk"
             recyclingKey={item.posterUri}
           />
@@ -692,6 +707,9 @@ export interface CommerceMediaStageProps {
   onBack: () => void;
   onShare: () => void;
   onSave?: () => void;
+  /** Long-press on the save control — the "file to board" tier (opens
+   *  the collection picker). Tap stays the instant quick-save toggle. */
+  onSaveLongPress?: () => void;
   onToggleFav?: () => void;
   isFav?: boolean;
   isSaved?: boolean;
@@ -755,6 +773,7 @@ export function CommerceMediaStage({
   onBack,
   onShare,
   onSave,
+  onSaveLongPress,
   onToggleFav,
   isFav = false,
   isSaved = false,
@@ -1044,9 +1063,13 @@ export function CommerceMediaStage({
               <AnimatedPressable
                 style={styles.controlBtn}
                 onPress={onSave}
+                onLongPress={onSaveLongPress}
                 scaleValue={PressScale.tap}
                 activeOpacity={0.85}
-                accessibilityLabel={isSaved ? 'Saved to collection' : 'Save to collection'}
+                accessibilityLabel={isSaved ? 'Saved' : 'Save'}
+                accessibilityHint={onSaveLongPress
+                  ? 'Tap to save. Long-press to file into a collection.'
+                  : undefined}
               >
                 <Ionicons
                   name={isSaved ? 'bookmark' : 'bookmark-outline'}
@@ -1160,8 +1183,10 @@ export function CommerceMediaStage({
                   ) : (
                     <CachedImage
                       uri={item.uri}
-                      previewUri={item.posterUri ?? undefined}
+                      previewUri={item.posterUri ?? item.lqip ?? undefined}
                       blurhash={item.blurhash ?? undefined}
+                      derivatives={item.derivatives}
+                      downscaleWidth={40}
                       style={styles.thumbnailImage}
                       containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.sm }}
                       contentFit="cover"

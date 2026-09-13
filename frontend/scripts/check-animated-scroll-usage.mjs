@@ -66,12 +66,21 @@ for (const file of files) {
   const forwardsHandlerToChild =
     /onScroll=\{?\s*[A-Za-z_$][\w$]*\s*\}?/.test(src) &&
     !/<\s*(ScrollView|FlatList|FlashList)\b[^>]*onScroll/.test(src);
+  // Hook-returns-handler pattern: a custom hook creates the scroll handler
+  // and returns it for the consumer to wire onto its own animated scroll
+  // container (the useItemDetailDismiss → ItemDetailScreen pattern). The
+  // animated-container obligation transfers to the consumer, whose own
+  // file is covered by the checks above.
+  const returnsHandlerFromHook =
+    /\bexport\s+function\s+use[A-Z]/.test(src) &&
+    /return\s*\{[\s\S]*?\b(scrollHandler|scrollHandlerRef)\b/.test(src);
 
   if (
     !hasReanimatedScrollView &&
     !hasReanimatedFlatList &&
     !hasCreatedAnimatedComponent &&
-    !forwardsHandlerToChild
+    !forwardsHandlerToChild &&
+    !returnsHandlerFromHook
   ) {
     const rel = file.replace(ROOT + '\\', '').replace(ROOT + '/', '');
     violations.push(

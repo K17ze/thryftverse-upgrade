@@ -332,7 +332,7 @@ export default function AgentLedgerScreen({ navigation }: Props) {
   }
 
   // --- Error state ---
-  if (error && agentRuns.length === 0) {
+  if (error && agentRuns.length === 0 && pendingApprovals.length === 0) {
     return (
       <FlagshipScreen
         header={
@@ -368,7 +368,7 @@ export default function AgentLedgerScreen({ navigation }: Props) {
   }
 
   // --- Empty state ---
-  if (agentRuns.length === 0) {
+  if (agentRuns.length === 0 && pendingApprovals.length === 0) {
     return (
       <FlagshipScreen
         header={

@@ -1,4 +1,5 @@
 import type { Pool, PoolClient } from 'pg';
+import { appendDomainEvent } from './domainOutbox.js';
 import { logger } from './logger.js';
 
 // ── Command + result types ──────────────────────────────────────────────
@@ -152,16 +153,46 @@ export async function executeListingCommand(
     // listing is reactivated before the offer expires.
     let cancelledOffers = 0;
     if (type === 'delete' || type === 'mark_sold_external') {
-      const cancelResult = await client.query(
+      const cancelResult = await client.query<{
+        id: string;
+        buyer_id: string;
+        seller_id: string;
+        offer_price_gbp: string;
+        conversation_id: string | null;
+      }>(
         `UPDATE listing_offers
             SET status = 'cancelled',
                 cancelled_at = NOW(),
                 updated_at = NOW()
           WHERE listing_id = $1
-            AND status = 'pending'`,
+            AND status = 'pending'
+          RETURNING id, buyer_id, seller_id, offer_price_gbp::text, conversation_id`,
         [listingId],
       );
       cancelledOffers = cancelResult.rowCount ?? 0;
+
+      // One `offer.cancelled` domain event per cancelled offer — the same
+      // event the buyer-initiated cancel route emits — so the outbox drain
+      // notifies each buyer. The events are appended inside this transaction
+      // (outbox pattern) and the deduplication key is derived from the offer
+      // id, so a retried command cannot double-notify.
+      for (const cancelledOffer of cancelResult.rows) {
+        await appendDomainEvent(client, {
+          aggregateType: 'offer',
+          aggregateId: cancelledOffer.id,
+          eventType: 'offer.cancelled',
+          actorId: command.actorId ?? null,
+          deduplicationKey: `offer.cancelled:${cancelledOffer.id}`,
+          payload: {
+            offerId: cancelledOffer.id,
+            listingId,
+            buyerId: cancelledOffer.buyer_id,
+            sellerId: cancelledOffer.seller_id,
+            offerPriceGbp: Number(cancelledOffer.offer_price_gbp),
+            conversationId: cancelledOffer.conversation_id,
+          },
+        });
+      }
     }
 
     // Record an audit entry inside the same transaction so the audit trail

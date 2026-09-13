@@ -20,11 +20,7 @@ import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTranslation } from '../../i18n/useAppTranslation';
 import { isVideoUri } from '../../utils/media';
 import type { ProfileMediaState } from '../../hooks/useProfileMediaUpload';
-
-// A profile cover is identity media, not a thin toolbar backdrop. At 200pt it
-// retains a useful crop on common phone widths while leaving the avatar/stats
-// seam outside the cover-control layer.
-const COVER_HEIGHT = 200;
+import { COVER_HEIGHT } from '../../hooks/myprofile';
 
 export interface ProfileHeaderHeroProps {
   coverMedia: string;

@@ -48,19 +48,27 @@ interface MoreSheetProps {
   onDismiss: () => void;
   isSelfProfile: boolean;
   isBlocked: boolean;
+  isMuted: boolean;
+  isRestricted: boolean;
+  /** '@handle' of the target — used in the mute/restrict row labels. */
+  displayHandle: string;
   onShare: () => void;
   onCopyLink: () => void;
   onReport: () => void;
+  onMute: () => void;
+  onUnmute: () => void;
+  onRestrict: () => void;
+  onUnrestrict: () => void;
   onBlock: () => void;
   onUnblock: () => void;
 }
 
 export function ProfileMoreSheet({
-  visible, onDismiss, isSelfProfile, isBlocked,
-  onShare, onCopyLink, onReport, onBlock, onUnblock }: MoreSheetProps) {
+  visible, onDismiss, isSelfProfile, isBlocked, isMuted, isRestricted, displayHandle,
+  onShare, onCopyLink, onReport, onMute, onUnmute, onRestrict, onUnrestrict, onBlock, onUnblock }: MoreSheetProps) {
   const { colors } = useAppTheme();
   return (
-    <NativeSheet visible={visible} onDismiss={onDismiss} snapPoints={[{ fraction: 0.38 }]}>
+    <NativeSheet visible={visible} onDismiss={onDismiss} snapPoints={[{ fraction: 0.55 }]}>
       <View style={styles.sheetContainer}>
         <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>
           More options
@@ -70,6 +78,16 @@ export function ProfileMoreSheet({
         {!isSelfProfile ? (
           <>
             <SheetItem icon="flag-outline" label="Report" onPress={onReport} colors={colors} />
+            {isMuted ? (
+              <SheetItem icon="notifications-outline" label={`Unmute ${displayHandle}`} onPress={onUnmute} colors={colors} />
+            ) : (
+              <SheetItem icon="notifications-off-outline" label={`Mute ${displayHandle}`} onPress={onMute} colors={colors} />
+            )}
+            {isRestricted ? (
+              <SheetItem icon="eye-outline" label={`Unrestrict ${displayHandle}`} onPress={onUnrestrict} colors={colors} />
+            ) : (
+              <SheetItem icon="eye-off-outline" label={`Restrict ${displayHandle}`} onPress={onRestrict} colors={colors} />
+            )}
             {isBlocked ? (
               <SheetItem icon="hand-right-outline" label="Unblock" onPress={onUnblock} colors={colors} />
             ) : (
@@ -273,6 +291,59 @@ export function ProfileBlockConfirmSheet({
             {isPending ? <ActivityIndicator size="small" color={colors.textInverse} /> : (
               <Text style={[styles.confirmBlockBtnText, { color: colors.textInverse }]}>
                 Block
+              </Text>
+            )}
+          </AnimatedPressable>
+        </View>
+      </View>
+    </NativeSheet>
+  );
+}
+
+// ── Restrict confirmation sheet ─────────────────────────────────────────────
+interface RestrictConfirmSheetProps {
+  visible: boolean;
+  onDismiss: () => void;
+  displayHandle: string;
+  isPending: boolean;
+  onConfirm: () => void;
+}
+
+export function ProfileRestrictConfirmSheet({
+  visible, onDismiss, displayHandle, isPending, onConfirm }: RestrictConfirmSheetProps) {
+  const { colors } = useAppTheme();
+  return (
+    <NativeSheet visible={visible} onDismiss={onDismiss} snapPoints={[{ fraction: 0.4 }]}>
+      <View style={styles.sheetContainer}>
+        <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>
+          Restrict {displayHandle}?
+        </Text>
+        <Text style={[styles.sheetDescription, { color: colors.textSecondary }]}>
+          Their messages move to your requests and they won't see when you've read them or when you're typing. They won't know they're restricted.
+        </Text>
+        <View style={styles.confirmRow}>
+          <AnimatedPressable
+            style={[styles.cancelBtn, { borderColor: colors.border, backgroundColor: colors.background }]}
+            onPress={onDismiss}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel restrict"
+          >
+            <Text style={[styles.cancelBtnText, { color: colors.textPrimary }]}>
+              Cancel
+            </Text>
+          </AnimatedPressable>
+          <AnimatedPressable
+            style={[styles.confirmBlockBtn, { backgroundColor: colors.brand }]}
+            onPress={onConfirm}
+            activeOpacity={0.85}
+            disabled={isPending}
+            accessibilityRole="button"
+            accessibilityLabel="Confirm restrict"
+          >
+            {isPending ? <ActivityIndicator size="small" color={colors.textInverse} /> : (
+              <Text style={[styles.confirmBlockBtnText, { color: colors.textInverse }]}>
+                Restrict
               </Text>
             )}
           </AnimatedPressable>

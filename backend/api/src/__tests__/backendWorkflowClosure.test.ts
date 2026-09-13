@@ -258,6 +258,234 @@ test('counter-offer derives the next round and participant roles from the locked
   assert.ok(statements.some((sql) => sql.startsWith("UPDATE listing_offers SET status = 'countered'")));
 });
 
+test('creating a listing offer emits a durable offer.created domain event', async () => {
+  const { app, handlers } = createRouteHarness();
+  const domainEventParams: unknown[][] = [];
+  let outboxDrainQueued = false;
+  const client = {
+    async query(sql: string, params?: unknown[]) {
+      const normalized = sql.replace(/\s+/g, ' ').trim();
+      if (normalized.startsWith('INSERT INTO domain_outbox')) {
+        domainEventParams.push(params ?? []);
+        return { rowCount: 1, rows: [{ id: 'evt_offer_created' }] };
+      }
+      if (normalized.startsWith('SELECT id, seller_id, price_gbp::text, status FROM listings')) {
+        return {
+          rowCount: 1,
+          rows: [{ id: 'listing_1', seller_id: 'seller_1', price_gbp: '100.00', status: 'active' }],
+        };
+      }
+      if (normalized.startsWith('INSERT INTO listing_offers')) {
+        return {
+          rowCount: 1,
+          rows: [{
+            id: 'offer_1',
+            listing_id: 'listing_1',
+            buyer_id: 'buyer_1',
+            seller_id: 'seller_1',
+            offer_price_gbp: '80.00',
+            original_price_gbp: '100.00',
+            counter_round: 0,
+            status: 'pending',
+            expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+            accepted_at: null,
+            declined_at: null,
+            expired_at: null,
+            cancelled_at: null,
+            conversation_id: 'conversation_1',
+            parent_offer_id: null,
+            metadata: {},
+            offered_by_user_id: 'buyer_1',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }],
+        };
+      }
+      return { rowCount: 0, rows: [] };
+    },
+    release() {},
+  };
+  const db = {
+    async connect() {
+      return client;
+    },
+  } as unknown as Pool;
+
+  registerListingOfferRoutes({
+    app,
+    db,
+    resolveAuthenticatedUserId: () => 'buyer_1',
+    calculatePlatformChargeGbp: () => 0,
+    authorizeInternalServiceRequest: () => true,
+    enqueueOutboxDrain: async () => {
+      outboxDrainQueued = true;
+    },
+  });
+
+  const handler = handlers.get('POST /listings/:listingId/offers');
+  assert.ok(handler);
+  const reply = createReply();
+  const result = await handler(
+    {
+      params: { listingId: 'listing_1' },
+      body: { offerPriceGbp: 80, conversationId: 'conversation_1' },
+    },
+    reply,
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(reply.statusCode, 201);
+  const created = domainEventParams.find((params) => params[3] === 'offer.created');
+  assert.ok(created);
+  const eventPayload = JSON.parse(String(created[5]));
+  assert.match(String(eventPayload.offerId), /^offer_/);
+  assert.equal(created[2], eventPayload.offerId);
+  assert.equal(created[10], `offer.created:${eventPayload.offerId}`);
+  assert.equal(eventPayload.listingId, 'listing_1');
+  assert.equal(eventPayload.buyerId, 'buyer_1');
+  assert.equal(eventPayload.sellerId, 'seller_1');
+  assert.equal(eventPayload.amountGbp, 80);
+  assert.equal(eventPayload.counterRound, 0);
+  assert.equal(eventPayload.conversationId, 'conversation_1');
+  assert.equal(outboxDrainQueued, true);
+});
+
+test('declining a listing offer emits a durable offer.declined domain event', async () => {
+  const { app, handlers } = createRouteHarness();
+  const domainEventParams: unknown[][] = [];
+  let outboxDrainQueued = false;
+  const client = {
+    async query(sql: string, params?: unknown[]) {
+      const normalized = sql.replace(/\s+/g, ' ').trim();
+      if (normalized.startsWith('INSERT INTO domain_outbox')) {
+        domainEventParams.push(params ?? []);
+        return { rowCount: 1, rows: [{ id: 'evt_offer_declined' }] };
+      }
+      if (normalized.includes('FROM listing_offers') && normalized.includes('FOR UPDATE')) {
+        return {
+          rowCount: 1,
+          rows: [{
+            seller_id: 'seller_1',
+            buyer_id: 'buyer_1',
+            listing_id: 'listing_1',
+            offer_price_gbp: '80.00',
+            conversation_id: 'conversation_1',
+            status: 'pending',
+          }],
+        };
+      }
+      return { rowCount: 1, rows: [] };
+    },
+    release() {},
+  };
+  const db = {
+    async connect() {
+      return client;
+    },
+  } as unknown as Pool;
+
+  registerListingOfferRoutes({
+    app,
+    db,
+    resolveAuthenticatedUserId: () => 'seller_1',
+    calculatePlatformChargeGbp: () => 0,
+    authorizeInternalServiceRequest: () => true,
+    enqueueOutboxDrain: async () => {
+      outboxDrainQueued = true;
+    },
+  });
+
+  const handler = handlers.get('POST /offers/:offerId/decline');
+  assert.ok(handler);
+  const result = await handler(
+    { params: { offerId: 'offer_1' } },
+    createReply(),
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.status, 'declined');
+  const declined = domainEventParams.find((params) => params[3] === 'offer.declined');
+  assert.ok(declined);
+  assert.equal(declined[10], 'offer.declined:offer_1');
+  const eventPayload = JSON.parse(String(declined[5]));
+  assert.equal(eventPayload.offerId, 'offer_1');
+  assert.equal(eventPayload.buyerId, 'buyer_1');
+  assert.equal(eventPayload.sellerId, 'seller_1');
+  assert.equal(outboxDrainQueued, true);
+});
+
+test('the offer expiry sweep emits one offer.expired event per expired offer', async () => {
+  const { app, handlers } = createRouteHarness();
+  const domainEventParams: unknown[][] = [];
+  let outboxDrainQueued = false;
+  const client = {
+    async query(sql: string, params?: unknown[]) {
+      const normalized = sql.replace(/\s+/g, ' ').trim();
+      if (normalized.startsWith('INSERT INTO domain_outbox')) {
+        domainEventParams.push(params ?? []);
+        return { rowCount: 1, rows: [{ id: 'evt_offer_expired' }] };
+      }
+      if (normalized.startsWith("UPDATE listing_offers SET status = 'expired'")) {
+        return {
+          rowCount: 2,
+          rows: [
+            {
+              id: 'offer_exp_1',
+              listing_id: 'listing_1',
+              buyer_id: 'buyer_1',
+              seller_id: 'seller_1',
+              offer_price_gbp: '80.00',
+              conversation_id: null,
+              expires_at: new Date(Date.now() - 60_000).toISOString(),
+            },
+            {
+              id: 'offer_exp_2',
+              listing_id: 'listing_2',
+              buyer_id: 'buyer_2',
+              seller_id: 'seller_2',
+              offer_price_gbp: '45.00',
+              conversation_id: 'conversation_2',
+              expires_at: new Date(Date.now() - 60_000).toISOString(),
+            },
+          ],
+        };
+      }
+      return { rowCount: 0, rows: [] };
+    },
+    release() {},
+  };
+  const db = {
+    async connect() {
+      return client;
+    },
+  } as unknown as Pool;
+
+  registerListingOfferRoutes({
+    app,
+    db,
+    resolveAuthenticatedUserId: () => 'ordinary_user',
+    calculatePlatformChargeGbp: () => 0,
+    authorizeInternalServiceRequest: () => true,
+    enqueueOutboxDrain: async () => {
+      outboxDrainQueued = true;
+    },
+  });
+
+  const handler = handlers.get('POST /offers/sweep-expired');
+  assert.ok(handler);
+  const result = await handler({ headers: {} }, createReply());
+
+  assert.equal(result.ok, true);
+  assert.equal(result.expiredCount, 2);
+  const expiredEvents = domainEventParams.filter((params) => params[3] === 'offer.expired');
+  assert.equal(expiredEvents.length, 2);
+  assert.deepEqual(
+    expiredEvents.map((params) => params[10]).sort(),
+    ['offer.expired:offer_exp_1', 'offer.expired:offer_exp_2'],
+  );
+  assert.equal(outboxDrainQueued, true);
+});
+
 test('Co-Own commerce policy exposes one versioned 20-unit boundary', () => {
   assert.match(COMMERCE_POLICY_VERSION, /^\d{4}-\d{2}-\d{2}\.\d+$/);
   assert.equal(COOWN_POLICY.maxIssuanceUnits, 20);

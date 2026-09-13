@@ -1,501 +1,63 @@
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   View,
-  StyleSheet,
   RefreshControl,
   StatusBar,
-  Text,
-  ScrollView,
-  Platform } from 'react-native';
+  Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { FlashList, type ListRenderItem, type FlashListRef } from '@shopify/flash-list';
+import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { SupportedCurrencyCode } from '../constants/currencies';
 import { useCurrencyContext } from '../context/CurrencyContext';
-import { toIze, formatAuctionIze } from '../utils/currency';
-import { useBucketedServerClock, resolveAuctionTiming } from '../hooks/useServerClock';
-import {
-  resolvePriceLabel,
-  resolvePriceText,
-  resolveTimeLabel,
-  resolveUrgency,
-  buildAuctionAccessibilityLabel,
-  type AuctionHomeItem } from '../utils/auctionHomeLogic';
-import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { CachedImage } from '../components/CachedImage';
-import { SkeletonLoader } from '../components/SkeletonLoader';
+import { useAppTheme } from '../theme/ThemeContext';
 import { AppButton } from '../components/ui/AppButton';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { OfflineBanner } from '../components/OfflineBanner';
-import { RetryState } from '../components/RetryState';
-import { Space, Radius, Typography, Stroke, Control } from '../theme/designTokens';
-import { TypographyV2 } from '../theme/typography.v2';
+import { Space } from '../theme/designTokens';
 import {
-
-  listAuctions,
-  type MarketAuction } from '../services/marketApi';
-import { t } from '../i18n';
+  SellerAuctionRow,
+  SellerAuctionSummary,
+  SellerAuctionTabRail,
+  SellerAuctionEmptyState,
+  SellerAuctionLoadMore } from '../components/auction';
+import {
+  buildSellerTabs,
+  type FlatListItem } from '../components/auction/sellerAuctionCentreViewModels';
+import { createSellerAuctionCentreScreenStyles } from '../components/auction/sellerAuctionCentreScreenStyles';
+import {
+  useSellerAuctionCentreData,
+  useSellerAuctionTabScroll } from '../hooks/auction';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
-
-type SellerTab = 'scheduled' | 'live' | 'sold' | 'unsold' | 'cancelled';
-
-/**
- * Flattened list item model.
- *
- * The original SectionList rendered a single section per active tab, with the
- * tab rail as a sticky section header. FlashList has no native concept of
- * sections, so the section is materialised as a discriminated header item
- * followed by its row items in a flat `data` array.
- */
-type SectionHeaderItem = { type: 'header'; sectionTitle: SellerTab };
-type SectionRowItem = { type: 'item' } & AuctionHomeItem;
-type SectionEmptyItem = { type: 'empty' };
-type FlatListItem = SectionHeaderItem | SectionRowItem | SectionEmptyItem;
-
-function toViewModel(api: MarketAuction): AuctionHomeItem {
-  return {
-    id: api.id,
-    listingId: api.listingId,
-    sellerId: api.seller.id,
-    sellerUsername: api.seller.username,
-    sellerDisplayName: api.seller.displayName,
-    sellerAvatarUrl: api.seller.avatarUrl,
-    title: api.title,
-    imageUrl: api.imageUrl ?? '',
-    brand: api.brand,
-    startsAt: api.startsAt,
-    endsAt: api.endsAt,
-    startingBidGbp: api.startingBidGbp,
-    currentBidGbp: api.currentBidGbp,
-    minimumNextBidGbp: api.minimumNextBidGbp,
-    bidCount: api.bidCount,
-    buyNowPriceGbp: api.buyNowPriceGbp,
-    reservePriceGbp: api.reservePriceGbp ?? null,
-    viewerState: api.viewerState,
-    isWatched: api.isWatched,
-    winnerBidderId: api.winnerBidderId ?? null,
-    cancelledAt: api.cancelledAt ?? null,
-    settledAt: api.settledAt ?? null,
-    lifecycle: api.lifecycle,
-    terminalReason: api.terminalReason };
-}
-
-interface SellerStats {
-  total: number;
-  live: number;
-  scheduled: number;
-  sold: number;
-  unsold: number;
-  cancelled: number;
-  totalBids: number;
-  highestBid: number;
-}
-
-function computeStats(items: AuctionHomeItem[], clockMs: number): SellerStats {
-  let live = 0, scheduled = 0, sold = 0, unsold = 0, cancelled = 0, totalBids = 0, highestBid = 0;
-  for (const item of items) {
-    const timing = resolveAuctionTiming(item, clockMs);
-    if (timing.effectiveState === 'live') live++;
-    else if (timing.effectiveState === 'upcoming') scheduled++;
-    else if (timing.effectiveState === 'cancelled') cancelled++;
-    else if (timing.effectiveState === 'ended' || timing.effectiveState === 'settled') {
-      if (item.bidCount > 0) sold++;
-      else unsold++;
-    }
-    totalBids += item.bidCount;
-    if (item.currentBidGbp > highestBid) highestBid = item.currentBidGbp;
-  }
-  return { total: items.length, live, scheduled, sold, unsold, cancelled, totalBids, highestBid };
-}
-
-// ── Terminal reason mapping — never expose raw backend enums ──
-const TERMINAL_REASON_MAP: Record<string, string> = {
-  seller_cancelled: 'Cancelled by seller',
-  policy_violation: 'Cancelled after review',
-  payment_failure: 'Payment was not completed',
-  admin_cancelled: 'Cancelled after review',
-  duplicate_listing: 'Cancelled after review',
-  prohibited_item: 'Cancelled after review' };
-
-function mapTerminalReason(reason: string | null): string {
-  if (!reason) return 'Cancelled';
-  return TERMINAL_REASON_MAP[reason] ?? 'Cancelled';
-}
-
-// ── State-specific presentation config ──
-interface StatePresentation {
-  stateLabel: string;
-  stateColor: string;
-  /** Leading operational line — the most important fact for this state */
-  leadingLabel: string;
-  leadingColor: string;
-  /** One truthful next action */
-  actionLabel: string;
-  /** Whether to show the live signal dot on the image */
-  showLiveDot: boolean;
-  /** Whether to use danger colour for state text (genuine final urgency only) */
-  useDangerState: boolean;
-}
-
-function resolveStatePresentation(
-  item: AuctionHomeItem,
-  timing: ReturnType<typeof resolveAuctionTiming>,
-  urgency: ReturnType<typeof resolveUrgency>,
-  timeLabel: string,
-  colors: ThemeColors,
-): StatePresentation {
-  const isCancelled = timing.effectiveState === 'cancelled' || item.cancelledAt;
-  const isSold = (timing.effectiveState === 'ended' || timing.effectiveState === 'settled') && item.bidCount > 0 && !isCancelled;
-  const isUnsold = timing.effectiveState === 'ended' && item.bidCount === 0 && !isCancelled;
-  const isLive = timing.effectiveState === 'live';
-  const isScheduled = timing.effectiveState === 'upcoming';
-
-  if (isCancelled) {
-    return {
-      stateLabel: 'Cancelled',
-      stateColor: colors.textMuted,
-      leadingLabel: mapTerminalReason(item.terminalReason),
-      leadingColor: colors.textMuted,
-      actionLabel: 'View details',
-      showLiveDot: false,
-      useDangerState: false };
-  }
-  if (isSold) {
-    return {
-      stateLabel: 'Sold',
-      stateColor: colors.success,
-      leadingLabel: `Sold · ${item.bidCount} ${item.bidCount === 1 ? 'bid' : 'bids'}`,
-      leadingColor: colors.textSecondary,
-      actionLabel: 'View sale',
-      showLiveDot: false,
-      useDangerState: false };
-  }
-  if (isUnsold) {
-    return {
-      stateLabel: 'Unsold',
-      stateColor: colors.textMuted,
-      leadingLabel: 'No bids received',
-      leadingColor: colors.textMuted,
-      actionLabel: 'Review result',
-      showLiveDot: false,
-      useDangerState: false };
-  }
-  if (isLive) {
-    const finalUrgency = urgency === 'finalMinutes';
-    return {
-      stateLabel: finalUrgency ? 'Ending' : 'Live',
-      stateColor: finalUrgency ? colors.danger : colors.textPrimary,
-      leadingLabel: timeLabel,
-      leadingColor: finalUrgency ? colors.danger : colors.textSecondary,
-      actionLabel: 'View bids',
-      showLiveDot: true,
-      useDangerState: finalUrgency };
-  }
-  if (isScheduled) {
-    return {
-      stateLabel: 'Scheduled',
-      stateColor: colors.textSecondary,
-      leadingLabel: timeLabel,
-      leadingColor: colors.textSecondary,
-      actionLabel: 'View schedule',
-      showLiveDot: false,
-      useDangerState: false };
-  }
-  return {
-    stateLabel: 'Ended',
-    stateColor: colors.textMuted,
-    leadingLabel: timeLabel,
-    leadingColor: colors.textMuted,
-    actionLabel: 'Review result',
-    showLiveDot: false,
-    useDangerState: false };
-}
-
-// ── Inventory row — horizontal, operations-studio layout ──
-function SellerAuctionRow({
-  item,
-  clockMs,
-  onPress,
-  formatFromFiat,
-  fxRates,
-  currencyCode }: {
-  item: AuctionHomeItem;
-  clockMs: number;
-  onPress: () => void;
-  formatFromFiat: (amount: number, currency?: any, opts?: any) => string;
-  fxRates: any;
-  currencyCode: SupportedCurrencyCode;
-}) {
-  const { colors } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
-  const timing = resolveAuctionTiming(item, clockMs);
-  const urgency = resolveUrgency(timing);
-  const priceLabel = resolvePriceLabel(item, timing);
-  const priceText = resolvePriceText(item, timing, priceLabel, formatFromFiat);
-  const timeLabel = resolveTimeLabel(timing);
-  const presentation = resolveStatePresentation(item, timing, urgency, timeLabel, colors);
-
-  const amount = item.currentBidGbp > 0 ? item.currentBidGbp : item.startingBidGbp;
-  const izeText = amount > 0 ? formatAuctionIze(toIze(amount, currencyCode, fxRates)) : null;
-  const localText = priceLabel === 'No bids' ? null : priceText;
-
-  // Value prefix depends on state
-  const valuePrefix =
-    priceLabel === 'Starting bid' ? 'Starts '
-    : priceLabel === 'Final bid' ? 'Final '
-    : priceLabel === 'Current bid' ? 'Current '
-    : '';
-
-  return (
-    <AnimatedPressable
-      style={styles.row}
-      scaleValue={0.992}
-      activeOpacity={0.94}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={buildAuctionAccessibilityLabel(item, timing, priceLabel, priceText)}
-    >
-      {/* Media — controlled radius, scanable size */}
-      <View style={styles.rowImageWrap}>
-        {item.imageUrl ? (
-          <CachedImage
-            uri={item.imageUrl}
-            style={styles.rowImage}
-            containerStyle={styles.rowImageContainer}
-            contentFit="cover"
-          />
-        ) : (
-          <View style={styles.rowImagePlaceholder}>
-            <Ionicons name="image-outline" size={22} color={colors.textMuted} />
-          </View>
-        )}
-        {presentation.showLiveDot && <View style={styles.rowLiveDot} />}
-      </View>
-
-      {/* Body — identity + operational block */}
-      <View style={styles.rowBody}>
-        {/* Identity */}
-        <View style={styles.rowIdentity}>
-          <Text style={styles.rowTitle} numberOfLines={2}>{item.title}</Text>
-          <Text style={[styles.rowStateText, { color: presentation.stateColor }]}>
-            {presentation.stateLabel}
-          </Text>
-        </View>
-        {item.brand && <Text style={styles.rowBrand} numberOfLines={1}>{item.brand}</Text>}
-
-        {/* Hairline separator — identity → operational */}
-        <View style={styles.rowHairline} />
-
-        {/* Operational block — value + leading op + action */}
-        <View style={styles.rowOperational}>
-          <View style={styles.rowValueCol}>
-            <Text style={styles.rowIze} numberOfLines={1}>
-              {valuePrefix && <Text style={styles.rowValuePrefix}>{valuePrefix}</Text>}
-              {izeText ?? 'No value'}
-            </Text>
-            {localText && (
-              <Text style={styles.rowLocal} numberOfLines={1}>{localText}</Text>
-            )}
-          </View>
-          <View style={styles.rowActionCol}>
-            <Text style={styles.rowActionLabel}>{presentation.actionLabel}</Text>
-            <Ionicons name="chevron-forward" size={13} color={colors.textMuted} style={styles.rowActionChevron} />
-          </View>
-        </View>
-        <View style={styles.rowLeadingRow}>
-          <Text
-            style={[styles.rowLeading, { color: presentation.leadingColor }]}
-            numberOfLines={1}
-          >
-            {presentation.leadingLabel}
-          </Text>
-          {item.bidCount > 0 && presentation.stateLabel !== 'Sold' && (
-            <Text style={styles.rowBidCount}>
-              {item.bidCount} {item.bidCount === 1 ? 'bid' : 'bids'}
-            </Text>
-          )}
-        </View>
-      </View>
-    </AnimatedPressable>
-  );
-}
-
-function SellerSummary({
-  stats,
-  formatFromFiat,
-  fxRates,
-  currencyCode }: {
-  stats: SellerStats;
-  formatFromFiat: (amount: number, currency?: any, opts?: any) => string;
-  fxRates: any;
-  currencyCode: SupportedCurrencyCode;
-}) {
-  const { colors } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
-  const active = stats.live;
-  const activeColor = active > 0 ? colors.danger : colors.textPrimary;
-  const hasBidContext = stats.totalBids > 0 && stats.highestBid > 0;
-  const highestBidIze = hasBidContext
-    ? formatAuctionIze(toIze(stats.highestBid, currencyCode, fxRates))
-    : null;
-  const highestBidLocal = hasBidContext
-    ? formatFromFiat(stats.highestBid, 'GBP', { displayMode: 'fiat' })
-    : null;
-
-  return (
-    <View style={styles.summary}>
-      <View style={styles.summaryRow}>
-        {/* Primary measure — Active auctions */}
-        <View style={styles.summaryPrimary}>
-          <Text style={[styles.summaryPrimaryValue, { color: activeColor }]}>{active}</Text>
-          <Text style={[styles.summaryPrimaryLabel, { color: active > 0 ? colors.danger : colors.textMuted }]}>
-            Active auctions
-          </Text>
-        </View>
-        {/* Vertical hairline divider */}
-        <View style={styles.summaryPrimaryDivider} />
-        {/* Secondary measures — hairline-divided compact row */}
-        <View style={styles.summarySecondary}>
-          <View style={styles.summarySecondaryItem}>
-            <Text style={styles.summarySecondaryValue}>{stats.scheduled}</Text>
-            <Text style={styles.summarySecondaryLabel}>Scheduled</Text>
-          </View>
-          <View style={styles.summarySecondaryItem}>
-            <Text style={styles.summarySecondaryValue}>{stats.sold}</Text>
-            <Text style={styles.summarySecondaryLabel}>Sold</Text>
-          </View>
-          <View style={styles.summarySecondaryItem}>
-            <Text style={styles.summarySecondaryValue}>{stats.unsold}</Text>
-            <Text style={styles.summarySecondaryLabel}>Unsold</Text>
-          </View>
-        </View>
-      </View>
-      {/* Quiet context — total bids + highest bid, only when authoritative */}
-      {hasBidContext && (
-        <View style={styles.summaryContext}>
-          <Text style={styles.summaryContextText}>
-            {stats.totalBids} {stats.totalBids === 1 ? 'bid' : 'bids'} · Highest {highestBidIze}
-            {highestBidLocal ? ` · ${highestBidLocal}` : ''}
-          </Text>
-        </View>
-      )}
-    </View>
-  );
-}
 
 export default function SellerAuctionCentreScreen() {
   const navigation = useNavigation<NavT>();
   const { formatFromFiat, currencyCode } = useFormattedPrice();
   const { fxRates } = useCurrencyContext();
   const { colors, isDark } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const styles = useMemo(() => createSellerAuctionCentreScreenStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
 
-  const [activeTab, setActiveTab] = React.useState<SellerTab>('scheduled');
-  const [allItems, setAllItems] = React.useState<AuctionHomeItem[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [refreshing, setRefreshing] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-  const [cursor, setCursor] = React.useState<string | null>(null);
-  const [loadingMore, setLoadingMore] = React.useState(false);
+  const {
+    activeTab,
+    setActiveTab,
+    stats,
+    flatData,
+    secondClock,
+    loading,
+    refreshing,
+    error,
+    cursor,
+    loadingMore,
+    fetchAuctions,
+    handleRefresh,
+    handleLoadMore } = useSellerAuctionCentreData();
 
-  const requestIdRef = useRef(0);
-
-  const fetchAuctions = React.useCallback(async (isRefresh: boolean) => {
-    const reqId = ++requestIdRef.current;
-    if (!isRefresh) setLoading(true);
-    setError(null);
-    try {
-      const result = await listAuctions({ seller: 'me', status: 'all', sort: 'endingSoon', limit: 50 });
-      if (reqId !== requestIdRef.current) return;
-      setAllItems(result.items.map(toViewModel));
-      setCursor(result.nextCursor);
-    } catch {
-      if (reqId === requestIdRef.current) {
-        setError('Unable to load your auctions');
-      }
-    } finally {
-      if (reqId === requestIdRef.current) {
-        setLoading(false);
-        setRefreshing(false);
-        setLoadingMore(false);
-      }
-    }
-  }, []);
-
-  React.useEffect(() => {
-    void fetchAuctions(false);
-  }, [fetchAuctions]);
-
-  const { secondClock, minuteClock, needsResync } =
-    useBucketedServerClock(null);
-
-  React.useEffect(() => {
-    if (needsResync) void fetchAuctions(true);
-  }, [needsResync, fetchAuctions]);
-
-  const stats = useMemo(() => computeStats(allItems, minuteClock), [allItems, minuteClock]);
-
-  const filteredItems = useMemo(() => {
-    const clock = minuteClock;
-    return allItems.filter((item) => {
-      const timing = resolveAuctionTiming(item, clock);
-      if (activeTab === 'live') return timing.effectiveState === 'live';
-      if (activeTab === 'scheduled') return timing.effectiveState === 'upcoming';
-      if (activeTab === 'sold') {
-        return (timing.effectiveState === 'ended' || timing.effectiveState === 'settled') && item.bidCount > 0;
-      }
-      if (activeTab === 'unsold') {
-        return timing.effectiveState === 'ended' && item.bidCount === 0;
-      }
-      if (activeTab === 'cancelled') {
-        return timing.effectiveState === 'cancelled';
-      }
-      return false;
-    });
-  }, [allItems, activeTab, minuteClock]);
-
-  // Flatten the single section into a plain array for FlashList:
-  //   [header(activeTab), ...filteredItems]
-  // The header is always at index 0 so it can be made sticky. When the section
-  // has no rows, an explicit 'empty' item is emitted so the loading / error /
-  // empty-state content still renders beneath the sticky tab rail — mirroring
-  // SectionList's ListEmptyComponent behaviour (which FlashList cannot trigger
-  // because the header keeps `data` non-empty).
-  const flatData = useMemo<FlatListItem[]>(() => {
-    if (filteredItems.length === 0) {
-      return [{ type: 'empty' }];
-    }
-    return filteredItems.map((i) => ({ type: 'item', ...i }));
-  }, [filteredItems]);
-
-  const handleRefresh = React.useCallback(() => {
-    setRefreshing(true);
-    void fetchAuctions(true);
-  }, [fetchAuctions]);
-
-  const handleLoadMore = React.useCallback(async () => {
-    if (!cursor || loadingMore) return;
-    setLoadingMore(true);
-    try {
-      const result = await listAuctions({ seller: 'me', status: 'all', sort: 'endingSoon', cursor, limit: 50 });
-      setAllItems((prev) => {
-        const existingIds = new Set(prev.map((a) => a.id));
-        const newItems = result.items.map(toViewModel).filter((a) => !existingIds.has(a.id));
-        return [...prev, ...newItems];
-      });
-      setCursor(result.nextCursor);
-    } catch {
-      // silent
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [cursor, loadingMore]);
+  const { listRef, tabScrollRef, tabLayoutsRef, handleTabPress } =
+    useSellerAuctionTabScroll(activeTab, setActiveTab);
 
   const handleBack = useCallback(() => {
     if (navigation.canGoBack()) navigation.goBack();
@@ -510,150 +72,33 @@ export default function SellerAuctionCentreScreen() {
     navigation.navigate('CreateAuction');
   }, [navigation]);
 
-  // Refs for sticky-tab scroll architecture
-  const listRef = useRef<FlashListRef<FlatListItem>>(null);
-  const tabScrollRef = useRef<ScrollView>(null);
-  const tabLayoutsRef = useRef<Record<string, { x: number; width: number }>>({});
-
-  // Tab press: switch tab + scroll list to top for predictable positioning
-  const handleTabPress = useCallback((key: SellerTab) => {
-    setActiveTab(key);
-    // Scroll to top so summary reappears — predictable on tab switch
-    requestAnimationFrame(() => {
-      listRef.current?.scrollToOffset({ offset: 0, animated: false });
-    });
-  }, []);
-
-  // Auto-scroll selected tab into view when it changes
-  React.useEffect(() => {
-    const layout = tabLayoutsRef.current[activeTab];
-    if (layout && tabScrollRef.current) {
-      tabScrollRef.current.scrollTo({
-        x: Math.max(0, layout.x - 40),
-        animated: false });
-    }
-  }, [activeTab]);
-
-  const tabs: { key: SellerTab; label: string; count: number }[] = [
-    { key: 'scheduled', label: 'Scheduled', count: stats.scheduled },
-    { key: 'live', label: 'Live', count: stats.live },
-    { key: 'sold', label: 'Sold', count: stats.sold },
-    { key: 'unsold', label: 'Unsold', count: stats.unsold },
-    { key: 'cancelled', label: 'Cancelled', count: stats.cancelled },
-  ];
+  const tabs = useMemo(() => buildSellerTabs(stats), [stats]);
 
   // Empty / loading / error state — rendered for the 'empty' item in the
   // flattened FlashList data (see flatData). Defined before renderItem because
   // renderItem closes over it.
-  const renderEmpty = useCallback(() => {
-    if (loading) {
-      return (
-        <View style={styles.loadingWrap}>
-          {[0, 1, 2, 3].map((i) => (
-            <View key={i} style={styles.loadingRow}>
-              <SkeletonLoader width={96} height={96} borderRadius={Radius.md} />
-              <View style={styles.loadingBody}>
-                <View style={styles.loadingTitleRow}>
-                  <SkeletonLoader width="70%" height={15} borderRadius={Radius.sm} />
-                  <SkeletonLoader width={40} height={12} borderRadius={Radius.sm} />
-                </View>
-                <SkeletonLoader width="40%" height={11} borderRadius={Radius.sm} />
-                <View style={styles.loadingHairline} />
-                <SkeletonLoader width="55%" height={17} borderRadius={Radius.sm} />
-                <SkeletonLoader width="35%" height={11} borderRadius={Radius.sm} />
-              </View>
-            </View>
-          ))}
-        </View>
-      );
-    }
-    if (error) {
-      return (
-        <RetryState
-          message="Couldn't load auctions. Check your connection and try again."
-          onRetry={() => void fetchAuctions(false)}
-        />
-      );
-    }
-    const emptyConfig: Record<SellerTab, { title: string; message: string; cta?: string }> = {
-      scheduled: {
-        title: 'No auctions scheduled',
-        message: 'Create an auction when you are ready to sell.',
-        cta: 'Create Auction' },
-      live: {
-        title: 'Nothing live right now',
-        message: 'Scheduled auctions will appear here when they begin.' },
-      sold: {
-        title: 'No completed sales yet',
-        message: 'Auctions sold with bids will appear here.' },
-      unsold: {
-        title: 'No unsold auctions',
-        message: 'Auctions ending without bids will appear here.' },
-      cancelled: {
-        title: 'No cancelled auctions',
-        message: 'Cancelled auctions will remain available here.' } };
-    const cfg = emptyConfig[activeTab];
-    return (
-      <View style={styles.inlineStateWrap}>
-        <Text style={styles.inlineStateTitle}>{cfg.title}</Text>
-        <Text style={styles.inlineStateMessage}>{cfg.message}</Text>
-        {cfg.cta && (
-          <AnimatedPressable
-            style={styles.inlineCtaBtn}
-            onPress={navigateToCreate}
-            accessibilityRole="button"
-            accessibilityLabel={cfg.cta}
-          >
-            <Text style={styles.inlineCtaText}>{cfg.cta}</Text>
-            <Ionicons name="add" size={15} color={colors.brand} style={styles.inlineCtaIcon} />
-          </AnimatedPressable>
-        )}
-      </View>
-    );
-  }, [loading, error, activeTab, fetchAuctions, navigateToCreate]);
+  const renderEmpty = useCallback(() => (
+    <SellerAuctionEmptyState
+      loading={loading}
+      error={error}
+      activeTab={activeTab}
+      onRetry={() => void fetchAuctions(false)}
+      onCreateAuction={navigateToCreate}
+    />
+  ), [loading, error, activeTab, fetchAuctions, navigateToCreate]);
 
   // Tab rail — rendered for the 'header' item in the flattened FlashList data.
   // Kept sticky via `stickyHeaderIndices={[0]}` on FlashList (the header is
   // always the first element of the flattened array).
   const renderSectionHeader = useCallback(() => (
-    <View style={styles.tabBarContainer}>
-      <ScrollView
-        ref={tabScrollRef}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.tabBar}
-      >
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.key;
-          return (
-            <AnimatedPressable
-              key={tab.key}
-              style={styles.tab}
-              onPress={() => handleTabPress(tab.key)}
-              onLayout={(e) => {
-                tabLayoutsRef.current[tab.key] = {
-                  x: e.nativeEvent.layout.x,
-                  width: e.nativeEvent.layout.width };
-              }}
-              accessibilityRole="tab"
-              accessibilityLabel={tab.label}
-              accessibilityState={{ selected: isActive }}
-            >
-              <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
-                {tab.label}
-              </Text>
-              {tab.count > 0 && (
-                <Text style={[styles.tabCount, isActive && styles.tabCountActive]}>
-                  {tab.count}
-                </Text>
-              )}
-              {isActive && <View style={styles.tabIndicator} />}
-            </AnimatedPressable>
-          );
-        })}
-      </ScrollView>
-    </View>
-  ), [tabs, activeTab, handleTabPress]);
+    <SellerAuctionTabRail
+      tabs={tabs}
+      activeTab={activeTab}
+      onTabPress={handleTabPress}
+      tabScrollRef={tabScrollRef}
+      tabLayoutsRef={tabLayoutsRef}
+    />
+  ), [tabs, activeTab, handleTabPress, tabScrollRef, tabLayoutsRef]);
 
   // Distinguishes header items from row items so FlashList can recycle cells
   // by type rather than treating every cell as interchangeable.
@@ -696,7 +141,7 @@ export default function SellerAuctionCentreScreen() {
   const listHeader = useMemo(() => {
     if (stats.total === 0) return null;
     return (
-      <SellerSummary
+      <SellerAuctionSummary
         stats={stats}
         formatFromFiat={formatFromFiat}
         fxRates={fxRates}
@@ -711,26 +156,10 @@ export default function SellerAuctionCentreScreen() {
   const listFooter = useMemo(() => {
     if (!cursor || loading) return null;
     return (
-      <View style={styles.loadMoreWrap}>
-        <AnimatedPressable
-          style={styles.loadMoreBtn}
-          onPress={() => void handleLoadMore()}
-          disabled={loadingMore}
-          scaleValue={0.97}
-          activeOpacity={0.9}
-          accessibilityRole="button"
-          accessibilityLabel="Load more auctions"
-        >
-          {loadingMore ? (
-            <Text style={styles.loadMoreText}>Loading…</Text>
-          ) : (
-            <>
-              <Ionicons name="chevron-down" size={14} color={colors.brand} />
-              <Text style={styles.loadMoreText}>Load more</Text>
-            </>
-          )}
-        </AnimatedPressable>
-      </View>
+      <SellerAuctionLoadMore
+        loadingMore={loadingMore}
+        onPress={() => void handleLoadMore()}
+      />
     );
   }, [cursor, loading, loadingMore, handleLoadMore]);
 
@@ -754,7 +183,7 @@ export default function SellerAuctionCentreScreen() {
             <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
           </AnimatedPressable>
           <View style={styles.headerTitleWrap}>
-            <Text style={styles.headerTitle} numberOfLines={1}>Seller Centre</Text>
+            <Text style={styles.headerTitle} numberOfLines={1}>Your auctions</Text>
             <Text style={styles.headerSubtitle} numberOfLines={1}>
               {stats.total > 0 ? `${stats.total} auctions` : 'Auction listings'}
             </Text>
@@ -822,367 +251,4 @@ export default function SellerAuctionCentreScreen() {
       )}
     </SafeAreaView>
   );
-}
-
-const ROW_IMAGE_SIZE = 96;
-
-function createStyles(colors: ThemeColors) {
-  return StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background },
-  // ── Header ──
-  header: {
-    paddingBottom: Space.sm,
-    paddingHorizontal: Space.sm },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    minHeight: Control.hit },
-  headerIconBtn: {
-    width: Control.hit,
-    height: Control.hit,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  headerIconPressed: {
-    opacity: 0.5 },
-  headerTitleWrap: {
-    flex: 1,
-    marginLeft: Space.xs },
-  headerTitle: {
-    fontFamily: Typography.family.bold,
-    fontSize: TypographyV2.priceHero.size,
-    lineHeight: TypographyV2.priceHero.lineHeight,
-    color: colors.textPrimary,
-    letterSpacing: TypographyV2.priceHero.letterSpacing },
-  headerSubtitle: {
-    fontFamily: Typography.family.regular,
-    fontSize: TypographyV2.meta.size,
-    color: colors.textSecondary,
-    marginTop: Space.xs / 4,
-    letterSpacing: -0.1 },
-  // ── Seller summary — one integrated surface ──
-  summary: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.lg,
-    paddingBottom: Space.md },
-  summaryContext: {
-    marginTop: Space.sm,
-    paddingTop: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border },
-  summaryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md },
-  summaryContextText: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    color: colors.textMuted,
-    fontFamily: TypographyV2.meta.fontFamily,
-    fontVariant: ['tabular-nums'],
-    letterSpacing: TypographyV2.meta.letterSpacing },
-  summaryPrimary: {
-    alignItems: 'flex-start' },
-  summaryPrimaryValue: {
-    fontSize: TypographyV2.display.size,
-    fontFamily: TypographyV2.display.fontFamily,
-    letterSpacing: TypographyV2.display.letterSpacing,
-    fontVariant: ['tabular-nums'],
-    lineHeight: TypographyV2.display.lineHeight },
-  summaryPrimaryLabel: {
-    fontSize: TypographyV2.label.size,
-    lineHeight: TypographyV2.label.lineHeight,
-    fontFamily: TypographyV2.label.fontFamily,
-    marginTop: Space.xs / 2 + 1,
-    letterSpacing: TypographyV2.label.letterSpacing },
-  summaryPrimaryDivider: {
-    width: StyleSheet.hairlineWidth,
-    height: Space.xl + Space.xl + 4,
-    backgroundColor: colors.border },
-  summarySecondary: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between' },
-  summarySecondaryItem: {
-    alignItems: 'center',
-    flex: 1 },
-  summarySecondaryValue: {
-    fontSize: TypographyV2.priceList.size,
-    lineHeight: TypographyV2.priceList.lineHeight,
-    fontFamily: TypographyV2.priceList.fontFamily,
-    color: colors.textPrimary,
-    fontVariant: ['tabular-nums'],
-    letterSpacing: TypographyV2.priceList.letterSpacing },
-  summarySecondaryLabel: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    color: colors.textMuted,
-    fontFamily: TypographyV2.meta.fontFamily,
-    marginTop: Space.xs / 2 + 1,
-    letterSpacing: TypographyV2.meta.letterSpacing },
-  // ── Tab bar — text-first, underline indicator, sticky container ──
-  tabBarContainer: {
-    backgroundColor: colors.background,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border },
-  tabBar: {
-    flexDirection: 'row',
-    paddingHorizontal: Space.md,
-    gap: Space.md,
-    height: Control.hit,
-    alignItems: 'center' },
-  tab: {
-    height: Control.hit,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs / 2 + 1,
-    paddingHorizontal: Space.xs / 2,
-    position: 'relative' },
-  tabPressed: {
-    opacity: 0.5 },
-  tabText: {
-    fontSize: TypographyV2.body.size,
-    color: colors.textSecondary,
-    fontFamily: TypographyV2.body.fontFamily },
-  tabTextActive: {
-    color: colors.textPrimary,
-    fontFamily: Typography.family.semibold },
-  tabCount: {
-    fontSize: TypographyV2.meta.size,
-    color: colors.textMuted,
-    fontFamily: TypographyV2.meta.fontFamily,
-    fontVariant: ['tabular-nums'] },
-  tabCountActive: {
-    color: colors.textSecondary },
-  tabIndicator: {
-    position: 'absolute',
-    bottom: -Stroke.hairline,
-    left: Space.xs / 2,
-    right: Space.xs / 2,
-    height: Stroke.emphasis,
-    backgroundColor: colors.textPrimary,
-    borderRadius: Stroke.hairline },
-  // ── List ──
-  listContent: {
-    paddingBottom: Space.xl },
-  // ── Inventory row — horizontal, operations studio ──
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.md,
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.md },
-  rowImageWrap: {
-    position: 'relative',
-    borderRadius: Radius.md,
-    overflow: 'hidden' },
-  rowImageContainer: {
-    width: ROW_IMAGE_SIZE,
-    height: ROW_IMAGE_SIZE },
-  rowImage: {
-    width: ROW_IMAGE_SIZE,
-    height: ROW_IMAGE_SIZE },
-  rowImagePlaceholder: {
-    width: ROW_IMAGE_SIZE,
-    height: ROW_IMAGE_SIZE,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: Radius.md },
-  rowLiveDot: {
-    position: 'absolute',
-    top: Space.xs + 2,
-    left: Space.xs + 2,
-    width: Space.xs / 2 + 2,
-    height: Space.xs / 2 + 2,
-    borderRadius: Radius.sm,
-    backgroundColor: colors.danger,
-    borderWidth: Stroke.emphasis,
-    borderColor: colors.background },
-  rowBody: {
-    flex: 1,
-    minHeight: ROW_IMAGE_SIZE,
-    justifyContent: 'space-between' },
-  rowIdentity: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: Space.sm },
-  rowTitle: {
-    flex: 1,
-    fontSize: TypographyV2.bodyStrong.size,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-    color: colors.textPrimary,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
-    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
-  rowStateText: {
-    fontSize: TypographyV2.label.size,
-    lineHeight: TypographyV2.label.lineHeight,
-    fontFamily: TypographyV2.label.fontFamily,
-    letterSpacing: TypographyV2.label.letterSpacing,
-    paddingTop: Space.xs / 2 + 1 },
-  rowBrand: {
-    fontSize: TypographyV2.meta.size,
-    color: colors.textMuted,
-    fontFamily: TypographyV2.meta.fontFamily,
-    marginTop: Space.xs / 2 },
-  rowHairline: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.border,
-    marginVertical: Space.sm - 2 },
-  rowOperational: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    gap: Space.sm },
-  rowValueCol: {
-    flex: 1,
-    gap: Space.xs / 4 },
-  rowIze: {
-    fontSize: TypographyV2.priceList.size,
-    lineHeight: TypographyV2.priceList.lineHeight,
-    fontFamily: TypographyV2.priceList.fontFamily,
-    color: colors.textPrimary,
-    fontVariant: ['tabular-nums'],
-    letterSpacing: TypographyV2.priceList.letterSpacing },
-  rowValuePrefix: {
-    fontSize: TypographyV2.label.size,
-    lineHeight: TypographyV2.label.lineHeight,
-    fontFamily: TypographyV2.label.fontFamily,
-    color: colors.textSecondary,
-    fontVariant: ['tabular-nums'],
-    letterSpacing: TypographyV2.label.letterSpacing },
-  rowLocal: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textMuted,
-    fontVariant: ['tabular-nums'],
-    letterSpacing: TypographyV2.meta.letterSpacing },
-  rowActionCol: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs / 4,
-    paddingBottom: Space.xs / 4 },
-  rowActionLabel: {
-    fontSize: TypographyV2.meta.size,
-    color: colors.textSecondary,
-    fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: 0.1 },
-  rowActionChevron: {
-    marginTop: Space.xs / 4 },
-  rowLeadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Space.sm,
-    marginTop: Space.xs },
-  rowLeading: {
-    flex: 1,
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily,
-    fontVariant: ['tabular-nums'],
-    letterSpacing: TypographyV2.meta.letterSpacing },
-  rowBidCount: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    color: colors.textMuted,
-    fontFamily: TypographyV2.meta.fontFamily,
-    fontVariant: ['tabular-nums'] },
-  rowSeparator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.border,
-    marginHorizontal: Space.md },
-  // ── Loading ──
-  loadingWrap: {
-    paddingTop: Space.md,
-    gap: Space.md },
-  loadingRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.md,
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.md },
-  loadingBody: {
-    flex: 1,
-    gap: Space.xs },
-  loadingTitleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: Space.sm },
-  loadingHairline: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.border,
-    marginVertical: Space.xs },
-  // ── Inline empty / error states ──
-  inlineStateWrap: {
-    paddingTop: Space.xl * 2,
-    paddingHorizontal: Space.md,
-    alignItems: 'flex-start' },
-  inlineStateTitle: {
-    fontSize: TypographyV2.sectionTitle.size,
-    fontFamily: TypographyV2.sectionTitle.fontFamily,
-    color: colors.textPrimary,
-    letterSpacing: -0.3 },
-  inlineStateMessage: {
-    fontSize: TypographyV2.body.size,
-    color: colors.textSecondary,
-    fontFamily: TypographyV2.body.fontFamily,
-    marginTop: Space.xs + 2,
-    lineHeight: TypographyV2.body.lineHeight },
-  inlineCtaBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    marginTop: Space.md,
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.lg,
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.brand,
-    minHeight: Control.hit },
-  inlineCtaPressed: {
-    opacity: 0.6 },
-  inlineCtaText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily,
-    color: colors.brand },
-  inlineCtaIcon: {
-    marginTop: Space.xs / 4 },
-  // ── Load more ──
-  loadMoreWrap: {
-    paddingVertical: Space.lg,
-    alignItems: 'center' },
-  loadMoreBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.lg,
-    borderRadius: Radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.surface },
-  loadMoreText: {
-    fontSize: TypographyV2.body.size,
-    color: colors.brand,
-    fontFamily: TypographyV2.body.fontFamily },
-  // ── Floating CTA ──
-  floatingCta: {
-    position: 'absolute',
-    left: Space.md,
-    right: Space.md,
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.shadow,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.12,
-        shadowRadius: 12 },
-      android: {
-        elevation: 4 } }) } });
 }

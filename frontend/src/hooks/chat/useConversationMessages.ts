@@ -308,9 +308,12 @@ export function useConversationMessages({
   }, [conversationId, markConversationRead, conversationUnread]);
 
   // Auto-send offer message when arriving from MakeOfferScreen with an offerPayload
-  // P1-05: The offer is created on the server via listingOffersApi, which now
-  // also creates a chat message. The local bubble is optimistic and will be
-  // reconciled when the realtime event arrives with the server message ID.
+  // P1-05: The offer entity is created on the server via listingOffersApi, but
+  // the server does NOT create a chat message for it. This bubble is a
+  // sender-local optimistic echo so the offer appears in the thread the
+  // sender is looking at; it is not a server-persisted message and the
+  // counterparty sees the offer through the conversation's offer context
+  // (listing_offers.conversation_id → context bar), not this bubble.
   const offerPayloadRef = useRef(routeOfferPayload);
   offerPayloadRef.current = routeOfferPayload;
   useEffect(() => {

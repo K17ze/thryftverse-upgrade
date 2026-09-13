@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, ExchangeLayout, FontFamily } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
+import { buildDepthRows } from '../../utils/orderBookDepth';
 
 /**
  * Order-book row height. The shared `ExchangeLayout.bookRowHeight` token is
@@ -24,7 +25,7 @@ import { TypographyV2 } from '../../theme/typography.v2';
  * interactive, so we tighten them to 32pt to expose more depth per viewport
  * while keeping the 44pt hit target for the header row below.
  */
-const BOOK_ROW_HEIGHT = 32;
+const BOOK_ROW_HEIGHT = 44;
 /** Fixed-width price rail — wider to accommodate larger tabular figures. */
 const PRICE_COL_WIDTH = 90;
 /** Fixed-width size rail — wider to accommodate larger tabular figures. */
@@ -50,6 +51,7 @@ export interface CoOwnOrderBookProps {
    * page's single market surface. Data, row targets and states remain
    * identical. */
   embedded?: boolean;
+  onRequestQuote?: () => void;
 }
 
 export function CoOwnOrderBook({
@@ -61,6 +63,7 @@ export function CoOwnOrderBook({
   onSelectLevel,
   mode,
   embedded = false,
+  onRequestQuote,
 }: CoOwnOrderBookProps) {
   const { colors } = useAppTheme();
   const containerStyle = [
@@ -83,12 +86,13 @@ export function CoOwnOrderBook({
           </Text>
           <Pressable
             style={[styles.rfqBtn, { backgroundColor: colors.brand }]}
-            onPress={() => onSelectLevel?.('ask', 0)}
-            hitSlop={8}
+            onPress={onRequestQuote}
+            disabled={!onRequestQuote}
+            accessibilityState={{ disabled: !onRequestQuote }}
             accessibilityRole="button"
             accessibilityLabel="Request quote"
           >
-            <Text style={[styles.rfqBtnText, { color: colors.background }]}>Request quote</Text>
+            <Text style={[styles.rfqBtnText, { color: colors.background }]}>{onRequestQuote ? 'Request quote' : 'Quotes unavailable'}</Text>
           </Pressable>
         </View>
       </View>
@@ -171,9 +175,9 @@ export function CoOwnOrderBook({
           (U24). The cumulative column flexes to fill remaining space.
           Header keeps the 44pt hit target; level rows tighten to 32pt. */}
       <View style={[styles.colHeaderRow, { borderColor: colors.border }]}>
-        <Text style={[styles.colHeader, styles.colHeaderPrice, { color: colors.textMuted }]}>Price</Text>
-        <Text style={[styles.colHeader, styles.colHeaderSize, { color: colors.textMuted }]}>Size</Text>
-        <Text style={[styles.colHeader, { color: colors.textMuted, textAlign: 'right' }]}>Cumulative</Text>
+        <Text style={[styles.colHeader, styles.colHeaderPrice, { color: colors.textMuted }]}>Price · 1ZE</Text>
+        <Text style={[styles.colHeader, styles.colHeaderSize, { color: colors.textMuted }]}>Units</Text>
+        <Text style={[styles.colHeader, { color: colors.textMuted, textAlign: 'right' }]}>Total units</Text>
       </View>
 
       {/* Asks (descending — highest at top) */}
@@ -274,12 +278,12 @@ const BookLevelRow = React.memo(function BookLevelRow({
     <Pressable
       onPress={() => onSelectLevel?.(side, level.price)}
       disabled={!onSelectLevel}
-      hitSlop={6}
       accessibilityRole={onSelectLevel ? 'button' : undefined}
-      accessibilityLabel={`${side === 'bid' ? 'Bid' : 'Ask'} ${level.price.toFixed(2)}, size ${level.size}`}
+      accessibilityLabel={`${side === 'bid' ? 'Bid' : 'Ask'} ${level.price.toFixed(2)} 1ZE, ${level.size} units, ${cumulative} cumulative units`}
+      accessibilityHint={onSelectLevel ? 'Opens a limit order at this price for review' : undefined}
       style={({ pressed }) => pressed && { opacity: 0.6 }}
     >
-      <View style={[styles.levelRow, { height: BOOK_ROW_HEIGHT, minHeight: 44 }]}>
+      <View style={[styles.levelRow, { minHeight: BOOK_ROW_HEIGHT }]}>
         {/* Depth bar — behind the text (z-index), grows from the
             outer edge: left for bids, right for asks. Fills the full
             row height at 40% opacity so figures stay readable. */}
@@ -335,7 +339,6 @@ function BookSide({
   reverseOrder?: boolean;
 }) {
   // For asks, we want highest price at top (reverse of natural ascending)
-  const ordered = reverseOrder ? [...levels].reverse() : levels;
 
   // Per-side empty states are differentiated (U25): "No bids" when only
   // asks exist, "No asks" when only bids exist, "No open orders" when the
@@ -359,11 +362,7 @@ function BookSide({
   // Running cumulative totals — single linear pass from the best price
   // outward instead of a slice+reduce per row. Falls back to the level's
   // own size if the API provides a precomputed `cumulative` field.
-  let running = 0;
-  const rows = ordered.map((level) => {
-    running += level.size;
-    return { level, cumulative: level.cumulative ?? running };
-  });
+  const rows = buildDepthRows(levels, reverseOrder);
 
   return (
     <View style={styles.sideWrap}>
@@ -374,7 +373,7 @@ function BookSide({
         // Depth bars are proportional to each level's own size relative to
         // the deepest level in the book — visual depth, not cumulative total.
         const depthFraction = level.size / maxSize;
-        const isEdge = i === rows.length - 1;
+        const isEdge = reverseOrder ? i === rows.length - 1 : i === 0;
 
         return (
           <BookLevelRow

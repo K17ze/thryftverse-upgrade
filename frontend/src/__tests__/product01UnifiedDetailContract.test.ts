@@ -500,6 +500,75 @@ describe('PRODUCT-01 media helpers', () => {
   it('mediaFromUris returns empty for empty input', () => {
     expect(mediaFromUris([])).toEqual([]);
   });
+
+  // Media contract seam: canonical media[] records carry placeholder,
+  // geometry, focal point and derivative data that flat URIs cannot
+  // express — the detail view-model must not drop them.
+  it('buildAuctionViewModel passes blurhash, poster verification and derivatives through', () => {
+    const vm = buildAuctionViewModel({
+      auction: {
+        ...baseAuction,
+        mediaItems: [{
+          id: 'm1',
+          type: 'image',
+          url: 'https://cdn.example.com/a.jpg',
+          width: 1200,
+          height: 900,
+          blurhash: 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.',
+          lqip: 'data:image/jpeg;base64,AAAA',
+          focalX: 0.3,
+          focalY: 0.7,
+          posterUrl: null,
+          posterVerifiedAt: null,
+          derivatives: [{
+            variant: 'webp_400w',
+            url: 'https://cdn.example.com/d/webp_400w.webp',
+            width: 400,
+            height: 300,
+            format: 'webp',
+            contentType: 'image/webp',
+          }],
+          order: 0,
+        }],
+      },
+    });
+    expect(vm.media).toHaveLength(1);
+    expect(vm.media[0].blurhash).toBe('LGF5]+Yk^6#M@-5c,1J5@[or[Q6.');
+    expect(vm.media[0].lqip).toBe('data:image/jpeg;base64,AAAA');
+    expect(vm.media[0].focalPoint).toEqual({ x: 0.3, y: 0.7 });
+    expect(vm.media[0].derivatives).toHaveLength(1);
+    expect(vm.media[0].derivatives![0].url).toBe('https://cdn.example.com/d/webp_400w.webp');
+    expect(vm.media[0].width).toBe(1200);
+    expect(vm.media[0].height).toBe(900);
+  });
+
+  it('buildDirectViewModel prefers canonical media records over flat images', () => {
+    const vm = buildDirectViewModel({
+      listing: {
+        ...baseListing,
+        media: [{
+          id: 'li_1',
+          uri: 'https://cdn.example.com/a.jpg',
+          url: 'https://cdn.example.com/a.jpg',
+          kind: 'image',
+          sortOrder: 0,
+          width: 800,
+          height: 1000,
+          focalPoint: { x: 0.5, y: 0.4 },
+          poster: null,
+          posterVerifiedAt: null,
+          blurhash: 'LEHV6nWB2yk8pyo0adR*.7kCMdnj',
+          lqip: null,
+          derivatives: [],
+        }],
+      },
+    });
+    expect(vm.media).toHaveLength(1);
+    expect(vm.media[0].id).toBe('li_1');
+    expect(vm.media[0].blurhash).toBe('LEHV6nWB2yk8pyo0adR*.7kCMdnj');
+    expect(vm.media[0].height).toBe(1000);
+    expect(vm.media[0].fit).toBe('cover');
+  });
 });
 
 // ── Family is never guessed ──────────────────────────────────────────────────

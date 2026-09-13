@@ -24,6 +24,7 @@ import {
 } from '../lib/productRecommendationPolicy.js';
 import {
   loadListingMedia,
+  listingImageUrls,
   type ListingMediaItem,
 } from '../lib/media/listingMediaProjection.js';
 import { validateListingActivation } from '../lib/listingCategoryPolicy.js';
@@ -380,6 +381,10 @@ app.get('/search/listings', async (request) => {
     category: z.string().min(1).optional(),
     condition: z.string().min(1).optional(),
     size: z.string().min(1).optional(),
+    /** Multi-value filters: comma-separated lists matching the Filter
+     *  sheet's multi-select contract (brands[], sizes[]). */
+    brands: z.string().min(1).optional(),
+    sizes: z.string().min(1).optional(),
     priceMin: z.coerce.number().min(0).optional(),
     priceMax: z.coerce.number().min(0).optional(),
     sustainableOnly: z.coerce.boolean().optional().default(false),
@@ -387,8 +392,11 @@ app.get('/search/listings', async (request) => {
     page: z.coerce.number().int().min(1).max(100).default(1),
   });
 
-  const { q, limit, category, condition, size, priceMin, priceMax, sustainableOnly, sort, page } =
+  const { q, limit, category, condition, size, brands: brandsCsv, sizes: sizesCsv, priceMin, priceMax, sustainableOnly, sort, page } =
     querySchema.parse(request.query);
+  // Sorted so cache keys are stable regardless of selection order.
+  const brands = brandsCsv?.split(',').map((s) => s.trim()).filter(Boolean).sort();
+  const sizes = sizesCsv?.split(',').map((s) => s.trim()).filter(Boolean).sort();
   const searchPolicyVersion = 'listing-search-postgres-v3.0';
   const startTime = Date.now();
 
@@ -399,6 +407,8 @@ app.get('/search/listings', async (request) => {
       category,
       condition,
       size,
+      brands,
+      sizes,
       priceMin,
       priceMax,
       sustainableOnly,
@@ -411,7 +421,7 @@ app.get('/search/listings', async (request) => {
   // â”€â”€ Cache-first read with stale-while-revalidate â”€â”€
   const revalidate = async (): Promise<void> => {
     const freshResult = await computeSearchResults(
-      readDb, q, limit, category, condition, size, priceMin, priceMax, sort, page,
+      readDb, q, limit, category, condition, size, brands, sizes, priceMin, priceMax, sort, page,
       searchPolicyVersion, sustainableOnly,
     );
     await setCachedSearchResult(redis, cacheParams, freshResult);
@@ -440,7 +450,7 @@ app.get('/search/listings', async (request) => {
 
   // â”€â”€ Cache miss: compute results from DB â”€â”€
   const computed = await computeSearchResults(
-    readDb, q, limit, category, condition, size, priceMin, priceMax, sort, page,
+    readDb, q, limit, category, condition, size, brands, sizes, priceMin, priceMax, sort, page,
     searchPolicyVersion, sustainableOnly,
   );
 
@@ -478,6 +488,8 @@ async function computeSearchResults(
   category: string | undefined,
   condition: string | undefined,
   size: string | undefined,
+  brands: string[] | undefined,
+  sizes: string[] | undefined,
   priceMin: number | undefined,
   priceMax: number | undefined,
   sort: string,
@@ -503,6 +515,14 @@ async function computeSearchResults(
   if (size) {
     filterConditions.push(`l.size = $${filterIdx++}`);
     filterArgs.push(size);
+  }
+  if (brands && brands.length > 0) {
+    filterConditions.push(`l.brand = ANY($${filterIdx++})`);
+    filterArgs.push(brands);
+  }
+  if (sizes && sizes.length > 0) {
+    filterConditions.push(`l.size = ANY($${filterIdx++})`);
+    filterArgs.push(sizes);
   }
   if (priceMin !== undefined) {
     filterConditions.push(`l.price_gbp >= $${filterIdx++}`);
@@ -534,7 +554,10 @@ async function computeSearchResults(
       break;
     case 'relevance':
     default:
-      orderBy = 'rank_score::numeric DESC, l.created_at DESC, l.id DESC';
+      // Postgres resolves bare output aliases in ORDER BY, but not inside
+      // expressions — `rank_score::numeric` would look for a real column
+      // named rank_score and 42703. Order on the rank expression directly.
+      orderBy = "ts_rank_cd(l.search_vector, websearch_to_tsquery('simple', $1)) DESC, l.created_at DESC, l.id DESC";
       break;
   }
 
@@ -775,6 +798,23 @@ app.get('/search/analytics', async () => {
   const { getSearchAnalytics } = await import('../lib/searchCache.js');
   const analytics = await getSearchAnalytics(redis, 5);
   return { ok: true, analytics };
+});
+
+/**
+ * GET /search/trending — real trending searches from the query-frequency
+ * tracker (Redis sorted set populated by trackQueryFrequency on every
+ * /search/listings call). Returns only queries that crossed the hot
+ * threshold in the current window; an empty list means there is no real
+ * trend data — clients must not fabricate trends in that case.
+ */
+app.get('/search/trending', async (request) => {
+  const querySchema = z.object({
+    limit: z.coerce.number().int().min(1).max(20).default(6),
+  });
+  const { limit } = querySchema.parse(request.query);
+  const { getHotQueryLabels } = await import('../lib/searchCache.js');
+  const items = await getHotQueryLabels(redis, limit);
+  return { ok: true, items };
 });
 
 app.get('/feed/looks', async () => {
@@ -3031,7 +3071,7 @@ app.get('/listings/:listingId', async (request, reply) => {
       description: row.description,
       priceGbp: itemPrice,
       imageUrl: row.image_url,
-      images: detailMedia.map((m) => m.uri),
+      images: listingImageUrls(detailMedia, row.image_url),
       media: detailMedia,
       status: row.status,
       category: row.category,
@@ -3290,7 +3330,7 @@ app.get('/listings/:listingId/sold-comparables', async (request, reply) => {
          FROM orders o
          INNER JOIN listings l ON l.id = o.listing_id
          WHERE o.listing_id <> $1
-           AND o.status IN ('paid', 'shipped', 'delivered')
+           AND o.status IN ('paid', 'shipped', 'delivered', 'completed')
            AND o.paid_at IS NOT NULL
            AND l.status = 'sold'
            AND LOWER(l.category) = LOWER($2)
@@ -4573,7 +4613,7 @@ app.get('/seller-hub/overview', async (request, reply) => {
         COUNT(*) AS orders
       FROM orders
       WHERE seller_id = $1
-        AND status IN ('paid', 'shipped', 'delivered')
+        AND status IN ('paid', 'shipped', 'delivered', 'completed')
         AND created_at >= NOW() - INTERVAL '30 days'
     `,
     [sellerId]

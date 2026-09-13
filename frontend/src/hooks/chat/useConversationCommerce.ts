@@ -11,8 +11,13 @@
  */
 
 import { useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { acceptListingOfferOnApi, declineListingOfferOnApi } from "../../services/listingOffersApi";
+import { queryKeys } from "../../platform/server/queryKeys";
+import type { ListingDetailResult } from "../../platform/product/useListingQueries";
+import { useBackendData } from "../../context/BackendDataContext";
+import { useStore } from "../../store/useStore";
 
 import type { ConversationContext } from "../../domain";
 import type { Message } from "./types";
@@ -31,6 +36,15 @@ interface UseConversationCommerceOptions {
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   routeItemId?: string;
   conversationItemId?: string;
+  /**
+   * The conversation being viewed. Threaded into the offer create/counter
+   * payloads so `listing_offers.conversation_id` links the negotiation to
+   * this thread (drives the offer badge in ChatListingContextBar). The
+   * counter endpoint also inherits the parent offer's conversation_id
+   * server-side when this is absent, so callers that don't pass it degrade
+   * gracefully.
+   */
+  conversationId?: string;
   context?: ConversationContext;
   onUpdateContext?: (context: ConversationContext) => void;
   show: (msg: string, type: "success" | "error" | "info") => void;
@@ -45,12 +59,17 @@ export function useConversationCommerce({
   setMessages,
   routeItemId,
   conversationItemId,
+  conversationId,
   context,
   onUpdateContext,
   show,
   haptic,
   navigation,
 }: UseConversationCommerceOptions) {
+  const queryClient = useQueryClient();
+  const { refreshListings } = useBackendData();
+  const currentUserId = useStore((s) => s.currentUser?.id);
+
   const handleAcceptOffer = useCallback(
     async (msgId: string) => {
       const msg = messages.find((m) => m.id === msgId);
@@ -76,12 +95,36 @@ export function useConversationCommerce({
       }
 
       try {
-        await acceptListingOfferOnApi(offerId);
+        const result = await acceptListingOfferOnApi(offerId);
         const linkedItemId = routeItemId || conversationItemId;
         if (linkedItemId) {
-          navigation.navigate("Checkout", { itemId: linkedItemId });
+          // Accepting creates an order and commits the listing server-side —
+          // same propagation as checkout settlement: the cached listing
+          // detail, the seller's listings pages, and the discovery feed.
+          void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(linkedItemId) });
+          const cached = queryClient.getQueryData<ListingDetailResult>(
+            queryKeys.listing.detail(linkedItemId),
+          );
+          // The accepter is the seller — the cached detail's sellerId is
+          // authoritative, with the current user as fallback.
+          const sellerId = cached?.listing?.sellerId ?? currentUserId;
+          if (sellerId) {
+            void queryClient.invalidateQueries({ queryKey: queryKeys.user.listingsAll(sellerId) });
+          }
+          void refreshListings();
+        }
+        // The actor here is the SELLER. Accept creates a real order +
+        // reservation and returns a checkout payload — navigate to the
+        // order that was just created, never to a fresh listing checkout.
+        // Seam: CheckoutScreen cannot consume an orderId yet (parallel
+        // refactor); OrderDetail's capability resolver renders the
+        // "Complete payment" action for the buyer once checkout accepts
+        // order-scoped entry.
+        const orderId = result.checkout?.orderId;
+        if (orderId) {
+          navigation.navigate("OrderDetail", { orderId });
         } else {
-          show("Offer accepted. Checkout requires a linked listing.", "info");
+          show("Offer accepted. The order could not be opened from here.", "info");
         }
       } catch {
         setMessages((prev) =>
@@ -98,7 +141,7 @@ export function useConversationCommerce({
         show("Could not accept offer. Try again.", "error");
       }
     },
-    [messages, setMessages, routeItemId, conversationItemId, context, onUpdateContext, show, haptic, navigation],
+    [messages, setMessages, routeItemId, conversationItemId, conversationId, context, onUpdateContext, show, haptic, navigation, queryClient, refreshListings, currentUserId],
   );
 
   const handleDeclineOffer = useCallback(
@@ -127,6 +170,12 @@ export function useConversationCommerce({
 
       try {
         await declineListingOfferOnApi(offerId);
+        // The listing's active-offer count dropped — invalidate its cached
+        // detail so the social-proof line doesn't serve a stale count.
+        const linkedItemId = routeItemId || conversationItemId;
+        if (linkedItemId) {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(linkedItemId) });
+        }
       } catch {
         setMessages((prev) =>
           prev.map((m) =>
@@ -142,7 +191,7 @@ export function useConversationCommerce({
         show("Could not decline offer. Try again.", "error");
       }
     },
-    [messages, setMessages, context, onUpdateContext, show, haptic],
+    [messages, setMessages, routeItemId, conversationItemId, context, onUpdateContext, show, haptic, queryClient],
   );
 
   const handleCounterOffer = useCallback(
@@ -163,9 +212,14 @@ export function useConversationCommerce({
         previousOffer: offerPrice ?? 0,
         counterRound: currentRound + 1,
         parentOfferId: currentMsg?.offer?.offerId,
+        // Links the counter-offer row to this conversation so the chat
+        // context bar can render the live offer badge. The backend counter
+        // endpoint also inherits the parent's conversation_id when this is
+        // absent — this is belt-and-suspenders, not a correctness fix.
+        conversationId,
       });
     },
-    [messages, routeItemId, conversationItemId, show, haptic, navigation],
+    [messages, routeItemId, conversationItemId, conversationId, show, haptic, navigation],
   );
 
   const handleOfferExpired = useCallback(

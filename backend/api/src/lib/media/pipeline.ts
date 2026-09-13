@@ -259,8 +259,18 @@ async function processImageAsset(
   lqip: string;
   blurhash: string | null;
   canonicalUrl: string;
+  /** Post-EXIF-orientation source geometry — authoritative for the
+   *  persisted asset width/height. */
+  sourceWidth: number;
+  sourceHeight: number;
 }> {
-  const { derivatives: imageDerivatives, lqip, blurhash } = await generateImageDerivatives(sourceBuffer);
+  const {
+    derivatives: imageDerivatives,
+    lqip,
+    blurhash,
+    sourceWidth,
+    sourceHeight,
+  } = await generateImageDerivatives(sourceBuffer);
 
   const uploaded: InternalProcessingResult['derivatives'] = [];
   const manifestDerivatives: MediaAssetManifest['derivatives'] = [];
@@ -308,7 +318,15 @@ async function processImageAsset(
     canonicalUrl = uploaded[0].canonicalUrl;
   }
 
-  return { derivatives: uploaded, manifestDerivatives, lqip, blurhash, canonicalUrl };
+  return {
+    derivatives: uploaded,
+    manifestDerivatives,
+    lqip,
+    blurhash,
+    canonicalUrl,
+    sourceWidth,
+    sourceHeight,
+  };
 }
 
 async function processVideoAsset(
@@ -639,6 +657,12 @@ export async function processMediaAsset(
     let lqip: string | null = null;
     let blurhash: string | null = null;
     let canonicalUrl = '';
+    // Persisted geometry defaults to the ffprobe values; for images the
+    // derivative pipeline reports post-EXIF-orientation dims, which are the
+    // authoritative ones — orientation tags 5–8 swap width/height relative
+    // to the coded stream ffprobe measures.
+    let resultWidth = probe.width ?? undefined;
+    let resultHeight = probe.height ?? undefined;
 
     if (probe.mediaKind === 'image') {
       const imageResult = await processImageAsset(asset, processingBuffer, probe);
@@ -647,6 +671,8 @@ export async function processMediaAsset(
       lqip = imageResult.lqip;
       blurhash = imageResult.blurhash;
       canonicalUrl = imageResult.canonicalUrl;
+      resultWidth = imageResult.sourceWidth;
+      resultHeight = imageResult.sourceHeight;
     } else if (probe.mediaKind === 'video') {
       const videoResult = await processVideoAsset(asset, sourceBuffer, probe);
       derivatives = videoResult.derivatives;
@@ -686,8 +712,8 @@ export async function processMediaAsset(
       moderationStatus,
       processingSucceeded: true,
       canonicalUrl,
-      width: probe.width ?? undefined,
-      height: probe.height ?? undefined,
+      width: resultWidth,
+      height: resultHeight,
       durationMs: probe.durationMs ?? undefined,
       blurhash: blurhash ?? undefined,
       metadata: {

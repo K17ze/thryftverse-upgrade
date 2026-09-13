@@ -3,13 +3,36 @@ import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
 const SCREENS = resolve(__dirname, '../screens');
+const COMPONENTS = resolve(__dirname, '../components');
+const HOOKS = resolve(__dirname, '../hooks');
 
 function readScreen(name: string): string {
   return readFileSync(resolve(SCREENS, name), 'utf-8');
 }
 
+function readComponent(relPath: string): string {
+  return readFileSync(resolve(COMPONENTS, relPath), 'utf-8');
+}
+
+function readHook(relPath: string): string {
+  return readFileSync(resolve(HOOKS, relPath), 'utf-8');
+}
+
 describe('direct-listing-detail flagship closure (spec 04_DIRECT)', () => {
   const src = readScreen('ItemDetailScreen.tsx');
+  // The screen was decomposed — ItemDetailScreen.tsx is now an
+  // orchestrator. Positive assertions below check the owner layer where
+  // the code actually lives, not the orchestrator:
+  //   hooks/itemDetail/itemDetailDerived.ts  — display-string derivation
+  //   hooks/itemDetail/useItemDetailOverlays — sheet visibility state
+  //   hooks/itemDetail/useItemDetailData     — server comparables query
+  //   components/itemdetail/ItemDetailSheets — canonical BottomSheet set
+  //   components/commerce/detail/CommerceIdentityBlock — identity wiring
+  const derived = readHook('itemDetail/itemDetailDerived.ts');
+  const overlays = readHook('itemDetail/useItemDetailOverlays.ts');
+  const dataHook = readHook('itemDetail/useItemDetailData.ts');
+  const sheets = readComponent('itemdetail/ItemDetailSheets.tsx');
+  const identityBlock = readComponent('commerce/detail/CommerceIdentityBlock.tsx');
 
   // ── §1 Remove fabricated "interested" count ──
   describe('fabricated interested count', () => {
@@ -17,15 +40,18 @@ describe('direct-listing-detail flagship closure (spec 04_DIRECT)', () => {
       // The interestSignal function should not combine likes with
       // isItemSavedAnywhere to fabricate a higher "people interested"
       // count. It should only show truthful likes.
-      const interestSignalMatch = src.match(/const interestSignal = \([\s\S]*?\}\)\(\);/);
+      // interestSignal is derived in the owner layer (itemDetailDerived),
+      // not the orchestrator.
+      const interestSignalMatch = derived.match(/const interestSignal = \([\s\S]*?\}\)\(\);/);
       expect(interestSignalMatch).toBeTruthy();
       expect(interestSignalMatch![0]).not.toContain('isItemSavedAnywhere');
       expect(interestSignalMatch![0]).not.toContain('people interested');
     });
 
     it('only shows truthful likes from the backend', () => {
-      expect(src).toContain('item.likes');
-      expect(src).toContain("like${item.likes > 1 ? 's' : ''}");
+      // Owner layer: itemDetailDerived builds the likes line.
+      expect(derived).toContain('item.likes');
+      expect(derived).toContain("like${item.likes > 1 ? 's' : ''}");
     });
   });
 
@@ -37,9 +63,10 @@ describe('direct-listing-detail flagship closure (spec 04_DIRECT)', () => {
     });
 
     it('retains truthful price insight rows', () => {
-      expect(src).toContain('Price drop');
-      expect(src).toContain('similar sold');
-      expect(src).toContain('Time on market');
+      // Owner layer: itemDetailDerived builds priceInsightRows.
+      expect(derived).toContain('Price drop');
+      expect(derived).toContain('similar sold');
+      expect(derived).toContain('Time on market');
     });
   });
 
@@ -61,14 +88,19 @@ describe('direct-listing-detail flagship closure (spec 04_DIRECT)', () => {
     });
 
     it('has qaSheetVisible state', () => {
-      expect(src).toContain('qaSheetVisible');
-      expect(src).toContain('setQaSheetVisible');
+      // Owner layer: overlay visibility lives in useItemDetailOverlays.
+      expect(overlays).toContain('qaSheetVisible');
+      expect(overlays).toContain('setQaSheetVisible');
     });
 
     it('opens Q&A in a canonical BottomSheet', () => {
-      expect(src).toContain('BottomSheet');
-      expect(src).toContain('qaSheetVisible');
-      expect(src).toContain('ListingQA');
+      // Owner layer: the sheet set lives in ItemDetailSheets (BottomSheet
+      // + ListingQA wired to visibility.qa); the visibility state lives in
+      // useItemDetailOverlays.
+      expect(sheets).toContain('BottomSheet');
+      expect(sheets).toContain('visibility.qa');
+      expect(sheets).toContain('ListingQA');
+      expect(overlays).toContain('qaSheetVisible');
     });
   });
 
@@ -102,13 +134,15 @@ describe('direct-listing-detail flagship closure (spec 04_DIRECT)', () => {
   // ── §5 Family-aware identity ──
   describe('family-aware identity', () => {
     it('identity uses family="direct"', () => {
-      const identityMatch = src.match(/<CommerceDetailIdentity[\s\S]*?\/>/);
+      // Owner layer: the screen composes CommerceIdentityBlock, which owns
+      // the CommerceDetailIdentity wiring.
+      const identityMatch = identityBlock.match(/<CommerceDetailIdentity[\s\S]*?\/>/);
       expect(identityMatch).toBeTruthy();
       expect(identityMatch![0]).toContain('family="direct"');
     });
 
     it('identity shows primaryValue (direct may show price)', () => {
-      const identityMatch = src.match(/<CommerceDetailIdentity[\s\S]*?\/>/);
+      const identityMatch = identityBlock.match(/<CommerceDetailIdentity[\s\S]*?\/>/);
       expect(identityMatch).toBeTruthy();
       expect(identityMatch![0]).toContain('primaryValue={formattedPrice}');
     });
@@ -117,12 +151,17 @@ describe('direct-listing-detail flagship closure (spec 04_DIRECT)', () => {
   // ── §6 Server comparables ──
   describe('server comparables', () => {
     it('derives sold comparables from backend listings', () => {
-      expect(src).toContain('soldComps');
-      expect(src).toContain('backendListings');
+      // Owner layer: useItemDetailData fetches comparables via the
+      // authoritative server endpoint (useListingSoldComparables) and
+      // itemDetailDerived consumes them for the price-insight rows.
+      expect(dataHook).toContain('soldComps');
+      expect(dataHook).toContain('useListingSoldComparables');
+      expect(derived).toContain('soldComps');
     });
 
     it('requires at least 2 sold comparables', () => {
-      expect(src).toContain('sampleSize >= 2');
+      // Owner layer: the >=2 gate lives in itemDetailDerived.
+      expect(derived).toContain('sampleSize >= 2');
     });
   });
 

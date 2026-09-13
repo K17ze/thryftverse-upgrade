@@ -15,6 +15,8 @@ import { Space, Radius } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useSignupWall } from '../hooks/useSignupWall';
+import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { EmptyState } from '../components/EmptyState';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SkeletonLoader } from '../components/SkeletonLoader';
@@ -31,6 +33,7 @@ export default function ExploreCollectionScreen() {
   const route = useRoute<RouteT>();
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
+  const { requireAuth } = useSignupWall();
   const { colors } = useAppTheme();
   const { width: SCREEN_W } = useWindowDimensions();
   const styles = useMemo(() => createStyles(colors, SCREEN_W), [colors, SCREEN_W]);
@@ -42,6 +45,9 @@ export default function ExploreCollectionScreen() {
 
   const [backendListings, setBackendListings] = useState<Listing[] | null>(null);
   const [isFetching, setIsFetching] = useState(false);
+  // Long-press on a tile bookmark opens the save-to-collection picker
+  // (the "file to board" tier; tap stays instant quick-save).
+  const [savePickerItemId, setSavePickerItemId] = useState<string | null>(null);
 
   useEffect(() => {
     if (source.type === 'category' && source.categoryId && source.categoryId !== 'all') {
@@ -135,6 +141,15 @@ export default function ExploreCollectionScreen() {
     [toggleSavedProduct],
   );
 
+  const handleSaveLongPress = useCallback(
+    (listing: ReturnType<typeof mapListingToDiscoverySummary>) => {
+      if (!requireAuth('save_item')) return;
+      haptic.selection();
+      setSavePickerItemId(listing.id);
+    },
+    [requireAuth, haptic],
+  );
+
   const isItemSaved = useCallback(
     (listingId: string) => savedProducts.includes(listingId),
     [savedProducts],
@@ -203,6 +218,7 @@ export default function ExploreCollectionScreen() {
         items={filteredListings}
         onPressItem={handleItemPress}
         onItemSaveToggle={handleSaveToggle}
+        onItemSaveLongPress={handleSaveLongPress}
         isItemSaved={isItemSaved}
         listHeaderComponent={listHeader}
         refreshControl={
@@ -212,6 +228,11 @@ export default function ExploreCollectionScreen() {
             tintColor={colors.brand}
           />
         }
+      />
+      <SaveToCollectionModal
+        visible={savePickerItemId !== null}
+        itemId={savePickerItemId ?? ''}
+        onClose={() => setSavePickerItemId(null)}
       />
     </FlagshipScreen>
   );

@@ -2,6 +2,10 @@ export const queryKeys = {
   user: {
     profile: (userId?: string) => ['user', 'profile', userId] as const,
     listings: (userId: string, status?: string) => ['user', 'listings', userId, status ?? 'all'] as const,
+    // Prefix key for invalidating every status variant of a user's listings
+    // ('active' | 'sold' | 'all'). Invalidating `listings(userId)` alone only
+    // matches the 'all' variant — status-filtered keys differ at index 3.
+    listingsAll: (userId: string) => ['user', 'listings', userId] as const,
     orders: (userId: string) => ['user', 'orders', userId] as const,
     collections: (userId: string) => ['user', 'collections', userId] as const,
     looks: (userId: string) => ['user', 'looks', userId] as const,
@@ -23,6 +27,9 @@ export const queryKeys = {
   chat: {
     conversations: ['chat', 'conversations'] as const,
     messages: (conversationId: string) => ['chat', 'messages', conversationId] as const,
+  },
+  wishlist: {
+    items: ['wishlist'] as const,
   },
   discover: {
     feed: ['discover', 'feed'] as const,

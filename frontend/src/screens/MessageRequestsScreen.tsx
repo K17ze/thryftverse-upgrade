@@ -49,7 +49,7 @@ export default function MessageRequestsScreen() {
   const declineMessageRequest = useStore((state) => state.declineMessageRequest);
   const profileMediaOverrides = useStore((state) => state.profileMediaOverrides);
   const currentUser = useStore((state) => state.currentUser);
-  const toggleBlockedUser = useStore((state) => state.toggleBlockedUser);
+  const addBlockedUser = useStore((state) => state.addBlockedUser);
 
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
@@ -138,7 +138,7 @@ export default function MessageRequestsScreen() {
         try {
           if (counterpartyId) {
             await blockUser(counterpartyId);
-            toggleBlockedUser(counterpartyId);
+            addBlockedUser(counterpartyId);
           }
           await deleteConversationOnApi(id, 'me');
           declineMessageRequest(id);

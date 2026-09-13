@@ -31,6 +31,13 @@ export interface CommerceDetailMediaAction {
   activeIcon?: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
+  /** Optional second-tier gesture — e.g. long-press the save action to
+   *  open the collection picker (Pinterest "file to board" pattern)
+   *  while tap stays the instant quick-save toggle. */
+  onLongPress?: () => void;
+  /** Optional screen-reader hint. Pass one that names the long-press
+   *  tier whenever `onLongPress` is set. */
+  accessibilityHint?: string;
   /** Whether the action's state is "on" (saved / favourited / watching). */
   isActive?: boolean;
 }
@@ -55,12 +62,16 @@ const PRESS_OPACITY = 0.85;
 
 function RailControl({
   onPress,
+  onLongPress,
   label,
+  hint,
   isActive,
   reducedMotion,
   children }: {
   onPress: () => void;
+  onLongPress?: () => void;
   label: string;
+  hint?: string;
   isActive?: boolean;
   reducedMotion: boolean;
   children: React.ReactNode;
@@ -76,6 +87,7 @@ function RailControl({
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress}
       onPressIn={() => {
         pressed.value = withTiming(1, { duration: Motion.duration.fast });
       }}
@@ -84,6 +96,7 @@ function RailControl({
       }}
       hitSlop={12}
       accessibilityLabel={label}
+      accessibilityHint={hint}
       accessibilityRole="button"
       accessibilityState={isActive ? { selected: true } : undefined}
       style={styles.hitTarget}
@@ -128,7 +141,9 @@ export function CommerceDetailMediaRail({
             <RailControl
               key={action.label}
               onPress={action.onPress}
+              onLongPress={action.onLongPress}
               label={action.label}
+              hint={action.accessibilityHint}
               isActive={action.isActive}
               reducedMotion={reducedMotion}
             >

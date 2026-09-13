@@ -98,20 +98,68 @@ function mapRow(row: ListingOfferRow) {
   };
 }
 
+type ExpiredOfferRow = {
+  id: string;
+  listing_id: string;
+  buyer_id: string;
+  seller_id: string;
+  offer_price_gbp: string;
+  conversation_id: string | null;
+  expires_at: string;
+};
+
 /**
  * Marks offers past their `expires_at` as expired. Called inline before any
  * offer read/write so the server-authoritative expiry is always reflected
- * without needing a separate sweep job for correctness. A background sweep
- * can additionally drive notifications.
+ * without needing a separate sweep job for correctness. Returns the rows
+ * that transitioned so the caller can append `offer.expired` domain events
+ * inside the same transaction — the outbox then drives notifications.
  */
-async function expireOverdueOffers(client: { query: Pool['query'] }): Promise<number> {
-  const result = await client.query(
+async function expireOverdueOffers(
+  client: { query: Pool['query'] },
+): Promise<ExpiredOfferRow[]> {
+  const result = await client.query<ExpiredOfferRow>(
     `UPDATE listing_offers
      SET status = 'expired', expired_at = NOW(), updated_at = NOW()
      WHERE status = 'pending' AND expires_at <= NOW()
-     RETURNING id`,
+     RETURNING id, listing_id, buyer_id, seller_id, offer_price_gbp::text,
+               conversation_id, expires_at::text`,
   );
-  return result.rowCount ?? 0;
+  return result.rows;
+}
+
+/**
+ * Appends one `offer.expired` domain event per offer that just transitioned.
+ * An offer can only leave `pending` once, and the deduplication key is
+ * derived from the offer id, so each event is appended exactly once even if
+ * the caller transaction is retried.
+ */
+async function appendOfferExpiredEvents(
+  client: { query: Pool['query'] },
+  expiredOffers: ExpiredOfferRow[],
+  correlationId: string | null,
+): Promise<void> {
+  for (const expiredOffer of expiredOffers) {
+    await appendDomainEvent(client, {
+      aggregateType: 'offer',
+      aggregateId: expiredOffer.id,
+      eventType: 'offer.expired',
+      correlationId,
+      deduplicationKey: `offer.expired:${expiredOffer.id}`,
+      payload: {
+        offerId: expiredOffer.id,
+        listingId: expiredOffer.listing_id,
+        buyerId: expiredOffer.buyer_id,
+        sellerId: expiredOffer.seller_id,
+        offerPriceGbp: Number(expiredOffer.offer_price_gbp),
+        conversationId: expiredOffer.conversation_id,
+        // expires_at::text renders Postgres format ('2026-07-28 12:34:56.789+00')
+        // which the drain handler's z.string().datetime() schema rejects —
+        // normalise to ISO-8601 here so the event does not dead-letter.
+        expiresAt: new Date(expiredOffer.expires_at).toISOString(),
+      },
+    });
+  }
 }
 
 export const registerListingOfferRoutes = ({
@@ -137,7 +185,8 @@ export const registerListingOfferRoutes = ({
     const client = await db.connect();
     try {
       await client.query('BEGIN');
-      await expireOverdueOffers(client);
+      const expiredOffers = await expireOverdueOffers(client);
+      await appendOfferExpiredEvents(client, expiredOffers, request.id);
       const requestHash = crypto
         .createHash('sha256')
         .update(JSON.stringify({
@@ -215,13 +264,43 @@ export const registerListingOfferRoutes = ({
       }
 
       // Cancel any prior pending offers by this buyer on the same listing —
-      // only one active offer per buyer/listing at a time.
-      await client.query(
+      // only one active offer per buyer/listing at a time. Each cancelled
+      // offer gets its own `offer.cancelled` domain event (same event the
+      // buyer-initiated cancel route and listingCommandService emit) so the
+      // buyer is notified instead of the offer silently disappearing. The
+      // deduplication key is derived from the offer id, so a retried
+      // transaction cannot double-notify.
+      const supersededOffers = await client.query<{
+        id: string;
+        buyer_id: string;
+        seller_id: string;
+        offer_price_gbp: string;
+        conversation_id: string | null;
+      }>(
         `UPDATE listing_offers
          SET status = 'cancelled', cancelled_at = NOW(), updated_at = NOW()
-         WHERE listing_id = $1 AND buyer_id = $2 AND status = 'pending'`,
+         WHERE listing_id = $1 AND buyer_id = $2 AND status = 'pending'
+         RETURNING id, buyer_id, seller_id, offer_price_gbp::text, conversation_id`,
         [listingId, actorUserId],
       );
+      for (const superseded of supersededOffers.rows) {
+        await appendDomainEvent(client, {
+          aggregateType: 'offer',
+          aggregateId: superseded.id,
+          eventType: 'offer.cancelled',
+          actorId: actorUserId,
+          correlationId: request.id,
+          deduplicationKey: `offer.cancelled:${superseded.id}`,
+          payload: {
+            offerId: superseded.id,
+            listingId,
+            buyerId: superseded.buyer_id,
+            sellerId: superseded.seller_id,
+            offerPriceGbp: Number(superseded.offer_price_gbp),
+            conversationId: superseded.conversation_id,
+          },
+        });
+      }
 
       const offerId = `offer_${crypto.randomUUID()}`;
       const expiresAt = new Date(Date.now() + payload.expiryHours * 3600_000).toISOString();
@@ -256,7 +335,34 @@ export const registerListingOfferRoutes = ({
         ],
       );
 
+      await appendDomainEvent(client, {
+        aggregateType: 'offer',
+        aggregateId: offerId,
+        eventType: 'offer.created',
+        actorId: actorUserId,
+        correlationId: request.id,
+        idempotencyKey: payload.idempotencyKey ?? offerId,
+        deduplicationKey: `offer.created:${offerId}`,
+        payload: {
+          offerId,
+          listingId,
+          buyerId: actorUserId,
+          sellerId: listing.seller_id,
+          amountGbp: payload.offerPriceGbp,
+          expiresAt,
+          counterRound: 0,
+          conversationId: payload.conversationId ?? null,
+        },
+      });
+
       await client.query('COMMIT');
+      try {
+        await enqueueOutboxDrain();
+      } catch (error) {
+        // The event is already durable. The periodic drain will retry even
+        // when Redis is temporarily unavailable at commit time.
+        app.log.error({ err: error, offerId }, 'Failed to enqueue offer outbox drain');
+      }
       // Fire-and-forget Smart Sell evaluation. If the listing has an active
       // policy, the evaluation worker will decide whether to accept, counter,
       // or escalate. This is non-blocking — the offer is already durable.
@@ -295,7 +401,8 @@ export const registerListingOfferRoutes = ({
     const client = await db.connect();
     try {
       await client.query('BEGIN');
-      await expireOverdueOffers(client);
+      const expiredOffers = await expireOverdueOffers(client);
+      await appendOfferExpiredEvents(client, expiredOffers, request.id);
       const replay = await client.query<ListingOfferRow & { request_hash: string | null }>(
         `SELECT id, listing_id, buyer_id, seller_id,
                 offer_price_gbp::text, original_price_gbp::text,
@@ -439,6 +546,7 @@ export const registerListingOfferRoutes = ({
           counterRound: nextRound,
           offerPriceGbp: payload.offerPriceGbp,
           expiresAt,
+          conversationId: inserted.rows[0].conversation_id,
         },
       });
       await client.query('COMMIT');
@@ -581,7 +689,8 @@ export const registerListingOfferRoutes = ({
     const client = await db.connect();
     try {
       await client.query('BEGIN');
-      await expireOverdueOffers(client);
+      const expiredOffers = await expireOverdueOffers(client);
+      await appendOfferExpiredEvents(client, expiredOffers, request.id);
 
       const result = await client.query<{
         seller_id: string;
@@ -592,9 +701,10 @@ export const registerListingOfferRoutes = ({
         expires_at: string;
         order_id: string | null;
         reservation_id: string | null;
+        conversation_id: string | null;
       }>(
         `SELECT seller_id, buyer_id, listing_id, offer_price_gbp::text,
-                status, expires_at::text, order_id, reservation_id
+                status, expires_at::text, order_id, reservation_id, conversation_id
          FROM listing_offers WHERE id = $1 FOR UPDATE`,
         [offerId],
       );
@@ -644,6 +754,24 @@ export const registerListingOfferRoutes = ({
           `UPDATE listing_offers SET status = 'expired', expired_at = NOW(), updated_at = NOW() WHERE id = $1`,
           [offerId],
         );
+        await appendDomainEvent(client, {
+          aggregateType: 'offer',
+          aggregateId: offerId,
+          eventType: 'offer.expired',
+          correlationId: request.id,
+          deduplicationKey: `offer.expired:${offerId}`,
+          payload: {
+            offerId,
+            listingId: offer.listing_id,
+            buyerId: offer.buyer_id,
+            sellerId: offer.seller_id,
+            offerPriceGbp: Number(offer.offer_price_gbp),
+            conversationId: offer.conversation_id,
+            // Same ::text → ISO normalisation as appendOfferExpiredEvents —
+            // the drain schema requires ISO-8601 (z.string().datetime()).
+            expiresAt: new Date(offer.expires_at).toISOString(),
+          },
+        });
         await client.query('COMMIT');
         reply.code(410);
         return { ok: false, error: 'Offer has expired' };
@@ -749,11 +877,17 @@ export const registerListingOfferRoutes = ({
       );
       // Decline other pending offers on the same listing — once one is accepted
       // the rest are moot.
-      await client.query(
+      const siblingResult = await client.query<{
+        id: string;
+        buyer_id: string;
+        offer_price_gbp: string;
+        conversation_id: string | null;
+      }>(
         `UPDATE listing_offers
          SET status = 'declined', declined_at = NOW(), updated_at = NOW()
          WHERE listing_id = (SELECT listing_id FROM listing_offers WHERE id = $1)
-           AND id <> $1 AND status = 'pending'`,
+           AND id <> $1 AND status = 'pending'
+         RETURNING id, buyer_id, offer_price_gbp::text, conversation_id`,
         [offerId],
       );
       await client.query(
@@ -762,7 +896,7 @@ export const registerListingOfferRoutes = ({
          WHERE id = $1`,
         [offer.listing_id],
       );
-      await appendDomainEvent(client, {
+      const acceptedEventId = await appendDomainEvent(client, {
         aggregateType: 'offer',
         aggregateId: offerId,
         eventType: 'offer.accepted',
@@ -783,6 +917,29 @@ export const registerListingOfferRoutes = ({
           reservationExpiresAt,
         },
       });
+      // First-accept-wins: every sibling declined as a side effect gets its
+      // own domain event so the losing buyers are notified.
+      for (const sibling of siblingResult.rows) {
+        await appendDomainEvent(client, {
+          aggregateType: 'offer',
+          aggregateId: sibling.id,
+          eventType: 'offer.sibling_declined',
+          actorId: actorUserId,
+          correlationId: request.id,
+          causationId: acceptedEventId,
+          deduplicationKey: `offer.sibling_declined:${sibling.id}`,
+          payload: {
+            offerId: sibling.id,
+            listingId: offer.listing_id,
+            buyerId: sibling.buyer_id,
+            sellerId: offer.seller_id,
+            offerPriceGbp: Number(sibling.offer_price_gbp),
+            conversationId: sibling.conversation_id,
+            acceptedOfferId: offerId,
+            orderId,
+          },
+        });
+      }
       await client.query(
         `INSERT INTO order_events (
            order_id, event_type, actor_id, source, deduplication_key, metadata
@@ -842,10 +999,20 @@ export const registerListingOfferRoutes = ({
     const client = await db.connect();
     try {
       await client.query('BEGIN');
-      await expireOverdueOffers(client);
+      const expiredOffers = await expireOverdueOffers(client);
+      await appendOfferExpiredEvents(client, expiredOffers, request.id);
 
-      const result = await client.query<{ seller_id: string; status: string }>(
-        `SELECT seller_id, status FROM listing_offers WHERE id = $1 FOR UPDATE`,
+      const result = await client.query<{
+        seller_id: string;
+        buyer_id: string;
+        listing_id: string;
+        offer_price_gbp: string;
+        conversation_id: string | null;
+        status: string;
+      }>(
+        `SELECT seller_id, buyer_id, listing_id, offer_price_gbp::text,
+                conversation_id, status
+         FROM listing_offers WHERE id = $1 FOR UPDATE`,
         [offerId],
       );
       if (!result.rowCount) {
@@ -853,15 +1020,16 @@ export const registerListingOfferRoutes = ({
         reply.code(404);
         return { ok: false, error: 'Offer not found' };
       }
-      if (result.rows[0].seller_id !== actorUserId) {
+      const offer = result.rows[0];
+      if (offer.seller_id !== actorUserId) {
         await client.query('ROLLBACK');
         reply.code(403);
         return { ok: false, error: 'Only the seller can decline this offer' };
       }
-      if (result.rows[0].status !== 'pending') {
+      if (offer.status !== 'pending') {
         await client.query('ROLLBACK');
         reply.code(409);
-        return { ok: false, error: `A ${result.rows[0].status} offer cannot be declined` };
+        return { ok: false, error: `A ${offer.status} offer cannot be declined` };
       }
 
       await client.query(
@@ -870,7 +1038,30 @@ export const registerListingOfferRoutes = ({
          WHERE id = $1`,
         [offerId],
       );
+      await appendDomainEvent(client, {
+        aggregateType: 'offer',
+        aggregateId: offerId,
+        eventType: 'offer.declined',
+        actorId: actorUserId,
+        correlationId: request.id,
+        deduplicationKey: `offer.declined:${offerId}`,
+        payload: {
+          offerId,
+          listingId: offer.listing_id,
+          buyerId: offer.buyer_id,
+          sellerId: offer.seller_id,
+          offerPriceGbp: Number(offer.offer_price_gbp),
+          conversationId: offer.conversation_id,
+        },
+      });
       await client.query('COMMIT');
+      try {
+        await enqueueOutboxDrain();
+      } catch (error) {
+        // The event is already durable. The periodic drain will retry even
+        // when Redis is temporarily unavailable at commit time.
+        app.log.error({ err: error, offerId }, 'Failed to enqueue offer outbox drain');
+      }
       return { ok: true, offerId, status: 'declined' };
     } catch (error) {
       await client.query('ROLLBACK');
@@ -889,8 +1080,17 @@ export const registerListingOfferRoutes = ({
     const client = await db.connect();
     try {
       await client.query('BEGIN');
-      const result = await client.query<{ buyer_id: string; status: string }>(
-        `SELECT buyer_id, status FROM listing_offers WHERE id = $1 FOR UPDATE`,
+      const result = await client.query<{
+        buyer_id: string;
+        seller_id: string;
+        listing_id: string;
+        offer_price_gbp: string;
+        conversation_id: string | null;
+        status: string;
+      }>(
+        `SELECT buyer_id, seller_id, listing_id, offer_price_gbp::text,
+                conversation_id, status
+         FROM listing_offers WHERE id = $1 FOR UPDATE`,
         [offerId],
       );
       if (!result.rowCount) {
@@ -898,15 +1098,16 @@ export const registerListingOfferRoutes = ({
         reply.code(404);
         return { ok: false, error: 'Offer not found' };
       }
-      if (result.rows[0].buyer_id !== actorUserId) {
+      const offer = result.rows[0];
+      if (offer.buyer_id !== actorUserId) {
         await client.query('ROLLBACK');
         reply.code(403);
         return { ok: false, error: 'Only the buyer can cancel this offer' };
       }
-      if (result.rows[0].status !== 'pending') {
+      if (offer.status !== 'pending') {
         await client.query('ROLLBACK');
         reply.code(409);
-        return { ok: false, error: `A ${result.rows[0].status} offer cannot be cancelled` };
+        return { ok: false, error: `A ${offer.status} offer cannot be cancelled` };
       }
 
       await client.query(
@@ -915,7 +1116,30 @@ export const registerListingOfferRoutes = ({
          WHERE id = $1`,
         [offerId],
       );
+      await appendDomainEvent(client, {
+        aggregateType: 'offer',
+        aggregateId: offerId,
+        eventType: 'offer.cancelled',
+        actorId: actorUserId,
+        correlationId: request.id,
+        deduplicationKey: `offer.cancelled:${offerId}`,
+        payload: {
+          offerId,
+          listingId: offer.listing_id,
+          buyerId: offer.buyer_id,
+          sellerId: offer.seller_id,
+          offerPriceGbp: Number(offer.offer_price_gbp),
+          conversationId: offer.conversation_id,
+        },
+      });
       await client.query('COMMIT');
+      try {
+        await enqueueOutboxDrain();
+      } catch (error) {
+        // The event is already durable. The periodic drain will retry even
+        // when Redis is temporarily unavailable at commit time.
+        app.log.error({ err: error, offerId }, 'Failed to enqueue offer outbox drain');
+      }
       return { ok: true, offerId, status: 'cancelled' };
     } catch (error) {
       await client.query('ROLLBACK');
@@ -948,7 +1172,9 @@ export const registerListingOfferRoutes = ({
     const client = await db.connect();
     try {
       await client.query('BEGIN');
-      const count = await expireOverdueOffers(client);
+      const expiredOffers = await expireOverdueOffers(client);
+      await appendOfferExpiredEvents(client, expiredOffers, request.id);
+      const count = expiredOffers.length;
       const expiredReservations = await client.query<{
         listing_id: string;
         order_id: string;
@@ -997,6 +1223,15 @@ export const registerListingOfferRoutes = ({
         );
       }
       await client.query('COMMIT');
+      if (count > 0) {
+        try {
+          await enqueueOutboxDrain();
+        } catch (error) {
+          // The events are already durable. The periodic drain will retry
+          // even when Redis is temporarily unavailable at commit time.
+          app.log.error({ err: error }, 'Failed to enqueue offer outbox drain');
+        }
+      }
       return {
         ok: true,
         expiredCount: count,

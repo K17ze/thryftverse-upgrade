@@ -1,1567 +1,238 @@
-import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { AnimatedPressable } from '../components/AnimatedPressable';
-import { View, Text, StyleSheet, RefreshControl } from 'react-native';
-import { CachedImage } from '../components/CachedImage';
-import { ConfirmationSheet } from '../components/ConfirmationSheet';
-import { ActionSheet } from '../components/sheets';
-import { FlashList, type FlashListProps, type FlashListRef } from '@shopify/flash-list';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useCallback, useRef } from 'react';
+import { View, StyleSheet } from 'react-native';
 import { useNavigation, useScrollToTop, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import NetInfo from '@react-native-community/netinfo';
+import { type FlashListRef } from '@shopify/flash-list';
 import { useAppTheme } from '../theme/ThemeContext';
-import type { Conversation, Message } from '../domain';
+import type { Conversation } from '../domain';
 import { RootStackParamList } from '../navigation/types';
-import { SwipeableRow } from '../components/SwipeableRow';
-import Reanimated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
-import { EmptyState } from '../components/EmptyState';
 import { useStore } from '../store/useStore';
-import { useNotifications } from '../hooks/useNotifications';
-import { RefreshIndicator } from '../components/RefreshIndicator';
 import { useBackendData } from '../context/BackendDataContext';
-import { fetchConversationsFromApi, deleteConversationOnApi } from '../services/chatApi';
-import { useInboxMessageEvent, useInboxGroupIdentityEvent, realtimePayloadToMessage } from '../services/realtimeClient';
-import { AppSearchBar } from '../components/ui/AppSearchBar';
-import { useHaptic } from '../hooks/useHaptic';
-import { Caption } from '../components/ui/Text';
-import { AvatarRing } from '../components/chat/AvatarRing';
-import { SkeletonLoader } from '../components/SkeletonLoader';
-import { InboxConversationRow, type InboxDeliveryStatus } from '../components/chat/InboxConversationRow';
 import { OfflineBanner } from '../components/OfflineBanner';
-import { MessagingSegment } from '../components/chat/MessagingSegmentRail';
-import { formatActivityTimestamp } from '../utils/dateFormat';
-import {
-  classifyConversation,
-} from '../utils/conversationClassification';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Space, Control, Stroke, FontFamily } from '../theme/designTokens';
-import { TypographyV2 } from '../theme/typography.v2';
-import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
-import { useVisuallyComplete } from '../performance/visuallyComplete';
-import { colorForId, initialsFromName } from '../utils/avatarColor';
+import {
+  useInboxData,
+  useInboxRealtime,
+  useInboxFilters,
+  useInboxActions,
+  type InboxSegment,
+} from '../hooks/inbox';
+import { InboxHeader } from '../components/inbox/InboxHeader';
+import { InboxFilters } from '../components/inbox/InboxFilters';
+import { InboxSyncBanner, InboxListingFilterBanner } from '../components/inbox/InboxBanners';
+import { InboxList } from '../components/inbox/InboxList';
+import { InboxEmptyState } from '../components/inbox/InboxEmptyState';
+import { InboxRow } from '../components/inbox/InboxRow';
+import { InboxSheets } from '../components/inbox/InboxSheets';
+
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type InboxRoute = RouteProp<RootStackParamList, 'Inbox'>;
 type ConvoItem = Conversation;
-type InboxSegment = MessagingSegment | 'all' | 'unread' | 'buying' | 'selling' | 'archived' | 'groups';
-
-const AnimatedFlashList = Reanimated.createAnimatedComponent(FlashList) as unknown as React.ComponentClass<FlashListProps<Conversation>>;
-
-// Inbox timestamps arrive in mixed formats: ISO strings from the API and
-// optimistic labels like "just now" written by local appends. Render a
-// compact relative timestamp (time-of-day today, short date otherwise) and
-// pass through any non-parseable label verbatim rather than showing nothing.
-function formatInboxTimestamp(value: string): string {
-  if (!value) return '';
-  return formatActivityTimestamp(value) || value;
-}
-
-// Delivery state is only shown when it is provable: the last stored message
-// must be authored by the current user and carry a lifecycle status or read
-// receipt. A synthetic preview row (system placeholder from the list fetch)
-// or a message from the other participant yields no glyph — the row never
-// claims "sent"/"read" for state it cannot verify.
-function deriveInboxDeliveryStatus(message?: Message): InboxDeliveryStatus | undefined {
-  if (!message || message.sender !== 'me') return undefined;
-  if (message.status === 'failed' || message.uploadStatus === 'failed') return 'failed';
-  if (
-    message.status === 'sending' ||
-    message.status === 'reconciling' ||
-    message.status === 'draft' ||
-    message.uploadStatus === 'uploading'
-  ) {
-    return 'sending';
-  }
-  if (message.readStatus === 'read') return 'read';
-  if (message.readStatus === 'delivered') return 'delivered';
-  return 'sent';
-}
-
-function ListingContextThumbnail({ itemId }: { itemId: string }) {
-  const { colors } = useAppTheme();
-  const { listings } = useBackendData();
-  const listing = useMemo(() => listings.find((l) => l.id === itemId), [listings, itemId]);
-  const listingThemed = useMemo(() => ({
-    contextThumb: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
-  }), [colors]);
-  if (!listing?.images?.[0]) {
-    return (
-      <View style={[styles.contextThumb, listingThemed.contextThumb]} accessible={false} importantForAccessibility="no-hide-descendants">
-        <Ionicons name="bag-handle-outline" size={14} color={colors.textMuted} />
-      </View>
-    );
-  }
-  return (
-    <View accessible={false} importantForAccessibility="no-hide-descendants">
-      <CachedImage
-        uri={listing.images[0]}
-        style={styles.contextThumbImage}
-        containerStyle={[styles.contextThumb, listingThemed.contextThumb]}
-        contentFit="cover"
-      />
-    </View>
-  );
-}
 
 export default function InboxScreen() {
-  const { colors, isDark } = useAppTheme();
-  const reducedMotion = useReducedMotion();
+  const { colors } = useAppTheme();
   const navigation = useNavigation<NavT>();
   const route = useRoute<InboxRoute>();
-  // ── Listing context filter (P2-06) ──
-  // When navigated from ManageListing → Questions, the inbox scopes to
-  // conversations about that specific listing. A local state override
-  // lets the user clear the filter via "Show all" without navigating away.
-  const routeListingId = route.params?.listingId;
-  const [listingFilterId, setListingFilterId] = useState<string | undefined>(routeListingId);
-  const { showSuccess, showInfo, showError } = useNotifications();
-  const haptic = useHaptic();
-  const { refreshListings, listings } = useBackendData();
+
+  // Data lifecycle: focus refetch (initial mount + returns from Chat/offers/
+  // orders), pull-to-refresh, connectivity, sync error, readiness milestones.
+  const {
+    refreshing,
+    isLoading,
+    syncError,
+    isOffline,
+    loadConversations,
+    handleRefresh,
+  } = useInboxData();
+
+  // Realtime subscriptions — new-message events live-update inbox rows and
+  // group identity updates keep titles/avatars current; both can trigger a
+  // full reload for threads not yet in the local store.
+  useInboxRealtime(loadConversations);
+
+  // Filter surface: listing-scoped filter (seeded from route params), search,
+  // segment rail, expanded secondary filters, and the derived list/counts.
+  const {
+    listingFilterId,
+    setListingFilterId,
+    filteredListingTitle,
+    searchQuery,
+    setSearchQuery,
+    segment,
+    setSegment,
+    filterExpanded,
+    setFilterExpanded,
+    participantNameLookup,
+    visibleConversations,
+    buyingUnreadCount,
+    sellingUnreadCount,
+    messageRequests,
+  } = useInboxFilters(route.params?.listingId);
+
+  // Row/conversation actions plus the confirmation and quick-action sheets.
+  const {
+    confirmSheet,
+    actionSheet,
+    dismissConfirmSheet,
+    dismissActionSheet,
+    handleDelete,
+    handleMute,
+    handleArchive,
+    handleAcceptRequest,
+    handleDeclineRequest,
+    handlePin,
+    handleToggleRead,
+    handleQuickActions,
+  } = useInboxActions();
+
   const currentUser = useStore((state) => state.currentUser);
-  const conversations = useStore((state) => state.conversations);
-  const upsertConversation = useStore((state) => state.upsertConversation);
-  const deleteConversation = useStore((state) => state.deleteConversation);
-  const toggleConversationPinned = useStore((state) => state.toggleConversationPinned);
-  const markConversationRead = useStore((state) => state.markConversationRead);
-  const toggleConversationUnread = useStore((state) => state.toggleConversationUnread);
-  const toggleMutedConversation = useStore((state) => state.toggleMutedConversation);
-  const toggleArchivedConversation = useStore((state) => state.toggleArchivedConversation);
-  const archivedIds = useStore((state) => state.archivedConversationIds);
-  const reportReady = useVisuallyComplete('Inbox');
   const mutedIds = useStore((state) => state.mutedConversationIds);
-  const messageRequests = useStore((state) => state.messageRequests);
-  const acceptMessageRequest = useStore((state) => state.acceptMessageRequest);
-  const declineMessageRequest = useStore((state) => state.declineMessageRequest);
-  const markConversationsLoaded = useStore((state) => state.markConversationsLoaded);
-  const [refreshing, setRefreshing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [segment, setSegment] = useState<InboxSegment>('all');
-  const [isLoading, setIsLoading] = useState(true);
-  const [syncError, setSyncError] = useState('');
-  const [isOffline, setIsOffline] = useState(false);
-  // Secondary filters (Unread, Archived, Groups) expand inline under the
-  // filter icon — keeps the first viewport calm with the All/Buying/Selling/
-  // Requests rail as the sole top-tier control.
-  const [filterExpanded, setFilterExpanded] = useState(false);
-  const [confirmSheet, setConfirmSheet] = useState<{
-    visible: boolean;
-    title: string;
-    message: string;
-    confirmLabel?: string;
-    onConfirm: () => void;
-    variant?: 'default' | 'danger';
-  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
-  const [actionSheet, setActionSheet] = useState<{
-    visible: boolean;
-    conversationId: string;
-    isMuted: boolean;
-    isPinned: boolean;
-  }>({ visible: false, conversationId: '', isMuted: false, isPinned: false });
-  const scrollY = useSharedValue(0);
-  const scrollHandler = useAnimatedScrollHandler({
-    onScroll: (e) => {
-      if (!reducedMotion) {
-        scrollY.value = e.contentOffset.y;
-      }
-    },
-  });
-  useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener((state) => {
-      setIsOffline(!state.isConnected);
-    });
-    return () => unsubscribe();
-  }, []);
-  const loadBotsFromApi = useStore((state) => state.loadBotsFromApi);
-  const loadConversations = async () => {
-    setSyncError('');
-    setIsLoading(true);
-    try {
-      const [remoteConversations] = await Promise.all([
-        fetchConversationsFromApi(),
-        loadBotsFromApi(),
-      ]);
-      for (const conversation of remoteConversations) {
-        upsertConversation(conversation);
-      }
-    } catch (error) {
-      setSyncError((error as Error).message || 'Unable to load conversations.');
-    } finally {
-      setIsLoading(false);
-      markConversationsLoaded();
-    }
-  };
-  useEffect(() => {
-    void loadConversations();
-  }, []);
+  const profileMediaOverrides = useStore((state) => state.profileMediaOverrides);
+  const markConversationRead = useStore((state) => state.markConversationRead);
+  const { listings } = useBackendData();
 
-  // Readiness milestones: 'data-ready' when the initial conversation fetch
-  // settles (isLoading flips false in loadConversations' finally — covering
-  // both success and error), 'interaction-ready' with it since the list and
-  // composer entry points are usable once the skeleton clears.
-  useEffect(() => {
-    if (!isLoading) {
-      reportReady('data-ready');
-      reportReady('interaction-ready');
-    }
-  }, [isLoading, reportReady]);
-
-  // Realtime subscription — live-update inbox rows when new messages arrive
-  // on any loaded conversation. useInboxMessageEvent subscribes to every
-  // conversation topic currently in the store and reconciles as the list
-  // changes.
-  useInboxMessageEvent(
-    useCallback(
-      (payload) => {
-        const existing = conversations.find((c) => c.id === payload.conversationId);
-        const domainMessage = realtimePayloadToMessage(payload, currentUser?.id);
-
-        // If the conversation isn't in the local store yet, reload the full
-        // inbox so the new thread appears.
-        if (!existing) {
-          void loadConversations();
-          return;
-        }
-
-        // Skip messages the current user just sent — the sending surface
-        // already optimistically updated the row.
-        const isOwnMessage = Boolean(
-          currentUser?.id && payload.senderType === 'user' && payload.senderUserId === currentUser.id,
-        );
-
-        // Deduplicate — the store may already hold this message after an
-        // optimistic send or a prior realtime event.
-        const alreadyStored = existing.messages.some((m) => m.id === domainMessage.id);
-
-        // `text` is '' (not undefined) for voice/media-only payloads, so a
-        // truthy check — not `??` — is required to reach the fallbacks.
-        const nextLastMessage =
-          domainMessage.text ||
-          (domainMessage.mediaType === 'image'
-            ? '📷 Photo'
-            : domainMessage.mediaType === 'video'
-              ? '🎥 Video'
-              : domainMessage.type === 'voice'
-                ? '🎤 Voice message'
-                : domainMessage.systemTitle) ||
-          'New message';
-
-        upsertConversation({
-          ...existing,
-          lastMessage: nextLastMessage,
-          lastMessageTime: domainMessage.timestamp,
-          unread: isOwnMessage ? existing.unread : true,
-          messages: alreadyStored ? existing.messages : [...existing.messages, domainMessage],
-        });
-      },
-      [conversations, currentUser?.id, upsertConversation],
-    ),
-  );
-
-  // Realtime group identity updates — when an admin changes the group name,
-  // avatar, cover, or description, merge it into the inbox store so the row
-  // title and avatar stay current without a manual refetch.
-  useInboxGroupIdentityEvent(
-    useCallback(
-      (payload) => {
-        const existing = conversations.find((c) => c.id === payload.conversationId);
-        if (!existing) return;
-        upsertConversation({
-          ...existing,
-          title: payload.title ?? existing.title,
-          description: payload.description ?? existing.description,
-          avatar: payload.avatar !== undefined ? (payload.avatar ?? undefined) : existing.avatar,
-          coverPhoto: payload.coverPhoto !== undefined ? (payload.coverPhoto ?? undefined) : existing.coverPhoto,
-        });
-      },
-      [conversations, upsertConversation],
-    ),
-  );
-
-  const handleRefresh = async () => {
-    haptic.patterns.refresh();
-    setRefreshing(true);
-    setSyncError('');
-    await refreshListings();
-    try {
-      const [remoteConversations] = await Promise.all([
-        fetchConversationsFromApi(),
-        loadBotsFromApi(),
-      ]);
-      for (const conversation of remoteConversations) {
-        upsertConversation(conversation);
-      }
-    } catch (error) {
-      setSyncError((error as Error).message || 'Unable to refresh conversations.');
-    }
-    setRefreshing(false);
-  };
   const listRef = useRef<FlashListRef<Conversation>>(null);
   useScrollToTop(listRef);
-  const t = useMemo(() => ({
-    screenRoot: { backgroundColor: colors.background },
-    headerTitle: { color: colors.textPrimary },
-    iconBtn: { backgroundColor: 'transparent' },
-    searchWrap: { backgroundColor: colors.surfaceAlt },
-    rowSeparator: { backgroundColor: colors.border },
-    groupAvatar: { backgroundColor: colors.surfaceAlt },
-    groupAvatarText: { color: colors.textPrimary },
-    botIndicator: { backgroundColor: colors.surface, borderColor: colors.border },
-    nameText: { color: colors.textPrimary },
-    snippet: { color: colors.textSecondary },
-    requestRowAccent: { borderLeftColor: colors.brand, backgroundColor: colors.brandSubtle },
-    requestBtnDecline: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
-    requestBtnDeclineText: { color: colors.textPrimary },
-    requestBtnAccept: { backgroundColor: colors.brand },
-    requestsAvatar: { backgroundColor: colors.brandSubtle },
-    requestsBadge: { backgroundColor: colors.textPrimary },
-    requestsBadgeText: { color: colors.textInverse },
-    requestsBannerText: { color: colors.textPrimary },
-    requestsBannerSub: { color: colors.textMuted },
-    requestBtnAcceptText: { color: colors.textInverse },
-    errorBanner: { backgroundColor: colors.dangerSubtle, borderBottomColor: colors.border },
-    errorBannerTitle: { color: colors.danger },
-    errorBannerSub: { color: colors.textMuted },
-    errorBannerRetry: { color: colors.brand },
-    filterChipSecondary: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
-    filterChipSecondaryActive: { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary },
-    filterChipSecondaryText: { color: colors.textSecondary },
-    filterChipSecondaryTextActive: { color: colors.textInverse },
-    filterDot: { backgroundColor: colors.brand },
-    unreadBadgePill: { backgroundColor: colors.brand },
-    unreadBadgeText: { color: colors.textInverse },
-  }), [colors]);
-  const participantNameLookup = useMemo(() => {
-    const map = new Map<string, string>();
-    map.set('me', currentUser?.username ?? 'you');
-    if (currentUser?.id) {
-      map.set(currentUser.id, currentUser.username);
-    }
-    for (const conversation of conversations) {
-      for (const participant of conversation.participantProfiles ?? []) {
-        map.set(participant.id, participant.displayName || participant.username);
-      }
-    }
-    return map;
-  }, [conversations, currentUser?.id, currentUser?.username]);
-  const profileMediaOverrides = useStore((s) => s.profileMediaOverrides);
-  // ── Listing-scoped filter ──
-  // When a listingId filter is active, only conversations whose context
-  // listing or itemId matches are shown. The filter is applied before
-  // segment/search so the user sees a focused subset.
-  const filteredByListing = useMemo(() => {
-    if (!listingFilterId) return conversations;
-    return conversations.filter((c) => {
-      const contextListingId = c.context?.listing?.id;
-      return contextListingId === listingFilterId || c.itemId === listingFilterId;
-    });
-  }, [conversations, listingFilterId]);
-  const filteredListingTitle = useMemo(() => {
-    if (!listingFilterId) return null;
-    const listing = listings.find((l) => l.id === listingFilterId);
-    return listing?.title ?? null;
-  }, [listings, listingFilterId]);
-  const visibleConversations = useMemo(() => {
-    const normalizedQuery = String(searchQuery ?? '').trim().toLowerCase();
-    const scoped = filteredByListing.filter((conversation) => {
-      const isArchived = archivedIds.includes(conversation.id);
-      const isRequest = messageRequests.includes(conversation.id);
-      if (segment === 'unread' && !conversation.unread) return false;
-      if (segment === 'groups' && conversation.type !== 'group') return false;
-      if (segment === 'buying' && !classifyConversation(conversation, currentUser?.id).isBuying) return false;
-      if (segment === 'selling' && !classifyConversation(conversation, currentUser?.id).isSelling) return false;
-      if (segment === 'requests') return isRequest;
-      if (segment === 'archived') return isArchived;
 
-      // In 'all', hide requests and archived from main inbox
+  // Everything behind the sheets is hidden from screen readers while a sheet
+  // is open — the sheets render outside the a11y wrap below.
+  const sheetsOpen = actionSheet.visible || confirmSheet.visible;
 
-      if (segment === 'all' && (isArchived || isRequest)) return false;
-      if (!normalizedQuery) return true;
-      const counterpartyId = conversation.participantIds?.find((id) => id !== 'me' && id !== currentUser?.id);
-      const title = conversation.type === 'group'
-        ? conversation.title ?? 'group chat'
-        : (counterpartyId ? participantNameLookup.get(counterpartyId) ?? 'Thryft user' : 'Thryft user');
-      const corpus = [
-        title,
-        conversation.lastMessage ?? '',
-        ...conversation.messages.slice(-10).map((m) => m.text ?? m.systemTitle ?? ''),
-      ].join(' ').toLowerCase();
-      return corpus.includes(normalizedQuery);
+  const handleOpenConversation = useCallback((id: string) => {
+    markConversationRead(id);
+    navigation.navigate('Chat', {
+      conversationId: id,
+      focusQuery: searchQuery.trim() || undefined,
     });
-    const ordered = [...scoped];
-    ordered.sort((a, b) => {
-      const pinDiff = Number(b.isPinned) - Number(a.isPinned);
-      if (pinDiff !== 0) return pinDiff;
-      const unreadDiff = Number(b.unread) - Number(a.unread);
-      if (unreadDiff !== 0) return unreadDiff;
-      return b.lastMessageTime.localeCompare(a.lastMessageTime);
-    });
-    return ordered;
-  }, [filteredByListing, searchQuery, segment, currentUser?.id, participantNameLookup, archivedIds, messageRequests]);
+  }, [markConversationRead, navigation, searchQuery]);
 
-  const buyingUnreadCount = useMemo(
-    () => conversations.filter(
-      (c) => !archivedIds.includes(c.id) && !messageRequests.includes(c.id) && c.unread && classifyConversation(c, currentUser?.id).isBuying
-    ).length,
-    [conversations, archivedIds, messageRequests, currentUser?.id]
-  );
-  const sellingUnreadCount = useMemo(
-    () => conversations.filter(
-      (c) => !archivedIds.includes(c.id) && !messageRequests.includes(c.id) && c.unread && classifyConversation(c, currentUser?.id).isSelling
-    ).length,
-    [conversations, archivedIds, messageRequests, currentUser?.id]
-  );
-  const handleDelete = useCallback((id: string) => {
-    haptic.medium();
-    setConfirmSheet({
-      visible: true,
-      title: 'Remove from inbox?',
-      message: 'This conversation will be hidden from your inbox. The other participant keeps their copy.',
-      confirmLabel: 'Remove',
-      variant: 'danger',
-      onConfirm: async () => {
-        setConfirmSheet((s) => ({ ...s, visible: false }));
-        const previous = conversations.find((c) => c.id === id);
-        deleteConversation(id);
-        showError('Conversation removed', 'This conversation was removed from your inbox.');
-        try {
-          await deleteConversationOnApi(id, 'me');
-        } catch {
-          showError('Delete failed', 'Failed to delete on server. Restoring conversation.');
-          if (previous) {
-            upsertConversation(previous);
-          }
-        }
-      },
-    });
-  }, [conversations, deleteConversation, upsertConversation, showError, haptic]);
-  const handleMute = useCallback((id: string) => {
-    haptic.light();
-    const nowMuted = !mutedIds.includes(id);
-    toggleMutedConversation(id)
-      .then(() => {
-        showInfo(nowMuted ? 'Conversation muted' : 'Conversation unmuted');
-      })
-      .catch(() => {
-        showError('Action failed', 'Could not update mute status. Check your connection and try again.');
-      });
-  }, [toggleMutedConversation, mutedIds, showInfo, showError, haptic]);
-  const handleArchive = useCallback((id: string) => {
-    haptic.light();
-    const nowArchived = !archivedIds.includes(id);
-    toggleArchivedConversation(id)
-      .then(() => {
-        showInfo(nowArchived ? 'Conversation archived' : 'Conversation unarchived');
-      })
-      .catch(() => {
-        showError('Action failed', 'Could not update archive status. Check your connection and try again.');
-      });
-  }, [toggleArchivedConversation, archivedIds, showInfo, showError, haptic]);
-  const handleAcceptRequest = useCallback((id: string) => {
-    haptic.medium();
-    acceptMessageRequest(id)
-      .then(() => {
-        showSuccess('Request accepted', 'Message request accepted.');
-      })
-      .catch(() => {
-        showError('Action failed', 'Could not accept this request. Check your connection and try again.');
-      });
-  }, [acceptMessageRequest, showSuccess, showError, haptic]);
-  const handleDeclineRequest = useCallback((id: string) => {
-    haptic.medium();
-    declineMessageRequest(id)
-      .then(() => {
-        showInfo('Request declined', 'Message request declined.');
-      })
-      .catch(() => {
-        showError('Action failed', 'Could not decline this request. Check your connection and try again.');
-      });
-  }, [declineMessageRequest, showInfo, showError, haptic]);
-  const handlePin = useCallback((id: string) => {
-    haptic.medium();
-    const nowPinned = !conversations.find((c) => c.id === id)?.isPinned;
-    toggleConversationPinned(id)
-      .then(() => {
-        showSuccess(nowPinned ? 'Pinned' : 'Unpinned', nowPinned ? 'Conversation pinned.' : 'Conversation unpinned.');
-      })
-      .catch(() => {
-        showError('Action failed', 'Could not update pin status. Check your connection and try again.');
-      });
-  }, [conversations, toggleConversationPinned, showSuccess, showError, haptic]);
-  const handleToggleRead = useCallback((id: string) => {
-    const convo = conversations.find((c) => c.id === id);
-    const willMarkUnread = convo ? !convo.unread : false;
-    haptic.light();
-    toggleConversationUnread(id)
-      .then(() => {
-        showInfo(willMarkUnread ? 'Marked unread' : 'Marked read', willMarkUnread ? 'Conversation marked as unread' : 'Conversation marked as read');
-      })
-      .catch(() => {
-        showError('Action failed', 'Could not update read status. Check your connection and try again.');
-      });
-  }, [conversations, toggleConversationUnread, showInfo, showError, haptic]);
-
-  // Long-press quick actions: an ActionSheet exposing mute, pin, and
-  // delete. Preserves the capabilities previously surfaced via the old
-  // multi-button swipe panels (AGENTS.md §8: preserve working functionality).
-  const handleQuickActions = useCallback((id: string) => {
-    const convo = conversations.find((c) => c.id === id);
-    const isMuted = mutedIds.includes(id);
-    const isPinned = !!convo?.isPinned;
-    haptic.medium();
-    setActionSheet({ visible: true, conversationId: id, isMuted, isPinned });
-  }, [conversations, mutedIds, haptic]);
+  const handleSelectSecondaryFilter = useCallback((key: InboxSegment) => {
+    setSegment(key);
+    setFilterExpanded(false);
+  }, [setSegment, setFilterExpanded]);
 
   // FlashList v2 performance: memoized renderItem prevents full re-render of
   // all visible conversation rows on every parent state change.
   // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
-  const renderItem = useCallback(({ item, index }: { item: ConvoItem; index: number }) => {
-    const isGroup = item.type === 'group';
-    const counterpartyId = item.participantIds?.find((id) => id !== 'me' && id !== currentUser?.id);
-    const displayTitle = isGroup
-      ? item.title ?? 'Untitled Group'
-      : (counterpartyId ? participantNameLookup.get(counterpartyId) ?? 'Thryft user' : 'Thryft user');
-    const safeDisplayTitle = String(displayTitle ?? 'Thryft user');
-    const isRequest = messageRequests.includes(item.id);
-    const isMuted = mutedIds.includes(item.id);
-    const counterpartySummary = counterpartyId
-      ? item.participantProfiles?.find((participant) => participant.id === counterpartyId)
-      : undefined;
-    const avatarEl = isGroup ? (
-      <View style={[styles.groupAvatar, t.groupAvatar, !item.avatar && { backgroundColor: colorForId(item.id) }]}>
-        {item.avatar ? (
-          <CachedImage
-            uri={item.avatar}
-            style={styles.groupAvatarImage}
-            contentFit="cover"
-          />
-        ) : (
-          <Text style={[styles.groupAvatarText, t.groupAvatarText, !item.avatar && { color: colors.textInverse }]}>
-            {initialsFromName(item.title)}
-          </Text>
-        )}
-        {(item.botIds?.length ?? 0) > 0 && (
-          <View style={[styles.botIndicator, t.botIndicator]} accessible={false} importantForAccessibility="no-hide-descendants">
-            <Ionicons name="bulb-outline" size={14} color={colors.brand} />
-          </View>
-        )}
-      </View>
-    ) : (
-      <AvatarRing
-        uri={item.avatar ?? (counterpartyId ? profileMediaOverrides[counterpartyId]?.avatar ?? counterpartySummary?.avatar ?? undefined : undefined)}
-        size={44}
-        isUnread={item.unread}
-            ringWidth={2}
-        fallbackInitials={safeDisplayTitle === 'Thryft user' ? 'T' : safeDisplayTitle.slice(0, 2).toUpperCase()}
-      />
-    );
-    const requestRow = (
-      <View style={[styles.requestRowAccent, t.requestRowAccent]}>
-        <View style={styles.requestRowInner}>
-          {avatarEl}
-          <View style={styles.messageBody}>
-            <View style={styles.messageTop}>
-              <Text style={[styles.nameText, t.nameText, styles.nameUnread]}>{displayTitle}</Text>
-              <Caption color={colors.textMuted}>{formatInboxTimestamp(item.lastMessageTime)}</Caption>
-            </View>
-            <Text style={[styles.snippet, t.snippet]} numberOfLines={1}>{item.lastMessage}</Text>
-            {item.itemId && (
-              <View style={styles.requestListingContext}>
-                <ListingContextThumbnail itemId={item.itemId} />
-                <Text style={[styles.requestListingText, { color: colors.textSecondary }]}>About a listing</Text>
-              </View>
-            )}
-            <View style={styles.requestActions}>
-              <AnimatedPressable
-                style={[styles.requestBtnDecline, t.requestBtnDecline]}
-                onPress={() => handleDeclineRequest(item.id)}
-                activeOpacity={0.85}
-                scaleValue={0.96}
-                hapticFeedback="light"
-                accessibilityLabel="Decline message request"
-                accessibilityRole="button"
-              >
-                <Text style={[styles.requestBtnDeclineText, t.requestBtnDeclineText]}>Decline</Text>
-              </AnimatedPressable>
-              <AnimatedPressable
-                style={[styles.requestBtnAccept, t.requestBtnAccept]}
-                onPress={() => handleAcceptRequest(item.id)}
-                activeOpacity={0.85}
-                scaleValue={0.96}
-                hapticFeedback="medium"
-                accessibilityLabel="Accept message request"
-                accessibilityRole="button"
-              >
-                <Text style={[styles.requestBtnAcceptText, t.requestBtnAcceptText]}>Accept</Text>
-              </AnimatedPressable>
-            </View>
-          </View>
-        </View>
-      </View>
-    );
-    // Delivery state is derived from the last stored message only — a
-    // conversation fresh from the list endpoint carries a synthetic preview
-    // message (sender 'system'), which yields no glyph. After a thread visit
-    // or an optimistic send the real message is present and its status /
-    // readStatus drives the check-clock-alert glyph truthfully.
-    const lastStoredMessage = item.messages.length
-      ? item.messages[item.messages.length - 1]
-      : undefined;
-    const conversationRow = (
-      <InboxConversationRow
-        displayTitle={safeDisplayTitle}
-        lastMessage={item.lastMessage ?? ''}
-        lastMessageTime={formatInboxTimestamp(item.lastMessageTime)}
-        unread={!!item.unread}
-        // No truthful unread count exists client-side (the list payload has
-        // no per-message read cursor), so render the plain unread dot rather
-        // than fabricate a number from message history length.
-        unreadCount={undefined}
-        deliveryStatus={deriveInboxDeliveryStatus(lastStoredMessage)}
-        isPinned={!!item.isPinned}
-        isMuted={isMuted}
-        isGroup={isGroup}
-        memberCount={isGroup ? item.participantIds?.length : undefined}
-        draftText={item.draftText}
-        itemId={item.itemId}
-        itemThumbUri={item.itemId ? (() => {
-          const listing = listings.find((l) => l.id === item.itemId);
-          return listing?.images?.[0] ?? null;
-        })() : undefined}
-        avatarElement={avatarEl}
-        onPress={() => {
-          markConversationRead(item.id);
-          navigation.navigate('Chat', {
-            conversationId: item.id,
-            focusQuery: searchQuery.trim() || undefined,
-          });
-        }}
-        onLongPress={() => handleQuickActions(item.id)}
-        testID={index === 0 ? 'golden-inbox-first-conversation' : undefined}
-      />
-    );
-    return (
-      <View>
-        {isRequest ? requestRow : (
-          <SwipeableRow
-            accessibilityLabel={safeDisplayTitle}
-            accessibilityHint="Opens the conversation thread. Swipe right to mark read or unread, swipe left to archive, long press for quick actions"
-            leftAction={{
-              icon: 'checkmark-done-outline',
-              label: item.unread ? 'Mark unread' : 'Mark read',
-              onPress: () => handleToggleRead(item.id),
-              color: colors.brand,
-            }}
-            rightAction={{
-              icon: 'archive-outline',
-              label: 'Archive',
-              onPress: () => handleArchive(item.id),
-              color: colors.surfaceAlt,
-            }}
-          >
-            {conversationRow}
-          </SwipeableRow>
-        )}
-        {!isRequest && <View style={[styles.rowSeparator, t.rowSeparator]} />}
-      </View>
-    );
-  }, [
+  const renderItem = useCallback(({ item, index }: { item: ConvoItem; index: number }) => (
+    <InboxRow
+      item={item}
+      index={index}
+      currentUserId={currentUser?.id}
+      participantNameLookup={participantNameLookup}
+      isRequest={messageRequests.includes(item.id)}
+      isMuted={mutedIds.includes(item.id)}
+      profileMediaOverrides={profileMediaOverrides}
+      itemThumbUri={item.itemId ? (listings.find((l) => l.id === item.itemId)?.images?.[0] ?? null) : undefined}
+      onOpenConversation={handleOpenConversation}
+      onQuickActions={handleQuickActions}
+      onToggleRead={handleToggleRead}
+      onArchive={handleArchive}
+      onAcceptRequest={handleAcceptRequest}
+      onDeclineRequest={handleDeclineRequest}
+    />
+  ), [
     currentUser,
     participantNameLookup,
     messageRequests,
     mutedIds,
     profileMediaOverrides,
-    styles,
-    t,
-    colors,
     listings,
-    searchQuery,
-    markConversationRead,
-    navigation,
+    handleOpenConversation,
     handleQuickActions,
-    handleDeclineRequest,
-    handleAcceptRequest,
     handleToggleRead,
     handleArchive,
+    handleAcceptRequest,
+    handleDeclineRequest,
   ]);
+
   return (
-    <SafeAreaView testID="inbox-screen" edges={['top']} style={[styles.screenRoot, t.screenRoot]}
-      accessibilityElementsHidden={actionSheet.visible || confirmSheet.visible}
-      importantForAccessibility={actionSheet.visible || confirmSheet.visible ? 'no-hide-descendants' : 'auto'}
-    >
-      <View style={styles.compactHeader}>
-        <AnimatedPressable
-          style={styles.headerLeftWrap}
-          onPress={() => navigation.navigate('ChatSettings')}
-          activeOpacity={0.7}
-          scaleValue={0.98}
-          hapticFeedback="light"
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityLabel={`Account ${currentUser?.username || 'Messages'}`}
-          accessibilityRole="button"
-        >
-          <Text style={[styles.headerTitle, t.headerTitle]} numberOfLines={1} accessibilityRole="header">
-            {currentUser?.username || 'Messages'}
-          </Text>
-          <Ionicons name="chevron-down" size={16} color={colors.textPrimary} style={styles.headerChevron} />
-        </AnimatedPressable>
-        <View style={styles.headerActions}>
-          <AnimatedPressable
-            style={[styles.iconBtn, t.iconBtn]}
-            onPress={() => setFilterExpanded((v) => !v)}
-            activeOpacity={0.7}
-            scaleValue={0.95}
-            hapticFeedback="light"
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityLabel="More filters"
-            accessibilityHint="Shows additional filters: requests, unread, archived, groups"
-            accessibilityRole="button"
-          >
-            <Ionicons
-              name={filterExpanded ? 'options' : 'options-outline'}
-              size={22}
-              color={filterExpanded || ['requests', 'unread', 'archived', 'groups'].includes(segment) ? colors.brand : colors.textSecondary}
-            />
-            {['requests', 'unread', 'archived', 'groups'].includes(segment) && !filterExpanded ? (
-              <View style={[styles.filterDot, t.filterDot]} />
-            ) : null}
-          </AnimatedPressable>
-          <AnimatedPressable
-            style={[styles.iconBtn, t.iconBtn]}
-            onPress={() => navigation.navigate('ChatSettings')}
-            activeOpacity={0.7}
-            scaleValue={0.95}
-            hapticFeedback="light"
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityLabel="Message settings"
-            accessibilityHint="Opens privacy, automation, and quick reply settings"
-            accessibilityRole="button"
-          >
-            <Ionicons name="settings-outline" size={20} color={colors.textSecondary} />
-          </AnimatedPressable>
-          <AnimatedPressable
-            style={[styles.iconBtn, t.iconBtn]}
-            onPress={() => navigation.navigate('NewMessage')}
-            activeOpacity={0.7}
-            scaleValue={0.95}
-            hapticFeedback="light"
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityLabel="New message"
-            accessibilityHint="Opens message composer to start a new chat"
-            accessibilityRole="button"
-          >
-            <Ionicons name="create-outline" size={23} color={colors.textPrimary} />
-          </AnimatedPressable>
-        </View>
-      </View>
-      <View style={styles.header}>
-        <AppSearchBar
-          placeholder="Search messages"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          onCameraPress={() => navigation.navigate('VisualSearch')}
-          containerStyle={[styles.searchWrap, t.searchWrap]}
-          inputProps={{
-            autoCapitalize: 'none',
-            autoCorrect: false,
-            accessibilityLabel: 'Search conversations',
-          }}
-        />
-        <View style={styles.filterChipRail}>
-          {([
-            { key: 'all' as const, label: 'All' },
-            { key: 'buying' as const, label: 'Buying', badge: buyingUnreadCount },
-            { key: 'selling' as const, label: 'Selling', badge: sellingUnreadCount },
-            { key: 'requests' as const, label: 'Requests', badge: messageRequests.length },
-          ]).map((tab) => {
-            const isActive = segment === tab.key;
-            return (
-              <AnimatedPressable
-                key={tab.key}
-                style={[
-                  styles.filterChip,
-                  t.filterChipSecondary,
-                  isActive && t.filterChipSecondaryActive,
-                ]}
-                onPress={() => {
-                  haptic.light();
-                  setSegment(tab.key);
-                }}
-                activeOpacity={0.85}
-                scaleValue={0.96}
-                hapticFeedback="light"
-                accessibilityRole="tab"
-                accessibilityState={{ selected: isActive }}
-                accessibilityLabel={`${tab.label} tab${tab.badge ? `, ${tab.badge} pending` : ''}`}
-              >
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    t.filterChipSecondaryText,
-                    isActive && t.filterChipSecondaryTextActive,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {tab.label}
-                </Text>
-                {(tab.badge ?? 0) > 0 ? (
-                  <View style={[styles.unreadBadgePill, t.unreadBadgePill, isActive && { backgroundColor: colors.textInverse }]}>
-                    <Text style={[styles.unreadBadgeText, t.unreadBadgeText, isActive && { color: colors.textPrimary }]}>
-                      {tab.badge! > 99 ? '99+' : tab.badge}
-                    </Text>
-                  </View>
-                ) : null}
-              </AnimatedPressable>
-            );
-          })}
-        </View>
-        {filterExpanded && (
-          <View style={styles.filterChips}>
-            {([
-              { key: 'unread' as const, label: 'Unread' },
-              { key: 'archived' as const, label: 'Archived' },
-              { key: 'groups' as const, label: 'Groups' },
-            ]).map((chip) => {
-              const isActive = segment === chip.key;
-              return (
-                <AnimatedPressable
-                  key={chip.key}
-                  style={[
-                    styles.filterChip,
-                    t.filterChipSecondary,
-                    isActive && t.filterChipSecondaryActive,
-                  ]}
-                  onPress={() => {
-                    haptic.light();
-                    setSegment(chip.key);
-                    setFilterExpanded(false);
-                  }}
-                  activeOpacity={0.85}
-                  scaleValue={0.96}
-                  hapticFeedback="light"
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected: isActive }}
-                  accessibilityLabel={`${chip.label} filter`}
-                >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      t.filterChipSecondaryText,
-                      isActive && t.filterChipSecondaryTextActive,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {chip.label}
-                  </Text>
-                </AnimatedPressable>
-              );
-            })}
-          </View>
-        )}
-      </View>
-      {isOffline && (
-        <OfflineBanner message="You are offline" />
-      )}
-      {/* Slim sync banner only when content is on screen — with an empty
-          list the EmptyState carries the error + retry instead. */}
-      {!!syncError && visibleConversations.length > 0 && (
-        <View style={[styles.errorBanner, t.errorBanner]}>
-          <Ionicons name="alert-circle-outline" size={16} color={colors.danger} accessible={false} />
-          <View style={styles.errorBannerCopy}>
-            <Text style={[styles.errorBannerTitle, t.errorBannerTitle]} accessibilityLiveRegion="polite">Couldn't sync messages</Text>
-            <Text style={[styles.errorBannerSub, t.errorBannerSub]}>Check your connection or retry.</Text>
-          </View>
-          <AnimatedPressable
-            onPress={() => void loadConversations()}
-            activeOpacity={0.7}
-            scaleValue={0.95}
-            hapticFeedback="light"
-            accessibilityLabel="Retry loading conversations"
-            accessibilityRole="button"
-            style={styles.errorBannerRetryBtn}
-          >
-            <Text style={[styles.errorBannerRetry, t.errorBannerRetry]}>Retry</Text>
-          </AnimatedPressable>
-        </View>
-      )}
-      {listingFilterId && (
-        <View style={[styles.listingFilterBanner, { backgroundColor: colors.surfaceAlt, borderBottomColor: colors.border }]}>
-          <Ionicons name="pricetag-outline" size={16} color={colors.brand} accessible={false} />
-          <View style={styles.listingFilterCopy}>
-            <Text style={[styles.listingFilterTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-              {filteredListingTitle ?? 'Listing'}
-            </Text>
-            <Text style={[styles.listingFilterSub, { color: colors.textMuted }]}>
-              Showing conversations about this listing
-            </Text>
-          </View>
-          <AnimatedPressable
-            onPress={() => {
-              haptic.light();
-              setListingFilterId(undefined);
-            }}
-            activeOpacity={0.7}
-            scaleValue={0.95}
-            hapticFeedback="light"
-            accessibilityLabel="Show all conversations"
-            accessibilityHint="Clear the listing filter and show all conversations"
-            accessibilityRole="button"
-            style={styles.listingFilterShowAll}
-          >
-            <Text style={[styles.listingFilterShowAllText, { color: colors.brand }]}>Show all</Text>
-          </AnimatedPressable>
-        </View>
-      )}
-      <View style={{ flex: 1 }}>
-        <RefreshIndicator scrollY={scrollY} isRefreshing={refreshing} topInset={20} />
-        {isLoading && !visibleConversations.length ? (
-          <View style={styles.skeletonList}>
-            {Array.from({ length: 6 }).map((_, i) => (
-              <View key={i} style={styles.skeletonRow}>
-                <SkeletonLoader width={40} height={40} borderRadius={RadiusRoleValue.pillAvatar} />
-                <View style={styles.skeletonText}>
-                  <SkeletonLoader width="70%" height={16} borderRadius={RadiusRoleValue.compactControl} />
-                  <SkeletonLoader width="40%" height={14} borderRadius={RadiusRoleValue.compactControl} />
-                </View>
-              </View>
-            ))}
-          </View>
-        ) : (
-          <>
-            {segment === 'all' && messageRequests.length > 0 && !filterExpanded && (
-              <View style={styles.requestsBanner}>
-                <AnimatedPressable
-                  onPress={() => navigation.navigate('MessageRequests')}
-                  activeOpacity={0.85}
-                  scaleValue={0.98}
-                  hapticFeedback="light"
-                  accessibilityLabel={`${messageRequests.length} message requests`}
-                  accessibilityRole="button"
-                  style={styles.requestsBannerTap}
-                >
-                  <View style={[styles.requestsAvatar, t.requestsAvatar]}>
-                    <Ionicons name="mail-unread-outline" size={18} color={colors.brand} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.requestsBannerText, t.requestsBannerText]}>Message Requests</Text>
-                    <Text style={[styles.requestsBannerSub, t.requestsBannerSub]}>
-                      {messageRequests.length} pending {messageRequests.length === 1 ? 'request' : 'requests'}
-                    </Text>
-                  </View>
-                  <View style={[styles.requestsBadge, t.requestsBadge]}>
-                    <Text style={[styles.requestsBadgeText, t.requestsBadgeText]}>{messageRequests.length}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-                </AnimatedPressable>
-              </View>
-            )}
-            <AnimatedFlashList
-              ref={listRef as unknown as React.Ref<React.Component<FlashListProps<Conversation>>>}
-              data={visibleConversations}
-              keyExtractor={(c: Conversation) => c.id}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.listContent}
-              renderItem={renderItem}
-              onScroll={scrollHandler}
-              scrollEventThrottle={16}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={handleRefresh}
-                  tintColor="transparent"
-                  colors={['transparent']}
-                  progressBackgroundColor="transparent"
-                />
-              }
-              ListEmptyComponent={
-                (() => {
-                  // A failed load with an empty list is an error state, not
-                  // "no conversations" — never let the two collapse together.
-                  if (syncError) {
-                    return (
-                      <EmptyState
-                        icon="cloud-offline-outline"
-                        title="Couldn't load messages"
-                        subtitle={isOffline ? 'You are offline. Reconnect and retry.' : 'Check your connection or retry.'}
-                        ctaLabel="Retry"
-                        onCtaPress={() => void loadConversations()}
-                      />
-                    );
-                  }
-                  if (listingFilterId) {
-                    return (
-                      <EmptyState
-                        icon="chatbubbles-outline"
-                        title="No conversations about this listing"
-                        subtitle="When buyers message you about this item, their conversations will appear here."
-                        ctaLabel="Show all"
-                        onCtaPress={() => setListingFilterId(undefined)}
-                      />
-                    );
-                  }
-                  if (searchQuery.trim()) {
-                    return (
-                      <EmptyState
-                        icon="search-outline"
-                        title="No matching conversations"
-                        subtitle="Try another keyword or filter."
-                        ctaLabel="Clear search"
-                        onCtaPress={() => setSearchQuery('')}
-                      />
-                    );
-                  }
-                  switch (segment) {
-                    case 'unread':
-                      return (
-                        <EmptyState
-                          icon="mail-open-outline"
-                          title="No unread messages"
-                          subtitle="You're all caught up."
-                          ctaLabel="View all"
-                          onCtaPress={() => setSegment('all')}
-                        />
-                      );
-                    case 'requests':
-                      return (
-                        <EmptyState
-                          icon="mail-unread-outline"
-                          title="No message requests"
-                          subtitle="Requests from people you don't follow will appear here."
-                          ctaLabel="View all"
-                          onCtaPress={() => setSegment('all')}
-                        />
-                      );
-                    case 'archived':
-                      return (
-                        <EmptyState
-                          icon="archive-outline"
-                          title="No archived conversations"
-                          subtitle="Archived chats will appear here."
-                          ctaLabel="View all"
-                          onCtaPress={() => setSegment('all')}
-                        />
-                      );
-                    case 'groups':
-                      return (
-                        <EmptyState
-                          icon="people-outline"
-                          title="No groups yet"
-                          subtitle="Create a group to chat with multiple people."
-                          ctaLabel="Create group"
-                          onCtaPress={() => navigation.navigate('CreateGroupChat')}
-                        />
-                      );
-                    case 'buying':
-                      return (
-                        <EmptyState
-                          icon="cart-outline"
-                          title="No buying conversations"
-                          subtitle="When you message a seller about a listing, it'll appear here."
-                          ctaLabel="Browse listings"
-                          onCtaPress={() => navigation.navigate('MainTabs')}
-                        />
-                      );
-                    case 'selling':
-                      return (
-                        <EmptyState
-                          icon="chatbubbles-outline"
-                          title="No selling conversations"
-                          ctaLabel="View all"
-                          onCtaPress={() => setSegment('all')}
-                        />
-                      );
-                    default:
-                      return (
-                        <EmptyState
-                          icon="chatbubbles-outline"
-                          title="No conversations yet"
-                          subtitle="Start chatting with a seller to see your messages here."
-                          ctaLabel="Browse listings"
-                          onCtaPress={() => navigation.navigate('MainTabs')}
-                        />
-                      );
-                  }
-                })()
-              }
-            />
-          </>
-        )}
-      </View>
-      <ConfirmationSheet
-        visible={confirmSheet.visible}
-        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
-        title={confirmSheet.title}
-        message={confirmSheet.message}
-        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
-        variant={confirmSheet.variant ?? 'default'}
-        onConfirm={confirmSheet.onConfirm}
-      />
-      <ActionSheet
-        visible={actionSheet.visible}
-        onDismiss={() => setActionSheet((s) => ({ ...s, visible: false }))}
-        snapPoint={0.36}
+    <SafeAreaView testID="inbox-screen" edges={['top']} style={[styles.screenRoot, { backgroundColor: colors.background }]}>
+      {/* Everything behind the sheets is hidden from screen readers while a
+          sheet is open — but the sheets themselves must stay OUTSIDE this
+          wrapper: BottomSheet renders in-tree, so hiding an ancestor would
+          hide the open sheet too (audit M2). */}
+      <View
+        style={styles.a11yContentWrap}
+        accessibilityElementsHidden={sheetsOpen}
+        importantForAccessibility={sheetsOpen ? 'no-hide-descendants' : 'auto'}
       >
-        <View style={styles.actionSheetBody}>
-          <Text style={[styles.actionSheetTitle, { color: colors.textPrimary }]}>
-            Conversation
-          </Text>
-          <View style={[styles.actionSheetList, { borderColor: colors.border }]}>
-            <AnimatedPressable
-              style={styles.actionSheetRow}
-              onPress={() => {
-                const id = actionSheet.conversationId;
-                setActionSheet((s) => ({ ...s, visible: false }));
-                handleMute(id);
-              }}
-              activeOpacity={0.7}
-              scaleValue={0.98}
-              hapticFeedback="light"
-              accessibilityRole="button"
-              accessibilityLabel={actionSheet.isMuted ? 'Unmute conversation' : 'Mute conversation'}
-            >
-              <Ionicons
-                name={actionSheet.isMuted ? 'notifications-outline' : 'notifications-off-outline'}
-                size={22}
-                color={colors.brand}
-              />
-              <Text style={[styles.actionSheetRowLabel, { color: colors.textPrimary }]}>
-                {actionSheet.isMuted ? 'Unmute' : 'Mute'}
-              </Text>
-            </AnimatedPressable>
-            <View style={[styles.actionSheetDivider, { backgroundColor: colors.border }]} />
-            <AnimatedPressable
-              style={styles.actionSheetRow}
-              onPress={() => {
-                const id = actionSheet.conversationId;
-                setActionSheet((s) => ({ ...s, visible: false }));
-                handlePin(id);
-              }}
-              activeOpacity={0.7}
-              scaleValue={0.98}
-              hapticFeedback="light"
-              accessibilityRole="button"
-              accessibilityLabel={actionSheet.isPinned ? 'Unpin conversation' : 'Pin conversation'}
-            >
-              <Ionicons
-                name={actionSheet.isPinned ? 'pin-outline' : 'pin'}
-                size={22}
-                color={colors.brand}
-              />
-              <Text style={[styles.actionSheetRowLabel, { color: colors.textPrimary }]}>
-                {actionSheet.isPinned ? 'Unpin' : 'Pin'}
-              </Text>
-            </AnimatedPressable>
-            <View style={[styles.actionSheetDivider, { backgroundColor: colors.border }]} />
-            <AnimatedPressable
-              style={styles.actionSheetRow}
-              onPress={() => {
-                const id = actionSheet.conversationId;
-                setActionSheet((s) => ({ ...s, visible: false }));
-                handleDelete(id);
-              }}
-              activeOpacity={0.7}
-              scaleValue={0.98}
-              hapticFeedback="medium"
-              accessibilityRole="button"
-              accessibilityLabel="Delete conversation"
-            >
-              <Ionicons name="trash-outline" size={22} color={colors.danger} />
-              <Text style={[styles.actionSheetRowLabel, { color: colors.danger }]}>
-                Delete
-              </Text>
-            </AnimatedPressable>
-          </View>
-          <AnimatedPressable
-            style={[styles.actionSheetCancelBtn, { borderColor: colors.border }]}
-            onPress={() => setActionSheet((s) => ({ ...s, visible: false }))}
-            activeOpacity={0.7}
-            scaleValue={0.98}
-            hapticFeedback="light"
-            accessibilityRole="button"
-            accessibilityLabel="Cancel"
-          >
-            <Text style={[styles.actionSheetCancelText, { color: colors.textPrimary }]}>
-              Cancel
-            </Text>
-          </AnimatedPressable>
-        </View>
-      </ActionSheet>
+        <InboxHeader
+          username={currentUser?.username}
+          filterExpanded={filterExpanded}
+          segment={segment}
+          onToggleFilters={() => setFilterExpanded((v) => !v)}
+        />
+        <InboxFilters
+          searchQuery={searchQuery}
+          onSearchQueryChange={setSearchQuery}
+          segment={segment}
+          onSelectSegment={setSegment}
+          onSelectSecondaryFilter={handleSelectSecondaryFilter}
+          filterExpanded={filterExpanded}
+          buyingUnreadCount={buyingUnreadCount}
+          sellingUnreadCount={sellingUnreadCount}
+          requestsCount={messageRequests.length}
+        />
+        {isOffline && (
+          <OfflineBanner message="You are offline" />
+        )}
+        {/* Slim sync banner only when content is on screen — with an empty
+            list the EmptyState carries the error + retry instead. */}
+        {!!syncError && visibleConversations.length > 0 && (
+          <InboxSyncBanner onRetry={loadConversations} />
+        )}
+        {listingFilterId && (
+          <InboxListingFilterBanner
+            title={filteredListingTitle ?? 'Listing'}
+            onShowAll={() => setListingFilterId(undefined)}
+          />
+        )}
+        <InboxList
+          listRef={listRef}
+          data={visibleConversations}
+          renderItem={renderItem}
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          isLoading={isLoading}
+          showRequestsBanner={segment === 'all' && messageRequests.length > 0 && !filterExpanded}
+          requestsCount={messageRequests.length}
+          emptyComponent={
+            <InboxEmptyState
+              syncError={syncError}
+              isOffline={isOffline}
+              listingFilterId={listingFilterId}
+              searchQuery={searchQuery}
+              segment={segment}
+              onRetry={loadConversations}
+              onShowAll={() => setListingFilterId(undefined)}
+              onClearSearch={() => setSearchQuery('')}
+              onViewAll={() => setSegment('all')}
+            />
+          }
+        />
+      </View>
+      <InboxSheets
+        confirmSheet={confirmSheet}
+        onDismissConfirmSheet={dismissConfirmSheet}
+        actionSheet={actionSheet}
+        onDismissActionSheet={dismissActionSheet}
+        onMuteConversation={handleMute}
+        onPinConversation={handlePin}
+        onDeleteConversation={handleDelete}
+      />
     </SafeAreaView>
-    );
+  );
 }
 
 const styles = StyleSheet.create({
   screenRoot: {
     flex: 1,
   },
-  compactHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.xs / 2,
-  },
-  headerLeftWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    maxWidth: '70%',
-    minHeight: 44,
-  },
-  headerChevron: {
-    marginTop: 2,
-  },
-  header: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.xs + 2,
-    paddingBottom: 0,
-    gap: Space.sm,
-  },
-  headerTitle: {
-    fontSize: TypographyV2.screenTitle.size,
-    fontFamily: FontFamily.bold,
-    letterSpacing: TypographyV2.screenTitle.letterSpacing,
-    lineHeight: TypographyV2.screenTitle.lineHeight,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-  },
-  filterChipRail: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    paddingTop: Space.xs,
-    paddingBottom: Space.xs,
-  },
-  unreadBadgePill: {
-    borderRadius: RadiusRoleValue.pillAvatar,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    marginLeft: 6,
-    minWidth: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  unreadBadgeText: {
-    fontSize: 11,
-    fontFamily: FontFamily.bold,
-  },
-  iconBtn: {
-    width: Space.xxl,
-    height: Space.xxl,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  filterDot: {
-    position: 'absolute',
-    top: Space.xs,
-    right: Space.xs,
-    width: Space.xs,
-    height: Space.xs,
-    borderRadius: RadiusRoleValue.pillAvatar,
-  },
-
-  searchWrap: {
-    borderRadius: RadiusRoleValue.pillAvatar,
-    paddingHorizontal: Space.md,
-    minHeight: Space.xxl,
-  },
-  filterChips: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    paddingTop: Space.xs,
-    paddingBottom: Space.xs,
-  },
-  filterChip: {
-    paddingVertical: Space.xs + 1,
-    paddingHorizontal: Space.sm + Space.xs,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  filterChipText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold,
-  },
-  listContent: {
-    paddingBottom: Space.xxl + 24,
-    flexGrow: 1,
-    paddingTop: Space.xs + 2,
-  },
-  rowSeparator: {
-    height: StyleSheet.hairlineWidth,
-    marginLeft: Space.md + 40 + Space.sm + 2,
-    marginRight: Space.md,
-  },
-  groupAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  groupAvatarImage: {
-    width: 40,
-    height: 40,
-    borderRadius: RadiusRoleValue.pillAvatar,
-  },
-  groupAvatarText: {
-    fontSize: TypographyV2.sectionTitle.size,
-    fontFamily: FontFamily.bold,
-  },
-  botIndicator: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    width: Control.iconCompact,
-    height: Control.iconCompact,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    borderWidth: Stroke.emphasis,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  messageBody: { flex: 1, justifyContent: 'center', gap: Space.xs / 2 },
-  messageTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: Space.xs,
-    alignItems: 'center',
-  },
-  nameText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.body.letterSpacing,
-  },
-  nameUnread: {
-    fontFamily: FontFamily.bold,
-  },
-  snippet: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.regular,
-    lineHeight: TypographyV2.body.lineHeight,
+  // Wraps all behind-the-sheet content so one accessibilityElementsHidden
+  // flag covers header, filters and the list. flex:1 keeps the geometry
+  // identical to the screen root it fills.
+  a11yContentWrap: {
     flex: 1,
-  },
-
-  contextThumb: {
-    width: Space.lg + Space.xs,
-    height: Space.lg + Space.xs,
-    borderRadius: RadiusRoleValue.compactControl,
-    borderWidth: StyleSheet.hairlineWidth,
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  contextThumbImage: {
-    width: Space.lg + Space.xs,
-    height: Space.lg + Space.xs,
-  },
-  requestListingContext: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-    marginTop: Space.xs,
-  },
-  requestListingText: {
-    fontFamily: FontFamily.semibold,
-  },
-  requestRowAccent: {
-    borderLeftWidth: 3,
-    marginHorizontal: Space.md,
-    marginVertical: Space.xs,
-    borderRadius: RadiusRoleValue.mediaThumbnail,
-  },
-  requestRowInner: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    alignItems: 'center',
-    paddingVertical: Space.sm + 2,
-    paddingHorizontal: Space.md,
-    paddingLeft: Space.md - 2,
-    minHeight: 68,
-  },
-  requestActions: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    marginTop: Space.sm,
-  },
-  requestBtnDecline: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Space.sm + 2,
-    borderRadius: RadiusRoleValue.compactControl,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  requestBtnDeclineText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.semibold,
-  },
-  requestBtnAccept: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Space.sm + 2,
-    borderRadius: RadiusRoleValue.compactControl,
-  },
-  requestsBanner: {
-    marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-  },
-  requestsBannerTap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm + 2,
-    paddingHorizontal: Space.md,
-  },
-  requestsAvatar: {
-    width: Control.chrome,
-    height: Control.chrome,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  requestsBadge: {
-    width: Space.lg,
-    height: Space.lg,
-    borderRadius: RadiusRoleValue.compactControl,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  requestsBadgeText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.bold,
-  },
-  requestsBannerText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.body.letterSpacing,
-  },
-  requestsBannerSub: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.regular,
-    marginTop: Space.xs / 2,
-  },
-  requestBtnAcceptText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.semibold,
-  },
-  errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  errorBannerCopy: {
-    flex: 1,
-    gap: Space.xs / 4,
-  },
-  errorBannerTitle: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.semibold,
-  },
-  errorBannerSub: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.regular,
-  },
-  errorBannerRetryBtn: {
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
-  },
-  errorBannerRetry: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.semibold,
-  },
-  listingFilterBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  listingFilterCopy: {
-    flex: 1,
-    gap: Space.xs / 4,
-  },
-  listingFilterTitle: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.body.letterSpacing,
-  },
-  listingFilterSub: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.regular,
-  },
-  listingFilterShowAll: {
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
-    minHeight: 36,
-    justifyContent: 'center',
-  },
-  listingFilterShowAllText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.semibold,
-  },
-  skeletonList: {
-    paddingHorizontal: Space.md + 4,
-    paddingTop: Space.md,
-    gap: Space.md,
-  },
-  skeletonRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm + 6,
-  },
-  skeletonText: {
-    flex: 1,
-    gap: Space.xs + 2,
-  },
-  actionSheetBody: {
-    gap: Space.md,
-    paddingBottom: Space.lg,
-  },
-  actionSheetTitle: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.body.letterSpacing,
-  },
-  actionSheetList: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: RadiusRoleValue.compactControl,
-    overflow: 'hidden',
-  },
-  actionSheetDivider: {
-    height: StyleSheet.hairlineWidth,
-  },
-  actionSheetRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.smMd,
-    paddingVertical: Space.sm + 4,
-    paddingHorizontal: Space.md,
-    minHeight: 44,
-  },
-  actionSheetRowLabel: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.semibold,
-  },
-  actionSheetCancelBtn: {
-    borderRadius: RadiusRoleValue.compactControl,
-    paddingVertical: Space.md,
-    alignItems: 'center',
-    marginTop: Space.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  actionSheetCancelText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.semibold,
   },
 });

@@ -11,6 +11,7 @@ import {
   type CachedSearchResult,
 } from '../lib/searchCache.js';
 import type { RetrievalMeta, RetrievalFallbackReason } from '../lib/retrievalMeta.js';
+import { loadListingMedia } from '../lib/media/listingMediaProjection.js';
 
 type SearchExtendedRouteDependencies = {
   app: FastifyInstance;
@@ -25,6 +26,10 @@ const searchListingsQuerySchema = z.object({
   category: z.string().min(1).optional(),
   condition: z.string().min(1).optional(),
   size: z.string().min(1).optional(),
+  /** Multi-value filters: comma-separated lists matching the Filter
+   *  sheet's multi-select contract (brands[], sizes[]). */
+  brands: z.string().min(1).optional(),
+  sizes: z.string().min(1).optional(),
   priceMin: z.coerce.number().min(0).optional(),
   priceMax: z.coerce.number().min(0).optional(),
   sustainableOnly: z.coerce.boolean().optional().default(false),
@@ -44,6 +49,8 @@ async function computeSearchResults(
   category: string | undefined,
   condition: string | undefined,
   size: string | undefined,
+  brands: string[] | undefined,
+  sizes: string[] | undefined,
   priceMin: number | undefined,
   priceMax: number | undefined,
   sort: string,
@@ -69,6 +76,14 @@ async function computeSearchResults(
   if (size) {
     filterConditions.push(`l.size = $${filterIdx++}`);
     filterArgs.push(size);
+  }
+  if (brands && brands.length > 0) {
+    filterConditions.push(`l.brand = ANY($${filterIdx++})`);
+    filterArgs.push(brands);
+  }
+  if (sizes && sizes.length > 0) {
+    filterConditions.push(`l.size = ANY($${filterIdx++})`);
+    filterArgs.push(sizes);
   }
   if (priceMin !== undefined) {
     filterConditions.push(`l.price_gbp >= $${filterIdx++}`);
@@ -119,7 +134,10 @@ async function computeSearchResults(
       break;
     case 'relevance':
     default:
-      orderBy = 'rank_score::numeric DESC, l.created_at DESC, l.id DESC';
+      // Postgres resolves bare output aliases in ORDER BY, but not inside
+      // expressions — `rank_score::numeric` would look for a real column
+      // named rank_score and 42703. Order on the rank expression directly.
+      orderBy = "ts_rank_cd(l.search_vector, websearch_to_tsquery('simple', $1)) DESC, l.created_at DESC, l.id DESC";
       break;
   }
 
@@ -174,6 +192,10 @@ async function computeSearchResults(
   );
 
   if (result.rowCount && result.rowCount > 0) {
+    const mediaByListing = await loadListingMedia(
+      dbPool,
+      result.rows.map((row) => row.id),
+    );
     const retrievalMeta: RetrievalMeta = {
       method: 'lexical',
       embedderConfigured: false,
@@ -195,6 +217,8 @@ async function computeSearchResults(
         description: row.description,
         priceGbp: Number(row.price_gbp),
         imageUrl: row.image_url,
+        images: (mediaByListing.get(row.id) ?? []).map((m) => m.uri),
+        media: mediaByListing.get(row.id) ?? [],
         rank: Number(row.rank_score),
         createdAt: row.created_at,
         // Commerce facts are passed through as-is (including null). The
@@ -256,6 +280,10 @@ async function computeSearchResults(
     [q, ...filterArgs, limit, offset]
   );
 
+  const fallbackMediaByListing = await loadListingMedia(
+    dbPool,
+    fallback.rows.map((row) => row.id),
+  );
   const fallbackReason: RetrievalFallbackReason = 'fts_no_matches_ilike_fallback';
   const retrievalMeta: RetrievalMeta = {
     method: 'lexical',
@@ -280,6 +308,8 @@ async function computeSearchResults(
       description: row.description,
       priceGbp: Number(row.price_gbp),
       imageUrl: row.image_url,
+      images: (fallbackMediaByListing.get(row.id) ?? []).map((m) => m.uri),
+      media: fallbackMediaByListing.get(row.id) ?? [],
       rank: 0,
       createdAt: row.created_at,
       // Commerce facts passed through as-is (including null) so the
@@ -320,10 +350,15 @@ export const registerSearchExtendedRoutes = ({
   redis,
 }: SearchExtendedRouteDependencies): void => {
   app.get('/search/listings', async (request) => {
-    const { q, limit, category, condition, size, priceMin, priceMax, sustainableOnly, sort, page } =
+    const { q, limit, category, condition, size, brands, sizes, priceMin, priceMax, sustainableOnly, sort, page } =
       searchListingsQuerySchema.parse(request.query);
-    const searchPolicyVersion = 'listing-search-postgres-v3.0';
+    const searchPolicyVersion = 'listing-search-postgres-v3.1';
     const startTime = Date.now();
+
+    // Multi-value filters arrive as CSV strings; normalize to sorted
+    // arrays (sorted for stable cache-key hashing).
+    const brandList = brands ? brands.split(',').map((b) => b.trim()).filter(Boolean).sort() : undefined;
+    const sizeList = sizes ? sizes.split(',').map((s) => s.trim()).filter(Boolean).sort() : undefined;
 
     // Build cache params from the normalized query
     const cacheParams: SearchQueryParams = {
@@ -332,6 +367,8 @@ export const registerSearchExtendedRoutes = ({
         category,
         condition,
         size,
+        brands: brandList,
+        sizes: sizeList,
         priceMin,
         priceMax,
         sustainableOnly,
@@ -344,7 +381,7 @@ export const registerSearchExtendedRoutes = ({
     // ── Cache-first read with stale-while-revalidate ──
     const revalidate = async (): Promise<void> => {
       const freshResult = await computeSearchResults(
-        readDb, q, limit, category, condition, size, priceMin, priceMax, sort, page,
+        readDb, q, limit, category, condition, size, brandList, sizeList, priceMin, priceMax, sort, page,
         searchPolicyVersion, sustainableOnly,
       );
       await setCachedSearchResult(redis, cacheParams, freshResult);
@@ -373,7 +410,7 @@ export const registerSearchExtendedRoutes = ({
 
     // ── Cache miss: compute results from DB ──
     const computed = await computeSearchResults(
-      readDb, q, limit, category, condition, size, priceMin, priceMax, sort, page,
+      readDb, q, limit, category, condition, size, brandList, sizeList, priceMin, priceMax, sort, page,
       searchPolicyVersion, sustainableOnly,
     );
 
@@ -405,5 +442,22 @@ export const registerSearchExtendedRoutes = ({
     const { getSearchAnalytics } = await import('../lib/searchCache.js');
     const analytics = await getSearchAnalytics(redis, 5);
     return { ok: true, analytics };
+  });
+
+  // ── Trending searches endpoint ────────────────────────────────────────────────
+  // Real trending queries from the frequency tracker (Redis sorted set
+  // populated by trackQueryFrequency on every /search/listings call).
+  // Returns only queries that crossed the hot threshold in the current
+  // window — an empty list means there is no real trend data, and clients
+  // must not fabricate trends in that case.
+
+  app.get('/search/trending', async (request) => {
+    const querySchema = z.object({
+      limit: z.coerce.number().int().min(1).max(20).default(6),
+    });
+    const { limit } = querySchema.parse(request.query);
+    const { getHotQueryLabels } = await import('../lib/searchCache.js');
+    const items = await getHotQueryLabels(redis, limit);
+    return { ok: true, items };
   });
 };

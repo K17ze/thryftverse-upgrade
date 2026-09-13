@@ -10,7 +10,7 @@ import {
 import { FlashList } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
@@ -212,6 +212,24 @@ export default function MyOrdersScreen() {
     setPaginationError(null);
     void fetchOrders();
   }, [fetchOrders]);
+
+  // Refetch the first page when the screen regains focus so orders created
+  // or advanced on other surfaces (checkout, order detail, fulfilment,
+  // offers accepted in chat) are reflected on return. The initial focus is
+  // skipped — the mount effect above already loaded the list — and the
+  // refetch is silent: no skeleton, no refresh spinner.
+  const fetchOrdersRef = useRef(fetchOrders);
+  fetchOrdersRef.current = fetchOrders;
+  const didInitialFocusRef = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!didInitialFocusRef.current) {
+        didInitialFocusRef.current = true;
+        return;
+      }
+      void fetchOrdersRef.current();
+    }, [])
+  );
 
   const handleRefresh = useCallback(async () => {
     if (!viewerId) return;

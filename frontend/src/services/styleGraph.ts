@@ -294,6 +294,17 @@ export function getSlotLabel(slot: OutfitSlot): string {
   return labels[slot];
 }
 
+export function getSlotPluralLabel(slot: OutfitSlot): string {
+  const labels: Record<OutfitSlot, string> = {
+    top: 'Tops',
+    bottom: 'Bottoms',
+    shoes: 'Shoes',
+    outerwear: 'Outerwear',
+    accessory: 'Accessories',
+  };
+  return labels[slot];
+}
+
 export function getSlotIcon(slot: OutfitSlot): React.ComponentProps<typeof Ionicons>['name'] {
   const icons: Record<OutfitSlot, React.ComponentProps<typeof Ionicons>['name']> = {
     top: 'shirt-outline',

@@ -27,7 +27,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const blockedIds = useStore((state) => state.blockedUsers);
-  const toggleBlocked = useStore((state) => state.toggleBlockedUser);
+  const removeBlockedUser = useStore((state) => state.removeBlockedUser);
   const [serverEntries, setServerEntries] = useState<BlockedUserEntry[]>([]);
   const [loadingProfiles, setLoadingProfiles] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -56,7 +56,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
     setPendingId(userId);
     try {
       await unblockUser(userId);
-      toggleBlocked(userId);
+      removeBlockedUser(userId);
       show('Account unblocked', 'success');
     } catch {
       show('Could not unblock this account. Try again.', 'error');

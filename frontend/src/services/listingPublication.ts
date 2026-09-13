@@ -100,6 +100,12 @@ function buildResolvedMedia(
       status: res.state === 'uploaded' ? 'uploaded' : res.state === 'failed' ? 'failed' : m.status,
       publicUrl: res.publicUrl || m.publicUrl,
       error: res.error || m.error,
+      // Processor-measured values win over client-declared ones — the
+      // pipeline's dims are post-EXIF-orientation and its blurhash is the
+      // real decodable hash.
+      blurhash: res.blurhash ?? m.blurhash,
+      width: res.mediaWidth ?? m.width,
+      height: res.mediaHeight ?? m.height,
     };
   });
 }
@@ -280,6 +286,8 @@ export async function executePublication(
           mediaHeight: m.height,
           mediaType: m.kind,
           finalizationId,
+          posterUrl: m.posterUrl ?? null,
+          blurhash: m.blurhash ?? null,
           focalX: m.focalPoint?.x ?? null,
           focalY: m.focalPoint?.y ?? null,
         });

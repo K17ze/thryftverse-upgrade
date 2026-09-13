@@ -42,10 +42,10 @@ import {
   FeedExplanationReason,
   SignalSource,
   ConfidenceLabel,
-  getAlgorithmDemoMode,
   fetchFeedExplanation,
   removeTopic,
-  updateTopicWeight } from '../../services/algorithmTransparencyApi';
+  updateTopicWeight,
+  type ServedItemExplanationContext } from '../../services/algorithmTransparencyApi';
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 export interface FeedExplanationSheetProps {
@@ -55,6 +55,11 @@ export interface FeedExplanationSheetProps {
   onDismiss: () => void;
   /** The feed item ID to explain. */
   itemId: string | null;
+  /** Real serve attribution for the item when it came from the personalised
+   *  feed — the serve's reason codes and component scores replace the mock
+   *  topic fallback so the sheet never shows illustrative data on a real
+   *  recommendation. */
+  servedContext?: ServedItemExplanationContext | null;
   /** Called when the user taps "See more like this". Receives the top reason topic. */
   onSeeMoreLikeThis?: (topic: string) => void;
   /** Called when the user taps "Show less like this". Receives the top reason topic. */
@@ -80,6 +85,7 @@ export function FeedExplanationSheet({
   visible,
   onDismiss,
   itemId,
+  servedContext,
   onSeeMoreLikeThis,
   onShowLessLikeThis,
   onTopicRemoved }: FeedExplanationSheetProps) {
@@ -106,7 +112,7 @@ export function FeedExplanationSheet({
     setError(false);
     setExplanation(null);
 
-    fetchFeedExplanation(itemId)
+    fetchFeedExplanation(itemId, servedContext)
       .then((data) => {
         if (!mounted) return;
         if (data) {
@@ -125,7 +131,7 @@ export function FeedExplanationSheet({
     return () => {
       mounted = false;
     };
-  }, [visible, itemId]);
+  }, [visible, itemId, servedContext]);
 
   // ── Handlers ──
   const topReason = useMemo(() => {
@@ -182,8 +188,10 @@ export function FeedExplanationSheet({
           Why you're seeing this
         </Text>
 
-        {/* ── Demo mode indicator ── */}
-        {getAlgorithmDemoMode() && (
+        {/* ── Demo mode indicator — bound to the loaded explanation's own
+            honesty flag, not the module-level default, so a real serve never
+            wears the demo badge (and mock data always does). ── */}
+        {explanation?.isDemo === true && (
           <View style={[styles.demoPill, { backgroundColor: colors.surfaceAlt }]}>
             <Ionicons name="information-circle-outline" size={14} color={colors.textSecondary} />
             <Text style={styles.demoPillText}>Demo mode — illustrative data</Text>

@@ -267,7 +267,13 @@ export default function CreateCoOwnScreen() {
       if (selectedListing) {
         void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(selectedListing.id) });
       }
-      void queryClient.invalidateQueries({ queryKey: ['coown', 'assets'] });
+      // Co-Own query keys are camelCase 'coOwn' — the previous lowercase
+      // 'coown' key never matched a live query. The issuance gives the
+      // issuer a new holding, so invalidate their holdings prefix; the
+      // assets catalogue itself is direct-fetch + focus refetch.
+      if (issuerId) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.coOwn.holdings(issuerId) });
+      }
       navigation.goBack();
     } catch (err) {
       show('Failed to sign recourse agreement. The asset was created but cannot be traded until signed.', 'error');

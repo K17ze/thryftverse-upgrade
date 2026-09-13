@@ -235,7 +235,12 @@ export type RootStackParamList = {
 
   // ── Commerce ── (orders, offers, checkout, listings)
   // Phase 16 new screens
-  MakeOffer: { itemId: string; price: number; title: string; counterOffer?: boolean; previousOffer?: number; counterRound?: number; parentOfferId?: string };
+  MakeOffer: { itemId: string; price: number; title: string; counterOffer?: boolean; previousOffer?: number; counterRound?: number; parentOfferId?: string; conversationId?: string };
+  /**
+   * Offers surface — both directions of GET /users/me/offers.
+   * `listingId` scopes the list to one listing (ManageListing entry point).
+   */
+  Offers: { listingId?: string } | undefined;
   PushNotifications: undefined;
   Postage: undefined;
   InviteFriends: undefined;
@@ -248,7 +253,10 @@ export type RootStackParamList = {
   SellerFulfilment: { orderId: string };
   OrderReceipt: { orderId: string };
   // Phase 19 new screens
-  Checkout: { itemId: string };
+  // `itemId` drives the listing-checkout path. `orderId` (with its
+  // `reservationId`) resumes an existing order — e.g. the one created when a
+  // seller accepted an offer — and is authoritative when both are present.
+  Checkout: { itemId?: string; orderId?: string; reservationId?: string };
   AddressForm:
     | {
         mode: 'add' | 'edit';
@@ -360,6 +368,7 @@ export type RootStackParamList = {
   ChatSettings: undefined;
   ActiveSessions: undefined;
   BlockedUsers: undefined;
+  RestrictedAccounts: undefined;
   PrivacySettings: undefined;
   About: undefined;
   MutedConversations: undefined;
@@ -594,6 +603,7 @@ export const ROOT_STACK_ROUTES = [
   'SavedAddresses',
   'Payments',
   'MakeOffer',
+  'Offers',
   'PushNotifications',
   'Postage',
   'InviteFriends',
@@ -635,6 +645,7 @@ export const ROOT_STACK_ROUTES = [
   'ChatSettings',
   'ActiveSessions',
   'BlockedUsers',
+  'RestrictedAccounts',
   'PrivacySettings',
   'About',
   'MutedConversations',

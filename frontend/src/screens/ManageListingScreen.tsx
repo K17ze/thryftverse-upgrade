@@ -1,3 +1,4 @@
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useMemo } from 'react';
 import {
   View,
@@ -8,13 +9,7 @@ import {
   useWindowDimensions,
   Share,
   Pressable } from 'react-native';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import Reanimated, {
-  useAnimatedScrollHandler,
-  useSharedValue,
-  useAnimatedStyle,
-  interpolate,
-  Extrapolation } from 'react-native-reanimated';
+import { useNavigation, useRoute, useFocusEffect, RouteProp } from '@react-navigation/native';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
 import { ProductDetailSkeleton } from '../components/product/ProductDetailSkeleton';
@@ -38,7 +33,7 @@ import {
   Numeric,
   FontFamily } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
-import { fetchListingByIdFromApi, patchListingOnApi, deleteListingOnApi } from '../services/listingsApi';
+import { fetchListingByIdFromApi, patchListingOnApi, deleteListingOnApi, type ListingApiItem } from '../services/listingsApi';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -57,7 +52,7 @@ export default function ManageListingScreen() {
   const { colors, isDark } = useAppTheme();
   const { width: SCREEN_W } = useWindowDimensions();
   const styles = useMemo(() => createStyles(colors, SCREEN_W), [colors, SCREEN_W]);
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteT>();
   const insets = useSafeAreaInsets();
   const { currencyCode, formatFromFiat } = useFormattedPrice();
@@ -67,7 +62,7 @@ export default function ManageListingScreen() {
   const { refreshListings } = useBackendData();
   const queryClient = useQueryClient();
 
-  const [item, setItem] = React.useState<any>(null);
+  const [item, setItem] = React.useState<ListingApiItem | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isNotFound, setIsNotFound] = React.useState(false);
   const [hasError, setHasError] = React.useState(false);
@@ -83,7 +78,7 @@ export default function ManageListingScreen() {
   }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
   const currentUser = useStore((s) => s.currentUser);
 
-  React.useEffect(() => {
+  useFocusEffect(React.useCallback(() => {
     let mounted = true;
     setIsLoading(true);
     setHasError(false);
@@ -106,30 +101,7 @@ export default function ManageListingScreen() {
       })
       .finally(() => { if (mounted) setIsLoading(false); });
     return () => { mounted = false; };
-  }, [itemId, show]);
-
-  const scrollY = useSharedValue(0);
-  const scrollHandler = useAnimatedScrollHandler((event) => {
-    scrollY.value = event.contentOffset.y;
-  });
-
-  // ── Animated header styles ──
-  // Must be called unconditionally before any early returns (Rules of Hooks).
-  const headerBgStyle = useAnimatedStyle(() => {
-    if (reducedMotion) {
-      return { backgroundColor: colors.background };
-    }
-    const opacity = interpolate(scrollY.value, [0, 120], [0, 1], Extrapolation.CLAMP);
-    return { backgroundColor: `${colors.background}${Math.round(opacity * 255).toString(16).padStart(2, '0')}` };
-  });
-
-  const headerTitleStyle = useAnimatedStyle(() => {
-    if (reducedMotion) {
-      return { opacity: 1 };
-    }
-    const opacity = interpolate(scrollY.value, [60, 140], [0, 1], Extrapolation.CLAMP);
-    return { opacity };
-  });
+  }, [itemId, show]));
 
   const images = React.useMemo(() => {
     if (!item) return [];
@@ -138,12 +110,8 @@ export default function ManageListingScreen() {
 
   // ── Performance metrics (moved before early returns for Rules of Hooks) ──
   const engagement = item?.engagement ?? null;
-  const activeOfferCount = engagement?.activeOfferCount ?? item?.offersCount ?? item?.offers ?? 0;
-  const viewsCount: number | null = engagement?.views ?? item?.views ?? null;
-  const conversionRate = useMemo(() => {
-    if (viewsCount == null || viewsCount === 0) return null;
-    return (activeOfferCount / viewsCount) * 100;
-  }, [viewsCount, activeOfferCount]);
+  const activeOfferCount = engagement?.activeOfferCount ?? 0;
+  const viewsCount: number | null = engagement?.views ?? null;
   const daysOnMarket = useMemo(() => {
     const created = item?.createdAt;
     if (!created) return null;
@@ -163,7 +131,7 @@ export default function ManageListingScreen() {
     );
   }
 
-  if (isNotFound || !item) {
+  if (!hasError && (isNotFound || !item)) {
     return (
       <View style={styles.container}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
@@ -205,7 +173,7 @@ export default function ManageListingScreen() {
     );
   }
 
-  if (!isOwner) {
+  if (!item || !isOwner) {
     return (
       <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: Space.lg }]}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
@@ -252,7 +220,10 @@ export default function ManageListingScreen() {
           show(t('manage.deleted'), 'success');
           void refreshListings();
           void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(itemId) });
-          navigation.goBack();
+          if (currentUser?.id) {
+            void queryClient.invalidateQueries({ queryKey: queryKeys.user.listingsAll(currentUser.id) });
+          }
+          navigation.navigate('MyListings');
         } catch {
           show(t('manage.deleteFailed'), 'error');
         }
@@ -275,10 +246,13 @@ export default function ManageListingScreen() {
       onConfirm: async () => {
         try {
           await patchListingOnApi(itemId, { status: 'sold' });
-          setItem((prev: any) => ({ ...prev, status: 'sold' }));
+          setItem((prev) => prev ? ({ ...prev, status: 'sold' }) : null);
           show(t('manage.markedSold'), 'success');
           void refreshListings();
           void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(itemId) });
+          if (currentUser?.id) {
+            void queryClient.invalidateQueries({ queryKey: queryKeys.user.listingsAll(currentUser.id) });
+          }
         } catch {
           show(t('manage.updateFailed'), 'error');
         }
@@ -288,10 +262,13 @@ export default function ManageListingScreen() {
   const handlePause = async () => {
     try {
       await patchListingOnApi(itemId, { status: 'paused' });
-      setItem((prev: any) => ({ ...prev, status: 'paused' }));
+      setItem((prev) => prev ? ({ ...prev, status: 'paused' }) : null);
       show(t('manage.paused'), 'info');
       void refreshListings();
       void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(itemId) });
+      if (currentUser?.id) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.user.listingsAll(currentUser.id) });
+      }
     } catch {
       show(t('manage.updateFailed'), 'error');
     }
@@ -300,10 +277,13 @@ export default function ManageListingScreen() {
   const handleReactivate = async () => {
     try {
       await patchListingOnApi(itemId, { status: 'active' });
-      setItem((prev: any) => ({ ...prev, status: 'active' }));
+      setItem((prev) => prev ? ({ ...prev, status: 'active' }) : null);
       show(t('manage.reactivated'), 'success');
       void refreshListings();
       void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(itemId) });
+      if (currentUser?.id) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.user.listingsAll(currentUser.id) });
+      }
     } catch {
       show(t('manage.updateFailed'), 'error');
     }
@@ -335,8 +315,8 @@ export default function ManageListingScreen() {
   const statusColor = isSold ? colors.brand : isPaused ? colors.warning : colors.success;
 
   // ── Real engagement data (from backend engagement summary) ──
-  const likesCount = engagement?.likes ?? item.likes ?? 0;
-  const savesCount = engagement?.saves ?? item.saves ?? 0;
+  const likesCount = engagement?.likes ?? 0;
+  const savesCount = engagement?.saves ?? 0;
   const questionCount = engagement?.questionCount ?? 0;
   const answeredQuestionCount = engagement?.answeredQuestionCount ?? 0;
 
@@ -344,7 +324,7 @@ export default function ManageListingScreen() {
     <View style={styles.container}>
       <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
 
-      <Reanimated.View style={[styles.floatingHeader, headerBgStyle, { paddingTop: Math.max(insets.top, 20) }]}>
+      <View style={[styles.floatingHeader, { paddingTop: Math.max(insets.top, 20), backgroundColor: colors.background }]}>
         <AppIconButton
           name="back"
           size={IconSize.lg}
@@ -352,9 +332,9 @@ export default function ManageListingScreen() {
           onPress={() => navigation.goBack()}
           accessibilityLabel="Go back"
         />
-        <Reanimated.View style={headerTitleStyle}>
+        <View>
           <Text style={styles.hdrTitle} numberOfLines={1}>{t('manage.title')}</Text>
-        </Reanimated.View>
+        </View>
         <AppIconButton
           name="overflow"
           size={IconSize.md}
@@ -363,31 +343,31 @@ export default function ManageListingScreen() {
           accessibilityLabel="More actions"
           accessibilityHint={t('manage.a11y.overflowHint')}
         />
-      </Reanimated.View>
+      </View>
 
-      <Reanimated.ScrollView
+      <ScrollView
         showsVerticalScrollIndicator={false}
-        onScroll={scrollHandler}
         scrollEventThrottle={16}
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 24 }}
       >
-        {/* ── Media carousel ── */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', padding: Space.md }}>
+        {/* Item reference; full gallery remains available in Preview. */}
         <View style={styles.heroWrap}>
           <ScrollView
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
             onScroll={(e) => {
-              const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
+              const idx = Math.round(e.nativeEvent.contentOffset.x / 96);
               setImgIndex(idx);
             }}
             scrollEventThrottle={32}
           >
             {images.map((uri: string, i: number) => (
-              <CachedImage key={i} uri={uri} style={styles.heroImage} contentFit="cover" />
+              <CachedImage key={i} uri={uri} style={styles.heroImage} contentFit="contain" />
             ))}
           </ScrollView>
-          <View style={styles.heroOverlay} />
+
 
           {images.length > 1 && (
             <View style={styles.dotRow}>
@@ -416,6 +396,8 @@ export default function ManageListingScreen() {
               {questionCount > 0 ? ` · ${t('manage.questionCount', { count: questionCount, plural: questionCount === 1 ? '' : 's' })}` : ''}
             </Text>
           </View>
+        </View>
+
         </View>
 
         {/* ── Primary CTA: Edit listing ── */}
@@ -470,31 +452,6 @@ export default function ManageListingScreen() {
           </AnimatedPressable>
         </View>
 
-        {/* ── Performance — compact label-value pairs, no cards ──
-            Flat composition per AGENTS.md §4: hairline separators, one
-            icon family, design tokens only. Unavailable metrics show
-            "—" not "0" to distinguish missing data from zero. */}
-        <FlagshipFormSection
-          variant="flat"
-          title={t('manage.performance')}
-          style={styles.metricsSection}
-        >
-          <FlagshipMetricLine label={t('manage.views')} value={viewsCount != null ? String(viewsCount) : '—'} />
-          <FlagshipMetricLine label={t('manage.saves')} value={String(savesCount)} separated />
-          <FlagshipMetricLine label={t('manage.questions')} value={String(questionCount)} separated />
-          <FlagshipMetricLine label={t('manage.offers')} value={String(activeOfferCount)} separated />
-          <FlagshipMetricLine
-            label={t('manage.conversionRate')}
-            value={conversionRate != null ? `${conversionRate.toFixed(1)}%` : '—'}
-            separated
-          />
-          <FlagshipMetricLine
-            label={t('manage.timeOnMarket')}
-            value={daysOnMarket != null ? t('manage.daysCount', { count: daysOnMarket, plural: daysOnMarket === 1 ? '' : 's' }) : '—'}
-            separated
-          />
-        </FlagshipFormSection>
-
         {/* ── Buyer activity / performance (real metrics only) ──
             Views intentionally omitted — not returned by the backend
             engagement query (was fabricated in a prior build). Likes, saves,
@@ -506,6 +463,8 @@ export default function ManageListingScreen() {
           title={t('manage.buyerActivity')}
           style={styles.metricsSection}
         >
+          <FlagshipMetricLine label={t('manage.views')} value={viewsCount != null ? String(viewsCount) : '—'} />
+          <FlagshipMetricLine label={t('manage.timeOnMarket')} value={daysOnMarket != null ? `${daysOnMarket} days` : '—'} separated />
           <FlagshipMetricLine label={t('manage.likes')} value={String(likesCount)} />
           <FlagshipMetricLine label={t('manage.saves')} value={String(savesCount)} separated />
           <FlagshipMetricLine
@@ -537,6 +496,18 @@ export default function ManageListingScreen() {
               accessibilityHint={t('manage.a11y.viewQuestionsHint')}
             />
           ) : null}
+          {/* Offers affordance — only rendered when the backend engagement
+              metric reports at least one active offer. Never fabricated. */}
+          {activeOfferCount > 0 ? (
+            <FlagshipNavigationRow
+              title={t('manage.viewOffers')}
+              subtitle={t('manage.viewOffersActive', { count: activeOfferCount, plural: activeOfferCount === 1 ? '' : 's' })}
+              icon="pricetag"
+              onPress={() => navigation.navigate('Offers', { listingId: item.id })}
+              accessibilityLabel={t('manage.viewOffers')}
+              accessibilityHint={t('manage.a11y.viewOffersHint')}
+            />
+          ) : null}
         </FlagshipFormSection>
 
         {/* ── Progressive disclosure rows ── */}
@@ -552,7 +523,7 @@ export default function ManageListingScreen() {
           />
           <FlagshipNavigationRow
             title={t('manage.delivery')}
-            subtitle={item.shippingType ? item.shippingType : t('manage.shippingOptions')}
+            subtitle={item.shippingMethod ? item.shippingMethod : t('manage.shippingOptions')}
             icon="car-outline"
             onPress={() => navigation.navigate('EditListing', { itemId, focus: 'shipping' })}
             accessibilityLabel={t('manage.delivery')}
@@ -634,7 +605,7 @@ export default function ManageListingScreen() {
             accessibilityHint={t('manage.deleteHint')}
           />
         </View>
-      </Reanimated.ScrollView>
+      </ScrollView>
 
       <ConfirmationSheet
         visible={confirmSheet.visible}
@@ -655,11 +626,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     container: { flex: 1, backgroundColor: colors.background },
 
     floatingHeader: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      zIndex: 20,
+
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
@@ -679,13 +646,13 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
 
     // ── Media carousel ──
     heroWrap: {
-      width: screenWidth,
-      height: screenWidth,
+      width: 96,
+      height: 120,
       position: 'relative',
       backgroundColor: colors.surface },
     heroImage: {
-      width: screenWidth,
-      height: screenWidth },
+      width: 96,
+      height: 120 },
     heroOverlay: {
       ...StyleSheet.absoluteFill,
       backgroundColor: colors.overlay },
@@ -710,8 +677,9 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     // Per AGENTS.md §4: no floating white card over media. Title, price and
     // status metadata sit directly on the canvas with flat typography.
     identityBlock: {
+      flex: 1,
       paddingHorizontal: Space.md,
-      paddingTop: Space.lg,
+      paddingTop: Space.xs,
       paddingBottom: Space.sm },
     identityTitle: {
       fontSize: TypographyV2.itemTitle.size,
@@ -726,7 +694,8 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
       marginTop: Space.xs },
     statusRow: {
       flexDirection: 'row',
-      alignItems: 'center',
+      alignItems: 'flex-start',
+      flexWrap: 'wrap',
       gap: Space.sm,
       marginTop: Space.sm },
     statusPillFlat: {

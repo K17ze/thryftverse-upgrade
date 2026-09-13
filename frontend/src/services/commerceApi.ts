@@ -1,5 +1,5 @@
 import { fetchJson } from '../lib/apiClient';
-import type { FulfilmentSnapshot } from '../components/orders/orderCapabilities';
+import type { DispatchExtension, FulfilmentSnapshot } from '../components/orders/orderCapabilities';
 
 export interface CommerceAddress {
   id: number;
@@ -120,6 +120,8 @@ export interface CommerceOrder {
   shippingQuoteGbp: number | null;
   shippedAt: string | null;
   deliveredAt: string | null;
+  /** ISO timestamp the buyer paid; anchors the dispatch SLA clock. */
+  paidAt?: string | null;
   createdAt: string;
   updatedAt: string;
   buyer: { id: string; username: string; avatar: string | null } | null;
@@ -133,10 +135,29 @@ export interface CommerceOrder {
   fulfilmentSnapshot?: FulfilmentSnapshot | null;
   /**
    * Server-derived ship-by deadline (ISO 8601). The seller must dispatch by
-   * this date or risk cancellation / SLA penalties. May be derived from the
-   * fulfilment snapshot or a separate backend field.
+   * this date or risk cancellation / SLA penalties. Server-computed: the
+   * latest accepted dispatch extension wins, otherwise paid_at +
+   * dispatch_sla_days.
    */
   shipByDate?: string | null;
+  /**
+   * Server-derived inspection window deadline (ISO 8601). Null until the
+   * order is delivered; the client renders it but never invents one.
+   */
+  inspectionDeadlineAt?: string | null;
+  /**
+   * Server-computed escrow money projection: the scheduled auto-release and
+   * the actual release timestamp (null until released).
+   */
+  moneyProjection?: {
+    estimatedReleaseAt: string | null;
+    releasedAt: string | null;
+  } | null;
+  /**
+   * Latest pending dispatch extension awaiting buyer response, or null.
+   * Accepted/declined extensions are folded into `shipByDate` server-side.
+   */
+  dispatchExtension?: DispatchExtension | null;
 }
 
 export interface ShippingQuoteItem {
@@ -695,6 +716,63 @@ export async function deliverOrder(orderId: string) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   });
+}
+
+/* ─── Dispatch extensions ─── */
+
+export interface DispatchExtensionResult {
+  id: string;
+  orderId: string;
+  days: number;
+  proposedShipBy: string;
+  status: 'pending' | 'accepted' | 'declined';
+  createdAt: string;
+}
+
+/**
+ * Seller proposes a dispatch extension (1–30 days). Buyer-only approval —
+ * the new ship-by date takes effect only if the buyer accepts. The backend
+ * rejects with 409 when an extension is already pending or the order is not
+ * in 'paid' status.
+ */
+export async function proposeDispatchExtension(
+  orderId: string,
+  days: number,
+  note?: string
+): Promise<DispatchExtensionResult> {
+  const payload = await fetchJson<{ ok: true; extension: DispatchExtensionResult }>(
+    `/orders/${encodeURIComponent(orderId)}/dispatch-extension`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(note ? { days, note } : { days }),
+    }
+  );
+  return payload.extension;
+}
+
+/**
+ * Buyer accepts or declines a pending dispatch extension. On acceptance the
+ * response carries the new effective `shipByDate`.
+ */
+export async function respondDispatchExtension(
+  orderId: string,
+  accept: boolean,
+  extensionId?: string
+): Promise<{ extension: DispatchExtensionResult; shipByDate: string | null }> {
+  const payload = await fetchJson<{
+    ok: true;
+    extension: DispatchExtensionResult;
+    shipByDate: string | null;
+  }>(
+    `/orders/${encodeURIComponent(orderId)}/dispatch-extension/respond`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(extensionId ? { accept, extensionId } : { accept }),
+    }
+  );
+  return { extension: payload.extension, shipByDate: payload.shipByDate };
 }
 
 export async function refundOrder(orderId: string, reason?: string) {

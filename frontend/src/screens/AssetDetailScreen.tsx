@@ -1119,6 +1119,7 @@ export default function AssetDetailScreen() {
             lifecycleState={lifecycleState}
             yourOpenOrders={yourOpenOrders}
             yourOpenOrdersFailed={yourOpenOrdersFailed}
+            onRetryOpenOrders={retryOpenOrders}
             yourOpenOrdersLoading={yourOpenOrdersLoading}
             onCancelOrder={handleCancelOrder}
             cancellingOrderId={cancellingOrderId}

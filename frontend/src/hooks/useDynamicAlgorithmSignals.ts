@@ -38,7 +38,10 @@ export function useDynamicAlgorithmSignals(options: UseDynamicAlgorithmSignalsOp
   const currentUser = useStore((state) => state.currentUser);
   const wishlist = useStore((state) => state.wishlist);
   const { listings } = useBackendData();
-  const forYouFeed = useForYouFeed();
+  // Forward the consuming surface so the serve is recorded where the items
+  // are actually shown — feedback attribution and impression joins depend
+  // on the surface matching.
+  const forYouFeed = useForYouFeed(surface);
   const { categories: taxonomyCategories } = useTaxonomy();
 
   const [profile, setProfile] = useState<AlgorithmTransparencyProfile | null>(null);

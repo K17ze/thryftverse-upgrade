@@ -10,6 +10,7 @@ import {
   type ListingFieldKey,
 } from '../contracts/listingCategoryPolicy';
 import { CONDITION_NAMES } from '../contracts/taxonomy';
+import type { ListingMediaRecord } from '../contracts/listingMedia';
 
 /**
  * Canonical backend listing → frontend Listing view-model mapper.
@@ -33,6 +34,9 @@ export interface BackendListingRow {
   priceGbp?: number | string | null;
   imageUrl?: string | null;
   images?: string[] | null;
+  /** Canonical media records (derivatives, blurhash/LQIP, focal point,
+   *  poster) served alongside the flat `images` array. */
+  media?: ListingMediaRecord[] | null;
   mediaAspectRatio?: number | null;
   mediaWidth?: number | null;
   mediaHeight?: number | null;
@@ -129,7 +133,50 @@ function collectMedia(row: BackendListingRow): string[] {
       : '';
   if (fromSingle) return [fromSingle];
 
+  // Last resort: derive URIs from the canonical media[] records so a
+  // payload that only ships media still renders.
+  if (Array.isArray(row.media)) {
+    return row.media
+      .map((m) => (typeof m?.uri === 'string' ? m.uri : typeof m?.url === 'string' ? m.url : ''))
+      .filter((uri) => uri.trim().length > 0);
+  }
+
   return [];
+}
+
+function collectMediaRecords(row: BackendListingRow): ListingMediaRecord[] | undefined {
+  if (!Array.isArray(row.media)) return undefined;
+  const records: ListingMediaRecord[] = [];
+  for (const raw of row.media) {
+    if (!raw || typeof raw !== 'object') continue;
+    const uri =
+      typeof raw.uri === 'string' && raw.uri.trim().length > 0
+        ? raw.uri
+        : typeof raw.url === 'string' && raw.url.trim().length > 0
+          ? raw.url
+          : null;
+    if (!uri) continue;
+    // Normalize with safe defaults — older payloads may only carry the
+    // legacy `{ id, url, sortOrder }` trio. Absent placeholder/derivative
+    // data stays absent rather than being fabricated.
+    records.push({
+      ...raw,
+      id: typeof raw.id === 'string' ? raw.id : `${row.id ?? 'listing'}:${records.length}`,
+      uri,
+      url: typeof raw.url === 'string' && raw.url.trim().length > 0 ? raw.url : uri,
+      kind: raw.kind === 'video' ? 'video' : 'image',
+      sortOrder: typeof raw.sortOrder === 'number' ? raw.sortOrder : records.length,
+      width: typeof raw.width === 'number' ? raw.width : null,
+      height: typeof raw.height === 'number' ? raw.height : null,
+      focalPoint: raw.focalPoint ?? null,
+      poster: typeof raw.poster === 'string' ? raw.poster : null,
+      posterVerifiedAt: typeof raw.posterVerifiedAt === 'string' ? raw.posterVerifiedAt : null,
+      blurhash: typeof raw.blurhash === 'string' ? raw.blurhash : null,
+      lqip: typeof raw.lqip === 'string' ? raw.lqip : null,
+      derivatives: Array.isArray(raw.derivatives) ? raw.derivatives : [],
+    });
+  }
+  return records.length > 0 ? records : undefined;
 }
 
 function nonBlank(v: unknown): string | null {
@@ -168,6 +215,7 @@ export function mapBackendListingToListing(row: BackendListingRow): Listing {
     price: toFinitePrice(row.priceGbp),
     originalPrice: toFiniteOriginalPrice(row.originalPriceGbp),
     images: collectMedia(row),
+    media: collectMediaRecords(row),
     mediaAspectRatio:
       typeof row.mediaAspectRatio === 'number' && Number.isFinite(row.mediaAspectRatio)
         ? row.mediaAspectRatio

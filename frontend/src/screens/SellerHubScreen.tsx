@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, RefreshControl, ScrollView } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, FontFamily, DockConstants } from '../theme/designTokens';
@@ -12,6 +12,7 @@ import { AppIcon } from '../components/common/AppIcon';
 import { IconSize } from '../theme/iconTokens';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
+import { createSellerHubScreenStyles } from '../components/seller/sellerHubScreenStyles';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import {
@@ -71,7 +72,7 @@ async function fetchHubResource<T>(
 
 export default function SellerHubScreen() {
   const { colors } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const styles = useMemo(() => createSellerHubScreenStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const currentUser = useStore((s) => s.currentUser);
   const savedProducts = useStore((s) => s.savedProducts);
@@ -144,6 +145,23 @@ export default function SellerHubScreen() {
       mounted = false;
     };
   }, [load]);
+
+  // Refetch on focus so hub state mutated elsewhere (new orders, shipped
+  // parcels, listing status changes, import progress) is fresh on return.
+  // The initial focus is skipped — the mount effect above already loaded —
+  // and load() itself never toggles `isLoading`, so refocus is silent.
+  const loadRef = useRef(load);
+  loadRef.current = load;
+  const didInitialFocusRef = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!didInitialFocusRef.current) {
+        didInitialFocusRef.current = true;
+        return;
+      }
+      void loadRef.current();
+    }, [])
+  );
 
   useEffect(() => {
     track('seller_dashboard_viewed');
@@ -372,24 +390,4 @@ export default function SellerHubScreen() {
       <SellerHubDock onListNewPiece={() => navigation.navigate('Sell')} />
     </FlagshipScreen>
   );
-}
-
-function createStyles(colors: ThemeColors) {
-  return StyleSheet.create({
-    scrollContent: {
-      paddingBottom: Space.xxl + DockConstants.singleActionHeight,
-    },
-    importErrorBanner: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      marginHorizontal: Space.md,
-      marginTop: Space.xs,
-      paddingVertical: Space.sm,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
-    importErrorText: { fontSize: TypographyV2.caption.size, fontFamily: FontFamily.regular, flex: 1 },
-    resourceErrorBanner: { marginHorizontal: Space.md, marginTop: Space.lg },
-  });
 }

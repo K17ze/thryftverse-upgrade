@@ -59,11 +59,11 @@ interface EditListingRouteParams {
 
 /**
  * Resolve the media kind ('image' | 'video') from a backend media record.
- * The canonical `ListingApiItem.media` entry only declares `{ id, url,
- * sortOrder }`, but the backend may include a discriminator (`type`,
- * `mediaType`, `kind`, or `contentType`). We read whichever is present
- * and fall back to `'image'` only when none is — so videos returned by
- * the API are not silently misclassified as images (E16).
+ * The canonical `ListingApiItem.media` entry declares `kind`, but legacy
+ * payloads may carry a different discriminator (`type`, `mediaType`,
+ * `contentType`). We read whichever is present and fall back to `'image'`
+ * only when none is — so videos returned by the API are not silently
+ * misclassified as images (E16).
  */
 function resolveApiMediaKind(
   m: { id: string; url: string; sortOrder: number },
@@ -245,7 +245,14 @@ export default function EditListingScreen() {
             kind: hasMediaIds ? resolveApiMediaKind(apiMedia[i]) : ('image' as const),
             source: 'remote' as const,
             status: 'uploaded' as const,
-            publicUrl: uri }));
+            publicUrl: uri,
+            // Preserve the media contract fields on remote items so a
+            // re-attach keeps placeholders, geometry and art direction.
+            width: apiMedia[i]?.width ?? undefined,
+            height: apiMedia[i]?.height ?? undefined,
+            focalPoint: apiMedia[i]?.focalPoint ?? undefined,
+            blurhash: apiMedia[i]?.blurhash ?? null,
+            posterUrl: apiMedia[i]?.poster ?? null }));
           setMediaItems(items);
           const remoteIds = items.map((m) => m.mediaId ?? m.id);
           setRemoteMediaOrder(remoteIds);
@@ -604,9 +611,15 @@ export default function EditListingScreen() {
             listingId: itemId,
             imageUrl: qi.publicUrl!,
             sortOrder: existingRemotePhotos.length + i,
-            mediaWidth: qi.asset.width,
-            mediaHeight: qi.asset.height,
+            // Processor-measured geometry wins over the raw asset dims —
+            // EXIF orientation is baked in server-side and can flip
+            // portrait↔landscape relative to what the picker reported.
+            mediaWidth: qi.mediaWidth ?? qi.asset.width,
+            mediaHeight: qi.mediaHeight ?? qi.asset.height,
+            mediaType: qi.asset.kind === 'video' ? 'video' : 'image',
             finalizationId: qi.finalizationId!,
+            posterUrl: draftItem?.posterUrl ?? null,
+            blurhash: qi.blurhash ?? draftItem?.blurhash ?? null,
             focalX: draftItem?.focalPoint?.x ?? null,
             focalY: draftItem?.focalPoint?.y ?? null,
           });
@@ -688,6 +701,9 @@ export default function EditListingScreen() {
       // immediately when the user returns to the feed or profile.
       void refreshListings();
       void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(itemId) });
+      if (currentUser?.id) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.user.listingsAll(currentUser.id) });
+      }
       navigation.goBack();
     } catch (e) {
       setSaveStage('failed_recoverable');
@@ -696,7 +712,7 @@ export default function EditListingScreen() {
     } finally {
       setIsSaving(false);
     }
-  }, [validate, isOwner, itemId, title, description, price, brand, size, condition, category, originalPrice, shippingMethod, shippingPayer, mediaItems, removedRemoteIds, showToast, navigation]);
+  }, [validate, isOwner, itemId, title, description, price, brand, size, condition, category, originalPrice, shippingMethod, shippingPayer, mediaItems, removedRemoteIds, showToast, navigation, queryClient, currentUser?.id]);
 
   /* ── preview handler ── */
   const handlePreview = useCallback(() => {
@@ -860,7 +876,12 @@ export default function EditListingScreen() {
                       kind: hasMediaIds ? resolveApiMediaKind(apiMedia[i]) : ('image' as const),
                       source: 'remote' as const,
                       status: 'uploaded' as const,
-                      publicUrl: uri }));
+                      publicUrl: uri,
+                      width: apiMedia[i]?.width ?? undefined,
+                      height: apiMedia[i]?.height ?? undefined,
+                      focalPoint: apiMedia[i]?.focalPoint ?? undefined,
+                      blurhash: apiMedia[i]?.blurhash ?? null,
+                      posterUrl: apiMedia[i]?.poster ?? null }));
                     setMediaItems(items);
                     const remoteIds = items.map((m) => m.mediaId ?? m.id);
                     setRemoteMediaOrder(remoteIds);

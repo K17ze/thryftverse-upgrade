@@ -25,6 +25,8 @@ import { AppIcon } from '../components/common/AppIcon';
 import { IconSize } from '../theme/iconTokens';
 import { getOrder, CommerceOrder } from '../services/commerceApi';
 import { getOrderReview, createOrderReview, OrderReview } from '../services/reviewApi';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../platform/server/queryKeys';
 import { parseApiError } from '../lib/apiClient';
 import { track } from '../analytics';
 import { CachedImage } from '../components/CachedImage';
@@ -44,6 +46,7 @@ export default function WriteReviewScreen() {
   const { show } = useToast();
   const { isOffline } = useConnectivity();
   const haptic = useHaptic();
+  const queryClient = useQueryClient();
 
   const [rating, setRating] = useState(initialRating ?? 0);
   const [review, setReview] = useState('');
@@ -131,6 +134,17 @@ export default function WriteReviewScreen() {
     try {
       await createOrderReview(orderId, rating, review.trim() || undefined, photoUris.length > 0 ? photoUris : undefined);
       track('review_written', { seller_id: order!.sellerId, rating });
+      // Propagate the new review to every surface that displays the
+      // seller's ratings: their reviews list, public profile aggregate
+      // (rating / reviewCount), and the seller trust summary on item
+      // detail. Order detail re-derives `hasReview` via its own focus
+      // refetch, so it needs no explicit invalidation.
+      const reviewedSellerId = order?.sellerId;
+      if (reviewedSellerId) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.user.reviews(reviewedSellerId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.user.profile(reviewedSellerId) });
+        void queryClient.invalidateQueries({ queryKey: ['seller', 'trust', reviewedSellerId] });
+      }
       haptic.success();
       show('Review published', 'success');
       navigation.goBack();
@@ -148,7 +162,7 @@ export default function WriteReviewScreen() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [canSubmit, haptic, orderId, rating, review, show, navigation, isOffline, photoUris]);
+  }, [canSubmit, haptic, orderId, rating, review, show, navigation, isOffline, photoUris, order?.sellerId, queryClient]);
 
   if (isLoading) {
     return (

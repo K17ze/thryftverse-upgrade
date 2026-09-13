@@ -53,6 +53,10 @@ interface ForYouFeedState {
   policyVersion: string | null;
   refresh: () => Promise<void>;
   confirmImpressions: (entries: ImpressionEntry[]) => Promise<void>;
+  /** Remove a listing from the currently served page (e.g. after the user
+   *  marks it "not interested") so the suppression is visible immediately,
+   *  ahead of the next server-side serve. */
+  dismissListing: (listingId: string) => void;
 }
 
 function generateSessionId(): string {
@@ -118,7 +122,7 @@ function mapResponseToPage(
   };
 }
 
-export function useForYouFeed(): ForYouFeedState {
+export function useForYouFeed(surface: string = 'home'): ForYouFeedState {
   const currentUser = useStore((s) => s.currentUser);
   const [page, setPage] = React.useState<RecommendationPage | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
@@ -145,10 +149,10 @@ export function useForYouFeed(): ForYouFeedState {
 
       try {
         const payload = await fetchJson<BackendRecommendationsResponse>(
-          `/recommendations/${encodeURIComponent(userId)}?surface=home&sessionId=${encodeURIComponent(sessionIdRef.current)}`
+          `/recommendations/${encodeURIComponent(userId)}?surface=${encodeURIComponent(surface)}&sessionId=${encodeURIComponent(sessionIdRef.current)}`
         );
 
-        const mapped = mapResponseToPage(payload, sessionIdRef.current, 'home');
+        const mapped = mapResponseToPage(payload, sessionIdRef.current, surface);
         setPage(mapped);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to load recommendations';
@@ -162,7 +166,7 @@ export function useForYouFeed(): ForYouFeedState {
         }
       }
     },
-    [userId]
+    [userId, surface]
   );
 
   React.useEffect(() => {
@@ -196,6 +200,14 @@ export function useForYouFeed(): ForYouFeedState {
     [page?.requestId]
   );
 
+  const dismissListing = React.useCallback((listingId: string) => {
+    setPage((prev) =>
+      prev
+        ? { ...prev, items: prev.items.filter((vm) => vm.listing.id !== listingId) }
+        : prev
+    );
+  }, []);
+
   const items = page?.items ?? [];
   const listings = React.useMemo(() => items.map((vm) => vm.listing), [items]);
 
@@ -213,5 +225,6 @@ export function useForYouFeed(): ForYouFeedState {
     policyVersion: page?.policyVersion ?? null,
     refresh,
     confirmImpressions,
+    dismissListing,
   };
 }

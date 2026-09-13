@@ -26,6 +26,9 @@ export interface CommerceMediaHeroProps {
   onBack: () => void;
   onShare: () => void;
   onSave: () => void;
+  /** Long-press on the save affordance — the "file to board" tier
+   *  (opens the collection picker). Tap stays instant quick-save. */
+  onSaveLongPress?: () => void;
   onToggleFav: () => void;
   onDoubleTap: () => void;
   onZoomStart: () => void;
@@ -53,6 +56,7 @@ export function CommerceMediaHero({
   onBack,
   onShare,
   onSave,
+  onSaveLongPress,
   onToggleFav,
   onDoubleTap,
   onZoomStart,
@@ -85,6 +89,7 @@ export function CommerceMediaHero({
         onBack={onBack}
         onShare={onShare}
         onSave={onSave}
+        onSaveLongPress={onSaveLongPress}
         onToggleFav={onToggleFav}
         onDoubleTap={onDoubleTap}
         onZoomStart={onZoomStart}
@@ -121,8 +126,12 @@ export function CommerceMediaHero({
           {
             icon: isSaved ? 'bookmark' : 'bookmark-outline',
             activeIcon: 'bookmark',
-            label: isSaved ? 'Saved to collection' : 'Save to collection',
+            label: isSaved ? 'Saved' : 'Save',
+            accessibilityHint: onSaveLongPress
+              ? 'Tap to save. Long-press to file into a collection.'
+              : undefined,
             onPress: onRailSave,
+            onLongPress: onSaveLongPress,
             isActive: isSaved,
           },
         ]}

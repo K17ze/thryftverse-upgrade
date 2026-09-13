@@ -22,8 +22,65 @@ from app.schemas import (
 POLICY_VERSION = "recommendation-heuristic-v2.0"
 FEATURE_SCHEMA_VERSION = "recommendation-features-v2"
 TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
-ACTION_WEIGHTS = {"view": 1.0, "wishlist": 2.8, "purchase": 4.5}
-ACTION_HALF_LIFE_DAYS = {"view": 7.0, "wishlist": 21.0, "purchase": 60.0}
+
+# Signed engagement weights. Negative actions are explicit user steering —
+# "not interested", "show fewer", hides, skips and undos must push the profile
+# down, not just fail to push it up. Values mirror INTERACTION_ACTIONS in
+# backend/api/src/routes/recommendations.ts.
+ACTION_WEIGHTS = {
+    "view": 1.0,
+    "qualified_detail_view": 1.6,
+    "open_seller_profile": 0.8,
+    "share": 2.0,
+    "save": 2.4,
+    "wishlist": 2.8,
+    "follow_seller": 2.4,
+    "message_seller_started": 2.0,
+    "offer_started": 2.2,
+    "offer_submitted": 3.0,
+    "add_to_basket": 3.2,
+    "checkout_started": 3.6,
+    "purchase": 4.5,
+    "rapid_skip": -0.8,
+    "unsave": -1.2,
+    "unfollow_seller": -1.5,
+    "show_fewer": -2.5,
+    "not_interested": -4.0,
+    "report_content": -5.0,
+}
+ACTION_HALF_LIFE_DAYS = {
+    "view": 7.0,
+    "qualified_detail_view": 7.0,
+    "open_seller_profile": 7.0,
+    "rapid_skip": 7.0,
+    "share": 14.0,
+    "save": 21.0,
+    "wishlist": 21.0,
+    "unsave": 21.0,
+    "follow_seller": 30.0,
+    "unfollow_seller": 30.0,
+    "message_seller_started": 14.0,
+    "offer_started": 14.0,
+    "offer_submitted": 30.0,
+    "add_to_basket": 30.0,
+    "checkout_started": 30.0,
+    "purchase": 60.0,
+    "show_fewer": 45.0,
+    "not_interested": 60.0,
+    "report_content": 90.0,
+}
+
+# Actions that remove the specific listing from eligibility entirely —
+# "not interested" and content reports mean "never show me this again".
+# ``show_fewer`` stays a ranking signal only (less ≠ never show).
+HARD_EXCLUDE_ACTIONS = frozenset({"not_interested", "report_content"})
+
+# Magnitude of the utility adjustment applied per matched topic directive.
+LESS_TOPIC_PENALTY = 0.18
+MORE_TOPIC_BOOST = 0.10
+# Prefixed candidate tokens a directive label can match against directly
+# (e.g. a "Denim" topic matches a candidate's ``category:denim`` token).
+DIRECTIVE_PREFIXES = ("category", "brand", "size", "condition")
 
 # Ordered feature names matching the component scores produced by the heuristic
 # ranker.  The LightGBM challenger consumes exactly these features so that
@@ -122,8 +179,73 @@ def _response_velocity(candidate: CandidateItem) -> float:
 def _event_weight(event: InteractionEvent, as_of: datetime) -> float:
     age_days = max(0.0, (as_of - _utc(event.created_at, as_of)).total_seconds() / 86_400)
     decay = math.pow(0.5, age_days / ACTION_HALF_LIFE_DAYS[event.action])
-    # Cap each event so retries or abusive clients cannot dominate a profile.
-    return min(8.0, ACTION_WEIGHTS[event.action] * min(event.strength, 3.0) * decay)
+    # Symmetric cap so retries or abusive clients cannot dominate a profile —
+    # and so stacked negative feedback cannot sink a topic unboundedly.
+    return max(-8.0, min(8.0, ACTION_WEIGHTS[event.action] * min(event.strength, 3.0) * decay))
+
+
+def _directive_match(label: str, candidate_tokens: set[str]) -> float:
+    """How strongly an intent directive applies to a candidate, 0–1.
+
+    The full label is first tried as a compound prefixed token
+    ("Acne Studios" → ``brand:acne_studios``). Otherwise each label token is
+    matched against the candidate's free-text and prefixed tokens
+    ("outerwear" matches ``category:outerwear``) and the fraction of matched
+    tokens is returned.
+    """
+    tokens = set(TOKEN_PATTERN.findall(label.lower()))
+    if not tokens:
+        return 0.0
+    compound = "_".join(sorted(tokens))
+    if any(f"{prefix}:{compound}" in candidate_tokens for prefix in DIRECTIVE_PREFIXES):
+        return 1.0
+    matched = sum(
+        1
+        for token in tokens
+        if token in candidate_tokens
+        or any(f"{prefix}:{token}" in candidate_tokens for prefix in DIRECTIVE_PREFIXES)
+    )
+    return matched / len(tokens)
+
+
+def _prepare_directives(payload: RecommendationRequest) -> dict[str, list[str]]:
+    directives: dict[str, list[str]] = {"more": [], "less": [], "excluded": []}
+    for directive in payload.topic_directives:
+        label = directive.label.strip()
+        if label:
+            directives[directive.band].append(label)
+    return directives
+
+
+def _is_directive_excluded(candidate_tokens: set[str], excluded_labels: list[str]) -> bool:
+    """``excluded`` means never show — require a decisive match so a muted
+    multi-word topic does not silently wipe a whole facet of the feed."""
+    for label in excluded_labels:
+        tokens = set(TOKEN_PATTERN.findall(label.lower()))
+        if not tokens:
+            continue
+        compound = "_".join(sorted(tokens))
+        if any(f"{prefix}:{compound}" in candidate_tokens for prefix in DIRECTIVE_PREFIXES):
+            return True
+        if _directive_match(label, candidate_tokens) >= 1.0:
+            return True
+    return False
+
+
+def _directive_utility_adjustment(
+    candidate_tokens: set[str],
+    directives: dict[str, list[str]],
+) -> float:
+    adjustment = 0.0
+    for label in directives["less"]:
+        match = _directive_match(label, candidate_tokens)
+        if match > 0.0:
+            adjustment -= LESS_TOPIC_PENALTY * match
+    for label in directives["more"]:
+        match = _directive_match(label, candidate_tokens)
+        if match > 0.0:
+            adjustment += MORE_TOPIC_BOOST * match
+    return adjustment
 
 
 def _normalize_affinity(raw: float) -> float:
@@ -194,12 +316,20 @@ def extract_candidate_features(
     purchased = {
         event.listing_id for event in payload.recent_interactions if event.action == "purchase"
     }
+    hard_excluded = {
+        event.listing_id
+        for event in payload.recent_interactions
+        if event.action in HARD_EXCLUDE_ACTIONS
+    }
+    directives = _prepare_directives(payload)
     eligible = [
         item
         for item in candidates
         if item.available
         and item.listing_id not in explicitly_excluded
         and item.listing_id not in purchased
+        and item.listing_id not in hard_excluded
+        and not _is_directive_excluded(_candidate_tokens(item), directives["excluded"])
     ]
 
     profile_weights: Counter[str] = Counter()
@@ -216,11 +346,13 @@ def extract_candidate_features(
         for token in tokens:
             profile_weights[token] += weight
             sequence_weights[token] += weight * math.exp(-sequence_index / 6.0)
-        if event.price_gbp and event.price_gbp > 0:
+        # Only positive engagement shapes the preferred price band — an item
+        # the user dismissed says nothing about what they will pay.
+        if weight > 0 and event.price_gbp and event.price_gbp > 0:
             interacted_prices.append(event.price_gbp)
 
     median_price = float(np.median(interacted_prices)) if interacted_prices else None
-    meaningful_events = sum(_event_weight(event, as_of) >= 0.15 for event in ordered_events)
+    meaningful_events = sum(abs(_event_weight(event, as_of)) >= 0.15 for event in ordered_events)
     cold_start = meaningful_events < 3 or not profile_weights
 
     rows: list[dict[str, object]] = []
@@ -261,6 +393,7 @@ def extract_candidate_features(
                 + 0.06 * components["seller_trust"]
                 + 0.06 * components["response_velocity"]
             )
+        utility += _directive_utility_adjustment(tokens, directives)
         rows.append(
             {
                 "listing_id": candidate.listing_id,
@@ -284,6 +417,12 @@ def rank_recommendations(payload: RecommendationRequest) -> RecommendationRespon
     purchased = {
         event.listing_id for event in payload.recent_interactions if event.action == "purchase"
     }
+    hard_excluded = {
+        event.listing_id
+        for event in payload.recent_interactions
+        if event.action in HARD_EXCLUDE_ACTIONS
+    }
+    directives = _prepare_directives(payload)
     unavailable_removed = sum(not item.available for item in candidates)
     explicit_removed = sum(
         item.available and item.listing_id in explicitly_excluded for item in candidates
@@ -300,6 +439,8 @@ def rank_recommendations(payload: RecommendationRequest) -> RecommendationRespon
         if item.available
         and item.listing_id not in explicitly_excluded
         and item.listing_id not in purchased
+        and item.listing_id not in hard_excluded
+        and not _is_directive_excluded(_candidate_tokens(item), directives["excluded"])
     ]
 
     profile_weights: Counter[str] = Counter()
@@ -316,11 +457,11 @@ def rank_recommendations(payload: RecommendationRequest) -> RecommendationRespon
         for token in tokens:
             profile_weights[token] += weight
             sequence_weights[token] += weight * math.exp(-sequence_index / 6.0)
-        if event.price_gbp and event.price_gbp > 0:
+        if weight > 0 and event.price_gbp and event.price_gbp > 0:
             interacted_prices.append(event.price_gbp)
 
     median_price = float(np.median(interacted_prices)) if interacted_prices else None
-    meaningful_events = sum(_event_weight(event, as_of) >= 0.15 for event in ordered_events)
+    meaningful_events = sum(abs(_event_weight(event, as_of)) >= 0.15 for event in ordered_events)
     cold_start = meaningful_events < 3 or not profile_weights
     effective_exploration = max(payload.exploration_rate, 0.25) if cold_start else payload.exploration_rate
 
@@ -362,6 +503,7 @@ def rank_recommendations(payload: RecommendationRequest) -> RecommendationRespon
                 + 0.06 * components["seller_trust"]
                 + 0.06 * components["response_velocity"]
             )
+        utility += _directive_utility_adjustment(tokens, directives)
         ranked.append(
             {
                 "candidate": candidate,

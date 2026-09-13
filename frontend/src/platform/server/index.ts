@@ -19,5 +19,7 @@ export {
   useFollowingInfinite,
   useFollowMutation,
   useBlockMutation,
+  useMuteMutation,
+  useRestrictMutation,
   useReportUserMutation,
 } from './useProfileSocialQueries';

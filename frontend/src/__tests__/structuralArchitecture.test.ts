@@ -65,9 +65,10 @@ describe('structural architecture checks', () => {
 
     it('AuctionDetailScreen composes identity and transaction surface', () => {
       // Surface budget guard: identity + transaction stay as flat
-      // composed primitives instead of card-on-card rows.
-      expectComposes(auctionScreen, 'CommerceDetailIdentity');
-      expectComposes(auctionScreen, 'CommerceDetailTransactionSurface');
+      // composed primitives instead of card-on-card rows. The screen was
+      // decomposed into auctiondetail/* — check the owner layer.
+      expectComposes(readComponent('auctiondetail/AuctionDetailHero.tsx'), 'CommerceDetailIdentity');
+      expectComposes(readComponent('auctiondetail/AuctionBidPanel.tsx'), 'CommerceDetailTransactionSurface');
     });
 
     it('AssetDetailScreen composes extracted identity and state dock', () => {
@@ -120,7 +121,8 @@ describe('structural architecture checks', () => {
   // ── Media-first composition: hero media dominates the first viewport ──
   describe('media-first composition', () => {
     it('auction screen renders a media stage', () => {
-      expectComposes(auctionScreen, 'CommerceMediaStage');
+      // CommerceMediaStage lives inside the extracted hero (owner layer).
+      expectComposes(readComponent('auctiondetail/AuctionDetailHero.tsx'), 'CommerceMediaStage');
     });
 
     it('asset screen renders a media stage', () => {
@@ -323,9 +325,10 @@ describe('structural architecture checks', () => {
     it('item screen has consolidated discovery modules', () => {
       // Per spec 12: "One high-quality continuation section is better than
       // 3 repetitive rails." Phase 2 consolidated to BundleUpsell + More
-      // like this + Seen in Looks.
+      // like this + Seen in Looks. The screen was decomposed into
+      // itemdetail/* — the grid style lives in the owner component.
       expect(itemScreen).toContain('BundleUpsellRow');
-      expect(itemScreen).toContain('moreLikeThisGrid');
+      expect(readComponent('itemdetail/ItemDetailSimilarGrid.tsx')).toContain('moreLikeThisGrid');
       // Should NOT have the generic rail mapping or DiscoveryGrid
       expect(itemScreen).not.toContain('railSections.map');
     });

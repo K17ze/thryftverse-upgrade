@@ -24,6 +24,7 @@ import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { AppStatusPill } from '../components/ui/AppStatusPill';
 import { fetchListingByIdFromApi } from '../services/listingsApi';
 import { useBackendData } from '../context/BackendDataContext';
+import { useStore } from '../store/useStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
 import { t } from '../i18n';
@@ -37,6 +38,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
   const { formatFromFiat } = useFormattedPrice();
   const { refreshListings } = useBackendData();
   const queryClient = useQueryClient();
+  const currentUserId = useStore((s) => s.currentUser?.id);
 
   const listingId = route.params?.listingId;
   const routeTitle = route.params?.title;
@@ -56,7 +58,13 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
     if (listingId) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(listingId) });
     }
-  }, [refreshListings, queryClient, listingId]);
+    // The new listing belongs to the current user's shop grid — invalidate
+    // their listings pages so profile surfaces refetch instead of serving
+    // a stale pre-publish snapshot.
+    if (currentUserId) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.user.listingsAll(currentUserId) });
+    }
+  }, [refreshListings, queryClient, listingId, currentUserId]);
 
   React.useEffect(() => {
     if (!listingId) return;

@@ -34,6 +34,7 @@ const SEARCH_KEY_PREFIX = `${CACHE_PREFIX}:results`;
 const AUTOCOMPLETE_KEY_PREFIX = `${CACHE_PREFIX}:autocomplete`;
 const HOT_QUERY_KEY_PREFIX = `${CACHE_PREFIX}:hot`;
 const FREQUENCY_KEY = `${CACHE_PREFIX}:freq`;
+const FREQUENCY_LABELS_KEY = `${CACHE_PREFIX}:freq:labels`;
 const ANALYTICS_KEY_PREFIX = `${CACHE_PREFIX}:analytics`;
 const STALE_FLAG = '__stale__';
 
@@ -45,6 +46,9 @@ export interface SearchQueryParams {
     category?: string;
     condition?: string;
     size?: string;
+    /** Multi-select filters (arrays hash stably after sort). */
+    brands?: string[];
+    sizes?: string[];
     priceMin?: number;
     priceMax?: number;
     location?: string;
@@ -306,8 +310,33 @@ export async function trackQueryFrequency(
     .digest('hex')
     .slice(0, 24);
   await redis.zincrby(FREQUENCY_KEY, 1, member);
+  // Keep a reversible hash→label mapping so hot queries can be displayed
+  // back to users (e.g. "Trending searches"). Only the normalized query
+  // text is stored — no user identifiers.
+  await redis.hset(FREQUENCY_LABELS_KEY, member, normalized);
   // Set/update expiry on the sorted set so old entries age out
   await redis.expire(FREQUENCY_KEY, QUERY_FREQUENCY_WINDOW_SECONDS);
+  await redis.expire(FREQUENCY_LABELS_KEY, QUERY_FREQUENCY_WINDOW_SECONDS);
+}
+
+/**
+ * Retrieve the top N hottest query *labels* (human-readable, normalized
+ * query text) by frequency. Returns [] when no queries cross the hot
+ * threshold in the current window — callers must not fabricate trends.
+ */
+export async function getHotQueryLabels(
+  redis: Redis,
+  limit: number = 10,
+): Promise<Array<{ query: string; frequency: number }>> {
+  const hot = await getHotQueries(redis, limit);
+  if (hot.length === 0) return [];
+  const labels = await redis.hmget(
+    FREQUENCY_LABELS_KEY,
+    ...hot.map((h) => h.queryHash),
+  );
+  return hot
+    .map((h, i) => ({ query: labels[i] ?? '', frequency: h.frequency }))
+    .filter((entry) => entry.query.length > 0);
 }
 
 /**
@@ -635,6 +664,26 @@ export function createMockRedis(): Redis {
         return 1;
       }
       return 0;
+    },
+
+    async hset(key: string, ...fieldValues: string[]): Promise<number> {
+      let hash = hashes.get(key);
+      if (!hash) {
+        hash = new Map();
+        hashes.set(key, hash);
+      }
+      let added = 0;
+      for (let i = 0; i < fieldValues.length; i += 2) {
+        const field = fieldValues[i];
+        if (!hash.has(field)) added += 1;
+        hash.set(field, fieldValues[i + 1]);
+      }
+      return added;
+    },
+
+    async hmget(key: string, ...fields: string[]): Promise<(string | null)[]> {
+      const hash = hashes.get(key);
+      return fields.map((field) => hash?.get(field) ?? null);
     },
 
     async hincrby(key: string, field: string, increment: number): Promise<number> {

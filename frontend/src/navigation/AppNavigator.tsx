@@ -327,6 +327,7 @@ export default function AppNavigator() {
       <Stack.Screen name="ChatSettings" getComponent={() => require('../screens/ChatSettingsScreen').default} />
       <Stack.Screen name="ActiveSessions" getComponent={() => require('../screens/ActiveSessionsScreen').default} />
       <Stack.Screen name="BlockedUsers" getComponent={() => require('../screens/BlockedUsersScreen').default} />
+      <Stack.Screen name="RestrictedAccounts" getComponent={() => require('../screens/RestrictedAccountsScreen').default} />
       <Stack.Screen name="PrivacySettings" getComponent={() => require('../screens/PrivacySettingsScreen').default} />
       <Stack.Screen name="About" getComponent={() => require('../screens/AboutScreen').default} />
       <Stack.Screen name="MutedConversations" getComponent={() => require('../screens/MutedConversationsScreen').default} />
@@ -359,6 +360,7 @@ export default function AppNavigator() {
       {/* ── Commerce ── (orders, offers, checkout, listings) */}
       {/* new screens */}
       <Stack.Screen name="MakeOffer" getComponent={() => require('../screens/MakeOfferScreen').default} options={formSheetScreenOptions} />
+      <Stack.Screen name="Offers" getComponent={withScreenErrorBoundary(() => require('../screens/OffersScreen').default, 'Offers')} />
       <Stack.Screen name="Postage" getComponent={() => require('../screens/PostageScreen').default} />
       <Stack.Screen name="InviteFriends" getComponent={() => require('../screens/InviteFriendsScreen').default} />
       <Stack.Screen name="BalanceHistory" getComponent={() => require('../screens/BalanceHistoryScreen').default} />

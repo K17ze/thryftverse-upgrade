@@ -178,6 +178,27 @@ export interface FulfilmentSnapshot {
   shipByDate: string | null;
   destinationSummary: string | null;
   parcelProfile: { maxWeightKg: number | null; maxLengthCm: number | null } | null;
+  /** Dispatch SLA in days snapshotted at purchase (server-provided). */
+  dispatchSlaDays?: number | null;
+}
+
+// ─── Dispatch extension ──────────────────────────────────────────────────────
+//
+// When a seller cannot meet the ship-by deadline they may propose a dispatch
+// extension; the buyer must accept it before the new deadline takes effect.
+// The order payload only surfaces the latest PENDING extension — accepted /
+// declined extensions are already folded into the server-computed shipByDate.
+
+export interface DispatchExtension {
+  id: string;
+  /** Number of extra days requested on top of the current ship-by date. */
+  days: number;
+  /** The proposed new ship-by deadline (ISO). */
+  proposedShipBy: string;
+  /** User id of the proposer (always the seller — enforced server-side). */
+  proposedBy: string;
+  status: 'pending' | 'accepted' | 'declined';
+  createdAt: string;
 }
 
 // ─── Capability resolution ──────────────────────────────────────────────────
@@ -194,6 +215,17 @@ export interface OrderCapabilityContext {
    * the generic carrier picker.
    */
   fulfilmentSnapshot?: FulfilmentSnapshot | null;
+  /**
+   * Server-computed ship-by deadline on the order payload. Takes precedence
+   * over `fulfilmentSnapshot.shipByDate` — the server already folds in any
+   * accepted dispatch extension, so this is the authoritative deadline.
+   */
+  shipByDate?: string | null;
+  /**
+   * Latest pending dispatch extension (server-provided). Only 'pending'
+   * extensions are surfaced on the order payload.
+   */
+  dispatchExtension?: DispatchExtension | null;
   isSubmitting?: boolean;
 }
 
@@ -203,7 +235,7 @@ export interface OrderCapability {
   statusLabel: string;
   statusTone: StatusTone;
   nextActionHint: string | null;
-  /** Ship-by deadline ISO string, derived from the fulfilment snapshot. */
+  /** Ship-by deadline ISO string — server-computed value wins, snapshot is the fallback. */
   shipByDate: string | null;
   /** Human-readable ETA window, e.g. "2–3 days". */
   etaWindow: string | null;
@@ -212,6 +244,10 @@ export interface OrderCapability {
   /** Whether the purchased service is carrier-integrated (label/QR) vs manual. */
   deliveryMode: FulfilmentSnapshot['deliveryMode'];
   canDispatch: boolean;
+  /** Seller may propose a dispatch extension (paid, none already pending). */
+  canProposeExtension: boolean;
+  /** Buyer may accept/decline a pending dispatch extension. */
+  canRespondExtension: boolean;
   canConfirmDelivery: boolean;
   canTrack: boolean;
   canInspect: boolean;
@@ -227,6 +263,8 @@ export interface OrderCapability {
 export type OrderAction =
   | 'pay'
   | 'dispatch'
+  | 'propose_extension'
+  | 'respond_extension'
   | 'confirm_delivery'
   | 'cancel'
   | 'report_issue'
@@ -271,10 +309,21 @@ export function resolveCapabilities(ctx: OrderCapabilityContext): OrderCapabilit
   const snap = ctx.fulfilmentSnapshot ?? null;
   const serviceName = snap?.serviceName ?? snap?.carrierId ?? null;
   const deliveryMode = snap?.deliveryMode ?? 'unknown';
-  const shipByDate = snap?.shipByDate ?? null;
+  // The server-computed order.shipByDate already accounts for the latest
+  // accepted dispatch extension; the snapshot value is only a fallback for
+  // older payloads that predate the top-level field.
+  const shipByDate = ctx.shipByDate ?? snap?.shipByDate ?? null;
   const etaWindow = formatEtaWindow(snap?.etaMinDays ?? null, snap?.etaMaxDays ?? null);
 
   const canDispatch = ctx.role === 'seller' && isPaid && !submitting;
+  // Only 'pending' extensions are surfaced on the order payload, and only
+  // sellers can propose — so a pending extension seen by a buyer is always
+  // seller-proposed and awaiting their response.
+  const pendingExtension = ctx.dispatchExtension?.status === 'pending'
+    ? ctx.dispatchExtension
+    : null;
+  const canProposeExtension = ctx.role === 'seller' && isPaid && !pendingExtension && !submitting;
+  const canRespondExtension = ctx.role === 'buyer' && pendingExtension != null && !submitting;
   const canTrack = isInTransit && ctx.hasTracking;
   const canInspect = ctx.role === 'buyer' && isDelivered && !ctx.hasReview && !submitting;
   // Receipt confirmation releases escrowed funds — a high-consequence money
@@ -333,6 +382,11 @@ export function resolveCapabilities(ctx: OrderCapabilityContext): OrderCapabilit
   if (canCancel && primaryAction !== 'pay') {
     secondaryActions.push('cancel');
   }
+  // Dispatch-extension actions are intentionally NOT pushed into
+  // secondaryActions: propose/respond are two-option or sheet-driven flows
+  // rendered as dedicated inline UI, not single-slot footer actions. They are
+  // exposed as capability flags (canProposeExtension / canRespondExtension)
+  // and OrderAction vocabulary for surfaces that render them inline.
   if (canContact) {
     secondaryActions.push('contact');
   }
@@ -358,6 +412,8 @@ export function resolveCapabilities(ctx: OrderCapabilityContext): OrderCapabilit
     serviceName,
     deliveryMode,
     canDispatch,
+    canProposeExtension,
+    canRespondExtension,
     canConfirmDelivery,
     canTrack,
     canInspect,
@@ -437,6 +493,10 @@ export interface OrderExperienceContext {
   hasReview: boolean;
   hasTracking: boolean;
   fulfilmentSnapshot?: FulfilmentSnapshot | null;
+  /** Server-computed ship-by deadline on the order payload (wins over snapshot). */
+  shipByDate?: string | null;
+  /** Latest pending dispatch extension (server-provided). */
+  dispatchExtension?: DispatchExtension | null;
   isSubmitting?: boolean;
   /** Server-provided inspection window deadline (ISO). */
   inspectionDeadlineAt?: string | null;

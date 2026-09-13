@@ -20,6 +20,7 @@ export default function ChatSettingsScreen({ navigation }: Props) {
   const allowFrom = useStore((s) => s.allowMessagesFrom);
   const setAllowFrom = useStore((s) => s.setAllowMessagesFrom);
   const blockedCount = useStore((s) => s.blockedUsers.length);
+  const restrictedCount = useStore((s) => s.restrictedUsers.length);
   const offersInChat = useStore((s) => s.offersInChatEnabled);
   const setOffersInChat = useStore((s) => s.setOffersInChatEnabled);
   const orderUpdatesInChat = useStore((s) => s.orderUpdatesInChatEnabled);
@@ -74,6 +75,12 @@ export default function ChatSettingsScreen({ navigation }: Props) {
           title="Archived"
           value={archivedCount === 0 ? 'None' : String(archivedCount)}
           onPress={() => navigation.navigate('ArchivedConversations')}
+        />
+        <SettingsRow
+          icon="eye-off-outline"
+          title="Restricted accounts"
+          value={restrictedCount === 0 ? 'None' : String(restrictedCount)}
+          onPress={() => navigation.navigate('RestrictedAccounts')}
         />
         <SettingsRow
           icon="ban-outline"

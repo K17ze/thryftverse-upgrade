@@ -113,6 +113,10 @@ export function useListingPublishPipeline(params: ListingPublishPipelineParams) 
           status: res.state === 'uploaded' ? 'uploaded' : res.state === 'failed' ? 'failed' : m.status,
           publicUrl: res.publicUrl || m.publicUrl,
           error: res.error || m.error,
+          // Processor-measured values win over client-declared ones.
+          blurhash: res.blurhash ?? m.blurhash,
+          width: res.mediaWidth ?? m.width,
+          height: res.mediaHeight ?? m.height,
         };
       })
     );

@@ -1,9 +1,15 @@
 import React from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { useQueryClient } from '@tanstack/react-query';
 import { useStore } from '../store/useStore';
 import { fetchFollowing, type FollowListUser } from '../services/profileApi';
 import { fetchUserListingsFromApi } from '../services/listingsApi';
 import { mapBackendListings } from '../services/listingMapper';
 import type { Listing } from '../domain';
+
+// The N+1 composition (paginated following list + per-seller listings) is
+// too heavy to run on every focus — gate refocus refetches at 2 minutes.
+const FOLLOWING_FEED_STALE_MS = 120_000;
 
 interface FollowingFeedState {
   listings: Listing[];
@@ -27,6 +33,7 @@ interface FollowingFeedState {
  */
 export function useFollowingFeed(): FollowingFeedState {
   const currentUser = useStore((s) => s.currentUser);
+  const queryClient = useQueryClient();
   const [listings, setListings] = React.useState<Listing[]>([]);
   const [followingUsers, setFollowingUsers] = React.useState<FollowListUser[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
@@ -34,6 +41,7 @@ export function useFollowingFeed(): FollowingFeedState {
   const [error, setError] = React.useState<string | null>(null);
 
   const userId = currentUser?.id ?? null;
+  const lastLoadedAtRef = React.useRef(0);
 
   const loadFollowingFeed = React.useCallback(
     async (isRefresh: boolean) => {
@@ -65,6 +73,7 @@ export function useFollowingFeed(): FollowingFeedState {
         } while (cursor && pages < MAX_FOLLOWING_PAGES);
 
         setFollowingUsers(allFollowing);
+        lastLoadedAtRef.current = Date.now();
 
         if (allFollowing.length === 0) {
           setListings([]);
@@ -119,6 +128,39 @@ export function useFollowingFeed(): FollowingFeedState {
   React.useEffect(() => {
     void loadFollowingFeed(false);
   }, [loadFollowingFeed]);
+
+  // Follow/unfollow mutations land in the React Query mutation cache under
+  // ['social', 'follow', userId] (useFollowMutation / useSellerFollow).
+  // This feed composes the following list directly — no RQ query — so
+  // cache invalidation alone cannot reach it. Subscribe to successful
+  // follow mutations and reload so the feed and followed-seller rows never
+  // serve a stale membership set for the rest of the session.
+  React.useEffect(() => {
+    return queryClient.getMutationCache().subscribe((event) => {
+      if (event.type !== 'updated' || event.action?.type !== 'success') return;
+      const key = event.mutation.options.mutationKey;
+      if (key?.[0] === 'social' && key?.[1] === 'follow') {
+        void loadFollowingFeed(true);
+      }
+    });
+  }, [queryClient, loadFollowingFeed]);
+
+  // Refetch on screen focus when the feed is stale — pushed screens keep
+  // Home mounted, so the mount effect never refires after the user
+  // browses a seller profile or their inventory changes. The first focus
+  // is owned by the mount effect; the stale gate keeps the N+1 fetch from
+  // firing on every tab revisit.
+  const hasFocusedOnceRef = React.useRef(false);
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!hasFocusedOnceRef.current) {
+        hasFocusedOnceRef.current = true;
+        return;
+      }
+      if (Date.now() - lastLoadedAtRef.current < FOLLOWING_FEED_STALE_MS) return;
+      void loadFollowingFeed(true);
+    }, [loadFollowingFeed])
+  );
 
   const refresh = React.useCallback(() => loadFollowingFeed(true), [loadFollowingFeed]);
 

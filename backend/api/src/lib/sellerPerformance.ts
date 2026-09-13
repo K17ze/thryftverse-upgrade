@@ -184,16 +184,16 @@ export async function recomputeSellerMetrics(
     }>(
       `SELECT
          COUNT(*)::text AS total_orders,
-         COUNT(*) FILTER (WHERE o.status IN ('shipped', 'delivered'))::text AS shipped_orders,
+         COUNT(*) FILTER (WHERE o.status IN ('shipped', 'delivered', 'completed'))::text AS shipped_orders,
          COUNT(*) FILTER (WHERE o.status = 'cancelled')::text AS cancelled_orders,
          COALESCE(
-           SUM(o.total_gbp) FILTER (WHERE o.status IN ('paid', 'shipped', 'delivered')),
+           SUM(o.total_gbp) FILTER (WHERE o.status IN ('paid', 'shipped', 'delivered', 'completed')),
            0
          )::text AS sales_volume,
          (SELECT COUNT(*)::text
             FROM orders
            WHERE seller_id = $1
-             AND status IN ('shipped', 'delivered')) AS lifetime_shipped
+             AND status IN ('shipped', 'delivered', 'completed')) AS lifetime_shipped
        FROM orders o
        WHERE o.seller_id = $1
          AND o.created_at >= NOW() - INTERVAL '90 days'
@@ -237,7 +237,7 @@ export async function recomputeSellerMetrics(
            ) pickup ON TRUE
            WHERE o.seller_id = $1
              AND o.created_at >= NOW() - INTERVAL '90 days'
-             AND o.status IN ('shipped', 'delivered')
+             AND o.status IN ('shipped', 'delivered', 'completed')
              AND o.paid_at IS NOT NULL
              AND (pickup.occurred_at IS NOT NULL OR o.shipped_at IS NOT NULL)
          ) t`,

@@ -4,6 +4,12 @@ export { useConversationCommerce } from "./useConversationCommerce";
 export { useConversationAgents } from "./useConversationAgents";
 export { useConversationSafety } from "./useConversationSafety";
 export { useMessageSelection } from "./useMessageSelection";
+export { usePinnedMessage } from "./usePinnedMessage";
+export { useHydratedChatMessages } from "./useHydratedChatMessages";
+export { useChatHeaderData } from "./useChatHeaderData";
+export { useChatContextualStack } from "./useChatContextualStack";
+export { useChatSearchScroll } from "./useChatSearchScroll";
+export { useNewMessageTracker } from "./useNewMessageTracker";
 export type { Message } from "./types";
 export {
   INITIAL_MESSAGES,

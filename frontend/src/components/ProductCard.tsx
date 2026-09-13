@@ -100,6 +100,12 @@ function ProductCardBase({
   // the image layer or the "multiple media" badge.
   const usableImages = (item.images ?? []).filter(isUsableUri);
   const primaryImage = usableImages[0] ?? '';
+  // Canonical media record for the primary image — supplies the pipeline
+  // blurhash/LQIP placeholder and the derivative ladder so the card serves
+  // a sized rendition instead of the full-resolution original.
+  const primaryMedia = (item.media ?? []).find(
+    (m) => m.kind === 'image' && (m.uri === primaryImage || m.url === primaryImage),
+  ) ?? (item.media ?? []).find((m) => m.kind === 'image') ?? null;
   const hasUsableImage = primaryImage.length > 0;
   const hasVideo = usableImages.some((uri) => isVideoUri(uri));
   const hasMultiple = usableImages.length > 1;
@@ -190,7 +196,10 @@ function ProductCardBase({
             style={[styles.image, { aspectRatio }]}
             contentFit="cover"
             transition={300}
-            focalPoint={getCategoryFocalPoint(item.category)}
+            focalPoint={primaryMedia?.focalPoint ?? getCategoryFocalPoint(item.category)}
+            blurhash={primaryMedia?.blurhash ?? undefined}
+            previewUri={primaryMedia?.blurhash ? undefined : (primaryMedia?.lqip ?? undefined)}
+            derivatives={primaryMedia?.derivatives}
             onError={() => setImageFailed(true)}
             downscaleWidth={downscaleWidth}
           />
@@ -588,6 +597,12 @@ interface ProductDiscoveryTileProps {
    *  the media (top-right) — the quick-save pattern that
    *  turns passive browsing into engagement. */
   onSaveToggle?: () => void;
+  /** Long-press on the bookmark button — the "file to board" tier
+   *  (opens the collection picker). Tap stays the quick-save toggle. */
+  onSaveLongPress?: () => void;
+  /** Long-press affordance for feed controls ("Not interested" / "Show less
+   *  like this"). Renders no extra chrome — the gesture only. */
+  onLongPress?: () => void;
 }
 
 function ProductDiscoveryTileBase({
@@ -597,7 +612,9 @@ function ProductDiscoveryTileBase({
   downscaleWidth,
   testID,
   isSaved,
-  onSaveToggle }: ProductDiscoveryTileProps) {
+  onSaveToggle,
+  onSaveLongPress,
+  onLongPress }: ProductDiscoveryTileProps) {
   const { colors } = useAppTheme();
   const { formatFromFiat, currencyCode } = useFormattedPrice();
   const haptic = useHaptic();
@@ -614,6 +631,12 @@ function ProductDiscoveryTileBase({
   // Use getListingCoverUri to always pick an image (not a video) — ExpoImage
   // cannot render video URIs, and the discovery tile is image-only.
   const primaryImage = getListingCoverUri(item.images ?? [], '');
+  // Resolve the canonical media record matching the cover URI so the tile
+  // renders its pipeline blurhash/LQIP and serves a sized derivative
+  // instead of the full-resolution original.
+  const primaryMedia = (item.media ?? []).find(
+    (m) => m.kind === 'image' && (m.uri === primaryImage || m.url === primaryImage),
+  ) ?? (item.media ?? []).find((m) => m.kind === 'image') ?? null;
   const showSaveButton = !!onSaveToggle;
   // Category-sensitive focal point for art-directed crops (AGENTS.md §15:
   // "Do not rely on cover blindly"). Converted to ExpoImage's
@@ -645,14 +668,26 @@ function ProductDiscoveryTileBase({
     [haptic, onSaveToggle],
   );
 
+  const handleSaveLongPress = useCallback(
+    (e: { stopPropagation?: () => void }) => {
+      // Same bubbling guard as the tap — a long-press on the bookmark
+      // must not trigger the tile's feed-controls long-press.
+      e.stopPropagation?.();
+      haptic.selection();
+      onSaveLongPress?.();
+    },
+    [haptic, onSaveLongPress],
+  );
+
   return (
     <AnimatedPressable
       onPress={onPress}
+      onLongPress={onLongPress}
       hapticFeedback="light"
       style={tileStyles.container}
       accessibilityRole="button"
       accessibilityLabel={`${item.title}, ${priceLabel ?? 'price unavailable'}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}${isSaved ? ', Saved' : ''}`}
-      accessibilityHint="Opens item details"
+      accessibilityHint={onLongPress ? 'Opens item details. Long-press for feed controls.' : 'Opens item details'}
       testID={testID}
     >
       <View style={[tileStyles.media, { aspectRatio: ratio, backgroundColor: colors.surfaceAlt }]}>
@@ -661,7 +696,13 @@ function ProductDiscoveryTileBase({
             uri={primaryImage}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
-            focalPoint={focalPoint}
+            // Authored focal point from the media contract wins over the
+            // category heuristic; fall back when the record carries none.
+            focalPoint={primaryMedia?.focalPoint ?? focalPoint}
+            blurhash={primaryMedia?.blurhash ?? undefined}
+            previewUri={primaryMedia?.blurhash ? undefined : (primaryMedia?.lqip ?? undefined)}
+            derivatives={primaryMedia?.derivatives}
+            downscaleWidth={downscaleWidth}
             priority="high"
           />
         ) : (
@@ -675,11 +716,14 @@ function ProductDiscoveryTileBase({
         {showSaveButton ? (
           <Pressable
             onPress={handleSavePress}
+            onLongPress={onSaveLongPress ? handleSaveLongPress : undefined}
             style={tileStyles.saveHitTarget}
             hitSlop={6}
             accessibilityRole="button"
             accessibilityLabel={isSaved ? 'Remove from saved' : 'Save item'}
-            accessibilityHint="Toggles this product in your saved items"
+            accessibilityHint={onSaveLongPress
+              ? 'Toggles this product in your saved items. Long-press to file into a collection.'
+              : 'Toggles this product in your saved items'}
             accessibilityState={{ checked: isSaved }}
           >
             <Ionicons

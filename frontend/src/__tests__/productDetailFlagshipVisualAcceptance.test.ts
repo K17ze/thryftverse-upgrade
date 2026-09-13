@@ -4,6 +4,7 @@ import { resolve } from 'path';
 
 const SCREENS = resolve(__dirname, '../screens');
 const COMPONENTS = resolve(__dirname, '../components');
+const HOOKS = resolve(__dirname, '../hooks');
 const COMMERCE_DETAIL = resolve(COMPONENTS, 'commerce/detail');
 
 function read(p: string): string {
@@ -41,63 +42,104 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
   // Every detail screen must use the shared commerce/detail primitives.
   // This is the structural foundation for visual consistency across
   // 320/360/390/430 in light/dark.
+  //
+  // The screens were decomposed into orchestrators — each shared
+  // primitive is now composed inside an extracted owner component. The
+  // OWNER_LAYER map records where each primitive lives; null means the
+  // orchestrator still references it directly. An array means "any of
+  // these owner files" (OR).
+  const OWNER_LAYER: Record<
+    string,
+    Record<'header' | 'identity' | 'stateDock' | 'section' | 'mediaRail' | 'seller', string | string[] | null>
+  > = {
+    'ItemDetailScreen.tsx': {
+      // Owner layer: itemdetail/ItemDetailHeader owns the header,
+      // CommerceIdentityBlock owns the identity, CommerceActionDock
+      // wraps CommerceDetailStateDock.
+      header: 'itemdetail/ItemDetailHeader.tsx',
+      identity: 'commerce/detail/CommerceIdentityBlock.tsx',
+      stateDock: 'commerce/detail/CommerceActionDock.tsx',
+      section: null,
+      mediaRail: null,
+      seller: null,
+    },
+    'AuctionDetailScreen.tsx': {
+      // Owner layer: hero owns identity + media rail, dock owns the
+      // state dock, info sections own the section, seller section owns
+      // the seller row.
+      header: null,
+      identity: 'auctiondetail/AuctionDetailHero.tsx',
+      stateDock: 'auctiondetail/AuctionDetailDock.tsx',
+      section: 'auctiondetail/AuctionDetailInfoSections.tsx',
+      mediaRail: 'auctiondetail/AuctionDetailHero.tsx',
+      seller: 'auctiondetail/AuctionDetailSellerSection.tsx',
+    },
+    'AssetDetailScreen.tsx': {
+      // AssetDetailScreen was refactored earlier: identity/seller row
+      // live in AssetDetailIdentity, the dock in AssetDetailDock, and
+      // CommerceDetailSection in the extracted section components.
+      header: null,
+      identity: 'coown/asset-detail/AssetDetailIdentity.tsx',
+      stateDock: 'coown/asset-detail/AssetDetailDock.tsx',
+      section: [
+        'coown/asset-detail/AssetOverviewSection.tsx',
+        'coown/asset-detail/AssetMarketSection.tsx',
+        'coown/asset-detail/AssetOwnershipSection.tsx',
+      ],
+      mediaRail: null,
+      seller: 'coown/asset-detail/AssetDetailIdentity.tsx',
+    },
+  };
+
+  function ownerSources(
+    screen: string,
+    key: 'header' | 'identity' | 'stateDock' | 'section' | 'mediaRail' | 'seller',
+  ): string[] {
+    const ref = OWNER_LAYER[screen][key];
+    if (ref === null) return [readScreen(screen)];
+    const paths = Array.isArray(ref) ? ref : [ref];
+    return paths.map((p) => read(resolve(COMPONENTS, p)));
+  }
+
   describe('shared shell adoption', () => {
     for (const screen of DETAIL_SCREENS) {
       it(`${screen} imports CommerceDetailHeader`, () => {
-        expect(readScreen(screen)).toContain('CommerceDetailHeader');
+        expect(
+          ownerSources(screen, 'header').some((s) => s.includes('CommerceDetailHeader')),
+        ).toBe(true);
       });
 
       it(`${screen} imports CommerceDetailIdentity`, () => {
-        expect(readScreen(screen)).toContain('CommerceDetailIdentity');
+        expect(
+          ownerSources(screen, 'identity').some((s) => s.includes('CommerceDetailIdentity')),
+        ).toBe(true);
       });
 
       it(`${screen} imports CommerceDetailStateDock`, () => {
-        // AssetDetailScreen was refactored: the dock now lives in
-        // AssetDetailDock.tsx, which imports CommerceDetailStateDock.
-        if (screen === 'AssetDetailScreen.tsx') {
-          const dock = read(resolve(COMPONENTS, 'coown/asset-detail/AssetDetailDock.tsx'));
-          expect(dock).toContain('CommerceDetailStateDock');
-        } else {
-          expect(readScreen(screen)).toContain('CommerceDetailStateDock');
-        }
+        expect(
+          ownerSources(screen, 'stateDock').some((s) => s.includes('CommerceDetailStateDock')),
+        ).toBe(true);
       });
 
       it(`${screen} imports CommerceDetailSection`, () => {
-        // AssetDetailScreen was refactored: CommerceDetailSection now
-        // lives in the extracted section components (AssetOverview/
-        // AssetMarket/AssetOwnership). The screen still orchestrates
-        // them, so we check the section files for the import.
-        if (screen === 'AssetDetailScreen.tsx') {
-          const overview = read(resolve(COMPONENTS, 'coown/asset-detail/AssetOverviewSection.tsx'));
-          const market = read(resolve(COMPONENTS, 'coown/asset-detail/AssetMarketSection.tsx'));
-          const ownership = read(resolve(COMPONENTS, 'coown/asset-detail/AssetOwnershipSection.tsx'));
-          expect(
-            overview.includes('CommerceDetailSection')
-            || market.includes('CommerceDetailSection')
-            || ownership.includes('CommerceDetailSection'),
-          ).toBe(true);
-        } else {
-          expect(readScreen(screen)).toContain('CommerceDetailSection');
-        }
+        expect(
+          ownerSources(screen, 'section').some((s) => s.includes('CommerceDetailSection')),
+        ).toBe(true);
       });
 
       it(`${screen} imports CommerceDetailMediaRail`, () => {
-        expect(readScreen(screen)).toContain('CommerceDetailMediaRail');
+        expect(
+          ownerSources(screen, 'mediaRail').some((s) => s.includes('CommerceDetailMediaRail')),
+        ).toBe(true);
       });
 
       it(`${screen} imports CommerceDetailSellerRow or SellerInfoCard`, () => {
-        const src = readScreen(screen);
         // SellerInfoCard is the enriched canonical seller surface for
         // ItemDetailScreen; CommerceDetailSellerRow remains the slim row
         // for Auction/Asset detail. Either is acceptable.
-        // AssetDetailScreen was refactored: CommerceDetailSellerRow now
-        // lives in AssetDetailIdentity.tsx.
-        if (screen === 'AssetDetailScreen.tsx') {
-          const identity = read(resolve(COMPONENTS, 'coown/asset-detail/AssetDetailIdentity.tsx'));
-          expect(identity).toMatch(/CommerceDetailSellerRow|SellerInfoCard/);
-        } else {
-          expect(src).toMatch(/CommerceDetailSellerRow|SellerInfoCard/);
-        }
+        expect(
+          ownerSources(screen, 'seller').some((s) => /CommerceDetailSellerRow|SellerInfoCard/.test(s)),
+        ).toBe(true);
       });
     }
 
@@ -193,17 +235,21 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
   describe('price hierarchy: one dominant price location', () => {
     it('ItemDetailScreen has one dominant price in identity, not repeated in body', () => {
       const src = readScreen('ItemDetailScreen.tsx');
-      // Identity carries the dominant price
-      expect(src).toContain('primaryValue={formattedPrice}');
+      // Identity carries the dominant price — the owner layer
+      // (CommerceIdentityBlock) wires primaryValue to the identity.
+      const identityBlock = read(resolve(COMPONENTS, 'commerce/detail/CommerceIdentityBlock.tsx'));
+      expect(identityBlock).toContain('primaryValue={formattedPrice}');
       // No second large price display in the body (the dock carries a
-      // compact actionable price, which is allowed)
+      // compact actionable price, which is allowed). Kept on the
+      // orchestrator: it must not re-inline a competing price surface.
       expect(src).not.toContain('ProductCommerceSummary');
       expect(src).not.toContain('PriceInsightStrip');
     });
 
     it('AuctionDetailScreen has one dominant price (current bid) in transaction surface', () => {
-      const src = readScreen('AuctionDetailScreen.tsx');
-      expect(src).toMatch(/CommerceDetailTransactionSurface|primaryValue/);
+      // Owner layer: AuctionBidPanel composes the transaction surface.
+      const bidPanel = read(resolve(COMPONENTS, 'auctiondetail/AuctionBidPanel.tsx'));
+      expect(bidPanel).toMatch(/CommerceDetailTransactionSurface|primaryValue/);
     });
 
     it('AssetDetailScreen has one dominant price (unit price) in transaction surface', () => {
@@ -219,11 +265,12 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
   // ── 5. No repeated family labels ──
   describe('no repeated family labels', () => {
     it('ItemDetailScreen does not repeat family label in identity eyebrow and media badge', () => {
-      const src = readScreen('ItemDetailScreen.tsx');
       // The family badge lives on the media stage; the identity eyebrow
       // is the brand, not the family label. Note: family="direct" is a
       // prop that controls art direction, not a visible family label.
-      const identityMatch = src.match(/<CommerceDetailIdentity[\s\S]*?\/>/);
+      // Owner layer: CommerceIdentityBlock composes the identity.
+      const identityBlock = read(resolve(COMPONENTS, 'commerce/detail/CommerceIdentityBlock.tsx'));
+      const identityMatch = identityBlock.match(/<CommerceDetailIdentity[\s\S]*?\/>/);
       expect(identityMatch).toBeTruthy();
       expect(identityMatch![0]).not.toContain('"Direct"');
     });
@@ -244,8 +291,11 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
     it('AuctionDetailScreen does not render both SellerTrustCard and CommerceDetailSellerRow', () => {
       const src = readScreen('AuctionDetailScreen.tsx');
       // The slim row is the primary presentation; the full card is not
-      // rendered by default.
-      expect(src).toContain('CommerceDetailSellerRow');
+      // rendered by default. Owner layer: AuctionDetailSellerSection
+      // composes the row; the orchestrator must not re-inline the card.
+      const sellerSection = read(resolve(COMPONENTS, 'auctiondetail/AuctionDetailSellerSection.tsx'));
+      expect(sellerSection).toContain('CommerceDetailSellerRow');
+      expect(sellerSection).not.toContain('<SellerTrustCard');
       expect(src).not.toContain('<SellerTrustCard');
     });
 
@@ -341,7 +391,11 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
   describe('safe area handling', () => {
     for (const screen of DETAIL_SCREENS) {
       it(`${screen} uses useSafeAreaInsets for top inset`, () => {
-        const src = readScreen(screen);
+        // AuctionDetailScreen was decomposed — the top-inset rail lives
+        // in the owner layer (auctiondetail/AuctionDetailHero).
+        const src = screen === 'AuctionDetailScreen.tsx'
+          ? read(resolve(COMPONENTS, 'auctiondetail/AuctionDetailHero.tsx'))
+          : readScreen(screen);
         expect(src).toContain('useSafeAreaInsets');
         expect(src).toMatch(/insets\.top/);
       });
@@ -389,13 +443,17 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
   // ── 13. Dock geometry adapts to action count ──
   describe('dock geometry adapts to action count', () => {
     it('ItemDetailScreen computes dock height from action count', () => {
-      const src = readScreen('ItemDetailScreen.tsx');
-      expect(src).toMatch(/DockConstants|dockHeight/);
+      // Owner layer: itemDetailDerived computes dockHeight from
+      // DockConstants based on the dual/single-action dock shape.
+      const derived = read(resolve(HOOKS, 'itemDetail/itemDetailDerived.ts'));
+      expect(derived).toMatch(/DockConstants|dockHeight/);
     });
 
     it('AuctionDetailScreen computes dock height from action count', () => {
-      const src = readScreen('AuctionDetailScreen.tsx');
-      expect(src).toMatch(/DockConstants|dockHeight/);
+      // Owner layer: useAuctionDetailPresentation computes dockHeight
+      // from DockConstants.
+      const presentation = read(resolve(HOOKS, 'auctiondetail/useAuctionDetailPresentation.ts'));
+      expect(presentation).toMatch(/DockConstants|dockHeight/);
     });
 
     it('AssetDetailScreen computes dock height from action count', () => {

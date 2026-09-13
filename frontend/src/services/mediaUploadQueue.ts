@@ -30,6 +30,14 @@ export interface UploadQueueItem {
   finalizationId: string | null;
   error: string | null;
   retryable: boolean;
+  /** Processor-computed BlurHash from the finalized media asset, when the
+   *  pipeline has already produced one at finalize time. Null is normal —
+   *  the attach endpoint backfills it from `media_assets` once processing
+   *  completes. */
+  blurhash?: string | null;
+  /** Processor-measured post-orientation geometry. */
+  mediaWidth?: number | null;
+  mediaHeight?: number | null;
   /** Internal flag: cancellation requested while in-flight. */
   _cancelRequested?: boolean;
   /** Internal flag: bytes already on the origin, only finalize remains on retry. */
@@ -55,6 +63,11 @@ export interface UploadQueueResult {
   publicUrl: string | null;
   finalizationId: string | null;
   error: string | null;
+  /** Processor-computed BlurHash, when available at finalize time. */
+  blurhash?: string | null;
+  /** Processor-measured post-orientation geometry. */
+  mediaWidth?: number | null;
+  mediaHeight?: number | null;
 }
 
 export type UploadQueueListener = (state: UploadQueueState) => void;
@@ -77,7 +90,7 @@ export interface MediaUploadQueueConfig {
 /** Minimal durable metadata — never the media payload or byte offsets. */
 type UploadQueueSnapshot = Pick<
   UploadQueueItem,
-  'id' | 'asset' | 'order' | 'state' | 'attemptCount' | 'publicUrl' | 'finalizationId' | 'error' | 'retryable'
+  'id' | 'asset' | 'order' | 'state' | 'attemptCount' | 'publicUrl' | 'finalizationId' | 'error' | 'retryable' | 'blurhash' | 'mediaWidth' | 'mediaHeight'
 >;
 
 const ITEM_STATES: readonly UploadQueueItemState[] = [
@@ -142,6 +155,9 @@ function reviveSnapshotEntry(entry: unknown): UploadQueueItem | null {
     finalizationId: typeof raw.finalizationId === 'string' ? raw.finalizationId : null,
     error: typeof raw.error === 'string' ? raw.error : null,
     retryable: raw.retryable === true,
+    blurhash: typeof raw.blurhash === 'string' ? raw.blurhash : null,
+    mediaWidth: typeof raw.mediaWidth === 'number' ? raw.mediaWidth : null,
+    mediaHeight: typeof raw.mediaHeight === 'number' ? raw.mediaHeight : null,
   };
 }
 
@@ -454,6 +470,9 @@ export class MediaUploadQueue {
         publicUrl: item.publicUrl,
         finalizationId: item.finalizationId,
         error: item.error,
+        blurhash: item.blurhash ?? null,
+        mediaWidth: item.mediaWidth ?? null,
+        mediaHeight: item.mediaHeight ?? null,
       });
     }
     return map;
@@ -608,6 +627,9 @@ export class MediaUploadQueue {
       finalizationId: item.finalizationId,
       error: item.error,
       retryable: item.retryable,
+      blurhash: item.blurhash ?? null,
+      mediaWidth: item.mediaWidth ?? null,
+      mediaHeight: item.mediaHeight ?? null,
     }));
     return AsyncStorage.setItem(this.storageKey, JSON.stringify(snapshot)).catch(() => {
       // Storage failures must not break the upload flow — metadata is best-effort.
@@ -731,6 +753,9 @@ export class MediaUploadQueue {
         item.progress = 1;
         item.publicUrl = finalization.publicUrl;
         item.finalizationId = finalization.id;
+        item.blurhash = finalization.mediaAsset?.blurhash ?? null;
+        item.mediaWidth = finalization.mediaAsset?.width ?? null;
+        item.mediaHeight = finalization.mediaAsset?.height ?? null;
         item.error = null;
         item.retryable = false;
         delete item._needsFinalizationOnly;
@@ -913,6 +938,9 @@ export class MediaUploadQueue {
         item.progress = 1;
         item.publicUrl = finalization.publicUrl;
         item.finalizationId = finalization.id;
+        item.blurhash = finalization.mediaAsset?.blurhash ?? null;
+        item.mediaWidth = finalization.mediaAsset?.width ?? null;
+        item.mediaHeight = finalization.mediaAsset?.height ?? null;
         item.error = null;
         item.retryable = false;
         delete item._presign;

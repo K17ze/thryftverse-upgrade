@@ -56,18 +56,13 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
     textSize,
     reducedMotion,
     highContrast,
-    boldText,
-    screenReaderHints,
     setTextSize: setContextTextSize,
     setReducedMotion: setContextReducedMotion,
-    setHighContrast: setContextHighContrast,
-    setBoldText: setContextBoldText,
-    setScreenReaderHints: setContextScreenReaderHints } = useAccessibilityPreferences();
+    setHighContrast: setContextHighContrast } = useAccessibilityPreferences();
 
   // Live preview text — shows the user exactly how their selected text size
-  // and bold setting will look in context.
-  // immediate feedback on settings reduces uncertainty and builds confidence
-  // that the change is real.
+  // will look in context. Immediate feedback on settings reduces uncertainty
+  // and builds confidence that the change is real.
   const previewFontSize = TEXT_SIZES.find((t) => t.value === textSize)?.sample ?? TypographyV2.body.size;
 
   const motionToggles: ToggleConfig[] = [
@@ -81,6 +76,10 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
       onToggle: (v) => { haptic.selection(); setContextReducedMotion(v); } },
   ];
 
+  // Only preferences with real global consumers are surfaced as toggles.
+  // "Bold text" and "screen reader hints" were removed (audit M4): font
+  // weight and per-element hints cannot be applied to raw <Text> nodes
+  // app-wide, so the toggles were decorative — a Truthful UI violation.
   const displayToggles: ToggleConfig[] = [
     {
       key: 'highContrast',
@@ -90,25 +89,6 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
       iconColor: colors.antiqueGold,
       value: highContrast,
       onToggle: (v) => { haptic.selection(); setContextHighContrast(v); } },
-    {
-      key: 'boldText',
-      label: 'Bold text',
-      description: 'Make all text heavier for better readability',
-      icon: 'text-outline',
-      iconColor: colors.brand,
-      value: boldText,
-      onToggle: (v) => { haptic.selection(); setContextBoldText(v); } },
-  ];
-
-  const readerToggles: ToggleConfig[] = [
-    {
-      key: 'screenReaderHints',
-      label: 'Additional hints',
-      description: 'Provide extra context for screen reader users',
-      icon: 'volume-medium-outline',
-      iconColor: colors.bronze,
-      value: screenReaderHints,
-      onToggle: (v) => { haptic.selection(); setContextScreenReaderHints(v); } },
   ];
 
   const renderToggleRow = (config: ToggleConfig, index: number, total: number) => (
@@ -135,7 +115,7 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
         showsVerticalScrollIndicator={false}
       >
         {/* Text Size — visual segmented selector with live preview */}
-        <SettingsSection title="Text size" description="Adjust the size of text throughout the app. Works with your device's text size settings.">
+        <SettingsSection title="Text size" description="Adjust the size of text in areas of the app that use ThryftVerse text styles. Works alongside your device's text size setting, which applies everywhere.">
           <View style={styles.textSizeOptions}>
             {TEXT_SIZES.map((option, index) => {
               const isSelected = textSize === option.value;
@@ -179,7 +159,7 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
           </View>
 
           {/* Live preview — flat text block, no card wrapper.
-              Shows how body text will look at the selected size and weight. */}
+              Shows how body text will look at the selected size. */}
           <Text maxFontSizeMultiplier={1.5} style={styles.previewLabel}>Preview</Text>
           <Text
             maxFontSizeMultiplier={1.5}
@@ -187,7 +167,7 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
               styles.previewText,
               {
                 fontSize: previewFontSize,
-                fontFamily: boldText ? Typography.family.bold : Typography.family.regular,
+                fontFamily: Typography.family.regular,
                 color: colors.textPrimary,
                 lineHeight: previewFontSize + 6 },
             ]}
@@ -204,11 +184,6 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
         {/* Display */}
         <SettingsSection title="Display">
           {displayToggles.map((cfg, i) => renderToggleRow(cfg, i, displayToggles.length))}
-        </SettingsSection>
-
-        {/* Screen Reader */}
-        <SettingsSection title="Screen reader">
-          {readerToggles.map((cfg, i) => renderToggleRow(cfg, i, readerToggles.length))}
         </SettingsSection>
 
         {/* Info note — flat row, no card wrapper */}

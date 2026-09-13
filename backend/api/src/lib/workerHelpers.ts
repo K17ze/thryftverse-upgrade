@@ -114,8 +114,11 @@ export function mapEventToPushCategory(eventType: string): NotificationPushCateg
   // Messages
   if (eventType === 'chat_message') return 'messages';
 
-  // Offers
-  if (eventType === 'offer_accepted') return 'offers';
+  // Offers — the whole offer lifecycle (created/countered/accepted/declined/
+  // expired/cancelled/sibling_declined) is preference-gated by `offers`.
+  // Prefix match mirrors the order_/auction_ handling so a future offer_*
+  // event type cannot silently fail closed into in-app-only delivery.
+  if (eventType.startsWith('offer_')) return 'offers';
 
   // Orders and resolution (transactional commerce)
   if (eventType.startsWith('order_')) return 'orderUpdates';
@@ -166,7 +169,7 @@ export function mapEventTypeToChannelId(eventType: string): string {
   if (eventType.startsWith('auction_')) return 'auctions';
   if (eventType === 'chat_message') return 'messages';
   if (eventType === 'new_follower' || eventType === 'new_listing_from_followed_seller' || eventType === 'review_received') return 'social';
-  if (eventType === 'price_drop' || eventType === 'offer_accepted' || eventType === 'generic' || eventType === 'safety_outcome') return 'news';
+  if (eventType === 'price_drop' || eventType.startsWith('offer_') || eventType === 'generic' || eventType === 'safety_outcome') return 'news';
   if (eventType === 'resolution_opened' || eventType === 'resolution_status_changed') return 'orders';
   return 'default';
 }
@@ -231,7 +234,7 @@ export function mapEventTypeToRelevanceScore(eventType: string): number {
   if (eventType === 'auction_ending_soon' || eventType === 'auction_outbid') return 0.9;
   if (eventType.startsWith('order_') || eventType === 'payout_processed' || eventType === 'refund_completed') return 0.8;
   if (eventType === 'resolution_opened' || eventType === 'safety_outcome') return 0.8;
-  if (eventType === 'offer_accepted') return 0.7;
+  if (eventType.startsWith('offer_')) return 0.7;
   if (eventType === 'chat_message') return 0.6;
   if (eventType === 'price_drop') return 0.4;
   if (eventType === 'review_received') return 0.3;

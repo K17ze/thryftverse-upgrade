@@ -438,7 +438,7 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
           SELECT COALESCE(SUM(o.subtotal_gbp), 0)::text AS pending_gbp
           FROM orders o
           WHERE o.seller_id = $1
-            AND o.status IN ('paid', 'shipped', 'delivered')
+            AND o.status IN ('paid', 'shipped', 'delivered', 'completed')
             AND o.escrow_released_at IS NULL
             AND NOT EXISTS (
               SELECT 1 FROM ledger_entries le
@@ -509,7 +509,7 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
               COUNT(*) AS orders
             FROM orders
             WHERE seller_id = $1
-              AND status IN ('paid', 'shipped', 'delivered')
+              AND status IN ('paid', 'shipped', 'delivered', 'completed')
               AND paid_at >= NOW() - INTERVAL '30 days'
           `,
             [sellerId],
@@ -525,7 +525,7 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
               COUNT(*) AS orders
             FROM orders
             WHERE seller_id = $1
-              AND status IN ('paid', 'shipped', 'delivered')
+              AND status IN ('paid', 'shipped', 'delivered', 'completed')
               AND paid_at >= NOW() - INTERVAL '60 days'
               AND paid_at < NOW() - INTERVAL '30 days'
           `,
@@ -742,7 +742,7 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
           FROM listings l
           LEFT JOIN interactions i ON i.listing_id = l.id
           LEFT JOIN orders o ON o.listing_id = l.id
-            AND o.status IN ('paid', 'shipped', 'delivered')
+            AND o.status IN ('paid', 'shipped', 'delivered', 'completed')
             AND o.paid_at >= NOW() - INTERVAL '30 days'
           WHERE l.seller_id = $1 AND l.status = 'active'
           GROUP BY l.id

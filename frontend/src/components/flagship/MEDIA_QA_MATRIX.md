@@ -1,8 +1,9 @@
 # Media QA Matrix
 
-Required edge-case coverage for the flagship media system (`FlagshipImage` +
-`theme/mediaAssets.ts`). Every scenario must be verified on at least one
-iOS device, one Android device, and web before a media-touching release.
+Required edge-case coverage for the flagship media system (`CachedImage` +
+the `media[]` contract in `contracts/listingMedia.ts`). Every scenario must
+be verified on at least one iOS device, one Android device, and web before
+a media-touching release.
 
 ## Required test scenarios
 
@@ -44,9 +45,11 @@ iOS device, one Android device, and web before a media-touching release.
 ## Notes
 
 - Expo Image is the 2026 modern standard (BlurHash/ThumbHash, `contentFit`,
-  `contentPosition`, caching, transitions). `FlagshipImage` wraps it; the
-  legacy `CachedImage` remains for surfaces not yet migrated.
-- Category-aware geometry lives in `theme/mediaAssets.ts` — never invent
-  per-screen ratios.
+  `contentPosition`, caching, transitions). `CachedImage` wraps it and
+  consumes the `media[]` contract (derivatives, blurhash/lqip, focal point)
+  end-to-end.
+- Media geometry comes from the `media[]` contract (`width`/`height`,
+  `mediaAspectRatio`) and category focal policy in `utils/media.ts` —
+  never invent per-screen ratios.
 - Sensitive-media blur is a scrim + tap-to-reveal, never a permanent censor
   bar (AGENTS §4: full state coverage, no dead-end states).

@@ -107,7 +107,7 @@ export function CommerceActionDock({
     return (
       <CommerceDetailStateDock
         stateBadge={
-          <Text style={[styles.dockStateBadge, { color: colors.success }]} maxFontSizeMultiplier={1.4}>
+          <Text style={[styles.dockStateBadge, { color: colors.success }]} maxFontSizeMultiplier={2}>
             Sold
           </Text>
         }
@@ -142,7 +142,7 @@ export function CommerceActionDock({
     return (
       <CommerceDetailStateDock
         stateBadge={
-          <Text style={[styles.dockStateBadge, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
+          <Text style={[styles.dockStateBadge, { color: colors.textSecondary }]} maxFontSizeMultiplier={2}>
             {unavailableCopy.label}
           </Text>
         }

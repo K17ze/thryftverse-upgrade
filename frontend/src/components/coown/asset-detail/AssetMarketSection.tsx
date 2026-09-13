@@ -44,6 +44,7 @@ export interface AssetMarketSectionProps {
   yourOpenOrders?: MarketHistoryItem[] | null;
   /** True when the open-orders fetch failed — panel shows a quiet unavailable line. */
   yourOpenOrdersFailed?: boolean;
+  onRetryOpenOrders?: () => void;
   /** True while the open-orders fetch is in-flight — panel shows a loading indicator. */
   yourOpenOrdersLoading?: boolean;
   /** Cancel an open order by orderId. The parent handles auth, optimistic removal, and error toast. */
@@ -71,6 +72,7 @@ export function AssetMarketSection({
   lifecycleState,
   yourOpenOrders = null,
   yourOpenOrdersFailed = false,
+  onRetryOpenOrders,
   yourOpenOrdersLoading = false,
   onCancelOrder,
   cancellingOrderId = null,
@@ -86,8 +88,9 @@ export function AssetMarketSection({
   const [executionsFailed, setExecutionsFailed] = React.useState(false);
   const [orderBookView, setOrderBookView] = React.useState<OrderBookView>('ladder');
 
+  const executionRequest = React.useRef(0);
   const loadExecutions = React.useCallback(() => {
-    let cancelled = false;
+    const request = ++executionRequest.current;
     setExecutionsLoading(true);
     setExecutionsFailed(false);
     // Clear the previous asset's tape immediately so a slow response for the
@@ -95,25 +98,25 @@ export function AssetMarketSection({
     setExecutions(null);
     void listCoOwnExecutions(asset.id, { limit: 25 })
       .then((result) => {
-        if (cancelled) return;
+        if (request !== executionRequest.current) return;
         const settled = result.items
           .filter((e) => e.settlementStatus == null || e.settlementStatus === 'settled')
-          .slice(0, 3);
+          .slice(0, 12);
         setExecutions(settled);
         setExecutionsLoading(false);
       })
       .catch(() => {
-        if (cancelled) return;
+        if (request !== executionRequest.current) return;
         setExecutions(null);
         setExecutionsFailed(true);
         setExecutionsLoading(false);
       });
-    return () => { cancelled = true; };
+
   }, [asset.id]);
 
   React.useEffect(() => {
-    const cleanup = loadExecutions();
-    return cleanup;
+    loadExecutions();
+    return () => { executionRequest.current += 1; };
   }, [loadExecutions]);
 
   const tapeExecutions = executions ?? [];
@@ -211,10 +214,10 @@ export function AssetMarketSection({
         ? 'Synchronizing'
         : reconciliationActive
           ? 'Orders paused'
-          : !isMarketOpen && isSecondaryMarket
-            ? 'Market closed'
-            : isSecondaryMarket && marketDataStale
-              ? 'Stale quotes'
+          : isSecondaryMarket && marketDataStale
+            ? 'Stale quotes'
+            : !isMarketOpen && isSecondaryMarket
+              ? 'Market closed'
               : null;
 
   // Connection dot — colour reinforces the text label, never replaces it:
@@ -370,7 +373,9 @@ export function AssetMarketSection({
               },
             ]}
           >
-            {reconciliationActive
+            {isOffline
+              ? 'Offline · last known market'
+              : reconciliationActive
               ? 'Orders paused'
               : isSecondaryMarket && marketDataStale
                 ? 'Market data stale'
@@ -417,93 +422,6 @@ export function AssetMarketSection({
         </Text>
       </View>
 
-      {/* ── 2. Your Open Orders — inline panel (Kalshi/Polymarket parity) ──
-          Shows the viewer's resting orders for THIS asset only. Each row
-          carries side, type, limit price, remaining/total units, and a
-          cancel control. Loading/empty/error states are all explicit.
-          Omitted entirely for anonymous viewers (yourOpenOrders = null
-          with no failure and no loading → not rendered). */}
-      {yourOpenOrders != null || yourOpenOrdersFailed || yourOpenOrdersLoading ? (
-        <CommerceDetailSection label="Your open orders">
-          {yourOpenOrdersFailed ? (
-            <CommerceDetailUnavailableInline
-              title="Open orders unavailable"
-              body={isOffline
-                ? 'Your resting orders could not be loaded while offline.'
-                : 'Your resting orders could not be loaded.'}
-            />
-          ) : yourOpenOrdersLoading ? (
-            <View style={styles.openOrdersLoadingRow}>
-              <ActivityIndicator size="small" color={colors.textMuted} />
-            </View>
-          ) : yourOpenOrders != null && yourOpenOrders.length > 0 ? (
-            <View>
-              {isOffline ? (
-                <Text style={[styles.offlineNoteText, { color: colors.textMuted }]}>
-                  Offline — last known orders
-                </Text>
-              ) : null}
-              {yourOpenOrders.map((order, idx) => {
-                const isBuy = order.action === 'buy-units';
-                const isCancelling = cancellingOrderId != null && order.orderId != null && cancellingOrderId === order.orderId;
-                const canCancel = onCancelOrder != null && order.orderId != null && !isCancelling;
-                const sideColor = isBuy ? colors.coownUp : colors.coownDown;
-                const typeLabel = order.orderType
-                  ? order.orderType === 'protected_market' ? 'protected' : order.orderType
-                  : 'limit';
-                return (
-                  <View
-                    key={order.id}
-                    style={[
-                      styles.openOrderRow,
-                      idx > 0 && { borderTopColor: colors.borderSubtle },
-                    ]}
-                  >
-                    {/* Compact leading token: colored dot + side · type */}
-                    <View style={styles.openOrderLeading}>
-                      <View style={[styles.sideDot, { backgroundColor: sideColor }]} />
-                      <Text style={[styles.openOrderSideType, { color: colors.textPrimary }]}>
-                        {isBuy ? 'Buy' : 'Sell'} · {typeLabel}
-                      </Text>
-                    </View>
-
-                    {/* Price and units inline */}
-                    <Text style={[styles.openOrderPrice, { color: colors.textPrimary }]}>
-                      {order.unitPriceGbp != null ? formatCoOwnIze(order.unitPriceGbp) : '—'}
-                    </Text>
-                    <Text style={[styles.openOrderUnits, { color: colors.textSecondary }]}>
-                      {order.remainingUnits != null
-                        ? `${order.remainingUnits}/${order.units ?? order.remainingUnits}u`
-                        : `${order.units ?? '—'}u`}
-                    </Text>
-
-                    {canCancel ? (
-                      <Pressable
-                        onPress={() => onCancelOrder!(order.orderId!)}
-                        hitSlop={8}
-                        style={({ pressed }) => [styles.cancelLink, pressed && { opacity: 0.6 }]}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Cancel ${isBuy ? 'buy' : 'sell'} order ${order.orderId}`}
-                      >
-                        <Text style={[styles.cancelLinkText, { color: colors.warning }]}>
-                          Cancel
-                        </Text>
-                      </Pressable>
-                    ) : isCancelling ? (
-                      <ActivityIndicator size="small" color={colors.textMuted} />
-                    ) : null}
-                  </View>
-                );
-              })}
-            </View>
-          ) : (
-            <Text style={[styles.noOpenOrdersText, { color: colors.textMuted }]}>
-              No resting orders on this asset
-            </Text>
-          )}
-        </CommerceDetailSection>
-      ) : null}
-
       {/* ── Status row above the card (depth status + alert) ── */}
       <View style={styles.orderBookStatusRow}>
         <View style={styles.depthStatusRow}>
@@ -546,7 +464,7 @@ export function AssetMarketSection({
             style={[styles.orderBookCardTitle, { color: colors.textPrimary }]}
             accessibilityRole="header"
           >
-            Order Book
+            Market depth
           </Text>
           <View style={styles.orderBookTabs}>
             {(['ladder', 'depth', 'tape'] as const).map((view) => {
@@ -556,8 +474,8 @@ export function AssetMarketSection({
                   key={view}
                   onPress={() => setOrderBookView(view)}
                   hitSlop={4}
-                  style={styles.orderBookTab}
-                  accessibilityRole="button"
+                  style={({ pressed }) => [styles.orderBookTab, pressed && { opacity: 0.7 }]}
+                  accessibilityRole="tab"
                   accessibilityLabel={`Order book view: ${view}`}
                   accessibilityState={{ selected: isActive }}
                 >
@@ -568,7 +486,7 @@ export function AssetMarketSection({
                       isActive && { fontFamily: FontFamily.semibold },
                     ]}
                   >
-                    {view === 'ladder' ? 'Ladder' : view === 'depth' ? 'Depth' : 'Tape'}
+                    {view === 'ladder' ? 'Orders' : view === 'depth' ? 'Depth' : 'Trades'}
                   </Text>
                   {isActive && <View style={[styles.orderBookTabUnderline, { backgroundColor: colors.brand }]} />}
                 </Pressable>
@@ -606,7 +524,7 @@ export function AssetMarketSection({
                   </Text>
                 ) : null}
                 {tapeExecutions.map((execution, idx) => {
-                  const prev = idx > 0 ? tapeExecutions[idx - 1] : null;
+                  const prev = tapeExecutions[idx + 1] ?? null;
                   const tick = prev == null || execution.unitPriceGbp === prev.unitPriceGbp
                     ? 0
                     : execution.unitPriceGbp > prev.unitPriceGbp ? 1 : -1;
@@ -677,45 +595,6 @@ export function AssetMarketSection({
           ) : isMarketOpen && hasBidsOrAsks ? (
             orderBookView === 'ladder' ? (
               <View>
-                {/* Top-of-book quote strip */}
-                <View style={styles.topOfBookRow}>
-                  <View style={styles.tobCell}>
-                    <Text style={[styles.tobLabel, { color: colors.textMuted }]}>Bid</Text>
-                    <Text
-                      style={[styles.tobPrice, { color: colors.coownUp }]}
-                      accessibilityLabel={bestBid ? `Bid price ${formatCoOwnIze(bestBid.unitPriceGbp)}` : 'Bid price unavailable'}
-                    >
-                      {bestBid ? formatCoOwnIze(bestBid.unitPriceGbp) : '—'}
-                    </Text>
-                    <Text
-                      style={[styles.tobSize, { color: colors.textMuted }]}
-                      accessibilityLabel={bestBid ? `${bestBid.units.toLocaleString('en-GB')} units at bid` : undefined}
-                    >
-                      {bestBid ? `${bestBid.units}u` : '—'}
-                    </Text>
-                  </View>
-                  <View style={styles.tobSpreadCell}>
-                    <Text style={[styles.tobSpreadValue, { color: colors.textSecondary }]} numberOfLines={1}>
-                      {spreadGbp != null ? formatCoOwnIze(spreadGbp) : '—'}
-                    </Text>
-                    <Text style={[styles.tobSpreadLabel, { color: colors.textMuted }]}>spread</Text>
-                  </View>
-                  <View style={[styles.tobCell, styles.tobCellRight]}>
-                    <Text style={[styles.tobLabel, { color: colors.textMuted }]}>Ask</Text>
-                    <Text
-                      style={[styles.tobPrice, { color: colors.coownDown }]}
-                      accessibilityLabel={bestAsk ? `Ask price ${formatCoOwnIze(bestAsk.unitPriceGbp)}` : 'Ask price unavailable'}
-                    >
-                      {bestAsk ? formatCoOwnIze(bestAsk.unitPriceGbp) : '—'}
-                    </Text>
-                    <Text
-                      style={[styles.tobSize, { color: colors.textMuted }]}
-                      accessibilityLabel={bestAsk ? `${bestAsk.units.toLocaleString('en-GB')} units at ask` : undefined}
-                    >
-                      {bestAsk ? `${bestAsk.units}u` : '—'}
-                    </Text>
-                  </View>
-                </View>
                 <CoOwnOrderBook
                   bids={mappedBids}
                   asks={mappedAsks}
@@ -756,6 +635,101 @@ export function AssetMarketSection({
           )}
         </View>
       </View>
+
+      {/* ── 2. Your Open Orders — inline panel (Kalshi/Polymarket parity) ──
+          Shows the viewer's resting orders for THIS asset only. Each row
+          carries side, type, limit price, remaining/total units, and a
+          cancel control. Loading/empty/error states are all explicit.
+          Omitted entirely for anonymous viewers (yourOpenOrders = null
+          with no failure and no loading → not rendered). */}
+      {yourOpenOrders != null || yourOpenOrdersFailed || yourOpenOrdersLoading ? (
+        <CommerceDetailSection label="Your open orders">
+          {yourOpenOrdersFailed ? (
+            <View>
+            <CommerceDetailUnavailableInline
+              title="Open orders unavailable"
+              body={isOffline
+                ? 'Your resting orders could not be loaded while offline.'
+                : 'Your resting orders could not be loaded.'}
+            />
+            {onRetryOpenOrders && <Pressable onPress={onRetryOpenOrders} disabled={isOffline}
+              accessibilityRole="button" accessibilityLabel="Retry loading your open orders"
+              accessibilityState={{ disabled: isOffline }}
+              style={({ pressed }) => [styles.retryLink, { opacity: isOffline ? 0.4 : pressed ? 0.7 : 1 }]}>
+              <Text style={[styles.retryLinkText, { color: colors.textPrimary }]}>Retry</Text>
+            </Pressable>}
+            </View>
+          ) : yourOpenOrdersLoading ? (
+            <View style={styles.openOrdersLoadingRow}>
+              <ActivityIndicator size="small" color={colors.textMuted} />
+            </View>
+          ) : yourOpenOrders != null && yourOpenOrders.length > 0 ? (
+            <View>
+              {isOffline ? (
+                <Text style={[styles.offlineNoteText, { color: colors.textMuted }]}>
+                  Offline — last known orders
+                </Text>
+              ) : null}
+              {yourOpenOrders.map((order, idx) => {
+                const isBuy = order.action === 'buy-units';
+                const isCancelling = cancellingOrderId != null && order.orderId != null && cancellingOrderId === order.orderId;
+                const canCancel = onCancelOrder != null && order.orderId != null && !isCancelling && !isOffline;
+                const sideColor = isBuy ? colors.coownUp : colors.coownDown;
+                const typeLabel = order.orderType
+                  ? order.orderType === 'protected_market' ? 'protected' : order.orderType
+                  : 'limit';
+                return (
+                  <View
+                    key={order.id}
+                    style={[
+                      styles.openOrderRow,
+                      idx > 0 && { borderTopColor: colors.borderSubtle },
+                    ]}
+                  >
+                    {/* Compact leading token: colored dot + side · type */}
+                    <View style={styles.openOrderLeading}>
+                      <View style={[styles.sideDot, { backgroundColor: sideColor }]} />
+                      <Text style={[styles.openOrderSideType, { color: colors.textPrimary }]}>
+                        {isBuy ? 'Buy' : 'Sell'} · {typeLabel}
+                      </Text>
+                    </View>
+
+                    {/* Price and units inline */}
+                    <Text style={[styles.openOrderPrice, { color: colors.textPrimary }]}>
+                      {order.unitPriceGbp != null ? formatCoOwnIze(order.unitPriceGbp) : '—'}
+                    </Text>
+                    <Text style={[styles.openOrderUnits, { color: colors.textSecondary }]}>
+                      {order.remainingUnits != null
+                        ? `${order.remainingUnits}/${order.units ?? order.remainingUnits}u`
+                        : `${order.units ?? '—'}u`}
+                    </Text>
+
+                    {canCancel ? (
+                      <Pressable
+                        onPress={() => onCancelOrder!(order.orderId!)}
+                        hitSlop={8}
+                        style={({ pressed }) => [styles.cancelLink, pressed && { opacity: 0.6 }]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Cancel ${isBuy ? 'buy' : 'sell'} order ${order.orderId}`}
+                      >
+                        <Text style={[styles.cancelLinkText, { color: colors.warning }]}>
+                          Cancel
+                        </Text>
+                      </Pressable>
+                    ) : isCancelling ? (
+                      <ActivityIndicator size="small" color={colors.textMuted} />
+                    ) : null}
+                  </View>
+                );
+              })}
+            </View>
+          ) : (
+            <Text style={[styles.noOpenOrdersText, { color: colors.textMuted }]}>
+              No resting orders on this asset
+            </Text>
+          )}
+        </CommerceDetailSection>
+      ) : null}
 
       {/* ── 4. Trading Rules — compact disclosure row ──
           Replaces the verbose 4-row icon+title+description list with a
@@ -800,7 +774,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   orderBookCardHeader: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
@@ -812,10 +786,12 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.semibold,
   },
   orderBookTabs: {
+    alignSelf: 'stretch',
     flexDirection: 'row',
     gap: Space.sm,
   },
   orderBookTab: {
+    flex: 1,
     paddingVertical: Space.xs,
     paddingHorizontal: Space.xs,
     alignItems: 'center',
@@ -853,6 +829,8 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.medium,
   },
   alertActionBtn: {
+    minHeight: 44,
+    paddingHorizontal: Space.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xxs,
@@ -860,49 +838,6 @@ const styles = StyleSheet.create({
   alertActionText: {
     fontSize: TypographyV2.caption.size,
     fontFamily: FontFamily.medium,
-  },
-  // ── Top-of-book quote strip ──
-  topOfBookRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Space.xs + 2,
-    marginBottom: Space.xs,
-  },
-  tobCell: {
-    flex: 1,
-    gap: 1,
-  },
-  tobCellRight: {
-    alignItems: 'flex-end',
-  },
-  tobLabel: {
-    fontSize: 11,
-    fontFamily: FontFamily.medium,
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-  },
-  tobPrice: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: FontFamily.bold,
-    fontVariant: ['tabular-nums'],
-  },
-  tobSize: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.regular,
-    fontVariant: ['tabular-nums'],
-  },
-  tobSpreadCell: {
-    alignItems: 'center',
-    paddingHorizontal: Space.sm,
-  },
-  tobSpreadValue: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.medium,
-    fontVariant: ['tabular-nums'],
-  },
-  tobSpreadLabel: {
-    fontSize: 10,
-    fontFamily: FontFamily.regular,
   },
   // ── Flat depth notice — left-aligned text, no centered icon box ──
   depthNoticeBlock: {
@@ -919,6 +854,8 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   retryLink: {
+    minHeight: 44,
+    justifyContent: 'center',
     marginTop: Space.xs,
     alignSelf: 'flex-start',
   },

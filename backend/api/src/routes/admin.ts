@@ -31,6 +31,10 @@ const COMMERCE_ORDER_STATUSES = [
   'paid',
   'shipped',
   'delivered',
+  // 'completed' is the terminal state: the buyer confirmed receipt (escrow
+  // released immediately) or the escrow release sweep paid out after the
+  // buyer-protection hold expired. Migration 280 relaxes the CHECK.
+  'completed',
   'cancelled',
 ] as const;
 type CommerceOrderStatus = (typeof COMMERCE_ORDER_STATUSES)[number];

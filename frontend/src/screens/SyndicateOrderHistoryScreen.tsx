@@ -14,7 +14,6 @@ import {
   listUserMarketHistory,
   lookupCoOwnOrderByIdempotencyKey,
 } from '../services/marketApi';
-import { CO_OWN_FEE_RATE } from '../utils/tradeFlow';
 import { useToast } from '../context/ToastContext';
 import { OrderHistoryRow } from '../components/trade';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
@@ -59,7 +58,7 @@ interface HistoryEntry {
   quantity: number;
   pricePerShare: number;
   totalAmount: number;
-  fee: number;
+  fee: number | null;
   status: OrderStatus;
   filledQuantity: number;
   // U36: Remaining unfilled units. Null when the backend does not report it
@@ -146,7 +145,7 @@ function mapRemoteHistoryToEntries(history: MarketHistoryItem[]): HistoryEntry[]
         quantity,
         pricePerShare,
         totalAmount: item.amountGbp,
-        fee: item.feeGbp ?? Number((item.amountGbp * CO_OWN_FEE_RATE).toFixed(2)),
+        fee: item.feeGbp ?? null,
         status,
         filledQuantity: Math.max(0, item.filledUnits ?? (status === 'filled' ? quantity : 0)),
         // U36: remainingUnits is optional on the backend; null when absent.
@@ -591,7 +590,7 @@ export default function CoOwnOrderHistoryScreen() {
         remainingQuantity={item.remainingQuantity != null
           ? item.remainingQuantity
           : Math.max(0, item.quantity - item.filledQuantity)}
-        fee={formatCoOwnIze(item.fee)}
+        fee={item.fee == null ? undefined : formatCoOwnIze(item.fee)}
         averageExecutionPrice={item.averageExecutionPrice != null
           ? formatCoOwnIze(item.averageExecutionPrice)
           : null}

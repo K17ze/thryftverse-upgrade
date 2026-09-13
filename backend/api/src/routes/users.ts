@@ -1382,17 +1382,36 @@ app.get('/users/:userId/profile', async (request, reply) => {
   // disclosed to the viewer (404) unless the viewer is a moderator/admin.
   let blockedByViewer = false;
   let blockedByTarget = false;
+  let mutedByViewer = false;
+  let restrictedByViewer = false;
 
   if (viewerUserId && viewerUserId !== userId) {
-    const blockResult = await readDb.query<{ viewer_blocked: boolean; target_blocked: boolean }>(
+    const blockResult = await readDb.query<{
+      viewer_blocked: boolean;
+      target_blocked: boolean;
+      viewer_muted: boolean;
+      viewer_restricted: boolean;
+    }>(
       `SELECT
          EXISTS (SELECT 1 FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2) AS viewer_blocked,
-         EXISTS (SELECT 1 FROM user_blocks WHERE blocker_id = $2 AND blocked_id = $1) AS target_blocked`,
+         EXISTS (SELECT 1 FROM user_blocks WHERE blocker_id = $2 AND blocked_id = $1) AS target_blocked,
+         EXISTS (
+           SELECT 1 FROM user_relationship_states
+           WHERE owner_id = $1 AND target_id = $2 AND kind = 'mute'
+             AND (expires_at IS NULL OR expires_at > NOW())
+         ) AS viewer_muted,
+         EXISTS (
+           SELECT 1 FROM user_relationship_states
+           WHERE owner_id = $1 AND target_id = $2 AND kind = 'restrict'
+             AND (expires_at IS NULL OR expires_at > NOW())
+         ) AS viewer_restricted`,
       [viewerUserId, userId]
     );
     const blockRow = blockResult.rows[0];
     blockedByViewer = blockRow?.viewer_blocked ?? false;
     blockedByTarget = blockRow?.target_blocked ?? false;
+    mutedByViewer = blockRow?.viewer_muted ?? false;
+    restrictedByViewer = blockRow?.viewer_restricted ?? false;
   }
 
   // If the target blocked the viewer, do not disclose the profile.
@@ -1568,6 +1587,10 @@ app.get('/users/:userId/profile', async (request, reply) => {
       isFollowing,
       isBlocked: blockedByViewer,
       isBlockedByTarget: blockedByTarget,
+      // Graduated moderation: mute/restrict are silent — they never change
+      // profile visibility (that 404 semantics belongs to block only).
+      isMuted: mutedByViewer,
+      isRestricted: restrictedByViewer,
       canMessage,
       canViewSocialContent,
       canViewShop,
@@ -1906,6 +1929,235 @@ app.get('/users/me/blocked-users', async (request, reply) => {
       avatarUrl: row.avatar,
       blockedAt: row.created_at,
       reason: row.reason,
+    })),
+  };
+});
+
+// ── Mute / unmute (graduated moderation ladder) ──────────────────────
+// Silent moderation between filter and block. Mute suppresses message
+// notifications from the target; the target is never told.
+
+app.post('/users/:userId/mute', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const { userId } = paramsSchema.parse(request.params);
+  const ownerId = request.authUser.userId;
+
+  if (ownerId === userId) {
+    reply.code(400);
+    return { ok: false, error: 'Cannot mute yourself' };
+  }
+
+  const stateId = `rel_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  await db.query(
+    `INSERT INTO user_relationship_states (id, owner_id, target_id, kind, created_at)
+     VALUES ($1, $2, $3, 'mute', NOW())
+     ON CONFLICT (owner_id, target_id, kind) DO NOTHING`,
+    [stateId, ownerId, userId]
+  );
+
+  return { ok: true, muted: true };
+});
+
+app.delete('/users/:userId/mute', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const { userId } = paramsSchema.parse(request.params);
+  const ownerId = request.authUser.userId;
+
+  await db.query(
+    `DELETE FROM user_relationship_states
+     WHERE owner_id = $1 AND target_id = $2 AND kind = 'mute'`,
+    [ownerId, userId]
+  );
+
+  return { ok: true, muted: false };
+});
+
+app.get('/users/me/muted-users', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  const ownerId = request.authUser.userId;
+
+  const result = await readDb.query<{
+    user_id: string;
+    username: string;
+    display_name: string | null;
+    avatar: string | null;
+    created_at: string;
+  }>(
+    `SELECT
+       urs.target_id AS user_id,
+       u.username,
+       u.display_name,
+       u.avatar,
+       urs.created_at::text
+     FROM user_relationship_states urs
+     INNER JOIN users u ON u.id = urs.target_id
+     WHERE urs.owner_id = $1 AND urs.kind = 'mute'
+     ORDER BY urs.created_at DESC`,
+    [ownerId]
+  );
+
+  return {
+    ok: true,
+    users: result.rows.map((row) => ({
+      id: row.user_id,
+      username: row.username,
+      displayName: row.display_name,
+      avatarUrl: row.avatar,
+      mutedAt: row.created_at,
+    })),
+  };
+});
+
+// ── Restrict / unrestrict (graduated moderation ladder) ─────────────
+// Restricted users' DMs land in the owner's message requests, and they
+// receive no read receipts or typing indicators back. Unlike block, the
+// profile stays visible and no existence disclosure is made.
+
+app.post('/users/:userId/restrict', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const { userId } = paramsSchema.parse(request.params);
+  const ownerId = request.authUser.userId;
+
+  if (ownerId === userId) {
+    reply.code(400);
+    return { ok: false, error: 'Cannot restrict yourself' };
+  }
+
+  const stateId = `rel_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  await db.query(
+    `INSERT INTO user_relationship_states (id, owner_id, target_id, kind, created_at)
+     VALUES ($1, $2, $3, 'restrict', NOW())
+     ON CONFLICT (owner_id, target_id, kind) DO NOTHING`,
+    [stateId, ownerId, userId]
+  );
+
+  // Move any shared DM threads into the owner's requests inbox so the
+  // restricted user's messages stop landing in the main inbox. Only
+  // 'accepted' rows are touched — pending/declined states stay as-is.
+  await db.query(
+    `UPDATE chat_conversation_user_state cus
+     SET request_status = 'pending', updated_at = NOW()
+     WHERE cus.user_id = $1
+       AND cus.request_status = 'accepted'
+       AND EXISTS (
+         SELECT 1
+         FROM chat_conversations c
+         INNER JOIN chat_members cm
+           ON cm.conversation_id = c.id AND cm.user_id = $2
+         WHERE c.id = cus.conversation_id
+           AND c.type = 'dm'
+       )`,
+    [ownerId, userId]
+  );
+
+  return { ok: true, restricted: true };
+});
+
+app.delete('/users/:userId/restrict', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const { userId } = paramsSchema.parse(request.params);
+  const ownerId = request.authUser.userId;
+
+  await db.query(
+    `DELETE FROM user_relationship_states
+     WHERE owner_id = $1 AND target_id = $2 AND kind = 'restrict'`,
+    [ownerId, userId]
+  );
+
+  // Restore shared DM threads to the inbox when the owner's DM privacy
+  // gate would have accepted the sender anyway (mirrors the
+  // allow_messages_from evaluation in DM creation). Threads that would
+  // still be gated ('nobody', or 'following' without a follow edge) stay
+  // in requests.
+  const privacyResult = await db.query<{ allow_messages_from: string }>(
+    `SELECT allow_messages_from FROM users WHERE id = $1 LIMIT 1`,
+    [ownerId]
+  );
+  const allowMessagesFrom = privacyResult.rows[0]?.allow_messages_from ?? 'everyone';
+  let restoreAccepted = allowMessagesFrom === 'everyone';
+  if (!restoreAccepted && allowMessagesFrom === 'following') {
+    const followResult = await db.query<{ id: string }>(
+      `SELECT id FROM user_follows
+       WHERE follower_id = $1 AND following_id = $2 LIMIT 1`,
+      [ownerId, userId]
+    );
+    restoreAccepted = Boolean(followResult.rowCount);
+  }
+  if (restoreAccepted) {
+    await db.query(
+      `UPDATE chat_conversation_user_state cus
+       SET request_status = 'accepted', updated_at = NOW()
+       WHERE cus.user_id = $1
+         AND cus.request_status = 'pending'
+         AND EXISTS (
+           SELECT 1
+           FROM chat_conversations c
+           INNER JOIN chat_members cm
+             ON cm.conversation_id = c.id AND cm.user_id = $2
+           WHERE c.id = cus.conversation_id
+             AND c.type = 'dm'
+         )`,
+      [ownerId, userId]
+    );
+  }
+
+  return { ok: true, restricted: false };
+});
+
+app.get('/users/me/restricted-users', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  const ownerId = request.authUser.userId;
+
+  const result = await readDb.query<{
+    user_id: string;
+    username: string;
+    display_name: string | null;
+    avatar: string | null;
+    created_at: string;
+  }>(
+    `SELECT
+       urs.target_id AS user_id,
+       u.username,
+       u.display_name,
+       u.avatar,
+       urs.created_at::text
+     FROM user_relationship_states urs
+     INNER JOIN users u ON u.id = urs.target_id
+     WHERE urs.owner_id = $1 AND urs.kind = 'restrict'
+     ORDER BY urs.created_at DESC`,
+    [ownerId]
+  );
+
+  return {
+    ok: true,
+    users: result.rows.map((row) => ({
+      id: row.user_id,
+      username: row.username,
+      displayName: row.display_name,
+      avatarUrl: row.avatar,
+      restrictedAt: row.created_at,
     })),
   };
 });

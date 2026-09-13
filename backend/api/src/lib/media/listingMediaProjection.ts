@@ -162,10 +162,13 @@ const FLAT_MEDIA_QUERY = `
   ORDER BY li.listing_id, li.sort_order, li.created_at, li.id
 `;
 
+// The contract documents `derivatives` as ascending by variant width — the
+// ORDER BY makes that explicit rather than relying on insertion order.
 const DERIVATIVES_QUERY = `
   SELECT media_asset_id, variant, content_type, width, height, canonical_url
   FROM media_derivatives
   WHERE media_asset_id = ANY($1)
+  ORDER BY media_asset_id, width ASC NULLS LAST
 `;
 
 function derivativeFormat(variant: string, contentType: string): string {

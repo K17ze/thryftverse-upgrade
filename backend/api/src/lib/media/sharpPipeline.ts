@@ -35,6 +35,15 @@ export interface ImageDerivativeSet {
    * `expo-image`'s `placeholder={{ blurhash }}` prop.
    */
   blurhash: string | null;
+  /**
+   * Post-EXIF-orientation source geometry — the pixel dimensions of the
+   * delivered image after `.rotate()` bakes the Orientation tag in. For
+   * orientation values 5–8 these are swapped relative to the coded dims
+   * ffprobe/sharp.metadata report, so callers persisting asset geometry
+   * MUST use these over the probe values.
+   */
+  sourceWidth: number;
+  sourceHeight: number;
 }
 
 const RESPONSIVE_WIDTHS = [200, 400, 800, 1200, 2000] as const;
@@ -182,7 +191,7 @@ export async function generateImageDerivatives(
     '[sharpPipeline] image derivatives generated',
   );
 
-  return { derivatives, lqip, blurhash };
+  return { derivatives, lqip, blurhash, sourceWidth, sourceHeight };
 }
 
 /**
@@ -206,7 +215,10 @@ export async function generateImageDerivatives(
  * The output format matches the input content type so the object key
  * extension and S3 Content-Type remain valid. Returns the original buffer
  * reference unchanged when the format cannot be re-encoded without changing
- * type (e.g. HEIC when libheif output is unavailable).
+ * type (e.g. HEIC when libheif output is unavailable, or formats like GIF
+ * that have no same-type encoder here) — callers gate the re-put on the
+ * returned buffer identity, so a pass-through never overwrites the object
+ * under a mismatched Content-Type.
  */
 export async function stripImageExif(
   sourceBuffer: Buffer,
@@ -223,18 +235,34 @@ export async function stripImageExif(
   if (normalized === 'image/webp') {
     return image.webp({ quality: 95 }).toBuffer();
   }
+  if (normalized === 'image/jpeg' || normalized === 'image/jpg') {
+    return image.jpeg({ quality: 95 }).toBuffer();
+  }
   if (normalized === 'image/heic' || normalized === 'image/heif') {
     try {
       return await image.heif({ quality: 95 }).toBuffer();
-    } catch {
+    } catch (error) {
       // libheif output may be unavailable in this sharp build — cannot
       // re-encode without changing the format, so return the original
-      // buffer unchanged.
+      // buffer unchanged. The warn makes this privacy no-op observable
+      // instead of silent.
+      logger.warn(
+        { err: error, contentType: normalized },
+        '[sharpPipeline] HEIC EXIF strip skipped — libheif output unavailable; source retains metadata',
+      );
       return sourceBuffer;
     }
   }
-  // Default: JPEG re-encode (covers image/jpeg and image/jpg).
-  return image.jpeg({ quality: 95 }).toBuffer();
+  // Unhandled types (image/gif, image/tiff, image/avif, …): re-encoding to
+  // JPEG would change the wire format while the object key extension and
+  // stored Content-Type stay on the original type — a format/Content-Type
+  // mismatch. Return the source unchanged and log so the privacy no-op is
+  // observable.
+  logger.warn(
+    { contentType: normalized },
+    '[sharpPipeline] EXIF strip skipped — unhandled content type; source retains metadata',
+  );
+  return sourceBuffer;
 }
 
 // ── BlurHash encoding ────────────────────────────────────────────────────
@@ -293,6 +321,17 @@ function encodeBlurHashAC(
 }
 
 /**
+ * The BlurHash size flag packs `(componentX - 1) + (componentY - 1) * 9`
+ * into a single Base83 digit — component counts outside [1, 9] overflow it
+ * and produce an undecodable hash. This export is public, so clamp rather
+ * than trust the caller.
+ */
+function clampComponentCount(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.max(1, Math.min(9, Math.trunc(value)));
+}
+
+/**
  * Encodes an RGBA pixel buffer as a BlurHash string. `pixels` must contain
  * 4 bytes per pixel in RGBA order; alpha is ignored per the spec.
  */
@@ -307,9 +346,12 @@ export function encodeBlurHash(
     throw new Error('encodeBlurHash received an undersized pixel buffer');
   }
 
+  const cx = clampComponentCount(componentX);
+  const cy = clampComponentCount(componentY);
+
   const factors: Array<[number, number, number]> = [];
-  for (let y = 0; y < componentY; y += 1) {
-    for (let x = 0; x < componentX; x += 1) {
+  for (let y = 0; y < cy; y += 1) {
+    for (let x = 0; x < cx; x += 1) {
       const normalisation = x === 0 && y === 0 ? 1 : 2;
       let r = 0;
       let g = 0;
@@ -333,7 +375,7 @@ export function encodeBlurHash(
   const dc = factors[0];
   const ac = factors.slice(1);
 
-  const sizeFlag = componentX - 1 + (componentY - 1) * 9;
+  const sizeFlag = cx - 1 + (cy - 1) * 9;
   let hash = encodeBase83(sizeFlag, 1);
 
   let maximumValue = 1;

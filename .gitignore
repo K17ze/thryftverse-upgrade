@@ -25,6 +25,7 @@ expo-env.d.ts
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+*.log
 
 # macOS
 .DS_Store
@@ -95,3 +96,6 @@ output/
 .flagship/*.png
 .flagship/*.xml
 .flagship/*.tsv
+
+# Nested duplicate directory
+thryftverse-upgrade/

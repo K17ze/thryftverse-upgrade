@@ -138,15 +138,7 @@ export function OrderHistoryRow({
   const NOT_AVAILABLE = 'Not available';
 
   return (
-    <AnimatedPressable
-      style={styles.container}
-      onPress={onPress}
-      activeOpacity={0.92}
-      disableAnimation={false}
-      scaleValue={0.985}
-      accessibilityRole="button"
-      accessibilityLabel={`${side} ${quantity} units of ${assetTitle}`}
-    >
+    <View style={styles.container}>
       <View style={styles.iconWrap}>
         <Ionicons
           name={resolveSideIcon(side)}
@@ -156,6 +148,13 @@ export function OrderHistoryRow({
       </View>
 
       <View style={styles.body}>
+        <Pressable
+          onPress={onPress}
+          disabled={!onPress}
+          accessibilityRole={onPress ? 'button' : undefined}
+          accessibilityLabel={`${side} ${quantity} units of ${assetTitle}, ${statusLabel(status)}, ${totalAmount}`}
+          style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+        >
         <View style={styles.topRow}>
           <BodyEmphasis style={styles.title} numberOfLines={1}>
             {assetTitle}
@@ -173,9 +172,10 @@ export function OrderHistoryRow({
         </View>
 
         <View style={styles.priceRow}>
-          <Body style={styles.price} numberOfLines={1}>{pricePerShare} / share</Body>
+          <Body style={styles.price} numberOfLines={1}>{pricePerShare} / unit</Body>
           <BodyEmphasis style={styles.total} numberOfLines={1}>{totalAmount}</BodyEmphasis>
         </View>
+        </Pressable>
 
         {/* U36: expandable multi-fill receipt. Explains one order across
             fills — executed/remaining quantity, average execution, fees,
@@ -250,6 +250,8 @@ export function OrderHistoryRow({
         {onCancel ? (
           <AnimatedPressable
             onPress={onCancel}
+            disabled={isCancelling}
+            accessibilityState={{ disabled: isCancelling, busy: isCancelling }}
             style={styles.cancelAction}
             scaleValue={0.97}
             accessibilityRole="button"
@@ -309,7 +311,7 @@ export function OrderHistoryRow({
           </View>
         )}
       </View>
-    </AnimatedPressable>
+    </View>
   );
 }
 
@@ -319,8 +321,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'flex-start',
     paddingHorizontal: Space.md,
     paddingVertical: Space.smMd,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
+    backgroundColor: colors.background,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
   iconWrap: {

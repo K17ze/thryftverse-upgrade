@@ -28,6 +28,11 @@ interface ApiConversationPayload {
   unread: boolean;
   memberRoles?: Record<string, string>;
   isMuted?: boolean;
+  /** Moderation ladder state vs the DM counterparty — viewer-scoped. */
+  isBlocked?: boolean;
+  isRestricted?: boolean;
+  isAuthorMuted?: boolean;
+  isAuthorRestricted?: boolean;
   isArchived?: boolean;
   requestStatus?: 'pending' | 'accepted' | 'declined';
   pinnedRank?: number;
@@ -301,6 +306,10 @@ function mapApiConversationToApp(
     messages: resolvedMessages,
     memberRoles: normalizeMemberRoles(payload.memberRoles),
     isMuted: payload.isMuted ?? false,
+    isBlocked: payload.isBlocked ?? false,
+    isRestricted: payload.isRestricted ?? payload.isAuthorRestricted ?? false,
+    isAuthorMuted: payload.isAuthorMuted ?? false,
+    isAuthorRestricted: payload.isAuthorRestricted ?? false,
     isArchived: payload.isArchived ?? false,
     requestStatus: payload.requestStatus ?? 'accepted',
     isPinned: (payload.pinnedRank ?? 0) > 0,

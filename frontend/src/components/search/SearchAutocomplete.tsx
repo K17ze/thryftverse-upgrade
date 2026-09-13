@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Pressable,
   ActivityIndicator } from 'react-native';
-import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
@@ -116,12 +115,14 @@ export interface SearchAutocompleteProps {
    * 300ms debouncing.
    */
   suggestions?: AutocompleteSuggestion[];
-  /** Trending searches shown at the top (3–5). */
+  /** Real trending searches shown at the top (3–5). Pass only genuinely
+   *  trend-ranked data — taxonomy categories belong in `categories`. */
   trending: string[];
+  /** Popular taxonomy categories — rendered under their own honest label,
+   *  never labelled as "trending". */
+  categories?: string[];
   /** Recent searches shown when the input is empty and focused. */
   recent: string[];
-  /** Algorithmic taste topics suggested dynamically for the user. */
-  suggested?: string[];
   /** The raw query — used to highlight the matched portion and fetch suggestions. */
   query: string;
   /** Whether the dropdown is visible (focused + no explicit hide). */
@@ -148,8 +149,8 @@ export interface SearchAutocompleteProps {
 export function SearchAutocomplete({
   suggestions: suggestionsProp,
   trending,
+  categories = [],
   recent,
-  suggested = [],
   query,
   visible,
   onSelect,
@@ -178,11 +179,12 @@ export function SearchAutocomplete({
     [haptic, onSelect],
   );
 
-  // Build a flat list of renderable rows for FlashList.
+  // Build a flat list of renderable rows.
   type Row =
     | { kind: 'header'; text: string }
-    | { kind: 'suggested'; term: string }
+    | { kind: 'submit'; term: string }
     | { kind: 'trending'; term: string }
+    | { kind: 'category'; term: string }
     | { kind: 'recent'; term: string }
     | { kind: 'clear' }
     | { kind: 'suggestion'; suggestion: AutocompleteSuggestion }
@@ -193,25 +195,30 @@ export function SearchAutocomplete({
     const out: Row[] = [];
     const normalizedQuery = query.trim();
     if (normalizedQuery.length === 0) {
-      if (suggested && suggested.length > 0) {
-        out.push({ kind: 'header', text: 'Suggested for you' });
-        for (const term of suggested.slice(0, 4)) {
-          out.push({ kind: 'suggested', term });
-        }
-      }
       if (recent.length > 0) {
         out.push({ kind: 'header', text: 'Recent' });
         for (const term of recent.slice(0, 4)) {
           out.push({ kind: 'recent', term });
         }
         if (onClearRecent) out.push({ kind: 'clear' });
-      } else if (trending.length > 0) {
+      }
+      if (trending.length > 0) {
         out.push({ kind: 'header', text: 'Trending' });
         for (const term of trending.slice(0, 5)) {
           out.push({ kind: 'trending', term });
         }
       }
-    } else if (normalizedQuery.length > 0 && suggestions.length > 0) {
+      if (categories.length > 0) {
+        out.push({ kind: 'header', text: 'Categories' });
+        for (const term of categories.slice(0, 5)) {
+          out.push({ kind: 'category', term });
+        }
+      }
+    } else {
+      // A typed query always yields an actionable row ("Search for X") so the
+      // dropdown can never render as a blank surface — even when the backend
+      // returns zero suggestions or is unreachable.
+      out.push({ kind: 'submit', term: normalizedQuery });
       for (const suggestion of suggestions.slice(0, 5)) {
         out.push({ kind: 'suggestion', suggestion });
       }
@@ -223,10 +230,16 @@ export function SearchAutocomplete({
       out.push({ kind: 'demo' });
     }
     return out;
-  }, [suggested, trending, recent, suggestions, onClearRecent, query, isSelfFetching, isLoading, isDemo]);
+  }, [trending, categories, recent, suggestions, onClearRecent, query, isSelfFetching, isLoading, isDemo]);
 
   const hasContent = rows.some(
-    (r) => r.kind === 'trending' || r.kind === 'recent' || r.kind === 'suggestion' || r.kind === 'loading',
+    (r) =>
+      r.kind === 'trending' ||
+      r.kind === 'category' ||
+      r.kind === 'recent' ||
+      r.kind === 'submit' ||
+      r.kind === 'suggestion' ||
+      r.kind === 'loading',
   );
   if (!visible) return null;
   if (!hasContent && !isDemo) return null;
@@ -235,24 +248,26 @@ export function SearchAutocomplete({
     switch (item.kind) {
       case 'header':
         return <Text style={styles.sectionHeader}>{item.text}</Text>;
-      case 'suggested':
+      case 'submit':
         return (
           <Pressable
             style={styles.row}
             onPress={() =>
               handleSelect({
                 query: item.term,
-                type: 'trending',
-                confidence: 0.9,
-                source: 'trending' })
+                type: 'recent',
+                confidence: 1,
+                source: 'recent' })
             }
             accessibilityRole="button"
-            accessibilityLabel={`Search suggested: ${item.term}`}
+            accessibilityLabel={`Search for ${item.term}`}
+            accessibilityHint="Runs the search"
           >
-            <Ionicons name="sparkles-outline" size={18} color={colors.brand} style={styles.rowIcon} />
+            <Ionicons name="search-outline" size={18} color={colors.textPrimary} style={styles.rowIcon} />
             <Text style={styles.rowText} numberOfLines={1}>
               {item.term}
             </Text>
+            <Ionicons name="arrow-up-outline" size={16} color={colors.textMuted} style={{ transform: [{ rotate: '45deg' }] }} />
           </Pressable>
         );
       case 'trending':
@@ -271,6 +286,26 @@ export function SearchAutocomplete({
             accessibilityHint="Fills the search box and searches"
           >
             <Ionicons name="trending-up" size={18} color={colors.success} style={styles.rowIcon} />
+            <Text style={styles.rowText} numberOfLines={1}>
+              {item.term}
+            </Text>
+          </Pressable>
+        );
+      case 'category':
+        return (
+          <Pressable
+            style={styles.row}
+            onPress={() =>
+              handleSelect({
+                query: item.term,
+                type: 'trending',
+                confidence: 0.5,
+                source: 'trending' })
+            }
+            accessibilityRole="button"
+            accessibilityLabel={`Browse category: ${item.term}`}
+          >
+            <Ionicons name="grid-outline" size={18} color={colors.textMuted} style={styles.rowIcon} />
             <Text style={styles.rowText} numberOfLines={1}>
               {item.term}
             </Text>
@@ -349,8 +384,12 @@ export function SearchAutocomplete({
     switch (item.kind) {
       case 'header':
         return `header_${index}`;
+      case 'submit':
+        return `submit_${item.term}`;
       case 'trending':
         return `trending_${item.term}`;
+      case 'category':
+        return `category_${item.term}`;
       case 'recent':
         return `recent_${item.term}`;
       case 'clear':
@@ -369,14 +408,17 @@ export function SearchAutocomplete({
   return (
     <View style={styles.container}>
       {isOffline ? <OfflineBanner compact /> : null}
-      <FlashList
-        data={rows}
-        renderItem={renderItem}
-        keyExtractor={keyExtractor}
-        scrollEnabled={false}
-        nestedScrollEnabled
-        contentContainerStyle={styles.listContent}
-      />
+      {/* Rows are bounded (≤ ~15: 4 recent + clear + 5 trending + 5 categories
+          + 5 suggestions + headers) and non-scrolling, so a plain map is more
+          reliable than FlashList — which can collapse to zero height inside
+          an unbounded dropdown container and render an invisible blank. */}
+      <View style={styles.listContent}>
+        {rows.map((item, index) => (
+          <React.Fragment key={keyExtractor(item, index)}>
+            {renderItem({ item })}
+          </React.Fragment>
+        ))}
+      </View>
     </View>
   );
 }

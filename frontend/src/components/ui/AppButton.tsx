@@ -152,7 +152,7 @@ export function AppButton({
               </View>
             ) : null}
             <View style={[styles.textCol, resolvedAlign === 'center' && styles.textColCentered]}>
-              <Text maxFontSizeMultiplier={1.4} style={[styles.title, { color: tokens.titleColor }, titleStyle]}>{title}</Text>
+              <Text maxFontSizeMultiplier={2} style={[styles.title, { color: tokens.titleColor }, titleStyle]}>{title}</Text>
               {subtitle ? (
                 <Text style={[styles.subtitle, { color: tokens.subtitleColor }, subtitleStyle]}>{subtitle}</Text>
               ) : null}

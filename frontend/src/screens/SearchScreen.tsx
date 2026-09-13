@@ -1,6 +1,7 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import {
   View,
+  Text,
   StyleSheet,
   StatusBar,
   TextInput,
@@ -8,6 +9,7 @@ import {
   Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -22,14 +24,17 @@ import { Space, Radius, Control, LetterSpacing, Stroke } from '../theme/designTo
 import { TypographyV2 } from '../theme/typography.v2';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { useHaptic } from '../hooks/useHaptic';
+import { useSignupWall } from '../hooks/useSignupWall';
+import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { DiscoveryModeNav, type DiscoveryMode } from '../components/discovery/DiscoveryModeNav';
 import { DiscoverScene, PulseScene, LooksScene } from '../scenes/discovery';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { SearchAutocomplete } from '../components/search/SearchAutocomplete';
 import { loadRecentSearchStrings, recordRecentSearch, clearRecentSearches } from '../services/searchHistory';
+import { fetchTrendingSearches } from '../services/feedApi';
 import type { DiscoveryListingSummary } from '../contracts/DiscoveryListingSummary';
 import { useTaxonomy } from '../context/TaxonomyContext';
-import { useDynamicAlgorithmSignals } from '../hooks/useDynamicAlgorithmSignals';
+import { ScreenErrorBoundary } from '../components/ScreenErrorBoundary';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -40,22 +45,33 @@ export default function SearchScreen() {
   const navigation = useNavigation<NavT>();
   const { listings, isSyncing, lastError, refreshListings, loadMoreListings, isLoadingMore, hasMore } = useBackendData();
   const currentUser = useStore((state) => state.currentUser);
+  const browseFilters = useStore((state) => state.browseFilters);
   const toggleSavedProduct = useStore((state) => state.toggleSavedProduct);
   const isSavedProduct = useStore((state) => state.isSavedProduct);
   const upsertConversation = useStore((state) => state.upsertConversation);
   const haptic = useHaptic();
+  const { requireAuth } = useSignupWall();
   const { categories } = useTaxonomy();
 
-  const { signals: algorithmSignals } = useDynamicAlgorithmSignals({ surface: 'search' });
+  // Long-press on a discovery tile's bookmark opens the save-to-collection
+  // picker (the "file to board" tier; tap stays instant quick-save).
+  const [savePickerItemId, setSavePickerItemId] = useState<string | null>(null);
 
-  const suggestedSearches = useMemo(() => {
-    return algorithmSignals
-      .filter((s) => s.kind !== 'all' && s.isPersonalized)
-      .slice(0, 4)
-      .map((s) => s.label);
-  }, [algorithmSignals]);
+  // Real trending searches — query-frequency data from the backend. Empty
+  // means "no trend data"; taxonomy categories are shown under their own
+  // honest label instead of being mislabelled as trending.
+  const [trendingSearches, setTrendingSearches] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetchTrendingSearches(6)
+      .then((result) => {
+        if (!cancelled) setTrendingSearches(result.items.map((i) => i.query));
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
 
-  const trendingSearches = useMemo(
+  const popularCategories = useMemo(
     () =>
       categories
         .filter((cat) => cat.parentId === null)
@@ -83,6 +99,24 @@ export default function SearchScreen() {
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [searchRowHeight, setSearchRowHeight] = useState(0);
   const searchInputRef = useRef<TextInput>(null);
+
+  // Active non-query filter count — drives the badge on the filter entry
+  // point so the user can see filters are applied before opening the sheet.
+  const activeFilterCount =
+    browseFilters.brands.length +
+    browseFilters.sizes.length +
+    (browseFilters.condition !== 'Any' ? 1 : 0) +
+    (browseFilters.sustainableOnly ? 1 : 0) +
+    (browseFilters.priceMin != null || browseFilters.priceMax != null ? 1 : 0);
+
+  // The autocomplete surface only mounts when it can render at least one
+  // actionable row. A typed query always produces the "Search for X" row;
+  // an empty query needs recent/trending/category content.
+  const autocompleteHasContent =
+    searchQuery.trim().length > 0 ||
+    recentSearches.length > 0 ||
+    trendingSearches.length > 0 ||
+    popularCategories.length > 0;
 
   useEffect(() => {
     loadRecentSearchStrings(currentUser?.id)
@@ -128,10 +162,33 @@ export default function SearchScreen() {
 
   // Search
   searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     paddingBottom: Space.smMd,
   },
+  filterButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  filterBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: Radius.full,
+    backgroundColor: colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4 },
+  filterBadgeText: {
+    fontSize: 10,
+    fontFamily: TypographyV2.label.fontFamily,
+    color: colors.textInverse },
   autocompleteOverlay: {
     position: 'absolute',
     left: 0, right: 0, bottom: 0,
@@ -197,16 +254,38 @@ export default function SearchScreen() {
       haptic.light();
       toggleSavedProduct(item.id);
     },
+    // "File to board" tier — long-press the tile bookmark to choose a
+    // collection. Collections are account-backed, so this is gated.
+    onItemSaveLongPress: (item: DiscoveryListingSummary) => {
+      if (!requireAuth('save_item')) return;
+      haptic.selection();
+      setSavePickerItemId(item.id);
+    },
     isSavedListing: (listingId: string) => isSavedProduct(listingId) };
 
   const renderScene = (tab: ExploreTab) => {
+    // Each scene is isolated behind a per-scene error boundary so a render
+    // crash in one tab (e.g. malformed media in a masonry cell) shows a
+    // recoverable error state instead of blanking the whole Explore tab.
     switch (tab) {
       case 'discover':
-        return <DiscoverScene {...discoverProps} />;
+        return (
+          <ScreenErrorBoundary screenName="Explore.Discover">
+            <DiscoverScene {...discoverProps} />
+          </ScreenErrorBoundary>
+        );
       case 'pulse':
-        return <PulseScene />;
+        return (
+          <ScreenErrorBoundary screenName="Explore.Pulse">
+            <PulseScene />
+          </ScreenErrorBoundary>
+        );
       case 'looks':
-        return <LooksScene />;
+        return (
+          <ScreenErrorBoundary screenName="Explore.Looks">
+            <LooksScene />
+          </ScreenErrorBoundary>
+        );
     }
   };
 
@@ -233,17 +312,36 @@ export default function SearchScreen() {
           }}
           containerStyle={{ flex: 1 }}
         />
+        <Pressable
+          onPress={() => navigation.navigate('Filter', { categoryId: 'search', title: 'Search' })}
+          style={styles.filterButton}
+          accessibilityRole="button"
+          accessibilityLabel={activeFilterCount > 0 ? `Filters, ${activeFilterCount} active` : 'Filters'}
+          accessibilityHint="Opens search filters"
+          hitSlop={8}
+        >
+          <AppIcon name="options-outline" size={IconSize.md} color={activeFilterCount > 0 ? 'brand' : 'textPrimary'} accessible={false} />
+          {activeFilterCount > 0 && (
+            <View style={styles.filterBadge}>
+              <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+            </View>
+          )}
+        </Pressable>
       </View>
 
-      {/* Autocomplete overlay — covers scene content while the search is focused. */}
-      {isSearchFocused && (
+      {/* Autocomplete overlay — covers scene content while the search is
+          focused AND there is something to show. A typed query always has
+          content (the "Search for X" submit row); an empty query needs at
+          least one section. When nothing exists, the overlay is not mounted
+          so the scene stays visible instead of blanking to a white surface. */}
+      {isSearchFocused && autocompleteHasContent && (
         <View style={[styles.autocompleteOverlay, { top: searchRowHeight }]}>
           <View style={styles.autocompleteDropdown}>
             <SearchAutocomplete
               query={searchQuery}
               visible={isSearchFocused}
-              suggested={suggestedSearches}
               trending={trendingSearches}
+              categories={popularCategories}
               recent={recentSearches}
               userId={currentUser?.id}
               onSelect={(suggestion) => {
@@ -260,7 +358,7 @@ export default function SearchScreen() {
             />
           </View>
           <Pressable
-            style={{ height: Space.xl }}
+            style={{ flex: 1 }}
             onPress={() => { setIsSearchFocused(false); searchInputRef.current?.blur(); Keyboard.dismiss(); }}
             accessibilityRole="button"
             accessibilityLabel="Dismiss search"
@@ -307,6 +405,13 @@ export default function SearchScreen() {
           );
         })}
       </View>
+
+      {/* ── Save-to-collection picker — long-press a tile bookmark ── */}
+      <SaveToCollectionModal
+        visible={savePickerItemId !== null}
+        itemId={savePickerItemId ?? ''}
+        onClose={() => setSavePickerItemId(null)}
+      />
     </SafeAreaView>
   );
 }

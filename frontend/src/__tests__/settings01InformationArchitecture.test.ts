@@ -6,9 +6,24 @@ function readSrc(filePath: string): string {
   return readFileSync(resolve(__dirname, '..', filePath), 'utf-8');
 }
 
+// SettingsScreen was decomposed into a thin orchestrator — the settings hub
+// source is the orchestrator plus its extracted hooks/components owner layer.
+const SETTINGS_HUB_FILES = [
+  'screens/SettingsScreen.tsx',
+  'hooks/settings/settingsRouteMetadata.ts',
+  'hooks/settings/useSettingsSearch.ts',
+  'components/settings/SettingsSearchResults.tsx',
+  'components/settings/SettingsAccountSection.tsx',
+  'components/settings/SettingsAccountActionsSection.tsx',
+];
+
+function readSettingsHubSrc(): string {
+  return SETTINGS_HUB_FILES.map(readSrc).join('\n');
+}
+
 describe('SETTINGS-01 — Settings information architecture, ownership and subpage elevation', () => {
   describe('Settings hub', () => {
-    const settingsSrc = readSrc('screens/SettingsScreen.tsx');
+    const settingsSrc = readSettingsHubSrc();
 
     it('uses FlagshipScreen and FlagshipHeader', () => {
       expect(settingsSrc).toContain('FlagshipScreen');
@@ -61,7 +76,7 @@ describe('SETTINGS-01 — Settings information architecture, ownership and subpa
   });
 
   describe('Settings search destinations', () => {
-    const settingsSrc = readSrc('screens/SettingsScreen.tsx');
+    const settingsSrc = readSettingsHubSrc();
 
     it('includes Account control in search destinations', () => {
       expect(settingsSrc).toMatch(/key:\s*'AccountControl'/);
@@ -200,7 +215,7 @@ describe('SETTINGS-01 — Settings information architecture, ownership and subpa
     });
 
     it('is not a giant red button in the Settings hub', () => {
-      const settingsSrc = readSrc('screens/SettingsScreen.tsx');
+      const settingsSrc = readSettingsHubSrc();
       expect(settingsSrc).toContain("ts('rows.accountControl')");
       expect(settingsSrc).not.toContain("title={ts('rows.accountControl')} danger");
     });

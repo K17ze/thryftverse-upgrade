@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { AccessibilityInfo, View, Text, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useToast, ToastType } from '../context/ToastContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -47,11 +47,23 @@ function ToastItem({ id, message, type }: ToastItemProps) {
     translateY.value = withTiming(0, { duration: reducedMotion ? 0 : Motion.duration.slow, easing: Easing.out(Easing.quad) });
     opacity.value = withTiming(1, { duration: reducedMotion ? 0 : Motion.duration.fast });
 
+    // Announce the toast to screen readers on show — the message is
+    // transient (auto-dismisses), so without an explicit announcement a
+    // VoiceOver/TalkBack user never hears it. `accessibilityLiveRegion`
+    // on the container covers TalkBack (Android); the explicit announce
+    // call covers VoiceOver only — it is iOS-gated because calling it on
+    // Android as well would double-announce on builds where TalkBack
+    // honours both the live region and the explicit announcement.
+    if (Platform.OS === 'ios' && typeof AccessibilityInfo?.announceForAccessibility === 'function') {
+      void AccessibilityInfo.announceForAccessibility(message);
+    }
+
     const timer = setTimeout(() => {
       handleDismiss();
     }, 3200);
 
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reducedMotion]);
 
   const handleDismiss = () => {
@@ -68,7 +80,11 @@ function ToastItem({ id, message, type }: ToastItemProps) {
     transform: [{ translateY: translateY.value }] }));
 
   return (
-    <Reanimated.View style={[styles.toast, { borderLeftColor: config.borderColor }, animStyle]}>
+    <Reanimated.View
+      style={[styles.toast, { borderLeftColor: config.borderColor }, animStyle]}
+      accessibilityLiveRegion="polite"
+      accessibilityRole="alert"
+    >
       <Ionicons name={config.icon} size={20} color={config.iconColor} />
       <Text style={styles.message} numberOfLines={2}>{message}</Text>
       <AnimatedPressable
@@ -77,6 +93,8 @@ function ToastItem({ id, message, type }: ToastItemProps) {
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         disableAnimation
         activeOpacity={1}
+        accessibilityLabel="Dismiss notification"
+        accessibilityRole="button"
       >
         <Ionicons name="close" size={16} color={colors.textMuted} />
       </AnimatedPressable>

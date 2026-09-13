@@ -42,6 +42,20 @@ vi.mock('../hooks/useHaptic', () => ({
   }),
 }));
 
+// Mock accessibility preferences (components/ui/Text consumes the context)
+vi.mock('../context/AccessibilityPreferencesContext', () => ({
+  useAccessibilityPreferences: () => ({
+    textSize: 'medium',
+    textSizeScale: 1,
+    reducedMotion: false,
+    highContrast: false,
+    isHydrated: true,
+    setTextSize: vi.fn(),
+    setReducedMotion: vi.fn(),
+    setHighContrast: vi.fn(),
+  }),
+}));
+
 describe('Iconography Design Tokens', () => {
   it('defines normalized optical size bands', () => {
     expect(IconSize.micro).toBe(12);

@@ -252,6 +252,11 @@ export interface ListingMediaDraftItem {
   publicUrl?: string;
   /** Normalized (0-1) cover-fit anchor set via the crop sheet's focal mode. */
   focalPoint?: { x: number; y: number };
+  /** Decodable BlurHash placeholder — populated for remote items loaded
+   *  from `media[]`, or from the finalized media asset after upload. */
+  blurhash?: string | null;
+  /** Video poster frame URL for remote items loaded from `media[]`. */
+  posterUrl?: string | null;
   status:
     | 'draft'
     | 'pending'

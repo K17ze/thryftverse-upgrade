@@ -1,5 +1,3 @@
-export { FlagshipImage } from './FlagshipImage';
-export type { FlagshipImageProps } from './FlagshipImage';
 export { FlagshipProfileMedia } from './FlagshipProfileMedia';
 export { FlagshipProductCard } from './FlagshipProductCard';
 export { FlagshipOrderCard } from './FlagshipOrderCard';

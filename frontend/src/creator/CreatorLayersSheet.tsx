@@ -501,6 +501,13 @@ function LayerRow({
       <SwipeableRow
         accessibilityLabel={`Layer ${getLayerDisplayName(layer)}${layer.locked ? ', locked' : ''}${layer.hidden ? ', hidden' : ''}${isSelected ? ', selected' : ''}`}
         accessibilityHint="Swipe left to delete, swipe right to lock. Double tap to select."
+        // Mirror the inner PressScale handlers so the accessible row exposes
+        // truthful activate/longpress actions — touches still resolve to the
+        // inner pressable first via responder negotiation (same pattern as
+        // InboxScreen's conversation rows).
+        onPress={() => onSelect(layer.id)}
+        onLongPress={() => onLongPressRow(layer.id)}
+        longPressActionLabel="Reorder layer"
         leftAction={{
           icon: layer.locked ? 'lock-open-outline' : 'lock-closed',
           label: layer.locked ? 'Unlock' : 'Lock',

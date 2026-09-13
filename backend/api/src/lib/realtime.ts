@@ -43,6 +43,9 @@ interface RealtimeBusMessage {
   sourceInstanceId: string;
   event: RealtimeEnvelope;
   userId?: string;
+  /** User IDs that must not receive this event even when they are
+   * subscribed to the topic (e.g. restricted parties in a DM). */
+  excludeUserIds?: string[];
 }
 
 const REALTIME_PUBSUB_PREFIX = 'realtime:pubsub:';
@@ -151,18 +154,35 @@ export function parseRealtimeTopics(raw: unknown): string[] {
     .filter((entry) => entry.length > 0);
 }
 
-function clientCanReceive(client: RealtimeClient, topic: string, userId?: string): boolean {
-  if (client.topics.has('*') || client.topics.has(topic)) {
-    return userId ? client.userId === userId : true;
+function clientCanReceive(
+  client: RealtimeClient,
+  topic: string,
+  userId?: string,
+  excludeUserIds?: ReadonlySet<string>,
+): boolean {
+  if (!(client.topics.has('*') || client.topics.has(topic))) {
+    return false;
   }
 
-  return false;
+  if (userId) {
+    return client.userId === userId;
+  }
+
+  if (excludeUserIds && client.userId && excludeUserIds.has(client.userId)) {
+    return false;
+  }
+
+  return true;
 }
 
-function deliverLocalEvent(event: RealtimeEnvelope, userId?: string): number {
+function deliverLocalEvent(
+  event: RealtimeEnvelope,
+  userId?: string,
+  excludeUserIds?: ReadonlySet<string>,
+): number {
   let delivered = 0;
   for (const client of clients.values()) {
-    if (!clientCanReceive(client, event.topic, userId)) {
+    if (!clientCanReceive(client, event.topic, userId, excludeUserIds)) {
       continue;
     }
 
@@ -192,6 +212,9 @@ function decodeBusMessage(raw: string): RealtimeBusMessage | null {
       || Array.isArray(decoded.event.payload)
       || typeof decoded.event.timestamp !== 'string'
       || (decoded.userId !== undefined && typeof decoded.userId !== 'string')
+      || (decoded.excludeUserIds !== undefined
+        && (!Array.isArray(decoded.excludeUserIds)
+          || decoded.excludeUserIds.some((id) => typeof id !== 'string')))
     ) {
       return null;
     }
@@ -221,7 +244,11 @@ export async function startRealtimeBridge(publisher: Redis): Promise<void> {
       return;
     }
 
-    deliverLocalEvent(message.event, message.userId);
+    deliverLocalEvent(
+      message.event,
+      message.userId,
+      message.excludeUserIds ? new Set(message.excludeUserIds) : undefined,
+    );
   });
 
   subscriber.on('pmessage', (_pattern, channel, raw) => {
@@ -235,7 +262,11 @@ export async function startRealtimeBridge(publisher: Redis): Promise<void> {
       return;
     }
 
-    deliverLocalEvent(message.event, message.userId);
+    deliverLocalEvent(
+      message.event,
+      message.userId,
+      message.excludeUserIds ? new Set(message.excludeUserIds) : undefined,
+    );
   });
 
   subscriber.on('error', (error) => {
@@ -522,6 +553,10 @@ export async function publishRealtimeEvent(input: {
   type: string;
   payload: Record<string, unknown>;
   userId?: string;
+  /** Topic subscribers that must not receive this event. Used by
+   * graduated moderation so restricted parties never observe read
+   * receipts or typing indicators from the user who restricted them. */
+  excludeUserIds?: string[];
   /** R01: When true (default), attaches a per-topic sequence number. */
   seq?: boolean;
   /** R01: Event payload schema version. Clients use this for
@@ -533,7 +568,10 @@ export async function publishRealtimeEvent(input: {
     seq: input.seq,
     version: input.version,
   });
-  const delivered = deliverLocalEvent(event, input.userId);
+  const excludeUserIds = input.excludeUserIds?.length
+    ? new Set(input.excludeUserIds)
+    : undefined;
+  const delivered = deliverLocalEvent(event, input.userId, excludeUserIds);
 
   // R07: Buffer the event for replay on gap.
   bufferEvent(event);
@@ -543,6 +581,7 @@ export async function publishRealtimeEvent(input: {
       sourceInstanceId: instanceId,
       event,
       userId: input.userId,
+      excludeUserIds: input.excludeUserIds,
     };
 
     void realtimePublisher.publish(pubsubChannelForTopic(topic), JSON.stringify(message)).catch((error) => {

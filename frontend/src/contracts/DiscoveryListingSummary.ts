@@ -36,6 +36,7 @@ export interface DiscoverySellerSummary {
 
 export type { ListingCondition } from './taxonomy';
 import type { ListingCondition } from './taxonomy';
+import type { ListingMediaRecord } from './listingMedia';
 
 // ============================================================================
 // DISCOVERY LISTING SUMMARY
@@ -73,6 +74,10 @@ export interface DiscoveryListingSummary {
   priceWithProtection?: number;
   /** Primary media URIs (images and/or video poster frames). */
   images: string[];
+  /** Canonical media records (derivatives, blurhash/LQIP, focal point,
+   *  poster). Present when the source endpoint serves the media contract —
+   *  prefer over `images` for placeholders and sized renditions. */
+  media?: ListingMediaRecord[];
   /**
    * Width divided by height for the primary media asset. Backends should
    * provide this so discovery grids can reserve the final frame before the
@@ -133,6 +138,8 @@ export interface ListingLike {
   originalPrice?: number;
   priceWithProtection?: number;
   images: string[];
+  /** Canonical media records, when the source listing carries them. */
+  media?: ListingMediaRecord[];
   mediaAspectRatio?: number | null;
   mediaWidth?: number | null;
   mediaHeight?: number | null;
@@ -178,6 +185,7 @@ export function mapListingToDiscoverySummary(
     originalPrice: source.originalPrice,
     priceWithProtection: source.priceWithProtection,
     images: source.images,
+    media: source.media,
     mediaAspectRatio: source.mediaAspectRatio ?? null,
     mediaWidth: source.mediaWidth ?? null,
     mediaHeight: source.mediaHeight ?? null,

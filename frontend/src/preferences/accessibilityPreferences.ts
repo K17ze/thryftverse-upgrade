@@ -30,18 +30,12 @@ export interface AccessibilityPreferences {
   reducedMotion: boolean;
   /** High contrast — strengthens text/background contrast globally. */
   highContrast: boolean;
-  /** Bold text — increases font weight for body text globally. */
-  boldText: boolean;
-  /** Additional screen reader hints — exposes extra accessibilityHint context. */
-  screenReaderHints: boolean;
 }
 
 export const DEFAULT_ACCESSIBILITY_PREFERENCES: AccessibilityPreferences = {
   textSize: 'medium',
   reducedMotion: false,
   highContrast: false,
-  boldText: false,
-  screenReaderHints: true,
 };
 
 /**
@@ -77,9 +71,24 @@ export async function getStoredAccessibilityPreferences(): Promise<Accessibility
     const raw = await AsyncStorage.getItem(ACCESSIBILITY_PREF_STORAGE_KEY);
     if (!raw) return DEFAULT_ACCESSIBILITY_PREFERENCES;
     const parsed = JSON.parse(raw) as Partial<AccessibilityPreferences>;
+    // Merge known keys only — legacy keys from removed preferences (e.g.
+    // boldText, screenReaderHints) would otherwise ride the spread and
+    // persist in storage indefinitely. Because setStoredAccessibilityPreferences
+    // writes back this filtered result, the next save also scrubs the store.
+    const textSize: TextSize =
+      typeof parsed.textSize === 'string' && parsed.textSize in TEXT_SIZE_SCALE
+        ? parsed.textSize
+        : DEFAULT_ACCESSIBILITY_PREFERENCES.textSize;
     return {
-      ...DEFAULT_ACCESSIBILITY_PREFERENCES,
-      ...parsed,
+      textSize,
+      reducedMotion:
+        typeof parsed.reducedMotion === 'boolean'
+          ? parsed.reducedMotion
+          : DEFAULT_ACCESSIBILITY_PREFERENCES.reducedMotion,
+      highContrast:
+        typeof parsed.highContrast === 'boolean'
+          ? parsed.highContrast
+          : DEFAULT_ACCESSIBILITY_PREFERENCES.highContrast,
     };
   } catch {
     return DEFAULT_ACCESSIBILITY_PREFERENCES;

@@ -520,6 +520,9 @@ export function ChatMessageRow({
               itemId: msg.listing!.id,
               price: msg.listing!.price,
               title: msg.listing!.title,
+              // Offer made from inside this thread — link it so the chat
+              // context bar can render the live offer badge.
+              conversationId,
             });
           }}
         />

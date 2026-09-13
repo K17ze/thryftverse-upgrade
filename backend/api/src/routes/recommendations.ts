@@ -165,6 +165,57 @@ function intentEpochKey(userId: string): string {
   return `recommendations:intent:${userId}`;
 }
 
+// ── User-authored feed controls ─────────────────────────────────────────────
+// Intent mutations (scope item/seller/brand/category) and topic-projection
+// bands (more/less/excluded) are the authoritative record of what the user
+// asked to see — they must shape the candidate set and the ranking, not just
+// the settings screen (report §22: "Honour reset and removal in the backend
+// signal pipeline, not merely in the settings screen").
+
+const DIRECTIVE_TOKEN_PATTERN = /[a-z0-9]+/g;
+const DIRECTIVE_PREFIXES = ['category', 'brand', 'size', 'condition'] as const;
+type DirectiveBand = 'more' | 'less' | 'excluded';
+
+function directiveTokensOf(text: string): string[] {
+  return text.toLowerCase().match(DIRECTIVE_TOKEN_PATTERN) ?? [];
+}
+
+function candidateTokenSet(row: ListingRow): Set<string> {
+  const tokens = new Set(directiveTokensOf(`${row.title} ${row.description}`));
+  for (const prefix of DIRECTIVE_PREFIXES) {
+    const value = prefix === 'category' ? row.category
+      : prefix === 'brand' ? row.brand
+      : prefix === 'size' ? row.size
+      : row.condition;
+    const normalized = directiveTokensOf(value ?? '').join('_');
+    if (normalized) tokens.add(`${prefix}:${normalized}`);
+  }
+  return tokens;
+}
+
+/** Mirror of ml-service `_directive_match`: 0–1 label-vs-candidate match. */
+function directiveMatchScore(label: string, candidateTokens: Set<string>): number {
+  const tokens = new Set(directiveTokensOf(label));
+  if (tokens.size === 0) return 0;
+  const compound = [...tokens].sort().join('_');
+  if (DIRECTIVE_PREFIXES.some((p) => candidateTokens.has(`${p}:${compound}`))) return 1;
+  let matched = 0;
+  for (const token of tokens) {
+    if (
+      candidateTokens.has(token)
+      || DIRECTIVE_PREFIXES.some((p) => candidateTokens.has(`${p}:${token}`))
+    ) {
+      matched += 1;
+    }
+  }
+  return matched / tokens.size;
+}
+
+/** ``excluded`` means never show — a decisive (compound or full-token) match. */
+function isExcludedByDirective(label: string, candidateTokens: Set<string>): boolean {
+  return directiveMatchScore(label, candidateTokens) >= 1;
+}
+
 async function resolveIntentEpoch(
   redis: Redis,
   userId: string,
@@ -743,6 +794,97 @@ export function registerRecommendationRoutes({
       [userId],
     );
 
+    // ── User-authored feed controls ────────────────────────────────────────
+    // Resolve the intent ledger into (a) hard candidate exclusions — muted
+    // items, sellers and "never show" topics — and (b) ranking directives
+    // ("show more/less like this") forwarded to the decision service. This
+    // runs at the API layer so exclusions also hold on the degraded fallback
+    // path and inside cached serve validation.
+    let topicDirectives: { label: string; band: DirectiveBand }[] = [];
+    const excludedListingIds = new Set<string>();
+    const excludedSellerIds = new Set<string>();
+
+    try {
+      const bandRows = await db.query<{ topic_label: string; influence_band: string }>(
+        `SELECT topic_label, influence_band
+         FROM recommendation_topic_projection
+         WHERE user_id = $1 AND paused = FALSE
+           AND influence_band IN ('more', 'less', 'excluded')`,
+        [userId],
+      );
+      topicDirectives = bandRows.rows.map((row) => ({
+        label: row.topic_label,
+        band: row.influence_band as DirectiveBand,
+      }));
+    } catch (error) {
+      request.log.warn({ err: error, userId }, 'Topic directive read failed');
+    }
+
+    try {
+      // Latest mutation per (scope, target) wins, so a later "usual"/"add"
+      // reverses an earlier "exclude". Expired directives are ignored.
+      const mutationRows = await db.query<{
+        scope: string;
+        target_id: string;
+        target_label: string;
+        direction: string;
+      }>(
+        `SELECT scope, target_id, target_label, direction
+         FROM (
+           SELECT scope, target_id, target_label, direction,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY scope, target_id ORDER BY mutation_id DESC
+                  ) AS rn
+           FROM user_intent_mutations
+           WHERE user_id = $1
+             AND scope IN ('item', 'seller', 'brand', 'category')
+             AND (expires_at IS NULL OR expires_at > now())
+         ) latest
+         WHERE rn = 1`,
+        [userId],
+      );
+      for (const row of mutationRows.rows) {
+        if (row.direction === 'exclude' || row.direction === 'remove') {
+          if (row.scope === 'item') excludedListingIds.add(row.target_id);
+          else if (row.scope === 'seller') excludedSellerIds.add(row.target_id);
+          else topicDirectives.push({ label: row.target_label, band: 'excluded' });
+        } else if (row.direction === 'less' || row.direction === 'more') {
+          if (row.scope === 'brand' || row.scope === 'category' || row.scope === 'item') {
+            // Item-scope 'less' ("show fewer like this" on a listing with no
+            // category/brand facet) binds the directive to the item's label —
+            // the bounded less-penalty then down-ranks token-similar
+            // candidates instead of the mutation being a no-op ledger write.
+            topicDirectives.push({ label: row.target_label, band: row.direction });
+          }
+        }
+      }
+    } catch (error) {
+      request.log.warn({ err: error, userId }, 'Intent mutation read failed');
+    }
+
+    // Item-level negative feedback from the interaction stream suppresses the
+    // listing immediately — it must not wait on a ledger projection.
+    for (const row of interactionsResult.rows) {
+      if (row.action === 'not_interested' || row.action === 'report_content') {
+        excludedListingIds.add(row.listing_id);
+      }
+    }
+
+    const excludedTopicLabels = topicDirectives
+      .filter((directive) => directive.band === 'excluded')
+      .map((directive) => directive.label);
+    const eligibleListingRows = listingsResult.rows.filter((row) => {
+      if (excludedListingIds.has(row.id)) return false;
+      if (excludedSellerIds.has(row.seller_id)) return false;
+      if (excludedTopicLabels.length > 0) {
+        const tokens = candidateTokenSet(row);
+        if (excludedTopicLabels.some((label) => isExcludedByDirective(label, tokens))) {
+          return false;
+        }
+      }
+      return true;
+    });
+
     let cached: string | null = null;
     try {
       cached = await redis.get(cacheKey);
@@ -755,7 +897,9 @@ export function registerRecommendationRoutes({
     if (cached) {
       try {
         const cachedResult = decisionResponseSchema.parse(JSON.parse(cached));
-        const activeListingIds = new Set(listingsResult.rows.map((row) => row.id));
+        // Validate cached recs against the *eligible* set — an item the user
+        // has since excluded invalidates the cached serve, not just the row.
+        const activeListingIds = new Set(eligibleListingRows.map((row) => row.id));
         if (cachedResult.recommendations.every((item) => activeListingIds.has(item.listing_id))) {
           usedCache = true;
           result = {
@@ -797,7 +941,7 @@ export function registerRecommendationRoutes({
         }
         const maximumInteractions = Math.max(
           1,
-          ...listingsResult.rows.map((row) => Number(row.interaction_count)),
+          ...eligibleListingRows.map((row) => Number(row.interaction_count)),
         );
         const response = await fetch(`${decisionServiceUrl}/recommendations`, {
           method: 'POST',
@@ -811,7 +955,8 @@ export function registerRecommendationRoutes({
             request_id: requestId,
             as_of: generatedAt,
             result_limit: 24,
-            candidates: listingsResult.rows.map((row) => ({
+            topic_directives: topicDirectives,
+            candidates: eligibleListingRows.map((row) => ({
               listing_id: row.id,
               seller_id: row.seller_id,
               title: row.title,
@@ -858,7 +1003,7 @@ export function registerRecommendationRoutes({
         ) {
           throw new Error('Decision service returned an unsupported policy contract');
         }
-        const candidateIds = new Set(listingsResult.rows.map((row) => row.id));
+        const candidateIds = new Set(eligibleListingRows.map((row) => row.id));
         const recommendationIds = new Set(
           parsed.recommendations.map((item) => item.listing_id),
         );
@@ -914,13 +1059,21 @@ export function registerRecommendationRoutes({
             );
           }
         }
-        result = fallbackDecision(listingsResult.rows, requestId, generatedAt);
+        // The degraded baseline must honour the same exclusions — a muted
+        // item resurfacing on the fallback path would break the user's trust
+        // in the control.
+        result = fallbackDecision(eligibleListingRows, requestId, generatedAt);
         if (circuitWasOpen) {
           result.decision.diagnostics.circuit_open = true;
         }
       }
       latencyMs = Date.now() - startedAt;
     }
+
+    // Observability: how many candidates the user's own controls removed
+    // before ranking — the honest answer to "did my feedback do anything".
+    result.decision.diagnostics.user_control_suppressed =
+      listingsResult.rows.length - eligibleListingRows.length;
 
     const baseServeMode =
       result.source === 'fallback' ? 'degraded_baseline' :
@@ -936,7 +1089,7 @@ export function registerRecommendationRoutes({
       durationSeconds: latencyMs / 1_000,
       resultCount: result.recommendations.length,
     });
-    const listingById = new Map(listingsResult.rows.map((row) => [row.id, row]));
+    const listingById = new Map(eligibleListingRows.map((row) => [row.id, row]));
     const items = result.recommendations.flatMap((recommendation) => {
       const listing = listingById.get(recommendation.listing_id);
       return listing

@@ -75,28 +75,7 @@ export function CommerceTrustDossier({
           hairlines for clear scanning. */}
       {(() => {
         const trustRows: { icon: keyof typeof Ionicons.glyphMap; label: string; dotColor?: string }[] = [];
-        // 1. Seller rating — social proof (review count/score summary)
-        if (seller?.rating != null && seller.rating > 0) {
-          const ratingText = seller.reviewCount != null && seller.reviewCount > 0
-            ? `${seller.rating.toFixed(1)} · ${seller.reviewCount} reviews`
-            : `${seller.rating.toFixed(1)}`;
-          trustRows.push({
-            icon: 'star-outline',
-            label: ratingText,
-          });
-        }
-        // 2. Seller verification — trust badge for verified sellers
-        if (seller?.verified || seller?.verificationTier === 'seller' || seller?.verificationTier === 'id') {
-          const verifyLabel = seller.verificationTier === 'seller'
-            ? 'Trusted Seller'
-            : seller.verificationTier === 'id'
-              ? 'ID Verified'
-              : 'Verified';
-          trustRows.push({
-            icon: 'checkmark-circle-outline',
-            label: verifyLabel,
-          });
-        }
+        // Rating and verification already belong to the seller identity above.
         // 3. Response time — "Usually responds in 2h" signal
         if (seller?.responseTimeLabel) {
           trustRows.push({
@@ -169,7 +148,7 @@ export function CommerceTrustDossier({
                 ) : (
                   <Ionicons name={row.icon} size={16} color={colors.textSecondary} />
                 )}
-                <Text style={[styles.trustFactText, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
+                <Text style={[styles.trustFactText, { color: colors.textSecondary }]} maxFontSizeMultiplier={2}>
                   {row.label}
                 </Text>
               </View>
