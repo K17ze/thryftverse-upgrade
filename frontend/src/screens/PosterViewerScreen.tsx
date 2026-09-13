@@ -72,7 +72,8 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring } from 'react-native-reanimated';
-import { safeValidateDocument, type CreatorDocument } from '../creator/composition';
+import { safeValidateDocument, type CreatorDocument, type CreatorLayer } from '../creator/composition';
+import { pageWithRenderedMedia } from '../creator/renderedViewDocument';
 import { CreatorCanvas } from '../creator/CreatorCanvas';
 import * as Clipboard from 'expo-clipboard';
 import { Sentry } from '../platform/monitoring';
@@ -221,7 +222,23 @@ export default function PosterViewerScreen() {
     return null;
   }, [activeStory?.compositionDocument]);
 
-  const compositionPage = compositionDoc?.pages[frameIndex] ?? null;
+  // When the frame's published `media_url` is a rendered artifact (the
+  // backend burned trim/speed/freeze/reverse/overlays into it at publish),
+  // the canvas must play THAT — not the doc's raw source URI — so the
+  // viewer shows exactly what was published. `pageWithRenderedMedia`
+  // substitutes the artifact and keeps only live/interactive layers.
+  const compositionPage = React.useMemo(() => {
+    const page = compositionDoc?.pages[frameIndex] ?? null;
+    if (!page || !activeFrame?.mediaUrl) return page;
+    const mediaLayer = page.layers.find((l) => l.type === 'media' && !l.hidden);
+    if (!mediaLayer || mediaLayer.type !== 'media') return page;
+    if (mediaLayer.payload.mediaUri === activeFrame.mediaUrl) return page;
+    return pageWithRenderedMedia(
+      page,
+      activeFrame.mediaUrl,
+      activeFrame.mediaType === 'video' ? 'video' : 'image',
+    );
+  }, [compositionDoc, frameIndex, activeFrame?.mediaUrl, activeFrame?.mediaType]);
 
   const goNextFrame = React.useCallback(() => {
     setProgress(0);

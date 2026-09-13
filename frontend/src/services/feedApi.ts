@@ -113,7 +113,10 @@ export interface SearchApiResult {
     sellerId: string;
     title: string;
     description: string;
-    priceGbp: number;
+    /** Asking price in GBP major units — `null` when the search index row
+     *  does not carry a price. Adapters must preserve null rather than
+     *  fabricating £0. */
+    priceGbp: number | null;
     imageUrl: string | null;
     rank: number;
     createdAt: string;
@@ -210,13 +213,49 @@ export async function fetchSearchAutocomplete(
   }
 }
 
-export async function searchListingsFromApi(query: string, limit?: number): Promise<SearchApiResult> {
+/** Backend sort contract for GET /search/listings. */
+export type ListingSearchSort = 'relevance' | 'recent' | 'price_asc' | 'price_desc' | 'most_liked';
+
+/** Filters accepted by GET /search/listings. All optional; omitted keys are
+ *  not serialized into the request. */
+export interface ListingSearchFilters {
+  category?: string;
+  condition?: string;
+  /** Single size (legacy contract). Prefer `sizes` for multi-select. */
+  size?: string;
+  /** Multi-select filters — serialized as comma-separated lists. */
+  brands?: string[];
+  sizes?: string[];
+  priceMin?: number;
+  priceMax?: number;
+  sustainableOnly?: boolean;
+  sort?: ListingSearchSort;
+  page?: number;
+}
+
+export async function searchListingsFromApi(
+  query: string,
+  limitOrFilters?: number | (ListingSearchFilters & { limit?: number }),
+): Promise<SearchApiResult> {
   const trimmed = query.trim();
   if (trimmed.length < 2) return { items: [] };
 
+  const options: ListingSearchFilters & { limit?: number } =
+    typeof limitOrFilters === 'number' ? { limit: limitOrFilters } : (limitOrFilters ?? {});
+
   const params = new URLSearchParams();
   params.set('q', trimmed);
-  if (limit) params.set('limit', String(Math.min(limit, 100)));
+  if (options.limit) params.set('limit', String(Math.min(options.limit, 100)));
+  if (options.category) params.set('category', options.category);
+  if (options.condition) params.set('condition', options.condition);
+  if (options.size) params.set('size', options.size);
+  if (options.brands && options.brands.length > 0) params.set('brands', options.brands.join(','));
+  if (options.sizes && options.sizes.length > 0) params.set('sizes', options.sizes.join(','));
+  if (options.priceMin != null) params.set('priceMin', String(options.priceMin));
+  if (options.priceMax != null) params.set('priceMax', String(options.priceMax));
+  if (options.sustainableOnly) params.set('sustainableOnly', 'true');
+  if (options.sort && options.sort !== 'relevance') params.set('sort', options.sort);
+  if (options.page && options.page > 1) params.set('page', String(options.page));
 
   try {
     const payload = await fetchJson<{ ok: boolean; query: string; fallback?: boolean; items: SearchApiResult['items'] }>(
@@ -231,5 +270,28 @@ export async function searchListingsFromApi(query: string, limit?: number): Prom
       items: [],
       error: friendlyBackendError(error),
     };
+  }
+}
+
+export interface TrendingSearchItem {
+  query: string;
+  frequency: number;
+}
+
+/**
+ * Real trending searches from the backend query-frequency tracker.
+ * Returns an empty list when there is no real trend data — callers must
+ * not fabricate trends in that case (AGENTS.md §11).
+ */
+export async function fetchTrendingSearches(
+  limit: number = 6,
+): Promise<{ items: TrendingSearchItem[]; error?: string }> {
+  try {
+    const payload = await fetchJson<{ ok: boolean; items: TrendingSearchItem[] }>(
+      `/search/trending?limit=${Math.min(Math.max(limit, 1), 20)}`
+    );
+    return { items: (payload.items ?? []).filter((i) => typeof i.query === 'string' && i.query.length > 0) };
+  } catch (error) {
+    return { items: [], error: friendlyBackendError(error) };
   }
 }

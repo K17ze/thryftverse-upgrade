@@ -1,14 +1,20 @@
 ---
-version: "1.7"
+version: "1.9"
 name: "ThryftVerse Neutral Flagship Native Design System"
-benchmark-date: "2026-09-08"
-description: "A machine-readable and human-readable design contract for a media-first native social-commerce marketplace. It is calibrated against current public Pinterest, Coinbase, Corner, Instagram, Depop, Vinted, Vestiaire and Whatnot product evidence while remaining faithful to the ThryftVerse React Native codebase. v1.6 adds reference-evidence discipline plus enforceable control anatomy, navigation geometry, direct-manipulation physics, sheet continuity, dense-row alignment and media-context rules. v1.7 registers the Co-Own detail authored patterns: the editorial section tab rail and the top-of-book quote strip, validated against September 2026 broker and fractional-ownership platform research. The neutral palette remains canonical; quality comes from geometry, media integrity, hierarchy, interaction, state clarity, accessibility and performance."
+benchmark-date: "2026-09-12"
+description: "A machine-readable and human-readable design contract for a media-first native social-commerce marketplace. It is calibrated against current public Pinterest, Coinbase, Corner, Instagram, Depop, Vinted, Vestiaire and Whatnot product evidence while remaining faithful to the ThryftVerse React Native codebase. v1.6 adds reference-evidence discipline plus enforceable control anatomy, navigation geometry, direct-manipulation physics, sheet continuity, dense-row alignment and media-context rules. v1.7 registers the Co-Own detail authored patterns: the editorial section tab rail and the top-of-book quote strip, validated against September 2026 broker and fractional-ownership platform research. v1.8 registers the Co-Own detail density upgrade: the asset dossier ribbon (compact metadata chip bar replacing inline provenance/condition/custody/fee grids) and the asset dossier sheet (unified bottom sheet consolidating provenance, custody, valuation, fees, and risk disclosure), plus the Co-Own typographic rescaling (title 28pt→20pt, market primary value 32pt→20pt, media height 26%→38-42%) validated against September 2026 Masterworks, Instagram, and Pinterest PDP density research. v1.9 registers the media pipeline contract seam (media[] with derivatives/EXIF/ICC/blurhash projected through listing reads), retrieval-scoped visual search facets, recommendation control (signed action weights, topic directives, negative feedback surface), accessibility hardening (SwipeableRow actions, a11yContentWrap sheet isolation, toast announcements, 200% font scaling), and focus/cache propagation (mutation-to-surface invalidation, dead-key fixes). The neutral palette remains canonical; quality comes from geometry, media integrity, hierarchy, interaction, state clarity, accessibility and performance."
 
 implementation-status:
-  current-runtime-theme: "VERIFIED — frontend/src/theme/ThemeContext.tsx currently exposes the neutral base palette and does not yet expose the proposed premium/luxury tokens below."
-  current-spacing-type-radius-motion: "VERIFIED — frontend/src/theme/designTokens.ts is the runtime source of truth."
-  current-gradients: "VERIFIED — frontend/src/theme/gradients.ts exposes static Gradients, Glass and Glow exports AND a useGradients() reactive hook (line 85)."
-  target-premium-tokens: "DEFERRED — do not introduce decorative champagne or gold in the flagship reconstruction. The current neutral runtime palette remains canonical; optional premium accents require a separate product decision and semantic use case."
+  current-runtime-theme: "SOURCE-VERIFIED 2026-09-12 — frontend/src/theme/ThemeContext.tsx exposes the neutral base palette plus implemented semantic accents (social, discovery, commerceTrust, coownUp, coownDown and their Subtle/Border variants). Premium accent tokens antiqueGold, bronze and bronzeSubtle are also exposed but marked @deprecated for new use; migration to semantic roles is in progress. The remaining proposed-luxury keys below (champagne, pressed variants, luxuryOnAccent, luxuryFocus*, softGoldSurface*, goldBorder*, goldGlow*) are not implemented."
+  current-spacing-type-radius-motion: "SOURCE-VERIFIED 2026-09-12 — frontend/src/theme/designTokens.ts is the runtime source of truth for Space, Radius and motion tokens. For typography it is a compatibility layer only — see typography-authority."
+  typography-authority: "SOURCE-VERIFIED 2026-09-12 — frontend/src/theme/typography.v2.ts (TypographyV2) is the canonical source of truth for new type code. designTokens.ts Type/TypeStyles are deprecated compatibility exports. Former migration gap closed (F04): Type.display now resolves to 32/38 — identical geometry to TypographyV2.display regardless of import path. TypographyV2 remains canonical."
+  current-gradients: "SOURCE-VERIFIED 2026-09-12 — frontend/src/theme/gradients.ts exposes static Gradients, Glass and Glow exports AND a useGradients() reactive hook (line 96)."
+  media-pipeline-contract: "SOURCE-VERIFIED 2026-09-12 — backend/api/src/lib/media/listingMediaProjection.ts projects media[] (uri, kind, width, height, focalPoint, poster, blurhash/lqip, derivatives[]) through listing_images reads. sharpPipeline.ts preserves EXIF orientation via .rotate(), keeps ICC profiles, and emits real BlurHash (not SHA-256). Frontend CachedImage consumes derivatives[] for responsive sizing; downscaleWidth CDN-param rewriting remains as fallback. Prefetch and render share resolveCachedImageSourceUri for identical cache keys."
+  visual-search-facets: "SOURCE-VERIFIED 2026-09-12 — backend/api/src/routes/visualSearch.ts accepts facets: { color?, style? } as retrieval parameters (ILIKE on title/description/brand/category). Response includes facets: { colors: [{value,count}], styles: [{value,count}] } + matchCount. Frontend chips display server counts; empty facet scopes show honest 'No matches found' not 'connection error'."
+  recommendation-control: "SOURCE-VERIFIED 2026-09-12 — ml-service ranking.py uses signed action weights (not_interested −4.0, show_fewer −2.5), symmetric ±8 cap, hard exclusion of not_interested/report_content, and topic directives (excluded drops decisive matches, less −0.18×match, more +0.10×match). recommendations.ts resolves intent mutations into eligibleListingRows; feedback events only attach requestId when the listing was in the personalised serve. Long-press opens control sheet on Discover tiles."
+  accessibility-patterns: "SOURCE-VERIFIED 2026-09-12 — SwipeableRow registers accessibilityActions (activate, longpress, leadingAction, trailingAction) for VoiceOver/TalkBack. a11yContentWrap container hides behind-sheet content on ItemDetail/Checkout/Inbox without hiding the open sheet (sheets render in-tree, not RN Modal). Toast uses accessibilityLiveRegion='polite' + announceForAccessibility (iOS only, TalkBack covered by live region). maxFontSizeMultiplier raised to 2.0 on CTAs and key text. Inert boldText/screenReaderHints toggles removed; textSize retained with corrected copy."
+  cache-propagation: "SOURCE-VERIFIED 2026-09-12 — Mutations invalidate the right queries: offer create/counter/accept/decline → listing.detail; order cancel → listing.detail + user.listingsAll + refreshListings; syndicate create → coOwn.holdings(issuerId) (dead-key fix). Focus refetches on Wallet, SellerAuctionCentre, FollowingFeed, ItemDetail, UserProfile, MyOrders, Inbox."
+  target-premium-tokens: "DEFERRED — do not introduce decorative champagne or gold in the flagship reconstruction. The current neutral runtime palette remains canonical; optional premium accents require a separate product decision and semantic use case. Existing deprecated antiqueGold/bronze consumers are legacy and must not be extended."
   migration-rule: "Never hardcode proposed tokens in screens. Add them to ThemeColors, LIGHT_COLORS and DARK_COLORS in one focused token migration, then consume through useAppTheme().colors."
 
 reference-priority:
@@ -68,6 +74,9 @@ colors:
       dark-surface: "#141414"
       accent-policy: "No decorative luxury accent. Quality comes from geometry, typography, state clarity and interaction."
 
+  # Partially implemented: antiqueGold (#C9A46A), bronze (#8A6A3F) and
+  # bronzeSubtle are exposed in ThemeContext.tsx but @deprecated for new use.
+  # All other keys below remain unimplemented proposals.
   proposed-luxury:
     champagne: "#F4E8D0"
     champagne-pressed: "#E3C98F"
@@ -84,6 +93,9 @@ colors:
     gold-glow-light: "rgba(201,164,106,0.18)"
     gold-glow-dark: "rgba(244,232,208,0.18)"
 
+  # Implemented: social, discovery, commerceTrust, coownUp and coownDown are
+  # exposed in ThemeContext.tsx (values are theme-adapted in constants/colors.ts;
+  # the light-theme hexes below are the canonical policy values).
   proposed-semantic:
     social: "#6B3245"
     discovery: "#7B0E1E"
@@ -226,7 +238,34 @@ components:
   top-of-book-strip:
     description: "Broker quote header above an order-book ladder: best bid (price + resting size) | spread | best ask (price + size). Bid value uses coownUp, ask uses coownDown, spread centered and neutral. Tabular numerals throughout; flat on canvas, hairline-separated from the ladder."
     typography: "price scale for bid/ask values; meta for sizes and spread label"
+  asset-dossier-ribbon:
+    description: "Compact horizontal chip bar on the Co-Own Overview tab that replaces the former inline provenance grid, condition/custody rows, and fee section. One tappable affordance opens the asset dossier sheet. Metadata fragments (condition grade, custodian, insured status, fee rate) are middot-separated text — not pills — the way Masterworks and Robinhood render compact metadata. Flat on canvas, hairline top + bottom separators, one shield-checkmark glyph + chevron-forward as the single 'this opens something' signal."
+    height: "44pt press target; visible glyph row ~20pt"
+    typography: "meta for all fragments; one weight, one family"
+    accessibility: "Single button role; label concatenates fragments; chevron is decorative"
+    anti-pattern: "Do not make individual fragments separately tappable — the ribbon is one disclosure affordance, not a row of independent buttons"
+  asset-dossier-sheet:
+    description: "Unified bottom sheet (snap 0.82) consolidating the former inline provenance, condition, custody, appraisal, fee schedule, and risk disclosure sections. Reuses the CoOwnAssetDossier component for structured provenance/condition/storage/appraisal rows, then appends a flat fee block and a 'Full due diligence' link. One sheet replaces ~400px of card clutter across the Overview tab."
+    snap-point: 0.82
+    header: "sectionTitle 'Asset dossier' + close target"
+    sections: "Provenance timeline · Condition · Storage (custody) · Appraisal · Fees · Full due diligence link"
+    typography: "bodyStrong for section headers; body for label/value rows; priceList for appraisal value"
+    accessibility: "Close button labeled; scrollable content; sheet dismiss on backdrop tap"
+    anti-pattern: "Do not duplicate fee schedule on the Ownership tab — the sheet is the single source of truth for fees"
 ---
+
+## Evidence status
+
+This document describes design policy and implementation direction. Claims about visual quality require rendered evidence — native screenshots and device review. Source-level verification (typecheck, lint, code inspection) is not visual acceptance.
+
+Status vocabulary used in this file and in implementation reports:
+
+- **implemented** — the code exists in the repository.
+- **statically verified / source-verified** — typecheck, lint or source inspection confirms the code; says nothing about rendered output.
+- **native reviewed** — a device capture of the rendered screen has been reviewed.
+- **live verified** — tested against real endpoints/data, not fixtures or fallbacks.
+
+A token, component or screen that is only implemented or source-verified must not be described as "flagship", "production-ready" or visually accepted.
 
 ## Overview
 
@@ -254,7 +293,7 @@ The app must feel:
 
 ### Benchmark freshness
 
-The reference interpretation in this file was reviewed against public product imagery, first-party App Store screenshots, official product documentation and publicly accessible design-system material available on **30 August 2026**. Reference applications evolve continuously. Agents must preserve the underlying product logic rather than freeze ThryftVerse to one screenshot or one historical layout.
+The reference interpretation in this file was reviewed against public product imagery, first-party App Store screenshots, official product documentation and publicly accessible design-system material accessed as of the benchmark date, **12 September 2026**. Reference applications evolve continuously. Agents must preserve the underlying product logic rather than freeze ThryftVerse to one screenshot or one historical layout.
 
 The user-supplied Mobbin Pinterest, Coinbase and Corner URLs are the named benchmark anchors for this revision. Their screen libraries are subscription-gated in the available environment, so no rule below is represented as a direct measurement of protected Mobbin content. Screen-level observations are taken from the corresponding current first-party App Store screenshot sets and official documentation. This evidence boundary is mandatory: a link identifying an app is not proof that an agent inspected every protected flow inside it.
 
@@ -299,7 +338,7 @@ The palette must support three distinct surface modes. The previous global rule 
 
 ### Current runtime palette
 
-`frontend/src/theme/ThemeContext.tsx` is the current source of truth for component colours through `useAppTheme().colors`. The verified runtime palette remains the neutral base documented in the YAML front matter. It does **not** currently expose the proposed premium/luxury keys.
+`frontend/src/theme/ThemeContext.tsx` is the current source of truth for component colours through `useAppTheme().colors`. The runtime palette is the neutral base documented in the YAML front matter, plus the implemented semantic accents (`social`, `discovery`, `commerceTrust`, `coownUp`, `coownDown` with Subtle/Border variants). Three premium accent keys — `antiqueGold`, `bronze`, `bronzeSubtle` — are exposed but marked `@deprecated` for new use; existing consumers are legacy. The remaining proposed-luxury keys (`champagne`, `luxuryOnAccent`, `luxuryFocus*`, `softGoldSurface*`, `goldBorder*`, `goldGlow*`, pressed variants) are **not** implemented in `ThemeColors`.
 
 The legacy `frontend/src/constants/colors.ts` is compatibility-only. New React components should use `useAppTheme().colors`; non-component utilities may use static tokens where hooks are impossible.
 
@@ -337,16 +376,16 @@ Choose a mode before designing a screen.
 - `surfaceElevated`: sheets, dialogs and materially elevated content.
 - `brand`: high-confidence primary action, not general decoration.
 - `danger`, `success`, `warning`: semantic truth only.
-- proposed `commerceTrust`: protection/verification only.
-- proposed `social` and `discovery`: selected action states only.
-- proposed `coownUp` / `coownDown`: financial truth only.
+- `commerceTrust` (implemented): protection/verification only.
+- `social` and `discovery` (implemented): selected action states only.
+- `coownUp` / `coownDown` (implemented): financial truth only.
 
 ### Rules
 
 1. **Imagery carries colour on media surfaces.** The UI should not compete with user content.
 2. **Canvas warmth is contextual, not global.** Warm premium surfaces are allowed where materiality or authenticated value matters; media and utility surfaces may remain neutral.
 3. **One dominant accent family per visual cluster.** Semantic state colours do not count as decoration.
-4. **No generic blue-purple web gradients.** Use only verified static exports from `theme/gradients.ts` (`Gradients`, `Glass`, `Glow`) or the reactive `useGradients()` hook, or add a focused token if a new gradient is required.
+4. **No generic blue-purple web gradients.** Use only the implemented static exports from `theme/gradients.ts` (`Gradients`, `Glass`, `Glow`) or the reactive `useGradients()` hook, or add a focused token if a new gradient is required.
 5. **Editable fields must look editable.** Use `colors.input` or transparent backgrounds with clear borders/focus states; never flat mid-grey blocks that read as disabled.
 6. **Gold is never a substitute for hierarchy.** A screen may be flagship with zero gold.
 7. **No hardcoded target colours.** Proposed tokens require ThemeContext migration first.
@@ -370,7 +409,7 @@ Luxury in ThryftVerse comes first from photography, composition, typography, int
 
 ### Implementation status
 
-The luxury tokens in the YAML front matter are **proposed**. They are not yet verified in the current runtime `ThemeContext.tsx`. Before any production component uses them:
+Most luxury tokens in the YAML front matter remain **proposed** and are not implemented in `ThemeContext.tsx`. Three of them — `antiqueGold`, `bronze` and `bronzeSubtle` — are already exposed at runtime but marked `@deprecated`: existing consumers are legacy, and no new uses may be added. Before any production component uses the remaining proposed keys:
 
 1. add every required key to `ThemeColors`;
 2. define both `LIGHT_COLORS` and `DARK_COLORS` values;
@@ -417,10 +456,12 @@ A flagship screen may use no gold at all.
 
 ## Typography
 
-Typography uses **Inter** (loaded via Expo Google Fonts) as the unified font family across iOS and Android. This ensures visual consistency and avoids platform font-rendering discrepancies. The source of truth is `frontend/src/theme/designTokens.ts` — use `FontFamily`, `Type`, `FontSize`, and `TypeStyles` tokens; never hardcode font families or arbitrary sizes.
+Typography uses **Inter** (loaded via Expo Google Fonts) as the unified font family across iOS and Android. This ensures visual consistency and avoids platform font-rendering discrepancies. **`frontend/src/theme/typography.v2.ts` (`TypographyV2`) is the canonical source of truth for new code** — use `TypographyV2` roles or `typographyV2Style(role)`. `designTokens.ts` `Type`/`TypeStyles`/`FontSize` are deprecated compatibility exports kept during migration; `FontFamily` remains shared. Never hardcode font families or arbitrary sizes.
+
+> **Migration note (F04 — closed):** `designTokens.ts` `Type.display` previously resolved to 24/30 while `TypographyV2.display` resolved to 32/38. The gap is closed — `Type.display` now resolves to 32/38, identical geometry to `TypographyV2.display` (and `TypeStyles.display` delegates to `TypographyV2`) regardless of import path. **TypographyV2's 32/38 remains canonical** — matching the YAML front matter and the type scale below.
 
 - **Font family:** Inter (light, regular, medium, semibold, bold, extrabold) via `FontFamily` token.
-- **React Native:** map through existing `Typography` / `TypeStyles` / `Type` tokens; do not hardcode arbitrary sizes.
+- **React Native:** map through `TypographyV2` roles / `typographyV2Style(role)` in new code; `Type` / `TypeStyles` remain only for unmigrated consumers. Do not hardcode arbitrary sizes.
 - **Financial values:** use `mono-tabular` role (platform monospace) for prices, portfolio values, deltas, units, and ledger values in Co-Own / auction surfaces.
 
 ### Type scale
@@ -450,7 +491,7 @@ Use only these semantic roles unless the screen has a justified exception:
 
 ## Layout
 
-ThryftVerse uses the verified `Space` scale from `frontend/src/theme/designTokens.ts`: 4 / 8 / 16 / 24 / 32 / 48. Treat it as a rhythm system, not a demand that every coordinate be a multiple of eight. Optical corrections of 1–4pt are allowed when they improve perceived alignment.
+ThryftVerse uses the `Space` scale implemented in `frontend/src/theme/designTokens.ts`: 4 / 8 / 16 / 24 / 32 / 48. Treat it as a rhythm system, not a demand that every coordinate be a multiple of eight. Optical corrections of 1–4pt are allowed when they improve perceived alignment.
 
 ### Structural rails
 
@@ -946,6 +987,229 @@ These specs define the exact token-level details that separate a functional comp
 - Curated module titles may use a short accent rule, but never repeat it under every heading.
 - CTAs remain `colors.brand` unless a specific authenticated ownership/certificate action warrants a premium fill.
 - Settings, Edit Profile and routine account screens do not receive decorative luxury accents.
+
+## Media Pipeline Contract
+
+The media pipeline is the foundation of the media-first product. The contract seam — the point where `listing_images` rows are projected into API responses — is the source of truth for all media surfaces.
+
+### Contract shape
+
+Every listing read emits a `media[]` array alongside the legacy `image_url`/`images[]` fields:
+
+```typescript
+interface ListingMediaRecord {
+  uri: string;                    // Canonical media URI
+  kind: 'image' | 'video';        // Media type
+  width?: number;                 // Source width (post-orientation)
+  height?: number;                // Source height (post-orientation)
+  focalPoint?: { x: number; y: number }; // Focal point for contentPosition
+  poster?: string;                // Video poster URI
+  blurhash?: string;              // Real BlurHash (not SHA-256 hex)
+  lqip?: string;                  // Low-quality image placeholder (base64)
+  derivatives?: Array<{           // Responsive sizes, ascending by width
+    width: number;
+    height: number;
+    url: string;
+    format: 'jpeg' | 'webp' | 'avif';
+  }>;
+  fit?: 'cover' | 'contain' | 'fill' | 'none' | 'scale-down'; // Authored fit
+}
+```
+
+### Backend pipeline
+
+- `sharpPipeline.ts` — generates responsive derivatives (200–2000w JPEG/WebP + AVIF + LQIP), preserves EXIF orientation via `.rotate()`, keeps ICC profiles, emits real BlurHash at processing time.
+- `listingMediaProjection.ts` — projects `media[]` through `listing_images` reads; filters legacy 32-hex SHA-256 values from `blurhash` field; `ORDER BY width ASC NULLS LAST` on derivatives.
+- `mediaAssets.ts` — persists derivatives to `media_derivatives` table.
+- `stripImageExif` — re-encodes with `.rotate()` and `.keepIccProfile()`; unhandled types (gif/tiff/avif) return `sourceBuffer` with a warn log instead of mislabeled JPEG.
+
+### Frontend consumption
+
+- `CachedImage` — consumes `derivatives[]` for responsive sizing; `resolveCachedImageSourceUri` is the shared source-URI policy for render and prefetch paths.
+- `PinterestMasonryGrid` — prefetch calls `resolveCachedImageSourceUri` with the tile's real cover image and `downscaleWidth`; cache keys match render keys.
+- `CommerceMediaStage` — video poster placeholder applies `contentPosition` from `item.focalPoint`; video `contentFit` maps from media's `fit` property.
+- `downscaleWidth` — CDN-param rewriting remains as fallback for non-derivative media (Cloudinary/Imgix/Supabase/CloudFront hosts).
+
+### Media pipeline rules
+
+1. **Never download full-resolution originals for thumbnails.** Use `derivatives[]` — the backend generates them at 200–2000w.
+2. **Placeholder geometry matches final image geometry.** The LQIP/preview must use the same `contentFit` and `contentPosition` as the final image.
+3. **Reset recycled image identity.** `recyclingKey` + reset effect prevents old listing's photo from flashing on new listing.
+4. **Missing media is honest.** Show a restrained placeholder with the correct aspect ratio, not a grey rectangle.
+5. **EXIF orientation is preserved.** `.rotate()` is applied before re-encoding; `mediaAspectRatio` records post-rotation dims.
+6. **BlurHash is real.** The stored value is a spec-correct Base83/DCT-encoded BlurHash, not a SHA-256 hex.
+7. **Focal points are respected.** `contentPosition` from `focalPoint` prevents centre-crop → focal-crop shift on crossfade.
+8. **Video `contentFit` is authored.** The media's `fit` property maps to the correct `ResizeMode`; default is `COVER`.
+
+## Accessibility Patterns
+
+Accessibility is a first-class contract, not a polish step. The codebase is strong on a11y — `useReducedMotion` ORs OS + in-app prefs, `BottomSheet` has `accessibilityViewIsModal` + focus management, `AnimatedPressable` defaults role/state/hitSlop. These are the patterns that close the remaining gaps.
+
+### SwipeableRow accessibility actions
+
+`SwipeableRow` registers `accessibilityActions` for VoiceOver/TalkBack:
+
+- `activate` — opens the row's primary action (navigate, select)
+- `longpress` — opens the row's secondary action (quick actions, reorder)
+- `leadingAction` — left swipe action (e.g. "Mark read")
+- `trailingAction` — right swipe action (e.g. "Archive")
+
+The `onAccessibilityAction` handler dispatches to the same callbacks the gesture path fires. The `longPressActionLabel` prop customises the action name (default `'Show actions'`).
+
+### Sheet focus isolation
+
+Sheets render in-tree (not RN `Modal`), so `accessibilityElementsHidden` on the screen root would hide the open sheet itself. The `a11yContentWrap` pattern wraps all behind-sheet chrome (header, scroll content, dock/pay footer) in a `flex:1` container carrying the hiding props, with sheets as siblings:
+
+```tsx
+<View style={styles.root}>
+  <View style={styles.a11yContentWrap} accessibilityElementsHidden={anySheetVisible} importantForAccessibility={anySheetVisible ? 'no-hide-descendants' : 'auto'}>
+    {/* header, scroll content, dock */}
+  </View>
+  {/* sheets as siblings — remain accessible */}
+</View>
+```
+
+This is used on `ItemDetailScreen`, `CheckoutScreen`, and `InboxScreen`.
+
+### Toast announcements
+
+`Toast` uses `accessibilityLiveRegion="polite"` + `accessibilityRole="alert"` on the container (covers TalkBack) and `announceForAccessibility` on mount (covers VoiceOver, iOS only — TalkBack is covered by the live region, so the explicit announce is gated to `Platform.OS === 'ios'` to prevent double-announcement).
+
+### Font scaling
+
+`maxFontSizeMultiplier` is raised to `2.0` on CTAs and key text (`AppButton`, `ItemDetailScreen`, `CheckoutScreen`, `CommerceActionDock`, `CommerceIdentityBlock`, `CommerceTrustDossier`). The previous `1.3–1.4` caps contradicted the "works at 200% text" goal.
+
+### Inert toggles
+
+`boldText` and `screenReaderHints` were removed — they had zero consumers and could not be applied globally to ~2,600 raw `<Text>` nodes. `textSize` is retained (real consumers via `ui/Text`, ~30 files) with corrected copy.
+
+### Accessibility rules
+
+1. **Every interactive element has an `accessibilityLabel`** — icons, buttons, rows, sheets.
+2. **Every button has an `accessibilityRole`** — `button`, `link`, `header`, `image`, etc.
+3. **Non-obvious actions have an `accessibilityHint`** — "Double tap to select", "Swipe left to delete".
+4. **Touch targets are ≥44pt** — the whole row owns the target, not just the icon.
+5. **State is not colour-only** — text, icon, or pattern accompanies colour changes.
+6. **Dynamic content has `accessibilityLiveRegion`** — toasts, banners, status changes.
+7. **Decorative elements have `accessible={false}`** — icons, dividers, background media.
+8. **Sheets isolate focus** — `a11yContentWrap` hides behind-sheet content without hiding the sheet.
+9. **Reduced motion is respected** — `useReducedMotion` ORs OS + in-app prefs; no ungated `withRepeat`/`withSequence`.
+10. **Font scaling is supported** — `allowFontScaling` on text; `maxFontSizeMultiplier={2}` on CTAs; layouts don't break at 200%.
+
+## Cache Propagation
+
+Mutations must propagate to the right surfaces. The mutation-to-surface map defines which caches invalidate or refetch after each mutation.
+
+### Mutation-to-surface map
+
+| Mutation | Invalidates | Refetches |
+|----------|-------------|-----------|
+| `createListing` | `user.listings`, `listing.detail` | — |
+| `updateListing` | `user.listings`, `listing.detail` | — |
+| `deleteListing` | `user.listings`, `listing.detail` | — |
+| `createOffer` / `counterOffer` | `listing.detail` | — |
+| `acceptOffer` | `listing.detail`, `user.listingsAll(sellerId)`, `refreshListings()` | — |
+| `declineOffer` | `listing.detail` | — |
+| `cancelOrder` | `listing.detail`, `user.listingsAll`, `refreshListings()` | — |
+| `checkoutSettlement` | `listing.detail`, `user.listingsAll`, `refreshListings()` | — |
+| `createSyndicate` | `coOwn.holdings(issuerId)` | — |
+| `follow` / `unfollow` | `user.following(viewerId)` | — |
+| `save` / `unsave` | `wishlist`, `listing.detail` | — |
+| `sendMessage` | `chat.conversation(id)` | — |
+| `markRead` | `chat.conversations` | — |
+
+### Focus refetching
+
+Focused screens refetch stale data via `useFocusEffect` or `useIsFocused`:
+
+- `WalletScreen` — silent `loadBalance(true)` on focus (skip-first)
+- `SellerAuctionCentreScreen` — skip-first-focus refetch
+- `useFollowingFeed` — mutation-cache subscription + 120s-gated focus refetch
+- `ItemDetailScreen` / `UserProfileScreen` — `useRefetchOnFocus`
+- `MyOrdersScreen` — latest-ref + skip-first + `isFetchingRef`
+- `InboxScreen` — every-focus, skeleton gated by empty list
+
+### Cache propagation rules
+
+1. **Invalidate only what changed.** Don't over-invalidate — only refetch the queries that surface the mutated data.
+2. **Focus refetches are silent.** Use `silent: true` or equivalent to suppress skeleton flash on refocus.
+3. **Skip-first-focus is the default.** Don't refetch on mount — the initial fetch already covers it.
+4. **Dead keys are fixed.** `['coown','assets']` → `coOwn.holdings(issuerId)` — always use the canonical query key.
+5. **Unknown-outcome reconciliation is shared.** `useUnknownOutcomeReconciliation` + `lookupOfferByIdempotencyKey` are used on both `MakeOfferScreen` and `MakeOfferSheet`.
+
+## Visual Search Facets
+
+Visual-search facets are retrieval-scoped backend parameters, not post-filters. The backend uses facets to narrow the candidate set before returning results.
+
+### Contract
+
+```typescript
+// Request
+POST /api/visual-search
+{
+  imageUrl?: string;
+  imageBase64?: string;
+  facets?: {
+    color?: string;    // e.g. "Red"
+    style?: string;    // e.g. "Vintage"
+  }
+}
+
+// Response
+{
+  items: ListingApiItem[];
+  facets: {
+    colors: [{ value: string; count: number }];
+    styles: [{ value: string; count: number }];
+  };
+  matchCount: number;
+}
+```
+
+### Backend
+
+- `visualSearch.ts` — `facets` schema accepts `{ color?, style? }`; appended to candidate `WHERE` clause via `concat_ws(' ', title, description, brand, category) ILIKE $n`.
+- Facet counts use standard faceted-search scoping — each dimension counted under all filters *except itself*.
+- `matchCount` reflects the full facet scope.
+
+### Frontend
+
+- `buildFilterPayload` emits facets as query parameters, not post-filters.
+- Chips display server counts inline (`Red · 12`) and in accessibility labels.
+- `facetCounts` cleared on offline/error/reset — no fabricated numbers.
+- Cached-listings fallback keeps client-side facet matching (cache is the whole offline dataset).
+
+### Visual search rules
+
+1. **Facets are retrieval parameters.** The backend narrows the candidate set, not the frontend.
+2. **Facet counts are server-computed.** The response includes per-facet counts; the frontend displays them, not guesses them.
+3. **Empty facet scopes are honest.** "No matches found" with a Clear-filters CTA, not a connection error.
+4. **Facet vocabularies are contractual.** `COLOR_FACET_VALUES`/`STYLE_FACET_VALUES` (backend) mirror `COLOR_FACETS`/`STYLE_FACETS` (frontend) by convention — commented on both sides.
+5. **Cached fallback is honest.** When the API is unavailable, cached listings are substituted and labelled `partial` — but the facet scope is preserved.
+
+## Recommendation Control
+
+The recommendation surface gives users real control over their feed — not just a "like" button that doesn't affect anything.
+
+### Feedback surface
+
+- **Long-press** on a Discover tile opens a control sheet with "Not interested", "Show less like this", and "Why am I seeing this?".
+- `FeedExplanationSheet` shows real `reasonCodes`/`componentScores` from the serve when available; falls back to `sessionTopics` mocks with a "Demo mode" pill when not.
+- `recommendationFeedbackApi.ts` — `markItemNotInterested` (interaction + item `exclude` mutation) and `showFewerLikeThis` (interaction + `less` directive on category/brand).
+
+### Algorithm
+
+- `ranking.py` — signed action weights (`not_interested` −4.0, `show_fewer` −2.5, `save` +2.0, `wishlist` +2.0, `purchase` +3.0), symmetric ±8 cap, hard exclusion of `not_interested`/`report_content`, negative token mass into `profile_weights`/`sequence_weights`.
+- `recommendations.ts` — resolves topic bands + latest-per-target intent mutations + negative interactions into `eligibleListingRows`; forwards `topic_directives` to the decision service; `user_control_suppressed` diagnostic.
+- `schemas.py` — `Action` literal includes all 19 actions; `TopicDirective` + `topic_directives` field.
+
+### Recommendation rules
+
+1. **Feedback actually affects recommendations.** `not_interested` removes the item; `excluded` removes the topic; `less` down-ranks ~35% without suppressing.
+2. **Negative feedback is durable.** Writes to `POST /interactions` + `POST /recommendations/intent/:userId/mutate`; both bump the intent epoch → cache key changes.
+3. **Feedback attribution is honest.** `requestId` is only attached when the listing was in the personalised serve — non-personalised tiles don't 422.
+4. **The "Why am I seeing this?" sheet uses real serve data.** `reasonCodes`/`componentScores` from `forYouFeed.items`, not mock topics.
+5. **Guests get local-only hide.** No user id → honest non-persistence.
 
 ## Do's and Don'ts
 
@@ -1827,7 +2091,7 @@ Do not substitute ADB poking for design implementation.
 - Keyboard: use `KeyboardAwareScrollView` and `KeyboardStickyView` from `platform/keyboard/KeyboardProvider` (re-exports `react-native-keyboard-controller`); use any higher-level keyboard wrappers only after verifying them on the active branch.
 - Animation: Reanimated with reduced-motion behaviour.
 - Haptics: selection/light for low-risk interaction, medium for bid/buy/offer/send commitment, success for real completion.
-- Gradients/glass: use verified static `Gradients`, `Glass` and `Glow` exports from `theme/gradients.ts`, or the reactive `useGradients()` hook (verified at gradients.ts:85).
+- Gradients/glass: use the implemented static `Gradients`, `Glass` and `Glow` exports from `theme/gradients.ts`, or the reactive `useGradients()` hook (gradients.ts:96).
 - Icons: Ionicons or an existing mapped project icon family.
 - Fonts: Inter through `FontFamily`/`Type`/`TypeStyles`.
 

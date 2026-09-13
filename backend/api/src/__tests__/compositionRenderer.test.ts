@@ -588,6 +588,237 @@ describe('renderComposition — video path', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Wave 12 — authored edit parity (volume, fades, freeze, reverse, curves)
+// ---------------------------------------------------------------------------
+
+describe('renderComposition — audio edits', () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    fetchSpy = vi.spyOn(globalThis, 'fetch');
+    ffmpegMock.runFfmpeg.mockReset();
+    ffprobeMock.probeMedia.mockReset();
+    fsMock.writeFile.mockReset();
+    fsMock.readFile.mockReset();
+    fsMock.rm.mockReset();
+
+    ffmpegMock.runFfmpeg.mockResolvedValue(undefined);
+    ffprobeMock.probeMedia.mockResolvedValue(defaultProbeResult());
+    fsMock.writeFile.mockResolvedValue(undefined);
+    fsMock.readFile.mockResolvedValue(FAKE_MP4);
+    fsMock.rm.mockResolvedValue(undefined);
+    fetchSpy.mockResolvedValue(new Response(FAKE_MP4, { status: 200 }));
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('applies a volume filter for partial volume (0 < v < 1)', async () => {
+    await renderComposition(
+      videoDoc({ volume: 0.5, videoDurationMs: 10000 }),
+      'https://cdn.example.com/clip.mp4',
+    );
+
+    const args = ffmpegMock.runFfmpeg.mock.calls[0]![0] as string[];
+    const af = args[args.indexOf('-af') + 1] as string;
+    expect(af).toContain('volume=0.5');
+  });
+
+  it('emits afade filters for authored audio fades', async () => {
+    await renderComposition(
+      videoDoc({ fadeInMs: 500, fadeOutMs: 1000, videoDurationMs: 10000 }),
+      'https://cdn.example.com/clip.mp4',
+    );
+
+    const args = ffmpegMock.runFfmpeg.mock.calls[0]![0] as string[];
+    const af = args[args.indexOf('-af') + 1] as string;
+    expect(af).toContain('afade=t=in:st=0:d=0.500');
+    // fadeOut starts at outputDuration - fadeOut = 10s - 1s = 9s.
+    expect(af).toContain('afade=t=out:st=9.000:d=1.000');
+  });
+
+  it('drops the audio stream when muted on the transcode path', async () => {
+    // volume 0 + speed 2 → transcode (not remux); audio must still be muted.
+    await renderComposition(
+      videoDoc({ volume: 0, speed: 2, videoDurationMs: 10000 }),
+      'https://cdn.example.com/clip.mp4',
+    );
+
+    const args = ffmpegMock.runFfmpeg.mock.calls[0]![0] as string[];
+    expect(args).toContain('-an');
+    // No audio stream should be mapped or encoded.
+    expect(args).not.toContain('-af');
+    expect(args).not.toContain('-c:a');
+    const mapIdx = args.indexOf('-map');
+    if (mapIdx >= 0) {
+      expect(args[mapIdx + 1]).not.toContain('a');
+    }
+  });
+});
+
+describe('renderComposition — advanced video edits', () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    fetchSpy = vi.spyOn(globalThis, 'fetch');
+    ffmpegMock.runFfmpeg.mockReset();
+    ffprobeMock.probeMedia.mockReset();
+    fsMock.writeFile.mockReset();
+    fsMock.readFile.mockReset();
+    fsMock.rm.mockReset();
+
+    ffmpegMock.runFfmpeg.mockResolvedValue(undefined);
+    ffprobeMock.probeMedia.mockResolvedValue(defaultProbeResult());
+    fsMock.writeFile.mockResolvedValue(undefined);
+    fsMock.readFile.mockResolvedValue(FAKE_MP4);
+    fsMock.rm.mockResolvedValue(undefined);
+    fetchSpy.mockResolvedValue(new Response(FAKE_MP4, { status: 200 }));
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const fcOf = (args: string[]) => args[args.indexOf('-filter_complex') + 1] as string;
+
+  it('renders a freeze frame via tpad clone-hold inside a concat graph', async () => {
+    await renderComposition(
+      videoDoc({ freezeFrameMs: 3000, freezeDurationMs: 2000, videoDurationMs: 10000 }),
+      'https://cdn.example.com/clip.mp4',
+    );
+
+    const args = ffmpegMock.runFfmpeg.mock.calls[0]![0] as string[];
+    expect(args).toContain('-filter_complex');
+    const fc = fcOf(args);
+    // Freeze segment: isolate a frame at 3s then clone-hold for ~2s.
+    expect(fc).toContain('tpad=stop_mode=clone');
+    // Three segments concatenated (pre, freeze, post).
+    expect(fc).toContain('concat=n=3:v=1:a=0');
+    // The frozen window's audio is silence, not dup'd audio.
+    expect(fc).toContain('anullsrc');
+    expect(fc).toContain('concat=n=3:v=0:a=1');
+    // -t limits input read to the trimmed window.
+    expect(args).toContain('-t');
+    expect(args[args.indexOf('-t') + 1]).toBe('10.000');
+  });
+
+  it('reverses video and audio per-segment with reversed concat order', async () => {
+    await renderComposition(
+      videoDoc({ reversed: true, videoDurationMs: 10000 }),
+      'https://cdn.example.com/clip.mp4',
+    );
+
+    const args = ffmpegMock.runFfmpeg.mock.calls[0]![0] as string[];
+    const fc = fcOf(args);
+    // Single-segment reverse: the play segment carries `reverse`, the
+    // audio segment carries `areverse`.
+    expect(fc).toContain(',reverse');
+    expect(fc).toContain('areverse');
+    expect(fc).toContain('concat=n=1:v=1:a=0');
+  });
+
+  it('subdivides a speed curve into per-segment trims + setpts', async () => {
+    await renderComposition(
+      videoDoc({
+        speedCurve: {
+          points: [
+            { id: 'p0', position: 0, speed: 0.5 },
+            { id: 'p1', position: 1, speed: 2 },
+          ],
+          easing: 'linear',
+        },
+        videoDurationMs: 10000,
+      }),
+      'https://cdn.example.com/clip.mp4',
+    );
+
+    const args = ffmpegMock.runFfmpeg.mock.calls[0]![0] as string[];
+    const fc = fcOf(args);
+    // The curve is subdivided into fixed-count segments, each trimmed and
+    // speed-scaled, then concatenated.
+    expect(fc).toContain('concat=n=24:v=1:a=0');
+    expect(fc).toContain('concat=n=24:v=0:a=1');
+    // First segment (~position 0.02) ≈ speed 0.52; mid segment faster.
+    expect(fc).toMatch(/setpts=\(PTS-STARTPTS\)\/0\.\d+/);
+    expect(fc).toMatch(/setpts=\(PTS-STARTPTS\)\/1\.\d+/);
+    // Audio uses per-segment atempo factors.
+    expect(fc).toContain('atempo=');
+  });
+
+  it('keeps total output duration when a freeze window skips source content', async () => {
+    await renderComposition(
+      videoDoc({ freezeFrameMs: 2000, freezeDurationMs: 1000, videoDurationMs: 10000 }),
+      'https://cdn.example.com/clip.mp4',
+    );
+
+    const options = ffmpegMock.runFfmpeg.mock.calls[0]![2] as { totalDurationMs: number };
+    // Output duration = trimDur/speed (freeze replaces, not inserts).
+    expect(options.totalDurationMs).toBe(10000);
+  });
+});
+
+describe('renderComposition — timed overlays', () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    fetchSpy = vi.spyOn(globalThis, 'fetch');
+    ffmpegMock.runFfmpeg.mockReset();
+    ffprobeMock.probeMedia.mockReset();
+    fsMock.writeFile.mockReset();
+    fsMock.readFile.mockReset();
+    fsMock.rm.mockReset();
+
+    ffmpegMock.runFfmpeg.mockResolvedValue(undefined);
+    ffprobeMock.probeMedia.mockResolvedValue(defaultProbeResult());
+    fsMock.writeFile.mockResolvedValue(undefined);
+    fsMock.readFile.mockResolvedValue(FAKE_MP4);
+    fsMock.rm.mockResolvedValue(undefined);
+    fetchSpy.mockResolvedValue(new Response(FAKE_MP4, { status: 200 }));
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('gates drawtext on the authored timeRange via enable=between(t,…)', async () => {
+    const doc = videoDocWithLayers(
+      [{
+        id: 'text_1', type: 'text', x: 0.5, y: 0.2, width: 0.8, height: 0.12,
+        scale: 1, rotation: 0, zIndex: 1, hidden: false, opacity: 1,
+        timeRange: { startMs: 1500, endMs: 4500 },
+        payload: { text: 'Timed', textColor: '#ffffff', fontSize: 48 },
+      }],
+      { videoDurationMs: 10000 },
+    );
+
+    await renderComposition(doc, 'https://cdn.example.com/clip.mp4');
+
+    const args = ffmpegMock.runFfmpeg.mock.calls[0]![0] as string[];
+    const vf = args[args.indexOf('-vf') + 1] as string;
+    expect(vf).toContain("enable='between(t,1.500,4.500)'");
+  });
+
+  it('gates sticker overlays on the authored timeRange via overlay enable', async () => {
+    const doc = videoDocWithLayers(
+      [{
+        id: 'sticker_1', type: 'mention', x: 0.5, y: 0.85, width: 0.3, height: 0.08,
+        scale: 1, rotation: 0, zIndex: 1, hidden: false, opacity: 1,
+        timeRange: { startMs: 2000, endMs: 6000 },
+        payload: { username: 'creator' },
+      }],
+      { videoDurationMs: 10000 },
+    );
+
+    await renderComposition(doc, 'https://cdn.example.com/clip.mp4');
+
+    const args = ffmpegMock.runFfmpeg.mock.calls[0]![0] as string[];
+    const fc = args[args.indexOf('-filter_complex') + 1] as string;
+    expect(fc).toContain("overlay=0:0:enable='between(t,2.000,6.000)'");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Filter preset matrices
 // ---------------------------------------------------------------------------
 

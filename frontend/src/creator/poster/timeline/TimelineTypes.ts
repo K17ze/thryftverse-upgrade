@@ -83,12 +83,13 @@ export interface PosterClip {
   /** Computed: (trimEnd - trimStart) adjusted for speed. */
   durationMs: number;
   /**
-   * Variable speed curve anchored to source-media time. When present, the
-   * renderer samples the curve via the {@link SpeedCurveEvaluator} to
-   * compute instantaneous speed at each timeline position. The `speed`
-   * field holds the average speed for duration display.
+   * Variable speed curve (normalized-position model — the authored payload
+   * shape, matching {@link PosterClipRef.speedCurve} and
+   * `MediaLayerPayloadSchema.speedCurve`). When present, the projection
+   * uses {@link averageSpeed} over the curve for the wall-clock duration
+   * and `speed` holds that average for display.
    */
-  speedCurve?: SpeedCurvePoint[];
+  speedCurve?: SpeedCurve;
   /** Crop rectangle (normalized 0..1) applied to the source frame. */
   cropRect?: ClipCropRect;
   /** Rotation in degrees — one of 0, 90, 180, 270. */

@@ -57,6 +57,7 @@ import type {
   TimelineOperation,
 } from './timeline';
 import type { SpeedCurve } from './speedcurves/SpeedCurveTypes';
+import { averageSpeed } from './speedcurves/SpeedCurveTypes';
 import type { ActiveSheet } from './useActiveSheet';
 import {
   trimClipStart,
@@ -66,7 +67,7 @@ import {
   splitClip,
   duplicateClip,
 } from './timeline/TimelineOperations';
-import { computeTotalDuration } from './timeline';
+import { projectTimeline } from '../core/playback';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -189,46 +190,41 @@ export function usePosterTimeline({
   setPickerMode,
 }: UsePosterTimelineInput): UsePosterTimelineResult {
   // ── Timeline clips + page-index mapping ────────────────────────────
-  // Map pages with video media to PosterClip objects. We also track which
-  // page each clip originated from (clipPageIndices) so the transition
-  // icons between clips can resolve the source page's transitionId.
-  // Both are derived in a single memo to avoid a ref-mutation-in-memo.
-  const { timelineClips, clipPageIndices } = useMemo<{
+  // The editor timeline is derived from the canonical TimelineProjector —
+  // the same projection the playback clock consumes — so clip order,
+  // first-media-per-page semantics, speed-curve durations, freeze frames
+  // and reverse flags can never drift between the strip and playback.
+  // clipPageIndices maps each clip back to its page so transition icons
+  // resolve the source page's transitionId.
+  const { timelineClips, clipPageIndices, projectedTimeline } = useMemo<{
     timelineClips: PosterClip[];
     clipPageIndices: number[];
+    projectedTimeline: ReturnType<typeof projectTimeline>;
   }>(() => {
-    const clips: PosterClip[] = [];
-    const pageIndices: number[] = [];
-    for (let pageIdx = 0; pageIdx < document.pages.length; pageIdx++) {
-      const p = document.pages[pageIdx];
-      for (const layer of p.layers) {
-        if (layer.type !== 'media' || layer.payload.mediaType !== 'video') continue;
-        const payload = layer.payload;
-        const trimStart = payload.trimStartMs ?? 0;
-        const trimEnd =
-          payload.trimEndMs ??
-          payload.videoDurationMs ??
-          p.durationMs ??
-          5000;
-        const rawDuration = Math.max(100, trimEnd - trimStart);
-        const speed = payload.speed ?? 1.0;
-        const durationMs = rawDuration / speed;
-        clips.push({
-          id: layer.id,
-          assetId: layer.id,
-          sourceUri: payload.mediaUri,
-          trimStartMs: trimStart,
-          trimEndMs: trimEnd,
-          speed,
-          volume: payload.volume ?? 1.0,
-          thumbnailUri: payload.thumbnailUri,
-          durationMs,
-        });
-        pageIndices.push(pageIdx);
-      }
-    }
-    return { timelineClips: clips, clipPageIndices: pageIndices };
-  }, [document.pages]);
+    const projected = projectTimeline(document);
+    const pageIndexById = new Map(
+      document.pages.map((p, i) => [p.id, i] as const),
+    );
+    const clips: PosterClip[] = projected.clips.map((pc) => ({
+      id: pc.layerId,
+      assetId: pc.assetId,
+      sourceUri: pc.sourceUri,
+      mediaType: pc.mediaType,
+      trimStartMs: pc.sourceStartMs,
+      trimEndMs: pc.sourceEndMs,
+      speed: pc.speed,
+      speedCurve: pc.speedCurve,
+      volume: pc.volume,
+      thumbnailUri: pc.thumbnailUri,
+      durationMs: pc.durationMs,
+      reversed: pc.reversed,
+      freezeFrameMs: pc.freezeFrameMs,
+    }));
+    const pageIndices = projected.clips.map(
+      (pc) => pageIndexById.get(pc.pageId) ?? 0,
+    );
+    return { timelineClips: clips, clipPageIndices: pageIndices, projectedTimeline: projected };
+  }, [document]);
 
   // ── Selection coherence ────────────────────────────────────────────
   // Validate selectedClipId against the current timeline clips. If the
@@ -265,42 +261,40 @@ export function usePosterTimeline({
   }, [clipPageIndices, document.pages]);
 
   // ── Timeline overlays (clip-anchored overlay resolution, W7-4) ──────
-  // Build a clip-id → absolute-start-ms map so clip-anchored overlays
-  // can resolve their timeRange relative to their owning clip's start.
-  // This makes overlays follow clips on reorder: when a clip moves,
-  // its anchored overlays move with it automatically.
+  // Overlay offsets are rebased onto the canonical projection: clip start
+  // positions come from ProjectedClip.timelineStartMs and each page's
+  // timeline footprint is its projected clip duration (or the authored
+  // page duration for media-less pages) — identical to the accumulation
+  // the playback projector performs. Previously the offsets used raw
+  // page.durationMs, so overlay positions drifted from playback whenever
+  // a clip's speed or speed curve changed its projected duration.
   const timelineOverlays = useMemo<OverlayLayer[]>(() => {
     const overlays: OverlayLayer[] = [];
-    // Build a clip-id → absolute-start-ms map so clip-anchored overlays
-    // can resolve their timeRange relative to their owning clip's start.
-    // This makes overlays follow clips on reorder: when a clip moves,
-    // its anchored overlays move with it automatically.
+    // clip-id → projected absolute start/duration, for clipId anchors.
     const clipStartMsById = new Map<string, number>();
-    let clipOffsetMs = 0;
-    for (const p of document.pages) {
-      const pageDuration = p.durationMs ?? 5000;
-      let hasVideoClip = false;
-      for (const layer of p.layers) {
-        if (layer.type === 'media' && layer.payload.mediaType === 'video') {
-          hasVideoClip = true;
-          clipStartMsById.set(layer.id, clipOffsetMs);
-          continue;
-        }
-      }
-      if (hasVideoClip) {
-        clipOffsetMs += pageDuration;
-      }
+    const clipDurationMsById = new Map<string, number>();
+    const clipByPageId = new Map<string, number>();
+    for (const c of projectedTimeline.clips) {
+      clipStartMsById.set(c.layerId, c.timelineStartMs);
+      clipDurationMsById.set(c.layerId, c.durationMs);
+      clipByPageId.set(c.pageId, c.durationMs);
     }
-    // Second pass: collect overlays, resolving clipId anchors.
-    clipOffsetMs = 0;
+    // Page start offsets accumulate each page's projected span — matching
+    // the projector's cumulative walk so every page (including still-image
+    // and media-less pages) occupies the same timeline footprint as in
+    // playback.
+    const pageStartMsById = new Map<string, number>();
+    const pageDurationMsById = new Map<string, number>();
+    let acc = 0;
     for (const p of document.pages) {
-      const pageDuration = p.durationMs ?? 5000;
-      let hasVideoClip = false;
+      pageStartMsById.set(p.id, acc);
+      const span = clipByPageId.get(p.id) ?? (p.durationMs ?? 0);
+      pageDurationMsById.set(p.id, span);
+      acc += span;
+    }
+    for (const p of document.pages) {
       for (const layer of p.layers) {
-        if (layer.type === 'media' && layer.payload.mediaType === 'video') {
-          hasVideoClip = true;
-          continue;
-        }
+        if (layer.type === 'media') continue;
         let overlayType: OverlayLayer['type'] | null = null;
         let label = '';
         if (layer.type === 'text') {
@@ -321,10 +315,11 @@ export function usePosterTimeline({
         }
         if (overlayType) {
           const stored = layer.timeRange;
-          // If the overlay has a clipId anchor, resolve its timeRange
-          // relative to the clip's absolute start. This makes the overlay
-          // follow the clip on reorder — the clip moves, the overlay moves.
-          const anchorClipId = (layer as { clipId?: string }).clipId;
+          // If the overlay has a clipId anchor, resolve its default range
+          // against the clip's projected absolute start. This makes the
+          // overlay follow the clip on reorder — the clip moves, the
+          // overlay moves.
+          const anchorClipId = layer.clipId;
           const clipStart = anchorClipId ? clipStartMsById.get(anchorClipId) : undefined;
           if (anchorClipId && clipStart == null) {
             // Orphaned anchor — the clip was deleted, split, or moved to
@@ -335,10 +330,10 @@ export function usePosterTimeline({
               `[usePosterTimeline] Overlay layer '${layer.id}' has orphaned clipId '${anchorClipId}' — falling back to page-level timing.`,
             );
           }
-          const baseOffset = clipStart ?? clipOffsetMs;
+          const baseOffset = clipStart ?? pageStartMsById.get(p.id) ?? 0;
           const baseDuration = clipStart != null
-            ? (timelineClips.find((c) => c.id === anchorClipId)?.durationMs ?? pageDuration)
-            : pageDuration;
+            ? (clipDurationMsById.get(anchorClipId!) ?? pageDurationMsById.get(p.id) ?? 0)
+            : (pageDurationMsById.get(p.id) ?? 0);
           const startMs = stored?.startMs ?? baseOffset;
           const endMs = stored?.endMs ?? (baseOffset + baseDuration);
           overlays.push({
@@ -349,17 +344,13 @@ export function usePosterTimeline({
           });
         }
       }
-      if (hasVideoClip) {
-        clipOffsetMs += pageDuration;
-      }
     }
     return overlays;
-  }, [document.pages, timelineClips]);
+  }, [document.pages, projectedTimeline]);
 
-  const timelineTotalDurationMs = useMemo(
-    () => computeTotalDuration(timelineClips),
-    [timelineClips],
-  );
+  // The strip's total duration IS the projected timeline duration — the
+  // playhead, strip widths, and playback clock all share one length.
+  const timelineTotalDurationMs = projectedTimeline.totalDurationMs;
 
   // ── Combined TimelineState snapshot ────────────────────────────────
   const timelineState: TimelineState = useMemo(
@@ -398,6 +389,11 @@ export function usePosterTimeline({
         case 'trim': {
           const clip = timelineClips.find((c) => c.id === op.clipId);
           if (!clip) return;
+          // Still-image clips have no source window to trim — their display
+          // duration is the page's hold time, not a trim range. The trim
+          // handles are only rendered for video clips (ClipThumb gates on
+          // mediaType); this guard is the safety net.
+          if (clip.mediaType === 'image') break;
           const layer = document.pages
             .flatMap((p) => p.layers)
             .find((l) => l.id === op.clipId);
@@ -505,6 +501,8 @@ export function usePosterTimeline({
           // split point to the original trim end.
           const clip = timelineClips.find((c) => c.id === op.clipId);
           if (!clip) return;
+          // Only video clips carry a source window that can split.
+          if (clip.mediaType === 'image') break;
 
           // Find the clip's start position in the timeline (sum of all
           // previous clips' speed-adjusted durations).
@@ -689,7 +687,14 @@ export function usePosterTimeline({
     if (!selectedLayer || selectedLayer.type !== 'media') return;
     updateLayer(selectedLayer.id, {
       type: 'media',
-      payload: { ...selectedLayer.payload, speedCurve: nextCurve },
+      // Keep `speed` in sync with the curve's average so consumers that
+      // read the constant field directly (viewers, fallbacks) agree with
+      // the projected duration the curve produces.
+      payload: {
+        ...selectedLayer.payload,
+        speedCurve: nextCurve,
+        speed: averageSpeed(nextCurve),
+      },
     }, 'Edit speed curve');
   }, [selectedLayer, updateLayer]);
 

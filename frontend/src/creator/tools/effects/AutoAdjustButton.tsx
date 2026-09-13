@@ -10,7 +10,7 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
 } from 'react-native-reanimated';
-import { useReducedMotion } from 'react-native-reanimated';
+import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import {
   Space,
   FontFamily,

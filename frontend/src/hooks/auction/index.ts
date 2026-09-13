@@ -4,3 +4,7 @@ export { useAuctionSearch } from './useAuctionSearch';
 export type { UseAuctionSearchResult } from './useAuctionSearch';
 export { useAuctionBrowse } from './useAuctionBrowse';
 export type { UseAuctionBrowseResult, BrowseResult } from './useAuctionBrowse';
+export { useSellerAuctionCentreData } from './useSellerAuctionCentreData';
+export type { UseSellerAuctionCentreDataResult } from './useSellerAuctionCentreData';
+export { useSellerAuctionTabScroll } from './useSellerAuctionTabScroll';
+export type { UseSellerAuctionTabScrollResult } from './useSellerAuctionTabScroll';

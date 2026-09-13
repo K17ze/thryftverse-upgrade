@@ -91,6 +91,16 @@ export type MediaAssetReceipt = {
   mediaKind: 'image' | 'video' | 'audio' | 'document';
   canonicalUrl: string | null;
   publishable: boolean;
+  /** Processor-measured post-orientation geometry — authoritative over
+   *  client-declared dims, which flip portrait↔landscape once EXIF
+   *  orientation is baked in. */
+  width?: number | null;
+  height?: number | null;
+  durationMs?: number | null;
+  /** Decodable BlurHash placeholder computed by the media pipeline. */
+  blurhash?: string | null;
+  focalX?: number | null;
+  focalY?: number | null;
   failureReason?: string | null;
   quarantineReason?: string | null;
 };
@@ -240,6 +250,11 @@ export interface UploadedMedia {
   mediaAssetId?: string;
   sizeBytes: number;
   contentType: string;
+  /** Processor-computed BlurHash, when the asset has finished processing. */
+  blurhash?: string | null;
+  /** Processor-measured post-orientation geometry. */
+  width?: number | null;
+  height?: number | null;
 }
 
 const MEDIA_PROCESSING_TIMEOUT_MS = 90_000;
@@ -396,6 +411,7 @@ export async function finalizePresignedMedia(
   }
 
   let resolvedPublicUrl = presign.publicUrl;
+  let resolvedAsset = finalization.mediaAsset;
   if (finalization.publicationGateRequired) {
     if (!finalization.mediaAsset?.id) {
       throw new Error('The media processor did not return a canonical asset reference');
@@ -405,15 +421,19 @@ export async function finalizePresignedMedia(
       throw new Error('The published media asset has no canonical delivery URL');
     }
     resolvedPublicUrl = publishedAsset.canonicalUrl;
+    resolvedAsset = publishedAsset;
   }
 
   return {
     publicUrl: resolvedPublicUrl,
     objectKey: presign.key,
     finalizationId: finalization.id,
-    mediaAssetId: finalization.mediaAsset?.id,
+    mediaAssetId: resolvedAsset?.id ?? finalization.mediaAsset?.id,
     sizeBytes: presign.sizeBytes,
     contentType: presign.contentType,
+    blurhash: resolvedAsset?.blurhash ?? null,
+    width: resolvedAsset?.width ?? null,
+    height: resolvedAsset?.height ?? null,
   };
 }
 

@@ -27,8 +27,6 @@ export { FlatRow } from './FlatRow';
 export type { FlatRowProps } from './FlatRow';
 export { HoldToSubmitButton } from './HoldToSubmitButton';
 export type { HoldToSubmitButtonProps } from './HoldToSubmitButton';
-export { MediaStage } from './MediaStage';
-export type { MediaStageProps, MediaStageItem, MediaStageAspectRatio, MediaStageOverlayControl } from './MediaStage';
 export { ScreenHeader } from './ScreenHeader';
 export type { ScreenHeaderVariant } from './ScreenHeader';
 export {

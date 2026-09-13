@@ -7,6 +7,7 @@ import {
   NativeScrollEvent,
   ScrollView,
   Pressable,
+  Modal,
   Text } from 'react-native';
 import {
   useSharedValue } from 'react-native-reanimated';
@@ -14,7 +15,7 @@ import { useNavigation, useScrollToTop } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useTaxonomy } from '../../context/TaxonomyContext';
-import { Space, Radius, FontFamily } from '../../theme/designTokens';
+import { Space, Radius, FontFamily, Control } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { RefreshIndicator } from '../../components/RefreshIndicator';
 import { EmptyState } from '../../components/EmptyState';
@@ -34,6 +35,15 @@ import { useDynamicAlgorithmSignals } from '../../hooks/useDynamicAlgorithmSigna
 import { matchesSignal } from '../../services/algorithmicSignalsService';
 import { useA11yAudit } from '../../hooks/useA11yAudit';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useHaptic } from '../../hooks/useHaptic';
+import { AppIcon } from '../../components/common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
+import { FeedExplanationSheet } from '../../components/algorithm/FeedExplanationSheet';
+import {
+  markItemNotInterested,
+  showFewerLikeThis,
+  type FeedbackAttribution,
+} from '../../services/recommendationFeedbackApi';
 
 const DISCOVER_NUM_COLUMNS = 2;
 type DiscoverNavigation = NativeStackNavigationProp<RootStackParamList>;
@@ -169,6 +179,9 @@ export interface DiscoverSceneProps {
   onBrowseCategories: () => void;
   /** Fired when the bookmark button on a listing tile is tapped. */
   onToggleSave?: (listing: DiscoveryListingSummary) => void;
+  /** Long-press on a listing tile's bookmark — the "file to board" tier;
+   *  the parent opens the collection picker for that listing. */
+  onItemSaveLongPress?: (listing: DiscoveryListingSummary) => void;
   /** Returns whether a listing is currently saved. */
   isSavedListing?: (listingId: string) => boolean;
 }
@@ -199,12 +212,14 @@ export function DiscoverScene({
   onPressItem,
   onBrowseCategories,
   onToggleSave,
+  onItemSaveLongPress,
   isSavedListing }: DiscoverSceneProps) {
   const { colors } = useAppTheme();
   const { isOffline } = useConnectivity();
   const { categories: taxonomyCategories } = useTaxonomy();
   const navigation = useNavigation<DiscoverNavigation>();
   const reducedMotion = useReducedMotion();
+  const haptic = useHaptic();
   const scrollY = useSharedValue(0);
   const staticScrollY = useSharedValue(0);
   const scrollRef = useRef<any>(null);
@@ -225,8 +240,113 @@ export function DiscoverScene({
   // they take priority over the unfiltered /listings cursor so the Discover
   // tab reads as a personalised surface, not a flat catalogue. Falls back
   // to the parent-provided listings when the endpoint is unavailable or
-  // returns nothing (cold-start, offline, guest).
-  const forYouFeed = useForYouFeed();
+  // returns nothing (cold-start, offline, guest). The serve is recorded
+  // under the 'discover' surface so impressions and feedback attribution
+  // agree on where the item was seen.
+  const forYouFeed = useForYouFeed('discover');
+
+  // ── Feed controls (report §22: users steer the feed, not just "like" it) ──
+  // Long-press on a listing tile opens a compact control sheet. Feedback is
+  // durable: "Not interested" writes an item-scope `exclude` intent mutation
+  // plus a `not_interested` interaction (hard suppression); "Show less like
+  // this" writes a `less` directive on the item's category plus a
+  // `show_fewer` interaction (ranking penalty). Both bump the intent epoch
+  // server-side, so the next recommendations serve reflects the change.
+  const [feedbackItem, setFeedbackItem] = useState<DiscoveryListingSummary | null>(null);
+  const [explanationItemId, setExplanationItemId] = useState<string | null>(null);
+  // Session-level hide list: covers items suppressed via the sheet AND any
+  // items from the non-personalised listings cursor, so the hide is visible
+  // immediately regardless of which feed source served the tile.
+  const [hiddenListingIds, setHiddenListingIds] = useState<Set<string>>(new Set());
+
+  const feedbackAttribution = useCallback(
+    (listing: DiscoveryListingSummary): FeedbackAttribution => {
+      const served = forYouFeed.items.find((vm) => vm.listing.id === listing.id);
+      return {
+        surface: 'discover',
+        // Only attach serve attribution when the item actually came from the
+        // personalised serve — the backend 422s an interaction whose
+        // requestId has no matching impression row for this listing.
+        requestId: served ? forYouFeed.requestId : undefined,
+        position: served?.position,
+        model: served?.model,
+        policyVersion: served ? forYouFeed.policyVersion : undefined,
+      };
+    },
+    [forYouFeed.items, forYouFeed.requestId, forYouFeed.policyVersion],
+  );
+
+  const hideListing = useCallback(
+    (listingId: string) => {
+      setHiddenListingIds((prev) => {
+        if (prev.has(listingId)) return prev;
+        const next = new Set(prev);
+        next.add(listingId);
+        return next;
+      });
+      forYouFeed.dismissListing(listingId);
+    },
+    [forYouFeed],
+  );
+
+  const handleListingLongPress = useCallback(
+    (listing: DiscoveryListingSummary) => {
+      haptic.selection();
+      setFeedbackItem(listing);
+    },
+    [haptic],
+  );
+
+  const handleNotInterested = useCallback(() => {
+    const target = feedbackItem;
+    if (!target) return;
+    haptic.medium();
+    setFeedbackItem(null);
+    hideListing(target.id);
+    void markItemNotInterested(target, feedbackAttribution(target));
+  }, [feedbackItem, haptic, hideListing, feedbackAttribution]);
+
+  const handleShowLess = useCallback(() => {
+    const target = feedbackItem;
+    if (!target) return;
+    haptic.light();
+    setFeedbackItem(null);
+    void showFewerLikeThis(target, feedbackAttribution(target)).then((result) => {
+      // The mutation bumps the intent epoch; refetch so the down-ranking is
+      // visible rather than only applying on the next cold load.
+      if (result.persisted) void forYouFeed.refresh();
+    });
+  }, [feedbackItem, haptic, feedbackAttribution, forYouFeed]);
+
+  const handleWhySeeing = useCallback(() => {
+    const target = feedbackItem;
+    if (!target) return;
+    haptic.selection();
+    setFeedbackItem(null);
+    setExplanationItemId(target.id);
+  }, [feedbackItem, haptic]);
+
+  const handleExplanationChanged = useCallback(() => {
+    // See-more / show-less / remove-topic all mutate the intent profile —
+    // refresh the personalised canvas so the change visibly propagates.
+    void forYouFeed.refresh();
+  }, [forYouFeed]);
+
+  // Real serve attribution for the explanation sheet — when the target item
+  // was in the personalised serve, its reason codes and component scores are
+  // the authoritative "why" (replacing the mock topic fallback).
+  const explanationServedContext = useMemo(() => {
+    if (!explanationItemId) return null;
+    const vm = forYouFeed.items.find((item) => item.listing.id === explanationItemId);
+    if (!vm) return null;
+    return {
+      reasonCodes: vm.reasonCodes,
+      componentScores: vm.componentScores,
+      score: vm.score,
+      itemTitle: vm.listing.title,
+      itemThumbnail: vm.listing.images?.[0] ?? '',
+    };
+  }, [explanationItemId, forYouFeed.items]);
 
   useScrollToTop(scrollRef);
 
@@ -268,7 +388,34 @@ export function DiscoverScene({
     () =>
       StyleSheet.create({
         container: { flex: 1, backgroundColor: colors.background },
-        stateWrap: { flex: 1 } }),
+        stateWrap: { flex: 1 },
+        // Feed-control sheet — flat canvas, hairline-free rows, same idiom as
+        // the YourAlgorithm topic sheet.
+        sheetScrim: {
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.4)',
+          justifyContent: 'flex-end' },
+        sheet: {
+          borderTopLeftRadius: Radius.lg,
+          borderTopRightRadius: Radius.lg,
+          paddingHorizontal: Space.md,
+          paddingTop: Space.lg,
+          paddingBottom: Space.xl },
+        sheetTitle: {
+          fontSize: TypographyV2.bodyStrong.size,
+          lineHeight: TypographyV2.bodyStrong.lineHeight,
+          fontFamily: FontFamily.semibold,
+          marginBottom: Space.sm },
+        sheetRow: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: Space.sm,
+          minHeight: Control.hit,
+          borderRadius: Radius.md,
+          paddingHorizontal: Space.sm },
+        sheetRowText: {
+          fontSize: TypographyV2.body.size,
+          fontFamily: FontFamily.medium } }),
     [colors],
   );
 
@@ -337,10 +484,13 @@ export function DiscoverScene({
   // the full backend cursor because For You recommendations don't carry
   // category metadata for client-side filtering.
   const personalisedListings = useMemo(() => {
-    if (activeCategory !== 'All') return listings;
-    if (forYouFeed.listings.length > 0) return forYouFeed.listings;
-    return listings;
-  }, [listings, activeCategory, forYouFeed.listings]);
+    const source =
+      activeCategory !== 'All'
+        ? listings
+        : forYouFeed.listings.length > 0 ? forYouFeed.listings : listings;
+    if (hiddenListingIds.size === 0) return source;
+    return source.filter((l) => !hiddenListingIds.has(l.id));
+  }, [listings, activeCategory, forYouFeed.listings, hiddenListingIds]);
 
   // Filter listings by the active category pill. "All" passes everything
   // through; any other pill applies the predicate built from the taxonomy
@@ -538,6 +688,8 @@ export function DiscoverScene({
         items={units}
         onItemPress={onPressItem}
         onItemSaveToggle={onToggleSave}
+        onItemSaveLongPress={onItemSaveLongPress}
+        onListingLongPress={handleListingLongPress}
         isItemSaved={isSavedListing}
         onLookPress={handleLookPress}
         onPosterPress={handlePosterPress}
@@ -552,6 +704,88 @@ export function DiscoverScene({
         scrollRef={scrollRef}
         listHeaderComponent={categoryBar}
         enableImagePrefetch
+      />
+
+      {/* ── Feed control sheet — long-press a listing tile. Three honest
+          actions: suppress the item, down-rank the topic, or inspect why it
+          was served. ── */}
+      <Modal
+        visible={feedbackItem !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setFeedbackItem(null)}
+      >
+        <Pressable
+          style={styles.sheetScrim}
+          onPress={() => setFeedbackItem(null)}
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss feed controls"
+        >
+          <View
+            style={[styles.sheet, { backgroundColor: colors.surface }]}
+            onStartShouldSetResponder={() => true}
+          >
+            {feedbackItem && (
+              <>
+                <Text style={[styles.sheetTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                  {feedbackItem.title}
+                </Text>
+
+                <Pressable
+                  style={styles.sheetRow}
+                  onPress={handleNotInterested}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Not interested in ${feedbackItem.title}`}
+                  accessibilityHint="Hides this item and stops recommending it"
+                >
+                  <AppIcon name="eye-off-outline" size={IconSize.md} color="textPrimary" accessible={false} />
+                  <Text style={[styles.sheetRowText, { color: colors.textPrimary }]}>
+                    Not interested
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  style={styles.sheetRow}
+                  onPress={handleShowLess}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Show less like ${feedbackItem.title}`}
+                  accessibilityHint="Lowers similar items in your feed without hiding them"
+                >
+                  <AppIcon name="remove-circle-outline" size={IconSize.md} color="textPrimary" accessible={false} />
+                  <Text style={[styles.sheetRowText, { color: colors.textPrimary }]}>
+                    Show less like this
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  style={styles.sheetRow}
+                  onPress={handleWhySeeing}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Why am I seeing ${feedbackItem.title}`}
+                  accessibilityHint="Shows the signals that placed this item in your feed"
+                >
+                  <AppIcon name="information-circle-outline" size={IconSize.md} color="textMuted" accessible={false} />
+                  <Text style={[styles.sheetRowText, { color: colors.textSecondary }]}>
+                    Why am I seeing this?
+                  </Text>
+                </Pressable>
+              </>
+            )}
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* ── "Why am I seeing this?" explanation sheet — the reasons carry
+          real topic controls (more / less / remove) wired to the intent
+          profile. ── */}
+      <FeedExplanationSheet
+        visible={explanationItemId !== null}
+        itemId={explanationItemId}
+        servedContext={explanationServedContext}
+        onDismiss={() => setExplanationItemId(null)}
+        onSeeMoreLikeThis={handleExplanationChanged}
+        onShowLessLikeThis={handleExplanationChanged}
+        onTopicRemoved={handleExplanationChanged}
       />
     </View>
   );

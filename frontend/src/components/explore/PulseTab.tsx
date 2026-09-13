@@ -238,36 +238,10 @@ export default function PulseTab() {
     navigation.navigate('PulseFeed');
   };
 
-  // ── Infinite loop feed ──────────────────────────────────────────────
-  // The activity feed loops: when the user reaches the end, we append the
-  // same items again (with deduplicated keys via a cycle index). This gives
-  // an infinite scroll discovery experience without requiring a backend
-  // pagination endpoint for the activity feed.
-  const cycleRef = useRef(0);
-  const [feedItems, setFeedItems] = useState<ActivityItem[]>([]);
-
-  useEffect(() => {
-    if (activities.length === 0) {
-      setFeedItems([]);
-      return;
-    }
-    // Seed the feed with the first cycle of activities
-    setFeedItems(activities);
-    cycleRef.current = 1;
-  }, [activities]);
-
-  const handleEndReached = useCallback(() => {
-    if (activities.length === 0) return;
-    cycleRef.current += 1;
-    const cycle = cycleRef.current;
-    setFeedItems((prev) => [
-      ...prev,
-      ...activities.map((item) => ({
-        ...item,
-        id: `${item.id}__cycle${cycle}`,
-      })),
-    ]);
-  }, [activities]);
+  // The feed renders real activity only — no synthetic repeat cycles.
+  // Re-appending the same items produced unbounded list growth (memory
+  // pressure) and fabricated depth; when the user reaches the end we show
+  // an honest end-of-feed marker instead.
 
   const renderActivityItem = useCallback(
     ({ item }: { item: ActivityItem }) => (
@@ -377,14 +351,17 @@ export default function PulseTab() {
   return (
     <FlashList
       ref={scrollRef}
-      data={feedItems}
+      data={activities}
       renderItem={renderActivityItem}
       keyExtractor={keyExtractor}
       ListHeaderComponent={ListHeader}
+      ListFooterComponent={
+        activities.length > 0 ? (
+          <Text style={styles.endOfFeedText}>You&apos;re all caught up</Text>
+        ) : null
+      }
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
-      onEndReached={handleEndReached}
-      onEndReachedThreshold={0.7}
     />
   );
 }
@@ -395,6 +372,12 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     paddingBottom: Space.xl },
+  endOfFeedText: {
+    textAlign: 'center',
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted,
+    paddingVertical: Space.lg },
 
   /* Live Now Rail */
   liveScroll: {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import NetInfo from '@react-native-community/netinfo';
 import { UploadJobStore } from './UploadJobStore';
 import { UploadManager } from './UploadManager';
 import type { QueueUploadParams, UploadJob, UploadEventListener, ProjectProgress } from './UploadTypes';
@@ -14,7 +15,22 @@ let reconciliationStarted = false;
 
 export function getSharedManager(): UploadManager {
   if (!sharedStore) sharedStore = new UploadJobStore();
-  if (!sharedManager) sharedManager = new UploadManager(sharedStore);
+  if (!sharedManager) {
+    sharedManager = new UploadManager(sharedStore);
+    // Wire connectivity gating once for the singleton's lifetime. Going
+    // offline aborts in-flight uploads back to 'queued' (auto-resume on
+    // reconnect); coming back online kicks the queue. `isConnected` can
+    // be null on an ambiguous probe — only an explicit false parks the
+    // queue, so a flaky NetInfo read never stalls a healthy upload.
+    NetInfo.fetch()
+      .then((state) => sharedManager?.setOnline(state.isConnected !== false))
+      .catch(() => {
+        // NetInfo unavailable (bare bridge) — stay online by default.
+      });
+    NetInfo.addEventListener((state) => {
+      sharedManager?.setOnline(state.isConnected !== false);
+    });
+  }
   return sharedManager;
 }
 
@@ -63,6 +79,10 @@ export interface UseUploadManagerResult {
   isConfirming: boolean;
   /** True when any job has stalled (no progress for an extended period). */
   isStalled: boolean;
+  /** True when the device reports no connectivity. Uploads are parked in
+   *  'queued' and resume automatically on reconnect — surface this in the
+   *  UI as "waiting for connection" rather than a stalled progress bar. */
+  isOffline: boolean;
   /**
    * Aggregate completion fraction 0–1 across the project's jobs, based
    * on **real transmitted bytes** (not job count). This is the truthful
@@ -186,6 +206,12 @@ export function useUploadManager(projectId?: string): UseUploadManagerResult {
     [filteredJobs],
   );
 
+  // Connectivity state — refreshed on every event tick (the manager emits
+  // `connectivityChanged` when NetInfo flips the gate, which bumps `tick`
+  // through the subscriber above and forces a re-render). Read live from
+  // the manager so the value is never stale across reconnects.
+  const isOffline = !manager.online;
+
   // Real byte progress: sum(progress * sizeBytes) / sum(sizeBytes).
   const { progress, totalBytes, uploadedBytes } = useMemo(() => {
     if (filteredJobs.length === 0) {
@@ -256,6 +282,7 @@ export function useUploadManager(projectId?: string): UseUploadManagerResult {
       isUploading,
       isConfirming,
       isStalled,
+      isOffline,
       progress,
       totalBytes,
       uploadedBytes,
@@ -274,6 +301,7 @@ export function useUploadManager(projectId?: string): UseUploadManagerResult {
       isUploading,
       isConfirming,
       isStalled,
+      isOffline,
       progress,
       totalBytes,
       uploadedBytes,

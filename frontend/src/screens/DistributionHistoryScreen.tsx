@@ -490,14 +490,6 @@ export default function DistributionHistoryScreen() {
                   </View>
                 </View>
                 <View style={[styles.distDetails, { borderTopColor: colors.borderSubtle }]}>
-                  <View style={styles.detailRow}>
-                    <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Units at record</Text>
-                    <Text style={[styles.detailValue, { color: colors.textPrimary }]}>{dist.unitsAtRecord}</Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Per unit</Text>
-                    <Text style={[styles.detailValue, { color: colors.textPrimary }]}>{formatPerUnit(dist.perUnitGbpMinor)}</Text>
-                  </View>
                   {dist.reference && (
                     <View style={styles.detailRow}>
                       <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Reference</Text>
@@ -511,6 +503,63 @@ export default function DistributionHistoryScreen() {
                         : dist.status === 'reinvest_failed' ? 'Reinvest failed'
                         : dist.status === 'retained_cash' ? 'Retained as cash'
                         : dist.status.charAt(0).toUpperCase() + dist.status.slice(1)}
+                    </Text>
+                  </View>
+                  {/* Record / ex / payable dates — rendered only when the
+                      payload carries them; never fabricated. */}
+                  {dist.recordDate && (
+                    <View style={styles.detailRow}>
+                      <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Record date</Text>
+                      <Text style={[styles.detailValue, { color: colors.textPrimary }]}>{formatDate(dist.recordDate)}</Text>
+                    </View>
+                  )}
+                  {dist.exDate && (
+                    <View style={styles.detailRow}>
+                      <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Ex date</Text>
+                      <Text style={[styles.detailValue, { color: colors.textPrimary }]}>{formatDate(dist.exDate)}</Text>
+                    </View>
+                  )}
+                  {dist.projectedPayableDate && (
+                    <View style={styles.detailRow}>
+                      <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Payable</Text>
+                      <Text style={[styles.detailValue, { color: colors.textPrimary }]}>{formatDate(dist.projectedPayableDate)}</Text>
+                    </View>
+                  )}
+                  {/* Proceeds waterfall — honest partial waterfall built only
+                      from fields the contract actually carries
+                      (amountGbpMinor, perUnitGbpMinor, unitsAtRecord). The
+                      payload has no separate cost/fee lines, so none are
+                      invented — the note below says so. */}
+                  <View style={[styles.waterfall, { borderTopColor: colors.borderSubtle }]}>
+                    <Text style={[styles.waterfallTitle, { color: colors.textMuted }]}>Proceeds</Text>
+                    <View style={styles.detailRow}>
+                      <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Gross distribution</Text>
+                      <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
+                        {formatDistributionAmount(dist.amountGbpMinor)}
+                      </Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Per unit</Text>
+                      <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
+                        {formatPerUnit(dist.perUnitGbpMinor)}
+                      </Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Your units at record</Text>
+                      <Text style={[styles.detailValue, { color: colors.textPrimary }]}>{dist.unitsAtRecord}</Text>
+                    </View>
+                    <View style={[styles.detailRow, styles.waterfallNet, { borderTopColor: colors.borderSubtle }]}>
+                      <Text style={[styles.detailLabel, { color: colors.textPrimary }]}>
+                        {dist.status === 'pending' ? 'Projected to you'
+                          : dist.status === 'reversed' ? 'Paid (later reversed)'
+                          : 'You received'}
+                      </Text>
+                      <Text style={[styles.detailValue, { color: amountColor }]}>
+                        {formatDistributionAmount(dist.amountGbpMinor)}
+                      </Text>
+                    </View>
+                    <Text style={[styles.waterfallNote, { color: colors.textMuted }]}>
+                      Costs and fees are not itemised for this distribution.
                     </Text>
                   </View>
                 </View>
@@ -623,6 +672,23 @@ function createStyles(colors: ThemeColors) {
     fontFamily: TypographyV2.meta.fontFamily,
     fontVariant: ['tabular-nums'],
     letterSpacing: TypographyV2.meta.letterSpacing },
+  // Proceeds waterfall — gross → per-unit → units → received
+  waterfall: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: Space.sm,
+    gap: Space.sm },
+  waterfallTitle: {
+    fontSize: TypographyV2.meta.size - 1,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    textTransform: 'uppercase' },
+  waterfallNet: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: Space.sm },
+  waterfallNote: {
+    fontSize: TypographyV2.meta.size - 1,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight },
   dripCard: {
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,

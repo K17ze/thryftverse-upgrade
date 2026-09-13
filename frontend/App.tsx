@@ -421,6 +421,8 @@ export default function App() {
         store.setTwoFactorEnabled(localAuthSnapshot.twoFactorEnabled);
         runSyncListingDraft();
         store.hydrateBlockedUsers().catch(() => undefined);
+        store.hydrateMutedUsers().catch(() => undefined);
+        store.hydrateRestrictedUsers().catch(() => undefined);
       }
 
       if (storedProfileMedia.avatar) {
@@ -452,6 +454,8 @@ export default function App() {
           latestStore.setTwoFactorEnabled(restoredSession.user.twoFactorEnabled);
           runSyncListingDraft();
           latestStore.hydrateBlockedUsers().catch(() => undefined);
+          latestStore.hydrateMutedUsers().catch(() => undefined);
+          latestStore.hydrateRestrictedUsers().catch(() => undefined);
         })
         .catch(() => {
           // Session refresh is best-effort and should not interrupt app usage.

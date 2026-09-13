@@ -111,10 +111,12 @@ describe('product-detail-flagship-reconstruction: offline state coverage', () =>
   });
 
   it('AuctionDetailScreen renders the offline banner', () => {
-    const src = readScreen('AuctionDetailScreen.tsx');
-    expect(src).toContain('CommerceDetailOfflineBanner');
-    expect(src).toContain('useConnectivity');
-    expect(src).toContain('isOffline');
+    // The screen was decomposed — the banner lives in the owner layer
+    // (auctiondetail/AuctionDetailStatusBanners), not the orchestrator.
+    const banners = readComponent('auctiondetail/AuctionDetailStatusBanners.tsx');
+    expect(banners).toContain('CommerceDetailOfflineBanner');
+    expect(banners).toContain('useConnectivity');
+    expect(banners).toContain('isOffline');
   });
 
   it('AssetDetailScreen renders an offline banner', () => {
@@ -231,7 +233,12 @@ describe('product-detail-flagship-reconstruction: Direct Listing report action',
   });
 
   it('ItemDetailScreen uses canonical BottomSheet for overflow (not local sheet)', () => {
-    expect(itemSrc).toContain('<BottomSheet');
+    // The sheets were decomposed into the owner layer
+    // (itemdetail/ItemDetailSheets). The orchestrator must not re-inline
+    // a local sheet, and the owner must use the canonical BottomSheet.
+    const sheets = readComponent('itemdetail/ItemDetailSheets.tsx');
+    expect(sheets).toContain('<BottomSheet');
+    expect(sheets).not.toContain('overflowBackdrop');
     expect(itemSrc).not.toContain('overflowBackdrop');
   });
 
@@ -254,7 +261,9 @@ describe('product-detail-flagship-reconstruction: Direct Listing report action',
 // Spec 02_AUCTION §4: Terminal state dock — one result, one next action
 // ───────────────────────────────────────────────────────────────────────────
 describe('product-detail-flagship-reconstruction: Auction terminal dock', () => {
-  const src = readScreen('AuctionDetailScreen.tsx');
+  // The dock was decomposed out of the screen — check the owner layer
+  // (auctiondetail/AuctionDetailDock), not the orchestrator.
+  const src = readComponent('auctiondetail/AuctionDetailDock.tsx');
 
   it('terminal dock carries only the next valid action (no state badge)', () => {
     // The terminal branch should return CommerceDetailStateDock with

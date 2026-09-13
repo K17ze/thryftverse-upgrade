@@ -64,6 +64,9 @@ interface LookMediaCarouselProps {
   /** Called when the user single-taps a media page, requesting fullscreen
    *  viewing. The parent owns the FullscreenMediaViewer modal lifecycle. */
   onFullscreenRequest?: (index: number) => void;
+  /** Called once when the first page's media has decoded (image onLoad /
+   *  video readyToPlay). Used for visual-completion telemetry only. */
+  onFirstMediaLoad?: () => void;
   /** Accessibility label for the carousel. */
   accessibilityLabel?: string;
 }
@@ -103,6 +106,7 @@ interface MediaPageProps {
   totalPages: number;
   onZoomStart?: () => void;
   onSingleTap?: () => void;
+  onMediaLoad?: () => void;
 }
 
 const MediaPage = React.memo(function MediaPage({
@@ -112,7 +116,8 @@ const MediaPage = React.memo(function MediaPage({
   pageIndex,
   totalPages,
   onZoomStart,
-  onSingleTap }: MediaPageProps) {
+  onSingleTap,
+  onMediaLoad }: MediaPageProps) {
   const reducedMotion = useReducedMotion();
   const { colors } = useAppTheme();
   const subComponentStyles = useMemo(() => createSubComponentStyles(colors), [colors]);
@@ -273,6 +278,7 @@ const MediaPage = React.memo(function MediaPage({
             onLoad={(e) => {
               const { width: w, height: h } = e.source;
               if (w && h) setNaturalRatio(w / h);
+              onMediaLoad?.();
             }}
             onError={() => setFailed(true)}
           />
@@ -300,6 +306,7 @@ interface VideoPageProps {
   pageIndex: number;
   totalPages: number;
   onSingleTap?: () => void;
+  onMediaLoad?: () => void;
 }
 
 const VideoPage = React.memo(function VideoPage({
@@ -309,7 +316,8 @@ const VideoPage = React.memo(function VideoPage({
   isActive,
   pageIndex,
   totalPages,
-  onSingleTap }: VideoPageProps) {
+  onSingleTap,
+  onMediaLoad }: VideoPageProps) {
   const [appIsActive, setAppIsActive] = useState(true);
   const { colors } = useAppTheme();
   const subComponentStyles = useMemo(() => createSubComponentStyles(colors), [colors]);
@@ -378,12 +386,13 @@ const VideoPage = React.memo(function VideoPage({
         } catch {
           /* no-op */
         }
+        onMediaLoad?.();
       } else if (status === 'error') {
         setFailed(true);
       }
     });
     return () => sub?.remove?.();
-  }, [player]);
+  }, [player, onMediaLoad]);
 
   // Poll current time for scrub bar.
   useEffect(() => {
@@ -735,6 +744,7 @@ function LookMediaCarouselImpl({
   aspectRatio = 0.8,
   onActiveIndexChange,
   onFullscreenRequest,
+  onFirstMediaLoad,
   accessibilityLabel = 'Look media carousel' }: LookMediaCarouselProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -857,6 +867,7 @@ function LookMediaCarouselImpl({
               pageIndex={index}
               totalPages={pages.length}
               onSingleTap={handleSingleTap}
+              onMediaLoad={index === 0 ? onFirstMediaLoad : undefined}
             />
           ) : (
             <MediaPage
@@ -867,6 +878,7 @@ function LookMediaCarouselImpl({
               totalPages={pages.length}
               onZoomStart={handleZoomStart}
               onSingleTap={handleSingleTap}
+              onMediaLoad={index === 0 ? onFirstMediaLoad : undefined}
             />
           )
         }

@@ -46,12 +46,6 @@ export interface ItemDetailActionsResult {
   handleViewSeller: () => void;
   /** Start a DM conversation with the seller, then navigate to Chat. */
   handleMessageSeller: () => Promise<void>;
-  /** Navigate to the report flow for this listing. */
-  handleReport: () => void;
-  /** Navigate to checkout (buy now). */
-  handleBuyNow: () => void;
-  /** Fire make-offer analytics (caller owns the sheet visibility state). */
-  handleMakeOffer: () => void;
   /** Enquire (brokered tier) — open a DM with the seller. */
   handleEnquire: () => Promise<void>;
   /** Request viewing (brokered tier) — open a DM with the seller. */
@@ -164,29 +158,6 @@ export function useItemDetailActions(
     }
   }, [item, seller, requireAuth, isResolvingConversation, upsertConversation, navigation, show]);
 
-  const handleReport = useCallback(() => {
-    if (!item) return;
-    navigation.navigate('Report', { type: 'item', targetId: item.id });
-  }, [item, navigation]);
-
-  const handleBuyNow = useCallback(() => {
-    if (!item) return;
-    if (!requireAuth('purchase')) return;
-    ProductAnalytics.checkoutStart(item.id);
-    // Do not fire a success haptic before the purchase has actually
-    // completed. "Buy now" navigates to checkout — it does not complete
-    // the purchase. A medium impact acknowledges the primary-action press;
-    // the success pattern belongs in the Checkout confirmation flow.
-    haptic.medium();
-    navigation.navigate('Checkout', { itemId: item.id });
-  }, [item, requireAuth, haptic, navigation]);
-
-  const handleMakeOffer = useCallback(() => {
-    if (!item) return;
-    if (!requireAuth('purchase')) return;
-    ProductAnalytics.offerStart(item.id);
-  }, [item, requireAuth]);
-
   // Shared helper for the brokered-tier dock actions (enquire / request
   // viewing). Both open a DM conversation with the seller using the
   // listing's sellerId, following the same createDmConversationOnApi →
@@ -258,9 +229,6 @@ export function useItemDetailActions(
     closeShare,
     handleViewSeller,
     handleMessageSeller,
-    handleReport,
-    handleBuyNow,
-    handleMakeOffer,
     handleEnquire,
     handleRequestViewing,
     isResolvingConversation,

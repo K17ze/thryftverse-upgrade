@@ -800,6 +800,31 @@ async function listChatParticipantIds(client: DbQueryable, conversationId: strin
   return result.rows.map((row) => row.user_id);
 }
 
+// Graduated moderation: returns the conversation participants that
+// `ownerId` has restricted. Presence events (read receipts, typing
+// indicators) are withheld from these parties — a restricted user must
+// not be able to tell they've been seen, nor that they're restricted.
+async function listRestrictedParticipantIds(
+  client: DbQueryable,
+  conversationId: string,
+  ownerId: string,
+): Promise<string[]> {
+  const result = await client.query<{ target_id: string }>(
+    `
+      SELECT urs.target_id
+      FROM user_relationship_states urs
+      INNER JOIN chat_members cm
+        ON cm.conversation_id = $1 AND cm.user_id = urs.target_id
+      WHERE urs.owner_id = $2
+        AND urs.kind = 'restrict'
+        AND (urs.expires_at IS NULL OR urs.expires_at > NOW())
+    `,
+    [conversationId, ownerId]
+  );
+
+  return result.rows.map((row) => row.target_id);
+}
+
 async function listChatBotIds(client: DbQueryable, conversationId: string): Promise<string[]> {
   const result = await client.query<{ bot_id: string }>(
     `
@@ -1054,6 +1079,22 @@ app.post('/chat/dm', async (request, reply) => {
         [payload.recipientUserId, actorUserId]
       );
       if (!followResult.rowCount) {
+        requestStatus = 'pending';
+      }
+    }
+
+    // Graduated moderation: a sender the recipient has restricted always
+    // lands in message requests, regardless of allow_messages_from. The
+    // sender gets no signal that this happened.
+    if (requestStatus === 'accepted') {
+      const restrictResult = await client.query<{ id: string }>(
+        `SELECT id FROM user_relationship_states
+         WHERE owner_id = $1 AND target_id = $2 AND kind = 'restrict'
+           AND (expires_at IS NULL OR expires_at > NOW())
+         LIMIT 1`,
+        [payload.recipientUserId, actorUserId]
+      );
+      if (restrictResult.rowCount) {
         requestStatus = 'pending';
       }
     }
@@ -1586,7 +1627,7 @@ app.get('/chat/conversations', async (request) => {
     };
   }
 
-  const [memberRows, botRows, stateRows, readStateRows, blockedMemberRows] = await Promise.all([
+  const [memberRows, botRows, stateRows, readStateRows, blockedMemberRows, relationshipRows] = await Promise.all([
     db.query<{
       conversation_id: string;
       user_id: string;
@@ -1657,9 +1698,33 @@ app.get('/chat/conversations', async (request) => {
       `,
       [conversationIds, actorUserId]
     ),
+    // Graduated moderation: per-peer mute/restrict flags, mirroring the
+    // isBlocked projection above. A conversation is flagged when the
+    // viewer has an active relationship-state row against any member.
+    db.query<{ conversation_id: string; kind: 'mute' | 'restrict' }>(
+      `
+        SELECT cm.conversation_id, urs.kind
+        FROM chat_members cm
+        INNER JOIN user_relationship_states urs
+          ON urs.target_id = cm.user_id AND urs.owner_id = $2
+        WHERE cm.conversation_id = ANY($1::text[])
+          AND urs.kind IN ('mute', 'restrict')
+          AND (urs.expires_at IS NULL OR urs.expires_at > NOW())
+      `,
+      [conversationIds, actorUserId]
+    ),
   ]);
 
   const blockedConversationIds = new Set(blockedMemberRows.rows.map((r) => r.conversation_id));
+  const authorMutedConversationIds = new Set<string>();
+  const authorRestrictedConversationIds = new Set<string>();
+  for (const row of relationshipRows.rows) {
+    if (row.kind === 'mute') {
+      authorMutedConversationIds.add(row.conversation_id);
+    } else if (row.kind === 'restrict') {
+      authorRestrictedConversationIds.add(row.conversation_id);
+    }
+  }
 
   const membersByConversation = new Map<string, string[]>();
   const rolesByConversation = new Map<string, Record<string, ChatGroupMemberRole>>();
@@ -1761,6 +1826,12 @@ app.get('/chat/conversations', async (request) => {
         pinnedRank: state?.pinnedRank ?? 0,
         markedUnread: Boolean(state?.markedUnreadMessageId),
         isBlocked: blockedConversationIds.has(row.id),
+        // Per-peer graduated-moderation flags (the viewer muted/restricted
+        // a member of this conversation). `isMuted` above is the
+        // conversation-level mute and stays untouched.
+        isAuthorMuted: authorMutedConversationIds.has(row.id),
+        isAuthorRestricted: authorRestrictedConversationIds.has(row.id),
+        isRestricted: authorRestrictedConversationIds.has(row.id),
         context: contextByConversation.get(row.id) ?? null,
       };
     }),
@@ -2574,6 +2645,21 @@ app.post('/chat/conversations/:conversationId/messages', {
       if (row.is_muted || row.is_archived || row.request_status === 'pending' || row.request_status === 'declined') {
         suppressedUserIds.add(row.user_id);
       }
+    }
+    // Graduated moderation: a recipient who muted the message author gets
+    // no push, identical to a conversation-level mute. Silent — the author
+    // is never told.
+    const mutedAuthorResult = await db.query<{ owner_id: string }>(
+      `SELECT owner_id
+       FROM user_relationship_states
+       WHERE kind = 'mute'
+         AND target_id = $1
+         AND owner_id = ANY($2::text[])
+         AND (expires_at IS NULL OR expires_at > NOW())`,
+      [actorUserId, recipientIds],
+    );
+    for (const row of mutedAuthorResult.rows) {
+      suppressedUserIds.add(row.owner_id);
     }
     notifiableRecipientIds = recipientIds.filter((id) => !suppressedUserIds.has(id));
   }
@@ -3460,6 +3546,14 @@ app.post('/chat/conversations/:conversationId/typing', {
 
   await ensureChatConversationAccess(db, conversationId, actorUserId);
 
+  // Graduated moderation: participants the typer has restricted never see
+  // their typing indicator — restrict must be unobservable.
+  const restrictedParticipantIds = await listRestrictedParticipantIds(
+    db,
+    conversationId,
+    actorUserId,
+  );
+
   publishRealtimeEvent({
     topic: `chat.conversation:${conversationId}`,
     type: 'chat.typing.update',
@@ -3468,6 +3562,7 @@ app.post('/chat/conversations/:conversationId/typing', {
       userId: actorUserId,
       isTyping,
     },
+    excludeUserIds: restrictedParticipantIds,
   });
 
   return { ok: true };
@@ -3559,12 +3654,38 @@ app.post('/chat/conversations/:conversationId/read', async (request) => {
     );
   }
 
-  const readReceiptsResult = await db.query<{ read_receipts_enabled: boolean }>(
-    `SELECT read_receipts_enabled FROM users WHERE id = $1`,
-    [actorUserId],
+  // Fetch the reader's receipt preference and request state together.
+  // last_read_at and per-message receipts were already recorded above —
+  // badges and unread counts keep working even when publishing is
+  // suppressed below.
+  const readerFlagsResult = await db.query<{
+    read_receipts_enabled: boolean;
+    request_status: string | null;
+  }>(
+    `SELECT
+       u.read_receipts_enabled,
+       cus.request_status
+     FROM users u
+     LEFT JOIN chat_conversation_user_state cus
+       ON cus.user_id = u.id AND cus.conversation_id = $2
+     WHERE u.id = $1`,
+    [actorUserId, conversationId],
   );
+  const readerFlags = readerFlagsResult.rows[0];
 
-  if (readReceiptsResult.rowCount && readReceiptsResult.rows[0].read_receipts_enabled) {
+  // A pending message request must not leak a read receipt to the sender —
+  // previewing a request stays invisible until the request is accepted.
+  const suppressReadReceipt = readerFlags?.request_status === 'pending';
+
+  if (readerFlags?.read_receipts_enabled && !suppressReadReceipt) {
+    // Graduated moderation: participants the reader has restricted never
+    // see the read receipt — restrict must be unobservable.
+    const restrictedParticipantIds = await listRestrictedParticipantIds(
+      db,
+      conversationId,
+      actorUserId,
+    );
+
     publishRealtimeEvent({
       topic: `chat.conversation:${conversationId}`,
       type: 'chat.message.read',
@@ -3574,6 +3695,7 @@ app.post('/chat/conversations/:conversationId/read', async (request) => {
         readAt: new Date().toISOString(),
         messageIds: markedMessageIds,
       },
+      excludeUserIds: restrictedParticipantIds,
     });
   }
 
@@ -3607,12 +3729,32 @@ app.post('/chat/conversations/:conversationId/messages/:messageId/read', async (
     [messageId, actorUserId, readAt.toISOString()]
   );
 
-  const readReceiptsResult = await db.query<{ read_receipts_enabled: boolean }>(
-    `SELECT read_receipts_enabled FROM users WHERE id = $1`,
-    [actorUserId],
+  const readerFlagsResult = await db.query<{
+    read_receipts_enabled: boolean;
+    request_status: string | null;
+  }>(
+    `SELECT
+       u.read_receipts_enabled,
+       cus.request_status
+     FROM users u
+     LEFT JOIN chat_conversation_user_state cus
+       ON cus.user_id = u.id AND cus.conversation_id = $2
+     WHERE u.id = $1`,
+    [actorUserId, conversationId],
   );
+  const readerFlags = readerFlagsResult.rows[0];
 
-  if (readReceiptsResult.rowCount && readReceiptsResult.rows[0].read_receipts_enabled) {
+  // Same rules as the bulk /read route: pending requests never leak a
+  // receipt, and parties the reader has restricted never see one.
+  const suppressReadReceipt = readerFlags?.request_status === 'pending';
+
+  if (readerFlags?.read_receipts_enabled && !suppressReadReceipt) {
+    const restrictedParticipantIds = await listRestrictedParticipantIds(
+      db,
+      conversationId,
+      actorUserId,
+    );
+
     publishRealtimeEvent({
       topic: `chat.conversation:${conversationId}`,
       type: 'chat.message.read',
@@ -3622,6 +3764,7 @@ app.post('/chat/conversations/:conversationId/messages/:messageId/read', async (
         readAt: readAt.toISOString(),
         messageIds: [messageId],
       },
+      excludeUserIds: restrictedParticipantIds,
     });
   }
 

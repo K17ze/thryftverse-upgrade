@@ -87,6 +87,13 @@ interface CompositionLayer {
   zIndex: number;
   hidden: boolean;
   opacity: number;
+  /**
+   * Timed overlay window (page-clip-relative ms) from BaseLayerSchema.
+   * When present, the overlay is only visible while the output clock is
+   * inside [startMs, endMs). Burned into video renders via FFmpeg
+   * `enable='between(t,…)'` gating on drawtext/overlay filters.
+   */
+  timeRange?: { startMs: number; endMs: number };
   payload: Record<string, unknown>;
 }
 
@@ -119,6 +126,14 @@ const RENDER_WIDTH = 1080;
 const MIN_DIMENSION = 200;
 const MAX_DIMENSION = 4096;
 const OUTPUT_QUALITY = 90;
+/**
+ * Hard deadline for a single video render (remux or transcode). The
+ * publication endpoint's connection timeout is 60s; bounding each render
+ * at 40s leaves headroom for source fetch, probe, S3 upload, and the
+ * transaction. A stalled FFmpeg is SIGKILLed and classified transient so
+ * the publication fails closed (non-trivial edits never publish raw).
+ */
+const VIDEO_RENDER_TIMEOUT_MS = 40_000;
 
 // ── Filter preset color matrices ───────────────────────────────────────
 // IMPORTANT: These 10 flagship filter ColorMatrix definitions are EXACT
@@ -328,6 +343,16 @@ function parseLayer(raw: unknown): CompositionLayer | null {
   if (!raw || typeof raw !== 'object') return null;
   const l = raw as Record<string, unknown>;
   const payload = l['payload'];
+  const tr = l['timeRange'];
+  const timeRange =
+    tr && typeof tr === 'object' &&
+    Number.isFinite((tr as Record<string, unknown>)['startMs']) &&
+    Number.isFinite((tr as Record<string, unknown>)['endMs'])
+      ? {
+          startMs: (tr as { startMs: number }).startMs,
+          endMs: (tr as { endMs: number }).endMs,
+        }
+      : undefined;
   return {
     id: str(l['id'], 'layer'),
     type: str(l['type'], 'unknown'),
@@ -340,6 +365,7 @@ function parseLayer(raw: unknown): CompositionLayer | null {
     zIndex: num(l['zIndex'], 0),
     hidden: bool(l['hidden'], false),
     opacity: num(l['opacity'], 1),
+    timeRange,
     payload: payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {},
   };
 }
@@ -394,17 +420,14 @@ export function isCompositionNonTrivial(doc: unknown): boolean {
   if (str(media.payload['contentFit'], 'cover') !== 'cover') return true;
   if (parseEffects(media.payload).length > 0) return true;
 
-  // Video trim/speed edits are non-trivial: they require an FFmpeg burn-in
-  // to be reflected in the published media. A plain video with no authored
-  // timeline edits is trivial (the source URL can be served directly).
+  // Video timeline edits are non-trivial: they require an FFmpeg burn-in
+  // to be reflected in the published media. Delegate to getVideoRenderPath
+  // so every authored edit (trim, speed, reverse, freeze, speed curve,
+  // volume, fades) is classified by a single source of truth — an edit the
+  // path classifier knows about can never fall through here and publish
+  // the unedited source.
   if (str(media.payload['mediaType'], 'image') === 'video') {
-    const trimStartMs = num(media.payload['trimStartMs'], 0);
-    const trimEndMs = num(media.payload['trimEndMs'], 0);
-    const speed = num(media.payload['speed'], 1);
-    const durationMs = num(media.payload['videoDurationMs'], 0);
-    if (trimStartMs > 0) return true;
-    if (durationMs > 0 && trimEndMs > 0 && trimEndMs < durationMs) return true;
-    if (speed !== 1) return true;
+    if (getVideoRenderPath(doc) !== 'trivial') return true;
   }
 
   return false;
@@ -1083,6 +1106,192 @@ function buildAtempoChain(speed: number): string {
   return factors.map((f) => `atempo=${f.toFixed(6)}`).join(',');
 }
 
+// ── Timeline segment model (speed curves / freeze / reverse) ────────────
+//
+// The composition schema can author edits that a single `setpts` cannot
+// express: variable speed curves, freeze frames, and reverse playback. We
+// model the rendered output as an ordered list of segments and emit one
+// FFmpeg `concat` graph:
+//
+//   - `play`   — a source window played at a constant speed
+//                ([0:v]trim → setpts=(PTS-STARTPTS)/speed)
+//   - `freeze` — a held frame at a source position for a fixed output
+//                duration (trim ~1 frame → tpad stop_mode=clone)
+//
+// Freeze semantics mirror the preview's computeSourceTime exactly: during
+// the freeze window the source "keeps running underneath" — the frozen
+// window's source content is skipped, so the clip's total output duration
+// is unchanged. (This is the authored semantic, not CapCut's insert-time
+// freeze — parity with our own preview is what matters.)
+//
+// Reverse is realized per-segment (`reverse` on each segment, segments
+// concatenated in reverse order). Reverse-of-concat == concat-of-reversed,
+// but per-segment reversal bounds `reverse`'s in-memory frame buffer to a
+// single segment instead of the whole clip.
+//
+// Speed curves are subdivided into fixed-count segments whose speed is
+// sampled at the segment midpoint — a piecewise-constant approximation of
+// the authored curve, matching how the preview approximates via
+// averageSpeed().
+
+/** A speed curve control point as authored by the frontend. */
+interface SpeedCurvePoint {
+  position: number;
+  speed: number;
+}
+
+/** Parsed speed curve (points sorted by position + easing mode). */
+interface ParsedSpeedCurve {
+  points: SpeedCurvePoint[];
+  easing: 'linear' | 'smooth' | 'hold';
+}
+
+/** One output-ordered video segment. Times are in ms relative to the
+ *  trimmed window start (graph time base 0 = trimStartMs). */
+type VideoSegment =
+  | { kind: 'play'; srcStartMs: number; srcEndMs: number; speed: number }
+  | { kind: 'freeze'; atSourceMs: number; outDurMs: number };
+
+/** Parse a defensive speedCurve payload into a normalized curve, or null. */
+function parseSpeedCurve(raw: unknown): ParsedSpeedCurve | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const obj = raw as Record<string, unknown>;
+  const pointsRaw = obj['points'];
+  if (!Array.isArray(pointsRaw) || pointsRaw.length < 2) return null;
+  const points: SpeedCurvePoint[] = [];
+  for (const p of pointsRaw) {
+    if (!p || typeof p !== 'object') continue;
+    const r = p as Record<string, unknown>;
+    const position = num(r['position'], NaN);
+    const speed = num(r['speed'], NaN);
+    if (!Number.isFinite(position) || !Number.isFinite(speed)) continue;
+    points.push({ position: clamp(position, 0, 1), speed: clamp(speed, 0.25, 4) });
+  }
+  if (points.length < 2) return null;
+  points.sort((a, b) => a.position - b.position);
+  const easingRaw = str(obj['easing'], 'linear');
+  const easing: ParsedSpeedCurve['easing'] =
+    easingRaw === 'smooth' || easingRaw === 'hold' ? easingRaw : 'linear';
+  return { points, easing };
+}
+
+/**
+ * Sample the instantaneous speed at a normalized position (0–1) on the
+ * curve. Mirrors the frontend's `sampleSpeedAtPosition` exactly (linear /
+ * smoothstep / hold-step interpolation between sorted control points).
+ */
+function sampleSpeedCurve(curve: ParsedSpeedCurve, position: number): number {
+  const pos = clamp(position, 0, 1);
+  const points = curve.points;
+  if (points.length === 0) return 1;
+  if (points.length === 1) return points[0]!.speed;
+
+  let before = points[0]!;
+  let after = points[points.length - 1]!;
+  for (let i = 0; i < points.length - 1; i++) {
+    if (pos >= points[i]!.position && pos <= points[i + 1]!.position) {
+      before = points[i]!;
+      after = points[i + 1]!;
+      break;
+    }
+  }
+  if (curve.easing === 'hold') return before.speed;
+
+  const t = (pos - before.position) / Math.max(0.001, after.position - before.position);
+  const k = curve.easing === 'smooth' ? t * t * (3 - 2 * t) : t;
+  return before.speed + (after.speed - before.speed) * k;
+}
+
+/** How many sub-segments a speed curve is subdivided into. 24 subdivisions
+ *  gives ≤4% position error per segment on typical curves — visually
+ *  indistinguishable from continuous ramping while keeping the concat graph
+ *  small. */
+const SPEED_CURVE_SEGMENTS = 24;
+
+/**
+ * Build the output-ordered segment list for a trimmed video window.
+ *
+ * @param trimmedDurationMs  The source window length (post-trim, ms).
+ * @param speed              Constant playback speed (ignored when curve set).
+ * @param curve              Parsed speed curve, or null.
+ * @param freezeFrameMs      Source-relative position to freeze at, or NaN.
+ * @param freezeDurationMs   Output duration of the freeze hold (ms).
+ */
+function buildVideoSegments(
+  trimmedDurationMs: number,
+  speed: number,
+  curve: ParsedSpeedCurve | null,
+  freezeFrameMs: number,
+  freezeDurationMs: number,
+): VideoSegment[] {
+  let segs: VideoSegment[];
+  if (curve) {
+    segs = [];
+    const n = SPEED_CURVE_SEGMENTS;
+    for (let i = 0; i < n; i++) {
+      const p0 = i / n;
+      const p1 = (i + 1) / n;
+      const s = clamp(sampleSpeedCurve(curve, (p0 + p1) / 2), 0.25, 4);
+      segs.push({
+        kind: 'play',
+        srcStartMs: p0 * trimmedDurationMs,
+        srcEndMs: p1 * trimmedDurationMs,
+        speed: s,
+      });
+    }
+  } else {
+    segs = [{
+      kind: 'play',
+      srcStartMs: 0,
+      srcEndMs: trimmedDurationMs,
+      speed,
+    }];
+  }
+
+  // Insert the freeze hold with skip-under semantics: the segment containing
+  // the freeze point splits into pre-freeze, freeze-hold, and post-freeze
+  // (post starts freezeDur*speed later in source time — the frozen window's
+  // source content is skipped, matching the preview's computeSourceTime).
+  if (Number.isFinite(freezeFrameMs) && freezeDurationMs > 0 && freezeFrameMs >= 0 && freezeFrameMs < trimmedDurationMs) {
+    const out: VideoSegment[] = [];
+    for (const seg of segs) {
+      if (seg.kind !== 'play' || freezeFrameMs < seg.srcStartMs || freezeFrameMs >= seg.srcEndMs) {
+        out.push(seg);
+        continue;
+      }
+      const skipMs = freezeDurationMs * seg.speed;
+      // A freeze exactly at a segment start (including clip position 0)
+      // emits no pre-segment — the hold leads the segment.
+      if (freezeFrameMs > seg.srcStartMs) {
+        out.push({ kind: 'play', srcStartMs: seg.srcStartMs, srcEndMs: freezeFrameMs, speed: seg.speed });
+      }
+      out.push({ kind: 'freeze', atSourceMs: freezeFrameMs, outDurMs: freezeDurationMs });
+      const postStart = freezeFrameMs + skipMs;
+      if (postStart < seg.srcEndMs) {
+        out.push({ kind: 'play', srcStartMs: postStart, srcEndMs: seg.srcEndMs, speed: seg.speed });
+      }
+    }
+    segs = out;
+  }
+  return segs;
+}
+
+/** Total output duration of a segment list (ms). */
+function segmentsOutputDurationMs(segs: VideoSegment[]): number {
+  let total = 0;
+  for (const seg of segs) {
+    total += seg.kind === 'play'
+      ? (seg.srcEndMs - seg.srcStartMs) / seg.speed
+      : seg.outDurMs;
+  }
+  return total;
+}
+
+/** Format milliseconds as a fixed-precision seconds string for FFmpeg. */
+function msToSec(ms: number): string {
+  return (ms / 1000).toFixed(3);
+}
+
 // ── Video overlay burn-in helpers ──────────────────────────────────────
 
 /**
@@ -1173,10 +1382,18 @@ function buildDrawtextFilter(
   }
   const yExpr = String(Math.round(top));
 
+  // Timed overlay window: gate the drawtext on output time so the text is
+  // only burned in during its authored [startMs, endMs) window. `t` is the
+  // output timestamp in seconds; the clip's page timeline starts at 0.
+  const enable = layer.timeRange && layer.timeRange.endMs > layer.timeRange.startMs
+    ? `:enable='between(t,${msToSec(layer.timeRange.startMs)},${msToSec(layer.timeRange.endMs)})'`
+    : '';
+
   return (
     `drawtext=fontfile='${DRAWTEXT_FONT_PATH}'` +
     `:text=${escapeDrawtextText(text)}` +
-    `:fontcolor=${fontColor}:fontsize=${fontPx}:x=${xExpr}:y=${yExpr}`
+    `:fontcolor=${fontColor}:fontsize=${fontPx}:x=${xExpr}:y=${yExpr}` +
+    enable
   );
 }
 
@@ -1262,7 +1479,17 @@ async function renderVideoComposition(
   const sourceDurationMs = num(layer.payload['videoDurationMs'], 0);
   // Mute is authored as `volume === 0` (the composition schema has no
   // dedicated mute flag; the timeline audio panel writes volume 0).
-  const muted = num(layer.payload['volume'], 1) === 0;
+  const volume = clamp(num(layer.payload['volume'], 1), 0, 1);
+  const muted = volume === 0;
+  // Advanced edits (Wave 12): reverse playback, freeze frames, variable
+  // speed curves, and audio fades — all authored in the poster editor and
+  // previously dropped by the backend renderer.
+  const reversed = bool(layer.payload['reversed'], false);
+  const freezeFrameMs = num(layer.payload['freezeFrameMs'], NaN);
+  const freezeDurationMs = num(layer.payload['freezeDurationMs'], 0);
+  const fadeInMs = clamp(num(layer.payload['fadeInMs'], 0), 0, 5000);
+  const fadeOutMs = clamp(num(layer.payload['fadeOutMs'], 0), 0, 5000);
+  const speedCurve = parseSpeedCurve(layer.payload['speedCurve']);
 
   // Resolve the trimmed window. When trimEndMs is unset, the window extends
   // to the end of the source (use the probed/source duration if known).
@@ -1284,7 +1511,7 @@ async function renderVideoComposition(
 
   let inputPath: string | null = null;
   let outputPath: string | null = null;
-  let overlayPngPath: string | null = null;
+  const overlayPngPaths: string[] = [];
   try {
     // Download the source video to a temp file.
     let sourceBuffer: Buffer;
@@ -1305,12 +1532,18 @@ async function renderVideoComposition(
     let height = 0;
     let hasAudio = false;
     let durationMs = sourceDurationMs;
+    let probeFrameRate = 30;
+    let audioSampleRate = 48000;
+    let audioChannelLayout = 'stereo';
     try {
       const probe = await probeMedia(inputPath);
       width = probe.width ?? 0;
       height = probe.height ?? 0;
       hasAudio = probe.audioCodec !== null;
       if (probe.durationMs && probe.durationMs > 0) durationMs = probe.durationMs;
+      if (probe.frameRate && probe.frameRate > 0) probeFrameRate = probe.frameRate;
+      if (probe.audioSampleRate && probe.audioSampleRate > 0) audioSampleRate = probe.audioSampleRate;
+      if (probe.audioChannels === 1) audioChannelLayout = 'mono';
     } catch (error) {
       logger.warn({ sourceUrl, error: String(error) }, '[compositionRenderer] video probe failed');
     }
@@ -1345,7 +1578,10 @@ async function renderVideoComposition(
       };
 
       const outputDurationMs = trimmedDurationMs > 0 ? trimmedDurationMs : durationMs;
-      await runFfmpeg(buildRemuxArgs(), onProgress, { totalDurationMs: outputDurationMs });
+      await runFfmpeg(buildRemuxArgs(), onProgress, {
+        totalDurationMs: outputDurationMs,
+        timeoutMs: VIDEO_RENDER_TIMEOUT_MS,
+      });
 
       const buffer = await readFile(outputPath);
 
@@ -1372,8 +1608,10 @@ async function renderVideoComposition(
 
     // ── Transcode path (re-encode) ────────────────────────────────────
     // Build overlay burn-in: text layers → drawtext filters, sticker layers
-    // → a single composited PNG overlaid via the `overlay` filter. Each
-    // layer is built defensively so one bad overlay never blanks the rest.
+    // → composited PNGs overlaid via the `overlay` filter. Sticker layers
+    // are grouped by their authored timeRange so each PNG input can be
+    // gated independently via `enable='between(t,…)'` — a single composite
+    // PNG could not express per-layer timing.
     const textLayers = overlayLayers.filter((l) => l.type === 'text');
     const stickerLayers = overlayLayers.filter((l) => l.type !== 'text');
 
@@ -1392,33 +1630,78 @@ async function renderVideoComposition(
       }
     }
 
-    let stickerPng: Buffer | null = null;
+    // Group sticker layers by identical timeRange (empty key = always on).
+    const stickerGroups: Array<{ pngPath: string; timeRange: { startMs: number; endMs: number } | null }> = [];
     if (stickerLayers.length > 0 && width > 0 && height > 0) {
-      try {
-        stickerPng = await buildStickerOverlayPng(stickerLayers, width, height);
-      } catch (error) {
-        logger.warn(
-          { error: String(error) },
-          '[compositionRenderer] sticker overlay build failed — skipping stickers',
-        );
-        stickerPng = null;
+      const buckets = new Map<string, { layers: CompositionLayer[]; timeRange: { startMs: number; endMs: number } | null }>();
+      for (const sl of stickerLayers) {
+        const tr = sl.timeRange && sl.timeRange.endMs > sl.timeRange.startMs ? sl.timeRange : null;
+        const key = tr ? `${tr.startMs}:${tr.endMs}` : '';
+        const bucket = buckets.get(key) ?? { layers: [], timeRange: tr };
+        bucket.layers.push(sl);
+        buckets.set(key, bucket);
+      }
+      for (const bucket of buckets.values()) {
+        try {
+          const png = await buildStickerOverlayPng(bucket.layers, width, height);
+          if (!png) continue;
+          const pngPath = path.join(tmpdir(), `comp-overlay-${randomUUID()}.png`);
+          await writeFile(pngPath, png);
+          overlayPngPaths.push(pngPath);
+          stickerGroups.push({ pngPath, timeRange: bucket.timeRange });
+        } catch (error) {
+          logger.warn(
+            { error: String(error) },
+            '[compositionRenderer] sticker overlay build failed — skipping sticker group',
+          );
+        }
       }
     }
-    const hasOverlays = drawtextFilters.length > 0 || stickerPng !== null;
+    const hasOverlays = drawtextFilters.length > 0 || stickerGroups.length > 0;
 
-    if (stickerPng) {
-      overlayPngPath = path.join(tmpdir(), `comp-overlay-${randomUUID()}.png`);
-      await writeFile(overlayPngPath, stickerPng);
-    }
+    // ── Segment model ────────────────────────────────────────────────
+    // Advanced edits (speed curve, freeze frame, reverse) decompose the
+    // trimmed window into output-ordered segments concatenated by FFmpeg.
+    // Advanced graphs and sticker overlays both require -filter_complex;
+    // plain speed/text still uses the cheaper -vf/-af path.
+    const frameMs = 1000 / probeFrameRate;
+    const windowMs = trimmedDurationMs > 0 ? trimmedDurationMs : durationMs;
+    const hasFreeze = Number.isFinite(freezeFrameMs) && freezeDurationMs > 0
+      && freezeFrameMs >= 0 && freezeFrameMs < windowMs;
+    const advancedVideo = speedCurve !== null || hasFreeze || reversed;
+    const segs: VideoSegment[] = advancedVideo
+      ? buildVideoSegments(windowMs, speed, speedCurve, freezeFrameMs, freezeDurationMs)
+      : [];
+    const outputDurationMs = advancedVideo
+      ? segmentsOutputDurationMs(segs)
+      : speed !== 1 && windowMs > 0
+        ? windowMs / speed
+        : windowMs;
+
+    // Post-segment audio processing shared by both graph shapes: partial
+    // volume and authored fades apply in output time after the segment
+    // structure is assembled.
+    const audioPostChain = (): string[] => {
+      const chain: string[] = [];
+      if (volume > 0 && volume < 1) chain.push(`volume=${volume}`);
+      if (fadeInMs > 0) chain.push(`afade=t=in:st=0:d=${msToSec(fadeInMs)}`);
+      if (fadeOutMs > 0 && outputDurationMs > 0) {
+        const st = Math.max(0, outputDurationMs - fadeOutMs);
+        chain.push(`afade=t=out:st=${msToSec(st)}:d=${msToSec(fadeOutMs)}`);
+      }
+      return chain;
+    };
+    const audioOut = hasAudio && !muted;
 
     // Build the FFmpeg argument vector. `withOverlays` toggles the
     // drawtext/overlay burn-in so the same builder powers the initial
-    // render and the defensive retry (trim/speed only).
+    // render and the defensive retry (media edits only).
     const buildArgs = (withOverlays: boolean): string[] => {
       const a: string[] = ['-y'];
       // Input-seek trim. -ss before -i is a fast input seek; -t before -i
       // limits the input read duration so the trim window is exact
-      // regardless of subsequent speed filtering.
+      // regardless of subsequent speed filtering. Filter-graph time base
+      // 0 corresponds to the trim start.
       if (trimStartMs > 0) {
         a.push('-ss', (trimStartMs / 1000).toFixed(3));
       }
@@ -1427,43 +1710,140 @@ async function renderVideoComposition(
       }
       a.push('-i', inputPath!);
 
-      const useStickers = withOverlays && stickerPng !== null;
-      const useDrawtext = withOverlays;
+      const activeDrawtexts = withOverlays ? drawtextFilters : [];
+      const activeStickerGroups = withOverlays ? stickerGroups : [];
+      // Sticker PNGs are inputs 1..K (one per timeRange group).
+      for (const g of activeStickerGroups) a.push('-i', g.pngPath);
 
-      if (useStickers) {
-        // The overlay PNG is the second input.
-        a.push('-i', overlayPngPath!);
-      }
+      const useComplex = advancedVideo || activeStickerGroups.length > 0;
 
-      // Video filter chain: setpts leads, then drawtext, then overlay.
-      const vChain: string[] = [];
-      if (speed !== 1) vChain.push(`setpts=PTS/${speed}`);
-      if (useDrawtext) vChain.push(...drawtextFilters);
-
-      if (useStickers) {
-        // `overlay` needs a second input, so the whole graph is expressed
-        // with -filter_complex. Audio speed (atempo) is handled here too so
-        // -af and -filter_complex never interact.
+      if (useComplex) {
         const parts: string[] = [];
-        if (vChain.length > 0) {
-          parts.push(`[0:v]${vChain.join(',')}[v0]`);
-          parts.push('[v0][1:v]overlay=0:0[v1]');
-        } else {
-          parts.push('[0:v][1:v]overlay=0:0[v1]');
+
+        // ── Video stage ──────────────────────────────────────────────
+        let vCur = '0:v';
+        let vSeq = 0;
+        const vNext = () => `v${vSeq++}`;
+        if (advancedVideo) {
+          const vLabels: string[] = [];
+          segs.forEach((seg, i) => {
+            const label = `vseg${i}`;
+            if (seg.kind === 'play') {
+              // Frame-indexed trim: second-based boundaries double-count
+              // the shared edge frame at every segment junction (~1 frame
+              // of drift per boundary, ~24 boundaries on a speed curve).
+              // start_frame/end_frame partition the window exactly — the
+              // segments tile the frame space with no overlap or gap.
+              const startFrame = Math.round((seg.srcStartMs * probeFrameRate) / 1000);
+              const endFrame = Math.round((seg.srcEndMs * probeFrameRate) / 1000);
+              let chain =
+                `trim=start_frame=${startFrame}:end_frame=${endFrame}` +
+                `,setpts=(PTS-STARTPTS)/${seg.speed}`;
+              // Per-segment reverse bounds the frame buffer; concat order
+              // below is reversed to produce the authored backwards play.
+              if (reversed) chain += ',reverse';
+              parts.push(`[0:v]${chain}[${label}]`);
+            } else {
+              // Freeze: isolate exactly one frame at the freeze source
+              // position, then clone-hold it for the authored output
+              // duration. A two-frame window + select='eq(n,0)' guarantees
+              // a frame survives index rounding — a single-frame window
+              // can yield zero frames and break the concat graph.
+              const freezeFrame = Math.round((seg.atSourceMs * probeFrameRate) / 1000);
+              parts.push(
+                `[0:v]trim=start_frame=${freezeFrame}:end_frame=${freezeFrame + 2}` +
+                `,select='eq(n,0)'` +
+                `,setpts=PTS-STARTPTS` +
+                `,tpad=stop_mode=clone:stop=${msToSec(Math.max(0, seg.outDurMs - frameMs))}` +
+                `[${label}]`,
+              );
+            }
+            vLabels.push(label);
+          });
+          const order = reversed ? [...vLabels].reverse() : vLabels;
+          parts.push(`${order.map((l) => `[${l}]`).join('')}concat=n=${vLabels.length}:v=1:a=0[${vNext()}]`);
+          vCur = `v${vSeq - 1}`;
+        } else if (speed !== 1) {
+          parts.push(`[0:v]setpts=PTS/${speed}[${vNext()}]`);
+          vCur = `v${vSeq - 1}`;
         }
-        if (speed !== 1 && hasAudio) {
-          parts.push(`[0:a]${buildAtempoChain(speed)}[a0]`);
+        if (activeDrawtexts.length > 0) {
+          parts.push(`[${vCur}]${activeDrawtexts.join(',')}[${vNext()}]`);
+          vCur = `v${vSeq - 1}`;
         }
+        activeStickerGroups.forEach((g, i) => {
+          const enable = g.timeRange
+            ? `:enable='between(t,${msToSec(g.timeRange.startMs)},${msToSec(g.timeRange.endMs)})'`
+            : '';
+          parts.push(`[${vCur}][${i + 1}:v]overlay=0:0${enable}[${vNext()}]`);
+          vCur = `v${vSeq - 1}`;
+        });
+
+        // ── Audio stage ──────────────────────────────────────────────
+        let aCur: string | null = null;
+        if (audioOut) {
+          if (advancedVideo) {
+            const aLabels: string[] = [];
+            segs.forEach((seg, i) => {
+              const label = `aseg${i}`;
+              if (seg.kind === 'play') {
+                let chain =
+                  `atrim=start=${msToSec(seg.srcStartMs)}:end=${msToSec(seg.srcEndMs)}` +
+                  `,asetpts=PTS-STARTPTS` +
+                  `,aformat=sample_rates=${audioSampleRate}:channel_layouts=${audioChannelLayout}`;
+                if (seg.speed !== 1) chain += `,${buildAtempoChain(seg.speed)}`;
+                if (reversed) chain += ',areverse';
+                parts.push(`[0:a]${chain}[${label}]`);
+              } else {
+                // The freeze window's source is skipped for video, so its
+                // audio is silence — the held frame is not accompanied by
+                // frozen/dup'd audio.
+                parts.push(
+                  `anullsrc=r=${audioSampleRate}:cl=${audioChannelLayout}` +
+                  `:d=${msToSec(seg.outDurMs)}[${label}]`,
+                );
+              }
+              aLabels.push(label);
+            });
+            const order = reversed ? [...aLabels].reverse() : aLabels;
+            parts.push(`${order.map((l) => `[${l}]`).join('')}concat=n=${aLabels.length}:v=0:a=1[acat]`);
+            aCur = 'acat';
+          } else {
+            const chain: string[] = [];
+            if (speed !== 1) chain.push(buildAtempoChain(speed));
+            chain.push(...audioPostChain());
+            if (chain.length > 0) {
+              parts.push(`[0:a]${chain.join(',')}[aout]`);
+              aCur = 'aout';
+            } else {
+              aCur = '0:a';
+            }
+          }
+          if (advancedVideo) {
+            const post = audioPostChain();
+            if (post.length > 0) {
+              parts.push(`[${aCur}]${post.join(',')}[aout]`);
+              aCur = 'aout';
+            }
+          }
+        }
+
         a.push('-filter_complex', parts.join(';'));
-        a.push('-map', '[v1]');
-        if (hasAudio) {
-          a.push('-map', speed !== 1 ? '[a0]' : '0:a?');
-        }
-      } else if (vChain.length > 0) {
-        // Text/speed only: a simple -vf chain (drawtext is single-input).
-        a.push('-vf', vChain.join(','));
-        if (speed !== 1 && hasAudio) {
-          a.push('-af', buildAtempoChain(speed));
+        a.push('-map', `[${vCur}]`);
+        if (aCur) a.push('-map', `[${aCur}]`);
+      } else {
+        // Simple path: single-input -vf/-af chains (trim + speed + text +
+        // volume + fades). No sticker inputs and no advanced segments.
+        const vChain: string[] = [];
+        if (speed !== 1) vChain.push(`setpts=PTS/${speed}`);
+        vChain.push(...activeDrawtexts);
+        if (vChain.length > 0) a.push('-vf', vChain.join(','));
+
+        if (audioOut) {
+          const aChain: string[] = [];
+          if (speed !== 1) aChain.push(buildAtempoChain(speed));
+          aChain.push(...audioPostChain());
+          if (aChain.length > 0) a.push('-af', aChain.join(','));
         }
       }
 
@@ -1474,7 +1854,7 @@ async function renderVideoComposition(
         '-crf', '23',
         '-pix_fmt', 'yuv420p',
       );
-      if (hasAudio) {
+      if (audioOut) {
         a.push('-c:a', 'aac', '-b:a', '128k');
       } else {
         a.push('-an');
@@ -1483,25 +1863,24 @@ async function renderVideoComposition(
       return a;
     };
 
-    // Progress total: the expected output duration after the speed change.
-    // Trim/speed/overlays do not alter dimensions, so the probed source
-    // width/height are the output dimensions.
-    const outputDurationMs = speed !== 1 && trimmedDurationMs > 0
-      ? trimmedDurationMs / speed
-      : (trimmedDurationMs > 0 ? trimmedDurationMs : durationMs);
-
     try {
-      await runFfmpeg(buildArgs(true), onProgress, { totalDurationMs: outputDurationMs });
+      await runFfmpeg(buildArgs(true), onProgress, {
+        totalDurationMs: outputDurationMs,
+        timeoutMs: VIDEO_RENDER_TIMEOUT_MS,
+      });
     } catch (error) {
       if (!hasOverlays) throw error;
       // The overlay burn-in failed (e.g. missing font, bad filter). Retry
-      // with trim/speed only so the video still publishes without overlays
-      // rather than falling back to the unedited source.
+      // with the media edits only so the video still publishes without
+      // overlays rather than falling back to the unedited source.
       logger.warn(
         { sourceUrl, error: String(error) },
         '[compositionRenderer] video render with overlays failed — retrying without overlays',
       );
-      await runFfmpeg(buildArgs(false), onProgress, { totalDurationMs: outputDurationMs });
+      await runFfmpeg(buildArgs(false), onProgress, {
+        totalDurationMs: outputDurationMs,
+        timeoutMs: VIDEO_RENDER_TIMEOUT_MS,
+      });
     }
 
     const buffer = await readFile(outputPath);
@@ -1514,7 +1893,10 @@ async function renderVideoComposition(
         speed,
         trimStartMs,
         trimEndMs,
-        overlayCount: drawtextFilters.length + (stickerPng ? 1 : 0),
+        reversed,
+        hasFreeze,
+        speedCurve: speedCurve !== null,
+        overlayCount: drawtextFilters.length + stickerGroups.length,
         size: buffer.length,
       },
       '[compositionRenderer] video composition rendered',
@@ -1539,8 +1921,8 @@ async function renderVideoComposition(
     if (outputPath) {
       await rm(outputPath, { force: true }).catch(() => {});
     }
-    if (overlayPngPath) {
-      await rm(overlayPngPath, { force: true }).catch(() => {});
+    for (const p of overlayPngPaths) {
+      await rm(p, { force: true }).catch(() => {});
     }
   }
 }

@@ -59,14 +59,29 @@ describe("neutral flagship production detail pass", () => {
   });
 
   it("labels filter-based visual-search results without simulating image matching", () => {
-    const visualSearch = readSource("screens/VisualSearchScreen.tsx");
+    // The check runs on the owner layer — the screen was decomposed into
+    // hooks/visualsearch/* and components/visualsearch/* (orchestrator pattern).
+    const visualSearch = [
+      readSource("screens/VisualSearchScreen.tsx"),
+      ...fs
+        .readdirSync(path.join(SRC, "hooks/visualsearch"))
+        .filter((f) => f.endsWith(".ts"))
+        .map((f) => readSource(path.join("hooks/visualsearch", f))),
+      ...fs
+        .readdirSync(path.join(SRC, "components/visualsearch"))
+        .filter((f) => f.endsWith(".tsx") || f.endsWith(".ts"))
+        .map((f) => readSource(path.join("components/visualsearch", f))),
+    ].join("\n");
     expect(visualSearch).toContain("Showing matches from your category, brand, and description filters.");
     expect(visualSearch).not.toContain("coming soon");
     expect(visualSearch).not.toContain("setInterval");
     expect(visualSearch).not.toContain("Analysing image");
     // The endpoint is called via the listingsApi client, not directly via fetchJson in the screen.
     expect(visualSearch).not.toContain("fetchJson('/visual-search'");
-    expect(visualSearch).toContain('onError={() => setPreviewFailed(true)}');
+    // Preview-image error still flips previewFailed — extracted through the
+    // header's onPreviewError prop into the screen's handler.
+    expect(visualSearch).toContain('onError={onPreviewError}');
+    expect(visualSearch).toContain('setPreviewFailed(true)');
     expect(visualSearch.match(/setPreviewFailed\(false\)/g)?.length).toBeGreaterThanOrEqual(3);
   });
 });

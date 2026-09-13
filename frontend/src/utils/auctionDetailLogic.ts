@@ -5,6 +5,7 @@ import {
 } from '../hooks/useServerClock';
 import { formatFinalMinutesCountdown, type AuctionViewerState } from './auctionHomeLogic';
 import type { AuctionDetail, AuctionFulfilmentSummary } from '../services/marketApi';
+import type { ListingMediaDerivative } from '../contracts/listingMedia';
 import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 // ── Detail-level auction input (richer than AuctionHomeItem) ──
@@ -1220,10 +1221,18 @@ export interface AuctionMediaItemView {
   uri: string;
   kind: 'image' | 'video';
   posterUri?: string | null;
+  /** When the poster was verified by the seller/admin; null when unverified. */
+  posterVerifiedAt?: string | null;
   width?: number | null;
   height?: number | null;
   focalPoint: { x: number; y: number } | null;
   fit: 'cover' | 'contain';
+  /** Decodable BlurHash placeholder from the media pipeline. */
+  blurhash?: string | null;
+  /** 20px blurred-JPEG data URI placeholder from the media pipeline. */
+  lqip?: string | null;
+  /** Responsive rendition ladder from the media pipeline. */
+  derivatives?: ListingMediaDerivative[];
   altText: string;
 }
 
@@ -1235,11 +1244,15 @@ export function buildAuctionMediaItems(auction: {
     url: string;
     type: string;
     posterUrl?: string | null;
+    posterVerifiedAt?: string | null;
     order: number;
     width?: number | null;
     height?: number | null;
     focalX?: number | null;
     focalY?: number | null;
+    blurhash?: string | null;
+    lqip?: string | null;
+    derivatives?: ListingMediaDerivative[];
   }> | null;
 }): AuctionMediaItemView[] {
   if (auction.mediaItems && auction.mediaItems.length > 0) {
@@ -1251,12 +1264,16 @@ export function buildAuctionMediaItems(auction: {
         uri: item.url,
         kind: (item.type === 'video' ? 'video' : 'image') as 'image' | 'video',
         posterUri: item.posterUrl,
+        posterVerifiedAt: item.posterVerifiedAt ?? null,
         width: item.width,
         height: item.height,
         focalPoint: item.focalX != null && item.focalY != null
           ? { x: item.focalX, y: item.focalY }
           : null,
         fit: item.focalX != null && item.focalY != null ? 'cover' : 'contain',
+        blurhash: item.blurhash ?? null,
+        lqip: item.lqip ?? null,
+        derivatives: item.derivatives ?? [],
         altText: `${auction.title} ${item.type}`,
       }));
   }

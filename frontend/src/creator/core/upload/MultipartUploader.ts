@@ -121,6 +121,11 @@ export interface MultipartUploaderOptions {
   partSize?: number;
   /** Maximum retries per part. */
   maxPartRetries?: number;
+  /** Parts uploaded concurrently. Defaults to 3 — S3 guidance and cellular
+   *  radio scheduling both favour a small pool: enough overlap to hide
+   *  per-part latency, few enough sockets to avoid competing for the same
+   *  narrow uplink. */
+  partConcurrency?: number;
 }
 
 /**
@@ -134,6 +139,7 @@ export interface MultipartUploaderOptions {
 export class MultipartUploader {
   private partSize: number;
   private maxPartRetries: number;
+  private partConcurrency: number;
   /** Cached full-file Blob — used only as a fallback for URI schemes that
    *  `expo-file-system` cannot read with `position`/`length` (e.g. `ph://`,
    *  `content://`). For `file://` URIs the chunk-read path is used instead,
@@ -146,6 +152,7 @@ export class MultipartUploader {
   constructor(options?: MultipartUploaderOptions) {
     this.partSize = options?.partSize ?? DEFAULT_PART_SIZE;
     this.maxPartRetries = options?.maxPartRetries ?? 3;
+    this.partConcurrency = Math.max(1, options?.partConcurrency ?? 3);
   }
 
   /**
@@ -385,17 +392,39 @@ export class MultipartUploader {
       }
     }
 
-    // Upload remaining parts.
-    for (const part of session.parts) {
-      if (signal.aborted) throw new Error('Aborted');
-      if (part.status === 'completed' && part.etag) continue;
-
-      await this.uploadPartWithRetry(session, part, filePath, (partBytes) => {
-        uploadedBytes += partBytes;
-        onProgress(uploadedBytes);
-      }, signal);
-      onPartComplete?.(part);
-    }
+    // Upload remaining parts through a bounded worker pool. Concurrent
+    // part PUTs overlap per-part latency (Meta's segmented-upload analysis
+    // attributes >2× upload latency cuts and ~5× failure reduction to this
+    // overlap); 3 workers is the sweet spot for cellular uplinks — more
+    // sockets just contend for the same narrow pipe.
+    const pending = session.parts.filter(
+      (p) => !(p.status === 'completed' && p.etag),
+    );
+    let cursor = 0;
+    let firstError: Error | undefined;
+    const worker = async (): Promise<void> => {
+      while (firstError === undefined && !signal.aborted) {
+        const part = pending[cursor++];
+        if (!part) return;
+        try {
+          await this.uploadPartWithRetry(session, part, filePath, (partBytes) => {
+            uploadedBytes += partBytes;
+            onProgress(uploadedBytes);
+          }, signal);
+          onPartComplete?.(part);
+        } catch (err) {
+          // First exhausted part fails the session — siblings stop picking
+          // up new work but finish their in-flight part so its progress is
+          // checkpointed (completed parts are skipped on the next resume).
+          firstError = err instanceof Error ? err : new Error(String(err));
+          return;
+        }
+      }
+    };
+    const workerCount = Math.min(this.partConcurrency, Math.max(1, pending.length));
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+    if (signal.aborted) throw new Error('Aborted');
+    if (firstError) throw firstError;
 
     return this.complete(session);
   }

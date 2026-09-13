@@ -1,19 +1,22 @@
 /**
  * ConversationalSearchScreen — flagship natural-language search surface.
  *
- * Per AGENTS.md §11 (Truthful UI): this screen is honest about its demo mode.
- * The service uses deterministic keyword matching — NOT an LLM / GPT / ChatGPT.
- * A subtle "Demo Mode" indicator is always visible so the user is never misled.
- * Extracted filters are labelled "matched keywords", not "AI inference".
+ * Per AGENTS.md §11 (Truthful UI): this screen is honest about what the
+ * backend actually is. `POST /search/conversational` uses a deterministic
+ * keyword parser — NOT an LLM. Extracted filters are labelled "matched
+ * keywords", never "AI inference". When the API is unreachable the service
+ * falls back to identical client-side keyword matching; only then is the
+ * disclosure line shown (driven by the real `isDemo` flag on each message,
+ * not a compile-time `__DEV__` assumption).
  *
  * Per AGENTS.md §4 (Push to Maximum Quality):
- *  - Flat composition, hairline separators, max two non-avatar radii
- *  - Max three type sizes in the first viewport
- *  - Design tokens only — no hardcoded values
+ *  - FlagshipScreen + FlagshipHeader; flat canvas, hairline separators
+ *  - Two non-avatar radii: Radius.lg (bubbles/field) + Radius.full (chips)
+ *  - AppIcon + IconSize only — no raw Ionicons
  *  - useAppTheme() for all colours
  *
- * Per AGENTS.md §14 (State Completeness): loading, populated, empty, error,
- * and offline states are all designed.
+ * Per AGENTS.md §14 (State Completeness): loading skeleton, populated,
+ * empty, error + retry, and offline states are all designed.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -22,28 +25,30 @@ import {
   StyleSheet,
   TextInput,
   ScrollView,
-  StatusBar,
-  Platform,
   ActivityIndicator } from 'react-native';
 import { FlashList, ListRenderItem, FlashListRef } from '@shopify/flash-list';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { KeyboardAvoidingView } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Radius, Space, Control, Stroke } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
+import { IconSize } from '../theme/iconTokens';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { AppIcon } from '../components/common/AppIcon';
 import { TypingIndicator } from '../components/chat/TypingIndicator';
 import { AITrustSignal, type AIConfidence } from '../components/ai/AITrustSignal';
+import { OfflineBanner } from '../components/OfflineBanner';
+import {
+  FlagshipScreen,
+  FlagshipHeader,
+  FlagshipState,
+  SkeletonBlock } from '../components/flagship';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
 import { RootStackParamList } from '../navigation/types';
 import {
-  CONVERSATIONAL_SEARCH_DEMO_MODE,
   ChatMessage,
   SearchConversation,
   SearchFilters,
@@ -61,7 +66,7 @@ type ConversationRow =
   | { kind: 'typing' };
 
 export default function ConversationalSearchScreen({ navigation }: Props) {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const { formatFromFiat } = useFormattedPrice();
   const { isOffline } = useConnectivity();
   const reducedMotion = useReducedMotion();
@@ -102,6 +107,15 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
       cancelled = true;
     };
   }, []);
+
+  // ── Honest demo disclosure ──
+  // Shown only when the conversation actually contains locally generated
+  // (fallback) messages — i.e. the API was unreachable and the service
+  // flagged its response `isDemo`. Never shown on compile-time __DEV__ alone.
+  const demoActive = useMemo(
+    () => conversation?.messages.some((m) => m.isDemo) ?? false,
+    [conversation],
+  );
 
   // ── Build the FlashList rows (messages + optional typing indicator) ──
   const rows: ConversationRow[] = useMemo(() => {
@@ -158,6 +172,19 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
     },
     [conversation, isProcessing, isOffline, t],
   );
+
+  // ── Retry the last user query after an error ──
+  const handleRetry = useCallback(() => {
+    setError(null);
+    if (conversation && conversation.messages.length > 0) {
+      const lastUser = [...conversation.messages]
+        .reverse()
+        .find((m) => m.role === 'user');
+      if (lastUser) {
+        void sendQuery(lastUser.content);
+      }
+    }
+  }, [conversation, sendQuery]);
 
   // ── Navigate to Browse with extracted filters applied ──
   const handleViewResults = useCallback(
@@ -266,11 +293,12 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
             {message.content}
           </Text>
 
-          {/* AI trust signal — confidence + matched-keyword source */}
+          {/* Trust signal — confidence + matched-keyword source. isDemo is
+              the per-message flag from the service, not a build constant. */}
           <AITrustSignal
             confidence={confidence}
             source={matchedSource}
-            isDemo={CONVERSATIONAL_SEARCH_DEMO_MODE}
+            isDemo={message.isDemo}
             style={localStyles.trustSignal}
           />
 
@@ -300,7 +328,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
                 onPress={() => handleViewResults(message.filterResults!)}
                 activeOpacity={0.85}
                 hapticFeedback="light"
-                accessibilityLabel={`View results in browse`}
+                accessibilityLabel={t('actions.viewResults')}
                 accessibilityHint="Opens the browse screen with the matched filters applied"
                 accessibilityRole="button"
               >
@@ -310,7 +338,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
                 >
                   {t('actions.viewResults')}
                 </Text>
-                <Ionicons name="arrow-forward" size={16} color={colors.textInverse} />
+                <AppIcon name="arrow-forward" size={IconSize.sm} color={colors.textInverse} accessible={false} />
               </AnimatedPressable>
             </View>
           )}
@@ -408,17 +436,13 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
       const message = item.message;
       if (message.role === 'user') {
         return (
-          <View
-            style={localStyles.messageRow}
-          >
+          <View style={localStyles.messageRow}>
             {renderUserMessage(message)}
           </View>
         );
       }
       return (
-        <View
-          style={localStyles.messageRow}
-        >
+        <View style={localStyles.messageRow}>
           {renderAssistantMessage(message)}
         </View>
       );
@@ -429,9 +453,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
   // ── Empty / first-viewport state ──
   const renderEmptyState = () => (
     <View style={localStyles.emptyStateWrap}>
-      <View
-        style={localStyles.greetingWrap}
-      >
+      <View style={localStyles.greetingWrap}>
         <Text
           style={[localStyles.greetingTitle, { color: colors.textPrimary }]}
           accessibilityRole="header"
@@ -446,7 +468,8 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
         </Text>
       </View>
 
-      {/* Suggested query chips */}
+      {/* Suggested query chips — skeleton blocks while loading so the
+          first-viewport geometry does not shift when they resolve. */}
       <View style={localStyles.suggestionsSection}>
         <Text
           style={[localStyles.suggestionsLabel, { color: colors.textMuted }]}
@@ -456,7 +479,9 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
         </Text>
         {suggestionsLoading ? (
           <View style={localStyles.suggestionSkeletonRow}>
-            <ActivityIndicator size="small" color={colors.textMuted} />
+            {[120, 168, 140].map((w) => (
+              <SkeletonBlock key={w} width={w} height={Control.hit} radius={Radius.full} />
+            ))}
           </View>
         ) : (
           <ScrollView
@@ -493,78 +518,93 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
     </View>
   );
 
-  // ── Error state ──
-  const renderErrorState = () => (
-    <View style={localStyles.errorWrap}>
-      <Ionicons name="cloud-offline-outline" size={28} color={colors.textMuted} accessible={false} aria-hidden={true} />
-      <Text
-        style={[localStyles.errorTitle, { color: colors.textPrimary }]}
-        accessibilityRole="text"
-      >
-        {error}
-      </Text>
-      <AnimatedPressable
-        style={[localStyles.retryBtn, { backgroundColor: colors.brand }]}
-        onPress={() => {
-          setError(null);
-          if (conversation && conversation.messages.length > 0) {
-            const lastUser = [...conversation.messages]
-              .reverse()
-              .find((m) => m.role === 'user');
-            if (lastUser) {
-              void sendQuery(lastUser.content);
-            }
-          }
-        }}
-        activeOpacity={0.85}
-        hapticFeedback="light"
-        accessibilityLabel="Retry search"
-        accessibilityHint="Re-sends your last search query"
-        accessibilityRole="button"
-      >
-        <Text
-          style={[localStyles.retryBtnText, { color: colors.textInverse }]}
-          accessibilityRole="text"
+  const showEmptyState = !conversation && !isProcessing;
+  const showError = !!error && !isProcessing;
+  const canSend = input.trim().length > 0 && !isProcessing && !isOffline;
+
+  // ── Composer (sticky footer) ──
+  const composer = (
+    <View style={{ paddingBottom: insets.bottom }}>
+      <View style={localStyles.inputBar}>
+        <View
+          style={[
+            localStyles.inputShell,
+            { backgroundColor: colors.input, borderColor: colors.border },
+          ]}
         >
-          {t('error.retry')}
-        </Text>
-      </AnimatedPressable>
+          <TextInput
+            ref={inputRef}
+            style={[localStyles.input, { color: colors.inputText }]}
+            placeholder={t('input.placeholder')}
+            placeholderTextColor={colors.textMuted}
+            value={input}
+            onChangeText={setInput}
+            onSubmitEditing={() => void sendQuery(input)}
+            returnKeyType="send"
+            autoCapitalize="none"
+            autoCorrect
+            editable={!isProcessing && !isOffline}
+            accessibilityLabel="Search query input"
+            accessibilityHint="Type a natural-language description of what you want to find"
+            accessibilityRole="search"
+          />
+        </View>
+        <AnimatedPressable
+          style={[
+            localStyles.sendBtn,
+            { backgroundColor: canSend ? colors.brand : colors.surfaceAlt },
+          ]}
+          onPress={() => void sendQuery(input)}
+          disabled={!canSend}
+          activeOpacity={0.85}
+          hapticFeedback="light"
+          accessibilityLabel="Send search query"
+          accessibilityHint="Sends your query and starts the conversational search"
+          accessibilityRole="button"
+        >
+          {isProcessing ? (
+            <ActivityIndicator size="small" color={colors.textInverse} />
+          ) : (
+            <AppIcon
+              name="arrow-up"
+              size={IconSize.md}
+              color={canSend ? colors.textInverse : colors.textMuted}
+              accessible={false}
+            />
+          )}
+        </AnimatedPressable>
+      </View>
     </View>
   );
 
-  const showEmptyState = !conversation && !isProcessing;
-  const showError = !!error && !isProcessing;
-
   return (
-    <SafeAreaView
-      style={[localStyles.container, { backgroundColor: colors.background }]}
-      edges={['top']}
+    <FlagshipScreen
+      testID="conversational-search-screen"
+      scrollEnabled={false}
+      keyboardAvoiding
+      contentStyle={localStyles.content}
+      stickyFooter={composer}
+      header={
+        <FlagshipHeader
+          title={t('header.title')}
+          backIcon="arrow-back"
+          onBack={() => navigation.goBack()}
+        />
+      }
     >
-      <StatusBar
-        barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={colors.background}
-      />
+      {/* ── Offline banner ── */}
+      {isOffline && <OfflineBanner message={t('offline.banner')} />}
 
-      {/* ── Header ── */}
-      <ScreenHeader
-        title={t('header.title')}
-        backIcon="arrow-back"
-        onBack={() => navigation.goBack()}
-        style={{
-          paddingBottom: Space.sm,
-          borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: colors.border }}
-      />
-
-      {/* ── Demo mode indicator (truthful UI per AGENTS.md §11) ── */}
-      {CONVERSATIONAL_SEARCH_DEMO_MODE && (
+      {/* ── Demo disclosure — only when the service actually fell back to
+          local keyword matching (truthful UI per AGENTS.md §11) ── */}
+      {demoActive && (
         <View
           style={[
             localStyles.demoBanner,
             { backgroundColor: colors.surfaceAlt, borderBottomColor: colors.borderSubtle },
           ]}
         >
-          <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} accessible={false} aria-hidden={true} />
+          <AppIcon name="info" size={IconSize.xs} color="textMuted" accessible={false} />
           <Text
             style={[localStyles.demoBannerText, { color: colors.textMuted }]}
             accessibilityRole="text"
@@ -574,123 +614,46 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
         </View>
       )}
 
-      {/* ── Offline banner ── */}
-      {isOffline && (
-        <View
-          style={[
-            localStyles.offlineBanner,
-            { backgroundColor: colors.surfaceAlt, borderBottomColor: colors.borderSubtle },
-          ]}
-        >
-          <Ionicons name="wifi-outline" size={14} color={colors.textMuted} accessible={false} aria-hidden={true} />
-          <Text
-            style={[localStyles.offlineBannerText, { color: colors.textMuted }]}
-            accessibilityRole="text"
-          >
-            {t('offline.banner')}
-          </Text>
-        </View>
-      )}
-
       {/* ── Conversation / empty / error ── */}
-      <KeyboardAvoidingView
-        style={localStyles.flexOne}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
-      >
-        {showError ? (
-          renderErrorState()
-        ) : showEmptyState ? (
-          renderEmptyState()
-        ) : (
-          <FlashList
-            ref={listRef}
-            data={rows}
-            renderItem={renderRow}
-            keyExtractor={(item, index) =>
-              item.kind === 'typing' ? 'typing-indicator' : item.message.id
-            }
-            contentContainerStyle={localStyles.listContent}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          />
-        )}
-
-        {/* ── Input field ── */}
-        <View
-          style={[
-            localStyles.inputBar,
-            {
-              backgroundColor: colors.background,
-              borderTopColor: colors.border,
-              paddingBottom: insets.bottom + Space.sm },
-          ]}
-        >
-          <View
-            style={[
-              localStyles.inputShell,
-              { backgroundColor: colors.input, borderColor: colors.border },
-            ]}
-          >
-            <TextInput
-              ref={inputRef}
-              style={[localStyles.input, { color: colors.inputText }]}
-              placeholder={t('input.placeholder')}
-              placeholderTextColor={colors.textMuted}
-              value={input}
-              onChangeText={setInput}
-              onSubmitEditing={() => void sendQuery(input)}
-              returnKeyType="send"
-              autoCapitalize="none"
-              autoCorrect
-              editable={!isProcessing && !isOffline}
-              accessibilityLabel="Search query input"
-              accessibilityHint="Type a natural-language description of what you want to find"
-              accessibilityRole="search"
-            />
-          </View>
-          <AnimatedPressable
-            style={[
-              localStyles.sendBtn,
-              {
-                backgroundColor: input.trim().length > 0 && !isProcessing ? colors.brand : colors.surfaceAlt },
-            ]}
-            onPress={() => void sendQuery(input)}
-            disabled={input.trim().length === 0 || isProcessing || isOffline}
-            activeOpacity={0.85}
-            hapticFeedback="light"
-            accessibilityLabel="Send search query"
-            accessibilityHint="Sends your query and starts the conversational search"
-            accessibilityRole="button"
-          >
-            {isProcessing ? (
-              <ActivityIndicator size="small" color={colors.textInverse} />
-            ) : (
-              <Ionicons
-                name="arrow-up"
-                size={20}
-                color={input.trim().length > 0 ? colors.textInverse : colors.textMuted}
-              />
-            )}
-          </AnimatedPressable>
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      {showError ? (
+        <FlagshipState
+          variant="error"
+          title={error ?? t('error.generic')}
+          actionLabel={t('error.retry')}
+          onAction={handleRetry}
+        />
+      ) : showEmptyState ? (
+        renderEmptyState()
+      ) : (
+        <FlashList
+          ref={listRef}
+          data={rows}
+          renderItem={renderRow}
+          keyExtractor={(item) =>
+            item.kind === 'typing' ? 'typing-indicator' : item.message.id
+          }
+          contentContainerStyle={localStyles.listContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        />
+      )}
+    </FlagshipScreen>
   );
 }
 
 // ---------------------------------------------------------------------------
 // Styles — design tokens only, no hardcoded values.
-// Radii: two non-avatar sizes — Radius.lg (12) for bubbles, Radius.full for
-// chips/buttons. Type: three sizes in the first viewport (title, body, caption).
+// Radii: two non-avatar sizes — Radius.lg (12) for bubbles/field, Radius.full
+// for chips/buttons. Type: three sizes in the first viewport (title, body,
+// caption).
 // ---------------------------------------------------------------------------
 const localStyles = StyleSheet.create({
-  container: {
-    flex: 1 },
-  flexOne: {
-    flex: 1 },
+  content: {
+    flex: 1,
+    paddingHorizontal: 0,
+    paddingTop: 0 },
 
-  // Demo mode banner
+  // Demo disclosure banner
   demoBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -699,21 +662,6 @@ const localStyles = StyleSheet.create({
     paddingVertical: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth },
   demoBannerText: {
-    flex: 1,
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: TypographyV2.meta.letterSpacing },
-
-  // Offline banner
-  offlineBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth },
-  offlineBannerText: {
     flex: 1,
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
@@ -851,7 +799,8 @@ const localStyles = StyleSheet.create({
     letterSpacing: TypographyV2.meta.letterSpacing,
     marginBottom: Space.sm },
   suggestionSkeletonRow: {
-    paddingVertical: Space.sm },
+    flexDirection: 'row',
+    gap: Space.sm },
   suggestionScroll: {
     gap: Space.sm,
     paddingRight: Space.md },
@@ -869,41 +818,12 @@ const localStyles = StyleSheet.create({
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: TypographyV2.meta.letterSpacing },
 
-  // Error state
-  errorWrap: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Space.lg,
-    gap: Space.sm },
-  errorTitle: {
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
-    fontFamily: TypographyV2.body.fontFamily,
-    letterSpacing: TypographyV2.body.letterSpacing,
-    textAlign: 'center' },
-  retryBtn: {
-    borderRadius: Radius.full,
-    paddingHorizontal: Space.xl,
-    paddingVertical: Space.sm + 2,
-    minHeight: Control.hit,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: Space.sm },
-  retryBtnText: {
-    fontSize: TypographyV2.bodyStrong.size,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
-    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
-
-  // Input bar
+  // Input bar (inside the FlagshipScreen sticky footer — hairline border
+  // comes from the footer wrapper)
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: Space.sm,
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth },
+    gap: Space.sm },
   inputShell: {
     flex: 1,
     borderRadius: Radius.lg,

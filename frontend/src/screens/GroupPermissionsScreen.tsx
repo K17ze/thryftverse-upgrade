@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { FlagshipHeader, FlagshipScreen } from '../components/flagship';
-import { AppIcon } from '../components/common/AppIcon';
+import { FlagshipHeader, FlagshipScreen, FlagshipState } from '../components/flagship';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { RootStackParamList } from '../navigation/types';
 import {
   fetchGroupSettingsFromApi,
@@ -14,8 +14,9 @@ import {
   type GroupSettings,
   type GroupSettingsCapabilities,
 } from '../services/chatApi';
-import { Control, Radius, Space, Stroke } from '../theme/designTokens';
+import { Control, Space, Stroke } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
+import { Ionicons } from '@expo/vector-icons';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupPermissions'>;
 type EditablePermission = 'editGroupInfo' | 'sendMessages' | 'addMembers';
@@ -28,7 +29,7 @@ const PERMISSIONS: Array<{
   {
     key: 'editGroupInfo',
     title: 'Edit group info',
-    description: 'Change the name, description, group photo and cover.',
+    description: 'Change the name, description and group photo.',
   },
   {
     key: 'sendMessages',
@@ -48,6 +49,7 @@ export default function GroupPermissionsScreen({ navigation, route }: Props) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
+  const { isOffline } = useConnectivity();
   const requestSequence = useRef(0);
   // §37.5 fail-closed: settings start as null and render only from the
   // server row. No client-side fallback defaults that could contradict
@@ -56,9 +58,12 @@ export default function GroupPermissionsScreen({ navigation, route }: Props) {
   const [capabilities, setCapabilities] = useState<GroupSettingsCapabilities | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [pendingKey, setPendingKey] = useState<EditablePermission | null>(null);
+  const [expandedKey, setExpandedKey] = useState<EditablePermission | null>(null);
 
   const load = useCallback(async () => {
     const sequence = ++requestSequence.current;
+    setPendingKey(null);
+    setExpandedKey(null);
     setState('loading');
     try {
       const snapshot = await fetchGroupSettingsFromApi(conversationId);
@@ -83,20 +88,24 @@ export default function GroupPermissionsScreen({ navigation, route }: Props) {
     key: EditablePermission,
     value: GroupPermissionScope,
   ) => {
-    if (!settings || !capabilities?.canManage || pendingKey || settings[key] === value) return;
-    const previous = settings;
+    if (!settings || !capabilities?.canManage || pendingKey || isOffline || settings[key] === value) return;
+    const sequence = ++requestSequence.current;
     haptic.selection();
     setPendingKey(key);
     setSettings((current) => current ? { ...current, [key]: value } : null);
     try {
       const confirmed = await updateGroupSettingsOnApi(conversationId, { [key]: value });
+      if (sequence !== requestSequence.current) return;
       setSettings(confirmed);
+      setExpandedKey(null);
       haptic.success();
     } catch {
+      if (sequence !== requestSequence.current) return;
       // A PATCH can finish even when its response is lost. Reconcile with the
       // server before reverting so the UI never lies about group authority.
       try {
         const reconciled = await fetchGroupSettingsFromApi(conversationId);
+        if (sequence !== requestSequence.current) return;
         setSettings(reconciled.settings);
         setCapabilities(reconciled.capabilities);
         if (reconciled.settings[key] === value) {
@@ -105,13 +114,14 @@ export default function GroupPermissionsScreen({ navigation, route }: Props) {
           show('Could not update this permission', 'error');
         }
       } catch {
-        setSettings(previous);
+        if (sequence !== requestSequence.current) return;
+        setState('error');
         show('Could not confirm the change. Check your connection and try again.', 'error');
       }
     } finally {
-      setPendingKey(null);
+      if (sequence === requestSequence.current) setPendingKey(null);
     }
-  }, [settings, capabilities?.canManage, conversationId, haptic, pendingKey, show]);
+  }, [settings, capabilities?.canManage, conversationId, haptic, pendingKey, show, isOffline]);
 
   return (
     <FlagshipScreen
@@ -123,28 +133,25 @@ export default function GroupPermissionsScreen({ navigation, route }: Props) {
           <ActivityIndicator color={colors.textPrimary} />
         </View>
       ) : state === 'error' ? (
-        <View style={styles.centerState}>
-          <AppIcon name="offline" size="lg" color="textMuted" accessible={false} />
-          <Text style={styles.stateTitle}>Permissions unavailable</Text>
-          <Text style={styles.stateCopy}>Check your connection, then try again.</Text>
-          <Pressable
-            onPress={() => void load()}
-            style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}
-            accessibilityRole="button"
-            accessibilityLabel="Retry loading group permissions"
-          >
-            <Text style={styles.retryText}>Retry</Text>
-          </Pressable>
-        </View>
+        <FlagshipState
+          variant={isOffline ? 'offline' : 'error'}
+          title="Permissions unavailable"
+          subtitle={
+            isOffline
+              ? 'You are offline. Reconnect to view and change group permissions.'
+              : 'Check your connection, then try again.'
+          }
+          actionLabel="Retry"
+          onAction={() => void load()}
+        />
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.content}
         >
           <View style={styles.intro}>
-            <Text style={styles.introTitle}>Choose who can do what</Text>
             <Text style={styles.introCopy}>
-              Owners and admins always keep access. Changes apply to every member and device.
+              {isOffline ? 'Offline. Reconnect to change permissions.' : 'Owners and admins retain access. Changes apply to the whole group.'}
             </Text>
           </View>
 
@@ -154,20 +161,28 @@ export default function GroupPermissionsScreen({ navigation, route }: Props) {
                 key={permission.key}
                 style={[styles.permissionBlock, index > 0 && styles.permissionDivider]}
               >
-                <View style={styles.permissionHeading}>
+                <Pressable
+                  style={({ pressed }) => [styles.permissionHeading, pressed && styles.pressed]}
+                  onPress={() => setExpandedKey(expandedKey === permission.key ? null : permission.key)}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: expandedKey === permission.key }}
+                  accessibilityLabel={`${permission.title}, ${settings?.[permission.key] === 'everyone' ? 'Everyone' : 'Admins only'}`}
+                >
                   <View style={styles.permissionCopy}>
                     <Text style={styles.permissionTitle}>{permission.title}</Text>
-                    <Text style={styles.permissionDescription}>{permission.description}</Text>
+                    <Text style={styles.permissionDescription}>{settings?.[permission.key] === 'everyone' ? 'Everyone' : 'Admins only'}</Text>
                   </View>
                   {pendingKey === permission.key ? (
                     <ActivityIndicator size="small" color={colors.textMuted} />
-                  ) : null}
-                </View>
+                  ) : <Ionicons name={expandedKey === permission.key ? 'chevron-up' : 'chevron-down'} size={20} color={colors.textMuted} />}
+                </Pressable>
 
+                {expandedKey === permission.key ? <>
+                <Text style={styles.permissionDescription}>{permission.description}</Text>
                 <View style={styles.scopeControl} accessibilityRole="radiogroup">
                   {(['everyone', 'admins'] as const).map((scope) => {
                     const selected = settings?.[permission.key] === scope;
-                    const disabled = !capabilities?.canManage || pendingKey !== null;
+                    const disabled = !capabilities?.canManage || pendingKey !== null || isOffline;
                     return (
                       <Pressable
                         key={scope}
@@ -179,16 +194,18 @@ export default function GroupPermissionsScreen({ navigation, route }: Props) {
                           pressed && !disabled && styles.pressed,
                         ]}
                         accessibilityRole="radio"
-                        accessibilityState={{ selected, disabled }}
+                        accessibilityState={{ checked: selected, disabled }}
                         accessibilityLabel={`${permission.title}: ${scope === 'everyone' ? 'Everyone' : 'Admins only'}`}
                       >
                         <Text style={[styles.scopeLabel, selected && styles.scopeLabelSelected]}>
                           {scope === 'everyone' ? 'Everyone' : 'Admins only'}
                         </Text>
+                        {selected ? <Ionicons name="checkmark" size={20} color={colors.textPrimary} /> : null}
                       </Pressable>
                     );
                   })}
                 </View>
+                </> : null}
               </View>
             ))}
           </View>
@@ -215,35 +232,6 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
       gap: Space.sm,
       paddingHorizontal: Space.xl,
-    },
-    stateTitle: {
-      fontFamily: TypographyV2.sectionTitle.fontFamily,
-      fontSize: TypographyV2.sectionTitle.size,
-      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
-      lineHeight: TypographyV2.sectionTitle.lineHeight,
-      color: colors.textPrimary,
-      marginTop: Space.xs,
-    },
-    stateCopy: {
-      fontFamily: TypographyV2.body.fontFamily,
-      fontSize: TypographyV2.body.size,
-      letterSpacing: TypographyV2.body.letterSpacing,
-      lineHeight: TypographyV2.body.lineHeight,
-      color: colors.textMuted,
-      textAlign: 'center',
-    },
-    retryButton: {
-      minHeight: Control.hit,
-      justifyContent: 'center',
-      paddingHorizontal: Space.lg,
-      marginTop: Space.sm,
-    },
-    retryText: {
-      fontFamily: TypographyV2.bodyStrong.fontFamily,
-      fontSize: TypographyV2.bodyStrong.size,
-      letterSpacing: TypographyV2.bodyStrong.letterSpacing,
-      lineHeight: TypographyV2.bodyStrong.lineHeight,
-      color: colors.textPrimary,
     },
     intro: {
       paddingBottom: Space.xl,
@@ -302,24 +290,19 @@ function createStyles(colors: ThemeColors) {
       maxWidth: 560,
     },
     scopeControl: {
-      flexDirection: 'row',
-      padding: 3,
+      flexDirection: 'column',
       marginTop: Space.md,
-      backgroundColor: colors.surfaceAlt,
-      borderRadius: Radius.md,
-      gap: 3,
     },
     scopeOption: {
       minHeight: Control.hit,
-      flex: 1,
+      flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: Radius.sm,
+      justifyContent: 'space-between',
+      paddingVertical: Space.sm,
+      paddingHorizontal: Space.sm,
     },
     scopeOptionSelected: {
-      backgroundColor: colors.surface,
-      borderWidth: Stroke.hairline,
-      borderColor: colors.border,
+      backgroundColor: colors.surfaceAlt,
     },
     scopeLabel: {
       fontFamily: TypographyV2.bodyStrong.fontFamily,

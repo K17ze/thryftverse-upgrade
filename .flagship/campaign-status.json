@@ -1,7 +1,9 @@
 {
   "campaignId": "flagship-coown-market-2026-09",
-  "lastUpdated": "2026-09-07",
-  "phase": "IMPLEMENTATION-WAVE-2",
+  "lastUpdated": "2026-09-11",
+  "phase": "WAVES-ABCDF-LANDED-SATELLITE-SURFACES-LANDED",
+  "researchReport": ".flagship/coown-upgrade-research-report-2026-09-11.md",
+  "gapRegistry": ".flagship/gap-registry-coown-2026-09.json",
   "scope": ["CoOwnHub", "AssetDetail", "Trade", "Portfolio", "Ledger", "IssueReporting", "CoOwnAPI"],
   "gates": {
     "researchSaturated": true,
@@ -15,15 +17,27 @@
     "nativeDeviceValidated": false,
     "adversarialReauditPass": true
   },
+  "implementedWaves": {
+    "A": "landed — legal-vehicle lead, prospectus sheet, dossier ribbon, asset/money protection split, risk acknowledgment gate, media a11y labels, hero rescale",
+    "B": "landed — CorporateActionVote screen + route, open-decisions panel in Ownership, buyout premiumPct computed vs mark, tradingFeeRate disclosed",
+    "C": "landed — top-of-book strip (bid/spread/ask + sizes), quote freshness stamp + state labels, stale-quote muting, 90ms socket delta batching, memoized book rows, offline-aware market states",
+    "D": "landed — record/ex/payable dates (calendar + history), honest proceeds waterfall, DRIP enrollment wired end-to-end, offline-aware ownership states, unrealised-P&L clarifier",
+    "E": "excluded by scope decision — jurisdiction/legal gated (G-07, G-17..G-21)",
+    "F": "landed — token-derived allocation palette, shadow-derived scrims, dead feeSchedule prop removed, test mocks fixed (vi.hoisted + rAF), hooks-order fix",
+    "SATELLITES": "landed — CorporateActionDetail read-only record + ballot deep-link + effect-on-holding explainer; TradeConfirm expired-quote surface; DueDiligence fabricated dossier section removed; Buyout premium-vs-reference context; Issue/Alerts offline banners; Ledger/Hub/Portfolio/Trade verified flagship-grade unchanged; CoOwnMarketStatusStrip documented as dormant (no session-mode contract)"
+  },
   "openGates": [
+    "Legal/jurisdiction decision gating appropriateness assessment + cooling-off (G-07)",
     "Capture native Co-Own Hub, Asset Detail, Trade, Portfolio and Issue states",
-    "Run native accessibility traversal when a configured device is available"
+    "Run native accessibility traversal when a configured device is available",
+    "Independent adversarial review pass — orchestrator performed both passes (agent infra repeatedly dropped subagents); a fresh-eyes review still recommended"
   ],
   "lastValidation": {
     "frontendTypecheck": "pass",
     "backendTypecheck": "pass",
-    "focusedFrontendTests": "14 files, 211 passed",
-    "targetedLint": "0 errors (repository warning set remains)",
+    "focusedFrontendTests": "163 passed incl. satellite wave (governance vote, distribution depth, dossier regression, asset-detail runtime, phase-2 realtime, flagship-upgrade, native visual acceptance)",
+    "fullFrontendSuite": "1847 passed / 9 pre-existing failures on ItemDetailScreen+HomeScreen source-grep tests (files unchanged vs HEAD; commerce department, not Co-Own)",
+    "targetedLint": "0 errors on changed files (repository i18n warning baseline remains)",
     "liveAssetsProjection": "200 with bid/ask/depth fields",
     "liveHoldingsProjection": "200 authenticated empty holdings",
     "liveIssueReport": "201 persisted open issue",

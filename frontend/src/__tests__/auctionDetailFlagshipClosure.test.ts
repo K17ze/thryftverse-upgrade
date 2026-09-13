@@ -3,11 +3,21 @@ import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
 const SCREENS = resolve(__dirname, '../screens');
+const COMPONENTS = resolve(__dirname, '../components');
+const HOOKS = resolve(__dirname, '../hooks');
 const SERVICES = resolve(__dirname, '../services');
 const UTILS = resolve(__dirname, '../utils');
 
 function readScreen(name: string): string {
   return readFileSync(resolve(SCREENS, name), 'utf-8');
+}
+
+function readComponent(relPath: string): string {
+  return readFileSync(resolve(COMPONENTS, relPath), 'utf-8');
+}
+
+function readHook(relPath: string): string {
+  return readFileSync(resolve(HOOKS, relPath), 'utf-8');
 }
 
 function readService(name: string): string {
@@ -22,61 +32,91 @@ describe('auction-detail flagship closure (spec 02_AUCTION)', () => {
   const src = readScreen('AuctionDetailScreen.tsx');
   const marketApi = readService('marketApi.ts');
   const logic = readUtil('auctionDetailLogic.ts');
+  // The screen was decomposed — AuctionDetailScreen.tsx is now an
+  // orchestrator. Positive assertions below check the owner layer where
+  // the code actually lives, not the orchestrator:
+  //   auctiondetail/AuctionDetailHero        — media stage + identity
+  //   auctiondetail/AuctionBidPanel          — transaction surface
+  //   auctiondetail/AuctionDetailDock        — dock incl. terminal action
+  //   auctiondetail/AuctionDetailInfoSections— Item details + bid activity
+  //   auctiondetail/AuctionDetailDiscovery   — related rail + seen-in-looks
+  //   auction/AuctionTerminalResult          — terminal result module
+  //   hooks/auctiondetail/useAuctionDetailPresentation — media derivation
+  const hero = readComponent('auctiondetail/AuctionDetailHero.tsx');
+  const bidPanel = readComponent('auctiondetail/AuctionBidPanel.tsx');
+  const dock = readComponent('auctiondetail/AuctionDetailDock.tsx');
+  const infoSections = readComponent('auctiondetail/AuctionDetailInfoSections.tsx');
+  const discovery = readComponent('auctiondetail/AuctionDetailDiscovery.tsx');
+  const terminalResult = readComponent('auction/AuctionTerminalResult.tsx');
+  const presentation = readHook('auctiondetail/useAuctionDetailPresentation.ts');
 
   // ── §1 Remove duplicated price hierarchy ──
   describe('price hierarchy', () => {
     it('identity does not show price (family="auction")', () => {
-      // The identity should not pass primaryValue when family="auction"
-      const identityMatch = src.match(/<CommerceDetailIdentity[\s\S]*?\/>/);
+      // The identity should not pass primaryValue when family="auction".
+      // Owner layer: AuctionDetailHero composes CommerceDetailIdentity.
+      const identityMatch = hero.match(/<CommerceDetailIdentity[\s\S]*?\/>/);
       expect(identityMatch).toBeTruthy();
       expect(identityMatch![0]).toContain('family="auction"');
       expect(identityMatch![0]).not.toContain('primaryValue={priceText}');
     });
 
     it('transaction surface owns the current bid', () => {
-      const surfaceMatch = src.match(/<CommerceDetailTransactionSurface[\s\S]*?\/>/);
+      // Owner layer: AuctionBidPanel composes the transaction surface.
+      const surfaceMatch = bidPanel.match(/<CommerceDetailTransactionSurface[\s\S]*?\/>/);
       expect(surfaceMatch).toBeTruthy();
       expect(surfaceMatch![0]).toContain('family="auction"');
       expect(surfaceMatch![0]).toContain('primaryValue={priceText}');
     });
 
     it('dock owns minimum next bid or action state', () => {
-      expect(src).toContain('dockValue');
-      expect(src).toContain('Min next bid');
+      // Owner layer: AuctionDetailDock computes dockValue + label.
+      expect(dock).toContain('dockValue');
+      expect(dock).toContain('Min next bid');
     });
   });
 
   // ── §2 Remove duplicated auction family/state treatment ──
   describe('family/state badge', () => {
     it('does not render ProductFamilyBadge in identity', () => {
+      // Screen must not re-inline it, and the owner layer (hero, which
+      // composes the identity) must not render it either.
       expect(src).not.toContain('ProductFamilyBadge');
       expect(src).not.toContain('familyChip');
+      expect(hero).not.toContain('ProductFamilyBadge');
+      expect(hero).not.toContain('familyChip');
     });
 
     it('renders identity in media overlay', () => {
-      expect(src).toContain('overlayBottomContent');
-      expect(src).toContain('family="auction"');
+      // Owner layer: AuctionDetailHero wires overlayBottomContent.
+      expect(hero).toContain('overlayBottomContent');
+      expect(hero).toContain('family="auction"');
     });
   });
 
   // ── §3 Consolidate bid history ──
   describe('bid history', () => {
     it('uses one presentation pattern (Bid activity)', () => {
-      expect(src).toContain('Bid activity');
-      expect(src).toContain('bidActivityRow');
+      // Owner layer: AuctionDetailInfoSections owns the bid-activity rows.
+      expect(infoSections).toContain('Bid activity');
+      expect(infoSections).toContain('bidActivityRow');
     });
 
     it('does not show both a disclosure row and a three-row preview', () => {
       // The old pattern had CommerceDetailDisclosureRow with label="Bid
       // history" inside a "Bid history" section. The new pattern uses
-      // a single "Bid activity" section with a latest-bid row.
+      // a single "Bid activity" section with a latest-bid row. Checked on
+      // the orchestrator and the owner layer so neither re-inlines it.
       expect(src).not.toContain('label="Bid history"');
       expect(src).not.toContain('bidPreviewList');
+      expect(infoSections).not.toContain('label="Bid history"');
+      expect(infoSections).not.toContain('bidPreviewList');
     });
 
     it('has one View all bids action', () => {
-      expect(src).toContain('bidActivityViewAll');
-      expect(src).toContain('View all');
+      // Owner layer: AuctionDetailInfoSections owns the action.
+      expect(infoSections).toContain('bidActivityViewAll');
+      expect(infoSections).toContain('View all');
     });
   });
 
@@ -85,9 +125,10 @@ describe('auction-detail flagship closure (spec 02_AUCTION)', () => {
     it('dock does not repeat terminal result message', () => {
       // The dock should not have a stateBadge with the terminal message
       // (the body owns the result). The dock carries the action only.
-      const terminalStart = src.indexOf('if (isTerminal)');
-      const terminalEnd = src.indexOf('// ── Post-end lifecycle states ──', terminalStart);
-      const dockSection = src.slice(terminalStart, terminalEnd);
+      // Owner layer: AuctionDetailDock owns the isTerminal branch.
+      const terminalStart = dock.indexOf('if (isTerminal)');
+      const terminalEnd = dock.indexOf('// ── Post-end lifecycle states ──', terminalStart);
+      const dockSection = dock.slice(terminalStart, terminalEnd);
       expect(terminalStart).toBeGreaterThan(-1);
       expect(terminalEnd).toBeGreaterThan(terminalStart);
       expect(dockSection).toContain('primaryAction={terminalAction}');
@@ -96,22 +137,28 @@ describe('auction-detail flagship closure (spec 02_AUCTION)', () => {
     });
 
     it('body owns detailed terminal result', () => {
-      expect(src).toContain('terminalResultModule');
-      expect(src).toContain('You won');
-      expect(src).toContain('Auction closed');
+      // Owner layer: the terminal result module was extracted to
+      // components/auction/AuctionTerminalResult.tsx, composed by the
+      // screen. Check the owner layer for the module + copy.
+      expect(src).toContain('AuctionTerminalResult');
+      expect(terminalResult).toContain('terminalResultModule');
+      expect(terminalResult).toContain('You won');
+      expect(terminalResult).toContain('Auction closed');
     });
   });
 
   // ── §5 Coherent Item Details section ──
   describe('item details section', () => {
     it('wraps description and evidence in one Item details section', () => {
-      expect(src).toContain('label="Item details"');
-      expect(src).toContain('variant="editorial"');
+      // Owner layer: AuctionDetailInfoSections owns the section.
+      expect(infoSections).toContain('label="Item details"');
+      expect(infoSections).toContain('variant="editorial"');
     });
 
     it('includes condition row inside Item details', () => {
-      expect(src).toContain('itemDetailRow');
-      expect(src).toContain('Condition');
+      // Owner layer: AuctionDetailInfoSections owns the rows.
+      expect(infoSections).toContain('itemDetailRow');
+      expect(infoSections).toContain('Condition');
     });
   });
 
@@ -119,13 +166,15 @@ describe('auction-detail flagship closure (spec 02_AUCTION)', () => {
   describe('compact dock geometry', () => {
     it('Buy Now button label does not include price', () => {
       // The old label was `Buy Now · £X`. The new label is just "Buy now".
-      expect(src).not.toContain('Buy Now ·');
-      expect(src).toMatch(/label:.*'Buy now'/);
+      // Owner layer: AuctionDetailDock owns the dock actions.
+      expect(dock).not.toContain('Buy Now ·');
+      expect(dock).toMatch(/label:.*'Buy now'/);
     });
 
     it('uses compact button labels', () => {
-      expect(src).toContain('Place bid');
-      expect(src).toContain('Bid again');
+      // Owner layer: AuctionDetailDock owns the action labels.
+      expect(dock).toContain('Place bid');
+      expect(dock).toContain('Bid again');
     });
   });
 
@@ -141,7 +190,9 @@ describe('auction-detail flagship closure (spec 02_AUCTION)', () => {
     });
 
     it('falls back to imageUrl for compatibility', () => {
-      expect(src).toContain('auction.imageUrl');
+      // Owner layer: useAuctionDetailPresentation maps auction.imageUrl
+      // into auctionMediaItems as the compatibility fallback.
+      expect(presentation).toContain('auction.imageUrl');
     });
 
     it('AuctionMediaItem type exists in marketApi', () => {
@@ -175,13 +226,16 @@ describe('auction-detail flagship closure (spec 02_AUCTION)', () => {
     });
 
     it('screen uses auctionFulfilment for next steps', () => {
-      expect(src).toContain('auctionFulfilment');
-      expect(src).toContain('buyerNextAction');
-      expect(src).toContain('sellerNextAction');
+      // Owner layer: AuctionDetailDock maps fulfilment into terminal
+      // actions (View order etc.).
+      expect(dock).toContain('auctionFulfilment');
+      expect(dock).toContain('buyerNextAction');
+      expect(dock).toContain('sellerNextAction');
     });
 
     it('does not show "Fulfilment not yet available" as the final state', () => {
       expect(src).not.toContain('Fulfilment not yet available for this result.');
+      expect(dock).not.toContain('Fulfilment not yet available for this result.');
     });
   });
 
@@ -194,14 +248,16 @@ describe('auction-detail flagship closure (spec 02_AUCTION)', () => {
     });
 
     it('retains one related-auctions rail', () => {
-      expect(src).toContain('CommerceRelatedRail');
+      // Owner layer: AuctionDetailDiscovery owns the related rail.
+      expect(discovery).toContain('CommerceRelatedRail');
       // Heading is now contextual with the category name, but the
       // fallback label and the rail component must still be present.
-      expect(src).toMatch(/More\s+auctions|More\s+.*auctions/);
+      expect(discovery).toMatch(/More\s+auctions|More\s+.*auctions/);
     });
 
     it('retains one Seen in Looks rail', () => {
-      expect(src).toContain('seenInLooksSection');
+      // Owner layer: AuctionDetailDiscovery owns seenInLooksSection.
+      expect(discovery).toContain('seenInLooksSection');
     });
   });
 });

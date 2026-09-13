@@ -64,7 +64,7 @@ export interface CoOwnCandleChartProps {
 
 const RANGES: CoOwnCandleRange[] = ['1D', '1W', '1M', '3M', '1Y', 'ALL'];
 
-const CHART_HEIGHT = 140;
+const CHART_HEIGHT = 200;
 const VOLUME_HEIGHT = 30;
 const CHART_PADDING = 8;
 const PRICE_AXIS_WIDTH = 52;
@@ -85,7 +85,8 @@ export function CoOwnCandleChart({
   const { colors } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
   // Per spec 03_COOWN §4: chart is width-responsive.
-  const CHART_WIDTH = Math.min(Math.max(screenWidth - 32, 280), 440);
+  const [measuredWidth, setMeasuredWidth] = useState<number | null>(null);
+  const CHART_WIDTH = measuredWidth ?? Math.max(screenWidth - 64, 160);
   const [crosshairIndex, setCrosshairIndex] = useState<number | null>(null);
   const [typeMenuOpen, setTypeMenuOpen] = useState(false);
 
@@ -223,7 +224,10 @@ export function CoOwnCandleChart({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candles, chartH, chartW, candleSlot, candleWidth, minPrice, maxPrice, priceRange]);
 
-  // Textual summary for screen readers
+  // Textual summary for screen readers — the chart's data fallback. It
+  // reports only real candle data for the visible range: first open,
+  // period high/low, last close, direction, and total volume. No
+  // fabricated values; when there are no candles it says so.
   const textualSummary = useMemo(() => {
     if (candles.length === 0) return 'No candle data available for this range.';
     const first = candles[0];
@@ -233,8 +237,8 @@ export function CoOwnCandleChart({
     const direction = change >= 0 ? 'up' : 'down';
     const totalVolume = candles.reduce((sum, c) => sum + c.v, 0);
     const agePart = lastAgeSeconds != null ? `, last trade ${formatAge(lastAgeSeconds)}` : '';
-    return `1ZE ${range} chart: ${candles.length} candles, ${direction} ${Math.abs(changePct).toFixed(1)}%, volume ${totalVolume.toLocaleString('en-GB')}${agePart}.`;
-  }, [candles, range, lastAgeSeconds]);
+    return `1ZE ${range} chart: ${candles.length} candles, opened ${first.o.toFixed(2)}, high ${maxPrice.toFixed(2)}, low ${minPrice.toFixed(2)}, last close ${last.c.toFixed(2)}, ${direction} ${Math.abs(changePct).toFixed(1)}%, volume ${totalVolume.toLocaleString('en-GB')}${agePart}.`;
+  }, [candles, range, lastAgeSeconds, minPrice, maxPrice]);
 
   const handleRangeChange = (r: CoOwnCandleRange) => {
     setCrosshairIndex(null);
@@ -245,9 +249,11 @@ export function CoOwnCandleChart({
   // Empty state
   if (candles.length === 0) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }, style]}>
+      <View onLayout={(event) => setMeasuredWidth(event.nativeEvent.layout.width)} style={[styles.container, style]}>
         <Text
           style={styles.a11ySummary}
+          accessible
+          importantForAccessibility="yes"
           accessibilityLabel={textualSummary}
           accessibilityRole="text"
         >
@@ -263,7 +269,7 @@ export function CoOwnCandleChart({
             </Text>
           ) : (
             <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
-              Candle chart requires trade data. Try a wider range, or place a limit order to be the first trade.
+              No settled trades are available. Try another range.
             </Text>
           )}
         </View>
@@ -278,10 +284,13 @@ export function CoOwnCandleChart({
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }, style]}>
-      {/* Textual summary for screen readers */}
+    <View onLayout={(event) => setMeasuredWidth(event.nativeEvent.layout.width)} style={[styles.container, style]}>
+      {/* Textual summary for screen readers — the data fallback for the
+          visual canvas. Visually hidden but always in the a11y tree. */}
       <Text
         style={styles.a11ySummary}
+        accessible
+        importantForAccessibility="yes"
         accessibilityLabel={textualSummary}
         accessibilityRole="text"
       >
@@ -506,7 +515,7 @@ function RangeChips({
             key={r}
             style={[
               styles.rangeChip,
-              { borderColor: colors.border },
+              { borderColor: 'transparent' },
               isActive && { backgroundColor: colors.brandSubtle, borderColor: colors.brand },
             ]}
             onPress={() => onRangeChange(r)}
@@ -648,9 +657,6 @@ function formatCandleDate(timestampMs: number, range: CoOwnCandleRange): string 
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
     gap: Space.sm,
   },
   a11ySummary: {
@@ -754,8 +760,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1,
   },
   emptyWrap: {
-    height: CHART_HEIGHT,
-    alignItems: 'center',
+    minHeight: CHART_HEIGHT,
+    alignItems: 'flex-start',
     justifyContent: 'center',
     gap: Space.xs,
   },

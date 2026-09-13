@@ -22,8 +22,8 @@ import Reanimated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  runOnJS,
-  useReducedMotion } from 'react-native-reanimated';
+  runOnJS } from 'react-native-reanimated';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Space, Radius, Typography, FontFamily, Stroke, IconGrammar, Control } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';

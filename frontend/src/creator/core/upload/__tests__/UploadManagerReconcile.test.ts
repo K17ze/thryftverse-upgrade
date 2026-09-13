@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { UploadManager } from '../UploadManager';
-import type { UploadJob, UploadJobStatus } from '../UploadTypes';
+import type { UploadEvent, UploadJob, UploadJobStatus } from '../UploadTypes';
 
 /**
  * A minimal, in-memory mock of `UploadJobStore`. Unlike the real store,
@@ -171,6 +171,97 @@ describe('UploadManager.reconcileOnStartup', () => {
     const second = await manager.reconcileOnStartup();
     expect(second.resumedCount).toBe(2);
     expect(store.records.get('stalled_1')?.updates.length).toBe(stalledUpdatesBefore);
+
+    manager.dispose();
+    vi.useRealTimers();
+  });
+});
+
+describe('UploadManager.setOnline (connectivity gating)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  it('aborts in-flight uploads back to queued (not failed) when connectivity drops', async () => {
+    const initialJobs: UploadJob[] = [makeJob('job_1', 'uploading')];
+    const store = createMockStore(initialJobs);
+    const manager = new UploadManager(store as unknown as never, {
+      multipartEnabled: false,
+    });
+    // Hydrate the cache so persistState can see job_1.
+    await manager.getJobs('proj_1');
+
+    // Fabricate an in-flight attempt — the AbortController is the only
+    // handle processJob owns; setOnline must fire it and requeue the job.
+    const controller = new AbortController();
+    (manager as unknown as { activeUploads: Map<string, AbortController> })
+      .activeUploads.set('job_1', controller);
+
+    const events: UploadEvent[] = [];
+    manager.subscribe((e) => events.push(e));
+
+    manager.setOnline(false);
+
+    expect(controller.signal.aborted).toBe(true);
+    expect(manager.online).toBe(false);
+    // The job is requeued — waiting for connectivity, not user-paused,
+    // not failed. persistState is async; flush microtasks.
+    await Promise.resolve();
+    expect(store.records.get('job_1')?.job.status).toBe('queued');
+    expect(
+      events.some((e) => e.type === 'connectivityChanged' && e.online === false),
+    ).toBe(true);
+
+    manager.dispose();
+    vi.useRealTimers();
+  });
+
+  it('parks the queue while offline and kicks it on reconnect', async () => {
+    const initialJobs: UploadJob[] = [makeJob('job_1', 'queued')];
+    const store = createMockStore(initialJobs);
+    const manager = new UploadManager(store as unknown as never, {
+      multipartEnabled: false,
+    });
+    await manager.getJobs('proj_1');
+
+    const processQueueSpy = vi
+      .spyOn(manager, 'processQueue')
+      .mockResolvedValue(undefined);
+
+    manager.setOnline(false);
+    expect(manager.online).toBe(false);
+
+    // The gate blocks queue processing while offline.
+    await manager.processQueue();
+    expect(processQueueSpy).toHaveBeenCalledTimes(1);
+    const job = store.records.get('job_1')?.job;
+    expect(job?.status).toBe('queued');
+
+    // Reconnect kicks the queue so parked jobs resume.
+    manager.setOnline(true);
+    expect(manager.online).toBe(true);
+    expect(processQueueSpy).toHaveBeenCalledTimes(2);
+
+    manager.dispose();
+    vi.useRealTimers();
+  });
+
+  it('leaves user-paused jobs untouched across connectivity flaps', async () => {
+    const initialJobs: UploadJob[] = [makeJob('job_1', 'paused')];
+    const store = createMockStore(initialJobs);
+    const manager = new UploadManager(store as unknown as never, {
+      multipartEnabled: false,
+    });
+    await manager.getJobs('proj_1');
+    vi.spyOn(manager, 'processQueue').mockResolvedValue(undefined);
+
+    manager.setOnline(false);
+    manager.setOnline(true);
+
+    // A user pause is user intent — reconnect must not resurrect it.
+    expect(store.records.get('job_1')?.job.status).toBe('paused');
+    const record = store.records.get('job_1');
+    expect(record?.updates.every((u) => u.status !== 'queued')).toBe(true);
 
     manager.dispose();
     vi.useRealTimers();

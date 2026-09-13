@@ -29,18 +29,12 @@ interface AccessibilityPreferencesContextValue {
   reducedMotion: boolean;
   /** High contrast — strengthens text/background contrast globally. */
   highContrast: boolean;
-  /** Bold text — increases font weight for body text globally. */
-  boldText: boolean;
-  /** Additional screen reader hints. */
-  screenReaderHints: boolean;
   /** Whether the stored preferences have been hydrated from disk. */
   isHydrated: boolean;
   /** Update a single preference. Persists to AsyncStorage. */
   setTextSize: (size: TextSize) => void;
   setReducedMotion: (enabled: boolean) => void;
   setHighContrast: (enabled: boolean) => void;
-  setBoldText: (enabled: boolean) => void;
-  setScreenReaderHints: (enabled: boolean) => void;
 }
 
 const AccessibilityPreferencesContext = React.createContext<
@@ -100,14 +94,6 @@ export function AccessibilityPreferencesProvider({
     (enabled: boolean) => updatePref('highContrast', enabled),
     [updatePref]
   );
-  const setBoldText = React.useCallback(
-    (enabled: boolean) => updatePref('boldText', enabled),
-    [updatePref]
-  );
-  const setScreenReaderHints = React.useCallback(
-    (enabled: boolean) => updatePref('screenReaderHints', enabled),
-    [updatePref]
-  );
 
   const value = React.useMemo<AccessibilityPreferencesContextValue>(
     () => ({
@@ -115,14 +101,10 @@ export function AccessibilityPreferencesProvider({
       textSizeScale: TEXT_SIZE_SCALE[prefs.textSize],
       reducedMotion: prefs.reducedMotion,
       highContrast: prefs.highContrast,
-      boldText: prefs.boldText,
-      screenReaderHints: prefs.screenReaderHints,
       isHydrated,
       setTextSize,
       setReducedMotion,
       setHighContrast,
-      setBoldText,
-      setScreenReaderHints,
     }),
     [
       prefs,
@@ -130,8 +112,6 @@ export function AccessibilityPreferencesProvider({
       setTextSize,
       setReducedMotion,
       setHighContrast,
-      setBoldText,
-      setScreenReaderHints,
     ]
   );
 

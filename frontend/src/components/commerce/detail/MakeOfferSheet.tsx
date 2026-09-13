@@ -23,6 +23,8 @@ import {
   LayoutChangeEvent,
   TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../../../platform/server/queryKeys';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import {
   Space,
@@ -43,9 +45,13 @@ import {
   convertGbpToDisplayAmount,
   sanitizeDecimalInput,
   calculateOfferSummaryFromDisplay } from '../../../utils/currencyAuthoringFlows';
-import { createListingOfferOnApi } from '../../../services/listingOffersApi';
+import {
+  createListingOfferOnApi,
+  lookupOfferByIdempotencyKey,
+  type ListingOffer } from '../../../services/listingOffersApi';
 import { fetchSmartSellConfig, SMART_SELL_PREVIEW_MODE } from '../../../services/smartSellApi';
 import { createStableId } from '../../../utils/createStableId';
+import { useUnknownOutcomeReconciliation } from '../../../hooks/useUnknownOutcomeReconciliation';
 import { haptics } from '../../../utils/haptics';
 
 export interface MakeOfferSheetListing {
@@ -61,6 +67,12 @@ export interface MakeOfferSheetProps {
   onDismiss: () => void;
   listing: MakeOfferSheetListing | null;
   sellerId: string | null;
+  /**
+   * When the sheet is opened from an existing conversation, the created
+   * offer is linked to that thread (`listing_offers.conversation_id`) so
+   * the chat context bar can render the live offer badge.
+   */
+  conversationId?: string | null;
   /** Fired with the created offer + chat navigation payload.
    *  `conversationId` is null when the backend created the offer but did not
    *  provision a conversation — callers must not navigate to Chat in that case. */
@@ -93,12 +105,14 @@ export function MakeOfferSheet({
   onDismiss,
   listing,
   sellerId,
+  conversationId,
   onSent }: MakeOfferSheetProps) {
   const { colors } = useAppTheme();
   const { formatFromFiat } = useFormattedPrice();
   const { currencyCode, fxRates } = useCurrencyContext();
   const { isOffline } = useConnectivity();
   const reducedMotion = useReducedMotion();
+  const queryClient = useQueryClient();
   const currencySymbol = CURRENCIES[currencyCode].symbol;
 
   const [offerDisplay, setOfferDisplay] = useState('');
@@ -107,6 +121,18 @@ export function MakeOfferSheet({
   const [smartSellEnabled, setSmartSellEnabled] = useState(false);
   const [smartSellThreshold, setSmartSellThreshold] = useState<number | null>(null);
   const idempotencyKeyRef = useRef<string | null>(null);
+  const isMountedRef = useRef(true);
+  // Unknown-outcome reconciliation: a lost create-offer response is resolved
+  // by polling the idempotency-key lookup rather than reporting a failure
+  // that invites a duplicate submission (same pattern as MakeOfferScreen).
+  const { reconcile } = useUnknownOutcomeReconciliation();
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const askingPriceGbp = listing?.price ?? 0;
 
@@ -146,7 +172,10 @@ export function MakeOfferSheet({
   }, [visible, listing?.id]);
 
   const numericOfferDisplay = parseFloat(offerDisplay) || 0;
-  const { offerGbp: numericOfferGbp } = calculateOfferSummaryFromDisplay(
+  const {
+    offerGbp: numericOfferGbp,
+    platformChargeGbp,
+    totalGbp } = calculateOfferSummaryFromDisplay(
     numericOfferDisplay,
     currencyCode,
     fxRates,
@@ -261,10 +290,17 @@ export function MakeOfferSheet({
         listingId: listing.id,
         offerPriceGbp: numericOfferGbp,
         expiryHours: DEFAULT_EXPIRY_HOURS,
+        conversationId: conversationId ?? undefined,
         idempotencyKey: idempotencyKeyRef.current,
         metadata: {
           originalPriceGbp: askingPriceGbp,
           source: 'detail_sheet' } });
+
+      // The listing's active-offer count changed — the sheet sits over the
+      // mounted detail screen (no focus event fires on dismiss), so
+      // invalidate the cached detail directly rather than relying on a
+      // focus refetch.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(listing.id) });
 
       const focusQuery = `Offer: ${formatFromFiat(numericOfferGbp, 'GBP')} for ${listing.title}. Valid for ${DEFAULT_EXPIRY_HOURS}h.`;
       onSent({
@@ -284,6 +320,45 @@ export function MakeOfferSheet({
     } catch (err) {
       const isNetworkError =
         isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
+
+      if (isNetworkError && idempotencyKeyRef.current) {
+        // Lost response during offer submission — the server may have
+        // committed. Poll for the authoritative status instead of telling
+        // the user the offer failed (which invites an unsafe retry).
+        setErrorMsg('Checking whether your offer was placed…');
+        const idempotencyKey = idempotencyKeyRef.current;
+        const partnerUserId = sellerId;
+        const result = await reconcile<ListingOffer>({
+          lookup: () => lookupOfferByIdempotencyKey(idempotencyKey),
+          onAcknowledged: (offer) => {
+            idempotencyKeyRef.current = null;
+            void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(listing.id) });
+            const focusQuery = `Offer: ${formatFromFiat(numericOfferGbp, 'GBP')} for ${listing.title}. Valid for ${DEFAULT_EXPIRY_HOURS}h.`;
+            onSent({
+              conversationId: offer.conversationId,
+              partnerUserId,
+              focusQuery,
+              offerPayload: {
+                offerId: offer.id,
+                price: numericOfferGbp,
+                originalPrice: askingPriceGbp,
+                expiresAt: offer.expiresAt,
+                counterRound: offer.counterRound } });
+            onDismiss();
+          },
+          onSafeToRetry: () => {
+            idempotencyKeyRef.current = null;
+            setErrorMsg('No offer was created. You can safely try again.');
+          },
+          onUnresolved: () => {
+            setErrorMsg('We could not confirm your offer. Check your offer history before trying again.');
+          },
+          shouldContinue: () => isMountedRef.current });
+        if (result.outcome === 'acknowledged' || result.outcome === 'safe_to_retry' || result.outcome === 'unresolved') {
+          return;
+        }
+      }
+
       const message = isNetworkError
         ? 'You appear to be offline. Check your connection and try again.'
         : err instanceof Error
@@ -299,10 +374,13 @@ export function MakeOfferSheet({
     numericOfferGbp,
     askingPriceGbp,
     sellerId,
+    conversationId,
     formatFromFiat,
     onSent,
     onDismiss,
     isOffline,
+    queryClient,
+    reconcile,
   ]);
 
   if (!listing) return null;
@@ -497,6 +575,19 @@ export function MakeOfferSheet({
         </Text>
       </View>
 
+      {/* Binding disclosure — matches MakeOfferScreen's Summary math
+          (offer + platform charge = total). One quiet muted line, no badge:
+          the offer is a commitment, and the total is the truth. */}
+      {numericOfferGbp > 0 ? (
+        <Text style={[styles.bindingText, { color: colors.textMuted }]}>
+          If the seller accepts, you'll be charged{' '}
+          {formatFromFiat(totalGbp, 'GBP', { displayMode: 'fiat' })}
+          {' — includes the '}
+          {formatFromFiat(platformChargeGbp, 'GBP', { displayMode: 'fiat' })}
+          {' platform charge.'}
+        </Text>
+      ) : null}
+
       {/* Send offer */}
       <AppButton
         title={isSubmitting ? 'Sending…' : 'Send Offer'}
@@ -636,6 +727,13 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: TypographyV2.meta.fontFamily },
+  bindingText: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    fontFamily: TypographyV2.meta.fontFamily,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.xs,
+    fontVariant: ['tabular-nums'] },
   chip: {
     flex: 1,
     alignItems: 'center',

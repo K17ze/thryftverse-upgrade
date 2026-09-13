@@ -26,7 +26,7 @@ import Reanimated, {
   useAnimatedStyle,
   withSpring,
 } from 'react-native-reanimated';
-import { useReducedMotion } from 'react-native-reanimated';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 import { CreatorGlyph, type CreatorGlyphName } from './CreatorGlyph';
 import { Radius, Space, PressScale } from '../../theme/designTokens';

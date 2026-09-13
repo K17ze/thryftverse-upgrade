@@ -16,6 +16,8 @@ export interface SellerListingsModuleProps {
   onViewAll: () => void;
   onItemPress: (id: string) => void;
   isLoading?: boolean;
+  /** Listings fetch rejected — the host renders an inline retry; suppress empty copy. */
+  isFailed?: boolean;
 }
 
 /**
@@ -30,6 +32,7 @@ export const SellerListingsModule: React.FC<SellerListingsModuleProps> = ({
   onViewAll,
   onItemPress,
   isLoading = false,
+  isFailed = false,
 }) => {
   const { colors } = useAppTheme();
   const styles = createStyles(colors);
@@ -83,7 +86,7 @@ export const SellerListingsModule: React.FC<SellerListingsModuleProps> = ({
           <View style={styles.skeletonBox} />
           <View style={styles.skeletonBox} />
         </ScrollView>
-      ) : (
+      ) : isFailed ? null : (
         <View style={styles.emptyRow}>
           <AppIcon
             concept="tag"

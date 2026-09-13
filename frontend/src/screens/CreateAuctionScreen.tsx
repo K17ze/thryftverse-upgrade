@@ -407,7 +407,7 @@ export default function CreateAuctionScreen() {
                             </View>
                             {isSelected && (
                               <View style={styles.pickerItemCheck}>
-                                <Ionicons name="checkmark" size={12} color="#fff" />
+                                <Ionicons name="checkmark" size={12} color={colors.textInverse} />
                               </View>
                             )}
                           </AnimatedPressable>
@@ -678,7 +678,7 @@ export default function CreateAuctionScreen() {
                       />
                       {buyNowPriceNum ? (
                         <View style={styles.izeConversionPill}>
-                          <Ionicons name="flash" size={13} color="#f59e0b" />
+                          <Ionicons name="flash" size={13} color={colors.warning} />
                           <Text style={styles.izeConversionText}>
                             Instant buyout at {formatIzeAmount(toIze(buyNowPriceNum, currencyCode, fxRates))}
                           </Text>
@@ -777,7 +777,7 @@ export default function CreateAuctionScreen() {
         <View style={styles.resultOverlay}>
           <View style={styles.resultCard}>
             <View style={styles.resultBadgeWrap}>
-              <Ionicons name="flame" size={32} color="#f59e0b" />
+              <Ionicons name="flame" size={32} color={colors.warning} />
             </View>
 
             <Text style={styles.resultTitle}>AUCTION DROP IS LIVE</Text>
@@ -1020,7 +1020,7 @@ function createStyles(colors: ThemeColors, isDark: boolean) {
     pieceConditionText: {
       fontSize: 8,
       fontFamily: Typography.family.bold,
-      color: '#fff',
+      color: colors.scrimTextPrimary,
       letterSpacing: 0.5,
     },
     pieceHeroMeta: {
@@ -1372,7 +1372,7 @@ function createStyles(colors: ThemeColors, isDark: boolean) {
       width: 24,
       height: 24,
       borderRadius: Radius.full,
-      backgroundColor: '#fff',
+      backgroundColor: colors.textInverse,
     },
     switchThumbActive: {
       alignSelf: 'flex-end',
@@ -1427,7 +1427,7 @@ function createStyles(colors: ThemeColors, isDark: boolean) {
       borderTopColor: colors.border,
       ...Platform.select({
         ios: {
-          shadowColor: '#000',
+          shadowColor: colors.shadow,
           shadowOffset: { width: 0, height: -4 },
           shadowOpacity: 0.1,
           shadowRadius: 8,
@@ -1492,7 +1492,7 @@ function createStyles(colors: ThemeColors, isDark: boolean) {
       width: 56,
       height: 56,
       borderRadius: Radius.xl,
-      backgroundColor: isDark ? 'rgba(245, 158, 11, 0.2)' : 'rgba(245, 158, 11, 0.12)',
+      backgroundColor: colors.warningSubtle,
       alignItems: 'center',
       justifyContent: 'center',
       marginBottom: Space.sm,

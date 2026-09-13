@@ -120,8 +120,13 @@ export function CoOwnMarketHighlightsCarousel({
           emptyIcon="diamond-outline"
           focalPoint={item.focalPoint}
         />
+        {/* Media scrim — derived from colors.shadow (the theme's scrim
+            base, '#000000' in both themes; scrims over media stay dark
+            regardless of theme). The Gradients export has no scrim ramp,
+            so hex-alpha stops follow the `${token}4D` gradients.ts
+            pattern rather than hardcoded rgba literals. */}
         <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.20)', 'rgba(0,0,0,0.78)']}
+          colors={[`${colors.shadow}00`, `${colors.shadow}33`, `${colors.shadow}C7`]}
           locations={[0.35, 0.58, 1]}
           style={StyleSheet.absoluteFill}
           pointerEvents="none"

@@ -19,8 +19,8 @@ import Reanimated, {
   runOnJS,
   interpolate,
   Extrapolation,
-  useReducedMotion,
   type SharedValue } from 'react-native-reanimated';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Space, Radius, Typography, Control, Stroke, IconGrammar } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';

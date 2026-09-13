@@ -25,10 +25,10 @@ import type {
   Transition,
   TransitionType,
   ClipCropRect,
-  SpeedCurvePoint,
 } from './TimelineTypes';
 import { computeTotalDuration } from './TimelineTypes';
-import { totalDurationMs, averageSpeed } from '../../core/playback/SpeedCurveEvaluator';
+import type { SpeedCurve } from '../speedcurves/SpeedCurveTypes';
+import { averageSpeed } from '../speedcurves/SpeedCurveTypes';
 
 // ── Speed bounds (match SpeedCurveEvaluator / composition schema) ─────────
 const SPEED_MIN = 0.25;
@@ -80,11 +80,10 @@ function clampSpeed(speed: number): number {
  */
 function recomputeDuration(clip: PosterClip): number {
   const trimSpan = Math.max(0, clip.trimEndMs - clip.trimStartMs);
-  if (clip.speedCurve && clip.speedCurve.length > 0) {
-    // The curve is anchored to source-media time. Its domain is
-    // [0, lastPoint.timeMs]; the clip's trim window is applied on top by
-    // the renderer. For the timeline wall-clock duration we use the trim
-    // span scaled by the curve's average speed over its domain.
+  // Speed curves use the normalized-position authored model — the same
+  // averageSpeed the TimelineProjector uses, so an edit the user commits
+  // here produces the same wall-clock duration the playback clock runs.
+  if (clip.speedCurve && clip.speedCurve.points.length > 0) {
     const avg = averageSpeed(clip.speedCurve);
     if (avg > 0 && Number.isFinite(avg)) {
       return trimSpan / avg;
@@ -365,28 +364,31 @@ export function setClipVolume(
 /**
  * Attach a variable speed curve to a clip and recompute its duration.
  *
- * The curve is an array of `{ timeMs, speed }` control points anchored to
- * source-media time. The clip's `durationMs` is the integral of 1/speed over
- * the curve domain (computed exactly by SpeedCurveEvaluator), and the `speed`
- * field is set to the curve's average speed for display.
+ * The curve is the authored {@link SpeedCurve} model — normalized-position
+ * control points plus an easing mode (the same shape the media layer
+ * payload and {@link PosterClipRef.speedCurve} carry). The clip's
+ * `durationMs` is the trim span divided by the curve's average speed —
+ * the same math the TimelineProjector uses, so the timeline and the
+ * playback clock stay in agreement. The `speed` field holds the average
+ * for display.
  *
- * An empty or single-point curve clears the curve (constant speed). Returns a
- * new clips array.
+ * A curve with fewer than two points clears the curve (constant speed).
+ * Returns a new clips array.
  */
 export function setClipSpeedCurve(
   clips: PosterClip[],
   clipId: string,
-  curvePoints: SpeedCurvePoint[],
+  curve: SpeedCurve,
 ): PosterClip[] {
   const idx = findClipIndex(clips, clipId);
   if (idx < 0) return clips;
   const clip = clips[idx];
 
-  if (!curvePoints || curvePoints.length < 2) {
+  if (!curve || !curve.points || curve.points.length < 2) {
     // Not enough points for a curve — fall back to constant speed using the
     // first point's speed (or the existing speed if no points).
-    const speed = curvePoints && curvePoints.length === 1
-      ? clampSpeed(curvePoints[0].speed)
+    const speed = curve?.points?.length === 1
+      ? clampSpeed(curve.points[0].speed)
       : clip.speed;
     const updated = withUpdates(clip, { speed, speedCurve: undefined });
     const next = clips.slice();
@@ -394,14 +396,11 @@ export function setClipSpeedCurve(
     return next;
   }
 
-  const avg = averageSpeed(curvePoints);
-  const duration = totalDurationMs(curvePoints);
-  const updated: PosterClip = {
-    ...clip,
-    speedCurve: curvePoints.slice(),
-    speed: Number.isFinite(avg) && avg > 0 ? avg : clip.speed,
-    durationMs: Number.isFinite(duration) && duration >= 0 ? duration : 0,
-  };
+  const normalized: SpeedCurve = { points: curve.points.slice(), easing: curve.easing };
+  const updated = withUpdates(clip, { speedCurve: normalized });
+  // Keep the display `speed` in sync with the curve's average.
+  const avg = averageSpeed(normalized);
+  if (avg > 0 && Number.isFinite(avg)) updated.speed = avg;
   const next = clips.slice();
   next[idx] = updated;
   return next;

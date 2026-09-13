@@ -27,8 +27,8 @@ import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
   useAnimatedStyle,
   withTiming,
-  useReducedMotion,
 } from 'react-native-reanimated';
+import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import { Typography, Space, Radius, Stroke, IconGrammar } from '../../../theme/designTokens';
 import { Motion } from '../../../theme/motionTokens';

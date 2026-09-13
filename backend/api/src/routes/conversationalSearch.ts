@@ -167,11 +167,30 @@ function buildSearchFilters(parsed: ParsedFilters): SearchQuery['filters'] {
   return filters;
 }
 
+/**
+ * Curated starting prompts for the conversational-search empty state.
+ * Served from the backend so the list can be tuned without an app release.
+ * These are product copy — not personalised or inferred data.
+ */
+const SEARCH_SUGGESTIONS = [
+  { id: 'sugg-1', label: 'Vintage denim under £50', query: 'Vintage denim under £50', category: 'vintage' },
+  { id: 'sugg-2', label: 'Sustainable sneakers size 9', query: 'Sustainable sneakers size 9', category: 'sustainable' },
+  { id: 'sugg-3', label: 'Designer bags for winter', query: 'Designer bags for winter', category: 'designer' },
+  { id: 'sugg-4', label: 'Mid-century furniture', query: 'Mid-century furniture', category: 'furniture' },
+  { id: 'sugg-5', label: 'Black leather jacket under £80', query: 'Black leather jacket under £80', category: 'value' },
+  { id: 'sugg-6', label: 'Minimalist wool knitwear', query: 'Minimalist wool knitwear', category: 'designer' },
+];
+
 export function registerConversationalSearchRoutes({
   app,
   db: _db,
   readDb: _readDb,
 }: ConversationalSearchRouteDependencies): void {
+  app.get('/search/conversational/suggestions', async () => ({
+    ok: true,
+    items: SEARCH_SUGGESTIONS,
+  }));
+
   app.post('/search/conversational', async (request: FastifyRequest, reply: FastifyReply) => {
     const parsed = conversationalSearchSchema.safeParse(request.body);
     if (!parsed.success) {

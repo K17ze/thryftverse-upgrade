@@ -64,6 +64,12 @@ export interface PublicProfileViewer {
   isFollowing: boolean;
   isBlocked: boolean;
   isBlockedByTarget: boolean;
+  /** Graduated moderation ladder — the viewer has muted this user (silent;
+   *  suppresses their-message notifications for the viewer). */
+  isMuted?: boolean;
+  /** Graduated moderation ladder — the viewer has restricted this user
+   *  (their DMs land in requests; no read receipts/typing flow back). */
+  isRestricted?: boolean;
   canMessage: boolean;
   /** Whether the viewer can see social content (Looks, creations). False for
    *  non-followers viewing a private profile. Shop is always visible. */
@@ -232,6 +238,76 @@ export async function getBlockedUsers(): Promise<BlockedUserEntry[]> {
     `/users/me/blocked-users`
   );
   return response.items;
+}
+
+// ── Mute / unmute ────────────────────────────────────────────────────
+// Mute is silent — the target is never notified. It suppresses
+// their-message notifications for the viewer.
+
+export async function muteUser(userId: string): Promise<{ muted: boolean }> {
+  const response = await fetchJson<{ muted: boolean }>(
+    `/users/${encodeURIComponent(userId)}/mute`,
+    { method: 'POST' }
+  );
+  return { muted: response.muted };
+}
+
+export async function unmuteUser(userId: string): Promise<{ muted: boolean }> {
+  const response = await fetchJson<{ muted: boolean }>(
+    `/users/${encodeURIComponent(userId)}/mute`,
+    { method: 'DELETE' }
+  );
+  return { muted: response.muted };
+}
+
+export interface MutedUserEntry {
+  id: string;
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  mutedAt: string;
+}
+
+export async function getMutedUsers(): Promise<MutedUserEntry[]> {
+  const response = await fetchJson<{ users: MutedUserEntry[] }>(
+    `/users/me/muted-users`
+  );
+  return response.users ?? [];
+}
+
+// ── Restrict / unrestrict ────────────────────────────────────────────
+// Restrict is invisible to the target — their DMs land in the viewer's
+// message requests and they get no read receipts or typing indicators.
+
+export async function restrictUser(userId: string): Promise<{ restricted: boolean }> {
+  const response = await fetchJson<{ restricted: boolean }>(
+    `/users/${encodeURIComponent(userId)}/restrict`,
+    { method: 'POST' }
+  );
+  return { restricted: response.restricted };
+}
+
+export async function unrestrictUser(userId: string): Promise<{ restricted: boolean }> {
+  const response = await fetchJson<{ restricted: boolean }>(
+    `/users/${encodeURIComponent(userId)}/restrict`,
+    { method: 'DELETE' }
+  );
+  return { restricted: response.restricted };
+}
+
+export interface RestrictedUserEntry {
+  id: string;
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  restrictedAt: string;
+}
+
+export async function getRestrictedUsers(): Promise<RestrictedUserEntry[]> {
+  const response = await fetchJson<{ users: RestrictedUserEntry[] }>(
+    `/users/me/restricted-users`
+  );
+  return response.users ?? [];
 }
 
 // ── Appeal (DSA Article 20) ───────────────────────────────────────────

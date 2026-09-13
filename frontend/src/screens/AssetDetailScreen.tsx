@@ -20,6 +20,8 @@ import {
   fetchMyCoOwnAssetOrders,
   cancelCoOwnOrder,
   listCoOwnAssets,
+  fetchDripEnrollments,
+  updateDripEnrollment,
   type CoOwnDistribution,
   type CoOwnCorporateAction,
   type MarketCoOwnAsset,
@@ -123,6 +125,7 @@ export default function AssetDetailScreen() {
   const holdingsError = currentUser?.id ? holdingsQuery.isError : false;
 
   const [lastDistribution, setLastDistribution] = React.useState<CoOwnDistribution | null>(null);
+  const [distributionList, setDistributionList] = React.useState<CoOwnDistribution[]>([]);
   const [corporateActions, setCorporateActions] = React.useState<CoOwnCorporateAction[] | null>(null);
   const [distributionsFailed, setDistributionsFailed] = React.useState(false);
   const [distributionsLoading, setDistributionsLoading] = React.useState(true);
@@ -137,6 +140,9 @@ export default function AssetDetailScreen() {
   const retryOpenOrders = React.useCallback(() => setOpenOrdersRetryNonce(value => value + 1), []);
   const [relatedAssets, setRelatedAssets] = React.useState<MarketCoOwnAsset[]>([]);
   const [relatedAssetsLoading, setRelatedAssetsLoading] = React.useState(false);
+  const [dripEnrolled, setDripEnrolled] = React.useState<boolean | null>(null);
+  const [dripPending, setDripPending] = React.useState(false);
+  const [dripError, setDripError] = React.useState<string | null>(null);
   const [refreshKey, setRefreshKey] = React.useState(0);
   const [fullscreenIndex, setFullscreenIndex] = React.useState(0);
   // F22: the pending trade intent carries the full draft (side + optional
@@ -160,6 +166,8 @@ export default function AssetDetailScreen() {
     overflowVisible,
     supplySheetVisible,
     riskDisclosureVisible,
+    dossierSheetVisible,
+    prospectusSheetVisible,
   } = sheets;
 
   // ── Price alert creation form state ──
@@ -231,26 +239,69 @@ export default function AssetDetailScreen() {
   // ── Last distribution fetch — most recent distribution for this asset.
   // The unclaimed badge treats only non-settled distributions as unclaimed;
   // a settled distribution is history, not an outstanding payout.
+  // The list (limit 6) also feeds the ownership distribution calendar.
   React.useEffect(() => {
     if (!assetId) return;
     let cancelled = false;
     setDistributionsFailed(false);
     setDistributionsLoading(true);
-    void fetchCoOwnDistributions({ assetId, limit: 1 })
+    void fetchCoOwnDistributions({ assetId, limit: 6 })
       .then((result) => {
         if (cancelled) return;
         setLastDistribution(result.items[0] ?? null);
+        setDistributionList(result.items);
         setDistributionsFailed(false);
         setDistributionsLoading(false);
       })
       .catch(() => {
         if (cancelled) return;
         setLastDistribution(null);
+        setDistributionList([]);
         setDistributionsFailed(true);
         setDistributionsLoading(false);
       });
     return () => { cancelled = true; };
   }, [assetId, refreshKey]);
+
+  // ── DRIP enrollment — server-authoritative enrollment state for this
+  // asset. Honest visibility: the toggle only appears for holders once
+  // the asset has actually paid a distribution (a DRIP on a
+  // never-distributing asset is meaningless). A first-class
+  // dripEligible contract field would be the proper upgrade.
+  React.useEffect(() => {
+    if (!currentUser?.id || !assetId) {
+      setDripEnrolled(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchDripEnrollments()
+      .then((enrollments) => {
+        if (cancelled) return;
+        setDripEnrolled(enrollments.find((e) => e.assetId === assetId)?.enrolled ?? false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setDripEnrolled(null);
+      });
+    return () => { cancelled = true; };
+  }, [assetId, currentUser?.id, refreshKey]);
+
+  const handleToggleDrip = React.useCallback((enrolled: boolean) => {
+    if (!assetId || !currentUser?.id || dripPending) return;
+    setDripPending(true);
+    setDripError(null);
+    void updateDripEnrollment(assetId, enrolled)
+      .then(() => {
+        setDripEnrolled(enrolled);
+        setDripPending(false);
+      })
+      .catch((err) => {
+        setDripPending(false);
+        const parsed = parseApiError(err, 'Could not update reinvestment setting');
+        setDripError(parsed.message);
+        show(parsed.message, 'error');
+      });
+  }, [assetId, currentUser?.id, dripPending, show]);
 
   // ── Corporate actions — latest 3 events for the ownership timeline ──
   React.useEffect(() => {
@@ -543,6 +594,24 @@ export default function AssetDetailScreen() {
 
   const { data: issuerTrust } = useSellerTrust(asset?.issuerId);
 
+  // Calendar entries map the same fetched distribution list — no second
+  // request. Status union narrows to the calendar's supported set;
+  // 'paid' is the backend's settled synonym. Declared above the early
+  // returns so hook order is stable while the asset loads.
+  const distributionCalendarEntries = React.useMemo(() => distributionList.map((d) => ({
+    id: d.id,
+    date: d.projectedPayableDate ?? d.settledAt ?? d.createdAt,
+    perUnitGbp: d.perUnitGbpMinor != null ? d.perUnitGbpMinor / 100 : 0,
+    totalPoolGbp: d.amountGbpMinor != null ? d.amountGbpMinor / 100 : 0,
+    status: d.status === 'settled' || d.status === 'paid' ? 'settled' as const
+      : d.status === 'scheduled' ? 'scheduled' as const
+      : d.status === 'reversed' ? 'reversed' as const
+      : 'pending' as const,
+    recordDate: d.recordDate ?? null,
+    exDate: d.exDate ?? null,
+    payableDate: d.projectedPayableDate ?? d.settledAt ?? null,
+  })), [distributionList]);
+
   if (isLoading) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -626,6 +695,16 @@ export default function AssetDetailScreen() {
       : null;
   const lastDistributionPerUnit = lastDistribution?.perUnitGbpMinor != null
     ? lastDistribution.perUnitGbpMinor / 100
+    : null;
+  // DRIP projection — units the next per-unit distribution could buy at
+  // the current mark (last execution → last trade → offering price).
+  // Honest estimate: uses the last settled distribution, not a forecast.
+  const dripMarkPrice = asset.marketSnapshot?.lastExecutionPriceGbp
+    ?? asset.lastTradePriceGbp
+    ?? asset.unitPriceGbp;
+  const dripProjectedUnits = lastDistributionPerUnit != null && yourUnits != null && yourUnits > 0
+    && dripMarkPrice != null && dripMarkPrice > 0
+    ? (lastDistributionPerUnit * yourUnits) / dripMarkPrice
     : null;
   const feePct = Math.round((asset.tradingFeeRate ?? CO_OWN_FEE_RATE) * 100);
 
@@ -743,6 +822,15 @@ export default function AssetDetailScreen() {
       show('Market data is stale. Refresh before trading.', 'error');
       return;
     }
+    // Risk acknowledgment precedes education — the compliance profile's
+    // own eligibility order (KYC → risk → wallet → education) treats
+    // risk acceptance as the earlier gate. The sheet carries an explicit
+    // active-choice "I understand" control; pending intent is preserved.
+    if (!coOwnCompliance.riskDisclosureAccepted) {
+      setPendingTradeSide({ side });
+      openSheet('riskDisclosure');
+      return;
+    }
     if (!coOwnCompliance.educationCompleted) {
       setPendingTradeSide({ side });
       openSheet('guide');
@@ -763,12 +851,38 @@ export default function AssetDetailScreen() {
       return;
     }
     const tradeSide: 'buy' | 'sell' = bookSide === 'ask' ? 'buy' : 'sell';
+    if (!coOwnCompliance.riskDisclosureAccepted) {
+      setPendingTradeSide({ side: tradeSide, limitPrice: price });
+      openSheet('riskDisclosure');
+      return;
+    }
     if (!coOwnCompliance.educationCompleted) {
       setPendingTradeSide({ side: tradeSide, limitPrice: price });
       openSheet('guide');
       return;
     }
     navigation.navigate('Trade', { assetId: asset.id, side: tradeSide, limitPrice: price });
+  };
+
+  // Active-choice risk acknowledgment (FCA decision-points pattern):
+  // the disclosure sheet renders an explicit "I understand — continue"
+  // control while unacknowledged. Accepting records the flag and resumes
+  // the pending trade intent through the education gate when needed.
+  const handleAcknowledgeRisk = () => {
+    updateCoOwnCompliance({ riskDisclosureAccepted: true });
+    closeSheet('riskDisclosure');
+    if (pendingTradeSide) {
+      if (!coOwnCompliance.educationCompleted) {
+        openSheet('guide');
+        return;
+      }
+      navigation.navigate('Trade', {
+        assetId: asset.id,
+        side: pendingTradeSide.side,
+        limitPrice: pendingTradeSide.limitPrice,
+      });
+      setPendingTradeSide(null);
+    }
   };
 
   const handleGuideComplete = () => {
@@ -821,15 +935,9 @@ export default function AssetDetailScreen() {
   });
   const hasIncompleteRights = rightsRows.some((r) => r.isTbc);
 
-  // Document references available on the asset (spec P1-B §2 Documents
-  // subsection). Only render the subsection when at least one document
-  // URL is published — no empty sections.
-  const dossierDocuments: { label: string; url: string; accessibilityLabel: string }[] = [];
-  if (asset.escrowTermsUrl) dossierDocuments.push({ label: 'Escrow terms', url: asset.escrowTermsUrl, accessibilityLabel: 'Open escrow terms' });
-  if (asset.safeguardingEvidenceUrl) dossierDocuments.push({ label: 'Safeguarding evidence', url: asset.safeguardingEvidenceUrl, accessibilityLabel: 'Open safeguarding evidence' });
-  if (asset.safeguardingTermsUrl) dossierDocuments.push({ label: 'Safeguarding terms', url: asset.safeguardingTermsUrl, accessibilityLabel: 'Open safeguarding terms' });
-  if (asset.buyerProtectionTermsUrl) dossierDocuments.push({ label: 'Buyer protection terms', url: asset.buyerProtectionTermsUrl, accessibilityLabel: 'Open buyer protection terms' });
-  const hasDocuments = dossierDocuments.length > 0;
+  // Document references are now surfaced via the CoOwnAssetDossierSheet
+  // (Pillar 2), so the inline dossierDocuments array is no longer needed
+  // on the Overview tab.
 
   return (
     <View testID="asset-detail-screen" style={[styles.container, { backgroundColor: colors.background }]}>
@@ -884,10 +992,11 @@ export default function AssetDetailScreen() {
           isFav={social.isLiked}
           isSaved={social.isSavedToCollection}
           showDefaultControls={false}
-          heightFraction={isVeryCompact ? 0.3 : isCompact ? 0.28 : 0.26}
+          heightFraction={isVeryCompact ? 0.42 : isCompact ? 0.40 : 0.38}
           initialIndex={fullscreenIndex}
           onActiveIndexChange={setFullscreenIndex}
           onOpenFullscreen={handleOpenFullscreen}
+          mediaLabel={asset.title}
         />
         <CommerceDetailMediaRail
           onBack={() => navigation.goBack()}
@@ -983,9 +1092,8 @@ export default function AssetDetailScreen() {
             marketDataAgeLabel={dataStaleAgeLabel}
             appraisedValuePerUnitGbp={appraisedValuePerUnitGbp}
             referenceVsAppraisalPct={referenceVsAppraisalPct}
-            dossierDocuments={dossierDocuments}
-            hasDocuments={hasDocuments}
-            onOpenDiligence={() => navigation.navigate('AssetDueDiligence', { assetId: asset.id })}
+            onOpenDossier={() => openSheet('dossier')}
+            onOpenProspectus={() => openSheet('prospectus')}
             onOpenRiskDisclosure={() => openSheet('riskDisclosure')}
             lifecycleState={lifecycleState}
           />
@@ -1011,6 +1119,7 @@ export default function AssetDetailScreen() {
             lifecycleState={lifecycleState}
             yourOpenOrders={yourOpenOrders}
             yourOpenOrdersFailed={yourOpenOrdersFailed}
+            onRetryOpenOrders={retryOpenOrders}
             yourOpenOrdersLoading={yourOpenOrdersLoading}
             onCancelOrder={handleCancelOrder}
             cancellingOrderId={cancellingOrderId}
@@ -1031,6 +1140,7 @@ export default function AssetDetailScreen() {
             avgEntryPriceGbp={avgEntryPriceGbp}
             unrealizedPnlGbp={unrealizedPnlGbp}
             unrealizedPnlPct={unrealizedPnlPct}
+            realizedPnlGbp={yourHolding?.realizedPnlGbp ?? null}
             yourSegmentPct={yourSegmentPct}
             otherHoldersSegmentPct={otherHoldersSegmentPct}
             availableSegmentPct={availableSegmentPct}
@@ -1060,12 +1170,24 @@ export default function AssetDetailScreen() {
               paymentDateLabel: action.payableDate ? `Payment: ${formatDayMonth(action.payableDate)}` : undefined,
               actionId: action.id,
             })}
+            onNavigateToVote={(action) => navigation.navigate('CorporateActionVote', {
+              actionId: action.id,
+              assetId: asset.id,
+            })}
+            isOffline={isOffline}
             onOpenBuyout={() => navigation.navigate('Buyout', { assetId: asset.id })}
             lockupEndDate={asset.lockupEndDate ?? null}
             activeBuyoutOfferPriceGbp={asset.activeBuyoutOffer?.priceGbp ?? null}
             activeBuyoutOfferPremiumPct={asset.activeBuyoutOffer?.premiumPct ?? null}
             activeBuyoutOfferExpiry={asset.activeBuyoutOffer?.expiry ?? null}
-            feeSchedule={asset.feeSchedule ?? undefined}
+            distributionCalendarEntries={distributionCalendarEntries}
+            dripSupported={lastDistribution != null}
+            dripEnrolled={dripEnrolled === true}
+            onToggleDrip={handleToggleDrip}
+            dripPending={dripPending}
+            dripError={dripError}
+            dripProjectedUnits={dripProjectedUnits}
+            assetId={asset.id}
           />
         )}
 
@@ -1131,6 +1253,10 @@ export default function AssetDetailScreen() {
         riskDisclosureVisible={riskDisclosureVisible}
         supplySheetVisible={supplySheetVisible}
         overflowVisible={overflowVisible}
+        dossierSheetVisible={dossierSheetVisible}
+        prospectusSheetVisible={prospectusSheetVisible}
+        riskAcknowledged={coOwnCompliance.riskDisclosureAccepted}
+        onAcknowledgeRisk={handleAcknowledgeRisk}
         priceAlertVisible={priceAlertVisible}
         alertTargetPrice={alertTargetPrice}
         alertCondition={alertCondition}
@@ -1170,6 +1296,18 @@ export default function AssetDetailScreen() {
         onNavigateOrderHistory={() => navigation.navigate('CoOwnOrderHistory')}
         onNavigatePriceAlerts={() => navigation.navigate('CoOwnPriceAlerts')}
         onNavigateIssue={() => navigation.navigate('CoOwnIssue', { assetId: asset.id })}
+        onOpenDiligence={() => {
+          closeSheet('dossier');
+          navigation.navigate('AssetDueDiligence', { assetId: asset.id });
+        }}
+        onOpenProspectus={() => {
+          closeSheet('dossier');
+          openSheet('prospectus');
+        }}
+        onOpenRiskDisclosure={() => {
+          closeSheet('dossier');
+          openSheet('riskDisclosure');
+        }}
       />
     </View>
   );

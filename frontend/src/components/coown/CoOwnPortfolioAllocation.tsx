@@ -21,23 +21,48 @@ export interface CoOwnPortfolioAllocationProps {
   groupBy?: 'asset' | 'category';
 }
 
-// ── Neutral palette ──────────────────────────────────────────────────────────
-// Per Design.md: allocation segments use a neutral palette — no decorative
-// gold. These muted slate/charcoal tones are distinguishable from one another
-// in both light and dark themes without introducing categorical colour noise.
-// The palette is theme-independent so segment identity stays stable across
-// theme switches (a segment's colour should not reshuffle when the user flips
-// dark mode).
-const NEUTRAL_SEGMENT_PALETTE = [
-  '#A8A8A8', // slate 1 — lightest
-  '#8A8A8A', // slate 2
-  '#6E6E6E', // slate 3
-  '#565656', // slate 4
-  '#424242', // slate 5
-  '#9C8E7E', // warm taupe 1
-  '#7E7468', // warm taupe 2
-  '#645A50', // warm taupe 3
-] as const;
+// ── Token-derived segment palette ────────────────────────────────────────────
+// Per Design.md: allocation segments stay neutral — no decorative gold, and
+// coownUp/coownDown remain reserved for P&L. The theme exposes no categorical
+// palette, so segments are derived deterministically by interpolating between
+// two semantic tokens: `textPrimary` (strongest ink) → `border` (faintest
+// hairline). Rank order maps to tonal order — the largest slice takes the
+// highest-contrast tone — so identity follows rank, not insertion order.
+// Deriving from theme tokens keeps every stop legible in both light and dark
+// themes instead of freezing hardcoded slate/taupe hex values.
+
+const SEGMENT_PALETTE_SIZE = 8;
+// Keep stops inside the ramp so no segment renders as literal text ink or an
+// invisible border tone.
+const SEGMENT_RAMP_MIN = 0.08;
+const SEGMENT_RAMP_MAX = 0.92;
+
+function hexToRgb(hex: string): [number, number, number] | null {
+  const match = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!match) return null;
+  const n = parseInt(match[1], 16);
+  return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff];
+}
+
+function mixHexColors(a: string, b: string, t: number): string {
+  const ca = hexToRgb(a);
+  const cb = hexToRgb(b);
+  if (!ca || !cb) return a;
+  const channel = (x: number, y: number) => Math.round(x + (y - x) * t);
+  const n = (channel(ca[0], cb[0]) << 16) | (channel(ca[1], cb[1]) << 8) | channel(ca[2], cb[2]);
+  return `#${n.toString(16).padStart(6, '0').toUpperCase()}`;
+}
+
+type PaletteColors = Pick<ReturnType<typeof useAppTheme>['colors'], 'textPrimary' | 'border'>;
+
+function buildSegmentPalette(colors: PaletteColors): string[] {
+  return Array.from({ length: SEGMENT_PALETTE_SIZE }, (_, i) =>
+    mixHexColors(
+      colors.textPrimary,
+      colors.border,
+      SEGMENT_RAMP_MIN + ((SEGMENT_RAMP_MAX - SEGMENT_RAMP_MIN) * i) / (SEGMENT_PALETTE_SIZE - 1),
+    ));
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -51,6 +76,7 @@ interface AggregatedSlice {
 function aggregateSlices(
   positions: CoOwnPortfolioAllocationSlice[],
   groupBy: 'asset' | 'category',
+  palette: readonly string[],
 ): AggregatedSlice[] {
   const buckets = new Map<string, { label: string; value: number }>();
   for (const p of positions) {
@@ -70,15 +96,15 @@ function aggregateSlices(
       key,
       label,
       value,
-      color: NEUTRAL_SEGMENT_PALETTE[i % NEUTRAL_SEGMENT_PALETTE.length],
+      color: palette[i % palette.length],
     }))
     .sort((a, b) => b.value - a.value);
 
   // Re-assign palette indices after sorting so the largest slice gets the
-  // lightest tone and identity follows rank, not insertion order.
+  // highest-contrast tone and identity follows rank, not insertion order.
   return sorted.map((s, i) => ({
     ...s,
-    color: NEUTRAL_SEGMENT_PALETTE[i % NEUTRAL_SEGMENT_PALETTE.length],
+    color: palette[i % palette.length],
   }));
 }
 
@@ -107,7 +133,8 @@ export function CoOwnPortfolioAllocation({
 }: CoOwnPortfolioAllocationProps) {
   const { colors } = useAppTheme();
 
-  const slices = useMemo(() => aggregateSlices(positions, groupBy), [positions, groupBy]);
+  const palette = useMemo(() => buildSegmentPalette(colors), [colors]);
+  const slices = useMemo(() => aggregateSlices(positions, groupBy, palette), [positions, groupBy, palette]);
   const effectiveTotal = totalValueGbp > 0 ? totalValueGbp : slices.reduce((s, sl) => s + sl.value, 0);
 
   // ── Empty state ──

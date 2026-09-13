@@ -183,6 +183,17 @@ export interface Conversation {
   memberRoles?: Record<string, 'owner' | 'admin' | 'member'>;
   /** P0.12: Per-user conversation state — hydrated from backend, not local-only. */
   isMuted?: boolean;
+  /** Graduated moderation ladder — viewer has blocked the DM counterparty. */
+  isBlocked?: boolean;
+  /** Graduated moderation ladder — viewer has restricted the DM counterparty
+   *  (their messages land in requests; no read receipts/typing flow back). */
+  isRestricted?: boolean;
+  /** Viewer has user-level-muted the DM counterparty — suppresses their
+   *  message notifications across all shared conversations. Distinct from
+   *  `isMuted`, which is the per-conversation notification mute. */
+  isAuthorMuted?: boolean;
+  /** Server-emitted alias carrying the same restrict edge as isRestricted. */
+  isAuthorRestricted?: boolean;
   isArchived?: boolean;
   requestStatus?: 'pending' | 'accepted' | 'declined';
   markedUnread?: boolean;

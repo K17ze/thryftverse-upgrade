@@ -101,7 +101,6 @@ export function CommerceDetailIdentity({
     family === 'auction' && styles.titleAuction,
     family === 'co_own' && styles.titleCoOwn,
     density === 'compact' && styles.titleCompact,
-    family === 'co_own' && density === 'compact' && styles.titleCoOwnCompact,
     isMedia && styles.titleMedia,
     { color: isMedia ? colors.scrimTextPrimary : colors.textPrimary },
   ];
@@ -256,12 +255,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     lineHeight: TypographyV2.priceHero.lineHeight - 1,
     letterSpacing: -0.4 },
   titleCoOwn: {
-    // 2026 PDP density benchmark (Instagram/Depop/StockX band): product
-    // title 18-22pt semibold. 20pt keeps the fractional title confident
-    // while freeing the first viewport for media + price + chart.
+    // Pillar 1: rescale from 28pt (priceHero) to 20pt (priceList) so the
+    // Co-Own title matches the item-detail typography scale. A 28pt title
+    // forced two-line wraps that consumed ~90px and pushed the chart below
+    // the first viewport. 20pt semibold is the 2026 PDP standard (Instagram,
+    // Pinterest, Masterworks) and aligns with the dock's priceList value.
     fontSize: TypographyV2.priceList.size,
-    lineHeight: TypographyV2.priceList.lineHeight + 4,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    lineHeight: TypographyV2.priceList.lineHeight + 3,
     letterSpacing: -0.3 },
   titleMedia: {
     fontSize: TypographyV2.priceHero.size - 1,
@@ -274,18 +274,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingBottom: Space.xs },
   containerCoOwn: {
     paddingBottom: Space.xs },
-  // Per spec 05 §3: compact width uses 26pt title with tighter line
+  // Per spec 05 §3: compact width uses 18pt title (was 26pt). Tighter line
   // height so long titles do not crowd the first viewport.
   titleCompact: {
-    fontSize: TypographyV2.priceHero.size - 2,
-    lineHeight: TypographyV2.priceHero.lineHeight - 1 },
-  // Co-Own compact: one step under the co_own standard (20pt) so narrow
-  // viewports tighten without falling back to the 26pt shared compact.
-  titleCoOwnCompact: {
-    fontSize: TypographyV2.priceList.size - 1,
-    lineHeight: TypographyV2.priceList.lineHeight + 3,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
-    letterSpacing: -0.3 },
+    fontSize: TypographyV2.priceList.size - 2,
+    lineHeight: TypographyV2.priceList.lineHeight },
   // Quiet trust row under the price/identity block — one compact line,
   // height-capped, no card or badge chrome.
   trustSlot: {

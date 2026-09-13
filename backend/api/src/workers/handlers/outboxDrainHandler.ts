@@ -23,6 +23,35 @@ export type OutboxDrainHandlerDeps = {
   /** Uses shared db singleton + worker runtime helpers. */
 };
 
+/**
+ * Resolve the notification deep link for an offer lifecycle event. There is
+ * no dedicated offers screen yet; when the offer is linked to a chat
+ * conversation the thread is the truthful surface (the listing context bar
+ * renders live offer state there). Otherwise fall back to the listing.
+ */
+function offerNotificationRoute(
+  conversationId: string | null | undefined,
+  counterpartyUserId: string,
+  listingId: string,
+): Record<string, unknown> {
+  if (conversationId) {
+    return {
+      screen: 'Chat',
+      params: { conversationId, partnerUserId: counterpartyUserId },
+    };
+  }
+  return { screen: 'ItemDetail', params: { itemId: listingId } };
+}
+
+const offerLifecyclePayloadSchema = z.object({
+  offerId: z.string().min(2),
+  listingId: z.string().min(2),
+  buyerId: z.string().min(2),
+  sellerId: z.string().min(2),
+  offerPriceGbp: z.number().nonnegative(),
+  conversationId: z.string().nullable().optional(),
+});
+
 async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void> {
   if (event.eventType === 'listing.price_changed') {
     const payload = z.object({
@@ -115,6 +144,7 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
       counterRound: z.number().int().positive(),
       offerPriceGbp: z.number().positive(),
       expiresAt: z.string().datetime(),
+      conversationId: z.string().nullable().optional(),
     }).parse(event.payload);
     const recipientId = payload.offeredByUserId === payload.buyerId
       ? payload.sellerId
@@ -131,13 +161,186 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
         listingId: payload.listingId,
         expiresAt: payload.expiresAt,
       },
-      route: { screen: 'ItemDetail', params: { itemId: payload.listingId } },
+      route: offerNotificationRoute(
+        payload.conversationId,
+        payload.offeredByUserId,
+        payload.listingId,
+      ),
       idempotencyKey: `offer_countered_${payload.offerId}_${recipientId}`,
       metadata: { outboxEventId: event.id },
     });
     publishRealtimeEvent({
       topic: `listing:${payload.listingId}`,
       type: 'offer.countered',
+      payload,
+    });
+    return;
+  }
+
+  if (event.eventType === 'offer.created') {
+    const payload = z.object({
+      offerId: z.string().min(2),
+      listingId: z.string().min(2),
+      buyerId: z.string().min(2),
+      sellerId: z.string().min(2),
+      amountGbp: z.number().positive(),
+      expiresAt: z.string().datetime(),
+      counterRound: z.number().int().nonnegative(),
+      conversationId: z.string().nullable().optional(),
+    }).parse(event.payload);
+    await queueUserNotification({
+      userId: payload.sellerId,
+      title: 'New offer',
+      body: `${formatGbpAmount(payload.amountGbp)} offered on your listing.`,
+      eventType: 'offer_created',
+      actorUserId: payload.buyerId,
+      payload: {
+        event: 'offer_created',
+        offerId: payload.offerId,
+        listingId: payload.listingId,
+        buyerId: payload.buyerId,
+        amountGbp: payload.amountGbp,
+        expiresAt: payload.expiresAt,
+      },
+      route: offerNotificationRoute(
+        payload.conversationId,
+        payload.buyerId,
+        payload.listingId,
+      ),
+      idempotencyKey: `offer_created_seller_${payload.offerId}`,
+      metadata: { outboxEventId: event.id },
+    });
+    publishRealtimeEvent({
+      topic: `listing:${payload.listingId}`,
+      type: 'offer.created',
+      payload: {
+        offerId: payload.offerId,
+        listingId: payload.listingId,
+        buyerId: payload.buyerId,
+        amountGbp: payload.amountGbp,
+        expiresAt: payload.expiresAt,
+      },
+    });
+    return;
+  }
+
+  if (event.eventType === 'offer.declined') {
+    const payload = offerLifecyclePayloadSchema.parse(event.payload);
+    await queueUserNotification({
+      userId: payload.buyerId,
+      title: 'Offer declined',
+      body: `Your ${formatGbpAmount(payload.offerPriceGbp)} offer was declined by the seller.`,
+      eventType: 'offer_declined',
+      actorUserId: payload.sellerId,
+      payload: {
+        event: 'offer_declined',
+        offerId: payload.offerId,
+        listingId: payload.listingId,
+      },
+      route: offerNotificationRoute(
+        payload.conversationId,
+        payload.sellerId,
+        payload.listingId,
+      ),
+      idempotencyKey: `offer_declined_buyer_${payload.offerId}`,
+      metadata: { outboxEventId: event.id },
+    });
+    publishRealtimeEvent({
+      topic: `listing:${payload.listingId}`,
+      type: 'offer.declined',
+      payload,
+    });
+    return;
+  }
+
+  if (event.eventType === 'offer.sibling_declined') {
+    const payload = offerLifecyclePayloadSchema.extend({
+      acceptedOfferId: z.string().min(2),
+      orderId: z.string().min(2),
+    }).parse(event.payload);
+    await queueUserNotification({
+      userId: payload.buyerId,
+      title: 'Offer declined',
+      body: 'Another offer on this item was accepted, so your offer was declined.',
+      eventType: 'offer_declined',
+      actorUserId: payload.sellerId,
+      payload: {
+        event: 'offer_declined',
+        offerId: payload.offerId,
+        listingId: payload.listingId,
+        acceptedOfferId: payload.acceptedOfferId,
+        orderId: payload.orderId,
+      },
+      route: offerNotificationRoute(
+        payload.conversationId,
+        payload.sellerId,
+        payload.listingId,
+      ),
+      idempotencyKey: `offer_sibling_declined_buyer_${payload.offerId}`,
+      metadata: { outboxEventId: event.id },
+    });
+    publishRealtimeEvent({
+      topic: `listing:${payload.listingId}`,
+      type: 'offer.sibling_declined',
+      payload,
+    });
+    return;
+  }
+
+  if (event.eventType === 'offer.expired') {
+    const payload = offerLifecyclePayloadSchema.extend({
+      expiresAt: z.string().datetime(),
+    }).parse(event.payload);
+    await queueUserNotification({
+      userId: payload.buyerId,
+      title: 'Offer expired',
+      body: `Your ${formatGbpAmount(payload.offerPriceGbp)} offer expired without a response.`,
+      eventType: 'offer_expired',
+      payload: {
+        event: 'offer_expired',
+        offerId: payload.offerId,
+        listingId: payload.listingId,
+        expiresAt: payload.expiresAt,
+      },
+      route: offerNotificationRoute(
+        payload.conversationId,
+        payload.sellerId,
+        payload.listingId,
+      ),
+      idempotencyKey: `offer_expired_buyer_${payload.offerId}`,
+      metadata: { outboxEventId: event.id },
+    });
+    publishRealtimeEvent({
+      topic: `listing:${payload.listingId}`,
+      type: 'offer.expired',
+      payload,
+    });
+    return;
+  }
+
+  if (event.eventType === 'offer.cancelled') {
+    const payload = offerLifecyclePayloadSchema.parse(event.payload);
+    await queueUserNotification({
+      userId: payload.buyerId,
+      title: 'Offer cancelled',
+      body: `Your ${formatGbpAmount(payload.offerPriceGbp)} offer was cancelled.`,
+      eventType: 'offer_cancelled',
+      payload: {
+        event: 'offer_cancelled',
+        offerId: payload.offerId,
+        listingId: payload.listingId,
+      },
+      route: offerNotificationRoute(
+        payload.conversationId,
+        payload.sellerId,
+        payload.listingId,
+      ),
+      idempotencyKey: `offer_cancelled_buyer_${payload.offerId}`,
+      metadata: { outboxEventId: event.id },
+    });
+    publishRealtimeEvent({
+      topic: `listing:${payload.listingId}`,
+      type: 'offer.cancelled',
       payload,
     });
     return;
@@ -421,6 +624,72 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
       `UPDATE creator_earning_entries SET status = 'reversed' WHERE id = $1`,
       [originalEntryId],
     );
+    return;
+  }
+
+  if (event.eventType === 'order.dispatch_extension_proposed') {
+    const payload = z.object({
+      orderId: z.string().min(2),
+      extensionId: z.string().min(2),
+      days: z.number().int().positive(),
+      proposedShipBy: z.string().datetime(),
+      buyerId: z.string().min(2),
+    }).parse(event.payload);
+    await queueUserNotification({
+      userId: payload.buyerId,
+      title: 'Dispatch extension requested',
+      body: `Seller asked for ${payload.days} more day${payload.days === 1 ? '' : 's'} to dispatch your order. Review and respond.`,
+      eventType: 'dispatch_extension_proposed',
+      payload: {
+        event: 'dispatch_extension_proposed',
+        orderId: payload.orderId,
+        extensionId: payload.extensionId,
+        days: payload.days,
+        proposedShipBy: payload.proposedShipBy,
+      },
+      route: { screen: 'OrderDetail', params: { orderId: payload.orderId } },
+      idempotencyKey: `dispatch_extension_proposed_${payload.extensionId}`,
+      metadata: { outboxEventId: event.id },
+    });
+    publishRealtimeEvent({
+      topic: `order:${payload.orderId}`,
+      type: 'order.dispatch_extension_proposed',
+      payload,
+    });
+    return;
+  }
+
+  if (event.eventType === 'order.dispatch_extension_responded') {
+    const payload = z.object({
+      orderId: z.string().min(2),
+      extensionId: z.string().min(2),
+      accepted: z.boolean(),
+      proposedShipBy: z.string().datetime(),
+      sellerId: z.string().min(2),
+    }).parse(event.payload);
+    await queueUserNotification({
+      userId: payload.sellerId,
+      title: payload.accepted ? 'Dispatch extension accepted' : 'Dispatch extension declined',
+      body: payload.accepted
+        ? 'The buyer accepted your dispatch extension. The new ship-by date is now in effect.'
+        : 'The buyer declined your dispatch extension. The original ship-by date still applies.',
+      eventType: 'dispatch_extension_responded',
+      payload: {
+        event: 'dispatch_extension_responded',
+        orderId: payload.orderId,
+        extensionId: payload.extensionId,
+        accepted: payload.accepted,
+        proposedShipBy: payload.proposedShipBy,
+      },
+      route: { screen: 'OrderDetail', params: { orderId: payload.orderId } },
+      idempotencyKey: `dispatch_extension_responded_${payload.extensionId}`,
+      metadata: { outboxEventId: event.id },
+    });
+    publishRealtimeEvent({
+      topic: `order:${payload.orderId}`,
+      type: 'order.dispatch_extension_responded',
+      payload,
+    });
     return;
   }
 

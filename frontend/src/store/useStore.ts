@@ -56,7 +56,9 @@ import {
   removeMessageReactionOnApi,
 } from '../services/chatApi';
 import { fetchJson } from '../lib/apiClient';
-import { fetchMyProfile as fetchMyProfileFromApi, getBlockedUsers } from '../services/profileApi';
+import { queryClient } from '../platform/server/queryClient';
+import { queryKeys } from '../platform/server/queryKeys';
+import { fetchMyProfile as fetchMyProfileFromApi, getBlockedUsers, getMutedUsers, getRestrictedUsers } from '../services/profileApi';
 import {
   createSupportTicket as createSupportTicketOnApi,
   listSupportTickets as listSupportTicketsFromApi,
@@ -168,7 +170,7 @@ interface CreateGroupConversationInput {
 export type BrowseSortOption = 'Recommended' | 'Newest' | 'Price: Low to High' | 'Price: High to Low' | 'Most liked' | 'Ending soon';
 type BrowseConditionOption = 'Any' | ListingCondition;
 
-interface BrowseFilterState {
+export interface BrowseFilterState {
   query: string;
   sort: BrowseSortOption;
   brands: string[];
@@ -555,18 +557,58 @@ interface StoreState {
   undeployBotFromConversation: (conversationId: string, botId: string) => void;
   appendConversationMessage: (conversationId: string, message: ConversationMessage) => void;
   replaceConversationMessages: (conversationId: string, messages: ConversationMessage[]) => void;
+  /**
+   * Patch a single stored message in place — matched by server `id` or by
+   * `clientMessageId` (the stable id that survives the optimistic→confirmed
+   * id rename). Used to reconcile send lifecycle (`sending`→`sent`/`failed`/
+   * `reconciling`) into the inbox store without touching list order or the
+   * conversation preview.
+   */
+  patchConversationMessage: (
+    conversationId: string,
+    match: { id?: string; clientMessageId?: string },
+    patch: Partial<ConversationMessage>,
+  ) => void;
   setConversationDraft: (conversationId: string, draft: string) => void;
   addMessageReaction: (conversationId: string, messageId: string, reaction: string) => void;
   removeMessageReaction: (conversationId: string, messageId: string, reaction: string) => void;
   // Chat settings / privacy
   blockedUsers: string[];
-  toggleBlockedUser: (userId: string) => void;
+  addBlockedUser: (userId: string) => void;
+  removeBlockedUser: (userId: string) => void;
   isBlockedUser: (userId: string) => boolean;
   hydrateBlockedUsers: () => Promise<void>;
   setBlockedUsers: (userIds: string[]) => void;
+  // Graduated moderation ladder — user-level mute (silent notification
+  // suppression) and restrict (DMs to requests, no read receipts back).
+  mutedUsers: string[];
+  addMutedUser: (userId: string) => void;
+  removeMutedUser: (userId: string) => void;
+  isMutedUser: (userId: string) => boolean;
+  hydrateMutedUsers: () => Promise<void>;
+  setMutedUsers: (userIds: string[]) => void;
+  restrictedUsers: string[];
+  addRestrictedUser: (userId: string) => void;
+  removeRestrictedUser: (userId: string) => void;
+  isRestrictedUser: (userId: string) => boolean;
+  hydrateRestrictedUsers: () => Promise<void>;
+  setRestrictedUsers: (userIds: string[]) => void;
   mutedConversationIds: string[];
   toggleMutedConversation: (id: string) => Promise<void>;
   isMutedConversation: (id: string) => boolean;
+  // Mirrors a committed restrict/unrestrict onto the conversation payload so
+  // surfaces deriving truth from `conversation.isRestricted` update without
+  // waiting on an inbox refetch.
+  setConversationRestricted: (id: string, restricted: boolean) => void;
+  // Same mirror for the block edge.
+  setConversationBlocked: (id: string, blocked: boolean) => void;
+  // Sweeps a committed moderation edge across every DM with that user —
+  // profile-surface mutations don't know which conversation will render the
+  // flag next, so all of them stay consistent with the committed op.
+  setUserModerationInConversations: (
+    userId: string,
+    patch: { isBlocked?: boolean; isRestricted?: boolean; isAuthorMuted?: boolean }
+  ) => void;
   readReceiptsEnabled: boolean;
   setReadReceiptsEnabled: (v: boolean) => void;
   allowMessagesFrom: 'everyone' | 'following' | 'nobody';
@@ -601,6 +643,8 @@ interface StoreState {
   addBuyerQuickReply: (reply: QuickReply) => void;
   updateBuyerQuickReply: (index: number, reply: QuickReply) => void;
   removeBuyerQuickReply: (index: number) => void;
+  quickRepliesLoaded: boolean;
+  quickRepliesLoadFailed: boolean;
   loadQuickRepliesFromApi: () => Promise<void>;
   addQuickReplyOnApi: (role: 'buyer' | 'seller', title: string, message: string) => Promise<QuickReply>;
   updateQuickReplyOnApi: (role: 'buyer' | 'seller', index: number, title: string, message: string) => Promise<void>;
@@ -710,12 +754,14 @@ export const useStore = create<StoreState>()(
       username: user.username,
     });
     get().hydrateBlockedUsers().catch(() => undefined);
+    get().hydrateMutedUsers().catch(() => undefined);
+    get().hydrateRestrictedUsers().catch(() => undefined);
     // U05: Reconcile watchlist with server on login so cross-device
     // changes and account-isolated state are reflected.
     get().hydrateCoOwnWatchlist().catch(() => undefined);
   },
   logout: () => {
-    set({ currentUser: null, isAuthenticated: false, twoFactorEnabled: false, biometricLoginPending: false, blockedUsers: [], coOwnWatchlist: [], coOwnWatchStatus: {} });
+    set({ currentUser: null, isAuthenticated: false, twoFactorEnabled: false, biometricLoginPending: false, blockedUsers: [], mutedUsers: [], restrictedUsers: [], coOwnWatchlist: [], coOwnWatchStatus: {} });
     persistLocalAuthSnapshot(null, false);
     // Scrub Sentry user context on logout so subsequent crashes are anonymous.
     setSentryUser(null);
@@ -765,15 +811,35 @@ export const useStore = create<StoreState>()(
   },
 
   wishlist: [],
-  toggleWishlist: (id) =>
-    set((state) => {
-      const isFav = state.wishlist.includes(id);
-      return {
-        wishlist: isFav
-          ? state.wishlist.filter((fid) => fid !== id)
-          : [...state.wishlist, id],
-      };
-    }),
+  // Local-first toggle kept synchronous for instant UI. When authenticated,
+  // the change is also persisted to the backend and mirrored into the React
+  // Query wishlist cache so server-backed readers (useWishlist /
+  // useIsWishlisted) never diverge from the local heart state. A failed or
+  // unauthenticated sync keeps the local toggle — matching the pre-existing
+  // local-only guest behaviour.
+  toggleWishlist: (id) => {
+    const previous = get().wishlist;
+    const isFav = previous.includes(id);
+    const next = isFav
+      ? previous.filter((fid) => fid !== id)
+      : [...previous, id];
+    set({ wishlist: next });
+    queryClient.setQueryData<string[]>(queryKeys.wishlist.items, next);
+    if (!get().isAuthenticated) return;
+    void fetchJson<{ ok: boolean; itemIds?: string[] }>('/users/me/wishlist', {
+      method: 'POST',
+      body: JSON.stringify({ listingId: id, action: isFav ? 'remove' : 'add' }),
+    })
+      .then((res) => {
+        if (res.ok && Array.isArray(res.itemIds)) {
+          set({ wishlist: res.itemIds });
+          queryClient.setQueryData<string[]>(queryKeys.wishlist.items, res.itemIds);
+        }
+      })
+      .catch(() => {
+        // Sync failure keeps the local toggle (offline / guest semantics).
+      });
+  },
   isWishlisted: (id) => get().wishlist.includes(id),
   savedProducts: [],
   toggleSavedProduct: (id) =>
@@ -1785,10 +1851,13 @@ export const useStore = create<StoreState>()(
           return conversation;
         }
 
+        // `text` is '' (not undefined) for media/voice-only payloads — a
+        // truthy check is required to reach the media fallbacks.
         const nextLastMessage = message.text
-          ?? (message.mediaType === 'image' ? '📷 Photo' : message.mediaType === 'video' ? '🎥 Video' : undefined)
-          ?? message.systemTitle
-          ?? (message.offerPrice ? `Offer ${message.offerPrice}` : 'New message');
+          || (message.mediaType === 'image' ? '📷 Photo' : message.mediaType === 'video' ? '🎥 Video' : undefined)
+          || (message.type === 'voice' || message.voiceUri ? '🎤 Voice message' : undefined)
+          || message.systemTitle
+          || (message.offerPrice ? `Offer ${message.offerPrice}` : 'New message');
 
         return {
           ...conversation,
@@ -1811,8 +1880,10 @@ export const useStore = create<StoreState>()(
 
         const latestMessage = messages[messages.length - 1];
         const nextLastMessage = latestMessage.text
-          ?? latestMessage.systemTitle
-          ?? (latestMessage.offerPrice ? `Offer ${latestMessage.offerPrice}` : conversation.lastMessage);
+          || (latestMessage.mediaType === 'image' ? '📷 Photo' : latestMessage.mediaType === 'video' ? '🎥 Video' : undefined)
+          || (latestMessage.type === 'voice' || latestMessage.voiceUri ? '🎤 Voice message' : undefined)
+          || latestMessage.systemTitle
+          || (latestMessage.offerPrice ? `Offer ${latestMessage.offerPrice}` : conversation.lastMessage);
 
         return {
           ...conversation,
@@ -1822,16 +1893,36 @@ export const useStore = create<StoreState>()(
         };
       }),
     })),
+  patchConversationMessage: (conversationId, match, patch) =>
+    set((state) => ({
+      conversations: state.conversations.map((conversation) => {
+        if (conversation.id !== conversationId) {
+          return conversation;
+        }
+        let touched = false;
+        const nextMessages = conversation.messages.map((msg) => {
+          const hit =
+            (match.id && msg.id === match.id) ||
+            (match.clientMessageId && msg.clientMessageId === match.clientMessageId);
+          if (!hit) return msg;
+          touched = true;
+          return { ...msg, ...patch };
+        });
+        return touched ? { ...conversation, messages: nextMessages } : conversation;
+      }),
+    })),
   blockedUsers: [],
-  toggleBlockedUser: (userId) =>
-    set((state) => {
-      const isBlocked = state.blockedUsers.includes(userId);
-      return {
-        blockedUsers: isBlocked
-          ? state.blockedUsers.filter((id) => id !== userId)
-          : [...state.blockedUsers, userId],
-      };
-    }),
+  // Set-semantics only — mutation paths know the direction they committed
+  // paths know the direction they committed server-side; a blind toggle can
+  // invert state when the local set diverged from the server (cross-device
+  // writes, hydration lag).
+  addBlockedUser: (userId) =>
+    set((state) =>
+      state.blockedUsers.includes(userId)
+        ? {}
+        : { blockedUsers: [...state.blockedUsers, userId] }),
+  removeBlockedUser: (userId) =>
+    set((state) => ({ blockedUsers: state.blockedUsers.filter((id) => id !== userId) })),
   isBlockedUser: (userId) => get().blockedUsers.includes(userId),
   setBlockedUsers: (userIds) => set({ blockedUsers: userIds }),
   hydrateBlockedUsers: async () => {
@@ -1840,6 +1931,46 @@ export const useStore = create<StoreState>()(
       set({ blockedUsers: entries.map((e) => e.userId) });
     } catch {
       // Best-effort — block list hydration must not block app usage.
+    }
+  },
+  mutedUsers: [],
+  // Set-semantics only — mutation paths know the operation they just
+  // committed server-side, so they add/remove explicitly. A blind toggle
+  // would invert state when the local set has diverged (e.g. restrict was
+  // applied on another device and hydration hasn't caught up).
+  addMutedUser: (userId) =>
+    set((state) =>
+      state.mutedUsers.includes(userId)
+        ? {}
+        : { mutedUsers: [...state.mutedUsers, userId] }),
+  removeMutedUser: (userId) =>
+    set((state) => ({ mutedUsers: state.mutedUsers.filter((id) => id !== userId) })),
+  isMutedUser: (userId) => get().mutedUsers.includes(userId),
+  setMutedUsers: (userIds) => set({ mutedUsers: userIds }),
+  hydrateMutedUsers: async () => {
+    try {
+      const entries = await getMutedUsers();
+      set({ mutedUsers: entries.map((e) => e.id) });
+    } catch {
+      // Best-effort — mute list hydration must not block app usage.
+    }
+  },
+  restrictedUsers: [],
+  isRestrictedUser: (userId) => get().restrictedUsers.includes(userId),
+  addRestrictedUser: (userId) =>
+    set((state) =>
+      state.restrictedUsers.includes(userId)
+        ? {}
+        : { restrictedUsers: [...state.restrictedUsers, userId] }),
+  removeRestrictedUser: (userId) =>
+    set((state) => ({ restrictedUsers: state.restrictedUsers.filter((id) => id !== userId) })),
+  setRestrictedUsers: (userIds) => set({ restrictedUsers: userIds }),
+  hydrateRestrictedUsers: async () => {
+    try {
+      const entries = await getRestrictedUsers();
+      set({ restrictedUsers: entries.map((e) => e.id) });
+    } catch {
+      // Best-effort — restrict list hydration must not block app usage.
     }
   },
   mutedConversationIds: [],
@@ -1872,6 +2003,33 @@ export const useStore = create<StoreState>()(
     );
   },
   isMutedConversation: (id) => get().mutedConversationIds.includes(id),
+  setConversationRestricted: (id, restricted) =>
+    set((state) => ({
+      conversations: state.conversations.map((c) =>
+        c.id === id ? { ...c, isRestricted: restricted, isAuthorRestricted: restricted } : c
+      ),
+    })),
+  setConversationBlocked: (id, blocked) =>
+    set((state) => ({
+      conversations: state.conversations.map((c) =>
+        c.id === id ? { ...c, isBlocked: blocked } : c
+      ),
+    })),
+  setUserModerationInConversations: (userId, patch) =>
+    set((state) => ({
+      conversations: state.conversations.map((c) =>
+        c.type === 'dm' && c.participantIds?.includes(userId)
+          ? {
+              ...c,
+              ...(patch.isBlocked !== undefined ? { isBlocked: patch.isBlocked } : {}),
+              ...(patch.isRestricted !== undefined
+                ? { isRestricted: patch.isRestricted, isAuthorRestricted: patch.isRestricted }
+                : {}),
+              ...(patch.isAuthorMuted !== undefined ? { isAuthorMuted: patch.isAuthorMuted } : {}),
+            }
+          : c
+      ),
+    })),
   readReceiptsEnabled: true,
   setReadReceiptsEnabled: (v) => {
     const previous = get().readReceiptsEnabled;
@@ -1984,12 +2142,7 @@ export const useStore = create<StoreState>()(
       set({ orderUpdatesInChatEnabled: previous });
     });
   },
-  sellerQuickReplies: [
-    { id: 'qr-s-1', title: 'Still available', message: 'Yes, still available!' },
-    { id: 'qr-s-2', title: 'Ship today', message: 'I can ship this today if you want to go ahead.' },
-    { id: 'qr-s-3', title: 'Thanks', message: 'Thanks for your interest! What would you like to know?' },
-    { id: 'qr-s-4', title: 'Quick sale', message: 'I can do a small discount for a quick sale.' },
-  ],
+  sellerQuickReplies: [],
   addSellerQuickReply: (reply) => set((state) => ({
     sellerQuickReplies: [...state.sellerQuickReplies, reply],
   })),
@@ -1999,12 +2152,9 @@ export const useStore = create<StoreState>()(
   removeSellerQuickReply: (index) => set((state) => ({
     sellerQuickReplies: state.sellerQuickReplies.filter((_, i) => i !== index),
   })),
-  buyerQuickReplies: [
-    { id: 'qr-b-1', title: 'Still available?', message: 'Hi, is this still available?' },
-    { id: 'qr-b-2', title: 'Make offer', message: 'Would you consider an offer on this?' },
-    { id: 'qr-b-3', title: 'More photos', message: 'Can I see more photos?' },
-    { id: 'qr-b-4', title: 'Best price', message: 'What\'s your best price?' },
-  ],
+  buyerQuickReplies: [],
+  quickRepliesLoaded: false,
+  quickRepliesLoadFailed: false,
   addBuyerQuickReply: (reply) => set((state) => ({
     buyerQuickReplies: [...state.buyerQuickReplies, reply],
   })),
@@ -2024,12 +2174,16 @@ export const useStore = create<StoreState>()(
         if (r.role === 'seller') sellerReplies.push(reply);
         else buyerReplies.push(reply);
       }
+      // Server is the source of truth — replace wholesale, including empty lists.
       set({
-        sellerQuickReplies: sellerReplies.length ? sellerReplies : get().sellerQuickReplies,
-        buyerQuickReplies: buyerReplies.length ? buyerReplies : get().buyerQuickReplies,
+        sellerQuickReplies: sellerReplies,
+        buyerQuickReplies: buyerReplies,
+        quickRepliesLoaded: true,
+        quickRepliesLoadFailed: false,
       });
     } catch {
-      // Silently keep local defaults if the API is unavailable.
+      set({ quickRepliesLoadFailed: true });
+      throw new Error('Quick replies could not be loaded');
     }
   },
   addQuickReplyOnApi: async (role, title, message) => {
@@ -2609,6 +2763,8 @@ export const useStore = create<StoreState>()(
         postagePreferences: state.postagePreferences,
         personalisationPreferences: state.personalisationPreferences,
         blockedUsers: state.blockedUsers,
+        mutedUsers: state.mutedUsers,
+        restrictedUsers: state.restrictedUsers,
         coOwnWatchlist: state.coOwnWatchlist,
         mutedConversationIds: state.mutedConversationIds,
         readReceiptsEnabled: state.readReceiptsEnabled,

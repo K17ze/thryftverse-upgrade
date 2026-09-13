@@ -186,9 +186,27 @@ export function CoOwnDepthChart({
   const bidDepth = hasBids ? bids[bids.length - 1].cumulativeUnits : null;
   const askDepth = hasAsks ? asks[asks.length - 1].cumulativeUnits : null;
 
+  // Screen-reader summary — the canvas is a Skia render with no a11y
+  // tree, so the whole chart collapses into one announcement covering
+  // every real figure: best bid/ask + cumulative depth, mid, last trade.
+  // Nothing is fabricated — every value comes from the level arrays.
+  const summaryParts: string[] = [];
+  if (bestBid != null && bidDepth != null) {
+    summaryParts.push(`best bid ${bestBid.toFixed(2)} with ${formatDepth(bidDepth)} units`);
+  }
+  if (bestAsk != null && askDepth != null) {
+    summaryParts.push(`best ask ${bestAsk.toFixed(2)} with ${formatDepth(askDepth)} units`);
+  }
+  summaryParts.push(`mid price ${mid.toFixed(2)}`);
+  if (lastPrice != null) summaryParts.push(`last trade ${lastPrice.toFixed(2)}`);
+  const depthSummary = `Order book depth: ${summaryParts.join(', ')}.`;
+
   return (
     <View
       style={styles.wrap}
+      accessible
+      accessibilityRole="text"
+      accessibilityLabel={depthSummary}
       onLayout={(e) => {
         const w = e.nativeEvent.layout.width;
         if (measuredWidth == null || Math.abs(measuredWidth - w) > 0.5) setMeasuredWidth(w);

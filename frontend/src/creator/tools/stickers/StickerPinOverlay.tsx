@@ -29,7 +29,7 @@ import Reanimated, {
   withTiming,
   useDerivedValue,
 } from 'react-native-reanimated';
-import { useReducedMotion } from 'react-native-reanimated';
+import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { Radius, Control, Stroke} from '../../../theme/designTokens';
 import { Motion } from '../../../theme/motionTokens';
 import { useAppTheme } from '../../../theme/ThemeContext';

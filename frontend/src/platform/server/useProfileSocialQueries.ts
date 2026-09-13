@@ -4,6 +4,10 @@ import {
   unfollowUser,
   blockUser,
   unblockUser,
+  muteUser,
+  unmuteUser,
+  restrictUser,
+  unrestrictUser,
   reportUser,
   fetchFollowers,
   fetchFollowing,
@@ -12,6 +16,7 @@ import {
 import { fetchUserListingsFromApi } from '../../services/listingsApi';
 import { fetchLooksFromApi } from '../../services/looksApi';
 import { fetchSellerReviews } from '../../services/sellerReviewsApi';
+import { useStore } from '../../store/useStore';
 import { queryKeys } from './queryKeys';
 
 // ── User listings (infinite, status-filtered) ───────────────────────
@@ -87,6 +92,10 @@ export function useFollowMutation(userId: string) {
   const profileKey = queryKeys.user.profile(userId);
 
   return useMutation({
+    // Keyed so non-RQ surfaces (the composed Following feed on Home) can
+    // observe successful follow/unfollow mutations via the mutation cache —
+    // query invalidation alone cannot reach direct-fetch surfaces.
+    mutationKey: ['social', 'follow', userId],
     mutationFn: async (shouldFollow: boolean) => {
       if (shouldFollow) {
         return followUser(userId);
@@ -123,6 +132,17 @@ export function useFollowMutation(userId: string) {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: profileKey });
+      // The target's followers list gained/lost the viewer, and the
+      // viewer's own following list changed — invalidate both so
+      // connection lists and the following feed don't serve stale rows.
+      // Scope the following invalidation to the viewer's own list rather
+      // than the whole ['user','following'] prefix, which would refetch
+      // every user's following list currently mounted.
+      queryClient.invalidateQueries({ queryKey: queryKeys.user.followers(userId) });
+      const viewerId = useStore.getState().currentUser?.id;
+      if (viewerId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.user.following(viewerId) });
+      }
     },
   });
 }
@@ -142,16 +162,85 @@ export function useBlockMutation(userId: string) {
     },
     onSuccess: (_data, shouldBlock) => {
       import('../../store/useStore').then(({ useStore }) => {
-        useStore.getState().toggleBlockedUser(userId);
-        if (!shouldBlock) {
+        if (shouldBlock) {
+          useStore.getState().addBlockedUser(userId);
+        } else {
+          useStore.getState().removeBlockedUser(userId);
           useStore.getState().hydrateBlockedUsers().catch(() => undefined);
         }
+        useStore.getState().setUserModerationInConversations(userId, { isBlocked: shouldBlock });
       }).catch(() => undefined);
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: profileKey });
-      queryClient.invalidateQueries({ queryKey: queryKeys.user.listings(userId) });
+      // listingsAll is the 3-segment prefix — `listings(userId)` produces
+      // a 4-segment key that would not match the 'active'/'sold' variants.
+      queryClient.invalidateQueries({ queryKey: queryKeys.user.listingsAll(userId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.user.looks(userId) });
+    },
+  });
+}
+
+// ── Mute / unmute mutation ──────────────────────────────────────────
+// Mute is the silent rung of the moderation ladder — no notification to
+// the target; suppresses their-message notifications for the viewer.
+
+export function useMuteMutation(userId: string) {
+  const queryClient = useQueryClient();
+  const profileKey = queryKeys.user.profile(userId);
+
+  return useMutation({
+    mutationFn: async (shouldMute: boolean) => {
+      if (shouldMute) {
+        return muteUser(userId);
+      }
+      return unmuteUser(userId);
+    },
+    onSuccess: (_data, shouldMute) => {
+      import('../../store/useStore').then(({ useStore }) => {
+        if (shouldMute) {
+          useStore.getState().addMutedUser(userId);
+        } else {
+          useStore.getState().removeMutedUser(userId);
+          useStore.getState().hydrateMutedUsers().catch(() => undefined);
+        }
+        useStore.getState().setUserModerationInConversations(userId, { isAuthorMuted: shouldMute });
+      }).catch(() => undefined);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: profileKey });
+    },
+  });
+}
+
+// ── Restrict / unrestrict mutation ──────────────────────────────────
+// Restrict is invisible to the target — their DMs land in the viewer's
+// message requests and read receipts / typing stop flowing back.
+
+export function useRestrictMutation(userId: string) {
+  const queryClient = useQueryClient();
+  const profileKey = queryKeys.user.profile(userId);
+
+  return useMutation({
+    mutationFn: async (shouldRestrict: boolean) => {
+      if (shouldRestrict) {
+        return restrictUser(userId);
+      }
+      return unrestrictUser(userId);
+    },
+    onSuccess: (_data, shouldRestrict) => {
+      import('../../store/useStore').then(({ useStore }) => {
+        if (shouldRestrict) {
+          useStore.getState().addRestrictedUser(userId);
+        } else {
+          useStore.getState().removeRestrictedUser(userId);
+          useStore.getState().hydrateRestrictedUsers().catch(() => undefined);
+        }
+        useStore.getState().setUserModerationInConversations(userId, { isRestricted: shouldRestrict });
+      }).catch(() => undefined);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: profileKey });
     },
   });
 }

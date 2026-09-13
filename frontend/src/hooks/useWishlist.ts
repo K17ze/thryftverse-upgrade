@@ -3,8 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '../lib/apiClient';
 import { useStore } from '../store/useStore';
 import { useHaptic } from './useHaptic';
+import { queryKeys } from '../platform/server/queryKeys';
 
-const WISHLIST_QUERY_KEY = ['wishlist'] as const;
+const WISHLIST_QUERY_KEY = queryKeys.wishlist.items;
 const PREFETCH_STALE_TIME = Infinity;
 
 interface WishlistResponse {

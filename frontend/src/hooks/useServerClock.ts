@@ -61,12 +61,12 @@ export function resolveAuctionTiming(
   } else if (settledAtMs !== null) {
     effectiveState = 'settled';
     terminalReason = 'settled';
-  } else if (input.winnerBidderId || input.terminalReason === 'buy_now') {
-    effectiveState = 'ended';
-    terminalReason = 'buy_now';
   } else if (input.lifecycle && input.lifecycle !== 'upcoming' && input.lifecycle !== 'live') {
     effectiveState = input.lifecycle as AuctionEffectiveState;
     terminalReason = (input.terminalReason as AuctionTerminalReason) ?? null;
+  } else if (input.winnerBidderId || input.terminalReason === 'buy_now') {
+    effectiveState = 'ended';
+    terminalReason = input.terminalReason === 'buy_now' ? 'buy_now' : null;
   } else if (serverNowMs >= endsAtMs) {
     effectiveState = 'ended';
     terminalReason = input.terminalReason === 'scheduled_end'

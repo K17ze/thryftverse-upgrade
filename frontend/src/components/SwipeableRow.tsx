@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   PanResponder,
+  type AccessibilityActionEvent,
   type PanResponderGestureState,
   type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -44,6 +45,12 @@ export interface SwipeableRowProps {
   rightAction?: SwipeAction;
   /** Fired on a long-press dwell. */
   onLongPress?: () => void;
+  /**
+   * Label announced for the long-press accessibility action (iOS rotor /
+   * TalkBack actions menu). Defaults to "Show actions" — pass a verb that
+   * describes what long-press actually does (e.g. "Reorder layer").
+   */
+  longPressActionLabel?: string;
   /** Horizontal distance (px) required to trigger an action. Default 80. */
   swipeThreshold?: number;
   /** Describes the row itself to assistive technology. */
@@ -73,13 +80,17 @@ const MAX_TRAVEL = 96;
  * - The row auto-animates back to centre on release or after an action fires.
  * - Haptics and motion are suppressed / collapsed when Reduce Motion is on.
  * - Full accessibility: the row is a button with a label, and the swipe
- *   actions are announced as labelled buttons.
+ *   actions are announced as labelled buttons. The same actions are also
+ *   exposed via `accessibilityActions` (activate / longpress / leading /
+ *   trailing) so VoiceOver and TalkBack users can trigger them without
+ *   performing the swipe gesture.
  */
 export function SwipeableRow({
   children,
   leftAction,
   rightAction,
   onLongPress,
+  longPressActionLabel,
   swipeThreshold = DEFAULT_THRESHOLD,
   accessibilityLabel,
   accessibilityHint,
@@ -172,9 +183,11 @@ export function SwipeableRow({
             longPressTimerRef.current = setTimeout(() => {
               if (!movedRef.current) {
                 longPressFiredRef.current = true;
-                if (!reducedMotionRef.current) {
-                  haptic.patterns.longPress();
-                }
+                // No row-side haptic here: the onLongPress callback owns the
+                // semantic haptic for every invocation path (this dwell timer,
+                // an inner pressable's own long-press, and the 'longpress'
+                // accessibility action). Firing patterns.longPress() as well
+                // produced a double haptic on the PanResponder-granted path.
                 onLongPressRef.current?.();
               }
             }, LONG_PRESS_DELAY);
@@ -286,17 +299,60 @@ export function SwipeableRow({
     return parts.join('. ');
   }, [leftAction, rightAction]);
 
+  // Every gesture-only interaction is also exposed as a named accessibility
+  // action (iOS rotor / TalkBack actions menu) so the swipe-to-reveal
+  // features are reachable without performing the swipe gesture. `activate`
+  // and `longpress` are standard actions; the swipe actions are custom and
+  // carry the same labels announced by the revealed panels.
+  const accessibilityActions = React.useMemo(() => {
+    const actions: { name: string; label?: string }[] = [];
+    if (onPress) actions.push({ name: 'activate' });
+    if (onLongPress) {
+      actions.push({ name: 'longpress', label: longPressActionLabel ?? 'Show actions' });
+    }
+    if (leftAction) {
+      actions.push({ name: 'leadingAction', label: leftAction.label });
+    }
+    if (rightAction) {
+      actions.push({ name: 'trailingAction', label: rightAction.label });
+    }
+    return actions;
+  }, [onPress, onLongPress, longPressActionLabel, leftAction, rightAction]);
+
+  const handleAccessibilityAction = React.useCallback(
+    (event: AccessibilityActionEvent) => {
+      switch (event.nativeEvent.actionName) {
+        case 'activate':
+          onPressRef.current?.();
+          break;
+        case 'longpress':
+          onLongPressRef.current?.();
+          break;
+        case 'leadingAction':
+          leftActionRef.current?.onPress?.();
+          break;
+        case 'trailingAction':
+          rightActionRef.current?.onPress?.();
+          break;
+        default:
+          break;
+      }
+    },
+    []
+  );
+
   return (
     <View
       style={[styles.container, style]}
       accessible
       accessibilityRole={onPress || onLongPress ? 'button' : undefined}
       accessibilityLabel={accessibilityLabel}
-      accessibilityHint={
-        accessibilityHint
-          ? `${accessibilityHint}. ${actionDescriptions}`
-          : actionDescriptions || undefined
-      }
+      // A caller-provided hint is authoritative — appending the
+      // auto-generated "Swipe right to … / Swipe left to …" sentence would
+      // restate gestures the custom hint already describes.
+      accessibilityHint={accessibilityHint ?? (actionDescriptions || undefined)}
+      accessibilityActions={accessibilityActions.length ? accessibilityActions : undefined}
+      onAccessibilityAction={handleAccessibilityAction}
     >
       {/* Revealed action panels (behind the content) */}
       {hasLeft && leftAction && (

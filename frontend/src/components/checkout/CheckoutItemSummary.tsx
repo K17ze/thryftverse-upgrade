@@ -30,7 +30,7 @@ function CheckoutItemSummaryBase({
   onPressMessage }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
-  const sellerName = seller.username ?? seller.id.slice(0, 8);
+  const sellerName = seller.username ?? (seller.id ? seller.id.slice(0, 8) : 'Seller');
 
   return (
     <View style={styles.container}>

@@ -46,11 +46,13 @@ export function InspectionBanner({
           <Text style={[styles.inspectionSub, { color: colors.textSecondary }]}>
             {expired
               ? t('orderDetail.inspection.expired')
-              : daysLeft === 0
-                ? t('orderDetail.inspection.lastDay')
-                : daysLeft === 1
-                  ? t('orderDetail.inspection.oneDayLeft')
-                  : t('orderDetail.inspection.daysLeft', { days: daysLeft ?? 0 })}
+              : daysLeft == null
+                ? t('orderDetail.inspection.windowUnknown')
+                : daysLeft === 0
+                  ? t('orderDetail.inspection.lastDay')
+                  : daysLeft === 1
+                    ? t('orderDetail.inspection.oneDayLeft')
+                    : t('orderDetail.inspection.daysLeft', { days: daysLeft })}
           </Text>
         </View>
       </View>

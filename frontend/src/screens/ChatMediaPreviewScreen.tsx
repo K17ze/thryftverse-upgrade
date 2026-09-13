@@ -4,16 +4,16 @@ import {
   Text,
   StyleSheet,
   useWindowDimensions } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { AppIcon } from '../components/common/AppIcon';
 import { CachedImage } from '../components/CachedImage';
 import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipScreen } from '../components/flagship';
 import { Video, ResizeMode } from '../components/compat/Video';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Control, Radius, Elevation, Space } from '../theme/designTokens';
+import { Control, Radius, Space } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 
@@ -35,7 +35,7 @@ export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
 
   const renderMissingState = () => (
     <View style={[styles.errorWrap, mediaSize]}>
-      <Ionicons name="image-outline" size={48} color="rgba(255,255,255,0.4)" />
+      <AppIcon name="image" size="display" color="scrimTextTertiary" accessible={false} />
       <Text style={styles.errorText}>Media unavailable</Text>
       <Text style={styles.errorSub}>This media could not be loaded.</Text>
       <AnimatedPressable
@@ -47,6 +47,8 @@ export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
         activeOpacity={0.7}
         scaleValue={0.95}
         hapticFeedback="light"
+        accessibilityRole="button"
+        accessibilityLabel="Retry loading media"
       >
         <Text style={styles.retryText}>Retry</Text>
       </AnimatedPressable>
@@ -98,7 +100,7 @@ export default function ChatMediaPreviewScreen({ navigation, route }: Props) {
           accessibilityLabel="Close preview"
           accessibilityRole="button"
         >
-          <Ionicons name="close" size={26} color="#fff" />
+          <AppIcon name="close" size={26} color="scrimTextPrimary" accessible={false} />
         </AnimatedPressable>
 
         {/* Media */}
@@ -141,12 +143,9 @@ function createStyles(colors: ThemeColors) {
       width: Control.hit,
       height: Control.hit,
       borderRadius: Radius.full,
-      backgroundColor: colors.glassBorder,
+      backgroundColor: colors.overlay,
       justifyContent: 'center',
-      alignItems: 'center',
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.glassBorder,
-      ...Elevation.subtle },
+      alignItems: 'center' },
     mediaWrap: {
       justifyContent: 'center',
       alignItems: 'center' },
@@ -164,11 +163,10 @@ function createStyles(colors: ThemeColors) {
       color: colors.scrimTextTertiary },
     retryBtn: {
       marginTop: Space.sm,
+      minHeight: Control.hit,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      borderRadius: Radius.full,
-      backgroundColor: colors.glassBorder,
-      ...Elevation.subtle },
+      justifyContent: 'center',
+      alignItems: 'center' },
     retryText: {
       fontSize: TypographyV2.body.size,
       fontFamily: TypographyV2.bodyStrong.fontFamily,

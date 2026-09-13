@@ -6,23 +6,20 @@ import { Space, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 
 interface Props {
-  /** ISO timestamp of order creation (dispatch window start) */
-  createdAt: string;
   /**
-   * Server-derived ship-by deadline (ISO). When present, the countdown is
-   * computed from this deadline instead of a hardcoded 24h window.
-   * Per AGENTS.md §11: "Never fabricate… order or tracking state."
+   * Server-derived ship-by deadline (ISO). The only deadline this component
+   * renders — per AGENTS.md §11 the client never fabricates a dispatch
+   * window. When absent or invalid, an honest muted "deadline unavailable"
+   * state is rendered instead of inventing one.
    */
-  shipByDate?: string | null;
-  /** Dispatch window in hours — used only as a fallback when no shipByDate exists (default 24) */
-  windowHours?: number;
+  shipByDate: string | null;
   /** Whether the order has been shipped (hides countdown) */
   shipped: boolean;
 }
 
 type Urgency = 'normal' | 'warning' | 'urgent' | 'overdue';
 
-function resolveUrgency(msRemaining: number, totalMs: number): Urgency {
+function resolveUrgency(msRemaining: number): Urgency {
   if (msRemaining <= 0) return 'overdue';
   const hoursRemaining = msRemaining / (1000 * 60 * 60);
   if (hoursRemaining <= 1) return 'urgent';
@@ -42,7 +39,7 @@ function formatDispatchCountdown(ms: number): string {
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
-export function DispatchCountdown({ createdAt, shipByDate, windowHours = 24, shipped }: Props) {
+export function DispatchCountdown({ shipByDate, shipped }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -56,19 +53,26 @@ export function DispatchCountdown({ createdAt, shipByDate, windowHours = 24, shi
 
   if (shipped) return null;
 
-  const createdMs = new Date(createdAt).getTime();
+  const deadlineMs = shipByDate ? new Date(shipByDate).getTime() : NaN;
 
-  // Use the server-derived shipByDate when available; fall back to
-  // createdAt + windowHours only when no server deadline exists.
-  const serverDeadlineMs = shipByDate ? new Date(shipByDate).getTime() : NaN;
-  const deadlineMs = Number.isFinite(serverDeadlineMs)
-    ? serverDeadlineMs
-    : createdMs + windowHours * 60 * 60 * 1000;
-  const totalMs = Number.isFinite(serverDeadlineMs)
-    ? serverDeadlineMs - createdMs
-    : windowHours * 60 * 60 * 1000;
+  // No server deadline → honest muted state. We do NOT fall back to
+  // createdAt + a hardcoded window: that invents a deadline the seller
+  // never agreed to (charter §11).
+  if (!Number.isFinite(deadlineMs)) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.row}>
+          <Ionicons name="time-outline" size={14} color={colors.textMuted} aria-hidden={true} />
+          <Text style={[styles.label, { color: colors.textMuted }]} numberOfLines={1}>
+            Dispatch deadline unavailable
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
   const msRemaining = deadlineMs - nowMs;
-  const urgency = resolveUrgency(msRemaining, totalMs);
+  const urgency = resolveUrgency(msRemaining);
 
   const color =
     urgency === 'overdue' ? colors.danger :
@@ -92,9 +96,6 @@ export function DispatchCountdown({ createdAt, shipByDate, windowHours = 24, shi
     urgency === 'overdue' ? 'Dispatch overdue' :
     'Dispatch within';
 
-  const elapsedMs = totalMs - msRemaining;
-  const elapsedPercent = (elapsedMs / totalMs) * 100;
-
   return (
     <View style={[styles.container, { backgroundColor: bgColor }]}>
       <View style={styles.row}>
@@ -106,22 +107,6 @@ export function DispatchCountdown({ createdAt, shipByDate, windowHours = 24, shi
           {urgency === 'overdue' ? '' : formatDispatchCountdown(msRemaining)}
         </Text>
       </View>
-      {/* Visual progress bar showing dispatch window elapsed */}
-      <View style={styles.progressTrack}>
-        <View
-          style={[
-            styles.progressFill,
-            {
-              width: `${Math.min(100, Math.max(0, elapsedPercent))}%`,
-              backgroundColor: color },
-          ]}
-        />
-      </View>
-      {urgency === 'overdue' && (
-        <Text style={styles.overdueHint}>
-          Buyer may cancel. Dispatch promptly to maintain trust.
-        </Text>
-      )}
     </View>
   );
 }
@@ -138,15 +123,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2 },
-  progressTrack: {
-    height: 3,
-    borderRadius: Radius.sm,
-    backgroundColor: colors.border,
-    marginTop: Space.sm,
-    overflow: 'hidden' },
-  progressFill: {
-    height: '100%',
-    borderRadius: Radius.sm },
   label: {
     flex: 1,
     fontSize: TypographyV2.meta.size,
@@ -155,9 +131,4 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: TypographyV2.body.size,
     fontFamily: TypographyV2.body.fontFamily,
     fontVariant: ['tabular-nums'],
-    letterSpacing: -0.3 },
-  overdueHint: {
-    marginTop: Space.xs,
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textMuted } });
+    letterSpacing: -0.3 } });

@@ -1,4 +1,5 @@
 import type { ListingCondition } from '../contracts/taxonomy';
+import type { ListingMediaRecord } from '../contracts/listingMedia';
 
 export interface ListingSeller {
   id: string;
@@ -20,6 +21,10 @@ export interface Listing {
   originalPrice?: number;
   priceWithProtection?: number;
   images: string[];
+  /** Canonical media records (derivatives, blurhash/LQIP, focal point,
+   *  poster). Present when the source endpoint serves the media contract —
+   *  prefer over `images` for placeholders and sized renditions. */
+  media?: ListingMediaRecord[];
   /**
    * Width divided by height for the primary media asset. Backends should
    * provide this when known so discovery grids can reserve the final frame

@@ -12,6 +12,7 @@ import type { Listing, ListingCommerceServerContext } from '../../services/listi
 import { fetchJson } from '../../lib/apiClient';
 import type { SellerTrustSummary } from './listingDetailContract';
 import { mapBackendListingToListing } from '../../services/listingMapper';
+import { useStore } from '../../store/useStore';
 import { ENABLE_RUNTIME_MOCKS } from '../../constants/runtimeFlags';
 import { MOCK_LISTINGS, MOCK_USERS } from '../../data/mockData';
 
@@ -182,6 +183,9 @@ export function useSellerTrust(sellerId: string | undefined) {
 export function useSellerFollow(sellerId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
+    // Same mutationKey namespace as useFollowMutation — non-RQ surfaces
+    // (the composed Following feed on Home) subscribe to it to reload.
+    mutationKey: ['social', 'follow', sellerId],
     mutationFn: async () => {
       if (!sellerId) throw new Error('No sellerId');
       const res = await fetchJson<{ ok: boolean; isFollowing: boolean }>(
@@ -195,6 +199,17 @@ export function useSellerFollow(sellerId: string | undefined) {
         queryClient.setQueryData(['seller', 'trust', sellerId], (old: SellerTrustSummary | null) =>
           old ? { ...old, isFollowing: data.isFollowing } : old
         );
+        // Propagate to the other surfaces that display follow state:
+        // the seller's public profile (follower count + viewer flag),
+        // their followers list, and the viewer's own following list —
+        // scoped to the viewer's key, not the whole 'following' prefix,
+        // which would refetch every user's mounted following list.
+        queryClient.invalidateQueries({ queryKey: queryKeys.user.profile(sellerId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.user.followers(sellerId) });
+        const viewerId = useStore.getState().currentUser?.id;
+        if (viewerId) {
+          queryClient.invalidateQueries({ queryKey: queryKeys.user.following(viewerId) });
+        }
       }
     },
   });

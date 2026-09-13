@@ -3,6 +3,28 @@
 Audit basis: two parallel read-only subagent audits (upload pipeline engineering + editor UI/UX),
 plus current-date web research (Expo background upload guidance, expo-video deprecations).
 
+## Status (updated 2026-09-11, Wave B)
+
+| ID | Status | Evidence |
+|---|---|---|
+| EU-P0-1 fake progress | **CLOSED** | `ListingMediaStudio` renders `getItemProgress` → real queue byte progress (XHR transport). STATUS_PROGRESS deleted. |
+| EU-P0-2 two crop systems | OPEN | `InCanvasCropOverlay` still dead code; listing flow still rotate/flip only. |
+| EU-P1-1 legacy queue durability/connectivity | **CLOSED** | AsyncStorage snapshots + revive, NetInfo gate + `parkForOffline` (abort → pending, refunded attempt), AbortController cancel, +25% jittered backoff, multipart >10MB with per-part checkpoint. |
+| EU-P1-2 focal point | PARTIAL | Skia path honors focal; ExpoImage/Video preview surfaces still `cover`. |
+| EU-P1-3 trim/thumbnail | OPEN | Trim still poster-only; `expo-video generateThumbnailsAsync` not yet used for listing thumbs. |
+| EU-P1-4 straighten/flip | OPEN | No straighten control; vertical flip unreachable. |
+| EU-P1-5 undo | PARTIAL | Poster has undo/redo UI + history; crop/effects sheets still lack undo. |
+| EU-P2-1..6 design defects | OPEN | Radius budget, icon-family mixing, stroke drift, badge clutter, placeholder empty state, raw focal readout — all still live on listing surfaces. |
+| W12-P0-1 published video drops edits | **CLOSED** | Video renders through `renderComposition` at publish (fail-closed `MEDIA_RENDER_FAILED`); viewers consume `media_url` artifact via `pageWithRenderedMedia` (PosterViewerScreen + LookDetailScreen). |
+| W12-P0-2 transcode drops authored ops | **CLOSED** | volume, fades, timed overlays (`enable=between`), reverse, freeze, speed curves all realized in the segment graph; fail-closed classification. |
+| W12-P1-1 timeline/UI divergence | **CLOSED** | `usePosterTimeline` consumes `projectTimeline`; `handleSpeedCurveChange` writes `speed=averageSpeed(curve)`. |
+| W12-P1-2 replace discards edits | **CLOSED** | A4 — replace preserves trim/speed/volume/effects, clamps trim, clears stale receipts. |
+| W12-P1-3 UploadManager NetInfo | **CLOSED** | `setOnline` gate + offline abort→queued + reconnect resume; listing queue has same via parkForOffline. |
+| W12-P1-4 segmented upload | PARTIAL | Multipart `resume()` now pipelines parts (worker pool, concurrency 3). Transcode-upload overlap (chunked fMP4) not implemented — parked. |
+| W12-P1-5 mediaExportService dead | OPEN | Still no importers; camera-roll export decision pending. |
+| W12-P1-6 async publish processing | OPEN | Publish still synchronous; long renders bound by request timeout. Bigger lift — needs job infra. |
+| W12-P2-1..3 polish | OPEN | Safe-zone parity, inline chrome residual, capture grammar audit. |
+
 ## Department map
 
 - Listing upload flow: SellScreen.tsx / EditListingScreen.tsx -> ListingMediaStudio.tsx -> MediaUploadQueue (legacy) -> mediaUpload.ts (fetch PUT)

@@ -10,6 +10,7 @@ import {
   type ImageFeatures,
 } from '../lib/visualSimilarity.js';
 import { safeFetchMediaBuffer } from '../lib/safeRemoteMediaFetch.js';
+import { loadListingMedia } from '../lib/media/listingMediaProjection.js';
 import type { RetrievalMeta, RetrievalFallbackReason } from '../lib/retrievalMeta.js';
 import logger from '../lib/logger.js';
 
@@ -30,6 +31,24 @@ const visualSearchBodySchema = z.object({
   condition: z.string().optional(),
   minPrice: z.coerce.number().nonnegative().optional(),
   maxPrice: z.coerce.number().nonnegative().optional(),
+  /**
+   * F08: Retrieval-scoped facet selections. Unlike a post-filter, facets are
+   * applied inside the candidate SQL query so the candidate set itself
+   * reflects the selection — matching rows beyond the recency-bounded
+   * superset can surface, and an honest "no results" is returned when a
+   * facet genuinely has no matches.
+   *
+   * Facet matching is honest text matching: a value matches when it appears
+   * (case-insensitive, substring) in the listing title, description, brand,
+   * or category. There is no dedicated colour/style column on `listings`,
+   * and no image analysis is performed for facets.
+   */
+  facets: z
+    .object({
+      color: z.string().trim().min(1).max(60).optional(),
+      style: z.string().trim().min(1).max(60).optional(),
+    })
+    .optional(),
   sort: z.enum(['newest', 'price_asc', 'price_desc', 'similarity']).optional().default('similarity'),
   limit: z.coerce.number().int().min(1).max(100).optional().default(48),
 });
@@ -40,6 +59,76 @@ const MAX_BASE64_BYTES = 5 * 1024 * 1024;
 const CANDIDATE_CAP = 60;
 /** Concurrent image downloads during scoring — reduced from 8 to bound egress. */
 const SCORING_CONCURRENCY = 4;
+
+/**
+ * F08: Canonical facet vocabularies for visual search. These mirror the
+ * `COLOR_FACETS` / `STYLE_FACETS` lists in
+ * `frontend/src/screens/VisualSearchScreen.tsx` — they are a request/response
+ * contract, kept in sync deliberately so the response can report how many
+ * candidates matched each facet value within the current filter scope.
+ *
+ * Facet values are matched as case-insensitive substrings against the
+ * listing's title, description, brand and category (`FACET_SEARCHABLE_EXPR`).
+ * This is honest text matching — the listings table has no colour/style
+ * column and no image-derived facet data exists.
+ */
+const COLOR_FACET_VALUES = [
+  'Black', 'White', 'Blue', 'Red', 'Green', 'Brown', 'Grey', 'Pink', 'Beige', 'Navy',
+] as const;
+const STYLE_FACET_VALUES = [
+  'Vintage', 'Minimal', 'Streetwear', 'Y2K', 'Formal', 'Casual', 'Sportswear', 'Luxury',
+] as const;
+
+/**
+ * The searchable text expression a facet value is matched against.
+ * `concat_ws` skips NULL columns so a missing brand/category never produces
+ * a NULL match result.
+ */
+const FACET_SEARCHABLE_EXPR = `concat_ws(' ', l.title, l.description, l.brand, l.category)`;
+
+export interface VisualSearchFacetBucket {
+  value: string;
+  count: number;
+}
+
+export interface VisualSearchFacetMetadata {
+  colors: VisualSearchFacetBucket[];
+  styles: VisualSearchFacetBucket[];
+}
+
+/**
+ * Count how many active listings match each facet value within a filter
+ * scope. `scopeConditions`/`scopeArgs` must already be parameterised with
+ * placeholders `$1..$n`; the per-value ILIKE patterns are appended starting
+ * at `$n+1`. A single aggregate query with conditional `FILTER` counts
+ * keeps this to one round-trip per facet dimension.
+ */
+async function countFacetValues(
+  readDb: Pool,
+  values: readonly string[],
+  scopeConditions: string[],
+  scopeArgs: unknown[],
+): Promise<Record<string, number>> {
+  if (values.length === 0) return {};
+  const selectFragments = values.map(
+    (_v, i) =>
+      `COUNT(*) FILTER (WHERE ${FACET_SEARCHABLE_EXPR} ILIKE $${scopeArgs.length + i + 1})::int AS "f${i}"`,
+  );
+  const res = await readDb.query<Record<string, number | string>>(
+    `
+      SELECT ${selectFragments.join(', ')}
+      FROM listings l
+      WHERE ${scopeConditions.join(' AND ')}
+    `,
+    [...scopeArgs, ...values.map((v) => `%${v}%`)],
+  );
+  const row = res.rows[0] ?? {};
+  const counts: Record<string, number> = {};
+  values.forEach((v, i) => {
+    counts[v] = Number(row[`f${i}`] ?? 0);
+  });
+  return counts;
+}
 
 /**
  * In-flight concurrency guard for visual search.
@@ -198,38 +287,60 @@ async function handleVisualSearch(
     }
 
     // ── Build the filtered candidate set ────────────────────────────────
-    const conditions: string[] = ["l.status = 'active'"];
-    const args: unknown[] = [];
+    // Base (non-facet) conditions are tracked separately so facet counts can
+    // be scoped correctly: the count for each facet dimension is computed
+    // under every other active filter EXCEPT that dimension itself — the
+    // standard faceted-search convention that lets users see how many items
+    // would match a different value in the same dimension.
+    const baseConditions: string[] = ["l.status = 'active'"];
+    const baseArgs: unknown[] = [];
 
     if (payload.category) {
-      conditions.push(`l.category = $${args.length + 1}`);
-      args.push(payload.category);
+      baseConditions.push(`l.category = $${baseArgs.length + 1}`);
+      baseArgs.push(payload.category);
     }
     if (payload.brand) {
-      conditions.push(`l.brand ILIKE $${args.length + 1}`);
-      args.push(`%${payload.brand}%`);
+      baseConditions.push(`l.brand ILIKE $${baseArgs.length + 1}`);
+      baseArgs.push(`%${payload.brand}%`);
     }
     if (payload.size) {
-      conditions.push(`l.size ILIKE $${args.length + 1}`);
-      args.push(`%${payload.size}%`);
+      baseConditions.push(`l.size ILIKE $${baseArgs.length + 1}`);
+      baseArgs.push(`%${payload.size}%`);
     }
     if (payload.condition) {
-      conditions.push(`l.condition ILIKE $${args.length + 1}`);
-      args.push(`%${payload.condition}%`);
+      baseConditions.push(`l.condition ILIKE $${baseArgs.length + 1}`);
+      baseArgs.push(`%${payload.condition}%`);
     }
     if (payload.minPrice !== undefined) {
-      conditions.push(`l.price_gbp >= $${args.length + 1}`);
-      args.push(payload.minPrice);
+      baseConditions.push(`l.price_gbp >= $${baseArgs.length + 1}`);
+      baseArgs.push(payload.minPrice);
     }
     if (payload.maxPrice !== undefined) {
-      conditions.push(`l.price_gbp <= $${args.length + 1}`);
-      args.push(payload.maxPrice);
+      baseConditions.push(`l.price_gbp <= $${baseArgs.length + 1}`);
+      baseArgs.push(payload.maxPrice);
     }
     if (payload.query) {
-      conditions.push(
-        `(l.title ILIKE $${args.length + 1} OR l.description ILIKE $${args.length + 1} OR l.brand ILIKE $${args.length + 1})`,
+      baseConditions.push(
+        `(l.title ILIKE $${baseArgs.length + 1} OR l.description ILIKE $${baseArgs.length + 1} OR l.brand ILIKE $${baseArgs.length + 1})`,
       );
-      args.push(`%${payload.query}%`);
+      baseArgs.push(`%${payload.query}%`);
+    }
+
+    // F08: Facet selections are retrieval parameters, not post-filters.
+    // They join the candidate WHERE clause so the SQL candidate set itself
+    // is narrowed before the candidate cap and similarity ranking run.
+    const colorFacet = payload.facets?.color?.trim() || undefined;
+    const styleFacet = payload.facets?.style?.trim() || undefined;
+
+    const conditions = [...baseConditions];
+    const args = [...baseArgs];
+    if (colorFacet) {
+      conditions.push(`${FACET_SEARCHABLE_EXPR} ILIKE $${args.length + 1}`);
+      args.push(`%${colorFacet}%`);
+    }
+    if (styleFacet) {
+      conditions.push(`${FACET_SEARCHABLE_EXPR} ILIKE $${args.length + 1}`);
+      args.push(`%${styleFacet}%`);
     }
 
     // Candidate cap: fetch a bounded superset so similarity ranking has room
@@ -268,20 +379,67 @@ async function handleVisualSearch(
 
     const candidateRows = result.rows;
 
+    // F08: Facet metadata — kicked off after the candidate fetch so the
+    // aggregate queries overlap the expensive image decode/scoring below.
+    // - colour counts are scoped under every filter except the colour facet
+    // - style counts are scoped under every filter except the style facet
+    // - matchCount is the total under the full scope (all facets applied)
+    const colorScopeConditions = [...baseConditions];
+    const colorScopeArgs = [...baseArgs];
+    if (styleFacet) {
+      colorScopeConditions.push(`${FACET_SEARCHABLE_EXPR} ILIKE $${colorScopeArgs.length + 1}`);
+      colorScopeArgs.push(`%${styleFacet}%`);
+    }
+    const styleScopeConditions = [...baseConditions];
+    const styleScopeArgs = [...baseArgs];
+    if (colorFacet) {
+      styleScopeConditions.push(`${FACET_SEARCHABLE_EXPR} ILIKE $${styleScopeArgs.length + 1}`);
+      styleScopeArgs.push(`%${colorFacet}%`);
+    }
+
+    const facetMetaPromise = (async (): Promise<{
+      facets: VisualSearchFacetMetadata;
+      matchCount: number;
+    } | null> => {
+      try {
+        const [colorCounts, styleCounts, matchRes] = await Promise.all([
+          countFacetValues(readDb, COLOR_FACET_VALUES, colorScopeConditions, colorScopeArgs),
+          countFacetValues(readDb, STYLE_FACET_VALUES, styleScopeConditions, styleScopeArgs),
+          readDb.query<{ total: number | string }>(
+            `SELECT COUNT(*)::int AS total FROM listings l WHERE ${conditions.join(' AND ')}`,
+            args,
+          ),
+        ]);
+        return {
+          facets: {
+            colors: COLOR_FACET_VALUES.map((v) => ({ value: v, count: colorCounts[v] ?? 0 })),
+            styles: STYLE_FACET_VALUES.map((v) => ({ value: v, count: styleCounts[v] ?? 0 })),
+          },
+          matchCount: Number(matchRes.rows[0]?.total ?? 0),
+        };
+      } catch (err) {
+        // Facet metadata is additive — a counting failure must never fail
+        // the search itself. The response simply omits `facets`.
+        logger.warn(
+          { err: err instanceof Error ? err.message : String(err) },
+          'visual_search.facet_count_failed',
+        );
+        return null;
+      }
+    })();
+
     // Resolve the primary image URL for each candidate (first listing_images
-    // row, falling back to the legacy l.image_url column).
+    // row, falling back to the legacy l.image_url column). The projected
+    // media items are also reused below to serve `images`/`media` on the
+    // response rows — a single media lookup covers both uses.
     const candidateIds = candidateRows.map((r) => r.id);
-    const imagesResult = candidateIds.length
-      ? await readDb.query<{ listing_id: string; image_url: string; sort_order: number }>(
-          `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
-          [candidateIds],
-        )
-      : { rows: [] };
+    const candidateMediaByListing = await loadListingMedia(readDb, candidateIds);
 
     const primaryImageByListing = new Map<string, string>();
-    for (const img of imagesResult.rows) {
-      if (!primaryImageByListing.has(img.listing_id)) {
-        primaryImageByListing.set(img.listing_id, img.image_url);
+    for (const [listingRowId, mediaItems] of candidateMediaByListing) {
+      const primary = mediaItems[0];
+      if (primary) {
+        primaryImageByListing.set(listingRowId, primary.uri);
       }
     }
     for (const row of candidateRows) {
@@ -382,22 +540,13 @@ async function handleVisualSearch(
       scoredRows = fallback.rows.map((row) => ({ ...row, similarityScore: null }));
     }
 
-    // Trim to the requested limit.
+    // Trim to the requested limit. Media rows were already loaded for the
+    // full candidate set above — reuse that map instead of re-querying.
     const trimmed = scoredRows.slice(0, payload.limit);
-    const trimmedIds = trimmed.map((r) => r.id);
-
-    const imagesResult2 = trimmedIds.length
-      ? await readDb.query<{ listing_id: string; image_url: string; sort_order: number }>(
-          `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
-          [trimmedIds],
-        )
-      : { rows: [] };
 
     const imagesByListing = new Map<string, string[]>();
-    for (const img of imagesResult2.rows) {
-      const arr = imagesByListing.get(img.listing_id) ?? [];
-      arr.push(img.image_url);
-      imagesByListing.set(img.listing_id, arr);
+    for (const [listingRowId, mediaItems] of candidateMediaByListing) {
+      imagesByListing.set(listingRowId, mediaItems.map((m) => m.uri));
     }
 
     const similarityMethod = hasImageScoring ? 'heuristic_color_features' : 'filter_only';
@@ -419,12 +568,20 @@ async function handleVisualSearch(
       embedderConfigured: false,
     };
 
+    // F08: Await the facet-count aggregates kicked off alongside the
+    // candidate fetch. `facets`/`matchCount` are omitted only if counting
+    // failed — the search result itself is never blocked on them.
+    const facetMeta = await facetMetaPromise;
+
     logger.info(
       {
         method: similarityMethod,
         visualMatching,
         candidateCount: candidateRows.length,
         resultCount: trimmed.length,
+        matchCount: facetMeta?.matchCount ?? null,
+        colorFacet: colorFacet ?? null,
+        styleFacet: styleFacet ?? null,
         hasImage: imageSupplied,
         fallbackReason: visualFallbackReason ?? null,
         latencyMs: Date.now() - requestStartTime,
@@ -447,6 +604,13 @@ async function handleVisualSearch(
       note: hasImageScoring
         ? 'Results ranked by colour & layout similarity (heuristic, not AI).'
         : 'No usable image supplied — results are matched by category, brand, and description.',
+      // F08: Facet metadata. `facets` reports how many candidates matched
+      // each facet value within the opposite-facet scope; `matchCount` is
+      // the total number of listings matching the full filter scope before
+      // the candidate cap / limit trim — so the UI can report honest counts.
+      ...(facetMeta
+        ? { facets: facetMeta.facets, matchCount: facetMeta.matchCount }
+        : {}),
       items: trimmed.map((row) => ({
         id: row.id,
         sellerId: row.seller_id,
@@ -455,6 +619,7 @@ async function handleVisualSearch(
         priceGbp: Number(row.price_gbp),
         imageUrl: row.image_url,
         images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
+        media: candidateMediaByListing.get(row.id) ?? [],
         status: row.status,
         category: row.category,
         brand: row.brand,

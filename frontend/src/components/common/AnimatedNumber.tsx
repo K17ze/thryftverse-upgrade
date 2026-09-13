@@ -10,10 +10,10 @@ import {
   Easing,
   runOnJS,
   useAnimatedReaction,
-  useReducedMotion,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const STEPS = 40;
 

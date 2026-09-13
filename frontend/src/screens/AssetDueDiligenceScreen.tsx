@@ -43,7 +43,6 @@ import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
 import {
   CoOwnTrustPanel,
   CoOwnRecoursePanel,
-  CoOwnAssetDossier,
   CoOwnRiskDisclosure,
   CoOwnRightsSheet,
   CoOwnSupplySheet,
@@ -901,28 +900,6 @@ export default function AssetDueDiligenceScreen() {
           )}
         </CommerceDetailSection>
 
-        {/* ── Full dossier (provenance/condition/storage/appraisal detail) ── */}
-        {(asset.provenance || asset.conditionGrade || asset.custodianLocation || asset.appraisalValueGbp) && (
-          <CommerceDetailSection label="Asset dossier" divider variant="editorial">
-            <CoOwnAssetDossier
-              provenance={asset.provenance ? [{ event: 'Provenance', date: '—', note: asset.provenance }] : undefined}
-              condition={asset.conditionGrade ? { grade: asset.conditionGrade } : undefined}
-              storage={asset.custodianLocation ? {
-                location: asset.custodianLocation,
-                custodian: asset.custodianName ?? '—',
-                insured: asset.custodyInsured ?? false,
-                policyRef: asset.custodyPolicyRef ?? undefined,
-              } : undefined}
-              appraisal={asset.appraisalValueGbp != null ? {
-                value: asset.appraisalValueGbp,
-                currency: 'GBP',
-                valuedAt: asset.appraisalValuedAt ?? '',
-                method: undefined,
-                valuer: asset.appraisalValuer ?? undefined,
-              } : undefined}
-            />
-          </CommerceDetailSection>
-        )}
       </ScrollView>
 
       {/* ── Back-to-asset sticky dock ── */}

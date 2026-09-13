@@ -15,6 +15,12 @@ export interface CoOwnRiskDisclosureProps {
   disclosures?: CoOwnRiskDisclosures | null;
   risks?: string[];
   onReportIssue?: () => void;
+  /** Wave A: whether the viewer has acknowledged the risk disclosure.
+   *  Only meaningful when `onAcknowledge` is provided. */
+  acknowledged?: boolean;
+  /** Wave A: when provided and not yet acknowledged, renders a
+   *  bottom-pinned "I understand — continue" confirmation. */
+  onAcknowledge?: () => void;
 }
 
 const DEFAULT_RISKS = [
@@ -41,7 +47,7 @@ function buildRisks(disclosures: CoOwnRiskDisclosures | null | undefined): strin
   return structured.length > 0 ? structured : DEFAULT_RISKS;
 }
 
-export function CoOwnRiskDisclosure({ disclosures, risks, onReportIssue }: CoOwnRiskDisclosureProps) {
+export function CoOwnRiskDisclosure({ disclosures, risks, onReportIssue, acknowledged, onAcknowledge }: CoOwnRiskDisclosureProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
@@ -104,6 +110,41 @@ export function CoOwnRiskDisclosure({ disclosures, risks, onReportIssue }: CoOwn
           <Ionicons name="flag-outline" size={14} color={colors.textSecondary} />
           <Text style={[styles.reportText, { color: colors.textSecondary }]}>Report an issue</Text>
         </Pressable>
+      ) : null}
+
+      {/* Acknowledgment — Wave A. Rendered only when the host supplies
+          onAcknowledge: an explicit "I understand" gate, or a quiet
+          acknowledged state once confirmed. */}
+      {onAcknowledge ? (
+        acknowledged ? (
+          <View style={styles.acknowledgedRow}>
+            <Ionicons
+              name="checkmark-circle"
+              size={14}
+              color={colors.success}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            />
+            <Text style={[styles.acknowledgedText, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>
+              Risk disclosure acknowledged
+            </Text>
+          </View>
+        ) : (
+          <Pressable
+            onPress={onAcknowledge}
+            style={({ pressed }) => [
+              styles.acknowledgeBtn,
+              { backgroundColor: colors.brand },
+              pressed && { opacity: 0.85 },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="I understand — continue"
+          >
+            <Text style={[styles.acknowledgeBtnText, { color: colors.textInverse }]} maxFontSizeMultiplier={1.3}>
+              I understand — continue
+            </Text>
+          </Pressable>
+        )
       ) : null}
     </View>
   );
@@ -170,6 +211,29 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   reportText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+  },
+  acknowledgeBtn: {
+    minHeight: 44,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Space.md,
+    marginTop: Space.xs,
+  },
+  acknowledgeBtnText: {
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+  },
+  acknowledgedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: Space.xs,
+  },
+  acknowledgedText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
   },

@@ -3,7 +3,7 @@ import { View, StyleSheet, StatusBar, RefreshControl, Text, Pressable, ScrollVie
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
@@ -196,6 +196,24 @@ export default function MyBidsScreen() {
     setLoading(true);
     void fetchItems(filter);
   }, [filter, fetchItems]);
+
+  // Refetch on focus so bids placed, auctions ending, or watchlist changes
+  // made on other screens (auction detail, live streams) are reflected on
+  // return. The initial focus is skipped — the mount effect above already
+  // loaded the list — and the refetch is silent (fetchItems does not
+  // toggle the skeleton's `loading` flag on entry).
+  const focusFetchRef = React.useRef<() => void>(() => {});
+  focusFetchRef.current = () => { void fetchItems(filter); };
+  const didInitialFocusRef = React.useRef(false);
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!didInitialFocusRef.current) {
+        didInitialFocusRef.current = true;
+        return;
+      }
+      focusFetchRef.current();
+    }, [])
+  );
 
   const handleRefresh = React.useCallback(() => {
     setRefreshing(true);

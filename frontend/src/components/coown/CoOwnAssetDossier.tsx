@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
+import { formatCoOwnIze } from '../../utils/currency';
 import { CoOwnNumericText } from '../ui/CoOwnNumericText';
 
 export interface CoOwnDossierProvenanceEvent {
@@ -47,11 +48,38 @@ export interface CoOwnDossierAppraisal {
   nextScheduled?: string;
 }
 
+/** Wave A trust split — who holds and insures the physical asset.
+ *  Distinct from money protection: custody of the asset, not of funds. */
+export interface CoOwnDossierAssetProtection {
+  custodian?: string | null;
+  location?: string | null;
+  insured?: boolean;
+  insurer?: string | null;
+  policyRef?: string | null;
+  coverageGbp?: number | null;
+}
+
+/** Wave A trust split — how buyer funds are held and protected.
+ *  Distinct from asset protection: escrow/safeguarding of money, not
+ *  custody of the physical asset. */
+export interface CoOwnDossierMoneyProtection {
+  safeguarded?: boolean;
+  safeguardingPartner?: string | null;
+  escrowPartner?: string | null;
+  buyerProtection?: boolean;
+}
+
 export interface CoOwnAssetDossierProps {
   provenance?: CoOwnDossierProvenanceEvent[];
   condition?: CoOwnDossierCondition;
   storage?: CoOwnDossierStorage;
   appraisal?: CoOwnDossierAppraisal;
+  /** Wave A: asset-side protection (custodian, insurance, coverage). */
+  assetProtection?: CoOwnDossierAssetProtection;
+  /** Wave A: money-side protection (safeguarding, escrow, buyer
+   *  protection). Kept visually separate from asset protection so the
+   *  buyer can tell "who holds the asset" from "who holds the money". */
+  moneyProtection?: CoOwnDossierMoneyProtection;
 }
 
 /** Check if an appraisal date is stale (>180 days). */
@@ -137,9 +165,30 @@ export function CoOwnAssetDossier({
   condition,
   storage,
   appraisal,
+  assetProtection,
+  moneyProtection,
 }: CoOwnAssetDossierProps) {
   const { colors } = useAppTheme();
-  const hasAny = provenance?.length || condition || storage || appraisal;
+  const hasAssetProtection = Boolean(
+    assetProtection && (
+      assetProtection.custodian ||
+      assetProtection.location ||
+      assetProtection.insured != null ||
+      assetProtection.insurer ||
+      assetProtection.policyRef ||
+      assetProtection.coverageGbp != null
+    ),
+  );
+  const hasMoneyProtection = Boolean(
+    moneyProtection && (
+      moneyProtection.safeguarded != null ||
+      moneyProtection.safeguardingPartner ||
+      moneyProtection.escrowPartner ||
+      moneyProtection.buyerProtection != null
+    ),
+  );
+  const hasAny = provenance?.length || condition || storage || appraisal
+    || hasAssetProtection || hasMoneyProtection;
   if (!hasAny) return null;
 
   // Flat composition — no rounded card. The parent CommerceDetailSection
@@ -242,6 +291,70 @@ export function CoOwnAssetDossier({
           )}
           {appraisal.nextScheduled && (
             <InfoRow label="Next appraisal" value={appraisal.nextScheduled} colors={colors} />
+          )}
+        </View>
+      )}
+
+      {/* ── Asset protection — who holds/insures the physical asset ──
+          Wave A: split from money protection so the buyer can tell
+          "who holds the asset" from "who holds the money". Rows render
+          only when the contract supplies data. */}
+      {hasAssetProtection && assetProtection && (
+        <View style={styles.section}>
+          <SectionHeader icon="lock-closed-outline" title="Asset protection" colors={colors} />
+          {assetProtection.custodian ? (
+            <InfoRow label="Custodian" value={assetProtection.custodian} colors={colors} />
+          ) : null}
+          {assetProtection.location ? (
+            <InfoRow label="Location" value={assetProtection.location} colors={colors} />
+          ) : null}
+          {assetProtection.insured != null && (
+            <InfoRow
+              label="Insured"
+              value={assetProtection.insured ? 'Insured' : 'Not insured'}
+              colors={colors}
+              valueColor={assetProtection.insured ? colors.success : colors.danger}
+            />
+          )}
+          {assetProtection.insurer ? (
+            <InfoRow label="Insurer" value={assetProtection.insurer} colors={colors} />
+          ) : null}
+          {assetProtection.policyRef ? (
+            <InfoRow label="Policy ref" value={assetProtection.policyRef} colors={colors} />
+          ) : null}
+          {assetProtection.coverageGbp != null && (
+            <InfoRow label="Coverage" value={formatCoOwnIze(assetProtection.coverageGbp)} colors={colors} />
+          )}
+        </View>
+      )}
+
+      {/* ── Money protection — how buyer funds are safeguarded ──
+          Rendered last: the dossier sheet appends the escrow/
+          safeguarding/buyer-protection document chips directly after
+          this component so they group under this heading. */}
+      {hasMoneyProtection && moneyProtection && (
+        <View style={styles.section}>
+          <SectionHeader icon="wallet-outline" title="Money protection" colors={colors} />
+          {moneyProtection.safeguarded != null && (
+            <InfoRow
+              label="Safeguarded"
+              value={moneyProtection.safeguarded ? 'Safeguarded' : 'Not safeguarded'}
+              colors={colors}
+              valueColor={moneyProtection.safeguarded ? colors.success : colors.danger}
+            />
+          )}
+          {moneyProtection.safeguardingPartner ? (
+            <InfoRow label="Safeguarding partner" value={moneyProtection.safeguardingPartner} colors={colors} />
+          ) : null}
+          {moneyProtection.escrowPartner ? (
+            <InfoRow label="Escrow partner" value={moneyProtection.escrowPartner} colors={colors} />
+          ) : null}
+          {moneyProtection.buyerProtection != null && (
+            <InfoRow
+              label="Buyer protection"
+              value={moneyProtection.buyerProtection ? 'Included' : 'Not included'}
+              colors={colors}
+            />
           )}
         </View>
       )}

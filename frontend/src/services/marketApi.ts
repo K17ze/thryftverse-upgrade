@@ -1,6 +1,7 @@
 import { fetchJson, fetchWithAuth } from '../lib/apiClient';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
 import { warnIfMockSuppressed } from '../utils/mockGate';
+import type { ListingMediaDerivative } from '../contracts/listingMedia';
 
 export type AuctionLifecycle =
   | 'upcoming'
@@ -145,6 +146,12 @@ export interface AuctionMediaItem {
   focalX: number | null;
   focalY: number | null;
   posterUrl: string | null;
+  /** When the poster was verified by the seller/admin; null when unverified. */
+  posterVerifiedAt?: string | null;
+  /** 20px blurred-JPEG data URI placeholder from the media pipeline. */
+  lqip?: string | null;
+  /** Responsive rendition ladder from the media pipeline. */
+  derivatives?: ListingMediaDerivative[];
   order: number;
 }
 

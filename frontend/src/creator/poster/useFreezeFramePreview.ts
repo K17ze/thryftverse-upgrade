@@ -102,7 +102,10 @@ export function useFreezeFramePreview({
 }
 
 // Mirrors computeSourceTime's freeze mapping: the freeze window begins at
-// `freezeFrameMs / speed` (timeline offset) and lasts `freezeDurationMs`.
+// `freezeFrameMs / speed` (forward timeline offset) and lasts
+// `freezeDurationMs`. For reversed clips the export graph reverses the
+// concat order — the hold appears at the mirrored output position —
+// so the preview window must be mirrored identically.
 function isInFreezeWindow(clip: ProjectedClip | null, playheadMs: number): boolean {
   if (!clip) return false;
   if (clip.freezeFrameMs == null || clip.freezeDurationMs == null) return false;
@@ -111,5 +114,10 @@ function isInFreezeWindow(clip: ProjectedClip | null, playheadMs: number): boole
   if (offsetMs < 0) return false;
   const freezeStart = clip.freezeFrameMs / clip.speed;
   const freezeEnd = freezeStart + clip.freezeDurationMs;
+  if (clip.reversed) {
+    const mirroredStart = clip.durationMs - freezeEnd;
+    const mirroredEnd = clip.durationMs - freezeStart;
+    return offsetMs >= mirroredStart && offsetMs < mirroredEnd;
+  }
   return offsetMs >= freezeStart && offsetMs < freezeEnd;
 }

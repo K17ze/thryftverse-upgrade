@@ -5,6 +5,7 @@ import {
   friendlyBackendError,
 } from './listingMapper';
 import type { DisplayReadyListing } from './listingMapper';
+import type { ListingMediaRecord } from '../contracts/listingMedia';
 import type { SupportedCurrencyCode } from '../constants/currencies';
 
 export interface ListingSeller {
@@ -53,6 +54,10 @@ export interface Listing {
   originalPrice?: number;
   priceWithProtection?: number;
   images: string[];
+  /** Canonical media records (derivatives, blurhash/LQIP, focal point,
+   *  poster). Supplements the flat `images` array — prefer this when a
+   *  consumer needs placeholders, sized renditions or art direction. */
+  media?: ListingMediaRecord[];
   mediaAspectRatio?: number | null;
   mediaWidth?: number | null;
   mediaHeight?: number | null;
@@ -85,6 +90,9 @@ interface ApiListingRow {
   priceGbp: number;
   imageUrl: string | null;
   images: string[];
+  /** Canonical media records served alongside the flat `images` array —
+   *  derivatives, blurhash/LQIP placeholders, focal point, poster. */
+  media?: ListingMediaRecord[];
   mediaAspectRatio?: number | null;
   mediaWidth?: number | null;
   mediaHeight?: number | null;
@@ -221,6 +229,24 @@ export async function fetchFilteredListings(options?: {
   }
 }
 
+export interface VisualSearchFacetBucket {
+  value: string;
+  count: number;
+}
+
+/**
+ * F08: Retrieval-scoped facet metadata returned by POST /visual-search.
+ * `colors`/`styles` report how many listings matched each facet value
+ * within the current filter scope (each dimension counted under all other
+ * filters except itself). `matchCount` is the total under the full scope.
+ * Absent when the backend could not compute counts or on client-side
+ * fallback.
+ */
+export interface VisualSearchFacets {
+  colors: VisualSearchFacetBucket[];
+  styles: VisualSearchFacetBucket[];
+}
+
 export interface VisualSearchResult {
   listings: DisplayReadyListing[];
   source: 'api' | 'fallback';
@@ -238,6 +264,10 @@ export interface VisualSearchResult {
     embedderConfigured: boolean;
     searchEngineVersion?: string;
   };
+  /** F08: Per-facet-value candidate counts from the retrieval scope. */
+  facets?: VisualSearchFacets;
+  /** F08: Total listings matching the full filter scope (pre-limit). */
+  matchCount?: number;
   note?: string;
   error?: string;
 }
@@ -266,6 +296,16 @@ export async function visualSearch(params: {
   condition?: string;
   minPrice?: number;
   maxPrice?: number;
+  /**
+   * F08: Retrieval-scoped facet selections. Sent to the backend so the
+   * candidate set itself is narrowed (facet values are matched as
+   * case-insensitive substrings against title/description/brand/category)
+   * — NOT applied as a post-filter over already-returned results.
+   */
+  facets?: {
+    color?: string;
+    style?: string;
+  };
   sort?: 'newest' | 'price_asc' | 'price_desc' | 'similarity';
   limit?: number;
   /**
@@ -288,6 +328,8 @@ export async function visualSearch(params: {
         searchEngineVersion?: string;
       };
       note?: string;
+      facets?: VisualSearchFacets;
+      matchCount?: number;
       items?: ApiListingRow[];
     }>('/visual-search', {
       method: 'POST',
@@ -302,6 +344,7 @@ export async function visualSearch(params: {
         condition: params.condition,
         minPrice: params.minPrice,
         maxPrice: params.maxPrice,
+        facets: params.facets,
         sort: params.sort ?? 'similarity',
         limit: params.limit ?? 48,
       }),
@@ -314,8 +357,13 @@ export async function visualSearch(params: {
       visualMatching: payload.visualMatching === true,
       similarityMethod: payload.similarityMethod,
       retrievalMeta: payload.retrievalMeta,
+      facets: payload.facets,
+      matchCount: payload.matchCount,
       note: payload.note,
-      error: rows.length === 0 ? 'No listings match your photo filters yet.' : undefined,
+      // A successful empty response is an empty state, not an error — with
+      // retrieval-scoped facets (F08) a legitimate zero-match scope must
+      // render "No matches found", not "Couldn't load results".
+      error: payload.ok === false ? 'Visual search request failed.' : undefined,
     };
   } catch (error) {
     return {
@@ -386,9 +434,10 @@ export interface ListingApiItem {
   engagement?: ListingEngagementSummaryApi | null;
   /** Pinned/featured listing — shown first in the Shop grid when true. */
   featured?: boolean | null;
-  /** Backend media records with stable IDs — used by the edit flow to build
-   *  `attachmentOrder` and `removedAttachmentIds` manifests. */
-  media?: Array<{ id: string; url: string; sortOrder: number }>;
+  /** Canonical media records with stable IDs — used by the edit flow to build
+   *  `attachmentOrder` and `removedAttachmentIds` manifests. Carries the
+   *  full media contract (derivatives, blurhash/LQIP, focal point, poster). */
+  media?: ListingMediaRecord[];
 }
 
 export interface ListingSoldComparables {

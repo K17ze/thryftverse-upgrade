@@ -15,11 +15,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   Pressable } from 'react-native';
 import { FlashList, type ListRenderItem } from '@shopify/flash-list';
-import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -33,17 +31,19 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { KeyboardStickyView } from '../platform/keyboard/KeyboardProvider';
-import { Space, Radius, Control } from '../theme/designTokens';
-import { TypographyV2 } from '../theme/typography.v2';
+import { Space, Control } from '../theme/designTokens';
+
 
 import { ChatTopBar } from '../components/chat/ChatTopBar';
+import { GroupDescriptionBar } from '../components/chat/GroupDescriptionBar';
+import { FlagshipState } from '../components/flagship';
+import { AppIcon } from '../components/common/AppIcon';
 import { MessageBubble } from '../components/chat/MessageBubble';
 import { SwipeableMessage } from '../components/SwipeableMessage';
 import { ChatComposerBar } from '../components/chat/ChatComposerBar';
 import { ChatActionSheet } from '../components/chat/ChatActionSheet';
 import { AttachmentReviewSheet } from '../components/chat/AttachmentReviewSheet';
 import { DocumentReviewSheet } from '../components/chat/DocumentReviewSheet';
-import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Caption, BodyEmphasis } from '../components/ui/Text';
 import { TypingIndicator } from '../components/chat/TypingIndicator';
 import { SkeletonChatLoader } from '../components/chat/SkeletonChatLoader';
@@ -219,10 +219,6 @@ export default function GroupChatScreen({ navigation, route }: Props) {
     haptic,
     onOfferSent: () => {},
     clearComposerState: async () => {},
-    deployedChatAgents: [],
-    getChatAgentResponse: () => ({ id: '', agentId: '', content: '' }),
-    getChatAgentSuggestions: () => [],
-    setChatAgentSuggestionsExternal: () => {},
     navigation,
     isGroup: true,
     conversationUnread: conversation?.unread,
@@ -522,47 +518,25 @@ export default function GroupChatScreen({ navigation, route }: Props) {
         {showLoading && <SkeletonChatLoader count={6} />}
 
         {showError && (
-          <View style={styles.centerState}>
-            <Ionicons name="alert-circle-outline" size={28} color={colors.textMuted} />
-            <BodyEmphasis color={colors.textPrimary} style={styles.stateTitle}>
-              Conversation unavailable
-            </BodyEmphasis>
-            <Caption color={colors.textMuted} style={styles.stateCaption}>
-              This group could not be loaded.
-            </Caption>
-            <AnimatedPressable
-              style={[styles.retryBtn, { backgroundColor: colors.brand }]}
-              onPress={() => void syncMessagesFromApi()}
-              activeOpacity={0.7}
-              scaleValue={0.96}
-              hapticFeedback="light"
-              accessibilityRole="button"
-              accessibilityLabel="Retry loading conversation"
-            >
-              <Text style={[styles.retryBtnText, { color: colors.textInverse }]}>Retry</Text>
-            </AnimatedPressable>
-          </View>
+          <FlagshipState
+            variant="error"
+            title="Conversation unavailable"
+            subtitle="This group could not be loaded."
+            actionLabel="Retry"
+            onAction={() => void syncMessagesFromApi()}
+          />
         )}
 
         {!showLoading && !showError && (
           <>
             {conversation?.description && !descriptionDismissed ? (
-              <View style={styles.descriptionBar}>
-                <View style={styles.descriptionContent}>
-                  <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
-                  <Text style={styles.descriptionText} numberOfLines={2}>
-                    {conversation.description}
-                  </Text>
-                </View>
-                <Pressable
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  onPress={() => setDescriptionDismissed(true)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Dismiss group description"
-                >
-                  <Ionicons name="close" size={16} color={colors.textMuted} />
-                </Pressable>
-              </View>
+              <GroupDescriptionBar
+                description={conversation.description}
+                onDismiss={() => setDescriptionDismissed(true)}
+                onPress={() =>
+                  navigation.navigate('GroupChatInfo', { conversationId: groupId })
+                }
+              />
             ) : null}
             <FlashList
               style={{ backgroundColor: chatBackground }}
@@ -576,7 +550,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
               onContentSizeChange={scheduleScrollToEnd}
               ListEmptyComponent={
                 <View style={styles.centerState}>
-                  <Ionicons name="chatbubbles-outline" size={30} color={colors.textMuted} />
+                  <AppIcon name="inbox" size="hero" color="textMuted" accessible={false} />
                   <BodyEmphasis color={colors.textPrimary} style={styles.stateTitle}>
                     No messages yet
                   </BodyEmphasis>
@@ -629,10 +603,11 @@ export default function GroupChatScreen({ navigation, route }: Props) {
 
               {sendPermission !== 'allowed' ? (
                 <View style={styles.permissionNotice} accessibilityRole="text">
-                  <Ionicons
-                    name={sendPermission === 'restricted' ? 'lock-closed-outline' : 'cloud-offline-outline'}
-                    size={16}
-                    color={colors.textMuted}
+                  <AppIcon
+                    name={sendPermission === 'restricted' ? 'lock' : 'cloud-offline-outline'}
+                    size="sm"
+                    color="textMuted"
+                    accessible={false}
                   />
                   <Caption color={colors.textMuted} style={styles.permissionNoticeText}>
                     {sendPermission === 'loading'
@@ -788,18 +763,6 @@ const createStyles = (colors: ThemeColors) =>
       textAlign: 'center' },
     stateCaption: {
       textAlign: 'center' },
-    retryBtn: {
-      paddingHorizontal: Space.lg,
-      paddingVertical: Space.sm,
-      borderRadius: Radius.md,
-      minHeight: Control.hit,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginTop: Space.xs },
-    retryBtnText: {
-      fontSize: TypographyV2.body.size,
-      lineHeight: TypographyV2.body.lineHeight,
-      fontFamily: TypographyV2.bodyStrong.fontFamily },
     listContent: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
@@ -849,26 +812,4 @@ const createStyles = (colors: ThemeColors) =>
       borderBottomColor: colors.borderSubtle },
     permissionNoticeText: {
       flex: 1 },
-    descriptionBar: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      backgroundColor: colors.surfaceElevated,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.borderSubtle,
-    },
-    descriptionContent: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      gap: Space.xs,
-      flex: 1,
-    },
-    descriptionText: {
-      flex: 1,
-      fontSize: 13,
-      lineHeight: 18,
-      color: colors.textSecondary,
-    },
   });

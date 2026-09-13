@@ -70,6 +70,9 @@ interface MediaPageProps {
   item: ProductMediaItem;
   width: number;
   height: number;
+  /** Screen-reader stem for the photo, e.g. "{asset title} photo" or a
+   *  positional "Photo 2 of 4" when no authored alt text exists. */
+  mediaLabel?: string;
   onDoubleTap?: () => void;
   sharedTransitionTag?: string;
   onZoomStart?: () => void;
@@ -80,6 +83,7 @@ function MediaPage({
   item,
   width,
   height,
+  mediaLabel,
   onDoubleTap,
   sharedTransitionTag,
   onZoomStart,
@@ -199,7 +203,8 @@ function MediaPage({
         style={[subComponentStyles.page, { width, height }, animStyle]}
         accessible
         accessibilityRole="imagebutton"
-        accessibilityLabel={`${item.altText ?? 'Listing image'}. Open fullscreen.`}
+        accessibilityLabel={`${item.altText ?? mediaLabel ?? 'Listing image'}. Open fullscreen.`}
+        accessibilityIgnoresInvertColors
         onAccessibilityTap={onOpenFullscreen}
       >
         {failed || !item.uri ? (
@@ -223,7 +228,9 @@ function MediaPage({
             <CachedImage
               key={retryKey}
               uri={item.uri}
+              previewUri={item.blurhash ? undefined : (item.lqip ?? undefined)}
               blurhash={item.blurhash ?? undefined}
+              derivatives={item.derivatives}
               style={subComponentStyles.image}
               containerStyle={subComponentStyles.image}
               contentFit={item.fit ?? 'cover'}
@@ -237,7 +244,9 @@ function MediaPage({
             <CachedImage
               key={retryKey}
               uri={item.uri}
+              previewUri={item.blurhash ? undefined : (item.lqip ?? undefined)}
               blurhash={item.blurhash ?? undefined}
+              derivatives={item.derivatives}
               style={subComponentStyles.image}
               containerStyle={subComponentStyles.image}
               contentFit={item.fit ?? 'cover'}
@@ -265,11 +274,14 @@ function VideoPage({
   width,
   height,
   isActive,
+  mediaLabel,
   onOpenFullscreen }: {
   item: ProductMediaItem;
   width: number;
   height: number;
   isActive: boolean;
+  /** Screen-reader stem for the video, matching MediaPage. */
+  mediaLabel?: string;
   onOpenFullscreen?: () => void;
 }) {
   // Pause video when the page is offscreen (scrolled away) or the app
@@ -473,7 +485,8 @@ function VideoPage({
   return (
     <View
       style={[subComponentStyles.page, { width, height }]}
-      accessibilityLabel={item.altText ?? 'Product video'}
+      accessibilityLabel={item.altText ?? mediaLabel ?? 'Product video'}
+      accessibilityIgnoresInvertColors
     >
       <VideoView
         player={player}
@@ -482,13 +495,24 @@ function VideoPage({
         nativeControls={false}
       />
 
-      {/* Poster image shown until video starts playing */}
+      {/* Poster image shown until video starts playing — honour the media
+          contract's focal point so the placeholder crops the same way the
+          poster renders on focal-aware surfaces (no focal-crop shift on
+          crossfade). */}
       {showPoster && item.posterUri && (
         <View pointerEvents="none" style={StyleSheet.absoluteFill}>
           <ExpoImage
             source={{ uri: item.posterUri }}
             style={StyleSheet.absoluteFill}
             contentFit={item.fit === 'cover' ? 'cover' : 'contain'}
+            contentPosition={
+              item.focalPoint
+                ? {
+                    top: `${Math.round(item.focalPoint.y * 100)}%`,
+                    left: `${Math.round(item.focalPoint.x * 100)}%`,
+                  }
+                : undefined
+            }
             cachePolicy="memory-disk"
             recyclingKey={item.posterUri}
           />
@@ -683,6 +707,9 @@ export interface CommerceMediaStageProps {
   onBack: () => void;
   onShare: () => void;
   onSave?: () => void;
+  /** Long-press on the save control — the "file to board" tier (opens
+   *  the collection picker). Tap stays the instant quick-save toggle. */
+  onSaveLongPress?: () => void;
   onToggleFav?: () => void;
   isFav?: boolean;
   isSaved?: boolean;
@@ -727,6 +754,13 @@ export interface CommerceMediaStageProps {
    * centre-top for shoes, centre for bags) instead of blind cover.
    */
   category?: string | null;
+  /**
+   * Human-readable subject for screen-reader labels on the media pages,
+   * e.g. the asset or listing title. Rendered as "{mediaLabel} photo N of
+   * M" (or "... video N of M") when an item has no authored altText.
+   * Optional — callers without a title get the positional fallback.
+   */
+  mediaLabel?: string;
 }
 
 export function CommerceMediaStage({
@@ -739,6 +773,7 @@ export function CommerceMediaStage({
   onBack,
   onShare,
   onSave,
+  onSaveLongPress,
   onToggleFav,
   isFav = false,
   isSaved = false,
@@ -758,7 +793,8 @@ export function CommerceMediaStage({
   onActiveIndexChange,
   initialIndex = 0,
   showPageIndicator = true,
-  category }: CommerceMediaStageProps) {
+  category,
+  mediaLabel }: CommerceMediaStageProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -924,12 +960,20 @@ export function CommerceMediaStage({
         viewabilityConfig={viewabilityConfig.current}
         renderItem={({ item, index }) =>
           item.kind === 'video' ? (
-            <VideoPage item={item} width={screenWidth} height={heroHeight} isActive={index === activeIndex} onOpenFullscreen={() => { dismissZoomHint(); onOpenFullscreen(index); }} />
+            <VideoPage
+              item={item}
+              width={screenWidth}
+              height={heroHeight}
+              isActive={index === activeIndex}
+              mediaLabel={mediaLabel ? `${mediaLabel} video ${index + 1} of ${mediaItems.length}` : `Video ${index + 1} of ${mediaItems.length}`}
+              onOpenFullscreen={() => { dismissZoomHint(); onOpenFullscreen(index); }}
+            />
           ) : (
             <MediaPage
               item={item}
               width={screenWidth}
               height={heroHeight}
+              mediaLabel={mediaLabel ? `${mediaLabel} photo ${index + 1} of ${mediaItems.length}` : `Photo ${index + 1} of ${mediaItems.length}`}
               onDoubleTap={onDoubleTap}
               sharedTransitionTag={index === 0 && objectId ? `image-${objectId}-0` : undefined}
               onZoomStart={() => { dismissZoomHint(); onZoomStart?.(); }}
@@ -1019,9 +1063,13 @@ export function CommerceMediaStage({
               <AnimatedPressable
                 style={styles.controlBtn}
                 onPress={onSave}
+                onLongPress={onSaveLongPress}
                 scaleValue={PressScale.tap}
                 activeOpacity={0.85}
-                accessibilityLabel={isSaved ? 'Saved to collection' : 'Save to collection'}
+                accessibilityLabel={isSaved ? 'Saved' : 'Save'}
+                accessibilityHint={onSaveLongPress
+                  ? 'Tap to save. Long-press to file into a collection.'
+                  : undefined}
               >
                 <Ionicons
                   name={isSaved ? 'bookmark' : 'bookmark-outline'}
@@ -1135,8 +1183,10 @@ export function CommerceMediaStage({
                   ) : (
                     <CachedImage
                       uri={item.uri}
-                      previewUri={item.posterUri ?? undefined}
+                      previewUri={item.posterUri ?? item.lqip ?? undefined}
                       blurhash={item.blurhash ?? undefined}
+                      derivatives={item.derivatives}
+                      downscaleWidth={40}
                       style={styles.thumbnailImage}
                       containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.sm }}
                       contentFit="cover"

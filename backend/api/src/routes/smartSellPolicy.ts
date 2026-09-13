@@ -605,10 +605,12 @@ export const registerSmartSellPolicyRoutes = ({
         status: string;
         expires_at: string;
         offered_by_user_id: string | null;
+        conversation_id: string | null;
       }>(
         `SELECT id, listing_id, seller_id, buyer_id,
                 offer_price_gbp::text, original_price_gbp::text,
-                counter_round, status, expires_at::text, offered_by_user_id
+                counter_round, status, expires_at::text, offered_by_user_id,
+                conversation_id
          FROM listing_offers
          WHERE id = $1
          LIMIT 1
@@ -767,6 +769,9 @@ export const registerSmartSellPolicyRoutes = ({
            WHERE id = $1 AND status = 'pending'`,
           [offerId],
         );
+        // The counter offer inherits the parent offer's conversation link —
+        // same as the manual counter route, which stores
+        // `payload.conversationId ?? parent.conversation_id`.
         await client.query(
           `INSERT INTO listing_offers (
              id, listing_id, buyer_id, seller_id,
@@ -776,7 +781,7 @@ export const registerSmartSellPolicyRoutes = ({
              offered_by_user_id, idempotency_key, request_hash
            )
            VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8,
-                   NULL, $9, $10::jsonb, $4, $11, $12)`,
+                   $13, $9, $10::jsonb, $4, $11, $12)`,
           [
             counterOfferId,
             offer.listing_id,
@@ -800,29 +805,33 @@ export const registerSmartSellPolicyRoutes = ({
                 smartSellDecisionId: decisionId,
               }),
             ).digest('hex'),
+            offer.conversation_id,
           ],
         );
+        // Emit the same `offer.countered` event the manual counter route
+        // (routes/listingOffers.ts POST /offers/:offerId/counter) emits, so
+        // the outbox drain notifies the buyer. The previous
+        // `smart_sell_decision.counter` event had no drain handler and
+        // dead-lettered — buyers were never told their offer was countered.
         await appendDomainEvent(client, {
-          aggregateType: 'smart_sell_decision',
-          aggregateId: decisionId,
-          eventType: 'smart_sell_decision.counter',
+          aggregateType: 'offer',
+          aggregateId: counterOfferId,
+          eventType: 'offer.countered',
           actorId: offer.seller_id,
           correlationId: request.id,
-          idempotencyKey: deduplicationKey,
-          deduplicationKey: `smart_sell_decision.counter:${counterOfferId}`,
+          idempotencyKey: `ssd_counter_${decisionId}`,
+          deduplicationKey: `offer.countered:${counterOfferId}`,
           payload: {
-            decisionId,
-            offerId,
-            counterOfferId,
+            offerId: counterOfferId,
+            parentOfferId: offerId,
             listingId: offer.listing_id,
             buyerId: offer.buyer_id,
             sellerId: offer.seller_id,
-            counterPriceGbp,
-            floorPriceGbp,
-            policyVersion: policy.policy_version,
+            offeredByUserId: offer.seller_id,
             counterRound: counterRound + 1,
-            netProceedsGbp: net.netProceedsGbp,
-            platformFeeGbp: net.platformFeeGbp,
+            offerPriceGbp: counterPriceGbp,
+            expiresAt,
+            conversationId: offer.conversation_id,
           },
         });
       } else if (decision === 'escalate') {

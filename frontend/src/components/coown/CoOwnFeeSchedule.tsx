@@ -63,6 +63,9 @@ export function CoOwnFeeSchedule({ fees, isEmpty }: CoOwnFeeScheduleProps) {
         <Text style={[styles.emptyText, { color: colors.textMuted }]}>
           No fees disclosed
         </Text>
+        <Text style={[styles.footerText, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>
+          Fees apply whether the investment gains or loses value.
+        </Text>
       </View>
     );
   }
@@ -111,6 +114,10 @@ export function CoOwnFeeSchedule({ fees, isEmpty }: CoOwnFeeScheduleProps) {
           </View>
         );
       })}
+      {/* Fee honesty footer — fees are owed regardless of outcome. */}
+      <Text style={[styles.footerText, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>
+        Fees apply whether the investment gains or loses value.
+      </Text>
     </View>
   );
 }
@@ -125,6 +132,13 @@ const styles = StyleSheet.create({
     fontFamily: TypographyV2.body.fontFamily,
     letterSpacing: TypographyV2.body.letterSpacing,
     paddingVertical: Space.sm,
+  },
+  footerText: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 4,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    paddingTop: Space.sm,
   },
   row: {
     flexDirection: 'row',

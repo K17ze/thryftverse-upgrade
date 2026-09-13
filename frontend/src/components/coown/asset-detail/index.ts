@@ -19,6 +19,9 @@ export type { RelatedAssetsRailProps } from './RelatedAssetsRail';
 export { AssetDetailIdentity } from './AssetDetailIdentity';
 export type { AssetDetailIdentityProps } from './AssetDetailIdentity';
 
+export { CoOwnDossierRibbon } from './CoOwnDossierRibbon';
+export type { CoOwnDossierRibbonProps } from './CoOwnDossierRibbon';
+
 export {
   deriveLifecycleState,
   type AssetLifecycleState,

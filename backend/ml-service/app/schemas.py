@@ -6,7 +6,31 @@ from typing import Literal
 from pydantic import BaseModel, Field, FiniteFloat
 
 
-Action = Literal["view", "wishlist", "purchase"]
+# Mirrors INTERACTION_ACTIONS in backend/api/src/routes/recommendations.ts.
+# Negative-signal actions (not_interested, show_fewer, report_content,
+# rapid_skip, unsave, unfollow_seller) are first-class — they are what lets a
+# user actually steer the feed, not just decorate a like button.
+Action = Literal[
+    "view",
+    "wishlist",
+    "purchase",
+    "qualified_detail_view",
+    "rapid_skip",
+    "save",
+    "unsave",
+    "share",
+    "follow_seller",
+    "unfollow_seller",
+    "open_seller_profile",
+    "offer_started",
+    "offer_submitted",
+    "message_seller_started",
+    "add_to_basket",
+    "checkout_started",
+    "not_interested",
+    "show_fewer",
+    "report_content",
+]
 
 
 class CandidateItem(BaseModel):
@@ -43,6 +67,18 @@ class InteractionEvent(BaseModel):
     price_gbp: FiniteFloat | None = Field(default=None, ge=0)
 
 
+class TopicDirective(BaseModel):
+    """A user-authored intent directive applied to ranking.
+
+    ``band`` mirrors ``recommendation_topic_projection.influence_band``:
+    ``excluded`` removes matching candidates outright ("never show"),
+    ``less`` down-ranks matches, ``more`` up-ranks matches.
+    """
+
+    label: str = Field(min_length=1, max_length=256)
+    band: Literal["more", "less", "excluded"]
+
+
 class RecommendationRequest(BaseModel):
     user_id: str = Field(min_length=2)
     request_id: str | None = Field(default=None, min_length=8, max_length=120)
@@ -51,6 +87,7 @@ class RecommendationRequest(BaseModel):
     candidates: list[CandidateItem] = Field(default_factory=list, max_length=2_000)
     recent_interactions: list[InteractionEvent] = Field(default_factory=list, max_length=500)
     exclude_listing_ids: list[str] = Field(default_factory=list, max_length=2_000)
+    topic_directives: list[TopicDirective] = Field(default_factory=list, max_length=500)
     result_limit: int = Field(default=20, ge=1, le=100)
     exploration_rate: FiniteFloat = Field(default=0.18, ge=0, le=0.45)
     max_per_seller: int = Field(default=2, ge=1, le=20)

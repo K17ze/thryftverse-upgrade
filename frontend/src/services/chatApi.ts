@@ -28,6 +28,11 @@ interface ApiConversationPayload {
   unread: boolean;
   memberRoles?: Record<string, string>;
   isMuted?: boolean;
+  /** Moderation ladder state vs the DM counterparty — viewer-scoped. */
+  isBlocked?: boolean;
+  isRestricted?: boolean;
+  isAuthorMuted?: boolean;
+  isAuthorRestricted?: boolean;
   isArchived?: boolean;
   requestStatus?: 'pending' | 'accepted' | 'declined';
   pinnedRank?: number;
@@ -221,7 +226,16 @@ export function mapApiMessageToConversationMessage(
     editVersion: payload.editVersion ?? undefined,
     editedAt: payload.editedAt ?? undefined,
     deletedForEveryoneAt: payload.deletedForEveryoneAt ?? undefined,
-    readStatus: 'sent',
+    // Read receipts: the API returns the durable per-message readBy set. For
+    // the sender's own messages, "read" is truthful only when another
+    // participant appears in it — the backend never reports a distinct
+    // "delivered" receipt, so we claim sent until proven read.
+    readBy: payload.readBy ?? undefined,
+    isReadByMe: payload.isReadByMe ?? undefined,
+    readStatus:
+      isMine && (payload.readBy ?? []).some((uid) => uid !== currentUserId)
+        ? 'read'
+        : 'sent',
     mediaUri: typeof meta.mediaUri === 'string' ? meta.mediaUri : undefined,
     mediaType: meta.mediaType === 'image' || meta.mediaType === 'video' ? meta.mediaType : undefined,
     voiceUri: typeof meta.mediaUri === 'string' && isVoice ? meta.mediaUri : undefined,
@@ -292,6 +306,10 @@ function mapApiConversationToApp(
     messages: resolvedMessages,
     memberRoles: normalizeMemberRoles(payload.memberRoles),
     isMuted: payload.isMuted ?? false,
+    isBlocked: payload.isBlocked ?? false,
+    isRestricted: payload.isRestricted ?? payload.isAuthorRestricted ?? false,
+    isAuthorMuted: payload.isAuthorMuted ?? false,
+    isAuthorRestricted: payload.isAuthorRestricted ?? false,
     isArchived: payload.isArchived ?? false,
     requestStatus: payload.requestStatus ?? 'accepted',
     isPinned: (payload.pinnedRank ?? 0) > 0,

@@ -1,6 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { MutableRefObject } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../platform/server/queryKeys';
+import { useBackendData } from '../context/BackendDataContext';
 import {
   normaliseOrderStatus,
   isTerminalStatus,
@@ -38,6 +41,8 @@ export interface UseOrderDetailResult {
 
 export function useOrderDetail(orderId: string): UseOrderDetailResult {
   const { show } = useToast();
+  const queryClient = useQueryClient();
+  const { refreshListings } = useBackendData();
   const loadSupportTicketsForOrderFromApi = useStore((state) => state.loadSupportTicketsForOrderFromApi);
 
   const [backendOrder, setBackendOrder] = useState<CommerceOrder | null>(null);
@@ -51,6 +56,11 @@ export function useOrderDetail(orderId: string): UseOrderDetailResult {
 
   const isMountedRef = useRef(true);
   const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Mirror of the last fetched order for use inside stable callbacks. Reading
+  // `backendOrder` state directly would make fetchOrder's identity change on
+  // every successful fetch — the useFocusEffect below would then re-fire while
+  // focused, refetching order + parcels + review in an infinite loop.
+  const backendOrderRef = useRef<CommerceOrder | null>(null);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -67,19 +77,20 @@ export function useOrderDetail(orderId: string): UseOrderDetailResult {
     try {
       const order = await getOrder(orderId);
       if (!isMountedRef.current) return;
+      backendOrderRef.current = order;
       setBackendOrder(order);
       setLoadError(null);
       return order;
     } catch (error) {
       if (!isMountedRef.current) return;
-      if (!backendOrder) {
+      if (!backendOrderRef.current) {
         setLoadError(t('orderDetail.error.loadFailed'));
       } else {
         setLoadError(t('orderDetail.error.refreshFailed'));
       }
       return null;
     }
-  }, [orderId, backendOrder]);
+  }, [orderId]);
 
   // --- Fetch parcel events ---
   const fetchParcelEvents = useCallback(async () => {
@@ -179,13 +190,24 @@ export function useOrderDetail(orderId: string): UseOrderDetailResult {
     try {
       await cancelOrder(orderId);
       show(t('orderDetail.toast.cancelled'), 'info');
+      // Cancelling releases the order's hold on the listing — propagate so
+      // the cached listing detail, the seller's listings pages, and the
+      // discovery feed show it as available again rather than a stale
+      // reserved/sold state.
+      if (backendOrder?.listingId) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(backendOrder.listingId) });
+      }
+      if (backendOrder?.sellerId) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.user.listingsAll(backendOrder.sellerId) });
+      }
+      void refreshListings();
       await refreshOrder(false);
     } catch (error) {
       show(parseApiError(error).message, 'error');
     } finally {
       if (isMountedRef.current) setOrderMutation(null);
     }
-  }, [orderMutation, orderId, show, refreshOrder]);
+  }, [orderMutation, orderId, show, refreshOrder, backendOrder, queryClient, refreshListings]);
 
   const handleDeliver = useCallback(async () => {
     if (orderMutation) return;

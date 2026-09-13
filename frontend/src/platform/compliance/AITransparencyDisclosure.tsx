@@ -71,39 +71,42 @@ const FEATURE_INFO: Record<AIFeature, FeatureInfo> = {
       'Recommendations are shown in demo mode using illustrative data. No browsing history or personal data is processed by a server-side model. When the recommendation engine is live, it will analyse your activity to suggest relevant listings.',
     dataProcessed: ['Browsing history', 'Liked items', 'Purchase history', 'Saved searches'] },
   search: {
-    title: 'AI-Powered Search',
+    title: 'Search Ranking',
     description:
-      'Search results are ranked using a machine learning model that considers relevance, listing quality, and your past interactions. The search index is rebuilt periodically from listing data.',
-    dataProcessed: ['Search queries', 'Click-through data', 'Listing metadata'] },
+      'Search results are ranked by text relevance and listing-quality signals such as completeness, photos and recency. Ranking is deterministic — it does not use a machine-learning model trained on your behaviour.',
+    dataProcessed: ['Search queries', 'Listing metadata'] },
   'image-labeling': {
-    title: 'On-Device Image Labeling',
+    title: 'Photo Detail Hints',
     description:
-      'When you upload photos, we use on-device ML Kit to suggest tags and categories. Image processing happens entirely on your device — no images are sent to our servers for labeling.',
-    dataProcessed: ['Local image data (on-device only)'] },
+      'When you add listing photos, we may suggest a title, brand or category based on the photo file name and your own hints. No image recognition is used, and every suggestion is shown for your review before it is applied.',
+    dataProcessed: ['Photo file names', 'Your own listing inputs'] },
   'conversational-search': {
-    title: 'Conversational AI Search',
+    title: 'Natural-language search',
     description:
-      'You can search using natural language. Your query is sent to our AI service, which interprets intent and returns relevant listings. Queries are not stored beyond the session.',
+      'You can search using everyday phrases like "vintage denim under £50". Your query is matched against known keywords — brands, categories, colours, sizes, conditions and price ranges — and listings are ranked by keyword relevance. This is heuristic keyword matching, not AI: no language model interprets your intent. Queries may be logged for error diagnosis.',
     demoDescription:
-      'Conversational search is in demo mode. Your query is processed locally with illustrative results — no data is sent to an AI service. When the live AI service is available, your query will be sent to our servers for interpretation.',
-    dataProcessed: ['Search query text', 'Session ID'] },
+      'Natural-language search is in demo mode. Your query is processed on-device using the same keyword matching as the live service, against illustrative results. No AI or language model is used in either mode.',
+    dataProcessed: ['Search query text'] },
   'price-prediction': {
-    title: 'Price Predictions',
+    title: 'Price Guidance',
     description:
-      'For Co-Own assets, we display AI-generated price predictions based on historical market data. These are estimates, not financial advice, and should not be the sole basis for investment decisions.',
-    dataProcessed: ['Historical price data', 'Market indicators'] },
+      'For listings and Co-Own assets we show reference ranges based on category resale averages or the most recent settled distributions. These are reference ranges — not machine-generated forecasts and not financial advice.',
+    dataProcessed: ['Category resale averages', 'Settled distribution history'] },
   'fraud-detection': {
     title: 'Fraud Detection',
     description:
-      'We use automated systems to detect potentially fraudulent activity. These systems analyse transaction patterns, listing content, and account behaviour. Suspicious activity is flagged for human review.',
+      'We use rules-based checks to flag potentially fraudulent activity, such as unusual transaction patterns or off-platform payment requests. Flagged activity is sent for human review — no automated system takes action on your account on its own.',
     dataProcessed: ['Transaction patterns', 'Account metadata', 'Listing content'] } };
 
+// Only features that actually exist on this deployment are listed by
+// default. 'image-labeling' and 'price-prediction' remain in FEATURE_INFO
+// with honest descriptions for any surface that passes them explicitly,
+// but they are not presented as AI features — photo hints are file-name
+// heuristics and price guidance is a settled-history reference range.
 const ALL_FEATURES: AIFeature[] = [
   'recommendations',
   'search',
-  'image-labeling',
   'conversational-search',
-  'price-prediction',
   'fraud-detection',
 ];
 
@@ -308,14 +311,15 @@ export function AITransparencyDisclosure({
           <View style={styles.header}>
             <Text style={styles.title}>AI Transparency</Text>
             <Text style={styles.subtitle}>
-              ThryftVerse uses artificial intelligence to enhance your
-              experience. This disclosure explains what AI features we use,
-              what data is processed, and how you can control your data.
+              ThryftVerse uses automated systems — and, where configured, an
+              AI provider — to power the features below. This disclosure
+              explains what each feature does, what data it processes, and
+              the controls you have.
             </Text>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false}>
-            <Text style={styles.sectionLabel}>AI Features We Use</Text>
+            <Text style={styles.sectionLabel}>Automated and assisted features</Text>
             {activeFeatures.map((info, index) => {
               const featureKey = features[index];
               const isExpanded = expandedFeature === featureKey;

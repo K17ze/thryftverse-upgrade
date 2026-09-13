@@ -221,6 +221,9 @@ export const ClipThumb = React.memo(function ClipThumb({
   const hasAudio = clip.mediaType === 'video';
   const showAudioBadge = hasAudio && (showMuted || showVolume);
   const hasBadges = showSpeed || showReversed || showFreeze || showAudioBadge;
+  // Still-image clips have no source window to trim — their segment length
+  // is the authored page hold time. Only video clips expose trim handles.
+  const canTrim = clip.mediaType !== 'image';
 
   const clipContent = (
     <Reanimated.View
@@ -315,7 +318,7 @@ export const ClipThumb = React.memo(function ClipThumb({
           </View>
         )}
 
-        {isSelected && onTrimCommit && (
+        {isSelected && onTrimCommit && canTrim && (
           <View style={clipStyles.trimHitStart}>
             <GestureDetector gesture={startTrimGesture}>
               <View
@@ -326,7 +329,7 @@ export const ClipThumb = React.memo(function ClipThumb({
             </GestureDetector>
           </View>
         )}
-        {isSelected && onTrimCommit && (
+        {isSelected && onTrimCommit && canTrim && (
           <View style={clipStyles.trimHitEnd}>
             <GestureDetector gesture={endTrimGesture}>
               <View

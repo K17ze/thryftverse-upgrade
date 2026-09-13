@@ -31,6 +31,8 @@ export type ProjectedClip = {
   layerId: string;
   assetId: string;
   sourceUri: string;
+  /** Media kind — 'image' pages are static clips; 'video' pages are trimmable. */
+  mediaType: 'image' | 'video';
   /** Trim start in the source asset (ms). */
   sourceStartMs: number;
   /** Trim end in the source asset (ms). */
@@ -155,11 +157,34 @@ function projectClip(
   timelineStartMs: number,
 ): ProjectedClip {
   const { payload } = layer;
+  const mediaType = payload.mediaType === 'video' ? 'video' : 'image';
+
+  // Still-image pages have no source-time semantics: their wall-clock
+  // duration is the authored page duration (the hold time), not a trim
+  // window over a media source.
+  if (mediaType !== 'video') {
+    const durationMs = Math.max(0, page.durationMs ?? 5000);
+    return {
+      layerId: layer.id,
+      assetId: layer.id,
+      sourceUri: payload.mediaUri,
+      mediaType,
+      sourceStartMs: 0,
+      sourceEndMs: durationMs,
+      timelineStartMs,
+      durationMs,
+      speed: 1,
+      volume: payload.volume ?? 1,
+      reversed: false,
+      thumbnailUri: payload.thumbnailUri,
+      pageId: page.id,
+    };
+  }
 
   // Determine trim range
   const sourceStartMs = payload.trimStartMs ?? 0;
   // Default trim end to videoDurationMs if available, else use a reasonable default
-  const defaultEnd = payload.videoDurationMs ?? 5000;
+  const defaultEnd = payload.videoDurationMs ?? page.durationMs ?? 5000;
   const sourceEndMs = payload.trimEndMs ?? defaultEnd;
   const sourceDurationMs = Math.max(0, sourceEndMs - sourceStartMs);
 
@@ -179,6 +204,7 @@ function projectClip(
     layerId: layer.id,
     assetId: layer.id, // The layer ID serves as the asset ID in the current schema
     sourceUri: payload.mediaUri,
+    mediaType,
     sourceStartMs,
     sourceEndMs,
     timelineStartMs,
@@ -327,32 +353,56 @@ export function computeSourceTime(
 
   const offsetMs = timeMs - clip.timelineStartMs;
 
-  // Handle reversed clips
-  if (clip.reversed) {
-    return clip.sourceEndMs - offsetMs * clip.speed;
-  }
-
-  // Handle freeze frame
-  if (clip.freezeFrameMs !== undefined && clip.freezeDurationMs !== undefined) {
-    const freezeTimelineStart = clip.freezeFrameMs / clip.speed;
-    const freezeTimelineEnd = freezeTimelineStart + clip.freezeDurationMs;
-    if (offsetMs >= freezeTimelineStart && offsetMs < freezeTimelineEnd) {
-      return clip.sourceStartMs + clip.freezeFrameMs;
+  // Freeze-aware forward-position mapping. Skip-under semantics — identical
+  // to the export segment graph: the freeze hold consumes output time while
+  // the source window beneath it (freezeDurationMs * speed of source) is
+  // skipped. Freeze position is source-relative to the trim start.
+  const speed = clip.speed > 0 ? clip.speed : 1;
+  const forwardSourceTime = (forwardOffsetMs: number): number => {
+    if (
+      clip.freezeFrameMs !== undefined &&
+      clip.freezeDurationMs !== undefined &&
+      clip.freezeDurationMs > 0
+    ) {
+      const freezeTimelineStart = clip.freezeFrameMs / speed;
+      const freezeTimelineEnd = freezeTimelineStart + clip.freezeDurationMs;
+      if (forwardOffsetMs >= freezeTimelineStart && forwardOffsetMs < freezeTimelineEnd) {
+        // Inside the hold — show the frozen source frame.
+        return clip.sourceStartMs + clip.freezeFrameMs;
+      }
+      if (forwardOffsetMs >= freezeTimelineEnd) {
+        // Post-freeze source resumes at freezeFrame + freezeDur*speed —
+        // the frozen window's source content is skipped so the clip's
+        // total output duration is unchanged.
+        const skipMs = clip.freezeDurationMs * speed;
+        return (
+          clip.sourceStartMs +
+          clip.freezeFrameMs +
+          skipMs +
+          (forwardOffsetMs - freezeTimelineEnd) * speed
+        );
+      }
+      return clip.sourceStartMs + forwardOffsetMs * speed;
     }
+    return clip.sourceStartMs + forwardOffsetMs * speed;
+  };
+
+  // Reversed playback mirrors the forward output: output offset 0 shows
+  // the clip's final frame. Map the offset to its forward output position
+  // and apply the same freeze-aware mapping — this keeps parity with the
+  // export pipeline, which builds segments forward and reverses their
+  // concat order (a reversed clip's freeze hold still freezes the frame
+  // at freezeFrameMs, mirrored to the symmetric output position).
+  if (clip.reversed) {
+    const forwardOffset = Math.max(0, clip.durationMs - offsetMs);
+    const src = forwardSourceTime(forwardOffset);
+    // Clamp into the trim window — forwardOffset=durationMs at offset 0
+    // can exceed sourceEndMs under float rounding.
+    return Math.min(clip.sourceEndMs, Math.max(clip.sourceStartMs, src));
   }
 
-  // For constant-speed clips (no curve), simple linear mapping
-  if (!clip.speedCurve) {
-    return clip.sourceStartMs + offsetMs * clip.speed;
-  }
-
-  // For speed-curve clips, we need to integrate the curve.
-  // The normalized position within the clip:
-  const normalizedPos = clip.durationMs > 0 ? offsetMs / clip.durationMs : 0;
-  // Approximate source time by sampling the curve at the normalized position
-  // and computing the average speed up to that point.
-  // This is an approximation; a precise implementation would integrate
-  // the inverse of the speed function. For real-time preview, this is
-  // sufficient — the export pipeline does precise integration.
-  return clip.sourceStartMs + offsetMs * clip.speed;
+  // For constant-speed clips (no curve), the forward mapping is linear.
+  // For speed-curve clips the preview approximates via the average speed —
+  // the export pipeline performs the precise piecewise integration.
+  return forwardSourceTime(offsetMs);
 }

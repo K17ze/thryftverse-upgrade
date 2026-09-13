@@ -10,7 +10,7 @@ import {
 import { FlashList } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
@@ -34,8 +34,9 @@ import {
   FilterClassification,
   OrdersFilterState } from '../components/orders/OrdersFilterSheet';
 import {
-
   needsAction,
+  normaliseOrderStatus,
+  resolveCapabilities,
   type OrderRole } from '../components/orders/orderCapabilities';
 import { t } from '../i18n';
 
@@ -212,6 +213,24 @@ export default function MyOrdersScreen() {
     void fetchOrders();
   }, [fetchOrders]);
 
+  // Refetch the first page when the screen regains focus so orders created
+  // or advanced on other surfaces (checkout, order detail, fulfilment,
+  // offers accepted in chat) are reflected on return. The initial focus is
+  // skipped — the mount effect above already loaded the list — and the
+  // refetch is silent: no skeleton, no refresh spinner.
+  const fetchOrdersRef = useRef(fetchOrders);
+  fetchOrdersRef.current = fetchOrders;
+  const didInitialFocusRef = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!didInitialFocusRef.current) {
+        didInitialFocusRef.current = true;
+        return;
+      }
+      void fetchOrdersRef.current();
+    }, [])
+  );
+
   const handleRefresh = useCallback(async () => {
     if (!viewerId) return;
     setIsRefreshing(true);
@@ -247,6 +266,29 @@ export default function MyOrdersScreen() {
       const counterpartyUsername =
         role === 'buyer' ? order.sellerUsername : order.buyerUsername;
 
+      // Canonical capability projection (P0-3): the list consumes the same
+      // resolver as Order Detail rather than reinterpreting status strings.
+      // The list payload carries no resolution/review flags, so those are
+      // resolved as false — the detail screen is the authority for them.
+      const capabilities = resolveCapabilities({
+        status: order.status,
+        role,
+        hasOpenResolution: false,
+        hasReview: false,
+        hasTracking: order.trackingNumber != null,
+        fulfilmentSnapshot: order.fulfilmentSnapshot ?? null });
+
+      const statusKey = normaliseOrderStatus(order.status);
+      const isInTransit =
+        statusKey === 'shipped' || statusKey === 'in transit' || statusKey === 'out for delivery';
+
+      // Only surface a next-action hint when the viewer actually has a primary
+      // action. Never promise tracking the carrier hasn't provided.
+      let nextActionLabel: string | null = capabilities.primaryAction
+        ? capabilities.nextActionHint
+        : null;
+      if (isInTransit && !capabilities.canTrack) nextActionLabel = null;
+
       return {
         id: order.id,
         listingId: order.listingId,
@@ -260,7 +302,10 @@ export default function MyOrdersScreen() {
         role,
         counterpartyUsername,
         shipByDate: order.shipByDate ?? null,
-        serviceName: order.fulfilmentSnapshot?.serviceName ?? order.fulfilmentSnapshot?.carrierId ?? null };
+        serviceName: order.fulfilmentSnapshot?.serviceName ?? order.fulfilmentSnapshot?.carrierId ?? null,
+        deliveredAt: order.deliveredAt,
+        etaWindow: capabilities.etaWindow,
+        nextActionLabel };
     });
   }, [orders, viewerId]);
 
@@ -443,17 +488,14 @@ export default function MyOrdersScreen() {
     </View>
   ), [fetchOrders, isOffline, colors.textMuted]);
 
-  const renderListFooter = useCallback(() => {
-    if (isLoadingMore) {
-      return (
+  const renderListFooter = useCallback(() => (
+    <View>
+      {isLoadingMore ? (
         <View style={styles.footerLoading}>
           <ActivityIndicator size="small" color={colors.textSecondary} />
           <Text style={styles.footerLoadingText}>Loading more…</Text>
         </View>
-      );
-    }
-    if (paginationError) {
-      return (
+      ) : paginationError ? (
         <View style={styles.footerError}>
           <Text style={styles.footerErrorText}>{paginationError}</Text>
           <Pressable
@@ -468,17 +510,29 @@ export default function MyOrdersScreen() {
             <Text style={styles.retryLink}>Retry</Text>
           </Pressable>
         </View>
-      );
-    }
-    if (!nextCursor && orders.length > 0) {
-      return (
+      ) : !nextCursor && orders.length > 0 ? (
         <View style={styles.footerEnd}>
           <Text style={styles.footerEndText}>All orders loaded</Text>
         </View>
-      );
-    }
-    return null;
-  }, [isLoadingMore, paginationError, nextCursor, orders.length, fetchOrders]);
+      ) : null}
+
+      {/* Support entry — present but never dominant. Per-order support lives
+          on Order Detail; this is the general route for anything else. */}
+      {orders.length > 0 ? (
+        <Pressable
+          style={styles.supportRow}
+          onPress={() => { haptics.tap(); navigation.navigate('HelpSupport'); }}
+          hitSlop={{ top: 8, bottom: 8 }}
+          accessibilityRole="button"
+          accessibilityLabel="Get help with an order"
+        >
+          <Ionicons name="help-buoy-outline" size={15} color={colors.textMuted} accessible={false} />
+          <Text style={styles.supportRowText}>Get help with an order</Text>
+          <Ionicons name="chevron-forward" size={13} color={colors.textMuted} accessible={false} />
+        </Pressable>
+      ) : null}
+    </View>
+  ), [isLoadingMore, paginationError, nextCursor, orders.length, fetchOrders, navigation, colors]);
 
   const filterSummary = useMemo(() => {
     const parts: string[] = [];
@@ -593,6 +647,23 @@ export default function MyOrdersScreen() {
         <OfflineBanner onRetry={() => void handleRefresh()} />
       ) : null}
 
+      {/* Partial state — a refresh failed but cached orders are still shown.
+          Surface it quietly instead of swallowing the error. */}
+      {!isOffline && loadError && orders.length > 0 ? (
+        <View style={styles.staleBanner}>
+          <Ionicons name="cloud-offline-outline" size={14} color={colors.textMuted} accessible={false} />
+          <Text style={styles.staleBannerText}>Couldn’t refresh — showing saved orders</Text>
+          <Pressable
+            onPress={() => { haptics.tap(); void handleRefresh(); }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Retry refreshing orders"
+          >
+            <Text style={styles.staleBannerRetry}>Retry</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       <FlashList
         data={groupedOrders}
         keyExtractor={(group) => group.key}
@@ -646,6 +717,27 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surface },
   needsActionText: {
     flex: 1,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    color: colors.brand },
+  staleBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 2,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle },
+  staleBannerText: {
+    flex: 1,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    color: colors.textMuted },
+  staleBannerRetry: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: TypographyV2.meta.fontFamily,
@@ -760,6 +852,22 @@ function createStyles(colors: ThemeColors) {
   footerEnd: {
     alignItems: 'center',
     paddingVertical: Space.md },
+  supportRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 2,
+    marginHorizontal: Space.md,
+    marginTop: Space.xs,
+    paddingVertical: Space.sm + 2,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle },
+  supportRowText: {
+    flex: 1,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    color: colors.textMuted },
   footerEndText: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,

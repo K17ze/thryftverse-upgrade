@@ -163,6 +163,8 @@ import {
   observeRedisConnection,
   recordAuctionSettlement,
   recordBackgroundJobDuration,
+  recordGmv,
+  recordOrderCompleted,
   recordPaymentTransition,
   recordPushDelivery,
   recordPushTicketError,
@@ -267,6 +269,11 @@ import { registerModerationTriageRoutes } from './routes/moderationTriage.js';
 import { moderateListingText } from './lib/moderation/moderationService.js';
 import { processMediaAsset } from './lib/media/pipeline.js';
 import {
+  loadListingMedia,
+  listingImageUrls,
+  type ListingMediaItem,
+} from './lib/media/listingMediaProjection.js';
+import {
   processCatalogImportDiscovery,
   processCatalogImportHydration,
   processCatalogImportMedia,
@@ -288,6 +295,7 @@ import {
   processBackupExpiryCheck,
   processDsarExport,
   processSellerTrustRecompute,
+  processDomainOutboxBatch,
 } from './workers/handlers/index.js';
 import {
   evaluatePriceAlertsForListing,
@@ -375,10 +383,7 @@ import type { SellerRiskTier } from './lib/sellerRiskTiering.js';
 import { compensateTerminalCommercePayment } from './lib/commerceCheckoutLifecycle.js';
 import {
   appendDomainEvent,
-  claimDomainOutboxBatch,
   completeDomainOutboxEvent,
-  failDomainOutboxEvent,
-  type DomainOutboxEvent,
 } from './lib/domainOutbox.js';
 import {
   getCachedSearchResult,
@@ -901,7 +906,16 @@ const COMMERCE_ORDER_STATUSES = [
   'paid',
   'shipped',
   'delivered',
+  // 'completed' is the terminal state: the buyer confirmed receipt (escrow
+  // released immediately) or the escrow release sweep paid out after the
+  // buyer-protection hold expired. Migration 280 relaxes the CHECK.
+  'completed',
   'cancelled',
+  // 'refunded'/'refunding' are persisted by POST /orders/:orderId/refund —
+  // 'refunding' while the provider refund outcome is pending or unknown.
+  // The admin force-status endpoint must accept every persisted status.
+  'refunded',
+  'refunding',
 ] as const;
 type CommerceOrderStatus = (typeof COMMERCE_ORDER_STATUSES)[number];
 
@@ -1296,6 +1310,7 @@ function isPublicRoute(method: string, path: string) {
     'GET /search/listings',
     'GET /search',
     'GET /search/autocomplete',
+    'GET /search/trending',
     'GET /search/health',
     'GET /feed/looks',
     'GET /oracle/gold/latest',
@@ -2563,6 +2578,31 @@ async function paymentDisputesTableAvailable(client: DbQueryable): Promise<boole
   );
 
   return Boolean(result.rows[0]?.exists);
+}
+
+async function orderDispatchExtensionsTableAvailable(client: DbQueryable): Promise<boolean> {
+  const result = await client.query<{ exists: boolean }>(
+    `
+      SELECT
+        to_regclass('public.order_dispatch_extensions') IS NOT NULL AS exists
+    `
+  );
+
+  return Boolean(result.rows[0]?.exists);
+}
+
+// ship-by anchor: the seller-rights snapshot is written at checkout/payment
+// time, so the dispatch SLA runs from paid_at (falling back to created_at
+// for orders that predate the paid_at column).
+function computeBaseShipByDate(
+  paidAt: string | null,
+  createdAt: string,
+  dispatchSlaDays: number | null
+): string | null {
+  if (dispatchSlaDays === null || dispatchSlaDays === undefined) return null;
+  const anchorMs = new Date(paidAt ?? createdAt).getTime();
+  if (!Number.isFinite(anchorMs)) return null;
+  return new Date(anchorMs + dispatchSlaDays * 24 * 60 * 60 * 1000).toISOString();
 }
 
 async function listingsStatusColumnAvailable(client: DbQueryable): Promise<boolean> {
@@ -5427,7 +5467,9 @@ async function releaseCommerceOrderEscrowToSeller(
   let creditedToSellerGbp = subtotalGbp;
   let heldInReserveGbp = 0;
   const sellerCompletedSales = await client.query<{ total: string }>(
-    `SELECT COUNT(*)::text AS total FROM orders WHERE seller_id = $1 AND status = 'delivered'`,
+    // 'completed' is the new terminal state (buyer confirm / escrow sweep);
+    // 'delivered' kept for orders still inside the protection hold.
+    `SELECT COUNT(*)::text AS total FROM orders WHERE seller_id = $1 AND status IN ('delivered', 'completed')`,
     [input.sellerId]
   );
   const completedSalesCount = Number(sellerCompletedSales.rows[0]?.total ?? '0');
@@ -5996,7 +6038,14 @@ async function applyOrderParcelEvent(
   let alreadyReleased = false;
   let escrowReleaseScheduledAt: string | null = null;
   if (PARCEL_DELIVERY_RELEASE_EVENTS.has(input.eventType)) {
-    if (order.status !== 'paid' && order.status !== 'shipped' && order.status !== 'delivered') {
+    // 'completed' is included: a late/duplicate carrier 'delivered' webhook on
+    // a buyer-confirmed order is a no-op, not an invalid state.
+    if (
+      order.status !== 'paid' &&
+      order.status !== 'shipped' &&
+      order.status !== 'delivered' &&
+      order.status !== 'completed'
+    ) {
       throw createApiError('ORDER_INVALID_STATE', `Order cannot be delivered from status '${order.status}'`, {
         orderId: input.orderId,
         status: order.status,
@@ -6069,7 +6118,7 @@ async function applyOrderParcelEvent(
            FROM orders
            WHERE seller_id = $1
              AND id != $2
-             AND status IN ('delivered', 'shipped', 'paid')`,
+             AND status IN ('delivered', 'completed', 'shipped', 'paid')`,
           [order.seller_id, order.id]
         );
         const priorSalesCount = Number(priorSales.rows[0]?.count ?? 0);
@@ -8528,7 +8577,9 @@ const NOTIFICATION_EVENT_TYPES = [
   'order_in_transit', 'order_out_for_delivery', 'order_delivered',
   'order_refunded', 'resolution_opened', 'resolution_status_changed',
   'review_received', 'chat_message', 'payout_processed', 'refund_completed',
-  'price_drop', 'offer_accepted',
+  'price_drop',
+  'offer_created', 'offer_countered', 'offer_accepted', 'offer_declined',
+  'offer_expired', 'offer_cancelled',
   'auction_outbid', 'auction_won', 'auction_ending_soon',
   'new_follower', 'new_listing_from_followed_seller',
   'safety_outcome',
@@ -8543,7 +8594,11 @@ type NotificationPushCategory = typeof NOTIFICATION_PUSH_CATEGORIES[number];
 
 function mapEventToPushCategory(eventType: string): NotificationPushCategory | null {
   if (eventType === 'chat_message') return 'messages';
-  if (eventType === 'offer_accepted') return 'offers';
+  // Offers — the whole offer lifecycle (created/countered/accepted/declined/
+  // expired/cancelled/sibling_declined) is preference-gated by `offers`.
+  // Prefix match mirrors the order_/auction_ handling so a future offer_*
+  // event type cannot silently fail closed into in-app-only delivery.
+  if (eventType.startsWith('offer_')) return 'offers';
   if (eventType.startsWith('order_')) return 'orderUpdates';
   if (eventType === 'resolution_opened' || eventType === 'resolution_status_changed') return 'orderUpdates';
   if (eventType === 'payout_processed' || eventType === 'refund_completed') return 'orderUpdates';
@@ -8560,7 +8615,7 @@ function mapEventTypeToChannelId(eventType: string): string {
   if (eventType.startsWith('auction_')) return 'auctions';
   if (eventType === 'chat_message') return 'messages';
   if (eventType === 'new_follower' || eventType === 'new_listing_from_followed_seller' || eventType === 'review_received') return 'social';
-  if (eventType === 'price_drop' || eventType === 'offer_accepted' || eventType === 'generic' || eventType === 'safety_outcome') return 'news';
+  if (eventType === 'price_drop' || eventType.startsWith('offer_') || eventType === 'generic' || eventType === 'safety_outcome') return 'news';
   if (eventType === 'resolution_opened' || eventType === 'resolution_status_changed') return 'orders';
   return 'default';
 }
@@ -8578,7 +8633,7 @@ function mapEventTypeToRelevanceScore(eventType: string): number {
   if (eventType === 'auction_ending_soon' || eventType === 'auction_outbid') return 0.9;
   if (eventType.startsWith('order_') || eventType === 'payout_processed' || eventType === 'refund_completed') return 0.8;
   if (eventType === 'resolution_opened' || eventType === 'safety_outcome') return 0.8;
-  if (eventType === 'offer_accepted') return 0.7;
+  if (eventType.startsWith('offer_')) return 0.7;
   if (eventType === 'chat_message') return 0.6;
   if (eventType === 'price_drop') return 0.4;
   if (eventType === 'review_received') return 0.3;
@@ -9283,213 +9338,15 @@ async function processPushQueueJob(job: {
   });
 }
 
-async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void> {
-  if (event.eventType === 'listing.price_changed') {
-    const payload = z.object({
-      listingId: z.string().min(2),
-      priceEventId: z.number().int().positive(),
-      previousPriceGbp: z.number().nonnegative(),
-      newPriceGbp: z.number().nonnegative(),
-    }).parse(event.payload);
-    await evaluatePriceAlertsForListing({
-      db,
-      listingId: payload.listingId,
-      priceEventId: payload.priceEventId,
-      previousPriceGbp: payload.previousPriceGbp,
-      newPriceGbp: payload.newPriceGbp,
-      queueNotification: queueUserNotification,
-    });
-    return;
-  }
-
-  if (event.eventType === 'offer.accepted') {
-    const payload = z.object({
-      offerId: z.string().min(2),
-      listingId: z.string().min(2),
-      orderId: z.string().min(2),
-      reservationId: z.string().min(2),
-      buyerId: z.string().min(2),
-      sellerId: z.string().min(2),
-      subtotalGbp: z.number().positive(),
-      platformChargeGbp: z.number().nonnegative(),
-      totalGbp: z.number().positive(),
-      reservationExpiresAt: z.string().datetime(),
-    }).parse(event.payload);
-
-    await queueUserNotification({
-      userId: payload.buyerId,
-      title: 'Offer accepted',
-      body: 'Your offer was accepted. Complete checkout before the reservation expires.',
-      eventType: 'offer_accepted',
-      payload: {
-        event: 'offer_accepted',
-        offerId: payload.offerId,
-        listingId: payload.listingId,
-        orderId: payload.orderId,
-        reservationId: payload.reservationId,
-        expiresAt: payload.reservationExpiresAt,
-      },
-      route: { screen: 'OrderDetail', params: { orderId: payload.orderId } },
-      idempotencyKey: `offer_accepted_buyer_${payload.offerId}`,
-      metadata: { outboxEventId: event.id },
-    });
-    await queueUserNotification({
-      userId: payload.sellerId,
-      title: 'Offer accepted',
-      body: 'The item is reserved while the buyer completes checkout.',
-      eventType: 'offer_accepted',
-      payload: {
-        event: 'offer_accepted',
-        offerId: payload.offerId,
-        listingId: payload.listingId,
-        orderId: payload.orderId,
-        reservationId: payload.reservationId,
-        expiresAt: payload.reservationExpiresAt,
-      },
-      route: { screen: 'OrderDetail', params: { orderId: payload.orderId } },
-      idempotencyKey: `offer_accepted_seller_${payload.offerId}`,
-      metadata: { outboxEventId: event.id },
-    });
-    publishRealtimeEvent({
-      topic: `listing:${payload.listingId}`,
-      type: 'offer.accepted',
-      payload: {
-        offerId: payload.offerId,
-        listingId: payload.listingId,
-        orderId: payload.orderId,
-        reservationId: payload.reservationId,
-        reservationExpiresAt: payload.reservationExpiresAt,
-      },
-    });
-    return;
-  }
-
-  if (event.eventType === 'offer.countered') {
-    const payload = z.object({
-      offerId: z.string().min(2),
-      parentOfferId: z.string().min(2),
-      listingId: z.string().min(2),
-      buyerId: z.string().min(2),
-      sellerId: z.string().min(2),
-      offeredByUserId: z.string().min(2),
-      counterRound: z.number().int().positive(),
-      offerPriceGbp: z.number().positive(),
-      expiresAt: z.string().datetime(),
-    }).parse(event.payload);
-    const recipientId = payload.offeredByUserId === payload.buyerId
-      ? payload.sellerId
-      : payload.buyerId;
-    await queueUserNotification({
-      userId: recipientId,
-      title: 'New counter-offer',
-      body: `${formatGbpAmount(payload.offerPriceGbp)} Â· round ${payload.counterRound}`,
-      eventType: 'offer_countered',
-      payload: {
-        event: 'offer_countered',
-        offerId: payload.offerId,
-        parentOfferId: payload.parentOfferId,
-        listingId: payload.listingId,
-        expiresAt: payload.expiresAt,
-      },
-      route: { screen: 'ItemDetail', params: { itemId: payload.listingId } },
-      idempotencyKey: `offer_countered_${payload.offerId}_${recipientId}`,
-      metadata: { outboxEventId: event.id },
-    });
-    publishRealtimeEvent({
-      topic: `listing:${payload.listingId}`,
-      type: 'offer.countered',
-      payload,
-    });
-    return;
-  }
-
-  if (event.eventType === 'order.created') {
-    const payload = z.object({
-      orderId: z.string().min(2),
-      listingId: z.string().min(2),
-      reservationId: z.string().min(2),
-      buyerId: z.string().min(2),
-      sellerId: z.string().min(2),
-      source: z.literal('direct'),
-      expiresAt: z.string().datetime(),
-      totalGbp: z.number().positive(),
-    }).parse(event.payload);
-    await queueUserNotification({
-      userId: payload.sellerId,
-      title: 'Item reserved',
-      body: 'A buyer has started checkout. The listing is temporarily reserved.',
-      eventType: 'order_created',
-      payload: {
-        event: 'order_created',
-        orderId: payload.orderId,
-        listingId: payload.listingId,
-        reservationId: payload.reservationId,
-        expiresAt: payload.expiresAt,
-      },
-      route: { screen: 'OrderDetail', params: { orderId: payload.orderId } },
-      idempotencyKey: `order_created_seller_${payload.orderId}`,
-      metadata: { outboxEventId: event.id },
-    });
-    publishRealtimeEvent({
-      topic: `listing:${payload.listingId}`,
-      type: 'listing.reserved',
-      payload: {
-        orderId: payload.orderId,
-        listingId: payload.listingId,
-        reservationId: payload.reservationId,
-        expiresAt: payload.expiresAt,
-      },
-    });
-    return;
-  }
-
-  if (event.eventType === 'payment.failed') {
-    const payload = z.object({
-      intentId: z.string().min(2),
-      orderId: z.string().min(2),
-      buyerId: z.string().min(2),
-      status: z.enum(['failed', 'cancelled']),
-      failureCode: z.string().nullable().optional(),
-    }).parse(event.payload);
-    await queueUserNotification({
-      userId: payload.buyerId,
-      title: payload.status === 'failed' ? 'Payment failed' : 'Payment cancelled',
-      body: 'The reservation was released and no completed payment was recorded. A temporary bank authorization may still take time to disappear.',
-      eventType: 'payment_failed',
-      payload: {
-        event: 'payment_failed',
-        intentId: payload.intentId,
-        orderId: payload.orderId,
-        status: payload.status,
-        failureCode: payload.failureCode ?? null,
-      },
-      route: { screen: 'OrderDetail', params: { orderId: payload.orderId } },
-      idempotencyKey: `payment_failed_${payload.intentId}`,
-      metadata: { outboxEventId: event.id },
-    });
-    return;
-  }
-
-  throw new Error(`Unsupported domain outbox event: ${event.eventType}`);
-}
-
-async function processDomainOutboxBatch(): Promise<number> {
-  const events = await claimDomainOutboxBatch(db, 50);
-  for (const event of events) {
-    try {
-      await processDomainOutboxEvent(event);
-      await completeDomainOutboxEvent(db, event.id);
-    } catch (error) {
-      await failDomainOutboxEvent(db, event.id, error);
-      app.log.error(
-        { err: error, outboxEventId: event.id, eventType: event.eventType },
-        'Domain outbox delivery failed',
-      );
-    }
-  }
-  return events.length;
-}
-
+// The domain outbox drain lives in `src/workers/handlers/outboxDrainHandler.ts`
+// (`processDomainOutboxBatch`, imported from the handlers barrel above) so the
+// in-process worker and the standalone worker process share a single
+// implementation. The previous inline copy handled only a subset of event
+// types and threw on the rest — any event it claimed but could not handle
+// (e.g. offer.created / offer.declined / offer.expired / offer.cancelled /
+// offer.sibling_declined, content.published, order.fulfilled,
+// order.refunded) retried until it dead-lettered. Keeping one handler module
+// removes that mirror-drift hazard permanently.
 async function sweepExpiredAuctions(reason: 'interval' | 'manual'): Promise<number> {
   const client = await db.connect();
 
@@ -12211,9 +12068,10 @@ app.post('/ops/escrow/release-sweep', async (request, reply) => {
       id: string;
       seller_id: string;
       subtotal_gbp: string | number;
+      listing_id: string;
     }>(
       `
-        SELECT id, seller_id, subtotal_gbp::text
+        SELECT id, seller_id, subtotal_gbp::text, listing_id
         FROM orders
         WHERE escrow_release_scheduled_at IS NOT NULL
           AND escrow_released_at IS NULL
@@ -12269,10 +12127,45 @@ app.post('/ops/escrow/release-sweep', async (request, reply) => {
           parcelEventType: 'delivered' as ParcelEventType,
         });
         if (release.released) {
+          // Funds released after the protection hold — the order reaches its
+          // 'completed' terminal state (mirrors the buyer-confirm path in
+          // POST /orders/:orderId/deliver).
           await client.query(
-            `UPDATE orders SET escrow_released_at = NOW(), updated_at = NOW() WHERE id = $1`,
+            `UPDATE orders
+             SET status = 'completed', escrow_released_at = NOW(), updated_at = NOW()
+             WHERE id = $1 AND status = 'delivered'`,
             [order.id]
           );
+          // Timeline row + order.fulfilled so sweep-completed orders get the
+          // same earnings/timeline treatment as buyer-confirmed ones. Both
+          // writes are dedup-keyed — a double completion is a no-op.
+          await client.query(
+            `INSERT INTO order_events (order_id, event_type, actor_id, source, deduplication_key, metadata)
+             VALUES ($1, 'order.completed', NULL, 'escrow_release_sweep', $2, $3::jsonb)
+             ON CONFLICT (order_id, deduplication_key)
+               WHERE deduplication_key IS NOT NULL
+             DO NOTHING`,
+            [
+              order.id,
+              `order.completed:${order.id}`,
+              toJsonString({ confirmedFrom: 'delivered', via: 'escrow_release_sweep' }),
+            ]
+          );
+          await appendDomainEvent(client, {
+            aggregateType: 'order',
+            aggregateId: order.id,
+            eventType: 'order.fulfilled',
+            payload: {
+              orderId: order.id,
+              sellerId: order.seller_id,
+              listingId: order.listing_id,
+              subtotalGbp: Number(order.subtotal_gbp),
+              deliveredAt: new Date().toISOString(),
+            },
+            actorId: order.seller_id,
+            idempotencyKey: `fulfilled_${order.id}`,
+            deduplicationKey: `order.fulfilled:${order.id}`,
+          });
           released.push({
             orderId: order.id,
             sellerId: order.seller_id,
@@ -12283,6 +12176,15 @@ app.post('/ops/escrow/release-sweep', async (request, reply) => {
     }
 
     await client.query('COMMIT');
+
+    // Sweep-completed orders must count in GMV/order-completed metrics the
+    // same way buyer-confirmed completions do — previously only the
+    // POST /orders/:orderId/deliver path recorded them, so sweep-completed
+    // sales were invisible to the metrics pipeline.
+    for (const entry of released) {
+      recordGmv(entry.amountGbp);
+      recordOrderCompleted();
+    }
 
     return {
       ok: true,
@@ -15564,41 +15466,19 @@ app.get('/listings', async (request) => {
   const pageRows = hasMore ? result.rows.slice(0, params.limit) : result.rows;
 
   const listingIds = pageRows.map((r) => r.id);
-  const imagesResult = listingIds.length
-      ? await readDb.query<{
-        listing_id: string;
-        image_url: string;
-        sort_order: number;
-        media_width: number | null;
-        media_height: number | null;
-      }>(
-        `SELECT
-           listing_id,
-           image_url,
-           sort_order,
-           NULLIF(to_jsonb(listing_images) ->> 'media_width', '')::integer AS media_width,
-           NULLIF(to_jsonb(listing_images) ->> 'media_height', '')::integer AS media_height
-         FROM listing_images
-         WHERE listing_id = ANY($1)
-         ORDER BY listing_id, sort_order`,
-        [listingIds]
-      )
-    : { rows: [] };
+  const mediaByListing = await loadListingMedia(readDb, listingIds);
 
   const imagesByListing = new Map<string, string[]>();
   const primaryGeometryByListing = new Map<string, { width: number; height: number } | null>();
-  for (const img of imagesResult.rows) {
-    const arr = imagesByListing.get(img.listing_id) ?? [];
-    arr.push(img.image_url);
-    imagesByListing.set(img.listing_id, arr);
-    if (!primaryGeometryByListing.has(img.listing_id)) {
-      primaryGeometryByListing.set(
-        img.listing_id,
-        img.media_width !== null && img.media_height !== null
-          ? { width: img.media_width, height: img.media_height }
-          : null,
-      );
-    }
+  for (const [listingRowId, mediaItems] of mediaByListing) {
+    imagesByListing.set(listingRowId, mediaItems.map((m) => m.uri));
+    const primary = mediaItems[0];
+    primaryGeometryByListing.set(
+      listingRowId,
+      primary && primary.width !== null && primary.height !== null
+        ? { width: primary.width, height: primary.height }
+        : null,
+    );
   }
 
   const lastRow = pageRows[pageRows.length - 1];
@@ -15622,6 +15502,7 @@ app.get('/listings', async (request) => {
         priceGbp: Number(row.price_gbp),
         imageUrl: row.image_url,
         images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
+        media: mediaByListing.get(row.id) ?? [],
         mediaWidth: primaryGeometry?.width ?? null,
         mediaHeight: primaryGeometry?.height ?? null,
         mediaAspectRatio: primaryGeometry
@@ -16122,13 +16003,8 @@ app.get('/listings/:listingId', async (request, reply) => {
     }
   }
 
-  const imagesResult = await readDb.query<{
-    image_url: string;
-    sort_order: number;
-  }>(
-    `SELECT image_url, sort_order FROM listing_images WHERE listing_id = $1 ORDER BY sort_order`,
-    [listingId]
-  );
+  const mediaByListing = await loadListingMedia(readDb, [listingId]);
+  const listingMedia = mediaByListing.get(listingId) ?? [];
 
   const itemPrice = Number(row.price_gbp);
   const buyerProtectionFee = Number(Math.max(
@@ -16186,7 +16062,8 @@ app.get('/listings/:listingId', async (request, reply) => {
       description: row.description,
       priceGbp: itemPrice,
       imageUrl: row.image_url,
-      images: imagesResult.rows.map((r) => r.image_url),
+      images: listingImageUrls(listingMedia, row.image_url),
+      media: listingMedia,
       status: row.status,
       category: row.category,
       brand: row.brand,
@@ -16267,7 +16144,7 @@ app.get('/listings/:listingId/sold-comparables', async (request, reply) => {
          FROM orders o
          INNER JOIN listings l ON l.id = o.listing_id
          WHERE o.listing_id <> $1
-           AND o.status IN ('paid', 'shipped', 'delivered')
+           AND o.status IN ('paid', 'shipped', 'delivered', 'completed')
            AND o.paid_at IS NOT NULL
            AND l.status = 'sold'
            AND LOWER(l.category) = LOWER($2)
@@ -16616,22 +16493,11 @@ app.get('/listings/:listingId/related', async (request, reply) => {
   );
 
   const listingIds = result.rows.map((r) => r.id);
-  const imagesResult = listingIds.length
-    ? await readDb.query<{
-        listing_id: string;
-        image_url: string;
-        sort_order: number;
-      }>(
-        `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
-        [listingIds]
-      )
-    : { rows: [] };
+  const mediaByListing = await loadListingMedia(readDb, listingIds);
 
   const imagesByListing = new Map<string, string[]>();
-  for (const img of imagesResult.rows) {
-    const arr = imagesByListing.get(img.listing_id) ?? [];
-    arr.push(img.image_url);
-    imagesByListing.set(img.listing_id, arr);
+  for (const [listingRowId, mediaItems] of mediaByListing) {
+    imagesByListing.set(listingRowId, mediaItems.map((m) => m.uri));
   }
 
   return {
@@ -16644,6 +16510,7 @@ app.get('/listings/:listingId/related', async (request, reply) => {
       priceGbp: Number(row.price_gbp),
       imageUrl: row.image_url,
       images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
+      media: mediaByListing.get(row.id) ?? [],
       status: row.status,
       category: row.category,
       brand: row.brand,
@@ -16755,27 +16622,21 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
     );
 
     const listingIds = result.rows.map((r) => r.id);
-    const imagesResult = listingIds.length
-      ? await readDb.query<{ listing_id: string; image_url: string; sort_order: number }>(
-          `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
-          [listingIds]
-        )
-      : { rows: [] };
+    const mediaByListing = await loadListingMedia(readDb, listingIds);
 
     const imagesByListing = new Map<string, string[]>();
-    for (const img of imagesResult.rows) {
-      const arr = imagesByListing.get(img.listing_id) ?? [];
-      arr.push(img.image_url);
-      imagesByListing.set(img.listing_id, arr);
+    for (const [listingRowId, mediaItems] of mediaByListing) {
+      imagesByListing.set(listingRowId, mediaItems.map((m) => m.uri));
     }
 
     return result.rows.map((row) => ({
       row,
       images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
+      media: mediaByListing.get(row.id) ?? [],
     }));
   };
 
-  const mapToListingItem = (candidate: { row: CandidateRow; images: string[] }) => ({
+  const mapToListingItem = (candidate: { row: CandidateRow; images: string[]; media: ListingMediaItem[] }) => ({
     id: candidate.row.id,
     sellerId: candidate.row.seller_id,
     title: candidate.row.title,
@@ -16783,6 +16644,7 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
     priceGbp: Number(candidate.row.price_gbp),
     imageUrl: candidate.row.image_url,
     images: candidate.images,
+    media: candidate.media,
     status: candidate.row.status,
     category: candidate.row.category,
     brand: candidate.row.brand,
@@ -16833,8 +16695,8 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
     }).score;
 
   const dedupeAndMap = (
-    candidates: Array<{ row: CandidateRow; images: string[] }>,
-    opts?: { scoreBy?: (c: { row: CandidateRow; images: string[] }) => number }
+    candidates: Array<{ row: CandidateRow; images: string[]; media: ListingMediaItem[] }>,
+    opts?: { scoreBy?: (c: { row: CandidateRow; images: string[]; media: ListingMediaItem[] }) => number }
   ) => {
     const filtered = candidates.filter((c) => !usedListingIds.has(c.row.id));
     if (opts?.scoreBy) {
@@ -17107,18 +16969,11 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
     );
 
     const listingIds = candidates.rows.map((r) => r.id);
-    const imagesResult = listingIds.length
-      ? await readDb.query<{ listing_id: string; image_url: string; sort_order: number }>(
-          `SELECT listing_id, image_url, sort_order FROM listing_images WHERE listing_id = ANY($1) ORDER BY sort_order`,
-          [listingIds]
-        )
-      : { rows: [] };
+    const mediaByListing = await loadListingMedia(readDb, listingIds);
 
     const imagesByListing = new Map<string, string[]>();
-    for (const img of imagesResult.rows) {
-      const arr = imagesByListing.get(img.listing_id) ?? [];
-      arr.push(img.image_url);
-      imagesByListing.set(img.listing_id, arr);
+    for (const [listingRowId, mediaItems] of mediaByListing) {
+      imagesByListing.set(listingRowId, mediaItems.map((m) => m.uri));
     }
 
     const mapped = candidates.rows
@@ -17126,6 +16981,7 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
       .map((row) => ({
         row,
         images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
+        media: mediaByListing.get(row.id) ?? [],
       }))
       .slice(0, limit);
 
@@ -17529,41 +17385,19 @@ app.get('/users/:userId/listings', async (request) => {
   );
 
   const listingIds = result.rows.map((r) => r.id);
-  const imagesResult = listingIds.length
-    ? await readDb.query<{
-        listing_id: string;
-        image_url: string;
-        sort_order: number;
-        media_width: number | null;
-        media_height: number | null;
-      }>(
-        `SELECT
-           listing_id,
-           image_url,
-           sort_order,
-           NULLIF(to_jsonb(listing_images) ->> 'media_width', '')::integer AS media_width,
-           NULLIF(to_jsonb(listing_images) ->> 'media_height', '')::integer AS media_height
-         FROM listing_images
-         WHERE listing_id = ANY($1)
-         ORDER BY listing_id, sort_order`,
-        [listingIds]
-      )
-    : { rows: [] };
+  const mediaByListing = await loadListingMedia(readDb, listingIds);
 
   const imagesByListing = new Map<string, string[]>();
   const primaryGeometryByListing = new Map<string, { width: number; height: number } | null>();
-  for (const img of imagesResult.rows) {
-    const arr = imagesByListing.get(img.listing_id) ?? [];
-    arr.push(img.image_url);
-    imagesByListing.set(img.listing_id, arr);
-    if (!primaryGeometryByListing.has(img.listing_id)) {
-      primaryGeometryByListing.set(
-        img.listing_id,
-        img.media_width !== null && img.media_height !== null
-          ? { width: img.media_width, height: img.media_height }
-          : null,
-      );
-    }
+  for (const [listingRowId, mediaItems] of mediaByListing) {
+    imagesByListing.set(listingRowId, mediaItems.map((m) => m.uri));
+    const primary = mediaItems[0];
+    primaryGeometryByListing.set(
+      listingRowId,
+      primary && primary.width !== null && primary.height !== null
+        ? { width: primary.width, height: primary.height }
+        : null,
+    );
   }
 
   return {
@@ -17577,6 +17411,7 @@ app.get('/users/:userId/listings', async (request) => {
         priceGbp: Number(row.price_gbp),
         imageUrl: row.image_url,
         images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
+        media: mediaByListing.get(row.id) ?? [],
         mediaWidth: primaryGeometry?.width ?? null,
         mediaHeight: primaryGeometry?.height ?? null,
         mediaAspectRatio: primaryGeometry
@@ -17658,12 +17493,22 @@ app.post('/listing-images', async (request, reply) => {
       media_asset_id: string | null;
       media_asset_status: string | null;
       canonical_url: string | null;
+      asset_blurhash: string | null;
+      asset_width: number | null;
+      asset_height: number | null;
+      asset_focal_x: string | number | null;
+      asset_focal_y: string | number | null;
     }>(
       `SELECT finalization.public_url, finalization.content_type,
               finalization.status, finalization.owner_id,
               finalization.media_asset_id,
               asset.status AS media_asset_status,
-              asset.canonical_url
+              asset.canonical_url,
+              asset.blurhash AS asset_blurhash,
+              asset.width AS asset_width,
+              asset.height AS asset_height,
+              asset.focal_x AS asset_focal_x,
+              asset.focal_y AS asset_focal_y
        FROM upload_finalizations finalization
        LEFT JOIN media_assets asset
          ON asset.id = finalization.media_asset_id
@@ -17737,13 +17582,18 @@ app.post('/listing-images', async (request, reply) => {
         payload.listingId,
         resolvedMediaUrl,
         payload.sortOrder,
-        payload.mediaWidth ?? null,
-        payload.mediaHeight ?? null,
+        // Prefer processor-measured dimensions (post-EXIF-orientation) over
+        // the client-declared values — the client reports the file's raw
+        // dims, which flip portrait↔landscape when orientation is baked in.
+        verifiedUpload.asset_width ?? payload.mediaWidth ?? null,
+        verifiedUpload.asset_height ?? payload.mediaHeight ?? null,
         payload.mediaType,
         payload.posterUrl ?? null,
-        payload.blurhash ?? null,
-        payload.focalX ?? null,
-        payload.focalY ?? null,
+        // Backfill the blurhash the media pipeline computed — the client
+        // never holds it because processing finishes after upload.
+        payload.blurhash ?? verifiedUpload.asset_blurhash ?? null,
+        payload.focalX ?? (verifiedUpload.asset_focal_x == null ? null : Number(verifiedUpload.asset_focal_x)),
+        payload.focalY ?? (verifiedUpload.asset_focal_y == null ? null : Number(verifiedUpload.asset_focal_y)),
       ],
     );
     if (!attached.rowCount) {
@@ -30734,14 +30584,24 @@ app.get('/orders/:orderId', async (request, reply) => {
     tracking_number: string | null;
     shipping_label_url: string | null;
     shipping_quote_gbp: number | string | null;
+    shipping_quote_id: string | null;
+    paid_at: string | null;
     shipped_at: string | null;
     delivered_at: string | null;
+    escrow_release_scheduled_at: string | null;
+    escrow_released_at: string | null;
     created_at: string;
     updated_at: string;
     buyer_username: string | null;
     buyer_avatar: string | null;
     seller_username: string | null;
     seller_avatar: string | null;
+    dispatch_sla_days: number | null;
+    return_window_days: number | null;
+    shipping_quote_hash: string | null;
+    quote_carrier_id: string | null;
+    quote_carrier_label: string | null;
+    quote_source: string | null;
   }>(
     `
       SELECT
@@ -30761,17 +30621,29 @@ app.get('/orders/:orderId', async (request, reply) => {
         o.tracking_number,
         o.shipping_label_url,
         o.shipping_quote_gbp,
+        o.shipping_quote_id,
+        o.paid_at::text,
         o.shipped_at::text,
         o.delivered_at::text,
+        o.escrow_release_scheduled_at::text,
+        o.escrow_released_at::text,
         o.created_at::text,
         o.updated_at::text,
         bu.username AS buyer_username,
         bu.avatar AS buyer_avatar,
         su.username AS seller_username,
-        su.avatar AS seller_avatar
+        su.avatar AS seller_avatar,
+        srs.dispatch_sla_days,
+        srs.return_window_days,
+        sq.quote_hash AS shipping_quote_hash,
+        sq.carrier_id AS quote_carrier_id,
+        sq.carrier_label AS quote_carrier_label,
+        sq.source AS quote_source
       FROM orders o
       LEFT JOIN users bu ON bu.id = o.buyer_id
       LEFT JOIN users su ON su.id = o.seller_id
+      LEFT JOIN order_seller_rights_snapshot srs ON srs.order_id = o.id
+      LEFT JOIN commerce_shipping_quotes sq ON sq.id = o.shipping_quote_id
       WHERE o.id = $1
       LIMIT 1
     `,
@@ -30789,6 +30661,94 @@ app.get('/orders/:orderId', async (request, reply) => {
     reply.code(403);
     return { ok: false, error: 'Forbidden: you do not have access to this order' };
   }
+
+  // Dispatch-extension state: accepted rows shift shipByDate; a pending row
+  // is surfaced so the buyer can respond. The table is optional (migration
+  // 280) so probe availability first.
+  let acceptedShipBy: string | null = null;
+  let pendingExtension: {
+    id: string;
+    extension_days: number;
+    proposed_ship_by: string;
+    proposed_by: string;
+    created_at: string;
+  } | null = null;
+  if (await orderDispatchExtensionsTableAvailable(db)) {
+    const extensionRows = await db.query<{
+      id: string;
+      status: string;
+      extension_days: number;
+      proposed_ship_by: string;
+      proposed_by: string;
+      created_at: string;
+    }>(
+      `SELECT id, status, extension_days, proposed_ship_by::text, proposed_by, created_at::text
+       FROM order_dispatch_extensions
+       WHERE order_id = $1 AND status IN ('pending', 'accepted')
+       ORDER BY created_at DESC`,
+      [orderId]
+    );
+    for (const ext of extensionRows.rows) {
+      if (ext.status === 'accepted' && !acceptedShipBy) {
+        acceptedShipBy = ext.proposed_ship_by;
+      }
+      if (ext.status === 'pending' && !pendingExtension) {
+        pendingExtension = ext;
+      }
+    }
+  }
+
+  // shipByDate: accepted extension override wins; otherwise paid_at (or
+  // created_at) + the snapshotted dispatch SLA.
+  const dispatchSlaDays = row.dispatch_sla_days === null ? null : Number(row.dispatch_sla_days);
+  const shipByDate = acceptedShipBy
+    ?? computeBaseShipByDate(row.paid_at, row.created_at, dispatchSlaDays);
+
+  // Inspection window = the buyer-protection hold after delivery. When the
+  // carrier path already scheduled escrow release, that timestamp IS
+  // delivered_at + hold — reuse it so both surfaces agree.
+  const inspectionDeadlineAt = row.escrow_release_scheduled_at
+    ?? (row.delivered_at
+      ? new Date(
+          new Date(row.delivered_at).getTime() + config.buyerProtectionHoldHours * 60 * 60 * 1000
+        ).toISOString()
+      : null);
+
+  // Purchased-service snapshot for the guided dispatch flow. Only evidence
+  // from persisted rows is surfaced; fields with no stored source stay null.
+  const deliveryMode: 'integrated' | 'manual' | 'unknown' =
+    row.quote_source === 'live' ||
+    (row.shipping_provider !== null &&
+      row.shipping_provider !== 'manual' &&
+      row.shipping_provider !== 'untracked' &&
+      row.shipping_provider !== 'seller_assertion')
+      ? 'integrated'
+      : row.shipping_provider !== null || row.shipping_quote_id !== null
+        ? 'manual'
+        : 'unknown';
+  const hasFulfilmentEvidence = dispatchSlaDays !== null || row.shipping_quote_id !== null;
+  const fulfilmentSnapshot = hasFulfilmentEvidence
+    ? {
+        quoteId: row.shipping_quote_id,
+        quoteHash: row.shipping_quote_hash,
+        carrierId: row.quote_carrier_id ?? row.shipping_carrier_id,
+        serviceCode: null,
+        serviceName: row.quote_carrier_label,
+        deliveryMode,
+        // Per-quote ETA days are not persisted on commerce_shipping_quotes
+        // (only provider/quoteRef metadata is) — left null rather than
+        // re-deriving catalog values that may have drifted since purchase.
+        etaMinDays: null,
+        etaMaxDays: null,
+        // Live carrier quotes always include tracking; for manual flows the
+        // tracking number itself is the evidence.
+        trackingIncluded: row.quote_source === 'live' ? true : row.tracking_number !== null,
+        shipByDate,
+        destinationSummary: null,
+        parcelProfile: null,
+        dispatchSlaDays,
+      }
+    : null;
 
   const platformChargeGbp = Number(row.buyer_protection_fee_gbp);
   return {
@@ -30813,8 +30773,28 @@ app.get('/orders/:orderId', async (request, reply) => {
       shippingQuoteGbp: row.shipping_quote_gbp === null ? null : Number(row.shipping_quote_gbp),
       shippedAt: row.shipped_at,
       deliveredAt: row.delivered_at,
+      paidAt: row.paid_at,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+      // Dispatch/protection contract: server-derived deadlines the client
+      // renders without recomputing policy.
+      shipByDate,
+      inspectionDeadlineAt,
+      fulfilmentSnapshot,
+      dispatchExtension: pendingExtension
+        ? {
+            id: pendingExtension.id,
+            days: pendingExtension.extension_days,
+            proposedShipBy: pendingExtension.proposed_ship_by,
+            proposedBy: pendingExtension.proposed_by,
+            status: 'pending' as const,
+            createdAt: pendingExtension.created_at,
+          }
+        : null,
+      moneyProjection: {
+        estimatedReleaseAt: row.escrow_release_scheduled_at,
+        releasedAt: row.escrow_released_at,
+      },
       buyer: row.buyer_username ? { id: row.buyer_id, username: row.buyer_username, avatar: row.buyer_avatar ?? null } : null,
       seller: row.seller_username ? { id: row.seller_id, username: row.seller_username, avatar: row.seller_avatar ?? null } : null,
     },
@@ -30884,7 +30864,10 @@ app.get('/users/:userId/orders', async (request) => {
       needs_action: ['created', 'paid'],
       active: ['created', 'paid', 'shipped'],
       completed: ['delivered', 'completed'],
-      cancelled: ['cancelled', 'refunded'],
+      // 'refunding' is the in-flight refund state — group it with the
+      // cancelled/refunded bucket so refunding orders stay visible in the
+      // history filter while the provider outcome resolves.
+      cancelled: ['cancelled', 'refunded', 'refunding'],
     };
     const set = classificationSets[classification];
     if (set && set.length > 0) {
@@ -30926,6 +30909,22 @@ app.get('/users/:userId/orders', async (request) => {
 
   const whereClause = conditions.join(' AND ');
 
+  // Dispatch extension table is optional (migration 280) — probe once and
+  // splice the accepted-extension join in only when it exists.
+  const extensionsAvailable = await orderDispatchExtensionsTableAvailable(db);
+  const extensionSelect = extensionsAvailable
+    ? `ext.proposed_ship_by::text AS extension_ship_by,`
+    : `NULL::text AS extension_ship_by,`;
+  const extensionJoin = extensionsAvailable
+    ? `LEFT JOIN LATERAL (
+         SELECT d.proposed_ship_by
+         FROM order_dispatch_extensions d
+         WHERE d.order_id = o.id AND d.status = 'accepted'
+         ORDER BY d.responded_at DESC NULLS LAST, d.created_at DESC
+         LIMIT 1
+       ) ext ON TRUE`
+    : '';
+
   // Use LEFT JOIN on listings so deleted listings don't break history
   const result = await db.query<{
     id: string;
@@ -30945,6 +30944,9 @@ app.get('/users/:userId/orders', async (request) => {
     listing_image_url: string | null;
     buyer_username: string | null;
     seller_username: string | null;
+    paid_at: string | null;
+    dispatch_sla_days: number | null;
+    extension_ship_by: string | null;
   }>(
     `
       SELECT
@@ -30961,6 +30963,9 @@ app.get('/users/:userId/orders', async (request) => {
         o.shipped_at::text,
         o.delivered_at::text,
         o.created_at,
+        o.paid_at::text,
+        srs.dispatch_sla_days,
+        ${extensionSelect}
         l.title AS listing_title,
         l.image_url AS listing_image_url,
         bu.username AS buyer_username,
@@ -30969,6 +30974,8 @@ app.get('/users/:userId/orders', async (request) => {
       LEFT JOIN listings l ON l.id = o.listing_id
       LEFT JOIN users bu ON bu.id = o.buyer_id
       LEFT JOIN users su ON su.id = o.seller_id
+      LEFT JOIN order_seller_rights_snapshot srs ON srs.order_id = o.id
+      ${extensionJoin}
       WHERE ${whereClause}
       ORDER BY o.created_at DESC
       LIMIT $${paramIdx}
@@ -30984,25 +30991,49 @@ app.get('/users/:userId/orders', async (request) => {
 
   return {
     ok: true,
-    items: items.map((row) => ({
-      id: row.id,
-      buyerId: row.buyer_id,
-      sellerId: row.seller_id,
-      listingId: row.listing_id,
-      listingTitle: row.listing_title,
-      listingImageUrl: row.listing_image_url,
-      status: row.status,
-      subtotalGbp: Number(row.subtotal_gbp),
-      postageFeeGbp: Number(row.postage_fee_gbp),
-      totalGbp: Number(row.total_gbp),
-      trackingNumber: row.tracking_number,
-      shippingProvider: row.shipping_provider,
-      shippedAt: row.shipped_at,
-      deliveredAt: row.delivered_at,
-      createdAt: row.created_at,
-      buyerUsername: row.buyer_username,
-      sellerUsername: row.seller_username,
-    })),
+    items: items.map((row) => {
+      const dispatchSlaDays = row.dispatch_sla_days === null ? null : Number(row.dispatch_sla_days);
+      const shipByDate = row.extension_ship_by
+        ?? computeBaseShipByDate(row.paid_at, row.created_at, dispatchSlaDays);
+      return {
+        id: row.id,
+        buyerId: row.buyer_id,
+        sellerId: row.seller_id,
+        listingId: row.listing_id,
+        listingTitle: row.listing_title,
+        listingImageUrl: row.listing_image_url,
+        status: row.status,
+        subtotalGbp: Number(row.subtotal_gbp),
+        postageFeeGbp: Number(row.postage_fee_gbp),
+        totalGbp: Number(row.total_gbp),
+        trackingNumber: row.tracking_number,
+        shippingProvider: row.shipping_provider,
+        shippedAt: row.shipped_at,
+        deliveredAt: row.delivered_at,
+        createdAt: row.created_at,
+        buyerUsername: row.buyer_username,
+        sellerUsername: row.seller_username,
+        // Server-derived ship-by deadline (SLA snapshot or accepted extension).
+        shipByDate,
+        fulfilmentSnapshot: dispatchSlaDays !== null
+          ? {
+              quoteId: null,
+              quoteHash: null,
+              carrierId: null,
+              serviceCode: null,
+              serviceName: null,
+              deliveryMode: 'unknown' as const,
+              etaMinDays: null,
+              etaMaxDays: null,
+              trackingIncluded: row.tracking_number !== null,
+              shipByDate,
+              destinationSummary: null,
+              parcelProfile: null,
+              dispatchSlaDays,
+            }
+          : null,
+      };
+    }),
     nextCursor,
   };
 });
@@ -31316,8 +31347,14 @@ app.post('/orders/:orderId/deliver', async (request, reply) => {
       status: string;
       subtotal_gbp: number | string;
       shipping_provider: string | null;
+      listing_id: string;
+      delivered_at: string | null;
+      escrow_release_scheduled_at: string | null;
+      escrow_released_at: string | null;
     }>(
-      `SELECT buyer_id, seller_id, status, subtotal_gbp, shipping_provider FROM orders WHERE id = $1 LIMIT 1 FOR UPDATE`,
+      `SELECT buyer_id, seller_id, status, subtotal_gbp, shipping_provider, listing_id,
+              delivered_at::text, escrow_release_scheduled_at::text, escrow_released_at::text
+       FROM orders WHERE id = $1 LIMIT 1 FOR UPDATE`,
       [orderId]
     );
 
@@ -31332,26 +31369,459 @@ app.post('/orders/:orderId/deliver', async (request, reply) => {
       return { ok: false, error: 'Only the buyer can confirm delivery' };
     }
 
-    if (order.status !== 'shipped') {
+    // Idempotent: re-confirming an already-completed order is a no-op.
+    if (order.status === 'completed') {
+      await client.query('COMMIT');
+      return { ok: true, orderId, status: 'completed', alreadyCompleted: true };
+    }
+
+    // Accept both 'shipped' (manual flow — the buyer's confirmation IS the
+    // delivery signal) and 'delivered' (integrated flow — the carrier webhook
+    // already moved the order, and the buyer now acknowledges it via the
+    // "Everything is OK" action). Previously 'delivered' returned 409, which
+    // broke confirmation on every carrier-integrated order.
+    if (order.status !== 'shipped' && order.status !== 'delivered') {
       reply.code(409);
       return { ok: false, error: `Cannot confirm delivery from status: ${order.status}` };
     }
 
+    // Gate 6: Check for open blocking disputes before releasing escrow.
+    // Buyer acknowledgement cannot release money while any return/dispute/
+    // blocking risk state is open.
+    const blockingTicketsResult = await client.query<{ id: string; topic_id: string }>(
+      `SELECT id, topic_id FROM support_tickets
+       WHERE order_id = $1 AND status = 'open'
+         AND topic_id IN ('buyer_protection', 'buyer_protection_claim', 'item_not_as_described', 'refund_request')`,
+      [orderId]
+    );
+    const hasOpenBlockingDispute = blockingTicketsResult.rows.length > 0;
+
+    // Payment-gateway disputes: parity with POST /ops/escrow/release-sweep —
+    // buyer confirmation must not release money while a PSP dispute is open.
+    let hasOpenGatewayDispute = false;
+    if (await paymentDisputesTableAvailable(client)) {
+      const gatewayDispute = await client.query<{ exists: boolean }>(
+        `SELECT EXISTS (
+           SELECT 1 FROM payment_disputes d
+           JOIN payment_intents i ON i.id = d.intent_id
+           WHERE i.order_id = $1
+             AND d.status IN ('open', 'warning', 'needs_response')
+             AND d.evidence_submitted_at IS NULL
+         ) AS exists`,
+        [orderId]
+      );
+      hasOpenGatewayDispute = Boolean(gatewayDispute.rows[0]?.exists);
+    }
+
+    const holdActive = hasOpenBlockingDispute || hasOpenGatewayDispute;
+    const ledgerReady = await ledgerTablesAvailable(client);
+
+    if (holdActive || !ledgerReady) {
+      // Delivery is acknowledged, but funds are held while a dispute is open
+      // (or the ledger is unavailable). Keep the order in 'delivered' and
+      // schedule the escrow release so the sweep completes the order once
+      // the hold expires with no open dispute/claim.
+      const holdHours = config.buyerProtectionHoldHours;
+      const scheduleBase = order.delivered_at ?? new Date().toISOString();
+      const scheduledAt = new Date(
+        new Date(scheduleBase).getTime() + holdHours * 60 * 60 * 1000
+      ).toISOString();
+      await client.query(
+        `UPDATE orders
+         SET status = 'delivered',
+             delivered_at = COALESCE(delivered_at, NOW()),
+             escrow_release_scheduled_at = COALESCE(escrow_release_scheduled_at, $2),
+             updated_at = NOW()
+         WHERE id = $1`,
+        [orderId, scheduledAt]
+      );
+      request.log.warn(
+        {
+          orderId,
+          ticketIds: blockingTicketsResult.rows.map(r => r.id),
+          hasOpenGatewayDispute,
+          ledgerReady,
+        },
+        'Escrow release blocked — delivery confirmed, funds held for sweep'
+      );
+      await client.query('COMMIT');
+      return {
+        ok: true,
+        orderId,
+        status: 'delivered',
+        escrowHeld: true,
+        holdReason: holdActive ? 'OPEN_DISPUTE' : 'LEDGER_UNAVAILABLE',
+        message: holdActive
+          ? 'Delivery confirmed. Funds are held while an open dispute is resolved.'
+          : 'Delivery confirmed. Funds release is deferred to the settlement sweep.',
+      };
+    }
+
+    // Clean confirmation: the buyer explicitly accepting the order is the
+    // escrow release signal — the remainder of the protection hold is waived
+    // (same semantics as Vinted's "Everything is OK"). The order transitions
+    // to the 'completed' terminal state and escrow releases immediately.
     await client.query(
-      `UPDATE orders SET status = 'delivered', delivered_at = NOW(), updated_at = NOW() WHERE id = $1`,
+      `UPDATE orders
+       SET status = 'completed',
+           delivered_at = COALESCE(delivered_at, NOW()),
+           updated_at = NOW()
+       WHERE id = $1`,
       [orderId]
     );
 
-    await releaseCommerceOrderEscrowToSeller(client, {
+    const release = await releaseCommerceOrderEscrowToSeller(client, {
       orderId,
       sellerId: order.seller_id,
       subtotalGbp: Number(order.subtotal_gbp),
       parcelProvider: order.shipping_provider ?? 'manual',
       parcelEventType: 'delivered',
     });
+    if (release.released || release.alreadyReleased) {
+      await client.query(
+        `UPDATE orders SET escrow_released_at = COALESCE(escrow_released_at, NOW()) WHERE id = $1`,
+        [orderId]
+      );
+    }
+
+    // Durable timeline row for the buyer-confirmation transition.
+    await client.query(
+      `INSERT INTO order_events (order_id, event_type, actor_id, source, deduplication_key, metadata)
+       VALUES ($1, 'order.completed', $2, 'buyer', $3, $4::jsonb)
+       ON CONFLICT (order_id, deduplication_key)
+         WHERE deduplication_key IS NOT NULL
+       DO NOTHING`,
+      [
+        orderId,
+        userId,
+        `order.completed:${orderId}`,
+        toJsonString({ confirmedFrom: order.status }),
+      ]
+    );
+
+    // Emit order.fulfilled for the creator earnings ledger.
+    // The outbox drain handler creates an immutable 'earned' entry
+    // with the commission rate at time of fulfillment.
+    await appendDomainEvent(client, {
+      aggregateType: 'order',
+      aggregateId: orderId,
+      eventType: 'order.fulfilled',
+      payload: {
+        orderId,
+        sellerId: order.seller_id,
+        listingId: order.listing_id,
+        subtotalGbp: Number(order.subtotal_gbp),
+        deliveredAt: new Date().toISOString(),
+      },
+      actorId: order.seller_id,
+      idempotencyKey: `fulfilled_${orderId}`,
+      deduplicationKey: `order.fulfilled:${orderId}`,
+    });
 
     await client.query('COMMIT');
-    return { ok: true, orderId, status: 'delivered' };
+    recordGmv(Number(order.subtotal_gbp));
+    recordOrderCompleted();
+    // Same settlement notifications the carrier parcel path sends — the
+    // seller must hear that escrow was released on buyer confirmation too.
+    // orderStatus 'completed' skips the buyer "delivered" ping (the buyer
+    // just confirmed receipt) and emits only order_escrow_released.
+    try {
+      await queueCommerceParcelSettlementNotifications({
+        orderId,
+        buyerId: order.buyer_id,
+        sellerId: order.seller_id,
+        orderStatus: 'completed',
+        sellerPayableReleasedGbp: release.released ? Number(order.subtotal_gbp) : 0,
+        source: 'buyer_confirm',
+        provider: order.shipping_provider ?? 'manual',
+        eventType: 'delivered',
+      });
+    } catch (notificationError) {
+      request.log.error(
+        { err: notificationError, orderId },
+        'Failed to queue settlement notifications after buyer confirmation'
+      );
+    }
+    return { ok: true, orderId, status: 'completed' };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+});
+
+// ── Dispatch extension (SLA renegotiation) ──────────────────────────────
+// A seller who cannot meet the snapshotted dispatch SLA proposes extra days;
+// the buyer accepts or declines. The seller-rights snapshot stays immutable —
+// extensions are separate rows so the original purchase-time terms remain
+// auditable. An accepted extension shifts the derived shipByDate.
+
+app.post('/orders/:orderId/dispatch-extension', async (request, reply) => {
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const bodySchema = z.object({
+    days: z.coerce.number().int().min(1).max(30),
+    note: z.string().max(500).optional(),
+  });
+  const { orderId } = paramsSchema.parse(request.params);
+  const body = bodySchema.parse(request.body ?? {});
+  const userId = (request as any).authUser?.userId as string | undefined;
+
+  if (!userId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    if (!(await orderDispatchExtensionsTableAvailable(client))) {
+      await client.query('ROLLBACK');
+      reply.code(503);
+      return { ok: false, error: 'Dispatch extensions are unavailable. Run migrations first.' };
+    }
+
+    const orderResult = await client.query<{
+      buyer_id: string;
+      seller_id: string;
+      status: string;
+      paid_at: string | null;
+      created_at: string;
+      dispatch_sla_days: number | null;
+    }>(
+      `SELECT o.buyer_id, o.seller_id, o.status, o.paid_at::text, o.created_at::text,
+              srs.dispatch_sla_days
+       FROM orders o
+       LEFT JOIN order_seller_rights_snapshot srs ON srs.order_id = o.id
+       WHERE o.id = $1 LIMIT 1 FOR UPDATE OF o`,
+      [orderId]
+    );
+
+    const order = orderResult.rows[0];
+    if (!order) {
+      await client.query('ROLLBACK');
+      reply.code(404);
+      return { ok: false, error: 'Order not found' };
+    }
+
+    if (order.seller_id !== userId) {
+      await client.query('ROLLBACK');
+      reply.code(403);
+      return { ok: false, error: 'Only the seller can propose a dispatch extension' };
+    }
+
+    // The SLA clock runs from payment; once shipped there is nothing to
+    // extend, and before payment there is no dispatch obligation yet.
+    if (order.status !== 'paid') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: `Cannot propose a dispatch extension for an order in status: ${order.status}` };
+    }
+
+    const pending = await client.query<{ id: string }>(
+      `SELECT id FROM order_dispatch_extensions
+       WHERE order_id = $1 AND status = 'pending' LIMIT 1`,
+      [orderId]
+    );
+    if (pending.rowCount) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'A dispatch extension is already pending buyer response', code: 'EXTENSION_PENDING' };
+    }
+
+    // Base ship-by: the latest accepted extension wins; otherwise the
+    // snapshot SLA anchored at payment time.
+    const accepted = await client.query<{ proposed_ship_by: string }>(
+      `SELECT proposed_ship_by::text FROM order_dispatch_extensions
+       WHERE order_id = $1 AND status = 'accepted'
+       ORDER BY responded_at DESC NULLS LAST, created_at DESC LIMIT 1`,
+      [orderId]
+    );
+    const baseShipBy = accepted.rows[0]?.proposed_ship_by
+      ?? computeBaseShipByDate(order.paid_at, order.created_at, order.dispatch_sla_days ?? 3)
+      ?? new Date().toISOString();
+    const proposedShipBy = new Date(
+      new Date(baseShipBy).getTime() + body.days * 24 * 60 * 60 * 1000
+    ).toISOString();
+
+    const extensionId = createRuntimeId('odx');
+    const inserted = await client.query<{ created_at: string }>(
+      `INSERT INTO order_dispatch_extensions
+         (id, order_id, proposed_by, extension_days, proposed_ship_by, status)
+       VALUES ($1, $2, $3, $4, $5, 'pending')
+       RETURNING created_at::text`,
+      [extensionId, orderId, userId, body.days, proposedShipBy]
+    );
+
+    await client.query(
+      `INSERT INTO order_events (order_id, event_type, actor_id, source, deduplication_key, metadata)
+       VALUES ($1, 'dispatch_extension.proposed', $2, 'seller', $3, $4::jsonb)
+       ON CONFLICT (order_id, deduplication_key)
+         WHERE deduplication_key IS NOT NULL
+       DO NOTHING`,
+      [
+        orderId,
+        userId,
+        `dispatch_extension.proposed:${extensionId}`,
+        toJsonString({ extensionId, days: body.days, proposedShipBy, note: body.note ?? null }),
+      ]
+    );
+
+    await appendDomainEvent(client, {
+      aggregateType: 'order',
+      aggregateId: orderId,
+      eventType: 'order.dispatch_extension_proposed',
+      actorId: userId,
+      correlationId: request.id,
+      idempotencyKey: `dispatch_extension_proposed_${extensionId}`,
+      deduplicationKey: `order.dispatch_extension_proposed:${extensionId}`,
+      payload: { orderId, extensionId, days: body.days, proposedShipBy, buyerId: order.buyer_id },
+    });
+
+    await client.query('COMMIT');
+    reply.code(201);
+    return {
+      ok: true,
+      extension: {
+        id: extensionId,
+        orderId,
+        days: body.days,
+        proposedShipBy,
+        status: 'pending',
+        createdAt: inserted.rows[0]?.created_at ?? new Date().toISOString(),
+      },
+    };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/orders/:orderId/dispatch-extension/respond', async (request, reply) => {
+  const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+  const bodySchema = z.object({
+    accept: z.boolean(),
+    extensionId: z.string().min(4).max(64).optional(),
+  });
+  const { orderId } = paramsSchema.parse(request.params);
+  const body = bodySchema.parse(request.body ?? {});
+  const userId = (request as any).authUser?.userId as string | undefined;
+
+  if (!userId) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    if (!(await orderDispatchExtensionsTableAvailable(client))) {
+      await client.query('ROLLBACK');
+      reply.code(503);
+      return { ok: false, error: 'Dispatch extensions are unavailable. Run migrations first.' };
+    }
+
+    const orderResult = await client.query<{ buyer_id: string }>(
+      `SELECT buyer_id FROM orders WHERE id = $1 LIMIT 1 FOR UPDATE`,
+      [orderId]
+    );
+    const order = orderResult.rows[0];
+    if (!order) {
+      await client.query('ROLLBACK');
+      reply.code(404);
+      return { ok: false, error: 'Order not found' };
+    }
+    if (order.buyer_id !== userId) {
+      await client.query('ROLLBACK');
+      reply.code(403);
+      return { ok: false, error: 'Only the buyer can respond to a dispatch extension' };
+    }
+
+    const extensionResult = await client.query<{
+      id: string;
+      extension_days: number;
+      proposed_ship_by: string;
+      proposed_by: string;
+      created_at: string;
+    }>(
+      `SELECT id, extension_days, proposed_ship_by::text, proposed_by, created_at::text
+       FROM order_dispatch_extensions
+       WHERE order_id = $1 AND status = 'pending'
+         ${body.extensionId ? 'AND id = $2' : ''}
+       ORDER BY created_at DESC
+       LIMIT 1
+       FOR UPDATE`,
+      body.extensionId ? [orderId, body.extensionId] : [orderId]
+    );
+    const extension = extensionResult.rows[0];
+    if (!extension) {
+      await client.query('ROLLBACK');
+      reply.code(404);
+      return { ok: false, error: 'No pending dispatch extension for this order' };
+    }
+
+    const nextStatus = body.accept ? 'accepted' : 'declined';
+    await client.query(
+      `UPDATE order_dispatch_extensions
+       SET status = $2, responded_by = $3, responded_at = NOW()
+       WHERE id = $1`,
+      [extension.id, nextStatus, userId]
+    );
+
+    await client.query(
+      `INSERT INTO order_events (order_id, event_type, actor_id, source, deduplication_key, metadata)
+       VALUES ($1, $2, $3, 'buyer', $4, $5::jsonb)
+       ON CONFLICT (order_id, deduplication_key)
+         WHERE deduplication_key IS NOT NULL
+       DO NOTHING`,
+      [
+        orderId,
+        `dispatch_extension.${nextStatus}`,
+        userId,
+        `dispatch_extension.${nextStatus}:${extension.id}`,
+        toJsonString({ extensionId: extension.id, days: extension.extension_days, proposedShipBy: extension.proposed_ship_by }),
+      ]
+    );
+
+    await appendDomainEvent(client, {
+      aggregateType: 'order',
+      aggregateId: orderId,
+      eventType: 'order.dispatch_extension_responded',
+      actorId: userId,
+      correlationId: request.id,
+      idempotencyKey: `dispatch_extension_responded_${extension.id}`,
+      deduplicationKey: `order.dispatch_extension_responded:${extension.id}`,
+      payload: {
+        orderId,
+        extensionId: extension.id,
+        accepted: body.accept,
+        // proposed_ship_by::text renders Postgres format — normalise to
+        // ISO-8601 so the drain handler's z.string().datetime() accepts it.
+        proposedShipBy: new Date(extension.proposed_ship_by).toISOString(),
+        // The proposing party is always the seller — the drain handler
+        // notifies them of the buyer's response.
+        sellerId: extension.proposed_by,
+      },
+    });
+
+    await client.query('COMMIT');
+    return {
+      ok: true,
+      extension: {
+        id: extension.id,
+        orderId,
+        days: extension.extension_days,
+        proposedShipBy: extension.proposed_ship_by,
+        status: nextStatus,
+        createdAt: extension.created_at,
+      },
+      // On acceptance the new deadline becomes effective immediately.
+      shipByDate: body.accept ? extension.proposed_ship_by : null,
+    };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -33662,51 +34132,26 @@ app.get('/auctions/:auctionId', async (request, reply) => {
     [auctionId]
   );
 
-  const mediaResult = await db.query<{
-    id: string;
-    image_url: string;
-    sort_order: number;
-    media_width: number | null;
-    media_height: number | null;
-    media_type: 'image' | 'video' | null;
-    poster_url: string | null;
-    poster_verified_at: string | null;
-    blurhash: string | null;
-    focal_x: string | number | null;
-    focal_y: string | number | null;
-  }>(
-    `
-      SELECT
-        id,
-        image_url,
-        sort_order,
-        NULLIF(to_jsonb(listing_images) ->> 'media_width', '')::integer AS media_width,
-        NULLIF(to_jsonb(listing_images) ->> 'media_height', '')::integer AS media_height,
-        COALESCE(NULLIF(to_jsonb(listing_images) ->> 'media_type', ''), 'image') AS media_type,
-        NULLIF(to_jsonb(listing_images) ->> 'poster_url', '') AS poster_url,
-        NULLIF(to_jsonb(listing_images) ->> 'poster_verified_at', '') AS poster_verified_at,
-        NULLIF(to_jsonb(listing_images) ->> 'blurhash', '') AS blurhash,
-        NULLIF(to_jsonb(listing_images) ->> 'focal_x', '') AS focal_x,
-        NULLIF(to_jsonb(listing_images) ->> 'focal_y', '') AS focal_y
-      FROM listing_images
-      WHERE listing_id = $1
-      ORDER BY sort_order, created_at, id
-    `,
-    [row.listing_id]
-  );
+  // Canonical media projection — the same `media[]` contract listing reads
+  // serve: derivatives ladder, LQIP and processing-computed blurhash are
+  // resolved through media_bindings → media_assets → media_derivatives.
+  const auctionMediaByListing = await loadListingMedia(db, [row.listing_id]);
+  const auctionMedia = auctionMediaByListing.get(row.listing_id) ?? [];
 
-  const mediaItems = mediaResult.rows.map((media) => ({
+  const mediaItems = auctionMedia.map((media) => ({
     id: media.id,
-    type: media.media_type === 'video' ? 'video' as const : 'image' as const,
-    url: media.image_url,
-    width: media.media_width,
-    height: media.media_height,
+    type: media.kind,
+    url: media.uri,
+    width: media.width,
+    height: media.height,
     blurhash: media.blurhash,
-    focalX: media.focal_x == null ? null : Number(media.focal_x),
-    focalY: media.focal_y == null ? null : Number(media.focal_y),
-    posterUrl: media.poster_url,
-    posterVerifiedAt: media.poster_verified_at,
-    order: media.sort_order,
+    focalX: media.focalPoint?.x ?? null,
+    focalY: media.focalPoint?.y ?? null,
+    posterUrl: media.poster,
+    posterVerifiedAt: media.posterVerifiedAt,
+    order: media.sortOrder,
+    lqip: media.lqip,
+    derivatives: media.derivatives,
   }));
 
   if (mediaItems.length === 0 && row.image_url) {
@@ -33722,6 +34167,8 @@ app.get('/auctions/:auctionId', async (request, reply) => {
       posterUrl: null,
       posterVerifiedAt: null,
       order: 0,
+      lqip: null,
+      derivatives: [],
     });
   }
 

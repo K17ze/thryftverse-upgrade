@@ -27,7 +27,7 @@ import Reanimated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
-import { useReducedMotion } from 'react-native-reanimated';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 import { AppIcon, type AppIconProps } from './AppIcon';
 import {

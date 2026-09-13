@@ -31,10 +31,10 @@ export function EscrowBanner({ order, normalisedStatus }: Props) {
         <Text style={[styles.escrowSub, themed.escrowSub]}>
           {normalisedStatus === 'paid'
             ? 'Payment confirmed. Funds are held until the seller dispatches.'
-            : 'Funds are held. Confirm receipt to release funds to the seller.'}
+            : 'Funds are held until delivery is confirmed.'}
         </Text>
         {(() => {
-          const releaseAt = (order as any)?.moneyProjection?.estimatedReleaseAt;
+          const releaseAt = order.moneyProjection?.estimatedReleaseAt;
           if (!releaseAt) return null;
           const releaseTime = new Date(releaseAt).getTime();
           if (Number.isNaN(releaseTime)) return null;

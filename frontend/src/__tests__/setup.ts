@@ -166,6 +166,34 @@ vi.mock('react-native', async () => {
       getColorScheme: () => 'light',
       addChangeListener: () => ({ remove: () => {} }),
     },
+    // PanResponder.create returns the config as panHandlers so tests can
+    // inspect or invoke the responder callbacks directly if needed.
+    PanResponder: {
+      create: (config: any) => ({ panHandlers: { ...config } }),
+    },
+    AccessibilityInfo: {
+      announceForAccessibility: vi.fn(() => Promise.resolve()),
+      isReduceMotionEnabled: vi.fn(() => Promise.resolve(false)),
+      isReduceTransparencyEnabled: vi.fn(() => Promise.resolve(false)),
+      isScreenReaderEnabled: vi.fn(() => Promise.resolve(false)),
+      isBoldTextEnabled: vi.fn(() => Promise.resolve(false)),
+      isGrayscaleEnabled: vi.fn(() => Promise.resolve(false)),
+      isInvertColorsEnabled: vi.fn(() => Promise.resolve(false)),
+      addEventListener: vi.fn(() => ({ remove: () => {} })),
+      removeEventListener: vi.fn(),
+      setAccessibilityFocus: vi.fn(),
+      sendAccessibilityEvent: vi.fn(),
+    },
+    UIManager: {
+      setLayoutAnimationEnabledExperimental: vi.fn(),
+    },
+    LayoutAnimation: {
+      configureNext: vi.fn(),
+      create: vi.fn(),
+      Types: { easeInEaseOut: 'easeInEaseOut', linear: 'linear', spring: 'spring' },
+      Properties: { opacity: 'opacity', scaleX: 'scaleX', scaleY: 'scaleY', scaleXY: 'scaleXY' },
+      Presets: { easeInEaseOut: {}, linear: {}, spring: {} },
+    },
   };
 });
 

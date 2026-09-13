@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../theme/motionTokens';
 import { isVideoUri } from '../utils/media';
+import type { ListingMediaDerivative } from '../contracts/listingMedia';
 import { ImageEmptyGraphic } from './ImageEmptyGraphic';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Radius, Stroke} from '../theme/designTokens';
@@ -71,9 +72,21 @@ interface CachedImageProps {
    * Leave undefined for detail/gallery surfaces that need full resolution.
    *
    * For providers not in the supported list, the prop is a no-op and the
-   * original URI is used as-is.
+   * original URI is used as-is — unless `derivatives` is supplied, which
+   * takes precedence over CDN-param rewriting on any host.
    */
   downscaleWidth?: number;
+  /**
+   * Pre-rendered rendition ladder from the listing media contract
+   * (`media[].derivatives`). When `downscaleWidth` is set, the component
+   * serves the smallest rendition that covers the physical pixel target
+   * (largest available when the target exceeds the ladder). This works on
+   * plain S3/MinIO origins where CDN resize parameters are a no-op.
+   *
+   * Format preference is jpeg → webp → png → avif → other so the chosen
+   * rendition stays decodable on every supported platform.
+   */
+  derivatives?: ListingMediaDerivative[];
   /**
    * Optional Reanimated shared-element transition tag. When set, the
    * image's animated wrapper participates in a shared-element transition
@@ -92,6 +105,115 @@ interface CachedImageProps {
 }
 
 const AnimatedLinearGradient = Reanimated.createAnimatedComponent(LinearGradient);
+
+// Image resolution policy: physical-pixel buckets the CDN / derivative
+// ladder can cache efficiently. `downscaleWidth` callers pass logical dp;
+// the policy multiplies by PixelRatio and snaps to the nearest bucket.
+const DERIVATIVE_BUCKETS = [160, 240, 360, 540, 720, 1080, 1440, 2048, 2560];
+
+// Format preference keeps the chosen rendition decodable on every
+// supported platform: jpeg → webp → png → avif → other.
+const DERIVATIVE_FORMAT_RANK: Record<string, number> = {
+  jpeg: 0, jpg: 0, webp: 1, png: 2, avif: 3,
+};
+
+/**
+ * Resolve the delivery URI `CachedImage` will request for a source.
+ *
+ * Resolution order when `downscaleWidth` is set:
+ *   1. `media[].derivatives` — the pre-rendered rendition ladder from the
+ *      listing media contract. The smallest rendition covering the
+ *      physical pixel target wins (largest available when the target
+ *      exceeds the ladder). These are real processed files (correct EXIF
+ *      orientation, preserved ICC) and work on plain S3/MinIO origins
+ *      where CDN resize parameters are a silent no-op. The `lqip` variant
+ *      is a 20px placeholder, never a delivery source, so it is excluded.
+ *   2. CDN resize parameters for supported providers — Cloudinary
+ *      (`/upload/` → `/upload/w_<w>,f_auto,q_auto/`), Imgix (`?w=`),
+ *      Supabase Storage (`?width=`), CloudFront (`?w=`).
+ *   3. The original URI unchanged for unsupported hosts.
+ *
+ * Exported so prefetch schedulers (e.g. PinterestMasonryGrid's
+ * viewability prefetch) can warm the exact disk-cache key the rendered
+ * image will use — warming the raw `uri` misses the cache entirely when
+ * the render path swaps in a derivative rendition or appends CDN resize
+ * parameters.
+ */
+export function resolveCachedImageSourceUri(
+  uri: string,
+  options: {
+    downscaleWidth?: number;
+    derivatives?: ListingMediaDerivative[];
+    cacheBuster?: string;
+  } = {},
+): string {
+  const { downscaleWidth, derivatives, cacheBuster } = options;
+  if (!uri) return uri;
+  let result = uri;
+
+  if (downscaleWidth && downscaleWidth > 0) {
+    // Convert logical dp → physical pixels with a small overscan factor
+    // (1.1×) to handle minor scale changes without a re-request.
+    const physicalWidth = Math.ceil(downscaleWidth * PixelRatio.get() * 1.1);
+    const bucketWidth = DERIVATIVE_BUCKETS.find((b) => b >= physicalWidth) ?? physicalWidth;
+
+    if (derivatives && derivatives.length > 0) {
+      const candidates = derivatives
+        .filter(
+          (d) => typeof d.url === 'string' && d.url.length > 0
+            && d.variant !== 'lqip'
+            && typeof d.width === 'number' && d.width > 0,
+        )
+        .sort((a, b) => {
+          const dw = (a.width ?? 0) - (b.width ?? 0);
+          if (dw !== 0) return dw;
+          return (DERIVATIVE_FORMAT_RANK[a.format] ?? 4) - (DERIVATIVE_FORMAT_RANK[b.format] ?? 4);
+        });
+      const covering = candidates.find((d) => (d.width ?? 0) >= bucketWidth);
+      if (covering) {
+        result = covering.url;
+      } else if (candidates.length > 0) {
+        // Target exceeds the ladder — serve the widest rendition in the
+        // most broadly decodable format (candidates are sorted by width,
+        // then format rank, so the first of the widest entries is the
+        // preferred format at maximum width).
+        const maxWidth = candidates[candidates.length - 1].width ?? 0;
+        const widest = candidates.find((d) => (d.width ?? 0) === maxWidth);
+        if (widest) result = widest.url;
+      }
+    }
+    // Cloudinary: /upload/ → /upload/w_<width>,f_auto,q_auto/
+    else if (/cloudinary\.com|res\.cloudinary\.com/i.test(uri)) {
+      result = uri.replace(
+        /\/upload\//i,
+        `/upload/w_${bucketWidth},f_auto,q_auto/`,
+      );
+    }
+    // Imgix: append ?w=<width>&auto=format,compress
+    else if (/imgix\.net/i.test(uri)) {
+      const sep = uri.includes('?') ? '&' : '?';
+      result = `${uri}${sep}w=${bucketWidth}&auto=format,compress`;
+    }
+    // Supabase Storage: append ?width=<width>
+    else if (/supabase\.co\/storage/i.test(uri)) {
+      const sep = uri.includes('?') ? '&' : '?';
+      result = `${uri}${sep}width=${bucketWidth}`;
+    }
+    // AWS CloudFront with Lambda edge: append ?w=<width> (common pattern)
+    else if (/cloudfront\.net/i.test(uri) && !uri.includes('?w=')) {
+      const sep = uri.includes('?') ? '&' : '?';
+      result = `${uri}${sep}w=${bucketWidth}`;
+    }
+  }
+
+  // Apply cache buster
+  if (cacheBuster) {
+    const separator = result.includes('?') ? '&' : '?';
+    result = `${result}${separator}cb=${encodeURIComponent(cacheBuster)}`;
+  }
+
+  return result;
+}
 
 function CachedImageComponent({
   uri,
@@ -113,6 +235,7 @@ function CachedImageComponent({
   isLooping = true,
   showPlayBadge = false,
   downscaleWidth,
+  derivatives,
   sharedTransitionTag,
   accessibilityRole,
   accessibilityLabel,
@@ -175,62 +298,32 @@ function CachedImageComponent({
     ? { top: `${Math.round(focalPoint.y * 100)}%`, left: `${Math.round(focalPoint.x * 100)}%` }
     : undefined;
 
-  // Image resolution policy: append CDN resize parameters for thumbnails.
-  // Avoids downloading full-resolution images for small grid tiles (audit
-  // §Caching/prefetch / LIST_RENDERING_POLICY.md §5.1).
-  // Supported: Cloudinary (/upload/ → /upload/w_<width>/), Imgix (?w=),
-  // Supabase Storage (?width=). Others pass through unchanged.
-  //
-  // Phase 6 P0 (§04_MEDIA_FIDELITY_NORTH_STAR): The `downscaleWidth` prop
-  // is in logical dp (layout points). CDN resize parameters expect physical
-  // pixels. On a 3× device, requesting a 180px image for a 180dp tile
-  // produces visibly soft results. We multiply by PixelRatio and snap to
-  // a derivative bucket to avoid requesting arbitrary widths.
-  const sourceUri = React.useMemo(() => {
-    if (!uri) return uri;
-    let result = uri;
+  // Image resolution policy — resolved through the shared
+  // `resolveCachedImageSourceUri` so the rendered source and any prefetch
+  // scheduler agree on the exact disk-cache key. The `downscaleWidth` prop
+  // is logical dp; the resolver handles dp → physical px conversion, the
+  // `media[].derivatives` ladder, and CDN-param fallback.
+  const sourceUri = React.useMemo(
+    () => resolveCachedImageSourceUri(uri, { downscaleWidth, derivatives, cacheBuster }),
+    [uri, cacheBuster, downscaleWidth, derivatives],
+  );
 
-    // Apply downscale for supported CDNs
-    if (downscaleWidth && downscaleWidth > 0) {
-      // Convert logical dp → physical pixels with a small overscan factor
-      // (1.1×) to handle minor scale changes without a re-request, then
-      // snap to the nearest derivative bucket so the CDN can cache efficiently.
-      const DERIVATIVE_BUCKETS = [160, 240, 360, 540, 720, 1080, 1440, 2048, 2560];
-      const physicalWidth = Math.ceil(downscaleWidth * PixelRatio.get() * 1.1);
-      const bucketWidth = DERIVATIVE_BUCKETS.find((b) => b >= physicalWidth) ?? physicalWidth;
-
-      // Cloudinary: /upload/ → /upload/w_<width>,f_auto,q_auto/
-      if (/cloudinary\.com|res\.cloudinary\.com/i.test(uri)) {
-        result = uri.replace(
-          /\/upload\//i,
-          `/upload/w_${bucketWidth},f_auto,q_auto/`,
-        );
-      }
-      // Imgix: append ?w=<width>&auto=format,compress
-      else if (/imgix\.net/i.test(uri)) {
-        const sep = uri.includes('?') ? '&' : '?';
-        result = `${uri}${sep}w=${bucketWidth}&auto=format,compress`;
-      }
-      // Supabase Storage: append ?width=<width>
-      else if (/supabase\.co\/storage/i.test(uri)) {
-        const sep = uri.includes('?') ? '&' : '?';
-        result = `${uri}${sep}width=${bucketWidth}`;
-      }
-      // AWS CloudFront with Lambda edge: append ?w=<width> (common pattern)
-      else if (/cloudfront\.net/i.test(uri) && !uri.includes('?w=')) {
-        const sep = uri.includes('?') ? '&' : '?';
-        result = `${uri}${sep}w=${bucketWidth}`;
-      }
+  // Video resize follows the media contract's `fit`, forwarded by callers
+  // via `contentFit` — a media item that declares 'contain' must not be
+  // force-cropped to COVER.
+  const videoResizeMode = React.useMemo(() => {
+    switch (contentFit) {
+      case 'fill':
+        return ResizeMode.STRETCH;
+      case 'contain':
+      case 'none':
+      case 'scale-down':
+        return ResizeMode.CONTAIN;
+      case 'cover':
+      default:
+        return ResizeMode.COVER;
     }
-
-    // Apply cache buster
-    if (cacheBuster) {
-      const separator = result.includes('?') ? '&' : '?';
-      result = `${result}${separator}cb=${encodeURIComponent(cacheBuster)}`;
-    }
-
-    return result;
-  }, [uri, cacheBuster, downscaleWidth]);
+  }, [contentFit]);
 
   const nativeResizeMode = React.useMemo(() => {
     switch (contentFit) {
@@ -320,6 +413,9 @@ function CachedImageComponent({
             source={{ uri: previewUri }}
             style={[styles.image, style]}
             contentFit={contentFit}
+            // Match the main image's focal crop so the LQIP → full-res
+            // crossfade doesn't visibly shift the framing.
+            contentPosition={contentPosition}
             transition={0}
             cachePolicy="memory-disk"
             priority={effectivePriority}
@@ -337,7 +433,7 @@ function CachedImageComponent({
           <Video
             source={{ uri: sourceUri }}
             style={[styles.image, style as StyleProp<ViewStyle>]}
-            resizeMode={ResizeMode.COVER}
+            resizeMode={videoResizeMode}
             shouldPlay={shouldPlay && isVisible}
             isMuted
             isLooping={isLooping}
@@ -406,6 +502,7 @@ function cachedImagePropsEqual(prev: CachedImageProps, next: CachedImageProps): 
     prev.isVisible !== next.isVisible ||
     prev.cacheBuster !== next.cacheBuster ||
     prev.downscaleWidth !== next.downscaleWidth ||
+    prev.derivatives !== next.derivatives ||
     prev.sharedTransitionTag !== next.sharedTransitionTag ||
     prev.shouldPlay !== next.shouldPlay ||
     prev.isLooping !== next.isLooping ||

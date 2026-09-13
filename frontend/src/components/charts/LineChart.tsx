@@ -21,7 +21,8 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, LayoutChangeEvent } from 'react-native';
 import { useFont, Line as SkiaLine, Circle, LinearGradient, vec } from '@shopify/react-native-skia';
-import { useDerivedValue, useReducedMotion, type SharedValue } from 'react-native-reanimated';
+import { useDerivedValue, type SharedValue } from 'react-native-reanimated';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import {
   CartesianChart,
   Line,

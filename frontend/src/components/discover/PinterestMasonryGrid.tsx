@@ -30,6 +30,9 @@ import { typographyV2Style } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { resolveListingMediaAspectRatio } from '../../utils/listingMediaGeometry';
+import { getListingCoverUri } from '../../utils/media';
+import { resolveCachedImageSourceUri } from '../CachedImage';
+import type { ListingMediaRecord } from '../../contracts/listingMedia';
 import { preloadCriticalImages } from '../../utils/imagePreloader';
 import { MasonrySkeleton } from '../skeletons/MasonrySkeleton';
 import { PremiumSkeletonTile } from './PremiumSkeletonTile';
@@ -66,9 +69,10 @@ function isFeedUnit(item: Listing | DiscoveryFeedUnit): item is DiscoveryFeedUni
 
 function extractFeedUnitImageUri(item: Listing | DiscoveryFeedUnit): string | null {
   if (isFeedUnit(item)) {
+    // 'listing' units never reach here — resolveTilePrefetchUri routes them
+    // through resolveListingTileSourceUri so prefetch warms the sized
+    // rendition the tile actually renders.
     switch (item.type) {
-      case 'listing':
-        return (item as ListingFeedUnit).posterUri || (item as ListingFeedUnit).mediaUri || null;
       case 'look':
         return (item as LookFeedUnit).coverImageUri || null;
       case 'poster':
@@ -82,6 +86,54 @@ function extractFeedUnitImageUri(item: Listing | DiscoveryFeedUnit): string | nu
     }
   }
   return item.images?.[0] ?? null;
+}
+
+/**
+ * Resolve the exact delivery URI a tile will request for this item, so the
+ * viewability prefetch warms the same disk-cache key the render uses.
+ *
+ * Listing tiles render through CachedImage with `downscaleWidth` and the
+ * media contract's `derivatives[]` ladder — the rendered source is a sized
+ * rendition (or CDN-param URL), so prefetching the raw `uri` heats a cache
+ * key nothing reads. Non-listing units (looks, posters, moodboards) render
+ * their URI verbatim via ExpoImage, so the raw URI is already correct.
+ */
+function resolveTilePrefetchUri(
+  item: Listing | DiscoveryFeedUnit,
+  colWidth: number,
+  numColumns: number,
+  gap: number,
+): string | null {
+  if (!isFeedUnit(item)) {
+    // Legacy Listing path — single-column tile at column width.
+    return resolveListingTileSourceUri(item, colWidth);
+  }
+  if (item.type !== 'listing') {
+    return extractFeedUnitImageUri(item);
+  }
+  const u = item as ListingFeedUnit;
+  // Hero (full-width) units request the same wider target the renderer
+  // passes as `downscaleWidth` below.
+  const isHero = (u.span ?? 1) >= numColumns;
+  const downscaleWidth = isHero ? colWidth * numColumns + gap : colWidth;
+  return resolveListingTileSourceUri(u.listing, downscaleWidth);
+}
+
+/** Mirror of ProductDiscoveryTile's media resolution: cover image plus the
+ *  media contract record supplying its derivative ladder. */
+function resolveListingTileSourceUri(
+  listing: { images?: string[]; media?: ListingMediaRecord[] },
+  downscaleWidth: number,
+): string | null {
+  const primaryImage = getListingCoverUri(listing.images ?? [], '');
+  if (!primaryImage) return null;
+  const primaryMedia = (listing.media ?? []).find(
+    (m) => m.kind === 'image' && (m.uri === primaryImage || m.url === primaryImage),
+  ) ?? (listing.media ?? []).find((m) => m.kind === 'image') ?? null;
+  return resolveCachedImageSourceUri(primaryImage, {
+    downscaleWidth,
+    derivatives: primaryMedia?.derivatives,
+  });
 }
 
 interface Props {
@@ -109,6 +161,16 @@ interface Props {
    * `isItemSaved`.
    */
   onItemSaveToggle?: (listing: DiscoveryListingSummary) => void;
+  /**
+   * Long-press on a listing tile's bookmark button — the "file to board"
+   * tier. The parent opens the collection picker for this listing while
+   * tap stays the instant quick-save toggle.
+   */
+  onItemSaveLongPress?: (listing: DiscoveryListingSummary) => void;
+  /** Long-press on a listing tile — opens the feed-control sheet
+   *  ("Not interested" / "Show less like this"). No visual chrome; the
+   *  gesture affordance lives on the tile. */
+  onListingLongPress?: (listing: DiscoveryListingSummary) => void;
   /** Returns whether a listing is currently saved. Drives the bookmark glyph. */
   isItemSaved?: (listingId: string) => boolean;
   onLookPress?: (lookId: string) => void;
@@ -201,6 +263,8 @@ export function PinterestMasonryGrid({
   onPressItem,
   onItemPress,
   onItemSaveToggle,
+  onItemSaveLongPress,
+  onListingLongPress,
   isItemSaved,
   onLookPress,
   onPosterPress,
@@ -279,14 +343,19 @@ export function PinterestMasonryGrid({
       const ahead = items.slice(maxVisibleIndex + 1, maxVisibleIndex + 11);
       const uris: string[] = [];
       for (const item of ahead) {
-        const uri = extractFeedUnitImageUri(item);
+        // Prefetch the exact URI the tile will request — listing tiles
+        // render through CachedImage with `downscaleWidth` +
+        // `media[].derivatives`, so the rendered source is a sized
+        // rendition / CDN-param URL. Warming the raw URI would heat a
+        // disk-cache key nothing reads.
+        const uri = resolveTilePrefetchUri(item, colWidth, numColumns, gap);
         if (uri) uris.push(uri);
       }
       if (uris.length > 0) {
         void preloadCriticalImages(uris, { priority: 'normal', cachePolicy: 'disk' });
       }
     },
-    [items],
+    [items, colWidth, numColumns, gap],
   );
 
   const renderItem = useCallback(
@@ -300,6 +369,8 @@ export function PinterestMasonryGrid({
           firstItemTestID,
           onListingPress: handleUnitPress,
           onListingSaveToggle: onItemSaveToggle,
+          onListingSaveLongPress: onItemSaveLongPress,
+          onListingLongPress,
           isListingSaved: isItemSaved,
           onLookPress,
           onPosterPress,
@@ -311,16 +382,18 @@ export function PinterestMasonryGrid({
           <ProductDiscoveryTile
             item={item}
             onPress={() => handleListingPress(item)}
+            onLongPress={onListingLongPress ? () => onListingLongPress(mapListingToDiscoverySummary(item)) : undefined}
             aspectRatio={resolveListingMediaAspectRatio(item)}
             downscaleWidth={colWidth}
             testID={index === 0 ? (firstItemTestID ?? (testIDPrefix ? `${testIDPrefix}-first` : undefined)) : undefined}
             isSaved={isItemSaved?.(item.id)}
             onSaveToggle={onItemSaveToggle ? () => onItemSaveToggle(mapListingToDiscoverySummary(item)) : undefined}
+            onSaveLongPress={onItemSaveLongPress ? () => onItemSaveLongPress(mapListingToDiscoverySummary(item)) : undefined}
           />
         </View>
       );
     },
-    [gap, colWidth, testIDPrefix, firstItemTestID, handleListingPress, handleUnitPress, numColumns, onItemSaveToggle, isItemSaved, onLookPress, onPosterPress, onMoodboardPress],
+    [gap, colWidth, testIDPrefix, firstItemTestID, handleListingPress, handleUnitPress, numColumns, onItemSaveToggle, onItemSaveLongPress, onListingLongPress, isItemSaved, onLookPress, onPosterPress, onMoodboardPress],
   );
 
   // overrideItemLayout — span is decided here from the unit's declared span
@@ -430,6 +503,8 @@ interface UnitRenderContext {
   firstItemTestID?: string;
   onListingPress: (listing: DiscoveryListingSummary) => void;
   onListingSaveToggle?: (listing: DiscoveryListingSummary) => void;
+  onListingSaveLongPress?: (listing: DiscoveryListingSummary) => void;
+  onListingLongPress?: (listing: DiscoveryListingSummary) => void;
   isListingSaved?: (listingId: string) => boolean;
   onLookPress?: (lookId: string) => void;
   onPosterPress?: (storyId: string) => void;
@@ -455,6 +530,7 @@ function renderUnit(
           <ProductDiscoveryTile
             item={u.listing}
             onPress={() => ctx.onListingPress(u.listing)}
+            onLongPress={ctx.onListingLongPress ? () => ctx.onListingLongPress!(u.listing) : undefined}
             aspectRatio={u.aspectRatio}
             // Hero (full-width) units request a wider derivative; single-
             // column units request the column width.
@@ -462,6 +538,7 @@ function renderUnit(
             testID={index === 0 ? (ctx.firstItemTestID ?? (ctx.testIDPrefix ? `${ctx.testIDPrefix}-first` : undefined)) : undefined}
             isSaved={ctx.isListingSaved?.(u.listing.id)}
             onSaveToggle={ctx.onListingSaveToggle ? () => ctx.onListingSaveToggle!(u.listing) : undefined}
+            onSaveLongPress={ctx.onListingSaveLongPress ? () => ctx.onListingSaveLongPress!(u.listing) : undefined}
           />
         </View>
       );

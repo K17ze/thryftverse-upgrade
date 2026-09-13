@@ -37,6 +37,8 @@ import {
 import { RootStackParamList } from '../navigation/types';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useConnectivity } from '../hooks/useConnectivity';
+import { CoOwnOfflineBanner } from '../components/coown';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CoOwnPriceAlerts'>;
 
@@ -50,6 +52,7 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
   const { show } = useToast();
+  const { isOffline } = useConnectivity();
   const { formatFromFiat, currencyCode } = useFormattedPrice();
 
   const formatGbp = React.useCallback(
@@ -156,6 +159,7 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
       header={<FlagshipHeader title="Price Alerts" onBack={() => navigation.goBack()} />}
       scrollEnabled={false}
     >
+      <CoOwnOfflineBanner isOffline={isOffline} />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => { setIsRefreshing(true); void load(); }} tintColor={colors.textSecondary} />}

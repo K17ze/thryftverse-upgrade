@@ -104,7 +104,7 @@ export function CommerceIdentityBlock({
                 accessibilityRole="button"
               >
                 <View style={[styles.conditionDot, { backgroundColor: conditionMeta?.color ?? colors.textMuted }]} />
-                <Text style={[styles.conditionChipText, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.4}>
+                <Text style={[styles.conditionChipText, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>
                   {item.condition}
                 </Text>
                 <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
@@ -116,7 +116,7 @@ export function CommerceIdentityBlock({
                 item.category,
               ].filter(Boolean).join(' · ');
               return remaining ? (
-                <Text style={[styles.attributeText, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
+                <Text style={[styles.attributeText, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={2}>
                   {remaining}
                 </Text>
               ) : null;
@@ -126,7 +126,7 @@ export function CommerceIdentityBlock({
                 in the same row. Only included when the backend
                 provides positive counts — never fabricated. */}
             {socialProofLine ? (
-              <Text style={[styles.socialProofInline, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
+              <Text style={[styles.socialProofInline, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={2}>
                 · {socialProofLine}
               </Text>
             ) : null}
@@ -141,7 +141,7 @@ export function CommerceIdentityBlock({
               accessibilityLabel="View size guide"
               accessibilityRole="button"
             >
-              <Text style={[styles.sizeGuideLink, { color: colors.brand }]} maxFontSizeMultiplier={1.4}>
+              <Text style={[styles.sizeGuideLink, { color: colors.brand }]} maxFontSizeMultiplier={2}>
                 Size guide
               </Text>
             </AnimatedPressable>
@@ -153,7 +153,7 @@ export function CommerceIdentityBlock({
           below the attribute row. Kept separate because it is a
           price-adjacent fact, not an attribute. */}
       {priceIzeText ? (
-        <Text style={[styles.izeText, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
+        <Text style={[styles.izeText, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={2}>
           {priceIzeText}
         </Text>
       ) : null}

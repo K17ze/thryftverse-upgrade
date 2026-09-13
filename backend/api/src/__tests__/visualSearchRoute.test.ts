@@ -85,23 +85,27 @@ function createMockApp(): {
   app: { post: (path: string, handler: CapturedHandler) => void };
   handler: CapturedHandler;
 } {
-  let handler: CapturedHandler | undefined;
+  let captured: CapturedHandler | undefined;
   const app = {
     // The real route registers with the 3-argument form
     // `app.post(path, options, handler)` so a per-route `config.rateLimit`
     // can be supplied. The mock accepts both the 2- and 3-argument forms and
     // captures the last argument as the handler.
     post: (_path: string, optsOrHandler: unknown, maybeHandler?: CapturedHandler) => {
-      handler = maybeHandler ?? (optsOrHandler as CapturedHandler);
+      captured = maybeHandler ?? (optsOrHandler as CapturedHandler);
     },
   };
-  // The register function is synchronous; handler is captured immediately.
+  // `handler` is a stable delegating function rather than a getter: tests
+  // destructure it BEFORE calling registerVisualSearchRoutes, so an eager
+  // getter would throw "route handler was not registered" at destructure
+  // time. Delegation defers the capture check to invocation.
+  const handler: CapturedHandler = (request, reply) => {
+    if (!captured) throw new Error('route handler was not registered');
+    return captured(request, reply);
+  };
   return {
     app: app as unknown as { post: (path: string, handler: CapturedHandler) => void },
-    get handler() {
-      if (!handler) throw new Error('route handler was not registered');
-      return handler;
-    },
+    handler,
   };
 }
 
@@ -390,6 +394,112 @@ describe('Honest retrieval metadata', () => {
     expect(body.retrievalMeta.method).toBe('heuristic_color_features');
     expect(body.retrievalMeta.fallbackReason).toBeUndefined();
     expect(body.items[0].similarityScore).toBe(0.87);
+  });
+});
+
+// ── 7. Retrieval-scoped facets (F08) ──────────────────────────────────────────
+//
+// Facets are retrieval parameters: they must narrow the SQL candidate set
+// itself (WHERE clause), not post-filter returned rows. The response carries
+// per-facet-value counts scoped under every other filter except that facet's
+// own dimension.
+
+describe('Retrieval-scoped facets (F08)', () => {
+  /** Mock readDb that answers COUNT aggregate queries with a synthetic row. */
+  function createFacetAwareReadDb(rows: unknown[] = [LISTING_ROW]) {
+    const query = vi.fn(async (text: string, _args?: unknown[]) => {
+      if (text.includes('listing_images')) return { rows: [] };
+      if (text.includes('COUNT(')) {
+        // Synthetic aggregate row: total + f0..f17 per-value FILTER counts.
+        const row: Record<string, number> = { total: 7 };
+        for (let i = 0; i < 18; i++) row[`f${i}`] = i;
+        return { rows: [row] };
+      }
+      return { rows };
+    });
+    return { query };
+  }
+
+  function registerFacetApp(readDb: { query: ReturnType<typeof vi.fn> }) {
+    const { app, handler } = createMockApp();
+    registerVisualSearchRoutes({
+      app,
+      db: createMockDb(),
+      readDb,
+    } as unknown as Parameters<typeof registerVisualSearchRoutes>[0]);
+    return handler;
+  }
+
+  it('narrows the candidate SQL query with the selected facet (not a post-filter)', async () => {
+    const readDb = createFacetAwareReadDb();
+    const handler = registerFacetApp(readDb);
+
+    await invokeHandler(handler, { facets: { color: 'Red', style: 'Vintage' } });
+
+    // The candidate query is the first readDb call (SELECT … FROM listings
+    // … ORDER BY … LIMIT) — facet conditions must be in its WHERE clause.
+    const candidateCall = readDb.query.mock.calls.find(
+      (c) => String(c[0]).includes('ORDER BY') && String(c[0]).includes('LIMIT'),
+    );
+    expect(candidateCall).toBeDefined();
+    const sql = String(candidateCall![0]);
+    expect(sql).toContain('ILIKE');
+    const callArgs = candidateCall![1] as unknown[];
+    expect(callArgs).toContain('%Red%');
+    expect(callArgs).toContain('%Vintage%');
+  });
+
+  it('returns per-facet counts and matchCount in the response', async () => {
+    const readDb = createFacetAwareReadDb();
+    const handler = registerFacetApp(readDb);
+
+    const { result } = await invokeHandler(handler, { facets: { color: 'Red' } });
+    const body = result as {
+      facets: {
+        colors: { value: string; count: number }[];
+        styles: { value: string; count: number }[];
+      };
+      matchCount: number;
+    };
+
+    expect(body.matchCount).toBe(7);
+    expect(body.facets.colors).toHaveLength(10);
+    expect(body.facets.styles).toHaveLength(8);
+    // The mock returns f<i> = i; 'Red' is index 3 in the colour vocabulary.
+    expect(body.facets.colors[3]).toEqual({ value: 'Red', count: 3 });
+    expect(body.facets.styles[0]).toEqual({ value: 'Vintage', count: 0 });
+  });
+
+  it('scopes each facet dimension under all filters except its own', async () => {
+    const readDb = createFacetAwareReadDb();
+    const handler = registerFacetApp(readDb);
+
+    await invokeHandler(handler, { facets: { color: 'Red', style: 'Vintage' } });
+
+    // Aggregate queries carry FILTER clauses: 10 for the colour dimension,
+    // 8 for the style dimension.
+    const countCalls = readDb.query.mock.calls.filter((c) =>
+      String(c[0]).includes('FILTER'),
+    );
+    const colorCountCall = countCalls.find(
+      (c) => (String(c[0]).match(/FILTER/g) ?? []).length === 10,
+    );
+    const styleCountCall = countCalls.find(
+      (c) => (String(c[0]).match(/FILTER/g) ?? []).length === 8,
+    );
+    expect(colorCountCall).toBeDefined();
+    expect(styleCountCall).toBeDefined();
+
+    // Colour scope = base filters + style facet (colour excluded): the
+    // first scope arg is the style pattern, followed by the 10 vocab values.
+    const colorScopeArgs = colorCountCall![1] as unknown[];
+    expect(colorScopeArgs).toHaveLength(11);
+    expect(colorScopeArgs[0]).toBe('%Vintage%');
+
+    // Style scope = base filters + colour facet (style excluded).
+    const styleScopeArgs = styleCountCall![1] as unknown[];
+    expect(styleScopeArgs).toHaveLength(9);
+    expect(styleScopeArgs[0]).toBe('%Red%');
   });
 });
 

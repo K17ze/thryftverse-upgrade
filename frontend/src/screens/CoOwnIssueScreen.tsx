@@ -15,7 +15,8 @@ import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { useToast } from '../context/ToastContext';
 import { fetchCoOwnAssetById, createCoOwnAssetIssue } from '../services/marketApi';
 import { haptics } from '../utils/haptics';
-import { CoOwnStickyActionDock } from '../components/coown';
+import { useConnectivity } from '../hooks/useConnectivity';
+import { CoOwnStickyActionDock, CoOwnOfflineBanner } from '../components/coown';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
 import { parseApiError } from '../lib/apiClient';
 
@@ -32,6 +33,7 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
   useScreenCaptureProtection();
   const { colors } = useAppTheme();
   const { show } = useToast();
+  const { isOffline } = useConnectivity();
   const insets = useSafeAreaInsets();
   const scrollBottomPadding = Math.max(insets.bottom, Space.md) + DockConstants.singleActionHeight;
   const [category, setCategory] = useState<string | null>(null);
@@ -91,6 +93,13 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
       return;
     }
 
+    // Offline — fail fast and keep the draft rather than letting the
+    // request hang and die on a network error toast.
+    if (isOffline) {
+      show('You are offline. Your report is kept here — reconnect and retry.', 'info');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const result = await createCoOwnAssetIssue({
@@ -124,6 +133,7 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
       scrollEnabled={false}
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
+      <CoOwnOfflineBanner isOffline={isOffline} />
       <KeyboardAwareScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: scrollBottomPadding }]}
         showsVerticalScrollIndicator={false}

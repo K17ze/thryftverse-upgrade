@@ -18,12 +18,28 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTranslation } from '../../i18n/useAppTranslation';
 import type { CommerceStatusTone } from '../../utils/conversationClassification';
 
+/**
+ * Delivery lifecycle of the LAST message in the conversation, when it was
+ * authored by the current user. Derived upstream from the stored message's
+ * `status`/`readStatus` — never fabricated:
+ *  - 'sending'   → clock (muted) — optimistic/in-flight or reconciling
+ *  - 'sent'      → single check (muted) — server-confirmed
+ *  - 'delivered' → double check (muted) — only when a real receipt exists
+ *  - 'read'      → double check (brand) — a readBy receipt from the recipient
+ *  - 'failed'    → alert (danger) — known failure, retry from the thread
+ * `undefined` means the last message isn't ours or its state is unknown —
+ * the row then shows no glyph rather than claiming a state it can't prove.
+ */
+export type InboxDeliveryStatus = 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
+
 export interface InboxConversationRowProps {
   displayTitle: string;
   lastMessage: string;
   lastMessageTime: string;
   unread: boolean;
   unreadCount?: number;
+  /** Delivery state of the user's own last message (see type docs). */
+  deliveryStatus?: InboxDeliveryStatus;
   isPinned: boolean;
   isMuted: boolean;
   isGroup: boolean;
@@ -102,6 +118,7 @@ function InboxConversationRowBase({
   lastMessageTime,
   unread,
   unreadCount,
+  deliveryStatus,
   isPinned,
   isMuted,
   isGroup,
@@ -161,12 +178,28 @@ function InboxConversationRowBase({
   };
   const tone = toneColors[commerceStatusTone] ?? toneColors.neutral;
 
+  // Delivery glyph — one small status mark before the preview, matching the
+  // thread's receipt grammar (check / double-check / clock / alert).
+  const deliveryIcon: { name: keyof typeof Ionicons.glyphMap; color: string; a11y: string } | null =
+    deliveryStatus === 'failed'
+      ? { name: 'alert-circle', color: colors.danger, a11y: 'not delivered' }
+      : deliveryStatus === 'sending'
+        ? { name: 'time-outline', color: colors.textMuted, a11y: 'sending' }
+        : deliveryStatus === 'read'
+          ? { name: 'checkmark-done', color: colors.brand, a11y: 'read' }
+          : deliveryStatus === 'delivered'
+            ? { name: 'checkmark-done', color: colors.textMuted, a11y: 'delivered' }
+            : deliveryStatus === 'sent'
+              ? { name: 'checkmark', color: colors.textMuted, a11y: 'sent' }
+              : null;
+
   const accessibilityParts: string[] = [
     displayTitle,
     isTyping ? 'typing...' : lastMessage,
     lastMessageTime,
   ];
   if (unread) accessibilityParts.push('unread');
+  if (deliveryIcon) accessibilityParts.push(`last message ${deliveryIcon.a11y}`);
   if (isMuted) accessibilityParts.push('muted');
   if (isPinned) accessibilityParts.push('pinned');
   if (isGroup && memberCount) accessibilityParts.push(t('conversation.memberCount', { count: memberCount }));
@@ -220,6 +253,16 @@ function InboxConversationRowBase({
                 Draft
               </Text>
             ) : null}
+            {deliveryIcon ? (
+              <Ionicons
+                name={deliveryIcon.name}
+                size={13}
+                color={deliveryIcon.color}
+                style={styles.deliveryIcon}
+                accessible={false}
+                importantForAccessibility="no-hide-descendants"
+              />
+            ) : null}
             {isTyping ? (
               <View style={styles.typingDotsWrap}>
                 <TypingDots color={colors.brand} />
@@ -243,8 +286,10 @@ function InboxConversationRowBase({
               </View>
             ) : null}
             {unread && !draftText ? (
-              <View style={styles.unreadBadge}>
-                <Text style={styles.unreadBadgeText}>
+              // Muted conversations keep their unread marker but at a
+              // subdued weight — "unread" is still true, just quiet.
+              <View style={[styles.unreadBadge, isMuted && styles.unreadBadgeMuted]}>
+                <Text style={[styles.unreadBadgeText, isMuted && styles.unreadBadgeTextMuted]}>
                   {unreadCount && unreadCount > 1 ? (unreadCount > 99 ? '99+' : unreadCount) : ''}
                 </Text>
               </View>
@@ -362,11 +407,18 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 5 },
+  unreadBadgeMuted: {
+    backgroundColor: colors.surfaceAlt },
   unreadBadgeText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.semibold,
     color: colors.textInverse,
     lineHeight: 12 },
+  unreadBadgeTextMuted: {
+    color: colors.textMuted },
+  // Delivery status glyph — sits before the preview on the bottom line.
+  deliveryIcon: {
+    marginRight: 1 },
   // Commerce thumbnail — 40×40 listing context, rounded media edge.
   itemThumb: {
     width: 40,

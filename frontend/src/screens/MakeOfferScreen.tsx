@@ -1,47 +1,24 @@
-import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { Space, Radius, Stroke, Control } from '../theme/designTokens';
-import { TypographyV2 } from '../theme/typography.v2';
-import {
-  AnimatedPressable } from '../components/AnimatedPressable';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  ScrollView,
-  Platform,
-  Pressable,
-  ActivityIndicator } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useRef } from 'react';
+import { ScrollView } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { useAppTheme } from '../theme/ThemeContext';
-import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { useCurrencyContext } from '../context/CurrencyContext';
-import { useToast } from '../context/ToastContext';
 import { useA11yAudit } from '../hooks/useA11yAudit';
-import {
-  calculateOfferSummaryFromDisplay,
-  convertGbpToDisplayAmount,
-  sanitizeDecimalInput } from '../utils/currencyAuthoringFlows';
-import { AppButton } from '../components/ui/AppButton';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
-import { CachedImage } from '../components/CachedImage';
-import { fetchListingByIdFromApi } from '../services/listingsApi';
-import {
-  counterListingOfferOnApi,
-  createListingOfferOnApi,
-  lookupOfferByIdempotencyKey,
-  type ListingOffer } from '../services/listingOffersApi';
 import { haptics } from '../utils/haptics';
-import { createStableId } from '../utils/createStableId';
-import { useUnknownOutcomeReconciliation } from '../hooks/useUnknownOutcomeReconciliation';
-import { track } from '../analytics';
 import { t } from '../i18n';
-import { useStore } from '../store/useStore';
-import { createDmConversationOnApi } from '../services/chatApi';
+import {
+  MakeOfferItemSummary,
+  MakeOfferPriceSection,
+  MakeOfferExpirySection,
+  MakeOfferSummarySection,
+  MakeOfferErrorBlock,
+  MakeOfferReviewSheet,
+  MakeOfferFooter,
+  makeOfferScreenStyles as styles } from '../components/offers';
+import {
+  useMakeOfferListing,
+  useMakeOfferSubmission } from '../hooks/offers';
 
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MakeOffer'>;
@@ -50,252 +27,60 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
   const a11yRef = useRef<any>(null);
   useA11yAudit(a11yRef, 'MakeOfferScreen');
   const { itemId, price, title } = route.params ?? {};
-  const { colors } = useAppTheme();
-  const { currencySymbol, formatFromFiat } = useFormattedPrice();
-  const { currencyCode, fxRates } = useCurrencyContext();
-  const { show } = useToast();
-  const upsertConversation = useStore((state) => state.upsertConversation);
-  const { isOffline } = useConnectivity();
   const reducedMotionEnabled = useReducedMotion();
-  const [offerPrice, setOfferPrice] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
-  const [listing, setListing] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [expiryHours, setExpiryHours] = useState(48);
-  const [showReview, setShowReview] = useState(false);
   const isCounterOffer = route.params?.counterOffer ?? false;
   const previousOffer = route.params?.previousOffer;
   const counterRound = route.params?.counterRound ?? 0;
   const parentOfferId = route.params?.parentOfferId;
-  const idempotencyKeyRef = React.useRef<string | null>(null);
-  const isMountedRef = useRef(true);
-  const { reconcile } = useUnknownOutcomeReconciliation();
+  // Set when the offer flow was opened from inside a conversation (e.g. a
+  // counter from Chat or the Offers surface). Threaded into the create/
+  // counter payload so listing_offers.conversation_id links the
+  // negotiation to that thread (feeds the chat context-bar offer badge).
+  const routeConversationId = route.params?.conversationId;
 
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => { isMountedRef.current = false; };
-  }, []);
-
-  React.useEffect(() => {
-    let mounted = true;
-    setIsLoading(true);
-    fetchListingByIdFromApi(itemId)
-      .then((res) => {
-        if (!mounted) return;
-        if (res.ok && res.listing) setListing(res.listing);
-      })
-      .catch(() => { if (mounted) show(t('makeOffer.toast.couldNotLoadListing'), 'error'); })
-      .finally(() => { if (mounted) setIsLoading(false); });
-    return () => { mounted = false; };
-  }, [itemId, show]);
-
-  React.useEffect(() => {
-    // For counter-offers, default to halfway between previous offer and asking price
-    const basePrice = isCounterOffer && previousOffer ? (previousOffer + price) / 2 : price;
-    const defaultOffer = convertGbpToDisplayAmount(basePrice, currencyCode, fxRates);
-    setOfferPrice((Number.isFinite(defaultOffer) ? defaultOffer : basePrice).toFixed(2));
-  }, [currencyCode, fxRates, price, isCounterOffer, previousOffer]);
-
-  const numericOffer = parseFloat(offerPrice) || 0;
   const {
-    offerGbp: numericOfferGbp,
+    listing,
+    isLoading,
+    offerPrice,
+    setOfferPrice,
+    isMountedRef,
+    numericOffer,
+    numericOfferGbp,
     platformChargeGbp,
-    totalGbp: total } = calculateOfferSummaryFromDisplay(numericOffer, currencyCode, fxRates);
+    total,
+    discountPct,
+    itemImageUri } = useMakeOfferListing({
+    itemId,
+    price,
+    isCounterOffer,
+    previousOffer });
 
-  // Discount percentage relative to listing price — key trust signal
-  // shown dynamically as the buyer adjusts their offer. Resale
-  // marketplaces all show this prominently.
-  const discountPct = useMemo(() => {
-    if (!price || price <= 0) return null;
-    const pct = ((price - numericOfferGbp) / price) * 100;
-    if (pct <= 0) return null;
-    return Math.round(pct);
-  }, [price, numericOfferGbp]);
-
-  const handleOfferChange = (value: string) => {
-    setOfferPrice(sanitizeDecimalInput(value));
-    if (errorMsg) setErrorMsg('');
-  };
-
-  // Validation only — used by the "Review offer" button to advance to
-  // the confirmation step without submitting.
-  const validateOffer = useCallback((): string | null => {
-    if (!numericOffer || !Number.isFinite(numericOfferGbp) || numericOfferGbp <= 0) {
-      return t('makeOffer.error.invalidAmount');
-    }
-    if (numericOfferGbp > price * 2) {
-      return t('makeOffer.error.tooHigh');
-    }
-    const sellerMinOffer = listing?.minimumOfferGbp ?? listing?.minimum_offer_gbp ?? 0;
-    if (sellerMinOffer > 0 && numericOfferGbp < sellerMinOffer) {
-      return t('makeOffer.error.sellerMinOffer', { amount: formatFromFiat(sellerMinOffer, 'GBP') });
-    }
-    if (!listing?.sellerId) {
-      return t('makeOffer.error.couldNotLoadSeller');
-    }
-    return null;
-  }, [numericOffer, numericOfferGbp, price, listing, formatFromFiat]);
-
-  const handleReviewOffer = useCallback(() => {
-    const validationError = validateOffer();
-    if (validationError) {
-      setErrorMsg(validationError);
-      return;
-    }
-    haptics.tap();
-    setErrorMsg('');
-    setShowReview(true);
-  }, [validateOffer, haptics]);
-
-  // Resolve a real DM conversation via the backend before navigating to Chat.
-  // Replaces fabricated IDs like `offer_${sellerId}_${itemId}`.
-  const resolveAndOpenOfferConversation = useCallback(async (
-    sellerId: string,
-    focusQuery: string,
-    offerPayload?: any,
-  ) => {
-    try {
-      const conversation = await createDmConversationOnApi({
-        recipientUserId: sellerId,
-        itemId,
-      });
-      upsertConversation(conversation);
-      navigation.navigate('Chat', {
-        conversationId: conversation.id,
-        focusQuery,
-        partnerUserId: sellerId,
-        offerPayload,
-      });
-    } catch {
-      show('Could not open chat. Try again.', 'error');
-    }
-  }, [itemId, navigation, upsertConversation, show]);
-
-  const handleSendOffer = async () => {
-    // The review step already validated, but re-check defensively.
-    const validationError = validateOffer();
-    if (validationError) {
-      setErrorMsg(validationError);
-      setShowReview(false);
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      // Persist the offer server-side so expiry, accept/decline and counter
-      // chains are authoritative across devices. The server computes
-      // expires_at — the frontend only suggests an expiryHours window.
-      if (!idempotencyKeyRef.current) {
-        idempotencyKeyRef.current = createStableId(isCounterOffer ? 'counter' : 'offer');
-      }
-      if (isCounterOffer && !parentOfferId) {
-        throw new Error(t('makeOffer.error.originalOfferUnavailable'));
-      }
-      const offer = isCounterOffer
-        ? await counterListingOfferOnApi(parentOfferId!, {
-          offerPriceGbp: numericOfferGbp,
-          expiryHours,
-          idempotencyKey: idempotencyKeyRef.current })
-        : await createListingOfferOnApi({
-          listingId: itemId,
-          offerPriceGbp: numericOfferGbp,
-          expiryHours,
-          idempotencyKey: idempotencyKeyRef.current,
-          metadata: {
-            originalPriceGbp: price,
-            source: 'initial' } });
-
-      track('offer_submitted', { item_id: itemId, offer_amount: numericOfferGbp });
-
-      const offerText = isCounterOffer
-        ? t('makeOffer.chat.counterOfferText', { amount: formatFromFiat(numericOfferGbp, 'GBP'), previousAmount: formatFromFiat(previousOffer ?? 0, 'GBP'), hours: expiryHours })
-        : t('makeOffer.chat.offerText', { amount: formatFromFiat(numericOfferGbp, 'GBP'), title, hours: expiryHours });
-
-      await resolveAndOpenOfferConversation(
-        listing.sellerId,
-        offerText,
-        {
-          offerId: offer.id,
-          price: numericOfferGbp,
-          originalPrice: price,
-          expiresAt: offer.expiresAt,
-          counterRound: offer.counterRound,
-        },
-      );
-      show(t('makeOffer.toast.openingChat'), 'info');
-    } catch (err) {
-      const isNetworkError = isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
-
-      if (isNetworkError && idempotencyKeyRef.current) {
-        // Lost response during offer submission — the server may have
-        // committed. Poll for the authoritative status instead of telling
-        // the user the offer failed (which invites an unsafe retry).
-        setErrorMsg(t('makeOffer.error.checking'));
-        const idempotencyKey = idempotencyKeyRef.current;
-        const result = await reconcile<ListingOffer>({
-          lookup: () => lookupOfferByIdempotencyKey(idempotencyKey),
-          onAcknowledged: async (offer) => {
-            idempotencyKeyRef.current = null;
-            const offerText = isCounterOffer
-              ? t('makeOffer.chat.counterOfferText', { amount: formatFromFiat(numericOfferGbp, 'GBP'), previousAmount: formatFromFiat(previousOffer ?? 0, 'GBP'), hours: expiryHours })
-              : t('makeOffer.chat.offerText', { amount: formatFromFiat(numericOfferGbp, 'GBP'), title, hours: expiryHours });
-            await resolveAndOpenOfferConversation(
-              listing.sellerId,
-              offerText,
-              {
-                offerId: offer.id,
-                price: numericOfferGbp,
-                originalPrice: price,
-                expiresAt: offer.expiresAt,
-                counterRound: offer.counterRound,
-              },
-            );
-            show(t('makeOffer.toast.openingChat') as string, 'info');
-          },
-          onSafeToRetry: () => {
-            idempotencyKeyRef.current = null;
-            setErrorMsg('');
-            show(t('makeOffer.error.noOfferCreated'), 'info');
-          },
-          onUnresolved: () => {
-            setErrorMsg(t('makeOffer.error.checkHistory'));
-          },
-          shouldContinue: () => isMountedRef.current });
-        if (result.outcome === 'acknowledged' || result.outcome === 'safe_to_retry' || result.outcome === 'unresolved') {
-          return;
-        }
-      }
-
-      const message = isNetworkError
-        ? t('makeOffer.error.offline')
-        : err instanceof Error ? err.message : t('makeOffer.error.couldNotSubmit');
-      setErrorMsg(message);
-      // Stay on review step so the user can retry without re-entering details.
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const quickOfferPercentages = [0.8, 0.9, 0.95];
-  const applyQuickOffer = (percentage: number) => {
-    const gbpAmount = price * percentage;
-    const displayAmount = convertGbpToDisplayAmount(gbpAmount, currencyCode, fxRates);
-    setOfferPrice((Number.isFinite(displayAmount) ? displayAmount : gbpAmount).toFixed(2));
-    if (errorMsg) setErrorMsg('');
-    haptics.tap();
-  };
-
-  const expiryOptions = [24, 48, 72];
-
-  const handleMessageSeller = React.useCallback(async () => {
-    if (!listing?.sellerId) return;
-    await resolveAndOpenOfferConversation(listing.sellerId, title);
-    show(t('makeOffer.toast.openingSellerChat'), 'info');
-  }, [itemId, navigation, listing?.sellerId, show, title, resolveAndOpenOfferConversation]);
-
-  // Item image — use listing image if available, fall back to icon
-  const itemImageUri = listing?.images?.[0] ?? listing?.imageUrl;
+  const {
+    errorMsg,
+    setErrorMsg,
+    isSubmitting,
+    showReview,
+    setShowReview,
+    expiryHours,
+    setExpiryHours,
+    handleOfferChange,
+    applyQuickOffer,
+    handleReviewOffer,
+    handleSendOffer,
+    handleMessageSeller } = useMakeOfferSubmission({
+    navigation,
+    itemId,
+    price,
+    title,
+    isCounterOffer,
+    previousOffer,
+    parentOfferId,
+    routeConversationId,
+    listing,
+    isMountedRef,
+    numericOffer,
+    numericOfferGbp,
+    setOfferPrice });
 
   return (
     <FlagshipScreen
@@ -315,276 +100,46 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* ── Item summary ──
-            Compact, flat, no card. Image + title + listed price + message
-            action. Per AGENTS.md surface budget: flat canvas, no cards. */}
-        <View style={styles.itemSummary}>
-          <View style={[styles.itemThumb, { backgroundColor: colors.surfaceAlt }]}>
-            {itemImageUri ? (
-              <CachedImage
-                uri={itemImageUri}
-                style={styles.itemThumbImage}
-                contentFit="cover"
-              />
-            ) : (
-              <Ionicons name="shirt-outline" size={24} color={colors.textMuted} />
-            )}
-          </View>
-          <View style={styles.itemInfo}>
-            <Text
-              style={[styles.itemTitle, { color: colors.textPrimary }]}
-              numberOfLines={2}
-            >
-              {title}
-            </Text>
-            <Text style={[styles.itemListingPrice, { color: colors.textSecondary }]}>
-              {t('makeOffer.item.listedAt', { amount: formatFromFiat(price, 'GBP') })}
-            </Text>
-          </View>
-        </View>
+        <MakeOfferItemSummary
+          title={title}
+          price={price}
+          itemImageUri={itemImageUri}
+          onMessageSeller={handleMessageSeller}
+        />
 
-        {/* ── Message seller action ──
-            Inline quiet action, not a bordered chip. Per Design.md:
-            quiet controls are transparent, no decorative chrome. */}
-        <View>
-        <Pressable
-          style={styles.messageAction}
-          onPress={handleMessageSeller}
-          accessibilityRole="button"
-          accessibilityLabel={t('makeOffer.a11y.messageSeller')}
-          accessibilityHint={t('makeOffer.a11y.opensChatSeller')}
-        >
-          <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.textSecondary} />
-          <Text style={[styles.messageActionText, { color: colors.textSecondary }]}>
-            {t('makeOffer.action.messageSeller')}
-          </Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-        </Pressable>
-        </View>
+        <MakeOfferPriceSection
+          isCounterOffer={isCounterOffer}
+          previousOffer={previousOffer}
+          price={price}
+          listing={listing}
+          offerPrice={offerPrice}
+          numericOfferGbp={numericOfferGbp}
+          discountPct={discountPct}
+          onChangeOffer={handleOfferChange}
+          onQuickOffer={applyQuickOffer}
+        />
 
-        {/* ── Price input ──
-            Large, centered price field. The currency symbol and amount
-            are the dominant visual element. No heavy border — the input
-            sits on the flat canvas with a subtle bottom hairline.
-            Per Design.md form-field: input background, 52px height,
-            Radius.xl. But for a price entry field, we want it to feel
-            like a number, not a form field — so we use a larger,
-            centered layout with a hairline underline. */}
-        <View>
-        <View style={styles.priceSection}>
-          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-            {isCounterOffer ? t('makeOffer.label.yourCounterOffer') : t('makeOffer.label.yourOffer')}
-          </Text>
+        <MakeOfferExpirySection
+          expiryHours={expiryHours}
+          onSelect={(hours) => { setExpiryHours(hours); haptics.tap(); }}
+        />
 
-          <View style={[styles.priceInputContainer, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.currencySymbol, { color: colors.brand }]}>
-              {currencySymbol}
-            </Text>
-            <TextInput
-              style={[styles.priceInput, { color: colors.textPrimary }]}
-              value={offerPrice}
-              onChangeText={handleOfferChange}
-              keyboardType="decimal-pad"
-              selectionColor={colors.brand}
-              placeholderTextColor={colors.textMuted}
-              placeholder="0.00"
-              accessibilityLabel={t('makeOffer.a11y.offerAmount')}
-            />
-          </View>
-
-          {/* Discount indicator — dynamic, shows how much below asking */}
-          {discountPct != null && (
-            <View style={styles.discountRow}>
-              <Text style={[styles.discountText, { color: colors.warning }]}>
-                {t('makeOffer.discount.belowAsking', { percent: discountPct })}
-              </Text>
-            </View>
-          )}
-
-          {/* Quick offer chips — 80%, 90%, 95% of asking price */}
-          <View style={styles.quickOfferRow}>
-            {quickOfferPercentages.map((pct) => {
-              const gbpAmount = price * pct;
-              const displayAmount = convertGbpToDisplayAmount(gbpAmount, currencyCode, fxRates);
-              const label = `${Math.round(pct * 100)}%`;
-              const sublabel = Number.isFinite(displayAmount)
-                ? `${currencySymbol}${displayAmount.toFixed(0)}`
-                : '';
-              return (
-                <Pressable
-                  key={pct}
-                  style={[styles.quickOfferChip, { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle }]}
-                  onPress={() => applyQuickOffer(pct)}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('makeOffer.a11y.quickOffer', { percent: Math.round(pct * 100), amount: `${currencySymbol}${displayAmount.toFixed(0)}` })}
-                >
-                  <Text style={[styles.quickOfferChipLabel, { color: colors.textPrimary }]}>
-                    {label}
-                  </Text>
-                  {sublabel ? (
-                    <Text style={[styles.quickOfferChipSub, { color: colors.textSecondary }]}>
-                      {sublabel}
-                    </Text>
-                  ) : null}
-                </Pressable>
-              );
-            })}
-          </View>
-
-          {/* Counter-offer context — previous vs new side by side */}
-          {isCounterOffer && previousOffer != null && (
-            <View style={[styles.counterCompareBox, { backgroundColor: colors.surfaceAlt }]}>
-              <View style={styles.counterCompareCol}>
-                <Text style={[styles.counterCompareLabel, { color: colors.textMuted }]}>
-                  {t('makeOffer.counter.previousOffer')}
-                </Text>
-                <Text style={[styles.counterCompareValue, { color: colors.textSecondary }]}>
-                  {formatFromFiat(previousOffer, 'GBP')}
-                </Text>
-              </View>
-              <Ionicons name="arrow-forward" size={16} color={colors.textMuted} />
-              <View style={styles.counterCompareCol}>
-                <Text style={[styles.counterCompareLabel, { color: colors.brand }]}>
-                  {t('makeOffer.counter.yourCounter')}
-                </Text>
-                <Text style={[styles.counterCompareValue, { color: colors.brand }]}>
-                  {numericOfferGbp > 0 ? formatFromFiat(numericOfferGbp, 'GBP') : '—'}
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {/* Seller minimum offer floor notice */}
-          {(() => {
-            const sellerMinOffer = listing?.minimumOfferGbp ?? listing?.minimum_offer_gbp ?? 0;
-            if (sellerMinOffer <= 0) return null;
-            return (
-              <View style={styles.contextRow}>
-                <Ionicons name="information-circle-outline" size={14} color={colors.textSecondary} />
-                <Text style={[styles.contextText, { color: colors.textSecondary }]}>
-                  {t('makeOffer.sellerMinOffer.label', { amount: formatFromFiat(sellerMinOffer, 'GBP') })}
-                </Text>
-              </View>
-            );
-          })()}
-        </View>
-        </View>
-
-        {/* ── Offer expiry ──
-            Clean chip selector with selection state. Per Design.md:
-            selected state uses brand fill, unselected uses surfaceAlt. */}
-        <View>
-        <View style={styles.expirySection}>
-          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-            {t('makeOffer.expiry.validFor')}
-          </Text>
-          <View style={styles.expiryRow}>
-            {expiryOptions.map((hours) => {
-              const isActive = expiryHours === hours;
-              return (
-                <Pressable
-                  key={hours}
-                  style={[
-                    styles.expiryChip,
-                    { backgroundColor: isActive ? colors.brand : colors.surfaceAlt,
-                      borderColor: isActive ? colors.brand : colors.borderSubtle },
-                  ]}
-                  onPress={() => { setExpiryHours(hours); haptics.tap(); }}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('makeOffer.a11y.offerValidFor', { hours })}
-                  accessibilityState={{ selected: isActive }}
-                >
-                  <Text style={[
-                    styles.expiryChipText,
-                    { color: isActive ? colors.textInverse : colors.textSecondary },
-                  ]}>
-                    {hours}h
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          <Text style={[styles.expiryHint, { color: colors.textMuted }]}>
-            {t('makeOffer.expiry.hint', { hours: expiryHours })}
-          </Text>
-        </View>
-        </View>
-
-        {/* ── Summary ──
-            Flat rows with hairline separator, not a card. Per AGENTS.md
-            surface budget: flat canvas, hairlines, no cards. */}
-        <View>
-        <View style={styles.summarySection}>
-          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-            Summary
-          </Text>
-          <View style={[styles.summaryRow, { borderBottomColor: colors.borderSubtle }]}>
-            <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
-              Your offer
-            </Text>
-            <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
-              {formatFromFiat(numericOfferGbp, 'GBP')}
-            </Text>
-          </View>
-          <View style={[styles.summaryRow, { borderBottomColor: colors.borderSubtle }]}>
-            <View style={styles.summaryLabelCluster}>
-              <Ionicons name="checkmark-circle-outline" size={15} color={colors.textSecondary} />
-              <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
-                Platform charge
-              </Text>
-            </View>
-            <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
-              {formatFromFiat(platformChargeGbp, 'GBP')}
-            </Text>
-          </View>
-          <View style={styles.totalRow}>
-            <Text style={[styles.totalLabel, { color: colors.textPrimary }]}>
-              Total
-            </Text>
-            <Text style={[styles.totalValue, { color: colors.brand }]}>
-              {formatFromFiat(total, 'GBP')}
-            </Text>
-          </View>
-        </View>
-        </View>
-
-        {/* ── Trust signal ──
-            Inline buyer protection note, not a card. Per Design.md:
-            trust signals are decision inputs, not decoration. */}
-        <View>
-        <View style={styles.trustRow}>
-          <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
-          <Text style={[styles.trustText, { color: colors.textSecondary }]}>
-            Protected by ThryftVerse Buyer Protection — secure settlement and support included.
-          </Text>
-        </View>
-
-        </View>
+        <MakeOfferSummarySection
+          numericOfferGbp={numericOfferGbp}
+          platformChargeGbp={platformChargeGbp}
+          total={total}
+        />
 
         {!!errorMsg && !showReview && (
-          <View style={styles.errorBlock}>
-            <Text style={[styles.errorText, { color: colors.danger }]}>
-              {errorMsg}
-            </Text>
-            <Pressable
-              style={({ pressed }) => [
-                styles.retryBtn,
-                { borderColor: colors.danger },
-                pressed && { opacity: 0.7 },
-              ]}
-              onPress={() => {
-                setErrorMsg('');
-                if (showReview) {
-                  void handleSendOffer();
-                }
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Retry submitting offer"
-            >
-              <Ionicons name="refresh-outline" size={15} color={colors.danger} />
-              <Text style={[styles.retryBtnText, { color: colors.danger }]}>Retry</Text>
-            </Pressable>
-          </View>
+          <MakeOfferErrorBlock
+            message={errorMsg}
+            onRetry={() => {
+              setErrorMsg('');
+              if (showReview) {
+                void handleSendOffer();
+              }
+            }}
+          />
         )}
       </ScrollView>
 
@@ -594,150 +149,22 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
             so the user can verify before committing. One dominant
             action (Confirm), one cancel (Back). */}
       {showReview && (
-        <View style={styles.reviewOverlay}>
-          <Pressable
-            style={[styles.reviewBackdrop, { backgroundColor: colors.overlay }]}
-            onPress={() => { if (!isSubmitting) setShowReview(false); }}
-            accessibilityLabel="Cancel review"
-            accessibilityRole="button"
-          />
-          <View
-            style={[styles.reviewSheet, { backgroundColor: colors.background }]}
-          >
-            <View style={[styles.reviewHandle, { backgroundColor: colors.border }]} />
-            <Text style={[styles.reviewTitle, { color: colors.textPrimary }]}>
-              {isCounterOffer ? 'Review counter-offer' : 'Review your offer'}
-            </Text>
-
-            {/* Listing context */}
-            <View style={styles.reviewItemRow}>
-              <View style={[styles.itemThumb, { backgroundColor: colors.surfaceAlt }]}>
-                {itemImageUri ? (
-                  <CachedImage
-                    uri={itemImageUri}
-                    style={styles.itemThumbImage}
-                    contentFit="cover"
-                  />
-                ) : (
-                  <Ionicons name="shirt-outline" size={20} color={colors.textMuted} />
-                )}
-              </View>
-              <View style={styles.reviewItemInfo}>
-                <Text style={[styles.reviewItemTitle, { color: colors.textPrimary }]} numberOfLines={2}>
-                  {title}
-                </Text>
-                <Text style={[styles.reviewItemPrice, { color: colors.textSecondary }]}>
-                  Listed at {formatFromFiat(price, 'GBP')}
-                </Text>
-              </View>
-            </View>
-
-            {/* Offer amount — dominant */}
-            <View style={[styles.reviewAmountBox, { backgroundColor: colors.surfaceAlt }]}>
-              <Text style={[styles.reviewAmountLabel, { color: colors.textMuted }]}>
-                {isCounterOffer ? 'Counter-offer amount' : 'Offer amount'}
-              </Text>
-              <Text style={[styles.reviewAmountValue, { color: colors.brand }]}>
-                {formatFromFiat(numericOfferGbp, 'GBP')}
-              </Text>
-              {isCounterOffer && previousOffer != null && (
-                <View style={[styles.reviewCompareRow, { borderTopColor: colors.borderSubtle }]}>
-                  <View style={styles.reviewCompareItem}>
-                    <Text style={[styles.reviewCompareLabel, { color: colors.textMuted }]}>
-                      Previous
-                    </Text>
-                    <Text style={[styles.reviewCompareValue, { color: colors.textSecondary }]}>
-                      {formatFromFiat(previousOffer, 'GBP')}
-                    </Text>
-                  </View>
-                  <Ionicons name="arrow-forward" size={16} color={colors.textMuted} />
-                  <View style={styles.reviewCompareItem}>
-                    <Text style={[styles.reviewCompareLabel, { color: colors.textMuted }]}>
-                      New offer
-                    </Text>
-                    <Text style={[styles.reviewCompareValue, { color: colors.brand }]}>
-                      {formatFromFiat(numericOfferGbp, 'GBP')}
-                    </Text>
-                  </View>
-                </View>
-              )}
-              <Text style={[styles.reviewExpiry, { color: colors.textMuted }]}>
-                Valid for {expiryHours} hours · seller must respond before expiry
-              </Text>
-            </View>
-
-            {/* Summary rows */}
-            <View style={[styles.reviewSummaryRow, { borderBottomColor: colors.borderSubtle }]}>
-              <Text style={[styles.reviewSummaryLabel, { color: colors.textSecondary }]}>
-                Platform charge
-              </Text>
-              <Text style={[styles.reviewSummaryValue, { color: colors.textPrimary }]}>
-                {formatFromFiat(platformChargeGbp, 'GBP')}
-              </Text>
-            </View>
-            <View style={styles.reviewTotalRow}>
-              <Text style={[styles.reviewTotalLabel, { color: colors.textPrimary }]}>
-                Total
-              </Text>
-              <Text style={[styles.reviewTotalValue, { color: colors.brand }]}>
-                {formatFromFiat(total, 'GBP')}
-              </Text>
-            </View>
-
-            {/* Error within review */}
-            {!!errorMsg && (
-              <View style={styles.errorBlock}>
-                <Text style={[styles.errorText, { color: colors.danger }]}>
-                  {errorMsg}
-                </Text>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.retryBtn,
-                    { borderColor: colors.danger },
-                    pressed && { opacity: 0.7 },
-                  ]}
-                  onPress={() => { setErrorMsg(''); void handleSendOffer(); }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Retry submitting offer"
-                >
-                  <Ionicons name="refresh-outline" size={15} color={colors.danger} />
-                  <Text style={[styles.retryBtnText, { color: colors.danger }]}>Retry</Text>
-                </Pressable>
-              </View>
-            )}
-
-            {/* Actions */}
-            <View style={styles.reviewActions}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.reviewCancelBtn,
-                  { borderColor: colors.border },
-                  pressed && { opacity: 0.7 },
-                ]}
-                onPress={() => { if (!isSubmitting) setShowReview(false); }}
-                disabled={isSubmitting}
-                accessibilityRole="button"
-                accessibilityLabel="Go back to edit offer"
-              >
-                <Text style={[styles.reviewCancelText, { color: colors.textSecondary }]}>
-                  Back
-                </Text>
-              </Pressable>
-              <AppButton
-                style={styles.reviewConfirmBtn}
-                title={isSubmitting ? 'Sending…' : 'Confirm & send'}
-                subtitle={formatFromFiat(total, 'GBP')}
-                icon={isSubmitting ? undefined : <Ionicons name="paper-plane-outline" size={16} color={colors.textInverse} />}
-                variant="primary"
-                size="lg"
-                onPress={handleSendOffer}
-                disabled={isSubmitting}
-                loading={isSubmitting}
-                accessibilityLabel={`Confirm ${isCounterOffer ? 'counter-offer' : 'offer'} of ${formatFromFiat(numericOfferGbp, 'GBP')} on ${title}`}
-              />
-            </View>
-          </View>
-        </View>
+        <MakeOfferReviewSheet
+          isCounterOffer={isCounterOffer}
+          previousOffer={previousOffer}
+          itemImageUri={itemImageUri}
+          title={title}
+          price={price}
+          numericOfferGbp={numericOfferGbp}
+          platformChargeGbp={platformChargeGbp}
+          total={total}
+          expiryHours={expiryHours}
+          errorMsg={errorMsg}
+          isSubmitting={isSubmitting}
+          onDismiss={() => { if (!isSubmitting) setShowReview(false); }}
+          onRetry={() => { setErrorMsg(''); void handleSendOffer(); }}
+          onConfirm={handleSendOffer}
+        />
       )}
 
       {/* ── Sticky footer ──
@@ -746,401 +173,17 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
             own confirm button. Per Design.md dock-geometry: single-action
             height, brand fill, full width. */}
       {!showReview && (
-        <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
-          {isLoading ? (
-            <View style={styles.footerLoading}>
-              <ActivityIndicator size="small" color={colors.brand} />
-              <Text style={[styles.footerLoadingText, { color: colors.textMuted }]}>
-                Loading listing…
-              </Text>
-            </View>
-          ) : (
-            <AppButton
-              style={styles.sendBtn}
-              title={isCounterOffer ? 'Review counter-offer' : 'Review offer'}
-              subtitle={formatFromFiat(total, 'GBP')}
-              icon={<Ionicons name="arrow-forward-outline" size={16} color={colors.textInverse} />}
-              variant="primary"
-              size="lg"
-              onPress={handleReviewOffer}
-              disabled={numericOffer <= 0 || isSubmitting}
-              loading={isSubmitting}
-              accessibilityLabel={`Review ${isCounterOffer ? 'counter-offer' : 'offer'} of ${formatFromFiat(numericOfferGbp, 'GBP')} on ${title}`}
-            />
-          )}
-        </View>
+        <MakeOfferFooter
+          isLoading={isLoading}
+          isCounterOffer={isCounterOffer}
+          total={total}
+          numericOffer={numericOffer}
+          numericOfferGbp={numericOfferGbp}
+          title={title}
+          isSubmitting={isSubmitting}
+          onReview={handleReviewOffer}
+        />
       )}
     </FlagshipScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  content: {
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.xl },
-  // ── Item summary ──
-  itemSummary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-    paddingVertical: Space.md },
-  itemThumb: {
-    width: Space.xxl + Space.sm,
-    height: Space.xxl + Space.sm,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden' },
-  itemThumbImage: {
-    width: '100%',
-    height: '100%' },
-  itemInfo: {
-    flex: 1,
-    gap: Space.xs },
-  itemTitle: {
-    fontSize: TypographyV2.sectionTitle.size,
-    lineHeight: TypographyV2.sectionTitle.lineHeight,
-    fontFamily: TypographyV2.sectionTitle.fontFamily,
-    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
-  itemListingPrice: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily },
-  // ── Message seller action ──
-  messageAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm + Space.xs,
-    minHeight: Control.hit },
-  messageActionText: {
-    flex: 1,
-    fontSize: TypographyV2.bodyStrong.size,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-    fontFamily: TypographyV2.bodyStrong.fontFamily },
-  // ── Price input section ──
-  priceSection: {
-    paddingTop: Space.lg,
-    paddingBottom: Space.md },
-  sectionLabel: {
-    fontSize: TypographyV2.label.size,
-    lineHeight: TypographyV2.label.lineHeight,
-    fontFamily: TypographyV2.label.fontFamily,
-    letterSpacing: TypographyV2.label.letterSpacing,
-    textTransform: 'uppercase',
-    marginBottom: Space.md },
-  priceInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderBottomWidth: Stroke.emphasis,
-    paddingBottom: Space.xs },
-  currencySymbol: {
-    fontSize: TypographyV2.display.size,
-    fontFamily: TypographyV2.display.fontFamily,
-    marginRight: Space.sm },
-  priceInput: {
-    flex: 1,
-    fontSize: TypographyV2.display.size + 8,
-    fontFamily: TypographyV2.display.fontFamily,
-    letterSpacing: TypographyV2.screenTitle.letterSpacing * 2,
-    paddingVertical: Space.sm },
-  discountRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: Space.sm },
-  discountText: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily },
-  // ── Quick offer chips ──
-  quickOfferRow: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    marginTop: Space.md },
-  quickOfferChip: {
-    flex: 1,
-    paddingVertical: Space.sm + 2,
-    borderRadius: Radius.md,
-    borderWidth: Stroke.standard,
-    alignItems: 'center',
-    gap: Space.xs / 2 },
-  quickOfferChipLabel: {
-    fontSize: TypographyV2.bodyStrong.size,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-    fontFamily: TypographyV2.bodyStrong.fontFamily },
-  quickOfferChipSub: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily },
-  // ── Context rows (counter-offer, seller minimum) ──
-  contextRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-    marginTop: Space.sm },
-  contextText: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily },
-  // ── Counter-offer side-by-side compare ──
-  counterCompareBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    marginTop: Space.md,
-    paddingVertical: Space.sm + 2,
-    paddingHorizontal: Space.md,
-    borderRadius: Radius.md },
-  counterCompareCol: {
-    flex: 1,
-    alignItems: 'center',
-    gap: Space.xs / 2 },
-  counterCompareLabel: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-    textTransform: 'uppercase' },
-  counterCompareValue: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
-    fontVariant: ['tabular-nums'] },
-  // ── Expiry section ──
-  expirySection: {
-    paddingTop: Space.lg,
-    paddingBottom: Space.md },
-  expiryRow: {
-    flexDirection: 'row',
-    gap: Space.sm },
-  expiryChip: {
-    flex: 1,
-    paddingVertical: Space.sm + 2,
-    borderRadius: Radius.md,
-    borderWidth: Stroke.standard,
-    alignItems: 'center' },
-  expiryChipText: {
-    fontSize: TypographyV2.bodyStrong.size,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-    fontFamily: TypographyV2.bodyStrong.fontFamily },
-  expiryHint: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight + 2,
-    fontFamily: TypographyV2.meta.fontFamily,
-    marginTop: Space.sm },
-  // ── Summary section ──
-  summarySection: {
-    paddingTop: Space.lg },
-  summaryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: Space.sm + 2,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    minHeight: Control.hit },
-  summaryLabelCluster: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2 },
-  summaryLabel: {
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
-    fontFamily: TypographyV2.body.fontFamily },
-  summaryValue: {
-    fontSize: TypographyV2.bodyStrong.size,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
-    fontVariant: ['tabular-nums'] },
-  totalRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: Space.md,
-    minHeight: Control.hit },
-  totalLabel: {
-    fontSize: TypographyV2.bodyStrong.size,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-    fontFamily: TypographyV2.bodyStrong.fontFamily },
-  totalValue: {
-    fontSize: TypographyV2.priceList.size,
-    lineHeight: TypographyV2.priceList.lineHeight,
-    fontFamily: TypographyV2.priceList.fontFamily,
-    letterSpacing: TypographyV2.priceList.letterSpacing,
-    fontVariant: ['tabular-nums'] },
-  // ── Trust signal ──
-  trustRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.xs + 2,
-    paddingTop: Space.lg },
-  trustText: {
-    flex: 1,
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight + 2,
-    fontFamily: TypographyV2.meta.fontFamily },
-  // ── Error ──
-  errorText: {
-    flex: 1,
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily },
-  errorBlock: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    marginTop: Space.sm + 2 },
-  retryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingVertical: Space.xs + 2,
-    paddingHorizontal: Space.sm + 2,
-    borderRadius: Radius.md,
-    borderWidth: Stroke.standard,
-    minHeight: Control.hit },
-  retryBtnText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-  // ── Footer ──
-  footer: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.md,
-    paddingBottom: Platform.OS === 'ios' ? Space.lg : Space.md,
-    borderTopWidth: StyleSheet.hairlineWidth },
-  sendBtn: {
-    width: '100%' },
-  footerLoading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.md },
-  footerLoadingText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily },
-  // ── Review overlay ──
-  reviewOverlay: {
-    ...StyleSheet.absoluteFill,
-    zIndex: 100 },
-  reviewBackdrop: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'transparent' },
-  reviewSheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl,
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Platform.OS === 'ios' ? Space.xl : Space.lg,
-    maxHeight: '85%' },
-  reviewHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: Radius.full,
-    alignSelf: 'center',
-    marginBottom: Space.md },
-  reviewTitle: {
-    fontSize: TypographyV2.screenTitle.size,
-    lineHeight: TypographyV2.screenTitle.lineHeight,
-    fontFamily: TypographyV2.screenTitle.fontFamily,
-    marginBottom: Space.md },
-  reviewItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-    marginBottom: Space.md },
-  reviewItemInfo: {
-    flex: 1,
-    gap: Space.xs / 2 },
-  reviewItemTitle: {
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
-    fontFamily: TypographyV2.body.fontFamily },
-  reviewItemPrice: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily },
-  reviewAmountBox: {
-    borderRadius: Radius.lg,
-    padding: Space.md,
-    alignItems: 'center',
-    marginBottom: Space.md },
-  reviewAmountLabel: {
-    fontSize: TypographyV2.label.size,
-    fontFamily: TypographyV2.label.fontFamily,
-    letterSpacing: TypographyV2.label.letterSpacing,
-    textTransform: 'uppercase',
-    marginBottom: Space.xs },
-  reviewAmountValue: {
-    fontSize: TypographyV2.display.size,
-    fontFamily: TypographyV2.display.fontFamily,
-    fontVariant: ['tabular-nums'] },
-  reviewCompareRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-    marginTop: Space.md,
-    paddingTop: Space.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'transparent' },
-  reviewCompareItem: {
-    alignItems: 'center',
-    flex: 1 },
-  reviewCompareLabel: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    marginBottom: Space.xs / 2 },
-  reviewCompareValue: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
-    fontVariant: ['tabular-nums'] },
-  reviewExpiry: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    marginTop: Space.sm,
-    textAlign: 'center' },
-  reviewSummaryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: Space.sm + 2,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    minHeight: Control.hit },
-  reviewSummaryLabel: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily },
-  reviewSummaryValue: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
-    fontVariant: ['tabular-nums'] },
-  reviewTotalRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: Space.md,
-    minHeight: Control.hit },
-  reviewTotalLabel: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: TypographyV2.bodyStrong.fontFamily },
-  reviewTotalValue: {
-    fontSize: TypographyV2.priceList.size,
-    fontFamily: TypographyV2.priceList.fontFamily,
-    fontVariant: ['tabular-nums'] },
-  reviewActions: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    marginTop: Space.lg },
-  reviewCancelBtn: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: Space.md,
-    paddingHorizontal: Space.lg,
-    borderRadius: Radius.lg,
-    borderWidth: Stroke.standard,
-    minHeight: Control.hit },
-  reviewCancelText: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: TypographyV2.bodyStrong.fontFamily },
-  reviewConfirmBtn: {
-    flex: 1 } });

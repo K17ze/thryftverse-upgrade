@@ -117,13 +117,19 @@ function parseProgressFraction(stderr: string, totalDurationMs: number): number 
  * provided and an `onProgress` callback is supplied, progress is reported as
  * a 0–1 fraction based on the current output time.
  *
+ * When `timeoutMs` is provided, the child is SIGKILLed once the deadline
+ * elapses and the promise rejects with a `transient` {@link FfmpegError}
+ * (a timed-out render is retryable, not a permanent failure). This bounds
+ * in-request renders so a stalled transcode cannot hold the publication
+ * request open past the connection timeout.
+ *
  * Resolves when ffmpeg exits cleanly (code 0). Rejects with an
- * {@link FfmpegError} on non-zero exit or spawn failure.
+ * {@link FfmpegError} on non-zero exit, spawn failure, or timeout.
  */
 export function runFfmpeg(
   args: string[],
   onProgress?: (fraction: number) => void,
-  options?: { totalDurationMs?: number },
+  options?: { totalDurationMs?: number; timeoutMs?: number },
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const runId = randomUUID();
@@ -135,10 +141,25 @@ export function runFfmpeg(
     }
 
     const totalDurationMs = options?.totalDurationMs ?? 0;
+    const timeoutMs = options?.timeoutMs ?? 0;
     const child = spawn(ffmpegPath, args, { windowsHide: true });
 
     let stderr = '';
     let lastReportedFraction = -1;
+    let settled = false;
+    let timedOut = false;
+
+    const timeout = timeoutMs > 0
+      ? setTimeout(() => {
+        timedOut = true;
+        logger.warn({ runId, timeoutMs, args }, '[ffmpeg] render deadline exceeded — killing process');
+        child.kill('SIGKILL');
+      }, timeoutMs)
+      : null;
+
+    const cleanup = () => {
+      if (timeout) clearTimeout(timeout);
+    };
 
     child.stderr.on('data', (chunk: Buffer) => {
       const text = chunk.toString('utf8');
@@ -154,11 +175,21 @@ export function runFfmpeg(
     });
 
     child.on('error', (error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
       logger.error({ err: error, runId, args }, '[ffmpeg] spawn error');
       reject(new FfmpegError('operational', null, error.message, `ffmpeg failed to start: ${error.message}`));
     });
 
     child.on('close', (code) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (timedOut) {
+        reject(new FfmpegError('transient', code, stderr, `ffmpeg render exceeded ${timeoutMs}ms deadline`));
+        return;
+      }
       if (code === 0) {
         logger.debug({ runId, args }, '[ffmpeg] completed');
         resolve();

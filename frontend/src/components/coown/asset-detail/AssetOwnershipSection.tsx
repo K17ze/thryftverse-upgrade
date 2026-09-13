@@ -7,7 +7,6 @@ import { useAppTheme } from '../../../theme/ThemeContext';
 import { formatCoOwnIze } from '../../../utils/currency';
 import type { CoOwnCorporateAction, CoOwnDistribution, MarketCoOwnAsset } from '../../../services/marketApi';
 import { CoOwnCorporateActionRow, type CoOwnCorporateActionStatus, type CoOwnCorporateActionType } from '../';
-import { CoOwnFeeSchedule, type CoOwnFeeScheduleEntry } from '../CoOwnFeeSchedule';
 import { CoOwnDripToggle } from '../CoOwnDripToggle';
 import { CoOwnDistributionCalendar, type CoOwnDistributionCalendarEntry } from '../CoOwnDistributionCalendar';
 import { CommerceDetailDisclosureRow, CommerceDetailMetricRow } from '../../commerce/detail';
@@ -29,6 +28,9 @@ export interface AssetOwnershipSectionProps {
   avgEntryPriceGbp: number | null;
   unrealizedPnlGbp: number | null;
   unrealizedPnlPct: number | null;
+  /** Cumulative realised gain/loss from completed sales (holdings
+   *  contract). Rendered only when non-zero — a £0 row does no work. */
+  realizedPnlGbp?: number | null;
   yourSegmentPct: number;
   otherHoldersSegmentPct: number;
   availableSegmentPct: number;
@@ -55,6 +57,12 @@ export interface AssetOwnershipSectionProps {
   /** True while the corporate actions fetch is in flight. */
   corporateActionsLoading?: boolean;
   onNavigateToCorporateAction: (action: CoOwnCorporateAction) => void;
+  /** Navigate to the governance vote screen for a votable corporate action.
+   * When omitted, open governance actions render without a vote affordance. */
+  onNavigateToVote?: (action: CoOwnCorporateAction) => void;
+  /** True when the device is offline — ownership sub-queries show
+   * offline-aware empty states instead of bare failure text. */
+  isOffline?: boolean;
   onOpenBuyout: () => void;
   /** ISO date when the position lockup / holding period ends. */
   lockupEndDate?: string | null;
@@ -64,11 +72,6 @@ export interface AssetOwnershipSectionProps {
   activeBuyoutOfferPremiumPct?: number | null;
   /** Active buyout offer expiry (ISO date). */
   activeBuyoutOfferExpiry?: string | null;
-  /** Wave 10/11: Structured fee schedule (management / performance /
-   * platform / sourcing). Undefined when the parent does not forward
-   * the asset's feeSchedule — the disclosure is omitted (truthful
-   * absence). Null when published but empty. */
-  feeSchedule?: MarketCoOwnAsset['feeSchedule'];
   /** Distribution calendar entries (upcoming + recent). Undefined when
    * the parent does not supply a history list — the disclosure is
    * omitted. Empty array = no distributions scheduled. */
@@ -102,22 +105,21 @@ const ACTION_STATUS_MAP: Record<string, CoOwnCorporateActionStatus> = {
 export function AssetOwnershipSection({
   isHolder, yourUnits, viewerPct, reservedUnits, sellableUnits, holdingsLoading = false,
   positionValueGbp, positionMarkBasis = 'reference price',
-  avgEntryPriceGbp, unrealizedPnlGbp, unrealizedPnlPct,
+  avgEntryPriceGbp, unrealizedPnlGbp, unrealizedPnlPct, realizedPnlGbp,
   yourSegmentPct, otherHoldersSegmentPct, availableSegmentPct,
   availableUnits, totalUnits, holderCount, onOpenRights, rights,
   lastDistribution, lastDistributionAmount, lastDistributionDate, lastDistributionPerUnit,
   onNavigateToDistributionHistory, distributionsFailed, distributionsLoading = false,
   corporateActions, corporateActionsFailed, corporateActionsLoading = false,
-  onNavigateToCorporateAction, onOpenBuyout, lockupEndDate,
+  onNavigateToCorporateAction, onNavigateToVote, isOffline = false, onOpenBuyout, lockupEndDate,
   activeBuyoutOfferPriceGbp, activeBuyoutOfferPremiumPct, activeBuyoutOfferExpiry,
-  feeSchedule, distributionCalendarEntries,
+  distributionCalendarEntries,
   dripSupported, dripEnrolled, onToggleDrip, dripPending, dripError, dripProjectedUnits,
   assetId,
 }: AssetOwnershipSectionProps) {
   const { colors } = useAppTheme();
   const [allocationExpanded, setAllocationExpanded] = useState(false);
   const [eventsExpanded, setEventsExpanded] = useState(false);
-  const [feesExpanded, setFeesExpanded] = useState(false);
   const [calendarExpanded, setCalendarExpanded] = useState(false);
   const lockupMs = lockupEndDate ? new Date(lockupEndDate).getTime() : NaN;
   const lockupActive = Number.isFinite(lockupMs) && lockupMs > Date.now();
@@ -133,6 +135,14 @@ export function AssetOwnershipSection({
     : pnlPositive ? colors.coownUp : colors.coownDown;
   const pnlBg = !pnlPositive && !pnlNegative ? undefined
     : pnlPositive ? colors.coownUpSubtle : colors.coownDownSubtle;
+  // ── Open governance decisions ──
+  // The backend only accepts votes on governance actions with status
+  // 'open' (record-date gate enforced server-side at the vote screen).
+  // Surface them separately from the passive event log — a decision
+  // awaiting the holder's ballot is actionable, not history.
+  const openVotes = (corporateActions ?? []).filter(action =>
+    action.actionType === 'governance' && action.status === 'open');
+  const showOpenVotes = openVotes.length > 0 && typeof onNavigateToVote === 'function';
   const activeEvents = (corporateActions ?? []).filter(action =>
     ['open', 'announced', 'executing'].includes(action.status));
   const pastEvents = (corporateActions ?? []).filter(action =>
@@ -164,32 +174,6 @@ export function AssetOwnershipSection({
   const distributionYieldPct = perUnitReference != null
     && perUnitReference > 0 && lastDistributionPerUnit != null
     ? (lastDistributionPerUnit / perUnitReference) * 100 : null;
-
-  // ── Fee schedule entries (Wave 10/11) ──
-  // Map the asset's structured feeSchedule into the row contract the
-  // CoOwnFeeSchedule component expects. Only fees with a non-null value
-  // are included; when every fee is null the entries array is empty and
-  // the component renders its truthful "No fees disclosed" state.
-  const feeEntries: CoOwnFeeScheduleEntry[] = feeSchedule ? (
-    [
-      feeSchedule.managementFeePct != null
-        ? { label: 'Management fee', ratePct: feeSchedule.managementFeePct, isRecurring: true }
-        : null,
-      feeSchedule.performanceFeePct != null
-        ? { label: 'Performance fee', ratePct: feeSchedule.performanceFeePct }
-        : null,
-      feeSchedule.platformFeePct != null
-        ? { label: 'Platform fee', ratePct: feeSchedule.platformFeePct, isRecurring: true }
-        : null,
-      feeSchedule.sourcingFeeGbp != null
-        ? { label: 'Sourcing fee', fixedGbp: feeSchedule.sourcingFeeGbp }
-        : null,
-    ] as (CoOwnFeeScheduleEntry | null)[]
-  ).filter((e): e is CoOwnFeeScheduleEntry => e != null) : [];
-  // Show the disclosure only when the parent forwards feeSchedule data.
-  // Absence of the prop = absence of the section (truthful).
-  const showFeeSchedule = feeSchedule !== undefined;
-  const feeScheduleEmpty = feeEntries.length === 0;
 
   // ── DRIP toggle visibility ──
   // Only holders with units see the reinvestment toggle, and only when
@@ -232,6 +216,11 @@ export function AssetOwnershipSection({
             <Text style={[styles.caption, { color: colors.textMuted }]}>
               Indicative value at {positionMarkBasis}
             </Text>
+            {unrealizedPnlGbp != null ? (
+              <Text style={[styles.caption, { color: colors.textMuted }]}>
+                Unrealised — excludes distributions and fees
+              </Text>
+            ) : null}
             {/* Cost basis | Market value — two aligned columns, Robinhood-style.
                 Replaces the stacked single-row layout so the two figures
                 read as a comparison rather than two unrelated metric rows. */}
@@ -254,6 +243,17 @@ export function AssetOwnershipSection({
                 </Text>
               </View>
             </View>
+            {/* Realised P&L — cumulative gain/loss from completed sales,
+                reported by the holdings contract. Rendered only when the
+                holder has actually sold (a £0.00 row does no work). Kept
+                separate from the unrealised figure so marked value never
+                reads as realised proceeds. */}
+            {realizedPnlGbp != null && realizedPnlGbp !== 0 ? (
+              <CommerceDetailMetricRow
+                label="Realised from sales"
+                value={`${realizedPnlGbp > 0 ? '+' : '−'}${formatCoOwnIze(Math.abs(realizedPnlGbp))}`}
+              />
+            ) : null}
             {sellableUnits != null ? (
               <CommerceDetailMetricRow label="Unreserved units" value={unitsLabel(sellableUnits)}
                 subLabel="Subject to transfer terms" />
@@ -374,6 +374,51 @@ export function AssetOwnershipSection({
         </View>
       ) : null}
 
+      {/* 2b ─ Open decisions — governance actions awaiting a holder vote.
+            Actionable ballots are separated from the passive event log:
+            a vote is something the holder does, not something that
+            happened to them. Backend gates eligibility on status 'open'
+            + record date + holdings; the vote screen re-checks. */}
+      {showOpenVotes ? (
+        <View style={[styles.section, styles.separated, { borderTopColor: colors.borderSubtle }]}>
+          <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>
+            Open decisions
+          </Text>
+          {openVotes.map(action => {
+            const deadlineMs = action.votingDeadline ? new Date(action.votingDeadline).getTime() : NaN;
+            const deadlineLabel = Number.isFinite(deadlineMs)
+              ? deadlineMs > Date.now()
+                ? `Voting closes ${formatDayMonth(action.votingDeadline!)}`
+                : 'Voting closed'
+              : null;
+            return (
+              <Pressable
+                key={action.id}
+                onPress={() => onNavigateToVote!(action)}
+                accessibilityRole="button"
+                accessibilityLabel={`Vote on ${action.title}`}
+                accessibilityHint="Opens the ballot for this governance decision"
+                style={({ pressed }) => [styles.voteRow, { borderTopColor: colors.borderSubtle }, pressed && styles.pressed]}
+              >
+                <View style={styles.flex}>
+                  <Text style={[styles.body, { color: colors.textPrimary }]} numberOfLines={2}>
+                    {action.title}
+                  </Text>
+                  {deadlineLabel ? (
+                    <Text style={[styles.caption, { color: colors.textMuted }]}>
+                      {deadlineLabel}
+                    </Text>
+                  ) : null}
+                </View>
+                <View style={[styles.voteCta, { borderColor: colors.borderSubtle }]}>
+                  <Text style={[styles.voteCtaText, { color: colors.textPrimary }]}>Vote</Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
+
       {/* 3 ─ Events — corporate actions as a progressive-disclosure log.
             Buyout offers are intentionally excluded (they own block 2). */}
       {showEvents ? (
@@ -383,7 +428,7 @@ export function AssetOwnershipSection({
           </Text>
           {corporateActionsFailed ? (
             <Text accessibilityLiveRegion="polite" style={[styles.body, { color: colors.textMuted }]}>
-              Events could not be refreshed.
+              {isOffline ? 'Offline — events will refresh when you reconnect.' : 'Events could not be refreshed.'}
             </Text>
           ) : null}
           {corporateActionsLoading && !corporateActions?.length ? (
@@ -441,20 +486,9 @@ export function AssetOwnershipSection({
           ) : undefined}
         />
         <CommerceDetailDisclosureRow label="Full rights agreement" onPress={onOpenRights} />
-        {showFeeSchedule ? (
-          <>
-            <Pressable onPress={() => setFeesExpanded(value => !value)}
-              accessibilityRole="button" accessibilityState={{ expanded: feesExpanded }}
-              accessibilityLabel="Fee schedule"
-              style={({ pressed }) => [styles.disclosure, { borderTopColor: colors.borderSubtle }, pressed && styles.pressed]}>
-              <Text style={[styles.body, styles.flex, { color: colors.textPrimary }]}>Fee schedule</Text>
-              <Ionicons name={feesExpanded ? 'chevron-up' : 'chevron-down'} size={20} color={colors.textMuted} />
-            </Pressable>
-            {feesExpanded ? (
-              <CoOwnFeeSchedule fees={feeEntries} isEmpty={feeScheduleEmpty} />
-            ) : null}
-          </>
-        ) : null}
+        {/* Pillar 4: Fee schedule removed from Ownership tab — now lives
+            in the unified CoOwnAssetDossierSheet (Pillar 2) to eliminate
+            cross-tab duplication. */}
         {!hasActiveBuyout ? (
           <CommerceDetailDisclosureRow label="Buyout offers" onPress={onOpenBuyout} />
         ) : null}
@@ -495,7 +529,9 @@ export function AssetOwnershipSection({
         ) : (
           <Text style={[styles.body, { color: colors.textMuted }]} accessibilityLiveRegion="polite">
             {distributionsLoading ? 'Loading distributions…'
-              : distributionsFailed ? 'Distribution history unavailable.' : 'No distributions yet.'}
+              : distributionsFailed
+                ? (isOffline ? 'Offline — connect to load distributions.' : 'Distribution history unavailable.')
+                : 'No distributions yet.'}
           </Text>
         )}
         {lastDistribution && distributionsFailed ? (
@@ -673,6 +709,28 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.semibold,
     letterSpacing: TypographyV2.meta.letterSpacing,
+  },
+  // ── Open decisions / vote rows ──
+  voteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    minHeight: 48,
+    paddingVertical: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  voteCta: {
+    borderWidth: Stroke.standard,
+    borderRadius: Radius.md,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  voteCtaText: {
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.semibold,
   },
   // ── DRIP toggle block ──
   dripBlock: {

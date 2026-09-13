@@ -80,7 +80,10 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     );
 
     const salesResult = await readDb.query<{ completed_sales: string }>(
-      `SELECT COUNT(*)::text AS completed_sales FROM orders WHERE seller_id = $1 AND status = 'completed'`,
+      // Count every settled sale — paid/shipped/delivered/completed — not
+      // just the 'completed' terminal state, or sellers with orders still
+      // inside the protection hold would show a deflated sales total.
+      `SELECT COUNT(*)::text AS completed_sales FROM orders WHERE seller_id = $1 AND status IN ('paid', 'shipped', 'delivered', 'completed')`,
       [sellerId]
     );
 
@@ -595,13 +598,13 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
             COUNT(*) FILTER (
               WHERE buyer_id IN (
                 SELECT o2.buyer_id FROM orders o2
-                WHERE o2.seller_id = $1 AND o2.status IN ('paid', 'shipped', 'delivered')
+                WHERE o2.seller_id = $1 AND o2.status IN ('paid', 'shipped', 'delivered', 'completed')
                 GROUP BY o2.buyer_id HAVING COUNT(*) > 1
               )
             ) AS repeat_orders
           FROM orders
           WHERE seller_id = $1
-            AND status IN ('paid', 'shipped', 'delivered')
+            AND status IN ('paid', 'shipped', 'delivered', 'completed')
             AND paid_at IS NOT NULL
             AND paid_at >= $2 AND paid_at < $3
         `,
@@ -659,7 +662,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
             COALESCE(SUM(subtotal_gbp) * 100, 0)::bigint AS revenue_gbp_minor
           FROM orders
           WHERE seller_id = $1
-            AND status IN ('paid', 'shipped', 'delivered')
+            AND status IN ('paid', 'shipped', 'delivered', 'completed')
             AND paid_at IS NOT NULL
             AND paid_at >= $2 AND paid_at < $3
         `,
@@ -682,7 +685,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
           FROM date_range dr
           LEFT JOIN orders o ON date_trunc('day', o.paid_at)::date = dr.d
             AND o.seller_id = $1
-            AND o.status IN ('paid', 'shipped', 'delivered')
+            AND o.status IN ('paid', 'shipped', 'delivered', 'completed')
             AND o.paid_at IS NOT NULL
             AND o.paid_at >= $2 AND o.paid_at < $3
           GROUP BY dr.d
@@ -707,7 +710,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
           FROM date_range dr
           LEFT JOIN orders o ON date_trunc('day', o.paid_at)::date = dr.d
             AND o.seller_id = $1
-            AND o.status IN ('paid', 'shipped', 'delivered')
+            AND o.status IN ('paid', 'shipped', 'delivered', 'completed')
             AND o.paid_at IS NOT NULL
             AND o.paid_at >= $2 AND o.paid_at < $3
           GROUP BY dr.d
@@ -735,7 +738,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
             AND i.created_at >= $2 AND i.created_at < $3
           LEFT JOIN orders o ON o.listing_id = l.id
             AND o.seller_id = $1
-            AND o.status IN ('paid', 'shipped', 'delivered')
+            AND o.status IN ('paid', 'shipped', 'delivered', 'completed')
             AND o.paid_at IS NOT NULL
             AND o.paid_at >= $2 AND o.paid_at < $3
           WHERE l.seller_id = $1
@@ -1063,7 +1066,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
             COUNT(o.id) AS sales
           FROM orders o
           WHERE o.seller_id = $1
-            AND o.status IN ('paid', 'shipped', 'delivered')
+            AND o.status IN ('paid', 'shipped', 'delivered', 'completed')
             AND o.paid_at IS NOT NULL
             AND o.paid_at >= $2 AND o.paid_at < $3
           GROUP BY day
@@ -1210,7 +1213,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
       `SELECT l.id, l.title, l.price_gbp, l.status, l.image_url,
               l.category, l.brand, l.condition, l.created_at,
               (SELECT o.paid_at FROM orders o
-               WHERE o.listing_id = l.id AND o.status IN ('paid','shipped','delivered')
+               WHERE o.listing_id = l.id AND o.status IN ('paid', 'shipped', 'delivered', 'completed')
                  AND o.paid_at IS NOT NULL
                ORDER BY o.paid_at DESC LIMIT 1) AS sold_at
        FROM listings l
@@ -1266,7 +1269,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
              FROM orders o
              INNER JOIN listings l ON l.id = o.listing_id
              WHERE o.listing_id <> $1
-               AND o.status IN ('paid', 'shipped', 'delivered')
+               AND o.status IN ('paid', 'shipped', 'delivered', 'completed')
                AND o.paid_at IS NOT NULL
                AND l.status = 'sold'
                AND LOWER(l.category) = LOWER($2)
@@ -1305,7 +1308,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     const purchasesResult = await readDb.query<{ count: string }>(
       `SELECT COUNT(*)::text AS count FROM orders
        WHERE listing_id = $1 AND seller_id = $2
-         AND status IN ('paid', 'shipped', 'delivered')
+         AND status IN ('paid', 'shipped', 'delivered', 'completed')
          AND paid_at IS NOT NULL
          AND paid_at >= $3 AND paid_at < $4`,
       [listingId, sellerId, start, end]

@@ -852,13 +852,41 @@ export async function processAgentRun(
   });
 
   try {
+    // Load the trigger message body + conversation context so the bot sees
+    // the actual text that invoked it. Message bodies are stored encrypted —
+    // the `body` column holds an "[encrypted]" placeholder — so decrypt via
+    // resolveMessageBody exactly like loadConversationHistory does. Without
+    // this, matchAgentInvocation sees the placeholder, no command matches,
+    // and the run "succeeds" with no reply — a silent failure.
+    const ctxResult = await db.query<{
+      msg_id: string | null;
+      body: string | null;
+      body_ciphertext: string | null;
+      conv_type: string;
+      title: string | null;
+    }>(
+      `SELECT m.id AS msg_id, m.body, m.body_ciphertext, c.type AS conv_type, c.title
+       FROM agent_runs r
+       LEFT JOIN chat_messages m ON m.id = r.trigger_message_id
+       LEFT JOIN chat_conversations c ON c.id = r.conversation_id
+       WHERE r.id = $1
+       LIMIT 1`,
+      [runId]
+    );
+    const ctxRow = ctxResult.rows[0];
+    const triggerBody = ctxRow?.msg_id
+      ? await resolveMessageBody(ctxRow.msg_id, ctxRow.body ?? '', ctxRow.body_ciphertext)
+      : '';
+    const convType = ctxRow?.conv_type === 'dm' ? 'dm' : 'group';
+    const convTitle = ctxRow?.title ?? null;
+
     const result = await executeBotCommand(db, {
       conversationId: run.conversation_id,
-      conversationType: 'group',
-      conversationTitle: null,
+      conversationType: convType,
+      conversationTitle: convTitle,
       actorUserId: run.actor_user_id,
       actorUserName: null,
-      messageText: '',
+      messageText: triggerBody,
       targetBotId: run.bot_id,
     });
 

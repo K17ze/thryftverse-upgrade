@@ -36,6 +36,7 @@ export interface DiscoverySellerSummary {
 
 export type { ListingCondition } from './taxonomy';
 import type { ListingCondition } from './taxonomy';
+import type { ListingMediaRecord } from './listingMedia';
 
 // ============================================================================
 // DISCOVERY LISTING SUMMARY
@@ -48,7 +49,8 @@ import type { ListingCondition } from './taxonomy';
  * - `brand`, `size`, `condition` are nullable. The UI must render only
  *   known facts — never fabricate a brand from the title or default
  *   size/condition.
- * - `price` is always present (a listing without a price is not a listing).
+ * - `price` is nullable: discovery/search rows can legitimately lack a
+ *   price, and `null` lets the UI omit it instead of fabricating £0.
  * - `originalPrice` is optional and only present when a genuine reference
  *   price exists.
  */
@@ -63,14 +65,19 @@ export interface DiscoveryListingSummary {
   size: string | null;
   /** Condition — nullable so the UI never defaults to "Very good". */
   condition: ListingCondition | null;
-  /** Current asking price (always present). */
-  price: number;
+  /** Current asking price in GBP major units — `null` when the source does
+   *  not provide one. Renderers omit the price line rather than showing £0. */
+  price: number | null;
   /** Optional original/reference price for discount display. */
   originalPrice?: number;
   /** Price including buyer protection fee, if applicable. */
   priceWithProtection?: number;
   /** Primary media URIs (images and/or video poster frames). */
   images: string[];
+  /** Canonical media records (derivatives, blurhash/LQIP, focal point,
+   *  poster). Present when the source endpoint serves the media contract —
+   *  prefer over `images` for placeholders and sized renditions. */
+  media?: ListingMediaRecord[];
   /**
    * Width divided by height for the primary media asset. Backends should
    * provide this so discovery grids can reserve the final frame before the
@@ -79,8 +86,9 @@ export interface DiscoveryListingSummary {
   mediaAspectRatio?: number | null;
   mediaWidth?: number | null;
   mediaHeight?: number | null;
-  /** Like count for social proof. */
-  likes: number;
+  /** Like count for social proof — `null` when the source endpoint does not
+   *  return engagement data (unknown, not a factual zero). */
+  likes: number | null;
   /** View count (optional). */
   views?: number;
   /** Whether the listing is bumped/boosted. */
@@ -126,14 +134,16 @@ export interface ListingLike {
   brand?: string | null;
   size?: string | null;
   condition?: ListingCondition | null;
-  price: number;
+  price: number | null;
   originalPrice?: number;
   priceWithProtection?: number;
   images: string[];
+  /** Canonical media records, when the source listing carries them. */
+  media?: ListingMediaRecord[];
   mediaAspectRatio?: number | null;
   mediaWidth?: number | null;
   mediaHeight?: number | null;
-  likes: number;
+  likes: number | null;
   views?: number;
   isBumped?: boolean;
   isSold?: boolean;
@@ -171,14 +181,15 @@ export function mapListingToDiscoverySummary(
     brand: source.brand ?? null,
     size: source.size ?? null,
     condition: source.condition ?? null,
-    price: source.price,
+    price: source.price ?? null,
     originalPrice: source.originalPrice,
     priceWithProtection: source.priceWithProtection,
     images: source.images,
+    media: source.media,
     mediaAspectRatio: source.mediaAspectRatio ?? null,
     mediaWidth: source.mediaWidth ?? null,
     mediaHeight: source.mediaHeight ?? null,
-    likes: source.likes,
+    likes: source.likes ?? null,
     views: source.views,
     isBumped: source.isBumped,
     isSold: source.isSold,

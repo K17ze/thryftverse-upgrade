@@ -115,6 +115,8 @@ export function CoOwnPositionCard({
   lockupEndDate,
 }: CoOwnPositionCardProps) {
   const { colors } = useAppTheme();
+  const [expanded, setExpanded] = React.useState(false);
+  React.useEffect(() => setExpanded(false), [title, imageUri]);
 
   const statusLabel = status === 'open' ? 'Active' : status === 'paused' ? 'Paused' : 'Closed';
   const statusColor = status === 'open' ? colors.success : status === 'paused' ? colors.textSecondary : colors.textMuted;
@@ -156,12 +158,10 @@ export function CoOwnPositionCard({
 
   return (
     <View>
-      <Pressable
-        onPress={onPress}
-        accessibilityRole="button"
-        accessibilityLabel={`${title}, ${settledUnits} settled units, ${ownershipPct}% of ${outstandingLabel} outstanding, ${statusLabel}`}
-      >
-        <View style={[styles.root, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.root, { backgroundColor: colors.background, borderColor: colors.border }]}>
+          <Pressable onPress={onPress} disabled={!onPress} accessibilityRole="button"
+            accessibilityLabel={`${title}, ${settledUnits} settled units, ${statusLabel}`}
+            style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1 })}>
           <View style={styles.mediaRow}>
             <View style={styles.imageWrap}>
               {imageUri ? (
@@ -201,8 +201,10 @@ export function CoOwnPositionCard({
             </View>
           </View>
 
+          </Pressable>
+
           {/* Phase 3: position state — settled/reserved/pending split */}
-          {positionState && (
+          {positionState && (reservedUnits > 0 || pendingInUnits > 0 || pendingOutUnits > 0) && (
             <View style={[styles.stateRow, { borderColor: colors.border }]}>
               <StateItem label="Settled" value={settledUnits} colors={colors} />
               {reservedUnits > 0 && <StateItem label="Reserved" value={reservedUnits} colors={colors} />}
@@ -221,6 +223,21 @@ export function CoOwnPositionCard({
             </View>
           )}
 
+          {/* U37: Marked value hero — the dominant element. Cost/P&L and
+              units follow as concise secondary context, not equally-weighted
+              tiles. Hierarchy, not a grid. */}
+          <View style={[styles.heroRow, { borderColor: colors.border }]}>
+            <Text style={[styles.heroLabel, { color: colors.textMuted }]} numberOfLines={1}>Marked value</Text>
+            <Text style={[styles.heroValue, { color: colors.textPrimary }]} numberOfLines={1}>{currentValueLabel}</Text>
+          </View>
+
+          <Pressable onPress={() => setExpanded(value => !value)} accessibilityRole="button"
+            accessibilityState={{ expanded }} accessibilityLabel={`${expanded ? 'Hide' : 'Show'} position breakdown for ${title}`}
+            style={({ pressed }) => ({ minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', opacity: pressed ? 0.72 : 1 })}>
+            <Text style={[styles.ownership, { color: colors.textSecondary }]}>{expanded ? 'Hide breakdown' : 'Position breakdown'}</Text>
+            <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={20} color={colors.textMuted} />
+          </Pressable>
+          {expanded && <View style={{ gap: Space.sm }}>
           {/* Phase 3: mark source + age + value */}
           {mark && markValueLabel && (
             <View style={[styles.markRow, { borderColor: colors.border }]}>
@@ -246,14 +263,6 @@ export function CoOwnPositionCard({
               </View>
             </View>
           )}
-
-          {/* U37: Marked value hero — the dominant element. Cost/P&L and
-              units follow as concise secondary context, not equally-weighted
-              tiles. Hierarchy, not a grid. */}
-          <View style={[styles.heroRow, { borderColor: colors.border }]}>
-            <Text style={[styles.heroLabel, { color: colors.textMuted }]} numberOfLines={1}>Marked value</Text>
-            <Text style={[styles.heroValue, { color: colors.textPrimary }]} numberOfLines={1}>{currentValueLabel}</Text>
-          </View>
 
           {/* U37: Concise cost/P&L context — compact hairline rows */}
           <View style={styles.contextRows}>
@@ -361,6 +370,8 @@ export function CoOwnPositionCard({
             )}
           </View>
 
+          </View>}
+
           {/* U43: Buy/Sell are permission-aware — disabled with reason when
               the asset is closed or has no sellable units. */}
           <View style={styles.actionRow}>
@@ -392,17 +403,16 @@ export function CoOwnPositionCard({
                 </Text>
               </Pressable>
             ) : null}
-            <Pressable
-              onPress={(e) => { e.stopPropagation(); onPress?.(); }}
+            {onPress && <Pressable
+              onPress={onPress}
               style={styles.detailBtn}
               accessibilityRole="button"
               accessibilityLabel={`View ${title} details`}
             >
-              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-            </Pressable>
+              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            </Pressable>}
           </View>
         </View>
-      </Pressable>
     </View>
   );
 }
@@ -443,9 +453,8 @@ function StateItem({
 
 const styles = StyleSheet.create({
   root: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: Space.md,
     gap: Space.sm,
   },
   mediaRow: {
@@ -474,6 +483,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
+    flexWrap: 'wrap',
   },
   statusDot: {
     width: 7,

@@ -6,7 +6,7 @@ import Reanimated, {
   useAnimatedStyle,
   withSpring,
   withTiming } from 'react-native-reanimated';
-import { useReducedMotion } from 'react-native-reanimated';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 import { Space, Radius, Elevation } from '../../theme/designTokens';
 import { Motion } from '../../theme/motionTokens';

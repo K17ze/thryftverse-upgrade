@@ -38,7 +38,7 @@ export interface StorefrontTabsProps {
   tabs: TabItem[];
   activeKey: TabKey;
   onTabChange: (key: TabKey) => void;
-  onTabContentLayout: (y: number) => void;
+  onTabContentLayout?: (y: number) => void;
 
   // Shared
   reducedMotion: boolean;
@@ -135,7 +135,7 @@ export function StorefrontTabs(props: StorefrontTabsProps) {
 
       {/* ── 10. ACTIVE TAB CONTENT ── */}
       <View
-        onLayout={(e) => { onTabContentLayout(e.nativeEvent.layout.y); }}
+        onLayout={(e) => { onTabContentLayout?.(e.nativeEvent.layout.y); }}
       >
         {/* LISTINGS TAB — two-column portfolio grid */}
         {activeKey === 'listings' && (

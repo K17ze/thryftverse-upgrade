@@ -94,7 +94,7 @@ export async function getSellerVelocityMetrics(
        COALESCE(SUM(total_gbp) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days'), 0)::text AS sales_gbp_7d
      FROM orders
      WHERE seller_id = $1
-       AND status IN ('paid', 'shipped', 'delivered')`,
+       AND status IN ('paid', 'shipped', 'delivered', 'completed')`,
     [sellerId]
   );
 

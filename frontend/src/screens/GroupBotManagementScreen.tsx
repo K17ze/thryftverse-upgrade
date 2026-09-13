@@ -1,24 +1,37 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
   StyleSheet,
   View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AgentIcon } from '../components/agents/AgentIcon';
-import { FlagshipHeader, FlagshipScreen } from '../components/flagship';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
+import {
+  FlagshipHeader,
+  FlagshipScreen,
+  FlagshipState,
+  SkeletonBlock,
+  SkeletonCircle } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { BodyEmphasis, Caption, Meta } from '../components/ui/Text';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { RootStackParamList } from '../navigation/types';
 import {
   deployBotToConversationOnApi,
   undeployBotFromConversationOnApi } from '../services/chatApi';
+import {
+  fetchConversationDeploymentsFromApi,
+  fetchCustomBotsFromApi,
+  fetchSystemBotsFromApi } from '../services/botsApi';
+import type { ConversationBotDeployment } from '../domain';
 import { useStore } from '../store/useStore';
 import { Space, Radius, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
@@ -41,11 +54,16 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
-  const conversations = useStore((state) => state.conversations);
   const bots = useStore((state) => state.availableChatBots);
   const customBots = useStore((state) => state.customBots);
   const deployBotToConversation = useStore((state) => state.deployBotToConversation);
   const undeployBotFromConversation = useStore((state) => state.undeployBotFromConversation);
+  const { isOffline } = useConnectivity();
+  const requestEpoch = useRef(0);
+  const mutationPending = useRef(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [deployments, setDeployments] = useState<ConversationBotDeployment[]>([]);
   const [pendingBotId, setPendingBotId] = useState<string | null>(null);
   const [confirmSheet, setConfirmSheet] = useState<{
     visible: boolean;
@@ -56,15 +74,55 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
     variant?: 'default' | 'danger';
   }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
-  const conversation = useMemo(
-    () => conversations.find((item) => item.id === conversationId),
-    [conversations, conversationId]
-  );
-  const deployedBotIds = conversation?.botIds ?? [];
+  // Load the real bot catalogue + this conversation's deployments. The
+  // store's loader swallows errors, so fetch directly for honest
+  // error + retry, then write results back into the store.
+  const refresh = useCallback(async () => {
+    const epoch = ++requestEpoch.current;
+    setIsLoading(true);
+    setLoadError(false);
+    try {
+      const [system, custom, convDeployments] = await Promise.all([
+        fetchSystemBotsFromApi(),
+        fetchCustomBotsFromApi(),
+        fetchConversationDeploymentsFromApi(conversationId),
+      ]);
+      if (epoch !== requestEpoch.current) return;
+      useStore.setState((s) => ({
+        availableChatBots: system,
+        customBots: custom,
+        conversationDeployments: {
+          ...s.conversationDeployments,
+          [conversationId]: convDeployments } }));
+      setDeployments(convDeployments);
+    } catch {
+      if (epoch === requestEpoch.current) setLoadError(true);
+    } finally {
+      if (epoch === requestEpoch.current) setIsLoading(false);
+    }
+  }, [conversationId]);
+
+  useFocusEffect(useCallback(() => {
+    void refresh();
+    return () => { requestEpoch.current += 1; };
+  }, [refresh]));
+
+  // Only the server deployment list is evidence of an installed agent.
+  const deployedBotIds = useMemo(() => deployments.map(d => d.botId), [deployments]);
   const allBots = useMemo(() => [...bots, ...customBots], [bots, customBots]);
   const deployedBots = useMemo(
-    () => allBots.filter((bot) => deployedBotIds.includes(bot.id)),
-    [allBots, deployedBotIds]
+    () => deployments.map(deployment => ({
+      id: deployment.botId,
+      name: deployment.botName,
+      category: deployment.botCategory,
+      type: deployment.botType,
+      status: deployment.runtimeReady ? deployment.status : 'setup-required',
+      description: deployment.runtimeReadinessReason
+        ?? allBots.find(bot => bot.id === deployment.botId)?.description
+        ?? 'Connected to this chat',
+      commandHint: deployment.commandHint,
+    })),
+    [allBots, deployments]
   );
   const availableToDeploy = useMemo(
     () =>
@@ -79,41 +137,51 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
     [allBots, deployedBotIds]
   );
 
-  const handleRemove = (botId: string, botName: string) => {
-    setConfirmSheet({
-      visible: true,
-      title: 'Remove agent?',
-      message: `${botName} will stop responding in this chat.`,
-      confirmLabel: 'Remove',
-      variant: 'danger',
-      onConfirm: async () => {
-        setConfirmSheet((s) => ({ ...s, visible: false }));
-        haptic.medium();
-        setPendingBotId(botId);
-        try {
-          await undeployBotFromConversationOnApi(conversationId, botId);
-          undeployBotFromConversation(conversationId, botId);
-          show(`${botName} removed`, 'info');
-        } catch {
-          show('Failed to remove agent. Try again.', 'error');
-        } finally {
-          setPendingBotId(null);
-        }
-      } });
-  };
-
-  const handleDeploy = async (botId: string) => {
-    haptic.success();
+  const changeDeployment = async (botId: string, connect: boolean) => {
+    if (isOffline || mutationPending.current) return;
+    mutationPending.current = true;
+    const epoch = requestEpoch.current;
     setPendingBotId(botId);
+    haptic.selection();
     try {
-      await deployBotToConversationOnApi(conversationId, botId);
-      deployBotToConversation(conversationId, botId);
-      show('Agent connected', 'success');
+      try {
+        if (connect) await deployBotToConversationOnApi(conversationId, botId);
+        else await undeployBotFromConversationOnApi(conversationId, botId);
+      } catch {
+        // A lost response does not establish whether installation changed.
+      }
+      const snapshot = await fetchConversationDeploymentsFromApi(conversationId);
+      if (epoch !== requestEpoch.current) return;
+      setDeployments(snapshot);
+      useStore.setState(state => ({ conversationDeployments: {
+        ...state.conversationDeployments, [conversationId]: snapshot,
+      } }));
+      const confirmed = snapshot.some(deployment => deployment.botId === botId) === connect;
+      if (confirmed) {
+        if (connect) deployBotToConversation(conversationId, botId);
+        else undeployBotFromConversation(conversationId, botId);
+        haptic.success();
+        show(connect ? 'Agent connected' : 'Agent removed', 'success');
+      } else show('The change was not applied. Try again.', 'error');
     } catch {
-      show('Failed to connect agent. Try again.', 'error');
+      if (epoch !== requestEpoch.current) return;
+      setLoadError(true);
+      show('Could not confirm the change. Reload agents to check the result.', 'error');
     } finally {
+      mutationPending.current = false;
       setPendingBotId(null);
     }
+  };
+
+  const handleRemove = (botId: string, botName: string) => {
+    if (isOffline || mutationPending.current) return;
+    setConfirmSheet({ visible: true, title: 'Remove agent?',
+      message: `${botName} will stop responding in this chat.`, confirmLabel: 'Remove', variant: 'danger',
+      onConfirm: () => {
+        setConfirmSheet(current => ({ ...current, visible: false }));
+        void changeDeployment(botId, false);
+      },
+    });
   };
 
   const renderAgent = (bot: AgentRowModel, deployed: boolean) => (
@@ -122,8 +190,9 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
       bot={bot}
       deployed={deployed}
       pending={pendingBotId === bot.id}
+      disabled={isOffline || pendingBotId !== null}
       onRemove={() => handleRemove(bot.id, bot.name)}
-      onDeploy={() => handleDeploy(bot.id)}
+      onDeploy={() => void changeDeployment(bot.id, true)}
       onView={() => navigation.navigate('BotDetail', { botId: bot.id, conversationId })}
     />
   );
@@ -138,13 +207,13 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
             <AnimatedPressable
               onPress={() => navigation.navigate('CustomBots')}
               activeOpacity={0.7}
-              scaleValue={0.92}
+              scaleValue={0.985}
               hapticFeedback="light"
               accessibilityRole="button"
               accessibilityLabel="Your agents"
             >
               <View style={styles.headerAction}>
-                <Ionicons name="person-outline" size={21} color={colors.textPrimary} />
+                <AppIcon name="profile" size={IconSize.md} color="textPrimary" opticalCenter accessible={false} />
               </View>
             </AnimatedPressable>
           }
@@ -153,9 +222,37 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
       scrollEnabled={false}
     >
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+        {isLoading ? (
+          <View>
+            {[0, 1, 2].map((i) => (
+              <View key={i} style={styles.skeletonRow}>
+                <SkeletonCircle size={Space.xl + Space.xs} />
+                <View style={styles.skeletonCopy}>
+                  <SkeletonBlock width="50%" height={13} />
+                  <SkeletonBlock width="75%" height={11} style={{ marginTop: Space.xs / 2 }} />
+                  <SkeletonBlock width="60%" height={11} style={{ marginTop: Space.xs / 2 }} />
+                </View>
+                <SkeletonBlock width={Control.hit} height={Control.hit} radius={Radius.full} />
+              </View>
+            ))}
+          </View>
+        ) : loadError ? (
+          <FlagshipState
+            variant={isOffline ? 'offline' : 'error'}
+            title={isOffline ? "You're offline" : "Couldn't load agents"}
+            subtitle={
+              isOffline
+                ? 'Reconnect to manage chat agents.'
+                : 'Check your connection and try again.'
+            }
+            actionLabel="Try again"
+            onAction={() => void refresh()}
+          />
+        ) : (
+          <>
         {deployedBots.length > 0 && (
           <AgentSection
-            title="CONNECTED TO THIS CHAT"
+            title="Connected"
             agents={deployedBots}
             renderAgent={(bot) => renderAgent(bot, true)}
           />
@@ -163,7 +260,7 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
 
         {availableToDeploy.length > 0 && (
           <AgentSection
-            title="AVAILABLE TO CONNECT"
+            title="Available"
             agents={availableToDeploy}
             renderAgent={(bot) => renderAgent(bot, false)}
           />
@@ -175,6 +272,8 @@ export default function GroupBotManagementScreen({ navigation, route }: Props) {
             title="No agents configured"
             subtitle="No agents are ready to connect."
           />
+        )}
+          </>
         )}
       </ScrollView>
       <ConfirmationSheet
@@ -221,12 +320,14 @@ function AgentRow({
   bot,
   deployed,
   pending,
+  disabled,
   onRemove,
   onDeploy,
   onView }: {
   bot: AgentRowModel;
   deployed: boolean;
   pending: boolean;
+  disabled: boolean;
   onRemove: () => void;
   onDeploy: () => void;
   onView: () => void;
@@ -241,15 +342,10 @@ function AgentRow({
         : 'Setup required';
 
   return (
-    <AnimatedPressable
-      onPress={onView}
-      activeOpacity={0.7}
-      scaleValue={0.985}
-      hapticFeedback="light"
-      accessibilityRole="button"
-      accessibilityLabel={`View ${bot.name}`}
-    >
-      <View style={styles.agentRow}>
+    <View style={styles.agentRow}>
+      <AnimatedPressable onPress={onView} activeOpacity={0.7} scaleValue={0.985}
+        accessibilityRole="button" accessibilityLabel={`View ${bot.name}`}
+        style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: Space.sm }}>
         <View style={styles.agentIcon}>
           <AgentIcon
             category={bot.category}
@@ -261,7 +357,7 @@ function AgentRow({
 
         <View style={styles.agentText}>
           <BodyEmphasis numberOfLines={1}>{bot.name}</BodyEmphasis>
-          <Caption color={colors.textMuted} numberOfLines={1}>
+          <Caption color={colors.textMuted} numberOfLines={2}>
             {bot.description}
           </Caption>
           <View style={styles.detailLine}>
@@ -279,6 +375,7 @@ function AgentRow({
           </View>
         </View>
 
+      </AnimatedPressable>
         {pending ? (
           <View style={styles.rowAction}>
             <ActivityIndicator size="small" color={colors.textMuted} />
@@ -286,23 +383,27 @@ function AgentRow({
         ) : (
           <AnimatedPressable
             onPress={deployed ? onRemove : onDeploy}
+            disabled={disabled}
+            accessibilityState={{ disabled }}
+            style={{ opacity: disabled ? 0.4 : 1 }}
             activeOpacity={0.7}
-            scaleValue={0.92}
+            scaleValue={0.985}
             hapticFeedback={deployed ? 'medium' : 'light'}
             accessibilityRole="button"
             accessibilityLabel={`${deployed ? 'Remove' : 'Connect'} ${bot.name}`}
           >
             <View style={styles.rowAction}>
-              <Ionicons
-                name={deployed ? 'remove' : 'add'}
-                size={deployed ? 20 : 21}
-                color={deployed ? colors.danger : colors.textPrimary}
+              <AppIcon
+                name={deployed ? 'remove' : 'plus'}
+                size={deployed ? IconSize.sm : IconSize.md}
+                color={deployed ? 'danger' : 'textPrimary'}
+                opticalCenter
+                accessible={false}
               />
             </View>
           </AnimatedPressable>
         )}
-      </View>
-    </AnimatedPressable>
+    </View>
   );
 }
 
@@ -318,7 +419,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: TypographyV2.meta.size,
     letterSpacing: TypographyV2.meta.letterSpacing },
   agentRow: {
-    minHeight: Space.xxl + Space.xxl + Space.xxl + 10,
+    minHeight: 88,
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: Space.smMd,
@@ -353,6 +454,13 @@ function createStyles(colors: ThemeColors) {
     height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center' },
+  skeletonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    paddingVertical: Space.md },
+  skeletonCopy: {
+    flex: 1 },
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,

@@ -1,7 +1,8 @@
+import { MarketActivityRow } from '../components/coown/MarketActivityRow';
 import React, { useCallback } from 'react';
-import { View, Text, StyleSheet, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl, Pressable } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
@@ -13,14 +14,13 @@ import {
 } from '../services/marketApi';
 import { Space, Radius, Stroke } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
-import { OrderHistoryRow } from '../components/trade';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { resolveCommerceDestination, type CommerceDestinationSource } from '../platform/commerce';
 import { haptics } from '../utils/haptics';
 import { formatCoOwnIze } from '../utils/currency';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
-import { CoOwnStateCanvas, CoOwnLedgerSummary, CoOwnActivitySkeleton, CoOwnOfflineBanner, CoOwnReconciliationBanner } from '../components/coown';
+import { CoOwnStateCanvas, CoOwnActivitySkeleton, CoOwnOfflineBanner } from '../components/coown';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -37,30 +37,16 @@ type LedgerEntry = {
   amountGBP: number;
   units?: number;
   note?: string;
+  status?: MarketHistoryItem['status'];
 };
 
 const FILTER_OPTIONS: Array<{ value: LedgerFilter; label: string; accessibilityLabel: string }> = [
-  { value: 'ALL', label: 'ALL', accessibilityLabel: 'Show all channels' },
-  { value: 'AUCTION', label: 'AUCTION', accessibilityLabel: 'Show auction activity' },
-  { value: 'CO-OWN', label: 'CO-OWN', accessibilityLabel: 'Show co-own activity' },
+  { value: 'ALL', label: 'All', accessibilityLabel: 'Show all channels' },
+  { value: 'AUCTION', label: 'Auctions', accessibilityLabel: 'Show auction activity' },
+  { value: 'CO-OWN', label: 'Co-own', accessibilityLabel: 'Show co-own activity' },
 ];
 
 const PAGE_SIZE = 80;
-
-function getEntryCashflow(entry: { action: 'bid' | 'win' | 'buy-units' | 'sell-units'; amountGBP: number }) {
-  if (entry.action === 'sell-units') return entry.amountGBP;
-  if (entry.action === 'buy-units' || entry.action === 'win') return -entry.amountGBP;
-  return 0;
-}
-
-function relativeTime(isoTs: string) {
-  const diffMs = Date.now() - new Date(isoTs).getTime();
-  const mins = Math.max(1, Math.floor(diffMs / (60 * 1000)));
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
 
 function sortLedgerEntriesDesc(a: LedgerEntry, b: LedgerEntry) {
   const tsDiff = new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
@@ -80,6 +66,7 @@ function mapHistoryToLedgerEntries(items: MarketHistoryItem[]): LedgerEntry[] {
       amountGBP: item.amountGbp,
       units: item.units ?? undefined,
       note: item.note ?? undefined,
+      status: item.status,
     }))
     .sort(sortLedgerEntriesDesc);
 }
@@ -99,14 +86,6 @@ export default function MarketLedgerScreen() {
     [formatFromFiat]
   );
 
-  const formatSignedMoney = useCallback(
-    (value: number) => {
-      const sign = value >= 0 ? '+' : '-';
-      return `${sign}${formatMoney(Math.abs(value))}`;
-    },
-    [formatMoney]
-  );
-
   const [filter, setFilter] = React.useState<LedgerFilter>('ALL');
   const [remoteEntries, setRemoteEntries] = React.useState<LedgerEntry[]>([]);
   const [isSyncingLedger, setIsSyncingLedger] = React.useState(false);
@@ -116,6 +95,9 @@ export default function MarketLedgerScreen() {
   const [nextCursor, setNextCursor] = React.useState<MarketHistoryCursor | null>(null);
   const [isLoadingMore, setIsLoadingMore] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
+  const [pageError, setPageError] = React.useState(false);
+  const requestEpoch = React.useRef(0);
+  const pageInFlight = React.useRef(false);
 
   const refreshRemoteLedger = React.useCallback(async () => {
     if (!viewerId) {
@@ -123,27 +105,29 @@ export default function MarketLedgerScreen() {
       setRemoteError(false);
       return;
     }
+    const epoch = ++requestEpoch.current;
     setIsSyncingLedger(true);
+    setPageError(false);
     try {
       const page = await listUserMarketHistory(viewerId, { channel: 'all', limit: PAGE_SIZE });
+      if (epoch !== requestEpoch.current) return;
       setRemoteEntries(mapHistoryToLedgerEntries(page.items));
       setIsRemoteAvailable(true);
       setRemoteError(false);
       setHasMoreRemote(page.pageInfo.hasMore);
       setNextCursor(page.pageInfo.nextCursor ?? null);
     } catch {
-      setIsRemoteAvailable(false);
+      if (epoch !== requestEpoch.current) return;
       setRemoteError(true);
-      setRemoteEntries([]);
-      setHasMoreRemote(false);
-      setNextCursor(null);
     } finally {
-      setIsSyncingLedger(false);
+      if (epoch === requestEpoch.current) setIsSyncingLedger(false);
     }
   }, [viewerId]);
 
   const loadMoreRemoteLedger = React.useCallback(async () => {
-    if (!isRemoteAvailable || !hasMoreRemote || !nextCursor || isLoadingMore || isSyncingLedger) return;
+    if (!isRemoteAvailable || !hasMoreRemote || !nextCursor || isLoadingMore || isSyncingLedger || pageInFlight.current) return;
+    const epoch = requestEpoch.current;
+    pageInFlight.current = true;
     setIsLoadingMore(true);
     try {
       const page = await listUserMarketHistory(viewerId, {
@@ -152,6 +136,7 @@ export default function MarketLedgerScreen() {
         cursorTs: nextCursor.cursorTs,
         cursorId: nextCursor.cursorId,
       });
+      if (epoch !== requestEpoch.current) return;
       const pageEntries = mapHistoryToLedgerEntries(page.items);
       setRemoteEntries((previous) => {
         const merged = [...previous, ...pageEntries];
@@ -162,14 +147,23 @@ export default function MarketLedgerScreen() {
       setHasMoreRemote(page.pageInfo.hasMore);
       setNextCursor(page.pageInfo.nextCursor ?? null);
     } catch {
-      setHasMoreRemote(false);
-      setNextCursor(null);
+      if (epoch === requestEpoch.current) setPageError(true);
     } finally {
-      setIsLoadingMore(false);
+      pageInFlight.current = false;
+      if (epoch === requestEpoch.current) setIsLoadingMore(false);
     }
-  }, [hasMoreRemote, isLoadingMore, isRemoteAvailable, isSyncingLedger, nextCursor, viewerId]);
+  }, [pageError, hasMoreRemote, isLoadingMore, isRemoteAvailable, isSyncingLedger, nextCursor, viewerId]);
 
-  React.useEffect(() => { void refreshRemoteLedger(); }, [refreshRemoteLedger]);
+  React.useEffect(() => {
+    setRemoteEntries([]);
+    setIsRemoteAvailable(false);
+    setNextCursor(null);
+    setHasMoreRemote(false);
+  }, [viewerId]);
+  useFocusEffect(React.useCallback(() => {
+    void refreshRemoteLedger();
+    return () => { requestEpoch.current += 1; };
+  }, [refreshRemoteLedger]));
 
   // Local entries are only a safe fallback when the device is offline. While
   // online, a failed history request must remain an explicit recoverable
@@ -184,16 +178,6 @@ export default function MarketLedgerScreen() {
     const channel = filter === 'AUCTION' ? 'auction' : 'co-own';
     return entries.filter((entry) => entry.channel === channel);
   }, [entries, filter]);
-
-  const totalMarketValue = React.useMemo(
-    () => filteredEntries.reduce((sum, entry) => sum + entry.amountGBP, 0),
-    [filteredEntries]
-  );
-
-  const netCashflow = React.useMemo(
-    () => filteredEntries.reduce((sum, entry) => sum + getEntryCashflow(entry), 0),
-    [filteredEntries]
-  );
 
   const handleRefresh = React.useCallback(async () => {
     setRefreshing(true);
@@ -211,23 +195,20 @@ export default function MarketLedgerScreen() {
   // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
   const renderLedgerItem = useCallback(({ item }: { item: LedgerEntry }) => {
     const isAuction = item.channel === 'auction';
-    const side = item.action === 'sell-units' ? 'sell' as const : 'buy' as const;
-    const title = item.action === 'bid' ? 'Bid submitted' : item.action === 'win' ? 'Auction settlement' : item.action === 'sell-units' ? 'Units sold' : 'Units purchased';
-    const unitPrice = item.units && item.units > 0 ? item.amountGBP / item.units : item.amountGBP;
-    const cashflow = getEntryCashflow(item);
-    const signedCoOwnTotal = `${cashflow >= 0 ? '+' : '−'}${formatCoOwnIze(Math.abs(cashflow))}`;
-
+    const title = item.action === 'bid' ? 'Auction bid' : item.action === 'win' ? 'Auction result' : item.action === 'sell-units' ? 'Sell order' : 'Buy order';
+    const stateLabel = item.status === 'filled' ? 'Filled'
+      : item.status === 'partially_filled' ? 'Partially filled'
+      : item.status === 'cancelled' ? 'Cancelled'
+      : item.status === 'rejected' ? 'Rejected'
+      : item.status === 'open' ? 'Open'
+      : 'Status unavailable';
     return (
-      <OrderHistoryRow
-        id={item.id}
-        side={side}
-        type="market"
-        assetTitle={title}
-        quantity={item.units ?? 1}
-        pricePerShare={isAuction ? formatMoney(unitPrice) : formatCoOwnIze(unitPrice)}
-        totalAmount={isAuction ? formatSignedMoney(cashflow) : signedCoOwnTotal}
-        status={item.action === 'bid' ? 'open' : 'filled'}
-        timestamp={relativeTime(item.timestamp)}
+      <MarketActivityRow
+        title={title}
+        detail={[item.note, item.units != null ? `${item.units} units` : null].filter(Boolean).join(' · ')}
+        amount={isAuction ? formatMoney(item.amountGBP) : formatCoOwnIze(item.amountGBP)}
+        status={stateLabel}
+        timestamp={item.timestamp}
         onPress={() => {
           haptics.tap();
           const source: CommerceDestinationSource = isAuction
@@ -246,7 +227,7 @@ export default function MarketLedgerScreen() {
         }}
       />
     );
-  }, [navigation, formatMoney, formatSignedMoney]);
+  }, [navigation, formatMoney]);
 
   // ── Loading state (initial sync, no entries yet) ──
   if (isSyncingLedger && entries.length === 0) {
@@ -254,8 +235,7 @@ export default function MarketLedgerScreen() {
       <FlagshipScreen
         header={
           <FlagshipHeader
-            title="Ledger"
-            subtitle="Market activity and trade history"
+            title="Market activity"
             onBack={handleBack}
           />
         }
@@ -270,52 +250,28 @@ export default function MarketLedgerScreen() {
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title="Ledger"
-          subtitle="Market activity and trade history"
+          title="Market activity"
           onBack={handleBack}
         />
       }
       scrollEnabled={false}
     >
       <CoOwnOfflineBanner isOffline={isOffline} />
-      <CoOwnReconciliationBanner
-        isActive={remoteError && !isOffline}
-        onContactSupport={() => navigation.navigate('HelpSupport')}
-      />
+      {remoteError && !isOffline && entries.length > 0 && (
+        <Pressable onPress={handleRefresh} accessibilityRole="button" accessibilityLabel="History could not refresh. Retry"
+          style={{ minHeight: 44, padding: Space.md }}>
+          <Text style={{ color: colors.textSecondary }}>Couldn’t refresh · Showing last loaded history · Retry</Text>
+        </Pressable>
+      )}
 
-      {/* Summary card */}
-      <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <View style={styles.summaryStat}>
-          <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Volume</Text>
-          <Text style={[styles.summaryStatValue, { color: colors.textPrimary }]} numberOfLines={1}>{formatMoney(totalMarketValue)}</Text>
-        </View>
-        <View style={[styles.summaryStatDivider, { backgroundColor: colors.border }]} />
-        <View style={styles.summaryStat}>
-          <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Net cashflow</Text>
-          <Text style={[styles.summaryStatValue, { color: netCashflow >= 0 ? colors.success : colors.danger }]} numberOfLines={1}>
-            {formatSignedMoney(netCashflow)}
-          </Text>
-        </View>
-        <View style={[styles.summaryStatDivider, { backgroundColor: colors.border }]} />
-        <View style={styles.summaryStat}>
-          <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Entries</Text>
-          <Text style={[styles.summaryStatValue, { color: colors.textPrimary }]} numberOfLines={1}>
-            {filteredEntries.length}
-          </Text>
-        </View>
+      <View style={{ paddingHorizontal: Space.md, paddingBottom: Space.md }}>
+        <Text style={{ color: colors.textSecondary, fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size }}>
+          {filteredEntries.length} loaded {filteredEntries.length === 1 ? 'entry' : 'entries'}{hasMoreRemote ? ' · more below' : ''}
+        </Text>
+        <Text style={{ color: colors.textMuted, fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, marginTop: Space.xxs }}>
+          Order values do not represent settled cash movements.
+        </Text>
       </View>
-
-      {/* Phase 4: Ledger summary with mark-used + window labels */}
-      <CoOwnLedgerSummary
-        issuedCount={filteredEntries.filter((e) => e.action === 'buy-units' && e.channel === 'co-own').length}
-        boughtCount={filteredEntries.filter((e) => e.action === 'buy-units').length}
-        soldCount={filteredEntries.filter((e) => e.action === 'sell-units').length}
-        pausedCount={0}
-        markUsedLabel="Last trade"
-        windowLabel="All time"
-        markTimestamp={undefined}
-        isStaleMark={false}
-      />
 
       {/* Filter */}
       <View style={styles.filterWrap}>
@@ -332,9 +288,15 @@ export default function MarketLedgerScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
-        onEndReached={() => void loadMoreRemoteLedger()}
+        onEndReached={() => { if (!pageError) void loadMoreRemoteLedger(); }}
         onEndReachedThreshold={0.5}
         renderItem={renderLedgerItem}
+        ListFooterComponent={pageError ? (
+          <Pressable onPress={() => { setPageError(false); void loadMoreRemoteLedger(); }} accessibilityRole="button"
+            accessibilityLabel="Retry loading more history" style={{ minHeight: 48, padding: Space.md }}>
+            <Text style={{ color: colors.textPrimary }}>Couldn’t load more · Retry</Text>
+          </Pressable>
+        ) : isLoadingMore ? <Text style={{ color: colors.textMuted, padding: Space.md }}>Loading more…</Text> : null}
         ListEmptyComponent={
           isSyncingLedger ? (
             <View style={styles.loadingWrap}>
@@ -352,7 +314,7 @@ export default function MarketLedgerScreen() {
             <CoOwnStateCanvas
               variant="error"
               title="Ledger unavailable"
-              subtitle="Your server history could not be loaded. Retry to reconcile it."
+              subtitle="Your history could not be loaded. Check your connection and retry."
               actionLabel="Retry"
               onAction={handleRefresh}
             />

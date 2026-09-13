@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { AppIcon } from '../components/common/AppIcon';
+import type { IoniconsGlyphName, SemanticIconName } from '../theme/iconTokens';
 import { CachedImage } from '../components/CachedImage';
 import { ChatInfoRow, ChatInfoSection } from '../components/chat/ChatInfoSection';
 import { FlagshipHeader, FlagshipScreen } from '../components/flagship';
@@ -20,7 +21,7 @@ import { useStore } from '../store/useStore';
 import { Radius, Space } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { deleteConversationOnApi, archiveConversationOnApi } from '../services/chatApi';
-import { blockUser, unblockUser } from '../services/profileApi';
+import { blockUser, unblockUser, restrictUser, unrestrictUser } from '../services/profileApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ConversationInfo'>;
 
@@ -44,7 +45,13 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
   const mutedIds = useStore((state) => state.mutedConversationIds);
   const toggleMuted = useStore((state) => state.toggleMutedConversation);
   const blockedUsers = useStore((state) => state.blockedUsers);
-  const toggleBlockedUser = useStore((state) => state.toggleBlockedUser);
+  const addBlockedUser = useStore((state) => state.addBlockedUser);
+  const removeBlockedUser = useStore((state) => state.removeBlockedUser);
+  const setConversationRestricted = useStore((state) => state.setConversationRestricted);
+  const setConversationBlocked = useStore((state) => state.setConversationBlocked);
+  const restrictedUsers = useStore((state) => state.restrictedUsers);
+  const addRestrictedUser = useStore((state) => state.addRestrictedUser);
+  const removeRestrictedUser = useStore((state) => state.removeRestrictedUser);
   const profileMediaOverrides = useStore((state) => state.profileMediaOverrides);
   const currentUser = useStore((state) => state.currentUser);
 
@@ -80,7 +87,14 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
     (id) => id !== 'me' && id !== currentUser?.id,
   );
   const isMuted = mutedIds.includes(conversationId);
-  const isBlocked = counterpartyId ? blockedUsers.includes(counterpartyId) : false;
+  const isBlocked =
+    (counterpartyId ? blockedUsers.includes(counterpartyId) : false) ||
+    Boolean(conversation.isBlocked);
+  // The server flag on the conversation payload is authoritative; the local
+  // set covers the gap before hydration completes.
+  const isRestricted =
+    (counterpartyId ? restrictedUsers.includes(counterpartyId) : false) ||
+    Boolean(conversation.isRestricted);
   const counterpartyProfile = counterpartyId
     ? conversation.participantProfiles?.find((p) => p.id === counterpartyId)
     : undefined;
@@ -140,17 +154,59 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
     }
   };
 
+  const applyUnrestrict = async () => {
+    if (!counterpartyId) return;
+    try {
+      await unrestrictUser(counterpartyId);
+      removeRestrictedUser(counterpartyId);
+      setConversationRestricted(conversationId, false);
+      show('User unrestricted', 'success');
+    } catch {
+      show('Could not update restrict status. Check your connection and try again.', 'error');
+    }
+  };
+
+  const toggleRestrict = () => {
+    if (!counterpartyId) return;
+    haptic.medium();
+    if (isRestricted) {
+      // Unrestrict is reversible and silent — no confirmation needed.
+      void applyUnrestrict();
+      return;
+    }
+    setConfirmSheet({
+      visible: true,
+      title: `Restrict ${displayName}?`,
+      message: "Their messages move to your requests and they won't see read receipts or typing from you. They won't know they're restricted.",
+      confirmLabel: 'Restrict',
+      onConfirm: () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        void (async () => {
+          try {
+            await restrictUser(counterpartyId);
+            addRestrictedUser(counterpartyId);
+            setConversationRestricted(conversationId, true);
+            show('User restricted', 'info');
+          } catch {
+            show('Could not update restrict status. Check your connection and try again.', 'error');
+          }
+        })();
+      } });
+  };
+
   const toggleBlock = async () => {
     if (!counterpartyId) return;
     haptic.heavy();
     try {
       if (isBlocked) {
         await unblockUser(counterpartyId);
-        toggleBlockedUser(counterpartyId);
+        removeBlockedUser(counterpartyId);
+        setConversationBlocked(conversationId, false);
         show('User unblocked', 'success');
       } else {
         await blockUser(counterpartyId);
-        toggleBlockedUser(counterpartyId);
+        addBlockedUser(counterpartyId);
+        setConversationBlocked(conversationId, true);
         show('User blocked', 'info');
       }
     } catch {
@@ -216,14 +272,14 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
         </AnimatedPressable>
 
         <View style={[styles.quickActions, t.quickActions]}>
-          <QuickAction icon="person-outline" label="Profile" onPress={viewProfile} />
+          <QuickAction icon="profile" label="Profile" onPress={viewProfile} />
           <QuickAction
-            icon="images-outline"
+            icon="images"
             label="Media"
             onPress={() => navigation.navigate('SharedConversationMedia', { conversationId })}
           />
           <QuickAction
-            icon={isMuted ? 'volume-mute-outline' : 'notifications-outline'}
+            icon={isMuted ? 'notificationsOff' : 'notifications'}
             label={isMuted ? 'Unmute' : 'Mute'}
             onPress={toggleMute}
             busy={isTogglingMute}
@@ -270,6 +326,12 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
 
         <ChatInfoSection title="PRIVACY AND SAFETY" danger>
           <ChatInfoRow
+            icon={isRestricted ? 'eye-outline' : 'eye-off-outline'}
+            label={isRestricted ? 'Unrestrict user' : 'Restrict user'}
+            subtitle={isRestricted ? 'Their messages go to your requests' : "Messages go to requests — they won't know"}
+            onPress={toggleRestrict}
+          />
+          <ChatInfoRow
             icon={isBlocked ? 'person-add-outline' : 'person-remove-outline'}
             label={isBlocked ? 'Unblock user' : 'Block user'}
             onPress={toggleBlock}
@@ -302,7 +364,7 @@ function QuickAction({
   label,
   onPress,
   busy }: {
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: SemanticIconName | IoniconsGlyphName;
   label: string;
   onPress: () => void;
   busy?: boolean;
@@ -325,7 +387,7 @@ function QuickAction({
       {busy ? (
         <ActivityIndicator size="small" color={colors.textPrimary} />
       ) : (
-        <Ionicons name={icon} size={21} color={colors.textPrimary} />
+        <AppIcon name={icon} size="lg" color="textPrimary" accessible={false} />
       )}
       <Text style={[styles.quickActionLabel, quickThemed.quickActionLabel]}>{label}</Text>
     </AnimatedPressable>

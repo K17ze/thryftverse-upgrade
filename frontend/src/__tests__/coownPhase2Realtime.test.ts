@@ -15,7 +15,10 @@ describe('Phase 2: Realtime order book stream hook', () => {
   it('FIX: hook implements snapshot-plus-delta protocol', () => {
     const src = readSrc('hooks/useCoOwnOrderBookStream.ts');
     expect(src).toContain('fetchSnapshot');
-    expect(src).toContain('applyDelta');
+    // Deltas are queued and flushed in a batched state update (see
+    // DELTA_FLUSH_MS); the delta-application path is flushDeltas.
+    expect(src).toContain('queueDelta');
+    expect(src).toContain('flushDeltas');
   });
 
   it('FIX: hook detects sequence gaps', () => {
