@@ -42,6 +42,7 @@ import {
   replicaConfigured,
 } from './db/pool.js';
 import { redis, closeRedis } from './lib/redis.js';
+import { createAuthenticationRequest, getLatestAuthenticationRequest } from './lib/authenticationPipeline.js';
 import type { AuthRole, AuthenticatedUser } from './lib/auth.js';
 import {
   createPublicToken,
@@ -108,6 +109,7 @@ import {
 // Avoids IEEE 754 representation error in the JSON wire format by emitting
 // decimal string variants (e.g. "49.2500") alongside legacy number fields.
 import { formatGbp } from './lib/moneyFormat.js';
+import { fetchSellerAwayState } from './lib/sellerAway.js';
 import {
   createMobileCustomerSession,
   getOrCreateStripeCustomer,
@@ -124,6 +126,7 @@ import {
 import {
   closeBackgroundQueues,
   enqueueAuctionSweepJob,
+  enqueueLiveLotSweepJob,
   enqueueCoOwnOrderExpirySweepJob,
   enqueueCoOwnAlertEvaluatorJob,
   enqueueCoOwnDripExecutionJob,
@@ -139,6 +142,7 @@ import {
   enqueueMediaIngestJob,
   enqueueDsarExportJob,
   enqueueSellerTrustRecomputeJob,
+  enqueueFeedbackEvaluationJob,
   startBackgroundWorkers,
 } from './lib/queues.js';
 import {
@@ -161,7 +165,6 @@ import {
   observeHttpRequest,
   observeDatabasePool,
   observeRedisConnection,
-  recordAuctionSettlement,
   recordBackgroundJobDuration,
   recordGmv,
   recordOrderCompleted,
@@ -287,6 +290,8 @@ import {
   processExtractionIntelligenceJob,
   processRetentionSweep,
   processPushReceiptReconciliation,
+  sweepExpiredAuctions,
+  sweepExpiredLiveLots,
   sweepExpiredCoOwnOrders,
   evaluateCoOwnPriceAlerts,
   processCoOwnDripReinvestment,
@@ -295,12 +300,17 @@ import {
   processBackupExpiryCheck,
   processDsarExport,
   processSellerTrustRecompute,
+  processAutoFeedbackSweep,
   processDomainOutboxBatch,
 } from './workers/handlers/index.js';
 import {
   evaluatePriceAlertsForListing,
   registerPriceAlertRoutes,
 } from './routes/priceAlerts.js';
+import {
+  evaluateSavedSearchAlertsForListing,
+  registerSavedSearchRoutes,
+} from './routes/savedSearches.js';
 import { registerListingOfferRoutes } from './routes/listingOffers.js';
 import { registerSmartSellPolicyRoutes } from './routes/smartSellPolicy.js';
 import { registerListingIntelligenceRoutes } from './routes/listingIntelligence.js';
@@ -332,6 +342,7 @@ import { registerSellerRoutes } from './routes/sellers.js';
 import { registerStorefrontRoutes } from './routes/storefronts.js';
 import { registerSellerHubRoutes } from './routes/sellerHub.js';
 import { registerPoliciesRoutes } from './routes/policies.js';
+import { registerAuthenticationRoutes } from './routes/authentication.js';
 import { registerFeedRoutes } from './routes/feed.js';
 import { registerGalleriaRoutes } from './routes/galleria.js';
 import { registerMoodboardRoutes } from './routes/moodboards.js';
@@ -355,6 +366,10 @@ import { registerExtractionIntelligenceRoutes } from './routes/extractionIntelli
 import { registerAnalyticsRoutes } from './routes/analytics.js';
 import { registerExperimentRoutes } from './routes/experiments.js';
 import { registerFlagRoutes } from './routes/flags.js';
+import { registerAppealsRoutes } from './routes/appeals.js';
+import { registerChatPreferencesRoutes } from './routes/chatPreferences.js';
+import { registerAuctionLifecycleRoutes } from './routes/auctions.js';
+import { registerListingInteractionRoutes } from './routes/listings.js';
 import { checkFraudNonBlocking } from './lib/fraudDetection.js';
 import { FraudShadowScoringService } from './lib/fraudShadowScoring.js';
 import { evaluateRisk, recordExecution } from './lib/riskDecision.js';
@@ -381,6 +396,10 @@ import {
 } from './lib/sellerRiskTiering.js';
 import type { SellerRiskTier } from './lib/sellerRiskTiering.js';
 import { compensateTerminalCommercePayment } from './lib/commerceCheckoutLifecycle.js';
+import {
+  emitOrderCommerceCard,
+  type OrderCommerceCardState,
+} from './lib/orderChatCards.js';
 import {
   appendDomainEvent,
   completeDomainOutboxEvent,
@@ -975,10 +994,6 @@ function calculateCommercePlatformChargeGbp(subtotalGbp: number): number {
   return roundTo(Math.max(formulaCharge, minimumCharge), 2);
 }
 
-function calculateAuctionPlatformFeeGbp(winningBidGbp: number): number {
-  return roundTo(Math.max(0, winningBidGbp) * AUCTION_PLATFORM_FEE_RATE, 2);
-}
-
 function calculateWalletTopupFeeBreakdown(grossFiatAmount: number): {
   grossFiatAmount: number;
   platformFeeRate: number;
@@ -1442,6 +1457,12 @@ function isPublicRoute(method: string, path: string) {
   // Poster product tag clicks are public (no auth required) so anonymous
   // viewers can register engagement on published posters.
   if (method === 'POST' && /^\/posters\/[^/]+\/tags\/[^/]+\/click$/.test(path)) {
+    return true;
+  }
+
+  // Public certificate verification — the certificateId is the unguessable
+  // capability issued on an authentication badge (CERT-<sha256 hex>).
+  if (method === 'GET' && /^\/authentication\/certificates\/[^/]+$/.test(path)) {
     return true;
   }
 
@@ -2585,6 +2606,17 @@ async function orderDispatchExtensionsTableAvailable(client: DbQueryable): Promi
     `
       SELECT
         to_regclass('public.order_dispatch_extensions') IS NOT NULL AS exists
+    `
+  );
+
+  return Boolean(result.rows[0]?.exists);
+}
+
+async function orderSlaBreachesTableAvailable(client: DbQueryable): Promise<boolean> {
+  const result = await client.query<{ exists: boolean }>(
+    `
+      SELECT
+        to_regclass('public.order_sla_breaches') IS NOT NULL AS exists
     `
   );
 
@@ -6257,139 +6289,52 @@ async function applyOrderParcelEvent(
   };
 }
 
-async function postAuctionSettlementLedgerEntries(
-  client: DbQueryable,
-  input: {
-    auctionId: string;
-    buyerId: string;
-    sellerId: string;
-    winningBidGbp: number;
-    platformFeeGbp: number;
+/**
+ * Emit in-thread commerce cards for a carrier parcel event, post-commit.
+ * Called from the shipping webhook and the admin parcel-event endpoint after
+ * applyOrderParcelEvent commits. Dedupe lives in emitOrderCommerceCard
+ * (deterministic message id per order+state), so emitting both 'shipped' and
+ * 'in_transit' for a paid→shipped in_transit event produces one card each,
+ * and a duplicate provider event produces none (gated on applied.idempotent).
+ */
+async function emitParcelOrderCards(input: {
+  orderId: string;
+  status: string;
+  eventType: ParcelEventType;
+  trackingNumber: string | null;
+  shippingProvider: string | null;
+  log: { error(obj: Record<string, unknown>, msg: string): void; warn(obj: Record<string, unknown>, msg: string): void };
+}): Promise<void> {
+  const states: OrderCommerceCardState[] = [];
+  if (input.status === 'shipped') {
+    states.push('order_shipped');
+    if (input.eventType === 'in_transit' || input.eventType === 'out_for_delivery') {
+      states.push('order_in_transit');
+    }
   }
-): Promise<void> {
-  const winningBidGbp = roundTo(Math.max(0, input.winningBidGbp), 2);
-  const platformFeeGbp = roundTo(Math.max(0, input.platformFeeGbp), 2);
-  if (winningBidGbp <= 0) {
-    return;
+  if (input.status === 'delivered') {
+    states.push('order_delivered');
+    // Carrier-reported delivery while the order still awaits buyer
+    // confirmation → nudge the buyer to confirm receipt. The emit
+    // re-verifies status = 'delivered', so a buyer who already confirmed
+    // (order 'completed') never sees a stale prompt.
+    states.push('delivery_confirm_prompt');
   }
-
-  const sellerNetGbp = roundTo(Math.max(0, winningBidGbp - platformFeeGbp), 2);
-  const sourceId = `auction:${input.auctionId}`;
-
-  const buyerSpendAccountId = await ensureLedgerAccount(
-    client,
-    'user',
-    input.buyerId,
-    'buyer_spend'
-  );
-  const sellerPayableAccountId = await ensureLedgerAccount(
-    client,
-    'user',
-    input.sellerId,
-    'ize_wallet',
-    'IZE'
-  );
-  const escrowAccountId = await ensureLedgerAccount(
-    client,
-    'platform',
-    'platform',
-    'escrow_liability'
-  );
-  const platformRevenueAccountId = await ensureLedgerAccount(
-    client,
-    'platform',
-    'platform',
-    'platform_revenue'
-  );
-
-  await appendLedgerEntry(client, {
-    accountId: buyerSpendAccountId,
-    counterpartyAccountId: escrowAccountId,
-    direction: 'debit',
-    amountGbp: winningBidGbp,
-    sourceType: 'order_payment',
-    sourceId,
-    lineType: 'auction_buyer_charge',
-    metadata: {
-      auctionId: input.auctionId,
-      buyerId: input.buyerId,
-      sellerId: input.sellerId,
-    },
-  });
-
-  await appendLedgerEntry(client, {
-    accountId: escrowAccountId,
-    counterpartyAccountId: buyerSpendAccountId,
-    direction: 'credit',
-    amountGbp: winningBidGbp,
-    sourceType: 'order_payment',
-    sourceId,
-    lineType: 'auction_buyer_charge',
-    metadata: {
-      auctionId: input.auctionId,
-      buyerId: input.buyerId,
-      sellerId: input.sellerId,
-    },
-  });
-
-  if (sellerNetGbp > 0) {
-    await appendLedgerEntry(client, {
-      accountId: escrowAccountId,
-      counterpartyAccountId: sellerPayableAccountId,
-      direction: 'debit',
-      amountGbp: sellerNetGbp,
-      sourceType: 'order_payment',
-      sourceId,
-      lineType: 'auction_seller_payable_credit',
-      metadata: {
-        auctionId: input.auctionId,
-        sellerId: input.sellerId,
-      },
-    });
-
-    await appendLedgerEntry(client, {
-      accountId: sellerPayableAccountId,
-      counterpartyAccountId: escrowAccountId,
-      direction: 'credit',
-      amountGbp: sellerNetGbp,
-      sourceType: 'order_payment',
-      sourceId,
-      lineType: 'auction_seller_payable_credit',
-      metadata: {
-        auctionId: input.auctionId,
-        sellerId: input.sellerId,
-      },
-    });
-  }
-
-  if (platformFeeGbp > 0) {
-    await appendLedgerEntry(client, {
-      accountId: escrowAccountId,
-      counterpartyAccountId: platformRevenueAccountId,
-      direction: 'debit',
-      amountGbp: platformFeeGbp,
-      sourceType: 'order_payment',
-      sourceId,
-      lineType: 'auction_platform_fee_credit',
-      metadata: {
-        component: 'auction_platform_charge',
-      },
-    });
-
-    await appendLedgerEntry(client, {
-      accountId: platformRevenueAccountId,
-      counterpartyAccountId: escrowAccountId,
-      direction: 'credit',
-      amountGbp: platformFeeGbp,
-      sourceType: 'order_payment',
-      sourceId,
-      lineType: 'auction_platform_fee_credit',
-      metadata: {
-        component: 'auction_platform_charge',
-      },
+  for (const stateType of states) {
+    await emitOrderCommerceCard({
+      orderId: input.orderId,
+      stateType,
+      trackingNumber: input.trackingNumber,
+      carrier: input.shippingProvider,
+      log: input.log,
     });
   }
 }
+
+// Auction settlement ledger entries are posted by
+// `postAuctionSettlementLedgerEntries` in lib/workerRuntime.ts — the shared
+// copy used by both the API routes and the worker handlers. The previous
+// inline copy here was removed to keep a single implementation.
 
 function toStripeMetadata(metadata: Record<string, unknown>): Record<string, string> {
   const next: Record<string, string> = {};
@@ -7114,6 +7059,10 @@ async function settlePaymentIntent(
 ): Promise<{
   intent: ReturnType<typeof toPaymentIntentPayload>;
   alreadyFinal: boolean;
+  /** Set when a terminal payment failure cancelled the linked commerce
+   *  order inside this transaction — lets callers emit post-commit effects
+   *  (notifications, in-thread commerce cards). */
+  orderCancelledOrderId?: string;
   orderSettlement?: {
     orderId: string;
     buyerChargedGbp: number;
@@ -7302,6 +7251,7 @@ async function settlePaymentIntent(
     channel: currentIntent.channel,
   });
 
+  let orderCancelledOrderId: string | undefined;
   let orderSettlement:
     | {
         orderId: string;
@@ -7336,6 +7286,7 @@ async function settlePaymentIntent(
       failureCode: updatedIntent.failure_code,
     });
     if (compensation.orderCancelled) {
+      orderCancelledOrderId = updatedIntent.order_id;
       await appendDomainEvent(client, {
         aggregateType: 'payment',
         aggregateId: updatedIntent.id,
@@ -7585,6 +7536,7 @@ async function settlePaymentIntent(
   return {
     intent: toPaymentIntentPayload(updatedIntent),
     alreadyFinal: false,
+    orderCancelledOrderId,
     orderSettlement,
   };
 }
@@ -8575,9 +8527,9 @@ async function rewrapDomainRows(
 const NOTIFICATION_EVENT_TYPES = [
   'order_created', 'order_paid', 'order_cancelled', 'order_dispatched',
   'order_in_transit', 'order_out_for_delivery', 'order_delivered',
-  'order_refunded', 'resolution_opened', 'resolution_status_changed',
+  'order_refunded', 'order_dispatch_sla_breach', 'resolution_opened', 'resolution_status_changed',
   'review_received', 'chat_message', 'payout_processed', 'refund_completed',
-  'price_drop',
+  'price_drop', 'saved_search_match',
   'offer_created', 'offer_countered', 'offer_accepted', 'offer_declined',
   'offer_expired', 'offer_cancelled',
   'auction_outbid', 'auction_won', 'auction_ending_soon',
@@ -8603,6 +8555,9 @@ function mapEventToPushCategory(eventType: string): NotificationPushCategory | n
   if (eventType === 'resolution_opened' || eventType === 'resolution_status_changed') return 'orderUpdates';
   if (eventType === 'payout_processed' || eventType === 'refund_completed') return 'orderUpdates';
   if (eventType === 'price_drop') return 'priceDrops';
+  // Saved-search matches ride the `wishlist` preference — a user who opted
+  // into alerts on a saved search is asking for item-interest pushes.
+  if (eventType === 'saved_search_match') return 'wishlist';
   if (eventType === 'auction_outbid' || eventType === 'auction_won' || eventType === 'auction_ending_soon') return 'auctionAlerts';
   if (eventType === 'new_follower' || eventType === 'new_listing_from_followed_seller') return 'followers';
   if (eventType === 'review_received') return 'wishlist';
@@ -8615,7 +8570,7 @@ function mapEventTypeToChannelId(eventType: string): string {
   if (eventType.startsWith('auction_')) return 'auctions';
   if (eventType === 'chat_message') return 'messages';
   if (eventType === 'new_follower' || eventType === 'new_listing_from_followed_seller' || eventType === 'review_received') return 'social';
-  if (eventType === 'price_drop' || eventType.startsWith('offer_') || eventType === 'generic' || eventType === 'safety_outcome') return 'news';
+  if (eventType === 'price_drop' || eventType === 'saved_search_match' || eventType.startsWith('offer_') || eventType === 'generic' || eventType === 'safety_outcome') return 'news';
   if (eventType === 'resolution_opened' || eventType === 'resolution_status_changed') return 'orders';
   return 'default';
 }
@@ -9347,158 +9302,14 @@ async function processPushQueueJob(job: {
 // offer.sibling_declined, content.published, order.fulfilled,
 // order.refunded) retried until it dead-lettered. Keeping one handler module
 // removes that mirror-drift hazard permanently.
-async function sweepExpiredAuctions(reason: 'interval' | 'manual'): Promise<number> {
-  const client = await db.connect();
-
-  try {
-    await client.query('BEGIN');
-
-    const expiring = await client.query<{
-      id: string;
-      listing_id: string;
-      seller_id: string;
-      title: string;
-    }>(
-      `
-        SELECT a.id, a.listing_id, a.seller_id, l.title
-        FROM auctions a
-        INNER JOIN listings l ON l.id = a.listing_id
-        WHERE a.ends_at <= NOW()
-          AND (a.status <> 'ended' OR a.settled_at IS NULL)
-        ORDER BY a.ends_at ASC
-        FOR UPDATE SKIP LOCKED
-      `
-    );
-
-    if (!expiring.rowCount) {
-      await client.query('COMMIT');
-      recordAuctionSettlement('no_action');
-      return 0;
-    }
-
-    const canPostAuctionLedger = await ledgerTablesAvailable(client);
-
-    for (const auction of expiring.rows) {
-      const winner = await client.query<{
-        id: number;
-        bidder_id: string;
-        amount_gbp: string;
-      }>(
-        `
-          SELECT id, bidder_id, amount_gbp::text
-          FROM auction_bids
-          WHERE auction_id = $1
-          ORDER BY amount_gbp DESC, created_at ASC, id ASC
-          LIMIT 1
-        `,
-        [auction.id]
-      );
-
-      const topBid = winner.rows[0];
-      const winningBidGbp = topBid ? Number(topBid.amount_gbp) : 0;
-      const platformFeeGbp = topBid ? calculateAuctionPlatformFeeGbp(winningBidGbp) : 0;
-      const sellerNetGbp = topBid ? roundTo(Math.max(0, winningBidGbp - platformFeeGbp), 2) : 0;
-
-      await client.query(
-        `
-          UPDATE auctions
-          SET
-            status = 'ended',
-            settled_at = NOW(),
-            winner_bid_id = $2,
-            winner_bidder_id = $3,
-            updated_at = NOW()
-          WHERE id = $1
-        `,
-        [auction.id, topBid?.id ?? null, topBid?.bidder_id ?? null]
-      );
-
-      // If the auction has a winner, mark the underlying listing as sold.
-      // If no winner (reserve not met / no bids), reactivate the listing so
-      // the seller can relist or try again.
-      if (topBid?.bidder_id) {
-        await client.query(
-          `UPDATE listings
-           SET status = 'sold', updated_at = NOW()
-           WHERE id = $1`,
-          [auction.listing_id]
-        );
-      } else {
-        await client.query(
-          `UPDATE listings
-           SET status = 'active', updated_at = NOW()
-           WHERE id = $1 AND status = 'paused'`,
-          [auction.listing_id]
-        );
-      }
-
-      if (topBid?.bidder_id && canPostAuctionLedger) {
-        await postAuctionSettlementLedgerEntries(client, {
-          auctionId: auction.id,
-          buyerId: topBid.bidder_id,
-          sellerId: auction.seller_id,
-          winningBidGbp,
-          platformFeeGbp,
-        });
-      }
-
-      publishRealtimeEvent({
-        topic: `auction:${auction.id}`,
-        type: 'auction.settled',
-        payload: {
-          auctionId: auction.id,
-          listingId: auction.listing_id,
-          winnerBidderId: topBid?.bidder_id ?? null,
-          winnerAmountGbp: topBid ? winningBidGbp : null,
-          platformFeeRate: topBid ? AUCTION_PLATFORM_FEE_RATE : null,
-          platformFeeGbp: topBid ? platformFeeGbp : null,
-          sellerNetGbp: topBid ? sellerNetGbp : null,
-          reason,
-        },
-      });
-
-      if (topBid?.bidder_id) {
-        await queueUserNotification({
-          userId: topBid.bidder_id,
-          title: 'Auction won',
-          body: `You won ${auction.title}`,
-          payload: {
-            auctionId: auction.id,
-            listingId: auction.listing_id,
-            event: 'auction_won',
-          },
-          route: { screen: 'AuctionDetail', params: { auctionId: auction.id } },
-          metadata: { reason },
-        });
-      }
-
-      await queueUserNotification({
-        userId: auction.seller_id,
-        title: 'Auction settled',
-        body: topBid?.bidder_id
-          ? `${auction.title} settled with a winning bid.`
-          : `${auction.title} ended without bids.`,
-        payload: {
-          auctionId: auction.id,
-          listingId: auction.listing_id,
-          event: topBid?.bidder_id ? 'auction_sold' : 'auction_no_sale',
-        },
-        route: { screen: 'AuctionDetail', params: { auctionId: auction.id } },
-        metadata: { reason },
-      });
-    }
-
-    await client.query('COMMIT');
-    recordAuctionSettlement('settled');
-    return expiring.rows.length;
-  } catch (error) {
-    await client.query('ROLLBACK');
-    recordAuctionSettlement('failed');
-    throw error;
-  } finally {
-    client.release();
-  }
-}
+//
+// The same holds for the auction sweep: `sweepExpiredAuctions` is imported
+// from the handlers barrel (workers/handlers/auctionSweepHandler.ts). The
+// previous inline copy predated the T20 payment lifecycle — it settled any
+// auction past ends_at straight to 'ended'/sold, bypassing reserve
+// enforcement, awaiting_payment, and second-chance offers. Sharing the
+// handler removes that drift so the in-process and standalone workers run
+// identical lifecycle logic.
 
 /**
  * withScheduledJobGuard wraps an async job invocation with:
@@ -9631,6 +9442,7 @@ function stopAnalyticsAggregationScheduler(): void {
 }
 
 let sellerTrustRecomputeTimer: NodeJS.Timeout | null = null;
+let sellerTrustRecomputeStartupTimer: NodeJS.Timeout | null = null;
 
 function startSellerTrustRecomputeScheduler(): void {
   if (sellerTrustRecomputeTimer) {
@@ -9649,10 +9461,17 @@ function startSellerTrustRecomputeScheduler(): void {
   sellerTrustRecomputeTimer.unref?.();
 
   // Run once shortly after startup so a fresh deploy heals stale projections.
-  setTimeout(enqueueRecompute, 60_000);
+  // The handle is stored + unref'd + cleared on stop so it neither survives
+  // stopSellerTrustRecomputeScheduler nor holds the event loop open.
+  sellerTrustRecomputeStartupTimer = setTimeout(enqueueRecompute, 60_000);
+  sellerTrustRecomputeStartupTimer.unref?.();
 }
 
 function stopSellerTrustRecomputeScheduler(): void {
+  if (sellerTrustRecomputeStartupTimer) {
+    clearTimeout(sellerTrustRecomputeStartupTimer);
+    sellerTrustRecomputeStartupTimer = null;
+  }
   if (!sellerTrustRecomputeTimer) {
     return;
   }
@@ -9660,7 +9479,47 @@ function stopSellerTrustRecomputeScheduler(): void {
   sellerTrustRecomputeTimer = null;
 }
 
+let autoFeedbackSweepTimer: NodeJS.Timeout | null = null;
+let autoFeedbackStartupTimer: NodeJS.Timeout | null = null;
+
+function startAutoFeedbackSweepScheduler(): void {
+  if (autoFeedbackSweepTimer) {
+    return;
+  }
+
+  const enqueueSweep = () => {
+    void enqueueFeedbackEvaluationJob('scheduled').catch((error) => {
+      app.log.error({ err: error }, 'Failed scheduling feedback evaluation job');
+    });
+  };
+
+  // Hourly sweep: the feedback window is day-granularity, so one pass per
+  // hour is ample. The BullMQ jobId is hour-bucketed, so overlapping
+  // schedulers collapse into a single run.
+  autoFeedbackSweepTimer = setInterval(enqueueSweep, config.autoFeedbackSweepIntervalMs);
+  autoFeedbackSweepTimer.unref?.();
+
+  // Run once shortly after startup so a fresh deploy heals stale feedback.
+  // The handle is stored + unref'd + cleared on stop so it neither survives
+  // stopAutoFeedbackSweepScheduler nor holds the event loop open.
+  autoFeedbackStartupTimer = setTimeout(enqueueSweep, 90_000);
+  autoFeedbackStartupTimer.unref?.();
+}
+
+function stopAutoFeedbackSweepScheduler(): void {
+  if (autoFeedbackStartupTimer) {
+    clearTimeout(autoFeedbackStartupTimer);
+    autoFeedbackStartupTimer = null;
+  }
+  if (!autoFeedbackSweepTimer) {
+    return;
+  }
+  clearInterval(autoFeedbackSweepTimer);
+  autoFeedbackSweepTimer = null;
+}
+
 let pushReceiptReconciliationTimer: NodeJS.Timeout | null = null;
+let pushReceiptReconciliationStartupTimer: NodeJS.Timeout | null = null;
 
 function startPushReceiptReconciliationScheduler(): void {
   if (pushReceiptReconciliationTimer) {
@@ -9679,11 +9538,18 @@ function startPushReceiptReconciliationScheduler(): void {
   pushReceiptReconciliationTimer = setInterval(enqueueReconciliation, 5 * 60 * 1000);
   pushReceiptReconciliationTimer.unref?.();
 
-  // Also run once shortly after startup to reconcile any pending tickets
-  setTimeout(enqueueReconciliation, 30_000);
+  // Also run once shortly after startup to reconcile any pending tickets.
+  // The handle is stored + unref'd + cleared on stop so it neither survives
+  // stopPushReceiptReconciliationScheduler nor holds the event loop open.
+  pushReceiptReconciliationStartupTimer = setTimeout(enqueueReconciliation, 30_000);
+  pushReceiptReconciliationStartupTimer.unref?.();
 }
 
 function stopPushReceiptReconciliationScheduler(): void {
+  if (pushReceiptReconciliationStartupTimer) {
+    clearTimeout(pushReceiptReconciliationStartupTimer);
+    pushReceiptReconciliationStartupTimer = null;
+  }
   if (!pushReceiptReconciliationTimer) {
     return;
   }
@@ -9692,6 +9558,7 @@ function stopPushReceiptReconciliationScheduler(): void {
 }
 
 let scheduledPublicationSweepTimer: NodeJS.Timeout | null = null;
+let scheduledPublicationStartupTimer: NodeJS.Timeout | null = null;
 
 function startScheduledPublicationSweepScheduler(): void {
   if (scheduledPublicationSweepTimer) {
@@ -9709,10 +9576,17 @@ function startScheduledPublicationSweepScheduler(): void {
   scheduledPublicationSweepTimer.unref?.();
 
   // Also run once shortly after startup to catch any due schedules.
-  setTimeout(enqueueSweep, 10_000);
+  // The handle is stored + unref'd + cleared on stop so it neither survives
+  // stopScheduledPublicationSweepScheduler nor holds the event loop open.
+  scheduledPublicationStartupTimer = setTimeout(enqueueSweep, 10_000);
+  scheduledPublicationStartupTimer.unref?.();
 }
 
 function stopScheduledPublicationSweepScheduler(): void {
+  if (scheduledPublicationStartupTimer) {
+    clearTimeout(scheduledPublicationStartupTimer);
+    scheduledPublicationStartupTimer = null;
+  }
   if (!scheduledPublicationSweepTimer) {
     return;
   }
@@ -9749,6 +9623,39 @@ function stopAuctionSweepScheduler(): void {
 
   clearInterval(auctionSweepTimer);
   auctionSweepTimer = null;
+}
+
+let liveLotSweepTimer: NodeJS.Timeout | null = null;
+
+function startLiveLotSweepScheduler(): void {
+  if (liveLotSweepTimer) {
+    return;
+  }
+
+  const queueSweep = async (reason: 'interval' | 'manual') => {
+    try {
+      await enqueueLiveLotSweepJob(reason);
+    } catch (error) {
+      app.log.error({ err: error, reason }, 'Failed to enqueue live lot sweep job');
+    }
+  };
+
+  void queueSweep('interval');
+
+  liveLotSweepTimer = setInterval(() => {
+    void queueSweep('interval');
+  }, config.liveLotSweepIntervalMs);
+
+  liveLotSweepTimer.unref?.();
+}
+
+function stopLiveLotSweepScheduler(): void {
+  if (!liveLotSweepTimer) {
+    return;
+  }
+
+  clearInterval(liveLotSweepTimer);
+  liveLotSweepTimer = null;
 }
 
 function startCoOwnOrderExpirySweepScheduler(): void {
@@ -12184,6 +12091,14 @@ app.post('/ops/escrow/release-sweep', async (request, reply) => {
     for (const entry of released) {
       recordGmv(entry.amountGbp);
       recordOrderCompleted();
+      // In-thread commerce card: the sweep moved the order to 'completed'
+      // without a buyer confirmation — still nudge for a review. The emit
+      // re-verifies status = 'completed' and dedupes on the deterministic id.
+      await emitOrderCommerceCard({
+        orderId: entry.orderId,
+        stateType: 'feedback_prompt',
+        log: request.log,
+      });
     }
 
     return {
@@ -15674,8 +15589,9 @@ app.post('/listings', {
     const existingListing = await client.query<{
       seller_id: string;
       price_gbp: string;
+      status: string;
     }>(
-      `SELECT seller_id, price_gbp::text
+      `SELECT seller_id, price_gbp::text, status
        FROM listings
        WHERE id = $1
        LIMIT 1
@@ -15863,6 +15779,27 @@ app.post('/listings', {
       );
     }
     await client.query('COMMIT');
+
+    // Saved-search matcher — fires when this upsert makes the listing
+    // active (fresh insert, or a draft/paused → active transition). Edits
+    // to an already-active listing skip the scan; the per-(search,listing)
+    // idempotency key would dedupe notifications anyway. Non-blocking:
+    // the listing is durable regardless of notification delivery.
+    if (
+      targetStatus === 'active'
+      && (!existingListing.rowCount || existingListing.rows[0].status !== 'active')
+    ) {
+      void evaluateSavedSearchAlertsForListing({
+        db,
+        listingId: payload.id,
+        queueNotification: queueUserNotification,
+      }).catch((matchError) => {
+        request.log.error(
+          { err: matchError, listingId: payload.id },
+          'Failed to evaluate saved-search alerts after listing activation',
+        );
+      });
+    }
 
     if (upsertPriceEvent) {
       try {
@@ -16053,6 +15990,44 @@ app.get('/listings/:listingId', async (request, reply) => {
   const activeOfferCount = Number(offerResult.rows[0]?.count ?? 0);
   const answeredQuestionCount = Number(answeredResult.rows[0]?.count ?? 0);
 
+  // Authenticity reflects the real pipeline state for this listing — the
+  // `auth:listing:{id}:latest` Redis projection maintained on every request
+  // write. Only a persisted badge earns 'verified'; a live in-flight request
+  // surfaces as 'in_progress'; terminal non-verified outcomes
+  // (counterfeit/inconclusive/cancelled) and absent records carry no public
+  // authenticity claim. A Redis outage degrades to 'not_offered' rather than
+  // failing the listing read.
+  let authenticity: {
+    status: 'not_offered' | 'eligible' | 'in_progress' | 'verified';
+    label?: string;
+  } = { status: 'not_offered' };
+  try {
+    const latestAuth = await getLatestAuthenticationRequest(redis, listingId);
+    if (latestAuth?.badge) {
+      authenticity = {
+        status: 'verified',
+        label:
+          latestAuth.badge.type === 'LAB_CERTIFIED'
+            ? 'Lab certified'
+            : latestAuth.badge.type === 'EXPERT_VERIFIED'
+              ? 'Expert verified'
+              : 'AI checked',
+      };
+    } else if (
+      latestAuth &&
+      latestAuth.status !== 'counterfeit' &&
+      latestAuth.status !== 'inconclusive' &&
+      latestAuth.status !== 'cancelled'
+    ) {
+      authenticity = { status: 'in_progress' };
+    }
+  } catch (error) {
+    request.log.warn(
+      { err: error, listingId },
+      'Authenticity state unavailable for listing'
+    );
+  }
+
   return {
     ok: true,
     listing: {
@@ -16116,9 +16091,7 @@ app.get('/listings/:listingId', async (request, reply) => {
         conditions: null,
         summary: 'Return policy confirmed at checkout based on seller status and your location.',
       },
-      authenticity: {
-        status: 'not_offered' as const,
-      },
+      authenticity,
     },
   };
 });
@@ -16407,43 +16380,9 @@ app.post('/listings/:listingId/questions/:questionId/answer', async (request, re
   };
 });
 
-app.post('/listings/:listingId/report', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-  const paramsSchema = z.object({ listingId: z.string().min(2) });
-  const bodySchema = z.object({
-    reason: z.enum([
-      'spam', 'inappropriate', 'counterfeit', 'unresponsive', 'harassment',
-      'off_platform', 'hate_speech', 'prohibited', 'scam', 'misinformation',
-      'privacy', 'impersonation', 'minor_safety', 'other',
-    ]),
-    details: z.string().trim().max(500).optional(),
-  });
-  const { listingId } = paramsSchema.parse(request.params);
-  const payload = bodySchema.parse(request.body);
-  const listingResult = await db.query<{ seller_id: string }>(
-    `SELECT seller_id FROM listings WHERE id = $1 LIMIT 1`,
-    [listingId]
-  );
-  if (!listingResult.rowCount) {
-    reply.code(404);
-    return { ok: false, error: 'Listing not found' };
-  }
-  if (listingResult.rows[0].seller_id === request.authUser.userId) {
-    reply.code(403);
-    return { ok: false, error: 'You cannot report your own listing' };
-  }
-  const reportId = `listing_report_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-  await db.query(
-    `INSERT INTO listing_reports (id, reporter_id, listing_id, reason, details)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [reportId, request.authUser.userId, listingId, payload.reason, payload.details ?? null]
-  );
-  reply.code(201);
-  return { ok: true, reportId };
-});
+// NOTE: POST /listings/:listingId/report now lives in
+// registerListingInteractionRoutes (routes/listings.ts) so the report write
+// is bridged into the safety case graph atomically via recordConsumerReport.
 
 app.get('/listings/:listingId/related', async (request, reply) => {
   const paramsSchema = z.object({ listingId: z.string().min(2) });
@@ -17084,8 +17023,9 @@ app.patch('/listings/:listingId', async (request, reply) => {
       seller_id: string;
       price_gbp: number | string;
       image_url: string | null;
+      status: string;
     }>(
-      `SELECT id, seller_id, price_gbp, image_url
+      `SELECT id, seller_id, price_gbp, image_url, status
        FROM listings
        WHERE id = $1
        LIMIT 1
@@ -17244,6 +17184,22 @@ app.patch('/listings/:listingId', async (request, reply) => {
     }
 
     await client.query('COMMIT');
+
+    // Saved-search matcher — a PATCH that transitions a listing into
+    // 'active' (e.g. publishing a draft) is an activation, same as the
+    // POST upsert path. Best-effort and idempotent per (search, listing).
+    if (payload.status === 'active' && existing.rows[0].status !== 'active') {
+      void evaluateSavedSearchAlertsForListing({
+        db,
+        listingId,
+        queueNotification: queueUserNotification,
+      }).catch((matchError) => {
+        app.log.error(
+          { err: matchError, listingId },
+          'Failed to evaluate saved-search alerts after listing activation',
+        );
+      });
+    }
   } catch (error) {
     await client.query('ROLLBACK');
     app.log.error({ err: error, listingId }, 'Failed to update listing');
@@ -17787,6 +17743,11 @@ registerExtractionIntelligenceRoutes({ app, db, readDb });
 registerChatTranslateRoutes({ app, db, ensureUserExists, redisClient: redis });
 
 registerChatRoutes({ app, db, redis, resolveAuthenticatedUserId, createApiError, ensureUserExists, createRuntimeId, toJsonString, resolveHeaderString, asObject, queueUserNotification, fraudShadowService, ipReputationProvider });
+registerChatPreferencesRoutes({ app, db, resolveAuthenticatedUserId });
+
+// Listing view/interaction tracking — the only two routes extracted from
+// the otherwise-shadowed registerListingRoutes module (routes/listings.ts).
+registerListingInteractionRoutes({ app, db, readDb, optionalAuthenticate, ensureUserExists });
 // â”€â”€ Agent runs: durable execution status â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 app.get('/agent-runs', async (request) => {
@@ -22318,6 +22279,7 @@ registerMediaAssetRoutes({
 registerMediaEnhancementRoutes({ app, db, resolveAuthenticatedUserId });
 registerModerationRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
 registerModerationTriageRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
+registerAppealsRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
 registerRecommendationRoutes({
   app,
   db,
@@ -25694,6 +25656,32 @@ app.post('/admin/orders/:orderId/force-status', async (request, reply) => {
         orderStatus: updated.rows[0].status,
         reason: payload.note,
       }).catch(() => {});
+
+      // In-thread commerce cards for the forced transition — each emit
+      // re-reads the order and no-ops when the persisted status doesn't
+      // match the card, so emitting the full lifecycle set for a state is
+      // safe. This mirrors the organic paths: 'delivered' also nudges the
+      // buyer to confirm receipt, and 'completed' also nudges for a review
+      // (previously forced transitions silently skipped those cards).
+      const forceStatusCardMap: Partial<Record<CommerceOrderStatus, OrderCommerceCardState[]>> = {
+        created: ['order_placed'],
+        paid: ['payment_confirmed'],
+        shipped: ['order_shipped'],
+        delivered: ['order_delivered', 'delivery_confirm_prompt'],
+        completed: ['order_delivered', 'feedback_prompt'],
+        cancelled: ['order_cancelled'],
+        refunded: ['order_refunded'],
+      };
+      const cardStates = forceStatusCardMap[updated.rows[0].status];
+      if (cardStates) {
+        for (const stateType of cardStates) {
+          await emitOrderCommerceCard({
+            orderId: updated.rows[0].id,
+            stateType,
+            log: request.log,
+          });
+        }
+      }
     }
 
     return {
@@ -26157,6 +26145,7 @@ app.post('/payments/intents', async (request, reply) => {
         id: string;
         buyer_id: string;
         seller_id: string;
+        listing_id: string | null;
         total_gbp: number | string;
         status: string;
         payment_intent_id: string | null;
@@ -26172,6 +26161,7 @@ app.post('/payments/intents', async (request, reply) => {
             o.id,
             o.buyer_id,
             o.seller_id,
+            o.listing_id,
             o.total_gbp,
             o.status,
             o.payment_intent_id,
@@ -26259,6 +26249,30 @@ app.post('/payments/intents', async (request, reply) => {
           ]
         );
         await client.query('COMMIT');
+        // In-thread commerce card: the checkout reservation lapsed and the
+        // pending order was cancelled.
+        await emitOrderCommerceCard({
+          orderId: orderRow.id,
+          stateType: 'order_cancelled',
+          log: request.log,
+        });
+        // Saved-search matcher: the cancellation fired the checkout
+        // trigger's reactivation branch — the listing is back to 'active',
+        // so run the alert scan post-commit, fire-and-forget. The
+        // evaluator self-gates on status='active' if no reactivation
+        // actually happened.
+        if (orderRow.listing_id) {
+          void evaluateSavedSearchAlertsForListing({
+            db,
+            listingId: orderRow.listing_id,
+            queueNotification: queueUserNotification,
+          }).catch((matchError) => {
+            request.log.error(
+              { err: matchError, listingId: orderRow.listing_id },
+              'Failed to evaluate saved-search alerts after order-cancel reactivation',
+            );
+          });
+        }
         reply.code(410);
         return {
           ok: false,
@@ -26975,6 +26989,30 @@ app.post('/payments/intents/:intentId/confirm', async (request, reply) => {
           'Failed to queue payment notifications after manual payment confirm'
         );
       }
+      // In-thread commerce card: payment confirmed.
+      await emitOrderCommerceCard({
+        orderId: settled.orderSettlement.orderId,
+        stateType: 'payment_confirmed',
+        log: request.log,
+      });
+      // In-thread commerce card: a shipping label was provisioned inside
+      // the settlement commit. Self-gates on a persisted label/tracking
+      // artifact — orders settled without provisioning emit nothing.
+      await emitOrderCommerceCard({
+        orderId: settled.orderSettlement.orderId,
+        stateType: 'label_created',
+        trackingNumber: settled.orderSettlement.shipment?.trackingNumber ?? null,
+        carrier: settled.orderSettlement.shipment?.shippingProvider ?? null,
+        log: request.log,
+      });
+    }
+    if (!settled.alreadyFinal && settled.orderCancelledOrderId) {
+      // In-thread commerce card: terminal payment failure cancelled the order.
+      await emitOrderCommerceCard({
+        orderId: settled.orderCancelledOrderId,
+        stateType: 'order_cancelled',
+        log: request.log,
+      });
     }
 
     return {
@@ -27784,6 +27822,31 @@ app.post('/payments/webhooks/mock', async (request, reply) => {
     );
 
     await client.query('COMMIT');
+
+    // In-thread commerce cards for the settled commerce order.
+    if (!settled.alreadyFinal && settled.orderSettlement?.orderId) {
+      await emitOrderCommerceCard({
+        orderId: settled.orderSettlement.orderId,
+        stateType: 'payment_confirmed',
+        log: request.log,
+      });
+      // Label card — self-gates on the persisted shipping artifact.
+      await emitOrderCommerceCard({
+        orderId: settled.orderSettlement.orderId,
+        stateType: 'label_created',
+        trackingNumber: settled.orderSettlement.shipment?.trackingNumber ?? null,
+        carrier: settled.orderSettlement.shipment?.shippingProvider ?? null,
+        log: request.log,
+      });
+    }
+    if (!settled.alreadyFinal && settled.orderCancelledOrderId) {
+      await emitOrderCommerceCard({
+        orderId: settled.orderCancelledOrderId,
+        stateType: 'order_cancelled',
+        log: request.log,
+      });
+    }
+
     return {
       ok: true,
       duplicate: false,
@@ -28233,9 +28296,14 @@ app.post('/webhooks/:provider', async (request, reply) => {
     let settledPayout: ReturnType<typeof toPayoutRequestPayload> | undefined;
     let settledPayoutIdempotent = false;
     let settledCommerceOrderId: string | null = null;
+    let settledCancelledOrderId: string | null = null;
     let refundCompletedUserId: string | null = null;
     let refundCompletedAmountGbp: number | null = null;
     let refundCompletedOrderId: string | null = null;
+    /** True only when cumulative succeeded refunds cover the order total —
+     *  the sole condition under which the order may become 'refunded'. */
+    let refundCompletedIsFull = false;
+    let refundCompletedEventKey: string | null = null;
     let mintOperation: ReturnType<typeof toMintOperationPayload> | undefined;
     let mintReserveEnqueueOperationId: string | null = null;
 
@@ -28278,6 +28346,7 @@ app.post('/webhooks/:provider', async (request, reply) => {
         });
         settledIntent = settled.intent;
         settledCommerceOrderId = settled.orderSettlement?.orderId ?? settledCommerceOrderId;
+        settledCancelledOrderId = settled.orderCancelledOrderId ?? settledCancelledOrderId;
       } else {
         const transitioned = await transitionPaymentIntentStatus(client, {
           intentId: intentRow.id,
@@ -28357,6 +28426,48 @@ app.post('/webhooks/:provider', async (request, reply) => {
       if (event.refund.status === 'succeeded') {
         refundCompletedUserId = intentRow.user_id;
         refundCompletedOrderId = intentRow.order_id;
+        refundCompletedEventKey =
+          event.refund.providerRefundRef ?? event.providerEventId ?? null;
+        // Provider-confirmed refund is a real order transition — persist it
+        // so the ledger reversal, the escrow sweep and the in-thread
+        // commerce card all agree the order is refunded. But only once
+        // CUMULATIVE succeeded refunds cover the paid total: a partial
+        // provider refund (e.g. a refund_execution below the maker-check
+        // threshold routed through the PSP) must keep the order live.
+        if (intentRow.order_id) {
+          const webhookOrder = await client.query<{
+            total_gbp: string | number;
+            status: string;
+          }>(
+            `SELECT total_gbp, status FROM orders WHERE id = $1 FOR UPDATE`,
+            [intentRow.order_id]
+          );
+          const orderTotalGbp = Number(webhookOrder.rows[0]?.total_gbp ?? 0);
+          // Same committed-balance rule as the refund routes: succeeded
+          // executions plus provider refunds not already counted through
+          // them (metadata.refundExecutionId marks execution-linked rows).
+          const cumulativeResult = await client.query<{ total: string | null }>(
+            `SELECT
+               (SELECT COALESCE(SUM(amount_gbp), 0) FROM refund_executions
+                 WHERE order_id = $1 AND status = 'succeeded')
+             + (SELECT COALESCE(SUM(pr.amount), 0) FROM payment_refunds pr
+                 JOIN payment_intents pi ON pi.id = pr.intent_id
+                 WHERE pi.order_id = $1 AND pr.status = 'succeeded'
+                   AND pr.metadata->>'refundExecutionId' IS NULL) AS total`,
+            [intentRow.order_id]
+          );
+          const cumulativeRefundedGbp = Number(cumulativeResult.rows[0]?.total ?? 0);
+          if (cumulativeRefundedGbp + 0.001 >= orderTotalGbp) {
+            refundCompletedIsFull = true;
+            await client.query(
+              `UPDATE orders
+               SET status = 'refunded', updated_at = NOW()
+               WHERE id = $1
+                 AND status IN ('paid', 'shipped', 'delivered', 'completed', 'refunding')`,
+              [intentRow.order_id]
+            );
+          }
+        }
         const refundCurrency = refundMoney?.currency ?? (event.refund.currency ?? '').toUpperCase();
         const refundAmount = refundMoney
           ? Number(moneyToMajorDecimal(refundMoney))
@@ -28528,6 +28639,27 @@ app.post('/webhooks/:provider', async (request, reply) => {
           'Failed to queue payment notifications after provider webhook settlement'
         );
       }
+      // In-thread commerce card: payment confirmed.
+      await emitOrderCommerceCard({
+        orderId: settledCommerceOrderId,
+        stateType: 'payment_confirmed',
+        log: request.log,
+      });
+      // Label card — self-gates on the persisted shipping artifact.
+      await emitOrderCommerceCard({
+        orderId: settledCommerceOrderId,
+        stateType: 'label_created',
+        log: request.log,
+      });
+    }
+
+    if (settledCancelledOrderId) {
+      // In-thread commerce card: terminal payment failure cancelled the order.
+      await emitOrderCommerceCard({
+        orderId: settledCancelledOrderId,
+        stateType: 'order_cancelled',
+        log: request.log,
+      });
     }
 
     if (settledPayout && settledPayout.status === 'paid' && !settledPayoutIdempotent) {
@@ -28565,6 +28697,20 @@ app.post('/webhooks/:provider', async (request, reply) => {
           'Failed to queue refund notification after provider webhook settlement'
         );
       }
+    }
+
+    if (refundCompletedOrderId) {
+      // In-thread commerce card: provider-confirmed refund. The emit
+      // re-verifies the persisted status, so a full refund that did not move
+      // the order cannot post a lying card — and a partial refund emits the
+      // distinct partial card keyed by the provider refund id.
+      await emitOrderCommerceCard({
+        orderId: refundCompletedOrderId,
+        stateType: refundCompletedIsFull ? 'order_refunded' : 'order_partially_refunded',
+        refundedAmountGbp: refundCompletedAmountGbp ?? undefined,
+        eventKey: refundCompletedIsFull ? undefined : (refundCompletedEventKey ?? undefined),
+        log: request.log,
+      });
     }
 
     return {
@@ -28748,8 +28894,11 @@ app.post('/ops/webhooks/retry-sweep', async (request, reply) => {
         [item.gateway_id, item.provider_event_id]
       );
 
+      // Captured settlement outcome for post-commit commerce card emission.
+      let dlqSettled: Awaited<ReturnType<typeof settlePaymentIntent>> | null = null;
+
       if (alreadyProcessed.rowCount) {
-        // Already processed â€” mark as succeeded.
+        // Already processed — mark as succeeded.
         await client.query(
           `UPDATE webhook_processing_outbox SET status = 'succeeded', updated_at = NOW() WHERE id = $1`,
           [item.id]
@@ -28758,7 +28907,7 @@ app.post('/ops/webhooks/retry-sweep', async (request, reply) => {
       } else {
         // Re-process: settle the intent if needed.
         if (event.paymentStatus && intentRow && ['succeeded', 'failed', 'cancelled'].includes(event.paymentStatus)) {
-          await settlePaymentIntent(client, {
+          dlqSettled = await settlePaymentIntent(client, {
             intentId: intentRow.id,
             finalStatus: event.paymentStatus as PaymentIntentTerminalStatus,
             providerAttemptRef: event.providerEventId,
@@ -28781,6 +28930,32 @@ app.post('/ops/webhooks/retry-sweep', async (request, reply) => {
       }
 
       await client.query('COMMIT');
+
+      // In-thread commerce cards for a DLQ-replayed settlement — the emit is
+      // idempotent (deterministic message id), so replaying an already-carded
+      // transition is a no-op.
+      if (dlqSettled && !dlqSettled.alreadyFinal && dlqSettled.orderSettlement?.orderId) {
+        await emitOrderCommerceCard({
+          orderId: dlqSettled.orderSettlement.orderId,
+          stateType: 'payment_confirmed',
+          log: request.log,
+        });
+        // Label card — self-gates on the persisted shipping artifact.
+        await emitOrderCommerceCard({
+          orderId: dlqSettled.orderSettlement.orderId,
+          stateType: 'label_created',
+          trackingNumber: dlqSettled.orderSettlement.shipment?.trackingNumber ?? null,
+          carrier: dlqSettled.orderSettlement.shipment?.shippingProvider ?? null,
+          log: request.log,
+        });
+      }
+      if (dlqSettled && !dlqSettled.alreadyFinal && dlqSettled.orderCancelledOrderId) {
+        await emitOrderCommerceCard({
+          orderId: dlqSettled.orderCancelledOrderId,
+          stateType: 'order_cancelled',
+          log: request.log,
+        });
+      }
     } catch (error) {
       await client.query('ROLLBACK');
 
@@ -29222,6 +29397,16 @@ const handleShippingWebhook = async (request: FastifyRequest, reply: FastifyRepl
           'Failed to queue parcel settlement notifications from shipping webhook'
         );
       }
+
+      // In-thread commerce cards for the parcel-driven transition.
+      await emitParcelOrderCards({
+        orderId: applied.order.id,
+        status: applied.order.status,
+        eventType: event.eventType,
+        trackingNumber: applied.order.trackingNumber,
+        shippingProvider: applied.order.shippingProvider,
+        log: request.log,
+      });
     }
 
     sendCommerceOrderSmsNotifications({
@@ -29300,17 +29485,46 @@ app.post('/orders', async (request, reply) => {
     buyerProtectionFeeGbp: z.number().min(0).optional(),
     postageFeeGbp: z.number().min(0).optional(),
     shippingCarrierId: z.string().min(2).max(80).optional(),
+    // Checkout tender markers. The settlement gateway is bound at
+    // POST /payments/intents time (the intent body carries gatewayId —
+    // 'oneze_internal' debits the buyer's 1ZE wallet there), so the order
+    // itself does not persist a gateway. Both fields are accepted and
+    // folded into requestHash so an idempotent replay with a different
+    // tender selection is a payload mismatch, not a silent replay.
+    paymentGatewayId: z.string().min(2).max(80).optional(),
+    // Fiat-wallet split-tender is not implemented server-side: the payment
+    // intent always charges orders.total_gbp in full. Accepting a positive
+    // debit silently would charge the buyer the full amount while the
+    // client displays a wallet-reduced total — rejected below instead.
+    walletDebitGbp: z.number().min(0).optional(),
+    // Item verification add-on: the buyer asks Thryft to run the listing
+    // through the authentication pipeline. No fee is charged — the backend
+    // exposes no verification price, so this is a request marker only.
+    verificationRequested: z.boolean().optional(),
   });
 
   const payload = bodySchema.parse(request.body);
   const actorUserId = resolveAuthenticatedUserId(request, payload.buyerId);
+
+  if (payload.walletDebitGbp !== undefined && payload.walletDebitGbp > 0) {
+    reply.code(422);
+    return {
+      ok: false,
+      error: 'Wallet balance cannot be applied to a marketplace order — split-tender is not supported',
+      code: 'WALLET_SPLIT_TENDER_UNSUPPORTED',
+    };
+  }
+
   const requestHash = computeRequestHash({
     buyerId: actorUserId,
     listingId: payload.listingId,
     addressId: payload.addressId ?? null,
     paymentMethodId: payload.paymentMethodId ?? null,
+    paymentGatewayId: payload.paymentGatewayId ?? null,
+    walletDebitGbp: payload.walletDebitGbp ?? null,
     shippingCarrierId: payload.shippingCarrierId ?? null,
     shippingQuoteId: payload.shippingQuoteId ?? null,
+    verificationRequested: payload.verificationRequested ?? false,
   });
   const checkoutExpiresAt = new Date(Date.now() + 30 * 60_000).toISOString();
   const quoteVersion = 'commerce-gbp-2026-07-28.1';
@@ -29359,6 +29573,7 @@ app.post('/orders', async (request, reply) => {
           tracking_number: string | null;
           shipping_label_url: string | null;
           shipping_quote_gbp: number | string | null;
+          verification_requested: boolean | null;
           shipped_at: string | null;
           delivered_at: string | null;
           created_at: string;
@@ -29369,7 +29584,8 @@ app.post('/orders', async (request, reply) => {
              subtotal_gbp, buyer_protection_fee_gbp, postage_fee_gbp, total_gbp,
              status, address_id, payment_method_id, shipping_carrier_id,
              shipping_provider, tracking_number, shipping_label_url,
-             shipping_quote_gbp, shipped_at::text, delivered_at::text,
+             shipping_quote_gbp, verification_requested,
+             shipped_at::text, delivered_at::text,
              created_at::text, updated_at::text
            FROM orders
            WHERE id = $1
@@ -29378,6 +29594,36 @@ app.post('/orders', async (request, reply) => {
         );
         const existing = existingOrderResult.rows[0];
         await client.query('COMMIT');
+
+        // Heal a possibly-failed first create: the pipeline request is
+        // idempotent per orderId (deterministic request id), so a replay of
+        // a verification-requested checkout re-attempts creation instead of
+        // trusting the durable flag — a Redis error on the first attempt is
+        // no longer permanent.
+        if (existing.verification_requested === true) {
+          try {
+            const listingMeta = await db.query<{ category: string | null; brand: string | null }>(
+              'SELECT category, brand FROM listings WHERE id = $1 LIMIT 1',
+              [existing.listing_id]
+            );
+            await createAuthenticationRequest(redis, {
+              listingId: existing.listing_id,
+              orderId: existing.id,
+              itemValue: Number(existing.subtotal_gbp),
+              category: listingMeta.rows[0]?.category ?? 'general',
+              brand: listingMeta.rows[0]?.brand ?? undefined,
+              sellerId: existing.seller_id,
+              buyerId: actorUserId,
+              requestedBy: 'buyer',
+            });
+          } catch (error) {
+            request.log.error(
+              { err: error, orderId: existing.id, listingId: existing.listing_id },
+              'Failed to heal authentication request on idempotent replay'
+            );
+          }
+        }
+
         return {
           ok: true,
           idempotent: true,
@@ -29401,6 +29647,7 @@ app.post('/orders', async (request, reply) => {
             shippingQuoteGbp: existing.shipping_quote_gbp === null
               ? null
               : Number(existing.shipping_quote_gbp),
+            verificationRequested: existing.verification_requested === true,
             shippedAt: existing.shipped_at,
             deliveredAt: existing.delivered_at,
             createdAt: existing.created_at,
@@ -29415,8 +29662,10 @@ app.post('/orders', async (request, reply) => {
       seller_id: string;
       price_gbp: number | string;
       status: string;
+      category: string | null;
+      brand: string | null;
     }>(
-      `SELECT id, seller_id, price_gbp, status
+      `SELECT id, seller_id, price_gbp, status, category, brand
        FROM listings
        WHERE id = $1
        LIMIT 1
@@ -29431,6 +29680,7 @@ app.post('/orders', async (request, reply) => {
     }
 
     // Reconcile an expired reservation while holding the same listing lock.
+    let expiredReservationOrderId: string | null = null;
     const expiredReservation = await client.query<{ order_id: string }>(
       `SELECT order_id
        FROM listing_checkout_reservations
@@ -29442,6 +29692,7 @@ app.post('/orders', async (request, reply) => {
       [payload.listingId]
     );
     if (expiredReservation.rowCount) {
+      expiredReservationOrderId = expiredReservation.rows[0].order_id;
       await client.query(
         `UPDATE orders
          SET status = 'cancelled', updated_at = NOW()
@@ -29463,6 +29714,24 @@ app.post('/orders', async (request, reply) => {
       await client.query('ROLLBACK');
       reply.code(400);
       return { ok: false, error: 'Buyer cannot purchase their own listing' };
+    }
+
+    // Holiday mode is a hard pause — every surface tells buyers "listings
+    // are paused" while the seller is away, so a new order against an away
+    // seller is rejected, not silently accepted into an unwatched queue.
+    // lib/sellerAway.ts owns the effective-away definition: a declared
+    // return date that has passed already ended the pause.
+    const sellerAway = await fetchSellerAwayState(client, listing.seller_id);
+    if (sellerAway.away) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'This seller is away — their listings are paused until they return',
+        code: 'SELLER_AWAY',
+        sellerAwayUntil: sellerAway.awayUntil,
+        awayMessage: sellerAway.awayMessage,
+      };
     }
 
     const conflictingReservation = await client.query<{ id: string }>(
@@ -29575,6 +29844,7 @@ app.post('/orders', async (request, reply) => {
       ? payload.orderId
       : createRuntimeId('ord');
     const reservationId = createRuntimeId('lres');
+    const verificationRequested = payload.verificationRequested === true;
     const quoteSnapshot = {
       source: 'direct',
       listingId: listing.id,
@@ -29585,6 +29855,7 @@ app.post('/orders', async (request, reply) => {
       currency: 'GBP',
       expiresAt: checkoutExpiresAt,
       policyVersion: quoteVersion,
+      verificationRequested,
     };
     const quoteHash = crypto
       .createHash('sha256')
@@ -29608,6 +29879,7 @@ app.post('/orders', async (request, reply) => {
       tracking_number: string | null;
       shipping_label_url: string | null;
       shipping_quote_gbp: number | string | null;
+      verification_requested: boolean | null;
       shipped_at: string | null;
       delivered_at: string | null;
       created_at: string;
@@ -29618,18 +29890,21 @@ app.post('/orders', async (request, reply) => {
          subtotal_gbp, buyer_protection_fee_gbp, postage_fee_gbp, total_gbp,
          status, address_id, payment_method_id, shipping_carrier_id,
          idempotency_key, request_hash, checkout_expires_at,
-         quote_version, quote_hash, quote_snapshot, shipping_quote_id
+         quote_version, quote_hash, quote_snapshot, shipping_quote_id,
+         verification_requested
        )
        VALUES (
          $1, $2, $3, $4, $5, $6, $7, $8,
-         'created', $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb, $18
+         'created', $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb, $18,
+         $19
        )
        RETURNING
          id, buyer_id, seller_id, listing_id,
          subtotal_gbp, buyer_protection_fee_gbp, postage_fee_gbp, total_gbp,
          status, address_id, payment_method_id, shipping_carrier_id,
          shipping_provider, tracking_number, shipping_label_url,
-         shipping_quote_gbp, shipped_at::text, delivered_at::text,
+         shipping_quote_gbp, verification_requested,
+         shipped_at::text, delivered_at::text,
          created_at::text, updated_at::text`,
       [
         orderId,
@@ -29650,6 +29925,7 @@ app.post('/orders', async (request, reply) => {
         quoteHash,
         toJsonString(quoteSnapshot),
         shippingQuote.id,
+        verificationRequested,
       ]
     );
 
@@ -29720,6 +29996,62 @@ app.post('/orders', async (request, reply) => {
       },
     });
     await client.query('COMMIT');
+
+    // In-thread commerce cards: the new order is placed; if this checkout
+    // reconciled a stale reservation, its order was cancelled too.
+    await emitOrderCommerceCard({
+      orderId,
+      stateType: 'order_placed',
+      log: request.log,
+    });
+    if (expiredReservationOrderId) {
+      await emitOrderCommerceCard({
+        orderId: expiredReservationOrderId,
+        stateType: 'order_cancelled',
+        log: request.log,
+      });
+      // Saved-search matcher: cancelling the stale reservation's order
+      // fired the checkout trigger's reactivation branch for this
+      // listing. The reservation created above normally re-pauses it
+      // inside the same transaction, so the evaluator's status='active'
+      // gate makes this a cheap no-op today — it exists so the
+      // reactivation path stays covered if that ordering ever changes.
+      void evaluateSavedSearchAlertsForListing({
+        db,
+        listingId: listing.id,
+        queueNotification: queueUserNotification,
+      }).catch((matchError) => {
+        request.log.error(
+          { err: matchError, listingId: listing.id },
+          'Failed to evaluate saved-search alerts after order-cancel reactivation',
+        );
+      });
+    }
+
+    // Item verification add-on: record a real authentication request in the
+    // tiered pipeline (AI photo triage → expert/lab escalation by value).
+    // Best-effort — a Redis outage must not break checkout; the
+    // verification_requested flag on the order row remains the durable record.
+    if (verificationRequested) {
+      try {
+        await createAuthenticationRequest(redis, {
+          listingId: listing.id,
+          orderId,
+          itemValue: subtotalGbp,
+          category: listing.category ?? 'general',
+          brand: listing.brand ?? undefined,
+          sellerId: listing.seller_id,
+          buyerId: actorUserId,
+          requestedBy: 'buyer',
+        });
+      } catch (error) {
+        request.log.error(
+          { err: error, orderId, listingId: listing.id },
+          'Failed to create authentication request for verified order'
+        );
+      }
+    }
+
     try {
       await enqueueOutboxDrainJob();
     } catch (error) {
@@ -29758,6 +30090,7 @@ app.post('/orders', async (request, reply) => {
         trackingNumber: row.tracking_number,
         shippingLabelUrl: row.shipping_label_url,
         shippingQuoteGbp: row.shipping_quote_gbp === null ? null : Number(row.shipping_quote_gbp),
+        verificationRequested: row.verification_requested === true,
         shippedAt: row.shipped_at,
         deliveredAt: row.delivered_at,
         createdAt: row.created_at,
@@ -29788,6 +30121,9 @@ app.patch('/orders/:orderId/checkout', async (request, reply) => {
     paymentMethodId: z.coerce.number().int().positive().optional(),
     shippingQuoteId: z.string().min(8).max(160),
     shippingCarrierId: z.string().min(2).max(80),
+    // Checkout add-on re-bind: when omitted the order's existing flag is
+    // preserved (COALESCE below); when present it overwrites.
+    verificationRequested: z.boolean().optional(),
   }).parse(request.body);
   const actorUserId = resolveAuthenticatedUserId(request);
   const client = await db.connect();
@@ -29802,10 +30138,12 @@ app.patch('/orders/:orderId/checkout', async (request, reply) => {
       status: string;
       payment_intent_id: string | null;
       checkout_expires_at: string | null;
+      verification_requested: boolean | null;
     }>(
       `SELECT
          id, buyer_id, seller_id, listing_id, subtotal_gbp,
-         status, payment_intent_id, checkout_expires_at::text
+         status, payment_intent_id, checkout_expires_at::text,
+         verification_requested
        FROM orders
        WHERE id = $1
        LIMIT 1
@@ -29843,6 +30181,27 @@ app.patch('/orders/:orderId/checkout', async (request, reply) => {
         [orderId]
       );
       await client.query('COMMIT');
+      // In-thread commerce card: the checkout reservation lapsed and the
+      // pending order was cancelled.
+      await emitOrderCommerceCard({
+        orderId,
+        stateType: 'order_cancelled',
+        log: request.log,
+      });
+      // Saved-search matcher: the cancellation fired the checkout
+      // trigger's reactivation branch — the listing is back to 'active'
+      // (no new reservation replaces it on this path), so run the alert
+      // scan post-commit, fire-and-forget.
+      void evaluateSavedSearchAlertsForListing({
+        db,
+        listingId: order.listing_id,
+        queueNotification: queueUserNotification,
+      }).catch((matchError) => {
+        request.log.error(
+          { err: matchError, listingId: order.listing_id },
+          'Failed to evaluate saved-search alerts after order-cancel reactivation',
+        );
+      });
       reply.code(410);
       return {
         ok: false,
@@ -29943,6 +30302,7 @@ app.patch('/orders/:orderId/checkout', async (request, reply) => {
       shippingQuoteId: shippingQuote.id,
       shippingQuoteHash: shippingQuote.quote_hash,
       policyVersion: quoteVersion,
+      verificationRequested: payload.verificationRequested ?? (order.verification_requested === true),
     };
     const quoteHash = crypto
       .createHash('sha256')
@@ -29960,6 +30320,7 @@ app.patch('/orders/:orderId/checkout', async (request, reply) => {
            quote_version = $9,
            quote_hash = $10,
            quote_snapshot = $11::jsonb,
+           verification_requested = COALESCE($12, verification_requested),
            updated_at = NOW()
        WHERE id = $1`,
       [
@@ -29974,6 +30335,7 @@ app.patch('/orders/:orderId/checkout', async (request, reply) => {
         quoteVersion,
         quoteHash,
         toJsonString(quoteSnapshot),
+        payload.verificationRequested ?? null,
       ]
     );
     await client.query(
@@ -29999,6 +30361,38 @@ app.patch('/orders/:orderId/checkout', async (request, reply) => {
       ]
     );
     await client.query('COMMIT');
+
+    // Item verification add-on (order-bound checkout): the pipeline create
+    // is idempotent per orderId (deterministic request id), so attempting
+    // it on every verification-requested PATCH is safe — re-binds return the
+    // existing request, and a first create that failed post-commit heals on
+    // the next replay instead of being skipped by the durable flag.
+    const verificationNowRequested =
+      payload.verificationRequested ?? (order.verification_requested === true);
+    if (verificationNowRequested) {
+      try {
+        const listingMeta = await db.query<{ category: string | null; brand: string | null }>(
+          'SELECT category, brand FROM listings WHERE id = $1 LIMIT 1',
+          [order.listing_id]
+        );
+        await createAuthenticationRequest(redis, {
+          listingId: order.listing_id,
+          orderId,
+          itemValue: subtotalGbp,
+          category: listingMeta.rows[0]?.category ?? 'general',
+          brand: listingMeta.rows[0]?.brand ?? undefined,
+          sellerId: order.seller_id,
+          buyerId: actorUserId,
+          requestedBy: 'buyer',
+        });
+      } catch (error) {
+        request.log.error(
+          { err: error, orderId, listingId: order.listing_id },
+          'Failed to create authentication request for verified order'
+        );
+      }
+    }
+
     return {
       ok: true,
       orderId,
@@ -30007,6 +30401,7 @@ app.patch('/orders/:orderId/checkout', async (request, reply) => {
         paymentMethodId: payload.paymentMethodId ?? null,
         shippingCarrierId: payload.shippingCarrierId,
         shippingQuoteId: shippingQuote.id,
+        verificationRequested: verificationNowRequested,
         subtotalGbp,
         platformChargeGbp,
         postageFeeGbp,
@@ -30177,6 +30572,22 @@ app.post('/orders/:orderId/pay', async (request, reply) => {
       );
     }
 
+    // In-thread commerce card: payment confirmed.
+    await emitOrderCommerceCard({
+      orderId: paidRow.id,
+      stateType: 'payment_confirmed',
+      log: request.log,
+    });
+    // In-thread commerce card: shipping label provisioned during this commit.
+    // Self-gates on the persisted label/tracking artifact.
+    await emitOrderCommerceCard({
+      orderId: paidRow.id,
+      stateType: 'label_created',
+      trackingNumber: shipment?.trackingNumber ?? null,
+      carrier: shipment?.shippingProvider ?? null,
+      log: request.log,
+    });
+
     const platformChargeCreditedGbp = Number(paidRow.buyer_protection_fee_gbp);
     const postageFeeCreditedGbp = Number(paidRow.postage_fee_gbp);
 
@@ -30268,6 +30679,16 @@ app.post('/orders/:orderId/parcel/events', async (request, reply) => {
           'Failed to queue parcel settlement notifications from admin parcel event'
         );
       }
+
+      // In-thread commerce cards for the parcel-driven transition.
+      await emitParcelOrderCards({
+        orderId: applied.order.id,
+        status: applied.order.status,
+        eventType: payload.eventType,
+        trackingNumber: applied.order.trackingNumber,
+        shippingProvider: applied.order.shippingProvider,
+        log: request.log,
+      });
     }
 
     sendCommerceOrderSmsNotifications({
@@ -30481,6 +30902,11 @@ app.get('/orders/:orderId/events', async (request, reply) => {
   };
 });
 
+// Authentication pipeline read surface:
+//   GET /orders/:orderId/authentication       — party-gated pipeline status
+//   GET /authentication/certificates/:id      — public certificate verify
+registerAuthenticationRoutes({ app, db, redis });
+
 app.get('/orders/:orderId/ledger', async (request) => {
   const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
   const { orderId } = paramsSchema.parse(request.params);
@@ -30585,6 +31011,7 @@ app.get('/orders/:orderId', async (request, reply) => {
     shipping_label_url: string | null;
     shipping_quote_gbp: number | string | null;
     shipping_quote_id: string | null;
+    verification_requested: boolean | null;
     paid_at: string | null;
     shipped_at: string | null;
     delivered_at: string | null;
@@ -30622,6 +31049,7 @@ app.get('/orders/:orderId', async (request, reply) => {
         o.shipping_label_url,
         o.shipping_quote_gbp,
         o.shipping_quote_id,
+        o.verification_requested,
         o.paid_at::text,
         o.shipped_at::text,
         o.delivered_at::text,
@@ -30704,6 +31132,33 @@ app.get('/orders/:orderId', async (request, reply) => {
   const shipByDate = acceptedShipBy
     ?? computeBaseShipByDate(row.paid_at, row.created_at, dispatchSlaDays);
 
+  // Seller SLA defect record (migration 284): when the auto-feedback sweep
+  // detects a paid order past its effective ship-by it writes an
+  // order_sla_breaches row. The table is optional — probe first.
+  let slaBreach: { breachType: string; shipBy: string; detectedAt: string } | null = null;
+  if (await orderSlaBreachesTableAvailable(db)) {
+    const breachRows = await db.query<{
+      breach_type: string;
+      ship_by: string;
+      detected_at: string;
+    }>(
+      `SELECT breach_type, ship_by::text, detected_at::text
+       FROM order_sla_breaches
+       WHERE order_id = $1
+       ORDER BY detected_at ASC
+       LIMIT 1`,
+      [orderId]
+    );
+    const breach = breachRows.rows[0];
+    if (breach) {
+      slaBreach = {
+        breachType: breach.breach_type,
+        shipBy: breach.ship_by,
+        detectedAt: breach.detected_at,
+      };
+    }
+  }
+
   // Inspection window = the buyer-protection hold after delivery. When the
   // carrier path already scheduled escrow release, that timestamp IS
   // delivered_at + hold — reuse it so both surfaces agree.
@@ -30771,6 +31226,7 @@ app.get('/orders/:orderId', async (request, reply) => {
       trackingNumber: row.tracking_number,
       shippingLabelUrl: row.shipping_label_url,
       shippingQuoteGbp: row.shipping_quote_gbp === null ? null : Number(row.shipping_quote_gbp),
+      verificationRequested: row.verification_requested === true,
       shippedAt: row.shipped_at,
       deliveredAt: row.delivered_at,
       paidAt: row.paid_at,
@@ -30780,6 +31236,7 @@ app.get('/orders/:orderId', async (request, reply) => {
       // renders without recomputing policy.
       shipByDate,
       inspectionDeadlineAt,
+      slaBreach,
       fulfilmentSnapshot,
       dispatchExtension: pendingExtension
         ? {
@@ -31202,8 +31659,9 @@ app.post('/orders/:orderId/cancel', async (request, reply) => {
       status: string;
       total_gbp: number | string;
       payment_intent_id: string | null;
+      listing_id: string | null;
     }>(
-      `SELECT buyer_id, seller_id, status, total_gbp, payment_intent_id FROM orders WHERE id = $1 LIMIT 1 FOR UPDATE`,
+      `SELECT buyer_id, seller_id, status, total_gbp, payment_intent_id, listing_id FROM orders WHERE id = $1 LIMIT 1 FOR UPDATE`,
       [orderId]
     );
 
@@ -31253,6 +31711,31 @@ app.post('/orders/:orderId/cancel', async (request, reply) => {
     );
 
     await client.query('COMMIT');
+    // In-thread commerce card: order cancelled.
+    await emitOrderCommerceCard({
+      orderId,
+      stateType: 'order_cancelled',
+      log: request.log,
+    });
+    // Saved-search matcher: the order → 'cancelled' transition fires the
+    // checkout-exclusivity trigger (migration 071), which returns the
+    // listing to 'active' once no active reservation remains. That
+    // re-activation must run the alert scan — same post-commit,
+    // fire-and-forget pattern as the listing upsert/PATCH paths; the
+    // evaluator self-gates on status='active' and per-(search, listing)
+    // idempotency keys make a re-run safe.
+    if (order.listing_id) {
+      void evaluateSavedSearchAlertsForListing({
+        db,
+        listingId: order.listing_id,
+        queueNotification: queueUserNotification,
+      }).catch((matchError) => {
+        request.log.error(
+          { err: matchError, listingId: order.listing_id },
+          'Failed to evaluate saved-search alerts after order-cancel reactivation',
+        );
+      });
+    }
     return { ok: true, orderId, status: 'cancelled' };
   } catch (err) {
     await client.query('ROLLBACK');
@@ -31310,7 +31793,8 @@ app.post('/orders/:orderId/ship', async (request, reply) => {
     }
 
     const provider = body.shippingProvider ?? order.shipping_provider ?? 'manual';
-    const tracking = body.trackingNumber ?? order.tracking_number ?? `TV-${orderId.toUpperCase()}`;
+    const sellerTracking = body.trackingNumber ?? order.tracking_number ?? null;
+    const tracking = sellerTracking ?? `TV-${orderId.toUpperCase()}`;
 
     await client.query(
       `UPDATE orders SET status = 'shipped', shipped_at = NOW(), shipping_provider = $2, tracking_number = $3, updated_at = NOW() WHERE id = $1`,
@@ -31318,6 +31802,16 @@ app.post('/orders/:orderId/ship', async (request, reply) => {
     );
 
     await client.query('COMMIT');
+    // In-thread commerce card: order shipped. Only seller/carrier-issued
+    // tracking may be rendered — the `TV-` placeholder is an internal
+    // fallback id, not a real tracking number, so it is passed as null.
+    await emitOrderCommerceCard({
+      orderId,
+      stateType: 'order_shipped',
+      trackingNumber: sellerTracking,
+      carrier: provider,
+      log: request.log,
+    });
     return { ok: true, orderId, status: 'shipped', trackingNumber: tracking, shippingProvider: provider };
   } catch (err) {
     await client.query('ROLLBACK');
@@ -31445,6 +31939,17 @@ app.post('/orders/:orderId/deliver', async (request, reply) => {
         'Escrow release blocked — delivery confirmed, funds held for sweep'
       );
       await client.query('COMMIT');
+      // In-thread commerce card: delivery confirmed (escrow held for sweep).
+      // Only emit when this request actually moved the order — a buyer
+      // re-acknowledging an already-delivered order must not post a second
+      // card (the deterministic id also dedupes, but don't even try).
+      if (order.status === 'shipped') {
+        await emitOrderCommerceCard({
+          orderId,
+          stateType: 'order_delivered',
+          log: request.log,
+        });
+      }
       return {
         ok: true,
         orderId,
@@ -31542,6 +32047,24 @@ app.post('/orders/:orderId/deliver', async (request, reply) => {
         'Failed to queue settlement notifications after buyer confirmation'
       );
     }
+    // In-thread commerce card: delivered + completed. If the buyer confirmed
+    // straight from 'shipped' the thread never saw a delivery card — emit it
+    // first so the lifecycle reads truthfully in order.
+    if (order.status === 'shipped') {
+      await emitOrderCommerceCard({
+        orderId,
+        stateType: 'order_delivered',
+        log: request.log,
+      });
+    }
+    // In-thread commerce card: order reached the 'completed' terminal state —
+    // nudge the buyer to leave a review (POST /orders/:orderId/review).
+    // Self-gates on status = 'completed'.
+    await emitOrderCommerceCard({
+      orderId,
+      stateType: 'feedback_prompt',
+      log: request.log,
+    });
     return { ok: true, orderId, status: 'completed' };
   } catch (err) {
     await client.query('ROLLBACK');
@@ -31556,6 +32079,13 @@ app.post('/orders/:orderId/deliver', async (request, reply) => {
 // the buyer accepts or declines. The seller-rights snapshot stays immutable —
 // extensions are separate rows so the original purchase-time terms remain
 // auditable. An accepted extension shifts the derived shipByDate.
+//
+// Product bound: total accepted extension days per order are capped at
+// MAX_TOTAL_DISPATCH_EXTENSION_DAYS (14). Without a cap each new proposal
+// re-bases on the latest accepted proposed_ship_by, letting a seller stack
+// extensions indefinitely and push the ship-by out forever.
+
+const MAX_TOTAL_DISPATCH_EXTENSION_DAYS = 14;
 
 app.post('/orders/:orderId/dispatch-extension', async (request, reply) => {
   const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
@@ -31630,6 +32160,26 @@ app.post('/orders/:orderId/dispatch-extension', async (request, reply) => {
       return { ok: false, error: 'A dispatch extension is already pending buyer response', code: 'EXTENSION_PENDING' };
     }
 
+    // Cumulative cap: extensions re-base on the latest accepted proposal, so
+    // without a bound the ship-by could be pushed out indefinitely. Enforce
+    // a total of MAX_TOTAL_DISPATCH_EXTENSION_DAYS accepted days per order.
+    const acceptedTotal = await client.query<{ total: string }>(
+      `SELECT COALESCE(SUM(extension_days), 0)::text AS total
+       FROM order_dispatch_extensions
+       WHERE order_id = $1 AND status = 'accepted'`,
+      [orderId]
+    );
+    const acceptedDays = Number(acceptedTotal.rows[0]?.total ?? 0);
+    if (acceptedDays + body.days > MAX_TOTAL_DISPATCH_EXTENSION_DAYS) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: `Dispatch extensions are capped at ${MAX_TOTAL_DISPATCH_EXTENSION_DAYS} days in total per order (${acceptedDays} already accepted)`,
+        code: 'EXTENSION_LIMIT_EXCEEDED',
+      };
+    }
+
     // Base ship-by: the latest accepted extension wins; otherwise the
     // snapshot SLA anchored at payment time.
     const accepted = await client.query<{ proposed_ship_by: string }>(
@@ -31680,6 +32230,17 @@ app.post('/orders/:orderId/dispatch-extension', async (request, reply) => {
     });
 
     await client.query('COMMIT');
+    // In-thread commerce card: seller proposed a dispatch extension — the
+    // buyer responds on the order screen. `eventKey` scopes the dedupe id to
+    // this proposal so a declined-then-reproposed extension still cards.
+    await emitOrderCommerceCard({
+      orderId,
+      stateType: 'extension_requested',
+      eventKey: extensionId,
+      extensionDays: body.days,
+      proposedShipBy,
+      log: request.log,
+    });
     reply.code(201);
     return {
       ok: true,
@@ -31920,13 +32481,30 @@ app.post('/orders/:orderId/refund', async (request, reply) => {
       return { ok: false, error: 'Order has already been fully refunded', code: 'ALREADY_FULLY_REFUNDED' };
     }
 
-    // Issue the real provider refund OUTSIDE the transaction lock.
-    // We release the transaction, call the provider, then open a new
-    // transaction to record the result.  This avoids holding a DB lock
-    // across a network call.
-    await client.query('ROLLBACK');
+    // Issue the real provider refund OUTSIDE the transaction lock — but
+    // first persist a 'pending' payment_refunds reservation INSIDE it. The
+    // remaining-refundable check above counts pending rows, so a concurrent
+    // admin refund sees the reduced balance instead of both requests
+    // refunding the full amount at the provider.
+    const reservationRefundRef = createRuntimeId(`refund_${linkedIntent.gateway_id}`);
+    await upsertPaymentRefund(client, {
+      intentId: linkedIntent.id,
+      gatewayId: linkedIntent.gateway_id,
+      providerRefundRef: reservationRefundRef,
+      status: 'pending',
+      amount: refundAmount,
+      currency: 'GBP',
+      reason: body.reason,
+      metadata: {
+        source: 'admin_order_refund',
+        orderId,
+        adminUserId: authUser.userId,
+        refundOperationId: reservationRefundRef,
+      },
+    });
+    await client.query('COMMIT');
 
-    let providerRefundRef = createRuntimeId(`refund_${linkedIntent.gateway_id}`);
+    let providerRefundRef = reservationRefundRef;
     let refundStatus: 'pending' | 'succeeded' | 'failed' | 'cancelled' | 'unknown' = 'pending';
 
     try {
@@ -31937,12 +32515,12 @@ app.post('/orders/:orderId/refund', async (request, reply) => {
         money: moneyFromMinor('GBP', String(Math.round(refundAmount * 100))),
         refundAmount,
         reason: body.reason,
-        metadata: { source: 'admin_order_refund', orderId, adminUserId: authUser.userId, refundOperationId: providerRefundRef },
+        metadata: { source: 'admin_order_refund', orderId, adminUserId: authUser.userId, refundOperationId: reservationRefundRef },
       });
       providerRefundRef = gatewayRefund.providerRefundRef;
       refundStatus = gatewayRefund.refundStatus;
     } catch (refundError) {
-      // Provider call failed or timed out â€” mark as unknown, not failed.
+      // Provider call failed or timed out — mark as unknown, not failed.
       // The reconciliation worker will query the provider for the authoritative
       // status.  Never claim success from a local-only update.
       refundStatus = 'unknown';
@@ -31964,8 +32542,16 @@ app.post('/orders/:orderId/refund', async (request, reply) => {
         amount: refundAmount,
         currency: 'GBP',
         reason: body.reason,
-        metadata: { source: 'admin_order_refund', orderId, adminUserId: authUser.userId },
+        metadata: { source: 'admin_order_refund', orderId, adminUserId: authUser.userId, refundOperationId: reservationRefundRef },
       });
+      if (providerRefundRef !== reservationRefundRef) {
+        // The provider returned its own refund id — the pending reservation
+        // row keyed by our operation id is superseded by the canonical row.
+        await recordClient.query(
+          `DELETE FROM payment_refunds WHERE id = $1`,
+          [`rf_${linkedIntent.gateway_id}_${reservationRefundRef}`]
+        );
+      }
       // PAY-08 fix: Only post the ledger reversal when the refund is
       // confirmed succeeded. Unknown/pending refunds must NOT trigger a
       // reversal â€” the money has not been returned to the buyer yet.
@@ -31987,6 +32573,18 @@ app.post('/orders/:orderId/refund', async (request, reply) => {
       throw recordError;
     } finally {
       recordClient.release();
+    }
+
+    // In-thread commerce card: refund confirmed by the provider. 'refunding'
+    // is a transient state — the card lands when reconciliation/webhook
+    // resolves it to 'refunded', not here.
+    if (refundStatus === 'succeeded') {
+      await emitOrderCommerceCard({
+        orderId,
+        stateType: 'order_refunded',
+        refundedAmountGbp: refundAmount,
+        log: request.log,
+      });
     }
 
     return {
@@ -33240,6 +33838,23 @@ app.post('/auctions/:auctionId/bids', {
       return { ok: false, error: 'This auction has ended. Bidding is no longer available.', code: 'AUCTION_ENDED' };
     }
 
+    // Holiday mode is a hard pause — same gate as POST /orders and
+    // POST /auctions/:auctionId/buy-now: a bid is new purchase intent that
+    // can bind an away seller to fulfil, so it is rejected, not silently
+    // accepted into an unwatched queue.
+    const sellerAway = await fetchSellerAwayState(client, auction.seller_id);
+    if (sellerAway.away) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'This seller is away — their listings are paused until they return',
+        code: 'SELLER_AWAY',
+        sellerAwayUntil: sellerAway.awayUntil,
+        awayMessage: sellerAway.awayMessage,
+      };
+    }
+
     const currentBid = Number(auction.current_bid_gbp);
     const minIncrement = Number(auction.min_increment_gbp) || 0.01;
     const amountGbp = roundTo(payload.amountGbp, 2);
@@ -33673,6 +34288,25 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
       return { ok: false, error: 'This auction has ended. Buy Now is no longer available.', code: 'AUCTION_ENDED' };
     }
 
+    // Holiday mode is a hard pause — same gate as POST /orders: every
+    // surface tells buyers "listings are paused" while the seller is away,
+    // so a Buy Now against an away seller is rejected, not silently
+    // accepted into an unwatched queue. lib/sellerAway.ts owns the
+    // effective-away definition: a declared return date that has passed
+    // already ended the pause.
+    const sellerAway = await fetchSellerAwayState(client, auction.seller_id);
+    if (sellerAway.away) {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'This seller is away — their listings are paused until they return',
+        code: 'SELLER_AWAY',
+        sellerAwayUntil: sellerAway.awayUntil,
+        awayMessage: sellerAway.awayMessage,
+      };
+    }
+
     const buyNowPriceGbp = auction.buy_now_price_gbp !== null ? Number(auction.buy_now_price_gbp) : null;
     if (!buyNowPriceGbp || buyNowPriceGbp <= 0) {
       await client.query('ROLLBACK');
@@ -33924,6 +34558,17 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
       seq: true,
       version: 1,
     });
+
+    // In-thread commerce card: the Buy Now order was placed. Only emit when
+    // this request actually created the order — an idempotent replay reusing
+    // the existing order row must not attempt a second card.
+    if (!existingOrder.rowCount) {
+      await emitOrderCommerceCard({
+        orderId,
+        stateType: 'order_placed',
+        log: request.log,
+      });
+    }
 
     try {
       await queueUserNotification({
@@ -34599,6 +35244,11 @@ app.get('/users/me/auction-bids', async (request, reply) => {
   return { ok: true, items: filtered, nextCursor };
 });
 
+// Auction lifecycle endpoints (cancel / payment / second-chance /
+// accept-highest-bid / bid lookup-by-key). These live in
+// routes/auctions.ts and have no inline duplicates — safe to mount here.
+registerAuctionLifecycleRoutes({ app, db, queueUserNotification });
+
 app.get('/users/:userId/co-own/holdings', async (request, reply) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);
@@ -34719,6 +35369,9 @@ const start = async () => {
         handleAuctionSweepJob: async ({ reason }) => {
           await sweepExpiredAuctions(reason);
         },
+        handleLiveLotSweepJob: async ({ reason }) => {
+          await sweepExpiredLiveLots(reason);
+        },
         handleCoOwnOrderExpirySweepJob: async ({ reason }) => {
           await sweepExpiredCoOwnOrders(reason);
         },
@@ -34805,6 +35458,9 @@ const start = async () => {
         handleDsarExportJob: async ({ requestId, userId, reason }) => {
           await processDsarExport({ requestId, userId, reason });
         },
+        handleFeedbackEvaluationJob: async ({ reason }) => {
+          await processAutoFeedbackSweep({ reason });
+        },
         handleAgentRunJob: async ({ runId }) => {
           const { processAgentRun } = await import('./botRuntime/index.js');
           await processAgentRun(db, runId);
@@ -34815,6 +35471,7 @@ const start = async () => {
     }
 
     startAuctionSweepScheduler();
+    startLiveLotSweepScheduler();
     startCoOwnOrderExpirySweepScheduler();
     startCoOwnAlertEvaluatorScheduler();
     startCoOwnDripExecutionScheduler();
@@ -34823,6 +35480,7 @@ const start = async () => {
     startAnalyticsAggregationScheduler();
     startSellerTrustRecomputeScheduler();
     startPushReceiptReconciliationScheduler();
+    startAutoFeedbackSweepScheduler();
     startScheduledPublicationSweepScheduler();
     startPlatformReconciliationScheduler();
     startPlatformRevenueSweepScheduler();
@@ -34909,7 +35567,7 @@ registerOperatorSupportRoutes({ app, db, createApiError, queueUserNotification }
 registerReturnRoutes({ app, db, resolveAuthenticatedUserId, ensureUserExists });
 
 // â”€â”€ Refund execution with maker-checker (Gate 10+12) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-registerRefundRoutes({ app, db, resolveAuthenticatedUserId, postCommerceOrderRefundLedgerReversal });
+registerRefundRoutes({ app, db, resolveAuthenticatedUserId, postCommerceOrderRefundLedgerReversal, createGatewayRefund, upsertPaymentRefund });
 
 // â”€â”€ Exception queue infrastructure (Gate 13) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 registerExceptionQueueRoutes({ app, db, resolveAuthenticatedUserId });
@@ -36601,6 +37259,12 @@ registerPriceAlertRoutes({
   queueNotification: queueUserNotification,
 });
 
+registerSavedSearchRoutes({
+  app,
+  db,
+  resolveAuthenticatedUserId,
+});
+
 registerListingOfferRoutes({
   app,
   db,
@@ -36703,13 +37367,16 @@ const shutdown = async () => {
   isShuttingDown = true;
 
   stopAuctionSweepScheduler();
+  stopLiveLotSweepScheduler();
   stopCoOwnOrderExpirySweepScheduler();
   stopCoOwnAlertEvaluatorScheduler();
   stopCoOwnDripExecutionScheduler();
   stopDomainOutboxScheduler();
   stopRetentionSweepScheduler();
   stopAnalyticsAggregationScheduler();
+  stopSellerTrustRecomputeScheduler();
   stopPushReceiptReconciliationScheduler();
+  stopAutoFeedbackSweepScheduler();
   stopScheduledPublicationSweepScheduler();
   stopPlatformReconciliationScheduler();
   stopPlatformRevenueSweepScheduler();

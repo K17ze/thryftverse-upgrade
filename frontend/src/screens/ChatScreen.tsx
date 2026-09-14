@@ -152,6 +152,8 @@ export default function ChatScreen({ navigation, route }: Props) {
     notifyStoppedTyping,
     replyTo,
     setReplyTo,
+    editingMessage,
+    setEditingMessage,
     attachmentPickerVisible,
     setAttachmentPickerVisible,
     isVoiceRecording,
@@ -244,6 +246,9 @@ export default function ChatScreen({ navigation, route }: Props) {
     confirmAgentDraft,
     retryAgentDraft,
     sendMessage: hookSendMessage,
+    editMessage: hookEditMessage,
+    toggleSaveInChat,
+    sendListingShare,
     handleSendVoice,
     handleRetryUpload,
     handleRetrySendMessage,
@@ -330,11 +335,36 @@ export default function ChatScreen({ navigation, route }: Props) {
     toggleMessageSelection,
     exitSelectionMode } = useMessageSelection({ selectionMode: false });
 
-  // Adapter: bind composer state to hookSendMessage's (input, replyTo, setInput, setReplyTo) signature
+  // Adapter: bind composer state to hookSendMessage's (input, replyTo, setInput, setReplyTo) signature.
+  // When a message edit is armed the composer commits via the edit API
+  // instead of a new send (P2-03).
   const handleSend = useCallback(() => {
     notifyStoppedTyping();
+    if (editingMessage) {
+      hookEditMessage(editingMessage.id, input);
+      setInput("");
+      setEditingMessage(null);
+      return;
+    }
     hookSendMessage(input, replyTo, setInput, setReplyTo);
-  }, [hookSendMessage, input, replyTo, setInput, setReplyTo, notifyStoppedTyping]);
+  }, [hookSendMessage, hookEditMessage, input, replyTo, setInput, setReplyTo, editingMessage, setEditingMessage, notifyStoppedTyping]);
+
+  // Context-menu Edit action — prefill the composer with the existing text
+  // and arm edit mode. Reply context is cleared; a send commits an edit.
+  const handleEditMessage = useCallback(
+    (msg: typeof selectedMessage) => {
+      if (!msg) return;
+      setReplyTo(null);
+      setEditingMessage(msg);
+      setInput(msg.text ?? "");
+    },
+    [setReplyTo, setEditingMessage, setInput],
+  );
+
+  const handleCloseEdit = useCallback(() => {
+    setEditingMessage(null);
+    setInput("");
+  }, [setEditingMessage, setInput]);
 
   // Adapter: wrap hookHandleMessageListScroll for FlashList's NativeSyntheticEvent type
   const handleMessageListScroll = useCallback(
@@ -360,6 +390,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     topBarTitle,
     topBarSubtitle,
     topBarInitials,
+    isPartnerOnline,
     isPartnerBlocked,
     handleUnblockPartner } = useChatHeaderData({
     conversation,
@@ -421,6 +452,27 @@ export default function ChatScreen({ navigation, route }: Props) {
       conversationId,
     });
   }, [linkedListing, conversationId, navigation]);
+
+  // "Share listing" attachment-rail action — sends the linked listing as a
+  // product-share card (`metadata.listingShare`). Any participant may share
+  // it — the card is a reference, not an offer.
+  const handleShareListingFromSheet = useCallback(() => {
+    if (!linkedListing) return;
+    sendListingShare({
+      id: linkedListing.id,
+      title: linkedListing.title ?? 'Listing',
+      price: linkedListing.price ?? 0,
+      originalPrice: linkedListing.originalPrice ?? null,
+      images: linkedListing.images,
+      brand: linkedListing.brand ?? null,
+      size: linkedListing.size ?? null,
+      condition: linkedListing.condition ?? null,
+      sellerId: linkedListing.sellerId ?? null,
+      sellerUsername: linkedListing.seller?.username ?? null,
+      sellerRating: linkedListing.seller?.rating ?? null,
+      isSold: linkedListing.isSold === true,
+    });
+  }, [linkedListing, sendListingShare]);
 
   // Conversation-level safety warning (triggered by conversation state,
   // e.g. off-platform payment requests in messages). This is distinct
@@ -497,6 +549,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           groupId={isGroup ? conversation?.id : undefined}
           variant={isGroup ? "group" : "dm"}
           isVerified={!isGroup && (partnerProfile?.identityVerified === true || partnerSummary?.identityVerified === true)}
+          isOnline={isPartnerOnline}
           onBack={() => navigation.goBack()}
           onSearch={() => {
             if (isSearchActive) {
@@ -652,8 +705,10 @@ export default function ChatScreen({ navigation, route }: Props) {
           onSelectReply={setInput}
           onManageReplies={(role) =>
             navigation.navigate("ManageQuickReplies", { role })}
-          replyTo={replyTo}
+          replyTo={editingMessage ? null : replyTo}
           onCloseReply={() => setReplyTo(null)}
+          editingMessage={editingMessage}
+          onCloseEdit={handleCloseEdit}
           reactingToMessage={reactingToMessage}
           onReact={(emoji) => {
             if (reactingToMessage && conversationId) {
@@ -696,6 +751,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           hasLinkedListing={!!linkedListing}
           isSeller={quickReplyRole === 'seller'}
           onMakeOffer={handleMakeOfferFromSheet}
+          onShareListing={handleShareListingFromSheet}
           pendingAttachment={pendingAttachment}
           onClosePendingAttachment={() => setPendingAttachment(null)}
           onSendPendingAttachment={handleSendPendingAttachment}
@@ -711,8 +767,10 @@ export default function ChatScreen({ navigation, route }: Props) {
           onCloseContextMenu={() => setContextMenuVisible(false)}
           selectedMessage={selectedMessage}
           onReplyMessage={setReplyTo}
+          onEditMessage={handleEditMessage}
           onReactToMessage={setReactingToMessage}
           onDeleteMessage={handleDeleteMessage}
+          onSaveMessage={toggleSaveInChat}
           onRetryUpload={handleRetryUpload}
           onRetrySendMessage={handleRetrySendMessage}
           onPrefillComposer={setInput}

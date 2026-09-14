@@ -189,8 +189,6 @@ interface Props {
   /** When false and not loading more, show end-of-list state. */
   hasMore?: boolean;
   numColumns?: number;
-  /** Kept for interface compatibility; the discovery tile has no save button. */
-  showSaveButton?: boolean;
   visualOnly?: boolean;
   gap?: number;
   horizontalPadding?: number;

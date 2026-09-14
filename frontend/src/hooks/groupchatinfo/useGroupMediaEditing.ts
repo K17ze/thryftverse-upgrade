@@ -144,27 +144,31 @@ export function useGroupMediaEditing(
     }
   }, [conversation, conversationId, mediaSheet.target, mediaUpload, upsertConversation, show]);
 
-  // Sync confirmed uploads to API & store
+  // Sync confirmed uploads to API & store. The async continuations read the
+  // conversation fresh via useStore.getState() — closing over the render-time
+  // `conversation` would clobber any store update that lands while the API
+  // call is in flight (same class as the generatedLabelUrl dep fix).
   useEffect(() => {
     if (mediaUpload.avatar.status === 'confirmed' && mediaUpload.avatar.confirmedRemote) {
       const prevAvatar = conversation?.avatar;
+      const confirmedRemote = mediaUpload.avatar.confirmedRemote;
+      const finalizationId = mediaUpload.avatar.finalizationId ?? undefined;
       updateConversationOnApi(conversationId, {
-        avatar: mediaUpload.avatar.confirmedRemote,
-        avatarFinalizationId: mediaUpload.avatar.finalizationId ?? undefined,
+        avatar: confirmedRemote,
+        avatarFinalizationId: finalizationId,
       })
         .then(() => {
-          if (conversation) {
-            useStore.getState().upsertConversation({
-              ...conversation,
-              avatar: mediaUpload.avatar.confirmedRemote ?? undefined,
-            });
+          const fresh = useStore.getState().conversations.find((c) => c.id === conversationId);
+          if (fresh) {
+            useStore.getState().upsertConversation({ ...fresh, avatar: confirmedRemote });
           }
           show('Group photo updated', 'success');
         })
         .catch((err) => {
           mediaUpload.removeAvatar();
-          if (conversation) {
-            useStore.getState().upsertConversation({ ...conversation, avatar: prevAvatar });
+          const fresh = useStore.getState().conversations.find((c) => c.id === conversationId);
+          if (fresh) {
+            useStore.getState().upsertConversation({ ...fresh, avatar: prevAvatar });
           }
           show(parseApiError(err, 'Could not save photo').message, 'error');
         });
@@ -174,23 +178,24 @@ export function useGroupMediaEditing(
   useEffect(() => {
     if (mediaUpload.cover.status === 'confirmed' && mediaUpload.cover.confirmedRemote) {
       const prevCover = conversation?.coverPhoto;
+      const confirmedRemote = mediaUpload.cover.confirmedRemote;
+      const finalizationId = mediaUpload.cover.finalizationId ?? undefined;
       updateConversationOnApi(conversationId, {
-        coverPhoto: mediaUpload.cover.confirmedRemote,
-        coverPhotoFinalizationId: mediaUpload.cover.finalizationId ?? undefined,
+        coverPhoto: confirmedRemote,
+        coverPhotoFinalizationId: finalizationId,
       })
         .then(() => {
-          if (conversation) {
-            useStore.getState().upsertConversation({
-              ...conversation,
-              coverPhoto: mediaUpload.cover.confirmedRemote ?? undefined,
-            });
+          const fresh = useStore.getState().conversations.find((c) => c.id === conversationId);
+          if (fresh) {
+            useStore.getState().upsertConversation({ ...fresh, coverPhoto: confirmedRemote });
           }
           show('Cover banner updated', 'success');
         })
         .catch((err) => {
           mediaUpload.removeCover();
-          if (conversation) {
-            useStore.getState().upsertConversation({ ...conversation, coverPhoto: prevCover });
+          const fresh = useStore.getState().conversations.find((c) => c.id === conversationId);
+          if (fresh) {
+            useStore.getState().upsertConversation({ ...fresh, coverPhoto: prevCover });
           }
           show(parseApiError(err, 'Could not save cover banner').message, 'error');
         });

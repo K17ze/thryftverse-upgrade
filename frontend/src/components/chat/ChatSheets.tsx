@@ -38,6 +38,8 @@ export interface ChatSheetsProps {
   hasLinkedListing?: boolean;
   isSeller?: boolean;
   onMakeOffer?: () => void;
+  /** Sends the conversation's linked listing as a product-share card. */
+  onShareListing?: () => void;
 
   // ── Pending attachment review ──
   pendingAttachment: { uri: string; mediaType: "image" | "video" } | null;
@@ -61,8 +63,12 @@ export interface ChatSheetsProps {
   onCloseContextMenu: () => void;
   selectedMessage: Message | null;
   onReplyMessage: (msg: Message) => void;
+  onEditMessage: (msg: Message) => void;
   onReactToMessage: (msg: Message) => void;
   onDeleteMessage: (msg: Message) => void;
+  /** Save-in-chat toggle — negotiated persistence (Snapchat-style);
+   *  either party may save or unsave, the marker is shared state. */
+  onSaveMessage: (msg: Message) => void;
   onRetryUpload: (msgId: string) => void;
   onRetrySendMessage: (msgId: string) => void;
   onPrefillComposer: (text: string) => void;
@@ -85,6 +91,7 @@ export function ChatSheets({
   hasLinkedListing = false,
   isSeller = false,
   onMakeOffer,
+  onShareListing,
   pendingAttachment,
   onClosePendingAttachment,
   onSendPendingAttachment,
@@ -100,8 +107,10 @@ export function ChatSheets({
   onCloseContextMenu,
   selectedMessage,
   onReplyMessage,
+  onEditMessage,
   onReactToMessage,
   onDeleteMessage,
+  onSaveMessage,
   onRetryUpload,
   onRetrySendMessage,
   onPrefillComposer,
@@ -109,6 +118,38 @@ export function ChatSheets({
   confirmation,
   onClearConfirmation }: ChatSheetsProps) {
   const { show } = useToast();
+
+  // P2-03: Edit affordance mirrors the backend window — sender-only, text
+  // messages, not deleted, within 15 minutes of the send timestamp.
+  const MESSAGE_EDIT_WINDOW_MS = 15 * 60 * 1000;
+  const canEditSelectedMessage = Boolean(
+    selectedMessage &&
+      selectedMessage.sender === "me" &&
+      !selectedMessage.isDeleted &&
+      Boolean(selectedMessage.text?.trim()) &&
+      selectedMessage.status !== "failed" &&
+      selectedMessage.status !== "sending" &&
+      selectedMessage.status !== "reconciling" &&
+      Date.now() - new Date(selectedMessage.timestamp).getTime() < MESSAGE_EDIT_WINDOW_MS,
+  );
+
+  // Save in chat — any confirmed, non-system message may be saved by
+  // either participant. In-flight/failed/local-draft messages are excluded
+  // because the server has no row to attach the save to. Deleted
+  // tombstones stay eligible only while the actor still has a save to
+  // retract — the backend permits unsave on tombstones.
+  const selectedMessageSavedByMe = Boolean(
+    currentUserId && selectedMessage?.savedBy?.includes(currentUserId),
+  );
+  const canSaveSelectedMessage = Boolean(
+    selectedMessage &&
+      !selectedMessage.isSystem &&
+      selectedMessage.status !== "sending" &&
+      selectedMessage.status !== "failed" &&
+      selectedMessage.status !== "reconciling" &&
+      selectedMessage.status !== "draft" &&
+      (!selectedMessage.isDeleted || selectedMessageSavedByMe),
+  );
 
   // ── Forward sheet state ──
   const [forwardSheetVisible, setForwardSheetVisible] = useState(false);
@@ -150,9 +191,10 @@ export function ChatSheets({
         // No document-send path exists anywhere yet (GroupChatScreen's
         // handler is a stub that discards the file) — hide the File row
         // rather than offer a picker that silently drops the document.
-        // Listing-share has no send API either; "Make an offer" does.
+        // Listing-share sends the linked listing as a product card via
+        // `metadata.listingShare`; documents still have no send path.
         hideDocument
-        hideShareListing
+        hideShareListing={!onShareListing}
         hasLinkedListing={hasLinkedListing}
         isSeller={isSeller}
         onSelect={(action: ChatAction) => {
@@ -162,6 +204,8 @@ export function ChatSheets({
             onOpenAgentPicker();
           } else if (action === "offer") {
             onMakeOffer?.();
+          } else if (action === "share_listing") {
+            onShareListing?.();
           }
         }}
       />
@@ -207,6 +251,9 @@ export function ChatSheets({
             case "reply":
               onReplyMessage(selectedMessage);
               break;
+            case "edit":
+              onEditMessage(selectedMessage);
+              break;
             case "forward":
               setForwardingMessage(selectedMessage);
               setForwardSheetVisible(true);
@@ -216,6 +263,9 @@ export function ChatSheets({
               break;
             case "delete":
               onDeleteMessage(selectedMessage);
+              break;
+            case "save":
+              onSaveMessage(selectedMessage);
               break;
             case "retry":
               if (selectedMessage.uploadStatus === "failed") {
@@ -260,6 +310,10 @@ export function ChatSheets({
           selectedMessage?.status === "failed" ||
           selectedMessage?.uploadStatus === "failed"
         }
+        canEdit={canEditSelectedMessage}
+        canSave={canSaveSelectedMessage}
+        isSaved={selectedMessageSavedByMe}
+        isDeleted={selectedMessage?.isDeleted === true}
       />
 
       <ForwardSheet

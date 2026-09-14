@@ -210,7 +210,31 @@ export function ChatMessageItem({
       fontFamily: TypographyV2.meta.fontFamily,
       color: colors.brand,
       letterSpacing: 0.3,
-      textTransform: 'uppercase' } }), [colors]);
+      textTransform: 'uppercase' },
+
+    tombstone: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Space.xs,
+      maxWidth: "78%",
+      paddingHorizontal: Space.smMd,
+      paddingVertical: Space.sm - 1,
+      borderRadius: Radius.md,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      backgroundColor: colors.surfaceAlt },
+
+    tombstoneMe: {
+      alignSelf: "flex-end" },
+
+    tombstoneThem: {
+      alignSelf: "flex-start" },
+
+    tombstoneText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted,
+      fontStyle: "italic" } }), [colors]);
 
   const prevMsg = messages[index - 1];
   const nextMsg = messages[index + 1];
@@ -266,6 +290,56 @@ export function ChatMessageItem({
 
   const separator = unreadDivider ?? dateSeparator;
 
+  const isMe = msg.sender === "me";
+
+  // Deleted-for-everyone messages keep a legible tombstone — the row must
+  // not silently vanish, and special-type branches (commerce cards, media)
+  // must not keep rendering actions for deleted payloads. A save placed
+  // before the delete can still be retracted: while the actor has a save
+  // row on this tombstone, long-press opens a reduced menu (Unsave only).
+  if (msg.isDeleted) {
+    const canUnsaveTombstone = Boolean(
+      currentUserId && msg.savedBy?.includes(currentUserId),
+    );
+    const tombstoneBody = (
+      <View
+        style={[
+          styles.tombstone,
+          isMe ? styles.tombstoneMe : styles.tombstoneThem,
+          { marginTop: spacingTop, marginBottom },
+        ]}
+        accessibilityLabel={t('messaging.conversation.messageDeleted')}
+      >
+        <Ionicons name="close-circle-outline" size={14} color={colors.textMuted} />
+        <Text style={styles.tombstoneText}>
+          {isMe
+            ? t('messaging.conversation.youDeletedMessage')
+            : t('messaging.conversation.messageDeleted')}
+        </Text>
+      </View>
+    );
+    const tombstone = canUnsaveTombstone ? (
+      <AnimatedPressable
+        key={msg.id}
+        onLongPress={() => handleLongPress(msg)}
+        disableAnimation
+        accessibilityLabel={t('messaging.conversation.messageDeleted')}
+      >
+        {tombstoneBody}
+      </AnimatedPressable>
+    ) : (
+      <View key={msg.id}>{tombstoneBody}</View>
+    );
+    return separator ? (
+      <View key={msg.id + "_group"}>
+        {separator}
+        {tombstone}
+      </View>
+    ) : (
+      tombstone
+    );
+  }
+
   if (isChatCommerceCardMessage(msg)) {
     const content = (
       <ChatCommerceCard
@@ -292,7 +366,6 @@ export function ChatMessageItem({
     );
   }
 
-  const isMe = msg.sender === "me";
   const isMedia = msg.type === "media" && msg.mediaUri;
   const isVoice = msg.type === "voice" && msg.voiceUri;
   if (!msg.text && !isMedia && !isVoice) return null;
@@ -367,6 +440,8 @@ export function ChatMessageItem({
           }
           readStatus={isMe ? msg.readStatus : undefined}
           readBy={msg.readBy}
+          isEdited={msg.isEdited === true}
+          isSaved={msg.isSavedInChat === true}
           isGroup={isGroup}
           currentUserId={currentUserId}
           onLongPress={() => handleLongPress(msg)}
@@ -393,7 +468,11 @@ export function ChatMessageItem({
                   return parent
                     ? {
                         senderName: parent.senderLabel ?? t('chat.fallbackUserName'),
-                        text: parent.text ?? "" }
+                        // A deleted parent must not render an empty preview —
+                        // show the tombstone label instead.
+                        text: parent.isDeleted
+                          ? t('messaging.conversation.messageDeleted')
+                          : parent.text ?? "" }
                     : null;
                 })()
               : null

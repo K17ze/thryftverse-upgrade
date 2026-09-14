@@ -86,7 +86,7 @@ export const Playhead = React.memo(function Playhead({
   // Sync the shared values whenever positionMs, totalDurationMs, or
   // trackWidth changes — but ONLY when the user is not actively
   // scrubbing. During a scrub the shared value is driven directly from
-  // the gesture (e.absoluteX), so we must not overwrite it with the
+  // the gesture (e.x), so we must not overwrite it with the
   // stale clock position.
   useEffect(() => {
     if (isScrubbingSV.value) return;
@@ -125,7 +125,11 @@ export const Playhead = React.memo(function Playhead({
         const w = widthSV.value || trackWidth;
         if (w <= 0 || totalDurationMs <= 0) return;
         isScrubbingSV.value = true;
-        const ratio = Math.max(0, Math.min(1, e.absoluteX / w));
+        // e.x is the touch position in THIS view's local coordinates — the
+        // gesture zone lives inside the horizontally scrolled content, so
+        // e.absoluteX (screen space) would map to the wrong timeline time
+        // whenever the track is scrolled (zoom > 1). Never use absoluteX here.
+        const ratio = Math.max(0, Math.min(1, e.x / w));
         const ms = ratio * totalDurationMs;
         const lineLeft = ratio * w - LINE_WIDTH / 2;
         const handleLeft = ratio * w - HIT_SIZE / 2;
@@ -143,7 +147,7 @@ export const Playhead = React.memo(function Playhead({
         'worklet';
         const w = widthSV.value || trackWidth;
         if (w <= 0 || totalDurationMs <= 0) return;
-        const ratio = Math.max(0, Math.min(1, e.absoluteX / w));
+        const ratio = Math.max(0, Math.min(1, e.x / w));
         const ms = ratio * totalDurationMs;
         const lineLeft = ratio * w - LINE_WIDTH / 2;
         const handleLeft = ratio * w - HIT_SIZE / 2;
@@ -168,7 +172,7 @@ export const Playhead = React.memo(function Playhead({
         'worklet';
         const w = widthSV.value || trackWidth;
         if (w > 0 && totalDurationMs > 0) {
-          const ratio = Math.max(0, Math.min(1, e.absoluteX / w));
+          const ratio = Math.max(0, Math.min(1, e.x / w));
           const ms = ratio * totalDurationMs;
           // Final committed seek.
           runOnJS(onSeek)(ms);

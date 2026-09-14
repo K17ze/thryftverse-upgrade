@@ -202,6 +202,7 @@ export type TimelineSemanticKey =
   | 'preparing'
   | 'issue_reported'
   | 'review_submitted'
+  | 'dispatch_sla_breach'
   | 'unknown';
 
 export const PARCEL_EVENT_SEMANTIC_KEY: Record<OrderParcelEvent['eventType'], TimelineSemanticKey> = {
@@ -250,6 +251,16 @@ export function parcelEventTimestamp(event: OrderParcelEvent): number {
 export interface TimelineExtras {
   hasOpenResolution?: boolean;
   hasReview?: boolean;
+  /** TRUE when the order's review row is platform-generated feedback — the
+   * buyer never submitted a review before the feedback window elapsed.
+   * The timeline renders truthful copy ("Left automatically — no review
+   * submitted") instead of "You reviewed this order." */
+  reviewIsAuto?: boolean;
+  /** Review row timestamp — the auto-feedback write time, or the buyer's
+   * submission time for a manual review. */
+  reviewCreatedAt?: string | null;
+  /** Recorded seller dispatch-SLA breach flag (order_sla_breaches). */
+  slaBreach?: { breachType: string; shipBy: string; detectedAt: string } | null;
   deliveredAt?: string | null;
 }
 
@@ -363,12 +374,25 @@ export function buildTimelineEntries(
   if (extras?.hasReview && !represented.has('review_submitted')) {
     entries.push({
       id: 'review_submitted',
-      label: 'Review submitted',
-      subtitle: 'You reviewed this order.',
-      date: formatTimelineDate(extras?.deliveredAt),
+      label: extras.reviewIsAuto ? 'Automatic feedback' : 'Review submitted',
+      subtitle: extras.reviewIsAuto
+        ? 'Left automatically — no review was submitted within the feedback window.'
+        : 'You reviewed this order.',
+      date: formatTimelineDate(extras?.reviewCreatedAt ?? extras?.deliveredAt),
       state: 'completed',
     });
     represented.add('review_submitted');
+  }
+
+  if (extras?.slaBreach && !represented.has('dispatch_sla_breach')) {
+    entries.push({
+      id: 'dispatch_sla_breach',
+      label: 'Dispatch deadline missed',
+      subtitle: 'The seller did not dispatch by the ship-by date. A service-level flag was recorded.',
+      date: formatTimelineDate(extras.slaBreach.detectedAt),
+      state: 'failure',
+    });
+    represented.add('dispatch_sla_breach');
   }
 
   return entries;

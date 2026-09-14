@@ -313,6 +313,8 @@
       "biometricLoginDisabled": "已禁用 — 应用直接进入您的账户",
       "notificationCategories": "通知类别",
       "notificationPreferencesSubtitle": "免打扰时段、预览",
+      "pushThisDevice": "此设备上的推送通知",
+      "pushThisDeviceSubtitle": "送达与注册",
       "featureFlags": "功能开关",
       "featureFlagsSubtitle": "当前 QA 的标志值",
       "autoTranslate": "自动翻译消息",

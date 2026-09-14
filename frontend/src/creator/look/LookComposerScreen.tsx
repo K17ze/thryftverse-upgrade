@@ -13,6 +13,12 @@ import {
   ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as MediaLibrary from 'expo-media-library/legacy';
+import { useToast } from '../../context/ToastContext';
+import {
+  exportDocumentImage,
+  isImageExportAvailable,
+} from '../export/mediaExportService';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { useSharedValue, runOnJS, useAnimatedStyle, useAnimatedReaction, withTiming } from 'react-native-reanimated';
 import { useNavigation, useRoute, useFocusEffect, type RouteProp } from '@react-navigation/native';
@@ -161,6 +167,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
+  const { show } = useToast();
   const {
     document,
     selectedLayerId,
@@ -1098,6 +1105,41 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     [activeToolContext, toolGroups],
   );
 
+  // ── Draft export (Edits parity: export without posting) ────────────
+  // Renders the look to an image via the export service (native module
+  // or JS Skia fallback) and saves to the camera roll. The control is
+  // omitted when the service can't render the content (e.g. a video
+  // media layer without the native module — JS Skia decodes stills
+  // only), never shown as a fake affordance.
+  const canExportDraft = isImageExportAvailable(document, page?.id);
+  const isExportingRef = useRef(false);
+
+  const handleExportDraftImage = useCallback(async () => {
+    if (!page || isExportingRef.current) return;
+    isExportingRef.current = true;
+    haptic.light();
+    try {
+      const perm = await MediaLibrary.requestPermissionsAsync(true);
+      if (!perm.granted) {
+        show('Allow photo access to save', 'info');
+        return;
+      }
+      const exported = await exportDocumentImage(document, page.id);
+      if (!exported) {
+        show('Export is not available for this look', 'info');
+        return;
+      }
+      await MediaLibrary.saveToLibraryAsync(exported.uri);
+      show('Saved to camera roll', 'success');
+      haptic.medium();
+    } catch (err) {
+      console.warn('[LookComposer] draft export failed', err);
+      show('Could not export look', 'error');
+    } finally {
+      isExportingRef.current = false;
+    }
+  }, [document, page, haptic, show]);
+
   // ── Global overflow groups ──────────────────────────────────────────
   // Canvas / Project / Accessibility / Help — grouped like the Poster
   // composer's overflow sheet. Rendered after the context tools and one
@@ -1114,6 +1156,9 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
       id: 'project',
       items: [
         { id: 'look-preview', icon: 'eye-outline', label: 'Preview', onPress: () => { setShowPreview(true); setShowOverflow(false); } },
+        ...(canExportDraft
+          ? [{ id: 'look-export', icon: 'download-outline' as const, label: 'Export image', onPress: () => { setShowOverflow(false); void handleExportDraftImage(); } }]
+          : []),
         { id: 'look-drafts', icon: 'document-outline', label: 'Drafts', onPress: () => { navigation.navigate('CreatorDraftList'); setShowOverflow(false); } },
         { id: 'look-settings', icon: 'settings-outline', label: 'Settings', onPress: () => { setShowSettings(true); setShowOverflow(false); } },
       ],

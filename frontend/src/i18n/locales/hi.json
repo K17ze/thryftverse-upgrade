@@ -313,6 +313,8 @@
       "biometricLoginDisabled": "अक्षम — ऐप सीधे आपके खाते पर खुलता है",
       "notificationCategories": "सूचना श्रेणियाँ",
       "notificationPreferencesSubtitle": "शांत समय, पूर्वावलोकन",
+      "pushThisDevice": "इस डिवाइस पर पुश नोटिफ़िकेशन",
+      "pushThisDeviceSubtitle": "डिलीवरी और पंजीकरण",
       "featureFlags": "फ़ीचर फ़्लैग",
       "featureFlagsSubtitle": "QA के लिए वर्तमान फ़्लैग मान",
       "autoTranslate": "संदेश स्वतः अनुवाद करें",

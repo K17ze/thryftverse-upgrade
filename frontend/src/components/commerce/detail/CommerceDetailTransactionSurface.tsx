@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Text } from 'react-native';
+import { View, StyleSheet, Text, useWindowDimensions } from 'react-native';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { Space } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
@@ -74,6 +74,8 @@ export function CommerceDetailTransactionSurface({
   flush = false,
   surfaceColor }: CommerceDetailTransactionSurfaceProps) {
   const { colors } = useAppTheme();
+  const { width, fontScale } = useWindowDimensions();
+  const stackAuctionHeadline = family === 'auction' && (width < 390 || fontScale > 1.2 || (primaryValue?.length ?? 0) > 14);
 
   // Per spec 05 §1: family-aware composition.
   //   - direct: quiet price rhythm.
@@ -102,9 +104,9 @@ export function CommerceDetailTransactionSurface({
             { color: colors.textPrimary },
           ]}
           accessibilityRole="text"
-          adjustsFontSizeToFit
+          adjustsFontSizeToFit={family !== 'auction'}
           minimumFontScale={0.78}
-          numberOfLines={1}
+          numberOfLines={family === 'auction' ? undefined : 1}
         >
           {primaryValue}
         </Text>
@@ -140,9 +142,9 @@ export function CommerceDetailTransactionSurface({
       accessibilityRole="summary"
     >
       {family === 'auction' && (headlineAside || secondaryContent) ? (
-        <View style={styles.auctionHeadline}>
+        <View style={[styles.auctionHeadline, stackAuctionHeadline && styles.auctionHeadlineStacked]}>
           {primaryContent}
-          {headlineAside ? <View style={styles.auctionHeadlineAside}>{headlineAside}</View> : secondaryContent}
+          {headlineAside ? <View style={[styles.auctionHeadlineAside, stackAuctionHeadline && styles.auctionAsideStacked]}>{headlineAside}</View> : secondaryContent}
         </View>
       ) : family === 'co_own' && headlineAside ? (
         <>
@@ -236,6 +238,8 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     gap: Space.md },
+  auctionHeadlineStacked: { flexDirection: 'column', alignItems: 'stretch', gap: Space.sm },
+  auctionAsideStacked: { alignItems: 'flex-start', paddingBottom: 0 },
   auctionHeadlineAside: {
     flexShrink: 1,
     alignItems: 'flex-end',

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,14 @@ import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useToast } from '../../context/ToastContext';
+import { useSignupWall } from '../../hooks/useSignupWall';
+import { SkeletonBlock } from '../flagship';
+import {
+  fetchListingQuestions,
+  askListingQuestion,
+  answerListingQuestion,
+  type ListingQuestionApi } from '../../services/listingsApi';
+import { parseApiError } from '../../lib/apiClient';
 
 export interface ListingQuestion {
   id: string;
@@ -27,35 +35,69 @@ export interface ListingQuestion {
   } | null;
 }
 
+function mapApiQuestion(q: ListingQuestionApi): ListingQuestion {
+  return {
+    id: q.id,
+    listingId: q.listingId,
+    askerName: q.askerName ?? 'Member',
+    text: q.text,
+    createdAt: Date.parse(q.createdAt) || Date.now(),
+    answer: q.answer
+      ? {
+          text: q.answer.text,
+          responderName: q.answer.responderName,
+          createdAt: Date.parse(q.answer.createdAt) || Date.now() }
+      : null };
+}
+
 export interface ListingQAProps {
   listingId: string;
   /** Current user's display name */
   currentUserName: string;
   /** Whether the current user is the seller (can answer questions) */
   isSeller: boolean;
-  /** Initial questions (would come from backend in production) */
-  initialQuestions?: ListingQuestion[];
 }
 
 /**
  * Public Q&A section for listing detail pages.
- * Allows buyers to ask questions and sellers to answer them.
- * Uses client-side optimistic state until backend Q&A API is wired.
+ * Server-backed: questions load from `/listings/:id/questions` and both
+ * ask + answer POST to the real endpoints — no fabricated local state.
  */
 export function ListingQA({
   listingId,
   currentUserName,
-  isSeller,
-  initialQuestions = [] }: ListingQAProps) {
+  isSeller }: ListingQAProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
-  const [questions, setQuestions] = useState<ListingQuestion[]>(initialQuestions);
+  const [questions, setQuestions] = useState<ListingQuestion[]>([]);
+  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [askText, setAskText] = useState('');
   const [answerText, setAnswerText] = useState('');
   const [answeringId, setAnsweringId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const haptic = useHaptic();
   const { show } = useToast();
+  const { requireAuth } = useSignupWall();
+
+  const cancelledRef = React.useRef(false);
+
+  const load = useCallback(async () => {
+    setLoadState('loading');
+    try {
+      const items = await fetchListingQuestions(listingId);
+      if (cancelledRef.current) return;
+      setQuestions(items.map(mapApiQuestion));
+      setLoadState('ready');
+    } catch {
+      if (!cancelledRef.current) setLoadState('error');
+    }
+  }, [listingId]);
+
+  useEffect(() => {
+    cancelledRef.current = false;
+    void load();
+    return () => { cancelledRef.current = true; };
+  }, [load]);
 
   const handleAsk = useCallback(async () => {
     const trimmed = askText.trim();
@@ -64,20 +106,20 @@ export function ListingQA({
       show('Question must be at least 5 characters', 'error');
       return;
     }
+    if (!requireAuth('message_seller')) return;
     setIsSubmitting(true);
     haptic.light();
-    const newQuestion: ListingQuestion = {
-      id: `local-${Date.now()}`,
-      listingId,
-      askerName: currentUserName,
-      text: trimmed,
-      createdAt: Date.now(),
-      answer: null };
-    setQuestions((prev) => [newQuestion, ...prev]);
-    setAskText('');
-    setIsSubmitting(false);
-    show('Question posted. The seller will be notified.', 'success');
-  }, [askText, listingId, currentUserName, haptic, show]);
+    try {
+      const posted = await askListingQuestion(listingId, trimmed);
+      setQuestions((prev) => [mapApiQuestion(posted), ...prev]);
+      setAskText('');
+      show('Question posted', 'success');
+    } catch (err) {
+      show(parseApiError(err, 'Could not post question. Try again.').message, 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [askText, listingId, requireAuth, haptic, show]);
 
   const handleAnswer = useCallback(async (questionId: string) => {
     const trimmed = answerText.trim();
@@ -88,23 +130,26 @@ export function ListingQA({
     }
     setIsSubmitting(true);
     haptic.light();
-    setQuestions((prev) =>
-      prev.map((q) =>
-        q.id === questionId
-          ? {
-              ...q,
-              answer: {
-                text: trimmed,
-                responderName: currentUserName,
-                createdAt: Date.now() } }
-          : q,
-      ),
-    );
-    setAnswerText('');
-    setAnsweringId(null);
-    setIsSubmitting(false);
-    show('Answer posted.', 'success');
-  }, [answerText, currentUserName, haptic, show]);
+    try {
+      const answer = await answerListingQuestion(listingId, questionId, trimmed);
+      const mapped = answer
+        ? {
+            text: answer.text,
+            responderName: answer.responderName,
+            createdAt: Date.parse(answer.createdAt) || Date.now() }
+        : null;
+      setQuestions((prev) =>
+        prev.map((q) => (q.id === questionId ? { ...q, answer: mapped } : q)),
+      );
+      setAnswerText('');
+      setAnsweringId(null);
+      show('Answer posted', 'success');
+    } catch (err) {
+      show(parseApiError(err, 'Could not post answer. Try again.').message, 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [answerText, listingId, haptic, show]);
 
   const formatTime = (ts: number) => {
     const diff = Date.now() - ts;
@@ -151,8 +196,28 @@ export function ListingQA({
         </AnimatedPressable>
       </View>
 
-      {/* Questions list */}
-      {questions.length === 0 ? (
+      {/* Questions list — full state contract: loading / error / empty / populated */}
+      {loadState === 'loading' ? (
+        <View style={styles.qList} accessibilityLabel="Loading questions">
+          <SkeletonBlock width="100%" height={64} style={{ marginBottom: Space.sm }} />
+          <SkeletonBlock width="100%" height={64} style={{ marginBottom: Space.sm }} />
+          <SkeletonBlock width="70%" height={64} />
+        </View>
+      ) : loadState === 'error' ? (
+        <View style={styles.emptyWrap}>
+          <Ionicons name="cloud-offline-outline" size={28} color={colors.textMuted} />
+          <Text style={styles.emptyText}>Couldn&apos;t load questions</Text>
+          <Pressable
+            style={({ pressed }) => [styles.answerBtn, pressed && styles.answerBtnPressed]}
+            onPress={() => { haptic.light(); void load(); }}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading questions"
+          >
+            <Ionicons name="refresh" size={14} color={colors.brand} />
+            <Text style={styles.answerBtnText}>Retry</Text>
+          </Pressable>
+        </View>
+      ) : questions.length === 0 ? (
         <View style={styles.emptyWrap}>
           <Ionicons name="chatbubble-outline" size={28} color={colors.textMuted} />
           <Text style={styles.emptyText}>No questions yet</Text>

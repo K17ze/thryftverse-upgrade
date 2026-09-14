@@ -208,6 +208,12 @@ export interface OrderCapabilityContext {
   role: OrderRole;
   hasOpenResolution: boolean;
   hasReview: boolean;
+  /**
+   * TRUE when the order's review row is platform-generated auto feedback
+   * (is_auto). Hints copy labels it "Automatic feedback recorded", never
+   * "Review submitted" — the buyer did not author it.
+   */
+  reviewIsAuto?: boolean;
   hasTracking: boolean;
   /**
    * Immutable purchased-service snapshot. When present, the seller's guided
@@ -398,7 +404,8 @@ export function resolveCapabilities(ctx: OrderCapabilityContext): OrderCapabilit
   }
 
   const nextActionHint = getNextActionHintInternal(
-    key, ctx.role, ctx.hasOpenResolution, ctx.hasReview, isInTransit, isDelivered,
+    key, ctx.role, ctx.hasOpenResolution, ctx.hasReview,
+    ctx.reviewIsAuto === true, isInTransit, isDelivered,
   );
 
   return {
@@ -442,6 +449,7 @@ function getNextActionHintInternal(
   role: OrderRole,
   hasOpenResolution: boolean,
   hasReview: boolean,
+  reviewIsAuto: boolean,
   isInTransit: boolean,
   isDelivered: boolean,
 ): string | null {
@@ -451,8 +459,10 @@ function getNextActionHintInternal(
     if (key === 'created') return 'Complete payment';
     if (isInTransit) return 'Track your parcel';
     if (isDelivered) {
-      // Inspection window first, then review.
-      return hasReview ? 'Review submitted' : 'Check your item';
+      // Inspection window first, then review. Auto feedback is labelled
+      // truthfully — the buyer did not submit a review.
+      if (hasReview) return reviewIsAuto ? 'Automatic feedback recorded' : 'Review submitted';
+      return 'Check your item';
     }
   }
 
@@ -472,7 +482,7 @@ export function getNextActionHint(
 ): string | null {
   const key = normaliseOrderStatus(status);
   return getNextActionHintInternal(
-    key, role, false, false,
+    key, role, false, false, false,
     IN_TRANSIT_STATUSES.has(key),
     key === 'delivered' || key === 'completed',
   );

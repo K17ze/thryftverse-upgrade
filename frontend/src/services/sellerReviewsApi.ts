@@ -18,6 +18,14 @@ export interface SellerReviewItem {
   id: string;
   rating: number;
   comment: string | null;
+  /**
+   * Provenance: TRUE when this is platform-generated feedback — the buyer
+   * never submitted a review before the feedback window elapsed. Render
+   * as automatic ("Left automatically — no review submitted"), never as a
+   * buyer-authored review.
+   */
+  isAuto?: boolean;
+  autoReason?: 'buyer_silence' | null;
   createdAt: string;
   /** Photo URLs persisted in review_media table (migration 165) */
   photoUrls?: string[];

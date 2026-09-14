@@ -94,6 +94,13 @@ export interface LiveJoinToken {
 export const LIVE_SHOPPING_DEMO_MODE =
   __DEV__ || process.env.EXPO_PUBLIC_MOCK_MODE === 'fixture-design';
 
+/**
+ * Default bidding window (seconds) applied when a host opens a lot without
+ * an explicit duration. Mirrors LIVE_LOT_DURATION_SECONDS on the backend —
+ * the server is authoritative; this only seeds the open request.
+ */
+export const DEFAULT_LOT_DURATION_SECONDS = 60;
+
 // ---------------------------------------------------------------------------
 // Categories
 // ---------------------------------------------------------------------------
@@ -430,6 +437,10 @@ interface BackendCurrentLot {
   currentPrice: number;
   bidCount: number;
   updatedAt: string;
+  /** Server-set auto-close deadline (null when the lot is host-closed only). */
+  closesAt?: string | null;
+  /** Anti-snipe extensions applied so far. */
+  extensionCount?: number;
 }
 
 interface BackendCurrentLotResponse {
@@ -600,6 +611,8 @@ async function placeBidOnBackend(
       currentPrice: response.lot!.currentPrice,
       bidCount: response.lot!.bidCount,
       status: 'active',
+      closesAt: response.lot!.closesAt ?? null,
+      extensionCount: response.lot!.extensionCount ?? 0,
     };
     return { success: true, lot, bid, clientBidId: bidId };
   } catch (error) {
@@ -658,6 +671,8 @@ async function connectToStreamFromBackend(streamId: string): Promise<LiveStream 
           currentPrice: currentLot.currentPrice,
           bidCount: currentLot.bidCount,
           status: 'active',
+          closesAt: currentLot.closesAt ?? null,
+          extensionCount: currentLot.extensionCount ?? 0,
         }]
       : [];
 
@@ -731,6 +746,17 @@ function backendToStreamEventType(type: string): StreamEventType | null {
       return 'lot_change';
     case LIVE_VIEWER_COUNT_EVENT:
       return 'viewer_count';
+    // Authoritative lot-engine events — lifecycle transitions and the
+    // anti-snipe extension. Viewers merge these into the current lot so the
+    // countdown and sold/passed states track the server.
+    case 'lot.scheduled':
+    case 'lot.opened':
+    case 'lot.closed':
+    case 'lot.sold':
+    case 'lot.passed':
+    case 'lot.cancelled':
+    case 'lot.extension':
+      return 'lot_update';
     default:
       return null;
   }
@@ -917,6 +943,12 @@ export interface LiveLot {
   /** Seconds remaining for the active auction (null when not active). */
   timeRemaining?: number;
   buyNowPrice?: number;
+  /** Server-set auto-close deadline for the active lot. Drives the dock
+   *  countdown when present; null means the lot closes host-manually and no
+   *  countdown is rendered. */
+  closesAt?: string | null;
+  /** Anti-snipe extensions applied so far. */
+  extensionCount?: number;
 }
 
 export type LotStatus = 'scheduled' | 'open' | 'closing' | 'sold' | 'passed' | 'cancelled';
@@ -1010,7 +1042,12 @@ export type StreamEventType =
   | 'purchase'
   | 'stream_end'
   | 'lot_sold'
-  | 'lot_passed';
+  | 'lot_passed'
+  /** Authoritative lot-engine lifecycle/update event (lot.opened, lot.closed,
+   *  lot.sold, lot.passed, lot.cancelled, lot.extension). Payload carries the
+   *  lot aggregate when the engine has one, or top-level lot fields for the
+   *  anti-snipe extension event. */
+  | 'lot_update';
 
 export interface StreamEvent<T = unknown> {
   type: StreamEventType;
@@ -1024,6 +1061,10 @@ export type BidEventPayload = {
   bid: LiveBid;
   newCurrentPrice: number;
   newBidCount: number;
+  /** Authoritative lot deadline after this bid — carries the post-extension
+   *  closes_at when a snipe bid extended the window. */
+  closesAt?: string | null;
+  extensionCount?: number;
 };
 
 export type ChatEventPayload = {
@@ -1426,11 +1467,14 @@ export function subscribeToBids(
       // field or from bid.listingId for compatibility.
       const lotId = (raw.lotId as string) ?? (raw.bid as Record<string, unknown>)?.listingId as string;
       const bid = raw.bid as LiveBid;
+      const lotState = raw.lot as BackendCurrentLot | undefined;
       callback({
         lotId,
         bid,
         newCurrentPrice: raw.newCurrentPrice as number,
         newBidCount: raw.newBidCount as number,
+        closesAt: lotState?.closesAt,
+        extensionCount: lotState?.extensionCount,
       });
     }
   });
@@ -1478,6 +1522,8 @@ export function subscribeToLotChanges(
             currentPrice: backendLot.currentPrice,
             bidCount: backendLot.bidCount,
             status: 'active',
+            closesAt: backendLot.closesAt ?? null,
+            extensionCount: backendLot.extensionCount ?? 0,
           }
         : (raw.lot as LiveLot);
       callback({
@@ -2178,11 +2224,20 @@ export async function scheduleLot(
 export async function openLot(
   sessionId: string,
   lotId: string,
+  options?: { durationSeconds?: number },
 ): Promise<LiveLotAggregate> {
   if (!LIVE_SHOPPING_DEMO_MODE) {
     const response = await fetchJson<BackendLotActionResponse>(
       `/streaming/sessions/${encodeURIComponent(sessionId)}/lots/${encodeURIComponent(lotId)}/open`,
-      { method: 'POST' },
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          options?.durationSeconds != null
+            ? { durationSeconds: options.durationSeconds }
+            : {},
+        ),
+      },
     );
     return mapBackendLotToAggregate(response.lot);
   }

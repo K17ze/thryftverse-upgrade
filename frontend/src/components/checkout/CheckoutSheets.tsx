@@ -1,9 +1,10 @@
 import React from 'react';
 import { AddCardSheet } from './AddCardSheet';
 import { CheckoutPaymentSelector } from './CheckoutPaymentSelector';
+import { CheckoutDeliverySelector } from './CheckoutDeliverySelector';
 import { CheckoutBreakdownSheet } from './CheckoutBreakdownSheet';
 import { ConfirmationSheet } from '../ConfirmationSheet';
-import type { CommercePaymentMethod } from '../../services/commerceApi';
+import type { CommercePaymentMethod, ShippingQuoteItem } from '../../services/commerceApi';
 
 interface ConfirmSheetState {
   visible: boolean;
@@ -20,6 +21,7 @@ interface BreakdownLabels {
   protectionLabel: string;
   deliveryRowLabel: string;
   deliveryLabel: string;
+  verificationLabel?: string;
   walletAppliedLabel?: string;
   useBalance: boolean;
   totalLabel: string;
@@ -38,6 +40,12 @@ interface Props {
   onSelectPaymentMethod: (method: CommercePaymentMethod) => void;
   isSelectingPayment: boolean;
   onShowAddCard: () => void;
+  // Per-option delivery selector (server-issued shipping quotes)
+  deliverySelectorVisible: boolean;
+  onDismissDeliverySelector: () => void;
+  shippingQuotes: ShippingQuoteItem[];
+  selectedQuoteId: string | null;
+  onSelectDeliveryOption: (quote: ShippingQuoteItem) => void;
   // Full cost-breakdown sheet
   breakdownSheetVisible: boolean;
   onDismissBreakdown: () => void;
@@ -60,6 +68,11 @@ export function CheckoutSheets({
   onSelectPaymentMethod,
   isSelectingPayment,
   onShowAddCard,
+  deliverySelectorVisible,
+  onDismissDeliverySelector,
+  shippingQuotes,
+  selectedQuoteId,
+  onSelectDeliveryOption,
   breakdownSheetVisible,
   onDismissBreakdown,
   breakdown,
@@ -82,6 +95,13 @@ export function CheckoutSheets({
         isSelecting={isSelectingPayment}
         onAddCard={onShowAddCard}
       />
+      <CheckoutDeliverySelector
+        visible={deliverySelectorVisible}
+        onDismiss={onDismissDeliverySelector}
+        quotes={shippingQuotes}
+        selectedQuoteId={selectedQuoteId}
+        onSelect={onSelectDeliveryOption}
+      />
       <CheckoutBreakdownSheet
         visible={breakdownSheetVisible}
         onDismiss={onDismissBreakdown}
@@ -89,6 +109,7 @@ export function CheckoutSheets({
         protectionLabel={breakdown.protectionLabel}
         deliveryRowLabel={breakdown.deliveryRowLabel}
         deliveryLabel={breakdown.deliveryLabel}
+        verificationLabel={breakdown.verificationLabel}
         walletAppliedLabel={breakdown.walletAppliedLabel}
         useBalance={breakdown.useBalance}
         totalLabel={breakdown.totalLabel}

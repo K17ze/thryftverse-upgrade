@@ -171,6 +171,45 @@ export function trimClipEnd(
 }
 
 /**
+ * Slip a clip's source window by `deltaMs` — shift trimStartMs and
+ * trimEndMs together so the clip's timeline duration is unchanged while a
+ * different section of the source media plays (Premiere slip / KineMaster
+ * semantics).
+ *
+ * The window is clamped inside the source asset: [0, sourceDurationMs].
+ * When `sourceDurationMs` is unknown the upper bound falls back to the
+ * current trim end's lower bound (no forward slip possible — we can't
+ * prove media exists beyond it).
+ *
+ * Wall-clock duration is invariant by construction — `withUpdates`
+ * recomputes it from the unchanged window width and speed.
+ *
+ * Returns a new clips array; the input is unchanged. If the clip is not
+ * found or the window cannot move, the input array is returned as-is.
+ */
+export function slipClip(
+  clips: PosterClip[],
+  clipId: string,
+  deltaMs: number,
+): PosterClip[] {
+  const idx = findClipIndex(clips, clipId);
+  if (idx < 0) return clips;
+  const clip = clips[idx];
+  const windowMs = clip.trimEndMs - clip.trimStartMs;
+  if (windowMs <= 0) return clips;
+  const upperBound = (clip.sourceDurationMs ?? clip.trimEndMs) - windowMs;
+  const newStart = clamp(clip.trimStartMs + deltaMs, 0, Math.max(0, upperBound));
+  if (newStart === clip.trimStartMs) return clips;
+  const updated = withUpdates(clip, {
+    trimStartMs: newStart,
+    trimEndMs: newStart + windowMs,
+  });
+  const next = clips.slice();
+  next[idx] = updated;
+  return next;
+}
+
+/**
  * Split a clip into two clips at source-media time `atMs`.
  *
  * The original clip becomes [trimStartMs, atMs) and a new clip is inserted

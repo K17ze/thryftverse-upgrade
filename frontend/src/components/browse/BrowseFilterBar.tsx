@@ -151,13 +151,13 @@ export function BrowseFilterBar({
             style={[styles.filterPillOutline, isCurrentSaved && styles.saveSearchPillActive]}
             activeOpacity={0.85}
             onPress={isCurrentSaved ? undefined : onSaveSearch}
-            accessibilityLabel={isCurrentSaved ? 'Search saved with alerts' : 'Save this search with alerts'}
+            accessibilityLabel={isCurrentSaved ? 'Search saved' : 'Save this search'}
             accessibilityRole="button"
             accessibilityState={{ selected: isCurrentSaved }}
-            accessibilityHint={isCurrentSaved ? 'Search is saved' : 'Saves this search and sends alerts for new matches'}
+            accessibilityHint={isCurrentSaved ? 'Search is saved' : 'Saves this search; new matches are flagged in-app'}
           >
             <Ionicons
-              name={isCurrentSaved ? 'notifications' : 'notifications-outline'}
+              name={isCurrentSaved ? 'flag' : 'flag-outline'}
               size={16}
               color={isCurrentSaved ? colors.brand : colors.textSecondary}
               aria-hidden={true}

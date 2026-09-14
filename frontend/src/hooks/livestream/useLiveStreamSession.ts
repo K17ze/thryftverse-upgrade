@@ -48,6 +48,7 @@ export function useLiveStreamSession(sessionId: string) {
     let unsubViewer: (() => void) | null = null;
     let unsubBids: (() => void) | null = null;
     let unsubLotChanges: (() => void) | null = null;
+    let unsubLotLifecycle: (() => void) | null = null;
     let unsubStreamEnd: (() => void) | null = null;
 
     (async () => {
@@ -107,17 +108,72 @@ export function useLiveStreamSession(sessionId: string) {
             if (!prev) return prev;
             // Ignore bid events that race in for a just-closed lot after a
             // lot-change — otherwise they corrupt the new lot's price.
-            if (payload.lotId && prev.id !== payload.lotId) return prev;
+            if (payload.lotId && prev.id !== payload.lotId && prev.listingId !== payload.lotId) {
+              return prev;
+            }
             return {
               ...prev,
               currentPrice: payload.newCurrentPrice ?? prev.currentPrice,
-              bidCount: payload.newBidCount ?? prev.bidCount };
+              bidCount: payload.newBidCount ?? prev.bidCount,
+              // A snipe bid may have extended the deadline — keep the
+              // countdown anchored to the latest server value.
+              closesAt: payload.closesAt !== undefined ? payload.closesAt : prev.closesAt,
+              extensionCount: payload.extensionCount ?? prev.extensionCount };
           });
         });
 
         unsubLotChanges = subscribeToLotChanges(sessionId, (payload) => {
           setCurrentLot({ ...payload.lot });
           setStream((prev) => prev ? { ...prev, currentLotIndex: payload.newLotIndex } : prev);
+        });
+
+        // Authoritative lot-engine events: open/close/sold/passed/cancelled
+        // carry the lot aggregate; lot.extension (anti-snipe) carries the new
+        // deadline at the top level. Both merge into the current lot so the
+        // dock countdown and terminal states follow the server.
+        unsubLotLifecycle = subscribeToStreamEvents(sessionId, (event) => {
+          if (event.type !== 'lot_update') return;
+          const raw = event.payload as Record<string, unknown>;
+          const dto = (raw.lot ?? null) as {
+            id?: string;
+            listingId?: string;
+            status?: string;
+            closesAt?: string | null;
+            extensionCount?: number;
+            highBidMinor?: number;
+          } | null;
+          setCurrentLot((prev) => {
+            if (!prev) return prev;
+            const lotId = dto?.id ?? (raw.lotId as string | undefined);
+            const listingId = dto?.listingId ?? (raw.listingId as string | undefined);
+            if (listingId !== prev.listingId && lotId !== prev.id) return prev;
+            const next = { ...prev };
+            if (dto) {
+              if (dto.closesAt !== undefined) next.closesAt = dto.closesAt;
+              if (typeof dto.extensionCount === 'number') {
+                next.extensionCount = dto.extensionCount;
+              }
+              // high_bid_minor is monotonic server-side — never let an
+              // out-of-order event regress the displayed price.
+              if (typeof dto.highBidMinor === 'number' && dto.highBidMinor > 0) {
+                next.currentPrice = Math.max(prev.currentPrice, dto.highBidMinor / 100);
+              }
+              if (dto.status === 'open' || dto.status === 'closing') {
+                next.status = 'active';
+              } else if (dto.status === 'sold') {
+                next.status = 'sold';
+              } else if (dto.status === 'passed' || dto.status === 'cancelled') {
+                next.status = 'passed';
+              }
+            }
+            if (typeof raw.closesAt === 'string' || raw.closesAt === null) {
+              next.closesAt = raw.closesAt as string | null;
+            }
+            if (typeof raw.extensionCount === 'number') {
+              next.extensionCount = raw.extensionCount;
+            }
+            return next;
+          });
         });
 
         unsubStreamEnd = subscribeToStreamEvents(sessionId, (event) => {
@@ -140,6 +196,7 @@ export function useLiveStreamSession(sessionId: string) {
       unsubViewer?.();
       unsubBids?.();
       unsubLotChanges?.();
+      unsubLotLifecycle?.();
       unsubStreamEnd?.();
       disconnectFromStream(sessionId);
     };

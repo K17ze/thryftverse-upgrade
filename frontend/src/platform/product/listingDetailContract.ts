@@ -20,10 +20,15 @@ export interface SellerTrustSummary {
   activeListingCount?: number | null;
   badges?: string[];
   isFollowing?: boolean;
-  /** Holiday/away mode — when true, the seller's shop is paused. */
+  /** Holiday/away mode — when true, the seller's shop is paused:
+   *  checkout and new offers are rejected server-side (409 SELLER_AWAY). */
   holidayMode?: boolean;
   /** Optional away message set by the seller for buyers. */
   awayMessage?: string | null;
+  /** Seller-declared return instant (ISO-8601). Present only while the
+   *  seller is effectively away and a real return date was published —
+   *  render "back on {date}" only when non-null, never fabricate. */
+  holidayModeUntil?: string | null;
 }
 
 export type VerificationTier = 'email' | 'id' | 'seller';
@@ -144,7 +149,14 @@ export interface ListingCommerceContext {
     summary: string;
   } | null;
   authenticity?: {
-    status: 'not_offered' | 'eligible' | 'verified';
+    /**
+     * Mirrors the backend authentication pipeline binding
+     * (auth:listing:{id}:latest): 'verified' only when a badge is persisted,
+     * 'in_progress' while a request is live in the pipeline, 'eligible' when
+     * verification is available but not requested, 'not_offered' otherwise —
+     * including terminal non-verified outcomes, which carry no public claim.
+     */
+    status: 'not_offered' | 'eligible' | 'in_progress' | 'verified';
     label?: string;
   } | null;
 }

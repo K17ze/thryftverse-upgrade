@@ -66,6 +66,7 @@ export default function MyProfileScreen() {
 
   const currentUser = useStore((state) => state.currentUser);
   const holidayMode = useStore((state) => state.accountPreferences?.holidayMode === true);
+  const holidayModeUntil = useStore((state) => state.accountPreferences?.holidayModeUntil ?? null);
   const user = currentUser;
   const profileUserId = user?.id ?? null;
 
@@ -280,7 +281,10 @@ export default function MyProfileScreen() {
 
           {/* Away-mode indicator — shown when holiday mode is enabled */}
           {holidayMode ? (
-            <AwayModeBanner onPress={() => navigation.navigate('PrivacySettings')} />
+            <AwayModeBanner
+              returnDate={holidayModeUntil}
+              onPress={() => navigation.navigate('PrivacySettings')}
+            />
           ) : null}
 
           {/* ── STORY HIGHLIGHTS RAIL ──

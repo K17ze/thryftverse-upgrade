@@ -23,6 +23,7 @@ import { ReviewSummaryBlock } from '../profile/ProfileReviews';
 import { PosterHighlightsRail } from '../poster/PosterHighlightsRail';
 import { ShopRail, type ShopRailItem } from '../profile/ShopRail';
 import type { UserProfileTab, UserProfileShopSegment } from '../../hooks/userprofile';
+import { formatShortDate } from '../../utils/dateFormat';
 
 interface UserProfileHeaderProps {
   targetProfile: PublicProfileUser | null;
@@ -148,6 +149,11 @@ export function UserProfileHeader({
                 ? awayState.awayMessage.trim()
                 : 'The seller is away right now. Listings are paused and will return when they are back.'}
             </Text>
+            {awayState.holidayModeUntil ? (
+              <Text style={[styles.awayBannerSub, { color: MUTED }]}>
+                Back {formatShortDate(awayState.holidayModeUntil)}
+              </Text>
+            ) : null}
           </View>
         </View>
       ) : null}

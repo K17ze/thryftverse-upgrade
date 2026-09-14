@@ -68,9 +68,12 @@ export interface ChatComposerProps {
   onSelectReply: (text: string) => void;
   onManageReplies: (role: "seller" | "buyer") => void;
 
-  // ── Composer banner stack (reply / reaction / offline / undo) ──
+  // ── Composer banner stack (reply / edit / reaction / offline / undo) ──
   replyTo: Message | null;
   onCloseReply: () => void;
+  /** P2-03: message currently being edited — renders an edit banner. */
+  editingMessage: Message | null;
+  onCloseEdit: () => void;
   reactingToMessage: Message | null;
   onReact: (emoji: string) => void;
   isOffline: boolean;
@@ -115,6 +118,8 @@ export function ChatComposer({
   onManageReplies,
   replyTo,
   onCloseReply,
+  editingMessage,
+  onCloseEdit,
   reactingToMessage,
   onReact,
   isOffline,
@@ -220,7 +225,8 @@ export function ChatComposer({
           that fit the budget so the input bar always remains usable. */}
       {(() => {
         const stackSlots: ComposerStackSlotState[] = [
-          { slot: 'replyQuote', visible: !!replyTo, estimatedHeight: 56 },
+          { slot: 'editBanner', visible: !!editingMessage, estimatedHeight: 56 },
+          { slot: 'replyQuote', visible: !!replyTo && !editingMessage, estimatedHeight: 56 },
           { slot: 'undoBanner', visible: recentlyDeletedCount > 0, estimatedHeight: 44 },
           { slot: 'offlineBanner', visible: isOffline, estimatedHeight: 36 },
           { slot: 'reactionPicker', visible: !!reactingToMessage, estimatedHeight: 48 },
@@ -228,6 +234,14 @@ export function ChatComposer({
         const resolution = resolveComposerStack(stackSlots);
         return (
           <>
+            {isSlotVisible(resolution, 'editBanner') && editingMessage ? (
+              <ReplyQuote
+                senderName={t('messaging.conversation.editMessage')}
+                text={editingMessage.text ?? ""}
+                onClose={onCloseEdit}
+              />
+            ) : null}
+
             {isSlotVisible(resolution, 'replyQuote') && replyTo ? (
               <ReplyQuote
                 senderName={replyTo.senderLabel ?? t('chat.fallbackUserName')}

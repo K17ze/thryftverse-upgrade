@@ -51,6 +51,9 @@ export function useConversationComposer({
 }: UseConversationComposerOptions) {
   const [input, setInput] = useState("");
   const [replyTo, setReplyTo] = useState<Message | null>(null);
+  // P2-03: message being edited — when set, the composer commits via the
+  // edit API instead of a new send.
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [attachmentPickerVisible, setAttachmentPickerVisible] = useState(false);
   const [isVoiceRecording, setIsVoiceRecording] = useState(false);
   const [pendingAttachment, setPendingAttachment] = useState<{
@@ -312,6 +315,8 @@ export function useConversationComposer({
     notifyStoppedTyping,
     replyTo,
     setReplyTo,
+    editingMessage,
+    setEditingMessage,
     attachmentPickerVisible,
     setAttachmentPickerVisible,
     isVoiceRecording,

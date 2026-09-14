@@ -168,7 +168,6 @@ export function DiscoverySearchResultsView({
             onMoodboardPress={onMoodboardPress}
             numColumns={2}
             scrollRef={scrollRef}
-            showSaveButton
             onItemSaveToggle={onItemSaveToggle}
             onItemSaveLongPress={onItemSaveLongPress}
             isItemSaved={isItemSaved}

@@ -22,7 +22,7 @@
  * are owned by PinterestMasonryGrid and are not touched here.
  */
 
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef } from 'react';
 import { View } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -30,7 +30,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useConnectivity } from '../hooks/useConnectivity';
-import { useSignupWall } from '../hooks/useSignupWall';
+import { useSaveToCollectionPicker } from '../hooks/useSaveToCollectionPicker';
 import { useStore } from '../store/useStore';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import {
@@ -57,11 +57,10 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
   const scrollRef = useRef<any>(null);
 
   // ── Two-tier save — tap = quick-save to Saved, long-press = file to a
-  //  collection (same contract as SearchScreen/DiscoverScene). ──
-  const toggleSavedProduct = useStore((state) => state.toggleSavedProduct);
+  //  collection (same contract as SearchScreen/DiscoverScene). The hook
+  //  also owns the one-shot "Add to a list" teaching toast. ──
   const isSavedProduct = useStore((state) => state.isSavedProduct);
-  const { requireAuth } = useSignupWall();
-  const [savePickerItemId, setSavePickerItemId] = useState<string | null>(null);
+  const { savePickerItemId, handleQuickSave, handleSaveLongPress, closeSavePicker } = useSaveToCollectionPicker();
 
   const content = useDiscoveryContent();
   const categories = useDiscoveryCategories();
@@ -120,16 +119,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
     navigation.navigate('UserProfile', { userId });
   }, [navigation]);
 
-  const handleSaveToggle = useCallback((item: DiscoveryListingSummary) => {
-    haptic.light();
-    toggleSavedProduct(item.id);
-  }, [haptic, toggleSavedProduct]);
 
-  const handleSaveLongPress = useCallback((item: DiscoveryListingSummary) => {
-    if (!requireAuth('save_item')) return;
-    haptic.selection();
-    setSavePickerItemId(item.id);
-  }, [haptic, requireAuth]);
 
   // ── Search bar header — back button + search bar + camera, all in the
   //  header so the search bar sits right below the status bar with no
@@ -167,7 +157,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
             onPosterPress={handlePosterPress}
             onMoodboardPress={handleMoodboardPress}
             onUserPress={handleUserPress}
-            onItemSaveToggle={handleSaveToggle}
+            onItemSaveToggle={handleQuickSave}
             onItemSaveLongPress={handleSaveLongPress}
             isItemSaved={isSavedProduct}
           />
@@ -192,7 +182,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
             onCollectionPress={handleCollectionPress}
             onRefresh={handleRefresh}
             scrollRef={scrollRef}
-            onItemSaveToggle={handleSaveToggle}
+            onItemSaveToggle={handleQuickSave}
             onItemSaveLongPress={handleSaveLongPress}
             isItemSaved={isSavedProduct}
           />
@@ -201,7 +191,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
       <SaveToCollectionModal
         visible={savePickerItemId != null}
         itemId={savePickerItemId ?? ''}
-        onClose={() => setSavePickerItemId(null)}
+        onClose={closeSavePicker}
       />
     </FlagshipScreen>
   );

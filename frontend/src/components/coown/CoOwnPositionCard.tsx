@@ -29,6 +29,7 @@ export interface CoOwnPositionMark {
 export type CoOwnPositionState = CanonicalCoOwnPositionState;
 
 export interface CoOwnPositionCardProps {
+  positionId?: string;
   imageUri?: string | null;
   title: string;
   unitsOwned: number;
@@ -81,6 +82,7 @@ export interface CoOwnPositionCardProps {
 }
 
 export function CoOwnPositionCard({
+  positionId,
   imageUri,
   title,
   unitsOwned,
@@ -116,7 +118,7 @@ export function CoOwnPositionCard({
 }: CoOwnPositionCardProps) {
   const { colors } = useAppTheme();
   const [expanded, setExpanded] = React.useState(false);
-  React.useEffect(() => setExpanded(false), [title, imageUri]);
+  React.useEffect(() => setExpanded(false), [positionId, title, imageUri]);
 
   const statusLabel = status === 'open' ? 'Active' : status === 'paused' ? 'Paused' : 'Closed';
   const statusColor = status === 'open' ? colors.success : status === 'paused' ? colors.textSecondary : colors.textMuted;
@@ -144,7 +146,10 @@ export function CoOwnPositionCard({
 
   // Outstanding denominator — prefer positionState.outstandingUnits, then the
   // separate prop, then fall back to totalUnits
-  const outstandingLabel = (positionState?.outstandingUnits ?? outstandingUnits ?? totalUnits).toLocaleString('en-GB');
+  const supply = positionState?.outstandingUnits ?? outstandingUnits ?? totalUnits;
+  const ownershipLabel = supply > 0
+    ? `${settledUnits} of ${supply.toLocaleString('en-GB')} units · ${ownershipPct}%`
+    : `${settledUnits} units`;
 
   // Lockup / holding period — only render a chip when the lockup is still
   // in the future. Past lockups are not shown (no chrome for resolved state).
@@ -196,7 +201,7 @@ export function CoOwnPositionCard({
               </View>
               <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={2}>{title}</Text>
               <Text style={[styles.ownership, { color: colors.textSecondary }]}>
-                {settledUnits} of {totalUnits} units · {ownershipPct}%
+                {ownershipLabel}
               </Text>
             </View>
           </View>
@@ -228,7 +233,7 @@ export function CoOwnPositionCard({
               tiles. Hierarchy, not a grid. */}
           <View style={[styles.heroRow, { borderColor: colors.border }]}>
             <Text style={[styles.heroLabel, { color: colors.textMuted }]} numberOfLines={1}>Marked value</Text>
-            <Text style={[styles.heroValue, { color: colors.textPrimary }]} numberOfLines={1}>{currentValueLabel}</Text>
+            <Text style={[styles.heroValue, { color: colors.textPrimary }]} >{currentValueLabel}</Text>
           </View>
 
           <Pressable onPress={() => setExpanded(value => !value)} accessibilityRole="button"
@@ -267,7 +272,7 @@ export function CoOwnPositionCard({
           {/* U37: Concise cost/P&L context — compact hairline rows */}
           <View style={styles.contextRows}>
             <View style={[styles.contextRow, { borderBottomColor: colors.border }]}>
-              <Text style={[styles.contextLabel, { color: colors.textSecondary }]} numberOfLines={1}>Cost basis</Text>
+              <Text style={[styles.contextLabel, { color: colors.textSecondary }]} numberOfLines={1}>Average entry / unit</Text>
               <Text style={[styles.contextValue, { color: colors.textPrimary }]} numberOfLines={1}>{avgEntryLabel ?? '—'}</Text>
             </View>
             {unrealizedLabel ? (
@@ -351,13 +356,13 @@ export function CoOwnPositionCard({
           )}
 
           {/* Ownership bar — portfolio weight when available, else ownership % */}
-          <View style={styles.ownershipBar}>
+          {(portfolioWeightPct != null || supply > 0) && <View style={styles.ownershipBar}>
             <View style={[styles.ownershipBarBg, { backgroundColor: colors.surfaceAlt }]}>
               <View
                 style={[
                   styles.ownershipBarFill,
                   {
-                    width: `${Math.min(portfolioWeightPct ?? ownershipPct, 100)}%`,
+                    width: `${Math.max(0, Math.min(portfolioWeightPct ?? ownershipPct, 100))}%`,
                     backgroundColor: colors.brand,
                   },
                 ]}
@@ -368,7 +373,7 @@ export function CoOwnPositionCard({
                 {portfolioWeightPct.toFixed(2)}% of your portfolio
               </Text>
             )}
-          </View>
+          </View>}
 
           </View>}
 
@@ -378,13 +383,14 @@ export function CoOwnPositionCard({
             {onBuyMore ? (
               <Pressable
                 onPress={(e) => { if (status !== 'open') return; e.stopPropagation(); onBuyMore(); }}
-                style={[styles.buyBtn, { backgroundColor: colors.brand, opacity: status === 'open' ? 1 : 0.4 }]}
+                style={({ pressed }) => [styles.buyBtn, { backgroundColor: colors.background, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth, opacity: status !== 'open' ? 0.4 : pressed ? 0.65 : 1 }]}
                 disabled={status !== 'open'}
+                accessibilityState={{ disabled: status !== 'open' }}
                 accessibilityRole="button"
                 accessibilityLabel={status === 'open' ? `Buy more units of ${title}` : `Buy unavailable — ${statusLabel}`}
                 accessibilityHint={status === 'open' ? undefined : `Item is ${statusLabel.toLowerCase()}`}
               >
-                <Text style={[styles.buyBtnText, { color: colors.background }]}>
+                <Text style={[styles.buyBtnText, { color: colors.textPrimary }]}>
                   {status === 'open' ? 'Buy more' : statusLabel}
                 </Text>
               </Pressable>
@@ -392,8 +398,9 @@ export function CoOwnPositionCard({
             {onSell ? (
               <Pressable
                 onPress={(e) => { if (!sellable) return; e.stopPropagation(); onSell(); }}
-                style={[styles.sellBtn, { borderColor: colors.border, opacity: sellable ? 1 : 0.4 }]}
+                style={({ pressed }) => [styles.sellBtn, { borderColor: colors.border, opacity: !sellable ? 0.4 : pressed ? 0.65 : 1 }]}
                 disabled={!sellable}
+                accessibilityState={{ disabled: !sellable }}
                 accessibilityRole="button"
                 accessibilityLabel={sellable ? `Sell units of ${title}` : `Sell unavailable for ${title}`}
                 accessibilityHint={sellable ? undefined : 'No sellable units'}

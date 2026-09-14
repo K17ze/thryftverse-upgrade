@@ -28,7 +28,10 @@ import { useStore } from "../../store/useStore";
 import {
   fetchConversationMessagesFromApi,
   sendConversationMessageOnApi,
+  editConversationMessageOnApi,
   deleteConversationMessageOnApi,
+  saveMessageInChatOnApi,
+  unsaveMessageInChatOnApi,
   mapApiMessageToConversationMessage,
   markConversationReadBatchOnApi,
 } from "../../services/chatApi";
@@ -37,6 +40,8 @@ import { enqueueChatMessage, drainChatOutbox } from "../../services/chatOutbox";
 import {
   useChatMessageEvent,
   useChatMessageDeletedEvent,
+  useChatMessageEditedEvent,
+  useChatMessageSaveEvent,
   useChatReactionEvent,
   useChatReadReceiptEvent,
   realtimePayloadToMessage,
@@ -60,6 +65,24 @@ import { INITIAL_MESSAGES, parseMessageDate } from "./types";
 // ./types) is the single message shape. This alias is used in
 // store-interaction signatures for readability.
 type ConversationMessage = Message;
+
+/** Strip a message's content fields and mark it deleted-for-everyone so the
+ *  row renders the tombstone instead of the payload. */
+function toDeletedTombstone(m: Message): Message {
+  return {
+    ...m,
+    text: undefined,
+    mediaUri: undefined,
+    mediaType: undefined,
+    voiceUri: undefined,
+    voiceDurationMs: undefined,
+    voiceWaveform: undefined,
+    replyToMessageId: undefined,
+    reactions: undefined,
+    isDeleted: true,
+    deletedForEveryoneAt: new Date().toISOString(),
+  };
+}
 
 interface UseConversationMessagesOptions {
   conversationId: string | undefined;
@@ -459,16 +482,92 @@ export function useConversationMessages({
     ),
   );
 
-  // P0.9: Consume delete realtime events — remove the message from the local
-  // list when the server confirms a delete (for-me or for-everyone). This
-  // handles second-device state and optimistic reconciliation.
+  // P0.9: Consume delete realtime events. `me` scope removes the message for
+  // this participant only; `everyone` scope leaves a tombstone in place —
+  // deletions are visible events, not silent gaps (Snapchat/iMessage).
   useChatMessageDeletedEvent(
     conversationId,
     useCallback(
       (event: { messageId: string; scope: 'me' | 'everyone'; deletedBy: string }) => {
-        setMessages((prev) => prev.filter((m) => m.id !== event.messageId));
+        setMessages((prev) =>
+          event.scope === 'everyone'
+            ? prev.map((m) =>
+                m.id === event.messageId ? toDeletedTombstone(m) : m,
+              )
+            : prev.filter((m) => m.id !== event.messageId),
+        );
+        // Keep the store copy consistent so the next hydration reset can't
+        // resurrect the deleted content — tombstone for `everyone`, removal
+        // for `me`.
+        if (event.scope === 'everyone') {
+          const tombstone = toDeletedTombstone({ id: event.messageId } as Message);
+          patchStoreMessage(
+            { id: event.messageId },
+            {
+              text: tombstone.text,
+              mediaUri: tombstone.mediaUri,
+              mediaType: tombstone.mediaType,
+              voiceUri: tombstone.voiceUri,
+              voiceDurationMs: tombstone.voiceDurationMs,
+              voiceWaveform: tombstone.voiceWaveform,
+              replyToMessageId: tombstone.replyToMessageId,
+              reactions: tombstone.reactions,
+              isDeleted: true,
+              deletedForEveryoneAt: tombstone.deletedForEveryoneAt,
+            },
+          );
+        } else if (conversationId) {
+          useStore.getState().removeConversationMessage(conversationId, event.messageId);
+        }
       },
-      [],
+      [conversationId, patchStoreMessage],
+    ),
+  );
+
+  // P2-03: Consume message-edited realtime events — another participant
+  // (or our own second device) edited a message body. Apply the new text
+  // and set isEdited so the row renders the "Edited" marker.
+  useChatMessageEditedEvent(
+    conversationId,
+    useCallback(
+      (event: { messageId: string; body: string; editedAt: string | null; editedBy: string }) => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === event.messageId
+              ? { ...m, text: event.body, isEdited: true, editedAt: event.editedAt ?? m.editedAt }
+              : m,
+          ),
+        );
+        patchStoreMessage(
+          { id: event.messageId },
+          { text: event.body, isEdited: true },
+        );
+      },
+      [patchStoreMessage],
+    ),
+  );
+
+  // Save-in-chat realtime events — shared, negotiated persistence. The
+  // payload carries the full post-change savedBy set, so applying it
+  // verbatim keeps the "Saved" marker identical on both sides.
+  useChatMessageSaveEvent(
+    conversationId,
+    useCallback(
+      (event: { messageId: string; savedBy: string[]; savedAt?: string | null }) => {
+        const savedAt = event.savedAt ?? undefined;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === event.messageId
+              ? { ...m, savedBy: event.savedBy, isSavedInChat: event.savedBy.length > 0, savedAt }
+              : m,
+          ),
+        );
+        patchStoreMessage(
+          { id: event.messageId },
+          { savedBy: event.savedBy, isSavedInChat: event.savedBy.length > 0, savedAt },
+        );
+      },
+      [patchStoreMessage],
     ),
   );
 
@@ -1220,6 +1319,220 @@ export function useConversationMessages({
     [createMediaMessage, pushMessage, appendToConversationStore, currentUser?.id, haptic, scheduleScrollToEnd, sendMediaMessage],
   );
 
+  // Share the conversation's linked listing as a product card. Optimistic
+  // push + API send + clientMessageId reconcile — same lifecycle as
+  // sendMessage. The card snapshot rides in `metadata.listingShare`.
+  const sendListingShare = useCallback(
+    (listing: {
+      id: string;
+      title: string;
+      price: number;
+      originalPrice?: number | null;
+      images?: string[];
+      image?: string | null;
+      brand?: string | null;
+      size?: string | null;
+      condition?: string | null;
+      sellerId?: string | null;
+      sellerUsername?: string | null;
+      sellerRating?: number | null;
+      isSold?: boolean;
+    }) => {
+      if (!conversationId) return;
+      const localId = makeStableId('msg_share', 7);
+      const clientMessageId = createStableId('cmsg');
+      const image = listing.image ?? listing.images?.[0] ?? null;
+      const outgoing: Message = {
+        id: localId,
+        type: 'listing_share',
+        sender: 'me',
+        senderId: currentUser?.id ?? 'me',
+        timestamp: new Date().toISOString(),
+        senderLabel: currentUser?.username ?? 'you',
+        text: `Shared a listing: ${listing.title}`,
+        listing: {
+          id: listing.id,
+          title: listing.title,
+          price: listing.price,
+          originalPrice: listing.originalPrice ?? undefined,
+          image: image ?? undefined,
+          brand: listing.brand ?? undefined,
+          size: listing.size ?? undefined,
+          condition: listing.condition ?? undefined,
+          sellerId: listing.sellerId ?? undefined,
+          sellerUsername: listing.sellerUsername ?? undefined,
+          sellerRating: listing.sellerRating ?? undefined,
+          isSold: listing.isSold === true,
+        },
+        status: 'sending',
+        clientMessageId,
+      };
+      pushMessage(outgoing);
+      appendToConversationStore(outgoing, currentUser?.id ?? 'me');
+      scheduleScrollToEnd();
+      haptic.light();
+
+      sendConversationMessageOnApi(
+        conversationId,
+        outgoing.text ?? '',
+        {
+          listingShare: {
+            listingId: listing.id,
+            title: listing.title,
+            price: listing.price,
+            originalPrice: listing.originalPrice ?? undefined,
+            image: image ?? undefined,
+            brand: listing.brand ?? undefined,
+            size: listing.size ?? undefined,
+            condition: listing.condition ?? undefined,
+            sellerId: listing.sellerId ?? undefined,
+            sellerUsername: listing.sellerUsername ?? undefined,
+            sellerRating: listing.sellerRating ?? undefined,
+            isSold: listing.isSold === true,
+          },
+        },
+        clientMessageId,
+        undefined,
+        currentUser?.id,
+      )
+        .then((serverMsg) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === localId ? { ...m, id: serverMsg.id, status: 'sent' as const } : m,
+            ),
+          );
+          patchStoreMessage(
+            { clientMessageId },
+            { id: serverMsg.id, status: 'sent', readStatus: 'sent' },
+          );
+        })
+        .catch(() => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === localId ? { ...m, status: 'reconciling' as const } : m,
+            ),
+          );
+          patchStoreMessage({ clientMessageId }, { status: 'reconciling' });
+          show('Listing share may not have sent. Check your connection.', 'error');
+        });
+    },
+    [
+      conversationId,
+      currentUser?.id,
+      currentUser?.username,
+      pushMessage,
+      appendToConversationStore,
+      scheduleScrollToEnd,
+      haptic,
+      patchStoreMessage,
+      show,
+    ],
+  );
+
+  // P2-03: Edit a sent message (sender-only, server-enforced 15-minute
+  // window). Optimistically apply the new text + Edited marker; reconcile
+  // with the server response; revert to the original text on failure.
+  const editMessage = useCallback(
+    (messageId: string, newText: string) => {
+      const trimmed = newText.trim();
+      if (!conversationId || !trimmed) return;
+      const original = messagesRef.current.find((m) => m.id === messageId);
+      if (!original || original.text === trimmed) return;
+      haptic.light();
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? { ...m, text: trimmed, isEdited: true }
+            : m,
+        ),
+      );
+      patchStoreMessage({ id: messageId }, { text: trimmed, isEdited: true });
+      editConversationMessageOnApi(conversationId, messageId, trimmed, currentUser?.id)
+        .then((serverMsg) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === messageId
+                ? { ...m, text: serverMsg.text ?? trimmed, isEdited: true, editedAt: serverMsg.editedAt ?? m.editedAt }
+                : m,
+            ),
+          );
+          patchStoreMessage({ id: messageId }, { text: serverMsg.text ?? trimmed, isEdited: true });
+        })
+        .catch((err: unknown) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === messageId
+                ? { ...m, text: original.text, isEdited: original.isEdited }
+                : m,
+            ),
+          );
+          patchStoreMessage({ id: messageId }, { text: original.text, isEdited: original.isEdited });
+          const message =
+            err instanceof ApiRequestError && err.status === 403
+              ? "This message can no longer be edited."
+              : "Edit failed. Check your connection and try again.";
+          show(message, "error");
+        });
+    },
+    [conversationId, currentUser?.id, haptic, patchStoreMessage, show],
+  );
+
+  // Save in chat — Snapchat-style negotiated persistence. Either party
+  // may save or retract their save; the marker is shared state both sides
+  // see. Optimistically apply the actor's add/remove, then reconcile with
+  // the server's authoritative savedBy set; roll back on failure.
+  const toggleSaveInChat = useCallback(
+    (msg: Message) => {
+      if (!conversationId) return;
+      const myId = currentUser?.id;
+      if (!myId) return;
+      // Resolve the live message — the caller may hold a stale snapshot
+      // (e.g. the context-menu selection) that predates a realtime save.
+      const live = messagesRef.current.find((m) => m.id === msg.id) ?? msg;
+      const priorSavedBy = live.savedBy ?? [];
+      const priorSavedAt = live.savedAt;
+      const wasSavedByMe = priorSavedBy.includes(myId);
+      const optimisticSavedBy = wasSavedByMe
+        ? priorSavedBy.filter((id) => id !== myId)
+        : [...priorSavedBy, myId];
+      const applySavedState = (savedBy: string[], savedAt?: string) => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === msg.id
+              ? { ...m, savedBy, isSavedInChat: savedBy.length > 0, savedAt }
+              : m,
+          ),
+        );
+        patchStoreMessage(
+          { id: msg.id },
+          { savedBy, isSavedInChat: savedBy.length > 0, savedAt },
+        );
+      };
+      haptic.light();
+      applySavedState(
+        optimisticSavedBy,
+        wasSavedByMe ? priorSavedAt : priorSavedAt ?? new Date().toISOString(),
+      );
+      const request = wasSavedByMe
+        ? unsaveMessageInChatOnApi(conversationId, msg.id)
+        : saveMessageInChatOnApi(conversationId, msg.id);
+      request
+        .then((res) => {
+          applySavedState(res.savedBy, res.savedAt ?? undefined);
+        })
+        .catch(() => {
+          applySavedState(priorSavedBy, priorSavedAt);
+          show(
+            wasSavedByMe
+              ? "Couldn't remove the saved marker. Try again."
+              : "Couldn't save this message. Try again.",
+            "error",
+          );
+        });
+    },
+    [conversationId, currentUser?.id, haptic, patchStoreMessage, show],
+  );
+
   const scheduleUndoClear = useCallback(() => {
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     undoTimerRef.current = setTimeout(() => setRecentlyDeleted([]), 5000);
@@ -1233,14 +1546,29 @@ export function useConversationMessages({
       return;
     }
     setMessages((prev) => {
-      const restored = [...recentlyDeleted];
-      const all = [...prev, ...restored];
+      // Restore in place for in-place tombstones (delete-for-everyone) and
+      // re-append for removed messages (delete-for-me) — never duplicate.
+      const byId = new Map(recentlyDeleted.map((m) => [m.id, m]));
+      const restoredIds = new Set<string>();
+      const merged = prev.map((m) => {
+        const original = byId.get(m.id);
+        if (original) restoredIds.add(m.id);
+        return original ?? m;
+      });
+      const missing = recentlyDeleted.filter((m) => !restoredIds.has(m.id));
+      const all = [...merged, ...missing];
       all.sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""));
       return all;
     });
+    // Restore store-side tombstones for `everyone` deletes still in flight —
+    // the row may have been patched with isDeleted; patchConversationMessage
+    // no-ops when the row is already gone (`me` deletes).
+    recentlyDeleted.forEach((m) => {
+      patchStoreMessage({ id: m.id }, m);
+    });
     setRecentlyDeleted([]);
     show(t("chat.messagesRestored"), "success");
-  }, [recentlyDeleted, show]);
+  }, [recentlyDeleted, show, patchStoreMessage]);
 
   const handleBulkDelete = useCallback(
     (selectedMessageIds: Set<string>, exitSelectionMode: () => void) => {
@@ -1261,6 +1589,13 @@ export function useConversationMessages({
           deleteApiStatusRef.current = "pending";
           setRecentlyDeleted(toDelete);
           setMessages((prev) => prev.filter((m) => !idsToDelete.has(m.id)));
+          // Bulk deletes are `me`-scope — drop the store rows too so a
+          // hydration reset can't resurrect them.
+          if (conversationId) {
+            idsToDelete.forEach((id) =>
+              useStore.getState().removeConversationMessage(conversationId, id),
+            );
+          }
           exitSelectionMode();
           scheduleUndoClear();
           try {
@@ -1276,7 +1611,7 @@ export function useConversationMessages({
         },
       });
     },
-    [messages, conversationId, haptic, show, scheduleUndoClear],
+    [messages, conversationId, haptic, show, scheduleUndoClear, patchStoreMessage],
   );
 
   const handleDeleteMessage = useCallback(
@@ -1290,7 +1625,35 @@ export function useConversationMessages({
         haptic.medium();
         deleteApiStatusRef.current = "pending";
         setRecentlyDeleted([msg]);
-        setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+        // `everyone` tombstones in place — the slot stays legible for both
+        // sides; `me` removes locally (the message still exists for others).
+        setMessages((prev) =>
+          scope === 'everyone'
+            ? prev.map((m) => (m.id === msg.id ? toDeletedTombstone(m) : m))
+            : prev.filter((m) => m.id !== msg.id),
+        );
+        // Mirror the delete into the conversation store so a hydration reset
+        // can't resurrect the row: tombstone for `everyone`, removal for `me`.
+        if (scope === 'everyone') {
+          const tombstone = toDeletedTombstone(msg);
+          patchStoreMessage(
+            { id: msg.id },
+            {
+              text: tombstone.text,
+              mediaUri: tombstone.mediaUri,
+              mediaType: tombstone.mediaType,
+              voiceUri: tombstone.voiceUri,
+              voiceDurationMs: tombstone.voiceDurationMs,
+              voiceWaveform: tombstone.voiceWaveform,
+              replyToMessageId: tombstone.replyToMessageId,
+              reactions: tombstone.reactions,
+              isDeleted: true,
+              deletedForEveryoneAt: tombstone.deletedForEveryoneAt,
+            },
+          );
+        } else if (conversationId) {
+          useStore.getState().removeConversationMessage(conversationId, msg.id);
+        }
         scheduleUndoClear();
         try {
           if (!conversationId) throw new Error("No conversation");
@@ -1298,6 +1661,14 @@ export function useConversationMessages({
           deleteApiStatusRef.current = "success";
         } catch {
           deleteApiStatusRef.current = "error";
+          // Failed `everyone` deletes must restore the original content —
+          // the message is still visible to the other side.
+          if (scope === 'everyone') {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === msg.id ? msg : m)),
+            );
+            patchStoreMessage({ id: msg.id }, msg);
+          }
           show(scope === 'everyone'
             ? "Delete failed. The message may still be visible to others."
             : "Message deleted locally. It may still be visible to others.", "info");
@@ -1449,6 +1820,9 @@ export function useConversationMessages({
     confirmAgentDraft,
     retryAgentDraft,
     sendMessage,
+    editMessage,
+    toggleSaveInChat,
+    sendListingShare,
     sendMediaMessage,
     sendVoiceMessage,
     handleSendVoice,

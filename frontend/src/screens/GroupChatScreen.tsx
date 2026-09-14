@@ -27,11 +27,12 @@ import { useChatPreferences } from '../hooks/useChatPreferences';
 import { chatThemeBackground } from '../services/chatPreferencesApi';
 import { useStore } from '../store/useStore';
 import { track } from '../analytics';
+import { t } from '../i18n';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { KeyboardStickyView } from '../platform/keyboard/KeyboardProvider';
-import { Space, Control } from '../theme/designTokens';
+import { Space, Control, Radius } from '../theme/designTokens';
 
 
 import { ChatTopBar } from '../components/chat/ChatTopBar';
@@ -201,6 +202,8 @@ export default function GroupChatScreen({ navigation, route }: Props) {
     recentlyDeleted,
     composerSending,
     sendMessage: hookSendMessage,
+    editMessage: hookEditMessage,
+    toggleSaveInChat,
     sendVoiceMessage,
     handleSendVoice,
     handleDeleteMessage,
@@ -232,10 +235,13 @@ export default function GroupChatScreen({ navigation, route }: Props) {
 
   const {
     input,
+    setInput,
     setTypingInput,
     notifyStoppedTyping,
     replyTo,
     setReplyTo,
+    editingMessage,
+    setEditingMessage,
     reactingToMessage,
     setReactingToMessage,
     attachmentPickerVisible,
@@ -285,13 +291,21 @@ export default function GroupChatScreen({ navigation, route }: Props) {
     if (sendPermission !== 'allowed') return;
     const trimmed = input.trim();
     if (!trimmed) return;
+    if (editingMessage) {
+      hookEditMessage(editingMessage.id, trimmed);
+      setInput('');
+      setEditingMessage(null);
+      setMentionQuery(null);
+      notifyStoppedTyping();
+      return;
+    }
     hookSendMessage(trimmed, replyTo, setTypingInput, setReplyTo);
     setMentionQuery(null);
     notifyStoppedTyping();
     if (conversationId) {
       track('message_sent', { conversation_id: conversationId, message_type: 'text' });
     }
-  }, [input, hookSendMessage, replyTo, setTypingInput, setReplyTo, notifyStoppedTyping, sendPermission, conversationId]);
+  }, [input, hookSendMessage, hookEditMessage, replyTo, setTypingInput, setInput, setReplyTo, editingMessage, setEditingMessage, notifyStoppedTyping, sendPermission, conversationId]);
 
   // ─── Attachment send adapters ───────────────────────────────────────
   const handleSendPendingAttachment = useCallback(
@@ -367,11 +381,47 @@ export default function GroupChatScreen({ navigation, route }: Props) {
     setContextMenuVisible(true);
   }, [haptic]);
 
+  // P2-03: mirror the backend edit window — sender's own text messages,
+  // not deleted, within 15 minutes of send.
+  const MESSAGE_EDIT_WINDOW_MS = 15 * 60 * 1000;
+  const canEditSelectedMessage = Boolean(
+    selectedMessage &&
+      selectedMessage.sender === 'me' &&
+      !selectedMessage.isDeleted &&
+      Boolean(selectedMessage.text?.trim()) &&
+      selectedMessage.status !== 'failed' &&
+      selectedMessage.status !== 'sending' &&
+      selectedMessage.status !== 'reconciling' &&
+      Date.now() - new Date(selectedMessage.timestamp).getTime() < MESSAGE_EDIT_WINDOW_MS,
+  );
+
+  // Save in chat — confirmed, non-system messages may be saved by any
+  // participant; in-flight/failed messages have no server row yet. Deleted
+  // tombstones stay eligible only while the actor still has a save to
+  // retract — the backend permits unsave on tombstones.
+  const selectedMessageSavedByMe = Boolean(
+    currentUser?.id && selectedMessage?.savedBy?.includes(currentUser.id),
+  );
+  const canSaveSelectedMessage = Boolean(
+    selectedMessage &&
+      !selectedMessage.isSystem &&
+      selectedMessage.status !== 'sending' &&
+      selectedMessage.status !== 'failed' &&
+      selectedMessage.status !== 'reconciling' &&
+      selectedMessage.status !== 'draft' &&
+      (!selectedMessage.isDeleted || selectedMessageSavedByMe),
+  );
+
   const handleContextAction = useCallback((action: MessageAction) => {
     if (!selectedMessage) return;
     switch (action) {
       case 'reply':
         setReplyTo(selectedMessage);
+        break;
+      case 'edit':
+        setReplyTo(null);
+        setEditingMessage(selectedMessage);
+        setInput(selectedMessage.text ?? '');
         break;
       case 'forward':
         // Forward in group chat — open forward sheet
@@ -388,6 +438,9 @@ export default function GroupChatScreen({ navigation, route }: Props) {
       case 'delete':
         handleDeleteMessage(selectedMessage);
         break;
+      case 'save':
+        toggleSaveInChat(selectedMessage);
+        break;
       case 'report': {
         const reportKey = `rpt_${conversationId}_${selectedMessage.id}`;
         reportConversationOnApi(conversationId, 'other', undefined, selectedMessage.id, reportKey)
@@ -399,7 +452,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
         break;
     }
     setContextMenuVisible(false);
-  }, [selectedMessage, conversationId, show, handleDeleteMessage, setReplyTo, setReactingToMessage, setForwardingMessage, setForwardSheetVisible, currentUser?.id]);
+  }, [selectedMessage, conversationId, show, handleDeleteMessage, toggleSaveInChat, setReplyTo, setEditingMessage, setInput, setReactingToMessage, setForwardingMessage, setForwardSheetVisible, currentUser?.id]);
 
   const handleReact = useCallback((emoji: string) => {
     const msg = reactingToMessage;
@@ -440,6 +493,39 @@ export default function GroupChatScreen({ navigation, route }: Props) {
               <View style={[styles.dateSeparatorLine, { backgroundColor: colors.borderSubtle }]} />
             </View>
           ) : null}
+          {item.isDeleted ? (
+            (() => {
+              // A save placed before delete-for-everyone can still be
+              // retracted — long-press opens a reduced menu (Unsave only)
+              // while the actor still has a save row on this tombstone.
+              const canUnsaveTombstone = Boolean(
+                currentUser?.id && item.savedBy?.includes(currentUser.id),
+              );
+              const tombstoneBody = (
+                <View
+                  style={[
+                    styles.tombstone,
+                    item.sender === 'me' ? styles.tombstoneMe : styles.tombstoneThem,
+                  ]}
+                  accessibilityLabel={t('messaging.conversation.messageDeleted')}
+                >
+                  <AppIcon name="close-circle-outline" size="sm" color="textMuted" accessible={false} />
+                  <Caption color={colors.textMuted} style={styles.tombstoneText}>
+                    {item.sender === 'me'
+                      ? t('messaging.conversation.youDeletedMessage')
+                      : t('messaging.conversation.messageDeleted')}
+                  </Caption>
+                </View>
+              );
+              return canUnsaveTombstone ? (
+                <Pressable onLongPress={() => handleMessageLongPress(item)}>
+                  {tombstoneBody}
+                </Pressable>
+              ) : (
+                tombstoneBody
+              );
+            })()
+          ) : (
           <SwipeableMessage
             isMe={item.sender === 'me'}
             onReply={() => setReplyTo(item)}
@@ -468,12 +554,15 @@ export default function GroupChatScreen({ navigation, route }: Props) {
               documentUri={item.documentUri}
               documentName={item.documentName}
               documentMimeType={item.documentMimeType}
+              isEdited={item.isEdited === true}
+              isSaved={item.isSavedInChat === true}
             />
           </SwipeableMessage>
+          )}
         </View>
       );
     },
-    [styles.messageRow, messages, handleMessageLongPress, dateSeparatorIndices, colors, setReactingToMessage, setReplyTo],
+    [styles.messageRow, messages, handleMessageLongPress, dateSeparatorIndices, colors, setReactingToMessage, setReplyTo, currentUser?.id],
   );
 
   const keyExtractor = useCallback((item: Message) => item.id, []);
@@ -577,7 +666,17 @@ export default function GroupChatScreen({ navigation, route }: Props) {
                 </Pressable>
               )}
 
-              {replyTo ? (
+              {editingMessage ? (
+                <ReplyQuote
+                  senderName={t('messaging.conversation.editMessage')}
+                  text={editingMessage.text ?? ''}
+                  onClose={() => {
+                    setEditingMessage(null);
+                    setInput('');
+                  }}
+                  style={styles.replyQuote}
+                />
+              ) : replyTo ? (
                 <ReplyQuote
                   senderName={replyTo.senderLabel ?? 'Member'}
                   text={replyTo.text ?? ''}
@@ -685,6 +784,10 @@ export default function GroupChatScreen({ navigation, route }: Props) {
           onAction={handleContextAction}
           messageText={selectedMessage?.text}
           isOwnMessage={selectedMessage?.sender === 'me'}
+          canEdit={canEditSelectedMessage}
+          canSave={canSaveSelectedMessage}
+          isSaved={selectedMessageSavedByMe}
+          isDeleted={selectedMessage?.isDeleted === true}
         />
 
         <ForwardSheet
@@ -779,6 +882,23 @@ const createStyles = (colors: ThemeColors) =>
       height: StyleSheet.hairlineWidth },
     dateSeparatorText: {
       textAlign: 'center' },
+    tombstone: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      maxWidth: '78%',
+      paddingHorizontal: Space.smMd,
+      paddingVertical: Space.sm - 1,
+      borderRadius: Radius.md,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      backgroundColor: colors.surfaceAlt },
+    tombstoneMe: {
+      alignSelf: 'flex-end' },
+    tombstoneThem: {
+      alignSelf: 'flex-start' },
+    tombstoneText: {
+      fontStyle: 'italic' },
     composerWrap: {
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.border },

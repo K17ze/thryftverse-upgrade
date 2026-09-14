@@ -124,7 +124,7 @@ export default function NotificationsScreen() {
       />
 
       {quietActive ? (
-        <QuietHoursBadge onPress={() => navigation.navigate('PushNotifications')} />
+        <QuietHoursBadge onPress={() => navigation.navigate('NotificationPreferences')} />
       ) : null}
 
       {isOffline ? (

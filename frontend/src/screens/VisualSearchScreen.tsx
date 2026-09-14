@@ -21,6 +21,9 @@ import { createVisualSearchStyles } from '../components/visualsearch/visualSearc
 import { VisualSearchQueryHeader } from '../components/visualsearch/VisualSearchQueryHeader';
 import { VisualSearchRefinementBar } from '../components/visualsearch/VisualSearchRefinementBar';
 import { VisualSearchResults } from '../components/visualsearch/VisualSearchResults';
+import { useStore } from '../store/useStore';
+import { useSaveToCollectionPicker } from '../hooks/useSaveToCollectionPicker';
+import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'VisualSearch'>;
 
@@ -29,6 +32,10 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
   const { currencySymbol } = useFormattedPrice();
   const reducedMotionEnabled = useReducedMotion();
   const haptic = useHaptic();
+  const isSavedProduct = useStore((state) => state.isSavedProduct);
+  // Two-tier save: tap = quick-save, long-press = file to a collection.
+  // The hook also owns the one-shot "Add to a list" teaching toast.
+  const { savePickerItemId, handleQuickSave, handleSaveLongPress, closeSavePicker } = useSaveToCollectionPicker();
   const styles = useMemo(() => createVisualSearchStyles(colors), [colors]);
   const initialImageUri = route.params?.initialImageUri;
 
@@ -213,9 +220,19 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
             availableCategories={availableCategories}
             onBrowseCategory={handleBrowseCategory}
             onRetry={runSearch}
+            onItemSaveToggle={handleQuickSave}
+            onItemSaveLongPress={handleSaveLongPress}
+            isItemSaved={isSavedProduct}
           />
         </View>
       </View>
+
+      {/* ── Save-to-collection picker — long-press a tile bookmark ── */}
+      <SaveToCollectionModal
+        visible={savePickerItemId !== null}
+        itemId={savePickerItemId ?? ''}
+        onClose={closeSavePicker}
+      />
     </FlagshipScreen>
   );
 }

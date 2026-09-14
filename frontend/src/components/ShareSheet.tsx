@@ -41,9 +41,11 @@ interface ShareSheetProps {
   subtitle?: string;
   contentType?: string;
   contentId?: string;
+  /** Opens the in-app conversation picker (Instagram "send to chat" row). */
+  onSendToChat?: () => void;
 }
 
-export function ShareSheet({ visible, onDismiss, url, title = 'Check this out', imageUri, subtitle, contentType = 'generic', contentId }: ShareSheetProps) {
+export function ShareSheet({ visible, onDismiss, url, title = 'Check this out', imageUri, subtitle, contentType = 'generic', contentId, onSendToChat }: ShareSheetProps) {
   const { colors } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
@@ -78,6 +80,18 @@ export function ShareSheet({ visible, onDismiss, url, title = 'Check this out', 
   }, [url, title, haptic, onDismiss, contentType, contentId]);
 
   const options: ShareOption[] = React.useMemo(() => [
+    // People row first — Instagram Direct standard: the primary share target
+    // is a person in-app, not the system sheet.
+    ...(onSendToChat
+      ? [{
+          id: 'send_to_chat',
+          label: 'Send to chat',
+          icon: 'paper-plane-outline' as const,
+          action: () => {
+            haptic.light();
+            onSendToChat();
+          } }]
+      : []),
     {
       id: 'copy',
       label: 'Copy Link',
@@ -97,7 +111,7 @@ export function ShareSheet({ visible, onDismiss, url, title = 'Check this out', 
         show('Reminder set for this item', 'success');
         onDismiss();
       } },
-  ], [handleCopyLink, handleNativeShare, haptic, show, onDismiss]);
+  ], [handleCopyLink, handleNativeShare, haptic, show, onDismiss, onSendToChat]);
 
   return (
     <BottomSheet visible={visible} onDismiss={onDismiss} snapPoint={0.45} blurIntensity={30}>

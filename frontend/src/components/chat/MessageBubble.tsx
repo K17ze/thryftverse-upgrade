@@ -111,6 +111,11 @@ interface MessageBubbleProps {
   /** When true, renders the message as an unconfirmed agent draft with a
    *  muted bubble, a "Draft" label, and a "Send" confirmation action. */
   isDraft?: boolean;
+  /** P2-03: message body was edited — renders a small "Edited" marker. */
+  isEdited?: boolean;
+  /** Save in chat — negotiated persistence. Renders a small bookmark +
+   *  "Saved" marker in the meta row; shared state both parties see. */
+  isSaved?: boolean;
   onLongPress?: () => void;
   onReactionPress?: () => void;
   onRetry?: () => void;
@@ -160,6 +165,8 @@ function MessageBubbleBase({
   isAgent = false,
   agentAvatar,
   isDraft = false,
+  isEdited = false,
+  isSaved = false,
   onConfirmDraft,
   onRetryDraft,
   onLongPress,
@@ -451,6 +458,22 @@ function MessageBubbleBase({
           ) : null}
 
           <View style={[styles.metaRow, isMe && styles.metaRowMe]}>
+            {isSaved ? (
+              <View
+                style={styles.savedMark}
+                accessibilityLabel={t('conversation.savedInChat')}
+              >
+                <Ionicons name="bookmark" size={10} color={metaColor} />
+                <Text style={[styles.timestamp, { color: metaColor }]}>
+                  {t('conversation.savedInChat')}
+                </Text>
+              </View>
+            ) : null}
+            {isEdited ? (
+              <Text style={[styles.timestamp, { color: metaColor, fontStyle: 'italic' }]}>
+                {t('conversation.edited')}
+              </Text>
+            ) : null}
             {timestamp ? <Text style={[styles.timestamp, { color: metaColor }]}>{timestamp}</Text> : null}
             {isMe && (readStatus || status) ? (
               <View style={styles.statusWrap}>
@@ -674,6 +697,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 4,
     marginTop: 2,
     minHeight: 14 },
+  savedMark: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2 },
   metaRowMe: {
     opacity: 0.7 },
   timestamp: {

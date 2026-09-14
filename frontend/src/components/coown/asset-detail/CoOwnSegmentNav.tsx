@@ -67,15 +67,8 @@ const TIMING_CONFIG = { duration: 220, easing: Easing.out(Easing.cubic) };
  * tabs (For you/Following): text labels on the canvas, hairline bottom
  * border, and one shared animated underline that glides between tabs.
  *
- * U62 — Text scaling: tab labels use maxFontSizeMultiplier={1.3} so they
- * remain readable at large text sizes without breaking the 44pt hit
- * target.  The label is allowed to grow; the tab height is fixed at 44pt
- * for the hit area (U63) while the text centres within it.
- *
- * U63 — Control targets: every tab is a full 44pt height Pressable with
- * flex:1 width.  The visual glyph (text label) can be smaller; the hit
- * area is the full tab envelope.  No hitSlop is needed because the
- * Pressable already fills the target.
+ * Labels support 200% text and grow the row when needed. The underline
+ * follows measured tab bounds; the 44pt target is a minimum, not a cap.
  *
  * U65 — Motion preservation:
  *   - Interruptible: Reanimated's withTiming is naturally interruptible —
@@ -208,7 +201,7 @@ export function CoOwnSegmentNav({
                     fontFamily: isActive ? FontFamily.semibold : FontFamily.regular,
                   },
                 ]}
-                maxFontSizeMultiplier={1.3}
+                maxFontSizeMultiplier={2}
               >
                 {tab.label}
               </Text>
@@ -238,16 +231,21 @@ const styles = StyleSheet.create({
   },
   tabButton: {
     flex: 1,
-    height: TAB_HEIGHT,
+    minHeight: TAB_HEIGHT,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.xs,
     alignItems: 'center',
     justifyContent: 'center',
   },
   tabContent: {
+    maxWidth: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
   },
   tabText: {
+    flexShrink: 1,
+    textAlign: 'center',
     // fontSize / lineHeight are set inline from TypographyV2.body (14/20) for
     // both states; only fontFamily varies (semibold when active, regular when
     // inactive) so the first viewport stays within the three-type-size cap.

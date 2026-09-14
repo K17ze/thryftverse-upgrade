@@ -10,8 +10,15 @@ import { makeStableId } from '../utils/createStableId';
 import { setSentryUser } from '../platform/monitoring/sentry';
 import { identifyUser, resetIdentity, track } from '../analytics';
 import { appStorage } from '../storage/mmkv';
-import { updateUserAccountPreferences, updateUserPostagePreferences, fetchPostagePreferences, updateUserPersonalisation, updateChatPrivacy } from '../services/accountApi';
+import { updateUserAccountPreferences, fetchAccountPreferences, updateUserPostagePreferences, fetchPostagePreferences, updateUserPersonalisation, updateChatPrivacy } from '../services/accountApi';
 import { addToCoOwnWatchlist, removeFromCoOwnWatchlist, fetchCoOwnWatchlist } from '../services/marketApi';
+import {
+  listSavedSearches as listSavedSearchesFromApi,
+  upsertSavedSearch as upsertSavedSearchOnApi,
+  setSavedSearchAlertsEnabled as setSavedSearchAlertsEnabledOnApi,
+  deleteSavedSearch as deleteSavedSearchOnApi,
+  type RemoteSavedSearchFilters,
+} from '../services/savedSearchesApi';
 import type { ChatGroupMembershipEvent } from '../services/realtimeClient';
 import {
   fetchSystemBotsFromApi,
@@ -262,6 +269,10 @@ type TradeActionResult = {
 
 interface AccountPreferences {
   holidayMode: boolean;
+  /** Seller-declared return date (ISO-8601) while holiday mode is on. */
+  holidayModeUntil?: string | null;
+  /** Seller-authored note shown to buyers while away. */
+  awayMessage?: string | null;
   privateProfile: boolean;
 }
 
@@ -420,9 +431,10 @@ interface StoreState {
   setBiometricLoginPending: (value: boolean) => void;
 
   // General app onboarding — first-launch gate.
-  // The authoritative check lives in AsyncStorage (@thryftverse_onboarding_complete)
-  // via OnboardingScreen.isOnboardingComplete; this flag mirrors it for in-app
-  // access (e.g. Settings reset) and is persisted so returning users skip it.
+  // Single source of truth for onboarding completion, persisted via the
+  // store's synchronous MMKV storage. OnboardingScreen.isOnboardingComplete
+  // reads this flag and migrates the legacy AsyncStorage key
+  // (@thryftverse_onboarding_complete) into it for older installs.
   hasCompletedOnboarding: boolean;
   setHasCompletedOnboarding: (value: boolean) => void;
 
@@ -450,6 +462,14 @@ interface StoreState {
   isInCollection: (collectionId: string, itemId: string) => boolean;
   isItemSavedAnywhere: (itemId: string) => boolean;
   getItemCollections: (itemId: string) => Collection[];
+  /**
+   * One-shot teaching flag for the second save gesture ("Add to a list").
+   * Set once the user has opened the collection picker — from any entry
+   * point — or explicitly dismissed the hint. Persisted so the teaching
+   * toast never nags across sessions.
+   */
+  hasSeenSaveToListHint: boolean;
+  markSaveToListHintSeen: () => void;
   seenPosterIds: string[];
   markPosterSeen: (posterId: string) => void;
   hasSeenPoster: (posterId: string) => boolean;
@@ -503,10 +523,19 @@ interface StoreState {
   // Saved searches with alerts
   savedSearches: SavedSearch[];
   addSavedSearch: (search: Omit<SavedSearch, 'id' | 'createdAt'>) => void;
-  removeSavedSearch: (id: string) => void;
-  toggleSavedSearchAlerts: (id: string) => void;
+  /** Optimistic remove — rolls back and rejects when the server delete
+   *  fails so local state can never diverge from the persisted row. */
+  removeSavedSearch: (id: string) => Promise<void>;
+  /** Optimistic toggle — rolls back and rejects on server failure. */
+  toggleSavedSearchAlerts: (id: string) => Promise<void>;
   updateSavedSearchMeta: (id: string, updates: Partial<Pick<SavedSearch, 'lastCheckedAt' | 'lastMatchCount'>>) => void;
   markAllSavedSearchesSeen: () => void;
+  /** Reconcile local saved searches with the server table — server rows
+   * become canonical (local `lastCheckedAt`/`lastMatchCount` meta is
+   * preserved per id), and local-only entries are backfilled to the API so
+   * the server-side matcher can alert on them. Account-isolated: cleared
+   * on logout. */
+  hydrateSavedSearches: () => Promise<void>;
 
   // Checkout state
   savedAddress: SavedAddress | null;
@@ -523,6 +552,10 @@ interface StoreState {
   // Settings preferences
   accountPreferences: AccountPreferences;
   updateAccountPreferences: (updates: Partial<AccountPreferences>) => void;
+  /** Rehydrate server-canonical account preferences (holidayMode etc.) —
+   *  called at login so a stale locally-persisted flag can't diverge from
+   *  the server truth that commerce gates on. */
+  hydrateAccountPreferences: () => Promise<void>;
   paymentPreferences: PaymentPreferences;
   updatePaymentPreferences: (updates: Partial<PaymentPreferences>) => void;
   postagePreferences: PostagePreferences;
@@ -569,6 +602,11 @@ interface StoreState {
     match: { id?: string; clientMessageId?: string },
     patch: Partial<ConversationMessage>,
   ) => void;
+  /**
+   * Remove a stored message — used for delete-for-me so a store-driven
+   * hydration reset cannot resurrect a row the viewer already deleted.
+   */
+  removeConversationMessage: (conversationId: string, messageId: string) => void;
   setConversationDraft: (conversationId: string, draft: string) => void;
   addMessageReaction: (conversationId: string, messageId: string, reaction: string) => void;
   removeMessageReaction: (conversationId: string, messageId: string, reaction: string) => void;
@@ -759,9 +797,16 @@ export const useStore = create<StoreState>()(
     // U05: Reconcile watchlist with server on login so cross-device
     // changes and account-isolated state are reflected.
     get().hydrateCoOwnWatchlist().catch(() => undefined);
+    // Saved searches: pull the server-canonical list and backfill any
+    // local-only entries so the server-side matcher covers this account.
+    get().hydrateSavedSearches().catch(() => undefined);
+    // Account preferences: holidayMode is persisted locally but the
+    // server is authoritative — rehydrate so a stale cached flag can't
+    // keep the shop visually paused (or unpaused) after relogin.
+    get().hydrateAccountPreferences().catch(() => undefined);
   },
   logout: () => {
-    set({ currentUser: null, isAuthenticated: false, twoFactorEnabled: false, biometricLoginPending: false, blockedUsers: [], mutedUsers: [], restrictedUsers: [], coOwnWatchlist: [], coOwnWatchStatus: {} });
+    set({ currentUser: null, isAuthenticated: false, twoFactorEnabled: false, biometricLoginPending: false, blockedUsers: [], mutedUsers: [], restrictedUsers: [], coOwnWatchlist: [], coOwnWatchStatus: {}, savedSearches: [] });
     persistLocalAuthSnapshot(null, false);
     // Scrub Sentry user context on logout so subsequent crashes are anonymous.
     setSentryUser(null);
@@ -971,6 +1016,8 @@ export const useStore = create<StoreState>()(
     get().savedProducts.includes(itemId) || get().collections.some((c) => c.itemIds?.includes(itemId) ?? false),
   getItemCollections: (itemId) =>
     get().collections.filter((c) => c.itemIds?.includes(itemId) ?? false),
+  hasSeenSaveToListHint: false,
+  markSaveToListHintSeen: () => set({ hasSeenSaveToListHint: true }),
   seenPosterIds: [],
   markPosterSeen: (posterId) =>
     set((state) => {
@@ -1474,15 +1521,18 @@ export const useStore = create<StoreState>()(
       },
     }),
 
-  // Saved searches
+  // Saved searches — local cache is the render source; every mutation is
+  // mirrored to the server (fire-and-forget) so the backend matcher can
+  // push `saved_search_match` notifications for `alertsEnabled` searches.
   savedSearches: [],
-  addSavedSearch: (search) =>
+  addSavedSearch: (search) => {
+    // Deduplicate by query string — if same query exists, update it instead
+    const normalized = search.query.trim().toLowerCase();
+    const existing = get().savedSearches.find(
+      (s) => s.query.trim().toLowerCase() === normalized
+    );
+    const searchId = existing?.id ?? makeStableId('saved_search');
     set((state) => {
-      // Deduplicate by query string — if same query exists, update it instead
-      const normalized = search.query.trim().toLowerCase();
-      const existing = state.savedSearches.find(
-        (s) => s.query.trim().toLowerCase() === normalized
-      );
       if (existing) {
         return {
           savedSearches: state.savedSearches.map((s) =>
@@ -1494,21 +1544,130 @@ export const useStore = create<StoreState>()(
       }
       const newSearch: SavedSearch = {
         ...search,
-        id: makeStableId('saved_search'),
+        id: searchId,
         createdAt: new Date().toISOString(),
       };
       return { savedSearches: [newSearch, ...state.savedSearches] };
-    }),
-  removeSavedSearch: (id) =>
+    });
+    upsertSavedSearchOnApi({
+      id: searchId,
+      query: search.query,
+      filters: search.filters as RemoteSavedSearchFilters,
+      alertsEnabled: search.alertsEnabled,
+    })
+      .then((remote) => {
+        // Server dedupe may resolve to a different canonical row (e.g. the
+        // same query+filters saved on another device) — adopt its id.
+        if (remote.id !== searchId) {
+          set((state) => ({
+            savedSearches: state.savedSearches.map((s) =>
+              s.id === searchId ? { ...s, id: remote.id } : s
+            ),
+          }));
+        }
+      })
+      .catch(() => {
+        // Offline or API failure — the write is captured by the offline
+        // queue and the next hydrateSavedSearches reconciles.
+      });
+  },
+  removeSavedSearch: (id) => {
+    const index = get().savedSearches.findIndex((s) => s.id === id);
+    if (index < 0) return Promise.resolve();
+    const removed = get().savedSearches[index];
     set((state) => ({
       savedSearches: state.savedSearches.filter((s) => s.id !== id),
-    })),
-  toggleSavedSearchAlerts: (id) =>
+    }));
+    return deleteSavedSearchOnApi(id).catch((error) => {
+      // Rollback on failure so the UI tells the truth (§11): the server
+      // row still exists, so the search must still render. Reinserted at
+      // its original position.
+      set((state) => {
+        const next = [...state.savedSearches];
+        next.splice(Math.min(index, next.length), 0, removed);
+        return { savedSearches: next };
+      });
+      throw error;
+    });
+  },
+  toggleSavedSearchAlerts: (id) => {
+    const current = get().savedSearches.find((s) => s.id === id);
+    if (!current) return Promise.resolve();
+    const next = !current.alertsEnabled;
     set((state) => ({
       savedSearches: state.savedSearches.map((s) =>
-        s.id === id ? { ...s, alertsEnabled: !s.alertsEnabled } : s
+        s.id === id ? { ...s, alertsEnabled: next } : s
       ),
-    })),
+    }));
+    return setSavedSearchAlertsEnabledOnApi(id, next).then(() => undefined).catch((error) => {
+      // Rollback on failure — the server still holds the previous value.
+      set((state) => ({
+        savedSearches: state.savedSearches.map((s) =>
+          s.id === id ? { ...s, alertsEnabled: current.alertsEnabled } : s
+        ),
+      }));
+      throw error;
+    });
+  },
+  hydrateSavedSearches: async () => {
+    try {
+      const remote = await listSavedSearchesFromApi();
+      const remoteMapped: SavedSearch[] = remote.map((r) => ({
+        id: r.id,
+        query: r.query,
+        filters: {
+          brands: Array.isArray(r.filters?.brands) ? r.filters.brands : [],
+          sizes: Array.isArray(r.filters?.sizes) ? r.filters.sizes : [],
+          condition:
+            typeof r.filters?.condition === 'string'
+              ? (r.filters.condition as BrowseConditionOption)
+              : 'Any',
+          sort:
+            typeof r.filters?.sort === 'string'
+              ? (r.filters.sort as BrowseSortOption)
+              : 'Recommended',
+          minPrice: typeof r.filters?.minPrice === 'number' ? r.filters.minPrice : undefined,
+          maxPrice: typeof r.filters?.maxPrice === 'number' ? r.filters.maxPrice : undefined,
+          category: typeof r.filters?.category === 'string' ? r.filters.category : undefined,
+        },
+        alertsEnabled: r.alertsEnabled,
+        createdAt: r.createdAt,
+      }));
+      const remoteQueries = new Set(
+        remoteMapped.map((r) => r.query.trim().toLowerCase())
+      );
+      // Local-only searches (created offline or before server persistence
+      // existed) are kept and backfilled to the server below.
+      const unsynced = get().savedSearches.filter(
+        (s) => !remoteQueries.has(s.query.trim().toLowerCase())
+      );
+      set((state) => {
+        const localById = new Map(state.savedSearches.map((s) => [s.id, s]));
+        return {
+          savedSearches: [
+            ...remoteMapped.map((r) => {
+              const local = localById.get(r.id);
+              return local
+                ? { ...r, lastCheckedAt: local.lastCheckedAt, lastMatchCount: local.lastMatchCount }
+                : r;
+            }),
+            ...unsynced,
+          ],
+        };
+      });
+      // Backfill local-only entries so the matcher can alert on them too.
+      for (const local of unsynced) {
+        upsertSavedSearchOnApi({
+          id: local.id,
+          query: local.query,
+          filters: local.filters as RemoteSavedSearchFilters,
+          alertsEnabled: local.alertsEnabled,
+        }).catch(() => undefined);
+      }
+    } catch {
+      // Keep the local cache — saved searches still render offline.
+    }
+  },
   updateSavedSearchMeta: (id, updates) =>
     set((state) => ({
       savedSearches: state.savedSearches.map((s) =>
@@ -1542,10 +1701,31 @@ export const useStore = create<StoreState>()(
 
   accountPreferences: { holidayMode: false, privateProfile: false },
   updateAccountPreferences: (updates) => {
+    const prev = get().accountPreferences;
     set((state) => ({
       accountPreferences: { ...state.accountPreferences, ...updates },
     }));
-    void updateUserAccountPreferences(updates);
+    void updateUserAccountPreferences(updates).catch(() => {
+      // Rollback on failure — restore previous state so the UI stays
+      // truthful (same convention as updatePostagePreferences).
+      set({ accountPreferences: prev });
+    });
+  },
+  hydrateAccountPreferences: async () => {
+    try {
+      const preferences = await fetchAccountPreferences();
+      set({
+        accountPreferences: {
+          holidayMode: preferences.holidayMode,
+          holidayModeUntil: preferences.holidayModeUntil,
+          awayMessage: preferences.awayMessage,
+          privateProfile: preferences.privateProfile,
+        },
+      });
+    } catch {
+      // Keep the locally persisted preferences — the settings surfaces
+      // still render and the next login rehydrates.
+    }
   },
 
   paymentPreferences: { useBalance: true },
@@ -1606,9 +1786,14 @@ export const useStore = create<StoreState>()(
       if (!existing) {
         nextConversations = [conversation, ...state.conversations];
       } else {
+        // Partial realtime events must not clobber existing fields with
+        // explicit `undefined` — strip undefined values before merging.
+        const defined = Object.fromEntries(
+          Object.entries(conversation).filter(([, v]) => v !== undefined),
+        ) as Partial<Conversation>;
         const mergedConversation: Conversation = {
           ...existing,
-          ...conversation,
+          ...defined,
           participantIds: conversation.participantIds ?? existing.participantIds,
           botIds: conversation.botIds ?? existing.botIds,
           messages: conversation.messages.length ? conversation.messages : existing.messages,
@@ -1909,6 +2094,18 @@ export const useStore = create<StoreState>()(
           return { ...msg, ...patch };
         });
         return touched ? { ...conversation, messages: nextMessages } : conversation;
+      }),
+    })),
+  removeConversationMessage: (conversationId, messageId) =>
+    set((state) => ({
+      conversations: state.conversations.map((conversation) => {
+        if (conversation.id !== conversationId) {
+          return conversation;
+        }
+        const nextMessages = conversation.messages.filter((msg) => msg.id !== messageId);
+        return nextMessages.length === conversation.messages.length
+          ? conversation
+          : { ...conversation, messages: nextMessages };
       }),
     })),
   blockedUsers: [],
@@ -2744,6 +2941,7 @@ export const useStore = create<StoreState>()(
         wishlist: state.wishlist,
         savedProducts: state.savedProducts,
         collections: state.collections,
+        hasSeenSaveToListHint: state.hasSeenSaveToListHint,
         seenPosterIds: state.seenPosterIds,
         savedPosterStoryIds: state.savedPosterStoryIds,
         customPosters: state.customPosters,

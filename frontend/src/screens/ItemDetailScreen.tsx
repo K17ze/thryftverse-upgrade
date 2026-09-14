@@ -569,6 +569,7 @@ export default function ItemDetailScreen() {
         item={item}
         capabilities={capabilities}
         commerce={commerce}
+        seller={seller}
         formattedPrice={formattedPrice}
         formattedOriginal={formattedOriginal}
         hasDiscount={hasDiscount}

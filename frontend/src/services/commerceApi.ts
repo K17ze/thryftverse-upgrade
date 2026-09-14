@@ -118,6 +118,12 @@ export interface CommerceOrder {
   trackingNumber: string | null;
   shippingLabelUrl: string | null;
   shippingQuoteGbp: number | null;
+  /**
+   * Buyer-requested item verification add-on captured at checkout.
+   * Optional for backward compatibility with orders that predate the
+   * orders.verification_requested column.
+   */
+  verificationRequested?: boolean;
   shippedAt: string | null;
   deliveredAt: string | null;
   /** ISO timestamp the buyer paid; anchors the dispatch SLA clock. */
@@ -158,6 +164,18 @@ export interface CommerceOrder {
    * Accepted/declined extensions are folded into `shipByDate` server-side.
    */
   dispatchExtension?: DispatchExtension | null;
+  /**
+   * Recorded seller SLA defect flag (migration 284). Present when the
+   * platform's auto-feedback sweep detected the order past its effective
+   * ship-by while still awaiting dispatch. This is a platform flag, not a
+   * review — surfaces render it as a breach notice, never as feedback
+   * authored by the buyer.
+   */
+  slaBreach?: {
+    breachType: 'dispatch_sla';
+    shipBy: string;
+    detectedAt: string;
+  } | null;
 }
 
 export interface ShippingQuoteItem {
@@ -216,11 +234,6 @@ interface ListPaymentMethodsResponse {
   items: CommercePaymentMethod[];
 }
 
-interface CreatePaymentMethodResponse {
-  ok: true;
-  item: CommercePaymentMethod;
-}
-
 interface CreateOrderResponse {
   ok: true;
   order: CommerceOrder;
@@ -231,9 +244,9 @@ interface GetOrderResponse {
   order: CommerceOrder;
 }
 
-interface ShippingQuoteResponse {
+export interface ShippingQuoteResponse {
   ok: true;
-  source: 'live' | 'fallback';
+  source: 'live' | 'fallback' | 'unavailable';
   originPostcode: string;
   destinationPostcode: string;
   recommendedQuote: ShippingQuoteItem | null;
@@ -344,13 +357,6 @@ export interface CreateAddressInput {
   isDefault?: boolean;
 }
 
-export interface CreatePaymentMethodInput {
-  type: 'card' | 'bank_account' | 'apple_pay' | 'google_pay';
-  label: string;
-  details?: string;
-  isDefault?: boolean;
-}
-
 export interface CreateOrderInput {
   buyerId: string;
   listingId: string;
@@ -366,6 +372,12 @@ export interface CreateOrderInput {
   shippingCarrierId?: string;
   /** Wallet balance to debit (GBP) — when > 0, the order uses split-tender */
   walletDebitGbp?: number;
+  /**
+   * Item verification add-on — the buyer asks Thryft to run the listing
+   * through the authentication pipeline. No fee is charged; persisted as
+   * orders.verification_requested.
+   */
+  verificationRequested?: boolean;
 }
 
 export interface ShippingQuoteInput {
@@ -456,21 +468,10 @@ export async function createStripeOrderSheet(
   );
 }
 
-export async function createUserPaymentMethod(
-  userId: string,
-  input: CreatePaymentMethodInput
-): Promise<CommercePaymentMethod> {
-  const payload = await fetchJson<CreatePaymentMethodResponse>(
-    `/users/${encodeURIComponent(userId)}/payment-methods`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
-    }
-  );
-
-  return payload.item;
-}
+// NOTE: POST /users/:userId/payment-methods was removed — the backend
+// permanently returns 410 TOKENISED_PAYMENT_METHOD_REQUIRED. New payment
+// methods are tokenised via createStripeSetupSheet (POST
+// /v2/payments/setup-intents) + provider-hosted collection.
 
 export async function setDefaultUserPaymentMethod(providerPaymentMethodId: string): Promise<CommercePaymentMethod[]> {
   const payload = await fetchJson<ListPaymentMethodsResponse>(
@@ -511,6 +512,8 @@ export async function completeOrderCheckout(
     paymentMethodId?: number;
     shippingQuoteId: string;
     shippingCarrierId: string;
+    /** Item verification add-on flag; omitted preserves the stored value. */
+    verificationRequested?: boolean;
   }
 ): Promise<{
   orderId: string;
@@ -521,6 +524,7 @@ export async function completeOrderCheckout(
     totalGbp: number;
     quoteVersion: string;
     quoteHash: string;
+    verificationRequested?: boolean;
   };
 }> {
   const payload = await fetchJson<{
@@ -533,6 +537,7 @@ export async function completeOrderCheckout(
       totalGbp: number;
       quoteVersion: string;
       quoteHash: string;
+      verificationRequested?: boolean;
     };
   }>(`/orders/${encodeURIComponent(orderId)}/checkout`, {
     method: 'PATCH',
@@ -555,6 +560,76 @@ export async function getOrderParcelEvents(orderId: string): Promise<OrderParcel
     `/orders/${encodeURIComponent(orderId)}/parcel/events`
   );
   return payload.items;
+}
+
+// ── Order authentication (verification pipeline) ──────────────────────────
+
+/**
+ * Pipeline statuses emitted by the backend authentication pipeline
+ * (backend/api/src/lib/authenticationPipeline.ts), plus two endpoint-level
+ * states: 'not_requested' (order never asked for verification) and
+ * 'request_pending' (the durable orders.verification_requested flag is set
+ * but the Redis pipeline record is absent — post-commit create failure or
+ * 90-day TTL expiry).
+ */
+export type OrderAuthenticationStatus =
+  | 'not_requested'
+  | 'request_pending'
+  | 'pending_ai_triage'
+  | 'ai_triage_complete'
+  | 'pending_expert_review'
+  | 'expert_review_complete'
+  | 'pending_lab_analysis'
+  | 'lab_analysis_complete'
+  | 'authenticated'
+  | 'counterfeit'
+  | 'inconclusive'
+  | 'cancelled';
+
+export interface OrderAuthentication {
+  requested: boolean;
+  status: OrderAuthenticationStatus;
+  request: {
+    id: string;
+    listingId: string;
+    tier: 1 | 2 | 3 | 4;
+    status: OrderAuthenticationStatus;
+    createdAt: string;
+    updatedAt: string;
+    completedAt: string | null;
+    aiTriage: {
+      confidenceScore: number;
+      recommendation: 'pass' | 'review' | 'fail';
+      /** Always true — AI triage is a preliminary assessment, not a guarantee. */
+      isPreliminary: true;
+      triagedAt: string;
+    } | null;
+    expertReview: { verdict: string; completedAt: string | null } | null;
+    labReport: { result: string; submittedAt: string } | null;
+    badge: {
+      type: 'AI_VERIFIED' | 'EXPERT_VERIFIED' | 'LAB_CERTIFIED';
+      certificateId: string;
+      authenticator: string;
+      method: string;
+      confidenceLevel: number;
+      issuedAt: string;
+      expiresAt: string | null;
+    } | null;
+  } | null;
+  storage?: {
+    /** Pipeline state is Redis-backed with a 90-day TTL — not archival. */
+    persistence: 'ephemeral';
+    recordExpiresAt: string | null;
+  };
+}
+
+export async function getOrderAuthentication(
+  orderId: string
+): Promise<OrderAuthentication> {
+  const payload = await fetchJson<{ ok: true; authentication: OrderAuthentication }>(
+    `/orders/${encodeURIComponent(orderId)}/authentication`
+  );
+  return payload.authentication;
 }
 
 export async function getShippingQuote(input: ShippingQuoteInput): Promise<ShippingQuoteResponse> {

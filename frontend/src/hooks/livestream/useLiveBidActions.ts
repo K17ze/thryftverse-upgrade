@@ -68,7 +68,17 @@ export function useLiveBidActions({
       setLastBidAmount(amount);
       if (result.success) {
         if (result.lot) {
-          setCurrentLot({ ...result.lot });
+          // Merge into the existing lot — the bid response is a thin price
+          // projection and must not blank the title, image or the server
+          // countdown deadline.
+          const accepted = result.lot;
+          setCurrentLot((prev) => (prev ? {
+            ...accepted,
+            title: accepted.title || prev.title,
+            imageUri: accepted.imageUri || prev.imageUri,
+            closesAt: accepted.closesAt ?? prev.closesAt ?? null,
+            extensionCount: accepted.extensionCount ?? prev.extensionCount,
+          } : accepted));
         }
         setBidOutcome('accepted');
         haptic.success();
@@ -94,7 +104,14 @@ export function useLiveBidActions({
       const result = await checkBidStatus(sessionId, currentLot.id, lastBidAmount, lastBidId);
       if (result.status === 'accepted') {
         if (result.lot) {
-          setCurrentLot({ ...result.lot });
+          const accepted = result.lot;
+          setCurrentLot((prev) => (prev ? {
+            ...accepted,
+            title: accepted.title || prev.title,
+            imageUri: accepted.imageUri || prev.imageUri,
+            closesAt: accepted.closesAt ?? prev.closesAt ?? null,
+            extensionCount: accepted.extensionCount ?? prev.extensionCount,
+          } : accepted));
         }
         setBidOutcome('accepted');
         haptic.success();

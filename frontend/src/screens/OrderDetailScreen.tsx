@@ -30,6 +30,12 @@ import { EscrowBanner } from '../components/orders/EscrowBanner';
 import { ShipmentDetails } from '../components/orders/ShipmentDetails';
 import { TransactionBreakdown } from '../components/orders/TransactionBreakdown';
 import { OrderSupportSection } from '../components/orders/OrderSupportSection';
+import { OrderAuthenticationSection } from '../components/orders/OrderAuthenticationSection';
+import { ReturnCaseCard } from '../components/orders/ReturnCaseCard';
+import { useReturnCase } from '../hooks/useReturnCase';
+import { requestReturnStepIn } from '../services/returnsApi';
+import { parseApiError } from '../lib/apiClient';
+import { useToast } from '../context/ToastContext';
 import { OrderDetailSkeleton } from '../components/orders/OrderDetailSkeleton';
 import { OrderDetailStatusHeader } from '../components/orders/OrderDetailStatusHeader';
 import { DispatchExtensionBanner } from '../components/orders/DispatchExtensionBanner';
@@ -55,6 +61,11 @@ export default function OrderDetailScreen() {
   const { formatFromFiat } = useFormattedPrice();
   const { orderId } = route.params ?? {};
   const { colors } = useAppTheme();
+  const { show } = useToast();
+
+  // Active return/refund case for this order (null when none exists).
+  const { returnCase, refresh: refreshReturnCase } = useReturnCase(orderId);
+  const [isStepInSubmitting, setIsStepInSubmitting] = React.useState(false);
 
   // Theme-aware color overrides for the static styles. The static
   // StyleSheet contains only non-color properties; colors are applied
@@ -63,9 +74,9 @@ export default function OrderDetailScreen() {
 
   // --- Data (fetch/poll/mutations live in hooks/useOrderDetail) ---
   const {
-    backendOrder, parcelEvents, hasReview, isInitialLoading, isRefreshing,
-    loadError, parcelError, orderMutation, isMountedRef,
-    refreshOrder, handleCancel, handleDeliver } = useOrderDetail(orderId);
+    backendOrder, parcelEvents, hasReview, orderReview, orderAuthentication,
+    isInitialLoading, isRefreshing, loadError, parcelError, orderMutation,
+    isMountedRef, refreshOrder, handleCancel, handleDeliver } = useOrderDetail(orderId);
 
   // --- Derived view-model (status, roles, counterparty, capabilities) ---
   const {
@@ -75,20 +86,20 @@ export default function OrderDetailScreen() {
     orderSubtitle, counterparty, subtotal, platformCharge, buyerProtectionFee,
     postageFee, totalPaid, capabilities, mutationLocked, pendingExtension,
     proposedShipByLabel, shortOrderId, carrierTrackingUrl } = useOrderDetailViewModel({
-    orderId, backendOrder, parcelEvents, hasReview, orderMutation });
+    orderId, backendOrder, parcelEvents, hasReview, orderReview, orderMutation });
 
   // --- Tracking/timeline derived data ---
   const {
     timelineEntries, shipmentLastUpdated, latestEventSummary, snapshot,
     etaWindow, estimatedDeliveryDate, estimatedDeliveryLabel, isStaleTracking,
     contextualIssues, packageSummary, showShipmentDetails } = useOrderDetailTracking({
-    backendOrder, parcelEvents, hasReview, normalisedStatus, isBuyer, openTicket });
+    backendOrder, parcelEvents, hasReview, orderReview, normalisedStatus, isBuyer, openTicket });
 
   // --- Review prompt (auto-surface after eligibility window) ---
   const {
     reviewPromptVisible, openReviewPrompt, closeReviewPrompt, deferReviewPrompt,
   } = useReviewPrompt({
-    backendOrder, currentUserId: currentUser?.id, isMountedRef });
+    backendOrder, currentUserId: currentUser?.id, isMountedRef, hasReview });
 
   // --- Sheet/overlay state ---
   const {
@@ -98,6 +109,33 @@ export default function OrderDetailScreen() {
 
   const scrollViewRef = useRef<ScrollView | null>(null);
   const timelineYRef = useRef(0);
+
+  // Platform step-in: escalate the return case once the seller response
+  // window has elapsed. The backend enforces the window authoritatively —
+  // this handler only runs when the card's state is 'eligible'.
+  const handleStepIn = () => {
+    if (!returnCase || isStepInSubmitting) return;
+    haptics.heavyPress();
+    setConfirmSheet({
+      visible: true,
+      title: 'Ask Thryft to step in?',
+      message: 'Our team will review the case and decide the outcome. The seller will no longer be able to resolve it directly.',
+      confirmLabel: 'Ask Thryft to step in',
+      cancelLabel: 'Not yet',
+      variant: 'default',
+      onConfirm: async () => {
+        setIsStepInSubmitting(true);
+        try {
+          await requestReturnStepIn(returnCase.id);
+          show('Thryft is now reviewing this case.', 'success');
+          await refreshReturnCase();
+        } catch (error) {
+          show(parseApiError(error).message, 'error');
+        } finally {
+          if (isMountedRef.current) setIsStepInSubmitting(false);
+        }
+      } });
+  };
 
   // --- Interaction handlers + footer/overflow action configs ---
   const {
@@ -338,6 +376,35 @@ export default function OrderDetailScreen() {
         />
 
         <View style={[styles.sectionDivider, themed.sectionDivider]} />
+
+        {/* 7a. Item verification — only when the buyer requested it at
+            checkout. The section renders the durable "requested" state even
+            while the live pipeline read is unavailable. */}
+        {backendOrder.verificationRequested === true ? (
+          <>
+            <OrderAuthenticationSection
+              authentication={orderAuthentication}
+              verificationRequested={true}
+            />
+            <View style={[styles.sectionDivider, themed.sectionDivider]} />
+          </>
+        ) : null}
+
+        {/* 7b. Return/refund case — status, step-in, return label. Rendered
+            only when the order has an active or historical return case. */}
+        {returnCase ? (
+          <>
+            <ReturnCaseCard
+              returnCase={returnCase}
+              isBuyer={isBuyer}
+              isStepInSubmitting={isStepInSubmitting}
+              onStepIn={handleStepIn}
+              onOpenLabel={(url) => { void handleOpenShippingLabel(url); }}
+              formatPrice={(amountGbp) => formatFromFiat(amountGbp, 'GBP', fiatOpts)}
+            />
+            <View style={[styles.sectionDivider, themed.sectionDivider]} />
+          </>
+        ) : null}
 
         {/* 8. Support state */}
         <OrderSupportSection

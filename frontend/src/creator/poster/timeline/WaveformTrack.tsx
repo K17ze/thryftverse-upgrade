@@ -104,7 +104,11 @@ export const WaveformTrack = React.memo(function WaveformTrack({
     extractWaveform(audioUri, barCount)
       .then((data) => {
         if (!cancelled) {
-          setExtractedSamples(data.samples);
+          // Synthetic stand-ins (non-WAV sources can't be decoded in pure
+          // JS) must never be drawn as real bars — a fake waveform shape
+          // reads as real amplitude data (AGENTS.md §11). Dropping them
+          // renders the honest flat-line state instead.
+          setExtractedSamples(data.isSynthetic ? undefined : data.samples);
           setIsExtracting(false);
         }
       })

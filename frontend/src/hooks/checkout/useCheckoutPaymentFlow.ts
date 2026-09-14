@@ -73,6 +73,10 @@ export interface UseCheckoutPaymentFlowOptions {
   savedPaymentMethod: SavedPaymentMethodInput | null;
   checkoutCapabilities: UserCountryCapabilities | null;
   postageOption: CheckoutPostageOption;
+  /** Item verification add-on flag — persisted on the order at create/bind
+   *  time and part of the order signature so toggling re-creates a stale
+   *  order rather than mutating it. */
+  verificationRequested: boolean;
   useBalance: boolean;
   walletBalance: number;
   useOnezePayment: boolean;
@@ -100,6 +104,7 @@ export function useCheckoutPaymentFlow({
   savedPaymentMethod,
   checkoutCapabilities,
   postageOption,
+  verificationRequested,
   useBalance,
   walletBalance,
   useOnezePayment,
@@ -329,6 +334,7 @@ export function useCheckoutPaymentFlow({
       postageFee: POSTAGE_FEE,
       walletDebit: useBalance && !boundOrderId ? Math.min(walletBalance, itemPriceGbp + PLATFORM_CHARGE + POSTAGE_FEE) : undefined,
       paymentGatewayId: useOnezePayment ? 'oneze_internal' : undefined,
+      verificationRequested,
     });
 
     const attemptId = ++paymentAttemptRef.current;
@@ -352,6 +358,7 @@ export function useCheckoutPaymentFlow({
           useOnezePayment ? 'oneze_internal' : savedPaymentMethod?.id ?? 'none',
           postageOption.carrierId ?? 'none',
           postageOption.quoteId ?? 'none',
+          verificationRequested ? 'verified' : 'none',
         ].join('|');
         // Skip re-binding when the order already carries these selections —
         // required for the retry-after-cancelled-sheet path, where a bound
@@ -365,6 +372,7 @@ export function useCheckoutPaymentFlow({
             && boundOrder.postageFeeGbp === POSTAGE_FEE
             && (boundOrder.paymentMethodId ?? null)
               === (useOnezePayment ? null : savedPaymentMethod?.id ?? null)
+            && (boundOrder.verificationRequested ?? false) === verificationRequested
           );
         if (!alreadyBound) {
           await completeOrderCheckout(boundOrderId, {
@@ -372,6 +380,7 @@ export function useCheckoutPaymentFlow({
             paymentMethodId: useOnezePayment ? undefined : savedPaymentMethod?.id,
             shippingQuoteId: postageOption.quoteId!,
             shippingCarrierId: postageOption.carrierId!,
+            verificationRequested,
           });
 
           if (
@@ -432,6 +441,8 @@ export function useCheckoutPaymentFlow({
           shippingCarrierId: postageOption.carrierId ?? undefined,
           // Pass wallet balance debit so the backend can apply split-tender
           walletDebitGbp: useBalance && !boundOrderId ? Math.min(walletBalance, itemPriceGbp + PLATFORM_CHARGE + POSTAGE_FEE) : undefined,
+          // Item verification add-on flag (orders.verification_requested)
+          verificationRequested,
         });
 
         if (
@@ -632,6 +643,20 @@ export function useCheckoutPaymentFlow({
       const errorCode = (error as { code?: string })?.code;
       const isNetworkError = isOffline || errorCode === 'NETWORK_ERROR' || errorCode === 'ECONNABORTED';
 
+      // Seller-away pause — POST /orders rejects checkout while the
+      // seller's holiday mode is active (409 SELLER_AWAY). Not a payment
+      // failure: surface the pause verbatim with no retry affordance
+      // (retry cannot succeed until the seller returns).
+      if (parseApiError(error).code === 'SELLER_AWAY') {
+        setStage('idle');
+        pendingIntentIdRef.current = null;
+        const message = error instanceof Error && error.message
+          ? error.message
+          : 'This seller is away — checkout is paused until they return.';
+        setOrderError(message);
+        return;
+      }
+
       // Order-bound dead ends — surface honestly instead of a generic
       // payment failure. The server cancels the order when the checkout
       // reservation lapses (410 / CHECKOUT_RESERVATION_EXPIRED). A bare 409
@@ -739,6 +764,7 @@ export function useCheckoutPaymentFlow({
     useBalance,
     walletBalance,
     useOnezePayment,
+    verificationRequested,
     setHasAttemptedPay,
   ]);
 

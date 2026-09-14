@@ -33,8 +33,8 @@ import { useMotionConfig } from '../hooks/useMotionConfig';
 import { Motion } from '../theme/motionTokens';
 import { createLookOnApi, fetchLookByIdFromApi, updateLookOnApi } from '../services/looksApi';
 import { createPosterStory, fetchPosterStoryById, scheduleCreatorDocument } from '../services/postersApi';
-import { publishCreatorDocument, lookupPublicationByKey, schedulePublication, lookupScheduleByKey } from '../services/creatorPublicationsApi';
-import type { PublishCommand, ExpectedMediaEntry } from '../services/creatorPublicationsApi';
+import { publishCreatorDocument, publishCreatorDocumentAsync, PublishAsyncFailedError, PublishAsyncTimeoutError, lookupPublicationByKey, schedulePublication, lookupScheduleByKey } from '../services/creatorPublicationsApi';
+import type { PublishCommand, ExpectedMediaEntry, PublicationResult } from '../services/creatorPublicationsApi';
 import { createCreatorDocument, updateCreatorDocument, fetchCreatorDocument, computeDocumentHash, CreatorDocumentConflictError } from '../services/creatorDocumentsApi';
 import type { CreatorDocumentSaveResult } from '../services/creatorDocumentsApi';
 import { ApiRequestError } from '../lib/apiClient';
@@ -175,6 +175,29 @@ function scanDocumentForLocalUris(doc: CreatorDocument): LocalMediaRef[] {
     }
   }
   return refs;
+}
+
+/**
+ * Heuristic for choosing the async publish transport: documents whose
+ * publication requires a server-side media render (any video layer, or a
+ * multi-page poster where frames render in sequence) block the sync
+ * publish request for tens of seconds. Those go through the immediate
+ * schedule row + worker path so the request returns instantly and the
+ * client polls for the terminal state — the Instagram "posting"
+ * contract. Trivial single-image docs stay on the sync fast path.
+ * This only selects the transport; the server's own classifier still
+ * decides whether a render is actually needed.
+ */
+function documentMayRequireRender(doc: CreatorDocument): boolean {
+  if (doc.pages.length > 1) return true;
+  for (const page of doc.pages) {
+    for (const layer of page.layers) {
+      if (layer.type === 'media' && layer.payload.mediaType === 'video') {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 function replaceUriInDoc(
@@ -537,6 +560,10 @@ export function useCreatorPublishWorkflow({ visible, onClose, editingLookId }: C
 
     CreatorAnalytics.publishStart(document.type);
     let publicationRequestStarted = false;
+    // True when this publish went through the async (immediate-schedule)
+    // path — needed in the catch to route unknown-outcome reconciliation
+    // to the schedule lookup rather than the publication lookup.
+    let usedAsyncPublish = false;
     const abortController = new AbortController();
     publishAbortRef.current = abortController;
     // Generate a unique attempt ID for this publish attempt. Used as the
@@ -764,11 +791,19 @@ export function useCreatorPublishWorkflow({ visible, onClose, editingLookId }: C
         setPublishState({ tag: 'scheduled', dueAt: workingDoc.metadata.scheduledFor });
         CreatorAnalytics.publishSuccess(workingDoc.type, `scheduled:${workingDoc.id}`);
       } else {
-        // Publish now via the orchestrator.
+        // Publish now. Render-heavy documents (video media or multi-page
+        // posters) go through the async path: the command is frozen into a
+        // server-owned schedule row due immediately, the request returns in
+        // ~200ms instead of blocking on the FFmpeg render, and we poll the
+        // schedule state until the worker commits the publication.
+        const useAsyncPublish = documentMayRequireRender(workingDoc);
+        usedAsyncPublish = useAsyncPublish;
         publicationRequestStarted = true;
 
         // Persist the attempt before sending so unknown-outcome recovery
         // can resolve it even if the process dies before the response.
+        // The async path stores commandType 'schedule' so reconciliation
+        // resolves via the schedule lookup endpoint.
         await savePublicationAttempt({
           attemptId,
           documentId: workingDoc.id,
@@ -779,14 +814,21 @@ export function useCreatorPublishWorkflow({ visible, onClose, editingLookId }: C
           lastCheckedAt: null,
           targetId: null,
           failureCode: null,
-          commandType: 'publish',
+          commandType: useAsyncPublish ? 'schedule' : 'publish',
         });
 
-        const pubResult = await publishCreatorDocument(
-          workingDoc.id,
-          publishCommand,
-          attemptId,
-        );
+        const pubResult: PublicationResult = useAsyncPublish
+          ? await publishCreatorDocumentAsync(
+              workingDoc.id,
+              publishCommand,
+              attemptId,
+              { signal: abortController.signal },
+            )
+          : await publishCreatorDocument(
+              workingDoc.id,
+              publishCommand,
+              attemptId,
+            );
         const targetId = pubResult.targetId;
 
         // Update the persisted attempt to committed.
@@ -843,6 +885,41 @@ export function useCreatorPublishWorkflow({ visible, onClose, editingLookId }: C
         }
       }
 
+      // Async publish terminal failure — the worker reported the
+      // publication failed. Surface the server's reason; a retry creates
+      // a fresh immediate schedule (the schedule endpoint cancels any
+      // superseded pending row, so this can't double-publish).
+      if (err instanceof PublishAsyncFailedError) {
+        setPublishState({
+          tag: 'error',
+          message: err.failureReason ?? 'The post could not be published.',
+          canRetry: true,
+          canSaveDraft: true,
+        });
+        if (publicationRequestStarted && attemptId) {
+          void updatePublicationAttemptState(attemptId, {
+            state: 'failed',
+            failureCode: 'PUBLISH_FAILED',
+            lastCheckedAt: new Date().toISOString(),
+          });
+        }
+        CreatorAnalytics.publishError(document.type, err.failureReason ?? 'publish_failed');
+        return;
+      }
+
+      // Async publish timeout — the schedule row exists on the server and
+      // may still complete. This is an unknown outcome, not a failure:
+      // surface the schedule-check reconciliation and let the server's
+      // push notification cover late completion.
+      if (err instanceof PublishAsyncTimeoutError) {
+        setPublishState({
+          tag: 'scheduleUnknown',
+          detail: 'Still processing on the server — check the result in a moment.',
+        });
+        CreatorAnalytics.publishUnknown(document.type);
+        return;
+      }
+
       const errorMessage = err instanceof Error ? err.message : 'Publishing failed';
       // Once a write has left the device, a dropped response is ambiguous:
       // the backend may have committed it. Never call that failure or success.
@@ -850,7 +927,9 @@ export function useCreatorPublishWorkflow({ visible, onClose, editingLookId }: C
       // Distinguish schedule unknown from publish unknown so the UI
       // offers the correct reconciliation action ("Check schedule" vs
       // "Check publish result") and analytics can separate the two.
-      const isSchedule = !!document.metadata.scheduledFor;
+      // The async publish-now path reconciles through the schedule
+      // endpoint (its attempt is stored with commandType 'schedule').
+      const isSchedule = !!document.metadata.scheduledFor || usedAsyncPublish;
       if (isUnknown) {
         setPublishState({ tag: isSchedule ? 'scheduleUnknown' : 'unknown', detail: errorMessage });
       } else {
@@ -860,7 +939,10 @@ export function useCreatorPublishWorkflow({ visible, onClose, editingLookId }: C
       // network error → leave as 'sending' (becomes 'unknown' after
       // the threshold in reconcilePublicationAttempts).
       if (publicationRequestStarted) {
-        const failedAttemptId = isSchedule ? scheduleAttemptId : attemptId;
+        // Async publish-now persists its attempt under `attemptId` (with
+        // commandType 'schedule') — scheduleAttemptId is only populated on
+        // the scheduled-for path. Fall back so failures are recorded.
+        const failedAttemptId = isSchedule ? (scheduleAttemptId || attemptId) : attemptId;
         if (failedAttemptId && !isUnknown) {
           void updatePublicationAttemptState(failedAttemptId, {
             state: 'failed',
@@ -974,6 +1056,63 @@ export function useCreatorPublishWorkflow({ visible, onClose, editingLookId }: C
       }
       const schedule = await lookupScheduleByKey(document.id, attemptId);
       if (schedule && schedule.ok) {
+        // Async publish-now completed on the server — the schedule reached
+        // a terminal state. 'published' resolves to the success state with
+        // the real targetId; 'failed' surfaces the worker's reason.
+        if (schedule.state === 'published') {
+          publishGuardRef.current.complete(document.id);
+          void updatePublicationAttemptState(attemptId, {
+            state: 'committed',
+            targetId: schedule.targetId ?? schedule.publicationId ?? undefined,
+            lastCheckedAt: new Date().toISOString(),
+          });
+          invalidateCachesAfterPublish(document.id, currentUser?.id ?? null);
+          progressWidth.value = 1;
+          setPublishState({ tag: 'success', publishedId: schedule.targetId ?? '' });
+          CreatorAnalytics.publishSuccess(document.type, schedule.targetId ?? document.id);
+          return;
+        }
+        if (schedule.state === 'failed') {
+          void updatePublicationAttemptState(attemptId, {
+            state: 'failed',
+            failureCode: 'PUBLISH_FAILED',
+            lastCheckedAt: new Date().toISOString(),
+          });
+          setPublishState({
+            tag: 'error',
+            message: schedule.failureReason ?? 'The post could not be published.',
+            canRetry: true,
+            canSaveDraft: true,
+          });
+          return;
+        }
+        if (schedule.state === 'cancelled') {
+          // The row was superseded (a newer schedule/publish attempt
+          // cancelled it) or explicitly cancelled — the publication will
+          // never land from this attempt.
+          void updatePublicationAttemptState(attemptId, {
+            state: 'failed',
+            failureCode: 'CANCELLED',
+            lastCheckedAt: new Date().toISOString(),
+          });
+          setPublishState({
+            tag: 'error',
+            message: 'This publish attempt was replaced by a newer one.',
+            canRetry: true,
+            canSaveDraft: true,
+          });
+          return;
+        }
+        // Still processing. For an immediate publish (no scheduledFor)
+        // this is an in-flight render — stay on the unknown state so the
+        // user can check again, not the "Scheduled for…" confirmation.
+        if (!document.metadata.scheduledFor) {
+          setPublishState({
+            tag: 'scheduleUnknown',
+            detail: 'Still processing on the server — check again in a moment.',
+          });
+          return;
+        }
         // Schedule was committed on the server. Transition to the
         // scheduled confirmation state.
         publishGuardRef.current.complete(document.id);

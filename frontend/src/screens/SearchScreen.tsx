@@ -24,7 +24,7 @@ import { Space, Radius, Control, LetterSpacing, Stroke } from '../theme/designTo
 import { TypographyV2 } from '../theme/typography.v2';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { useHaptic } from '../hooks/useHaptic';
-import { useSignupWall } from '../hooks/useSignupWall';
+import { useSaveToCollectionPicker } from '../hooks/useSaveToCollectionPicker';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { DiscoveryModeNav, type DiscoveryMode } from '../components/discovery/DiscoveryModeNav';
 import { DiscoverScene, PulseScene, LooksScene } from '../scenes/discovery';
@@ -46,16 +46,15 @@ export default function SearchScreen() {
   const { listings, isSyncing, lastError, refreshListings, loadMoreListings, isLoadingMore, hasMore } = useBackendData();
   const currentUser = useStore((state) => state.currentUser);
   const browseFilters = useStore((state) => state.browseFilters);
-  const toggleSavedProduct = useStore((state) => state.toggleSavedProduct);
   const isSavedProduct = useStore((state) => state.isSavedProduct);
   const upsertConversation = useStore((state) => state.upsertConversation);
   const haptic = useHaptic();
-  const { requireAuth } = useSignupWall();
   const { categories } = useTaxonomy();
 
-  // Long-press on a discovery tile's bookmark opens the save-to-collection
-  // picker (the "file to board" tier; tap stays instant quick-save).
-  const [savePickerItemId, setSavePickerItemId] = useState<string | null>(null);
+  // Two-tier save — tap = quick-save, long-press on a tile's bookmark
+  // opens the save-to-collection picker (the "file to board" tier). The
+  // hook also owns the one-shot "Add to a list" teaching toast.
+  const { savePickerItemId, handleQuickSave, handleSaveLongPress, closeSavePicker } = useSaveToCollectionPicker();
 
   // Real trending searches — query-frequency data from the backend. Empty
   // means "no trend data"; taxonomy categories are shown under their own
@@ -250,17 +249,10 @@ export default function SearchScreen() {
     onBrowseCategories: () => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' }),
     // Quick-save: bookmark button on each discovery tile (quick-save
     // pattern). The store owns the saved state; the tile reflects it.
-    onToggleSave: (item: DiscoveryListingSummary) => {
-      haptic.light();
-      toggleSavedProduct(item.id);
-    },
+    onToggleSave: handleQuickSave,
     // "File to board" tier — long-press the tile bookmark to choose a
     // collection. Collections are account-backed, so this is gated.
-    onItemSaveLongPress: (item: DiscoveryListingSummary) => {
-      if (!requireAuth('save_item')) return;
-      haptic.selection();
-      setSavePickerItemId(item.id);
-    },
+    onItemSaveLongPress: handleSaveLongPress,
     isSavedListing: (listingId: string) => isSavedProduct(listingId) };
 
   const renderScene = (tab: ExploreTab) => {
@@ -410,7 +402,7 @@ export default function SearchScreen() {
       <SaveToCollectionModal
         visible={savePickerItemId !== null}
         itemId={savePickerItemId ?? ''}
-        onClose={() => setSavePickerItemId(null)}
+        onClose={closeSavePicker}
       />
     </SafeAreaView>
   );

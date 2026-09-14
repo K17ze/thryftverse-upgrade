@@ -62,6 +62,7 @@ import type { ActiveSheet } from './useActiveSheet';
 import {
   trimClipStart,
   trimClipEnd,
+  slipClip,
   setClipSpeed,
   setClipVolume,
   splitClip,
@@ -163,6 +164,8 @@ export interface UsePosterTimelineResult {
   handleSpeedCurveChange: (nextCurve: SpeedCurve) => void;
   /** Navigates to the source page of a clip boundary and opens transitions. */
   handleTimelineTransitionTap: (boundaryIndex: number) => void;
+  /** Toggles `locked` on the media layer owning a clip (any page). */
+  toggleClipLock: (clipId: string) => void;
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────
@@ -205,6 +208,12 @@ export function usePosterTimeline({
     const pageIndexById = new Map(
       document.pages.map((p, i) => [p.id, i] as const),
     );
+    // Lock state lives on the media layer (canvas enforces it on layer
+    // gestures); carry it onto the clip so timeline ops can enforce the
+    // same invariant.
+    const lockedByLayerId = new Map(
+      document.pages.flatMap((p) => p.layers).map((l) => [l.id, l.locked] as const),
+    );
     const clips: PosterClip[] = projected.clips.map((pc) => ({
       id: pc.layerId,
       assetId: pc.assetId,
@@ -212,6 +221,7 @@ export function usePosterTimeline({
       mediaType: pc.mediaType,
       trimStartMs: pc.sourceStartMs,
       trimEndMs: pc.sourceEndMs,
+      sourceDurationMs: pc.sourceDurationMs,
       speed: pc.speed,
       speedCurve: pc.speedCurve,
       volume: pc.volume,
@@ -219,6 +229,7 @@ export function usePosterTimeline({
       durationMs: pc.durationMs,
       reversed: pc.reversed,
       freezeFrameMs: pc.freezeFrameMs,
+      locked: lockedByLayerId.get(pc.layerId) ?? false,
     }));
     const pageIndices = projected.clips.map(
       (pc) => pageIndexById.get(pc.pageId) ?? 0,
@@ -374,6 +385,25 @@ export function usePosterTimeline({
   // volume map to updateLayer on the underlying media layer.
   const handleTimelineOperation = useCallback(
     (op: TimelineOperation) => {
+      // Clip-lock parity (Instagram Edits): a locked clip rejects every
+      // mutating op. Canvas gestures already honor `layer.locked`; without
+      // this guard the same clip could still be trimmed, split, deleted or
+      // reordered through the timeline. Reorder resolves the moved clip via
+      // fromIndex; moveOverlay resolves the overlay layer directly.
+      const lockTargetIds: (string | undefined)[] =
+        'clipId' in op ? [op.clipId] :
+        // Reorder displaces both endpoint clips — check both.
+        op.type === 'reorder' ? [timelineClips[op.fromIndex]?.id, timelineClips[op.toIndex]?.id] :
+        op.type === 'moveOverlay' ? [op.overlayId] : [];
+      if (lockTargetIds.length > 0) {
+        const targetLocked = lockTargetIds.some((id) =>
+          id != null && document.pages.some((p) => p.layers.some((l) => l.id === id && l.locked)));
+        if (targetLocked) {
+          haptic.error();
+          show('Clip is locked', 'info');
+          return;
+        }
+      }
       switch (op.type) {
         case 'seek':
           playbackClock.seek(op.ms);
@@ -451,6 +481,34 @@ export function usePosterTimeline({
               trimEndMs: trimmedClip.trimEndMs,
             },
           }, 'Trim clip');
+          break;
+        }
+        case 'slip': {
+          // Slip: shift the source window without changing the clip's
+          // wall-clock duration (Premiere slip semantics). Page-aware —
+          // the owning page comes from clipPageIndices, and the commit is
+          // a single history entry via commitDocument (same pattern as
+          // toggleClipLock).
+          const clipIdx = timelineClips.findIndex((c) => c.id === op.clipId);
+          if (clipIdx < 0) break;
+          const clip = timelineClips[clipIdx];
+          if (clip.mediaType === 'image') break;
+          const slippedClips = slipClip(timelineClips, op.clipId, op.deltaMs);
+          const slippedClip = slippedClips.find((c) => c.id === op.clipId);
+          if (!slippedClip || slippedClip.trimStartMs === clip.trimStartMs) break;
+          const pageIndex = clipPageIndices[clipIdx];
+          const layer = document.pages[pageIndex]?.layers.find((l) => l.id === op.clipId);
+          if (!layer || layer.type !== 'media') break;
+          const doc = updateLayerInPage(document, pageIndex, op.clipId, {
+            type: 'media',
+            payload: {
+              ...layer.payload,
+              trimStartMs: slippedClip.trimStartMs,
+              trimEndMs: slippedClip.trimEndMs,
+            },
+          });
+          commitDocument({ ...doc, updatedAt: new Date().toISOString() }, 'Slip clip');
+          haptic.light();
           break;
         }
         case 'speed': {
@@ -717,6 +775,25 @@ export function usePosterTimeline({
     [clipPageIndices, activePageIndex, selectLayer, setActivePageIndex, openSheet],
   );
 
+  // ── Clip lock toggle ────────────────────────────────────────────────
+  // `toggleLayerLock` in the context only targets the active page; a
+  // timeline clip can live on any page, so resolve the owning page via
+  // clipPageIndices and commit through the document for a single history
+  // entry.
+  const toggleClipLock = useCallback(
+    (clipId: string) => {
+      const clipIdx = timelineClips.findIndex((c) => c.id === clipId);
+      if (clipIdx < 0) return;
+      const pageIndex = clipPageIndices[clipIdx];
+      const layer = document.pages[pageIndex]?.layers.find((l) => l.id === clipId);
+      if (!layer) return;
+      const doc = updateLayerInPage(document, pageIndex, clipId, { locked: !layer.locked });
+      commitDocument({ ...doc, updatedAt: new Date().toISOString() }, layer.locked ? 'Unlock clip' : 'Lock clip');
+      haptic.medium();
+    },
+    [timelineClips, clipPageIndices, document, commitDocument, haptic],
+  );
+
   return {
     timelineClips,
     clipPageIndices,
@@ -728,5 +805,6 @@ export function usePosterTimeline({
     handleTimelineOperation,
     handleSpeedCurveChange,
     handleTimelineTransitionTap,
+    toggleClipLock,
   };
 }

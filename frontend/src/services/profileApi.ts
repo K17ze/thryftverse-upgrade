@@ -81,6 +81,10 @@ export interface PublicProfileViewer {
 export interface PublicProfileAway {
   holidayMode: boolean;
   awayMessage: string | null;
+  /** Seller-declared return instant (ISO-8601) — only present while the
+   *  seller is effectively away and a real return date was set. The UI
+   *  renders "back on {date}" only when this is non-null; never fabricate. */
+  holidayModeUntil?: string | null;
 }
 
 /** DSA Article 30 trader disclosure. Legally required in the EU/UK. */
@@ -165,6 +169,15 @@ export async function updateMyProfile(input: UpdateProfileInput): Promise<Profil
     body: JSON.stringify(input),
   });
   return response.user;
+}
+
+/** Real-time handle availability for the edit-profile username field. */
+export async function checkUsernameAvailability(username: string): Promise<boolean> {
+  const response = await fetchJson<{ ok: boolean; available: boolean }>(
+    `/users/me/username-availability?username=${encodeURIComponent(username)}`,
+    { method: 'GET' },
+  );
+  return response.available;
 }
 
 export async function fetchPublicProfile(userId: string): Promise<PublicProfileUser> {

@@ -24,7 +24,7 @@ import { EmptyState } from '../components/EmptyState';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { PremiumToggle } from '../components/PremiumToggle';
-import { updateMyProfile, type UpdateProfileInput } from '../services/profileApi';
+import { checkUsernameAvailability, updateMyProfile, type UpdateProfileInput } from '../services/profileApi';
 import { parseApiError } from '../lib/apiClient';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { FlagshipScreen, FlagshipHeader, FlagshipNavigationRow } from '../components/flagship';
@@ -96,6 +96,10 @@ export default function EditProfileScreen() {
   const [saveError, setSaveError] = useState('');
   const [didSave, setDidSave] = useState(false);
   const savingRef = useRef(false);
+  // Live handle availability — Instagram-style debounced check against
+  // /users/me/username-availability while the user edits the field.
+  const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
+  const usernameCheckSeq = useRef(0);
   const [confirmSheet, setConfirmSheet] = useState<{
     visible: boolean;
     title: string;
@@ -132,10 +136,40 @@ export default function EditProfileScreen() {
     return true;
   }, []);
 
+  // Debounced live availability check. Latest-wins: a stale response can't
+  // clobber the state of a newer input. Failure → idle (don't block the user
+  // on a flaky availability read; PATCH still enforces with 409).
+  useEffect(() => {
+    const trimmed = username.trim();
+    if (trimmed === initialUsername || trimmed.length < 3) {
+      usernameCheckSeq.current += 1;
+      setUsernameStatus('idle');
+      return;
+    }
+    setUsernameStatus('checking');
+    const seq = ++usernameCheckSeq.current;
+    const timer = setTimeout(() => {
+      checkUsernameAvailability(trimmed)
+        .then((available) => {
+          if (seq !== usernameCheckSeq.current) return;
+          setUsernameStatus(available ? 'available' : 'taken');
+          if (!available) AccessibilityInfo.announceForAccessibility('That username is taken.');
+        })
+        .catch(() => {
+          if (seq === usernameCheckSeq.current) setUsernameStatus('idle');
+        });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [username, initialUsername]);
+
   const handleSave = async () => {
     if (!hasChanges || savingRef.current || avatar.status === 'uploading' || cover.status === 'uploading') return;
     const nextNameError = !name.trim() ? 'Enter your name.' : '';
-    const nextUsernameError = username.trim().length < 3 ? 'Use at least 3 characters.' : '';
+    const nextUsernameError = username.trim().length < 3
+      ? 'Use at least 3 characters.'
+      : usernameStatus === 'taken'
+        ? 'That username is taken.'
+        : '';
     setNameError(nextNameError);
     setUsernameError(nextUsernameError);
     const validWebsite = validateWebsite(website);
@@ -195,11 +229,19 @@ export default function EditProfileScreen() {
       setDidSave(true);
     } catch (err: unknown) {
       const parsed = parseApiError(err, 'Could not save your profile. Try again.');
-      const message = parsed.isNetworkError
-        ? 'Save could not be confirmed. Your edits are still here. Reconnect and save again to confirm them.'
-        : parsed.message;
-      setSaveError(message);
-      AccessibilityInfo.announceForAccessibility(message);
+      if (parsed.code === 'USERNAME_TAKEN' || (parsed.status === 409 && username !== initialUsername)) {
+        const taken = 'That username is taken.';
+        setUsernameStatus('taken');
+        setUsernameError(taken);
+        usernameInput.current?.focus();
+        AccessibilityInfo.announceForAccessibility(taken);
+      } else {
+        const message = parsed.isNetworkError
+          ? 'Save could not be confirmed. Your edits are still here. Reconnect and save again to confirm them.'
+          : parsed.message;
+        setSaveError(message);
+        AccessibilityInfo.announceForAccessibility(message);
+      }
     } finally {
       savingRef.current = false;
       setIsSaving(false);
@@ -401,7 +443,12 @@ export default function EditProfileScreen() {
             onChangeText={(value) => { setUsername(value); setUsernameError(''); }}
             inputRef={usernameInput}
             onSubmitEditing={() => pronounsInput.current?.focus()}
-            error={usernameError}
+            error={usernameError || (usernameStatus === 'taken' ? 'That username is taken.' : '')}
+            helper={
+              usernameStatus === 'checking' ? 'Checking availability…'
+                : usernameStatus === 'available' ? 'Username is available.'
+                : undefined
+            }
             maxLength={32}
             editable={!isSaving}
             placeholder="username"

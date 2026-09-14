@@ -6,6 +6,11 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import type { Listing } from '../../services/listingsApi';
 import { SaveToCollectionModal } from '../closet/SaveToCollectionModal';
 import { ShareSheet } from '../ShareSheet';
+import { ForwardSheet } from '../chat/ForwardSheet';
+import { sendListingShareMessage } from '../../services/chatApi';
+import { useStore } from '../../store/useStore';
+import { useToast } from '../../context/ToastContext';
+import { useSignupWall } from '../../hooks/useSignupWall';
 import { BottomSheet } from '../BottomSheet';
 import { FullscreenMediaViewer, SizeGuideSheet, ListingQA } from '../product';
 import {
@@ -91,6 +96,35 @@ export function ItemDetailSheets({
   onOfferSent,
 }: ItemDetailSheetsProps) {
   const { colors } = useAppTheme();
+  const { show } = useToast();
+  const { requireAuth } = useSignupWall();
+  const conversations = useStore((s) => s.conversations);
+  const currentUserId = useStore((s) => s.currentUser?.id);
+  const [chatPickerVisible, setChatPickerVisible] = React.useState(false);
+
+  const handleSendToChat = React.useCallback(async (conversationId: string) => {
+    setChatPickerVisible(false);
+    onShareDismiss();
+    try {
+      await sendListingShareMessage(conversationId, {
+        id: item.id,
+        title: item.title ?? displayTitle,
+        price: item.price ?? 0,
+        originalPrice: item.originalPrice ?? null,
+        image: item.images?.[0] ?? null,
+        brand: item.brand ?? null,
+        size: item.size ?? null,
+        condition: item.condition ?? null,
+        sellerId: item.sellerId ?? null,
+        sellerUsername: item.seller?.username ?? null,
+        sellerRating: item.seller?.rating ?? null,
+        isSold: item.isSold === true,
+      }, currentUserId);
+      show('Sent to chat', 'success');
+    } catch {
+      show('Could not send to chat. Try again.', 'error');
+    }
+  }, [item, displayTitle, currentUserId, show, onShareDismiss]);
 
   return (
     <>
@@ -115,6 +149,20 @@ export function ItemDetailSheets({
         title={displayTitle}
         subtitle={item.brand ? `${item.brand} · ${formattedPrice}` : formattedPrice}
         imageUri={item.images?.[0]}
+        contentType="listing"
+        contentId={item.id}
+        onSendToChat={() => {
+          if (!requireAuth('message_seller')) return;
+          setChatPickerVisible(true);
+        }}
+      />
+
+      {/* Send-to-chat people picker — reuses the forward sheet. */}
+      <ForwardSheet
+        visible={chatPickerVisible}
+        conversations={conversations}
+        onForward={(id) => { void handleSendToChat(id); }}
+        onClose={() => setChatPickerVisible(false)}
       />
 
       <SizeGuideSheet

@@ -579,10 +579,6 @@ export default function MyOrdersScreen() {
 
       <OrdersTabRail
         activeTab={activeTab}
-        allCount={0}
-        buyingCount={0}
-        sellingCount={0}
-        completedCount={0}
         onChange={(tab) => { haptics.selection(); setActiveTab(tab); }}
       />
 

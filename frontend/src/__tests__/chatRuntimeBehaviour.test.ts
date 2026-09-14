@@ -327,16 +327,37 @@ describe('deriveMessageActions — production export', () => {
     expect(deleteAction?.destructive).toBe(true);
   });
 
-  it('returns actions in correct order: retry, reply, react, forward, copy, askAgent, report/delete', () => {
-    const actions = deriveMessageActions({ ...baseCaps, isOwnMessage: true, isFailed: true, messageText: 'hello' });
+  it('returns actions in correct order: retry, reply, react, forward, save, copy, askAgent, report/delete', () => {
+    const actions = deriveMessageActions({ ...baseCaps, isOwnMessage: true, isFailed: true, messageText: 'hello', canSave: true });
     const ids = actions.map((a) => a.id);
-    expect(ids).toEqual(['retry', 'reply', 'react', 'forward', 'copy', 'askAgent', 'delete']);
+    expect(ids).toEqual(['retry', 'reply', 'react', 'forward', 'save', 'copy', 'askAgent', 'delete']);
   });
 
   it('returns actions in correct order for others message', () => {
-    const actions = deriveMessageActions({ ...baseCaps, isOwnMessage: false, messageText: 'hello' });
+    const actions = deriveMessageActions({ ...baseCaps, isOwnMessage: false, messageText: 'hello', canSave: true });
     const ids = actions.map((a) => a.id);
-    expect(ids).toEqual(['reply', 'react', 'forward', 'copy', 'askAgent', 'report']);
+    expect(ids).toEqual(['reply', 'react', 'forward', 'save', 'copy', 'askAgent', 'report']);
+  });
+
+  it('offers save for both own and others messages when canSave is set', () => {
+    expect(hasAction(deriveMessageActions({ ...baseCaps, isOwnMessage: true, canSave: true }), 'save')).toBe(true);
+    expect(hasAction(deriveMessageActions({ ...baseCaps, isOwnMessage: false, canSave: true }), 'save')).toBe(true);
+    expect(hasAction(deriveMessageActions({ ...baseCaps, isOwnMessage: true, canSave: false }), 'save')).toBe(false);
+  });
+
+  it('flips the save label to Unsave when isSaved is set', () => {
+    const unsaved = deriveMessageActions({ ...baseCaps, canSave: true, isSaved: false });
+    const saved = deriveMessageActions({ ...baseCaps, canSave: true, isSaved: true });
+    expect(unsaved.find((a) => a.id === 'save')?.label).toBe('Save in chat');
+    expect(saved.find((a) => a.id === 'save')?.label).toBe('Unsave');
+  });
+
+  it('deleted tombstones offer only Unsave while the actor has a prior save', () => {
+    const saved = deriveMessageActions({ ...baseCaps, isOwnMessage: false, messageText: 'hello', canSave: true, isSaved: true, isDeletedMessage: true });
+    expect(saved.map((a) => a.id)).toEqual(['save']);
+    expect(saved[0]?.label).toBe('Unsave');
+    const notSaved = deriveMessageActions({ ...baseCaps, canSave: true, isSaved: false, isDeletedMessage: true });
+    expect(notSaved).toEqual([]);
   });
 });
 

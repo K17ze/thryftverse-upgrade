@@ -1,9 +1,12 @@
 /**
  * NotificationPreferencesScreen — consolidated notification control surface.
  *
- * A single screen covering the master push toggle, per-category toggles
- * (offers, messages, listings, orders, live shopping, price drops, marketing),
- * quiet hours, and notification preview visibility.
+ * The canonical notification preference editor: a single screen covering the
+ * master push toggle, every per-category toggle (grouped by
+ * PUSH_NOTIFICATION_GROUPS), quiet hours, and notification preview
+ * visibility. PushNotificationsScreen is the channel-specific sub-screen —
+ * it owns this device's push delivery registration only and links here for
+ * categories and quiet hours.
  *
  * P0 FIX (report 18): Category toggles now sync to the server via
  * notificationsApi, not just device-local AsyncStorage. The false "Most
@@ -236,78 +239,39 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           />
         </SettingsSection>
 
-      {/* ── Category toggles ── */}
-        <SettingsSection title="Categories" noCard>
-          {prefsLoading ? (
+      {/* ── Category toggles — full definition set, grouped ── */}
+        {prefsLoading ? (
+          <SettingsSection title="Categories" noCard>
             <View style={styles.prefsLoading} accessibilityRole="progressbar">
               <ActivityIndicator size="small" color={colors.textSecondary} />
               <Text style={[styles.prefsLoadingText, { color: colors.textMuted }]}>
                 Loading preferences…
               </Text>
             </View>
-          ) : (
-          <>
-          <SettingsRow
-            icon="cash-outline"
-            title="Offers"
-            toggleValue={!!toggles.offers}
-            onToggle={() => void toggleCategory('offers')}
-            disabled={!masterOn}
-            syncing={syncingKeys.has('offers')}
-            isFirst
-          />
-          <SettingsRow
-            icon="chatbubble-outline"
-            title="Messages"
-            toggleValue={!!toggles.messages}
-            onToggle={() => void toggleCategory('messages')}
-            disabled={!masterOn}
-            syncing={syncingKeys.has('messages')}
-          />
-          <SettingsRow
-            icon="heart-outline"
-            title="New listings"
-            toggleValue={!!toggles.wishlist}
-            onToggle={() => void toggleCategory('wishlist')}
-            disabled={!masterOn}
-            syncing={syncingKeys.has('wishlist')}
-          />
-          <SettingsRow
-            icon="car-outline"
-            title="Order updates"
-            toggleValue={!!toggles.orderUpdates}
-            onToggle={() => void toggleCategory('orderUpdates')}
-            disabled={!masterOn}
-            syncing={syncingKeys.has('orderUpdates')}
-          />
-          <SettingsRow
-            icon="trophy-outline"
-            title="Auction alerts"
-            toggleValue={!!toggles.auctionAlerts}
-            onToggle={() => void toggleCategory('auctionAlerts')}
-            disabled={!masterOn}
-            syncing={syncingKeys.has('auctionAlerts')}
-          />
-          <SettingsRow
-            icon="cash-outline"
-            title="Price drops"
-            toggleValue={!!toggles.priceDrops}
-            onToggle={() => void toggleCategory('priceDrops')}
-            disabled={!masterOn}
-            syncing={syncingKeys.has('priceDrops')}
-          />
-          <SettingsRow
-            icon="megaphone-outline"
-            title="Marketing"
-            toggleValue={!!toggles.news}
-            onToggle={() => void toggleCategory('news')}
-            disabled={!masterOn}
-            syncing={syncingKeys.has('news')}
-            isLast
-          />
-          </>
-          )}
-        </SettingsSection>
+          </SettingsSection>
+        ) : (
+          PUSH_NOTIFICATION_GROUPS.map((group) => {
+            const groupItems = PUSH_NOTIFICATION_DEFINITIONS.filter((n) => n.group === group.key);
+            if (groupItems.length === 0) return null;
+            return (
+              <SettingsSection key={group.key} title={group.label} noCard>
+                {groupItems.map((item, idx) => (
+                  <SettingsRow
+                    key={item.key}
+                    icon={item.icon}
+                    title={item.label}
+                    toggleValue={!!toggles[item.key]}
+                    onToggle={() => void toggleCategory(item.key)}
+                    disabled={!masterOn}
+                    syncing={syncingKeys.has(item.key)}
+                    isFirst={idx === 0}
+                    isLast={idx === groupItems.length - 1}
+                  />
+                ))}
+              </SettingsSection>
+            );
+          })
+        )}
 
       {/* ── Quiet Hours ── */}
         <SettingsSection title="Quiet hours" noCard>

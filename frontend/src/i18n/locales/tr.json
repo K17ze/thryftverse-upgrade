@@ -313,6 +313,8 @@
       "biometricLoginDisabled": "Devre dışı — uygulama doğrudan hesabınıza açılır",
       "notificationCategories": "Bildirim kategorileri",
       "notificationPreferencesSubtitle": "Sessiz saatler, önizleme",
+      "pushThisDevice": "Bu cihazda anlık bildirimler",
+      "pushThisDeviceSubtitle": "Teslimat ve kayıt",
       "featureFlags": "Özellik bayrakları",
       "featureFlagsSubtitle": "QA için mevcut bayrak değerleri",
       "autoTranslate": "Mesajları otomatik çevir",

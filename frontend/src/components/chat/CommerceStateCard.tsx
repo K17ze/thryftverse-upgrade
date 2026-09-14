@@ -9,17 +9,23 @@ import { CachedImage } from '../CachedImage';
 import { OrderStatusStepper, OrderStepperStage } from '../orders/OrderStatusStepper';
 import { formatShortDateTime } from '../../utils/dateFormat';
 import { useAppTranslation } from '../../i18n/useAppTranslation';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export type CommerceStateType =
   | 'order_placed'
   | 'payment_confirmed'
+  | 'label_created'
   | 'order_shipped'
   | 'order_in_transit'
   | 'order_delivered'
+  | 'delivery_confirm_prompt'
+  | 'feedback_prompt'
+  | 'extension_requested'
   | 'order_cancelled'
-  | 'order_refunded';
+  | 'order_refunded'
+  | 'order_partially_refunded';
 
 export interface CommerceStateCardProps {
   type: CommerceStateType;
@@ -29,6 +35,11 @@ export interface CommerceStateCardProps {
   itemImage?: string | null;
   trackingNumber?: string | null;
   carrier?: string | null;
+  /** Dispatch-extension proposal snapshot (extension_requested cards). */
+  extensionDays?: number;
+  proposedShipBy?: string | null;
+  /** Refund amount (GBP) on refund cards — read from card metadata. */
+  refundedAmountGbp?: number;
   /** Optional ISO timestamp for when this state event occurred */
   timestamp?: string | null;
   onPress?: () => void;
@@ -46,12 +57,17 @@ interface StateConfig {
   isFailure?: boolean;
   failureLabel?: string;
   nextStep?: string;
+  /** Footer action label — prompt states get a verb, not "View details". */
+  ctaLabel?: string;
 }
 
 function getStateConfig(
   type: CommerceStateType,
   colors: ThemeColors,
-  t: (key: string, params?: Record<string, unknown>) => string
+  t: (key: string, params?: Record<string, unknown>) => string,
+  extensionDays?: number,
+  proposedShipBy?: string | null,
+  refundAmountLabel?: string | null
 ): StateConfig {
   switch (type) {
     case 'order_placed':
@@ -103,6 +119,53 @@ function getStateConfig(
         iconColor: colors.success,
         stage: 'delivered',
       };
+    case 'label_created':
+      return {
+        title: t('orders.labelCreated'),
+        subtitle: t('orders.labelCreatedBody'),
+        badgeLabel: 'LABEL',
+        icon: 'pricetag-outline',
+        iconColor: colors.brand,
+        stage: 'paid',
+        nextStep: 'Seller dispatching',
+      };
+    case 'delivery_confirm_prompt':
+      return {
+        title: t('orders.confirmReceipt'),
+        subtitle: t('orders.confirmReceiptBody'),
+        badgeLabel: 'ACTION NEEDED',
+        icon: 'cube-outline',
+        iconColor: colors.warning,
+        stage: 'delivered',
+        ctaLabel: t('orders.confirmReceiptCta'),
+      };
+    case 'feedback_prompt':
+      return {
+        title: t('orders.leaveFeedback'),
+        subtitle: t('orders.leaveFeedbackBody'),
+        badgeLabel: 'REVIEW',
+        icon: 'star-outline',
+        iconColor: colors.warning,
+        stage: 'delivered',
+        ctaLabel: t('orders.leaveFeedbackCta'),
+      };
+    case 'extension_requested': {
+      const shipByLabel = proposedShipBy ? formatShortDateTime(proposedShipBy) : '';
+      return {
+        title: t('orders.extensionRequested'),
+        subtitle: extensionDays != null
+          ? t('orders.extensionRequestedBody', { count: extensionDays })
+          : t('orders.extensionRequestedBodyGeneric'),
+        badgeLabel: 'REQUEST',
+        icon: 'time-outline',
+        iconColor: colors.brand,
+        stage: 'paid',
+        nextStep: shipByLabel
+          ? t('orders.extensionNewDeadline', { date: shipByLabel })
+          : 'Awaiting your response',
+        ctaLabel: t('orders.reviewRequestCta'),
+      };
+    }
     case 'order_cancelled':
       return {
         title: t('orders.cancelled'),
@@ -123,6 +186,16 @@ function getStateConfig(
         isFailure: true,
         failureLabel: 'Refunded',
       };
+    case 'order_partially_refunded':
+      return {
+        title: t('orders.partiallyRefunded'),
+        subtitle: refundAmountLabel
+          ? t('orders.partiallyRefundedBody', { amount: refundAmountLabel })
+          : t('orders.partiallyRefundedBodyGeneric'),
+        badgeLabel: 'PARTIAL REFUND',
+        icon: 'cash-outline',
+        iconColor: colors.warning,
+      };
   }
 }
 
@@ -136,13 +209,23 @@ export function CommerceStateCard({
   itemImage,
   trackingNumber,
   carrier,
+  extensionDays,
+  proposedShipBy,
+  refundedAmountGbp,
   timestamp,
   onPress,
 }: CommerceStateCardProps) {
   const { colors } = useAppTheme();
   const { t } = useAppTranslation('messaging');
+  const { formatFromFiat } = useFormattedPrice();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
-  const config = useMemo(() => getStateConfig(type, colors, t), [type, colors, t]);
+  const refundAmountLabel = refundedAmountGbp != null
+    ? formatFromFiat(refundedAmountGbp, 'GBP', { displayMode: 'fiat' })
+    : null;
+  const config = useMemo(
+    () => getStateConfig(type, colors, t, extensionDays, proposedShipBy, refundAmountLabel),
+    [type, colors, t, extensionDays, proposedShipBy, refundAmountLabel]
+  );
 
   const formattedTimestamp = useMemo(() => {
     if (!timestamp) return null;
@@ -238,7 +321,7 @@ export function CommerceStateCard({
 
       {/* Footer CTA Action */}
       <View style={styles.footerRow}>
-        <Text style={styles.viewDetailsText}>{t('orders.viewDetails')}</Text>
+        <Text style={styles.viewDetailsText}>{config.ctaLabel ?? t('orders.viewDetails')}</Text>
         <Ionicons name="arrow-forward" size={13} color={colors.brand} />
       </View>
     </AnimatedPressable>

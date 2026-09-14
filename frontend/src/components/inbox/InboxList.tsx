@@ -30,6 +30,9 @@ export interface InboxListProps {
   showRequestsBanner: boolean;
   requestsCount: number;
   emptyComponent: FlashListProps<Conversation>['ListEmptyComponent'];
+  // Friend-story rail — scrolls away with the conversation rows (same
+  // pattern as the Home feed, where the rail is the list header).
+  listHeader?: FlashListProps<Conversation>['ListHeaderComponent'];
 }
 
 export function InboxList({
@@ -42,6 +45,7 @@ export function InboxList({
   showRequestsBanner,
   requestsCount,
   emptyComponent,
+  listHeader,
 }: InboxListProps) {
   const { colors } = useAppTheme();
   const navigation = useNavigation<NavT>();
@@ -126,6 +130,7 @@ export function InboxList({
               />
             }
             ListEmptyComponent={emptyComponent}
+            ListHeaderComponent={listHeader}
           />
         </>
       )}

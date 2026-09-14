@@ -40,6 +40,8 @@ interface ClaimedSchedule {
   attempts: number;
   max_attempts: number;
   publish_command: string;
+  due_at: string;
+  created_at: string;
 }
 
 /**
@@ -84,7 +86,9 @@ export async function sweepScheduledPublications(
         creator_schedules.version,
         creator_schedules.attempts,
         creator_schedules.max_attempts,
-        creator_schedules.publish_command::text
+        creator_schedules.publish_command::text,
+        creator_schedules.due_at::text,
+        creator_schedules.created_at::text
       `,
       [BATCH_SIZE],
     );
@@ -114,7 +118,9 @@ export async function sweepScheduledPublications(
         creator_schedules.version,
         creator_schedules.attempts,
         creator_schedules.max_attempts,
-        creator_schedules.publish_command::text
+        creator_schedules.publish_command::text,
+        creator_schedules.due_at::text,
+        creator_schedules.created_at::text
       `,
       [BATCH_SIZE],
     );
@@ -152,11 +158,19 @@ export async function sweepScheduledPublications(
             result: 'completed',
           });
 
-          // Notify the creator.
+          // Notify the creator. Immediate publishes (the async
+          // "publish now" path) get copy that reflects what the user
+          // actually did — they didn't schedule anything.
+          const isImmediate =
+            Math.abs(
+              new Date(schedule.due_at).getTime() - new Date(schedule.created_at).getTime(),
+            ) < 60_000;
           await queueUserNotification({
             userId: schedule.creator_id,
-            title: 'Scheduled content published',
-            body: 'Your scheduled content is now live.',
+            title: isImmediate ? 'Post published' : 'Scheduled content published',
+            body: isImmediate
+              ? 'Your post is now live.'
+              : 'Your scheduled content is now live.',
             eventType: 'scheduled_publication_success',
             payload: {
               documentId: schedule.document_id,
@@ -167,7 +181,10 @@ export async function sweepScheduledPublications(
             idempotencyKey: `sched_pub_success_${schedule.id}`,
           });
         } else if (result.blocked) {
-          // Policy block — mark as failed with reason.
+          // Policy block — mark as failed with reason, and move the
+          // document out of 'scheduled'/'publishing' so its lifecycle
+          // state stays honest ('failed' is a terminal publish state in
+          // the creator_documents state machine).
           await db.query(
             `UPDATE creator_schedules
              SET state = 'failed',
@@ -177,15 +194,27 @@ export async function sweepScheduledPublications(
              WHERE id = $1`,
             [schedule.id, result.error ?? 'blocked'],
           );
+          await db.query(
+            `UPDATE creator_documents
+             SET status = 'failed', updated_at = NOW()
+             WHERE id = $1 AND status IN ('scheduled', 'publishing')`,
+            [schedule.document_id],
+          );
           recordBackgroundJob({
             queue: 'infra_ops',
             job: 'scheduled_publication',
             result: 'failed',
           });
 
+          const isImmediateBlock =
+            Math.abs(
+              new Date(schedule.due_at).getTime() - new Date(schedule.created_at).getTime(),
+            ) < 60_000;
           await queueUserNotification({
             userId: schedule.creator_id,
-            title: 'Scheduled content could not be published',
+            title: isImmediateBlock
+              ? 'Post could not be published'
+              : 'Scheduled content could not be published',
             body: result.error ?? 'The content was blocked by policy.',
             eventType: 'scheduled_publication_blocked',
             payload: {
@@ -206,16 +235,28 @@ export async function sweepScheduledPublications(
              WHERE id = $1`,
             [schedule.id, result.error ?? 'max attempts exceeded'],
           );
+          await db.query(
+            `UPDATE creator_documents
+             SET status = 'failed', updated_at = NOW()
+             WHERE id = $1 AND status IN ('scheduled', 'publishing')`,
+            [schedule.document_id],
+          );
           recordBackgroundJob({
             queue: 'infra_ops',
             job: 'scheduled_publication',
             result: 'failed',
           });
 
+          const isImmediateFail =
+            Math.abs(
+              new Date(schedule.due_at).getTime() - new Date(schedule.created_at).getTime(),
+            ) < 60_000;
           await queueUserNotification({
             userId: schedule.creator_id,
-            title: 'Scheduled publication failed',
-            body: 'After multiple attempts, the scheduled content could not be published. Please try publishing manually.',
+            title: isImmediateFail ? 'Post failed to publish' : 'Scheduled publication failed',
+            body: isImmediateFail
+              ? 'The post could not be published. Please try again.'
+              : 'After multiple attempts, the scheduled content could not be published. Please try publishing manually.',
             eventType: 'scheduled_publication_failed',
             payload: {
               documentId: schedule.document_id,
@@ -251,6 +292,12 @@ export async function sweepScheduledPublications(
                  updated_at = NOW()
              WHERE id = $1`,
             [schedule.id, error instanceof Error ? error.message : 'unexpected error'],
+          );
+          await db.query(
+            `UPDATE creator_documents
+             SET status = 'failed', updated_at = NOW()
+             WHERE id = $1 AND status IN ('scheduled', 'publishing')`,
+            [schedule.document_id],
           );
         } else {
           await db.query(

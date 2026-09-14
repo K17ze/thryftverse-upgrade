@@ -4,7 +4,7 @@
  * current lot, price, and bid / buy-now actions.
  */
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Control, Stroke } from '../../theme/designTokens';
@@ -20,6 +20,31 @@ import {
   lotStatusColor,
   lotStatusLabel,
   formatClock } from './livestreamUtils';
+
+/**
+ * Seconds until the server-set closes_at deadline — ticks once a second while
+ * the lot is active. Returns null when the lot carries no deadline (host
+ * closes manually) so no countdown is ever fabricated.
+ */
+function useServerCountdown(closesAt: string | null | undefined, active: boolean): number | null {
+  const [remaining, setRemaining] = useState<number | null>(null);
+  useEffect(() => {
+    if (!active || !closesAt) {
+      setRemaining(null);
+      return;
+    }
+    const target = Date.parse(closesAt);
+    if (!Number.isFinite(target)) {
+      setRemaining(null);
+      return;
+    }
+    const tick = () => setRemaining(Math.max(0, Math.floor((target - Date.now()) / 1000)));
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [closesAt, active]);
+  return remaining;
+}
 
 interface LiveLotDockProps {
   lot: LiveLot;
@@ -47,9 +72,14 @@ export function LiveLotDock({
   const { t } = useAppTranslation('liveStreamViewer');
   const { formatFromFiat, currencySymbol } = useFormattedPrice();
 
-  const derivedLotStatus = deriveLotStatus(lot);
+  // Server-driven countdown: closes_at wins over the local timeRemaining
+  // hint; absent closes_at leaves timeRemaining undefined so the lot is
+  // host-closed and shows no timer.
+  const serverRemaining = useServerCountdown(lot.closesAt, lot.status === 'active');
+  const timeRemainingSec = serverRemaining ?? lot.timeRemaining;
+  const derivedLotStatus = deriveLotStatus({ ...lot, timeRemaining: timeRemainingSec });
   const isWinner = isWinningViewer(lot);
-  const timeRemaining = lot.timeRemaining ?? 0;
+  const timeRemaining = timeRemainingSec ?? 0;
   const buyNowPrice = lot.buyNowPrice ?? 0;
 
   return (

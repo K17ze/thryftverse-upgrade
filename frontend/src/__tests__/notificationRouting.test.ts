@@ -52,6 +52,22 @@ describe('resolveNotificationRoute', () => {
     expect(result).toEqual({ screen: 'AuctionDetail', params: { auctionId: 'auc_123', openBidSheet: false, initialBidAmount: undefined } });
   });
 
+  it('resolves Browse route for saved-search match notifications', () => {
+    const result = resolveNotificationRoute({
+      screen: 'Browse',
+      params: { categoryId: 'search', searchQuery: 'nike jordan', title: 'Search: "nike jordan"' },
+    });
+    expect(result).toEqual({
+      screen: 'Browse',
+      params: { categoryId: 'search', searchQuery: 'nike jordan', title: 'Search: "nike jordan"' },
+    });
+  });
+
+  it('drops a Browse route missing required params', () => {
+    const result = resolveNotificationRoute({ screen: 'Browse', params: { categoryId: 'search' } });
+    expect(result).toBeNull();
+  });
+
   it('resolves AuctionHome as valid screen', () => {
     const result = resolveNotificationRoute({ screen: 'AuctionHome' });
     expect(result).toEqual({ screen: 'AuctionHome' });

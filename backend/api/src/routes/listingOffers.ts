@@ -3,6 +3,8 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import { appendDomainEvent } from '../lib/domainOutbox.js';
+import { emitOrderCommerceCard } from '../lib/orderChatCards.js';
+import { fetchSellerAwayState } from '../lib/sellerAway.js';
 
 type ListingOffersRouteDependencies = {
   app: FastifyInstance;
@@ -256,6 +258,24 @@ export const registerListingOfferRoutes = ({
         reply.code(400);
         return { ok: false, error: 'Cannot make an offer on your own listing' };
       }
+
+      // Holiday mode is a hard pause — the product tells buyers "listings
+      // are paused" on the seller's profile, so a new offer against an away
+      // seller must be rejected, not accepted into a queue nobody is
+      // watching. lib/sellerAway.ts owns the effective-away definition
+      // (a declared return date that has passed already ended the pause).
+      const sellerAway = await fetchSellerAwayState(client, listing.seller_id);
+      if (sellerAway.away) {
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return {
+          ok: false,
+          error: 'This seller is away — their listings are paused until they return',
+          code: 'SELLER_AWAY',
+          sellerAwayUntil: sellerAway.awayUntil,
+          awayMessage: sellerAway.awayMessage,
+        };
+      }
       const originalPriceGbp = Number(listing.price_gbp);
       if (payload.offerPriceGbp > originalPriceGbp * 2) {
         await client.query('ROLLBACK');
@@ -468,6 +488,25 @@ export const registerListingOfferRoutes = ({
         await client.query('ROLLBACK');
         reply.code(409);
         return { ok: false, error: 'Maximum counter-offer depth reached' };
+      }
+
+      // Same hard-pause rule as offer creation: when the buyer counters,
+      // the seller is the one who must respond — an away seller cannot.
+      // A counter authored BY the away seller is allowed: they are clearly
+      // active in the app despite the pause flag.
+      if (actorUserId === parent.buyer_id) {
+        const sellerAway = await fetchSellerAwayState(client, parent.seller_id);
+        if (sellerAway.away) {
+          await client.query('ROLLBACK');
+          reply.code(409);
+          return {
+            ok: false,
+            error: 'This seller is away — their listings are paused until they return',
+            code: 'SELLER_AWAY',
+            sellerAwayUntil: sellerAway.awayUntil,
+            awayMessage: sellerAway.awayMessage,
+          };
+        }
       }
 
       const listing = await client.query<{ status: string; price_gbp: string }>(
@@ -702,9 +741,11 @@ export const registerListingOfferRoutes = ({
         order_id: string | null;
         reservation_id: string | null;
         conversation_id: string | null;
+        offered_by_user_id: string | null;
       }>(
         `SELECT seller_id, buyer_id, listing_id, offer_price_gbp::text,
-                status, expires_at::text, order_id, reservation_id, conversation_id
+                status, expires_at::text, order_id, reservation_id, conversation_id,
+                offered_by_user_id
          FROM listing_offers WHERE id = $1 FOR UPDATE`,
         [offerId],
       );
@@ -714,10 +755,10 @@ export const registerListingOfferRoutes = ({
         return { ok: false, error: 'Offer not found' };
       }
       const offer = result.rows[0];
-      if (offer.seller_id !== actorUserId) {
+      if (actorUserId !== offer.buyer_id && actorUserId !== offer.seller_id) {
         await client.query('ROLLBACK');
         reply.code(403);
-        return { ok: false, error: 'Only the seller can accept this offer' };
+        return { ok: false, error: 'Only an offer participant can accept this offer' };
       }
       if (offer.status === 'accepted' && offer.order_id && offer.reservation_id) {
         const reservation = await client.query<{
@@ -742,6 +783,24 @@ export const registerListingOfferRoutes = ({
             reservationStatus: reservation.rows[0]?.status ?? 'active',
             expiresAt: reservation.rows[0]?.expires_at ?? null,
           },
+        };
+      }
+      // Only the counterparty may accept — the participant who did NOT
+      // author the current pending offer. `offered_by_user_id` records who
+      // authored the latest pending offer in the negotiation (buyer for
+      // the initial offer and buyer counters, seller for seller counters;
+      // NULL only on pre-migration rows, which were all buyer-authored —
+      // same `?? buyer_id` fallback the counter route and Smart Sell use).
+      // Without this check a seller who countered could accept their own
+      // counter, creating an order + reservation that binds the buyer at
+      // the seller's price without buyer consent.
+      if ((offer.offered_by_user_id ?? offer.buyer_id) === actorUserId) {
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return {
+          ok: false,
+          error: 'You cannot accept your own offer — the other participant must respond',
+          code: 'OFFER_AUTHOR_CANNOT_ACCEPT',
         };
       }
       if (offer.status !== 'pending') {
@@ -960,6 +1019,14 @@ export const registerListingOfferRoutes = ({
         ],
       );
       await client.query('COMMIT');
+      // In-thread commerce card: the accepted offer placed an order. The emit
+      // resolves the thread via listing_offers.conversation_id — the same
+      // thread the offer was negotiated in.
+      await emitOrderCommerceCard({
+        orderId,
+        stateType: 'order_placed',
+        log: request.log,
+      });
       try {
         await enqueueOutboxDrain();
       } catch (error) {
@@ -1223,6 +1290,16 @@ export const registerListingOfferRoutes = ({
         );
       }
       await client.query('COMMIT');
+      // In-thread commerce cards: each expired reservation cancelled its
+      // pending order. The emit re-verifies the persisted status, so a
+      // reservation whose order was never actually cancelled no-ops.
+      for (const expired of expiredReservations.rows) {
+        await emitOrderCommerceCard({
+          orderId: expired.order_id,
+          stateType: 'order_cancelled',
+          log: request.log,
+        });
+      }
       if (count > 0) {
         try {
           await enqueueOutboxDrain();

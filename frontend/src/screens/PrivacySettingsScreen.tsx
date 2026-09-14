@@ -6,13 +6,13 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
+import { AppDatePicker } from '../components/primitives/AppDatePicker';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { fetchPrivacyPreferences, updateActivityStatus, updateSearchVisibility } from '../services/accountApi';
-import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PrivacySettings'>;
 
@@ -30,7 +30,6 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
   const updateAccountPreferences = useStore((s) => s.updateAccountPreferences);
   const blockedCount = useStore((s) => s.blockedUsers.length);
   const twoFactorEnabled = useStore((s) => s.twoFactorEnabled);
-  const { analyticsOptOut, setAnalyticsOptOut } = useSettingsPreferences();
 
   // Hydrate privacy preferences from backend on mount so the posture score
   // reflects real server-side state, not fabricated defaults.
@@ -38,6 +37,18 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
   const [searchVisibility, setSearchVisibility] = React.useState<'visible' | 'hidden' | null>(null);
   const [fetchError, setFetchError] = React.useState(false);
   const mountedRef = React.useRef(true);
+
+  // Draft position for the return-date wheel — initialised from the stored
+  // return date when one exists, otherwise a week out so the picker opens
+  // somewhere sensible. The draft is display-only until the seller picks a
+  // date; nothing is persisted or shown to buyers before that.
+  const [returnDateDraft, setReturnDateDraft] = React.useState<Date>(() => {
+    const stored = accountPreferences.holidayModeUntil;
+    const parsed = stored ? new Date(stored) : null;
+    return parsed && !Number.isNaN(parsed.getTime())
+      ? parsed
+      : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  });
 
   const loadPrivacyPrefs = React.useCallback(() => {
     setFetchError(false);
@@ -185,10 +196,42 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           title="Holiday mode"
           subtitle="Pause your listings and hide your shop while you're away"
           toggleValue={accountPreferences.holidayMode}
-          onToggle={(v) => updateAccountPreferences({ holidayMode: v })}
+          onToggle={(v) =>
+            // Turning holiday mode off always clears the stored return
+            // date — the backend does the same, and a stale "until" can
+            // never resurrect an away state later.
+            updateAccountPreferences(v
+              ? { holidayMode: true }
+              : { holidayMode: false, holidayModeUntil: null, awayMessage: null })
+          }
           isFirst
-          isLast
+          isLast={!accountPreferences.holidayMode}
         />
+        {accountPreferences.holidayMode ? (
+          <SettingsRow
+            icon="calendar-outline"
+            title="Return date"
+            subtitle={
+              accountPreferences.holidayModeUntil
+                ? `Buyers see "back ${new Date(accountPreferences.holidayModeUntil).toLocaleDateString()}" — your shop stays paused until then`
+                : "Optional — buyers see your shop as paused until you return"
+            }
+            isLast
+          >
+            <AppDatePicker
+              value={returnDateDraft}
+              mode="date"
+              minDate={new Date(Date.now() + 24 * 60 * 60 * 1000)}
+              label="Return date"
+              onChange={(date) => {
+                setReturnDateDraft(date);
+                updateAccountPreferences({
+                  holidayModeUntil: date.toISOString(),
+                });
+              }}
+            />
+          </SettingsRow>
+        ) : null}
       </SettingsSection>
 
       <SettingsSection title="Messaging">
@@ -230,13 +273,14 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
         ))}
       </SettingsSection>
 
+      {/* Analytics consent is owned by DataPrivacyScreen — link, don't
+          duplicate the toggle (single canonical consent surface). */}
       <SettingsSection title="Data & analytics">
         <SettingsRow
           icon="analytics-outline"
-          title="Analytics opt-out"
-          subtitle="Stop sending anonymous usage data to Thryftverse. No personal information is ever collected."
-          toggleValue={analyticsOptOut}
-          onToggle={setAnalyticsOptOut}
+          title="Analytics & data controls"
+          subtitle="Analytics, personalised ads and data sharing"
+          onPress={() => navigation.navigate('DataPrivacy')}
           isFirst
           isLast
         />

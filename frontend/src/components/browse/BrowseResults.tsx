@@ -14,6 +14,7 @@ import type { ThemeColors } from '../../theme/ThemeContext';
 import type { Listing } from '../../domain';
 import type { BrowseStyles } from './browseStyles';
 import type { GridDensity } from '../../hooks/browse/useBrowseGridDensity';
+import type { DiscoveryListingSummary } from '../../contracts/DiscoveryListingSummary';
 
 interface BrowseResultsProps {
   styles: BrowseStyles;
@@ -30,6 +31,9 @@ interface BrowseResultsProps {
   gridDensity: GridDensity;
   onClearFilters: () => void;
   onRetryListings: () => void;
+  onItemSaveToggle?: (listing: DiscoveryListingSummary) => void;
+  onItemSaveLongPress?: (listing: DiscoveryListingSummary) => void;
+  isItemSaved?: (listingId: string) => boolean;
 }
 
 export function BrowseResults({
@@ -46,7 +50,10 @@ export function BrowseResults({
   hasAnyFiltering,
   gridDensity,
   onClearFilters,
-  onRetryListings }: BrowseResultsProps) {
+  onRetryListings,
+  onItemSaveToggle,
+  onItemSaveLongPress,
+  isItemSaved }: BrowseResultsProps) {
   const navigation = useNavigation<any>();
 
   const renderBrowseLoadingState = () => (
@@ -84,7 +91,9 @@ export function BrowseResults({
           items={displayListings}
           onPressItem={(item) => openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'BrowseScreen' })}
           numColumns={gridDensity === 'compact' ? 3 : 2}
-          showSaveButton
+          onItemSaveToggle={onItemSaveToggle}
+          onItemSaveLongPress={onItemSaveLongPress}
+          isItemSaved={isItemSaved}
           gap={gridDensity === 'compact' ? Space.xs + 2 : 3}
           horizontalPadding={Space.md}
           testIDPrefix="golden-browse-product-card"

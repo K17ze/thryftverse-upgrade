@@ -86,6 +86,7 @@ export default function SellerFulfilmentScreen() {
     shipByUrgent,
     shipByOverdue,
     shipByText,
+    slaBreachText,
     serviceName,
     etaWindow,
     escrowFootnote,
@@ -191,6 +192,9 @@ export default function SellerFulfilmentScreen() {
 
         {/* ─── D. Escrow footnote ─── */}
         {escrowFootnote && <Text style={styles.escrowFootnote}>{escrowFootnote}</Text>}
+
+        {/* ─── D2. Recorded dispatch-SLA defect flag ─── */}
+        {slaBreachText && <Text style={styles.breachFootnote}>{slaBreachText}</Text>}
 
         {/* ─── B. One next action ───
             Only the current next action is shown. Completed steps are

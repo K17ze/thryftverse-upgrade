@@ -19,6 +19,10 @@ export interface AuctionSweepJobData {
   reason: 'interval' | 'manual';
 }
 
+export interface LiveLotSweepJobData {
+  reason: 'interval' | 'manual';
+}
+
 export interface CoOwnOrderExpirySweepJobData {
   reason: 'interval' | 'manual';
 }
@@ -73,6 +77,10 @@ export interface BackupExpiryJobData {
 }
 
 export interface SellerTrustRecomputeJobData {
+  reason: 'scheduled' | 'manual';
+}
+
+export interface FeedbackEvaluationJobData {
   reason: 'scheduled' | 'manual';
 }
 
@@ -194,6 +202,7 @@ type CatalogImportJobData =
 
 type InfraJobData =
   | AuctionSweepJobData
+  | LiveLotSweepJobData
   | CoOwnOrderExpirySweepJobData
   | CoOwnAlertEvaluatorJobData
   | CoOwnDripExecutionJobData
@@ -207,11 +216,13 @@ type InfraJobData =
   | ScheduledPublicationSweepJobData
   | BackupExpiryJobData
   | DsarExportJobData
-  | SellerTrustRecomputeJobData;
+  | SellerTrustRecomputeJobData
+  | FeedbackEvaluationJobData;
 
 interface QueueHandlers {
   handlePushJob: (job: PushJobData) => Promise<void>;
   handleAuctionSweepJob: (job: AuctionSweepJobData) => Promise<void>;
+  handleLiveLotSweepJob: (job: LiveLotSweepJobData) => Promise<void>;
   handleCoOwnOrderExpirySweepJob: (job: CoOwnOrderExpirySweepJobData) => Promise<void>;
   handleCoOwnAlertEvaluatorJob: (job: CoOwnAlertEvaluatorJobData) => Promise<void>;
   handleCoOwnDripExecutionJob: (job: CoOwnDripExecutionJobData) => Promise<void>;
@@ -226,6 +237,7 @@ interface QueueHandlers {
   handleBackupExpiryJob: (job: BackupExpiryJobData) => Promise<void>;
   handleDsarExportJob: (job: DsarExportJobData) => Promise<void>;
   handleSellerTrustRecomputeJob: (job: SellerTrustRecomputeJobData) => Promise<void>;
+  handleFeedbackEvaluationJob: (job: FeedbackEvaluationJobData) => Promise<void>;
   handleMediaIngestJob: (job: MediaIngestJobData) => Promise<void>;
   handleMediaEmbeddingJob: (job: MediaEmbeddingJobData) => Promise<void>;
   handleModerationTriageJob: (job: ModerationTriageJobData) => Promise<void>;
@@ -516,6 +528,8 @@ export function startBackgroundWorkers(
         try {
           if (job.name === 'auction_sweep') {
             await handlers.handleAuctionSweepJob(job.data as AuctionSweepJobData);
+          } else if (job.name === 'live_lot_sweep') {
+            await handlers.handleLiveLotSweepJob(job.data as LiveLotSweepJobData);
           } else if (job.name === 'coown_order_expiry_sweep') {
             await handlers.handleCoOwnOrderExpirySweepJob(job.data as CoOwnOrderExpirySweepJobData);
           } else if (job.name === 'coown_alert_evaluator') {
@@ -544,6 +558,8 @@ export function startBackgroundWorkers(
             await handlers.handleDsarExportJob(job.data as DsarExportJobData);
           } else if (job.name === 'seller_trust_recompute') {
             await handlers.handleSellerTrustRecomputeJob(job.data as SellerTrustRecomputeJobData);
+          } else if (job.name === 'feedback_evaluation') {
+            await handlers.handleFeedbackEvaluationJob(job.data as FeedbackEvaluationJobData);
           }
 
           const durationMs = Date.now() - jobStart;
@@ -938,6 +954,22 @@ export async function enqueueAuctionSweepJob(reason: 'interval' | 'manual' = 'in
   );
 }
 
+export async function enqueueLiveLotSweepJob(reason: 'interval' | 'manual' = 'interval'): Promise<void> {
+  // The scheduler ticks at ~5s; bucket the jobId so overlapping schedulers
+  // (API + standalone worker during deploy overlap) collapse into one run.
+  const timeBucket = Math.floor(Date.now() / 5_000);
+
+  await infraQueue.add(
+    'live_lot_sweep',
+    { reason },
+    {
+      jobId: `live_lot_sweep_${timeBucket}`,
+      removeOnComplete: true,
+      removeOnFail: 100,
+    }
+  );
+}
+
 export async function enqueueCoOwnOrderExpirySweepJob(reason: 'interval' | 'manual' = 'interval'): Promise<void> {
   const timeBucket = Math.floor(Date.now() / 30_000);
 
@@ -994,7 +1026,11 @@ export async function enqueueOnezeWithdrawalExecuteJob(input: OnezeWithdrawalExe
         delay: 2_000,
       },
       removeOnComplete: true,
-      removeOnFail: 200,
+      // Entity-keyed jobId — a retained failed record would swallow a
+      // manual_queue retry of the same withdrawal until ~200 newer
+      // failures evicted it. 30-min bound keeps the record for debugging
+      // while letting an operator retry land.
+      removeOnFail: { age: 30 * 60, count: 200 },
     }
   );
 }
@@ -1011,7 +1047,9 @@ export async function enqueueOnezeMintReserveJob(input: OnezeMintReserveJobData)
         delay: 2_000,
       },
       removeOnComplete: true,
-      removeOnFail: 200,
+      // Same entity-keyed suppression guard — a failed mint allocation
+      // must not permanently swallow re-enqueues for that operation.
+      removeOnFail: { age: 30 * 60, count: 200 },
     }
   );
 }
@@ -1028,7 +1066,10 @@ export async function enqueueReconciliationJob(input: ReconciliationJobData): Pr
     {
       jobId: `reconciliation_run_${input.reason}_${normalizedRunDate}`,
       removeOnComplete: true,
-      removeOnFail: 100,
+      // Daily-bucketed jobId — a retained failed record would suppress
+      // every same-day re-enqueue. Bound to 5 min so a failed run can be
+      // retried within the day (same fix as the other sweep enqueues).
+      removeOnFail: { age: 5 * 60, count: 100 },
     }
   );
 }
@@ -1068,7 +1109,10 @@ export async function enqueueRetentionSweepJob(
         delay: 30_000,
       },
       removeOnComplete: true,
-      removeOnFail: 100,
+      // Retained failed jobs suppress in-bucket re-enqueues — bound the
+      // record to 5 min so a failure early in the hour doesn't blackhole
+      // the whole bucket (see enqueueFeedbackEvaluationJob).
+      removeOnFail: { age: 5 * 60, count: 100 },
     },
   );
 }
@@ -1087,7 +1131,9 @@ export async function enqueueAnalyticsAggregationJob(  reason: AnalyticsAggregat
         delay: 10_000,
       },
       removeOnComplete: true,
-      removeOnFail: 100,
+      // Same bucketed-jobId suppression guard — 5-min bound on failed
+      // records so a failed sweep doesn't suppress the 15-min bucket.
+      removeOnFail: { age: 5 * 60, count: 100 },
     },
   );
 }
@@ -1109,7 +1155,39 @@ export async function enqueueSellerTrustRecomputeJob(
         delay: 30_000,
       },
       removeOnComplete: true,
-      removeOnFail: 200,
+      // A failed job kept for `count: 200` would suppress every re-enqueue
+      // for the REST OF THE DAILY BUCKET — 24h of silently skipped trust
+      // recomputes. Bound to 5 min: enough for debugging, frees the jobId.
+      removeOnFail: { age: 5 * 60, count: 200 },
+    },
+  );
+}
+
+export async function enqueueFeedbackEvaluationJob(
+  reason: FeedbackEvaluationJobData['reason'] = 'scheduled',
+): Promise<void> {
+  // Hourly bucket: the feedback window is measured in days, so one sweep
+  // per hour is ample — overlapping schedulers collapse into a single run.
+  const timeBucket = Math.floor(Date.now() / (60 * 60 * 1000));
+  await infraQueue.add(
+    'feedback_evaluation',
+    { reason },
+    {
+      jobId: `feedback_evaluation_${reason}_${timeBucket}`,
+      attempts: 2,
+      backoff: {
+        type: 'exponential',
+        delay: 30_000,
+      },
+      removeOnComplete: true,
+      // BullMQ dedupes on jobId while the job record exists, so a retained
+      // failed job would suppress every in-bucket re-enqueue until the next
+      // hour — an early-bucket failure silently skipped a whole sweep cycle.
+      // Bound retention to ~5 minutes: long enough to inspect the failure
+      // (the DLQ copy from moveToDlq persists regardless), short enough that
+      // a later in-bucket enqueue still lands. `removeOnFail: false` would
+      // pin the jobId permanently — strictly worse than the old count cap.
+      removeOnFail: { age: 5 * 60, count: 100 },
     },
   );
 }

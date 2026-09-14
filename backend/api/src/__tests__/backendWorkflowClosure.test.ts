@@ -119,6 +119,159 @@ test('accepted listing offers atomically create a protected checkout order and r
   assert.equal(outboxDrainQueued, true);
 });
 
+// ── Offer accept: only the counterparty may accept ────────────────
+// offered_by_user_id records who authored the current pending offer.
+// Accepting executes the author's terms against the other participant, so
+// the author must never accept their own offer — a seller who countered
+// would otherwise bind the buyer to the seller's price without consent.
+
+function buildOfferAcceptClient(offerRow: Record<string, unknown>) {
+  const statements: string[] = [];
+  const client = {
+    async query(sql: string) {
+      const normalized = sql.replace(/\s+/g, ' ').trim();
+      statements.push(normalized);
+      if (normalized.includes('FROM listing_offers') && normalized.includes('FOR UPDATE')) {
+        return { rowCount: 1, rows: [offerRow] };
+      }
+      if (normalized.startsWith('SELECT status FROM listings')) {
+        return { rowCount: 1, rows: [{ status: 'active' }] };
+      }
+      if (normalized.startsWith('INSERT INTO domain_outbox')) {
+        return { rowCount: 1, rows: [{ id: 'evt_1' }] };
+      }
+      return { rowCount: 1, rows: [] };
+    },
+    release() {},
+  };
+  const db = {
+    async connect() {
+      return client;
+    },
+  } as unknown as Pool;
+  return { db, statements };
+}
+
+function pendingOfferRow(offeredBy: string | null) {
+  return {
+    seller_id: 'seller_1',
+    buyer_id: 'buyer_1',
+    listing_id: 'listing_1',
+    offer_price_gbp: '90.00',
+    status: 'pending',
+    expires_at: new Date(Date.now() + 60_000).toISOString(),
+    order_id: null,
+    reservation_id: null,
+    conversation_id: 'conversation_1',
+    offered_by_user_id: offeredBy,
+  };
+}
+
+test('a seller cannot accept their own counter-offer — it would bind the buyer without consent', async () => {
+  const { app, handlers } = createRouteHarness();
+  const { db, statements } = buildOfferAcceptClient(pendingOfferRow('seller_1'));
+
+  registerListingOfferRoutes({
+    app,
+    db,
+    resolveAuthenticatedUserId: () => 'seller_1',
+    calculatePlatformChargeGbp: () => 0,
+    authorizeInternalServiceRequest: () => true,
+    enqueueOutboxDrain: async () => {},
+  });
+
+  const handler = handlers.get('POST /offers/:offerId/accept');
+  assert.ok(handler);
+  const reply = createReply();
+  const result = await handler({ params: { offerId: 'offer_counter' } }, reply);
+
+  assert.equal(reply.statusCode, 409);
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'OFFER_AUTHOR_CANNOT_ACCEPT');
+  assert.equal(statements.some((sql) => sql.startsWith('INSERT INTO orders')), false);
+  assert.equal(
+    statements.some((sql) => sql.startsWith('INSERT INTO listing_checkout_reservations')),
+    false,
+  );
+  assert.equal(statements.at(-1), 'ROLLBACK');
+});
+
+test('a buyer cannot accept their own pending offer', async () => {
+  const { app, handlers } = createRouteHarness();
+  const { db, statements } = buildOfferAcceptClient(pendingOfferRow('buyer_1'));
+
+  registerListingOfferRoutes({
+    app,
+    db,
+    resolveAuthenticatedUserId: () => 'buyer_1',
+    calculatePlatformChargeGbp: () => 0,
+    authorizeInternalServiceRequest: () => true,
+    enqueueOutboxDrain: async () => {},
+  });
+
+  const handler = handlers.get('POST /offers/:offerId/accept');
+  assert.ok(handler);
+  const reply = createReply();
+  const result = await handler({ params: { offerId: 'offer_1' } }, reply);
+
+  assert.equal(reply.statusCode, 409);
+  assert.equal(result.code, 'OFFER_AUTHOR_CANNOT_ACCEPT');
+  assert.equal(statements.some((sql) => sql.startsWith('INSERT INTO orders')), false);
+});
+
+test('a non-participant cannot accept an offer', async () => {
+  const { app, handlers } = createRouteHarness();
+  const { db } = buildOfferAcceptClient(pendingOfferRow('buyer_1'));
+
+  registerListingOfferRoutes({
+    app,
+    db,
+    resolveAuthenticatedUserId: () => 'intruder_1',
+    calculatePlatformChargeGbp: () => 0,
+    authorizeInternalServiceRequest: () => true,
+    enqueueOutboxDrain: async () => {},
+  });
+
+  const handler = handlers.get('POST /offers/:offerId/accept');
+  assert.ok(handler);
+  const reply = createReply();
+  const result = await handler({ params: { offerId: 'offer_1' } }, reply);
+
+  assert.equal(reply.statusCode, 403);
+  assert.equal(result.ok, false);
+});
+
+test('a buyer can accept a seller-authored counter-offer', async () => {
+  const { app, handlers } = createRouteHarness();
+  const { db, statements } = buildOfferAcceptClient(pendingOfferRow('seller_1'));
+  let outboxDrainQueued = false;
+
+  registerListingOfferRoutes({
+    app,
+    db,
+    resolveAuthenticatedUserId: () => 'buyer_1',
+    calculatePlatformChargeGbp: () => 4.5,
+    authorizeInternalServiceRequest: () => true,
+    enqueueOutboxDrain: async () => {
+      outboxDrainQueued = true;
+    },
+  });
+
+  const handler = handlers.get('POST /offers/:offerId/accept');
+  assert.ok(handler);
+  const result = await handler({ params: { offerId: 'offer_counter' } }, createReply());
+
+  assert.equal(result.ok, true);
+  assert.equal(result.status, 'accepted');
+  assert.equal(result.idempotentReplay, false);
+  assert.equal(result.checkout.subtotalGbp, 90);
+  assert.equal(result.checkout.platformChargeGbp, 4.5);
+  assert.ok(statements.some((sql) => sql.startsWith('INSERT INTO orders')));
+  assert.ok(statements.some((sql) => sql.startsWith('INSERT INTO listing_checkout_reservations')));
+  assert.equal(statements.at(-1), 'COMMIT');
+  assert.equal(outboxDrainQueued, true);
+});
+
 test('terminal commerce payment failure cancels the order and records compensation once', async () => {
   const statements: string[] = [];
   const client = {

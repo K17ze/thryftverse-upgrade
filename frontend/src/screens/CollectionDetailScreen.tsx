@@ -393,7 +393,6 @@ export default function CollectionDetailScreen() {
             <ClosetMediaMosaic
               items={collectionItems}
               onPressItem={(item: any) => openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'CollectionDetail' })}
-              showSaveButton
             />
           </View>
         )}

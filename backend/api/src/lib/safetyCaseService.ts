@@ -229,7 +229,7 @@ export interface CaseWithEvidence {
 // persisted row instead of a fabricated ID (fixes TS-06).
 
 export async function createSafetyNotice(
-  db: Pool,
+  db: Pool | PoolClient,
   input: {
     reporter_id: string | null;
     subject_type: SafetySubjectType;
@@ -289,6 +289,220 @@ export async function createSafetyNotice(
   );
 
   return mapNoticeRow(row);
+}
+
+// ── Consumer report intake bridge ──────────────────────────────────────
+//
+// The consumer-facing report endpoints (user / listing / conversation)
+// historically wrote a row into their own report table and stopped: the
+// report never entered the trust & safety case graph, so no notice, no
+// triage SLA and no reporter outcome ever existed. recordConsumerReport
+// persists the domain report row AND its safety notice in a single
+// transaction so a report can never exist without entering the pipeline.
+//
+// Dedup: the notice's idempotency key is derived deterministically from
+// the report row id (`<kind>_report:<reportId>`), so a retried submission
+// of an already-persisted report (conversation_reports carries a client
+// idempotency key) returns the original notice instead of double-filing.
+
+export type ConsumerReportKind = 'user' | 'listing' | 'conversation';
+
+// Maps the mobile report vocabularies onto the seeded safety_reason_codes
+// taxonomy (migration 172). The user/listing enums are already 1:1 with
+// the taxonomy; the chat enum uses aliases resolved here. Unknown values
+// degrade to 'other' so a taxonomy rename can never drop a report.
+const CONSUMER_REPORT_REASON_MAP: Record<string, string> = {
+  spam: 'spam',
+  inappropriate: 'inappropriate',
+  counterfeit: 'counterfeit',
+  unresponsive: 'unresponsive',
+  harassment: 'harassment',
+  off_platform: 'off_platform',
+  hate_speech: 'hate_speech',
+  prohibited: 'prohibited',
+  scam: 'scam',
+  misinformation: 'misinformation',
+  privacy: 'privacy',
+  impersonation: 'impersonation',
+  minor_safety: 'minor_safety',
+  other: 'other',
+  // chat report enum aliases
+  scam_fraud: 'scam',
+  inappropriate_content: 'inappropriate',
+  off_platform_payment: 'off_platform',
+};
+
+export function mapConsumerReportReasonToSafetyCode(reason: string): string {
+  return CONSUMER_REPORT_REASON_MAP[reason] ?? 'other';
+}
+
+export function consumerReportNoticeIdempotencyKey(
+  kind: ConsumerReportKind,
+  reportId: string,
+): string {
+  return `${kind}_report:${reportId}`;
+}
+
+// Reason codes seeded with is_illegal_content = TRUE (migration 172 seed):
+// the reporter is alleging illegal content rather than a ToS breach, so the
+// notice basis is 'illegal_content'. Everything else is a terms allegation.
+const ILLEGAL_CONTENT_REASON_CODES = new Set([
+  'hate_speech',
+  'prohibited',
+  'scam',
+  'minor_safety',
+  'cyberflashing',
+]);
+
+// Urgency mirrors the seed's severity_class so the SLA class computed at
+// case-open matches the reporter's chosen category: severity 4 → emergency,
+// severity 3 → elevated, everything else normal.
+const EMERGENCY_REASON_CODES = new Set(['minor_safety']);
+const ELEVATED_REASON_CODES = new Set(['hate_speech', 'prohibited', 'scam']);
+
+export async function recordConsumerReport(
+  db: Pool,
+  input: {
+    kind: ConsumerReportKind;
+    reportId: string;
+    reporterId: string;
+    subjectId: string;
+    reason: string;
+    details?: string | null;
+    evidenceMessageId?: string | null;
+    idempotencyKey?: string | null;
+    subjectSnapshot?: Record<string, unknown>;
+  },
+): Promise<{ reportId: string; noticeId: string; duplicated: boolean }> {
+  const reasonCode = mapConsumerReportReasonToSafetyCode(input.reason);
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    let effectiveReportId = input.reportId;
+    let duplicated = false;
+
+    switch (input.kind) {
+      case 'user': {
+        // Client idempotency (migration 294): dedupe on
+        // (reporter_id, idempotency_key) — same contract as
+        // conversation_reports below. A retried submission resolves the
+        // original report id so the notice keys to a persisted row.
+        const insertResult = await client.query<{ id: string }>(
+          `INSERT INTO user_reports (id, reporter_id, reported_id, reason, details, created_at, updated_at, idempotency_key)
+           VALUES ($1, $2, $3, $4, $5, NOW(), NOW(), $6)
+           ON CONFLICT (reporter_id, idempotency_key) WHERE idempotency_key IS NOT NULL
+           DO NOTHING
+           RETURNING id`,
+          [input.reportId, input.reporterId, input.subjectId, input.reason, input.details ?? null, input.idempotencyKey ?? null],
+        );
+        if (insertResult.rowCount && insertResult.rowCount > 0) {
+          effectiveReportId = insertResult.rows[0].id;
+        } else {
+          duplicated = true;
+          if (input.idempotencyKey) {
+            const existing = await client.query<{ id: string }>(
+              `SELECT id FROM user_reports WHERE reporter_id = $1 AND idempotency_key = $2 LIMIT 1`,
+              [input.reporterId, input.idempotencyKey],
+            );
+            if (existing.rows[0]) {
+              effectiveReportId = existing.rows[0].id;
+            }
+          }
+        }
+        break;
+      }
+      case 'listing': {
+        const insertResult = await client.query<{ id: string }>(
+          `INSERT INTO listing_reports (id, reporter_id, listing_id, reason, details, idempotency_key)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (reporter_id, idempotency_key) WHERE idempotency_key IS NOT NULL
+           DO NOTHING
+           RETURNING id`,
+          [input.reportId, input.reporterId, input.subjectId, input.reason, input.details ?? null, input.idempotencyKey ?? null],
+        );
+        if (insertResult.rowCount && insertResult.rowCount > 0) {
+          effectiveReportId = insertResult.rows[0].id;
+        } else {
+          duplicated = true;
+          if (input.idempotencyKey) {
+            const existing = await client.query<{ id: string }>(
+              `SELECT id FROM listing_reports WHERE reporter_id = $1 AND idempotency_key = $2 LIMIT 1`,
+              [input.reporterId, input.idempotencyKey],
+            );
+            if (existing.rows[0]) {
+              effectiveReportId = existing.rows[0].id;
+            }
+          }
+        }
+        break;
+      }
+      case 'conversation': {
+        const insertResult = await client.query<{ id: string }>(
+          `INSERT INTO conversation_reports (id, conversation_id, reporter_user_id, reason, details, message_id, status, created_at, idempotency_key)
+           VALUES ($1, $2, $3, $4, $5, $6, 'submitted', NOW(), $7)
+           ON CONFLICT (idempotency_key) DO NOTHING
+           RETURNING id`,
+          [
+            input.reportId,
+            input.subjectId,
+            input.reporterId,
+            input.reason,
+            input.details ?? null,
+            input.evidenceMessageId ?? null,
+            input.idempotencyKey ?? null,
+          ],
+        );
+        if (insertResult.rowCount && insertResult.rowCount > 0) {
+          effectiveReportId = insertResult.rows[0].id;
+        } else {
+          // Idempotent retry: resolve the original report row so the notice
+          // dedupes on the same derived key rather than keying a notice to a
+          // report id that was never persisted.
+          duplicated = true;
+          if (input.idempotencyKey) {
+            const existing = await client.query<{ id: string }>(
+              `SELECT id FROM conversation_reports WHERE idempotency_key = $1 LIMIT 1`,
+              [input.idempotencyKey],
+            );
+            if (existing.rows[0]) {
+              effectiveReportId = existing.rows[0].id;
+            }
+          }
+        }
+        break;
+      }
+    }
+
+    const notice = await createSafetyNotice(client, {
+      reporter_id: input.reporterId,
+      subject_type: input.kind,
+      subject_id: input.subjectId,
+      subject_snapshot: {
+        reportId: effectiveReportId,
+        reportReason: input.reason,
+        evidenceMessageId: input.evidenceMessageId ?? null,
+        ...(input.subjectSnapshot ?? {}),
+      },
+      basis: ILLEGAL_CONTENT_REASON_CODES.has(reasonCode) ? 'illegal_content' : 'terms',
+      reason_code: reasonCode,
+      urgency: EMERGENCY_REASON_CODES.has(reasonCode)
+        ? 'emergency'
+        : ELEVATED_REASON_CODES.has(reasonCode)
+          ? 'elevated'
+          : 'normal',
+      allegation: input.details ?? undefined,
+      idempotency_key: consumerReportNoticeIdempotencyKey(input.kind, effectiveReportId),
+    });
+
+    await client.query('COMMIT');
+    return { reportId: effectiveReportId, noticeId: notice.id, duplicated };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 // ── Open a case from a notice ───────────────────────────────────────────

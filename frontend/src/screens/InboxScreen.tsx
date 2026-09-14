@@ -17,6 +17,8 @@ import {
   useInboxActions,
   type InboxSegment,
 } from '../hooks/inbox';
+import { usePosterStories } from '../hooks/usePosterStories';
+import { HomeStoryRail } from '../components/home/HomeStoryRail';
 import { InboxHeader } from '../components/inbox/InboxHeader';
 import { InboxFilters } from '../components/inbox/InboxFilters';
 import { InboxSyncBanner, InboxListingFilterBanner } from '../components/inbox/InboxBanners';
@@ -84,6 +86,11 @@ export default function InboxScreen() {
     handleToggleRead,
     handleQuickActions,
   } = useInboxActions();
+
+  // Friend/following stories live where conversations live — the same rail
+  // and data source as Home, mounted as the list header so it scrolls away
+  // with the rows and collapses to nothing when there are no stories.
+  const { posters, postersLoading } = usePosterStories();
 
   const currentUser = useStore((state) => state.currentUser);
   const mutedIds = useStore((state) => state.mutedConversationIds);
@@ -197,6 +204,7 @@ export default function InboxScreen() {
           isLoading={isLoading}
           showRequestsBanner={segment === 'all' && messageRequests.length > 0 && !filterExpanded}
           requestsCount={messageRequests.length}
+          listHeader={<HomeStoryRail postersLoading={postersLoading} posters={posters} />}
           emptyComponent={
             <InboxEmptyState
               syncError={syncError}

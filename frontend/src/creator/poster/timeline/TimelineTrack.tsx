@@ -7,7 +7,7 @@ import { IconGrammar } from '../../../theme/designTokens';
 import { RadiusRoleValue } from '../../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
-import { ClipThumb } from './ClipThumb';
+import { ClipThumb, type ClipThumbProps } from './ClipThumb';
 import { Playhead } from './Playhead';
 import type { PosterClip } from './TimelineTypes';
 
@@ -35,6 +35,8 @@ export interface TimelineTrackProps {
   onSelectClip: (id: string) => void;
   onSeek: (ms: number) => void;
   onTrimClip: (clipId: string, edge: 'start' | 'end', deltaMs: number) => void;
+  /** Slip commit — shift the clip's source window by deltaMs (source time). */
+  onSlipClip?: (clipId: string, deltaMs: number) => void;
   /**
    * Transition preset IDs for each clip boundary (length = clips.length - 1).
    * Index i is the transition between clip[i] and clip[i+1]. null/undefined
@@ -50,6 +52,8 @@ export interface TimelineTrackProps {
    * clip widths and the drag translation.
    */
   onReorderClip?: (clipId: string, translationX: number) => void;
+  /** Edge auto-scroll plumbing forwarded to each ClipThumb. */
+  edgeScroll?: ClipThumbProps['edgeScroll'];
 }
 
 export const TimelineTrack = React.memo(function TimelineTrack({
@@ -60,9 +64,11 @@ export const TimelineTrack = React.memo(function TimelineTrack({
   onSelectClip,
   onSeek,
   onTrimClip,
+  onSlipClip,
   transitionIds,
   onSelectTransition,
   onReorderClip,
+  edgeScroll,
 }: TimelineTrackProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
@@ -130,8 +136,10 @@ export const TimelineTrack = React.memo(function TimelineTrack({
               isSelected={clip.id === selectedClipId}
               onPress={() => onSelectClip(clip.id)}
               onTrimCommit={(edge, deltaMs) => onTrimClip(clip.id, edge, deltaMs)}
+              onSlipCommit={onSlipClip ? (deltaMs) => onSlipClip(clip.id, deltaMs) : undefined}
               clipIndex={i}
               onDragReorder={onReorderClip}
+              edgeScroll={edgeScroll}
             />
           );
         })}

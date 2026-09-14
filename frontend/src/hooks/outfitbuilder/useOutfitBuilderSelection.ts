@@ -117,27 +117,23 @@ export function useOutfitBuilderSelection(
 
   const toggleItem = useCallback((item: StyleItem) => {
     const slot = inferSlot(item);
-    setOutfitItems((prev) => {
-      const current = prev[slot];
-      const next = current?.id === item.id
-        ? { ...prev, [slot]: undefined }
-        : { ...prev, [slot]: item };
-      pushHistory(next, backgroundColor);
-      return next;
-    });
+    const current = outfitItems[slot];
+    const next = current?.id === item.id
+      ? { ...outfitItems, [slot]: undefined }
+      : { ...outfitItems, [slot]: item };
+    setOutfitItems(next);
+    pushHistory(next, backgroundColor);
     haptics.press();
-  }, [backgroundColor, pushHistory]);
+  }, [outfitItems, backgroundColor, pushHistory]);
 
   const handleAiSuggest = useCallback(() => {
     if (!aiSuggestion) return;
-    setOutfitItems((prev) => {
-      const next = { ...prev, [aiSuggestion.slot]: aiSuggestion.item };
-      pushHistory(next, backgroundColor);
-      return next;
-    });
+    const next = { ...outfitItems, [aiSuggestion.slot]: aiSuggestion.item };
+    setOutfitItems(next);
+    pushHistory(next, backgroundColor);
     setActiveSlot(aiSuggestion.slot);
     haptics.success();
-  }, [aiSuggestion, backgroundColor, pushHistory]);
+  }, [aiSuggestion, outfitItems, backgroundColor, pushHistory]);
 
   const clearSelection = useCallback(() => {
     const cleared = emptyOutfitItems();

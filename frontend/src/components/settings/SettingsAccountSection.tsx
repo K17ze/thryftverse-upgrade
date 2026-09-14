@@ -87,7 +87,7 @@ export function SettingsAccountSection({ isBiometricAvailable }: SettingsAccount
       <SettingsRow
         glyph="history-clock"
         title={ts('rows.devicesSessions')}
-        onPress={() => navigation.navigate('ActiveSessions')}
+        onPress={() => navigation.navigate('AccountSecurity')}
       />
       <SettingsRow
         glyph="security-lock"

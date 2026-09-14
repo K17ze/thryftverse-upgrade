@@ -185,3 +185,60 @@ BASE: 03153b2 (feat/product-detail-contract-media-device-closure)
 ### Viewer parity (W12-P0-1b) — done.
 - `renderedViewDocument.pageWithRenderedMedia`: when a frame's published `media_url` differs from the doc's media URI (i.e. rendered artifact exists), the viewer canvas plays the BAKED artifact — full-canvas identity geometry, all baked edit fields cleared — instead of the raw source. Static overlays already burned in are dropped; interactive/dynamic layers (vote/quiz/question/emojiSlider/link/product/look/music/mention/time/weather) stay live on top.
 - Multi-clip concat ruled unnecessary for publish: looks are contract-enforced single-page (`compositionContract.ts:81`); posters are a paged deck — every page renders its own frame artifact. Concat would matter only for a future "export poster as single video" feature.
+
+## Wave C (2026-09) - Minute-detail competitive audit + interaction-depth pass
+
+### C0: Research - done.
+- `.flagship/research-waveC-minute-detail-audit.md` - point-by-point verification vs Instagram Edits (Aug 2026), Snapchat Timeline Editor/Director Mode, CapCut/IMG.LY timeline-UX research. Verified PRESENT: pinch-zoom, magnetic snap, smart canvas guides, long-press reorder, waveform track, canvas lock enforcement, capture grammar, speed-curve sync, viewer parity.
+
+### C1: Clip-lock parity (Edits Jul-2026 feature) - done.
+- `PosterClip.locked` carried from `CreatorLayer.locked` in the page-to-clip projection.
+- `handleTimelineOperation` lock guard: trim/split/duplicate/delete/replace/speed/volume on a locked clip, moveOverlay on a locked overlay, and reorder touching a locked clip at EITHER endpoint all reject with haptic.error + "Clip is locked" toast. Previously the canvas honored lock but the timeline bypassed it - invariant leak.
+- `toggleClipLock(clipId)` added to usePosterTimeline - page-aware via clipPageIndices (context's toggleLayerLock only targets the active page), single history entry via commitDocument.
+- TimelineToolbar: Lock/Unlock tool + `isLocked` disables Split/Duplicate/Replace/Delete/sliders/curve (a11y disabled states).
+- ClipThumb: lock badge (persistent, width>44), trim handles suppressed, reorder drag disabled on locked clips.
+
+### C2: Edge auto-scroll during trim/reorder - done.
+- Timeline ScrollView upgraded to Reanimated.ScrollView + useAnimatedRef + useAnimatedScrollHandler (UI-thread scrollXSV).
+- ClipThumb trim + reorder pan worklets call scrollTo() when the finger enters the 44px edge zone (16px/frame step) - matches CapCut/Edits edge-scroll. Previously trimming past the viewport edge was impossible while zoomed.
+
+### C3: Save to camera roll - done (+P1 bug fix).
+- PosterViewerScreen more-menu now uses real PosterOptionsMenu (LookOverflowMenu anatomy: handle, icon+label rows, 48pt, hairlines, destructive last).
+- Save to camera roll: downloads baked `mediaUrl` via FileSystem to cache, saves via MediaLibrary (write-scoped permission), honest toasts.
+- FIXED P1: the old handleMoreMenu collapsed ALL options into a single-confirm dialog showing only "Copy link" - Archive story and Delete story were unreachable. Now a real option sheet; delete/archive still route through ConfirmationSheet (deferred 250ms to avoid Modal-during-Modal race).
+
+### Verification
+- Frontend tsc clean. Creator tests 26/26.
+
+### C4 (2026-09 cont.): Playhead + waveform honesty + async publish - done.
+- Playhead seek math: `e.absoluteX` (screen space) -> `e.x` (view-local). Inside the scrolled/zoomed timeline, absoluteX produced wrong seek positions whenever content offset > 0. All three pan phases fixed; comment added so it doesn't regress.
+- Playhead auto-follow: during playback with zoom > 1, a throttled (350ms) UI-thread scrollTo keeps the playhead inside the viewport (re-anchors at ~35% from left). Skips when track fits the viewport or playback paused.
+- Waveform honesty: WaveformExtractor marks compressed-source output `isSynthetic: true`; WaveformTrack now drops synthetic samples -> honest flat line instead of fabricated amplitude bars (AGENTS.md truthful-data rule). Dead `isSynthetic` state removed after review.
+- Async publish ("publish now, process on server") — W12-P1-6 landed using existing infra:
+  * `POST /creator/documents/:id/schedule` accepts `immediate: true` -> due_at=NOW(), doc status 'publishing' (not 'scheduled' — in-flight renders aren't cancellable), manual sweep trigger post-commit (skips the 30s interval).
+  * Sweep handler: claim returns due_at/created_at; immediate rows get "Post published / failed" notification copy instead of "Scheduled…"; terminal failures now also reset `creator_documents.status='failed'` (was stuck 'scheduled' forever).
+  * `GET /schedule` + `GET /schedule/:key` now LEFT JOIN creator_publications for `targetId`.
+  * `publishCreatorDocumentAsync()` client API: schedule-immediate + poll fetchScheduleInfo (1.5s, 150s budget) -> PublicationResult shape; PublishAsyncFailedError/PublishAsyncTimeoutError.
+  * Workflow: `documentMayRequireRender` (any video media layer OR multi-page) routes publish-now through async; trivial single-image docs keep the sync fast path. Attempts persist commandType 'schedule' so unknown-outcome reconciliation resolves via schedule lookup.
+  * Catch mapping: PublishAsyncFailedError -> retryable error with server reason; PublishAsyncTimeoutError -> scheduleUnknown "still processing" (push notification covers late completion); handleCheckSchedule resolves published->success(targetId), failed->error, cancelled->superseded error, pending->still-processing.
+  * reconcilePublicationAttempts: 'failed'/'cancelled' schedules now mark the attempt failed (was blindly 'committed'); 'published' carries real targetId.
+- Verification: backend tsc clean, frontend tsc clean, creator tests 26/26, publication render tests 66/66.
+
+
+### C5 (2026-09 cont.): Slip editing - done.
+- PosterClip.sourceDurationMs added; projector sources it from payload.videoDurationMs (fallback: current trim end = no provable forward headroom).
+- slipClip() pure op: shifts trimStart+trimEnd together, clamps [0, sourceDuration], duration invariant via withUpdates, no-op returns identity.
+- usePosterTimeline 'slip' case: page-aware via clipPageIndices + updateLayerInPage, single history entry, images rejected, locked clips rejected by the existing clipId lock guard.
+- ClipThumb: dedicated slip chip (swap-horizontal glyph) on selected video clips only, width>72; pan converts px->SOURCE ms (window span, not speed-adjusted); thumbnail translates opposite finger (filmstrip under fixed window), clamped to real headroom; 44pt hit target via gesture hitSlop; commits once on end.
+- TimelineTrack/PosterComposerScreen: onSlipClip prop -> handleTimelineOperation({type:'slip'}).
+- Tests: 7 new slipClip unit tests (window shift, both clamps, no-ops, unknown-source bound, speed invariance).
+- Verification: frontend tsc clean, creator tests 33/33.
+
+
+### C6 (2026-09 cont.): Draft export + crop-sheet undo + registry reconciliation - done.
+- Slip editing landed end-to-end (C5): PosterClip.sourceDurationMs, slipClip pure op, page-aware hook dispatch, dedicated slip chip on selected video clips (source-ms conversion, headroom-clamped preview, 44pt hitSlop), 7 unit tests.
+- W12-P1-5 resolved by ADOPTION: mediaExportService wired as draft export - 'Export image' in Poster overflow (Project section) + Look overflow (project group). jsExportImage renders the composition; saves to camera roll via MediaLibrary. Video docs omit the control (JS Skia can't decode video; native module deferred) - honest absence, no fake affordance.
+- EU-P1-5 closed: CreatorCropSheet undo - CropEditSnapshot stack (crop frame SVs are source of truth, image zoom/pan, rotation, flips, straighten, ratio). Gesture/slider transactions: capture-at-start, push-at-commit only when changed (no tap noise). Discrete edits push at press. Reset is undoable; stack clears per session; undo button left of Reset in top bar.
+- NEW GAP recorded: KF-P0 keyframe export - layer.keyframes animate in preview but never reach CompositionLayer/the ffmpeg graph; published video drops authored animation. Fix path documented in registry (per-frame expressions or native export module).
+- Registry reconciliation: EU-P0-2/EU-P1-3/EU-P1-4/EU-P2-1..6/W12-P1-6 verified closed (stale entries); EU-P1-2 closed (focal honored on all surfaces that can author it).
+- Verification: frontend tsc clean, creator tests 33/33.

@@ -349,10 +349,12 @@ export const registerSupportReviewRoutes = ({
       id: string;
       rating: number;
       comment: string | null;
+      is_auto: boolean;
+      auto_reason: string | null;
       created_at: string;
       updated_at: string;
     }>(
-      `SELECT id, rating, comment, created_at, updated_at
+      `SELECT id, rating, comment, is_auto, auto_reason, created_at, updated_at
        FROM order_reviews
        WHERE order_id = $1
        LIMIT 1`,
@@ -396,6 +398,10 @@ export const registerSupportReviewRoutes = ({
               createdAt: responseResult.rows[0].created_at,
             }
           : undefined,
+        // Truthful provenance: auto rows are platform-generated feedback,
+        // never buyer-authored reviews. Surfaces must render this.
+        isAuto: row.is_auto === true,
+        autoReason: row.auto_reason,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       },
@@ -449,26 +455,31 @@ export const registerSupportReviewRoutes = ({
     // retries safe after network drops (unknown-outcome → safe replay).
     const idempotencyKey = (request.headers["idempotency-key"] as string | undefined)?.trim();
 
-    const existingReview = await db.query<{ id: string }>(
-      "SELECT id FROM order_reviews WHERE order_id = $1 LIMIT 1",
+    const existingReview = await db.query<{ id: string; is_auto: boolean }>(
+      "SELECT id, is_auto FROM order_reviews WHERE order_id = $1 LIMIT 1",
       [orderId],
     );
-    if (existingReview.rowCount) {
-      // If idempotency key is present, this is a safe replay — return the
-      // existing review with 200 instead of 409.
+    const existing = existingReview.rows[0] ?? null;
+
+    if (existing && existing.is_auto !== true) {
+      // A buyer-authored review already exists. If an idempotency key is
+      // present, this is a safe replay — return the existing review with
+      // 200 instead of 409.
       if (idempotencyKey) {
-        const existing = await db.query<{
+        const existingRow = await db.query<{
           id: string;
           rating: number;
           comment: string | null;
+          is_auto: boolean;
+          auto_reason: string | null;
           created_at: string;
           updated_at: string;
         }>(
-          `SELECT id, rating, comment, created_at, updated_at
+          `SELECT id, rating, comment, is_auto, auto_reason, created_at, updated_at
            FROM order_reviews WHERE order_id = $1 LIMIT 1`,
           [orderId],
         );
-        const row = existing.rows[0];
+        const row = existingRow.rows[0];
         const mediaRows = await db.query<{ media_url: string; position: number }>(
           `SELECT media_url, position FROM review_media WHERE review_id = $1 ORDER BY position`,
           [row.id],
@@ -481,6 +492,8 @@ export const registerSupportReviewRoutes = ({
             rating: row.rating,
             comment: row.comment,
             photoUrls: mediaRows.rows.map((m) => m.media_url),
+            isAuto: row.is_auto === true,
+            autoReason: row.auto_reason,
             createdAt: row.created_at,
             updatedAt: row.updated_at,
           },
@@ -494,41 +507,135 @@ export const registerSupportReviewRoutes = ({
       };
     }
 
-    const reviewId = `review_${crypto.randomUUID()}`;
+    // An existing is_auto row is platform-generated placeholder feedback,
+    // NOT a buyer submission — the buyer's POST supersedes it in place.
+    // Updating the same row keeps UNIQUE(order_id) intact and preserves the
+    // review id so dedupe/idempotent replays stay stable. Crucially, an
+    // is_auto row is never echoed back as if the buyer authored it.
     const photoUrls = body.photoUrls ?? [];
+    let reviewId = `review_${crypto.randomUUID()}`;
+    let supersededAutoReview = false;
+    let supersededCreatedAt: string | null = null;
 
-    // Insert review and media atomically in a transaction.
-    await db.query("BEGIN");
+    // Insert/update review + media atomically on ONE checked-out connection
+    // — running BEGIN/COMMIT on the Pool would scatter statements across
+    // arbitrary pooled connections and could leak an open transaction.
+    const client = await db.connect();
     try {
-      await db.query(
-        `INSERT INTO order_reviews (
-           id, order_id, reviewer_id, seller_id, rating, comment, created_at, updated_at
-         )
-         VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
-        [
+      await client.query("BEGIN");
+
+      if (existing) {
+        // Supersede the auto row in place. The `is_auto = TRUE` guard makes
+        // the update conditional: if a buyer review raced in between the
+        // check and this write, zero rows match and we 409 below.
+        const updated = await client.query<{ id: string; created_at: string }>(
+          `UPDATE order_reviews
+           SET rating = $2,
+               comment = $3,
+               reviewer_id = $4,
+               is_auto = FALSE,
+               auto_reason = NULL,
+               updated_at = NOW()
+           WHERE id = $1 AND is_auto = TRUE
+           RETURNING id, created_at::text`,
+          [existing.id, body.rating, body.comment ?? null, userId],
+        );
+
+        if (!updated.rowCount) {
+          await client.query("ROLLBACK");
+          reply.code(409);
+          return {
+            ok: false,
+            error: "A review already exists for this order",
+            code: "REVIEW_ALREADY_EXISTS",
+          };
+        }
+
+        reviewId = existing.id;
+        supersededAutoReview = true;
+        supersededCreatedAt = updated.rows[0].created_at;
+
+        // Replace any media left on the auto row with the buyer's photos.
+        await client.query("DELETE FROM review_media WHERE review_id = $1", [
           reviewId,
-          orderId,
-          userId,
-          order.seller_id,
-          body.rating,
-          body.comment ?? null,
-        ],
-      );
+        ]);
+      } else {
+        const inserted = await client.query<{ id: string }>(
+          `INSERT INTO order_reviews (
+             id, order_id, reviewer_id, seller_id, rating, comment, created_at, updated_at
+           )
+           VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+           ON CONFLICT (order_id) DO NOTHING
+           RETURNING id`,
+          [
+            reviewId,
+            orderId,
+            userId,
+            order.seller_id,
+            body.rating,
+            body.comment ?? null,
+          ],
+        );
+
+        if (!inserted.rowCount) {
+          // A review landed between the check and the insert (concurrent
+          // sweep or buyer retry). If it is an auto row, supersede it in
+          // place; otherwise it is a real buyer review → 409.
+          const raced = await client.query<{ id: string; is_auto: boolean }>(
+            "SELECT id, is_auto FROM order_reviews WHERE order_id = $1 LIMIT 1",
+            [orderId],
+          );
+          const racedRow = raced.rows[0];
+          const updated = racedRow?.is_auto === true
+            ? await client.query<{ id: string; created_at: string }>(
+                `UPDATE order_reviews
+                 SET rating = $2,
+                     comment = $3,
+                     reviewer_id = $4,
+                     is_auto = FALSE,
+                     auto_reason = NULL,
+                     updated_at = NOW()
+                 WHERE id = $1 AND is_auto = TRUE
+                 RETURNING id, created_at::text`,
+                [racedRow.id, body.rating, body.comment ?? null, userId],
+              )
+            : { rowCount: 0, rows: [] as { id: string; created_at: string }[] };
+
+          if (!updated.rowCount) {
+            await client.query("ROLLBACK");
+            reply.code(409);
+            return {
+              ok: false,
+              error: "A review already exists for this order",
+              code: "REVIEW_ALREADY_EXISTS",
+            };
+          }
+
+          reviewId = racedRow!.id;
+          supersededAutoReview = true;
+          supersededCreatedAt = updated.rows[0].created_at;
+          await client.query("DELETE FROM review_media WHERE review_id = $1", [
+            reviewId,
+          ]);
+        }
+      }
 
       // Persist media if provided.
       for (let i = 0; i < photoUrls.length; i++) {
         const mediaId = `revmedia_${crypto.randomUUID()}`;
-        await db.query(
+        await client.query(
           `INSERT INTO review_media (id, review_id, media_url, position, created_at)
            VALUES ($1, $2, $3, $4, NOW())`,
           [mediaId, reviewId, photoUrls[i], i],
         );
       }
 
-      await db.query("COMMIT");
+      await client.query("COMMIT");
     } catch (error) {
-      await db.query("ROLLBACK");
+      await client.query("ROLLBACK");
       throw error;
+    } finally {
+      client.release();
     }
 
     try {
@@ -552,17 +659,24 @@ export const registerSupportReviewRoutes = ({
       );
     }
 
-    reply.code(201);
+    // 200 (not 201) when the buyer's review superseded a platform auto row —
+    // it is an in-place update of an existing record, and the flag lets
+    // callers distinguish "created" from "replaced automatic feedback".
+    reply.code(supersededAutoReview ? 200 : 201);
     const now = new Date().toISOString();
     return {
       ok: true,
+      supersededAutoReview,
       review: {
         id: reviewId,
         orderId,
         rating: body.rating,
         comment: body.comment ?? null,
         photoUrls: photoUrls.length > 0 ? photoUrls : undefined,
-        createdAt: now,
+        // A buyer-submitted review is never platform-generated.
+        isAuto: false,
+        autoReason: null,
+        createdAt: supersededCreatedAt ?? now,
         updatedAt: now,
       },
     };

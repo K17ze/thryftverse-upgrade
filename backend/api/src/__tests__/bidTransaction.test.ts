@@ -205,7 +205,6 @@ const SESSION_ROW = (overrides: Partial<Record<string, unknown>> = {}) => ({
 function createMockClient(options: {
   begin?: () => Promise<void>;
   selectForUpdate?: (sessionId: string) => Promise<{ rows: unknown[] }>;
-  selectExistingBid?: (bidId: string) => Promise<{ rows: unknown[] }>;
   insertBid?: (args: unknown[]) => Promise<{ rows: unknown[] }>;
   updateLotPrice?: (args: unknown[]) => Promise<{ rows: unknown[] }>;
   updatePrice?: (args: unknown[]) => Promise<{ rows: unknown[] }>;
@@ -243,11 +242,6 @@ function createMockClient(options: {
         return options.selectForUpdate
           ? options.selectForUpdate(String(args[0]))
           : { rows: [LOT_ROW()] };
-      }
-      if (sql.includes('SELECT id FROM live_shopping_bids')) {
-        return options.selectExistingBid
-          ? options.selectExistingBid(String(args[0]))
-          : { rows: [] };
       }
       if (sql.includes('INSERT INTO live_shopping_bids')) {
         return options.insertBid ? options.insertBid(args) : { rows: [] };
@@ -288,11 +282,18 @@ function createMockDb(
   client: PoolClient,
   sessionRow: Record<string, unknown> | null = SESSION_ROW(),
   lotRow: Record<string, unknown> | null = LOT_ROW(),
+  // Pool-side replay lookup: `SELECT ... FROM live_shopping_bids WHERE
+  // bidder_id = $1 AND client_bid_id = $2` runs on the pool BEFORE the bid
+  // transaction (and again after a 23505 race).
+  findBid?: (args: unknown[]) => Promise<{ rows: unknown[] }>,
 ): MockDb {
   const queryCalls: QueryCall[] = [];
   const db: MockDb = {
     query: async (sql: string, args: unknown[] = []) => {
       queryCalls.push({ sql, args });
+      if (sql.includes('live_shopping_bids')) {
+        return findBid ? findBid(args) : { rows: [] };
+      }
       if (sql.includes('live_shopping_sessions')) {
         return { rows: sessionRow ? [sessionRow] : [] };
       }
@@ -467,26 +468,54 @@ describe('FOR UPDATE serializes concurrent bids', () => {
 });
 
 // ── 3. clientBidId idempotency ───────────────────────────────────────────────
+// Dedupe is keyed on `client_bid_id` scoped to `bidder_id` (the partial
+// unique index from migration 186) and resolved on the pool BEFORE the bid
+// transaction opens — a retried bid replays its durable row regardless of
+// current lot/session state, and one bidder's key can never replay or
+// collide with another bidder's bid.
 
 describe('clientBidId idempotency', () => {
-  it('inserts on first call and returns idempotent success on duplicate clientBidId', async () => {
-    const seenBidIds = new Set<string>();
+  /** Durable store keyed `${bidder_id}:${client_bid_id}` — the index scope. */
+  function makeBidStore() {
+    const bidsByKey = new Map<string, Record<string, unknown>>();
+    const recordInsert = (args: unknown[]) => {
+      // INSERT args: id, session_id, listing_id, lot_number, bidder_id,
+      // amount, lot_id, client_bid_id
+      bidsByKey.set(`${args[4]}:${args[7]}`, {
+        id: args[0],
+        session_id: args[1],
+        listing_id: args[2],
+        lot_number: args[3],
+        lot_id: args[6],
+        bidder_id: args[4],
+        amount: String(args[5]),
+        created_at: new Date().toISOString(),
+      });
+    };
+    const findBid = async (args: unknown[]) => {
+      const row = bidsByKey.get(`${args[0]}:${args[1]}`);
+      return { rows: row ? [row] : [] };
+    };
+    return { bidsByKey, recordInsert, findBid };
+  }
+
+  it('inserts on first call and replays the durable row on duplicate clientBidId', async () => {
+    const store = makeBidStore();
     const lotRow = LOT_ROW({ current_price: '60', bid_count: 1 });
 
     const { client, clientQueries } = createMockClient({
-      selectForUpdate: async () => ({ rows: [LOT_ROW({ current_price: '50' })] }),
-      selectExistingBid: async (bidId) => ({
-        rows: seenBidIds.has(bidId) ? [{ id: bidId }] : [],
+      selectForUpdate: async () => ({
+        rows: [LIVE_LOT_ROW({ high_bid_minor: 5000, min_increment_minor: 100 })],
       }),
       insertBid: async (args) => {
-        seenBidIds.add(String(args[0]));
+        store.recordInsert(args);
         return { rows: [] };
       },
       updatePrice: async (args) => ({
         rows: [LOT_ROW({ current_price: String(args[1]), bid_count: 1 })],
       }),
     });
-    const db = createMockDb(client, SESSION_ROW(), lotRow);
+    const db = createMockDb(client, SESSION_ROW(), lotRow, store.findBid);
     const { app, handlers } = createMockApp();
     const deps = createDeps(db);
     deps.app = app;
@@ -503,36 +532,194 @@ describe('clientBidId idempotency', () => {
     );
     assert.equal(r1.reply._sentCode, 201);
     assert.equal((r1.result as { ok: boolean }).ok, true);
+    const firstBidId = (r1.result as { bid: { id: string } }).bid.id;
 
     const insertCalls = clientQueries.filter((c) =>
       c.sql.includes('INSERT INTO live_shopping_bids'),
     );
     assert.equal(insertCalls.length, 1, 'first call must INSERT exactly once');
+    // client_bid_id is the dedupe surface — it must be persisted, and the
+    // row id must be server-generated (not the client key).
+    assert.equal(insertCalls[0].args[7], clientBidId, 'INSERT must write client_bid_id');
+    assert.notEqual(firstBidId, clientBidId, 'bid id must not be the client key');
 
-    // Second call: existing bid found → idempotent success, no INSERT.
+    // Second call: durable row found → idempotent success, no INSERT.
     const r2 = await invoke(
       handlers,
       '/streaming/sessions/:sessionId/bids',
       { sessionId: 'sess-1' },
       { amount: 60, clientBidId },
     );
-    const body2 = r2.result as { ok: boolean; success: boolean; idempotent: boolean };
+    const body2 = r2.result as {
+      ok: boolean;
+      success: boolean;
+      idempotent: boolean;
+      bid: { id: string };
+    };
     assert.equal(body2.ok, true);
     assert.equal(body2.success, true);
     assert.equal(body2.idempotent, true);
+    assert.equal(body2.bid.id, firstBidId, 'replay must return the original bid');
 
-    const insertCallsAfterDup = clientQueries.filter((c) =>
-      c.sql.includes('INSERT INTO live_shopping_bids'),
-    );
     assert.equal(
-      insertCallsAfterDup.length,
+      clientQueries.filter((c) => c.sql.includes('INSERT INTO live_shopping_bids')).length,
       1,
       'duplicate clientBidId must not INSERT again',
     );
+    // The replay resolves before the transaction — exactly one BEGIN total.
+    assert.equal(
+      clientQueries.filter((c) => c.sql === 'BEGIN').length,
+      1,
+      'replay must not open a second transaction',
+    );
+  });
 
-    // The duplicate path must ROLLBACK (it acquired a lock but took no action).
-    const rollbackCalls = clientQueries.filter((c) => c.sql === 'ROLLBACK');
-    assert.ok(rollbackCalls.length >= 1, 'idempotent path must ROLLBACK');
+  it('replays an accepted bid even when the lot has since closed', async () => {
+    // The legit retry landing post-close must see idempotent success, not
+    // NO_CURRENT_LOT — the durable row wins over the lot-state gate.
+    const clientBidId = '22222222-2222-2222-2222-222222222222';
+    const store = makeBidStore();
+    store.bidsByKey.set(`user-1:${clientBidId}`, {
+      id: 'bid-original',
+      session_id: 'sess-1',
+      listing_id: 'listing-1',
+      lot_number: 1,
+      lot_id: 'lot_sess-1',
+      bidder_id: 'user-1',
+      amount: '60',
+      created_at: new Date().toISOString(),
+    });
+
+    // No open lot exists anymore — the transaction would fail NO_CURRENT_LOT.
+    const { client, clientQueries } = createMockClient({
+      selectForUpdate: async () => ({ rows: [] }),
+    });
+    const db = createMockDb(client, SESSION_ROW(), null, store.findBid);
+    const { app, handlers } = createMockApp();
+    const deps = createDeps(db);
+    deps.app = app;
+    registerStreamingRoutes(deps);
+
+    const { result } = await invoke(
+      handlers,
+      '/streaming/sessions/:sessionId/bids',
+      { sessionId: 'sess-1' },
+      { amount: 60, clientBidId },
+    );
+    const body = result as { ok: boolean; idempotent: boolean; bid: { id: string } };
+    assert.equal(body.ok, true);
+    assert.equal(body.idempotent, true);
+    assert.equal(body.bid.id, 'bid-original');
+    assert.equal(
+      clientQueries.length,
+      0,
+      'replay must resolve before BEGIN — the lot-state gate is never reached',
+    );
+  });
+
+  it('does not replay another bidder\'s clientBidId — a separate bid is inserted', async () => {
+    // Dedupe is scoped to (bidder_id, client_bid_id): bidder-b reusing
+    // bidder-a's key must place their own bid, not receive bidder-a's success.
+    const clientBidId = '33333333-3333-3333-3333-333333333333';
+    const store = makeBidStore();
+    store.bidsByKey.set(`bidder-a:${clientBidId}`, {
+      id: 'bid-of-a',
+      session_id: 'sess-1',
+      listing_id: 'listing-1',
+      lot_number: 1,
+      lot_id: 'lot_sess-1',
+      bidder_id: 'bidder-a',
+      amount: '55',
+      created_at: new Date().toISOString(),
+    });
+
+    const { client, clientQueries } = createMockClient({
+      selectForUpdate: async () => ({
+        rows: [LIVE_LOT_ROW({ high_bid_minor: 5000, min_increment_minor: 100 })],
+      }),
+      insertBid: async (args) => {
+        store.recordInsert(args);
+        return { rows: [] };
+      },
+      updatePrice: async (args) => ({
+        rows: [LOT_ROW({ current_price: String(args[1]), bid_count: 2 })],
+      }),
+    });
+    const db = createMockDb(client, SESSION_ROW(), LOT_ROW(), store.findBid);
+    const { app, handlers } = createMockApp();
+    const deps = createDeps(db);
+    deps.app = app;
+    registerStreamingRoutes(deps);
+
+    const { result, reply } = await invoke(
+      handlers,
+      '/streaming/sessions/:sessionId/bids',
+      { sessionId: 'sess-1' },
+      { amount: 60, clientBidId },
+      { userId: 'bidder-b' },
+    );
+    assert.equal(reply._sentCode, 201);
+    assert.equal(
+      (result as { idempotent?: boolean }).idempotent,
+      undefined,
+      'a foreign clientBidId must not be reported as a replay',
+    );
+    const inserts = clientQueries.filter((c) =>
+      c.sql.includes('INSERT INTO live_shopping_bids'),
+    );
+    assert.equal(inserts.length, 1, 'bidder-b gets their own bid row');
+    assert.equal(inserts[0].args[4], 'bidder-b');
+    assert.equal(inserts[0].args[7], clientBidId);
+  });
+
+  it('resolves the durable row when a concurrent retry wins the INSERT race', async () => {
+    // Pre-check missed (the other request had not committed yet); the INSERT
+    // then hits the partial unique index (23505). Roll back and replay the
+    // committed row instead of surfacing a raw constraint error.
+    const clientBidId = '44444444-4444-4444-4444-444444444444';
+    const committedRow = {
+      id: 'bid-race-winner',
+      session_id: 'sess-1',
+      listing_id: 'listing-1',
+      lot_number: 1,
+      lot_id: 'lot_sess-1',
+      bidder_id: 'user-1',
+      amount: '60',
+      created_at: new Date().toISOString(),
+    };
+    let committed = false;
+
+    const { client, clientQueries } = createMockClient({
+      selectForUpdate: async () => ({ rows: [LIVE_LOT_ROW()] }),
+      insertBid: async () => {
+        committed = true;
+        throw Object.assign(new Error('duplicate key value'), { code: '23505' });
+      },
+    });
+    const db = createMockDb(client, SESSION_ROW(), LOT_ROW(), async (args) =>
+      committed && args[0] === 'user-1' && args[1] === clientBidId
+        ? { rows: [committedRow] }
+        : { rows: [] },
+    );
+    const { app, handlers } = createMockApp();
+    const deps = createDeps(db);
+    deps.app = app;
+    registerStreamingRoutes(deps);
+
+    const { result } = await invoke(
+      handlers,
+      '/streaming/sessions/:sessionId/bids',
+      { sessionId: 'sess-1' },
+      { amount: 60, clientBidId },
+    );
+    const body = result as { ok: boolean; idempotent: boolean; bid: { id: string } };
+    assert.equal(body.ok, true);
+    assert.equal(body.idempotent, true);
+    assert.equal(body.bid.id, 'bid-race-winner');
+    assert.ok(
+      clientQueries.some((c) => c.sql === 'ROLLBACK'),
+      'the aborted transaction must roll back before the client is released',
+    );
   });
 });
 

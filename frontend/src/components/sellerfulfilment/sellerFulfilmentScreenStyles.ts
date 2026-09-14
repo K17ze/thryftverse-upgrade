@@ -50,6 +50,13 @@ export function createSellerFulfilmentStyles(colors: ThemeColors) {
       color: colors.textMuted,
       marginTop: Space.xs,
       marginBottom: Space.lg },
+    // SLA defect flag — same quiet footnote grammar, danger tint.
+    breachFootnote: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.danger,
+      marginTop: Space.xs,
+      marginBottom: Space.lg },
     // ─── B. One next action ───
     actionSection: {
       marginTop: Space.md,

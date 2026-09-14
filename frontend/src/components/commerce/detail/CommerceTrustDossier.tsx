@@ -75,6 +75,23 @@ export function CommerceTrustDossier({
           hairlines for clear scanning. */}
       {(() => {
         const trustRows: { icon: keyof typeof Ionicons.glyphMap; label: string; dotColor?: string }[] = [];
+        // 0. Seller away — holiday mode pauses the shop; checkout and
+        // offers are rejected server-side while it is on. The return date
+        // is rendered only when the seller published one — never derived
+        // from handling-time estimates. Normal dispatch/delivery claims
+        // are suppressed while paused: quoting them would be untruthful.
+        const sellerAway = seller?.holidayMode === true;
+        if (sellerAway) {
+          const backOn = seller?.holidayModeUntil
+            ? formatShortDate(seller.holidayModeUntil)
+            : null;
+          trustRows.push({
+            icon: 'sunny-outline',
+            label: backOn
+              ? `Seller away — back ${backOn}`
+              : seller?.awayMessage || 'Seller away — shop paused',
+          });
+        }
         // Rating and verification already belong to the seller identity above.
         // 3. Response time — "Usually responds in 2h" signal
         if (seller?.responseTimeLabel) {
@@ -99,7 +116,9 @@ export function CommerceTrustDossier({
           return start || end || null;
         })();
         const deliveryEstimate = deliveryWindow ? `Est. ${deliveryWindow}` : null;
-        if (seller?.dispatchTimeLabel) {
+        if (sellerAway) {
+          // Suppress the dispatch/delivery row — see note above.
+        } else if (seller?.dispatchTimeLabel) {
           trustRows.push({
             icon: 'car-outline',
             label: [seller.dispatchTimeLabel, deliveryEstimate].filter(Boolean).join(' · '),

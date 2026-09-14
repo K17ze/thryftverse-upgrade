@@ -17,7 +17,7 @@ import { Motion } from '../../theme/motionTokens';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useAppTranslation } from '../../i18n/useAppTranslation';
 
-export type MessageAction = 'copy' | 'reply' | 'react' | 'forward' | 'askAgent' | 'edit' | 'delete' | 'retry' | 'report';
+export type MessageAction = 'copy' | 'reply' | 'react' | 'forward' | 'save' | 'askAgent' | 'edit' | 'delete' | 'retry' | 'report';
 
 interface MessageContextMenuProps {
   visible: boolean;
@@ -28,6 +28,15 @@ interface MessageContextMenuProps {
   isFailed?: boolean;
   /** P2-03: Whether the message is still within the edit window. */
   canEdit?: boolean;
+  /** Save in chat — caller-gated so in-flight, failed, deleted, and
+   *  system messages never offer the action. */
+  canSave?: boolean;
+  /** Whether the message is currently saved in chat — drives the
+   *  "Save in chat" / "Unsave" label. */
+  isSaved?: boolean;
+  /** Deleted-for-everyone tombstone — suppresses all content actions;
+   *  only "Unsave" is offered when the actor has a prior save. */
+  isDeleted?: boolean;
 }
 
 export function MessageContextMenu({
@@ -38,6 +47,9 @@ export function MessageContextMenu({
   isOwnMessage,
   isFailed,
   canEdit,
+  canSave,
+  isSaved,
+  isDeleted,
 }: MessageContextMenuProps) {
   const { colors } = useAppTheme();
   const { t } = useAppTranslation('messaging');
@@ -51,8 +63,11 @@ export function MessageContextMenu({
       isFailed: Boolean(isFailed),
       messageText,
       canEdit: Boolean(canEdit),
+      canSave: Boolean(canSave),
+      isSaved: Boolean(isSaved),
+      isDeletedMessage: Boolean(isDeleted),
     });
-  }, [messageText, isOwnMessage, isFailed, canEdit]);
+  }, [messageText, isOwnMessage, isFailed, canEdit, canSave, isSaved, isDeleted]);
   const slideAnim = React.useRef(new Animated.Value(screenHeight)).current;
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
 

@@ -36,7 +36,7 @@ export const portfolioScreenStyles = StyleSheet.create({
     paddingVertical: Space.md,
     paddingHorizontal: Space.xs,
     gap: Space.sm,
-    marginBottom: Space.lg,
+    marginBottom: Space.sm,
   },
   // Label uses captionElevated per Design.md financial UI spec — quiet,
   // professional, not competing with the value below.
@@ -88,10 +88,14 @@ export const portfolioScreenStyles = StyleSheet.create({
   portfolioTabRow: {
     flexDirection: 'row',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    marginBottom: Space.lg,
-    marginTop: Space.lg,
+    marginBottom: Space.xs,
+    marginTop: Space.sm,
   },
   portfolioTab: {
+    minHeight: 48,
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md,
     borderBottomWidth: Stroke.emphasis,
@@ -207,6 +211,7 @@ export const portfolioScreenStyles = StyleSheet.create({
   },
   sectionActions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: Space.md,
   },
   // ── Realised returns — calm income surface ──

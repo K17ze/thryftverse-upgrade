@@ -206,15 +206,31 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
     const inventory = inventoryResult.rows[0] ?? { active: '0', drafts: '0', paused: '0', sold: '0', active_value: '0' };
     freshness.listings = { asOf: generatedAt, state: 'fresh' };
 
-    // ── Seller trust (for ship_within_days) ──
+    // ── Seller trust (for ship_within_days) + holiday-mode window ──
+    // holiday_mode_until/since feed the dispatch-deadline shift below: an
+    // order paid while the seller is away is due max(paid_at, return date)
+    // + handling days. Orders paid BEFORE the seller went away keep their
+    // original paid_at + handling deadline — going away does not excuse
+    // orders already sold (lib/sellerAway.ts).
     let shipWithinDays: number | null = null;
+    let holidayModeUntil: string | null = null;
+    let holidayModeSince: string | null = null;
     if (trustAvailable) {
       try {
-        const trustResult = await readDb.query<{ ship_within_days: number | null }>(
-          `SELECT ship_within_days FROM seller_trust WHERE user_id = $1 LIMIT 1`,
+        const trustResult = await readDb.query<{
+          ship_within_days: number | null;
+          holiday_mode_until: string | null;
+          holiday_mode_since: string | null;
+        }>(
+          `SELECT st.ship_within_days, u.holiday_mode_until, u.holiday_mode_since
+           FROM users u
+           LEFT JOIN seller_trust st ON st.user_id = u.id
+           WHERE u.id = $1 LIMIT 1`,
           [sellerId],
         );
         shipWithinDays = trustResult.rows[0]?.ship_within_days ?? null;
+        holidayModeUntil = trustResult.rows[0]?.holiday_mode_until ?? null;
+        holidayModeSince = trustResult.rows[0]?.holiday_mode_since ?? null;
         freshness.trust = { asOf: generatedAt, state: 'fresh' };
       } catch {
         freshness.trust = { asOf: generatedAt, state: 'unavailable' };
@@ -240,16 +256,30 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
           `
           SELECT
             COUNT(*) AS count,
-            MIN(paid_at)::text AS oldest_paid,
+            MIN(o.paid_at)::text AS oldest_paid,
             COUNT(*) FILTER (
-              WHERE paid_at IS NOT NULL
-                AND paid_at + COALESCE(
-                  (SELECT ship_within_days FROM seller_trust WHERE user_id = $1 LIMIT 1),
-                  3
-                ) * INTERVAL '1 day' < NOW()
+              WHERE o.paid_at IS NOT NULL
+                AND
+                -- Dispatch base: the return date only rebases an order that
+                -- was paid inside the away window (since <= paid_at <=
+                -- until). A NULL since (rows predating migration 293)
+                -- counts as "away since before the payment". Orders paid
+                -- before the seller left keep paid_at — the pause never
+                -- excuses a deadline that was already running.
+                CASE
+                  WHEN u.holiday_mode_until IS NOT NULL
+                       AND o.paid_at <= u.holiday_mode_until
+                       AND (u.holiday_mode_since IS NULL
+                            OR o.paid_at >= u.holiday_mode_since)
+                  THEN u.holiday_mode_until
+                  ELSE o.paid_at
+                END
+                + COALESCE(st.ship_within_days, 3) * INTERVAL '1 day' < NOW()
             ) AS overdue_count
-          FROM orders
-          WHERE seller_id = $1 AND status = 'paid'
+          FROM orders o
+          LEFT JOIN users u ON u.id = o.seller_id
+          LEFT JOIN seller_trust st ON st.user_id = o.seller_id
+          WHERE o.seller_id = $1 AND o.status = 'paid'
         `,
           [sellerId],
         );
@@ -258,13 +288,26 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
         const oldestPaid = shipOrdersResult.rows[0]?.oldest_paid ?? null;
 
         if (shipCount > 0) {
-          // Compute the real dispatch deadline: oldest paid_at + handling time
+          // Compute the real dispatch deadline:
+          //   return-date + handling when the oldest order was paid inside
+          //   the away window; paid_at + handling otherwise. A seller away
+          //   until R cannot ship before R — but an order paid before they
+          //   left keeps its original deadline (going away does not excuse
+          //   orders already sold). A NULL since (pre-migration anchor)
+          //   counts as "away since before the payment".
           let dueAt: string | null = null;
           if (oldestPaid) {
             const handlingDays = shipWithinDays ?? 3;
             const paidDate = new Date(oldestPaid);
-            paidDate.setDate(paidDate.getDate() + handlingDays);
-            dueAt = paidDate.toISOString();
+            const returnDate = holidayModeUntil ? new Date(holidayModeUntil) : null;
+            const awaySince = holidayModeSince ? new Date(holidayModeSince) : null;
+            const paidWhileAway = returnDate !== null
+              && paidDate.getTime() <= returnDate.getTime()
+              && (awaySince === null || paidDate.getTime() >= awaySince.getTime());
+            const base = paidWhileAway && returnDate ? returnDate : paidDate;
+            const due = new Date(base.getTime());
+            due.setDate(due.getDate() + handlingDays);
+            dueAt = due.toISOString();
           }
 
           tasks.push({

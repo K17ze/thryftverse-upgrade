@@ -7,6 +7,12 @@ import {
   type StreamRoom,
 } from "../lib/streaming/index.js";
 import { publishRealtimeEvent } from "../lib/realtime.js";
+import {
+  LIVE_LOT_ANTI_SNIPE_EXTENSION_SECONDS,
+  LIVE_LOT_ANTI_SNIPE_MAX_EXTENSIONS,
+  LIVE_LOT_ANTI_SNIPE_WINDOW_MS,
+  sweepDueLiveLots,
+} from "./liveLotEngine.js";
 
 type StreamingRouteDependencies = {
   app: FastifyInstance;
@@ -59,6 +65,12 @@ type LiveShoppingCurrentLotRow = {
   current_price: string;
   bid_count: number;
   updated_at: string;
+  /** From migration 186 — the current high bidder on the projection row. */
+  high_bidder_id?: string | null;
+  /** Joined from the authoritative live_lots row (NULL when the linked lot
+   *  is not open or carries no server deadline). */
+  lot_closes_at?: string | null;
+  lot_extension_count?: number | null;
 };
 
 type LiveLotRow = {
@@ -80,6 +92,20 @@ type LiveLotRow = {
   winner_id: string | null;
   order_id: string | null;
   extension_count: number;
+  /** Joined from live_lot_snapshots (seller captured at schedule time). */
+  seller_id?: string | null;
+};
+
+/** Row shape returned by the clientBidId replay lookup. */
+type LiveShoppingBidReplayRow = {
+  id: string;
+  session_id: string;
+  listing_id: string;
+  lot_number: number;
+  lot_id: string | null;
+  bidder_id: string;
+  amount: string;
+  created_at: string;
 };
 
 const createSessionSchema = z.object({
@@ -194,7 +220,14 @@ const fetchCurrentLotRow = async (
   sessionId: string,
 ): Promise<LiveShoppingCurrentLotRow | null> => {
   const result = await db.query<LiveShoppingCurrentLotRow>(
-    `SELECT * FROM live_shopping_current_lots WHERE session_id = $1 LIMIT 1`,
+    `SELECT c.*, l.closes_at AS lot_closes_at, l.extension_count AS lot_extension_count
+       FROM live_shopping_current_lots c
+       LEFT JOIN live_lots l
+         ON l.session_id = c.session_id
+        AND l.listing_id = c.listing_id
+        AND l.status IN ('open', 'closing')
+      WHERE c.session_id = $1
+      LIMIT 1`,
     [sessionId],
   );
   return result.rows[0] ?? null;
@@ -218,6 +251,8 @@ const mapCurrentLotRow = (row: LiveShoppingCurrentLotRow) => ({
   currentPrice: Number(row.current_price),
   bidCount: row.bid_count,
   updatedAt: row.updated_at,
+  closesAt: row.lot_closes_at ?? null,
+  extensionCount: row.lot_extension_count ?? 0,
 });
 
 /**
@@ -542,7 +577,12 @@ export const registerStreamingRoutes = ({
       ],
     );
 
-    const currentLot = mapCurrentLotRow(result.rows[0]);
+    // Re-read through the live_lots join so the emitted current-lot state
+    // carries the authoritative closes_at/extension_count countdown fields.
+    const refreshed = await fetchCurrentLotRow(db, sessionId);
+    const currentLot = refreshed
+      ? mapCurrentLotRow(refreshed)
+      : mapCurrentLotRow(result.rows[0]);
     const previousLotNumber = existing?.lot_number ?? -1;
 
     void publishRealtimeEvent({
@@ -577,6 +617,68 @@ export const registerStreamingRoutes = ({
     const { sessionId } = sessionIdParamsSchema.parse(request.params);
     const { amount, clientBidId } = placeBidSchema.parse(request.body);
 
+    // Idempotent replay, resolved for the authenticated bidder BEFORE any
+    // session/lot-state gate: a retried bid whose original insert committed
+    // must replay its accepted row even when the lot has since closed or the
+    // stream has ended — otherwise a legitimate retry would see
+    // NO_CURRENT_LOT / STREAM_NOT_LIVE instead of its own success.
+    //
+    // The dedupe key is `client_bid_id` scoped to `bidder_id` (the partial
+    // unique index from migration 186), never the bid `id` — one bidder's
+    // clientBidId can neither replay nor collide with another bidder's bid.
+    const findPriorBid = async (): Promise<LiveShoppingBidReplayRow | null> => {
+      if (!clientBidId) return null;
+      const prior = await db.query<LiveShoppingBidReplayRow>(
+        `SELECT id, session_id, listing_id, lot_number, lot_id, bidder_id,
+                amount, created_at::text
+           FROM live_shopping_bids
+          WHERE bidder_id = $1 AND client_bid_id = $2
+          LIMIT 1`,
+        [userId, clientBidId],
+      );
+      return prior.rows[0] ?? null;
+    };
+    const replayResponse = async (priorBid: LiveShoppingBidReplayRow) => {
+      const lotRow = await fetchCurrentLotRow(db, sessionId);
+      const lotState = lotRow ? mapCurrentLotRow(lotRow) : null;
+      return {
+        ok: true,
+        success: true,
+        idempotent: true,
+        bid: {
+          id: priorBid.id,
+          sessionId: priorBid.session_id,
+          listingId: priorBid.listing_id,
+          lotNumber: priorBid.lot_number,
+          bidderId: priorBid.bidder_id,
+          amount: Number(priorBid.amount),
+          createdAt: priorBid.created_at,
+        },
+        ...(lotState && lotRow
+          ? {
+              currentBid: lotState.currentPrice,
+              bidCount: lotState.bidCount,
+              isHighBidder: lotRow.high_bidder_id === userId,
+            }
+          : {}),
+      };
+    };
+
+    if (clientBidId) {
+      const priorBid = await findPriorBid();
+      if (priorBid) {
+        if (priorBid.session_id !== sessionId) {
+          reply.code(409);
+          return {
+            ok: false,
+            error: "clientBidId was already used for a bid in another session",
+            code: "CLIENT_BID_ID_REUSED",
+          };
+        }
+        return replayResponse(priorBid);
+      }
+    }
+
     const sessionRow = await fetchSessionRow(db, sessionId);
     if (!sessionRow) {
       throw createApiError("STREAM_NOT_FOUND", `Stream session ${sessionId} not found`);
@@ -587,7 +689,8 @@ export const registerStreamingRoutes = ({
     }
 
     const bidderName = request.authUser?.userId ?? userId;
-    const bidId = clientBidId ?? randomUUID();
+    // Server-generated bid id — `clientBidId` is a dedupe key, not the row id.
+    const bidId = randomUUID();
     const amountMinor = Math.round(amount * 100);
 
     const client = await db.connect();
@@ -595,7 +698,11 @@ export const registerStreamingRoutes = ({
       await client.query("BEGIN");
 
       const lotResult = await client.query<LiveLotRow>(
-        `SELECT * FROM live_lots WHERE session_id = $1 AND status = 'open' FOR UPDATE`,
+        `SELECT l.*, s.seller_id
+           FROM live_lots l
+           LEFT JOIN live_lot_snapshots s ON s.lot_id = l.id
+          WHERE l.session_id = $1 AND l.status = 'open'
+          FOR UPDATE OF l`,
         [sessionId],
       );
       const lockedLot = lotResult.rows[0];
@@ -605,6 +712,19 @@ export const registerStreamingRoutes = ({
         return { ok: false, error: "No current lot set for this session", code: "NO_CURRENT_LOT" };
       }
 
+      // The lot's seller (immutable snapshot taken at schedule time) can
+      // never bid on their own lot — same SELLER_RESTRICTED rule the
+      // auctions engine enforces.
+      if (lockedLot.seller_id === userId) {
+        await client.query("ROLLBACK");
+        reply.code(403);
+        return {
+          ok: false,
+          error: "Seller cannot bid on their own lot",
+          code: "SELLER_RESTRICTED",
+        };
+      }
+
       const projectionResult = await client.query<LiveShoppingCurrentLotRow>(
         `SELECT * FROM live_shopping_current_lots WHERE session_id = $1 LIMIT 1`,
         [sessionId],
@@ -612,49 +732,48 @@ export const registerStreamingRoutes = ({
       const projection = projectionResult.rows[0];
       const lotNumber = projection?.lot_number ?? lockedLot.position;
 
+      // The server deadline is authoritative: a *new* bid landing at/after
+      // closes_at is rejected even though the sweep has not flipped the lot
+      // to closed yet — otherwise the deadline would be cosmetic. Idempotent
+      // replays are resolved above so a retried accepted bid still reports
+      // success rather than lying about a rejection.
+      if (lockedLot.closes_at && Date.parse(lockedLot.closes_at) <= Date.now()) {
+        await client.query("ROLLBACK");
+        reply.code(409);
+        return {
+          ok: false,
+          error: "Bidding window for this lot has closed",
+          code: "LOT_BIDDING_CLOSED",
+        };
+      }
+
       const highBidMinor = Number(lockedLot.high_bid_minor ?? 0);
       const minIncrement = Number(lockedLot.min_increment_minor ?? 0);
-      const requiredMinor = highBidMinor + minIncrement;
+      const startPriceMinor = Number(lockedLot.start_price_minor ?? 0);
+      // Floor: the first bid must clear the lot's start price; every bid
+      // must clear high bid + min increment.
+      const requiredMinor = Math.max(startPriceMinor, highBidMinor + minIncrement);
       if (amountMinor < requiredMinor) {
         await client.query("ROLLBACK");
         reply.code(422);
         return {
           ok: false,
-          error: `Bid must be at least ${(requiredMinor / 100).toFixed(2)} (current high bid ${(highBidMinor / 100).toFixed(2)} plus increment ${(minIncrement / 100).toFixed(2)})`,
+          error: `Bid must be at least ${(requiredMinor / 100).toFixed(2)} (start price ${(startPriceMinor / 100).toFixed(2)}, current high bid ${(highBidMinor / 100).toFixed(2)} plus increment ${(minIncrement / 100).toFixed(2)})`,
           code: "BID_TOO_LOW",
           currentPrice: highBidMinor / 100,
           bidCount: projection?.bid_count ?? 0,
         };
       }
 
-      if (clientBidId) {
-        const existing = await client.query(
-          `SELECT id FROM live_shopping_bids WHERE id = $1 LIMIT 1`,
-          [bidId],
-        );
-        if (existing.rows.length > 0) {
-          await client.query("ROLLBACK");
-          const existingLot = await fetchCurrentLotRow(db, sessionId);
-          if (existingLot) {
-            const lotState = mapCurrentLotRow(existingLot);
-            return {
-              ok: true,
-              success: true,
-              currentBid: lotState.currentPrice,
-              bidCount: lotState.bidCount,
-              isHighBidder: true,
-              idempotent: true,
-            };
-          }
-          return { ok: true, success: true, idempotent: true };
-        }
-      }
-
+      // `client_bid_id` carries the client's dedupe key (partial unique
+      // index on (bidder_id, client_bid_id), migration 186); `status` is
+      // 'accepted' — this row only ever exists once the bid cleared every
+      // gate above.
       await client.query(
         `INSERT INTO live_shopping_bids
-           (id, session_id, listing_id, lot_number, bidder_id, amount, lot_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [bidId, sessionId, lockedLot.listing_id, lotNumber, userId, amount, lockedLot.id],
+           (id, session_id, listing_id, lot_number, bidder_id, amount, lot_id, client_bid_id, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'accepted')`,
+        [bidId, sessionId, lockedLot.listing_id, lotNumber, userId, amount, lockedLot.id, clientBidId ?? null],
       );
 
       await client.query(
@@ -667,15 +786,57 @@ export const registerStreamingRoutes = ({
         [lockedLot.id, amountMinor, userId, bidId],
       );
 
+      // Anti-snipe: a bid landing inside the closing window pushes closes_at
+      // out, capped at MAX_EXTENSIONS so the lot cannot be extended forever.
+      // The extension is written to live_lot_events and broadcast after commit
+      // so every viewer's countdown re-syncs to the server deadline.
+      let extension: { closes_at: string; extension_count: number; version: number } | null = null;
       if (lockedLot.closes_at) {
         const closeTime = Date.parse(lockedLot.closes_at);
         const now = Date.now();
-        const thirtySeconds = 30_000;
-        if (closeTime - now < thirtySeconds) {
-          await client.query(
-            `UPDATE live_lots SET closes_at = NOW() + INTERVAL '30 seconds', extension_count = extension_count + 1 WHERE id = $1`,
-            [lockedLot.id],
+        // Extend only for bids strictly before the deadline that land inside
+        // the window; each extension adds a fixed amount to the prior
+        // deadline, capped so the lot cannot be extended forever.
+        if (
+          now < closeTime
+          && closeTime - now <= LIVE_LOT_ANTI_SNIPE_WINDOW_MS
+          && lockedLot.extension_count < LIVE_LOT_ANTI_SNIPE_MAX_EXTENSIONS
+        ) {
+          const extensionResult = await client.query<{
+            closes_at: string;
+            extension_count: number;
+            version: number;
+          }>(
+            `UPDATE live_lots
+                SET closes_at = closes_at + make_interval(secs => $2),
+                    extension_count = extension_count + 1,
+                    version = version + 1,
+                    updated_at = NOW()
+              WHERE id = $1
+              RETURNING closes_at::text, extension_count, version`,
+            [lockedLot.id, LIVE_LOT_ANTI_SNIPE_EXTENSION_SECONDS],
           );
+          extension = extensionResult.rows[0] ?? null;
+          if (extension) {
+            await client.query(
+              `INSERT INTO live_lot_events
+                 (id, lot_id, session_id, event_type, event_version, actor_id, payload)
+               VALUES ($1, $2, $3, 'lot.extension', $4, $5, $6::jsonb)`,
+              [
+                randomUUID(),
+                lockedLot.id,
+                sessionId,
+                extension.version,
+                userId,
+                JSON.stringify({
+                  lotId: lockedLot.id,
+                  closesAt: extension.closes_at,
+                  extensionCount: extension.extension_count,
+                  trigger: 'anti_snipe_bid',
+                }),
+              ],
+            );
+          }
         }
       }
 
@@ -700,7 +861,15 @@ export const registerStreamingRoutes = ({
         currentPrice: amount,
         bidCount: (projection?.bid_count ?? 0) + 1,
         updatedAt: new Date().toISOString(),
+        closesAt: null as string | null,
+        extensionCount: 0,
       };
+      // Surface the authoritative deadline — the projection row itself does
+      // not carry closes_at, so stamp the live_lots value (post-extension
+      // when a snipe bid just extended the window).
+      lotState.closesAt = extension?.closes_at ?? lockedLot.closes_at ?? null;
+      lotState.extensionCount =
+        extension?.extension_count ?? lockedLot.extension_count ?? 0;
       const createdAt = new Date().toISOString();
 
       void publishRealtimeEvent({
@@ -726,6 +895,24 @@ export const registerStreamingRoutes = ({
         version: 1,
       });
 
+      // Anti-snipe extension — separate event so viewers' countdowns re-sync
+      // even if they missed which bid triggered it.
+      if (extension) {
+        void publishRealtimeEvent({
+          topic: liveSessionTopic(sessionId),
+          type: "lot.extension",
+          payload: {
+            lotId: lockedLot.id,
+            listingId: lockedLot.listing_id,
+            closesAt: extension.closes_at,
+            extensionCount: extension.extension_count,
+            maxExtensions: LIVE_LOT_ANTI_SNIPE_MAX_EXTENSIONS,
+          },
+          seq: true,
+          version: 1,
+        });
+      }
+
       reply.code(201);
       return {
         ok: true,
@@ -742,7 +929,27 @@ export const registerStreamingRoutes = ({
         lot: lotState,
       };
     } catch (err) {
+      // Never release a client mid-transaction back into the pool.
+      await client.query("ROLLBACK").catch(() => {});
       const code = (err as { code?: string })?.code;
+      if (code === "23505" && clientBidId) {
+        // Unique-violation on idx_live_bids_client_bid_id: a concurrent
+        // request already committed this bidder's bid under the same
+        // clientBidId between our pre-check and the INSERT. Resolve the
+        // durable row and replay it.
+        const priorBid = await findPriorBid();
+        if (priorBid) {
+          if (priorBid.session_id !== sessionId) {
+            reply.code(409);
+            return {
+              ok: false,
+              error: "clientBidId was already used for a bid in another session",
+              code: "CLIENT_BID_ID_REUSED",
+            };
+          }
+          return replayResponse(priorBid);
+        }
+      }
       if (code === "40001" || code === "40P01") {
         reply.code(409);
         return {
@@ -758,7 +965,12 @@ export const registerStreamingRoutes = ({
     }
   });
 
-  app.post("/streaming/sessions/:sessionId/lots/auto-close", async (request, reply) => {
+  // Auto-close pass for one session — the sweep worker runs the same path
+  // globally; this endpoint exists for manual/integration invocations. Each
+  // due lot closes through the shared engine close path (same lifecycle
+  // transition, live_lot_events entries and realtime fan-out as a host
+  // close), so no divergent close semantics live here.
+  app.post("/streaming/sessions/:sessionId/lots/auto-close", async (request) => {
     const { sessionId } = sessionIdParamsSchema.parse(request.params);
 
     const sessionRow = await fetchSessionRow(db, sessionId);
@@ -766,89 +978,7 @@ export const registerStreamingRoutes = ({
       throw createApiError("STREAM_NOT_FOUND", `Stream session ${sessionId} not found`);
     }
 
-    const client = await db.connect();
-    try {
-      await client.query("BEGIN");
-
-      const dueResult = await client.query<LiveLotRow>(
-        `SELECT * FROM live_lots
-           WHERE session_id = $1
-             AND status = 'open'
-             AND closes_at IS NOT NULL
-             AND closes_at <= NOW()
-         FOR UPDATE`,
-        [sessionId],
-      );
-
-      const closedLots: Array<{
-        lotId: string;
-        listingId: string;
-        status: string;
-        winnerId: string | null;
-        highBidMinor: number;
-        reservePriceMinor: number | null;
-      }> = [];
-
-      for (const lot of dueResult.rows) {
-        const highBidMinor = Number(lot.high_bid_minor ?? 0);
-        const reserveMinor = lot.reserve_price_minor != null ? Number(lot.reserve_price_minor) : null;
-        const meetsReserve = reserveMinor == null || highBidMinor >= reserveMinor;
-        const newStatus = meetsReserve && highBidMinor > 0 && lot.high_bidder_id
-          ? "sold"
-          : "passed";
-        const winnerId = newStatus === "sold" ? lot.high_bidder_id : null;
-
-        await client.query(
-          `UPDATE live_lots
-             SET status = $2,
-                 winner_id = $3,
-                 version = version + 1
-           WHERE id = $1`,
-          [lot.id, newStatus, winnerId],
-        );
-
-        await client.query(
-          `UPDATE live_shopping_current_lots
-             SET status = $2,
-                 winner_id = $3,
-                 updated_at = NOW()
-           WHERE session_id = $1`,
-          [sessionId, newStatus, winnerId],
-        );
-
-        closedLots.push({
-          lotId: lot.id,
-          listingId: lot.listing_id,
-          status: newStatus,
-          winnerId,
-          highBidMinor,
-          reservePriceMinor: reserveMinor,
-        });
-
-        void publishRealtimeEvent({
-          topic: liveSessionTopic(sessionId),
-          type: "live.lot.closed",
-          payload: {
-            lotId: lot.id,
-            listingId: lot.listing_id,
-            status: newStatus,
-            winnerId,
-            highBidMinor,
-            reservePriceMinor: reserveMinor,
-          },
-          seq: true,
-          version: 1,
-        });
-      }
-
-      await client.query("COMMIT");
-
-      return { ok: true, closedLots };
-    } catch (err) {
-      await client.query("ROLLBACK");
-      throw err;
-    } finally {
-      client.release();
-    }
+    const { closedLots, failedLots } = await sweepDueLiveLots(db, { sessionId });
+    return { ok: true, closedLots, failedLots };
   });
 };

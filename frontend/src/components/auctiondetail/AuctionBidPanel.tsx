@@ -63,8 +63,7 @@ export function AuctionBidPanel({
               styles.primaryStateSentence,
               { color: primaryState.color },
             ]}
-            numberOfLines={1}
-            accessibilityLiveRegion="polite"
+            maxFontSizeMultiplier={2}
           >
             {primaryState.text}
           </Text>
@@ -82,7 +81,7 @@ export function AuctionBidPanel({
       {subordinateStateText ? (
         <Text
           style={[styles.subordinateMetadata, { color: colors.textSecondary }]}
-          numberOfLines={1}
+          maxFontSizeMultiplier={2}
         >
           {subordinateStateText}
         </Text>
@@ -118,10 +117,10 @@ const styles = StyleSheet.create({
   // layout shift. Color is applied inline from the primaryState memo
   // so only one accent communicates urgency.
   primaryStateSentence: {
-    fontSize: TypographyV2.priceList.size,
-    lineHeight: TypographyV2.priceList.lineHeight,
-    fontFamily: FontFamily.bold,
-    letterSpacing: TypographyV2.priceList.letterSpacing,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   // Subordinate metadata — countdown demotes here when the viewer-state

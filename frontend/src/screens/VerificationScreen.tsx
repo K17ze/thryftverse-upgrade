@@ -9,6 +9,7 @@ import {
   KycFlowCard,
   Dac7Section,
   VerificationFooter } from '../components/verification';
+import { SkeletonBlock } from '../components/flagship';
 import { useVerificationStatus, useKycFlow, useDac7Flow } from '../hooks/verification';
 import { deriveVerificationTierInfo } from '../domain/verification';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
@@ -46,13 +47,24 @@ export default function VerificationScreen({ navigation }: Props) {
         contentContainerStyle={{ paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: Math.max(insets.bottom, Space.md) + Space.lg }}
       >
         {/* ── STATUS BANNER + VERIFICATION STEPS ── */}
-        <VerificationStatusSection
-          tierInfo={tierInfo}
-          emailVerified={status.emailVerified}
-          kycVerified={status.kycVerified}
-          kycPending={status.kycPending}
-          onStartKyc={kycFlow.start}
-        />
+        {/* Gate on the backend load — rendering kycVerified=false while the
+            fetch is in flight would briefly show a verified user the
+            "unverified / Start verification" state (truthful-UI contract). */}
+        {status.isStatusLoading ? (
+          <>
+            <SkeletonBlock width="100%" height={72} style={{ marginBottom: Space.md }} />
+            <SkeletonBlock width="100%" height={56} style={{ marginBottom: Space.xs }} />
+            <SkeletonBlock width="100%" height={56} style={{ marginBottom: Space.md }} />
+          </>
+        ) : (
+          <VerificationStatusSection
+            tierInfo={tierInfo}
+            emailVerified={status.emailVerified}
+            kycVerified={status.kycVerified}
+            kycPending={status.kycPending}
+            onStartKyc={kycFlow.start}
+          />
+        )}
 
         {/* ── KYC FLOW ── */}
         {kycFlow.step !== 'status' ? (

@@ -8,6 +8,7 @@ import {
   type CommerceAddress,
   type CommerceOrder,
   type CommercePaymentMethod,
+  type ShippingQuoteItem,
 } from '../../services/commerceApi';
 import {
   getUserCountryCapabilities,
@@ -17,8 +18,8 @@ import {
   type CheckoutPostageOption,
   DEFAULT_POSTAGE_OPTION,
   UNAVAILABLE_REGION_POSTAGE_OPTION,
-  toEtaLabelFromRange,
   toEtaLabel,
+  toPostageOptionFromQuote,
 } from '../../utils/checkoutFlow';
 import { useCheckoutCapabilities } from './useCheckoutCapabilities';
 import type { Listing } from '../../domain';
@@ -104,6 +105,10 @@ export function useCheckoutHydration({
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [shippingError, setShippingError] = useState<string | null>(null);
   const [postageOption, setPostageOption] = useState<CheckoutPostageOption>(DEFAULT_POSTAGE_OPTION);
+  // Every persisted quote returned by /shipping/quote — each carries its own
+  // quoteId and can be sent to POST /orders directly. The delivery selector
+  // renders these; the recommended quote pre-selects postageOption.
+  const [shippingQuotes, setShippingQuotes] = useState<ShippingQuoteItem[]>([]);
 
   // --- Hydration ---
   const hydrateCheckout = useCallback(async () => {
@@ -238,6 +243,7 @@ export function useCheckoutHydration({
         const primaryCarrier = capabilities.postage.carriers[0];
         if (!primaryCarrier) {
           setPostageOption(UNAVAILABLE_REGION_POSTAGE_OPTION);
+          setShippingQuotes([]);
         } else {
           const fallbackOption: CheckoutPostageOption = {
             quoteId: null,
@@ -248,7 +254,7 @@ export function useCheckoutHydration({
             liveQuote: false,
             tracking: primaryCarrier.tracking,
           };
-          setPostageOption(fallbackOption);
+          setShippingQuotes([]);
 
           const addrForQuote = preferredAddressId
             ? addresses.find((a) => a.id === preferredAddressId)
@@ -265,21 +271,29 @@ export function useCheckoutHydration({
                 declaredValueGbp,
               });
 
-              const selectedQuote = quoteResponse.recommendedQuote ?? quoteResponse.quotes[0];
-              if (selectedQuote) {
-                setPostageOption({
-                  quoteId: selectedQuote.quoteId,
-                  carrierId: selectedQuote.carrierId,
-                  label: selectedQuote.label,
-                  etaLabel: toEtaLabelFromRange(selectedQuote.etaMinDays, selectedQuote.etaMaxDays),
-                  priceFromGbp: selectedQuote.priceFromGbp,
-                  liveQuote: selectedQuote.live,
-                  tracking: selectedQuote.tracking,
-                });
-              }
+              // Keep the full quotes list — each entry is a persisted,
+              // order-ready shipping option (quoteId + carrierId).
+              const quotes = quoteResponse.quotes ?? [];
+              setShippingQuotes(quotes);
+
+              // Preserve the buyer's chosen quote across focus hydrations:
+              // when their quoteId is still in the refreshed list it stays
+              // selected (re-mapped so price/ETA reflect the fresh quote);
+              // only a selection that left the list falls back to the
+              // recommended quote.
+              setPostageOption((current) => {
+                const retained = current.quoteId != null
+                  ? quotes.find((q) => q.quoteId === current.quoteId)
+                  : undefined;
+                const selectedQuote = retained ?? quoteResponse.recommendedQuote ?? quotes[0];
+                return selectedQuote ? toPostageOptionFromQuote(selectedQuote) : fallbackOption;
+              });
             } catch {
+              setPostageOption(fallbackOption);
               setShippingError('A current shipping quote is unavailable. Refresh before paying.');
             }
+          } else {
+            setPostageOption(fallbackOption);
           }
         }
       }
@@ -322,6 +336,8 @@ export function useCheckoutHydration({
     capabilityError,
     checkoutCapabilities,
     postageOption,
+    setPostageOption,
+    shippingQuotes,
     hydrateCheckout,
     handleRefreshCheckout,
   };

@@ -1,4 +1,5 @@
 import type { CapabilityCarrier } from '../services/capabilitiesApi';
+import type { ShippingQuoteItem } from '../services/commerceApi';
 import { t } from '../i18n';
 
 export interface CheckoutSavedAddress {
@@ -27,19 +28,6 @@ export function isCheckoutReady(
   savedPaymentMethod: CheckoutSavedPaymentMethod | null | undefined
 ) {
   return Boolean(savedAddress && savedPaymentMethod?.id);
-}
-
-export function buildBankAccountPaymentMethod(
-  accountLast4: string,
-  sortCode: string
-): CheckoutSavedPaymentMethod {
-  const normalizedLast4 = accountLast4.replace(/\D/g, '').slice(-4).padStart(4, '0');
-
-  return {
-    type: 'bank_account',
-    label: `Bank •••• ${normalizedLast4}`,
-    details: `Sort code ${sortCode}`,
-  };
 }
 
 // ── Checkout stage tracking ──────────────────────────────────────────────
@@ -110,6 +98,24 @@ export function toEtaLabel(carrier: CapabilityCarrier): string {
   return toEtaLabelFromRange(carrier.etaMinDays, carrier.etaMaxDays);
 }
 
+/**
+ * Maps a persisted server-issued shipping quote to the checkout postage
+ * option shape. Quotes returned for a listing-bound request carry a
+ * `quoteId` the order-creation route requires — never hand-construct an
+ * option without one.
+ */
+export function toPostageOptionFromQuote(quote: ShippingQuoteItem): CheckoutPostageOption {
+  return {
+    quoteId: quote.quoteId,
+    carrierId: quote.carrierId,
+    label: quote.label,
+    etaLabel: toEtaLabelFromRange(quote.etaMinDays, quote.etaMaxDays),
+    priceFromGbp: quote.priceFromGbp,
+    liveQuote: quote.live,
+    tracking: quote.tracking,
+  };
+}
+
 // ── Order signature ──────────────────────────────────────────────────────
 
 export function buildOrderSignature(params: {
@@ -122,6 +128,9 @@ export function buildOrderSignature(params: {
   postageFee: number;
   walletDebit?: number;
   paymentGatewayId?: string;
+  /** Item verification add-on — part of the signature so toggling it
+   *  produces a fresh order rather than mutating a stale one. */
+  verificationRequested?: boolean;
 }): string {
   return [
     params.buyerId,
@@ -133,5 +142,6 @@ export function buildOrderSignature(params: {
     params.postageFee.toFixed(2),
     params.walletDebit?.toFixed(2) ?? 'none',
     params.paymentGatewayId ?? 'none',
+    params.verificationRequested ? 'verified' : 'none',
   ].join('|');
 }

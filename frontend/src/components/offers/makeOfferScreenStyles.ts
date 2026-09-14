@@ -361,6 +361,12 @@ export const makeOfferScreenStyles = StyleSheet.create({
     fontSize: TypographyV2.priceList.size,
     fontFamily: TypographyV2.priceList.fontFamily,
     fontVariant: ['tabular-nums'] },
+  reviewCommitment: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginTop: Space.md,
+    textAlign: 'center' },
   reviewActions: {
     flexDirection: 'row',
     gap: Space.sm,

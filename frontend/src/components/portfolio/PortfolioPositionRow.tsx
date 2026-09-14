@@ -26,6 +26,7 @@ export function PortfolioPositionRow({
 }: PortfolioPositionRowProps) {
   return (
     <CoOwnPositionCard
+      positionId={item.assetId}
       imageUri={item.imageUrl}
       title={item.title}
       unitsOwned={item.unitsOwned}

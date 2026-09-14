@@ -180,6 +180,13 @@ export const NOTIFICATION_EVENT_REGISTRY: Record<string, NotificationEventMetada
     aggregationTemplate: orderAggregation,
     objectExtractor: getOrderObject,
   },
+  order_dispatch_sla_breach: {
+    semanticRole: "commerce",
+    attention: "action",
+    requiresAction: true,
+    aggregationTemplate: orderAggregation,
+    objectExtractor: getOrderObject,
+  },
 
   // Resolution events
   resolution_opened: {

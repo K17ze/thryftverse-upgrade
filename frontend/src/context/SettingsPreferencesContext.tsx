@@ -19,6 +19,7 @@ import { setAnalyticsOptOut as setTelemetryOptOut } from '../lib/telemetry';
 import { setAnalyticsOptOut as setGateOptOut } from '../analytics/analyticsGate';
 import { fetchPrivacyConsent, patchPrivacyConsent } from '../services/consentApi';
 import { makeStableId } from '../utils/createStableId';
+import { useToast } from './ToastContext';
 
 interface SettingsPreferencesContextValue {
   language: SupportedLanguageOption;
@@ -85,6 +86,14 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
   const [thirdPartySharing, setThirdPartySharingState] = React.useState(false);
   const [autoTranslateMessages, setAutoTranslateMessagesState] = React.useState(false);
   const [isHydrated, setIsHydrated] = React.useState(false);
+  const { show } = useToast();
+
+  // GDPR-relevant consent toggles write through to the backend. When the
+  // patch fails we revert the optimistic value and tell the user — the UI
+  // must never display consent state the server never recorded.
+  const reportConsentSyncFailure = React.useCallback(() => {
+    show('Couldn’t save this privacy setting — check your connection and try again.', 'error');
+  }, [show]);
 
   React.useEffect(() => {
     let isMounted = true;
@@ -253,21 +262,50 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
   }, []);
 
   const setAnalyticsOptOutPref = React.useCallback((optOut: boolean) => {
+    const previous = analyticsOptOut;
     setAnalyticsOptOutState(optOut);
     setTelemetryOptOut(optOut);
     setGateOptOut(optOut);
-    patchPrivacyConsent({ analyticsOptOut: optOut }).catch(() => {});
-  }, []);
+    patchPrivacyConsent({ analyticsOptOut: optOut }).catch(() => {
+      // Only roll back if this optimistic value is still current — a newer
+      // toggle supersedes it and carries its own failure handling. The
+      // functional update reads the committed state at apply time, so a
+      // rejection landing before any passive ref/effect sync can't strand
+      // the optimistic value while the failure toast is showing.
+      setAnalyticsOptOutState((current) => {
+        if (current !== optOut) {
+          return current;
+        }
+        setTelemetryOptOut(previous);
+        setGateOptOut(previous);
+        return previous;
+      });
+      reportConsentSyncFailure();
+    });
+  }, [analyticsOptOut, reportConsentSyncFailure]);
 
   const toggleAnalyticsOptOut = React.useCallback(() => {
+    // Resolve `next` inside the functional update so a rapid double-tap
+    // flips the committed value twice instead of writing the stale closure
+    // value twice.
     setAnalyticsOptOutState((prev) => {
       const next = !prev;
       setTelemetryOptOut(next);
       setGateOptOut(next);
-      patchPrivacyConsent({ analyticsOptOut: next }).catch(() => {});
+      patchPrivacyConsent({ analyticsOptOut: next }).catch(() => {
+        setAnalyticsOptOutState((current) => {
+          if (current !== next) {
+            return current;
+          }
+          setTelemetryOptOut(prev);
+          setGateOptOut(prev);
+          return prev;
+        });
+        reportConsentSyncFailure();
+      });
       return next;
     });
-  }, []);
+  }, [reportConsentSyncFailure]);
 
   const setDeveloperMode = React.useCallback((enabled: boolean) => {
     setDeveloperModeState(enabled);
@@ -286,19 +324,31 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
   }, []);
 
   const setPersonalizedAds = React.useCallback((enabled: boolean) => {
+    const previous = personalizedAds;
     setPersonalizedAdsState(enabled);
-    patchPrivacyConsent({ personalisedAds: enabled }).catch(() => {});
-  }, []);
+    patchPrivacyConsent({ personalisedAds: enabled }).catch(() => {
+      setPersonalizedAdsState((current) => (current === enabled ? previous : current));
+      reportConsentSyncFailure();
+    });
+  }, [personalizedAds, reportConsentSyncFailure]);
 
   const setRecommendationPersonalization = React.useCallback((enabled: boolean) => {
+    const previous = recommendationPersonalization;
     setRecommendationPersonalizationState(enabled);
-    patchPrivacyConsent({ recommendationPersonalisation: enabled }).catch(() => {});
-  }, []);
+    patchPrivacyConsent({ recommendationPersonalisation: enabled }).catch(() => {
+      setRecommendationPersonalizationState((current) => (current === enabled ? previous : current));
+      reportConsentSyncFailure();
+    });
+  }, [recommendationPersonalization, reportConsentSyncFailure]);
 
   const setThirdPartySharing = React.useCallback((enabled: boolean) => {
+    const previous = thirdPartySharing;
     setThirdPartySharingState(enabled);
-    patchPrivacyConsent({ partnerSharing: enabled }).catch(() => {});
-  }, []);
+    patchPrivacyConsent({ partnerSharing: enabled }).catch(() => {
+      setThirdPartySharingState((current) => (current === enabled ? previous : current));
+      reportConsentSyncFailure();
+    });
+  }, [thirdPartySharing, reportConsentSyncFailure]);
 
   const setAutoTranslateMessages = React.useCallback((enabled: boolean) => {
     setAutoTranslateMessagesState(enabled);

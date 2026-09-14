@@ -14,6 +14,12 @@ export interface UseReviewPromptParams {
   backendOrder: CommerceOrder | null;
   currentUserId: string | undefined;
   isMountedRef: MutableRefObject<boolean>;
+  /**
+   * Whether a review row already exists for the order — buyer-authored or
+   * platform-generated auto feedback. Either suppresses the prompt: asking
+   * for a review after automatic feedback was recorded is untruthful.
+   */
+  hasReview?: boolean;
 }
 
 export interface UseReviewPromptResult {
@@ -32,7 +38,8 @@ export interface UseReviewPromptResult {
 export function useReviewPrompt({
   backendOrder,
   currentUserId,
-  isMountedRef }: UseReviewPromptParams): UseReviewPromptResult {
+  isMountedRef,
+  hasReview }: UseReviewPromptParams): UseReviewPromptResult {
   const [reviewPromptVisible, setReviewPromptVisible] = useState(false);
   const [reviewPromptShown, setReviewPromptShown] = useState(false);
   const [reviewDeferredUntil, setReviewDeferredUntil] = useState<number | null>(null);
@@ -47,6 +54,9 @@ export function useReviewPrompt({
     const isDelivered = normalised === 'delivered' || normalised === 'completed';
     const buyerId = backendOrder.buyerId;
     if (!isDelivered || currentUserId !== buyerId) return;
+    // A review row already exists — buyer-authored or platform-generated
+    // auto feedback. Either way there is nothing left to prompt for.
+    if (hasReview) return;
 
     const now = Date.now();
     const eligibleMs = reviewEligibleAtMs ?? now;
@@ -72,7 +82,7 @@ export function useReviewPrompt({
       }
     }, 1200);
     return () => clearTimeout(timer);
-  }, [backendOrder, reviewPromptShown, currentUserId, reviewEligibleAtMs, reviewDeferredUntil]);
+  }, [backendOrder, reviewPromptShown, currentUserId, reviewEligibleAtMs, reviewDeferredUntil, hasReview]);
 
   const openReviewPrompt = useCallback(() => {
     setReviewPromptVisible(true);

@@ -77,6 +77,12 @@ export interface PosterClip {
   mediaType?: 'image' | 'video';
   trimStartMs: number;
   trimEndMs: number;
+  /**
+   * Full duration of the source asset (ms) — the bound for slip editing.
+   * Sourced from `payload.videoDurationMs`; absent when unknown (slip is
+   * then bounded by the current window end only).
+   */
+  sourceDurationMs?: number;
   speed: number; // 0.25 to 4.0
   volume: number; // 0.0 to 1.0
   thumbnailUri?: string;
@@ -98,6 +104,14 @@ export interface PosterClip {
   reversed?: boolean;
   /** Freeze frame timestamp (ms from clip start). */
   freezeFrameMs?: number;
+  /**
+   * Locked clips reject all mutating timeline operations (trim, split,
+   * duplicate, delete, replace, speed, volume, reorder). Mirrors
+   * `CreatorLayer.locked`, which canvas gestures already enforce — the
+   * timeline must honor the same invariant. (Instagram Edits clip-lock
+   * parity.)
+   */
+  locked?: boolean;
 }
 
 export interface OverlayLayer {
@@ -120,6 +134,7 @@ export interface TimelineState {
 
 export type TimelineOperation =
   | { type: 'trim'; clipId: string; edge: 'start' | 'end'; deltaMs: number }
+  | { type: 'slip'; clipId: string; deltaMs: number }
   | { type: 'split'; clipId: string; atMs: number }
   | { type: 'delete'; clipId: string }
   | { type: 'duplicate'; clipId: string }

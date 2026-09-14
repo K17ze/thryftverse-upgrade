@@ -313,6 +313,8 @@
       "biometricLoginDisabled": "معطّل — يفتح التطبيق مباشرة إلى حسابك",
       "notificationCategories": "فئات الإشعارات",
       "notificationPreferencesSubtitle": "ساعات الهدوء، المعاينة",
+      "pushThisDevice": "الإشعارات الفورية على هذا الجهاز",
+      "pushThisDeviceSubtitle": "التسليم والتسجيل",
       "featureFlags": "أعلام الميزات",
       "featureFlagsSubtitle": "قيم الأعلام الحالية لضمان الجودة",
       "autoTranslate": "ترجمة الرسائل تلقائياً",

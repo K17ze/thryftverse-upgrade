@@ -48,9 +48,11 @@ export function useGroupMembersAddFlow(
   const [selectedToAdd, setSelectedToAdd] = useState<Set<string>>(new Set());
   const [isAdding, setIsAdding] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchSeqRef = useRef(0);
 
   const performSearch = useCallback(async (query: string) => {
     const trimmed = query.trim();
+    const seq = ++searchSeqRef.current;
     if (trimmed.length < 2) {
       setSearchResults([]);
       setHasSearched(false);
@@ -62,16 +64,18 @@ export function useGroupMembersAddFlow(
     setSearchError('');
     try {
       const results = await searchUsers(trimmed, 20);
+      if (seq !== searchSeqRef.current) return; // stale — a newer query owns the slot
       const existingIds = new Set(conversation?.participantIds ?? []);
       const filtered = results.filter((r) => r.id !== currentUserId && !existingIds.has(r.id));
       setSearchResults(filtered);
       setHasSearched(true);
     } catch (err) {
+      if (seq !== searchSeqRef.current) return;
       setSearchResults([]);
       setHasSearched(true);
       setSearchError(parseApiError(err, 'Search failed. Check your connection.').message);
     } finally {
-      setIsSearching(false);
+      if (seq === searchSeqRef.current) setIsSearching(false);
     }
   }, [conversation?.participantIds, currentUserId]);
 

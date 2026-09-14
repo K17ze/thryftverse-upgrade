@@ -116,6 +116,19 @@ function mapFocalToOutput(
     y: Math.min(1, Math.max(0, turned.y)) };
 }
 
+/** One undoable crop-sheet edit state (see the undo history block). */
+interface CropEditSnapshot {
+  cropRect: { x: number; y: number; width: number; height: number };
+  rotation: number;
+  flippedH: boolean;
+  flippedV: boolean;
+  straighten: number;
+  selectedRatio: number | null;
+  imageZoom: number;
+  imagePanX: number;
+  imagePanY: number;
+}
+
 interface CreatorCropSheetProps {
   visible: boolean;
   imageUri: string;
@@ -205,6 +218,72 @@ export function CreatorCropSheet({
   const panStartImageY = useSharedValue(0);
   const pinchStartZoom = useSharedValue(1);
 
+  // ── Undo history ─────────────────────────────────────────────────
+  // Snapshots cover everything the sheet owns that lands in the crop:
+  // crop frame, image zoom/pan, rotation, flips, straighten, ratio.
+  // (focalPoint is parent-owned via onFocalPointChange — excluded.)
+  // Discrete actions push at press; gestures/sliders capture at start
+  // and push at commit only when something actually changed.
+  const undoStackRef = useRef<CropEditSnapshot[]>([]);
+  const preEditSnapshotRef = useRef<CropEditSnapshot | null>(null);
+  const [canUndo, setCanUndo] = useState(false);
+
+  // The crop frame's source of truth is the shared values (React state
+  // flushes asynchronously after gesture commits), so snapshots read the
+  // SVs directly — correct at both gesture boundaries and discrete presses.
+  const captureSnapshot = useCallback((): CropEditSnapshot => ({
+    cropRect: {
+      x: cropXSV.value,
+      y: cropYSV.value,
+      width: cropWSV.value,
+      height: cropHSV.value,
+    },
+    rotation,
+    flippedH,
+    flippedV,
+    straighten,
+    selectedRatio,
+    imageZoom: imageZoomSV.value,
+    imagePanX: imagePanXSV.value,
+    imagePanY: imagePanYSV.value,
+  }), [rotation, flippedH, flippedV, straighten, selectedRatio,
+    cropXSV, cropYSV, cropWSV, cropHSV, imageZoomSV, imagePanXSV, imagePanYSV]);
+
+  const snapshotsEqual = (a: CropEditSnapshot, b: CropEditSnapshot): boolean =>
+    a.rotation === b.rotation
+    && a.flippedH === b.flippedH
+    && a.flippedV === b.flippedV
+    && a.straighten === b.straighten
+    && a.selectedRatio === b.selectedRatio
+    && a.imageZoom === b.imageZoom
+    && a.imagePanX === b.imagePanX
+    && a.imagePanY === b.imagePanY
+    && a.cropRect.x === b.cropRect.x
+    && a.cropRect.y === b.cropRect.y
+    && a.cropRect.width === b.cropRect.width
+    && a.cropRect.height === b.cropRect.height;
+
+  const pushUndo = useCallback((snapshot: CropEditSnapshot) => {
+    undoStackRef.current.push(snapshot);
+    if (undoStackRef.current.length > 30) undoStackRef.current.shift();
+    setCanUndo(true);
+  }, []);
+
+  // Capture pre-edit state at gesture/drag start (JS thread via runOnJS).
+  const beginUndoTransaction = useCallback(() => {
+    preEditSnapshotRef.current = captureSnapshot();
+  }, [captureSnapshot]);
+
+  // Push the captured snapshot only when the gesture actually changed state.
+  const commitUndoTransaction = useCallback(() => {
+    const pre = preEditSnapshotRef.current;
+    preEditSnapshotRef.current = null;
+    if (pre && !snapshotsEqual(pre, captureSnapshot())) pushUndo(pre);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [captureSnapshot, pushUndo]);
+
+
+
   // ── Load image dimensions on open ────────────────────────────────
   const loadImageSize = useCallback((uri: string) => {
     setImageLoadFailed(false);
@@ -225,6 +304,11 @@ export function CreatorCropSheet({
 
   useEffect(() => {
     if (visible && imageUri) {
+      // A new editing session starts with a clean undo stack — stale
+      // snapshots from a previous image must never apply here.
+      undoStackRef.current = [];
+      preEditSnapshotRef.current = null;
+      setCanUndo(false);
       loadImageSize(imageUri);
     }
   }, [visible, imageUri, loadImageSize]);
@@ -271,9 +355,29 @@ export function CreatorCropSheet({
     }
   }, [reduceMotion, cropXSV, cropYSV, cropWSV, cropHSV, spring]);
 
+  // ── Undo: restore the last snapshot across state + shared values ──
+  const handleUndo = useCallback(() => {
+    const snap = undoStackRef.current.pop();
+    if (!snap) return;
+    haptic.light();
+    setCropRect(snap.cropRect);
+    syncCropSV(snap.cropRect.x, snap.cropRect.y, snap.cropRect.width, snap.cropRect.height);
+    setRotation(snap.rotation);
+    rotateSV.value = reduceMotion ? snap.rotation : withSpring(snap.rotation, spring.entrance);
+    setFlippedH(snap.flippedH);
+    setFlippedV(snap.flippedV);
+    setStraighten(snap.straighten);
+    setSelectedRatio(snap.selectedRatio);
+    imageZoomSV.value = snap.imageZoom;
+    imagePanXSV.value = snap.imagePanX;
+    imagePanYSV.value = snap.imagePanY;
+    setCanUndo(undoStackRef.current.length > 0);
+  }, [haptic, syncCropSV, rotateSV, reduceMotion, spring, imageZoomSV, imagePanXSV, imagePanYSV]);
+
   // ── Apply aspect ratio preset ────────────────────────────────────
   const applyRatio = useCallback((ratio: number | null) => {
     haptic.selection();
+    pushUndo(captureSnapshot());
     setSelectedRatio(ratio);
     imageZoomSV.value = 1;
     imagePanXSV.value = 0;
@@ -298,7 +402,7 @@ export function CreatorCropSheet({
     const y = (imageSize.height - cropH) / 2;
     setCropRect({ x, y, width: cropW, height: cropH });
     syncCropSV(x, y, cropW, cropH);
-  }, [imageSize, haptic, syncCropSV, imageZoomSV, imagePanXSV, imagePanYSV]);
+  }, [imageSize, haptic, syncCropSV, imageZoomSV, imagePanXSV, imagePanYSV, pushUndo, captureSnapshot]);
 
   // ── Drag to reposition crop frame (1:1, clamped) ─────────────────
   const dragStartX = useSharedValue(0);
@@ -308,6 +412,7 @@ export function CreatorCropSheet({
   const panGesture = Gesture.Pan()
     .onStart(() => {
       isGestureActive.value = 1;
+      runOnJS(beginUndoTransaction)();
       dragStartX.value = cropXSV.value;
       dragStartY.value = cropYSV.value;
       panStartImageX.value = imagePanXSV.value;
@@ -337,6 +442,7 @@ export function CreatorCropSheet({
       if (imageZoomSV.value <= 1.01) {
         runOnJS(setCropRectFromSV)();
       }
+      runOnJS(commitUndoTransaction)();
     });
 
   const setCropRectFromSV = useCallback(() => {
@@ -350,6 +456,7 @@ export function CreatorCropSheet({
   const pinchGesture = Gesture.Pinch()
     .onStart(() => {
       pinchStartZoom.value = imageZoomSV.value;
+      runOnJS(beginUndoTransaction)();
     })
     .onUpdate((e) => {
       const next = Math.max(1, Math.min(4, pinchStartZoom.value * e.scale));
@@ -361,6 +468,7 @@ export function CreatorCropSheet({
         imagePanXSV.value = withSpring(0, spring.tap);
         imagePanYSV.value = withSpring(0, spring.tap);
       }
+      runOnJS(commitUndoTransaction)();
     });
 
   // Compose pan + pinch. Suspended while straightening — the frame is owned
@@ -372,6 +480,7 @@ export function CreatorCropSheet({
   // ── Rotate button with spring animation ──────────────────────────
   const handleRotate = useCallback(() => {
     haptic.medium();
+    pushUndo(captureSnapshot());
     const nextRotation = rotation + 90;
     setRotation(nextRotation);
     if (reduceMotion) {
@@ -379,18 +488,20 @@ export function CreatorCropSheet({
     } else {
       rotateSV.value = withSpring(nextRotation, spring.entrance);
     }
-  }, [rotation, haptic, rotateSV, reduceMotion, spring]);
+  }, [rotation, haptic, rotateSV, reduceMotion, spring, pushUndo, captureSnapshot]);
 
   // ── Flip toggles — mirror the preview and bake into the pipeline ──
   const handleFlipH = useCallback(() => {
     haptic.selection();
+    pushUndo(captureSnapshot());
     setFlippedH((v) => !v);
-  }, [haptic]);
+  }, [haptic, pushUndo, captureSnapshot]);
 
   const handleFlipV = useCallback(() => {
     haptic.selection();
+    pushUndo(captureSnapshot());
     setFlippedV((v) => !v);
-  }, [haptic]);
+  }, [haptic, pushUndo, captureSnapshot]);
 
   // ── Straighten — live preview + inscribed-rect ownership ──────────
   // While the angle is non-zero the crop frame is owned by the math: it
@@ -435,8 +546,9 @@ export function CreatorCropSheet({
   const handleStraightenReset = useCallback(() => {
     if (straighten === 0) return;
     haptic.selection();
+    pushUndo(captureSnapshot());
     setStraighten(0);
-  }, [straighten, haptic]);
+  }, [straighten, haptic, pushUndo, captureSnapshot]);
 
   // ── Execute crop via expo-image-manipulator ──────────────────────
   const handleCrop = useCallback(async () => {
@@ -555,9 +667,10 @@ export function CreatorCropSheet({
     onFocalPointChange({ x, y });
   }, [displayW, displayH, onFocalPointChange, haptic]);
 
-  // ── Reset — back to the initial state (undo-lite, no history) ─────
+  // ── Reset — back to the initial state (undoable, like any edit) ───
   const handleResetAll = useCallback(() => {
     haptic.light();
+    pushUndo(captureSnapshot());
     setRotation(0);
     rotateSV.value = reduceMotion ? 0 : withSpring(0, spring.entrance);
     setFlippedH(false);
@@ -566,8 +679,11 @@ export function CreatorCropSheet({
     setSelectedRatio(null);
     setCropRect({ x: 0, y: 0, width: imageSize.width, height: imageSize.height });
     syncCropSV(0, 0, imageSize.width, imageSize.height);
+    imageZoomSV.value = 1;
+    imagePanXSV.value = 0;
+    imagePanYSV.value = 0;
     onFocalPointChange?.({ x: 0.5, y: 0.5 });
-  }, [haptic, rotateSV, reduceMotion, spring, imageSize, syncCropSV, onFocalPointChange]);
+  }, [haptic, rotateSV, reduceMotion, spring, imageSize, syncCropSV, imageZoomSV, imagePanXSV, imagePanYSV, onFocalPointChange, pushUndo, captureSnapshot]);
 
   // ── Animated styles ──────────────────────────────────────────────
   const stageStyle = useAnimatedStyle(() => ({
@@ -659,16 +775,29 @@ export function CreatorCropSheet({
           stageStyle,
         ]}
       >
-        {/* ── Top bar: close · reset (dirty) · done ── */}
+        {/* ── Top bar: close · undo · reset (dirty) · done ── */}
         <View style={styles.topBar}>
-          <PressScale
-            onPress={onClose}
-            style={styles.topBtn}
-            accessibilityLabel="Close crop"
-            accessibilityRole="button"
-          >
-            <AppIcon name="close" size={22} color="textPrimary" opticalCenter={true} accessible={false} />
-          </PressScale>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <PressScale
+              onPress={onClose}
+              style={styles.topBtn}
+              accessibilityLabel="Close crop"
+              accessibilityRole="button"
+            >
+              <AppIcon name="close" size={22} color="textPrimary" opticalCenter={true} accessible={false} />
+            </PressScale>
+            <PressScale
+              onPress={handleUndo}
+              disabled={!canUndo}
+              style={[styles.topBtn, { opacity: canUndo ? 1 : 0.35 }]}
+              accessibilityLabel="Undo last edit"
+              accessibilityHint="Restores the previous crop, rotation, flip, straighten and framing"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !canUndo }}
+            >
+              <AppIcon name="arrow-undo-outline" size={22} color="textPrimary" opticalCenter={true} accessible={false} />
+            </PressScale>
+          </View>
 
           {isDirty ? (
             <PressScale
@@ -848,6 +977,10 @@ export function CreatorCropSheet({
           onFlipV={handleFlipV}
           straighten={straighten}
           onStraightenChange={handleStraightenChange}
+          onStraightenDragState={(dragging) => {
+            if (dragging) beginUndoTransaction();
+            else commitUndoTransaction();
+          }}
           onStraightenReset={handleStraightenReset}
           destination={destination}
           safeZonesOn={safeZonesOn}
@@ -870,6 +1003,7 @@ function CropControls({
   onFlipV,
   straighten,
   onStraightenChange,
+  onStraightenDragState,
   onStraightenReset,
   destination,
   safeZonesOn,
@@ -884,6 +1018,7 @@ function CropControls({
   onFlipV: () => void;
   straighten: number;
   onStraightenChange: (value: number) => void;
+  onStraightenDragState: (dragging: boolean) => void;
   onStraightenReset: () => void;
   destination?: 'story' | 'reels' | 'feed' | 'marketplace';
   safeZonesOn: boolean;
@@ -1022,6 +1157,7 @@ function CropControls({
               step={0.5}
               neutral={0}
               onValueChange={onStraightenChange}
+              onDragStateChange={onStraightenDragState}
               hapticAtNeutral={true}
               showNeutralTick={true}
               accessibilityLabel="Straighten"

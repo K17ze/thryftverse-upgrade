@@ -206,10 +206,16 @@ export default function WriteReviewScreen() {
           {existingReview ? (
             <View style={styles.existingState}>
               <AppIcon name="checkmark-circle" focused size={IconSize.xl} color="success" opticalCenter accessible={false} />
-              <Text style={styles.existingTitle}>Review published</Text>
+              <Text style={styles.existingTitle}>
+                {existingReview.isAuto ? 'Automatic feedback' : 'Review published'}
+              </Text>
               <Text style={styles.existingSub}>
-                {existingReview.rating} star{existingReview.rating > 1 ? 's' : ''} ·{' '}
-                {new Date(existingReview.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                {existingReview.isAuto
+                  ? 'Left automatically — no review was submitted.'
+                  : <>
+                      {existingReview.rating} star{existingReview.rating > 1 ? 's' : ''} ·{' '}
+                      {new Date(existingReview.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </>}
               </Text>
               {existingReview.comment ? (
                 <Text style={styles.existingComment}>{existingReview.comment}</Text>

@@ -1,5 +1,7 @@
 import { fetchJson } from '../lib/apiClient';
 
+export type OrderReviewAutoReason = 'buyer_silence';
+
 export interface OrderReview {
   id: string;
   orderId: string;
@@ -12,6 +14,13 @@ export interface OrderReview {
     text: string;
     createdAt: string;
   } | null;
+  /**
+   * Provenance: TRUE when the row is platform-generated feedback (the buyer
+   * never submitted a review before the feedback window elapsed). Surfaces
+   * must render this as automatic — never as a buyer-authored review.
+   */
+  isAuto?: boolean;
+  autoReason?: OrderReviewAutoReason | null;
   createdAt: string;
   updatedAt: string;
 }

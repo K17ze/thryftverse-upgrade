@@ -29,6 +29,7 @@
  */
 
 export type ComposerStackSlot =
+  | 'editBanner'
   | 'replyQuote'
   | 'undoBanner'
   | 'offlineBanner'
@@ -44,6 +45,7 @@ export interface ComposerStackSlotState {
 }
 
 const SLOT_PRIORITY: Record<ComposerStackSlot, number> = {
+  editBanner: 1,
   replyQuote: 1,
   undoBanner: 2,
   offlineBanner: 3,

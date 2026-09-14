@@ -65,6 +65,7 @@ import { PosterReactionReplyBar } from '../components/poster/PosterReactionReply
 import { HeartBurst } from '../components/poster/HeartBurst';
 import { StickerInteractionPanel } from '../components/poster/StickerInteractionPanel';
 import { ShareSheet } from '../components/ShareSheet';
+import { PosterOptionsMenu } from '../components/poster/PosterOptionsMenu';
 import { CachedImage } from '../components/CachedImage';
 import { VerificationBadge } from '../components/profile/VerificationBadge';
 import { Video } from '../components/compat/Video';
@@ -76,6 +77,8 @@ import { safeValidateDocument, type CreatorDocument, type CreatorLayer } from '.
 import { pageWithRenderedMedia } from '../creator/renderedViewDocument';
 import { CreatorCanvas } from '../creator/CreatorCanvas';
 import * as Clipboard from 'expo-clipboard';
+import * as MediaLibrary from 'expo-media-library/legacy';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Sentry } from '../platform/monitoring';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { ApiRequestError } from '../lib/apiClient';
@@ -112,6 +115,7 @@ export default function PosterViewerScreen() {
   const [recordedFrames, setRecordedFrames] = React.useState<Set<string>>(new Set());
   const [posterTags, setPosterTags] = React.useState<PosterTag[]>([]);
   const [shareVisible, setShareVisible] = React.useState(false);
+  const [moreMenuVisible, setMoreMenuVisible] = React.useState(false);
   const [isMuted, setIsMuted] = React.useState(true);
   const [mediaRetryKey, setMediaRetryKey] = React.useState(0);
   const [isBuffering, setIsBuffering] = React.useState(false);
@@ -677,38 +681,39 @@ export default function PosterViewerScreen() {
     }
   };
 
+  // Save the published frame to the camera roll (Edits/Snap export parity).
+  // Downloads the baked `mediaUrl` artifact — exactly what was published —
+  // then saves via MediaLibrary. Requires media-library write permission;
+  // on denial we surface an honest toast rather than silently failing.
+  const handleSaveToCameraRoll = async () => {
+    const uri = activeFrame?.mediaUrl;
+    if (!uri) return;
+    haptic.light();
+    try {
+      const perm = await MediaLibrary.requestPermissionsAsync(true);
+      if (!perm.granted) {
+        show('Allow photo access to save', 'info');
+        return;
+      }
+      const isVideo = activeFrame?.mediaType === 'video' || isVideoUrl(uri);
+      const ext = isVideo ? 'mp4' : 'jpg';
+      const dest = `${FileSystem.cacheDirectory}thryft-save-${activeFrame?.id ?? Date.now()}.${ext}`;
+      const downloaded = await FileSystem.downloadAsync(uri, dest);
+      await MediaLibrary.saveToLibraryAsync(downloaded.uri);
+      show('Saved to camera roll', 'success');
+      haptic.light();
+    } catch (err) {
+      Sentry.captureException?.(err);
+      show('Could not save media', 'error');
+    }
+  };
+
   // Consolidated "more" menu. Archive, delete, and
   // copy-link are tucked into an action sheet so the top bar stays clean
   // (only mute + close remain visible). Owner-only actions are gated.
   const handleMoreMenu = () => {
     haptic.light();
-    const options: { text: string; onPress?: () => void; style?: 'default' | 'cancel' | 'destructive' }[] = [
-      {
-        text: 'Copy link',
-        onPress: handleCopyLink },
-    ];
-    if (isOwner) {
-      options.push({
-        text: 'Archive story',
-        onPress: handleArchive });
-      options.push({
-        text: 'Delete story',
-        onPress: handleDelete,
-        style: 'destructive' });
-    }
-    options.push({ text: 'Cancel', style: 'cancel' });
-    // Map the action menu to ConfirmationSheet — first non-cancel button
-    // becomes the confirm action.
-    const firstAction = options.find((o) => o.style !== 'cancel' && o.onPress);
-    if (firstAction) {
-      setConfirmSheet({
-        visible: true,
-        title: 'Story options',
-        message: firstAction.text,
-        confirmLabel: firstAction.text,
-        variant: firstAction.style === 'destructive' ? 'danger' : 'default',
-        onConfirm: () => { firstAction.onPress?.(); } });
-    }
+    setMoreMenuVisible(true);
   };
 
   const handleRetryMedia = () => {
@@ -1333,6 +1338,19 @@ export default function PosterViewerScreen() {
         confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
         variant={confirmSheet.variant ?? 'default'}
         onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
+      />
+      <PosterOptionsMenu
+        visible={moreMenuVisible}
+        isOwner={!!isOwner}
+        canSaveMedia={!!activeFrame?.mediaUrl}
+        onClose={() => setMoreMenuVisible(false)}
+        onCopyLink={() => { setMoreMenuVisible(false); void handleCopyLink(); }}
+        onSaveToCameraRoll={() => { setMoreMenuVisible(false); void handleSaveToCameraRoll(); }}
+        // Archive/Delete open the ConfirmationSheet (also a Modal) — defer
+        // until the options sheet has dismissed so the two modals never
+        // race each other during presentation.
+        onArchive={() => { setMoreMenuVisible(false); setTimeout(() => { void handleArchive(); }, 250); }}
+        onDelete={() => { setMoreMenuVisible(false); setTimeout(() => { void handleDelete(); }, 250); }}
       />
         </Reanimated.View>
       </GestureDetector>

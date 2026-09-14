@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { AccessibilityInfo, View, Text, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useToast, ToastType } from '../context/ToastContext';
+import { useToast, ToastType, ToastAction } from '../context/ToastContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedPressable } from './AnimatedPressable';
 import { Typography, Radius, Space, Elevation } from '../theme/designTokens';
@@ -31,9 +31,12 @@ interface ToastItemProps {
   id: string;
   message: string;
   type: ToastType;
+  action?: ToastAction;
+  onDismiss?: () => void;
+  durationMs: number;
 }
 
-function ToastItem({ id, message, type }: ToastItemProps) {
+function ToastItem({ id, message, type, action, onDismiss, durationMs }: ToastItemProps) {
   const { dismiss } = useToast();
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
@@ -58,21 +61,31 @@ function ToastItem({ id, message, type }: ToastItemProps) {
       void AccessibilityInfo.announceForAccessibility(message);
     }
 
+    // Slide out 300ms before the context's hard removal so the exit
+    // animation completes first (the context timer is the fallback).
     const timer = setTimeout(() => {
       handleDismiss();
-    }, 3200);
+    }, Math.max(durationMs - 300, 800));
 
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reducedMotion]);
 
-  const handleDismiss = () => {
+  const handleDismiss = (explicit?: boolean) => {
+    // `explicit` = the user tapped the close button. Auto-dismiss never
+    // reports itself — callers use onDismiss for "seen and waved away".
+    if (explicit) onDismiss?.();
     translateY.value = withTiming(-60, { duration: reducedMotion ? 0 : Motion.duration.slow });
     opacity.value = withTiming(0, { duration: reducedMotion ? 0 : Motion.duration.normal }, (finished) => {
       if (finished) {
         runOnJS(dismiss)(id);
       }
     });
+  };
+
+  const handleAction = () => {
+    action?.onPress();
+    handleDismiss();
   };
 
   const animStyle = useAnimatedStyle(() => ({
@@ -87,8 +100,22 @@ function ToastItem({ id, message, type }: ToastItemProps) {
     >
       <Ionicons name={config.icon} size={20} color={config.iconColor} />
       <Text style={styles.message} numberOfLines={2}>{message}</Text>
+      {action ? (
+        <AnimatedPressable
+          onPress={handleAction}
+          style={styles.actionBtn}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          disableAnimation
+          accessibilityLabel={action.label}
+          accessibilityRole="button"
+        >
+          <Text style={[styles.actionLabel, { color: colors.brand }]} numberOfLines={1}>
+            {action.label}
+          </Text>
+        </AnimatedPressable>
+      ) : null}
       <AnimatedPressable
-        onPress={handleDismiss}
+        onPress={() => handleDismiss(true)}
         style={styles.closeBtn}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         disableAnimation
@@ -145,6 +172,16 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     color: colors.textPrimary,
     letterSpacing: Typography.tracking.normal,
     lineHeight: 19 },
+  // Inline action — text-only, brand color. No fill/outline: a toast CTA
+  // is a whisper, not a button (AGENTS.md surface budget).
+  actionBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+    flexShrink: 0 },
+  actionLabel: {
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
   closeBtn: {
     padding: 2 } });
 

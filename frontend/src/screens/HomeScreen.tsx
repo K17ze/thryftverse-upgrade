@@ -21,9 +21,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 
 // Typography simplified - using direct font names
-import { fetchPosterStories } from '../services/postersApi';
-import type { PosterStory } from '../services/postersApi';
 import { fetchLooksFromApi } from '../services/looksApi';
+import { usePosterStories } from '../hooks/usePosterStories';
 import { useNavigation, useScrollToTop, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -316,7 +315,8 @@ export default function HomeScreen() {
     await refreshListings();
     void followingFeed.refresh();
     void forYouFeed.refresh();
-    loadPostersAndLooks();
+    refreshPosters();
+    loadFeedLooks();
     acknowledgeNewListings();
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     refreshTimerRef.current = setTimeout(() => {
@@ -325,22 +325,16 @@ export default function HomeScreen() {
     }, 380);
   };
 
-  const [realPosters, setRealPosters] = React.useState<PosterStory[]>([]);
-  const [postersLoading, setPostersLoading] = React.useState(false);
+  // Poster stories — shared rail data source (the same rail renders in the
+  // Inbox). Refetches on screen focus inside the hook.
+  const { posters: realPosters, postersLoading, refresh: refreshPosters } = usePosterStories();
   // Looks fetched for the feed interruption rail. Optional enrichment — a
   // fetch failure silently leaves the feed without a Looks rail rather than
   // surfacing an error (looks are not core to the commerce feed).
   const [feedLooks, setFeedLooks] = React.useState<LookFeedMarker['looks']>([]);
 
-  const loadPostersAndLooks = React.useCallback(() => {
+  const loadFeedLooks = React.useCallback(() => {
     let mounted = true;
-    setPostersLoading(true);
-    fetchPosterStories({ active: true, limit: 20 })
-      .then((res) => {
-        if (mounted) setRealPosters(res.items);
-      })
-      .catch(() => { /* noop */ })
-      .finally(() => { if (mounted) setPostersLoading(false); });
     // Fetch looks for feed interruption — published public looks only.
     fetchLooksFromApi({ status: 'published', limit: 6 })
       .then((res) => {
@@ -359,16 +353,17 @@ export default function HomeScreen() {
   }, []);
 
   React.useEffect(() => {
-    const cleanup = loadPostersAndLooks();
+    const cleanup = loadFeedLooks();
     return cleanup;
-  }, [loadPostersAndLooks]);
+  }, [loadFeedLooks]);
 
-  // Refetch posters and looks on focus so newly published content appears
-  // in the feed without requiring a manual pull-to-refresh.
+  // Refetch looks on focus so newly published content appears in the feed
+  // without requiring a manual pull-to-refresh. Poster stories refetch on
+  // focus inside usePosterStories.
   useFocusEffect(
     React.useCallback(() => {
-      loadPostersAndLooks();
-    }, [loadPostersAndLooks]),
+      loadFeedLooks();
+    }, [loadFeedLooks]),
   );
 
   const feedStatus = React.useMemo(

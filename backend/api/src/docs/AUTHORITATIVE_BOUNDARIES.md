@@ -27,7 +27,7 @@ belong to deterministic code, policy rules, and accountable human review.
 
 ### Payments
 
-- **Authority:** `routes/payments.ts`, `routes/webhooks.ts`,
+- **Authority:** `index.ts` (`/payments/*`, `/webhooks/:provider`),
   `lib/paymentProviders.ts`, `lib/stripePaymentMethods.ts`
 - **Boundary:** Payment intent creation, capture, refund, and dispute
   handling are delegated to licensed payment providers (Stripe, etc.)
@@ -39,7 +39,7 @@ belong to deterministic code, policy rules, and accountable human review.
 
 ### Payouts
 
-- **Authority:** `routes/payouts.ts`
+- **Authority:** `index.ts` (`/users/:id/payout-*`, `/ops/payouts/*`)
 - **Boundary:** Payout scheduling and settlement require security-admin
   access (`ensureSecurityAdminAccess`). Payout status transitions are
   idempotent via `settlePayoutRequest`.
@@ -72,6 +72,23 @@ belong to deterministic code, policy rules, and accountable human review.
   posted deterministically from the winning bid amount and a fixed
   platform fee rate.
 
+### Live-Lot Timing and Auto-Close
+
+- **Authority:** `routes/liveLotEngine.ts` (`closeLiveLot`,
+  `sweepDueLiveLots`), `workers/handlers/liveLotSweepHandler.ts`
+- **Boundary:** Lot deadlines are server-owned. `closes_at` is stamped
+  at open (explicit `closesAt` or `durationSeconds`), and the
+  `live_lot_sweep` infra job closes every due lot through the same
+  `closeLiveLot` transaction the host close route runs — identical
+  outcome resolution, `live_lot_events` entries, and realtime fan-out.
+  Anti-snipe extension is deterministic: a bid strictly before the
+  deadline and inside a 30s window pushes `closes_at` out by 30s,
+  capped at 5 extensions. Bids at/after `closes_at` are rejected; the
+  sweep gap never admits a late bid.
+- **Enforcement:** Every transition runs under `SELECT ... FOR UPDATE`
+  on the lot row with a `version` bump; settlement remains a separate
+  explicit step and is not altered by auto-close.
+
 ### Settlement and Escrow
 
 - **Authority:** `lib/reconciliation.ts`,
@@ -86,7 +103,7 @@ belong to deterministic code, policy rules, and accountable human review.
 
 ### Account Restriction
 
-- **Authority:** Admin action via `routes/admin.ts`,
+- **Authority:** Admin action via `index.ts` (`/admin/*`),
   `routes/fraudDetection.ts`
 - **Boundary:** Account suspension, ban, or restriction is a human
   admin decision. The fraud detection system computes risk scores and
@@ -246,8 +263,8 @@ To confirm a boundary is real, not decorative:
 
 | Domain | Authoritative file | Guard |
 |--------|-------------------|-------|
-| Payments | `routes/payments.ts` | provider webhook verification, idempotency |
-| Payouts | `routes/payouts.ts` | `ensureSecurityAdminAccess`, `settlePayoutRequest` |
+| Payments | `index.ts` (`/payments/*`) | provider webhook verification, idempotency |
+| Payouts | `index.ts` (`/ops/payouts/*`) | `ensureSecurityAdminAccess`, `settlePayoutRequest` |
 | KYC/AML | `lib/kycProviders.ts` | provider-determined status only |
 | Auction ordering | `workers/handlers/auctionSweepHandler.ts` | `ORDER BY amount_gbp DESC, created_at ASC, id ASC` |
 | Settlement | `lib/reconciliation.ts` | idempotency keys, request hash comparison |

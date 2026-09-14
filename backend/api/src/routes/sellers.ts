@@ -7,6 +7,7 @@ import {
   recomputeSellerMetrics,
   type SellerMetrics,
 } from '../lib/sellerPerformance.js';
+import { isEffectivelyAway } from '../lib/sellerAway.js';
 
 type SellerRouteDependencies = {
   app: FastifyInstance;
@@ -57,10 +58,11 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
       location: string | null;
       created_at: string;
       holiday_mode: boolean;
+      holiday_mode_until: string | null;
       away_message: string | null;
     }>(
       `SELECT id, username, display_name, avatar, location, created_at,
-              holiday_mode, away_message
+              holiday_mode, holiday_mode_until::text, away_message
        FROM users WHERE id = $1 LIMIT 1`,
       [sellerId]
     );
@@ -230,9 +232,19 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
         dispatchTimeLabel,
         // Evidence-backed badges — no client-side derivation.
         badges,
-        // Authoritative away state.
-        holidayMode: user.holiday_mode === true,
-        awayMessage: user.away_message ?? null,
+        // Authoritative away state — effective-away (lib/sellerAway.ts):
+        // a declared return date that has passed already ended the pause,
+        // so buyers never see a stale "away" that still blocks commerce.
+        // awayMessage/awayUntil are gated on the same predicate — a seller
+        // who is back must not leak the note they wrote while away.
+        holidayMode: isEffectivelyAway(user.holiday_mode, user.holiday_mode_until),
+        awayMessage: isEffectivelyAway(user.holiday_mode, user.holiday_mode_until)
+          ? user.away_message ?? null
+          : null,
+        holidayModeUntil: isEffectivelyAway(user.holiday_mode, user.holiday_mode_until)
+          && user.holiday_mode_until
+          ? new Date(user.holiday_mode_until).toISOString()
+          : null,
       },
     };
   });
@@ -373,6 +385,8 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
       id: string;
       rating: number;
       comment: string | null;
+      is_auto: boolean;
+      auto_reason: string | null;
       created_at: string;
       reviewer_id: string;
       reviewer_username: string | null;
@@ -386,7 +400,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     }>(
       `
         SELECT
-          r.id, r.rating, r.comment, r.created_at,
+          r.id, r.rating, r.comment, r.is_auto, r.auto_reason, r.created_at,
           r.reviewer_id,
           u.username AS reviewer_username,
           u.display_name AS reviewer_display_name,
@@ -444,6 +458,10 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
         id: row.id,
         rating: row.rating,
         comment: row.comment,
+        // Truthful provenance: auto rows are platform-generated feedback,
+        // not buyer-authored reviews — surfaces render this explicitly.
+        isAuto: row.is_auto === true,
+        autoReason: row.auto_reason,
         createdAt: row.created_at,
         photoUrls: mediaMap.get(row.id) ?? [],
         sellerResponse: row.response_body

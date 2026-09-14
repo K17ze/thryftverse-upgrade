@@ -6,6 +6,11 @@ import { useBackendData } from '../../context/BackendDataContext';
 import { fetchCoOwnPortfolioPositions, type CoOwnPositionVM, type CoOwnPortfolioSummary } from '../../services/coOwnPortfolio';
 import { parseApiError } from '../../lib/apiClient';
 
+const EMPTY_SUMMARY: CoOwnPortfolioSummary = {
+  totalValueGbp: 0, totalUnits: 0, totalUnrealizedGbp: 0,
+  totalRealizedGbp: 0, positionCount: 0,
+};
+
 /**
  * Owns the portfolio data lifecycle: positions + summary state, the
  * latest-wins guarded fetch, the focus refetch (positions reconcile after
@@ -17,19 +22,9 @@ export function usePortfolioData() {
   const { show } = useToast();
   const { listings } = useBackendData();
 
+  const [resultViewerId, setResultViewerId] = React.useState<string | null>(null);
   const [positions, setPositions] = React.useState<CoOwnPositionVM[]>([]);
-  const [summary, setSummary] = React.useState<CoOwnPortfolioSummary>({
-    totalValueGbp: 0,
-    totalUnits: 0,
-    totalUnrealizedGbp: 0,
-    totalRealizedGbp: 0,
-    positionCount: 0,
-    totalDistributionsGbp: 0,
-    todayChangeGbp: 0,
-    todayChangePct: 0,
-    todayChangeTimestamp: '',
-    staleMarkCount: 0,
-  });
+  const [summary, setSummary] = React.useState<CoOwnPortfolioSummary>(EMPTY_SUMMARY);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isError, setIsError] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
@@ -41,13 +36,21 @@ export function usePortfolioData() {
   // unless their token matches the current value.
   const requestTokenRef = React.useRef(0);
 
+  React.useEffect(() => {
+    requestTokenRef.current += 1;
+    setPositions([]);
+    setSummary(EMPTY_SUMMARY);
+    setIsPartial(false);
+    setIsError(false);
+  }, [currentUser?.id]);
+
   const loadPortfolio = React.useCallback((mode: 'initial' | 'refresh' = 'initial') => {
+    const token = ++requestTokenRef.current;
     if (!currentUser?.id) {
       setIsLoading(false);
       setRefreshing(false);
       return;
     }
-    const token = ++requestTokenRef.current;
     let cancelled = false;
     if (mode === 'refresh') setRefreshing(true);
     else setIsLoading(true);
@@ -55,13 +58,14 @@ export function usePortfolioData() {
 
     fetchCoOwnPortfolioPositions(currentUser.id, listings)
       .then((result) => {
-        if (cancelled || token !== requestTokenRef.current) return;
+        if (cancelled || token !== requestTokenRef.current || useStore.getState().currentUser?.id !== currentUser.id) return;
+        setResultViewerId(currentUser.id);
         setPositions(result.positions);
         setSummary(result.summary);
         setIsPartial(result.partial ?? false);
       })
       .catch((err) => {
-        if (cancelled || token !== requestTokenRef.current) return;
+        if (cancelled || token !== requestTokenRef.current || useStore.getState().currentUser?.id !== currentUser.id) return;
         const parsed = parseApiError(err, 'Unable to load portfolio');
         show(parsed.message, 'error');
         setIsError(true);
@@ -83,7 +87,10 @@ export function usePortfolioData() {
   useFocusEffect(
     React.useCallback(() => {
       const cleanup = loadPortfolio();
-      return cleanup;
+      return () => {
+        cleanup?.();
+        requestTokenRef.current += 1;
+      };
     }, [loadPortfolio]),
   );
 
@@ -92,8 +99,8 @@ export function usePortfolioData() {
   }, [loadPortfolio]);
 
   return {
-    positions,
-    summary,
+    positions: resultViewerId === currentUser?.id ? positions : [],
+    summary: resultViewerId === currentUser?.id ? summary : EMPTY_SUMMARY,
     isLoading,
     isError,
     refreshing,

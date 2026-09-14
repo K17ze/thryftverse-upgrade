@@ -23,6 +23,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRealtimeSafe, type RealtimeConnectionState, type RealtimeEnvelope } from '../platform/realtime';
 import { useStore } from '../store/useStore';
 import type { Message as ConversationMessage } from '../domain';
+import { parseMessageCommerceState } from '../domain';
+import { fetchConversationPresenceFromApi, type PeerPresenceSnapshot } from './chatApi';
 
 // ── Backend event types ─────────────────────────────────────────────
 
@@ -45,6 +47,13 @@ export const CHAT_MESSAGE_EDITED_EVENT = 'chat.message.edited';
 /** P0.9: Reaction added/removed. */
 export const CHAT_REACTION_ADDED_EVENT = 'chat.reaction.added';
 export const CHAT_REACTION_REMOVED_EVENT = 'chat.reaction.removed';
+
+/** Save-in-chat — negotiated persistence. `saved` fires when any
+ *  participant saves a message; `unsaved` fires when a participant
+ *  retracts their save. Both carry the full post-change `savedBy` set so
+ *  the client can apply shared state verbatim without a refetch. */
+export const CHAT_MESSAGE_SAVED_EVENT = 'chat.message.saved';
+export const CHAT_MESSAGE_UNSAVED_EVENT = 'chat.message.unsaved';
 
 /** P0.7: Read receipt. */
 export const CHAT_MESSAGE_READ_EVENT = 'chat.message.read';
@@ -103,6 +112,9 @@ export interface ChatMessageCreatedPayload {
     expiresAt?: string;
     counterRound?: number;
   } | null;
+  /** Save-in-chat shared state — present only when non-empty. */
+  savedBy?: string[];
+  savedAt?: string | null;
 }
 
 /** Payload shape for `chat.message.deleted`. */
@@ -129,6 +141,16 @@ export interface ChatReactionPayload {
   messageId: string;
   userId: string;
   emoji: string;
+}
+
+/** Payload shape for `chat.message.saved` / `chat.message.unsaved`. */
+export interface ChatMessageSavedPayload {
+  conversationId: string;
+  messageId: string;
+  actorUserId: string;
+  /** Full set of user IDs who currently have the message saved. */
+  savedBy: string[];
+  savedAt?: string | null;
 }
 
 /** Payload shape for `chat.message.read`. */
@@ -182,6 +204,18 @@ export type ChatGroupMembershipEvent =
   | { type: typeof CHAT_MEMBER_ROLE_UPDATED_EVENT; payload: { conversationId: string; memberUserId: string; newRole: 'owner' | 'admin' | 'member' } }
   | { type: typeof CHAT_GROUP_OWNERSHIP_TRANSFERRED_EVENT; payload: { conversationId: string; newOwnerId: string } };
 
+/** Realtime event emitted on `presence.user:{userId}` when a user's online
+ *  state transitions (socket connect/disconnect). The backend only publishes
+ *  it when the user's `activity_status_visible` privacy setting allows it. */
+export const PRESENCE_UPDATE_EVENT = 'presence.update';
+
+/** Payload shape for `presence.update`. */
+export interface PresenceUpdatePayload {
+  userId: string;
+  isOnline: boolean;
+  lastSeenAt: string | null;
+}
+
 /** Typed envelope for chat message events. */
 export type ChatMessageEnvelope = RealtimeEnvelope<ChatMessageCreatedPayload>;
 /** Typed envelope for typing events. */
@@ -192,6 +226,12 @@ export type ChatTypingEnvelope = RealtimeEnvelope<ChatTypingUpdatePayload>;
 /** Build the realtime topic for a conversation. */
 export function chatConversationTopic(conversationId: string): string {
   return `chat.conversation:${conversationId}`;
+}
+
+/** Build the realtime topic carrying presence transitions for a user.
+ *  Subscription is authorized server-side for dyad conversation peers only. */
+export function presenceUserTopic(userId: string): string {
+  return `presence.user:${userId}`;
 }
 
 // ── Connection hook ─────────────────────────────────────────────────
@@ -243,6 +283,15 @@ export function realtimePayloadToMessage(
     (meta.offerPayload as ChatMessageCreatedPayload['offer'] | undefined);
   const isOffer = Boolean(payload.offer) || Boolean(meta.offerPayload);
 
+  // Listing-share: the card snapshot rides in `metadata.listingShare`.
+  const listingShare = meta.listingShare as Record<string, unknown> | undefined;
+  const isListingShare = Boolean(listingShare && typeof listingShare.listingId === 'string');
+
+  // In-thread commerce cards (marketplace audit P1): order lifecycle
+  // transitions arrive as `sender_type = 'system'` messages carrying the
+  // order snapshot under `metadata.commerceState`.
+  const commerceState = parseMessageCommerceState(meta);
+
   // Media: a non-voice message with a mediaUri renders as a media bubble.
   const mediaUri =
     typeof payload.mediaUri === 'string'
@@ -252,10 +301,14 @@ export function realtimePayloadToMessage(
         : undefined;
 
   let type: ConversationMessage['type'];
-  if (payload.senderType === 'system') {
+  if (commerceState) {
+    type = 'commerce_state';
+  } else if (payload.senderType === 'system') {
     type = 'system';
   } else if (isOffer) {
     type = 'offer';
+  } else if (isListingShare) {
+    type = 'listing_share';
   } else if (isVoice) {
     type = 'voice';
   } else if (mediaUri) {
@@ -298,6 +351,10 @@ export function realtimePayloadToMessage(
     isEdited: Boolean(payload.editedAt) || (payload.editVersion ?? 0) > 0,
     deletedForEveryoneAt: payload.deletedForEveryoneAt ?? undefined,
     isDeleted: Boolean(payload.deletedForEveryoneAt),
+    // Save-in-chat shared state — identical on both sides.
+    isSavedInChat: (payload.savedBy?.length ?? 0) > 0,
+    savedBy: payload.savedBy?.length ? payload.savedBy : undefined,
+    savedAt: payload.savedAt ?? undefined,
     // The server has accepted a realtime message, so it is at least "sent".
     readStatus: 'sent',
     readBy: [],
@@ -325,7 +382,26 @@ export function realtimePayloadToMessage(
           counterRound: offerSource.counterRound,
         }
       : undefined,
+    // Listing-share snapshot — populated only for `listing_share` messages.
+    listing: isListingShare && listingShare
+      ? {
+          id: listingShare.listingId as string,
+          title: typeof listingShare.title === 'string' ? listingShare.title : '',
+          price: typeof listingShare.price === 'number' ? listingShare.price : 0,
+          originalPrice: typeof listingShare.originalPrice === 'number' ? listingShare.originalPrice : undefined,
+          image: typeof listingShare.image === 'string' ? listingShare.image : undefined,
+          brand: typeof listingShare.brand === 'string' ? listingShare.brand : null,
+          size: typeof listingShare.size === 'string' ? listingShare.size : undefined,
+          condition: typeof listingShare.condition === 'string' ? listingShare.condition : undefined,
+          sellerId: typeof listingShare.sellerId === 'string' ? listingShare.sellerId : null,
+          sellerUsername: typeof listingShare.sellerUsername === 'string' ? listingShare.sellerUsername : undefined,
+          sellerRating: typeof listingShare.sellerRating === 'number' ? listingShare.sellerRating : undefined,
+          isSold: listingShare.isSold === true,
+        }
+      : undefined,
     replyToMessageId: payload.replyToMessageId ?? undefined,
+    // Order lifecycle snapshot — populated only for `commerce_state` cards.
+    commerceState,
   };
 }
 
@@ -784,6 +860,63 @@ export function useChatMessageEditedEvent(
   }, [client, topic]);
 }
 
+// ── Save-in-chat event hook ─────────────────────────────────────────
+
+/**
+ * useChatMessageSaveEvent — subscribe to `chat.message.saved` /
+ * `chat.message.unsaved` events for a single conversation. Saved state is
+ * shared (Snapchat-style negotiated persistence): both parties render the
+ * "Saved" marker while any participant's save remains. The payload
+ * carries the full post-change `savedBy` set, so the caller applies it
+ * verbatim — no refetch needed.
+ */
+export function useChatMessageSaveEvent(
+  conversationId: string | undefined,
+  onSave: (event: {
+    messageId: string;
+    conversationId: string;
+    action: 'saved' | 'unsaved';
+    savedBy: string[];
+    savedAt?: string | null;
+    actorUserId: string;
+  }) => void,
+): void {
+  const handlerRef = useRef(onSave);
+  handlerRef.current = onSave;
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
+
+  const topic = conversationId ? chatConversationTopic(conversationId) : null;
+
+  useEffect(() => {
+    if (!topic || !client) return;
+
+    client.subscribe([topic]);
+    const unsubscribe = client.on<ChatMessageSavedPayload>(topic, (envelope) => {
+      if (
+        envelope.type !== CHAT_MESSAGE_SAVED_EVENT &&
+        envelope.type !== CHAT_MESSAGE_UNSAVED_EVENT
+      ) {
+        return;
+      }
+      const payload = envelope.payload;
+      handlerRef.current({
+        messageId: payload.messageId,
+        conversationId: payload.conversationId,
+        action: envelope.type === CHAT_MESSAGE_SAVED_EVENT ? 'saved' : 'unsaved',
+        savedBy: payload.savedBy,
+        savedAt: payload.savedAt,
+        actorUserId: payload.actorUserId,
+      });
+    });
+
+    return () => {
+      unsubscribe();
+      client.unsubscribe([topic]);
+    };
+  }, [client, topic]);
+}
+
 // ── Reaction event hook ─────────────────────────────────────────────
 
 /**
@@ -829,4 +962,70 @@ export function useChatReactionEvent(
       client.unsubscribe([topic]);
     };
   }, [client, topic]);
+}
+
+// ── Dyad presence hook ────────────────────────────────────────────
+
+/**
+ * usePeerPresence — resolves a DM counterparty's live presence for the chat
+ * header. Pulls a snapshot from `GET /chat/conversations/:id/presence` and
+ * keeps it current via `presence.update` events on the peer's topic.
+ *
+ * Returns `null` while presence is undetermined, when the peer hides their
+ * activity status, or when the backend reports none — callers must render
+ * no presence affordance in that case (never a fabricated dot). The
+ * snapshot is re-pulled on every socket reconnect so a gap in
+ * `presence.update` events can't leave a stale indicator.
+ */
+export function usePeerPresence(
+  conversationId: string | undefined,
+  peerUserId: string | null | undefined,
+): PeerPresenceSnapshot | null {
+  const [presence, setPresence] = useState<PeerPresenceSnapshot | null>(null);
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
+  const connectionState = ctx?.connectionState ?? 'idle';
+
+  const topic = peerUserId ? presenceUserTopic(peerUserId) : null;
+
+  useEffect(() => {
+    let active = true;
+    setPresence(null);
+    if (!conversationId || !peerUserId || connectionState !== 'connected') {
+      return () => { active = false; };
+    }
+
+    fetchConversationPresenceFromApi(conversationId)
+      .then((snapshot) => {
+        if (active) setPresence(snapshot);
+      })
+      .catch(() => {
+        // Presence stays null — the header renders nothing.
+      });
+
+    return () => { active = false; };
+  }, [conversationId, peerUserId, connectionState]);
+
+  useEffect(() => {
+    if (!topic || !client || !peerUserId) return;
+
+    client.subscribe([topic]);
+    const unsubscribe = client.on<PresenceUpdatePayload>(topic, (envelope) => {
+      if (envelope.type !== PRESENCE_UPDATE_EVENT) return;
+      const payload = envelope.payload;
+      if (payload.userId !== peerUserId) return;
+      setPresence({
+        userId: payload.userId,
+        isOnline: payload.isOnline === true,
+        lastSeenAt: payload.lastSeenAt ?? null,
+      });
+    });
+
+    return () => {
+      unsubscribe();
+      client.unsubscribe([topic]);
+    };
+  }, [client, topic, peerUserId]);
+
+  return presence;
 }

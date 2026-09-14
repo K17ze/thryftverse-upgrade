@@ -12,6 +12,7 @@ export type NotificationEventType =
   | 'order_out_for_delivery'
   | 'order_delivered'
   | 'order_refunded'
+  | 'order_dispatch_sla_breach'
   | 'resolution_opened'
   | 'resolution_status_changed'
   | 'review_received'
@@ -356,6 +357,13 @@ export const NotificationEventRegistry: Record<NotificationEventType, Notificati
     aggregationTemplate: orderAggregation,
     objectExtractor: orderObjectExtractor,
   },
+  order_dispatch_sla_breach: {
+    semanticRole: 'commerce',
+    attention: 'action',
+    requiresAction: true,
+    aggregationTemplate: orderAggregation,
+    objectExtractor: orderObjectExtractor,
+  },
   resolution_opened: {
     semanticRole: 'system',
     attention: 'action',
@@ -531,6 +539,7 @@ const URGENT_EVENT_TYPES: NotificationEventType[] = [
   'order_delivered',
   'order_cancelled',
   'order_refunded',
+  'order_dispatch_sla_breach',
   'resolution_opened',
   'resolution_status_changed',
   'auction_outbid',

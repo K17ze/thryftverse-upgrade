@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { fetchPublicProfile, unblockUser, PublicProfileUser } from "../../services/profileApi";
+import { usePeerPresence } from "../../services/realtimeClient";
 
 import { useToast } from "../../context/ToastContext";
 import { useStore, type User } from "../../store/useStore";
 
-import { t } from "../../i18n";
+import { t, getI18nLocale } from "../../i18n";
+import { formatRelativeTime } from "../../utils/dateFormat";
 
 import type { Conversation } from "../../domain";
 
@@ -30,6 +32,8 @@ export interface UseChatHeaderDataResult {
   topBarTitle: string;
   topBarSubtitle: string;
   topBarInitials: string;
+  /** True only while the backend confirms the DM peer is online. */
+  isPartnerOnline: boolean;
   isPartnerBlocked: boolean;
   handleUnblockPartner: () => void;
 }
@@ -74,6 +78,15 @@ export function useChatHeaderData({
     isGroup,
     routePartnerUserId,
   ]);
+
+  // Live dyad presence — snapshot from the conversation presence endpoint
+  // plus `presence.update` realtime events. `null` while undetermined or
+  // when the peer hides their activity status; the header renders nothing
+  // in that case (never a fabricated indicator).
+  const peerPresence = usePeerPresence(
+    isGroup ? undefined : conversation?.id,
+    isGroup ? null : resolvedPartnerId,
+  );
 
   const [partnerProfile, setPartnerProfile] = useState<PublicProfileUser | null>(null);
 
@@ -134,11 +147,27 @@ export function useChatHeaderData({
   const topBarTitle = isGroup
     ? (conversation?.title ?? t('chat.groupChatLabel'))
     : sellerHandle;
+  // Presence subtitle is only derived from a real backend signal: "Online"
+  // while the peer is connected, "Active {time}" from their persisted
+  // last-seen, and the plain context label when presence is unknown or the
+  // peer hides their activity status.
+  const presenceSubtitle = !isGroup && peerPresence
+    ? peerPresence.isOnline
+      ? t('chat.presence.online')
+      : peerPresence.lastSeenAt
+        ? t('chat.presence.lastActive', {
+            time: formatRelativeTime(peerPresence.lastSeenAt, getI18nLocale()),
+          })
+        : null
+    : null;
+
+  const isPartnerOnline = !isGroup && peerPresence?.isOnline === true;
+
   const topBarSubtitle = isTyping
     ? 'typing…'
     : isGroup
       ? `${conversation?.participantIds?.length ?? 0} members`
-      : t('chat.marketplaceChatLabel');
+      : presenceSubtitle ?? t('chat.marketplaceChatLabel');
   const topBarInitials = isGroup
     ? (conversation?.title
         ?.split(" ")
@@ -157,6 +186,7 @@ export function useChatHeaderData({
     topBarTitle,
     topBarSubtitle,
     topBarInitials,
+    isPartnerOnline,
     isPartnerBlocked,
     handleUnblockPartner,
   };

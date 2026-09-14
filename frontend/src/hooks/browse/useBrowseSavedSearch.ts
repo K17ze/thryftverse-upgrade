@@ -12,8 +12,9 @@ interface UseBrowseSavedSearchOptions {
 /**
  * Save-search state for BrowseScreen: the label shown on the pill, whether
  * the current query+filter combination is already saved, and the save action
- * (writes a saved search with alerts enabled and confirms via toast).
- * Extracted verbatim.
+ * (persists the search to the server with match alerts enabled — the
+ * backend matcher pushes a notification when a new listing matches — and
+ * confirms via toast). Extracted verbatim.
  */
 export function useBrowseSavedSearch({
   searchQuery,
@@ -44,7 +45,7 @@ export function useBrowseSavedSearch({
         sort: browseFilters.sort,
         category: categoryId !== 'search' && categoryId !== 'all' ? categoryId : undefined },
       alertsEnabled: true });
-    show('Search saved with alerts enabled', 'success');
+    show("Search saved — you'll be notified of new matches", 'success');
   }, [saveSearchLabel, browseFilters, categoryId, addSavedSearch, show]);
 
   return { saveSearchLabel, isCurrentSaved, handleSaveSearch };

@@ -8,22 +8,23 @@ plus current-date web research (Expo background upload guidance, expo-video depr
 | ID | Status | Evidence |
 |---|---|---|
 | EU-P0-1 fake progress | **CLOSED** | `ListingMediaStudio` renders `getItemProgress` → real queue byte progress (XHR transport). STATUS_PROGRESS deleted. |
-| EU-P0-2 two crop systems | OPEN | `InCanvasCropOverlay` still dead code; listing flow still rotate/flip only. |
+| EU-P0-2 two crop systems | **CLOSED** | `InCanvasCropOverlay` deleted; `ListingMediaStudio` opens `CreatorCropSheet` (gesture crop + flipH/V + straighten + focal) for editable items. |
 | EU-P1-1 legacy queue durability/connectivity | **CLOSED** | AsyncStorage snapshots + revive, NetInfo gate + `parkForOffline` (abort → pending, refunded attempt), AbortController cancel, +25% jittered backoff, multipart >10MB with per-part checkpoint. |
-| EU-P1-2 focal point | PARTIAL | Skia path honors focal; ExpoImage/Video preview surfaces still `cover`. |
-| EU-P1-3 trim/thumbnail | OPEN | Trim still poster-only; `expo-video generateThumbnailsAsync` not yet used for listing thumbs. |
-| EU-P1-4 straighten/flip | OPEN | No straighten control; vertical flip unreachable. |
-| EU-P1-5 undo | PARTIAL | Poster has undo/redo UI + history; crop/effects sheets still lack undo. |
-| EU-P2-1..6 design defects | OPEN | Radius budget, icon-family mixing, stroke drift, badge clutter, placeholder empty state, raw focal readout — all still live on listing surfaces. |
+| EU-P1-2 focal point | **CLOSED** | Skia path + `FocalImage` honor focal everywhere focal can be authored; video surfaces can't carry focal (crop sheet is image-only by design — matches IG). |
+| EU-P1-3 trim/thumbnail | **CLOSED** | Listing thumbs use `useVideoPoster` → `generateThumbnailsAsync` (real decoded frames). Per-clip trim is editor-domain; listing flow intentionally has no trim. |
+| EU-P1-4 straighten/flip | **CLOSED** | `CreatorCropSheet` has straighten slider (a11y-labelled) + flipH/flipV; wired into listing cover edit. |
+| EU-P1-5 undo | **CLOSED** | Poster doc-level undo/redo covers all `updateLayer` mutations (effects, crop results). `CreatorCropSheet` now has in-sheet undo: snapshot stack (crop frame, zoom/pan, rotation, flips, straighten, ratio) pushed at gesture/drag/press boundaries, undo button in top bar, cleared per session. |
+| EU-P2-1..6 design defects | **CLOSED** | Stale — `ListingMediaStudio` rewritten: transparent 44pt glyph targets, 2-radius grammar, real poster frames, focal-aware `FocalImage`, hairline stroke grammar. |
 | W12-P0-1 published video drops edits | **CLOSED** | Video renders through `renderComposition` at publish (fail-closed `MEDIA_RENDER_FAILED`); viewers consume `media_url` artifact via `pageWithRenderedMedia` (PosterViewerScreen + LookDetailScreen). |
 | W12-P0-2 transcode drops authored ops | **CLOSED** | volume, fades, timed overlays (`enable=between`), reverse, freeze, speed curves all realized in the segment graph; fail-closed classification. |
 | W12-P1-1 timeline/UI divergence | **CLOSED** | `usePosterTimeline` consumes `projectTimeline`; `handleSpeedCurveChange` writes `speed=averageSpeed(curve)`. |
 | W12-P1-2 replace discards edits | **CLOSED** | A4 — replace preserves trim/speed/volume/effects, clamps trim, clears stale receipts. |
 | W12-P1-3 UploadManager NetInfo | **CLOSED** | `setOnline` gate + offline abort→queued + reconnect resume; listing queue has same via parkForOffline. |
 | W12-P1-4 segmented upload | PARTIAL | Multipart `resume()` now pipelines parts (worker pool, concurrency 3). Transcode-upload overlap (chunked fMP4) not implemented — parked. |
-| W12-P1-5 mediaExportService dead | OPEN | Still no importers; camera-roll export decision pending. |
-| W12-P1-6 async publish processing | OPEN | Publish still synchronous; long renders bound by request timeout. Bigger lift — needs job infra. |
+| W12-P1-5 mediaExportService dead | **CLOSED** | Adopted: "Export image" draft-export wired in Poster + Look composers (`exportDocumentImage` → MediaLibrary); video export stays gated behind the deferred native module. Viewer saves the baked `media_url`. |
+| W12-P1-6 async publish processing | **CLOSED** | "Publish now" for render-heavy docs routes through `creator_schedules` immediate path (due-now → sweep worker → canonical transaction); doc `publishing` state, notification on completion, failure resets doc to `failed`. |
 | W12-P2-1..3 polish | OPEN | Safe-zone parity, inline chrome residual, capture grammar audit. |
+| KF-P0 keyframe export | OPEN | `layer.keyframes` (position/scale/rotation/opacity) animate in preview via `evaluateKeyframes` but never reach the render contract — `CompositionLayer` has no keyframes field and the ffmpeg graph bakes overlays static. Published video drops authored animation. Fix path: extend `CompositionLayer.keyframes`, compile per-property tracks to ffmpeg per-frame expressions (overlay x/y, scale eval=frame, rotate a=; spring → per-frame sampled piecewise-linear), split sticker PNG into per-layer inputs. Alternative: defer to the native export module where keyframes evaluate naturally per-frame. |
 
 ## Department map
 

@@ -7,6 +7,7 @@ import {
   publishCreatorDocumentTransaction,
 } from '../services/creatorPublicationService.js';
 import { appendDomainEvent } from '../lib/domainOutbox.js';
+import { enqueueScheduledPublicationSweepJob } from '../lib/queues.js';
 
 /**
  * Creator publication routes.
@@ -203,6 +204,11 @@ export const registerCreatorPublicationRoutes = ({
   const scheduleBodySchema = z.object({
     dueAt: z.string().datetime(),
     timezone: z.string().max(60).default('UTC'),
+    // When true, the schedule row is due immediately (due_at = NOW()) and the
+    // publication sweep is triggered right after commit. This is the async
+    // "publish now" path: the request returns instantly instead of blocking
+    // on the server-side media render, and the client polls schedule state.
+    immediate: z.boolean().default(false),
     publishCommand: z.object({
       revision: z.number().int().min(0),
       destination: z.enum(['look', 'poster', 'moodboard']),
@@ -251,9 +257,10 @@ export const registerCreatorPublicationRoutes = ({
       : undefined;
     const idempotencyKey = headerKey ?? `sched_${documentId}_${body.publishCommand.revision}`;
 
-    // Due time must be in the future.
-    const dueAt = new Date(body.dueAt);
-    if (dueAt.getTime() <= Date.now()) {
+    // Due time must be in the future — unless this is an immediate
+    // (async publish-now) request, where due_at is NOW().
+    const dueAt = body.immediate ? new Date() : new Date(body.dueAt);
+    if (!body.immediate && dueAt.getTime() <= Date.now()) {
       reply.code(422);
       return { ok: false, error: 'Scheduled time must be in the future', code: 'PAST_DUE_TIME' };
     }
@@ -391,12 +398,15 @@ export const registerCreatorPublicationRoutes = ({
         ],
       );
 
-      // 8. Update document status to 'scheduled'.
+      // 8. Update document status. Immediate publishes move straight to
+      //    'publishing' (the work starts within seconds — 'scheduled' would
+      //    be a lie, and it keeps the cancel endpoint from pretending an
+      //    in-flight render is cancellable).
       await client.query(
         `UPDATE creator_documents
-         SET status = 'scheduled', updated_at = NOW()
+         SET status = $2, updated_at = NOW()
          WHERE id = $1`,
-        [documentId],
+        [documentId, body.immediate ? 'publishing' : 'scheduled'],
       );
 
       // 9. Append schedule-created domain outbox event (inside the tx).
@@ -411,6 +421,7 @@ export const registerCreatorPublicationRoutes = ({
           dueAt: dueAt.toISOString(),
           timezone: body.timezone,
           destination: body.publishCommand.destination,
+          immediate: body.immediate,
         },
         actorId: actorUserId,
         idempotencyKey,
@@ -427,12 +438,23 @@ export const registerCreatorPublicationRoutes = ({
       client.release();
     }
 
+    // Immediate publishes trigger the sweep right away — without this the
+    // row would wait for the 30s interval tick, which is the exact latency
+    // this path exists to remove. Fire-and-forget: the interval sweep is
+    // the durable fallback if the queue call fails.
+    if (body.immediate) {
+      void enqueueScheduledPublicationSweepJob('manual').catch((err) => {
+        app.log.warn({ err, scheduleId }, 'Failed to trigger immediate publication sweep');
+      });
+    }
+
     return {
       ok: true,
       scheduleId,
       documentId,
-      dueAt: body.dueAt,
+      dueAt: dueAt.toISOString(),
       timezone: body.timezone,
+      immediate: body.immediate,
       idempotencyKey,
     };
   });
@@ -509,11 +531,14 @@ export const registerCreatorPublicationRoutes = ({
       attempts: number;
       publication_id: string | null;
       failure_reason: string | null;
+      target_id: string | null;
     }>(
-      `SELECT id, due_at, timezone, version, state, attempts, publication_id, failure_reason
-       FROM creator_schedules
-       WHERE document_id = $1 AND state IN ('pending', 'claimed', 'published', 'failed')
-       ORDER BY created_at DESC
+      `SELECT s.id, s.due_at, s.timezone, s.version, s.state, s.attempts,
+              s.publication_id, s.failure_reason, p.target_id
+       FROM creator_schedules s
+       LEFT JOIN creator_publications p ON p.id = s.publication_id
+       WHERE s.document_id = $1 AND s.state IN ('pending', 'claimed', 'published', 'failed')
+       ORDER BY s.created_at DESC
        LIMIT 1`,
       [documentId],
     );
@@ -533,6 +558,7 @@ export const registerCreatorPublicationRoutes = ({
         state: row.state,
         attempts: row.attempts,
         publicationId: row.publication_id,
+        targetId: row.target_id,
         failureReason: row.failure_reason,
       },
     };
@@ -569,10 +595,13 @@ export const registerCreatorPublicationRoutes = ({
       attempts: number;
       publication_id: string | null;
       failure_reason: string | null;
+      target_id: string | null;
     }>(
-      `SELECT id, due_at, timezone, version, state, attempts, publication_id, failure_reason
-       FROM creator_schedules
-       WHERE document_id = $1 AND idempotency_key = $2
+      `SELECT s.id, s.due_at, s.timezone, s.version, s.state, s.attempts,
+              s.publication_id, s.failure_reason, p.target_id
+       FROM creator_schedules s
+       LEFT JOIN creator_publications p ON p.id = s.publication_id
+       WHERE s.document_id = $1 AND s.idempotency_key = $2
        LIMIT 1`,
       [documentId, idempotencyKey],
     );
@@ -599,6 +628,7 @@ export const registerCreatorPublicationRoutes = ({
       state: row.state,
       attempts: row.attempts,
       publicationId: row.publication_id,
+      targetId: row.target_id,
       failureReason: row.failure_reason,
     };
   });

@@ -1,132 +1,99 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  Pressable } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Text } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import * as ImagePicker from 'expo-image-picker';
 
 import { RootStackParamList } from '../navigation/types';
-import { useAppTheme } from '../theme/ThemeContext';
 import { useConnectivity } from '../hooks/useConnectivity';
-import { Space, Typography, DockConstants, Radius, Stroke, Control } from '../theme/designTokens';
-import { TypographyV2 } from '../theme/typography.v2';
-import { AppIcon } from '../components/common/AppIcon';
-import { IconSize } from '../theme/iconTokens';
-import { useToast } from '../context/ToastContext';
-import { useCurrencyPref } from '../hooks/useCurrencyPref';
-import { useReducedMotion } from '../hooks/useReducedMotion';
-import { CURRENCIES } from '../constants/currencies';
-import { sanitizeDecimalInput } from '../utils/currencyAuthoringFlows';
-import { convertPickerAsset, convertCaptureUri, validateMediaAssets, ListingMediaDraftItem } from '../utils/mediaUploadAsset';
-import type { MediaUploadAsset } from '../utils/mediaUploadAsset';
+import { Space, DockConstants } from '../theme/designTokens';
 import { haptics } from '../utils/haptics';
-import { useStore } from '../store/useStore';
+import { sanitizeDecimalInput } from '../utils/currencyAuthoringFlows';
+import { useTaxonomy } from '../context/TaxonomyContext';
+import { t } from '../i18n';
 
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
-import { fetchListingByIdFromApi, patchListingOnApi, createListingImageOnApi } from '../services/listingsApi';
-import { MediaUploadQueue, type UploadQueueItem } from '../services/mediaUploadQueue';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { ListingMediaStudio } from '../components/listing/ListingMediaStudio';
 import { ListingCameraSheet } from '../components/listing/ListingCameraSheet';
 import { EditListingFooter } from '../components/listing/EditListingFooter';
+import { EditListingLoadingState, EditListingErrorState } from '../components/listing/EditListingStates';
+import { EditListingStatusStrip } from '../components/listing/EditListingStatusStrip';
+import { EditListingDetailsSection } from '../components/listing/EditListingDetailsSection';
+import { EditListingPricingSection } from '../components/listing/EditListingPricingSection';
+import { EditListingDescriptionSection } from '../components/listing/EditListingDescriptionSection';
+import { EditListingShippingSection } from '../components/listing/EditListingShippingSection';
+import { EditListingInlineError, EditListingCompletenessRow } from '../components/listing/EditListingFeedbackRows';
+import { editListingStyles as styles, useEditListingThemedStyles } from '../components/listing/editListingStyles';
+import type {
+  EditListingPickerMode,
+  EditListingSectionFocus,
+} from '../components/listing/editListingViewModels';
+import type { ListingApiItem } from '../services/listingsApi';
+import {
+  useEditListingForm,
+  useEditListingMedia,
+  useEditListingData,
+  useEditListingDerived,
+  useEditListingSave,
+} from '../hooks/listing';
 import { KeyboardAwareScrollView, type KeyboardAwareScrollViewRef } from '../platform/keyboard/KeyboardProvider';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
-import { SkeletonLoader } from '../components/SkeletonLoader';
-import { ConfirmationSheet } from '../components/ConfirmationSheet';
-import { useBackendData } from '../context/BackendDataContext';
-import { useTaxonomy } from '../context/TaxonomyContext';
-import { useQueryClient } from '@tanstack/react-query';import { queryKeys } from '../platform/server/queryKeys';
-import { useSoldComps } from '../hooks/useSoldComps';
-import {
 
-  evaluateListingCompleteness,
-  type ListingFieldValues,
-  type ListingFieldKey } from '../contracts/listingCategoryPolicy';
-import { t } from '../i18n';
-
-type PickerMode = 'Category' | 'Brand' | 'Size' | 'Condition' | null;
 type RouteT = RouteProp<RootStackParamList, 'EditListing'>;
-type SaveStage = 'idle' | 'uploading_media' | 'updating_listing' | 'completed' | 'failed_recoverable';
-type SectionFocus = 'price' | 'shipping' | 'format';
 
 interface EditListingRouteParams {
   itemId: string;
-  focus?: SectionFocus;
+  focus?: EditListingSectionFocus;
 }
 
 /**
- * Resolve the media kind ('image' | 'video') from a backend media record.
- * The canonical `ListingApiItem.media` entry declares `kind`, but legacy
- * payloads may carry a different discriminator (`type`, `mediaType`,
- * `contentType`). We read whichever is present and fall back to `'image'`
- * only when none is — so videos returned by the API are not silently
- * misclassified as images (E16).
+ * Edit-listing orchestrator — owns hook composition, deep-link focus
+ * scrolling, preview/discard navigation and the sheet surfaces. All domain
+ * logic lives in `hooks/listing/` (form, media, data, derived, save) and
+ * all rendering in `components/listing/` sections.
  */
-function resolveApiMediaKind(
-  m: { id: string; url: string; sortOrder: number },
-): 'image' | 'video' {
-  const raw =
-    (m as { type?: unknown }).type ??
-    (m as { mediaType?: unknown }).mediaType ??
-    (m as { kind?: unknown }).kind ??
-    (m as { contentType?: unknown }).contentType;
-  if (typeof raw === 'string' && raw.toLowerCase().includes('video')) {
-    return 'video';
-  }
-  return 'image';
-}
-
 export default function EditListingScreen() {
   const insets = useSafeAreaInsets();
-  const { colors } = useAppTheme();
+  const themed = useEditListingThemedStyles();
   const { isOffline } = useConnectivity();
-  const reducedMotion = useReducedMotion();
-  // Theme-aware color overrides for the static styles. The static
-  // StyleSheet contains only non-color properties; colors are applied
-  // via this themed proxy so the screen is fully dark-mode compatible.
-  const themed = useMemo(() => ({
-    navStatusText: { color: colors.textMuted },
-    navStatusUnsaved: { color: colors.brand },
-    errorTitle: { color: colors.textPrimary },
-    retryBtn: { backgroundColor: colors.brand },
-    retryBtnText: { color: colors.textInverse },
-    statusDot: { backgroundColor: colors.textMuted },
-    statusDotActive: { backgroundColor: colors.success },
-    statusText: { color: colors.textSecondary },
-    restrictedText: { color: colors.textMuted },
-    sectionHeading: { color: colors.textSecondary },
-    fieldLabel: { color: colors.textSecondary },
-    fieldInput: { color: colors.textPrimary },
-    hairline: { backgroundColor: colors.border },
-    pickerValue: { color: colors.textPrimary },
-    pickerPlaceholder: { color: colors.textMuted },
-    currencySymbol: { color: colors.textMuted },
-    discountPreview: { color: colors.success },
-    descInput: { color: colors.textPrimary },
-    charCount: { color: colors.textMuted },
-    inlineErrorText: { color: colors.danger },
-    priceSuggestion: { color: colors.brand },
-    priceMarketHigh: { color: colors.warning },
-    priceMarketLow: { color: colors.textMuted },
-    priceMarketGood: { color: colors.success },
-    priceNoCompsHint: { color: colors.textMuted },
-    fieldValid: { color: colors.success },
-    fieldRequiredHint: { color: colors.textMuted },
-    charCountWarn: { color: colors.warning },
-    soldCompsText: { color: colors.textMuted },
-    soldCompsAction: { color: colors.brand } }), [colors]);
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
   const { itemId, focus } = route.params as EditListingRouteParams;
-  const { show: showToast } = useToast();
-  const { currencyCode } = useCurrencyPref();
-  const currencySymbol = CURRENCIES[currencyCode].symbol;
-  const { refreshListings } = useBackendData();
-  const queryClient = useQueryClient();
 
+  /* ── domain hooks ── */
+  const form = useEditListingForm();
+  const media = useEditListingMedia(itemId, form.setErrorMsg);
+  const hydrate = useCallback((l: ListingApiItem) => {
+    form.hydrate(l);
+    media.hydrate(l);
+  }, [form.hydrate, media.hydrate]);
+  const { listing, isLoading, loadError, retry } = useEditListingData({ itemId, onHydrate: hydrate });
+  const derived = useEditListingDerived({
+    itemId,
+    listing,
+    values: form.values,
+    mediaItems: media.mediaItems,
+    removedRemoteIds: media.removedRemoteIds,
+    remoteMediaOrder: media.remoteMediaOrder,
+    initialRemoteOrder: media.initialRemoteOrder,
+  });
+  const { isSaving, saveStage, handleSave } = useEditListingSave({
+    itemId,
+    isOwner: derived.isOwner,
+    values: form.values,
+    mediaItems: media.mediaItems,
+    removedRemoteIds: media.removedRemoteIds,
+    uploadQueueRef: media.uploadQueueRef,
+    setMediaItems: media.setMediaItems,
+    setErrorMsg: form.setErrorMsg,
+    validate: derived.validate,
+  });
+
+  const { isOwner, hasChanges, completeness, completenessLabel, recommendedLabel,
+    hasDiscount, discountPercent, soldComps, hasValidPrice, priceVsMarket,
+    listingStatusLabel, isEditingRestricted } = derived;
+
+  /* ── taxonomy options for the picker sheet ── */
   const { categories, conditions, sizes, brands } = useTaxonomy();
   const categoryOptions = useMemo(
     () => categories.filter((n) => n.parentId === null).map((n) => n.name),
@@ -136,70 +103,10 @@ export default function EditListingScreen() {
   const sizeOptions = useMemo(() => sizes.map((n) => n.name), [sizes]);
   const brandOptions = useMemo(() => brands.map((n) => n.name), [brands]);
 
-  const [listing, setListing] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
-
-  // Form state
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [price, setPrice] = useState('');
-  const [originalPrice, setOriginalPrice] = useState('');
-  const [category, setCategory] = useState('');
-  const [brand, setBrand] = useState('');
-  const [size, setSize] = useState('');
-  const [condition, setCondition] = useState('');
-  const [shippingMethod, setShippingMethod] = useState<'standard' | 'express' | null>(null);
-  const [shippingPayer, setShippingPayer] = useState<'buyer' | 'seller' | null>(null);
-  const [pickerMode, setPickerMode] = useState<PickerMode>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
-  const [saveStage, setSaveStage] = useState<SaveStage>('idle');
-
-  const [confirmSheet, setConfirmSheet] = useState<{
-    visible: boolean;
-    title: string;
-    message: string;
-    confirmLabel: string;
-    cancelLabel: string;
-    onConfirm: () => void;
-    variant: 'default' | 'danger';
-  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
-
-  // Media state — stable-ID based
-  const [mediaItems, setMediaItems] = useState<ListingMediaDraftItem[]>([]);
-  // P0-09: Track remote media mutations so removals, reorders and cover
-  // changes are detected and persisted. The API needs explicit
-  // `attachmentOrder` and `removedAttachmentIds` manifests — without these
-  // the patch is a no-op for remote media.
-  const [removedRemoteIds, setRemovedRemoteIds] = useState<string[]>([]);
-  const [remoteMediaOrder, setRemoteMediaOrder] = useState<string[]>([]);
-  const [initialRemoteOrder, setInitialRemoteOrder] = useState<string[]>([]);
-
-  // Ownership
-  const currentUser = useStore((s) => s.currentUser);
-  const isOwner = useMemo(() => {
-    if (!listing || !currentUser) return false;
-    return listing.sellerId === currentUser.id;
-  }, [listing, currentUser]);
-
-  /* ── upload queue ── */
-  const uploadQueueRef = useRef(new MediaUploadQueue());
-  const [queueState, setQueueState] = useState(uploadQueueRef.current.getState());
-  useEffect(() => {
-    const unsub = uploadQueueRef.current.subscribe((s) => setQueueState(s));
-    return () => {
-      unsub();
-      // The snapshot dies with the screen — reset so a later edit of the
-      // same listing starts from a clean queue.
-      uploadQueueRef.current.reset();
-    };
-  }, []);
-
   /* ── focus scroll (ManageListing deep-links: price / shipping / format) ── */
   const scrollRef = useRef<KeyboardAwareScrollViewRef | null>(null);
-  const sectionYRef = useRef<Partial<Record<SectionFocus, number>>>({});
-  const trackSectionY = useCallback((key: SectionFocus) => (e: { nativeEvent: { layout: { y: number } } }) => {
+  const sectionYRef = useRef<Partial<Record<EditListingSectionFocus, number>>>({});
+  const trackSectionY = useCallback((key: EditListingSectionFocus) => (e: { nativeEvent: { layout: { y: number } } }) => {
     sectionYRef.current[key] = e.nativeEvent.layout.y;
   }, []);
   useEffect(() => {
@@ -214,527 +121,17 @@ export default function EditListingScreen() {
     return () => clearTimeout(timer);
   }, [focus, isLoading, loadError]);
 
-  /* ── fetch listing on mount ── */
-  useEffect(() => {
-    let mounted = true;
-    setIsLoading(true);
-    setLoadError(false);
-    fetchListingByIdFromApi(itemId)
-      .then((res) => {
-        if (!mounted) return;
-        if (res.ok && res.listing) {
-          const l = res.listing;
-          setListing(l);
-          setTitle(l.title ?? '');
-          setDescription(l.description ?? '');
-          setPrice(String(l.priceGbp ?? ''));
-          setOriginalPrice(l.originalPriceGbp ? String(l.originalPriceGbp) : '');
-          setCategory(l.category ? l.category.charAt(0).toUpperCase() + l.category.slice(1) : '');
-          setBrand(l.brand ?? '');
-          setSize(l.size ?? '');
-          setCondition(l.condition ?? '');
-          setShippingMethod((l.shippingMethod as 'standard' | 'express' | null) ?? null);
-          setShippingPayer((l.shippingPayer as 'buyer' | 'seller' | null) ?? null);
-          const initialPhotos = l.images ?? (l.imageUrl ? [l.imageUrl] : []);
-          const apiMedia = l.media ?? [];
-          const hasMediaIds = apiMedia.length > 0;
-          const items: ListingMediaDraftItem[] = (hasMediaIds ? apiMedia.map((m) => m.url) : initialPhotos).map((uri: string, i: number) => ({
-            id: hasMediaIds ? apiMedia[i].id : `remote_${itemId}_${i}`,
-            mediaId: hasMediaIds ? apiMedia[i].id : undefined,
-            uri,
-            kind: hasMediaIds ? resolveApiMediaKind(apiMedia[i]) : ('image' as const),
-            source: 'remote' as const,
-            status: 'uploaded' as const,
-            publicUrl: uri,
-            // Preserve the media contract fields on remote items so a
-            // re-attach keeps placeholders, geometry and art direction.
-            width: apiMedia[i]?.width ?? undefined,
-            height: apiMedia[i]?.height ?? undefined,
-            focalPoint: apiMedia[i]?.focalPoint ?? undefined,
-            blurhash: apiMedia[i]?.blurhash ?? null,
-            posterUrl: apiMedia[i]?.poster ?? null }));
-          setMediaItems(items);
-          const remoteIds = items.map((m) => m.mediaId ?? m.id);
-          setRemoteMediaOrder(remoteIds);
-          setInitialRemoteOrder(remoteIds);
-          setRemovedRemoteIds([]);
-        } else {
-          setLoadError(true);
-          showToast(t('listing.edit.couldNotLoad'), 'error');
-        }
-      })
-      .catch(() => {
-        if (mounted) {
-          setLoadError(true);
-          showToast(t('listing.edit.couldNotLoad'), 'error');
-        }
-      })
-      .finally(() => { if (mounted) setIsLoading(false); });
-    return () => { mounted = false; };
-  }, [itemId, showToast]);
-
-  /* ── dirty state ── */
-  const hasChanges = useMemo(() => {
-    if (!listing) return false;
-    const originalCategory = listing.category
-      ? listing.category.charAt(0).toUpperCase() + listing.category.slice(1)
-      : '';
-    const originalOriginalPrice = listing.originalPriceGbp ? String(listing.originalPriceGbp) : '';
-    const originalShippingMethod = listing.shippingMethod ?? null;
-    const originalShippingPayer = listing.shippingPayer ?? null;
-
-    return (
-      title !== listing.title ||
-      description !== (listing.description ?? '') ||
-      price !== String(listing.priceGbp ?? '') ||
-      originalPrice !== originalOriginalPrice ||
-      category !== originalCategory ||
-      brand !== (listing.brand ?? '') ||
-      size !== (listing.size ?? '') ||
-      condition !== (listing.condition ?? '') ||
-      shippingMethod !== originalShippingMethod ||
-      shippingPayer !== originalShippingPayer ||
-      mediaItems.some((m) => m.source === 'local') ||
-      removedRemoteIds.length > 0 ||
-      remoteMediaOrder.length !== initialRemoteOrder.length ||
-      remoteMediaOrder.some((id, i) => id !== initialRemoteOrder[i])
-    );
-  }, [listing, title, description, price, originalPrice, category, brand, size, condition, shippingMethod, shippingPayer, mediaItems, removedRemoteIds, remoteMediaOrder, initialRemoteOrder]);
-
-  /* ── media handling ── */
-  const appendPhotoAsset = useCallback((asset: MediaUploadAsset) => {
-    setMediaItems((prev) => {
-      if (prev.some((m) => m.uri === asset.uri)) return prev;
-      const draftItem: ListingMediaDraftItem = {
-        id: asset.id,
-        uri: asset.uri,
-        kind: asset.kind,
-        source: 'local',
-        fileName: asset.fileName,
-        mimeType: asset.mimeType,
-        fileSize: asset.fileSize,
-        width: asset.width,
-        height: asset.height,
-        durationMs: asset.durationMs,
-        status: 'draft' };
-      return [...prev, draftItem].slice(0, 10);
-    });
-  }, []);
-
-  const handlePickFromLibrary = useCallback(async () => {
-    try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        setErrorMsg(t('listing.edit.allowGallery'));
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.All,
-        allowsMultipleSelection: true,
-        allowsEditing: false,
-        quality: 0.9 });
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const assets = result.assets.map(convertPickerAsset);
-        const existing = mediaItems.map((m) => ({
-          id: m.id,
-          uri: m.uri,
-          fileName: m.fileName ?? 'existing',
-          mimeType: m.mimeType ?? 'image/jpeg',
-          kind: m.kind,
-          fileSize: m.fileSize,
-          width: m.width,
-          height: m.height,
-          durationMs: m.durationMs }));
-        const validation = validateMediaAssets(assets, existing, { maxTotalCount: 10 });
-
-        if (validation.errors.length > 0) {
-          const skipped = validation.errors.map((e) => e.message).join('. ');
-          if (skipped) setErrorMsg(skipped);
-        }
-
-        for (const asset of validation.assets) {
-          appendPhotoAsset(asset);
-        }
-        if (validation.assets.length > 0) {
-          haptics.success();
-        }
-      }
-    } catch {
-      setErrorMsg(t('listing.edit.couldNotOpenLibrary'));
-    }
-  }, [appendPhotoAsset, mediaItems]);
-
-  const [cameraSheetVisible, setCameraSheetVisible] = useState(false);
-
-  const handlePickFromCamera = useCallback(async () => {
-    try {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permission.granted) {
-        setErrorMsg(t('listing.edit.allowCamera'));
-        return;
-      }
-      setCameraSheetVisible(true);
-    } catch {
-      setErrorMsg(t('listing.edit.couldNotOpenCamera'));
-    }
-  }, [setErrorMsg]);
-
-  const handleCameraCapture = useCallback((uris: string[]) => {
-    if (uris.length === 0) return;
-    const assets = uris.map(convertCaptureUri);
-    const existing = mediaItems.map((m) => ({
-      id: m.id,
-      uri: m.uri,
-      fileName: m.fileName ?? 'existing',
-      mimeType: m.mimeType ?? 'image/jpeg',
-      kind: m.kind,
-      fileSize: m.fileSize,
-      width: m.width,
-      height: m.height,
-      durationMs: m.durationMs }));
-    const validation = validateMediaAssets(assets, existing, { maxTotalCount: 10 });
-    if (validation.errors.length > 0) {
-      setErrorMsg(validation.errors.map((e) => e.message).join('. '));
-    }
-    for (const a of validation.assets) {
-      appendPhotoAsset(a);
-    }
-    if (validation.assets.length > 0) {
-      haptics.success();
-    }
-    setCameraSheetVisible(false);
-  }, [appendPhotoAsset, mediaItems, setErrorMsg]);
-
-  const handleRemoveItem = useCallback((itemId: string) => {
-    const item = mediaItems.find((m) => m.id === itemId);
-    if (!item) return;
-    haptics.tap();
-    if (item.source === 'remote') {
-      const remoteId = item.mediaId ?? item.id;
-      setRemovedRemoteIds((prev) => prev.includes(remoteId) ? prev : [...prev, remoteId]);
-      setRemoteMediaOrder((prev) => prev.filter((id) => id !== remoteId));
-    } else {
-      uploadQueueRef.current.removeItem(itemId);
-    }
-    setMediaItems((prev) => prev.filter((m) => m.id !== itemId));
-  }, [mediaItems]);
-
-  const handleRetryItem = useCallback((itemId: string) => {
-    const queue = uploadQueueRef.current;
-    const ok = queue.retryItem(itemId);
-    if (ok) {
-      setMediaItems((prev) =>
-        prev.map((m) =>
-          m.id === itemId ? { ...m, status: 'pending', error: undefined } : m
-        )
-      );
-      haptics.tap();
-    } else {
-      haptics.warning();
-    }
-  }, []);
-
-  const handleReorder = useCallback((newOrderedIds: string[]) => {
-    const itemMap = new Map(mediaItems.map((m) => [m.id, m]));
-    const next = newOrderedIds.map((id) => itemMap.get(id)).filter(Boolean) as ListingMediaDraftItem[];
-    setMediaItems(next);
-    setRemoteMediaOrder(next.filter((m) => m.source === 'remote').map((m) => m.mediaId ?? m.id));
-    haptics.tap();
-  }, [mediaItems]);
-
-  const canRemoveItem = useCallback((itemId: string) => {
-    const item = mediaItems.find((m) => m.id === itemId);
-    return !!item;
-  }, [mediaItems]);
-
-  // ── Transform item (crop/rotate/flip) ──
-  // A same-URI call is a focal-only update: store the point without
-  // resetting upload state. Only a real URI replacement re-queues the item.
-  const handleTransformItem = useCallback((itemId: string, transformedUri: string, focalPoint?: { x: number; y: number }) => {
-    setMediaItems((prev) =>
-      prev.map((m) => {
-        if (m.id !== itemId) return m;
-        const uriChanged = transformedUri !== m.uri;
-        return {
-          ...m,
-          ...(uriChanged ? { uri: transformedUri, publicUrl: undefined, status: 'draft' as const } : {}),
-          ...(focalPoint ? { focalPoint } : {}) };
-      })
-    );
-  }, []);
-
-  /* ── validation ── */
-  // Category-aware validation: use the completeness result's missing
-  // required fields instead of universal brand/size assumptions.
-  // Brandless vintage and sizeless home goods are valid when the policy
-  // says so.
-  const editCompleteness = useMemo(() => {
-    const numericPrice = Number(sanitizeDecimalInput(price));
-    const values: ListingFieldValues = {
-      title: title.trim() || null,
-      description: description.trim() || null,
-      price: numericPrice > 0 ? numericPrice : null,
-      category: category || null,
-      brand: brand || null,
-      size: size || null,
-      condition: condition || null,
-      images: mediaItems.length > 0 ? mediaItems.map((m) => m.publicUrl || m.uri) : null,
-      shippingMethod: shippingMethod || null,
-      shippingPayer: shippingPayer || null };
-    return evaluateListingCompleteness(values);
-  }, [title, description, price, category, brand, size, condition, mediaItems, shippingMethod, shippingPayer]);
-
-  const editFieldLabelMap: Record<ListingFieldKey, string> = {
-    title: 'title',
-    description: 'description',
-    price: 'price',
-    category: 'category',
-    subcategory: 'subcategory',
-    brand: 'brand',
-    size: 'size',
-    condition: 'condition',
-    images: 'photos',
-    shippingMethod: 'shipping method',
-    shippingPayer: 'shipping payer' };
-
-  const editCompletenessLabel = useMemo(() => editCompleteness.canActivate
-    ? 'Ready to publish'
-    : `Missing: ${editCompleteness.missingRequired.map((f) => editFieldLabelMap[f]).join(', ')}`,
-    [editCompleteness.canActivate, editCompleteness.missingRequired, editFieldLabelMap]);
-
-  const editRecommendedLabel = useMemo(() => editCompleteness.missingRecommended.length > 0
-    ? `Suggested: ${editCompleteness.missingRecommended.map((f) => editFieldLabelMap[f]).join(', ')}`
-    : null,
-    [editCompleteness.missingRecommended, editFieldLabelMap]);
-
-  const validate = useCallback(() => {
-    const trimmedTitle = title.trim();
-    const trimmedDesc = description.trim();
-    const numericPrice = Number(sanitizeDecimalInput(price));
-
-    // Category-aware: check missingRequired from the policy, not universal
-    // brand/size requirements.
-    for (const field of editCompleteness.missingRequired) {
-      switch (field) {
-        case 'title': if (!trimmedTitle) return t('listing.create.errorAddTitle'); break;
-        case 'category': if (!category) return t('listing.create.errorSelectCategoryField'); break;
-        case 'brand': if (!brand) return t('listing.create.errorSelectBrandField'); break;
-        case 'size': if (!size) return t('listing.create.errorSelectSizeField'); break;
-        case 'condition': if (!condition) return t('listing.create.errorSelectConditionField'); break;
-        case 'images': if (mediaItems.length === 0) return t('listing.create.errorAddPhoto'); break;
-        case 'description':
-          if (!trimmedDesc || trimmedDesc.length < 10) return t('listing.create.errorAddDescription');
-          break;
-        case 'price':
-          if (!Number.isFinite(numericPrice) || numericPrice <= 0) return t('listing.create.errorValidPrice');
-          break;
-        default: break;
-      }
-    }
-    return '';
-  }, [title, category, brand, size, condition, description, price, mediaItems, editCompleteness]);
-
-  /* ── save handler ── */
-  const handleSave = useCallback(async () => {
-    const error = validate();
-    if (error) {
-      setErrorMsg(error);
-      setSaveStage('failed_recoverable');
-      haptics.error();
-      return;
-    }
-    if (!isOwner) {
-      setErrorMsg(t('listing.edit.noPermission'));
-      setSaveStage('failed_recoverable');
-      return;
-    }
-    setErrorMsg('');
-    setIsSaving(true);
-
-    try {
-      let coverFinalizationId: string | undefined;
-      const existingRemotePhotos = mediaItems.filter((m) => m.source === 'remote').map((m) => m.publicUrl || m.uri);
-      const newLocalItems = mediaItems.filter((m) => m.source === 'local');
-      let uploadedItems: UploadQueueItem[] = [];
-
-      // 1. Upload new local media via queue (if any)
-      if (newLocalItems.length > 0) {
-        setSaveStage('uploading_media');
-        const queue = uploadQueueRef.current;
-        const assets = newLocalItems.map((m) => ({
-          id: m.id,
-          uri: m.uri,
-          fileName: m.fileName ?? m.uri.split('/').pop() ?? 'photo.jpg',
-          mimeType: m.mimeType ?? 'image/jpeg',
-          kind: m.kind,
-          fileSize: m.fileSize,
-          width: m.width,
-          height: m.height,
-          durationMs: m.durationMs }));
-        await queue.addAssets(assets);
-        await queue.run();
-        const queueItems = queue.getItems();
-        setMediaItems((prev) =>
-          prev.map((m) => {
-            const qi = queueItems.find((q) => q.id === m.id);
-            if (!qi) return m;
-            return {
-              ...m,
-              status: qi.state === 'uploaded' ? 'uploaded' : qi.state === 'failed' ? 'failed' : m.status,
-              publicUrl: qi.publicUrl || m.publicUrl,
-              error: qi.error || m.error };
-          })
-        );
-
-        const failedItems = queueItems.filter((q) => q.state === 'failed');
-        if (failedItems.length > 0) {
-          setSaveStage('failed_recoverable');
-          setErrorMsg(t('listing.edit.mediaFailedRetry'));
-          haptics.error();
-          return;
-        }
-
-        // 2. Attach uploaded images with deterministic IDs
-        uploadedItems = queueItems.filter(
-          (q) => q.state === 'uploaded' && !!q.publicUrl && !!q.finalizationId,
-        );
-        const firstMedia = mediaItems[0];
-        if (firstMedia?.source === 'local') {
-          coverFinalizationId = queueItems.find((item) => item.id === firstMedia.id)?.finalizationId ?? undefined;
-        }
-        for (let i = 0; i < uploadedItems.length; i++) {
-          const qi = uploadedItems[i];
-          const attachmentId = `${itemId}_media_${qi.id}`;
-          const draftItem = mediaItems.find((m) => m.id === qi.id);
-          await createListingImageOnApi({
-            id: attachmentId,
-            listingId: itemId,
-            imageUrl: qi.publicUrl!,
-            sortOrder: existingRemotePhotos.length + i,
-            // Processor-measured geometry wins over the raw asset dims —
-            // EXIF orientation is baked in server-side and can flip
-            // portrait↔landscape relative to what the picker reported.
-            mediaWidth: qi.mediaWidth ?? qi.asset.width,
-            mediaHeight: qi.mediaHeight ?? qi.asset.height,
-            mediaType: qi.asset.kind === 'video' ? 'video' : 'image',
-            finalizationId: qi.finalizationId!,
-            posterUrl: draftItem?.posterUrl ?? null,
-            blurhash: qi.blurhash ?? draftItem?.blurhash ?? null,
-            focalX: draftItem?.focalPoint?.x ?? null,
-            focalY: draftItem?.focalPoint?.y ?? null,
-          });
-        }
-      }
-
-      // 3. Build the attachment manifest from the current mediaItems order.
-      //    Remote items map to their backend mediaId; newly uploaded local
-      //    items map to the deterministic attachment id used above. This is
-      //    what tells the backend the final order, removals and cover.
-      const attachmentOrder: string[] = [];
-      for (const m of mediaItems) {
-        if (m.source === 'remote') {
-          const remoteId = m.mediaId ?? m.id;
-          if (!removedRemoteIds.includes(remoteId)) {
-            attachmentOrder.push(remoteId);
-          }
-        } else {
-          const qi = uploadedItems.find((q) => q.id === m.id);
-          if (qi) {
-            attachmentOrder.push(`${itemId}_media_${qi.id}`);
-          }
-        }
-      }
-
-      // Determine the cover media id — the first item in the final order.
-      let coverMediaId: string | undefined;
-      const coverItem = mediaItems[0];
-      if (coverItem) {
-        if (coverItem.source === 'remote') {
-          coverMediaId = coverItem.mediaId ?? coverItem.id;
-        } else {
-          const qi = uploadedItems.find((q) => q.id === coverItem.id);
-          if (qi) {
-            coverMediaId = `${itemId}_media_${qi.id}`;
-          }
-        }
-      }
-
-      // 4. Patch listing metadata (text fields + attachment manifest + cover)
-      setSaveStage('updating_listing');
-      // The queue result is fresher than state — the setMediaItems above has
-      // not re-rendered into this closure, so read the cover's uploaded URL
-      // from the queue items first. A local file:// URI is useless to the
-      // API: with no canonical remote URL the save fails through the
-      // existing error path instead of sending one.
-      const coverUri = coverItem
-        ? (uploadedItems.find((q) => q.id === coverItem.id)?.publicUrl
-          || coverItem.publicUrl)
-        : undefined;
-      if (coverItem && !coverUri) {
-        throw new Error(t('listing.edit.mediaFailedRetry'));
-      }
-      await patchListingOnApi(itemId, {
-        title: title.trim(),
-        description: description.trim(),
-        priceGbp: Number(sanitizeDecimalInput(price)),
-        category: category.toLowerCase(),
-        brand: brand || undefined,
-        size: size || undefined,
-        condition: condition || undefined,
-        originalPriceGbp: originalPrice ? Number(sanitizeDecimalInput(originalPrice)) : undefined,
-        shippingMethod: shippingMethod || undefined,
-        shippingPayer: shippingPayer || undefined,
-        imageUrl: coverUri,
-        coverFinalizationId,
-        attachmentOrder,
-        removedAttachmentIds: removedRemoteIds.length > 0 ? removedRemoteIds : undefined,
-        coverMediaId: coverMediaId ?? null });
-
-      // Results are synced into state and attachments are created — drop
-      // the queue snapshot so nothing leaks into a future save.
-      uploadQueueRef.current.reset();
-
-      setSaveStage('completed');
-      haptics.success();
-      showToast(t('listing.edit.updated'), 'success');
-      // Refresh feed + invalidate cached detail so the edit propagates
-      // immediately when the user returns to the feed or profile.
-      void refreshListings();
-      void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(itemId) });
-      if (currentUser?.id) {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.user.listingsAll(currentUser.id) });
-      }
-      navigation.goBack();
-    } catch (e) {
-      setSaveStage('failed_recoverable');
-      setErrorMsg(t('listing.edit.updateFailed'));
-      showToast(t('listing.edit.updateFailed'), 'error');
-    } finally {
-      setIsSaving(false);
-    }
-  }, [validate, isOwner, itemId, title, description, price, brand, size, condition, category, originalPrice, shippingMethod, shippingPayer, mediaItems, removedRemoteIds, showToast, navigation, queryClient, currentUser?.id]);
-
-  /* ── preview handler ── */
-  const handlePreview = useCallback(() => {
-    haptics.press();
-    const photos = mediaItems.map((m) => m.publicUrl || m.uri);
-    navigation.navigate('ListingPreview', {
-      preview: {
-        title: title.trim(),
-        price: Number(sanitizeDecimalInput(price)) || undefined,
-        originalPrice: originalPrice ? Number(sanitizeDecimalInput(originalPrice)) : undefined,
-        brand: brand || undefined,
-        condition: condition || undefined,
-        category: category || undefined,
-        size: size || undefined,
-        description: description.trim() || undefined,
-        photos,
-        shippingMethod: shippingMethod || undefined,
-        shippingPayer: shippingPayer || undefined },
-      origin: 'edit' });
-  }, [title, price, originalPrice, brand, condition, category, size, description, shippingMethod, shippingPayer, mediaItems, navigation]);
-
   /* ── discard confirmation ── */
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
+
   const handleCancel = useCallback(() => {
     if (hasChanges) {
       setConfirmSheet({
@@ -750,7 +147,29 @@ export default function EditListingScreen() {
     }
   }, [hasChanges, navigation]);
 
+  /* ── preview handler ── */
+  const handlePreview = useCallback(() => {
+    haptics.press();
+    const v = form.values;
+    const photos = media.mediaItems.map((m) => m.publicUrl || m.uri);
+    navigation.navigate('ListingPreview', {
+      preview: {
+        title: v.title.trim(),
+        price: Number(sanitizeDecimalInput(v.price)) || undefined,
+        originalPrice: v.originalPrice ? Number(sanitizeDecimalInput(v.originalPrice)) : undefined,
+        brand: v.brand || undefined,
+        condition: v.condition || undefined,
+        category: v.category || undefined,
+        size: v.size || undefined,
+        description: v.description.trim() || undefined,
+        photos,
+        shippingMethod: v.shippingMethod || undefined,
+        shippingPayer: v.shippingPayer || undefined },
+      origin: 'edit' });
+  }, [form.values, media.mediaItems, navigation]);
+
   /* ── picker helpers ── */
+  const { pickerMode, setPickerMode } = form;
   const getPickerOptions = useCallback(() => {
     switch (pickerMode) {
       case 'Category': return categoryOptions;
@@ -763,79 +182,30 @@ export default function EditListingScreen() {
 
   const getPickerSelected = useCallback(() => {
     switch (pickerMode) {
-      case 'Category': return category;
-      case 'Brand': return brand;
-      case 'Size': return size;
-      case 'Condition': return condition;
+      case 'Category': return form.category;
+      case 'Brand': return form.brand;
+      case 'Size': return form.size;
+      case 'Condition': return form.condition;
       default: return undefined;
     }
-  }, [pickerMode, category, brand, size, condition]);
+  }, [pickerMode, form.category, form.brand, form.size, form.condition]);
 
   const handlePickerSelect = useCallback((val: string) => {
-    if (pickerMode === 'Category') setCategory(val);
-    if (pickerMode === 'Brand') setBrand(val);
-    if (pickerMode === 'Size') setSize(val);
-    if (pickerMode === 'Condition') setCondition(val);
+    if (pickerMode === 'Category') form.setCategory(val);
+    if (pickerMode === 'Brand') form.setBrand(val);
+    if (pickerMode === 'Size') form.setSize(val);
+    if (pickerMode === 'Condition') form.setCondition(val);
     setPickerMode(null);
     haptics.selection();
-  }, [pickerMode]);
-
-  /* ── computed values ── */
-  const hasDiscount = useMemo(() => {
-    const orig = Number(originalPrice);
-    const curr = Number(price);
-    return orig > 0 && curr > 0 && curr < orig;
-  }, [originalPrice, price]);
-
-  const discountPercent = useMemo(() => {
-    const orig = Number(originalPrice);
-    const curr = Number(price);
-    if (!hasDiscount) return 0;
-    return Math.round(((orig - curr) / orig) * 100);
-  }, [hasDiscount, originalPrice, price]);
+  }, [pickerMode, form.setCategory, form.setBrand, form.setSize, form.setCondition, setPickerMode]);
 
   const saveDisabled = !hasChanges || isSaving;
-
-  /* ── sold comparables for pricing guidance ── */
-  const { listings: backendListings } = useBackendData();
-  const soldComps = useSoldComps(backendListings, category || undefined, brand || undefined, itemId);
-  const numericPrice = Number(sanitizeDecimalInput(price));
-  const hasValidPrice = Number.isFinite(numericPrice) && numericPrice > 0;
-  const priceVsMarket = useMemo(() => {
-    if (!soldComps.hasComps || !hasValidPrice) return null;
-    if (soldComps.minPrice != null && numericPrice < soldComps.minPrice * 0.8) return 'below' as const;
-    if (soldComps.maxPrice != null && numericPrice > soldComps.maxPrice * 1.2) return 'above' as const;
-    return 'in_range' as const;
-  }, [soldComps, hasValidPrice, numericPrice]);
-
-  /* ── listing status label ── */
-  const listingStatusLabel = useMemo(() => {
-    if (!listing) return null;
-    const status = listing.status;
-    switch (status) {
-      case 'active': return t('listing.edit.statusActive');
-      case 'draft': return t('listing.edit.statusDraft');
-      case 'sold': return t('listing.edit.statusSold');
-      case 'paused': return t('listing.edit.statusPaused');
-      default: return null;
-    }
-  }, [listing]);
-
-  const isEditingRestricted = listing?.status === 'sold' || listing?.status === 'deleted' || !isOwner;
 
   /* ── loading state ── */
   if (isLoading) {
     return (
       <FlagshipScreen header={<FlagshipHeader title={t('listing.create.editTitle')} onBack={() => navigation.goBack()} />}>
-        <View style={styles.loadingContainer}>
-          <SkeletonLoader width="100%" height={200} borderRadius={Radius.lg} />
-          <View style={styles.skeletonFormGap}>
-            <SkeletonLoader width="100%" height={48} borderRadius={Radius.md} />
-            <SkeletonLoader width="100%" height={48} borderRadius={Radius.md} />
-            <SkeletonLoader width="60%" height={48} borderRadius={Radius.md} />
-            <SkeletonLoader width="100%" height={120} borderRadius={Radius.md} />
-          </View>
-        </View>
+        <EditListingLoadingState />
       </FlagshipScreen>
     );
   }
@@ -843,63 +213,7 @@ export default function EditListingScreen() {
   if (loadError) {
     return (
       <FlagshipScreen header={<FlagshipHeader title={t('listing.create.editTitle')} onBack={() => navigation.goBack()} />}>
-        <View style={styles.errorContainer}>
-          <AppIcon name="cloud-offline-outline" size={IconSize.xl} color="textMuted" opticalCenter accessible={false} />
-          <Text style={[styles.errorTitle, themed.errorTitle]}>{t('listing.edit.couldNotLoad')}</Text>
-          <Pressable
-            style={({ pressed }) => [styles.retryBtn, themed.retryBtn, pressed && { opacity: 0.85 }]}
-            onPress={() => {
-              setLoadError(false);
-              setIsLoading(true);
-              fetchListingByIdFromApi(itemId)
-                .then((res) => {
-                  if (res.ok && res.listing) {
-                    const l = res.listing;
-                    setListing(l);
-                    setTitle(l.title ?? '');
-                    setDescription(l.description ?? '');
-                    setPrice(String(l.priceGbp ?? ''));
-                    setOriginalPrice(l.originalPriceGbp ? String(l.originalPriceGbp) : '');
-                    setCategory(l.category ? l.category.charAt(0).toUpperCase() + l.category.slice(1) : '');
-                    setBrand(l.brand ?? '');
-                    setSize(l.size ?? '');
-                    setCondition(l.condition ?? '');
-                    setShippingMethod((l.shippingMethod as 'standard' | 'express' | null) ?? null);
-                    setShippingPayer((l.shippingPayer as 'buyer' | 'seller' | null) ?? null);
-                    const initialPhotos = l.images ?? (l.imageUrl ? [l.imageUrl] : []);
-                    const apiMedia = l.media ?? [];
-                    const hasMediaIds = apiMedia.length > 0;
-                    const items: ListingMediaDraftItem[] = (hasMediaIds ? apiMedia.map((m) => m.url) : initialPhotos).map((uri: string, i: number) => ({
-                      id: hasMediaIds ? apiMedia[i].id : `remote_${itemId}_${i}`,
-                      mediaId: hasMediaIds ? apiMedia[i].id : undefined,
-                      uri,
-                      kind: hasMediaIds ? resolveApiMediaKind(apiMedia[i]) : ('image' as const),
-                      source: 'remote' as const,
-                      status: 'uploaded' as const,
-                      publicUrl: uri,
-                      width: apiMedia[i]?.width ?? undefined,
-                      height: apiMedia[i]?.height ?? undefined,
-                      focalPoint: apiMedia[i]?.focalPoint ?? undefined,
-                      blurhash: apiMedia[i]?.blurhash ?? null,
-                      posterUrl: apiMedia[i]?.poster ?? null }));
-                    setMediaItems(items);
-                    const remoteIds = items.map((m) => m.mediaId ?? m.id);
-                    setRemoteMediaOrder(remoteIds);
-                    setInitialRemoteOrder(remoteIds);
-                    setRemovedRemoteIds([]);
-                  } else {
-                    setLoadError(true);
-                  }
-                })
-                .catch(() => setLoadError(true))
-                .finally(() => setIsLoading(false));
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={t('listing.edit.retryLoad')}
-          >
-            <Text style={[styles.retryBtnText, themed.retryBtnText]}>{t('listing.edit.retry')}</Text>
-          </Pressable>
-        </View>
+        <EditListingErrorState onRetry={retry} />
       </FlagshipScreen>
     );
   }
@@ -932,16 +246,16 @@ export default function EditListingScreen() {
           {/* ── 2. LISTING MEDIA STUDIO ── */}
           {isOwner ? (
             <ListingMediaStudio
-              items={mediaItems}
-              queueItems={queueState.items}
+              items={media.mediaItems}
+              queueItems={media.queueState.items}
               maxCount={10}
-              onPickFromLibrary={handlePickFromLibrary}
-              onPickFromCamera={handlePickFromCamera}
-              onReorder={handleReorder}
-              onRemoveItem={handleRemoveItem}
-              onRetryItem={handleRetryItem}
-              onTransformItem={handleTransformItem}
-              canRemoveItem={canRemoveItem}
+              onPickFromLibrary={media.handlePickFromLibrary}
+              onPickFromCamera={media.handlePickFromCamera}
+              onReorder={media.handleReorder}
+              onRemoveItem={media.handleRemoveItem}
+              onRetryItem={media.handleRetryItem}
+              onTransformItem={media.handleTransformItem}
+              canRemoveItem={media.canRemoveItem}
               reorderEnabled={true}
               lockedNote={t('listing.edit.lockedPhotos')}
               removeLabel={t('listing.edit.remove')}
@@ -949,14 +263,14 @@ export default function EditListingScreen() {
             />
           ) : (
             <ListingMediaStudio
-              items={mediaItems}
-              queueItems={queueState.items}
+              items={media.mediaItems}
+              queueItems={media.queueState.items}
               maxCount={10}
-              onReorder={handleReorder}
-              onRemoveItem={handleRemoveItem}
-              onRetryItem={handleRetryItem}
-              onPickFromLibrary={handlePickFromLibrary}
-              onPickFromCamera={handlePickFromCamera}
+              onReorder={media.handleReorder}
+              onRemoveItem={media.handleRemoveItem}
+              onRetryItem={media.handleRetryItem}
+              onPickFromLibrary={media.handlePickFromLibrary}
+              onPickFromCamera={media.handlePickFromCamera}
               reorderEnabled={true}
               canRemoveItem={() => false}
               lockedNote={t('listing.edit.noPermission')}
@@ -965,356 +279,66 @@ export default function EditListingScreen() {
           )}
 
           {/* ── 3. LISTING STATUS/CONTEXT ── */}
-          {listingStatusLabel && (
-            <View style={styles.statusRow}>
-              <View style={[styles.statusDot, themed.statusDot, listing?.status === 'active' && styles.statusDotActive, listing?.status === 'active' && themed.statusDotActive]} />
-              <Text style={[styles.statusText, themed.statusText]}>{listingStatusLabel}</Text>
-            </View>
-          )}
-
-          {isEditingRestricted && (
-            <View style={styles.restrictedRow}>
-              <AppIcon name="lock-closed" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
-              <Text style={[styles.restrictedText, themed.restrictedText]}>{t('listing.edit.restricted')}</Text>
-            </View>
-          )}
+          <EditListingStatusStrip
+            statusLabel={listingStatusLabel}
+            statusActive={listing?.status === 'active'}
+            isEditingRestricted={isEditingRestricted}
+          />
 
           {/* ── 4. DETAILS ── */}
-          <View style={styles.sectionGroup}>
-            <Text style={[styles.sectionHeading, themed.sectionHeading]}>{t('listing.create.details')}</Text>
-
-            {/* ── Format (read-only) ──
-                The listing format is chosen when a listing is created and the
-                update API accepts no format field, so this row is deliberately
-                read-only. It gives the ManageListing "Format" deep-link an
-                honest destination instead of a dead control. */}
-            <View onLayout={trackSectionY('format')}>
-              <View style={styles.pickerRow}>
-                <View style={styles.pickerRowInner}>
-                  <View style={styles.fieldLabelRow}>
-                    <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.edit.format')}</Text>
-                  </View>
-                  <Text style={[styles.pickerValue, themed.pickerValue]}>
-                    {t('listing.edit.formatFixedPrice')}
-                  </Text>
-                </View>
-                <AppIcon name="lock-closed-outline" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
-              </View>
-              <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>
-                {t('listing.edit.formatHelper')}
-              </Text>
-            </View>
-            <View style={[styles.hairline, themed.hairline]} />
-
-            <View style={styles.fieldGroup}>
-              <View style={styles.fieldLabelRow}>
-                <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.listingTitle')}</Text>
-                {title.trim().length > 0 ? (
-                  <AppIcon name="checkmark-circle" size={12} color="success" opticalCenter accessible={false} />
-                ) : (
-                  <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
-                )}
-              </View>
-              <TextInput
-                style={[styles.fieldInput, themed.fieldInput, isEditingRestricted && styles.fieldInputDisabled]}
-                value={title}
-                onChangeText={(t) => { setTitle(t); setErrorMsg(''); }}
-                placeholder={t('listing.edit.titlePlaceholder')}
-                placeholderTextColor={colors.textMuted}
-                returnKeyType="next"
-                editable={!isEditingRestricted}
-              />
-              <View style={[styles.hairline, themed.hairline]} />
-            </View>
-
-            <Pressable
-              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.85 }]}
-              onPress={() => !isEditingRestricted && setPickerMode('Category')}
-              accessibilityRole="button"
-              accessibilityLabel={t('listing.edit.selectCategory')}
-            >
-              <View style={styles.pickerRowInner}>
-                <View style={styles.fieldLabelRow}>
-                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.category')}</Text>
-                  {category ? (
-                    <AppIcon name="checkmark-circle" size={12} color="success" opticalCenter accessible={false} />
-                  ) : (
-                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
-                  )}
-                </View>
-                <Text style={[styles.pickerValue, themed.pickerValue, !category && styles.pickerPlaceholder, !category && themed.pickerPlaceholder]}>
-                  {category || t('listing.edit.selectCategory')}
-                </Text>
-              </View>
-              <AppIcon name="chevron-forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
-            </Pressable>
-            <View style={[styles.hairline, themed.hairline]} />
-
-            <Pressable
-              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.85 }]}
-              onPress={() => !isEditingRestricted && setPickerMode('Brand')}
-              accessibilityRole="button"
-              accessibilityLabel={t('listing.edit.selectBrand')}
-            >
-              <View style={styles.pickerRowInner}>
-                <View style={styles.fieldLabelRow}>
-                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.brand')}</Text>
-                  {brand ? (
-                    <AppIcon name="checkmark-circle" size={12} color="success" opticalCenter accessible={false} />
-                  ) : editCompleteness.policy.brandlessValid ? (
-                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.optional')}</Text>
-                  ) : (
-                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
-                  )}
-                </View>
-                <Text style={[styles.pickerValue, themed.pickerValue, !brand && styles.pickerPlaceholder, !brand && themed.pickerPlaceholder]}>
-                  {brand || t('listing.edit.selectBrand')}
-                </Text>
-              </View>
-              <AppIcon name="chevron-forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
-            </Pressable>
-            <View style={[styles.hairline, themed.hairline]} />
-
-            <Pressable
-              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.85 }]}
-              onPress={() => !isEditingRestricted && setPickerMode('Size')}
-              accessibilityRole="button"
-              accessibilityLabel={t('listing.edit.selectSize')}
-            >
-              <View style={styles.pickerRowInner}>
-                <View style={styles.fieldLabelRow}>
-                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.size')}</Text>
-                  {size ? (
-                    <AppIcon name="checkmark-circle" size={12} color="success" opticalCenter accessible={false} />
-                  ) : editCompleteness.policy.sizelessValid ? (
-                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.optional')}</Text>
-                  ) : (
-                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
-                  )}
-                </View>
-                <Text style={[styles.pickerValue, themed.pickerValue, !size && styles.pickerPlaceholder, !size && themed.pickerPlaceholder]}>
-                  {size || t('listing.edit.selectSize')}
-                </Text>
-              </View>
-              <AppIcon name="chevron-forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
-            </Pressable>
-            <View style={[styles.hairline, themed.hairline]} />
-
-            <Pressable
-              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.85 }]}
-              onPress={() => !isEditingRestricted && setPickerMode('Condition')}
-              accessibilityRole="button"
-              accessibilityLabel={t('listing.edit.selectCondition')}
-            >
-              <View style={styles.pickerRowInner}>
-                <View style={styles.fieldLabelRow}>
-                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.condition')}</Text>
-                  {condition ? (
-                    <AppIcon name="checkmark-circle" size={12} color="success" opticalCenter accessible={false} />
-                  ) : (
-                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
-                  )}
-                </View>
-                <Text style={[styles.pickerValue, themed.pickerValue, !condition && styles.pickerPlaceholder, !condition && themed.pickerPlaceholder]}>
-                  {condition || t('listing.edit.selectCondition')}
-                </Text>
-              </View>
-              <AppIcon name="chevron-forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
-            </Pressable>
-          </View>
+          <EditListingDetailsSection
+            title={form.title}
+            onChangeTitle={form.setTitle}
+            category={form.category}
+            brand={form.brand}
+            size={form.size}
+            condition={form.condition}
+            brandlessValid={completeness.policy.brandlessValid}
+            sizelessValid={completeness.policy.sizelessValid}
+            isEditingRestricted={isEditingRestricted}
+            onOpenPicker={setPickerMode}
+            onFormatLayout={trackSectionY('format')}
+          />
 
           {/* ── 5. PRICING ── */}
-          <View style={styles.sectionGroup} onLayout={trackSectionY('price')}>
-            <Text style={[styles.sectionHeading, themed.sectionHeading]}>{t('listing.edit.pricing')}</Text>
-
-            <View style={styles.fieldGroup}>
-              <View style={styles.fieldLabelRow}>
-                <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.price')}</Text>
-                {hasValidPrice ? (
-                  <AppIcon name="checkmark-circle" size={12} color="success" opticalCenter accessible={false} />
-                ) : (
-                  <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
-                )}
-              </View>
-              <View style={styles.priceRow}>
-                <Text style={[styles.currencySymbol, themed.currencySymbol]}>{currencySymbol}</Text>
-                <TextInput
-                  style={[styles.fieldInput, themed.fieldInput, styles.priceInput, isEditingRestricted && styles.fieldInputDisabled]}
-                  value={price}
-                  onChangeText={(v) => { setPrice(sanitizeDecimalInput(v)); setErrorMsg(''); }}
-                  placeholder="0.00"
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="decimal-pad"
-                  editable={!isEditingRestricted}
-                />
-              </View>
-              {hasDiscount && (
-                <Text style={[styles.discountPreview, themed.discountPreview]}>{t('listing.create.discountOffOriginal', { percent: discountPercent })}</Text>
-              )}
-              {soldComps.hasComps && soldComps.minPrice != null && soldComps.maxPrice != null ? (
-                <View style={styles.priceSuggestionBlock}>
-                  <View style={styles.soldCompsHint}>
-                    <AppIcon name="cash-outline" size={12} color="textMuted" opticalCenter accessible={false} />
-                    <Text style={[styles.soldCompsText, themed.soldCompsText]}>
-                      {t('listing.create.soldCompsRange', { min: `${currencySymbol}${soldComps.minPrice.toFixed(0)}`, max: `${currencySymbol}${soldComps.maxPrice.toFixed(0)}`, count: soldComps.sampleSize })}
-                    </Text>
-                  </View>
-                  {soldComps.medianPrice != null && (
-                    <View style={styles.soldCompsHint}>
-                      <AppIcon name="bulb-outline" size={12} color="brand" opticalCenter accessible={false} />
-                      <Text style={[styles.soldCompsText, themed.priceSuggestion]}>
-                        {t('listing.create.suggestedPrice', { amount: `${currencySymbol}${soldComps.medianPrice.toFixed(0)}` })}
-                      </Text>
-                    </View>
-                  )}
-                  {priceVsMarket === 'above' && (
-                    <View style={styles.soldCompsHint}>
-                      <AppIcon name="trending-up-outline" size={12} color="warning" opticalCenter accessible={false} />
-                      <Text style={[styles.soldCompsText, themed.priceMarketHigh]}>
-                        {t('listing.create.pricedAboveRange')}
-                      </Text>
-                    </View>
-                  )}
-                  {priceVsMarket === 'below' && (
-                    <View style={styles.soldCompsHint}>
-                      <AppIcon name="trending-down-outline" size={12} color="textMuted" opticalCenter accessible={false} />
-                      <Text style={[styles.soldCompsText, themed.priceMarketLow]}>
-                        {t('listing.create.pricedBelowRange')}
-                      </Text>
-                    </View>
-                  )}
-                  {priceVsMarket === 'in_range' && (
-                    <View style={styles.soldCompsHint}>
-                      <AppIcon name="checkmark-circle" size={12} color="success" opticalCenter accessible={false} />
-                      <Text style={[styles.soldCompsText, themed.priceMarketGood]}>
-                        {t('listing.create.pricedInRange')}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              ) : (
-                <View style={styles.soldCompsHint}>
-                  <AppIcon name="information-circle-outline" size={12} color="textMuted" opticalCenter accessible={false} />
-                  <Text style={[styles.soldCompsText, themed.priceNoCompsHint]}>
-                    {t('listing.create.priceCompetitively')}
-                  </Text>
-                </View>
-              )}
-              <View style={[styles.hairline, themed.hairline]} />
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.originalPrice')}</Text>
-              <View style={styles.priceRow}>
-                <Text style={[styles.currencySymbol, themed.currencySymbol]}>{currencySymbol}</Text>
-                <TextInput
-                  style={[styles.fieldInput, themed.fieldInput, styles.priceInput, isEditingRestricted && styles.fieldInputDisabled]}
-                  value={originalPrice}
-                  onChangeText={(v) => { setOriginalPrice(sanitizeDecimalInput(v)); setErrorMsg(''); }}
-                  placeholder="0.00"
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="decimal-pad"
-                  editable={!isEditingRestricted}
-                />
-              </View>
-            </View>
-          </View>
+          <EditListingPricingSection
+            price={form.price}
+            onChangePrice={(v) => form.setPrice(sanitizeDecimalInput(v))}
+            originalPrice={form.originalPrice}
+            onChangeOriginalPrice={(v) => form.setOriginalPrice(sanitizeDecimalInput(v))}
+            hasValidPrice={hasValidPrice}
+            hasDiscount={hasDiscount}
+            discountPercent={discountPercent}
+            soldComps={soldComps}
+            priceVsMarket={priceVsMarket}
+            isEditingRestricted={isEditingRestricted}
+            onSectionLayout={trackSectionY('price')}
+          />
 
           {/* ── 6. DESCRIPTION ── */}
-          <View style={styles.sectionGroup}>
-            <Text style={[styles.sectionHeading, themed.sectionHeading]}>{t('listing.create.description')}</Text>
-            <View style={styles.fieldGroup}>
-              <View style={styles.fieldLabelRow}>
-                <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.description')}</Text>
-                {description.trim().length >= 10 ? (
-                  <AppIcon name="checkmark-circle" size={12} color="success" opticalCenter accessible={false} />
-                ) : (
-                  <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
-                )}
-              </View>
-              <TextInput
-                style={[styles.descInput, themed.descInput, isEditingRestricted && styles.fieldInputDisabled]}
-                value={description}
-                onChangeText={(t) => { setDescription(t); setErrorMsg(''); }}
-                placeholder={t('listing.edit.descriptionPlaceholder')}
-                placeholderTextColor={colors.textMuted}
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-                editable={!isEditingRestricted}
-              />
-              <Text style={[styles.charCount, description.trim().length < 10 ? themed.charCountWarn : themed.charCount]}>
-                {description.trim().length < 10 ? t('listing.create.charCountMin', { count: description.trim().length }) : description.length < 60 ? t('listing.create.charCountMore', { count: description.length }) : t('listing.create.charCount', { count: description.length })}
-              </Text>
-            </View>
-          </View>
+          <EditListingDescriptionSection
+            description={form.description}
+            onChangeDescription={form.setDescription}
+            isEditingRestricted={isEditingRestricted}
+          />
 
           {/* ── 7. SHIPPING ── */}
-          <View style={styles.sectionGroup} onLayout={trackSectionY('shipping')}>
-            <Text style={[styles.sectionHeading, themed.sectionHeading]}>{t('listing.edit.shipping')}</Text>
-
-            <Pressable
-              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.85 }]}
-              onPress={() => !isEditingRestricted && setShippingMethod(shippingMethod === 'standard' ? 'express' : 'standard')}
-              accessibilityRole="button"
-              accessibilityLabel={t('listing.edit.toggleShippingMethod')}
-            >
-              <View style={styles.pickerRowInner}>
-                <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.edit.shippingMethod')}</Text>
-                <Text style={[styles.pickerValue, themed.pickerValue, !shippingMethod && styles.pickerPlaceholder, !shippingMethod && themed.pickerPlaceholder]}>
-                  {shippingMethod === 'standard' ? t('listing.edit.shippingStandard') : shippingMethod === 'express' ? t('listing.edit.shippingExpress') : t('listing.edit.selectMethod')}
-                </Text>
-              </View>
-              <AppIcon name="swap-horizontal" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
-            </Pressable>
-            <View style={[styles.hairline, themed.hairline]} />
-
-            <Pressable
-              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.85 }]}
-              onPress={() => !isEditingRestricted && setShippingPayer(shippingPayer === 'buyer' ? 'seller' : 'buyer')}
-              accessibilityRole="button"
-              accessibilityLabel={t('listing.edit.toggleShippingPayer')}
-            >
-              <View style={styles.pickerRowInner}>
-                <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.edit.whoPays')}</Text>
-                <Text style={[styles.pickerValue, themed.pickerValue, !shippingPayer && styles.pickerPlaceholder, !shippingPayer && themed.pickerPlaceholder]}>
-                  {shippingPayer === 'buyer' ? t('listing.edit.payerBuyer') : shippingPayer === 'seller' ? t('listing.edit.payerSeller') : t('listing.edit.selectPayer')}
-                </Text>
-              </View>
-              <AppIcon name="swap-horizontal" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
-            </Pressable>
-          </View>
+          <EditListingShippingSection
+            shippingMethod={form.shippingMethod}
+            onToggleShippingMethod={() => form.setShippingMethod(form.shippingMethod === 'standard' ? 'express' : 'standard')}
+            shippingPayer={form.shippingPayer}
+            onToggleShippingPayer={() => form.setShippingPayer(form.shippingPayer === 'buyer' ? 'seller' : 'buyer')}
+            isEditingRestricted={isEditingRestricted}
+            onSectionLayout={trackSectionY('shipping')}
+          />
 
           {/* ── 8. SAVE/UPDATE FEEDBACK ── */}
-          {errorMsg && saveStage !== 'idle' && (
-            <View style={styles.inlineErrorRow}>
-              <AppIcon name="alert-circle" size={16} color="danger" opticalCenter accessible={false} />
-              <Text style={[styles.inlineErrorText, themed.inlineErrorText]}>{errorMsg}</Text>
-            </View>
-          )}
-
-          {/* ── Category-aware completeness indicator ──
-              Per Phase 5 WP7: truthful completeness based on the category
-              policy. Flat inline — no card chrome (§4 surface budget). */}
-          <View style={styles.completenessRow}>
-            <AppIcon
-              name={editCompleteness.canActivate ? 'checkmark-circle' : 'alert-circle-outline'}
-              size={IconSize.sm}
-              color={editCompleteness.canActivate ? 'success' : 'warning'}
-              opticalCenter
-              accessible={false}
-            />
-            <View style={styles.completenessTextWrap}>
-              <Text style={[styles.completenessLabel, { color: editCompleteness.canActivate ? colors.success : colors.textSecondary }]}>
-                {editCompletenessLabel}
-              </Text>
-              {editRecommendedLabel && !editCompleteness.canActivate ? (
-                <Text style={[styles.completenessHint, { color: colors.textMuted }]}>
-                  {editRecommendedLabel}
-                </Text>
-              ) : null}
-            </View>
-          </View>
+          <EditListingInlineError errorMsg={form.errorMsg} saveStage={saveStage} />
+          <EditListingCompletenessRow
+            canActivate={completeness.canActivate}
+            completenessLabel={completenessLabel}
+            recommendedLabel={recommendedLabel}
+          />
 
           <View style={{ height: DockConstants.singleActionHeight }} />
         </KeyboardAwareScrollView>
@@ -1325,7 +349,7 @@ export default function EditListingScreen() {
           isSaving={isSaving}
           saveDisabled={saveDisabled}
           saveStage={saveStage}
-          errorMsg={errorMsg || null}
+          errorMsg={form.errorMsg || null}
           onPreview={handlePreview}
           onSave={handleSave}
           bottomInset={insets.bottom}
@@ -1355,185 +379,11 @@ export default function EditListingScreen() {
 
       {/* Flagship camera sheet — replaces system camera for listing photos */}
       <ListingCameraSheet
-        visible={cameraSheetVisible}
-        onClose={() => setCameraSheetVisible(false)}
-        onCapture={handleCameraCapture}
-        maxPhotos={10 - mediaItems.length}
+        visible={media.cameraSheetVisible}
+        onClose={() => media.setCameraSheetVisible(false)}
+        onCapture={media.handleCameraCapture}
+        maxPhotos={10 - media.mediaItems.length}
       />
     </FlagshipScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  navStatusText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-  navStatusUnsaved: {
-    fontFamily: Typography.family.semibold },
-  scroll: {
-    flex: 1 },
-  scrollContent: {
-    paddingBottom: Space.md },
-  loadingContainer: {
-    flex: 1,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.md,
-    gap: Space.md },
-  skeletonFormGap: {
-    gap: Space.sm },
-  errorContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.md,
-    paddingHorizontal: Space.xl },
-  errorTitle: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: TypographyV2.bodyStrong.fontFamily },
-  retryBtn: {
-    paddingHorizontal: Space.lg,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.xxl },
-  retryBtnText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm },
-  statusDot: {
-    width: Space.sm,
-    height: Space.sm,
-    borderRadius: Radius.sm },
-  statusDotActive: {},
-  statusText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-  restrictedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.sm },
-  restrictedText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-  sectionGroup: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.lg },
-  sectionHeading: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: Space.sm },
-  fieldGroup: {
-    paddingVertical: Space.xs },
-  fieldLabel: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    marginBottom: Space.xs },
-  fieldInput: {
-    fontSize: Typography.size.bodyLarge,
-    fontFamily: Typography.family.regular,
-    paddingVertical: Space.sm,
-    minHeight: Control.hit + Space.sm },
-  fieldInputDisabled: {
-    opacity: 0.5 },
-  hairline: {
-    height: Stroke.hairline,
-    marginVertical: Space.xs },
-  pickerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: Space.sm + 2,
-    minHeight: Control.hit + Space.sm },
-  pickerRowInner: {
-    flex: 1 },
-  pickerValue: {
-    fontSize: Typography.size.bodyLarge,
-    fontFamily: Typography.family.regular },
-  pickerPlaceholder: {},
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'center' },
-  currencySymbol: {
-    fontSize: Typography.size.bodyLarge,
-    fontFamily: Typography.family.bold,
-    marginRight: Space.xs + 2 },
-  priceInput: {
-    flex: 1,
-    fontSize: TypographyV2.priceList.size,
-    fontFamily: TypographyV2.priceList.fontFamily },
-  discountPreview: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    marginTop: Space.xs },
-  descInput: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
-    minHeight: Space.xxl + Space.xxl + Space.sm,
-    paddingVertical: Space.sm,
-    lineHeight: TypographyV2.bodyStrong.lineHeight + 1 },
-  charCount: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    textAlign: 'right' },
-  inlineErrorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm },
-  inlineErrorText: {
-    flex: 1,
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-
-  /* -- price suggestion block -- */
-  priceSuggestionBlock: {
-    marginTop: Space.xs,
-    gap: 0 },
-  soldCompsHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    marginTop: Space.xs,
-    paddingVertical: Space.xs },
-  soldCompsText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    flex: 1 },
-  soldCompsAction: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-
-  /* -- field validation -- */
-  fieldLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Space.xs },
-  fieldRequiredHint: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-
-  /* -- category-aware completeness indicator (flat inline) -- */
-  completenessRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.xs + 1,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm },
-  completenessTextWrap: {
-    flex: 1,
-    gap: Space.xs / 2 },
-  completenessLabel: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-  completenessHint: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily } });

@@ -16,6 +16,9 @@ interface Props {
    *  caller via deliveryRowLabel. */
   deliveryRowLabel: string;
   deliveryLabel: string;
+  /** Item verification add-on price label (e.g. "Free") — when set, the
+   *  verification row renders between delivery and the protection note. */
+  verificationLabel?: string;
   /** Formatted wallet credit — when set, the applied row and the
    *  "To pay" row render. */
   walletAppliedLabel?: string;
@@ -32,6 +35,7 @@ export function CheckoutBreakdownSheet({
   protectionLabel,
   deliveryRowLabel,
   deliveryLabel,
+  verificationLabel,
   walletAppliedLabel,
   useBalance,
   totalLabel,
@@ -53,6 +57,9 @@ export function CheckoutBreakdownSheet({
           label={deliveryRowLabel}
           value={deliveryLabel}
         />
+        {verificationLabel ? (
+          <PriceRow label="Item verification" value={verificationLabel} />
+        ) : null}
         <View style={styles.protectionIncludedRow}>
           <Ionicons name="checkmark-circle" size={12} color={colors.success} importantForAccessibility="no" />
           <Text style={styles.protectionIncludedText}>

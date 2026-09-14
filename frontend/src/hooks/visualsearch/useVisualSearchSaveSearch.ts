@@ -65,7 +65,7 @@ export function useVisualSearchSaveSearch({
         minPrice: typeof minPriceNum === 'number' && !Number.isNaN(minPriceNum) ? minPriceNum : undefined,
         maxPrice: typeof maxPriceNum === 'number' && !Number.isNaN(maxPriceNum) ? maxPriceNum : undefined },
       alertsEnabled: false });
-    show('Search saved (alerts off)', 'success');
+    show('Search saved — new matches won\'t be flagged', 'success');
   }, [imageUri, saveSearchLabel, brand, selectedCategory, minPrice, maxPrice, addSavedSearch, show, haptic]);
 
   return {

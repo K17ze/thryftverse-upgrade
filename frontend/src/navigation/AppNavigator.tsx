@@ -63,9 +63,9 @@ export default function AppNavigator() {
   const biometricLoginPending = useStore((state) => state.biometricLoginPending);
   const storeOnboardingComplete = useStore((state) => state.hasCompletedOnboarding);
   // Onboarding is a first-run gate that sits ahead of auth. The persisted
-  // store flag lets returning users skip the AsyncStorage round-trip; for
-  // first-launch users we still confirm against AsyncStorage (the
-  // authoritative source) before showing the onboarding screen.
+  // store flag is the source of truth; isOnboardingComplete additionally
+  // migrates the legacy AsyncStorage key into the store for installs that
+  // completed onboarding before the store owned this state.
   const [onboardingChecked, setOnboardingChecked] = React.useState(storeOnboardingComplete);
   const [needsOnboarding, setNeedsOnboarding] = React.useState(!storeOnboardingComplete);
   // Age verification gate — checked ahead of onboarding. Persisted in

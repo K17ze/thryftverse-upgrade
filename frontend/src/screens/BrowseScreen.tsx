@@ -9,6 +9,8 @@ import { OfflineBanner } from '../components/OfflineBanner';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
+import { useSaveToCollectionPicker } from '../hooks/useSaveToCollectionPicker';
+import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { useDynamicAlgorithmSignals } from '../hooks/useDynamicAlgorithmSignals';
 import {
   useBrowseGridDensity,
@@ -48,6 +50,10 @@ export default function BrowseScreen() {
   const { title, categoryId, subcategoryId, searchQuery } = route.params || { title: 'Browse All', categoryId: 'search' };
   const browseFilters = useStore((state) => state.browseFilters);
   const updateBrowseFilters = useStore((state) => state.updateBrowseFilters);
+  const isSavedProduct = useStore((state) => state.isSavedProduct);
+  // Two-tier save: tap = quick-save, long-press = file to a collection.
+  // The hook also owns the one-shot "Add to a list" teaching toast.
+  const { savePickerItemId, handleQuickSave, handleSaveLongPress, closeSavePicker } = useSaveToCollectionPicker();
   const { listings, isSyncing, lastError, refreshListings } = useBackendData();
 
   // Grid density preference (AsyncStorage-backed)
@@ -174,6 +180,16 @@ export default function BrowseScreen() {
         gridDensity={gridDensity}
         onClearFilters={handleClearFilters}
         onRetryListings={() => void refreshListings()}
+        onItemSaveToggle={handleQuickSave}
+        onItemSaveLongPress={handleSaveLongPress}
+        isItemSaved={isSavedProduct}
+      />
+
+      {/* ── Save-to-collection picker — long-press a tile bookmark ── */}
+      <SaveToCollectionModal
+        visible={savePickerItemId !== null}
+        itemId={savePickerItemId ?? ''}
+        onClose={closeSavePicker}
       />
     </SafeAreaView>
   );

@@ -158,7 +158,7 @@ export default function ChatSettingsScreen({ navigation }: Props) {
         <SettingsRow
           title="Chat notifications"
           subtitle="Customise push and in-app alerts for messages"
-          onPress={() => navigation.navigate('PushNotifications')}
+          onPress={() => navigation.navigate('NotificationPreferences')}
           isFirst
           isLast
         />

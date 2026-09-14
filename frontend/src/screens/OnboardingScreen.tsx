@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -18,73 +18,56 @@ import { Space, Radius, FontFamily, LetterSpacing } from '../theme/designTokens'
 import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { OfflineBanner } from '../components/OfflineBanner';
-import { FlagshipState } from '../components/flagship';
 import { requestPushPermissionWithContext } from '../lib/pushPermission';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const ONBOARDING_KEY = '@thryftverse_onboarding_complete';
-const ONBOARDING_SETUP_KEY = '@thryftverse_onboarding_setup';
+/**
+ * Onboarding completion is owned by the persisted store flag
+ * (`hasCompletedOnboarding` in useStore — backed by synchronous MMKV storage,
+ * so it is already hydrated when the navigator reads it). This AsyncStorage
+ * key is a leftover write from builds that dual-wrote completion; it is read
+ * once below to migrate those installs into the store, then removed.
+ */
+const LEGACY_ONBOARDING_KEY = '@thryftverse_onboarding_complete';
 
 export async function isOnboardingComplete(): Promise<boolean> {
+  if (useStore.getState().hasCompletedOnboarding) {
+    return true;
+  }
   try {
-    const value = await AsyncStorage.getItem(ONBOARDING_KEY);
-    return value === 'true';
+    const legacy = await AsyncStorage.getItem(LEGACY_ONBOARDING_KEY);
+    if (legacy !== 'true') {
+      return false;
+    }
+    // Migrate the legacy flag into the store — the single owner — and drop
+    // the old key so the two sources cannot diverge again.
+    useStore.getState().setHasCompletedOnboarding(true);
+    void AsyncStorage.removeItem(LEGACY_ONBOARDING_KEY).catch(() => {});
+    return true;
   } catch {
     return false;
   }
 }
 
-export async function markOnboardingComplete(): Promise<void> {
-  try {
-    await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
-  } catch {
-    // Best-effort persistence — the app still functions if storage fails.
-  }
-}
-
-async function loadOnboardingSetup(): Promise<void> {
-  try {
-    await AsyncStorage.getItem(ONBOARDING_SETUP_KEY);
-  } catch {
-    throw new Error('onboarding_setup_failed');
-  }
+export function markOnboardingComplete(): void {
+  useStore.getState().setHasCompletedOnboarding(true);
 }
 
 export default function OnboardingScreen() {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const setHasCompletedOnboarding = useStore((s) => s.setHasCompletedOnboarding);
   const { isOffline } = useConnectivity();
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [setupError, setSetupError] = useState(false);
   const [isRequestingPermission, setIsRequestingPermission] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
 
-  const runSetup = useCallback(async () => {
-    setIsLoading(true);
-    setSetupError(false);
-    try {
-      await loadOnboardingSetup();
-      setIsLoading(false);
-    } catch {
-      setSetupError(true);
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void runSetup();
-  }, [runSetup]);
-
-  const finishOnboarding = useCallback(async () => {
-    await markOnboardingComplete();
-    setHasCompletedOnboarding(true);
+  const finishOnboarding = useCallback(() => {
+    markOnboardingComplete();
     track('onboarding_completed');
     trackFunnelStep('signup', 'onboarding_completed');
     navigation.replace('Personalisation', { fromOnboarding: true });
-  }, [navigation, setHasCompletedOnboarding]);
+  }, [navigation]);
 
   const handleContinue = useCallback(async () => {
     haptic.success();
@@ -93,7 +76,7 @@ export default function OnboardingScreen() {
       const granted = await requestPushPermissionWithContext('settings');
       setIsRequestingPermission(false);
       if (granted) {
-        void finishOnboarding();
+        finishOnboarding();
       } else {
         setPermissionDenied(true);
       }
@@ -105,53 +88,18 @@ export default function OnboardingScreen() {
 
   const handleSkip = useCallback(() => {
     haptic.light();
-    void finishOnboarding();
+    finishOnboarding();
   }, [haptic, finishOnboarding]);
-
-  const handleRetry = useCallback(() => {
-    haptic.medium();
-    void runSetup();
-  }, [haptic, runSetup]);
 
   const handleContinueWithout = useCallback(() => {
     haptic.light();
-    void finishOnboarding();
+    finishOnboarding();
   }, [haptic, finishOnboarding]);
 
   const handleRetryPermission = useCallback(() => {
     haptic.medium();
     setPermissionDenied(false);
   }, [haptic]);
-
-  if (isLoading) {
-    return (
-      <SafeAreaView
-        style={[styles.root, styles.center, { backgroundColor: colors.background }]}
-        edges={['top', 'bottom']}
-      >
-        <ActivityIndicator size="large" color={colors.brand} />
-      </SafeAreaView>
-    );
-  }
-
-  if (setupError) {
-    return (
-      <SafeAreaView
-        style={[styles.root, { backgroundColor: colors.background }]}
-        edges={['top', 'bottom']}
-      >
-        <View style={styles.center}>
-          <FlagshipState
-            variant="error"
-            title="Couldn't get ready"
-            subtitle="Check your connection and try again."
-            actionLabel="Try again"
-            onAction={handleRetry}
-          />
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
@@ -272,11 +220,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     paddingHorizontal: Space.lg,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   wordmark: {
     fontFamily: FontFamily.bold,

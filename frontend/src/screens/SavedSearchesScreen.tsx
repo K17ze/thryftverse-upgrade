@@ -5,7 +5,8 @@ import {
   StyleSheet,
   StatusBar,
   ScrollView,
-  Pressable } from 'react-native';
+  Pressable,
+  Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -41,8 +42,15 @@ export default function SavedSearchesScreen({ navigation }: Props) {
   const toggleSavedSearchAlerts = useStore((s) => s.toggleSavedSearchAlerts);
   const markAllSavedSearchesSeen = useStore((s) => s.markAllSavedSearchesSeen);
   const updateBrowseFilters = useStore((s) => s.updateBrowseFilters);
+  const hydrateSavedSearches = useStore((s) => s.hydrateSavedSearches);
   const alertResults = useSavedSearchAlerts();
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
+
+  // Reconcile the local cache with the server table on mount — saved
+  // searches are persisted server-side so the matcher can push alerts.
+  React.useEffect(() => {
+    hydrateSavedSearches().catch(() => undefined);
+  }, [hydrateSavedSearches]);
 
   // Build a map of searchId → newMatches count
   const newMatchesMap = React.useMemo(() => {
@@ -82,6 +90,20 @@ export default function SavedSearchesScreen({ navigation }: Props) {
 
   const handleDiscoverSellers = () => {
     navigation.navigate('UnifiedDiscovery');
+  };
+
+  // The store actions roll back optimistic state and reject on server
+  // failure — surface that so the toggle doesn't silently snap back.
+  const handleToggleAlerts = (id: string) => {
+    toggleSavedSearchAlerts(id).catch(() =>
+      Alert.alert('Couldn’t update alerts', 'Check your connection and try again.')
+    );
+  };
+
+  const handleRemoveSearch = (id: string) => {
+    removeSavedSearch(id).catch(() =>
+      Alert.alert('Couldn’t remove saved search', 'Check your connection and try again.')
+    );
   };
 
   const styles = useMemo(() => StyleSheet.create({
@@ -227,9 +249,9 @@ export default function SavedSearchesScreen({ navigation }: Props) {
       >
         {savedSearches.length === 0 ? (
           <EmptyState
-            icon="notifications-outline"
+            icon="bookmark-outline"
             title="No saved searches yet"
-            subtitle="Save searches to get alerts on new items."
+            subtitle="Save a search and we'll notify you when new items match."
             ctaLabel="Start searching"
             onCtaPress={handleDiscoverSellers}
           />
@@ -262,12 +284,12 @@ export default function SavedSearchesScreen({ navigation }: Props) {
             <Text style={styles.sectionHint}>
               {filteredSearches.length} {filteredSearches.length === 1 ? 'search' : 'searches'}
               {' · '}
-              {savedSearches.filter((s) => s.alertsEnabled).length} with alerts
+              {savedSearches.filter((s) => s.alertsEnabled).length} with alerts on
             </Text>
 
             {totalNewMatches > 0 && (
               <View style={styles.newMatchesBanner}>
-                <Ionicons name="notifications-outline" size={16} color={colors.brand} />
+                <Ionicons name="flag" size={16} color={colors.brand} />
                 <Text style={styles.newMatchesText}>
                   {totalNewMatches} new {totalNewMatches === 1 ? 'match' : 'matches'} across your saved searches
                 </Text>
@@ -292,7 +314,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
                     accessibilityRole="button"
                   >
                     <Ionicons
-                      name={search.alertsEnabled ? 'notifications' : 'bookmark-outline'}
+                      name={search.alertsEnabled ? 'flag' : 'bookmark-outline'}
                       size={20}
                       color={search.alertsEnabled ? colors.brand : colors.textMuted}
                       style={!search.alertsEnabled && styles.searchIconWrapInactive}
@@ -319,19 +341,19 @@ export default function SavedSearchesScreen({ navigation }: Props) {
                   <View style={styles.searchActions}>
                     <AnimatedPressable
                       style={styles.actionBtn}
-                      onPress={() => toggleSavedSearchAlerts(search.id)}
-                      accessibilityLabel={search.alertsEnabled ? 'Disable alerts' : 'Enable alerts'}
+                      onPress={() => handleToggleAlerts(search.id)}
+                      accessibilityLabel={search.alertsEnabled ? 'Turn off match alerts' : 'Turn on match alerts'}
                       accessibilityRole="button"
                     >
                       <Ionicons
-                        name={search.alertsEnabled ? 'notifications' : 'notifications-off-outline'}
+                        name={search.alertsEnabled ? 'flag' : 'flag-outline'}
                         size={20}
                         color={search.alertsEnabled ? colors.brand : colors.textMuted}
                       />
                     </AnimatedPressable>
                     <AnimatedPressable
                       style={styles.actionBtn}
-                      onPress={() => removeSavedSearch(search.id)}
+                      onPress={() => handleRemoveSearch(search.id)}
                       accessibilityLabel="Remove saved search"
                       accessibilityRole="button"
                     >

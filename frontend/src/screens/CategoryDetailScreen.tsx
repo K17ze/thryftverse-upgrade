@@ -24,6 +24,8 @@ import { Space, Typography, Control, Stroke, Radius } from '../theme/designToken
 import { TypographyV2 } from '../theme/typography.v2';
 import { useStore, type BrowseSortOption } from '../store/useStore';
 import { useHaptic } from '../hooks/useHaptic';
+import { useSaveToCollectionPicker } from '../hooks/useSaveToCollectionPicker';
+import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 
 const normalize = (value?: string) =>
   (value ?? '').trim().toLocaleLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -45,6 +47,10 @@ export default function CategoryDetailScreen() {
   const browseFilters = useStore((state) => state.browseFilters);
   const updateBrowseFilters = useStore((state) => state.updateBrowseFilters);
   const haptic = useHaptic();
+  const isSavedProduct = useStore((state) => state.isSavedProduct);
+  // Two-tier save: tap = quick-save, long-press = file to a collection.
+  // The hook also owns the one-shot "Add to a list" teaching toast.
+  const { savePickerItemId, handleQuickSave, handleSaveLongPress, closeSavePicker } = useSaveToCollectionPicker();
   const { categories } = useTaxonomy();
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
 
@@ -418,7 +424,9 @@ export default function CategoryDetailScreen() {
                 openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'CategoryDetail' })
               }
               numColumns={2}
-              showSaveButton
+              onItemSaveToggle={handleQuickSave}
+              onItemSaveLongPress={handleSaveLongPress}
+              isItemSaved={isSavedProduct}
               enableEntranceAnimation
             />
           </Reanimated.View>
@@ -464,6 +472,13 @@ export default function CategoryDetailScreen() {
           </View>
         )}
       </View>
+
+      {/* ── Save-to-collection picker — long-press a tile bookmark ── */}
+      <SaveToCollectionModal
+        visible={savePickerItemId !== null}
+        itemId={savePickerItemId ?? ''}
+        onClose={closeSavePicker}
+      />
     </FlagshipScreen>
   );
 }

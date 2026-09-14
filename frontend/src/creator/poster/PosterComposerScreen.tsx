@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import type { VideoPlayer } from 'expo-video';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Reanimated, { runOnJS, useSharedValue, useAnimatedStyle, withTiming, withDelay } from 'react-native-reanimated';
+import Reanimated, { runOnJS, useSharedValue, useAnimatedStyle, withTiming, withDelay, useAnimatedRef, useAnimatedScrollHandler } from 'react-native-reanimated';
 import { useNavigation, useRoute, useFocusEffect, type RouteProp } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Space, FontFamily, Radius, IconGrammar, Stroke, Scrim } from '../../theme/designTokens';
@@ -635,6 +635,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     handleTimelineOperation,
     handleSpeedCurveChange,
     handleTimelineTransitionTap,
+    toggleClipLock,
   } = usePosterTimeline({
     document,
     updateLayer,
@@ -690,8 +691,43 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
   // the gesture is relative to the starting zoom (not absolute).
   const timelineScaleSV = useSharedValue(1);
   const pinchBaseScaleSV = useSharedValue(1);
+  // Edge auto-scroll: animated ref + offset tracker for the timeline
+  // ScrollView. ClipThumb pan worklets call scrollTo() directly on the
+  // UI thread when a trim handle or reorder drag reaches the viewport
+  // edge — no JS hop, matches CapCut/Edits edge-scroll behavior.
+  const timelineScrollRef = useAnimatedRef<ScrollView>();
+  const timelineScrollXSV = useSharedValue(0);
+  const timelineScrollHandler = useAnimatedScrollHandler((e) => {
+    timelineScrollXSV.value = e.contentOffset.x;
+  });
+
+
   const timelineBaseTrackWidth = screenWidth - Space.md * 2;
   const scaledTrackWidth = timelineBaseTrackWidth * timelineZoomScale;
+
+  // Playhead auto-follow during playback (CapCut/Edits/Snap behavior):
+  // when the track is zoomed wider than the viewport, keep the playhead
+  // visible — crossing the right edge scrolls it back to ~35% from the
+  // left; crossing the left edge pulls it back into view. Throttled and
+  // playback-only so it never fights a user's manual scroll.
+  const playheadFollowAtRef = useRef(0);
+  useEffect(() => {
+    if (!playbackState.isPlaying) return;
+    const pxPerMs = timelineTotalDurationMs > 0 ? scaledTrackWidth / timelineTotalDurationMs : 0;
+    if (pxPerMs <= 0 || scaledTrackWidth <= screenWidth) return;
+    const playheadPx = playbackState.currentTimeMs * pxPerMs;
+    const scrollX = timelineScrollXSV.value;
+    const edge = 48;
+    if (playheadPx > scrollX + screenWidth - edge || playheadPx < scrollX + edge) {
+      const now = Date.now();
+      if (now - playheadFollowAtRef.current < 350) return;
+      playheadFollowAtRef.current = now;
+      timelineScrollRef.current?.scrollTo({
+        x: Math.max(0, playheadPx - screenWidth * 0.35),
+        animated: true,
+      });
+    }
+  }, [playbackState.currentTimeMs, playbackState.isPlaying, scaledTrackWidth, timelineTotalDurationMs, screenWidth, timelineScrollXSV, timelineScrollRef]);
 
   // â”€â”€ Session-state persistence & restoration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Extracted to usePosterSession hook. Persists active page, selected
@@ -1598,10 +1634,13 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
               horizontal scroll (1 finger) coexist naturally. */}
           <GestureDetector gesture={timelinePinchGesture}>
             <View style={styles.timelineScrollWrap}>
-              <ScrollView
+              <Reanimated.ScrollView
+                ref={timelineScrollRef}
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 scrollEnabled={timelineZoomScale > 1}
+                onScroll={timelineScrollHandler}
+                scrollEventThrottle={16}
                 contentContainerStyle={{ width: scaledTrackWidth }}
                 style={styles.timelineScroll}
               >
@@ -1643,6 +1682,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                     }
                     transitionIds={clipTransitionIds}
                     onSelectTransition={handleTimelineTransitionTap}
+                    edgeScroll={{ scrollRef: timelineScrollRef, scrollXSV: timelineScrollXSV, viewportWidth: screenWidth }}
                     onReorderClip={(clipId, translationX) => {
                       // Compute target index from drag translation.
                       // Each clip's width is proportional to its duration.
@@ -1685,7 +1725,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                     </View>
                   )}
                 </Reanimated.View>
-              </ScrollView>
+              </Reanimated.ScrollView>
 
               {/* â”€â”€ Zoom indicator â€” fades in on pinch, out after release â”€â”€ */}
               <Reanimated.View
@@ -1715,6 +1755,8 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
               onSpeedChange={(speed) => handleTimelineOperation({ type: 'speed', clipId: selectedClip.id, speed })}
               onVolumeChange={(volume) => handleTimelineOperation({ type: 'volume', clipId: selectedClip.id, volume })}
               onOpenSpeedCurve={() => { haptic.light(); openSheet('speedCurve'); }}
+              isLocked={!!selectedClip.locked}
+              onToggleLock={() => toggleClipLock(selectedClip.id)}
             />
           )}
         </View>

@@ -131,10 +131,22 @@ export async function reconcilePublicationAttempts(): Promise<void> {
         // Schedule reconciliation — look up the schedule row by key.
         const result = await lookupScheduleByKey(attempt.documentId, attempt.attemptId);
         if (result && result.ok) {
-          attempt.state = 'committed';
-          attempt.targetId = result.scheduleId;
-          attempt.lastCheckedAt = new Date().toISOString();
-          changed = true;
+          if (result.state === 'published') {
+            // Published — carry the real target id when the join
+            // resolved it (async publish-now path), else the schedule id.
+            attempt.state = 'committed';
+            attempt.targetId = result.targetId ?? result.scheduleId;
+            attempt.lastCheckedAt = new Date().toISOString();
+            changed = true;
+          } else if (result.state === 'failed' || result.state === 'cancelled') {
+            // Terminal non-success — the publication will never land.
+            attempt.state = 'failed';
+            attempt.failureCode = result.failureReason ?? result.state.toUpperCase();
+            attempt.lastCheckedAt = new Date().toISOString();
+            changed = true;
+          }
+          // 'pending' | 'claimed' — still processing; leave 'unknown'
+          // for the next reconciliation cycle.
         } else {
           // 404 — the schedule command didn't reach the server.
           attempt.state = 'failed';

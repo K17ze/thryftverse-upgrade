@@ -104,6 +104,7 @@ const EVENT_TYPE_CARD_MAP: Record<NotificationEventType, NotificationCardType> =
   order_out_for_delivery: 'order',
   order_delivered: 'order',
   order_refunded: 'order',
+  order_dispatch_sla_breach: 'order',
   resolution_opened: 'resolution',
   resolution_status_changed: 'resolution',
   review_received: 'review',

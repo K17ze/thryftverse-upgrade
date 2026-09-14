@@ -7,6 +7,7 @@ import {
   processPushQueueJob,
   processPushReceiptReconciliation,
   sweepExpiredAuctions,
+  sweepExpiredLiveLots,
   sweepExpiredCoOwnOrders,
   runPlatformReconciliation,
   processDomainOutboxBatch,
@@ -32,6 +33,7 @@ import {
   processDsarExport,
   evaluateCoOwnPriceAlerts,
   processCoOwnDripReinvestment,
+  processAutoFeedbackSweep,
 } from './handlers/index.js';
 
 /**
@@ -58,6 +60,9 @@ async function main(): Promise<void> {
       handlePushJob: processPushQueueJob,
       handleAuctionSweepJob: async ({ reason }) => {
         await sweepExpiredAuctions(reason);
+      },
+      handleLiveLotSweepJob: async ({ reason }) => {
+        await sweepExpiredLiveLots(reason);
       },
       handleCoOwnOrderExpirySweepJob: async ({ reason }) => {
         await sweepExpiredCoOwnOrders(reason);
@@ -144,6 +149,9 @@ async function main(): Promise<void> {
       },
       handleDsarExportJob: async ({ requestId, userId, reason }) => {
         await processDsarExport({ requestId, userId, reason });
+      },
+      handleFeedbackEvaluationJob: async ({ reason }) => {
+        await processAutoFeedbackSweep({ reason });
       },
       handleAgentRunJob: async ({ runId }) => {
         const { processAgentRun } = await import('../botRuntime/index.js');

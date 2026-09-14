@@ -64,20 +64,44 @@ export function hydrateConversationMessages(
 
         readBy: entry.readBy,
 
-        clientMessageId: entry.clientMessageId };
+        clientMessageId: entry.clientMessageId,
+
+        // Save-in-chat passthrough — the "Saved" marker survives
+        // store-driven hydration resets.
+        isSavedInChat: entry.isSavedInChat,
+
+        savedBy: entry.savedBy,
+
+        savedAt: entry.savedAt,
+
+        // Delete/edit lifecycle passthrough — without these a store-driven
+        // hydration reset resurrects deleted bubbles and drops Edited labels.
+        isDeleted: entry.isDeleted,
+
+        deletedForEveryoneAt: entry.deletedForEveryoneAt,
+
+        isEdited: entry.isEdited,
+
+        editedAt: entry.editedAt,
+
+        editVersion: entry.editVersion };
     }
 
     return {
       id: entry.id,
 
       type:
-        entry.isSystem || entry.type === "system"
-          ? "system"
-          : entry.type === "voice"
-            ? "voice"
-            : entry.mediaUri
-              ? "media"
-              : "text",
+        entry.type === "commerce_state" && entry.commerceState
+          ? "commerce_state"
+          : entry.type === "listing_share" && entry.listing
+            ? "listing_share"
+            : entry.isSystem || entry.type === "system"
+              ? "system"
+              : entry.type === "voice"
+                ? "voice"
+                : entry.mediaUri
+                  ? "media"
+                  : "text",
 
       sender,
 
@@ -122,9 +146,38 @@ export function hydrateConversationMessages(
 
       clientMessageId: entry.clientMessageId,
 
+      // Save-in-chat passthrough — the "Saved" marker survives
+      // store-driven hydration resets.
+      isSavedInChat: entry.isSavedInChat,
+
+      savedBy: entry.savedBy,
+
+      savedAt: entry.savedAt,
+
+      // Delete/edit lifecycle passthrough — a deleted-for-everyone bubble
+      // must rehydrate as a tombstone, not resurrect its cleared content;
+      // the Edited marker must survive hydration resets too.
+      isDeleted: entry.isDeleted,
+
+      deletedForEveryoneAt: entry.deletedForEveryoneAt,
+
+      isEdited: entry.isEdited,
+
+      editedAt: entry.editedAt,
+
+      editVersion: entry.editVersion,
+
+      // Listing-share card snapshot — survives hydration resets so the card
+      // doesn't degrade into a bare "Shared a listing:" text row.
+      listing: entry.listing,
+
       voiceUri: entry.voiceUri,
 
       voiceDurationMs: entry.voiceDurationMs,
+
+      // Order lifecycle card snapshot — survives hydration resets so an
+      // order status card doesn't degrade into a plain system row.
+      commerceState: entry.commerceState,
 
       replyToMessageId: entry.replyToMessageId };
   });

@@ -10,16 +10,20 @@ import { Space, FontFamily } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTranslation } from '../../i18n/useAppTranslation';
+import { formatShortDate } from '../../utils/dateFormat';
 
 export interface AwayModeBannerProps {
   onPress: () => void;
+  /** Seller-declared return instant (ISO-8601) — shown as "Back {date}"
+   *  only when a real date was published; never fabricated. */
+  returnDate?: string | null;
 }
 
 /**
  * Away-mode indicator — shown under the identity hero when holiday mode is
  * enabled; routes to privacy settings. Extracted from MyProfileScreen.
  */
-export function AwayModeBanner({ onPress }: AwayModeBannerProps) {
+export function AwayModeBanner({ onPress, returnDate }: AwayModeBannerProps) {
   const { colors } = useAppTheme();
   const { t: tt } = useAppTranslation('myProfile');
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -35,7 +39,9 @@ export function AwayModeBanner({ onPress }: AwayModeBannerProps) {
       <View style={styles.awayBannerTextWrap}>
         <Text style={styles.awayBannerTitle}>{tt('holiday.title')}</Text>
         <Text style={styles.awayBannerSub} maxFontSizeMultiplier={2}>
-          {tt('holiday.subtitle')}
+          {returnDate
+            ? `Back ${formatShortDate(returnDate)} · ${tt('holiday.subtitle')}`
+            : tt('holiday.subtitle')}
         </Text>
       </View>
       <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />

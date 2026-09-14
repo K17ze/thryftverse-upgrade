@@ -13,10 +13,13 @@ import {
   agentRuntimeReadinessReason,
 } from '../botRuntime/openaiAgent.js';
 import { publishRealtimeEvent } from '../lib/realtime.js';
+import { isUserOnline } from '../lib/presenceRegistry.js';
+import { config } from '../config.js';
 import { logger } from '../lib/logger.js';
 import { checkFraudNonBlocking } from '../lib/fraudDetection.js';
 import { evaluateRisk, recordExecution } from '../lib/riskDecision.js';
 import { scanMessageForScamPatterns } from '../lib/messageScamScanner.js';
+import { recordConsumerReport } from '../lib/safetyCaseService.js';
 
 // ── Local types ──
 
@@ -698,6 +701,26 @@ async function serializeChatMessageRows(
     userIds.push(r.user_id);
   }
 
+  // ── Save-in-chat state — batch-load saves so the "Saved" marker is
+  // shared state both participants render (Snapchat-style negotiated
+  // persistence). savedBy preserves attribution; savedAt is the first save.
+  const savesResult = await db.query<{ message_id: string; user_id: string; created_at: string }>(
+    `SELECT message_id, user_id, created_at::text
+     FROM chat_message_saves
+     WHERE message_id = ANY($1::text[])
+     ORDER BY created_at ASC`,
+    [messageIds]
+  );
+  const savesByMessage = new Map<string, { savedBy: string[]; savedAt: string }>();
+  for (const r of savesResult.rows) {
+    let entry = savesByMessage.get(r.message_id);
+    if (!entry) {
+      entry = { savedBy: [], savedAt: r.created_at };
+      savesByMessage.set(r.message_id, entry);
+    }
+    entry.savedBy.push(r.user_id);
+  }
+
   // ── Poll data: batch-load polls and votes for these messages ─────────
   const pollsResult = await db.query<{
     id: string;
@@ -755,6 +778,11 @@ async function serializeChatMessageRows(
       isReadByMe: readBy.includes(actorUserId),
       scamWarning: (row.metadata as Record<string, unknown> | null)?.scamWarning === true || undefined,
     };
+    const saves = savesByMessage.get(row.id);
+    if (saves && saves.savedBy.length > 0) {
+      baseReturn.savedBy = saves.savedBy;
+      baseReturn.savedAt = saves.savedAt;
+    }
     const voice = voiceByMessage.get(row.id);
     if (voice) {
       baseReturn.voice = voice;
@@ -3171,6 +3199,114 @@ app.delete('/chat/conversations/:conversationId/messages/:messageId/reactions', 
   return { ok: true, removed: true, emoji };
 });
 
+// ── Save in chat — Snapchat-style negotiated persistence ──────────────
+// Either participant may save a message; the "Saved" marker is shared
+// state both parties render. Per-user rows in chat_message_saves preserve
+// attribution (savedBy) — unsaving removes only the actor's save, so the
+// message stays saved while any participant's save remains. Save events
+// publish `chat.message.saved` / `chat.message.unsaved` with the full
+// post-change savedBy set so other devices reconcile without a refetch.
+
+app.post('/chat/conversations/:conversationId/messages/:messageId/save', async (request, reply) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+    messageId: z.string().min(2).max(120),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId, messageId } = paramsSchema.parse(request.params);
+
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  // The message must exist and not be deleted-for-everyone — a tombstone
+  // cannot be saved (consistent with edit/reaction rejection on deleted).
+  const msgResult = await db.query<{ deleted_for_everyone_at: string | null }>(
+    `SELECT deleted_for_everyone_at
+     FROM chat_messages
+     WHERE id = $1 AND conversation_id = $2 LIMIT 1`,
+    [messageId, conversationId]
+  );
+
+  if (!msgResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Message not found' };
+  }
+
+  if (msgResult.rows[0].deleted_for_everyone_at) {
+    reply.code(403);
+    return { ok: false, error: 'Cannot save a deleted message' };
+  }
+
+  await db.query(
+    `INSERT INTO chat_message_saves (message_id, conversation_id, user_id)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (message_id, user_id) DO NOTHING`,
+    [messageId, conversationId, actorUserId]
+  );
+
+  const savedRows = await db.query<{ user_id: string; created_at: string }>(
+    `SELECT user_id, created_at::text FROM chat_message_saves
+     WHERE message_id = $1 ORDER BY created_at ASC`,
+    [messageId]
+  );
+  const savedBy = savedRows.rows.map((r) => r.user_id);
+  const savedAt = savedRows.rows[0]?.created_at ?? null;
+
+  publishRealtimeEvent({
+    topic: `chat.conversation:${conversationId}`,
+    type: 'chat.message.saved',
+    payload: { conversationId, messageId, actorUserId, savedBy, savedAt },
+  });
+
+  return { ok: true, saved: true, messageId, savedBy, savedAt };
+});
+
+app.delete('/chat/conversations/:conversationId/messages/:messageId/save', async (request, reply) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+    messageId: z.string().min(2).max(120),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId, messageId } = paramsSchema.parse(request.params);
+
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  // Unsave is allowed on any existing message — including tombstones — so
+  // a save placed before a delete-for-everyone can still be retracted.
+  const msgResult = await db.query<{ id: string }>(
+    `SELECT id FROM chat_messages
+     WHERE id = $1 AND conversation_id = $2 LIMIT 1`,
+    [messageId, conversationId]
+  );
+
+  if (!msgResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Message not found' };
+  }
+
+  await db.query(
+    `DELETE FROM chat_message_saves WHERE message_id = $1 AND user_id = $2`,
+    [messageId, actorUserId]
+  );
+
+  const savedRows = await db.query<{ user_id: string; created_at: string }>(
+    `SELECT user_id, created_at::text FROM chat_message_saves
+     WHERE message_id = $1 ORDER BY created_at ASC`,
+    [messageId]
+  );
+  const savedBy = savedRows.rows.map((r) => r.user_id);
+  const savedAt = savedRows.rows[0]?.created_at ?? null;
+
+  publishRealtimeEvent({
+    topic: `chat.conversation:${conversationId}`,
+    type: 'chat.message.unsaved',
+    payload: { conversationId, messageId, actorUserId, savedBy, savedAt },
+  });
+
+  return { ok: true, saved: savedBy.length > 0, messageId, savedBy, savedAt };
+});
+
 // ── Pinned messages ───────────────────────────────────────────────────
 // One pinned message per conversation. Group admins/owners can pin.
 // Pinning a new message replaces the previous pin (upsert on conversation_id).
@@ -3469,29 +3605,46 @@ app.post('/chat/conversations/:conversationId/report', async (request, reply) =>
   const { conversationId } = paramsSchema.parse(request.params);
   const payload = bodySchema.parse(request.body ?? {});
 
-  await ensureChatConversationAccess(db, conversationId, actorUserId);
+  const conversation = await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  // The evidence message ref must resolve inside this conversation —
+  // reporter membership alone doesn't prove the cited message belongs
+  // here (cross-conversation or fabricated refs would write a dangling
+  // conversation_reports.message_id). Same convention as the pin/read
+  // checks: 400 on a bad body reference.
+  if (payload.messageId) {
+    const evidence = await db.query<{ id: string }>(
+      `SELECT id FROM chat_messages WHERE id = $1 AND conversation_id = $2 LIMIT 1`,
+      [payload.messageId, conversationId],
+    );
+    if (!evidence.rowCount) {
+      reply.code(400);
+      return { ok: false, error: 'Reported message not found in this conversation' };
+    }
+  }
 
   const reportId = createRuntimeId('chatrpt');
 
-  const insertResult = await db.query<{ id: string }>(
-    `INSERT INTO conversation_reports (id, conversation_id, reporter_user_id, reason, details, message_id, status, created_at, idempotency_key)
-     VALUES ($1, $2, $3, $4, $5, $6, 'submitted', NOW(), $7)
-     ON CONFLICT (idempotency_key) DO NOTHING
-     RETURNING id`,
-    [
-      reportId,
-      conversationId,
-      actorUserId,
-      payload.reason,
-      payload.details ?? null,
-      payload.messageId ?? null,
-      payload.idempotencyKey ?? null,
-    ]
-  );
-
-  const effectiveReportId = insertResult.rowCount && insertResult.rowCount > 0
-    ? insertResult.rows[0].id
-    : reportId;
+  // Persist the report row and its safety notice in one transaction. On an
+  // idempotent retry the helper resolves the original report id so the
+  // notice dedupes on `conversation_report:<reportId>` instead of
+  // double-filing.
+  const { reportId: effectiveReportId, noticeId } = await recordConsumerReport(db, {
+    kind: 'conversation',
+    reportId,
+    reporterId: actorUserId,
+    subjectId: conversationId,
+    reason: payload.reason,
+    details: payload.details ?? null,
+    evidenceMessageId: payload.messageId ?? null,
+    idempotencyKey: payload.idempotencyKey ?? null,
+    subjectSnapshot: {
+      conversationType: conversation.type,
+      title: conversation.title,
+      ownerId: conversation.owner_id,
+      itemId: conversation.item_id,
+    },
+  });
 
   publishRealtimeEvent({
     topic: `chat.conversation:${conversationId}`,
@@ -3500,7 +3653,7 @@ app.post('/chat/conversations/:conversationId/report', async (request, reply) =>
   });
 
   reply.code(201);
-  return { ok: true, reportId: effectiveReportId, status: 'submitted' };
+  return { ok: true, reportId: effectiveReportId, noticeId, status: 'submitted' };
 });
 
 // P0 #1 / P2 #56: Typing indicator endpoint.
@@ -5559,6 +5712,74 @@ app.get('/chat/conversations/:conversationId', async (request) => {
         status: r.install_status,
       })),
       context: contextMap.get(conversationId) ?? null,
+    },
+  };
+});
+
+// ── Dyad presence ──
+// Returns the DM counterparty's presence for the chat header. Group
+// conversations return null — presence is a dyad-only surface. The peer's
+// `activity_status_visible` privacy setting gates exposure entirely: when
+// disabled (or when no presence has ever been recorded), `presence` is null
+// and clients must render nothing rather than fabricate a status.
+app.get('/chat/conversations/:conversationId/presence', async (request) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+  const conversation = await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  if (conversation.type !== 'dm') {
+    return { ok: true, presence: null };
+  }
+
+  const peerResult = await db.query<{ user_id: string; activity_status_visible: boolean }>(
+    `
+      SELECT cm.user_id, u.activity_status_visible
+      FROM chat_members cm
+      INNER JOIN users u ON u.id = cm.user_id
+      WHERE cm.conversation_id = $1
+        AND cm.user_id <> $2
+      ORDER BY cm.joined_at ASC
+      LIMIT 1
+    `,
+    [conversationId, actorUserId]
+  );
+
+  const peer = peerResult.rows[0];
+  if (!peer || !peer.activity_status_visible) {
+    return { ok: true, presence: null };
+  }
+
+  const presenceResult = await db.query<{ last_seen_at: string | null; is_online: boolean | null }>(
+    `
+      SELECT MAX(last_seen_at)::text AS last_seen_at, BOOL_OR(is_online) AS is_online
+      FROM user_presence
+      WHERE user_id = $1
+    `,
+    [peer.user_id]
+  );
+
+  const presenceRow = presenceResult.rows[0];
+  const lastSeenAt = presenceRow?.last_seen_at ?? null;
+  const lastSeenMs = lastSeenAt ? new Date(lastSeenAt).getTime() : Number.NaN;
+
+  // Redis is the source of truth for "online now". The user_presence table
+  // is the designed fallback when Redis is unreachable — a stale `is_online`
+  // row only counts while its last_seen_at is still inside the TTL window.
+  const redisOnline = await isUserOnline(peer.user_id);
+  const dbOnlineFresh = Boolean(presenceRow?.is_online)
+    && Number.isFinite(lastSeenMs)
+    && Date.now() - lastSeenMs <= config.presenceTtlSeconds * 2 * 1000;
+
+  return {
+    ok: true,
+    presence: {
+      userId: peer.user_id,
+      isOnline: redisOnline || dbOnlineFresh,
+      lastSeenAt,
     },
   };
 });

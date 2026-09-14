@@ -1,5 +1,4 @@
 import { fetchJson } from '../lib/apiClient';
-import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
 
 export type PaymentIntentChannel =
   | 'commerce'
@@ -629,62 +628,13 @@ export async function burnIze(input: {
   });
 }
 
+// Custody/funds truthfulness: a failed position lookup must surface as an
+// error — never as a fabricated balance. Callers (useWalletData,
+// useConvertData, useCheckoutData) all handle rejections.
 export async function getIzePosition(userId: string, fiatCurrency = 'GBP') {
-  try {
-    return await fetchJson<WalletIzePositionResponse>(
-      `/wallet/1ze/${encodeURIComponent(userId)}/position?fiatCurrency=${encodeURIComponent(fiatCurrency)}`
-    );
-  } catch (err) {
-    // SAFETY: This mock fallback must NEVER be reachable in production builds.
-    // It fabricates a position with `safeguarded: true`, which could mask a
-    // real custody/funds failure if surfaced to users. The ENABLE_RUNTIME_MOCKS
-    // flag is expected to be false in production; this branch is a defensive
-    // guard only. Verify your build pipeline strips ENABLE_RUNTIME_MOCKS in
-    // release builds.
-    if (ENABLE_RUNTIME_MOCKS) {
-      console.warn('[walletApi] /wallet/1ze/position failed — returning dev mock fallback:', err instanceof Error ? err.message : err);
-      const now = new Date();
-      const expires = new Date(now.getTime() + 60_000);
-      return {
-        ok: true as const,
-        userId,
-        rate: {
-          currency: fiatCurrency,
-          ratePerGram: 1,
-          source: 'fixed_par:GBP:1ZE',
-          fetchedAt: now.toISOString(),
-          expiresAt: expires.toISOString(),
-          isFallback: true,
-          isOverride: false,
-        },
-        balances: {
-          userIze: 2_659.574,
-          userFiatValue: 2_659.574,
-          availableIze: 2_659.574,
-          reservedForOrders: 0,
-          redemptionInProgress: 0,
-          otherHolds: 0,
-          pendingDeposit: 0,
-          unsettledSaleProceeds: 0,
-          settledCustomerClaim: 2_659.574,
-          withdrawable: 2_659.574,
-          safeguarded: true,
-          safeguardingPartner: 'ThryftVerse Custody Ltd',
-          safeguardingEvidenceUrl: 'https://thryftverse.app/custody/evidence',
-          safeguardingTermsUrl: 'https://thryftverse.app/custody/terms',
-          snapshotSequence: 0,
-          serverTimestamp: now.toISOString(),
-          reconciliationState: 'reconciling' as const,
-          outstandingIze: 0,
-          circulatingIze: 1_000_000_000,
-          supplyDeltaIze: 0,
-          supplyParityRatio: 1,
-          liquidityBufferIze: 50_000_000,
-        },
-      };
-    }
-    throw err;
-  }
+  return fetchJson<WalletIzePositionResponse>(
+    `/wallet/1ze/${encodeURIComponent(userId)}/position?fiatCurrency=${encodeURIComponent(fiatCurrency)}`
+  );
 }
 
 // Convert 1ze to Fiat (for withdrawal)

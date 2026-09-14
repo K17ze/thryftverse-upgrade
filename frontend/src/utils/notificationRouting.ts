@@ -21,6 +21,7 @@ export type ResolvedRoute =
   | { screen: 'AssetDetail'; params: { assetId: string } }
   | { screen: 'VerificationResponse'; params: { assetId: string; demandId: number } }
   | { screen: 'CollectionDetail'; params: { collectionId: string } }
+  | { screen: 'Browse'; params: { categoryId: string; title: string; searchQuery?: string } }
   | { screen: ScreenName; params?: Record<string, unknown> }
   | null;
 
@@ -103,6 +104,22 @@ export function resolveNotificationRoute(
     }
     if (screen === 'CollectionDetail' && typeof params.collectionId === 'string') {
       return { screen: 'CollectionDetail', params: { collectionId: params.collectionId } };
+    }
+    // Saved-search match notifications land on the search results for the
+    // saved query — same destination as tapping the row in SavedSearches.
+    if (
+      screen === 'Browse' &&
+      typeof params.categoryId === 'string' &&
+      typeof params.title === 'string'
+    ) {
+      return {
+        screen: 'Browse',
+        params: {
+          categoryId: params.categoryId,
+          title: params.title,
+          searchQuery: typeof params.searchQuery === 'string' ? params.searchQuery : undefined,
+        },
+      };
     }
     if (screen === 'AuctionDetail' && typeof params.auctionId === 'string') {
       return {
