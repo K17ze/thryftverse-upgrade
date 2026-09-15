@@ -53,12 +53,18 @@ export async function createOrderReview(
   orderId: string,
   rating: number,
   comment?: string,
-  photoUrls?: string[]
+  photoUrls?: string[],
+  idempotencyKey?: string
 ): Promise<OrderReview> {
+  const headers: Record<string, string> = {};
+  // The backend dedupes on this key — a network drop followed by a retry
+  // returns the already-created review instead of REVIEW_ALREADY_EXISTS.
+  if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
   const res = await fetchJson<CreateReviewResponse>(
     `/orders/${encodeURIComponent(orderId)}/review`,
     {
       method: 'POST',
+      headers,
       body: JSON.stringify({ rating, comment, photoUrls }),
     }
   );

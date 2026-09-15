@@ -118,7 +118,6 @@ export function UserProfileHeader({
         stats={stats}
         activeCount={activeCount}
         soldCount={soldCount}
-        reviewCount={reviewCount}
         memberSince={memberSince}
         sellerTrust={sellerTrust}
         traderClassification={traderDisclosure}

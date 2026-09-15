@@ -151,6 +151,9 @@ const LOT_ROW = (overrides: Partial<Record<string, unknown>> = {}) => ({
   current_price: '50',
   bid_count: 0,
   updated_at: new Date().toISOString(),
+  // Joined listings.status the bid path re-checks — the listing must stay
+  // biddable ('active'/'paused') for a bid to land.
+  listing_status: 'active',
   ...overrides,
 });
 
@@ -177,6 +180,9 @@ const LIVE_LOT_ROW = (overrides: Partial<Record<string, unknown>> = {}) => ({
   extension_count: 0,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
+  // Joined listings.status the bid path re-checks — the listing must stay
+  // biddable ('active'/'paused') for a bid to land.
+  listing_status: 'active',
   ...overrides,
 });
 

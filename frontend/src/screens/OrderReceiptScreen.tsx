@@ -251,6 +251,12 @@ export default function OrderReceiptScreen() {
   const total = formatFromFiat(order.totalGbp, 'GBP', fiatOpts);
   const buyerProtectionFee = order.buyerProtectionFeeGbp;
   const hasBuyerProtection = buyerProtectionFee != null && buyerProtectionFee !== 0;
+  // The backend stores the buyer-protection fee in both columns
+  // (buyer_protection_fee_gbp === platform_charge_gbp) — rendering both
+  // rows would double-count one fee. A single "Buyer protection" row is
+  // the unified label; "Platform charge" only appears when a legacy order
+  // genuinely carries a different figure (mirrors TransactionBreakdown).
+  const feesAreDuplicate = hasBuyerProtection && buyerProtectionFee === order.platformChargeGbp;
 
   const counterpartyRole = isBuyer ? 'Seller' : 'Buyer';
   const counterparty = isBuyer ? order.seller : order.buyer;
@@ -359,7 +365,9 @@ export default function OrderReceiptScreen() {
             {hasBuyerProtection && (
               <ReceiptRow label="Buyer protection" value={formatFromFiat(buyerProtectionFee!, 'GBP', fiatOpts)} />
             )}
-            <ReceiptRow label="Platform charge" value={platformCharge} />
+            {!feesAreDuplicate && (
+              <ReceiptRow label="Platform charge" value={platformCharge} />
+            )}
             <ReceiptRow label="Delivery" value={postage} />
             <View style={styles.totalRow}>
               <Text style={[styles.totalLabel, themed.totalLabel]}>Total</Text>

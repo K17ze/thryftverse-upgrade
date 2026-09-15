@@ -25,6 +25,8 @@
  * - Stream metadata persistence (start, end, recording)
  */
 
+import { config } from '../../config.js';
+
 export interface StreamRoom {
   /** Unique room identifier (LiveKit room name) */
   roomId: string;
@@ -38,6 +40,8 @@ export interface StreamRoom {
   roomUrl: string;
   /** Recording URL (available after stream ends, if recording enabled) */
   recordingUrl?: string;
+  /** Whether recording was enabled for this session (DB-persisted flag) */
+  recordingEnabled?: boolean;
   /** Viewer count (real-time) */
   viewerCount: number;
   /** Created at ISO timestamp */
@@ -46,6 +50,12 @@ export interface StreamRoom {
   startedAt?: string;
   /** Ended at ISO timestamp (if ended) */
   endedAt?: string;
+  /**
+   * Host-declared go-live time for scheduled shows (ISO timestamp). Only set
+   * on sessions created with a future `scheduledStartAt`; the provider room
+   * is deferred until /start for those.
+   */
+  scheduledStartAt?: string;
 }
 
 export interface StreamTokenRequest {
@@ -83,12 +93,25 @@ export interface CreateStreamRequest {
   metadata?: Record<string, unknown>;
 }
 
+export interface StartStreamOptions {
+  /**
+   * Persisted session fields used to re-create the provider room when it was
+   * reaped while idle — e.g. a host who created the session then backgrounded
+   * longer than the room's emptyTimeout (5 min) before going live. When
+   * omitted, a missing room surfaces as an honest "not found" error instead.
+   */
+  title?: string;
+  hostUserId?: string;
+  recordingEnabled?: boolean;
+  maxViewers?: number;
+}
+
 export interface LiveStreamProvider {
   readonly name: string;
   /** Create a new stream room */
   createStream(request: CreateStreamRequest): Promise<StreamRoom>;
   /** Start a stream (go live) */
-  startStream(roomId: string): Promise<StreamRoom>;
+  startStream(roomId: string, options?: StartStreamOptions): Promise<StreamRoom>;
   /** End a stream */
   endStream(roomId: string): Promise<StreamRoom>;
   /** Generate a connection token for a participant */
@@ -170,7 +193,7 @@ export class LiveKitStreamProvider implements LiveStreamProvider {
     };
   }
 
-  async startStream(roomId: string): Promise<StreamRoom> {
+  async startStream(roomId: string, options?: StartStreamOptions): Promise<StreamRoom> {
     const svc = await this.getRoomServiceClient();
 
     // UpdateRoomMetadata replaces the entire metadata field, so fetch the
@@ -178,13 +201,39 @@ export class LiveKitStreamProvider implements LiveStreamProvider {
     // recordingEnabled that were written at createStream time.
     const rooms = await svc.listRooms([roomId]);
     const existing = rooms.find((r) => r.name === roomId);
-    if (!existing) throw new Error(`Stream ${roomId} not found`);
 
     let existingMeta: Record<string, unknown> = {};
-    try {
-      existingMeta = existing.metadata ? JSON.parse(existing.metadata) : {};
-    } catch {
-      // Malformed metadata — start from a clean slate
+    let viewerCount = 0;
+
+    if (existing) {
+      try {
+        existingMeta = existing.metadata ? JSON.parse(existing.metadata) : {};
+      } catch {
+        // Malformed metadata — start from a clean slate
+      }
+      viewerCount = Math.max(0, existing.numParticipants - 1); // Exclude host
+    } else if (options) {
+      // The provider room was reaped by emptyTimeout while the DB session row
+      // stayed in its pre-live status. Re-create the room under the same name
+      // from the persisted session fields so the stream can still go live —
+      // the alternative is a zombie row that can never start.
+      const recreatedAt = new Date().toISOString();
+      existingMeta = {
+        title: options.title ?? '',
+        hostUserId: options.hostUserId ?? '',
+        recordingEnabled: options.recordingEnabled ?? true,
+        status: 'created',
+        createdAt: recreatedAt,
+        recreatedAt,
+      };
+      await svc.createRoom({
+        name: roomId,
+        emptyTimeout: 300,
+        maxParticipants: options.maxViewers ?? 0,
+        metadata: JSON.stringify(existingMeta),
+      });
+    } else {
+      throw new Error(`Stream ${roomId} not found`);
     }
 
     const startedAt = new Date().toISOString();
@@ -197,12 +246,12 @@ export class LiveKitStreamProvider implements LiveStreamProvider {
     await svc.updateRoomMetadata(roomId, mergedMetadata);
 
     return {
-      roomId: existing.name,
+      roomId,
       title: (existingMeta.title as string) ?? '',
       hostUserId: (existingMeta.hostUserId as string) ?? '',
       status: 'live',
       roomUrl: this.apiUrl.replace(/^http/, 'ws').replace(/^https/, 'wss'),
-      viewerCount: Math.max(0, existing.numParticipants - 1), // Exclude host
+      viewerCount,
       createdAt: (existingMeta.createdAt as string) ?? new Date().toISOString(),
       startedAt,
     };
@@ -373,9 +422,24 @@ export class MockStreamProvider implements LiveStreamProvider {
     return stream;
   }
 
-  async startStream(roomId: string): Promise<StreamRoom> {
-    const stream = this.streams.get(roomId);
-    if (!stream) throw new Error(`Stream ${roomId} not found`);
+  async startStream(roomId: string, options?: StartStreamOptions): Promise<StreamRoom> {
+    let stream = this.streams.get(roomId);
+    if (!stream) {
+      // Mirror the LiveKit provider: when persisted session fields are
+      // supplied, re-create a room that was reaped while idle rather than
+      // orphaning the session row. Without options this stays an honest
+      // "not found" error.
+      if (!options) throw new Error(`Stream ${roomId} not found`);
+      stream = {
+        roomId,
+        title: options.title ?? '',
+        hostUserId: options.hostUserId ?? '',
+        status: 'created',
+        roomUrl: 'ws://localhost:7880',
+        viewerCount: 0,
+        createdAt: new Date().toISOString(),
+      };
+    }
     const updated = { ...stream, status: 'live' as const, startedAt: new Date().toISOString() };
     this.streams.set(roomId, updated);
     return updated;
@@ -416,7 +480,8 @@ let cachedProvider: LiveStreamProvider | null = null;
 /**
  * Create or return the cached live stream provider.
  *
- * Environment variables:
+ * Environment variables are read through config.ts (the single
+ * source-of-truth parsing path for the API):
  * - LIVE_STREAM_PROVIDER: 'livekit' | 'mock' (default: 'mock')
  * - LIVEKIT_URL: LiveKit server URL
  * - LIVEKIT_API_KEY: LiveKit API key
@@ -425,12 +490,12 @@ let cachedProvider: LiveStreamProvider | null = null;
 export function getStreamProvider(): LiveStreamProvider {
   if (cachedProvider) return cachedProvider;
 
-  const providerType = process.env.LIVE_STREAM_PROVIDER ?? 'mock';
+  const providerType = config.liveStreamProvider;
 
   if (providerType === 'livekit') {
-    const apiUrl = process.env.LIVEKIT_URL;
-    const apiKey = process.env.LIVEKIT_API_KEY;
-    const apiSecret = process.env.LIVEKIT_API_SECRET;
+    const apiUrl = config.livekitUrl;
+    const apiKey = config.livekitApiKey;
+    const apiSecret = config.livekitApiSecret;
 
     if (!apiUrl || !apiKey || !apiSecret) {
       console.warn(

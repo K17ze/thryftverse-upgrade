@@ -66,12 +66,18 @@ export function useBrowseListings({
     const selectedBrands = new Set(browseFilters.brands.map((brand) => brand.toLowerCase()));
     const selectedSizes = new Set(browseFilters.sizes.map((size) => size.toLowerCase()));
 
+    // 'search' and 'all' are unscoped browse modes — no real category is
+    // literally "all", so applying the category/subcategory predicates there
+    // rejected every listing and rendered the grid permanently empty.
+    const isUnscopedCategory =
+      normalizedCategory === 'search' || normalizedCategory === 'all';
+
     const baseList = listings.filter((listing) => {
-      if (normalizedCategory !== 'search' && listing.category?.toLowerCase() !== normalizedCategory) {
+      if (!isUnscopedCategory && listing.category?.toLowerCase() !== normalizedCategory) {
         return false;
       }
 
-      if (normalizedCategory !== 'search' && normalizedSubcategory) {
+      if (!isUnscopedCategory && normalizedSubcategory) {
         return listing.subcategory?.toLowerCase()?.includes(normalizedSubcategory) ?? false;
       }
 
@@ -163,13 +169,32 @@ export function useBrowseListings({
   }, [browseFilters, categoryId, listings, subcategoryId, title, activeSignal]);
 
   const displayListings = useMemo(() => {
-    if (backendListings !== null) return backendListings;
+    if (backendListings !== null) {
+      // The backend request carries a single brand/size value; multi-select
+      // selections are omitted from the request and applied here over the
+      // returned page so every chosen option stays in effect.
+      let result = backendListings;
+      if (browseFilters.brands.length > 1) {
+        const wanted = new Set(browseFilters.brands.map((b) => b.toLowerCase()));
+        result = result.filter((l) => wanted.has(l.brand?.toLowerCase() ?? ''));
+      }
+      if (browseFilters.sizes.length > 1) {
+        const wanted = new Set(browseFilters.sizes.map((s) => s.toLowerCase()));
+        result = result.filter((l) => wanted.has(l.size?.toLowerCase() ?? ''));
+      }
+      if (browseFilters.sustainableOnly) {
+        result = result.filter(
+          (l) => l.sustainabilityGrade === 'A' || l.sustainabilityGrade === 'B',
+        );
+      }
+      return result;
+    }
     const base = dataToRender;
     if (!browseFilters.sustainableOnly) return base;
     return base.filter((listing) =>
       listing.sustainabilityGrade === 'A' || listing.sustainabilityGrade === 'B',
     );
-  }, [backendListings, dataToRender, browseFilters.sustainableOnly]);
+  }, [backendListings, dataToRender, browseFilters.sustainableOnly, browseFilters.brands, browseFilters.sizes]);
 
   return { dataToRender, displayListings, displayCount: displayListings.length };
 }

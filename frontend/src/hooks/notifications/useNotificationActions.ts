@@ -8,9 +8,36 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
   deleteNotificationEvent } from '../../services/notificationsApi';
+import { ApiRequestError } from '../../lib/apiClient';
 import { resolveNotificationRoute } from '../../utils/notificationRouting';
 import { haptics } from '../../utils/haptics';
 import type { NotificationCard } from '../../components/notifications/notificationViewModels';
+
+/**
+ * The backend returns 404 NOTIFICATION_NOT_FOUND for events that are already
+ * read or deleted — for a mark-read fan-out that is a success outcome, not a
+ * failure. Tolerating it prevents a stale member from rolling back the whole
+ * aggregated card.
+ */
+function isNotificationNotFound(error: unknown): boolean {
+  if (!(error instanceof ApiRequestError)) return false;
+  if (error.status === 404) return true;
+  const details = error.details;
+  return (
+    typeof details === 'object' &&
+    details !== null &&
+    (details as { code?: unknown }).code === 'NOTIFICATION_NOT_FOUND'
+  );
+}
+
+async function markEventReadTolerant(eventId: string): Promise<void> {
+  try {
+    await markNotificationRead(eventId);
+  } catch (error) {
+    if (isNotificationNotFound(error)) return;
+    throw error;
+  }
+}
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -35,13 +62,19 @@ export function useNotificationActions({
   const { show } = useToast();
   // Tab/app badge propagation (§37.6): mark-as-read must update the global
   // unread count immediately, not wait for the next app-state poll.
-  const notificationCount = useStore((state) => state.notificationCount);
   const setNotificationCount = useStore((state) => state.setNotificationCount);
 
   // Aggregated cards carry a synthetic `agg:` render id — mutations must fan
   // out to the real member event ids or they silently no-op server-side.
   const memberIds = (notification: NotificationCard): string[] =>
     notification.aggregatedIds ?? [notification.id];
+
+  // Mark-read fans out to UNREAD members only. Already-read members 404
+  // server-side; even with the tolerant wrapper, targeting only unread
+  // members keeps the write set honest.
+  const unreadMemberIds = (notification: NotificationCard): string[] =>
+    notification.aggregatedUnreadIds ??
+    (notification.aggregatedIds ? notification.aggregatedIds : [notification.id]);
 
   const handleSwipeMarkRead = React.useCallback(
     async (notification: NotificationCard) => {
@@ -52,7 +85,7 @@ export function useNotificationActions({
         prev.map((item) => (item.id === notification.id ? { ...item, read: true } : item))
       );
       try {
-        await Promise.all(memberIds(notification).map(markNotificationRead));
+        await Promise.all(unreadMemberIds(notification).map(markEventReadTolerant));
         setNotificationCount(Math.max(0, useStore.getState().notificationCount - unreadDelta));
         show('Marked as read', 'success');
       } catch {
@@ -106,8 +139,11 @@ export function useNotificationActions({
           previous.map((item) => (item.id === notification.id ? { ...item, read: true } : item))
         );
         try {
-          await Promise.all(memberIds(notification).map(markNotificationRead));
-          setNotificationCount(Math.max(0, notificationCount - unreadDelta));
+          await Promise.all(unreadMemberIds(notification).map(markEventReadTolerant));
+          // Read the badge from the store at apply time — the render-captured
+          // `notificationCount` goes stale when several opens happen between
+          // renders.
+          setNotificationCount(Math.max(0, useStore.getState().notificationCount - unreadDelta));
         } catch {
           setNotifications((previous) =>
             previous.map((item) => (item.id === notification.id ? { ...item, read: previousRead } : item))
@@ -117,18 +153,32 @@ export function useNotificationActions({
 
       const route = resolveNotificationRoute(notification.route, notification.payload);
       if (route) {
-        const params = 'params' in route ? route.params : undefined;
-        if (params) {
-          (navigation.navigate as (screen: any, params?: any) => void)(route.screen, params);
-        } else {
-          (navigation.navigate as (screen: any) => void)(route.screen);
-        }
+        // Route screens are resolved dynamically from the payload — the
+        // navigate signature is widened once here rather than casting at
+        // each call site.
+        const navigateTo = navigation.navigate as (
+          screen: string,
+          params?: Record<string, unknown>
+        ) => void;
+        navigateTo(route.screen, 'params' in route ? route.params : undefined);
         return;
       }
 
       show('No linked destination for this notification yet.', 'info');
     },
-    [navigation, show, notifications, setNotifications, notificationCount, setNotificationCount]
+    [navigation, show, notifications, setNotifications, setNotificationCount]
+  );
+
+  /**
+   * Quiet action affordance ("Dispatch now", "Review offer"). Semantically
+   * this is an open — mark read, then follow the resolved route — so it
+   * delegates to the open path rather than duplicating it.
+   */
+  const handleActionPress = React.useCallback(
+    (notification: NotificationCard) => {
+      void handleOpenNotification(notification);
+    },
+    [handleOpenNotification]
   );
 
   return {
@@ -136,5 +186,6 @@ export function useNotificationActions({
     handleSwipeDismiss,
     handleMarkAllAsRead,
     handleOpenNotification,
+    handleActionPress,
   };
 }

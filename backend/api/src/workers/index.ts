@@ -14,6 +14,9 @@ import {
   processQueuedOnezeMintReserveAllocation,
   processQueuedOnezeWithdrawalExecution,
   processMediaIngestJob,
+  reconcileMediaIngestJobs,
+  expireStaleMultipartSessions,
+  sweepOrphanedUploadIntents,
   processMediaEmbeddingJob,
   processModerationTriageJob,
   processImporterExtraction,
@@ -95,6 +98,15 @@ async function main(): Promise<void> {
       },
       handleMediaIngestJob: async ({ assetId, reason }) => {
         await processMediaIngestJob({ assetId, reason });
+      },
+      handleMediaIngestReconcileJob: async ({ reason }) => {
+        await reconcileMediaIngestJobs(reason);
+      },
+      handleMultipartSessionSweepJob: async ({ reason }) => {
+        await expireStaleMultipartSessions(reason);
+      },
+      handleOrphanUploadIntentSweepJob: async ({ reason }) => {
+        await sweepOrphanedUploadIntents(reason);
       },
       handleMediaEmbeddingJob: async (job) => {
         await processMediaEmbeddingJob(job);

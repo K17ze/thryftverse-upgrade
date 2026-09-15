@@ -399,7 +399,7 @@ export default function AppNavigator() {
 
       {/* Explore / Creator screens */}
       <Stack.Screen name="CreatorStudio" getComponent={() => require('../creator').CreatorStudioScreen} options={modalScreenOptions} />
-      <Stack.Screen name="CreatorDraftList" getComponent={() => require('../creator/CreatorDraftListScreen').CreatorDraftListScreen} options={modalScreenOptions} />
+      <Stack.Screen name="CreatorDraftList" getComponent={() => require('../creator/studio/CreatorDraftListScreen').CreatorDraftListScreen} options={modalScreenOptions} />
       <Stack.Screen name="OutfitBuilder" getComponent={() => require('../screens/OutfitBuilderScreen').default} options={modalScreenOptions} />
       <Stack.Screen name="CoOwnIssue" getComponent={() => require('../screens/CoOwnIssueScreen').default} options={modalScreenOptions} />
 

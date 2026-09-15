@@ -80,12 +80,26 @@ export default function SavedSearchesScreen({ navigation }: Props) {
     markAllSavedSearchesSeen();
   };
 
-  const handleSearchPress = (query: string) => {
-    updateBrowseFilters({ query });
+  // Re-run a saved search — replay the ENTIRE stored filter set (brands,
+  // sizes, condition, sort, price bounds, category), not just the query.
+  // Fields absent from the saved search are reset so stale browse filters
+  // from another surface can't contaminate the replay.
+  const handleSearchPress = (search: (typeof savedSearches)[number]) => {
+    updateBrowseFilters({
+      query: search.query,
+      brands: search.filters.brands ?? [],
+      sizes: search.filters.sizes ?? [],
+      condition: search.filters.condition ?? 'Any',
+      sort: search.filters.sort ?? 'Recommended',
+      priceMin: search.filters.minPrice ?? null,
+      priceMax: search.filters.maxPrice ?? null,
+      sustainableOnly: false,
+    });
+    const categoryId = search.filters.category ?? 'search';
     navigation.navigate('Browse', {
-      categoryId: 'search',
-      title: `Search: "${query}"`,
-      searchQuery: query });
+      categoryId,
+      title: search.query,
+      searchQuery: categoryId === 'search' ? search.query : undefined });
   };
 
   const handleDiscoverSellers = () => {
@@ -308,7 +322,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
                 <View key={search.id} style={styles.searchCard}>
                   <Pressable
                     style={styles.searchMain}
-                    onPress={() => handleSearchPress(search.query)}
+                    onPress={() => handleSearchPress(search)}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     accessibilityLabel={`Search for ${search.query}${newCount > 0 ? `, ${newCount} new matches` : ''}`}
                     accessibilityRole="button"

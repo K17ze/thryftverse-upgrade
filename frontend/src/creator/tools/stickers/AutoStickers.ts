@@ -14,7 +14,7 @@
  * labeled truthfully as "Suggested" (never "AI-generated").
  */
 import type { MediaPaletteEntry } from '../../color/ColorTypes';
-import type { CreatorDocument, CreatorLayer } from '../../composition';
+import type { CreatorDocument, CreatorLayer } from '../../core/projectStore/composition';
 import { rgbToHsv, relativeLuminance } from '../../color/ColorMath';
 import type { StickerDef } from './StickerCategories';
 

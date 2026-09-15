@@ -13,9 +13,9 @@
  * It re-exports the real entry component without duplicating any logic — the
  * single source of truth remains `CreatorEntryScreen`.
  */
-export { CreatorEntryScreen as default } from '../creator/CreatorEntryScreen';
-export { CreatorEntryScreen as CreateCameraScreen } from '../creator/CreatorEntryScreen';
+export { CreatorEntryScreen as default } from '../creator/studio/CreatorEntryScreen';
+export { CreatorEntryScreen as CreateCameraScreen } from '../creator/studio/CreatorEntryScreen';
 export type {
   CreatorEntryScreenProps,
   CreatorCameraMode,
-} from '../creator/CreatorEntryScreen';
+} from '../creator/studio/CreatorEntryScreen';

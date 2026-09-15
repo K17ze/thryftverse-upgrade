@@ -127,7 +127,10 @@ export function useOrderDetail(orderId: string): UseOrderDetailResult {
     try {
       const review = await getOrderReview(orderId);
       if (!isMountedRef.current) return;
-      setHasReview(review !== null);
+      // Only a buyer-authored review counts — platform auto-feedback is a
+      // supersedable placeholder, matching the list payload's NOT is_auto
+      // semantics. The full row is still exposed so surfaces can label it.
+      setHasReview(review !== null && review.isAuto !== true);
       setOrderReview(review);
     } catch {
       // Review endpoint may not exist for all orders yet; default to false.

@@ -19,7 +19,7 @@
  */
 
 import type { NativeStackNavigationProp, RootStackParamList } from '../../navigation/types';
-import type { CreatorLayer } from '../composition';
+import type { CreatorLayer } from '../core/projectStore/composition';
 import type { useHaptic } from '../../hooks/useHaptic';
 import type { ToastType } from '../../context/ToastContext';
 import type {
@@ -28,7 +28,7 @@ import type {
 } from '../core/toolRegistry';
 import { TEXT_STYLE_PRESETS } from '../tools/text/textStylePresets';
 import type { ActiveSheet } from './useActiveSheet';
-import type { AssetPickerMode } from '../CreatorAssetPicker';
+import type { AssetPickerMode } from '../surfaces/CreatorAssetPicker';
 
 // ── Types ────────────────────────────────────────────────────────────
 

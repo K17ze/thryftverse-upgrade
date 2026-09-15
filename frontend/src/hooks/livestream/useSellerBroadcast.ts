@@ -9,7 +9,8 @@
  * - Realtime subscriptions while live (chat, viewer count, stream events)
  *   — subscribe/unsubscribe pairs stay atomic in one effect
  * - End-stream transition into the summary phase
- * - Host LiveKit room join (presence only — publishing is a shared-layer gap)
+ * - Host LiveKit room join + camera/mic publish (degrades to an honest
+ *   'unavailable' state — the session stays live for lots and chat)
  * - Broadcast stats (lots sold, total sales) and lot settlement status
  *
  * Truthful UI (AGENTS §11): everything flows through the real backend
@@ -40,6 +41,13 @@ import {
   type LotSettlementStatus } from '../../services/liveShoppingApi';
 import type { SellerPhase } from './types';
 
+/**
+ * Host camera/mic publish lifecycle. 'unavailable' means the publish
+ * attempt failed (permissions, no device, capturer error) — the broadcast
+ * session itself stays live; only the media plane is degraded.
+ */
+export type BroadcastPublishState = 'idle' | 'publishing' | 'published' | 'unavailable';
+
 interface UseSellerBroadcastOptions {
   resumeSessionId: string | undefined;
   selectedListings: ListingApiItem[];
@@ -52,6 +60,7 @@ export function useSellerBroadcast({ resumeSessionId, selectedListings, title }:
   // ── Phase & setup state ──
   const [phase, setPhase] = useState<SellerPhase>('setup');
   const [goingLive, setGoingLive] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
 
   // ── Live state ──
@@ -67,13 +76,14 @@ export function useSellerBroadcast({ resumeSessionId, selectedListings, title }:
   const [endError, setEndError] = useState<string | null>(null);
   const [settlementStatus, setSettlementStatus] = useState<LotSettlementStatus | null>(null);
   const [hostCredentials, setHostCredentials] = useState<{ wsUrl: string; token: string } | null>(null);
+  const [publishState, setPublishState] = useState<BroadcastPublishState>('idle');
+  const [publishError, setPublishError] = useState<string | null>(null);
 
   const startedAtRef = useRef<number>(0);
   const sessionId = session?.roomId ?? null;
 
-  // Host joins the LiveKit room with the host token. Publishing camera
-  // frames requires publish controls in the shared streaming layer — a
-  // known backend/frontend gap; the room join still keeps presence real.
+  // Host joins the LiveKit room with the host token — the backend issues it
+  // with canPublish, so once connected we publish camera + microphone.
   const liveKit = useLiveKitRoom(hostCredentials?.wsUrl ?? null, hostCredentials?.token ?? null);
 
   // ── Resume an in-progress session when the route carries one ──
@@ -147,6 +157,35 @@ export function useSellerBroadcast({ resumeSessionId, selectedListings, title }:
     };
   }, [phase, sessionId]);
 
+  // ── Publish camera + mic once the room is connected and the phase is
+  //    live. Failure degrades honestly: the session stays live for lots and
+  //    chat, and the live-phase UI surfaces the 'unavailable' state. ──
+  useEffect(() => {
+    if (phase !== 'live' || liveKit.state !== 'connected') {
+      setPublishState((prev) => (prev === 'idle' ? prev : 'idle'));
+      setPublishError(null);
+      return;
+    }
+    let cancelled = false;
+    setPublishState('publishing');
+    setPublishError(null);
+    (async () => {
+      try {
+        await liveKit.setCameraEnabled(true);
+        await liveKit.setMicrophoneEnabled(true);
+        if (!cancelled) setPublishState('published');
+      } catch (e) {
+        if (!cancelled) {
+          setPublishState('unavailable');
+          setPublishError(
+            e instanceof Error ? e.message : 'Camera or microphone could not be published',
+          );
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [phase, liveKit.state, liveKit.setCameraEnabled, liveKit.setMicrophoneEnabled]);
+
   // ── Actions ──
 
   const handleGoLive = useCallback(async () => {
@@ -174,8 +213,8 @@ export function useSellerBroadcast({ resumeSessionId, selectedListings, title }:
       } catch {
         // Current-lot is best-effort; the seller can still open bidding.
       }
-      // 4. Host token → join the LiveKit room (presence; publishing is a
-      //    shared-layer gap — see file header).
+      // 4. Host token → join the LiveKit room; the publish effect above
+      //    enables camera + mic once the connection reports 'connected'.
       try {
         const token = await fetchBroadcastHostToken(created.roomId);
         setHostCredentials({ wsUrl: token.wsUrl, token: token.token });
@@ -205,6 +244,62 @@ export function useSellerBroadcast({ resumeSessionId, selectedListings, title }:
     }
   }, [selectedListings, goingLive, haptic, title]);
 
+  /**
+   * Schedule a show for later — creates the session with `scheduledStartAt`
+   * and schedules the selected lots, but never fetches a host token and
+   * never starts the session. The phase machine stays on 'setup'; the
+   * caller renders the scheduled confirmation and navigates away.
+   *
+   * Returns true when the session was created so the UI can advance to its
+   * confirmation state; failures land in `setupError` like go-live errors.
+   */
+  const handleScheduleShow = useCallback(async (scheduledStartAt: string): Promise<boolean> => {
+    if (selectedListings.length === 0 || goingLive || scheduling) return false;
+    const start = new Date(scheduledStartAt).getTime();
+    if (Number.isNaN(start) || start <= Date.now()) {
+      setSetupError('Pick a future time to schedule this show.');
+      return false;
+    }
+    haptic.medium();
+    setScheduling(true);
+    setSetupError(null);
+    try {
+      // 1. Create the session as a scheduled show — it stays in 'created'
+      //    status and appears in the Coming up rail until started.
+      const created = await createBroadcastSession({
+        title: title.trim() || 'Live auction',
+        scheduledStartAt });
+      // 2. Schedule the selected listings as real lots (same contract as
+      //    go-live — lot scheduling runs on 'created' sessions).
+      const scheduled: LiveLotAggregate[] = [];
+      for (let i = 0; i < selectedListings.length; i += 1) {
+        const listing = selectedListings[i];
+        const lot = await scheduleLot(created.roomId, {
+          listingId: listing.id,
+          lotNumber: i + 1,
+          startPriceMinor: Math.round((listing.priceGbp ?? 0) * 100) });
+        scheduled.push(lot);
+      }
+      // 3. Point the session at the first lot — best-effort, same as go-live.
+      try {
+        await setCurrentLot(created.roomId, scheduled[0].listingId, scheduled[0].lotNumber);
+      } catch {
+        // Non-blocking for a scheduled show.
+      }
+      // No host token, no start — the session is deliberately not live.
+      setSession(created);
+      setLots(scheduled);
+      haptic.success();
+      return true;
+    } catch (e) {
+      setSetupError(e instanceof Error ? e.message : 'Could not schedule the show — try again.');
+      haptic.error();
+      return false;
+    } finally {
+      setScheduling(false);
+    }
+  }, [selectedListings, goingLive, scheduling, haptic, title]);
+
   const handleEndStream = useCallback(async () => {
     if (endingStream) return;
     haptic.medium();
@@ -214,6 +309,9 @@ export function useSellerBroadcast({ resumeSessionId, selectedListings, title }:
       if (sessionId) {
         await endBroadcastSession(sessionId);
       }
+      // Leave the LiveKit room — stops camera/mic capture and signals the
+      // host's departure to viewers.
+      void liveKit.disconnect();
       setPhase('summary');
     } catch {
       // Honest unknown outcome — the session may already be closed server-
@@ -224,7 +322,7 @@ export function useSellerBroadcast({ resumeSessionId, selectedListings, title }:
     } finally {
       setEndingStream(false);
     }
-  }, [sessionId, endingStream, haptic]);
+  }, [sessionId, endingStream, haptic, liveKit.disconnect]);
 
   // Sale stats are shared between the realtime 'lot_sold' event above and
   // the seller-driven close-lot transition in useSellerLotControls.
@@ -251,10 +349,14 @@ export function useSellerBroadcast({ resumeSessionId, selectedListings, title }:
     endingStream,
     endError,
     goingLive,
+    scheduling,
     setupError,
     setSetupError,
     liveKit,
+    publishState,
+    publishError,
     handleGoLive,
+    handleScheduleShow,
     handleEndStream,
     recordSale };
 }

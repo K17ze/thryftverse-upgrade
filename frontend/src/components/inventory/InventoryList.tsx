@@ -1,15 +1,12 @@
 import React, { useCallback } from 'react';
 import { ActivityIndicator, RefreshControl, View } from 'react-native';
-import { FlashList, type FlashListProps } from '@shopify/flash-list';
+import { FlashList } from '@shopify/flash-list';
 import { Space } from '../../theme/designTokens';
 import type { ThemeColors } from '../../theme/ThemeContext';
 import type { ListingApiItem } from '../../services/listingsApi';
+import type { SellerPromotion } from '../../services/promotionsApi';
 import { InventoryRow } from './InventoryRow';
 import type { InventoryScreenStyles } from './inventoryScreenStyles';
-
-const InventoryFlashList = FlashList as unknown as React.ComponentType<
-  FlashListProps<ListingApiItem> & { estimatedItemSize: number }
->;
 
 export interface InventoryListProps {
   listings: ListingApiItem[];
@@ -21,6 +18,12 @@ export interface InventoryListProps {
   onLongPress: (id: string) => void;
   onPressRow: (item: ListingApiItem) => void;
   onEdit: (item: ListingApiItem) => void;
+  /** Opens the promote sheet for an active listing. */
+  onPromote?: (item: ListingApiItem) => void;
+  /** listingId → live promotion — renders the Sponsored state chip. */
+  livePromotions?: ReadonlyMap<string, SellerPromotion>;
+  /** Opens the promotions management surface from a row's state chip. */
+  onManagePromotions?: () => void;
   onTogglePause: (item: ListingApiItem) => void;
   onRelist: (item: ListingApiItem) => void;
   onDelete: (item: ListingApiItem) => void;
@@ -43,6 +46,9 @@ export function InventoryList({
   onLongPress,
   onPressRow,
   onEdit,
+  onPromote,
+  livePromotions,
+  onManagePromotions,
   onTogglePause,
   onRelist,
   onDelete,
@@ -64,18 +70,20 @@ export function InventoryList({
       onLongPress={() => onLongPress(item.id)}
       onPress={() => onPressRow(item)}
       onEdit={() => onEdit(item)}
+      onPromote={onPromote ? () => onPromote(item) : undefined}
+      promotion={livePromotions?.get(item.id) ?? null}
+      onManagePromotions={onManagePromotions}
       onTogglePause={() => onTogglePause(item)}
       onRelist={() => onRelist(item)}
       onDelete={() => onDelete(item)}
       onToggleSelect={() => onToggleSelect(item.id)}
     />
-  ), [listings, colors, styles, selectionMode, selectedIds, pendingActionIds, onLongPress, onPressRow, onEdit, onTogglePause, onRelist, onDelete, onToggleSelect]);
+  ), [listings, colors, styles, selectionMode, selectedIds, pendingActionIds, onLongPress, onPressRow, onEdit, onPromote, livePromotions, onManagePromotions, onTogglePause, onRelist, onDelete, onToggleSelect]);
 
   return (
-    <InventoryFlashList
+    <FlashList<ListingApiItem>
       data={listings}
       renderItem={renderItem}
-      estimatedItemSize={72}
       keyExtractor={(item) => item.id}
       contentContainerStyle={styles.listContent}
       showsVerticalScrollIndicator={false}

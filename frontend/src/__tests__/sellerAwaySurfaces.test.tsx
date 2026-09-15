@@ -207,7 +207,10 @@ describe('seller-away surfaces (react-test-renderer)', () => {
     const seller: SellerTrustSummary = {
       ...awaySeller,
       dispatchTimeLabel: 'Ships in 2 days',
+      // The label only renders alongside real measured hours — the backend
+      // infers it from response-rate bands when avgResponseHours is null.
       responseTimeLabel: 'Usually responds in 2h',
+      avgResponseHours: 2,
     };
     const renderer = renderTree(
       <CommerceTrustDossier

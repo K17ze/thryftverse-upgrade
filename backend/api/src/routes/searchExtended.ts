@@ -11,14 +11,38 @@ import {
   type CachedSearchResult,
 } from '../lib/searchCache.js';
 import type { RetrievalMeta, RetrievalFallbackReason } from '../lib/retrievalMeta.js';
-import { loadListingMedia } from '../lib/media/listingMediaProjection.js';
+import {
+  loadListingMedia,
+  listingImageUrls,
+  type ListingMediaItem,
+} from '../lib/media/listingMediaProjection.js';
+import { reachExcludedSql, reachRankMultiplierExpr } from '../lib/sellerReach.js';
+import {
+  blendPromotedIntoResults,
+  fetchPromotedListingsForQuery,
+  recordPromotionImpressions,
+  PROMOTED_DISCLOSURE,
+  type PromotedListingPlacement,
+} from '../lib/promotionServing.js';
 
 type SearchExtendedRouteDependencies = {
   app: FastifyInstance;
+  /** Primary pool — promoted-slot settlement and impression writes. */
+  db: Pool;
   /** Read-replica pool (falls back to primary when no replica is configured). */
   readDb: Pool;
   redis: Redis;
 };
+
+// pg_trgm fallback tuning (migration 298). The `%` operator respects
+// pg_trgm.similarity_threshold (default 0.3); the explicit similarity()
+// predicates widen the net slightly below that so near-miss titles and
+// brands still surface. Trigrams are only meaningful at 3+ characters —
+// below that similarity() returns garbage, so short queries stay on the
+// substring-only fallback.
+const TRGM_MIN_QUERY_LENGTH = 3;
+const TRGM_TITLE_THRESHOLD = 0.2;
+const TRGM_BRAND_THRESHOLD = 0.25;
 
 const searchListingsQuerySchema = z.object({
   q: z.string().trim().min(2).max(120),
@@ -137,7 +161,10 @@ async function computeSearchResults(
       // Postgres resolves bare output aliases in ORDER BY, but not inside
       // expressions — `rank_score::numeric` would look for a real column
       // named rank_score and 42703. Order on the rank expression directly.
-      orderBy = "ts_rank_cd(l.search_vector, websearch_to_tsquery('simple', $1)) DESC, l.created_at DESC, l.id DESC";
+      // Reach demotion: a 'limited' seller's listings keep 30% of their
+      // ranked distribution (sellerReach.ts); 'suspended' rows are excluded
+      // by the WHERE clause entirely.
+      orderBy = `ts_rank_cd(l.search_vector, websearch_to_tsquery('simple', $1)) * ${reachRankMultiplierExpr('u')} DESC, l.created_at DESC, l.id DESC`;
       break;
   }
 
@@ -184,6 +211,7 @@ async function computeSearchResults(
           OR POSITION(lower($1) IN lower(COALESCE(l.size, ''))) > 0
           OR POSITION(lower($1) IN lower(COALESCE(l.condition, ''))) > 0
         )
+        ${reachExcludedSql('u')}
         ${filterClause}
       ORDER BY ${orderBy}
       LIMIT $${filterIdx} OFFSET $${filterIdx + 1}
@@ -216,8 +244,8 @@ async function computeSearchResults(
         title: row.title,
         description: row.description,
         priceGbp: Number(row.price_gbp),
-        imageUrl: row.image_url,
-        images: (mediaByListing.get(row.id) ?? []).map((m) => m.uri),
+        imageUrl: listingImageUrls(mediaByListing.get(row.id), row.image_url)[0] ?? row.image_url,
+        images: listingImageUrls(mediaByListing.get(row.id), row.image_url),
         media: mediaByListing.get(row.id) ?? [],
         rank: Number(row.rank_score),
         createdAt: row.created_at,
@@ -242,7 +270,30 @@ async function computeSearchResults(
     };
   }
 
-  // Fallback: ILIKE search when full-text search returns nothing
+  // Fallback when full-text search returns nothing: literal substring
+  // matching plus — for queries of 3+ characters — pg_trgm trigram
+  // similarity on title/brand so typos ("nikee" → "Nike") still surface
+  // results. Substring clauses stay: they are strictly stronger than
+  // trigrams for exact infix hits and cover the columns trigrams don't
+  // (description, category, size, condition).
+  const useTrgmFallback = q.trim().length >= TRGM_MIN_QUERY_LENGTH;
+  const trgmClause = useTrgmFallback
+    ? `
+          OR l.title % $1
+          OR similarity(l.title, $1) > ${TRGM_TITLE_THRESHOLD}
+          OR l.brand % $1
+          OR similarity(COALESCE(l.brand, ''), $1) > ${TRGM_BRAND_THRESHOLD}`
+    : '';
+
+  // For relevance sort, rank trigram hits by their best title/brand
+  // similarity — the ts_rank_cd expression is 0 for every row in this
+  // query since none matched the tsvector. Non-relevance sorts keep the
+  // caller's ordering unchanged.
+  const fallbackOrderBy =
+    sort === 'relevance' && useTrgmFallback
+      ? `GREATEST(similarity(l.title, $1), similarity(COALESCE(l.brand, ''), $1)) * ${reachRankMultiplierExpr('u')} DESC, l.created_at DESC, l.id DESC`
+      : orderBy;
+
   const fallback = await dbPool.query<{
     id: string;
     seller_id: string;
@@ -271,10 +322,11 @@ async function computeSearchResults(
           OR POSITION(lower($1) IN lower(COALESCE(l.brand, ''))) > 0
           OR POSITION(lower($1) IN lower(COALESCE(l.category, ''))) > 0
           OR POSITION(lower($1) IN lower(COALESCE(l.size, ''))) > 0
-          OR POSITION(lower($1) IN lower(COALESCE(l.condition, ''))) > 0
+          OR POSITION(lower($1) IN lower(COALESCE(l.condition, ''))) > 0${trgmClause}
         )
+        ${reachExcludedSql('u')}
         ${filterClause}
-      ORDER BY ${orderBy}
+      ORDER BY ${fallbackOrderBy}
       LIMIT $${filterIdx} OFFSET $${filterIdx + 1}
     `,
     [q, ...filterArgs, limit, offset]
@@ -284,7 +336,12 @@ async function computeSearchResults(
     dbPool,
     fallback.rows.map((row) => row.id),
   );
-  const fallbackReason: RetrievalFallbackReason = 'fts_no_matches_ilike_fallback';
+  // Honest disclosure: 'fts_no_matches_trgm' only when the trigram
+  // similarity clauses were actually part of the fallback query —
+  // sub-3-character queries ran substring matching alone.
+  const fallbackReason: RetrievalFallbackReason = useTrgmFallback
+    ? 'fts_no_matches_trgm'
+    : 'fts_no_matches_ilike_fallback';
   const retrievalMeta: RetrievalMeta = {
     method: 'lexical',
     fallbackReason,
@@ -307,8 +364,8 @@ async function computeSearchResults(
       title: row.title,
       description: row.description,
       priceGbp: Number(row.price_gbp),
-      imageUrl: row.image_url,
-      images: (fallbackMediaByListing.get(row.id) ?? []).map((m) => m.uri),
+      imageUrl: listingImageUrls(fallbackMediaByListing.get(row.id), row.image_url)[0] ?? row.image_url,
+      images: listingImageUrls(fallbackMediaByListing.get(row.id), row.image_url),
       media: fallbackMediaByListing.get(row.id) ?? [],
       rank: 0,
       createdAt: row.created_at,
@@ -344,11 +401,141 @@ async function computeSearchResults(
  * (adapter-backed with Redis caching and analytics); no duplicate is
  * registered here.
  */
+// ── Promoted ("Sponsored") slots ──────────────────────────────────────────
+// Flat-fee paid placements (migration 301). Blended at response time —
+// AFTER the cache read — so lazy daily-fee settlement runs per request and
+// served-impression facts are recorded for every response that actually
+// carried the unit (cache-hit responses still serve + record). Organic
+// order is untouched; each paid unit is stamped promoted+disclosure.
+// Strictly additive: any failure is logged and organic results return
+// unchanged.
+
+type SearchListingItem = {
+  id: string;
+  sellerId: string;
+  title: string;
+  description: string;
+  priceGbp: number;
+  imageUrl: string | null;
+  images: string[];
+  media: unknown[];
+  rank: number;
+  createdAt: string;
+  brand: string | null;
+  size: string | null;
+  condition: string | null;
+  category: string | null;
+  seller: { id: string; username: string; avatar: null; rating: null; reviewCount: null; location: null } | null;
+  promoted?: boolean;
+  disclosure?: string;
+  /** Present on promoted units only — the client posts it to /promotions/:id/click on tap-through. */
+  promotionId?: string;
+};
+
+function toPromotedSearchItem(
+  placement: PromotedListingPlacement,
+  media: ListingMediaItem[],
+): SearchListingItem {
+  const row = placement.listing;
+  return {
+    id: row.id,
+    sellerId: row.seller_id,
+    title: row.title,
+    description: row.description ?? '',
+    priceGbp: Number(row.price_gbp),
+    imageUrl: listingImageUrls(media, row.image_url)[0] ?? row.image_url,
+    images: listingImageUrls(media, row.image_url),
+    media,
+    promoted: true,
+    disclosure: PROMOTED_DISCLOSURE,
+    promotionId: placement.promotionId,
+    rank: 0,
+    createdAt: row.created_at,
+    brand: row.brand,
+    size: row.size,
+    condition: row.condition,
+    category: row.category,
+    seller: null,
+  };
+}
+
 export const registerSearchExtendedRoutes = ({
   app,
+  db,
   readDb,
   redis,
 }: SearchExtendedRouteDependencies): void => {
+
+  /**
+   * Blends billed promoted placements into a finished organic page.
+   * Runs at response time (not inside computeSearchResults) so cached
+   * organic pages still settle the daily fee per request and record
+   * served-impression facts honestly. Fail-open: promotion errors are
+   * logged and the organic page is returned unchanged.
+   */
+  const applyPromotedSlots = async (
+    request: FastifyRequest,
+    items: SearchListingItem[],
+    q: string,
+    filters: {
+      category?: string;
+      condition?: string;
+      size?: string;
+      brands?: string[];
+      sizes?: string[];
+      priceMin?: number;
+      priceMax?: number;
+      sustainableOnly?: boolean;
+    },
+  ): Promise<SearchListingItem[]> => {
+    try {
+      const viewerId = request.authUser?.userId ?? null;
+      const organicIds = new Set(items.map((i) => i.id));
+      // The full explicit filter set is forwarded so a Sponsored unit can
+      // never violate a filter the buyer set (priceMax, condition, …).
+      const placements = (await fetchPromotedListingsForQuery(db, {
+        query: q,
+        filters: {
+          category: filters.category ?? null,
+          condition: filters.condition ?? null,
+          size: filters.size ?? null,
+          brands: filters.brands ?? null,
+          sizes: filters.sizes ?? null,
+          priceMin: filters.priceMin ?? null,
+          priceMax: filters.priceMax ?? null,
+          sustainableOnly: filters.sustainableOnly ?? null,
+        },
+        viewerId,
+        limit: 4,
+      })).filter((p) => !organicIds.has(p.listing.id));
+
+      if (placements.length === 0) return items;
+
+      const mediaByListing = await loadListingMedia(
+        readDb,
+        placements.map((p) => p.listing.id),
+      );
+      const promotedItems = placements.map((p) =>
+        toPromotedSearchItem(p, mediaByListing.get(p.listing.id) ?? []),
+      );
+      const blended = blendPromotedIntoResults(items, promotedItems);
+
+      void recordPromotionImpressions(
+        db,
+        placements.map((p) => ({ promotionId: p.promotionId, listingId: p.listing.id })),
+        viewerId,
+        'search',
+      ).catch((impressionErr) =>
+        request.log.warn({ err: impressionErr }, 'promotion impression logging failed'),
+      );
+
+      return blended;
+    } catch (promotionErr) {
+      request.log.warn({ err: promotionErr }, 'promoted slot blending failed for /search/listings');
+      return items;
+    }
+  };
+
   app.get('/search/listings', async (request) => {
     const { q, limit, category, condition, size, brands, sizes, priceMin, priceMax, sustainableOnly, sort, page } =
       searchListingsQuerySchema.parse(request.query);
@@ -359,6 +546,19 @@ export const registerSearchExtendedRoutes = ({
     // arrays (sorted for stable cache-key hashing).
     const brandList = brands ? brands.split(',').map((b) => b.trim()).filter(Boolean).sort() : undefined;
     const sizeList = sizes ? sizes.split(',').map((s) => s.trim()).filter(Boolean).sort() : undefined;
+
+    // The same filter set the organic query applied — sponsored units are
+    // held to it too (see applyPromotedSlots).
+    const promotionFilters = {
+      category,
+      condition,
+      size,
+      brands: brandList,
+      sizes: sizeList,
+      priceMin,
+      priceMax,
+      sustainableOnly,
+    };
 
     // Build cache params from the normalized query
     const cacheParams: SearchQueryParams = {
@@ -403,6 +603,7 @@ export const registerSearchExtendedRoutes = ({
 
       return {
         ...cached,
+        items: await applyPromotedSlots(request, cached.items as SearchListingItem[], q, promotionFilters),
         fromCache: true,
         responseTimeMs,
       };
@@ -431,6 +632,7 @@ export const registerSearchExtendedRoutes = ({
 
     return {
       ...computed,
+      items: await applyPromotedSlots(request, computed.items as SearchListingItem[], q, promotionFilters),
       fromCache: false,
       responseTimeMs,
     };

@@ -221,9 +221,11 @@ export function useOrderDetailActions({
             variant: 'primary',
             accessibilityLabel: t('orderDetail.action.leaveReviewA11y') };
         case 'view_review':
+          // The review itself is rendered by WriteReviewScreen's published
+          // state — OrderReceipt shows the order summary, not the review.
           return {
             label: t('orderDetail.action.viewReview'),
-            onPress: () => { haptics.tap(); navigation.navigate('OrderReceipt', { orderId }); },
+            onPress: () => { haptics.tap(); navigation.navigate('WriteReview', { orderId }); },
             variant: 'secondary',
             accessibilityLabel: t('orderDetail.action.viewReviewA11y') };
         case 'confirm_delivery':

@@ -13,6 +13,9 @@ export type GroupMemberRole = 'owner' | 'admin' | 'member';
 export interface GroupMemberView {
   id: string;
   name: string;
+  /** Raw @handle — search must match both display name and username so a
+   *  member isn't invisible when the viewer knows one but not the other. */
+  username?: string;
   avatar: string | null;
   isMe: boolean;
   role: GroupMemberRole;
@@ -75,6 +78,22 @@ export function buildParticipantAvatarLookup(
   return map;
 }
 
+/** Username (@handle) lookup — kept separate from the display-name lookup
+ *  because the name lookup collapses to displayName ?? username. */
+export function buildParticipantUsernameLookup(
+  participantProfiles: Conversation['participantProfiles'],
+  currentUser: User | null,
+): Map<string, string> {
+  const map = new Map<string, string>();
+  if (currentUser?.id && currentUser.username) {
+    map.set(currentUser.id, currentUser.username);
+  }
+  for (const profile of participantProfiles ?? []) {
+    if (profile.username) map.set(profile.id, profile.username);
+  }
+  return map;
+}
+
 export function deriveCurrentRole(
   currentUserId: string | undefined,
   ownerId: string | undefined,
@@ -95,6 +114,7 @@ export function deriveGroupMembers(
   currentUserAvatar: string | null | undefined,
   nameLookup: ReadonlyMap<string, string>,
   avatarLookup: ReadonlyMap<string, string>,
+  usernameLookup?: ReadonlyMap<string, string>,
 ): GroupMemberView[] {
   const ids = conversation?.participantIds ?? [];
   return ids.map((id) => {
@@ -112,6 +132,7 @@ export function deriveGroupMembers(
     return {
       id,
       name,
+      username: usernameLookup?.get(id),
       avatar: id === currentUserId ? currentUserAvatar ?? null : avatarLookup.get(id) ?? null,
       isMe: id === currentUserId,
       role };
@@ -120,8 +141,12 @@ export function deriveGroupMembers(
 
 export function filterGroupMembers(members: GroupMemberView[], query: string): GroupMemberView[] {
   if (!query.trim()) return members;
-  const q = query.toLowerCase();
-  return members.filter((m) => m.name.toLowerCase().includes(q));
+  const q = query.trim().toLowerCase().replace(/^@/, '');
+  return members.filter(
+    (m) =>
+      m.name.toLowerCase().includes(q) ||
+      (m.username ?? '').toLowerCase().includes(q),
+  );
 }
 
 /** Narrow an API memberRoles payload to the known role union. */

@@ -112,7 +112,7 @@ export function ProfileLooksGrid({
           >
             <View style={styles.tileImageWrap}>
               <CachedImage
-                uri={look.mediaUrl}
+                uri={look.mediaType === 'video' ? (look.posterUrl ?? look.mediaUrl) : look.mediaUrl}
                 style={styles.tileImage}
                 contentFit="cover"
                 emptyLabel="Look"

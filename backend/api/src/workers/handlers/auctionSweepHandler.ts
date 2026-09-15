@@ -160,7 +160,7 @@ export async function advanceSecondChanceOffer(input: {
       userId: auction.seller_id,
       title: 'Payment expired — second chance offered',
       body: `The winner of ${auction.title} didn't pay. We've offered it to the next bidder.`,
-      eventType: 'auction_bid',
+      eventType: 'auction_sold_awaiting_payment',
       payload: { auctionId: auction.id, event: 'auction_second_chance_seller' },
       route: { screen: 'AuctionDetail', params: { auctionId: auction.id } },
       idempotencyKey: `auction-sc-offer-seller-${auction.id}-${next.bidder_id}`,
@@ -184,8 +184,8 @@ export async function advanceSecondChanceOffer(input: {
     [auction.id],
   );
   await client.query(
-    `UPDATE listings SET status = 'active', updated_at = NOW()
-     WHERE id = $1 AND status = 'paused'`,
+    `UPDATE listings SET status = 'active', pause_source = NULL, updated_at = NOW()
+     WHERE id = $1 AND status = 'paused' AND pause_source = 'auction'`,
     [auction.listing_id],
   );
 
@@ -209,7 +209,7 @@ export async function advanceSecondChanceOffer(input: {
     body: reason === 'second_chance_declined'
       ? `The next bidder declined the second-chance offer for ${auction.title} and there are no other bidders. Your listing has been reactivated.`
       : `The winner of ${auction.title} didn't pay and there are no other bidders. Your listing has been reactivated.`,
-    eventType: 'auction_bid',
+    eventType: 'auction_payment_expired',
     payload: { auctionId: auction.id, event: 'auction_payment_expired_relist' },
     route: { screen: 'AuctionDetail', params: { auctionId: auction.id } },
     idempotencyKey: `auction-sc-relist-${auction.id}`,
@@ -317,8 +317,8 @@ async function sweepEndedAuctions(
         [auction.id],
       );
       await client.query(
-        `UPDATE listings SET status = 'active', updated_at = NOW()
-         WHERE id = $1 AND status = 'paused'`,
+        `UPDATE listings SET status = 'active', pause_source = NULL, updated_at = NOW()
+         WHERE id = $1 AND status = 'paused' AND pause_source = 'auction'`,
         [auction.listing_id],
       );
 
@@ -343,7 +343,7 @@ async function sweepEndedAuctions(
         body: top
           ? `${auction.title} ended at £${topBidGbp.toFixed(2)} — below your reserve of £${reserveGbp!.toFixed(2)}. Relist or accept the highest bid.`
           : `${auction.title} ended with no bids. You can relist it.`,
-        eventType: 'auction_won',
+        eventType: 'auction_reserve_not_met',
         payload: { auctionId: auction.id, listingId: auction.listing_id, event: 'auction_reserve_not_met' },
         route: { screen: 'AuctionDetail', params: { auctionId: auction.id } },
         metadata: { reason },
@@ -360,7 +360,7 @@ async function sweepEndedAuctions(
             userId: row.bidder_id,
             title: 'Auction ended',
             body: `${auction.title} ended. Reserve not met — the item was not sold.`,
-            eventType: 'auction_ending_soon',
+            eventType: 'auction_reserve_not_met',
             payload: { auctionId: auction.id, event: 'auction_reserve_not_met_bidder' },
             route: { screen: 'AuctionDetail', params: { auctionId: auction.id } },
             metadata: { reason },
@@ -426,7 +426,7 @@ async function sweepEndedAuctions(
       userId: auction.seller_id,
       title: 'Auction sold — awaiting payment',
       body: `${auction.title} sold at £${topBidGbp.toFixed(2)}. Awaiting buyer payment.`,
-      eventType: 'auction_bid',
+      eventType: 'auction_sold_awaiting_payment',
       payload: { auctionId: auction.id, listingId: auction.listing_id, event: 'auction_sold_awaiting_payment' },
       route: { screen: 'AuctionDetail', params: { auctionId: auction.id } },
       metadata: { reason },

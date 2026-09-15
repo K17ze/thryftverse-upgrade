@@ -178,6 +178,8 @@ export async function sweepScheduledPublications(
               publicationId: result.publicationId,
               targetId: result.targetId,
             },
+            // The drafts library is where the published document lives.
+            route: { screen: 'CreatorDraftList', params: {} },
             idempotencyKey: `sched_pub_success_${schedule.id}`,
           });
         } else if (result.blocked) {
@@ -222,6 +224,7 @@ export async function sweepScheduledPublications(
               scheduleId: schedule.id,
               reason: result.error,
             },
+            route: { screen: 'CreatorDraftList', params: {} },
             idempotencyKey: `sched_pub_blocked_${schedule.id}`,
           });
         } else if (schedule.attempts >= schedule.max_attempts) {
@@ -263,6 +266,7 @@ export async function sweepScheduledPublications(
               scheduleId: schedule.id,
               reason: result.error,
             },
+            route: { screen: 'CreatorDraftList', params: {} },
             idempotencyKey: `sched_pub_failed_${schedule.id}`,
           });
         } else {

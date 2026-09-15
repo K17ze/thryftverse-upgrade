@@ -604,6 +604,9 @@ interface ListAuctionBidsResponse {
 interface ListCoOwnAssetsResponse {
   ok: true;
   items: MarketCoOwnAsset[];
+  /** Opaque cursor for the next page. Null when the catalogue is
+   * exhausted. Optional for backward compatibility with older backends. */
+  nextCursor?: string | null;
 }
 
 interface PlaceCoOwnOrderResponse {
@@ -1660,9 +1663,17 @@ function getMockCoOwnHoldings(userId: string): MarketCoOwnHolding[] {
   ];
 }
 
-export async function listCoOwnAssets(
+export interface ListCoOwnAssetsPage {
+  items: MarketCoOwnAsset[];
+  /** Opaque cursor for the next page; null when the catalogue is
+   * exhausted. Older backends that omit nextCursor resolve to null, so
+   * paged callers simply stop after the first page. */
+  nextCursor: string | null;
+}
+
+export async function listCoOwnAssetsPage(
   options: ListCoOwnAssetsOptions = {}
-): Promise<MarketCoOwnAsset[]> {
+): Promise<ListCoOwnAssetsPage> {
   const query = toQuery({
     openOnly: options.openOnly,
     issuerId: options.issuerId,
@@ -1672,15 +1683,23 @@ export async function listCoOwnAssets(
   });
   try {
     const payload = await fetchJson<ListCoOwnAssetsResponse>(`/co-own/assets${query}`);
-    return payload.items;
+    return { items: payload.items, nextCursor: payload.nextCursor ?? null };
   } catch (err) {
     if (ENABLE_RUNTIME_MOCKS) {
       console.warn('[marketApi] /co-own/assets failed — returning dev mock fallback:', err instanceof Error ? err.message : err);
-      return getMockCoOwnAssets();
+      // Dev mocks fit on a single page — report no continuation.
+      return { items: getMockCoOwnAssets(), nextCursor: null };
     }
     warnIfMockSuppressed('listCoOwnAssets', err);
     throw err;
   }
+}
+
+export async function listCoOwnAssets(
+  options: ListCoOwnAssetsOptions = {}
+): Promise<MarketCoOwnAsset[]> {
+  const page = await listCoOwnAssetsPage(options);
+  return page.items;
 }
 
 interface GetCoOwnAssetResponse {

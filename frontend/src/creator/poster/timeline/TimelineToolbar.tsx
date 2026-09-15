@@ -9,7 +9,7 @@ import { TypographyV2 } from '../../../theme/typography.v2';
 import { RadiusRoleValue } from '../../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
-import { PressScale } from '../../CreatorAnimations';
+import { PressScale } from '../../shared/CreatorAnimations';
 import { formatTimecode, type PosterClip } from './TimelineTypes';
 import { getToolLabel, getSliderLabel } from '../../core/a11y/CanvasAccessibilityLabels';
 
@@ -290,6 +290,9 @@ const SliderRow = React.memo(function SliderRow({
   const pct = Math.round(ratio * 100);
   const fillLeft = min < 0 ? Math.min(50, pct) : 0;
   const fillWidth = min < 0 ? Math.abs(pct - 50) : pct;
+  // Last emitted value — the step-quantized value repeats for many gesture
+  // events within a step, so dedupe before crossing the bridge.
+  const lastEmittedSV = useSharedValue(Number.NaN);
   const panGesture = React.useMemo(
     () =>
       Gesture.Pan()
@@ -298,20 +301,24 @@ const SliderRow = React.memo(function SliderRow({
           const w = widthSV.value;
           if (w <= 0) return;
           const r = Math.max(0, Math.min(1, e.x / w));
-          const v = min + Math.round((r * range) / step) * step;
+          const v = Math.max(min, Math.min(max, min + Math.round((r * range) / step) * step));
+          lastEmittedSV.value = v;
           runOnJS(haptic.selection)();
-          runOnJS(onChange)(Math.max(min, Math.min(max, v)));
+          runOnJS(onChange)(v);
         })
         .onChange((e) => {
           'worklet';
           const w = widthSV.value;
           if (w <= 0) return;
           const r = Math.max(0, Math.min(1, e.x / w));
-          const v = min + Math.round((r * range) / step) * step;
-          runOnJS(onChange)(Math.max(min, Math.min(max, v)));
+          const v = Math.max(min, Math.min(max, min + Math.round((r * range) / step) * step));
+          if (v !== lastEmittedSV.value) {
+            lastEmittedSV.value = v;
+            runOnJS(onChange)(v);
+          }
         }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [min, max, range, step, onChange, haptic]
+    [min, max, range, step, onChange, haptic, lastEmittedSV]
   );
 
   return (

@@ -43,7 +43,7 @@ import {
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { IconGrammar } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
-import { SheetContainer, PressScale } from '../../CreatorAnimations';
+import { SheetContainer, PressScale } from '../../shared/CreatorAnimations';
 import { KeyboardAwareScrollView } from '../../../platform/keyboard/KeyboardProvider';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';

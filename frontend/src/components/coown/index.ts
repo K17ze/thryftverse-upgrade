@@ -7,6 +7,8 @@ export { CoOwnFeaturedAsset } from './CoOwnFeaturedAsset';
 export type { CoOwnFeaturedAssetProps, CoOwnAssetStatus } from './CoOwnFeaturedAsset';
 export { CoOwnMarketHighlightsCarousel } from './CoOwnMarketHighlightsCarousel';
 export type { CoOwnMarketHighlight, CoOwnMarketHighlightsCarouselProps } from './CoOwnMarketHighlightsCarousel';
+export { CoOwnSegmentTabs, COOWN_HUB_SEGMENTS } from './CoOwnSegmentTabs';
+export type { CoOwnSegmentTabsProps, CoOwnHubSegment } from './CoOwnSegmentTabs';
 export { CoOwnCompactPositionCard, COOWN_POSITION_CARD_WIDTH } from './CoOwnCompactPositionCard';
 export type { CoOwnCompactPositionCardProps } from './CoOwnCompactPositionCard';
 export { CoOwnInstrumentCard } from './CoOwnInstrumentCard';

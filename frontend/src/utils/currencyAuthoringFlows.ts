@@ -66,6 +66,11 @@ export function convertDisplayToUsdAmount(
 
 export function calculatePlatformChargeGbp(subtotalGbp: number): number {
   const normalizedSubtotal = Number.isFinite(subtotalGbp) ? Math.max(0, subtotalGbp) : 0;
+  // Backend mirror (calculateCommercePlatformChargeGbp): a zero-value
+  // subtotal carries no fee — a £0 item must not show a £0.70 charge.
+  if (normalizedSubtotal <= 0) {
+    return 0;
+  }
   const formulaCharge =
     normalizedSubtotal * COMMERCE_PLATFORM_CHARGE_RATE + COMMERCE_PLATFORM_CHARGE_FIXED_GBP;
   const minimumCharge = normalizedSubtotal * COMMERCE_PLATFORM_CHARGE_MIN_RATE;

@@ -5,6 +5,7 @@ export { InventorySortMenu, type InventorySortMenuProps } from './InventorySortM
 export { InventoryRow, type InventoryRowProps } from './InventoryRow';
 export { InventoryList, type InventoryListProps } from './InventoryList';
 export { InventoryBulkActionsBar, type InventoryBulkActionsBarProps } from './InventoryBulkActionsBar';
+export { BulkEditSheet, type BulkEditSheetProps } from './BulkEditSheet';
 export {
   createInventoryScreenStyles,
   inventorySharedStyles,

@@ -164,6 +164,26 @@ export function createUnifiedDiscoveryStyles(colors: ThemeColors) {
       height: 2,
       backgroundColor: colors.textPrimary,
       borderRadius: 1 },
+    // Scope-bar glyph action (save search) — transparent 44pt hit area,
+    // icon-only, matching the filter trigger's quiet chrome.
+    scopeAction: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: Space.sm,
+      minWidth: Control.hit,
+      minHeight: 44 },
+    // Results meta — quiet count + retrieval-fallback note above the grid.
+    // Meta size, muted ink; the grid is the dominant object, not the label.
+    resultsMetaWrap: {
+      paddingHorizontal: Space.md,
+      paddingTop: Space.sm,
+      paddingBottom: Space.xs,
+      gap: 2 },
+    resultsMetaText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.regular,
+      color: colors.textMuted,
+      letterSpacing: 0.2 },
     filterTrigger: {
       flexDirection: 'row',
       alignItems: 'center',

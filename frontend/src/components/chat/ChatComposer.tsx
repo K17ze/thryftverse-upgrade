@@ -52,6 +52,14 @@ export interface ChatComposerProps {
   isVoiceRecording: boolean;
   onVoiceRecordingChange: (recording: boolean) => void;
   isSending: boolean;
+  /** Blocked/restricted composer — when set, the input bar is replaced by
+   *  an explanatory notice rather than silently disabled. Carries an
+   *  optional recovery action (e.g. "Unblock to message."). */
+  blockedNotice?: {
+    message: string;
+    actionLabel?: string;
+    onAction?: () => void;
+  };
   dangerWarning?: string;
   cautionWarning?: string;
   onDismissDangerWarning: () => void;
@@ -105,6 +113,7 @@ export function ChatComposer({
   isVoiceRecording,
   onVoiceRecordingChange,
   isSending,
+  blockedNotice,
   dangerWarning,
   cautionWarning,
   onDismissDangerWarning,
@@ -187,6 +196,24 @@ export function ChatComposer({
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.brandBorder },
 
+    blockedNoticeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs + 1,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm + 2 },
+
+    blockedNoticeText: {
+      flex: 1,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary },
+
+    blockedNoticeAction: {
+      fontFamily: TypographyV2.meta.fontFamily,
+      fontWeight: '600' },
+
     agentChipPressed: {
       backgroundColor: colors.brandSubtle },
 
@@ -218,6 +245,31 @@ export function ChatComposer({
         { paddingBottom: Math.max(bottomInset, Space.sm) + Space.sm },
       ]}
     >
+      {blockedNotice ? (
+        /* Blocked/restricted conversation — the composer is unavailable
+           and says why, with a recovery action when one exists. Never a
+           silently-disabled input. */
+        <View
+          style={styles.blockedNoticeRow}
+          accessibilityRole="alert"
+          accessibilityLiveRegion="polite"
+        >
+          <Ionicons name="lock-closed-outline" size={14} color={colors.textMuted} />
+          <Text style={styles.blockedNoticeText} maxFontSizeMultiplier={2}>
+            {blockedNotice.message}
+            {blockedNotice.actionLabel && blockedNotice.onAction ? (
+              <Text
+                style={[styles.blockedNoticeAction, { color: colors.textPrimary }]}
+                onPress={blockedNotice.onAction}
+                maxFontSizeMultiplier={2}
+              >
+                {" "}{blockedNotice.actionLabel}
+              </Text>
+            ) : null}
+          </Text>
+        </View>
+      ) : (
+      <>
       {/* P0-8: Composer-stack height enforcement. Multiple contextual
           banners can stack above the input bar (reply, reactions,
           offline, undo). On small devices the stack can push the input
@@ -401,6 +453,8 @@ export function ChatComposer({
         onDismissDangerWarning={onDismissDangerWarning}
         onDismissCautionWarning={onDismissCautionWarning}
       />
+      </>
+      )}
     </View>
     </KeyboardStickyView>
   );

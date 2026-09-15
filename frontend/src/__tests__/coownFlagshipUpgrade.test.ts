@@ -115,7 +115,12 @@ describe('COOWN-FLAGSHIP: Co-Own department flagship upgrade', () => {
 
     it('SyndicateHubScreen has education module', () => {
       const src = readSrc('screens/SyndicateHubScreen.tsx');
-      expect(src).toContain('CoOwnEducationCard');
+      // Education is reachable from the empty-catalogue state — the inline
+      // CoOwnEducationCard block was removed in favour of infinite scroll.
+      expect(src).toContain('Learn how it works');
+      expect(src).toContain('CoOwnOnboarding');
+      // The education card component itself remains part of the system.
+      expect(readSrc('components/coown/index.ts')).toContain('CoOwnEducationCard');
     });
 
     it('SyndicateHubScreen uses a looping market highlights carousel', () => {
@@ -134,10 +139,12 @@ describe('COOWN-FLAGSHIP: Co-Own department flagship upgrade', () => {
       expect(src).toContain("navigation.navigate('Portfolio')");
     });
 
-    it('SyndicateHubScreen keeps market tabs sticky and listing controls inline', () => {
+    it('SyndicateHubScreen pins market tabs under the header and keeps listing controls inline', () => {
       const src = readSrc('screens/SyndicateHubScreen.tsx');
-      expect(src).toContain('stickyHeaderIndices={[1]}');
-      expect(src).not.toContain('stickyHeaderIndices={[2]}');
+      // Segment tabs are a fixed element under the FlagshipHeader, not a
+      // sticky list row — no stickyHeaderIndices anywhere.
+      expect(src).toContain('CoOwnSegmentTabs');
+      expect(src).not.toContain('stickyHeaderIndices');
       expect(src).toContain('Market search and sorting');
       expect(src).not.toContain('CoOwnFeaturedAsset');
     });

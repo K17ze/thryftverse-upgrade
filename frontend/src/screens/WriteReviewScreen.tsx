@@ -54,6 +54,7 @@ export default function WriteReviewScreen() {
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [existingReview, setExistingReview] = useState<OrderReview | null>(null);
   const [order, setOrder] = useState<CommerceOrder | null>(null);
   // Unknown-outcome: when the network drops before the response, the outcome
@@ -77,7 +78,9 @@ export default function WriteReviewScreen() {
           setReview(fetchedReview.comment ?? '');
         }
       } catch {
-        // Non-critical; user can still attempt to submit
+        // The form needs the order row — without it the buyer can't know
+        // whether the order is even reviewable. Surface the failure.
+        if (!cancelled) setLoadError(true);
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -86,7 +89,16 @@ export default function WriteReviewScreen() {
     return () => { cancelled = true; };
   }, [orderId]);
 
-  const canSubmit = rating > 0 && !isSubmitting && !isLoading && !existingReview && !isUnknownOutcome;
+  // Reviewable only once the order is delivered/completed — the backend
+  // rejects earlier submissions with a 409 the old flow surfaced only as a
+  // toast after the buyer had written the whole review.
+  const isOrderReviewable = order != null && ['delivered', 'completed'].includes(order.status);
+
+  // A buyer-authored review is terminal; a platform auto-feedback row is a
+  // supersedable placeholder — the backend upgrades it in place, so the form
+  // stays reachable.
+  const existingIsTerminal = existingReview != null && existingReview.isAuto !== true;
+  const canSubmit = rating > 0 && !isSubmitting && !isLoading && !existingIsTerminal && isOrderReviewable;
 
   const handlePickPhotos = useCallback(async () => {
     if (photoUris.length >= 4) {
@@ -126,13 +138,47 @@ export default function WriteReviewScreen() {
     setPhotoUris((prev) => prev.filter((_, i) => i !== index));
   }, [haptic]);
 
+  // Re-check after an ambiguous outcome or an already-exists response —
+  // resolves to the published state when the review actually landed.
+  const resolvePublishedReview = useCallback(async (): Promise<boolean> => {
+    const published = await getOrderReview(orderId).catch(() => null);
+    if (published) {
+      setExistingReview(published);
+      setIsUnknownOutcome(false);
+      return true;
+    }
+    return false;
+  }, [orderId]);
+
   const handleSubmit = useCallback(async () => {
+    // Unknown-outcome path: don't resubmit — check whether it landed.
+    if (isUnknownOutcome) {
+      haptic.light();
+      setIsSubmitting(true);
+      const landed = await resolvePublishedReview();
+      setIsSubmitting(false);
+      if (landed) {
+        show('Your review was published.', 'success');
+      } else {
+        setIsUnknownOutcome(false);
+        show('Not published — you can try again.', 'info');
+      }
+      return;
+    }
     if (!canSubmit) return;
     haptic.medium();
     setIsSubmitting(true);
     setIsUnknownOutcome(false);
     try {
-      await createOrderReview(orderId, rating, review.trim() || undefined, photoUris.length > 0 ? photoUris : undefined);
+      await createOrderReview(
+        orderId,
+        rating,
+        review.trim() || undefined,
+        photoUris.length > 0 ? photoUris : undefined,
+        // Stable per-order key: a retry after a dropped response replays
+        // against the same key instead of colliding with UNIQUE(order_id).
+        `review_${orderId}`,
+      );
       track('review_written', { seller_id: order!.sellerId, rating });
       // Propagate the new review to every surface that displays the
       // seller's ratings: their reviews list, public profile aggregate
@@ -149,25 +195,61 @@ export default function WriteReviewScreen() {
       show('Review published', 'success');
       navigation.goBack();
     } catch (err) {
-      const isNetworkError = isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
-      if (isNetworkError) {
-        // Unknown outcome — the request may have reached the server. Show a
-        // distinct state, not a success or a hard error (AGENTS.md §11).
-        setIsUnknownOutcome(true);
-        show('Checking your review — connection was lost. Your review may have been published.', 'info');
+      const parsed = parseApiError(err);
+      // The review already exists — this is success, not an error.
+      if (parsed.code === 'REVIEW_ALREADY_EXISTS') {
+        const landed = await resolvePublishedReview();
+        if (landed) {
+          show('Your review was already published.', 'success');
+        } else {
+          show('This order already has a review.', 'info');
+        }
       } else {
-        const parsed = parseApiError(err);
-        show(parsed.message, 'error');
+        const isNetworkError = isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
+        if (isNetworkError) {
+          // Unknown outcome — the request may have reached the server. Show a
+          // distinct state, not a success or a hard error (AGENTS.md §11).
+          setIsUnknownOutcome(true);
+          show('Checking your review — connection was lost. Your review may have been published.', 'info');
+        } else {
+          show(parsed.message, 'error');
+        }
       }
     } finally {
       setIsSubmitting(false);
     }
-  }, [canSubmit, haptic, orderId, rating, review, show, navigation, isOffline, photoUris, order?.sellerId, queryClient]);
+  }, [canSubmit, isUnknownOutcome, haptic, orderId, rating, review, show, navigation, isOffline, photoUris, order?.sellerId, queryClient, resolvePublishedReview]);
 
   if (isLoading) {
     return (
       <FlagshipScreen header={<FlagshipHeader title="Review" onBack={() => navigation.goBack()} />}>
         <WriteReviewSkeleton />
+      </FlagshipScreen>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <FlagshipScreen header={<FlagshipHeader title="Review" onBack={() => navigation.goBack()} />}>
+        <View style={styles.blockedState}>
+          <AppIcon name="alert-circle-outline" focused={false} size={IconSize.xl} color="textMuted" opticalCenter accessible={false} />
+          <Text style={styles.blockedTitle}>Couldn’t load this order</Text>
+          <Text style={styles.blockedSub}>Check your connection and try again.</Text>
+        </View>
+      </FlagshipScreen>
+    );
+  }
+
+  if (!existingIsTerminal && order && !isOrderReviewable) {
+    return (
+      <FlagshipScreen header={<FlagshipHeader title="Review" onBack={() => navigation.goBack()} />}>
+        <View style={styles.blockedState}>
+          <AppIcon name="time-outline" focused={false} size={IconSize.xl} color="textMuted" opticalCenter={false} accessible={false} />
+          <Text style={styles.blockedTitle}>Not reviewable yet</Text>
+          <Text style={styles.blockedSub}>
+            You can review this purchase once the order has been delivered.
+          </Text>
+        </View>
       </FlagshipScreen>
     );
   }
@@ -203,19 +285,13 @@ export default function WriteReviewScreen() {
             </View>
           )}
 
-          {existingReview ? (
+          {existingIsTerminal ? (
             <View style={styles.existingState}>
               <AppIcon name="checkmark-circle" focused size={IconSize.xl} color="success" opticalCenter accessible={false} />
-              <Text style={styles.existingTitle}>
-                {existingReview.isAuto ? 'Automatic feedback' : 'Review published'}
-              </Text>
+              <Text style={styles.existingTitle}>Review published</Text>
               <Text style={styles.existingSub}>
-                {existingReview.isAuto
-                  ? 'Left automatically — no review was submitted.'
-                  : <>
-                      {existingReview.rating} star{existingReview.rating > 1 ? 's' : ''} ·{' '}
-                      {new Date(existingReview.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                    </>}
+                {existingReview.rating} star{existingReview.rating > 1 ? 's' : ''} ·{' '}
+                {new Date(existingReview.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
               </Text>
               {existingReview.comment ? (
                 <Text style={styles.existingComment}>{existingReview.comment}</Text>
@@ -236,6 +312,13 @@ export default function WriteReviewScreen() {
             </View>
           ) : (
             <>
+              {existingReview?.isAuto ? (
+                // Platform auto-feedback exists — the buyer's submission
+                // supersedes it in place (same review row, is_auto=false).
+                <Text style={styles.photoPrivacy}>
+                  Automatic feedback was recorded for this order. Your review replaces it.
+                </Text>
+              ) : null}
               {/* Rating — the dominant interaction. Left-aligned, not centered.
                   The star row is the primary control; the label confirms the
                   selection without competing for visual weight. */}
@@ -344,16 +427,16 @@ export default function WriteReviewScreen() {
             </>
           )}
 
-        {!existingReview && (
+        {!existingIsTerminal && (
           <View style={styles.footer}>
             <AppButton
               title={
-                isUnknownOutcome ? 'Checking your review'
+                isUnknownOutcome ? 'Check status'
                 : isSubmitting ? 'Publishing...'
                 : 'Publish review'
               }
               onPress={handleSubmit}
-              disabled={!canSubmit}
+              disabled={!isUnknownOutcome && !canSubmit}
               variant="primary"
               size="lg"
               hapticFeedback="medium"
@@ -499,6 +582,22 @@ function createStyles(colors: ThemeColors) {
     width: 64,
     height: 64,
     borderRadius: Radius.md },
+  // Blocked canvases — load error / not-yet-reviewable. Flat, icon-led.
+  blockedState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.sm,
+    paddingHorizontal: Space.xl },
+  blockedTitle: {
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    color: colors.textPrimary },
+  blockedSub: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textSecondary,
+    textAlign: 'center' },
   footer: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,

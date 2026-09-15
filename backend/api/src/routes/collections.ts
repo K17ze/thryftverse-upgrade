@@ -232,16 +232,19 @@ export const registerCollectionRoutes = ({
       return { ok: false, error: "Collection not found or not owned" };
     }
 
+    // A collection is a bookmark, not a purchase — sold and paused listings
+    // remain viewable PDPs and are legitimate to save. Only unviewable
+    // states (draft / deleted / risk_pending) are rejected.
     const listing = await db
       .selectFrom("listings")
       .select("id")
       .where("id", "=", listingId)
-      .where("status", "=", "active")
+      .where("status", "in", ["active", "sold", "paused"])
       .limit(1)
       .executeTakeFirst();
     if (!listing) {
       reply.code(404);
-      return { ok: false, error: "Active listing not found" };
+      return { ok: false, error: "Listing not found" };
     }
 
     await db

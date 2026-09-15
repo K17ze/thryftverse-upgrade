@@ -57,7 +57,8 @@ import { ReplyQuote } from '../components/chat/ReplyQuote';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import * as Clipboard from 'expo-clipboard';
 
-import { fetchGroupSettingsFromApi, reportConversationOnApi, sendConversationMessageOnApi } from '../services/chatApi';
+import { fetchGroupSettingsFromApi, pinMessageOnApi, reportConversationOnApi, unpinMessageOnApi } from '../services/chatApi';
+import { forwardMessageToConversation, isForwardableMessage } from '../components/chat/forwardMessage';
 import {
   useTypingIndicator,
   useTypingUsers,
@@ -69,9 +70,14 @@ import {
 import {
   useConversationMessages,
   useConversationComposer,
+  usePinnedMessage,
+  useUnreadDividerAnchor,
   type Message,
   formatDateSeparator,
-  formatMessageTime } from '../hooks/chat';
+  formatMessageTime,
+  parseMessageDate } from '../hooks/chat';
+import { UnreadMessagesDivider } from '../components/chat/ChatMessageItem';
+import { PinnedMessageBar } from '../components/chat/PinnedMessageBar';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupChat'>;
 
@@ -119,6 +125,39 @@ export default function GroupChatScreen({ navigation, route }: Props) {
   const isGroupManager = Boolean(
     currentUser?.id
     && (conversation?.ownerId === currentUser.id || currentRole === 'owner' || currentRole === 'admin'),
+  );
+
+  // Pin — real pin/unpin endpoints; backend permits group admins/owners
+  // only, so the context-menu action is gated on role.
+  const canPinMessage = currentRole === 'owner' || currentRole === 'admin';
+  const { pinnedMessage, refresh: refreshPinnedMessage } = usePinnedMessage(
+    conversationId,
+    true,
+    conversations,
+  );
+
+  const handlePinMessage = useCallback(
+    (msg: Message) => {
+      if (!conversationId || !canPinMessage) return;
+      const isPinned = pinnedMessage?.messageId === msg.id;
+      const request = isPinned
+        ? unpinMessageOnApi(conversationId, msg.id)
+        : pinMessageOnApi(conversationId, msg.id);
+      request
+        .then(() => {
+          refreshPinnedMessage();
+          show(isPinned ? 'Message unpinned' : 'Message pinned', 'success');
+        })
+        .catch(() =>
+          show(
+            isPinned
+              ? 'Failed to unpin message. Please try again.'
+              : 'Failed to pin message. Please try again.',
+            'error',
+          ),
+        );
+    },
+    [conversationId, canPinMessage, pinnedMessage?.messageId, refreshPinnedMessage, show],
   );
   const [sendPermission, setSendPermission] = useState<'loading' | 'allowed' | 'restricted' | 'unavailable'>(
     isGroupManager ? 'allowed' : 'loading',
@@ -211,7 +250,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
     handleSendPendingAttachment: hookSendPendingAttachment,
     confirmation: conversationConfirmation,
     clearConfirmation: clearConversationConfirmation,
-    dateSeparatorIndices,
+    unreadDividerIndex,
     handleMessageListScroll: hookHandleMessageListScroll,
     syncMessagesFromApi } = useConversationMessages({
     conversationId,
@@ -412,6 +451,11 @@ export default function GroupChatScreen({ navigation, route }: Props) {
       (!selectedMessage.isDeleted || selectedMessageSavedByMe),
   );
 
+  // Forward is only honest for payloads we can re-send faithfully —
+  // offers, polls, documents and commerce cards have no cross-thread
+  // send path, so the context menu must not offer it.
+  const canForwardSelectedMessage = isForwardableMessage(selectedMessage);
+
   const handleContextAction = useCallback((action: MessageAction) => {
     if (!selectedMessage) return;
     switch (action) {
@@ -441,6 +485,9 @@ export default function GroupChatScreen({ navigation, route }: Props) {
       case 'save':
         toggleSaveInChat(selectedMessage);
         break;
+      case 'pin':
+        handlePinMessage(selectedMessage);
+        break;
       case 'report': {
         const reportKey = `rpt_${conversationId}_${selectedMessage.id}`;
         reportConversationOnApi(conversationId, 'other', undefined, selectedMessage.id, reportKey)
@@ -452,7 +499,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
         break;
     }
     setContextMenuVisible(false);
-  }, [selectedMessage, conversationId, show, handleDeleteMessage, toggleSaveInChat, setReplyTo, setEditingMessage, setInput, setReactingToMessage, setForwardingMessage, setForwardSheetVisible, currentUser?.id]);
+  }, [selectedMessage, conversationId, show, handleDeleteMessage, toggleSaveInChat, handlePinMessage, setReplyTo, setEditingMessage, setInput, setReactingToMessage, setForwardingMessage, setForwardSheetVisible, currentUser?.id]);
 
   const handleReact = useCallback((emoji: string) => {
     const msg = reactingToMessage;
@@ -468,10 +515,58 @@ export default function GroupChatScreen({ navigation, route }: Props) {
   }, [reactingToMessage, conversationId, addMessageReaction, removeMessageReaction, haptic, setReactingToMessage]);
 
   // ─── Message rendering ──────────────────────────────────────────────
+  // "New messages" divider — anchored to the first unread message id so
+  // pagination prepends (and the search filter below) never move it.
+  const { messageId: firstUnreadMessageId } = useUnreadDividerAnchor(
+    conversationId,
+    messages,
+    unreadDividerIndex,
+  );
+
+  const displayMessages = useMemo(() => {
+    if (!isSearchActive || !searchQuery.trim()) return messages;
+    const q = searchQuery.trim().toLowerCase();
+    // Search the full message payload — text/caption, poll question and
+    // poll options — so media-with-caption and polls aren't silently
+    // invisible to search.
+    return messages.filter((m) => {
+      const haystacks = [m.text, m.poll?.question, ...(m.poll?.options ?? [])];
+      return haystacks.some((h) => (h ?? '').toLowerCase().includes(q));
+    });
+  }, [messages, isSearchActive, searchQuery]);
+
+  // Date separators must key off the displayed list — when search filters
+  // messages, indices into the full `messages` array no longer align with
+  // `displayMessages`, so the hook-provided set would render dividers on
+  // the wrong rows.
+  const displayDateSeparators = useMemo(() => {
+    const indices = new Set<number>();
+    const dayKey = (d?: string) => {
+      if (!d) return '';
+      const parsed = parseMessageDate(d);
+      if (!parsed) return d;
+      return `${parsed.getFullYear()}-${parsed.getMonth()}-${parsed.getDate()}`;
+    };
+    for (let i = 0; i < displayMessages.length; i++) {
+      if (i === 0) {
+        indices.add(i);
+        continue;
+      }
+      const prev = dayKey(displayMessages[i - 1]?.date);
+      const curr = dayKey(displayMessages[i]?.date);
+      if (curr && prev && curr !== prev) {
+        indices.add(i);
+      }
+    }
+    return indices;
+  }, [displayMessages]);
+
   const renderMessage: ListRenderItem<Message> = useCallback(
     ({ item, index }) => {
-      const prev = messages[index - 1];
-      const next = messages[index + 1];
+      // Cluster + separator lookups key off `displayMessages` — the array
+      // actually rendered — so the search filter can't desync them.
+      const prev = displayMessages[index - 1];
+      const next = displayMessages[index + 1];
       const isFirstInCluster = !prev || prev.senderId !== item.senderId;
       const isLastInCluster = !next || next.senderId !== item.senderId;
       const isAgent = item.isAgent === true;
@@ -479,7 +574,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
         ? messages.find((m) => m.id === item.replyToMessageId)
         : undefined;
 
-      const dateSep = dateSeparatorIndices.has(index)
+      const dateSep = displayDateSeparators.has(index)
         ? formatDateSeparator(item.date ?? '')
         : null;
       const time = formatMessageTime(item.date);
@@ -493,6 +588,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
               <View style={[styles.dateSeparatorLine, { backgroundColor: colors.borderSubtle }]} />
             </View>
           ) : null}
+          {item.id === firstUnreadMessageId ? <UnreadMessagesDivider /> : null}
           {item.isDeleted ? (
             (() => {
               // A save placed before delete-for-everyone can still be
@@ -562,7 +658,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
         </View>
       );
     },
-    [styles.messageRow, messages, handleMessageLongPress, dateSeparatorIndices, colors, setReactingToMessage, setReplyTo, currentUser?.id],
+    [styles.messageRow, messages, displayMessages, displayDateSeparators, firstUnreadMessageId, handleMessageLongPress, colors, setReactingToMessage, setReplyTo, currentUser?.id],
   );
 
   const keyExtractor = useCallback((item: Message) => item.id, []);
@@ -571,12 +667,6 @@ export default function GroupChatScreen({ navigation, route }: Props) {
   const headerSubtitle = remoteTyping && typingLabel
     ? typingLabel
     : `${memberCount} members`;
-
-  const displayMessages = useMemo(() => {
-    if (!isSearchActive || !searchQuery.trim()) return messages;
-    const q = searchQuery.toLowerCase();
-    return messages.filter((m) => (m.text ?? '').toLowerCase().includes(q));
-  }, [messages, isSearchActive, searchQuery]);
 
   // ─── Loading / error states ─────────────────────────────────────────
   const showLoading = isSyncing && messages.length === 0;
@@ -627,6 +717,20 @@ export default function GroupChatScreen({ navigation, route }: Props) {
                 }
               />
             ) : null}
+            {pinnedMessage ? (
+              <PinnedMessageBar
+                senderLabel={pinnedMessage.senderLabel}
+                text={pinnedMessage.text}
+                onPress={() => {
+                  const idx = displayMessages.findIndex(
+                    (m) => m.id === pinnedMessage.messageId,
+                  );
+                  if (idx >= 0) {
+                    listRef.current?.scrollToIndex({ index: idx, animated: true });
+                  }
+                }}
+              />
+            ) : null}
             <FlashList
               style={{ backgroundColor: chatBackground }}
               ref={listRef}
@@ -639,12 +743,21 @@ export default function GroupChatScreen({ navigation, route }: Props) {
               onContentSizeChange={scheduleScrollToEnd}
               ListEmptyComponent={
                 <View style={styles.centerState}>
-                  <AppIcon name="inbox" size="hero" color="textMuted" accessible={false} />
+                  <AppIcon
+                    name={isSearchActive && searchQuery.trim() ? 'search' : 'inbox'}
+                    size="hero"
+                    color="textMuted"
+                    accessible={false}
+                  />
                   <BodyEmphasis color={colors.textPrimary} style={styles.stateTitle}>
-                    No messages yet
+                    {isSearchActive && searchQuery.trim()
+                      ? 'No matching messages'
+                      : 'No messages yet'}
                   </BodyEmphasis>
                   <Caption color={colors.textMuted} style={styles.stateCaption}>
-                    Start the conversation
+                    {isSearchActive && searchQuery.trim()
+                      ? `Nothing matches “${searchQuery.trim()}”.`
+                      : 'Start the conversation'}
                   </Caption>
                 </View>
               }
@@ -788,6 +901,11 @@ export default function GroupChatScreen({ navigation, route }: Props) {
           canSave={canSaveSelectedMessage}
           isSaved={selectedMessageSavedByMe}
           isDeleted={selectedMessage?.isDeleted === true}
+          canForward={canForwardSelectedMessage}
+          canPin={canPinMessage}
+          isPinned={Boolean(
+            selectedMessage && pinnedMessage?.messageId === selectedMessage.id,
+          )}
         />
 
         <ForwardSheet
@@ -795,23 +913,20 @@ export default function GroupChatScreen({ navigation, route }: Props) {
           conversations={conversations.filter((c) => c.id !== conversationId)}
           currentConversationId={conversationId}
           onForward={(targetConversationId) => {
-            if (forwardingMessage) {
-              const text = forwardingMessage.text ?? '';
-              if (text) {
-                sendConversationMessageOnApi(
-                  targetConversationId,
-                  text,
-                  undefined,
-                  undefined,
-                  undefined,
-                  currentUser?.id,
-                )
-                  .then(() => show('Message forwarded', 'success'))
-                  .catch(() => show('Failed to forward message', 'error'));
-              }
-            }
+            const msg = forwardingMessage;
             setForwardSheetVisible(false);
             setForwardingMessage(null);
+            if (!msg) return;
+            // Defence in depth: never claim success for a payload we
+            // can't deliver — media/voice/listing/text are preserved,
+            // everything else is refused outright.
+            if (!isForwardableMessage(msg)) {
+              show("This message can't be forwarded", 'error');
+              return;
+            }
+            forwardMessageToConversation(targetConversationId, msg, currentUser?.id)
+              .then(() => show('Message forwarded', 'success'))
+              .catch(() => show('Failed to forward message', 'error'));
           }}
           onClose={() => {
             setForwardSheetVisible(false);

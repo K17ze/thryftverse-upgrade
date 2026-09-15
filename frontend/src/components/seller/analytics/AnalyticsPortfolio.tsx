@@ -10,7 +10,6 @@ export function AnalyticsPortfolio({ model }: { model: SellerAnalyticsModel }) {
     funnelPipeline,
     funnelBottleneck,
     conversionRate,
-    peerConversionBenchmark,
     periodLabel,
     categoryMix,
     listings,
@@ -50,7 +49,7 @@ export function AnalyticsPortfolio({ model }: { model: SellerAnalyticsModel }) {
             })}
           </View>
 
-          {/* ── Funnel Bottleneck Lever & Peer Benchmark (Shopify 2026 Mobile) ── */}
+          {/* ── Funnel Bottleneck Lever ── */}
           {funnelBottleneck ? (
             <View style={[styles.bottleneckCard, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
               <View style={styles.bottleneckHeaderRow}>
@@ -70,7 +69,7 @@ export function AnalyticsPortfolio({ model }: { model: SellerAnalyticsModel }) {
           {conversionRate != null ? (
             <View style={styles.benchmarkRow}>
               <Text style={[styles.benchmarkLabel, { color: colors.textMuted }]}>
-                Store conversion: <Text style={{ color: colors.textPrimary }}>{conversionRate.toFixed(1)}%</Text> · Top 20% peer benchmark: {peerConversionBenchmark}%
+                Store conversion: <Text style={{ color: colors.textPrimary }}>{conversionRate.toFixed(1)}%</Text>
               </Text>
             </View>
           ) : null}

@@ -6,6 +6,11 @@ import {
   executeListingCommand,
   type ListingCommand,
 } from '../lib/listingCommandService.js';
+import {
+  applyListingFieldPatch,
+  listingEditPatchSchema,
+} from '../lib/listingPatch.js';
+import { isEffectivelyAway } from '../lib/sellerAway.js';
 
 type SellerHubRouteDependencies = {
   app: FastifyInstance;
@@ -34,12 +39,24 @@ async function tableExists(pool: Pool, tableName: string): Promise<boolean> {
 
 interface SellerTask {
   id: string;
-  type: 'ship_order' | 'respond_offer' | 'listing_issue' | 'catalogue_awaiting' | 'payout_hold';
+  type:
+    | 'ship_order'
+    | 'respond_offer'
+    | 'listing_issue'
+    | 'catalogue_awaiting'
+    | 'verification_demand'
+    | 'payout_hold';
   priority: 'critical' | 'high' | 'normal' | 'low';
   count: number;
   dueAt: string | null;
   consequence: { kind: 'money' | 'buyer' | 'trust' | 'listing'; amountGbp?: number } | null;
   actionRoute: string;
+  /**
+   * Optional deep-link params for the action route — emitted so a task tap
+   * lands on the right scope (e.g. MyOrders seller/needs-action, the real
+   * import batch) instead of the route's default surface.
+   */
+  actionParams?: Record<string, unknown>;
   actionLabel: string;
 }
 
@@ -112,12 +129,28 @@ interface SellerOverviewV2 {
     priceGbp: number | null;
     views30d: number;
   }[] | null;
+  /**
+   * Seller's own away state (users.holiday_mode + holiday_mode_until +
+   * away_message), evaluated through the shared isEffectivelyAway
+   * definition — the same predicate commerce gates use. `active` is only
+   * true while the pause is effective; a past return date already expired
+   * it. Null when the source row could not be read.
+   */
+  away: {
+    active: boolean;
+    until: string | null;
+    message: string | null;
+  } | null;
 }
 
 // ── Batch command types ──
 
+type BatchCommand = 'pause' | 'resume' | 'delete' | 'edit';
+
 interface BatchCommandItem {
   listingId: string;
+  /** 'edit' command only — a ListingEditPatch field subset. */
+  patch?: unknown;
 }
 
 interface BatchCommandResult {
@@ -126,6 +159,8 @@ interface BatchCommandResult {
   newStatus?: string;
   reason?: string;
   currentStatus?: string;
+  /** 'edit' command only — the field keys actually written. */
+  appliedFields?: string[];
 }
 
 interface BatchCommandResponse {
@@ -171,6 +206,8 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
       trustAvailable,
       reserveHoldsAvailable,
       interactionsAvailable,
+      importBatchesAvailable,
+      verificationDemandsAvailable,
     ] = await Promise.all([
       tableExists(readDb, 'orders'),
       tableExists(readDb, 'listing_offers'),
@@ -179,6 +216,8 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
       tableExists(readDb, 'seller_trust'),
       tableExists(readDb, 'payout_reserve_holds'),
       tableExists(readDb, 'interactions'),
+      tableExists(readDb, 'catalog_import_batches'),
+      tableExists(readDb, 'coown_verification_demands'),
     ]);
 
     // ── Inventory counts (real, uncapped) ──
@@ -215,14 +254,18 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
     let shipWithinDays: number | null = null;
     let holidayModeUntil: string | null = null;
     let holidayModeSince: string | null = null;
+    let away: SellerOverviewV2['away'] = null;
     if (trustAvailable) {
       try {
         const trustResult = await readDb.query<{
           ship_within_days: number | null;
+          holiday_mode: boolean | null;
           holiday_mode_until: string | null;
           holiday_mode_since: string | null;
+          away_message: string | null;
         }>(
-          `SELECT st.ship_within_days, u.holiday_mode_until, u.holiday_mode_since
+          `SELECT st.ship_within_days, u.holiday_mode_until, u.holiday_mode_since,
+                  u.holiday_mode, u.away_message
            FROM users u
            LEFT JOIN seller_trust st ON st.user_id = u.id
            WHERE u.id = $1 LIMIT 1`,
@@ -231,6 +274,19 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
         shipWithinDays = trustResult.rows[0]?.ship_within_days ?? null;
         holidayModeUntil = trustResult.rows[0]?.holiday_mode_until ?? null;
         holidayModeSince = trustResult.rows[0]?.holiday_mode_since ?? null;
+        // Same effective-away predicate the commerce gates use (lib/
+        // sellerAway.ts) — a past return date already expired the pause, so
+        // the hub never shows a stale away row. until/message are only
+        // meaningful while away is active (mirrors fetchSellerAwayState).
+        const awayActive = isEffectivelyAway(
+          trustResult.rows[0]?.holiday_mode,
+          holidayModeUntil,
+        );
+        away = {
+          active: awayActive,
+          until: awayActive ? holidayModeUntil : null,
+          message: awayActive ? (trustResult.rows[0]?.away_message ?? null) : null,
+        };
         freshness.trust = { asOf: generatedAt, state: 'fresh' };
       } catch {
         freshness.trust = { asOf: generatedAt, state: 'unavailable' };
@@ -318,6 +374,9 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
             dueAt,
             consequence: { kind: 'trust', amountGbp: undefined },
             actionRoute: 'MyOrders',
+            // Deep-link into the seller-side "needs action" scope — the
+            // default MyOrders surface mixes buying + selling on 'all'.
+            actionParams: { tab: 'selling', classification: 'needs_action' },
             actionLabel: 'Ship orders',
           });
         }
@@ -359,7 +418,9 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
             count: offerCount,
             dueAt: nearestExpiry,
             consequence: { kind: 'money', amountGbp: totalOfferValue },
-            actionRoute: 'Inbox',
+            // The Offers surface (received segment) is where a seller can
+            // actually accept/decline/counter — not the unfiltered Inbox.
+            actionRoute: 'Offers',
             actionLabel: 'Review offers',
           });
         }
@@ -438,6 +499,116 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
       }
     } else {
       freshness.payout_holds = { asOf: generatedAt, state: 'unavailable' };
+    }
+
+    // Task 5: Catalogue import awaiting — a non-terminal import batch is
+    // seller work (a paused pipeline, a batch needing review) that was
+    // previously invisible on the hub. The task carries the OLDEST open
+    // batch's real id so the tap lands on CatalogImportProgress directly.
+    if (importBatchesAvailable) {
+      try {
+        const batchesResult = await readDb.query<{
+          count: string;
+          oldest_id: string | null;
+          oldest_created: string | null;
+          awaiting_seller_count: string;
+        }>(
+          `
+          SELECT
+            COUNT(*) AS count,
+            (ARRAY_AGG(id ORDER BY created_at ASC))[1] AS oldest_id,
+            MIN(created_at)::text AS oldest_created,
+            COUNT(*) FILTER (WHERE status = 'awaiting_seller') AS awaiting_seller_count
+          FROM catalog_import_batches
+          WHERE user_id = $1 AND status NOT IN ('completed', 'cancelled')
+        `,
+          [sellerId],
+        );
+        const batchCount = parseInt(batchesResult.rows[0]?.count ?? '0', 10) || 0;
+        const oldestBatchId = batchesResult.rows[0]?.oldest_id ?? null;
+        const oldestCreated = batchesResult.rows[0]?.oldest_created ?? null;
+        const awaitingSellerCount = parseInt(batchesResult.rows[0]?.awaiting_seller_count ?? '0', 10) || 0;
+
+        if (batchCount > 0 && oldestBatchId) {
+          // Priority by age: an open batch older than 7 days (or one the
+          // saga explicitly parked on 'awaiting_seller') outranks routine
+          // listing hygiene; a fresh in-flight batch stays quiet.
+          const ageDays = oldestCreated
+            ? (Date.now() - new Date(oldestCreated).getTime()) / (1000 * 60 * 60 * 24)
+            : 0;
+          tasks.push({
+            id: `catalogue_awaiting_${oldestBatchId}`,
+            type: 'catalogue_awaiting',
+            priority: awaitingSellerCount > 0 || ageDays >= 7 ? 'high' : 'normal',
+            count: batchCount,
+            dueAt: null,
+            consequence: { kind: 'listing' },
+            actionRoute: 'CatalogImportProgress',
+            actionParams: { batchId: oldestBatchId },
+            actionLabel: 'Review import',
+          });
+        }
+        freshness.catalog_imports = { asOf: generatedAt, state: 'fresh' };
+      } catch {
+        freshness.catalog_imports = { asOf: generatedAt, state: 'unavailable' };
+      }
+    } else {
+      freshness.catalog_imports = { asOf: generatedAt, state: 'unavailable' };
+    }
+
+    // Task 6: Verification demands — a pending coown_verification_demands
+    // row is a legal-grade deadline: silence triggers recourse. Emit it as
+    // a hub task so it surfaces outside notification routing. The liable
+    // seller is the custodian on the asset's recourse agreement
+    // (coown_recourse_agreements.seller_id — migration 101).
+    if (verificationDemandsAvailable) {
+      try {
+        const demandsResult = await readDb.query<{
+          count: string;
+          nearest_deadline: string | null;
+          overdue_count: string;
+        }>(
+          `
+          SELECT
+            COUNT(*) AS count,
+            MIN(d.deadline)::text AS nearest_deadline,
+            COUNT(*) FILTER (WHERE d.deadline < NOW()) AS overdue_count
+          FROM coown_verification_demands d
+          JOIN coown_recourse_agreements ra ON ra.asset_id = d.asset_id
+          WHERE ra.seller_id = $1 AND d.status = 'pending'
+        `,
+          [sellerId],
+        );
+        const demandCount = parseInt(demandsResult.rows[0]?.count ?? '0', 10) || 0;
+        const overdueDemands = parseInt(demandsResult.rows[0]?.overdue_count ?? '0', 10) || 0;
+        // Normalise Postgres ::text output to ISO-8601 — the client's due
+        // label parser only accepts a parseable date, and an invalid date
+        // must degrade to no label rather than a thrown render.
+        const nearestDeadlineRaw = demandsResult.rows[0]?.nearest_deadline ?? null;
+        const nearestDeadlineDate = nearestDeadlineRaw ? new Date(nearestDeadlineRaw) : null;
+        const nearestDeadline =
+          nearestDeadlineDate && !Number.isNaN(nearestDeadlineDate.getTime())
+            ? nearestDeadlineDate.toISOString()
+            : null;
+
+        if (demandCount > 0) {
+          tasks.push({
+            id: `verification_demand_${sellerId}`,
+            type: 'verification_demand',
+            priority: overdueDemands > 0 ? 'critical' : 'high',
+            count: demandCount,
+            dueAt: nearestDeadline,
+            consequence: { kind: 'trust' },
+            actionRoute: 'SellerVerification',
+            actionLabel: 'Respond to verification',
+          });
+        }
+        freshness.verification_demands = { asOf: generatedAt, state: 'fresh' };
+      } catch {
+        freshness.verification_demands = { asOf: generatedAt, state: 'unavailable' };
+      }
+    } else {
+      freshness.verification_demands = { asOf: generatedAt, state: 'unavailable' };
     }
 
     // ── Sort tasks by priority ──
@@ -832,6 +1003,7 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
       businessPulse,
       trust,
       opportunities,
+      away,
     };
 
     return { ok: true, overview };
@@ -911,20 +1083,20 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
       reply.code(400);
       return { ok: false, error: 'idempotencyKey is required (min 4 chars)' };
     }
-    if (!['pause', 'resume', 'delete'].includes(body.command)) {
+    if (!['pause', 'resume', 'delete', 'edit'].includes(body.command)) {
       reply.code(400);
-      return { ok: false, error: 'command must be pause, resume, or delete' };
+      return { ok: false, error: 'command must be pause, resume, delete, or edit' };
     }
     if (!Array.isArray(body.items) || body.items.length === 0) {
       reply.code(400);
-      return { ok: false, error: 'items must be a non-empty array of { listingId }' };
+      return { ok: false, error: 'items must be a non-empty array of { listingId, patch? }' };
     }
     if (body.items.length > 200) {
       reply.code(400);
       return { ok: false, error: 'Maximum 200 items per batch' };
     }
 
-    const command: 'pause' | 'resume' | 'delete' = body.command;
+    const command: BatchCommand = body.command;
     const items: BatchCommandItem[] = body.items;
     const idempotencyKey: string = body.idempotencyKey;
     const requestHash: string =
@@ -972,8 +1144,9 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
         status: string;
         reason: string | null;
         current_status: string | null;
+        detail: { appliedFields?: string[] } | null;
       }>(
-        `SELECT listing_id, status, reason, current_status
+        `SELECT listing_id, status, reason, current_status, detail
            FROM listing_batch_items
           WHERE batch_job_id = $1
           ORDER BY created_at`,
@@ -984,6 +1157,7 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
         state: row.status as BatchCommandResult['state'],
         reason: row.reason ?? undefined,
         currentStatus: row.current_status ?? undefined,
+        appliedFields: row.detail?.appliedFields ?? undefined,
       }));
       const hasFailures = results.some((r) => r.state !== 'applied');
       const response: BatchCommandResponse = {
@@ -1048,8 +1222,8 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
         rejectedCount += 1;
         await db.query(
           `INSERT INTO listing_batch_items
-             (job_id, listing_id, state, reason, current_status, new_status)
-           VALUES ($1, $2, 'rejected', 'not_found', NULL, NULL)`,
+             (batch_job_id, listing_id, status, reason, current_status)
+           VALUES ($1, $2, 'rejected', 'not_found', NULL)`,
           [batchId, item.listingId],
         );
         continue;
@@ -1065,40 +1239,86 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
         rejectedCount += 1;
         await db.query(
           `INSERT INTO listing_batch_items
-             (job_id, listing_id, state, reason, current_status, new_status)
-           VALUES ($1, $2, 'rejected', 'forbidden', NULL, NULL)`,
+             (batch_job_id, listing_id, status, reason, current_status)
+           VALUES ($1, $2, 'rejected', 'forbidden', NULL)`,
           [batchId, item.listingId],
         );
         continue;
       }
 
-      const listingCommand: ListingCommand = {
-        type: command,
-        listingId: item.listingId,
-        actorId: sellerId,
-      } as ListingCommand;
-
-      const result = await executeListingCommand(db, listingCommand);
-
       let state: BatchCommandResult['state'];
       let reason: string | undefined;
       let currentStatus: string | undefined;
       let newStatus: string | undefined;
+      let appliedFields: string[] | undefined;
 
-      if (result.status === 'applied') {
-        state = 'applied';
-        newStatus = result.newStatus;
-        appliedCount += 1;
-      } else if (result.status === 'rejected') {
-        state = 'rejected';
-        reason = result.reason;
-        currentStatus = result.currentStatus;
-        rejectedCount += 1;
+      if (command === 'edit') {
+        // Field edit — same allowed-field whitelist as PATCH
+        // /listings/:listingId (status and cover media excluded: lifecycle
+        // transitions must go through the canonical command service and
+        // cover changes require the verified-upload flow).
+        const parsed = listingEditPatchSchema.safeParse(item.patch);
+        if (!parsed.success) {
+          state = 'rejected';
+          reason = 'invalid_patch';
+          rejectedCount += 1;
+        } else {
+          const editResult = await applyListingFieldPatch(db, {
+            listingId: item.listingId,
+            patch: parsed.data,
+            actorId: sellerId,
+            correlationId: request.id,
+          });
+          if (editResult.status === 'applied') {
+            state = 'applied';
+            appliedFields = editResult.appliedFields;
+            currentStatus = editResult.currentStatus;
+            appliedCount += 1;
+          } else if (editResult.status === 'rejected') {
+            state = 'rejected';
+            reason = editResult.reason;
+            currentStatus = editResult.currentStatus;
+            rejectedCount += 1;
+          } else {
+            state = 'conflict';
+            reason = editResult.reason;
+            currentStatus = editResult.currentStatus;
+            conflictCount += 1;
+          }
+        }
       } else {
-        state = 'conflict';
-        reason = result.reason;
-        currentStatus = result.currentStatus;
-        conflictCount += 1;
+        const listingCommand: ListingCommand = {
+          type: command,
+          listingId: item.listingId,
+          actorId: sellerId,
+        } as ListingCommand;
+
+        // The command service enforces the publish-risk gate internally for
+        // any transition targeting 'active' (e.g. batch resume); forward the
+        // request signals so the evaluation sees the same context the
+        // single-listing routes do.
+        const result = await executeListingCommand(db, listingCommand, undefined, {
+          requestContext: {
+            headers: request.headers as Record<string, string | string[] | undefined>,
+            ip: request.ip,
+          },
+        });
+
+        if (result.status === 'applied') {
+          state = 'applied';
+          newStatus = result.newStatus;
+          appliedCount += 1;
+        } else if (result.status === 'rejected') {
+          state = 'rejected';
+          reason = result.reason;
+          currentStatus = result.currentStatus;
+          rejectedCount += 1;
+        } else {
+          state = 'conflict';
+          reason = result.reason;
+          currentStatus = result.currentStatus;
+          conflictCount += 1;
+        }
       }
 
       results.push({
@@ -1107,19 +1327,22 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
         newStatus,
         reason,
         currentStatus,
+        appliedFields,
       });
 
       // Persist the per-item outcome so a replay returns the same receipt.
+      // `detail` carries the applied-field list for edit receipts.
       await db.query(
         `INSERT INTO listing_batch_items
-           (batch_job_id, listing_id, status, reason, current_status)
-         VALUES ($1, $2, $3, $4, $5)`,
+           (batch_job_id, listing_id, status, reason, current_status, detail)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
         [
           batchId,
           item.listingId,
           state,
           reason ?? null,
           currentStatus ?? newStatus ?? null,
+          appliedFields ? JSON.stringify({ appliedFields }) : null,
         ],
       );
     }

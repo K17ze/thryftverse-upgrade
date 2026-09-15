@@ -54,7 +54,7 @@ export default function BrowseScreen() {
   // Two-tier save: tap = quick-save, long-press = file to a collection.
   // The hook also owns the one-shot "Add to a list" teaching toast.
   const { savePickerItemId, handleQuickSave, handleSaveLongPress, closeSavePicker } = useSaveToCollectionPicker();
-  const { listings, isSyncing, lastError, refreshListings } = useBackendData();
+  const { listings, isSyncing, lastError, refreshListings, hasMore, isLoadingMore, loadMoreListings } = useBackendData();
 
   // Grid density preference (AsyncStorage-backed)
   const { gridDensity, handleGridDensityChange } = useBrowseGridDensity();
@@ -69,7 +69,7 @@ export default function BrowseScreen() {
 
   // Route query ↔ browseFilters sync + backend-filtered fetch (effect order
   // preserved: query-sync runs before the fetch effect, as before).
-  const { backendListings, backendLoading, backendError } = useBrowseBackendListings({
+  const { backendListings, backendLoading, backendError, backendHasMore, backendLoadingMore, loadMoreBackendListings } = useBrowseBackendListings({
     categoryId,
     searchQuery,
     refreshTimerRef });
@@ -94,6 +94,16 @@ export default function BrowseScreen() {
     activeSignal: activeBrowseSignal });
 
   const showBrowseLoadingSkeleton = isSyncing && dataToRender.length === 0 && !lastError;
+
+  // Pagination follows the active data path: when backend-filtered results
+  // are displayed, pages advance the filtered cursor; otherwise the shared
+  // listings cursor paginates the client-filtered base list.
+  const gridOnCursorPath = backendListings !== null;
+  const gridHasMore = gridOnCursorPath ? backendHasMore : hasMore;
+  const gridIsLoadingMore = gridOnCursorPath ? backendLoadingMore : isLoadingMore;
+  const handleEndReached = gridOnCursorPath
+    ? loadMoreBackendListings
+    : () => void loadMoreListings();
 
   return (
     <SafeAreaView testID="browse-screen" style={styles.container} edges={['top']}>
@@ -177,12 +187,16 @@ export default function BrowseScreen() {
         lastError={lastError}
         displayListings={displayListings}
         hasAnyFiltering={hasAnyFiltering}
+        categoryId={categoryId}
         gridDensity={gridDensity}
         onClearFilters={handleClearFilters}
         onRetryListings={() => void refreshListings()}
         onItemSaveToggle={handleQuickSave}
         onItemSaveLongPress={handleSaveLongPress}
         isItemSaved={isSavedProduct}
+        onEndReached={handleEndReached}
+        isLoadingMore={gridIsLoadingMore}
+        hasMore={gridHasMore}
       />
 
       {/* ── Save-to-collection picker — long-press a tile bookmark ── */}

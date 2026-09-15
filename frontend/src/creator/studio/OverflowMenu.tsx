@@ -16,7 +16,7 @@ import { Space, Radius, Typography, IconGrammar, Elevation } from '../../theme/d
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
-import { PressScale } from '../CreatorAnimations';
+import { PressScale } from '../shared/CreatorAnimations';
 import { CreatorGlyph, type CreatorGlyphName } from '../controls/CreatorGlyph';
 
 import { AppIcon } from '../../components/common/AppIcon';

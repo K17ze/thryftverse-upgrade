@@ -57,12 +57,18 @@ type PosterRow = {
   created_at: string;
   content_type: string;
   moodboard_id: string | null;
+  media_type: string | null;
+  poster_url: string | null;
+  download_media_url: string | null;
 };
 
 const mapPosterRow = (row: PosterRow) => ({
   id: row.id,
   creatorId: row.creator_id,
   mediaUrl: row.media_url,
+  mediaType: row.media_type,
+  posterUrl: row.poster_url,
+  downloadUrl: row.download_media_url,
   caption: row.caption,
   textOverlay: row.text_overlay
     ? (typeof row.text_overlay === 'string' ? JSON.parse(row.text_overlay) : row.text_overlay)
@@ -77,7 +83,7 @@ const mapPosterRow = (row: PosterRow) => ({
 });
 
 const POSTER_SELECT_COLUMNS = `
-  id, creator_id, media_url, caption, text_overlay, background_color, layout, status, expiry_hours, created_at, content_type, moodboard_id
+  id, creator_id, media_url, caption, text_overlay, background_color, layout, status, expiry_hours, created_at, content_type, moodboard_id, media_type, poster_url, download_media_url
 `;
 
 /**
@@ -98,6 +104,9 @@ export const registerPosterRoutes = ({ app, db, resolveAuthenticatedUserId }: Po
 
     let mediaUrl = payload.mediaUrl;
     let moodboardId: string | null = null;
+    let posterUrl: string | null = null;
+    let downloadMediaUrl: string | null = null;
+    let mediaType: string | null = null;
 
     if (payload.contentType === 'moodboard') {
       if (!payload.moodboardId) {
@@ -138,10 +147,16 @@ export const registerPosterRoutes = ({ app, db, resolveAuthenticatedUserId }: Po
           owner_id: string;
           status: string;
           public_url: string;
+          content_type: string;
+          canonical_url: string | null;
+          asset_poster_url: string | null;
         }>(
-          `SELECT owner_id, status, public_url
-           FROM upload_finalizations
-           WHERE id = $1
+          `SELECT f.owner_id, f.status, f.public_url, f.content_type,
+                  asset.canonical_url,
+                  asset.metadata->>'posterUrl' AS asset_poster_url
+           FROM upload_finalizations f
+           LEFT JOIN media_assets asset ON asset.id = f.media_asset_id
+           WHERE f.id = $1
            LIMIT 1`,
           [payload.mediaFinalizationId]
         );
@@ -158,7 +173,14 @@ export const registerPosterRoutes = ({ app, db, resolveAuthenticatedUserId }: Po
             code: 'MEDIA_RECEIPT_MISMATCH',
           };
         }
-        mediaUrl = receipt.public_url;
+        // Prefer the canonical (processed) URL — for video this is the HLS
+        // master playlist; the progressive upload stays as downloadMediaUrl.
+        mediaUrl = receipt.canonical_url ?? receipt.public_url;
+        mediaType = receipt.content_type.startsWith('video/') ? 'video' : 'image';
+        if (mediaType === 'video') {
+          posterUrl = receipt.asset_poster_url;
+          downloadMediaUrl = receipt.public_url;
+        }
       } else {
         console.warn(
           '[posters] DEPRECATION: POST /posters called without mediaFinalizationId — relying on client-supplied mediaUrl'
@@ -173,8 +195,8 @@ export const registerPosterRoutes = ({ app, db, resolveAuthenticatedUserId }: Po
 
     await db.query(
       `
-        INSERT INTO posters (id, creator_id, media_url, caption, text_overlay, background_color, layout, status, expiry_hours, content_type, moodboard_id)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        INSERT INTO posters (id, creator_id, media_url, caption, text_overlay, background_color, layout, status, expiry_hours, content_type, moodboard_id, media_type, poster_url, download_media_url)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         ON CONFLICT (id) DO UPDATE
         SET media_url = EXCLUDED.media_url,
             caption = EXCLUDED.caption,
@@ -184,7 +206,10 @@ export const registerPosterRoutes = ({ app, db, resolveAuthenticatedUserId }: Po
             status = EXCLUDED.status,
             expiry_hours = EXCLUDED.expiry_hours,
             content_type = EXCLUDED.content_type,
-            moodboard_id = EXCLUDED.moodboard_id
+            moodboard_id = EXCLUDED.moodboard_id,
+            media_type = EXCLUDED.media_type,
+            poster_url = EXCLUDED.poster_url,
+            download_media_url = EXCLUDED.download_media_url
       `,
       [
         payload.id,
@@ -198,6 +223,9 @@ export const registerPosterRoutes = ({ app, db, resolveAuthenticatedUserId }: Po
         payload.expiryHours,
         payload.contentType,
         moodboardId,
+        mediaType,
+        posterUrl,
+        downloadMediaUrl,
       ]
     );
 

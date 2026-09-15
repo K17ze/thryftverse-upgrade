@@ -13,6 +13,7 @@ import { fetchGroupSettingsFromApi } from '../../services/chatApi';
 import {
   buildParticipantAvatarLookup,
   buildParticipantNameLookup,
+  buildParticipantUsernameLookup,
   deriveCurrentRole,
   deriveGroupMembers,
   filterGroupMembers,
@@ -56,6 +57,11 @@ export function useGroupMembersData(conversationId: string): GroupMembersDataRes
     [conversation?.participantProfiles]
   );
 
+  const participantUsernameLookup = useMemo(
+    () => buildParticipantUsernameLookup(conversation?.participantProfiles, currentUser),
+    [conversation?.participantProfiles, currentUser]
+  );
+
   const currentRole = useMemo(
     () => deriveCurrentRole(currentUser?.id, conversation?.ownerId, conversation?.memberRoles),
     [conversation, currentUser?.id]
@@ -86,8 +92,8 @@ export function useGroupMembersData(conversationId: string): GroupMembersDataRes
 
   // Determine roles from memberRoles / ownerId
   const members = useMemo(
-    () => deriveGroupMembers(conversation, currentUser?.id, currentUser?.avatar, participantNameLookup, participantAvatarLookup),
-    [conversation, currentUser?.id, currentUser?.avatar, participantNameLookup, participantAvatarLookup]
+    () => deriveGroupMembers(conversation, currentUser?.id, currentUser?.avatar, participantNameLookup, participantAvatarLookup, participantUsernameLookup),
+    [conversation, currentUser?.id, currentUser?.avatar, participantNameLookup, participantAvatarLookup, participantUsernameLookup]
   );
 
   const filteredMembers = useMemo(

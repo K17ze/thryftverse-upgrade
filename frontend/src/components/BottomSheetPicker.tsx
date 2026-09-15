@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, useWindowDimensions, TextInput } from 'react-native';
 import Reanimated, {
   useSharedValue,
@@ -11,6 +11,7 @@ import { Radius, Space, Elevation } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from './AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useModalFocusManagement } from '../hooks/useModalFocusManagement';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useAppTranslation } from '../i18n/useAppTranslation';
 
@@ -35,6 +36,8 @@ export function BottomSheetPicker({ visible, onClose, title, options, selectedVa
   const overlayOpacity = useSharedValue(0);
   const contextY = useSharedValue(0);
   const reducedMotion = useReducedMotion();
+  const sheetContentRef = useRef<View>(null);
+  useModalFocusManagement({ visible: shouldRender, contentRef: sheetContentRef });
 
   // Derived filtered options
   const filteredOptions = options.filter(o => o?.toLowerCase()?.includes(searchQuery.toLowerCase()) ?? false);
@@ -100,11 +103,17 @@ export function BottomSheetPicker({ visible, onClose, title, options, selectedVa
           activeOpacity={1}
           disableAnimation
           onPress={handleClose}
+          accessibilityRole="button"
+          accessibilityLabel="Close picker"
         />
       </Reanimated.View>
 
       <GestureDetector gesture={gesture}>
-        <Reanimated.View style={[styles.sheet, sheetStyle]}>
+        <Reanimated.View
+          ref={sheetContentRef}
+          style={[styles.sheet, sheetStyle]}
+          accessibilityViewIsModal
+        >
           <View style={styles.handleContainer}>
             <View style={styles.handle} />
           </View>
@@ -122,6 +131,7 @@ export function BottomSheetPicker({ visible, onClose, title, options, selectedVa
                 placeholderTextColor={colors.textMuted}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
+                accessibilityLabel={`Search ${title}`}
               />
             </View>
           )}
@@ -138,6 +148,7 @@ export function BottomSheetPicker({ visible, onClose, title, options, selectedVa
                   onPress={() => handleSelect(opt)}
                   accessibilityRole="button"
                   accessibilityLabel={opt}
+                  accessibilityState={{ selected: selectedValue === opt }}
                 >
                   <Text style={[styles.optionText, selectedValue === opt && styles.optionTextActive]}>{opt}</Text>
                   {selectedValue === opt && <Ionicons name="checkmark-circle" size={24} color={colors.brand} aria-hidden={true} />}

@@ -64,6 +64,22 @@ export interface Listing {
   likes: number;
   views?: number;
   isBumped?: boolean;
+  /**
+   * Paid-placement marker — true only when the backend stamped this listing
+   * as a promoted ("Sponsored") slot. The client never infers sponsorship.
+   */
+  promoted?: boolean;
+  /**
+   * Server-generated disclosure label (e.g. "Sponsored"). Rendered verbatim
+   * only when present — never synthesised from `promoted` or `isBumped`.
+   */
+  disclosure?: string | null;
+  /**
+   * Promotion id on promoted units only — posted to /promotions/:id/click
+   * on tap-through so seller stats count real taps. Never present on
+   * organic units.
+   */
+  promotionId?: string | null;
   isSold?: boolean;
   sellerId: string | null;
   seller?: ListingSeller | null;
@@ -106,6 +122,13 @@ interface ApiListingRow {
   seller?: ListingSeller | null;
   /** Pinned/featured listing — shown first in the Shop grid when true. */
   featured?: boolean | null;
+  /** Server-stamped paid-placement flag on sponsored feed units. */
+  promoted?: boolean | null;
+  /** Server-generated disclosure label ("Sponsored") — verbatim only. */
+  disclosure?: string | null;
+  /** Promotion id on promoted units — posted to /promotions/:id/click on
+   *  tap-through. Absent on organic rows. */
+  promotionId?: string | null;
   sustainabilityGrade?: 'A' | 'B' | 'C' | 'D' | null;
   materialComposition?: string | null;
   weightKg?: number | null;
@@ -438,6 +461,11 @@ export interface ListingApiItem {
    *  `attachmentOrder` and `removedAttachmentIds` manifests. Carries the
    *  full media contract (derivatives, blurhash/LQIP, focal point, poster). */
   media?: ListingMediaRecord[];
+  /** PDP item-detail projection — real `listings` columns selected by the
+   *  detail endpoint for the Item Details evidence card. */
+  sustainabilityGrade?: 'A' | 'B' | 'C' | 'D' | null;
+  materialComposition?: string | null;
+  weightKg?: number | null;
 }
 
 export interface ListingSoldComparables {
@@ -474,12 +502,12 @@ export interface ListingQuestionApi {
   id: string;
   listingId: string;
   askerId: string;
-  askerName?: string;
+  askerName?: string | null;
   text: string;
   createdAt: string;
   answer: {
     text: string;
-    responderName: string;
+    responderName: string | null;
     createdAt: string;
   } | null;
 }
@@ -513,12 +541,27 @@ export interface ListingCommerceServerContext {
     summary: string;
   } | null;
   returnPolicy: {
-    accepted: boolean;
-    windowDays?: number;
-    conditions?: string;
+    /**
+     * Tri-state from the PDP endpoint: `true` = accepted, `false` =
+     * explicitly not accepted, `null` = not yet determined (confirmed at
+     * checkout). The server always emits `accepted: null` today alongside
+     * a human-readable `summary` — null must never render as "not
+     * accepted".
+     */
+    accepted: boolean | null;
+    windowDays?: number | null;
+    conditions?: string | null;
+    /** Server-authored explanation shown when `accepted` is null. */
+    summary?: string | null;
   } | null;
   authenticity: {
-    status: 'not_offered' | 'eligible' | 'verified';
+    /**
+     * Mirrors the backend authentication pipeline binding
+     * (auth:listing:{id}:latest): 'verified' only when a badge is persisted,
+     * 'in_progress' while a request is live in the pipeline, 'eligible' when
+     * verification is available but not requested, 'not_offered' otherwise.
+     */
+    status: 'not_offered' | 'eligible' | 'in_progress' | 'verified';
     label?: string;
   } | null;
 }
@@ -535,13 +578,14 @@ export interface ListingsResponse {
   nextCursor?: string | null;
 }
 
+// Idempotency is keyed on the client-generated `body.id` — POST /listings
+// upserts with ON CONFLICT (id). No Idempotency-Key header: the backend
+// never read it, and sending it implied a header-keyed contract that does
+// not exist.
 export async function createListingOnApi(body: ListingCreateBody): Promise<{ ok: boolean; listingId: string }> {
   return fetchJson<{ ok: boolean; listingId: string }>('/listings', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Idempotency-Key': body.id,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
 }

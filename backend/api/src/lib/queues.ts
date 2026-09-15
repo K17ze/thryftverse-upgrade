@@ -72,6 +72,18 @@ export interface ScheduledPublicationSweepJobData {
   reason: 'scheduled' | 'manual';
 }
 
+export interface MediaIngestReconcileJobData {
+  reason: 'scheduled' | 'manual';
+}
+
+export interface MultipartSessionSweepJobData {
+  reason: 'scheduled' | 'manual';
+}
+
+export interface OrphanUploadIntentSweepJobData {
+  reason: 'scheduled' | 'manual';
+}
+
 export interface BackupExpiryJobData {
   reason: 'scheduled' | 'manual';
 }
@@ -217,7 +229,10 @@ type InfraJobData =
   | BackupExpiryJobData
   | DsarExportJobData
   | SellerTrustRecomputeJobData
-  | FeedbackEvaluationJobData;
+  | FeedbackEvaluationJobData
+  | MediaIngestReconcileJobData
+  | MultipartSessionSweepJobData
+  | OrphanUploadIntentSweepJobData;
 
 interface QueueHandlers {
   handlePushJob: (job: PushJobData) => Promise<void>;
@@ -238,6 +253,9 @@ interface QueueHandlers {
   handleDsarExportJob: (job: DsarExportJobData) => Promise<void>;
   handleSellerTrustRecomputeJob: (job: SellerTrustRecomputeJobData) => Promise<void>;
   handleFeedbackEvaluationJob: (job: FeedbackEvaluationJobData) => Promise<void>;
+  handleMediaIngestReconcileJob: (job: MediaIngestReconcileJobData) => Promise<void>;
+  handleMultipartSessionSweepJob: (job: MultipartSessionSweepJobData) => Promise<void>;
+  handleOrphanUploadIntentSweepJob: (job: OrphanUploadIntentSweepJobData) => Promise<void>;
   handleMediaIngestJob: (job: MediaIngestJobData) => Promise<void>;
   handleMediaEmbeddingJob: (job: MediaEmbeddingJobData) => Promise<void>;
   handleModerationTriageJob: (job: ModerationTriageJobData) => Promise<void>;
@@ -560,6 +578,12 @@ export function startBackgroundWorkers(
             await handlers.handleSellerTrustRecomputeJob(job.data as SellerTrustRecomputeJobData);
           } else if (job.name === 'feedback_evaluation') {
             await handlers.handleFeedbackEvaluationJob(job.data as FeedbackEvaluationJobData);
+          } else if (job.name === 'media_ingest_reconcile') {
+            await handlers.handleMediaIngestReconcileJob(job.data as MediaIngestReconcileJobData);
+          } else if (job.name === 'multipart_session_sweep') {
+            await handlers.handleMultipartSessionSweepJob(job.data as MultipartSessionSweepJobData);
+          } else if (job.name === 'orphan_upload_intent_sweep') {
+            await handlers.handleOrphanUploadIntentSweepJob(job.data as OrphanUploadIntentSweepJobData);
           }
 
           const durationMs = Date.now() - jobStart;
@@ -1233,12 +1257,21 @@ export async function enqueueScheduledPublicationSweepJob(
   );
 }
 
-export async function enqueueMediaIngestJob(input: MediaIngestJobData): Promise<void> {
+export async function enqueueMediaIngestJob(
+  input: MediaIngestJobData,
+  opts?: { jobId?: string },
+): Promise<void> {
   await mediaIngestQueue.add(
     'media_ingest',
     input,
     {
-      jobId: `media_ingest_${input.assetId}`,
+      // `media_ingest_${assetId}` is the natural dedupe key. Callers that
+      // must resurrect an asset whose retained failed job would suppress
+      // the default id (removeOnFail keeps the record — and its jobId —
+      // for 200 entries) pass a distinct jobId; the DB claim inside the
+      // pipeline remains the real arbiter, so a duplicate drive is a
+      // harmless no-op.
+      jobId: opts?.jobId ?? `media_ingest_${input.assetId}`,
       attempts: 5,
       backoff: {
         type: 'exponential',
@@ -1246,6 +1279,75 @@ export async function enqueueMediaIngestJob(input: MediaIngestJobData): Promise<
       },
       removeOnComplete: true,
       removeOnFail: 200,
+    },
+  );
+}
+
+export async function enqueueMediaIngestReconcileJob(
+  reason: MediaIngestReconcileJobData['reason'] = 'scheduled',
+): Promise<void> {
+  // One-minute bucket: overlapping schedulers (API + deploy overlap)
+  // collapse into a single sweep run.
+  const timeBucket = Math.floor(Date.now() / 60_000);
+  await infraQueue.add(
+    'media_ingest_reconcile',
+    { reason },
+    {
+      jobId: `media_ingest_reconcile_${reason}_${timeBucket}`,
+      attempts: 2,
+      backoff: {
+        type: 'exponential',
+        delay: 15_000,
+      },
+      removeOnComplete: true,
+      // Bound failed-record retention — a retained failure must not
+      // suppress the rest of the bucket's sweep (same hazard as
+      // seller_trust_recompute / feedback_evaluation).
+      removeOnFail: { age: 5 * 60, count: 100 },
+    },
+  );
+}
+
+export async function enqueueMultipartSessionSweepJob(
+  reason: MultipartSessionSweepJobData['reason'] = 'scheduled',
+): Promise<void> {
+  // Five-minute bucket — expired-session cleanup is hygiene, not latency-
+  // sensitive, and overlapping schedulers collapse into one run.
+  const timeBucket = Math.floor(Date.now() / (5 * 60 * 1000));
+  await infraQueue.add(
+    'multipart_session_sweep',
+    { reason },
+    {
+      jobId: `multipart_session_sweep_${reason}_${timeBucket}`,
+      attempts: 2,
+      backoff: {
+        type: 'exponential',
+        delay: 30_000,
+      },
+      removeOnComplete: true,
+      removeOnFail: { age: 5 * 60, count: 100 },
+    },
+  );
+}
+
+export async function enqueueOrphanUploadIntentSweepJob(
+  reason: OrphanUploadIntentSweepJobData['reason'] = 'scheduled',
+): Promise<void> {
+  // Five-minute bucket — orphan collection is hygiene, not
+  // latency-sensitive, and overlapping schedulers collapse into one run.
+  const timeBucket = Math.floor(Date.now() / (5 * 60 * 1000));
+  await infraQueue.add(
+    'orphan_upload_intent_sweep',
+    { reason },
+    {
+      jobId: `orphan_upload_intent_sweep_${reason}_${timeBucket}`,
+      attempts: 2,
+      backoff: {
+        type: 'exponential',
+        delay: 30_000,
+      },
+      removeOnComplete: true,
+      removeOnFail: { age: 5 * 60, count: 100 },
     },
   );
 }

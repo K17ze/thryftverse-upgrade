@@ -1249,7 +1249,8 @@
       "stream": "Demo stream"
     },
     "video": {
-      "connecting": "Connecting to stream..."
+      "connecting": "Connecting to stream...",
+      "a11yLabel": "Live video"
     },
     "seller": {
       "following": "Following",
@@ -1308,6 +1309,9 @@
     "featured": {
       "currentBid": "Current bid"
     },
+    "card": {
+      "currentBid": "Current bid"
+    },
     "replay": {
       "justEnded": "Just ended",
       "hoursAgo": "{{count}}h ago",
@@ -1317,7 +1321,8 @@
       "waiting": "waiting",
       "notified": "Notified",
       "notifyMe": "Notify me",
-      "startingSoon": "Starting soon"
+      "startingSoon": "Starting soon",
+      "remindFailed": "Couldn't update the reminder — try again."
     },
     "scheduled": {
       "inMinutes": "In {{minutes}} min · {{time}}",

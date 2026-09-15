@@ -22,7 +22,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { Scrim, IconGrammar } from '../../theme/designTokens';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { PressScale } from '../CreatorAnimations';
+import { PressScale } from '../shared/CreatorAnimations';
 import type { useHaptic } from '../../hooks/useHaptic';
 import type { ActiveSheet } from './useActiveSheet';
 

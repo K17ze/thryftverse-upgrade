@@ -916,9 +916,24 @@ export async function fetchJson<T>(
     mergedInit.method !== undefined &&
     ['POST', 'PUT', 'DELETE', 'PATCH'].includes(mergedInit.method.toUpperCase());
 
+  // Orchestrated publish/schedule commands carry their own idempotency-key
+  // and persisted attempt-store recovery. They must NOT enter the generic
+  // FIFO offline queue — a blind replay would double-publish or resurrect a
+  // superseded schedule after the UI already resolved the attempt.
+  const isOrchestratedMutation = /\/creator\/documents\/[^/]+\/(publications|schedule)\/?$/.test(path);
+
   if (isWriteMethod) {
     const networkState = await Network.getNetworkStateAsync();
     if (networkState.isInternetReachable === false) {
+      if (isOrchestratedMutation) {
+        // Offline before send — the outcome is unknown (the request may
+        // reconcile via its idempotency key), NOT queued-for-replay.
+        throw new ApiRequestError(
+          'You are offline. The publication was not sent — check the result when you reconnect.',
+          undefined,
+          { code: 'OFFLINE_UNREACHABLE', status: 'unknown' }
+        );
+      }
       // Offline before the request even leaves the device: enqueue the write
       // mutation for later replay via the offline queue (WS33) so the user's
       // intent is preserved across connectivity gaps. The thrown error carries
@@ -980,6 +995,16 @@ export async function fetchJson<T>(
         throw error;
       }
       if (isWriteMethod) {
+        if (isOrchestratedMutation) {
+          // Mid-flight drop — the request may have committed. The
+          // orchestrator's keyed reconciliation resolves the outcome; a
+          // blind FIFO replay must never fire a second publish/schedule.
+          throw new ApiRequestError(
+            'The connection dropped before the server confirmed the result — the outcome will be reconciled on reconnect.',
+            undefined,
+            { code: 'OFFLINE_UNREACHABLE', status: 'unknown' }
+          );
+        }
         // The connection dropped mid-flight before the server confirmed the
         // result. Enqueue the mutation for replay so the user does not lose
         // the action — the offline queue (WS33) will retry with its own
@@ -1020,10 +1045,11 @@ export async function fetchJson<T>(
       } else {
         // Token refresh failed — session is no longer valid. Trigger a
         // lazy logout so the navigator remounts to AuthLanding instead of
-        // leaving the user on a screen with stale auth state.
+        // leaving the user on a screen with stale auth state. Flag the
+        // expiry so the landing screen can say WHY, not just redirect.
         try {
           const { useStore } = await import('../store/useStore');
-          useStore.getState().logout();
+          useStore.getState().logout({ sessionExpired: true });
         } catch {
           // Store not available (e.g. during app bootstrap) — safe to ignore.
         }
@@ -1181,7 +1207,7 @@ export async function fetchWithAuth(
     } else {
       try {
         const { useStore } = await import('../store/useStore');
-        useStore.getState().logout();
+        useStore.getState().logout({ sessionExpired: true });
       } catch {
         // Store not available (e.g. during app bootstrap) — safe to ignore.
       }

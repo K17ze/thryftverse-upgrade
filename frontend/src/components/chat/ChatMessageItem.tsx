@@ -187,31 +187,6 @@ export function ChatMessageItem({
       backgroundColor: colors.brand,
       borderColor: colors.brand },
 
-    unreadDividerWrap: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      marginVertical: Space.sm,
-      paddingHorizontal: Space.md },
-
-    unreadDividerLine: {
-      flex: 1,
-      height: StyleSheet.hairlineWidth,
-      backgroundColor: colors.brand },
-
-    unreadDividerBadge: {
-      paddingHorizontal: Space.sm + 2,
-      paddingVertical: Space.xs,
-      borderRadius: Radius.full,
-      backgroundColor: colors.brandSubtle },
-
-    unreadDividerText: {
-      fontSize: TypographyV2.meta.size,
-      fontFamily: TypographyV2.meta.fontFamily,
-      color: colors.brand,
-      letterSpacing: 0.3,
-      textTransform: 'uppercase' },
-
     tombstone: {
       flexDirection: "row",
       alignItems: "center",
@@ -276,19 +251,24 @@ export function ChatMessageItem({
       </View>
     ) : null;
 
-  // Unread divider — "New messages" separator between read and unread
-  const showUnreadDivider = unreadDividerIndex === index && unreadDividerIndex > 0;
-  const unreadDivider = showUnreadDivider ? (
-    <View style={styles.unreadDividerWrap}>
-      <View style={styles.unreadDividerLine} />
-      <View style={styles.unreadDividerBadge}>
-        <Text style={styles.unreadDividerText}>New messages</Text>
-      </View>
-      <View style={styles.unreadDividerLine} />
-    </View>
-  ) : null;
+  // Unread divider — "New messages" banner above the first unread
+  // incoming message. The index is resolved upstream from a snapshotted
+  // message id (useUnreadDividerAnchor), so cursor-pagination prepends
+  // keep it anchored to the same message. Index 0 is a valid anchor: a
+  // fully-unread conversation still shows the banner at the top.
+  const showUnreadDivider = unreadDividerIndex === index && index >= 0;
+  const unreadDivider = showUnreadDivider ? <UnreadMessagesDivider /> : null;
 
-  const separator = unreadDivider ?? dateSeparator;
+  // Both separators may land on the same index (a day boundary that is
+  // also the read boundary) — the date pill labels the section, the
+  // unread banner hugs the first unread message.
+  const separatorBlock =
+    dateSeparator || unreadDivider ? (
+      <>
+        {dateSeparator}
+        {unreadDivider}
+      </>
+    ) : null;
 
   const isMe = msg.sender === "me";
 
@@ -330,9 +310,9 @@ export function ChatMessageItem({
     ) : (
       <View key={msg.id}>{tombstoneBody}</View>
     );
-    return separator ? (
+    return separatorBlock ? (
       <View key={msg.id + "_group"}>
-        {separator}
+        {separatorBlock}
         {tombstone}
       </View>
     ) : (
@@ -356,9 +336,9 @@ export function ChatMessageItem({
         onOfferExpired={onOfferExpired}
       />
     );
-    return dateSeparator ? (
+    return separatorBlock ? (
       <View key={msg.id + "_group"}>
-        {dateSeparator}
+        {separatorBlock}
         {content}
       </View>
     ) : (
@@ -429,16 +409,22 @@ export function ChatMessageItem({
                 ? "sending"
                 : msg.status === "failed"
                   ? "failed"
-                  : msg.uploadStatus === "uploading"
-                    ? "sending"
-                    : msg.uploadStatus === "failed"
-                      ? "failed"
-                      : "sent"
+                  : msg.status === "reconciling"
+                    ? "reconciling"
+                    : msg.uploadStatus === "uploading"
+                      ? "sending"
+                      : msg.uploadStatus === "failed"
+                        ? "failed"
+                        : "sent"
               : msg.isAgent && (msg.status === "sending" || msg.status === "failed")
                 ? msg.status
                 : undefined
           }
-          readStatus={isMe ? msg.readStatus : undefined}
+          // While reconciling, a stale 'sent' readStatus must not override
+          // the honest pending glyph — the server has not confirmed the row.
+          readStatus={
+            isMe && msg.status !== "reconciling" ? msg.readStatus : undefined
+          }
           readBy={msg.readBy}
           isEdited={msg.isEdited === true}
           isSaved={msg.isSavedInChat === true}
@@ -488,6 +474,7 @@ export function ChatMessageItem({
             reactedByMe: r.reactedByMe ?? false,
           }))}
           mediaUri={msg.mediaUri}
+          posterUri={msg.posterUri}
           mediaType={msg.mediaType}
           uploadStatus={msg.uploadStatus}
           voiceDurationMs={msg.voiceDurationMs}
@@ -549,10 +536,10 @@ export function ChatMessageItem({
     </View>
   );
 
-  if (showDateSeparator && dateLabel) {
+  if (separatorBlock) {
     return (
       <View key={msg.id + "_group"}>
-        {dateSeparator}
+        {separatorBlock}
         <SwipeableMessage
           isMe={isMe}
           onReply={() => onSwipeReply(msg)}
@@ -575,3 +562,47 @@ export function ChatMessageItem({
     </SwipeableMessage>
   );
 }
+
+/**
+ * "New messages" banner — the read/unread boundary marker rendered above
+ * the first unread incoming message. Exported so GroupChatScreen (which
+ * renders its own rows, not ChatMessageItem) shares the same grammar.
+ */
+export function UnreadMessagesDivider() {
+  const { colors } = useAppTheme();
+  return (
+    <View
+      style={dividerStyles.wrap}
+      accessibilityLabel="New messages"
+      accessibilityRole="text"
+    >
+      <View style={[dividerStyles.line, { backgroundColor: colors.brand }]} />
+      <View style={[dividerStyles.badge, { backgroundColor: colors.brandSubtle }]}>
+        <Text style={[dividerStyles.text, { color: colors.brand }]}>
+          New messages
+        </Text>
+      </View>
+      <View style={[dividerStyles.line, { backgroundColor: colors.brand }]} />
+    </View>
+  );
+}
+
+const dividerStyles = StyleSheet.create({
+  wrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    marginVertical: Space.sm,
+    paddingHorizontal: Space.md },
+  line: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth },
+  badge: {
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs,
+    borderRadius: Radius.full },
+  text: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase' } });

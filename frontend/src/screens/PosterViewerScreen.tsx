@@ -73,9 +73,9 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring } from 'react-native-reanimated';
-import { safeValidateDocument, type CreatorDocument, type CreatorLayer } from '../creator/composition';
-import { pageWithRenderedMedia } from '../creator/renderedViewDocument';
-import { CreatorCanvas } from '../creator/CreatorCanvas';
+import { safeValidateDocument, type CreatorDocument, type CreatorLayer } from '../creator/core/projectStore/composition';
+import { pageWithRenderedMedia } from '../creator/export/renderedViewDocument';
+import { CreatorCanvas } from '../creator/studio/CreatorCanvas';
 import * as Clipboard from 'expo-clipboard';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -421,12 +421,17 @@ export default function PosterViewerScreen() {
     const nextFrame = activeStory.frames[frameIndex + 1];
     if (nextFrame?.mediaUrl && !isVideoUrl(nextFrame.mediaUrl)) {
       Image.prefetch(nextFrame.mediaUrl).catch((err: unknown) => { Sentry.captureException?.(err); });
+    } else if (nextFrame?.posterUrl) {
+      // Video frames preload their poster still — the m3u8 itself streams.
+      Image.prefetch(nextFrame.posterUrl).catch((err: unknown) => { Sentry.captureException?.(err); });
     }
 
     const nextStory = stories[storyIndex + 1];
     const nextStoryFirstFrame = nextStory?.frames[0];
     if (nextStoryFirstFrame?.mediaUrl && !isVideoUrl(nextStoryFirstFrame.mediaUrl)) {
       Image.prefetch(nextStoryFirstFrame.mediaUrl).catch((err: unknown) => { Sentry.captureException?.(err); });
+    } else if (nextStoryFirstFrame?.posterUrl) {
+      Image.prefetch(nextStoryFirstFrame.posterUrl).catch((err: unknown) => { Sentry.captureException?.(err); });
     }
   }, [activeStory, frameIndex, stories, storyIndex]);
 
@@ -686,8 +691,17 @@ export default function PosterViewerScreen() {
   // then saves via MediaLibrary. Requires media-library write permission;
   // on denial we surface an honest toast rather than silently failing.
   const handleSaveToCameraRoll = async () => {
-    const uri = activeFrame?.mediaUrl;
+    // Prefer the progressive MP4 — mediaUrl may be an m3u8 playlist for
+    // processed/rendered video, which saves as playlist text, not video.
+    const uri = activeFrame?.downloadUrl ?? activeFrame?.mediaUrl;
     if (!uri) return;
+    if (/\.m3u8(\?|#|$)/i.test(uri)) {
+      // Adaptive playlist with no progressive fallback on the row (e.g.
+      // frames published before download_media_url existed) — saving it
+      // would store playlist text, not a playable video.
+      show('Save unavailable for this video', 'info');
+      return;
+    }
     haptic.light();
     try {
       const perm = await MediaLibrary.requestPermissionsAsync(true);
@@ -879,6 +893,8 @@ export default function PosterViewerScreen() {
           isMuted={isMuted}
           isLooping={false}
           resizeMode="cover"
+          usePoster={!!activeFrame.posterUrl}
+          posterSource={activeFrame.posterUrl ? { uri: activeFrame.posterUrl } : undefined}
           onLoad={() => setIsBuffering(false)}
           onError={() => { setMediaError(true); setIsBuffering(false); }}
         />

@@ -57,6 +57,7 @@ const TASK_ICON: Record<SellerHubTaskType, { concept?: IconConcept; name?: Seman
   respond_offer: { concept: 'chat' },
   listing_issue: { concept: 'edit' },
   catalogue_awaiting: { name: 'download' },
+  verification_demand: { concept: 'shield' },
   payout_hold: { concept: 'wallet' },
 };
 
@@ -100,6 +101,11 @@ function isUrgentDue(dueLabel: string | null): boolean {
 
 function consequenceCopy(task: SellerHubTask): string {
   if (task.type === 'ship_order') return 'Payout held.';
+  // Task-type copy where the generic kind language would misstate the risk:
+  // a verification demand risks recourse, not rating; an open import batch
+  // is paused pipeline work, not restricted visibility.
+  if (task.type === 'verification_demand') return 'Recourse risk if missed.';
+  if (task.type === 'catalogue_awaiting') return 'Import in progress.';
   switch (task.consequence?.kind) {
     case 'money':
       return 'Payout held.';

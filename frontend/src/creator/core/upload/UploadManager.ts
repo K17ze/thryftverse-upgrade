@@ -1,10 +1,11 @@
 import * as FileSystem from 'expo-file-system/legacy';
-import { fetchJson } from '../../../lib/apiClient';
-import { finalizePresignedMedia, waitForPublishableMedia } from '../../../services/mediaUpload';
-import { xhrPutFile } from '../../../platform/media/xhrUploadTransport';
+import * as MediaLibrary from 'expo-media-library/legacy';
+import { ApiRequestError, fetchJson } from '../../../lib/apiClient';
+import { finalizePresignedMedia, MediaProcessingError, waitForPublishableMedia } from '../../../services/mediaUpload';
+import { putFile } from '../../../platform/media/nativeUploadTransport';
 import { createStableId } from '../../../utils/createStableId';
 import { detectMimeType, deriveFileName } from './MimeDetector';
-import { MultipartUploader } from './MultipartUploader';
+import { MultipartUploader, UploadContractError } from './MultipartUploader';
 import type { UploadJobStore } from './UploadJobStore';
 import type {
   UploadEvent,
@@ -15,6 +16,10 @@ import type {
   ProjectProgress,
 } from './UploadTypes';
 import { MULTIPART_THRESHOLD_BYTES, STALL_THRESHOLD_MS } from './UploadTypes';
+
+/** Terminal jobs (completed/failed) are purged from the store once their
+ *  last update is this old — they carry no recovery value beyond it. */
+const TERMINAL_JOB_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** Base delay (ms) for exponential backoff between retry attempts. */
 const BASE_BACKOFF_MS = 1000;
@@ -57,17 +62,17 @@ interface UploadAttemptResult {
  *
  * Replaces the previous whole-Blob PUT with:
  *
- * - **Correct MIME** — `MimeDetector` derives the real type from the
+ * - **Correct MIME** â€” `MimeDetector` derives the real type from the
  *   file extension. Never `image/*` for video.
- * - **Real file size** — `expo-file-system.getInfoAsync` resolves the
+ * - **Real file size** â€” `expo-file-system.getInfoAsync` resolves the
  *   actual byte count. Never 0.
- * - **Real byte progress** — `XMLHttpRequest.upload.onprogress` reports
+ * - **Real byte progress** â€” `XMLHttpRequest.upload.onprogress` reports
  *   actual transmitted bytes / total bytes. No fake interpolation.
- * - **Multipart (resumable)** — when the backend supports it and the
+ * - **Multipart (resumable)** â€” when the backend supports it and the
  *   file exceeds the threshold, `MultipartUploader` splits the file
  *   into 5 MB parts. On failure, only the failed part is retried. On
  *   app restart, completed parts (with ETags) are skipped.
- * - **Single-PUT (retryable)** — when multipart is unavailable or the
+ * - **Single-PUT (retryable)** â€” when multipart is unavailable or the
  *   file is small, a single XHR PUT with real progress is used. On
  *   failure, the whole file is re-uploaded. This is honestly labeled
  *   "Retryable", not "Resumable".
@@ -75,7 +80,7 @@ interface UploadAttemptResult {
  * ## Idempotency
  *
  * Duplicate `queueUpload` calls for the same `(projectId, assetId,
- * localPath)` are de-duplicated — the existing job ID is returned
+ * localPath)` are de-duplicated â€” the existing job ID is returned
  * instead of creating a duplicate upload.
  *
  * ## Background behaviour
@@ -84,7 +89,7 @@ interface UploadAttemptResult {
  * uploads in-flight will be paused by the OS and may fail on resume.
  * The manager retries automatically. True background upload (surviving
  * process kill) requires a native module (e.g. `react-native-s3-bg-uploader`
- * or `expo-file-system` upload tasks with background session) — see the
+ * or `expo-file-system` upload tasks with background session) â€” see the
  * "Future work" section in the module report.
  */
 export class UploadManager {
@@ -103,14 +108,14 @@ export class UploadManager {
   private lastProgressPersistMs = 0;
   /** Multipart uploader (lazy-initialised). */
   private multipartUploader: MultipartUploader;
-  /** Whether multipart transport is enabled. Defaults to true — the backend
+  /** Whether multipart transport is enabled. Defaults to true â€” the backend
    *  exposes /uploads/multipart/* endpoints for resumable large-file uploads. */
   private multipartEnabled: boolean;
   /** Interval handle for the periodic stall-detection checker. Stored so it
    *  could be cleared if the manager is ever torn down. */
   private stallCheckInterval: ReturnType<typeof setInterval> | undefined;
   private hydrationPromise: Promise<void> | null = null;
-  /** Connectivity gate — while false no new jobs start and in-flight
+  /** Connectivity gate â€” while false no new jobs start and in-flight
    *  uploads are aborted back to 'queued' so they resume on reconnect.
    *  Defaults true; the host wires real NetInfo state via `setOnline`. */
   private isOnline = true;
@@ -118,6 +123,16 @@ export class UploadManager {
    *  (as opposed to a user pause or cancel). `processJob` consults this so
    *  the unwinding attempt leaves the job 'queued' instead of 'failed'. */
   private readonly offlineAborted = new Set<string>();
+  /** In-flight `queueUpload` calls keyed by the dedup tuple — closes the
+   *  async gap between the existing-job check and job insertion. */
+  private readonly pendingEnqueues = new Map<string, Promise<string>>();
+  /** Rolling throughput samples per job: (timestamp, cumulative bytes)
+   *  pairs kept for ~4s so ETA is a real rate, not a point estimate.
+   *  Entries are dropped when a job reaches a terminal state. */
+  private readonly throughputSamples = new Map<string, { t: number; bytes: number }[]>();
+  /** Last emitted progress snapshot per job — lets consumers aggregate
+   *  throughput/ETA without subscribing to every tick. */
+  private readonly progressSnapshots = new Map<string, UploadProgress>();
 
   constructor(
     jobStore: UploadJobStore,
@@ -145,14 +160,32 @@ export class UploadManager {
    * file size, initialises state and timestamps. Returns the job id.
    *
    * **Idempotent**: if a job already exists for the same `(projectId,
-   * assetId, localPath)`, the existing job id is returned — no duplicate
+   * assetId, localPath)`, the existing job id is returned â€” no duplicate
    * upload is created. This prevents duplicate Publish taps from
    * creating duplicate remote objects.
    *
-   * Does not start processing — call `processQueue()` (or rely on
+   * Does not start processing â€” call `processQueue()` (or rely on
    * auto-processing) to begin.
    */
   async queueUpload(params: QueueUploadParams): Promise<string> {
+    // In-flight dedup: the existing-job check below happens before the
+    // async `resolveFileSize` call, so two concurrent calls for the same
+    // asset would both pass it and create duplicate jobs. Join on a
+    // shared promise keyed by the same (projectId, assetId, localPath)
+    // tuple `findExistingJob` uses, so the second caller waits for the
+    // first and then sees its job in the cache.
+    const dedupeKey = `${params.projectId}:${params.assetId}:${params.localPath}`;
+    const pending = this.pendingEnqueues.get(dedupeKey);
+    if (pending) return pending;
+
+    const task = this.queueUploadInner(params).finally(() => {
+      this.pendingEnqueues.delete(dedupeKey);
+    });
+    this.pendingEnqueues.set(dedupeKey, task);
+    return task;
+  }
+
+  private async queueUploadInner(params: QueueUploadParams): Promise<string> {
     await this.hydrate();
 
     // Idempotency: check for an existing job with the same key.
@@ -161,7 +194,7 @@ export class UploadManager {
       // Jobs completed by the former manager contain only the raw presign
       // URL. They are not trusted publication receipts and must pass through
       // the verified upload flow before they can be reused.
-      if (existingJob.status === 'completed' && !existingJob.finalizationId) {
+      if (existingJob.status === 'completed' && (!existingJob.finalizationId || !existingJob.remoteUrl)) {
         await this.persistState(existingJob.id, {
           status: 'queued',
           progress: 0,
@@ -237,14 +270,14 @@ export class UploadManager {
   /**
    * Update the connectivity gate.
    *
-   * - **Going offline** — every in-flight upload's AbortController fires;
+   * - **Going offline** â€” every in-flight upload's AbortController fires;
    *   its owning `processJob` unwinds and leaves the job `queued` (waiting
-   *   for connectivity — not `paused`, which is user intent, and not
+   *   for connectivity â€” not `paused`, which is user intent, and not
    *   `failed`, which is a real error). The `activeUploads` entries are
    *   removed by each `processJob`'s `finally` block, so a reconnect that
    *   lands mid-unwind can never start a duplicate attempt: `pickNextJob`
    *   still skips the job until the old attempt releases its slot.
-   * - **Coming online** — the queue is kicked so parked jobs resume from
+   * - **Coming online** â€” the queue is kicked so parked jobs resume from
    *   their last checkpoint (multipart parts with ETags are skipped by the
    *   uploader; single-PUT jobs restart the byte stream honestly).
    */
@@ -269,7 +302,7 @@ export class UploadManager {
   /**
    * Start processing queued jobs up to `maxConcurrent`. Safe to call
    * repeatedly; concurrent calls are coalesced via the `processing` flag.
-   * No-ops while offline — jobs stay `queued` until connectivity returns.
+   * No-ops while offline â€” jobs stay `queued` until connectivity returns.
    */
   async processQueue(): Promise<void> {
     if (this.processing || !this.isOnline) return;
@@ -291,17 +324,25 @@ export class UploadManager {
   /** Pause a specific job. Aborts an in-flight upload if present. */
   pauseJob(jobId: string): void {
     const controller = this.activeUploads.get(jobId);
-    if (controller) {
-      controller.abort();
-      this.activeUploads.delete(jobId);
-    }
+    // Abort but do NOT delete the entry — the owning processJob removes it
+    // in its `finally`. Deleting here opens a window where resumeJob's
+    // `activeUploads.has` guard passes while the first attempt is still
+    // unwinding, spawning a second processJob for the same job.
+    if (controller) controller.abort();
     void this.persistState(jobId, { status: 'paused' });
   }
 
-  /** Resume a paused or failed job by re-queueing it for processing. */
+  /**
+   * Resume a paused or failed job by re-queueing it for processing.
+   * No-ops for jobs with a live attempt — flipping an in-flight job back
+   * to 'queued' would both corrupt its status mid-attempt and queue a
+   * duplicate drive the moment the running attempt frees its slot.
+   */
   async resumeJob(jobId: string): Promise<void> {
     const current = this.jobsCache.get(jobId);
-    if (current?.session) {
+    if (!current || this.activeUploads.has(jobId)) return;
+    if (current.status !== 'paused' && current.status !== 'failed') return;
+    if (current.session) {
       const session = { ...current.session, presignedUrls: {} };
       this.jobsCache.set(jobId, { ...current, session });
       await this.jobStore.updateJob(jobId, { session });
@@ -313,21 +354,24 @@ export class UploadManager {
   /** Cancel a job: abort any in-flight upload, abort multipart session, and remove from the store. */
   async cancelJob(jobId: string): Promise<void> {
     const controller = this.activeUploads.get(jobId);
-    if (controller) {
-      controller.abort();
-      this.activeUploads.delete(jobId);
-    }
+    // Same contract as pauseJob — abort in place; processJob's finally
+    // owns the removal so a concurrent resume can never double-drive.
+    if (controller) controller.abort();
     // Abort the multipart session if one exists.
     const job = this.jobsCache.get(jobId);
     if (job?.session) {
       await this.multipartUploader.abort(job.session);
     }
     this.jobsCache.delete(jobId);
+    this.clearThroughput(jobId);
     await this.jobStore.removeJob(jobId);
   }
 
   /** Retry a failed job: reset retry counter and re-queue. */
   async retryJob(jobId: string): Promise<void> {
+    const current = this.jobsCache.get(jobId);
+    if (!current || this.activeUploads.has(jobId)) return;
+    if (current.status !== 'failed') return;
     await this.persistState(jobId, {
       status: 'queued',
       retries: 0,
@@ -350,7 +394,10 @@ export class UploadManager {
   async resumePendingJobs(): Promise<void> {
     await this.hydrate();
     for (const job of this.jobsCache.values()) {
-      if (job.status === 'uploading' || job.status === 'stalled') {
+      if (!this.activeUploads.has(job.id) && (
+        job.status === 'uploading' || job.status === 'initiating'
+        || job.status === 'stalled' || job.status === 'confirming'
+      )) {
         await this.persistState(job.id, { status: 'queued', error: undefined });
       }
     }
@@ -369,14 +416,14 @@ export class UploadManager {
    * 2. Counts every recoverable job (`queued`, `uploading`, `initiating`,
    *    `stalled`) so the UI can surface "N uploads resumed" truthfully.
    * 3. Rewrites non-`queued` recoverable jobs to `queued` and clears their
-   *    error. Already-`queued` jobs are counted but NOT mutated — they are
+   *    error. Already-`queued` jobs are counted but NOT mutated â€” they are
    *    already in the correct state and a redundant write would pollute
    *    the mutation history tests rely on.
    * 4. Leaves terminal jobs (`completed`, `failed`, `paused`) untouched.
    * 5. Kicks `processQueue()` so re-queued jobs actually start.
    *
    * This is JS-only reconciliation. It does NOT claim native background
-   * upload survival — a job interrupted by process death loses its
+   * upload survival â€” a job interrupted by process death loses its
    * in-flight bytes and restarts from the last persisted checkpoint
    * (multipart parts with ETags are skipped by the uploader).
    *
@@ -386,9 +433,9 @@ export class UploadManager {
   async reconcileOnStartup(): Promise<{ resumedCount: number }> {
     await this.hydrate();
     let resumedCount = 0;
-    const recoverable: UploadJob['status'][] = ['queued', 'uploading', 'initiating', 'stalled'];
+    const recoverable: UploadJob['status'][] = ['queued', 'uploading', 'initiating', 'stalled', 'confirming'];
     for (const job of this.jobsCache.values()) {
-      if (!recoverable.includes(job.status)) continue;
+      if (this.activeUploads.has(job.id) || !recoverable.includes(job.status)) continue;
       resumedCount += 1;
       if (job.status !== 'queued') {
         await this.persistState(job.id, { status: 'queued', error: undefined });
@@ -411,7 +458,21 @@ export class UploadManager {
     if (!this.hydrationPromise) {
       this.hydrationPromise = this.jobStore.loadJobs()
         .then((jobs) => {
-          for (const job of jobs) this.jobsCache.set(job.id, job);
+          // Terminal-job retention: completed/failed jobs serve no
+          // recovery purpose after the retention window and would
+          // otherwise grow AsyncStorage unboundedly across sessions.
+          // Paused/queued jobs are user intent or pending work — kept.
+          const cutoff = Date.now() - TERMINAL_JOB_RETENTION_MS;
+          for (const job of jobs) {
+            if (
+              (job.status === 'completed' || job.status === 'failed')
+              && job.updatedAt < cutoff
+            ) {
+              void this.jobStore.removeJob(job.id);
+              continue;
+            }
+            this.jobsCache.set(job.id, job);
+          }
         })
         .finally(() => {
           this.hydrationPromise = null;
@@ -432,25 +493,43 @@ export class UploadManager {
    * or `failed`). Resolves with the final job list so the caller can
    * inspect `remoteUrl` on each completed job and detect failures.
    *
+   * `paused` jobs count as settled — pausing is user intent, and a paused
+   * upload must not pin the caller's wait forever; the returned list still
+   * carries `status: 'paused'` so the caller can report it honestly.
+   * `opts.signal` aborts the wait and `opts.timeoutMs` bounds it; both
+   * resolve with the latest job list rather than throwing so the caller
+   * inspects statuses the same way on every exit path.
+   *
    * Polls at `intervalMs` (default 250 ms) to avoid tight loops.
    */
   async waitForProjectCompletion(
     projectId: string,
     intervalMs = 250,
+    opts?: { signal?: AbortSignal; timeoutMs?: number },
   ): Promise<UploadJob[]> {
     // First, make sure the queue is processing.
     void this.processQueue();
 
-    // Poll until all jobs are terminal.
+    const deadline = opts?.timeoutMs !== undefined ? Date.now() + opts.timeoutMs : undefined;
+
+    // Poll until all jobs are settled.
     // eslint-disable-next-line no-constant-condition
     while (true) {
       const jobs = await this.getJobs(projectId);
       if (jobs.length === 0) return jobs;
-      const allTerminal = jobs.every(
-        (j) => j.status === 'completed' || j.status === 'failed',
+      const allSettled = jobs.every(
+        (j) => j.status === 'completed' || j.status === 'failed' || j.status === 'paused',
       );
-      if (allTerminal) return jobs;
-      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      if (allSettled || opts?.signal?.aborted
+        || (deadline !== undefined && Date.now() >= deadline)) {
+        return jobs;
+      }
+      try {
+        await this.sleep(intervalMs, opts?.signal);
+      } catch {
+        // Aborted mid-poll — return the latest list per the contract.
+        return this.getJobs(projectId);
+      }
     }
   }
 
@@ -482,7 +561,7 @@ export class UploadManager {
     };
   }
 
-  // ── Internals ─────────────────────────────────────────────────────
+  // â”€â”€ Internals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * Remove all completed/failed jobs for a project from the job store.
@@ -528,14 +607,19 @@ export class UploadManager {
         await this.maybeEmitAllComplete(job.projectId);
       } else {
         // If the job was paused while the upload was in flight (pauseJob
-        // aborted the controller), the catch block below already set the
-        // status to 'paused'. Don't overwrite it with 'failed' here — the
-        // user intentionally paused, not the network failing. Likewise a
+        // aborted the controller), don't overwrite it with 'failed' here â€”
+        // the user intentionally paused, not the network failing. Likewise a
         // connectivity drop aborts the attempt but leaves the job 'queued'
-        // so it resumes on reconnect — never a failure.
+        // so it resumes on reconnect â€” never a failure. The controller's
+        // own signal is the source of truth: a deliberate abort is never a
+        // failure regardless of what status a concurrent pause/resume
+        // interleave left on the job.
         const current = this.jobsCache.get(job.id);
-        if (current?.status === 'paused' || this.offlineAborted.has(job.id)) {
-          this.offlineAborted.delete(job.id);
+        if (
+          controller.signal.aborted ||
+          current?.status === 'paused' ||
+          this.offlineAborted.has(job.id)
+        ) {
           return;
         }
         await this.persistState(job.id, {
@@ -549,13 +633,16 @@ export class UploadManager {
       }
     } catch (err: unknown) {
       // pauseJob calls controller.abort() and sets status to 'paused'.
-      // The AbortError surfaces here — check the current job status before
+      // The AbortError surfaces here â€” check the current job status before
       // marking it failed. If the user paused, leave the paused status
       // intact and exit quietly. A connectivity abort (setOnline(false))
-      // is the same shape — the job stays 'queued' for auto-resume.
+      // is the same shape â€” the job stays 'queued' for auto-resume.
       const current = this.jobsCache.get(job.id);
-      if (current?.status === 'paused' || this.offlineAborted.has(job.id)) {
-        this.offlineAborted.delete(job.id);
+      if (
+        controller.signal.aborted ||
+        current?.status === 'paused' ||
+        this.offlineAborted.has(job.id)
+      ) {
         return;
       }
       const message = err instanceof Error ? err.message : 'Unknown upload error';
@@ -565,7 +652,16 @@ export class UploadManager {
         this.emit({ type: 'jobFailed', job: failed, error: message });
       }
     } finally {
-      this.activeUploads.delete(job.id);
+      // Only release the slot if the map still points at THIS attempt's
+      // controller — a late unwind must never evict a successor attempt's
+      // AbortController (it would become an uncancellable zombie).
+      if (this.activeUploads.get(job.id) === controller) {
+        this.activeUploads.delete(job.id);
+      }
+      // A stale offline-abort marker must not survive into a future attempt
+      // or it would swallow one real failure.
+      this.offlineAborted.delete(job.id);
+      this.clearThroughput(job.id);
       // Fill any freed slot.
       void this.processQueue();
     }
@@ -582,7 +678,7 @@ export class UploadManager {
   ): Promise<UploadAttemptResult> {
     let lastError: string | undefined;
     // Always loop from 0 to maxRetries. Using job.retries as the start
-    // meant resumed jobs got fewer retries than fresh ones — a job that
+    // meant resumed jobs got fewer retries than fresh ones â€” a job that
     // had already used 3 of 5 retries would only get 2 more on resume.
     // The retry counter is persisted below purely for telemetry/resume
     // visibility, not for controlling the loop bound.
@@ -597,7 +693,7 @@ export class UploadManager {
         // Choose transport: multipart for large files when enabled,
         // single-PUT otherwise.
         if (this.multipartEnabled && job.sizeBytes > MULTIPART_THRESHOLD_BYTES) {
-          return await this.performMultipartUpload(job, signal);
+          return await this.performMultipartUpload(this.jobsCache.get(job.id) ?? job, signal);
         }
         return await this.performSinglePutUpload(
           this.jobsCache.get(job.id) ?? job,
@@ -608,6 +704,13 @@ export class UploadManager {
           return { ok: false, error: 'Aborted' };
         }
         lastError = err instanceof Error ? err.message : String(err);
+        if (err instanceof MediaProcessingError || err instanceof UploadContractError || (
+          err instanceof ApiRequestError && err.status !== undefined
+          && err.status >= 400 && err.status < 500
+          && err.status !== 408 && err.status !== 429
+        )) {
+          return { ok: false, error: lastError };
+        }
         // If more attempts remain, back off and continue.
         if (attempt < job.maxRetries - 1) {
           const delay = this.computeBackoff(attempt);
@@ -621,14 +724,14 @@ export class UploadManager {
     return { ok: false, error: lastError ?? 'Exhausted retries' };
   }
 
-  // ── Single-PUT transport (retryable, real byte progress) ──────────
+  // â”€â”€ Single-PUT transport (retryable, real byte progress) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * Perform a single-PUT upload with real byte progress via
    * `XMLHttpRequest.upload.onprogress`.
    *
    * Flow:
-   *   1. POST /uploads/presign → obtain presigned PUT URL
+   *   1. POST /uploads/presign â†’ obtain presigned PUT URL
    *   2. XHR PUT the file to S3 with `upload.onprogress` for real bytes
    *   3. POST /uploads/finalize and wait for the canonical publishable asset
    *
@@ -653,7 +756,7 @@ export class UploadManager {
         ),
       };
     } else {
-      // Step 1 — presign via the backend (with auth + base URL).
+      // Step 1 â€” presign via the backend (with auth + base URL).
       presign = await fetchJson<PresignResponse>('/uploads/presign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -666,10 +769,10 @@ export class UploadManager {
         signal,
       });
 
-      // Step 2 — PUT the file to S3 via the shared XHR transport for real
+      // Step 2 â€” PUT the file to S3 via the shared XHR transport for real
       // byte progress. RN's send({ uri }) can report event.total as 0, so
       // the job's resolved size is the progress denominator.
-      await xhrPutFile(presign.url, job.localPath, job.mimeType, {
+      await putFile(presign.url, job.localPath, job.mimeType, {
         signal,
         onProgress: (loadedBytes, _totalBytes) => this.emitProgress(job.id, loadedBytes, job.sizeBytes),
       });
@@ -696,14 +799,27 @@ export class UploadManager {
     await this.persistState(job.id, { status: 'confirming' });
     const confirming = this.jobsCache.get(job.id);
     if (confirming) this.emit({ type: 'jobConfirming', job: confirming });
-    const uploaded = await finalizePresignedMedia({
-      presign,
-      fileName: job.fileName,
-      folder: job.folder,
-      scopeRefId: job.projectId,
-      metadata: { clientAssetId: job.assetId },
-      signal,
-    });
+    let uploaded: Awaited<ReturnType<typeof finalizePresignedMedia>>;
+    try {
+      uploaded = await finalizePresignedMedia({
+        presign,
+        fileName: job.fileName,
+        folder: job.folder,
+        scopeRefId: job.projectId,
+        metadata: { clientAssetId: job.assetId },
+        signal,
+      });
+    } catch (err) {
+      // A persisted `uploadedObject` checkpoint is only useful while the
+      // server's upload intent survives. A 404/410 means the intent is
+      // gone — replaying the checkpoint fails forever. Drop it so the next
+      // attempt re-presigns and re-uploads instead of re-finalizing a dead
+      // intent on every retry.
+      if (err instanceof ApiRequestError && (err.status === 404 || err.status === 410)) {
+        await this.persistState(job.id, { uploadedObject: undefined });
+      }
+      throw err;
+    }
 
     return {
       ok: true,
@@ -714,19 +830,19 @@ export class UploadManager {
     };
   }
 
-  // ── Multipart transport (resumable, per-part progress) ────────────
+  // â”€â”€ Multipart transport (resumable, per-part progress) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * Perform a multipart upload. If the job already has a session (from a
    * previous interrupted attempt), resume from the last completed part.
    * Otherwise, initiate a new session.
    *
-   * This transport is **resumable** — on failure, only the failed part
+   * This transport is **resumable** â€” on failure, only the failed part
    * is retried. On app restart, completed parts (with ETags) are skipped.
    *
    * After the backend assembles the final object and creates the
    * media_asset row, this method polls until the asset reaches a
-   * publishable state and returns the canonical URL — identical to the
+   * publishable state and returns the canonical URL â€” identical to the
    * single-PUT path's `finalizePresignedMedia` contract. The job is not
    * marked complete until the asset is processed and ready.
    */
@@ -788,7 +904,7 @@ export class UploadManager {
 
     this.emitProgress(job.id, job.sizeBytes, job.sizeBytes);
 
-    // All parts uploaded — transition to 'confirming' while the backend
+    // All parts uploaded â€” transition to 'confirming' while the backend
     // assembles the final object and the asset reaches a publishable state.
     await this.persistState(job.id, { status: 'confirming' });
     const confirming = this.jobsCache.get(job.id);
@@ -798,7 +914,7 @@ export class UploadManager {
     let remoteUrl = result.publicUrl;
     let mediaAssetId = result.mediaAssetId;
 
-    // Wait for the media asset to reach a publishable state — same
+    // Wait for the media asset to reach a publishable state â€” same
     // guarantee as the single-PUT path. The backend's /complete endpoint
     // creates the media_asset + processing job, but the asset may still
     // be in 'integrity_verified' / 'processing' / 'moderation_pending'.
@@ -825,7 +941,7 @@ export class UploadManager {
     return { ok: true, remoteUrl, finalizationId, mediaAssetId };
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────
+  // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /** Find an existing job matching the same (projectId, assetId, localPath). */
   private findExistingJob(params: QueueUploadParams): UploadJob | undefined {
@@ -845,7 +961,7 @@ export class UploadManager {
    * Resolve the real file size in bytes via expo-file-system.
    * Falls back to reading the Blob size when `getInfoAsync` is not
    * supported (e.g. `ph://` or `content://` URIs). Never returns 0
-   * for an existing file — if the size cannot be determined, returns 1
+   * for an existing file â€” if the size cannot be determined, returns 1
    * so the presign call doesn't fail on `sizeBytes > 0` validation.
    */
   private async resolveFileSize(localPath: string): Promise<number> {
@@ -858,7 +974,24 @@ export class UploadManager {
       // getInfoAsync may not support ph:// or content:// URIs.
     }
 
-    // Fallback: read as Blob and use blob.size.
+    // Media-library URIs (ph:// / content://) resolve to a file path via
+    // metadata alone — no byte read, so a multi-GB video never allocates a
+    // whole-file Blob just to learn its size.
+    if (localPath.startsWith('ph://') || localPath.startsWith('content://')) {
+      try {
+        const assetInfo = await MediaLibrary.getAssetInfoAsync(localPath);
+        if (assetInfo.localUri) {
+          const info = await FileSystem.getInfoAsync(assetInfo.localUri);
+          if (info.exists && typeof info.size === 'number' && info.size > 0) {
+            return info.size;
+          }
+        }
+      } catch {
+        // Not a library asset (e.g. a SAF document URI) — fall through.
+      }
+    }
+
+    // Last resort: read as Blob and use blob.size.
     try {
       const blob = await fetch(localPath).then((r) => r.blob());
       if (blob.size > 0) return blob.size;
@@ -895,15 +1028,17 @@ export class UploadManager {
       uploadedBytes,
       totalBytes,
       progress,
+      ...this.computeThroughput(jobId, uploadedBytes),
     };
+    this.progressSnapshots.set(jobId, snapshot);
     this.emit({ type: 'progress', progress: snapshot });
     // Always update the in-memory cache so the UI sees the latest value
     // synchronously. Throttle the AsyncStorage write to at most once every
-    // 500ms — progress events fire on every XHR byte tick and a full
+    // 500ms â€” progress events fire on every XHR byte tick and a full
     // read-modify-write of the job store on each tick starves the JS thread.
     const current = this.jobsCache.get(jobId);
     if (current) {
-      // If the job had stalled, real progress has resumed — transition
+      // If the job had stalled, real progress has resumed â€” transition
       // back to 'uploading' so the UI reflects the recovery.
       const nextStatus = current.status === 'stalled' ? 'uploading' : current.status;
       this.jobsCache.set(jobId, {
@@ -917,9 +1052,78 @@ export class UploadManager {
     const now = Date.now();
     if (now - this.lastProgressPersistMs >= 500) {
       this.lastProgressPersistMs = now;
-      // Persist progress (best-effort — don't block the upload loop).
+      // Persist progress (best-effort â€” don't block the upload loop).
       void this.jobStore.updateJob(jobId, { progress });
     }
+  }
+
+  /**
+   * Rolling throughput over the last ~4s of progress ticks for a job.
+   * Returns an empty object until at least two samples spanning ≥500ms
+   * exist — never fabricates a rate from a single tick. A rate of zero
+   * (stalled tick) yields no ETA rather than Infinity.
+   */
+  private computeThroughput(
+    jobId: string,
+    uploadedBytes: number,
+  ): Pick<UploadProgress, 'bytesPerSecond' | 'etaSeconds'> {
+    const WINDOW_MS = 4_000;
+    const MIN_SPAN_MS = 500;
+    const now = Date.now();
+    let samples = this.throughputSamples.get(jobId);
+    if (!samples) {
+      samples = [];
+      this.throughputSamples.set(jobId, samples);
+    }
+    // Negative deltas (retry un-reporting) reset the window — the rate
+    // before the retry says nothing about the rate after it.
+    const last = samples[samples.length - 1];
+    if (last && uploadedBytes < last.bytes) samples.length = 0;
+    samples.push({ t: now, bytes: uploadedBytes });
+    while (samples.length > 0 && now - samples[0].t > WINDOW_MS) samples.shift();
+    if (samples.length < 2 || now - samples[0].t < MIN_SPAN_MS) return {};
+    const elapsed = (now - samples[0].t) / 1000;
+    const rate = (uploadedBytes - samples[0].bytes) / elapsed;
+    if (!(rate > 0)) return { bytesPerSecond: 0 };
+    const job = this.jobsCache.get(jobId);
+    const total = job?.sizeBytes ?? 0;
+    const remaining = Math.max(0, total - uploadedBytes);
+    return {
+      bytesPerSecond: rate,
+      etaSeconds: remaining > 0 ? Math.ceil(remaining / rate) : 0,
+    };
+  }
+
+  /** Drop throughput samples once a job leaves the in-flight set. */
+  private clearThroughput(jobId: string): void {
+    this.throughputSamples.delete(jobId);
+    this.progressSnapshots.delete(jobId);
+  }
+
+  /**
+   * Aggregate transfer stats for a project's in-flight jobs: summed
+   * rolling throughput and an ETA derived from real remaining bytes.
+   * Returns undefineds when no rate is known — never a fabricated value.
+   */
+  getTransferStats(projectId: string): { bytesPerSecond?: number; etaSeconds?: number } {
+    let rate = 0;
+    let remaining = 0;
+    let hasRate = false;
+    for (const job of this.jobsCache.values()) {
+      if (job.projectId !== projectId) continue;
+      if (job.status !== 'uploading') continue;
+      const snap = this.progressSnapshots.get(job.id);
+      if (snap?.bytesPerSecond !== undefined) {
+        rate += snap.bytesPerSecond;
+        hasRate = true;
+      }
+      remaining += Math.max(0, job.sizeBytes - job.progress * job.sizeBytes);
+    }
+    if (!hasRate) return {};
+    return {
+      bytesPerSecond: rate,
+      etaSeconds: rate > 0 && remaining > 0 ? Math.ceil(remaining / rate) : undefined,
+    };
   }
 
   /** Emit `allComplete` when every job for a project is completed. */
@@ -934,11 +1138,11 @@ export class UploadManager {
    * state and transitions any that haven't received a progress event for
    * longer than `STALL_THRESHOLD_MS` to 'stalled', emitting a `jobFailed`
    * event with a descriptive message so the UI can surface feedback. The
-   * job is not marked terminal — when progress resumes, `emitProgress`
+   * job is not marked terminal â€” when progress resumes, `emitProgress`
    * transitions it back to 'uploading'.
    */
   private checkStalledJobs(): void {
-    // While offline there are no in-flight uploads to stall — jobs aborted
+    // While offline there are no in-flight uploads to stall â€” jobs aborted
     // by the connectivity drop are already requeued as 'queued'.
     if (!this.isOnline) return;
     const now = Date.now();
@@ -952,7 +1156,7 @@ export class UploadManager {
           this.emit({
             type: 'jobFailed',
             job: stalled,
-            error: 'Upload stalled — no progress for an extended period.',
+            error: 'Upload stalled â€” no progress for an extended period.',
           });
         }
       }
@@ -987,21 +1191,21 @@ export class UploadManager {
   }
 
   /** Promise-based sleep that rejects early if the signal aborts. */
-  private sleep(ms: number, signal: AbortSignal): Promise<void> {
+  private sleep(ms: number, signal?: AbortSignal): Promise<void> {
     return new Promise<void>((resolve, reject) => {
-      if (signal.aborted) {
+      if (signal?.aborted) {
         reject(new Error('Aborted'));
         return;
       }
       const timer = setTimeout(() => {
-        signal.removeEventListener('abort', onAbort);
+        signal?.removeEventListener('abort', onAbort);
         resolve();
       }, ms);
       const onAbort = () => {
         clearTimeout(timer);
         reject(new Error('Aborted'));
       };
-      signal.addEventListener('abort', onAbort, { once: true });
+      signal?.addEventListener('abort', onAbort, { once: true });
     });
   }
 

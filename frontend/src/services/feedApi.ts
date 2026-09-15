@@ -17,6 +17,13 @@ interface FeedListingRow {
   condition: string | null;
   originalPriceGbp: number | null;
   createdAt: string;
+  /** Paid-placement flag stamped by the server on sponsored feed units. */
+  promoted?: boolean;
+  /** Server-generated disclosure label ("Sponsored") — rendered verbatim. */
+  disclosure?: string;
+  /** Promotion id on promoted units — posted to /promotions/:id/click on
+   *  tap-through. Absent on organic rows. */
+  promotionId?: string | null;
 }
 
 interface FeedPosterRow {
@@ -133,8 +140,29 @@ export interface SearchApiResult {
     /** Pre-computed cover aspect ratio (width / height), when the backend
      *  exposes it. Takes precedence over mediaWidth/mediaHeight. */
     aspectRatio?: number;
+    /** Full image list when the backend serves it (the postgres search
+     *  route returns `images`/`media` alongside the flat `imageUrl`). */
+    images?: string[];
+    /** Server-stamped paid-placement flag on sponsored result units. */
+    promoted?: boolean | null;
+    /** Server-generated disclosure label ("Sponsored") — verbatim only. */
+    disclosure?: string | null;
+    /** Promotion id on promoted units — posted to /promotions/:id/click on
+     *  tap-through. Absent on organic rows. */
+    promotionId?: string | null;
   }>;
   fallback?: boolean;
+  /**
+   * Retrieval capability metadata from the backend — which method produced
+   * the results and, when a higher-capability method fell back, the honest
+   * `fallbackReason`. Absent on client-side failures.
+   */
+  retrievalMeta?: {
+    method: string;
+    fallbackReason?: string;
+    embedderConfigured?: boolean;
+    searchEngineVersion?: string;
+  };
   error?: string;
 }
 
@@ -258,12 +286,18 @@ export async function searchListingsFromApi(
   if (options.page && options.page > 1) params.set('page', String(options.page));
 
   try {
-    const payload = await fetchJson<{ ok: boolean; query: string; fallback?: boolean; items: SearchApiResult['items'] }>(
+    const payload = await fetchJson<{
+      ok: boolean;
+      query: string;
+      fallback?: boolean;
+      retrievalMeta?: SearchApiResult['retrievalMeta'];
+      items: SearchApiResult['items'] }>(
       `/search/listings?${params.toString()}`
     );
     return {
       items: payload.items ?? [],
       fallback: payload.fallback ?? false,
+      retrievalMeta: payload.retrievalMeta,
     };
   } catch (error) {
     return {

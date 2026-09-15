@@ -6,7 +6,7 @@ import Reanimated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
-import CreatorCamera from '../../creator/CreatorCamera';
+import CreatorCamera from '../../creator/capture/CreatorCamera';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Motion } from '../../theme/motionTokens';
@@ -35,8 +35,8 @@ export interface ListingCameraSheetProps {
   onClose: () => void;
   /** Called with the captured photo URIs when the user finishes a batch. */
   onCapture: (uris: string[]) => void;
-  /** Maximum photos the caller can accept. Used only to short-circuit;
-   *  CreatorCamera's staging tray does not enforce an external cap. */
+  /** Maximum media items the caller can still accept. Enforced inside
+   *  CreatorCamera — the shutter refuses new captures at the cap. */
   maxPhotos?: number;
 }
 
@@ -44,6 +44,7 @@ export function ListingCameraSheet({
   visible,
   onClose,
   onCapture,
+  maxPhotos,
 }: ListingCameraSheetProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
@@ -85,16 +86,12 @@ export function ListingCameraSheet({
   // ── Camera → listing media ──
   // CreatorCamera sends a typed batch (CreatorInitialMedia[]). We extract
   // the URIs — listing flows handle dimensions/MIME downstream via
-  // convertCaptureUri. Only image captures are forwarded; video captures
-  // from a listing photo session are dropped (listing media supports video
-  // but the camera-first flow is photo-oriented).
+  // convertCaptureUri, which resolves video captures to video/mp4 assets,
+  // so photo and video captures are both forwarded to the media pipeline.
   const handleCaptureBatch = useCallback(
     (captures: CreatorInitialMedia[]) => {
       if (captures.length === 0) return;
-      const uris = captures
-        .filter((c) => c.kind === 'image')
-        .map((c) => c.uri);
-      if (uris.length === 0) return;
+      const uris = captures.map((c) => c.uri);
       handleExit();
       onCapture(uris);
     },
@@ -128,6 +125,8 @@ export function ListingCameraSheet({
       <Reanimated.View style={[styles.fill, { backgroundColor: colors.background }, animatedStyle]}>
         <CreatorCamera
           mode="poster"
+          initialMultiCapture
+          maxCaptures={maxPhotos}
           onCapture={(uri) => {
             // Single-capture legacy path — forward as a one-element batch.
             handleExit();

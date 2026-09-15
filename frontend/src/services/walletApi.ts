@@ -813,9 +813,12 @@ export interface WalletLedgerItem {
   txId: string;
   asset: string;
   amount: number;
+  /** Major units for FIAT, 1ZE units for 1ZE — display-ready, sign preserved. */
   amountDisplay: number;
   balanceAfter: number;
   balanceAfterDisplay: number;
+  /** Wallet fiat currency for FIAT rows ('GBP' etc.), '1ZE' otherwise. */
+  currency?: string;
   kind: string;
   refType: string | null;
   refId: string | null;

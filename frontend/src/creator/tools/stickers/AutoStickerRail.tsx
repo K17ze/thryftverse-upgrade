@@ -30,7 +30,7 @@ import {
   Control, Stroke} from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
-import { PressScale } from '../../CreatorAnimations';
+import { PressScale } from '../../shared/CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
 import {
   suggestAutoStickers,

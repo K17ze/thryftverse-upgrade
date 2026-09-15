@@ -34,6 +34,10 @@ export type { OnezeWithdrawalHandlerDeps } from './onezeWithdrawalHandler.js';
 export { processMediaIngestJob } from './mediaIngestHandler.js';
 export type { MediaIngestHandlerDeps } from './mediaIngestHandler.js';
 
+export { reconcileMediaIngestJobs } from './mediaIngestReconcileHandler.js';
+
+export { expireStaleMultipartSessions } from './multipartSessionSweepHandler.js';
+
 export { processMediaEmbeddingJob } from './mediaEmbeddingHandler.js';
 
 export { processModerationTriageJob } from './moderationTriageHandler.js';
@@ -81,6 +85,8 @@ export { aggregateAnalyticsDaily } from './analyticsAggregationHandler.js';
 export type { AnalyticsAggregationHandlerDeps } from './analyticsAggregationHandler.js';
 
 export { sweepScheduledPublications } from './scheduledPublicationHandler.js';
+
+export { sweepOrphanedUploadIntents } from './orphanUploadIntentSweepHandler.js';
 
 export { processBackupExpiryCheck } from './backupExpiryHandler.js';
 export type { BackupExpiryJobData } from './backupExpiryHandler.js';

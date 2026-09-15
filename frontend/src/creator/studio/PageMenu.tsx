@@ -16,7 +16,7 @@ import { TypographyV2 } from '../../theme/typography.v2';
 import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
-import { PressScale, SheetContainer } from '../CreatorAnimations';
+import { PressScale, SheetContainer } from '../shared/CreatorAnimations';
 
 // ── Props ──────────────────────────────────────────────────────────
 export interface PageMenuProps {

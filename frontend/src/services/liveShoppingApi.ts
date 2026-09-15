@@ -18,6 +18,9 @@ import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import { fetchJson, ApiRequestError, parseApiError } from '../lib/apiClient';
 import { getRealtimeClient, type RealtimeEnvelope } from '../platform/realtime';
 import { createStableId } from '../utils/createStableId';
+// liveBroadcastApi lives under components/live but is a pure API module —
+// it owns the remind endpoints and their on-device persistence.
+import { loadLocalReminderIds } from '../components/live/liveBroadcastApi';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -49,6 +52,10 @@ export interface LiveSession {
   itemTimeRemainingSec?: number;
   watchers: number;
   isFollowing: boolean;
+  /** Whether the viewer asked to be reminded when this scheduled show starts.
+   *  Sourced from the backend `reminded` flag when present, else merged from
+   *  on-device persistence. Undefined = backend did not report it. */
+  reminderSet?: boolean;
   /** Honest flag — true while this session comes from mock data, not a real stream. */
   isDemo: boolean;
 }
@@ -325,6 +332,20 @@ interface BackendStreamRoom {
   createdAt: string;
   startedAt?: string;
   endedAt?: string;
+  // Scheduled shows + discovery enrichment — all nullable; render gracefully
+  // when absent. Both camelCase and snake_case scheduled-start keys are
+  // accepted while the backend contract settles.
+  scheduledStartAt?: string | null;
+  scheduled_start_at?: string | null;
+  hostUsername?: string | null;
+  hostAvatarUrl?: string | null;
+  hostVerified?: boolean | null;
+  currentLotTitle?: string | null;
+  currentLotPriceMinor?: number | null;
+  currentLotCurrency?: string | null;
+  thumbnailUrl?: string | null;
+  /** Per-viewer reminder flag for scheduled sessions (auth'd responses). */
+  reminded?: boolean | null;
 }
 
 interface BackendStreamSessionsResponse {
@@ -343,27 +364,38 @@ interface BackendStreamTokenResponse {
   error?: string;
 }
 
-const mapBackendSessionToLiveSession = (room: BackendStreamRoom): LiveSession => ({
-  id: room.roomId,
-  sellerId: room.hostUserId,
-  sellerName: '',
-  sellerAvatar: '',
-  sellerVerified: false,
-  title: room.title,
-  thumbnail: '',
-  category: 'All',
-  viewerCount: room.viewerCount,
-  likeCount: 0,
-  status: room.status === 'live' ? 'live' : room.status === 'ended' ? 'ended' : 'upcoming',
-  startedAt: room.startedAt,
-  endedAt: room.endedAt,
-  watchers: room.viewerCount,
-  isFollowing: false,
-  isDemo: false,
-});
+const mapBackendSessionToLiveSession = (room: BackendStreamRoom): LiveSession => {
+  const scheduledStartAt = room.scheduledStartAt ?? room.scheduled_start_at ?? undefined;
+  return {
+    id: room.roomId,
+    sellerId: room.hostUserId,
+    sellerName: room.hostUsername ?? '',
+    sellerAvatar: room.hostAvatarUrl ?? '',
+    sellerVerified: room.hostVerified ?? false,
+    title: room.title,
+    thumbnail: room.thumbnailUrl ?? '',
+    category: 'All',
+    viewerCount: room.viewerCount,
+    likeCount: 0,
+    // 'created' sessions (incl. scheduled shows) surface as upcoming.
+    status: room.status === 'live' ? 'live' : room.status === 'ended' ? 'ended' : 'upcoming',
+    startedAt: room.startedAt,
+    scheduledAt: scheduledStartAt,
+    endedAt: room.endedAt,
+    currentItemTitle: room.currentLotTitle ?? undefined,
+    currentBid: room.currentLotPriceMinor != null ? room.currentLotPriceMinor / 100 : undefined,
+    watchers: room.viewerCount,
+    isFollowing: false,
+    reminderSet: room.reminded ?? undefined,
+    isDemo: false,
+  };
+};
 
 /**
  * Fetch live sessions from the real backend streaming API.
+ * The list now carries live rows, scheduled shows (coming up) and ended
+ * replays — the same ordering the demo data applies is enforced client-side
+ * so the rail sections stay deterministic regardless of backend ordering.
  */
 async function fetchLiveSessionsFromBackend(
   opts: { cursor?: string | null; category?: string } = {},
@@ -373,6 +405,31 @@ async function fetchLiveSessionsFromBackend(
   try {
     const response = await fetchJson<BackendStreamSessionsResponse>('/streaming/sessions');
     const sessions = (response.sessions ?? []).map(mapBackendSessionToLiveSession);
+
+    // When the backend does not echo a per-viewer `reminded` flag, merge the
+    // on-device reminder state so the toggle survives reloads. A reported
+    // flag always wins.
+    const localReminders = await loadLocalReminderIds();
+    for (const session of sessions) {
+      if (session.reminderSet == null) {
+        session.reminderSet = localReminders.has(session.id);
+      }
+    }
+
+    sessions.sort((a, b) => {
+      const order = { live: 0, upcoming: 1, ended: 2 };
+      if (order[a.status] !== order[b.status]) {
+        return order[a.status] - order[b.status];
+      }
+      if (a.status === 'live') {
+        return b.viewerCount - a.viewerCount;
+      }
+      if (a.status === 'upcoming') {
+        return new Date(a.scheduledAt ?? 0).getTime() - new Date(b.scheduledAt ?? 0).getTime();
+      }
+      return new Date(b.endedAt ?? 0).getTime() - new Date(a.endedAt ?? 0).getTime();
+    });
+
     const featured = sessions.find((s) => s.status === 'live') ?? null;
     return { sessions, featured, cursor: null };
   } catch {
@@ -679,10 +736,13 @@ async function connectToStreamFromBackend(streamId: string): Promise<LiveStream 
     const stream: LiveStream = {
       id: session.roomId,
       sellerId: session.hostUserId,
-      sellerName: '',
+      sellerName: session.hostUsername ?? '',
+      sellerAvatar: session.hostAvatarUrl ?? undefined,
+      sellerVerified: session.hostVerified ?? undefined,
       title: session.title,
       status: session.status === 'live' ? 'live' : session.status === 'ended' ? 'ended' : 'scheduled',
       startedAt: session.startedAt,
+      scheduledStartAt: session.scheduledStartAt ?? session.scheduled_start_at ?? undefined,
       endedAt: session.endedAt,
       viewerCount: session.viewerCount,
       likeCount: 0,

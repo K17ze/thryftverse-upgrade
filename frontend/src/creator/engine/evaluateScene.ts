@@ -27,7 +27,7 @@ import type {
   CreatorLayer,
   CreatorPage,
   EffectNode,
-} from '../composition';
+} from '../core/projectStore/composition';
 import { evaluateAllKeyframes } from '../core/playback/KeyframeEvaluator';
 import {
   evaluateCompositionEffectStack,

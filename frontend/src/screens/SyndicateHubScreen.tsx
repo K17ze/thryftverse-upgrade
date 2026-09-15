@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  ActivityIndicator,
   RefreshControl,
   StyleSheet,
   Text,
@@ -13,7 +14,12 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { fetchCoOwnHoldings, listCoOwnAssets, fetchCoOwnWatchlist } from '../services/marketApi';
+import {
+  fetchCoOwnHoldings,
+  listCoOwnAssetsPage,
+  fetchCoOwnWatchlist,
+  type MarketCoOwnAsset,
+} from '../services/marketApi';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useToast } from '../context/ToastContext';
 import { useBackendData } from '../context/BackendDataContext';
@@ -25,14 +31,15 @@ import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import {
   CoOwnCompactPositionCard,
-  CoOwnEducationCard,
   CoOwnHubSkeleton,
   CoOwnInstrumentCard,
   CoOwnMarketHighlightsCarousel,
   CoOwnOfflineBanner,
+  CoOwnSegmentTabs,
   CoOwnStateCanvas,
   COOWN_POSITION_CARD_WIDTH,
   type CoOwnAssetStatus,
+  type CoOwnHubSegment,
   type CoOwnMarketHighlight,
 } from '../components/coown';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
@@ -41,7 +48,8 @@ import { formatCoOwnIze } from '../utils/currency';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type SortOption = 'newest' | 'price' | 'activity';
-type HubSegment = 'offerings' | 'trading' | 'watchlist';
+// Canonical segment union lives in CoOwnSegmentTabs — single source of truth.
+type HubSegment = CoOwnHubSegment;
 
 interface HubAsset {
   id: string;
@@ -77,23 +85,17 @@ interface HubAsset {
 
 type HubRow =
   | { kind: 'highlights'; key: 'highlights' }
-  | { kind: 'tabs'; key: 'tabs' }
   | { kind: 'positions'; key: 'positions' }
   | { kind: 'instrumentsHeader'; key: 'instruments-header' }
   | { kind: 'instrumentRow'; key: string; assets: HubAsset[] }
-  | { kind: 'instrumentsEmpty'; key: 'instruments-empty' }
-  | { kind: 'remaining'; key: 'remaining' };
+  | { kind: 'instrumentsEmpty'; key: 'instruments-empty' };
 
-const SEGMENTS: HubSegment[] = ['offerings', 'trading', 'watchlist'];
 const SORT_OPTIONS: SortOption[] = ['newest', 'price', 'activity'];
 const POSITION_CARD_WIDTH = COOWN_POSITION_CARD_WIDTH;
 const POSITION_CARD_GAP = 12;
 const POSITION_SNAP_INTERVAL = POSITION_CARD_WIDTH + POSITION_CARD_GAP;
-const SEGMENT_LABELS: Record<HubSegment, string> = {
-  offerings: 'Offerings',
-  trading: 'Trading',
-  watchlist: 'Watchlist',
-};
+// Catalogue page size for both the first load and each onEndReached page.
+const CATALOGUE_PAGE_SIZE = 60;
 const SORT_LABELS: Record<SortOption, string> = {
   newest: 'Newest',
   price: 'Reference price',
@@ -190,18 +192,69 @@ export default function CoOwnHubScreen() {
   const [activeSegment, setActiveSegment] = React.useState<HubSegment>(normalizeInitialSegment(route.params?.initialSegment));
   const [remoteAssets, setRemoteAssets] = React.useState<HubAsset[]>([]);
   // U03: Watched assets fetched separately via fetchCoOwnWatchlist so they
-  // remain discoverable outside the first 120 catalogue items.
+  // remain discoverable outside the loaded catalogue pages.
   const [watchedAssets, setWatchedAssets] = React.useState<HubAsset[]>([]);
   const [holdings, setHoldings] = React.useState<Map<string, { units: number; avgEntry: number; realized: number }>>(new Map());
   const [isSyncing, setIsSyncing] = React.useState(true);
   const [isError, setIsError] = React.useState(false);
   const [holdingsError, setHoldingsError] = React.useState(false);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
+  const [isLoadingMore, setIsLoadingMore] = React.useState(false);
+  const [loadMoreError, setLoadMoreError] = React.useState(false);
 
   // U07: Preserve scroll position through detail navigation.
   const flashListRef = React.useRef<FlashListRef<HubRow>>(null);
   const scrollOffsetRef = React.useRef(0);
   const hasLoadedRef = React.useRef(false);
+  // Catalogue pagination — refs because they drive fetch logic, not render.
+  const nextCursorRef = React.useRef<string | null>(null);
+  const loadingMoreRef = React.useRef(false);
+  const mountedRef = React.useRef(true);
+  // Read-through refs for values that feed fetch logic. If these lived in
+  // loadData's deps, every appended page / keystroke would change its
+  // identity, re-fire useFocusEffect, and truncate the catalogue back to
+  // page 1.
+  const queryRef = React.useRef(query);
+  const remoteAssetsLengthRef = React.useRef(remoteAssets.length);
+  React.useEffect(() => { queryRef.current = query; }, [query]);
+  React.useEffect(() => { remoteAssetsLengthRef.current = remoteAssets.length; }, [remoteAssets.length]);
+  // Incremented on every fresh load so a page response that was in flight
+  // during a refresh cannot write a stale cursor over the reset state.
+  const catalogueEpochRef = React.useRef(0);
+  React.useEffect(() => () => { mountedRef.current = false; }, []);
+
+  const mapAssetItem = React.useCallback((item: MarketCoOwnAsset): HubAsset => {
+    const linkedListing = item.listingId
+      ? listings.find((listing) => listing.id === item.listingId)
+      : undefined;
+    return {
+      id: item.id,
+      listingId: item.listingId,
+      issuerId: item.issuerId,
+      title: item.title,
+      image: item.imageUrl || linkedListing?.images?.[0] || '',
+      category: linkedListing?.category || linkedListing?.subcategory || 'Luxury asset',
+      totalUnits: item.totalUnits,
+      availableUnits: item.availableUnits,
+      unitPriceGBP: item.unitPriceGbp,
+      unitPriceStable: item.unitPriceStable,
+      bestBidGBP: item.bestBidGbp ?? null,
+      bidDepthUnits: item.bidDepthUnits ?? 0,
+      bestAskGBP: item.bestAskGbp ?? null,
+      askDepthUnits: item.askDepthUnits ?? 0,
+      volume24hGbp: item.volume24hGbp ?? null,
+      lastExecutionPriceGBP: item.marketSnapshot?.lastExecutionPriceGbp ?? null,
+      lastExecutionAt: item.marketSnapshot?.lastExecutionAt ?? null,
+      settlementMode: item.settlementMode as HubAsset['settlementMode'],
+      issuerJurisdiction: item.issuerJurisdiction ?? undefined,
+      holders: item.holders,
+      yourUnits: 0,
+      isOpen: item.isOpen,
+      offeringStatus: item.offeringStatus,
+      marketStatus: item.marketStatus,
+      createdAt: item.createdAt,
+    };
+  }, [listings]);
 
   const loadData = React.useCallback((opts?: { silent?: boolean }) => {
     // Public browsing: always fetch the marketplace catalogue so
@@ -213,7 +266,7 @@ export default function CoOwnHubScreen() {
     const silent = opts?.silent ?? false;
     // U07: Don't flash the loading skeleton when we already have data
     // (e.g., returning from AssetDetail). Only show it on first load.
-    if (!silent || remoteAssets.length === 0) {
+    if (!silent || remoteAssetsLengthRef.current === 0) {
       setIsSyncing(true);
     }
     setIsError(false);
@@ -226,7 +279,7 @@ export default function CoOwnHubScreen() {
       : Promise.resolve({ items: [] as Awaited<ReturnType<typeof fetchCoOwnHoldings>>, failed: false });
 
     // U03: Fetch watched assets separately so they remain discoverable
-    // outside the first 120 catalogue items. Only when authenticated.
+    // outside the loaded catalogue pages. Only when authenticated.
     const watchedPromise = actingUserId
       ? fetchCoOwnWatchlist(200)
           .then((items) => ({ items, failed: false }))
@@ -234,45 +287,19 @@ export default function CoOwnHubScreen() {
       : Promise.resolve({ items: [] as Awaited<ReturnType<typeof fetchCoOwnWatchlist>>, failed: false });
 
     Promise.all([
-      listCoOwnAssets({ limit: 120, search: query.trim() || undefined }),
+      listCoOwnAssetsPage({ limit: CATALOGUE_PAGE_SIZE, search: queryRef.current.trim() || undefined }),
       holdingsPromise,
       watchedPromise,
     ])
-      .then(([items, holdingResult, watchedResult]) => {
+      .then(([page, holdingResult, watchedResult]) => {
         if (cancelled) return;
-        const mapItem = (item: typeof items[number]): HubAsset => {
-          const linkedListing = item.listingId
-            ? listings.find((listing) => listing.id === item.listingId)
-            : undefined;
-          return {
-            id: item.id,
-            listingId: item.listingId,
-            issuerId: item.issuerId,
-            title: item.title,
-            image: item.imageUrl || linkedListing?.images?.[0] || '',
-            category: linkedListing?.category || linkedListing?.subcategory || 'Luxury asset',
-            totalUnits: item.totalUnits,
-            availableUnits: item.availableUnits,
-            unitPriceGBP: item.unitPriceGbp,
-            unitPriceStable: item.unitPriceStable,
-            bestBidGBP: item.bestBidGbp ?? null,
-            bidDepthUnits: item.bidDepthUnits ?? 0,
-            bestAskGBP: item.bestAskGbp ?? null,
-            askDepthUnits: item.askDepthUnits ?? 0,
-            volume24hGbp: item.volume24hGbp ?? null,
-            lastExecutionPriceGBP: item.marketSnapshot?.lastExecutionPriceGbp ?? null,
-            lastExecutionAt: item.marketSnapshot?.lastExecutionAt ?? null,
-            settlementMode: item.settlementMode as HubAsset['settlementMode'],
-            issuerJurisdiction: item.issuerJurisdiction ?? undefined,
-            holders: item.holders,
-            yourUnits: 0,
-            isOpen: item.isOpen,
-            offeringStatus: item.offeringStatus,
-            marketStatus: item.marketStatus,
-            createdAt: item.createdAt,
-          };
-        };
-        const mapped = items.map(mapItem);
+        // A fresh load replaces the catalogue — reset the page cursor so
+        // infinite scroll resumes from the first page boundary, and bump
+        // the epoch so an in-flight page response is discarded.
+        catalogueEpochRef.current += 1;
+        nextCursorRef.current = page.nextCursor;
+        setLoadMoreError(false);
+        const mapped = page.items.map(mapAssetItem);
         const holdingsMap = new Map<string, { units: number; avgEntry: number; realized: number }>();
         for (const holding of holdingResult.items) {
           holdingsMap.set(holding.assetId, {
@@ -285,8 +312,8 @@ export default function CoOwnHubScreen() {
         setHoldings(holdingsMap);
         setHoldingsError(holdingResult.failed);
         // U03: Watched assets are mapped separately so they're always
-        // available in the watchlist segment, even outside the first 120.
-        setWatchedAssets(watchedResult.items.map(mapItem));
+        // available in the watchlist segment, even outside the loaded pages.
+        setWatchedAssets(watchedResult.items.map(mapAssetItem));
         hasLoadedRef.current = true;
       })
       .catch(() => {
@@ -302,7 +329,43 @@ export default function CoOwnHubScreen() {
       });
 
     return () => { cancelled = true; };
-  }, [actingUserId, listings, query, remoteAssets.length, show]);
+  }, [actingUserId, mapAssetItem, show]);
+
+  // Infinite scroll — fetch the next catalogue page. Guarded by refs so
+  // repeated onEndReached calls cannot fire concurrent requests. On failure
+  // the cursor is preserved so the footer retry resumes in place.
+  const handleLoadMore = React.useCallback(() => {
+    const cursor = nextCursorRef.current;
+    if (!cursor || loadingMoreRef.current) return;
+    const epoch = catalogueEpochRef.current;
+    loadingMoreRef.current = true;
+    setIsLoadingMore(true);
+    setLoadMoreError(false);
+    listCoOwnAssetsPage({
+      limit: CATALOGUE_PAGE_SIZE,
+      cursor,
+      search: queryRef.current.trim() || undefined,
+    })
+      .then((page) => {
+        // Discard if the catalogue was refreshed while this page was in
+        // flight — its cursor no longer belongs to the current data set.
+        if (!mountedRef.current || epoch !== catalogueEpochRef.current) return;
+        nextCursorRef.current = page.nextCursor;
+        setRemoteAssets((prev) => {
+          const seen = new Set(prev.map((asset) => asset.id));
+          const fresh = page.items.map(mapAssetItem).filter((asset) => !seen.has(asset.id));
+          return fresh.length > 0 ? [...prev, ...fresh] : prev;
+        });
+      })
+      .catch(() => {
+        if (!mountedRef.current || epoch !== catalogueEpochRef.current) return;
+        setLoadMoreError(true);
+      })
+      .finally(() => {
+        loadingMoreRef.current = false;
+        if (mountedRef.current) setIsLoadingMore(false);
+      });
+  }, [mapAssetItem]);
 
   // U07: Re-fetch on initial focus only. On subsequent focuses (returning
   // from AssetDetail), do a silent refresh that preserves scroll position
@@ -324,6 +387,17 @@ export default function CoOwnHubScreen() {
       return cleanup;
     }, [loadData])
   );
+
+  // Search is server-side — debounce keystrokes into a single silent
+  // refetch so typing doesn't fire a catalogue+holdings+watchlist request
+  // per character. The first load still comes from the focus effect.
+  React.useEffect(() => {
+    if (!hasLoadedRef.current) return;
+    const timer = setTimeout(() => {
+      loadData({ silent: true });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [query, loadData]);
 
   React.useEffect(() => {
     if (route.params?.initialSegment) {
@@ -347,7 +421,7 @@ export default function CoOwnHubScreen() {
   const marketAssets = React.useMemo(
     () => {
       // U03: Merge watched assets (fetched separately) into the catalogue
-      // so they remain discoverable outside the first 120 fetched items.
+      // so they remain discoverable outside the loaded catalogue pages.
       // Deduplicate by id — catalogue items take precedence.
       const catalogueIds = new Set(remoteAssets.map((a) => a.id));
       const extraWatched = watchedAssets.filter((a) => !catalogueIds.has(a.id));
@@ -398,6 +472,19 @@ export default function CoOwnHubScreen() {
           hapticFeedback="light"
         >
           <Ionicons name="pulse-outline" size={20} color={colors.textPrimary} />
+        </AnimatedPressable>
+        <AnimatedPressable
+          style={styles.headerAction}
+          onPress={() => {
+            haptics.tap();
+            navigation.navigate('CreateCoOwn');
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Issue a Co-Own"
+          accessibilityHint="List an eligible luxury asset for shared ownership"
+          hapticFeedback="light"
+        >
+          <Ionicons name="add-outline" size={22} color={colors.textPrimary} />
         </AnimatedPressable>
       </View>
     ),
@@ -527,29 +614,28 @@ export default function CoOwnHubScreen() {
     const hasPositions = yourPositions.length > 0;
     const rows: HubRow[] = [];
 
-    // Holders: positions first (personal portfolio), then market tabs + grid.
-    // Non-holders: market highlights first (education/discovery), then tabs + grid.
+    // Holders: positions first (personal portfolio), then the grid.
+    // Non-holders: market highlights first (education/discovery), then grid.
     // Per doc 42: "Do not always put generic highlights before existing holdings."
-    // This keeps tabs at index 1 so stickyHeaderIndices={[1]} always pins the
-    // market segment selector (holders: positions[0] → tabs[1]; non-holders:
-    // highlights[0] → tabs[1]).
+    // The segment tabs are no longer a row — CoOwnSegmentTabs is fixed under
+    // the header so the market switch is always visible at the top.
     if (hasPositions) {
       rows.push({ kind: 'positions', key: 'positions' });
     } else {
       rows.push({ kind: 'highlights', key: 'highlights' });
     }
 
-    rows.push({ kind: 'tabs', key: 'tabs' });
     rows.push({ kind: 'instrumentsHeader', key: 'instruments-header' });
 
     if (instrumentRows.length === 0) {
       rows.push({ kind: 'instrumentsEmpty', key: 'instruments-empty' });
     } else {
       instrumentRows.forEach((assets, index) => {
-        rows.push({ kind: 'instrumentRow', key: `instruments-${index}-${assets.map((asset) => asset.id).join('-')}`, assets });
+        // Key by row position, not content — embedding asset ids meant every
+        // infinite-scroll append changed all keys and remounted every row.
+        rows.push({ kind: 'instrumentRow', key: `instruments-${index}`, assets });
       });
     }
-    rows.push({ kind: 'remaining', key: 'remaining' });
     return rows;
   }, [instrumentRows, yourPositions.length]);
 
@@ -584,45 +670,6 @@ export default function CoOwnHubScreen() {
     );
   }, [format1ze, formatLocal, navigation, totalPositionValue]);
 
-  const renderTabs = React.useCallback(() => (
-    <View style={[styles.tabsSurface, { backgroundColor: colors.background, borderBottomColor: colors.border, borderTopColor: colors.border }]}>
-      <View style={styles.tabsRow} accessibilityRole="tablist">
-        {SEGMENTS.map((segment) => {
-          const isActive = activeSegment === segment;
-          return (
-            <AnimatedPressable
-              key={segment}
-              onPress={() => {
-                haptics.selection();
-                setActiveSegment(segment);
-              }}
-              style={styles.tab}
-              scaleValue={0.98}
-              activeOpacity={0.72}
-              accessibilityRole="tab"
-              accessibilityLabel={`${SEGMENT_LABELS[segment]} tab, ${segmentCounts[segment]} items`}
-              accessibilityState={{ selected: isActive }}
-            >
-              <Text
-                style={[
-                  styles.tabText,
-                  {
-                    color: isActive ? colors.textPrimary : colors.textSecondary,
-                    fontFamily: isActive ? Typography.family.semibold : Typography.family.regular,
-                  },
-                ]}
-                maxFontSizeMultiplier={1.35}
-              >
-                {SEGMENT_LABELS[segment]}
-              </Text>
-              {isActive ? <View style={[styles.tabIndicator, { backgroundColor: colors.textPrimary }]} /> : null}
-            </AnimatedPressable>
-          );
-        })}
-      </View>
-    </View>
-  ), [activeSegment, colors, segmentCounts]);
-
   const renderRow = React.useCallback(({ item }: { item: HubRow }) => {
     if (item.kind === 'highlights') {
       return (
@@ -631,8 +678,6 @@ export default function CoOwnHubScreen() {
         </View>
       );
     }
-
-    if (item.kind === 'tabs') return renderTabs();
 
     if (item.kind === 'positions') {
       return (
@@ -887,35 +932,11 @@ export default function CoOwnHubScreen() {
       );
     }
 
-    return (
-      <View style={styles.remainingContent}>
-        <AnimatedPressable
-          onPress={() => {
-            haptics.tap();
-            navigation.navigate('CreateCoOwn');
-          }}
-          style={[styles.creatorLink, { borderBottomColor: colors.border }]}
-          accessibilityRole="button"
-          accessibilityLabel="Issue a new Co-Own item"
-        >
-          <View style={[styles.creatorIcon, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name="add-outline" size={20} color={colors.textSecondary} />
-          </View>
-          <View style={styles.creatorBody}>
-            <Text style={[styles.creatorTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.25}>Issue a Co-Own</Text>
-            <Text style={[styles.creatorText, { color: colors.textSecondary }]} numberOfLines={2} maxFontSizeMultiplier={1.3}>List an eligible luxury asset for shared ownership.</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-        </AnimatedPressable>
-        <CoOwnEducationCard
-          onLearnMore={() => navigation.navigate('CoOwnOnboarding')}
-          learnMoreLabel="Read full guide"
-        />
-      </View>
-    );
+    return null;
   }, [
     activeSegment,
     coOwnWatchlist,
+    coOwnWatchStatus,
     colors,
     columns,
     filteredAssets.length,
@@ -930,37 +951,80 @@ export default function CoOwnHubScreen() {
     navigation,
     query,
     renderPosition,
-    renderTabs,
     sortBy,
     toggleCoOwnWatch,
     yourPositions,
   ]);
 
+  // Fixed segment selector — always at the top, directly under the header.
+  const segmentTabs = (
+    <CoOwnSegmentTabs
+      activeSegment={activeSegment}
+      counts={segmentCounts}
+      onSelect={setActiveSegment}
+    />
+  );
+
+  const listFooter = isLoadingMore ? (
+    <View
+      style={styles.listFooter}
+      accessibilityRole="progressbar"
+      accessibilityLabel="Loading more markets"
+      accessibilityHint="Additional markets will appear when loaded"
+    >
+      <ActivityIndicator size="small" color={colors.textSecondary} />
+    </View>
+  ) : loadMoreError ? (
+    <AnimatedPressable
+      onPress={handleLoadMore}
+      style={styles.listFooter}
+      accessibilityRole="button"
+      accessibilityLabel="Retry loading more markets"
+      accessibilityHint="Fetches the next page of markets"
+    >
+      <Text style={[styles.listFooterText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.25}>
+        Couldn't load more — tap to retry
+      </Text>
+    </AnimatedPressable>
+  ) : null;
+
   if (isSyncing && remoteAssets.length === 0) {
     return (
       <FlagshipScreen
         header={<FlagshipHeader title="Co-Own" onBack={handleBack} rightAction={headerRightAction} />}
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
       >
+        {segmentTabs}
         <CoOwnHubSkeleton />
       </FlagshipScreen>
     );
   }
 
-  if (isError && remoteAssets.length === 0) {
+  // Error state: hide the canvas only when the watchlist segment has no
+  // items — watched assets are fetched independently of the catalogue, so
+  // a catalogue failure must not bury them.
+  if (isError && remoteAssets.length === 0 && !(activeSegment === 'watchlist' && watchedAssets.length > 0)) {
     return (
       <FlagshipScreen
         header={<FlagshipHeader title="Co-Own" onBack={handleBack} rightAction={headerRightAction} />}
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
       >
+        {segmentTabs}
         <CoOwnStateCanvas variant="error" actionLabel="Try again" onAction={() => loadData()} />
       </FlagshipScreen>
     );
   }
 
-  if (remoteAssets.length === 0) {
+  if (remoteAssets.length === 0 && !(activeSegment === 'watchlist' && watchedAssets.length > 0)) {
     return (
       <FlagshipScreen
         header={<FlagshipHeader title="Co-Own" onBack={handleBack} rightAction={headerRightAction} />}
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
       >
+        {segmentTabs}
         <CoOwnStateCanvas
           variant="empty"
           title="No items yet"
@@ -982,19 +1046,22 @@ export default function CoOwnHubScreen() {
       scrollEnabled={false}
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
+      {segmentTabs}
       <CoOwnOfflineBanner isOffline={isOffline} />
       <FlashList
         ref={flashListRef}
         data={hubRows}
         renderItem={renderRow}
         keyExtractor={(item) => item.key}
-        stickyHeaderIndices={[1]}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         onScroll={(e) => {
           scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
         }}
         scrollEventThrottle={16}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.4}
+        ListFooterComponent={listFooter}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -1042,40 +1109,6 @@ const styles = StyleSheet.create({
   highlightsSection: {
     paddingTop: Space.sm,
     paddingBottom: Space.md,
-  },
-  tabsSurface: {
-    minHeight: Control.hit + 6,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    justifyContent: 'flex-end',
-  },
-  tabsRow: {
-    minHeight: Control.hit + 5,
-    paddingHorizontal: Space.sm,
-    flexDirection: 'row',
-    alignItems: 'stretch',
-  },
-  tab: {
-    minWidth: 0,
-    minHeight: Control.hit + 5,
-    flex: 1,
-    paddingHorizontal: Space.xs,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  tabText: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    letterSpacing: LetterSpacing.normal - 0.1,
-    textAlign: 'center',
-  },
-  tabIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    width: Space.lg + 4,
-    height: Stroke.emphasis,
-    borderRadius: Stroke.hairline,
   },
   majorSection: {
     paddingTop: Space.lg,
@@ -1241,38 +1274,13 @@ const styles = StyleSheet.create({
     minHeight: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xl - 4,
     paddingHorizontal: Space.md,
   },
-  remainingContent: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.lg,
-    gap: Space.md,
-  },
-  creatorLink: {
-    minHeight: Space.xxl + Space.xl + Space.xs,
+  listFooter: {
+    minHeight: Control.hit,
     paddingVertical: Space.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  creatorIcon: {
-    width: Control.hit,
-    height: Control.hit,
-    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
   },
-  creatorBody: {
-    flex: 1,
-    minWidth: 0,
-    gap: Space.xs / 2,
-  },
-  creatorTitle: {
-    fontSize: TypographyV2.bodyStrong.size,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
-  },
-  creatorText: {
+  listFooterText: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: TypographyV2.meta.fontFamily,

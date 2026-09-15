@@ -17,7 +17,7 @@
  * per-clip adjustments — matching the Instagram Edits / Meta Edits
  * adjustment layer semantics.
  */
-import type { CreatorLayer, EffectNode, AdjustmentLayer } from '../../composition';
+import type { CreatorLayer, EffectNode, AdjustmentLayer } from '../projectStore/composition';
 
 // ── Types ───────────────────────────────────────────────────────────
 

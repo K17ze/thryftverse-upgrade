@@ -27,6 +27,9 @@ interface RefundRouteDependencies {
     refundAmount: number;
     reason?: string;
     metadata: Record<string, unknown>;
+    /** Caller transaction — required for the oneze_internal rail so the
+     *  wallet re-credit commits atomically with the refund row. */
+    client?: PoolClient;
   }) => Promise<{
     providerRefundRef: string;
     refundStatus: 'pending' | 'succeeded' | 'failed' | 'cancelled';
@@ -273,6 +276,9 @@ export function registerRefundRoutes({
         money: moneyFromMinor('GBP', String(Math.round(opts.amountGbp * 100))),
         refundAmount: opts.amountGbp,
         reason: opts.reason,
+        // Join this transaction so a oneze_internal wallet re-credit commits
+        // atomically with the refund row.
+        client,
         metadata: {
           source: 'refund_execution',
           orderId: opts.orderId,

@@ -52,6 +52,7 @@ import {
   LiveStreamErrorScreen,
   LiveStreamEndedScreen } from '../components/livestream/LiveStreamStateScreens';
 import { resolveStageCaption } from '../components/livestream/livestreamUtils';
+import { LiveKitVideoSurface } from '../components/live/BroadcastPreview';
 
 type LiveStreamViewerRoute = RouteProp<RootStackParamList, 'LiveStreamViewer'>;
 
@@ -110,9 +111,11 @@ export function LiveStreamViewerScreen() {
   const goBack = useCallback(() => navigation.goBack(), [navigation]);
 
   // Video stage caption — honest about what the LiveKit room is doing.
+  // hasRemoteVideo means a real subscribed track object exists, not just
+  // publication metadata.
   const hasVideoCredentials = Boolean(stream?.wsUrl && stream?.token);
-  const hasRemoteVideo = liveKit.remoteParticipants.some((p) =>
-    p.tracks.some((trackInfo) => trackInfo.kind === 'video'));
+  const remoteVideoTrack = liveKit.remoteVideoTrack;
+  const hasRemoteVideo = Boolean(remoteVideoTrack);
   const stageCaption = resolveStageCaption({
     hasVideoCredentials,
     roomState: liveKit.state,
@@ -145,8 +148,17 @@ export function LiveStreamViewerScreen() {
     <View style={styles.stage}>
       <StatusBar barStyle="light-content" />
 
-      {/* Video plane — the dominant object. LiveKit connects in the
-          background; when no video can play the stage states it plainly. */}
+      {/* Video plane — the dominant object. When a remote video track is
+          subscribed it fills the stage; otherwise the caption states what
+          the room is doing (connecting / waiting / unavailable). */}
+      {remoteVideoTrack ? (
+        <LiveKitVideoSurface
+          track={remoteVideoTrack}
+          style={StyleSheet.absoluteFill}
+          objectFit="cover"
+          accessibilityLabel={t('video.a11yLabel')}
+        />
+      ) : null}
       {stageCaption ? (
         <View style={styles.stageCenter} pointerEvents="none">
           <Text style={[styles.stageCaption, { color: colors.scrimTextSecondary }]}>

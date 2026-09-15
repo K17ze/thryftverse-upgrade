@@ -9,7 +9,7 @@
  * poster composition surface, the creator canvas, and the layers sheet all
  * share one source of truth for layer-type accent colouring.
  */
-import type { CreatorLayer, LayerType } from '../../../creator/composition';
+import type { CreatorLayer, LayerType } from '../../../creator/core/projectStore/composition';
 
 // ── Accent colour constants ──────────────────────────────────────────
 /** Text layers — blue. */

@@ -6,6 +6,7 @@ import type { InventoryScreenStyles } from './inventoryScreenStyles';
 
 export interface InventoryBulkActionsBarProps {
   selectedCount: number;
+  onEdit: () => void;
   onPause: () => void;
   onResume: () => void;
   onDelete: () => void;
@@ -17,6 +18,7 @@ export interface InventoryBulkActionsBarProps {
 /** Bulk actions bar — docked at the bottom while selection mode is active. */
 export function InventoryBulkActionsBar({
   selectedCount,
+  onEdit,
   onPause,
   onResume,
   onDelete,
@@ -32,6 +34,17 @@ export function InventoryBulkActionsBar({
         <Text style={styles.bulkBarCount}>{selectedCount} selected</Text>
       </View>
       <View style={styles.bulkBarActions}>
+        {selectedCount > 0 ? (
+          <Pressable
+            onPress={onEdit}
+            style={styles.bulkActionBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Edit selected listings"
+          >
+            <Ionicons name="create-outline" size={18} color={colors.textPrimary} />
+            <Text style={styles.bulkActionText}>Edit</Text>
+          </Pressable>
+        ) : null}
         <Pressable
           onPress={onPause}
           style={styles.bulkActionBtn}

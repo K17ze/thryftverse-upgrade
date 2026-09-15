@@ -20,6 +20,10 @@ export interface LookCreator {
 export interface LookMediaEntry {
   url: string;
   mediaType: 'image' | 'video';
+  /** JPEG preview for video slides (m3u8 can't render in an Image). */
+  posterUrl?: string | null;
+  /** Progressive MP4 for save/share on video slides. */
+  downloadUrl?: string | null;
   mediaFinalizationId?: string;
   mediaAssetId?: string;
 }
@@ -31,6 +35,11 @@ export interface LookApiItem {
   title: string;
   caption: string;
   mediaUrl: string;
+  /** JPEG preview for video looks — cover tiles must use this instead of
+   *  mediaUrl, which is an m3u8 playlist for processed/rendered videos. */
+  posterUrl?: string | null;
+  /** Progressive MP4 for save/share flows on video looks. */
+  downloadUrl?: string | null;
   /** Media type — defaults to 'image' when absent for backward compatibility */
   mediaType?: 'image' | 'video';
   /** Additional carousel slides beyond the primary mediaUrl. Empty array when

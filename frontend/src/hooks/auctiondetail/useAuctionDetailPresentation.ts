@@ -7,6 +7,7 @@ import type {
 import type { AuctionEffectiveState } from '../useServerClock';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useFormattedPrice } from '../useFormattedPrice';
+import { useAuctionValueLockup, type AuctionValueLockup } from '../auctionhome';
 import { HapticPatterns } from '../../utils/hapticPatterns';
 import { Space, DockConstants } from '../../theme/designTokens';
 import {
@@ -28,6 +29,7 @@ import {
   resolveReserveStatus,
   buildAuctionMediaItems,
   resolveTerminalAmountText,
+  resolveTerminalAmountGbp,
   auctionHasValidWinner,
   isAuctionPaymentConfirmed,
   resolveSellerSaleTitle,
@@ -60,7 +62,10 @@ export interface AuctionDetailPresentation {
   stateAction: StateActionConfig | null;
   priceLabel: DetailPriceLabel;
   priceAmount: number;
+  /** Primary display value — 1ZE in ize/both modes, fiat in fiat mode. */
   priceText: string;
+  /** Subordinate conversion line (local fiat) — only in 'both' mode. */
+  priceEquivalentText: string | null;
   countdown: { text: string; isFinalMinutes: boolean; stage: CountdownStage };
   presentation: AuctionPresentationState | null;
   accessibilityLabel: string;
@@ -85,6 +90,14 @@ export interface AuctionDetailPresentation {
   auctionMediaItems: AuctionMediaItemView[];
   auctionFulfilment: AuctionFulfilmentSummary | null;
   terminalAmountText: string;
+  /** Terminal amount split for the dock — primary unit + subordinate
+   *  conversion so the dock value never renders one oversized dual
+   *  string that pushes the CTA off-screen. */
+  terminalPrimaryText: string;
+  terminalEquivalentText: string | null;
+  /** Min-next-bid lockup for the live dock value / outbid row. Null
+   *  when the backend reports no minimum. */
+  minimumNextBidLockup: AuctionValueLockup | null;
   isPaymentConfirmed: boolean;
   hasValidWinner: boolean;
   sellerSaleTitle: string;
@@ -122,6 +135,13 @@ export function useAuctionDetailPresentation({
 }: UseAuctionDetailPresentationParams): AuctionDetailPresentation {
   const { colors } = useAppTheme();
   const { formatFromFiat } = useFormattedPrice();
+  // Canonical auction value lockup — the same formatter the auction
+  // home cards use. It splits the dual-currency amount into a dominant
+  // primary value (1ZE, or fiat in fiat-only mode) and a subordinate
+  // local-currency equivalent so detail surfaces never render one
+  // oversized "X 1ze · £Y" string that can wrap or push the CTA off
+  // the dock row.
+  const { formatValueLockup } = useAuctionValueLockup();
 
   const detailInput: AuctionDetailInput | null = React.useMemo(() => {
     if (!auction) return null;
@@ -186,10 +206,17 @@ export function useAuctionDetailPresentation({
     return resolveDetailPriceAmount(detailInput);
   }, [detailInput]);
 
-  const priceText = React.useMemo(() => {
-    if (priceLabel === 'No bids') return 'No bids';
-    return formatFromFiat(priceAmount, 'GBP');
-  }, [priceLabel, priceAmount, formatFromFiat]);
+  const priceLockup = React.useMemo<AuctionValueLockup>(() => {
+    if (priceLabel === 'No bids') return { izeText: 'No bids', localText: null };
+    return formatValueLockup(priceAmount);
+  }, [priceLabel, priceAmount, formatValueLockup]);
+  const priceText = priceLockup.izeText;
+  const priceEquivalentText = priceLockup.localText;
+  // Screen readers keep the full dual amount — the same information
+  // the previous combined string carried.
+  const priceA11yText = priceEquivalentText
+    ? `${priceText} · ${priceEquivalentText}`
+    : priceText;
 
   const countdown = React.useMemo(() => {
     if (!timing) return { text: '', isFinalMinutes: false, stage: 'plenty' as const };
@@ -213,11 +240,11 @@ export function useAuctionDetailPresentation({
       detailInput,
       timing,
       priceLabel,
-      priceText,
+      priceA11yText,
       countdown.text,
       detailInput.viewerState,
     );
-  }, [detailInput, timing, priceLabel, priceText, countdown.text]);
+  }, [detailInput, timing, priceLabel, priceA11yText, countdown.text]);
 
   const isLive = effectiveState === 'live';
   const isUpcoming = effectiveState === 'upcoming';
@@ -289,6 +316,22 @@ export function useAuctionDetailPresentation({
   const terminalAmountText = auction
     ? resolveTerminalAmountText(auction, formatFromFiat)
     : 'Amount unavailable';
+  // The dock renders the terminal amount through the same value
+  // lockup split — primary unit dominant, local equivalent demoted —
+  // so a dual-mode string can never widen the dock's value cluster.
+  const terminalLockup = React.useMemo<AuctionValueLockup>(() => {
+    const gbp = auction ? resolveTerminalAmountGbp(auction) : null;
+    return gbp != null
+      ? formatValueLockup(gbp)
+      : { izeText: 'Amount unavailable', localText: null };
+  }, [auction, formatValueLockup]);
+  const terminalPrimaryText = terminalLockup.izeText;
+  const terminalEquivalentText = terminalLockup.localText;
+
+  const minimumNextBidLockup = React.useMemo<AuctionValueLockup | null>(() => {
+    if (!auction || auction.minimumNextBidGbp <= 0) return null;
+    return formatValueLockup(auction.minimumNextBidGbp);
+  }, [auction, formatValueLockup]);
 
   // ── Truthful terminal sale-state labels (audit P0.5) ──
   // `ended` is not `settled`. Derive the sale title from the authoritative
@@ -379,6 +422,7 @@ export function useAuctionDetailPresentation({
     priceLabel,
     priceAmount,
     priceText,
+    priceEquivalentText,
     countdown,
     presentation,
     accessibilityLabel,
@@ -403,6 +447,9 @@ export function useAuctionDetailPresentation({
     auctionMediaItems,
     auctionFulfilment,
     terminalAmountText,
+    terminalPrimaryText,
+    terminalEquivalentText,
+    minimumNextBidLockup,
     isPaymentConfirmed,
     hasValidWinner,
     sellerSaleTitle,

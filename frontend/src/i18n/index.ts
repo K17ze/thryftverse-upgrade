@@ -1125,6 +1125,8 @@ export const EN_TRANSLATIONS = {
   'myListings.listingCount': '{count} {word}',
   'myListings.listingWord': 'listing',
   'myListings.listingWordPlural': 'listings',
+  'myListings.promotions': 'Promotions',
+  'myListings.partialCounts': 'Counts reflect loaded listings',
   'commerce.wallet.error.unableToLoad': 'Unable to load wallet',
   'commerce.wallet.action.tryAgain': 'Try again',
   'commerce.wallet.a11y.viewAllWalletActivity': 'View all wallet activity',

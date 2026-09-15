@@ -13,9 +13,10 @@
  */
 
 import { useCallback, useMemo, useState } from 'react';
-import type { CreatorLayer, EffectNode } from '../composition';
+import type { CreatorLayer, EffectNode } from '../core/projectStore/composition';
 import type { AdjustNode, AdjustParameterId } from '../tools/effects';
 import { ADJUST_PARAM_MAP, computeAutoAdjust, isAutoAdjustNode } from '../tools/effects';
+import { buildFilterEffectNode } from '../tools/effects/filterNode';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -97,7 +98,7 @@ export function useLookEffects(
       setLiveFilterAmount(null);
       const newEffects: EffectNode[] = [
         ...currentEffects.filter((n) => n.type !== 'filter'),
-        { type: 'filter', id: presetId, amount: 1 },
+        buildFilterEffectNode(presetId),
       ];
       updateLayer(
         selectedMediaLayer.id,
@@ -276,7 +277,7 @@ export function useLookEffects(
         ...currentEffects.filter(
           (n) => n.type !== 'filter' || !n.id.startsWith('ai:'),
         ),
-        { type: 'filter', id: `ai:${effectId}`, amount: intensity },
+        buildFilterEffectNode(`ai:${effectId}`, intensity),
       ];
       updateLayer(
         selectedMediaLayer.id,

@@ -151,6 +151,10 @@ export function useListingPublishPipeline(params: ListingPublishPipelineParams) 
     // Performance mark: listing creation flow start (validation passed).
     safeMark('listing:create:start');
 
+    // Double-tap guard must cover the co_own redirect too — replace() on the
+    // same route still churns the navigation stack on a rapid second tap.
+    if (isPublishing || isPublishingRef.current) return;
+
     if (listingMode === 'co_own') {
       const prefillResult = buildCreateCoOwnPrefillFromSell({
         shareCountInput,
@@ -167,7 +171,9 @@ export function useListingPublishPipeline(params: ListingPublishPipelineParams) 
 
       setErrorMsg(null);
       haptics.success();
+      isPublishingRef.current = true;
       navigation.replace('CreateCoOwn', prefillResult.params);
+      isPublishingRef.current = false;
       return;
     }
 
@@ -183,7 +189,6 @@ export function useListingPublishPipeline(params: ListingPublishPipelineParams) 
       return;
     }
 
-    if (isPublishing || isPublishingRef.current) return;
     isPublishingRef.current = true;
     setIsPublishing(true);
     setErrorMsg(null);

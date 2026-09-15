@@ -10,7 +10,7 @@ import {
 import { FlashList } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, useRoute, type RouteProp } from '@react-navigation/native';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
@@ -38,6 +38,7 @@ import {
   normaliseOrderStatus,
   resolveCapabilities,
   type OrderRole } from '../components/orders/orderCapabilities';
+import type { RootStackParamList } from '../navigation/types';
 import { t } from '../i18n';
 
 interface DateGroup {
@@ -80,6 +81,9 @@ function groupOrdersByDate(orders: OrderViewModel[]): DateGroup[] {
 
 export default function MyOrdersScreen() {
   const navigation = useNavigation<any>();
+  // Deep-link scope (e.g. Seller Hub "Ship orders" → selling + needs_action).
+  // Absent params keep the historical default: the 'all' tab.
+  const route = useRoute<RouteProp<RootStackParamList, 'MyOrders'>>();
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -88,7 +92,7 @@ export default function MyOrdersScreen() {
   const viewerId = currentUser?.id;
   const { isOffline } = useConnectivity();
 
-  const [activeTab, setActiveTab] = useState<OrdersTab>('all');
+  const [activeTab, setActiveTab] = useState<OrdersTab>(route.params?.tab ?? 'all');
   const [orders, setOrders] = useState<CommerceUserOrder[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -100,7 +104,7 @@ export default function MyOrdersScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [filter, setFilter] = useState<OrdersFilterState>({
-    classification: 'all',
+    classification: route.params?.classification ?? 'all',
     year: null });
   const [filterSheetVisible, setFilterSheetVisible] = useState(false);
 
@@ -178,7 +182,14 @@ export default function MyOrdersScreen() {
       try {
         const result = await listUserOrders(viewerId, buildParams(cursor));
         if (cursor) {
-          setOrders((prev) => [...prev, ...result.items]);
+          // Dedup by id — a focus-refetch that replaced the list between
+          // pages, or a status mutation that re-orders rows, must not render
+          // the same order twice.
+          setOrders((prev) => {
+            const seen = new Set(prev.map((o) => o.id));
+            const fresh = result.items.filter((o) => !seen.has(o.id));
+            return [...prev, ...fresh];
+          });
         } else {
           setOrders(result.items);
         }
@@ -268,13 +279,13 @@ export default function MyOrdersScreen() {
 
       // Canonical capability projection (P0-3): the list consumes the same
       // resolver as Order Detail rather than reinterpreting status strings.
-      // The list payload carries no resolution/review flags, so those are
-      // resolved as false — the detail screen is the authority for them.
+      // hasReview now arrives on the list payload; hasOpenResolution stays
+      // resolved in the detail screen, which remains the authority for it.
       const capabilities = resolveCapabilities({
         status: order.status,
         role,
         hasOpenResolution: false,
-        hasReview: false,
+        hasReview: order.hasReview === true,
         hasTracking: order.trackingNumber != null,
         fulfilmentSnapshot: order.fulfilmentSnapshot ?? null });
 

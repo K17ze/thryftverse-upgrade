@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { appendDomainEvent } from '../lib/domainOutbox.js';
 import { emitOrderCommerceCard } from '../lib/orderChatCards.js';
 import { fetchSellerAwayState } from '../lib/sellerAway.js';
+import { getSellerReach } from '../lib/sellerReach.js';
+import { cancelOrderOnReservationExpiry } from '../lib/commerceCheckoutLifecycle.js';
 
 type ListingOffersRouteDependencies = {
   app: FastifyInstance;
@@ -276,6 +278,20 @@ export const registerListingOfferRoutes = ({
           awayMessage: sellerAway.awayMessage,
         };
       }
+
+      // Seller reach (lib/sellerReach.ts): a 'suspended' seller is excluded
+      // from distribution — a new offer is purchase intent toward a listing
+      // that cannot transact, so it is rejected. 'limited' does not block.
+      const sellerReach = await getSellerReach(client, listing.seller_id);
+      if (sellerReach?.state === 'suspended') {
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return {
+          ok: false,
+          error: 'This seller is currently restricted — their listings are not available for purchase',
+          code: 'SELLER_RESTRICTED',
+        };
+      }
       const originalPriceGbp = Number(listing.price_gbp);
       if (payload.offerPriceGbp > originalPriceGbp * 2) {
         await client.query('ROLLBACK');
@@ -505,6 +521,21 @@ export const registerListingOfferRoutes = ({
             code: 'SELLER_AWAY',
             sellerAwayUntil: sellerAway.awayUntil,
             awayMessage: sellerAway.awayMessage,
+          };
+        }
+
+        // Seller reach (lib/sellerReach.ts): a buyer-authored counter is
+        // fresh purchase intent toward a suspended seller whose listings
+        // cannot transact — rejected. A suspended seller's own counter
+        // binds nobody; the accept route is the order-bind gate.
+        const counterSellerReach = await getSellerReach(client, parent.seller_id);
+        if (counterSellerReach?.state === 'suspended') {
+          await client.query('ROLLBACK');
+          reply.code(409);
+          return {
+            ok: false,
+            error: 'This seller is currently restricted — their listings are not available for purchase',
+            code: 'SELLER_RESTRICTED',
           };
         }
       }
@@ -805,6 +836,14 @@ export const registerListingOfferRoutes = ({
       }
       if (offer.status !== 'pending') {
         await client.query('ROLLBACK');
+        // expireOverdueOffers already transitioned overdue rows to 'expired'
+        // before this read — honour the 410 contract for them instead of the
+        // generic 409 (the in-transaction expiry path below stays as the
+        // sub-millisecond race fallback).
+        if (offer.status === 'expired') {
+          reply.code(410);
+          return { ok: false, error: 'Offer has expired' };
+        }
         reply.code(409);
         return { ok: false, error: `A ${offer.status} offer cannot be accepted` };
       }
@@ -834,6 +873,45 @@ export const registerListingOfferRoutes = ({
         await client.query('COMMIT');
         reply.code(410);
         return { ok: false, error: 'Offer has expired' };
+      }
+
+      // Same hard-pause rule as offer creation and buyer-authored counters:
+      // a buyer accepting a seller-authored counter creates a new order +
+      // reservation that binds the seller — an away seller cannot fulfil it.
+      // When the SELLER is the actor (accepting a buyer's offer) they are
+      // demonstrably active, so no gate applies — mirroring the counter
+      // route's reasoning for seller-authored counters.
+      if (actorUserId === offer.buyer_id) {
+        const sellerAway = await fetchSellerAwayState(client, offer.seller_id);
+        if (sellerAway.away) {
+          await client.query('ROLLBACK');
+          reply.code(409);
+          return {
+            ok: false,
+            error: 'This seller is away — their listings are paused until they return',
+            code: 'SELLER_AWAY',
+            sellerAwayUntil: sellerAway.awayUntil,
+            awayMessage: sellerAway.awayMessage,
+          };
+        }
+      }
+
+      // Seller reach (lib/sellerReach.ts): accept is the order-bind point —
+      // whichever participant accepts, the created order binds the buyer to
+      // pay the seller, so a suspended seller's offer can never convert.
+      // Gated for both actors: unlike sellerAway there is no "demonstrably
+      // active" exemption — the restriction is on the seller's ability to
+      // sell, not their presence in the app. This also covers Smart Sell
+      // auto-accept, which routes through this endpoint.
+      const acceptSellerReach = await getSellerReach(client, offer.seller_id);
+      if (acceptSellerReach?.state === 'suspended') {
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return {
+          ok: false,
+          error: 'This seller is currently restricted — their listings are not available for purchase',
+          code: 'SELLER_RESTRICTED',
+        };
       }
 
       const listingResult = await client.query<{
@@ -951,7 +1029,7 @@ export const registerListingOfferRoutes = ({
       );
       await client.query(
         `UPDATE listings
-         SET status = 'paused', updated_at = NOW()
+         SET status = 'paused', pause_source = 'checkout_reservation', updated_at = NOW()
          WHERE id = $1`,
         [offer.listing_id],
       );
@@ -1242,45 +1320,65 @@ export const registerListingOfferRoutes = ({
       const expiredOffers = await expireOverdueOffers(client);
       await appendOfferExpiredEvents(client, expiredOffers, request.id);
       const count = expiredOffers.length;
+      // Pass 1 — cancel 'created' orders bound to expired reservations.
+      // Each cancel runs the shared airtight guard (row lock → post-lock
+      // in-flight check → guarded UPDATE): an order whose payment intent
+      // is still live is skipped, so a late provider 'succeeded' can still
+      // settle into a payable order instead of capturing money against a
+      // cancelled one. The reconcile_listing_checkout_from_order trigger
+      // flips each bound reservation to 'cancelled' and restores the
+      // listing only when the pause is reservation-owned (pause_source,
+      // migration 305).
+      const expiredOrderCandidates = await client.query<{
+        order_id: string;
+        listing_id: string;
+      }>(
+        `SELECT r.order_id, r.listing_id
+         FROM listing_checkout_reservations r
+         JOIN orders o ON o.id = r.order_id
+         WHERE r.status = 'active'
+           AND r.expires_at <= NOW()
+           AND o.status = 'created'`,
+      );
+      const cancelledOrders: Array<{ order_id: string; listing_id: string }> = [];
+      for (const candidate of expiredOrderCandidates.rows) {
+        const outcome = await cancelOrderOnReservationExpiry(client, candidate.order_id);
+        if (outcome === 'cancelled') {
+          cancelledOrders.push(candidate);
+        }
+      }
+
+      // Pass 2 — drifted reservations: the bound order is already terminal
+      // or missing, so the trigger can no longer reach them. Expire the
+      // reservation row and restore the listing under the same provenance
+      // and exclusivity conditions the trigger enforces. Reservations whose
+      // 'created' order is shielded by an in-flight intent are skipped by
+      // the EXISTS clause and stay 'active' for the reconciler.
       const expiredReservations = await client.query<{
         listing_id: string;
         order_id: string;
       }>(
-        `UPDATE listing_checkout_reservations
+        `UPDATE listing_checkout_reservations r
          SET status = 'expired', updated_at = NOW()
-         WHERE status = 'active'
-           AND expires_at <= NOW()
+         WHERE r.status = 'active'
+           AND r.expires_at <= NOW()
            AND NOT EXISTS (
              SELECT 1
-             FROM orders checkout_order
-             JOIN payment_intents intent
-               ON intent.id = checkout_order.payment_intent_id
-             WHERE checkout_order.id = listing_checkout_reservations.order_id
-               AND (
-                 intent.status = 'processing'
-                 OR (
-                   intent.status = 'requires_confirmation'
-                   AND intent.updated_at > NOW() - INTERVAL '2 hours'
-                 )
-               )
+             FROM orders o
+             WHERE o.id = r.order_id
+               AND o.status = 'created'
            )
-         RETURNING listing_id, order_id`,
+         RETURNING r.listing_id, r.order_id`,
       );
 
       if (expiredReservations.rowCount) {
-        const orderIds = expiredReservations.rows.map((row) => row.order_id);
         const listingIds = expiredReservations.rows.map((row) => row.listing_id);
         await client.query(
-          `UPDATE orders
-           SET status = 'cancelled', updated_at = NOW()
-           WHERE id = ANY($1::text[]) AND status = 'created'`,
-          [orderIds],
-        );
-        await client.query(
           `UPDATE listings l
-           SET status = 'active', updated_at = NOW()
+           SET status = 'active', pause_source = NULL, updated_at = NOW()
            WHERE l.id = ANY($1::text[])
              AND l.status = 'paused'
+             AND l.pause_source = 'checkout_reservation'
              AND NOT EXISTS (
                SELECT 1
                FROM listing_checkout_reservations r
@@ -1293,6 +1391,13 @@ export const registerListingOfferRoutes = ({
       // In-thread commerce cards: each expired reservation cancelled its
       // pending order. The emit re-verifies the persisted status, so a
       // reservation whose order was never actually cancelled no-ops.
+      for (const cancelled of cancelledOrders) {
+        await emitOrderCommerceCard({
+          orderId: cancelled.order_id,
+          stateType: 'order_cancelled',
+          log: request.log,
+        });
+      }
       for (const expired of expiredReservations.rows) {
         await emitOrderCommerceCard({
           orderId: expired.order_id,
@@ -1313,6 +1418,7 @@ export const registerListingOfferRoutes = ({
         ok: true,
         expiredCount: count,
         expiredCheckoutReservations: expiredReservations.rowCount ?? 0,
+        expiredReservationOrdersCancelled: cancelledOrders.length,
       };
     } catch (error) {
       await client.query('ROLLBACK');

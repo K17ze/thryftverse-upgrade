@@ -57,7 +57,7 @@ function LookMasonryTileImpl({
       >
         <View style={[styles.imageWrap, { aspectRatio }]}>
           <CachedImage
-            uri={look.mediaUrl}
+            uri={isVideo ? (look.posterUrl ?? look.mediaUrl) : look.mediaUrl}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
             priority="high"
@@ -111,7 +111,7 @@ function LookMasonryTileImpl({
     >
       <View style={[styles.imageWrap, { aspectRatio }]}>
         <CachedImage
-          uri={look.mediaUrl}
+          uri={isVideo ? (look.posterUrl ?? look.mediaUrl) : look.mediaUrl}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
           priority="normal"

@@ -265,6 +265,10 @@ export const registerSyncRoutes = ({
                  price_gbp = $4,
                  image_url = $5,
                  status = $6,
+                 -- Pause provenance (migration 305): device sync is a
+                 -- seller-authored write — a synced 'paused' is 'seller'
+                 -- owned; any other status clears automated ownership.
+                 pause_source = CASE WHEN $6 = 'paused' THEN 'seller' ELSE NULL END,
                  category = $7,
                  brand = $8,
                  size = $9,

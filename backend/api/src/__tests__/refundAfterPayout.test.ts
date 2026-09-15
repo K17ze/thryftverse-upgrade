@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { planCommerceOrderRefundRecovery } from '../lib/walletMoneyPath.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Refund-after-payout recovery — Connect charge architecture
@@ -25,35 +26,11 @@ import test from 'node:test';
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Pure function that models the refund-after-payout decision.
- * This mirrors the logic in postCommerceOrderRefundLedgerReversal.
+ * The real production planner used by postCommerceOrderRefundLedgerReversal
+ * (lib/walletMoneyPath.ts) — this test exercises the shipping code path, not
+ * a local replica.
  */
-function computeRefundRecoveryPlan(input: {
-  sellerEscrowReleased: boolean;
-  sellerId: string | null;
-  subtotalGbp: number;
-  platformChargeGbp: number;
-  postageFeeGbp: number;
-  totalGbp: number;
-}): {
-  postBuyerRefund: boolean;
-  postSellerRecovery: boolean;
-  sellerRecoveryAmount: number;
-  reversePlatformFee: boolean;
-  reversePostage: boolean;
-  escrowGoesNegative: boolean;
-} {
-  const { sellerEscrowReleased, sellerId, subtotalGbp, platformChargeGbp, postageFeeGbp, totalGbp } = input;
-
-  return {
-    postBuyerRefund: totalGbp > 0,
-    postSellerRecovery: sellerEscrowReleased && sellerId !== null && subtotalGbp > 0,
-    sellerRecoveryAmount: sellerEscrowReleased && sellerId !== null ? subtotalGbp : 0,
-    reversePlatformFee: platformChargeGbp > 0,
-    reversePostage: postageFeeGbp > 0,
-    escrowGoesNegative: sellerEscrowReleased,
-  };
-}
+const computeRefundRecoveryPlan = planCommerceOrderRefundRecovery;
 
 test('refund-before-payout: no seller recovery needed', () => {
   const plan = computeRefundRecoveryPlan({

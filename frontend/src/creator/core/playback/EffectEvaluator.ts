@@ -25,10 +25,9 @@
 import type {
   EffectNode as NativeEffectNode,
   AdjustNode,
-  MatrixNode,
 } from '../../tools/effects/EffectTypes';
 import { IDENTITY_MATRIX, interpolateMatrix } from '../../tools/effects/EffectTypes';
-import type { EffectNode as CompositionEffectNode } from '../../composition';
+import type { EffectNode as CompositionEffectNode } from '../projectStore/composition';
 import {
   resolveColorMatrix,
   type ImageFilter,
@@ -362,18 +361,62 @@ export function evaluateCompositionEffectStack(
   let colorMatrix: number[] | undefined;
   let blurRadius = 0;
   let vignetteAmount = 0;
+  let grainAmount = 0;
   let hasBlur = false;
   let hasVignette = false;
+  let hasGrain = false;
 
   for (const node of stack) {
     switch (node.type) {
       case 'filter': {
+        const amount = Math.max(0, Math.min(1, node.amount));
+        if (node.recipe && node.recipe.length > 0) {
+          // Registry effects persist their render(1) recipe — fold the
+          // baked nodes so `ai:`/registry ids render their authored
+          // result instead of failing closed to identity.
+          for (const rn of node.recipe) {
+            switch (rn.type) {
+              case 'matrix': {
+                const m = interpolateMatrix(rn.matrix, amount);
+                colorMatrix = colorMatrix ? multiplyMatrix(colorMatrix, m) : m;
+                break;
+              }
+              case 'adjust': {
+                const adjustMatrix = buildAdjustmentMatrix(rn);
+                colorMatrix = colorMatrix
+                  ? multiplyMatrix(colorMatrix, adjustMatrix)
+                  : adjustMatrix;
+                if (rn.vignette !== undefined && rn.vignette > 0) {
+                  vignetteAmount += rn.vignette * amount;
+                  hasVignette = true;
+                }
+                break;
+              }
+              case 'blur': {
+                blurRadius = Math.max(blurRadius, rn.radius * amount);
+                hasBlur = true;
+                break;
+              }
+              case 'grain': {
+                grainAmount += rn.amount * amount;
+                hasGrain = true;
+                break;
+              }
+              case 'vignette': {
+                vignetteAmount += rn.amount * amount;
+                hasVignette = true;
+                break;
+              }
+            }
+          }
+          break;
+        }
         // Resolve persisted preset IDs here so every image consumer using
         // the canonical evaluator receives the same Skia matrix as the live
         // camera preview. Unknown/retired IDs fail closed to identity.
         const filterMatrix = resolveColorMatrix(
           node.id as ImageFilter,
-          Math.max(0, Math.min(1, node.amount)),
+          amount,
         );
         colorMatrix = colorMatrix
           ? multiplyMatrix(colorMatrix, filterMatrix)
@@ -433,6 +476,9 @@ export function evaluateCompositionEffectStack(
   }
   if (hasVignette && vignetteAmount > 0) {
     result.vignetteAmount = Math.min(1, vignetteAmount);
+  }
+  if (hasGrain && grainAmount > 0) {
+    result.grainAmount = Math.min(1, grainAmount);
   }
   return result;
 }

@@ -569,6 +569,22 @@ export default function EditProfileScreen() {
         <View style={styles.navSection}>
           <Text style={[styles.sectionLabel, styles.navSectionLabel]}>Security</Text>
 
+          {/* Verification — the single entry point for identity/seller
+              verification. The subtitle mirrors the verification status shown
+              previously in Settings (trusted seller > identity > none). */}
+          <FlagshipNavigationRow
+            title="Verification"
+            subtitle={
+              user.sellerVerified
+                ? 'Trusted seller'
+                : user.identityVerified
+                  ? 'Identity verified'
+                  : 'Get verified'
+            }
+            onPress={() => navigation.navigate('Verification')}
+            accessibilityHint="Manage identity and seller verification"
+          />
+
           <FlagshipNavigationRow
             title="Password"
             onPress={() => navigation.navigate('ChangePassword')}

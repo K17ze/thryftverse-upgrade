@@ -44,9 +44,11 @@ import {
   useChatMessageSaveEvent,
   useChatReactionEvent,
   useChatReadReceiptEvent,
+  useChatPollVotedEvent,
   realtimePayloadToMessage,
   chatConversationTopic,
   type ChatMessageCreatedPayload,
+  type ChatPollVotedPayload,
 } from "../../services/realtimeClient";
 import { useRealtimeResnapshot } from "../../platform/realtime";
 import { requestPushPermissionWithSoftAsk } from "../../lib/pushPermission";
@@ -237,7 +239,17 @@ export function useConversationMessages({
       for (const m of localMessages) {
         if (m.status === 'sending' || m.status === 'draft') {
           // In-flight optimistic messages must survive sync — the server
-          // has not confirmed them yet.
+          // has not confirmed them yet. Exception: the server ALREADY
+          // carries this message (id or clientMessageId match — e.g. an
+          // offer card persisted before the realtime event arrived). The
+          // synced copy is authoritative; keeping the echo would render a
+          // permanent duplicate 'sending' bubble.
+          if (
+            serverIds.has(m.id) ||
+            (m.clientMessageId && serverClientIds.has(m.clientMessageId))
+          ) {
+            continue;
+          }
           preserved.push(m);
         } else if (
           (m.status === 'sent' || m.status === 'reconciling') &&
@@ -330,43 +342,93 @@ export function useConversationMessages({
     }
   }, [conversationId, markConversationRead, conversationUnread]);
 
-  // Auto-send offer message when arriving from MakeOfferScreen with an offerPayload
-  // P1-05: The offer entity is created on the server via listingOffersApi, but
-  // the server does NOT create a chat message for it. This bubble is a
-  // sender-local optimistic echo so the offer appears in the thread the
-  // sender is looking at; it is not a server-persisted message and the
-  // counterparty sees the offer through the conversation's offer context
-  // (listing_offers.conversation_id → context bar), not this bubble.
+  // Auto-send offer message when arriving from MakeOfferScreen with an offerPayload.
+  // P1-05: The offer entity is created on the server via listingOffersApi and
+  // the backend persists the canonical card as a real chat message
+  // (`chatmsg_offer_{offerId}` carrying client_message_id `offer_{offerId}` —
+  // lib/offerChatCards.ts, driven by the offer.created outbox event). This
+  // bubble is the sender's optimistic echo: the server card's
+  // chat.message.created event reconciles it in place via clientMessageId
+  // (dedupe branch in the realtime handler below), clearing 'sending' on the
+  // thread AND the inbox preview, and the counterparty receives the real card
+  // with working Accept/Pass/Counter actions.
   const offerPayloadRef = useRef(routeOfferPayload);
   offerPayloadRef.current = routeOfferPayload;
   useEffect(() => {
     if (!routeOfferPayload || !conversationId) return;
     const { offerId, price, originalPrice, expiresAt, counterRound } = routeOfferPayload;
-    const localId = makeStableId('offer', 7);
-    const offerMsg: Message = {
-      id: localId,
-      type: "offer",
-      sender: "me",
-      senderId: currentUser?.id ?? 'me',
-      timestamp: new Date().toISOString(),
-      senderLabel: currentUser?.username ?? "you",
-      text:
-        (counterRound ?? 0) > 0
-          ? `Counter-offer: ${formatFromFiat(price, DEFAULT_CURRENCY_CODE)}`
-          : `Offer: ${formatFromFiat(price, DEFAULT_CURRENCY_CODE)}`,
-      offer: {
-        offerId,
-        price,
-        originalPrice,
-        status: "pending",
-        expiresAt,
-        counterRound,
-      },
-      status: "sending",
-      clientMessageId: `offer_${offerId}`,
-    };
-    pushMessage(offerMsg);
-    appendToConversationStore(offerMsg, currentUser?.id ?? "me");
+    const clientMessageId = offerId ? `offer_${offerId}` : undefined;
+    const serverMessageId = offerId ? `chatmsg_offer_${offerId}` : undefined;
+    // Reconcile-first: when the server card already reached the list —
+    // realtime beat the navigation hand-off, or a resnapshot hydrated it —
+    // patch it in place instead of appending a duplicate bubble.
+    const existing = offerId
+      ? messagesRef.current.find(
+          (m) =>
+            m.id === serverMessageId ||
+            (clientMessageId !== undefined && m.clientMessageId === clientMessageId) ||
+            (m.offer?.offerId !== undefined && m.offer.offerId === offerId),
+        )
+      : undefined;
+    if (existing) {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === existing.id
+            ? {
+                ...m,
+                status: "sent" as const,
+                offer: {
+                  ...m.offer,
+                  offerId,
+                  price,
+                  offerPrice: price,
+                  amount: price,
+                  originalPrice,
+                  expiresAt,
+                  counterRound,
+                },
+              }
+            : m,
+        ),
+      );
+      patchStoreMessage(
+        { id: existing.id, clientMessageId },
+        {
+          status: "sent",
+          offerPrice: price,
+          originalPrice,
+          offerStatus: existing.offer?.status ?? "pending",
+        },
+      );
+    } else {
+      const localId = makeStableId('offer', 7);
+      const offerMsg: Message = {
+        id: localId,
+        type: "offer",
+        sender: "me",
+        senderId: currentUser?.id ?? 'me',
+        timestamp: new Date().toISOString(),
+        senderLabel: currentUser?.username ?? "you",
+        text:
+          (counterRound ?? 0) > 0
+            ? `Counter-offer: ${formatFromFiat(price, DEFAULT_CURRENCY_CODE)}`
+            : `Offer: ${formatFromFiat(price, DEFAULT_CURRENCY_CODE)}`,
+        offer: {
+          offerId,
+          price,
+          offerPrice: price,
+          amount: price,
+          originalPrice,
+          status: "pending",
+          expiresAt,
+          counterRound,
+        },
+        status: "sending",
+        clientMessageId,
+      };
+      pushMessage(offerMsg);
+      appendToConversationStore(offerMsg, currentUser?.id ?? "me");
+    }
     scheduleScrollToEnd();
     navigation.setParams({ offerPayload: undefined });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -434,10 +496,25 @@ export function useConversationMessages({
             (m) => m.clientMessageId === payload.clientMessageId,
           );
           if (optimistic) {
+            // Merge the server's authoritative fields into the echo — for
+            // offer cards the confirmed payload carries the real
+            // offerPayload snapshot (status/counter-round), so the bubble
+            // stops being a sender-local approximation the moment the
+            // canonical card lands.
+            const confirmed = realtimePayloadToMessage(payload, currentUser?.id);
             setMessages((prev) =>
               prev.map((m) =>
                 m.clientMessageId === payload.clientMessageId
-                  ? { ...m, id: payload.id, status: "sent" as const }
+                  ? {
+                      ...m,
+                      id: payload.id,
+                      status: "sent" as const,
+                      text: confirmed.text ?? m.text,
+                      type: confirmed.type ?? m.type,
+                      senderId: confirmed.senderId ?? m.senderId,
+                      offer: confirmed.offer ?? m.offer,
+                      readStatus: "sent" as const,
+                    }
                   : m,
               ),
             );
@@ -445,7 +522,21 @@ export function useConversationMessages({
             // a 'sending' row that must not linger once the server confirms.
             patchStoreMessage(
               { clientMessageId: payload.clientMessageId },
-              { id: payload.id, status: "sent", readStatus: "sent" },
+              {
+                id: payload.id,
+                status: "sent",
+                readStatus: "sent",
+                ...(confirmed.offer
+                  ? {
+                      offerPrice: confirmed.offer.offerPrice ?? confirmed.offer.price,
+                      originalPrice: confirmed.offer.originalPrice,
+                      offerStatus:
+                        confirmed.offer.status === "countered"
+                          ? "pending"
+                          : confirmed.offer.status,
+                    }
+                  : {}),
+              },
             );
             return;
           }
@@ -527,10 +618,56 @@ export function useConversationMessages({
   // P2-03: Consume message-edited realtime events — another participant
   // (or our own second device) edited a message body. Apply the new text
   // and set isEdited so the row renders the "Edited" marker.
+  //
+  // Offer card status sync (marketplace P1): when the payload carries an
+  // `offer` snapshot the "edit" is a commerce metadata sync emitted by
+  // offerChatCards.syncOfferChatCardStatus — merge the offer state so the
+  // card flips live on both devices WITHOUT gaining an "Edited" marker.
+  // The match falls back to offerId/clientMessageId so a sender's
+  // not-yet-reconciled optimistic echo still flips.
   useChatMessageEditedEvent(
     conversationId,
     useCallback(
-      (event: { messageId: string; body: string; editedAt: string | null; editedBy: string }) => {
+      (event: {
+        messageId: string;
+        body: string;
+        editedAt: string | null;
+        editedBy: string;
+        offer?: ChatMessageCreatedPayload['offer'] | null;
+      }) => {
+        if (event.offer) {
+          const offer = event.offer;
+          const offerClientMessageId = offer.offerId ? `offer_${offer.offerId}` : undefined;
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === event.messageId ||
+              (offer.offerId !== undefined &&
+                (m.offer?.offerId === offer.offerId ||
+                  m.clientMessageId === offerClientMessageId))
+                ? {
+                    ...m,
+                    id: event.messageId,
+                    status: m.status === "sending" ? ("sent" as const) : m.status,
+                    text: event.body ?? m.text,
+                    offer: { ...m.offer, ...offer },
+                  }
+                : m,
+            ),
+          );
+          patchStoreMessage(
+            { id: event.messageId, clientMessageId: offerClientMessageId },
+            {
+              id: event.messageId,
+              status: "sent",
+              text: event.body ?? undefined,
+              offerStatus:
+                offer.status === "countered" ? "pending" : offer.status ?? undefined,
+              offerPrice: offer.offerPrice ?? offer.amount,
+              originalPrice: offer.originalPrice,
+            },
+          );
+          return;
+        }
         setMessages((prev) =>
           prev.map((m) =>
             m.id === event.messageId
@@ -694,6 +831,48 @@ export function useConversationMessages({
     ),
   );
 
+  // Live poll convergence — the backend publishes `chat.poll.voted` on both
+  // vote and unvote carrying the post-change `voteCounts` plus the voter's
+  // full vote set (`voterVotes`). Every member's PollMessageBubble applies
+  // the counts; the voter's own devices sync `myVotes` verbatim so "your
+  // vote" stays consistent across devices.
+  useChatPollVotedEvent(
+    conversationId,
+    useCallback(
+      (event: ChatPollVotedPayload) => {
+        const applyVote = (m: Message): Message => {
+          if (m.id !== event.messageId || !m.poll) return m;
+          return {
+            ...m,
+            poll: {
+              ...m.poll,
+              voteCounts: event.voteCounts ?? m.poll.voteCounts,
+              myVotes:
+                event.userId === currentUser?.id && event.voterVotes
+                  ? event.voterVotes
+                  : m.poll.myVotes,
+            },
+          };
+        };
+        setMessages((prev) => prev.map(applyVote));
+        // Mirror into the conversation store so a hydration reset can't
+        // resurrect stale counts — the store row supplies the rest of the
+        // poll snapshot the patch needs.
+        if (conversationId) {
+          const stored = useStore
+            .getState()
+            .conversations.find((c) => c.id === conversationId)
+            ?.messages.find((m) => m.id === event.messageId);
+          const next = stored ? applyVote(stored) : undefined;
+          if (next?.poll) {
+            patchStoreMessage({ id: event.messageId }, { poll: next.poll });
+          }
+        }
+      },
+      [conversationId, currentUser?.id, patchStoreMessage],
+    ),
+  );
+
   // Realtime resnapshot — when the bridge signals that canonical state for
   // this conversation should be refetched (e.g. after a gap was replayed),
   // re-sync the full message list from the API.
@@ -739,6 +918,7 @@ export function useConversationMessages({
         sender: next.sender === "me" ? "me" : "other",
         mediaUri: next.mediaUri,
         mediaType: next.mediaType,
+        posterUri: next.posterUri,
         uploadStatus: next.uploadStatus,
         // Lifecycle fields — carried through so the inbox row can render a
         // truthful delivery state ("Sending" / "Failed") for in-flight and

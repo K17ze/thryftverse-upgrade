@@ -22,7 +22,7 @@
  * Per spec 07_MEDIA_TOOLCHAIN and AGENTS.md §4: production-quality, pure,
  * deterministic, and TypeScript-strict compatible.
  */
-import type { CreatorLayer } from '../../composition';
+import type { CreatorLayer } from '../../core/projectStore/composition';
 import { evaluateAllKeyframes } from '../../core/playback/KeyframeEvaluator';
 import type { Keyframe } from '../../poster/keyframes/KeyframeTypes';
 

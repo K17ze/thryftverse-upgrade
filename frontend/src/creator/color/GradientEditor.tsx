@@ -27,7 +27,7 @@ import { IconGrammar } from '../../theme/designTokens';
 import { Motion } from '../../theme/motionTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
-import { PressScale } from '../CreatorAnimations';
+import { PressScale } from '../shared/CreatorAnimations';
 import { toHexString, normalize } from './ColorMath';
 import { CreatorColorPicker } from './CreatorColorPicker';
 import { makeStableId } from '../../utils/createStableId';
@@ -84,6 +84,8 @@ function StopThumb({
     thumbX.value = withTiming(stop.position * barWidth, SNAP_TIMING);
   }, [stop.position, barWidth, thumbX]);
 
+  // onDragChange emits at most once per 0.5% position bucket.
+  const lastPosBucketSV = useSharedValue(-1);
   const panGesture = React.useMemo(() => {
     return Gesture.Pan()
       .activateAfterLongPress(0)
@@ -92,6 +94,7 @@ function StopThumb({
         const w = layoutWidth.value;
         const pos = Math.max(0, Math.min(1, e.x / w));
         thumbX.value = pos * w;
+        lastPosBucketSV.value = Math.round(pos * 200);
         runOnJS(onDragChange)(pos);
       })
       .onChange((e) => {
@@ -99,10 +102,16 @@ function StopThumb({
         const w = layoutWidth.value;
         const pos = Math.max(0, Math.min(1, e.x / w));
         thumbX.value = pos * w;
-        runOnJS(onDragChange)(pos);
+        const bucket = Math.round(pos * 200);
+        if (bucket !== lastPosBucketSV.value) {
+          lastPosBucketSV.value = bucket;
+          runOnJS(onDragChange)(pos);
+        }
       })
-      .onEnd(() => {
+      .onFinalize(() => {
         'worklet';
+        // Commit on finalize (not onEnd) so an interrupted drag still
+        // lands the stop at its dragged position.
         const w = layoutWidth.value;
         const pos = Math.max(0, Math.min(1, thumbX.value / w));
         runOnJS(onDragCommit)(pos);
@@ -445,6 +454,8 @@ function AngleSlider({ angle, width, onChange, onCommit }: AngleSliderProps) {
     thumbX.value = withTiming((angle / 360) * width, SNAP_TIMING);
   }, [angle, width, thumbX]);
 
+  // onChange emits at most once per integer degree.
+  const lastAngleBucketSV = useSharedValue(-1);
   const panGesture = React.useMemo(() => {
     return Gesture.Pan()
       .activateAfterLongPress(0)
@@ -453,6 +464,7 @@ function AngleSlider({ angle, width, onChange, onCommit }: AngleSliderProps) {
         const w = layoutWidth.value;
         const a = Math.max(0, Math.min(1, e.x / w)) * 360;
         thumbX.value = (a / 360) * w;
+        lastAngleBucketSV.value = Math.round(a);
         runOnJS(onChange)(a);
       })
       .onChange((e) => {
@@ -460,9 +472,13 @@ function AngleSlider({ angle, width, onChange, onCommit }: AngleSliderProps) {
         const w = layoutWidth.value;
         const a = Math.max(0, Math.min(1, e.x / w)) * 360;
         thumbX.value = (a / 360) * w;
-        runOnJS(onChange)(a);
+        const bucket = Math.round(a);
+        if (bucket !== lastAngleBucketSV.value) {
+          lastAngleBucketSV.value = bucket;
+          runOnJS(onChange)(a);
+        }
       })
-      .onEnd(() => {
+      .onFinalize(() => {
         'worklet';
         const w = layoutWidth.value;
         const a = Math.max(0, Math.min(1, thumbX.value / w)) * 360;

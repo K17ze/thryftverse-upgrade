@@ -31,7 +31,7 @@ import {
   Stroke } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
-import { SheetContainer, PressScale } from '../../CreatorAnimations';
+import { SheetContainer, PressScale } from '../../shared/CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
 import {
   CreatorColorPicker,

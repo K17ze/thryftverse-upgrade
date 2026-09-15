@@ -1,9 +1,9 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { useBackendData } from '../../context/BackendDataContext';
 import type { Listing } from '../../services/listingsApi';
 import type { Listing as CatalogListing } from '../../domain';
+import type { DisplayReadyListing } from '../../services/listingMapper';
 import type { SellerTrustSummary } from '../../platform/product';
 import { HorizontalRail } from '../HorizontalRail';
 import { ProductCard } from '../ProductCard';
@@ -16,6 +16,14 @@ export interface ItemDetailSellerSectionProps {
   item: Listing;
   /** Resolved seller trust summary (null hides the whole section). */
   seller: SellerTrustSummary | null;
+  /**
+   * "More from this seller" rail items — the backend recommendation
+   * section `more_from_seller`, which already filters to the seller's
+   * active listings server-side. Never sourced from the local feed
+   * cache (BackendDataContext.listings is a discovery slice, not a
+   * per-seller truth).
+   */
+  railItems: DisplayReadyListing[];
   /** Whether the current user owns this listing. */
   isOwner: boolean;
   isFollowing: boolean;
@@ -23,7 +31,7 @@ export interface ItemDetailSellerSectionProps {
   onFollow: () => void;
   onMessage: () => void;
   onViewShop: () => void;
-  onPressRailItem: (item: Listing) => void;
+  onPressRailItem: (item: DisplayReadyListing, index?: number) => void;
 }
 
 /**
@@ -33,8 +41,8 @@ export interface ItemDetailSellerSectionProps {
  * item evidence, and the sole profile navigation point on the screen.
  */
 export function ItemDetailSellerSection({
-  item,
   seller,
+  railItems,
   isOwner,
   isFollowing,
   isFollowPending,
@@ -44,25 +52,6 @@ export function ItemDetailSellerSection({
   onPressRailItem,
 }: ItemDetailSellerSectionProps) {
   const { colors } = useAppTheme();
-  const { listings: backendListings } = useBackendData();
-
-  // "More from this seller" browse rail — other live listings from the
-  // same seller, capped at 6.
-  const railItems: Listing[] = useMemo(
-    () =>
-      item
-        ? backendListings
-            .filter(
-              (l) =>
-                l.id !== item.id &&
-                !l.isSold &&
-                item.sellerId != null &&
-                l.sellerId === item.sellerId,
-            )
-            .slice(0, 6)
-        : [],
-    [backendListings, item?.id, item?.sellerId],
-  );
 
   return (
     <>
@@ -81,13 +70,14 @@ export function ItemDetailSellerSection({
       )}
 
       {/* ── More from this seller ──
-          Horizontal browse rail of other live listings from the same
-          seller. Contextual to the seller section — closes it with a
-          bottom hairline. Only rendered when there are at least 2 real
-          items. Uses ProductCard inside HorizontalRail so cards match
-          discovery surfaces. Distinct from the Bundle upsell discovery
-          module in the tail (which incentivises multi-item purchase). */}
-      {seller && railItems.length >= 2 ? (
+          Horizontal browse rail of the seller's other active listings —
+          server-filtered via the `more_from_seller` recommendation
+          section. Contextual to the seller section — closes it with a
+          bottom hairline. Rendered when at least one real item exists.
+          Uses ProductCard inside HorizontalRail so cards match discovery
+          surfaces. Distinct from the Bundle upsell discovery module in
+          the tail (which incentivises multi-item purchase). */}
+      {seller && railItems.length >= 1 ? (
         <View style={[styles.moreFromSellerRailWrap, { borderBottomColor: colors.borderSubtle }]}>
           <Text style={[styles.moreFromSellerRailTitle, { color: colors.textPrimary }]} numberOfLines={1} maxFontSizeMultiplier={2}>
             More from {seller.username ?? 'this seller'}
@@ -96,11 +86,11 @@ export function ItemDetailSellerSection({
             contentContainerStyle={styles.railContent}
             accessibilityLabel={`More from ${seller.username ?? 'this seller'}`}
           >
-            {railItems.map((railItem) => (
+            {railItems.map((railItem, railIndex) => (
               <View key={railItem.id} style={styles.railCardWrap}>
                 <ProductCard
                   item={railItem as unknown as CatalogListing}
-                  onPress={() => onPressRailItem(railItem)}
+                  onPress={() => onPressRailItem(railItem, railIndex)}
                   showSaveButton={false}
                   enableEntranceAnimation={false}
                   visualOnly

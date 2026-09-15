@@ -62,6 +62,7 @@ export function useProductSocialState(
     toggleWishlistMutation.mutate(undefined, {
       onSuccess: () => {
         options?.onLikeAnalytics?.();
+        show(wasLiked ? 'Removed from wishlist' : 'Added to wishlist', 'success');
       },
       onError: () => {
         haptic.error();
@@ -69,7 +70,6 @@ export function useProductSocialState(
       },
     });
     haptic.medium();
-    show(wasLiked ? 'Removed from wishlist' : 'Added to wishlist', 'success');
   }, [vm, objectId, isLiked, toggleWishlistMutation, haptic, show, options]);
 
   const openCollectionPicker = useCallback(() => {

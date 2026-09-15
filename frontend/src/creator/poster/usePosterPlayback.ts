@@ -36,7 +36,7 @@ import type { RefObject } from 'react';
 
 import type { VideoPlayer } from 'expo-video';
 
-import type { CreatorDocument } from '../composition';
+import type { CreatorDocument } from '../core/projectStore/composition';
 import {
   PlaybackClock,
   projectTimeline,

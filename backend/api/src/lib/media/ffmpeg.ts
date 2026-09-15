@@ -202,3 +202,113 @@ export function runFfmpeg(
     });
   });
 }
+
+/**
+ * Streaming variant of {@link runFfmpeg}: the caller's arg vector ends with
+ * a `pipe:1` output (e.g. `-f mp4 -movflags frag_keyframe+empty_moov pipe:1`)
+ * and stdout bytes are handed to `onChunk` via an async iterator, which
+ * provides natural backpressure — ffmpeg blocks on its stdout write while a
+ * slow consumer (e.g. an S3 part upload) is awaited.
+ *
+ * Chunk-handler failures kill the child and reject with the original error.
+ * Progress parsing, timeout, and error classification are identical to the
+ * file-output variant. Resolves only after ffmpeg exits cleanly AND the
+ * stdout pump has fully drained.
+ */
+export function runFfmpegStreaming(
+  args: string[],
+  onChunk: (chunk: Buffer) => Promise<void> | void,
+  onProgress?: (fraction: number) => void,
+  options?: { totalDurationMs?: number; timeoutMs?: number },
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const runId = randomUUID();
+    const ffmpegPath = ffmpegStatic;
+
+    if (!ffmpegPath) {
+      reject(new FfmpegError('operational', null, '', 'ffmpeg binary is not available for this platform'));
+      return;
+    }
+
+    const totalDurationMs = options?.totalDurationMs ?? 0;
+    const timeoutMs = options?.timeoutMs ?? 0;
+    const child = spawn(ffmpegPath, args, { windowsHide: true });
+
+    let stderr = '';
+    let lastReportedFraction = -1;
+    let settled = false;
+    let timedOut = false;
+    let pumpError: unknown = null;
+
+    const timeout = timeoutMs > 0
+      ? setTimeout(() => {
+        timedOut = true;
+        logger.warn({ runId, timeoutMs, args }, '[ffmpeg] render deadline exceeded — killing process');
+        child.kill('SIGKILL');
+      }, timeoutMs)
+      : null;
+
+    const cleanup = () => {
+      if (timeout) clearTimeout(timeout);
+    };
+
+    // Async-iterator stdout pump: the next chunk is only pulled after the
+    // consumer's await resolves — bounded memory without explicit pause().
+    const pump = (async () => {
+      try {
+        for await (const chunk of child.stdout) {
+          await onChunk(chunk as Buffer);
+        }
+      } catch (error) {
+        pumpError = error;
+        child.kill('SIGKILL');
+      }
+    })();
+
+    child.stderr.on('data', (chunk: Buffer) => {
+      const text = chunk.toString('utf8');
+      stderr += text;
+
+      if (onProgress) {
+        const fraction = parseProgressFraction(stderr.split('\n').pop() ?? text, totalDurationMs);
+        if (fraction !== null && fraction > lastReportedFraction) {
+          lastReportedFraction = fraction;
+          onProgress(fraction);
+        }
+      }
+    });
+
+    child.on('error', (error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      logger.error({ err: error, runId, args }, '[ffmpeg] spawn error');
+      reject(new FfmpegError('operational', null, error.message, `ffmpeg failed to start: ${error.message}`));
+    });
+
+    child.on('close', (code) => {
+      void pump.then(() => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        if (pumpError) {
+          reject(pumpError instanceof Error ? pumpError : new Error(String(pumpError)));
+          return;
+        }
+        if (timedOut) {
+          reject(new FfmpegError('transient', code, stderr, `ffmpeg render exceeded ${timeoutMs}ms deadline`));
+          return;
+        }
+        if (code === 0) {
+          logger.debug({ runId, args }, '[ffmpeg] completed (streaming)');
+          resolve();
+          return;
+        }
+
+        const category = classifyError(code, stderr);
+        logger.error({ code, category, stderr: stderr.slice(-2000), runId, args }, '[ffmpeg] non-zero exit');
+        reject(new FfmpegError(category, code, stderr));
+      });
+    });
+  });
+}

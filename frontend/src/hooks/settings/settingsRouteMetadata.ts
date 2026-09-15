@@ -14,8 +14,9 @@ export interface DestinationMeta {
 // consistent with the browsable hierarchy.
 export const ROUTE_METADATA: DestinationMeta[] = [
   // ── Your account (profile, security, privacy) ──
-  { key: 'EditProfile', label: 'Edit profile & account', searchTerms: 'avatar name bio username email phone password 2fa two factor', section: 'Your account', showSection: true },
-  { key: 'Verification', label: 'Verify your identity', searchTerms: 'identity dac7 tax badge seller trust kyc', section: 'Your account' },
+  // Verification has a single entry point — the Verification row inside
+  // Edit Profile — so its search synonyms live on the EditProfile result.
+  { key: 'EditProfile', label: 'Edit profile & account', searchTerms: 'avatar name bio username email phone password 2fa two factor verification verify identity dac7 tax badge seller trust kyc', section: 'Your account', showSection: true },
   { key: 'ChangePassword', label: 'Change password', searchTerms: '2fa two factor security', section: 'Your account' },
   { key: 'ConnectedAccounts', label: 'Connected accounts', searchTerms: 'google apple oauth social login', section: 'Your account' },
   { key: 'AccountSecurity', label: 'Devices & sessions', searchTerms: 'login device security passkey sign out revoke', section: 'Your account' },

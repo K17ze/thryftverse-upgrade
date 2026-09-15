@@ -9,6 +9,23 @@ export enum HapticType {
   WARNING = 'warning',
 }
 
+// Lazily-resolved reduced-motion gate — mirrors hooks/useHaptic.ts so the
+// ~400 legacy `haptics.*` call sites honour Reduce Motion too. Impact and
+// selection haptics are decorative and suppress; notification haptics
+// (success/error/warning) communicate outcome and still fire.
+let reducedMotionGate = false;
+try {
+  const { AccessibilityInfo } = require('react-native');
+  AccessibilityInfo.isReduceMotionEnabled().then((v: boolean) => {
+    reducedMotionGate = v;
+  }).catch(() => {});
+  AccessibilityInfo.addEventListener?.('reduceMotionChanged', (v: boolean) => {
+    reducedMotionGate = v;
+  });
+} catch {
+  // ignore on platforms without AccessibilityInfo
+}
+
 /**
  * Trigger haptic feedback for better UX
  * @param type - Type of haptic feedback
@@ -17,12 +34,15 @@ export async function triggerHaptic(type: HapticType): Promise<void> {
   try {
     switch (type) {
       case HapticType.LIGHT:
+        if (reducedMotionGate) return;
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         break;
       case HapticType.MEDIUM:
+        if (reducedMotionGate) return;
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         break;
       case HapticType.HEAVY:
+        if (reducedMotionGate) return;
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
         break;
       case HapticType.SUCCESS:

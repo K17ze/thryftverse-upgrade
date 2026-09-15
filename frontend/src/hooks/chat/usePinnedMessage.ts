@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { fetchPinnedMessageFromApi } from "../../services/chatApi";
+import { chatConversationTopic } from "../../services/realtimeClient";
+import { useRealtimeSafe } from "../../platform/realtime";
 import type { Conversation } from "../../domain";
 
 export interface PinnedMessageSummary {
@@ -10,14 +12,17 @@ export interface PinnedMessageSummary {
 }
 
 /**
- * Pinned message — fetch the conversation's pinned message on mount and when
- * realtime pin/unpin events arrive. Only group chats support pinning.
+ * Pinned message — fetch the conversation's pinned message on mount and
+ * whenever a `chat.message.pinned` / `chat.message.unpinned` realtime
+ * event lands on the conversation topic, so the bar reflects pins made
+ * by other admins without a screen reload. Only group chats support
+ * pinning (enforced server-side: group admins/owners only).
  */
 export function usePinnedMessage(
   conversationId: string,
   isGroup: boolean,
   conversations: Conversation[],
-): PinnedMessageSummary | null {
+): { pinnedMessage: PinnedMessageSummary | null; refresh: () => void } {
   const [pinnedMessage, setPinnedMessage] = useState<PinnedMessageSummary | null>(null);
 
   const loadPinnedMessage = useCallback(async () => {
@@ -50,5 +55,30 @@ export function usePinnedMessage(
     void loadPinnedMessage();
   }, [loadPinnedMessage]);
 
-  return pinnedMessage;
+  // Realtime convergence — refetch on pin/unpin events so the bar tracks
+  // pins made by other admins on other devices.
+  const loadRef = useRef(loadPinnedMessage);
+  loadRef.current = loadPinnedMessage;
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
+  const topic = isGroup && conversationId ? chatConversationTopic(conversationId) : null;
+
+  useEffect(() => {
+    if (!topic || !client) return;
+    client.subscribe([topic]);
+    const unsubscribe = client.on(topic, (envelope) => {
+      if (
+        envelope.type === 'chat.message.pinned' ||
+        envelope.type === 'chat.message.unpinned'
+      ) {
+        void loadRef.current();
+      }
+    });
+    return () => {
+      unsubscribe();
+      client.unsubscribe([topic]);
+    };
+  }, [client, topic]);
+
+  return { pinnedMessage, refresh: loadPinnedMessage };
 }

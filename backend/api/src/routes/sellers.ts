@@ -14,6 +14,18 @@ type SellerRouteDependencies = {
   db: Pool;
   /** Read-replica pool (falls back to primary when no replica is configured). */
   readDb: Pool;
+  queueUserNotification: (input: {
+    userId: string;
+    title: string;
+    body: string;
+    payload?: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
+    eventType?: string;
+    actorUserId?: string;
+    imageUrl?: string;
+    route?: Record<string, unknown>;
+    idempotencyKey?: string;
+  }) => Promise<string | null>;
 };
 
 const sellerIdParamsSchema = z.object({ sellerId: z.string().min(2) });
@@ -44,7 +56,7 @@ const appealBodySchema = z.object({
  *   GET  /sellers/:sellerId/standards                  — inspect operational metrics & tier defects (gate 12)
  *   POST /sellers/:sellerId/standards/appeal           — appeal an operational defect (gate 12)
  */
-export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencies): void => {
+export const registerSellerRoutes = ({ app, db, readDb, queueUserNotification }: SellerRouteDependencies): void => {
   app.get('/sellers/:sellerId', async (request, reply) => {
     const { sellerId } = sellerIdParamsSchema.parse(request.params);
     const viewerUserId = request.authUser?.userId ?? null;
@@ -60,9 +72,10 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
       holiday_mode: boolean;
       holiday_mode_until: string | null;
       away_message: string | null;
+      reach_state: string | null;
     }>(
       `SELECT id, username, display_name, avatar, location, created_at,
-              holiday_mode, holiday_mode_until::text, away_message
+              holiday_mode, holiday_mode_until::text, away_message, reach_state
        FROM users WHERE id = $1 LIMIT 1`,
       [sellerId]
     );
@@ -77,7 +90,18 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
       avg_rating: string | null;
       review_count: string;
     }>(
-      `SELECT AVG(rating)::numeric(3,2) AS avg_rating, COUNT(*)::text AS review_count FROM order_reviews WHERE seller_id = $1`,
+      // Public rating: published/restored reviews only (moderation leak
+      // fixed — a removed review previously kept counting). The average
+      // excludes is_auto rows: an automated 5★ must never move a seller's
+      // score. The count includes them — they render in the list labeled
+      // 'Auto', so the count matches what the reader sees.
+      `SELECT
+         AVG(r.rating) FILTER (WHERE NOT r.is_auto)::numeric(3,2) AS avg_rating,
+         COUNT(*)::text AS review_count
+       FROM order_reviews r
+       LEFT JOIN review_publication_state ps ON ps.review_id = r.id
+       WHERE r.seller_id = $1
+         AND COALESCE(ps.state, 'published') IN ('published', 'restored')`,
       [sellerId]
     );
 
@@ -205,7 +229,15 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     const avgRating = reviewStats.rows[0]?.avg_rating ? Number(reviewStats.rows[0].avg_rating) : null;
     const reviewCount = reviewStats.rows[0]?.review_count ? Number(reviewStats.rows[0].review_count) : 0;
     const completedSales = salesResult.rows[0]?.completed_sales ? Number(salesResult.rows[0].completed_sales) : 0;
-    const activeListingCount = activeListingsResult.rows[0]?.active_count ? Number(activeListingsResult.rows[0].active_count) : 0;
+    // A suspended seller's status='active' rows are not distributed or
+    // sellable — reporting the raw count would claim items buyers cannot
+    // see or buy, so the buyer-facing count is 0 while suspended.
+    const rawActiveListingCount = activeListingsResult.rows[0]?.active_count
+      ? Number(activeListingsResult.rows[0].active_count)
+      : 0;
+    const activeListingCount = (user.reach_state ?? 'normal') === 'suspended'
+      ? 0
+      : rawActiveListingCount;
 
     return {
       ok: true,
@@ -245,6 +277,13 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
           && user.holiday_mode_until
           ? new Date(user.holiday_mode_until).toISOString()
           : null,
+        // Seller reach (lib/sellerReach.ts, migration 300) — the honest
+        // distribution state so the storefront can render a held surface
+        // instead of silently empty rails: 'suspended' sellers serve no
+        // sellable items anywhere (browse/feed/search exclude them and
+        // checkout rejects with SELLER_RESTRICTED); 'limited' sellers are
+        // still purchasable, only down-ranked.
+        reachState: user.reach_state ?? 'normal',
       },
     };
   });
@@ -277,12 +316,40 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     }
 
     const followId = `follow_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    await db.query(
+    const inserted = await db.query<{ id: string }>(
       `INSERT INTO user_follows (id, follower_id, following_id, created_at)
        VALUES ($1, $2, $3, NOW())
-       ON CONFLICT (follower_id, following_id) DO NOTHING`,
+       ON CONFLICT (follower_id, following_id) DO NOTHING
+       RETURNING id`,
       [followId, userId, sellerId]
     );
+
+    // Mirror POST /users/:userId/follow — a product-surface follow notifies
+    // the seller too (this route was previously silent).
+    if ((inserted.rowCount ?? 0) > 0) {
+      try {
+        const followerRow = await readDb.query<{ username: string; display_name: string | null; avatar: string | null }>(
+          `SELECT username, display_name, avatar FROM users WHERE id = $1 LIMIT 1`,
+          [userId]
+        );
+        const follower = followerRow.rows[0];
+        const followerName = follower?.display_name || follower?.username || 'Someone';
+        await queueUserNotification({
+          userId: sellerId,
+          title: 'New follower',
+          body: `${followerName} started following you`,
+          eventType: 'new_follower',
+          actorUserId: userId,
+          imageUrl: follower?.avatar ?? undefined,
+          payload: { followerId: userId },
+          route: { screen: 'UserProfile', params: { userId } },
+          idempotencyKey: `follow_received_${userId}_${sellerId}`,
+          metadata: { source: 'seller_follow' },
+        });
+      } catch (notifErr) {
+        app.log.error({ err: notifErr }, 'Failed to queue new_follower notification');
+      }
+    }
 
     return { ok: true, isFollowing: true };
   });
@@ -339,21 +406,26 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
       d4: string;
       d5: string;
     }>(
+      // Average + distribution count published/restored, non-auto reviews —
+      // a moderated-out or auto-generated row must never move the score.
+      // review_count covers all eligible rows (incl. auto — they render as
+      // labeled 'Auto' rows in the list).
       `SELECT
-         AVG(r.rating)::numeric(3,2) AS avg_rating,
+         AVG(r.rating) FILTER (WHERE NOT r.is_auto)::numeric(3,2) AS avg_rating,
          COUNT(*)::text AS review_count,
          COUNT(*) FILTER (
            WHERE COALESCE(ps.state, 'published') IN ('published', 'restored')
          )::text AS eligible_count,
          MAX(r.created_at) AS as_of,
-         COUNT(*) FILTER (WHERE r.rating = 1)::text AS d1,
-         COUNT(*) FILTER (WHERE r.rating = 2)::text AS d2,
-         COUNT(*) FILTER (WHERE r.rating = 3)::text AS d3,
-         COUNT(*) FILTER (WHERE r.rating = 4)::text AS d4,
-         COUNT(*) FILTER (WHERE r.rating = 5)::text AS d5
+         COUNT(*) FILTER (WHERE r.rating = 1 AND NOT r.is_auto)::text AS d1,
+         COUNT(*) FILTER (WHERE r.rating = 2 AND NOT r.is_auto)::text AS d2,
+         COUNT(*) FILTER (WHERE r.rating = 3 AND NOT r.is_auto)::text AS d3,
+         COUNT(*) FILTER (WHERE r.rating = 4 AND NOT r.is_auto)::text AS d4,
+         COUNT(*) FILTER (WHERE r.rating = 5 AND NOT r.is_auto)::text AS d5
        FROM order_reviews r
        LEFT JOIN review_publication_state ps ON ps.review_id = r.id
-       WHERE r.seller_id = $1`,
+       WHERE r.seller_id = $1
+         AND COALESCE(ps.state, 'published') IN ('published', 'restored')`,
       [sellerId]
     );
 
@@ -373,7 +445,12 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     // Paginated review list with reviewer identity + associated listing context.
     // Returns reviewer_id (for authorized public navigation), media URLs, and
     // seller response — all backed by real persistence (migration 165).
-    const conditions: string[] = ['r.seller_id = $1'];
+    // Same publication gate as the summary — a moderated-out review must
+    // not render in the public list.
+    const conditions: string[] = [
+      'r.seller_id = $1',
+      `COALESCE(ps.state, 'published') IN ('published', 'restored')`,
+    ];
     const args: unknown[] = [sellerId];
     if (cursor) {
       conditions.push(`r.created_at < $${args.length + 1}`);
@@ -415,6 +492,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
         LEFT JOIN orders o ON o.id = r.order_id
         LEFT JOIN listings l ON l.id = o.listing_id
         LEFT JOIN review_responses resp ON resp.review_id = r.id
+        LEFT JOIN review_publication_state ps ON ps.review_id = r.id
         WHERE ${conditions.join(' AND ')}
         ORDER BY r.created_at DESC
         LIMIT $${args.length + 1}

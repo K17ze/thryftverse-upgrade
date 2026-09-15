@@ -49,6 +49,7 @@
  */
 
 import * as FileSystem from 'expo-file-system/legacy';
+import * as MediaLibrary from 'expo-media-library/legacy';
 import { fetchJson } from '../../../lib/apiClient';
 import type { UploadSession, UploadPart } from './UploadTypes';
 import { DEFAULT_PART_SIZE } from './UploadTypes';
@@ -57,6 +58,14 @@ import { DEFAULT_PART_SIZE } from './UploadTypes';
  *  well within 2 minutes on any reasonable connection; if they don't, the
  *  request is stale and the retry loop takes over. */
 const CHUNK_TIMEOUT_MS = 120_000;
+
+/**
+ * The backend returned HTTP success but the receipt violated the contract
+ * (missing finalizationId/objectKey/publicUrl). Retrying the same complete
+ * request cannot repair a malformed receipt — this is a permanent
+ * client-visible failure, not a transient transport error.
+ */
+export class UploadContractError extends Error {}
 
 /** Response shape from `POST /uploads/multipart/initiate`. */
 interface InitiateResponse {
@@ -77,6 +86,7 @@ interface InitiateResponse {
 interface PartsResponse {
   ok: boolean;
   error?: string;
+  expiresAt?: string;
   presignedParts: Array<{ url: string; partNumber: number; expiresInSeconds: number }>;
 }
 
@@ -148,6 +158,8 @@ export class MultipartUploader {
    *  finishes. */
   private cachedBlob: Blob | null = null;
   private cachedBlobPath: string | null = null;
+  /** ph:// / content:// → resolved file:// path, resolved once per session. */
+  private resolvedPaths = new Map<string, string>();
 
   constructor(options?: MultipartUploaderOptions) {
     this.partSize = options?.partSize ?? DEFAULT_PART_SIZE;
@@ -337,6 +349,9 @@ export class MultipartUploader {
     );
 
     if (!response.ok) throw new Error(response.error ?? 'Upload complete request failed');
+    if (!response.finalizationId || !response.objectKey || !response.publicUrl) {
+      throw new UploadContractError('Upload completion response is missing the finalized media reference');
+    }
 
     // Store the finalizationId on the session so the caller can use it.
     session.finalizationId = response.finalizationId;
@@ -527,8 +542,12 @@ export class MultipartUploader {
     _mimeType: string,
   ): Promise<Blob> {
     const length = endByte - startByte + 1;
+    // Library URIs (ph:// / content://) resolve to a real file path via
+    // metadata alone — ranged reads then work and the full-file Blob
+    // fallback below is never needed for library assets.
+    const readablePath = await this.resolveReadablePath(filePath);
     try {
-      const base64 = await FileSystem.readAsStringAsync(filePath, {
+      const base64 = await FileSystem.readAsStringAsync(readablePath, {
         position: startByte,
         length,
         encoding: FileSystem.EncodingType.Base64,
@@ -542,8 +561,8 @@ export class MultipartUploader {
       return blob;
     } catch {
       // Fallback for URIs that don't support position/length reads
-      // (e.g. ph://, content://). This loads the full file into memory
-      // but only for these exotic URI schemes.
+      // (non-library SAF document URIs). This loads the full file into
+      // memory but only for these exotic URI schemes.
     }
 
     if (this.cachedBlobPath !== filePath || !this.cachedBlob) {
@@ -562,6 +581,29 @@ export class MultipartUploader {
   clearBlobCache(): void {
     this.cachedBlob = null;
     this.cachedBlobPath = null;
+  }
+
+  /**
+   * Resolve a media-library URI (ph://, content://) to a ranged-readable
+   * file:// path via `MediaLibrary.getAssetInfoAsync` — metadata only, no
+   * byte read. Non-library URIs (and library misses, e.g. a SAF document
+   * URI) return the original path unchanged.
+   */
+  private async resolveReadablePath(filePath: string): Promise<string> {
+    const cached = this.resolvedPaths.get(filePath);
+    if (cached) return cached;
+    if (filePath.startsWith('ph://') || filePath.startsWith('content://')) {
+      try {
+        const info = await MediaLibrary.getAssetInfoAsync(filePath);
+        if (info.localUri) {
+          this.resolvedPaths.set(filePath, info.localUri);
+          return info.localUri;
+        }
+      } catch {
+        // Not a media-library asset — keep the original path.
+      }
+    }
+    return filePath;
   }
 
   /**
@@ -600,7 +642,8 @@ export class MultipartUploader {
     // Optimistically extend the session expiry so we don't re-refresh on
     // every subsequent part. The presigned URLs carry their own per-URL
     // expiry; the session expiry is a coarse guard.
-    session.expiresAt = Date.now() + 60 * 60 * 1000;
+    const expiresAt = response.expiresAt ? Date.parse(response.expiresAt) : NaN;
+    if (Number.isFinite(expiresAt)) session.expiresAt = expiresAt;
   }
 
   /**

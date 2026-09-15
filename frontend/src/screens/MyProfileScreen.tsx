@@ -89,15 +89,11 @@ export default function MyProfileScreen() {
     loadMyLooks,
     highlights } = useMyProfileData(currentUser?.id);
 
-  // Profile media — avatar/cover upload wiring, display priority and
-  // upload-status toasts. The upload state machine is untouched.
+  // Profile media — display priority chain and upload state passthrough.
+  // Avatar/cover picking lives in Edit Profile; this surface is display-only.
   const {
     avatarState,
     coverState,
-    pickAvatar,
-    pickCover,
-    retryCover,
-    revertCover,
     displayAvatar,
     displayCover } = useMyProfileMedia(user);
 
@@ -242,9 +238,6 @@ export default function MyProfileScreen() {
         username={user.username}
         onSettings={() => { haptic.light(); navigation.navigate('Settings'); }}
         onShare={handleShare}
-        onEditCover={pickCover}
-        onRetryCover={retryCover}
-        onRevertCover={revertCover}
       />
 
       <Reanimated.ScrollView
@@ -265,13 +258,10 @@ export default function MyProfileScreen() {
             website={user.website ?? null}
             memberSince={memberSince}
             sellerTrust={sellerTrust}
-            ratingAverage={sellerTrust?.rating ?? null}
-            reviewCount={sellerTrust?.reviewCount}
             responseTimeLabel={sellerTrust?.responseTimeLabel ?? null}
             followerCount={followCounts.followerCount}
             followingCount={followCounts.followingCount}
             followCountsStatus={followCountsStatus}
-            onEditAvatar={pickAvatar}
             onEditProfile={() => navigation.navigate('EditProfile', {})}
             onShare={handleShare}
             onPressSold={() => { haptic.light(); navigation.navigate('MyOrders'); }}

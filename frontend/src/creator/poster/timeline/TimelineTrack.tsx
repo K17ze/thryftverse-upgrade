@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
 import { View, StyleSheet, Pressable, LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSharedValue } from 'react-native-reanimated';
+import { useSharedValue, type SharedValue } from 'react-native-reanimated';
 import { Space, Control } from '../../../theme/designTokens';
 import { IconGrammar } from '../../../theme/designTokens';
 import { RadiusRoleValue } from '../../../theme/surfaceRadiusRules';
@@ -33,7 +33,6 @@ export interface TimelineTrackProps {
   playheadMs: number;
   totalDurationMs: number;
   onSelectClip: (id: string) => void;
-  onSeek: (ms: number) => void;
   onTrimClip: (clipId: string, edge: 'start' | 'end', deltaMs: number) => void;
   /** Slip commit — shift the clip's source window by deltaMs (source time). */
   onSlipClip?: (clipId: string, deltaMs: number) => void;
@@ -54,6 +53,11 @@ export interface TimelineTrackProps {
   onReorderClip?: (clipId: string, translationX: number) => void;
   /** Edge auto-scroll plumbing forwarded to each ClipThumb. */
   edgeScroll?: ClipThumbProps['edgeScroll'];
+  /**
+   * Ruler-scrub position in ms (>= 0 while scrubbing, -1 idle) — the
+   * playhead tracks it 1:1 on the UI thread.
+   */
+  scrubMsSV?: SharedValue<number>;
 }
 
 export const TimelineTrack = React.memo(function TimelineTrack({
@@ -62,13 +66,13 @@ export const TimelineTrack = React.memo(function TimelineTrack({
   playheadMs,
   totalDurationMs,
   onSelectClip,
-  onSeek,
   onTrimClip,
   onSlipClip,
   transitionIds,
   onSelectTransition,
   onReorderClip,
   edgeScroll,
+  scrubMsSV,
 }: TimelineTrackProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
@@ -196,7 +200,7 @@ export const TimelineTrack = React.memo(function TimelineTrack({
           positionMs={playheadMs}
           totalDurationMs={totalDurationMs}
           trackWidth={trackWidth}
-          onSeek={onSeek}
+          scrubMsSV={scrubMsSV}
         />
       )}
     </View>

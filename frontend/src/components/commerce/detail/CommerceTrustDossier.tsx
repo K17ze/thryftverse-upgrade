@@ -93,50 +93,33 @@ export function CommerceTrustDossier({
           });
         }
         // Rating and verification already belong to the seller identity above.
-        // 3. Response time — "Usually responds in 2h" signal
-        if (seller?.responseTimeLabel) {
+        // 3. Response time — "Usually responds in 2h" signal. Gated on
+        // real measured hours: the backend infers responseTimeLabel from
+        // response-rate bands when avgResponseHours is null, and that
+        // inferred label is not a measured response time — do not render it.
+        if (seller?.responseTimeLabel && seller.avgResponseHours != null) {
           trustRows.push({
             icon: 'chatbubble-ellipses-outline',
             label: seller.responseTimeLabel,
           });
         }
-        // 4. Delivery — when will it arrive? Combines the seller's
-        // dispatch promise with the server-provided estimated delivery
-        // window into a single row: two truthful facts, one line. When
-        // only the estimate exists it still earns the row — delivery
-        // timing is a first-viewport decision fact.
-        const deliveryWindow = (() => {
-          const start = commerce.estimatedDeliveryStart
-            ? formatShortDate(commerce.estimatedDeliveryStart)
-            : '';
-          const end = commerce.estimatedDeliveryEnd
-            ? formatShortDate(commerce.estimatedDeliveryEnd)
-            : '';
-          if (start && end) return `${start}–${end}`;
-          return start || end || null;
-        })();
-        const deliveryEstimate = deliveryWindow ? `Est. ${deliveryWindow}` : null;
+        // 4. Delivery — when will it arrive? Only the seller's dispatch
+        // promise or the emitted shipping method qualify; the contract's
+        // estimatedDeliveryStart/End fields are dead (never emitted by the
+        // PDP endpoint), so no delivery window is fabricated here.
         if (sellerAway) {
           // Suppress the dispatch/delivery row — see note above.
         } else if (seller?.dispatchTimeLabel) {
           trustRows.push({
             icon: 'car-outline',
-            label: [seller.dispatchTimeLabel, deliveryEstimate].filter(Boolean).join(' · '),
+            label: seller.dispatchTimeLabel,
           });
         } else if (commerce.shippingMethod) {
           trustRows.push({
             icon: commerce.shippingPayer === 'seller' ? 'gift-outline' : 'car-outline',
-            label: [
-              commerce.shippingPayer === 'seller'
-                ? `Free ${commerce.shippingMethod}`
-                : commerce.shippingMethod,
-              deliveryEstimate,
-            ].filter(Boolean).join(' · '),
-          });
-        } else if (deliveryEstimate) {
-          trustRows.push({
-            icon: 'car-outline',
-            label: `Est. delivery ${deliveryWindow}`,
+            label: commerce.shippingPayer === 'seller'
+              ? `Free ${commerce.shippingMethod}`
+              : commerce.shippingMethod,
           });
         }
         // 5. Buyer protection fallback — per research doc M1: when no

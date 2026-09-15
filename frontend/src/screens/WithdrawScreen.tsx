@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
@@ -68,6 +68,8 @@ export default function WithdrawScreen() {
     availableBalance,
     setAvailableBalance,
     isHydratingBalance,
+    balanceError,
+    reloadBalance,
     countryCapabilities,
     setCountryCapabilities,
     payoutAccount,
@@ -116,6 +118,7 @@ export default function WithdrawScreen() {
     setAmount,
     ensurePayoutAccount,
     loadWithdrawals,
+    reloadBalance,
   });
 
   useEffect(() => {
@@ -171,6 +174,37 @@ export default function WithdrawScreen() {
   // Prevents layout shift and provides immediate visual feedback on first render.
   if (isHydratingBalance) {
     return <WithdrawSkeleton onBack={() => navigation.goBack()} />;
+  }
+
+  // ── Balance load failure — never fall through to a fabricated £0 form ──
+  if (balanceError) {
+    return (
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Withdraw Balance"
+            onBack={() => navigation.goBack()}
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
+        <View style={styles.balanceErrorWrap}>
+          <Ionicons name="cloud-offline-outline" size={40} color={colors.textMuted} accessible={false} />
+          <Text style={[styles.balanceErrorTitle, { color: colors.textPrimary }]}>
+            {balanceError}
+          </Text>
+          <Pressable
+            onPress={reloadBalance}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading balance"
+          >
+            <Text style={[styles.balanceErrorRetry, { color: colors.brand }]}>Try again</Text>
+          </Pressable>
+        </View>
+      </FlagshipScreen>
+    );
   }
 
   // ── Unknown outcome step ──
@@ -290,6 +324,21 @@ function createStyles(colors: ThemeColors) {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
     lineHeight: TypographyV2.meta.lineHeight },
+
+  balanceErrorWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.md,
+    paddingHorizontal: Space.xl },
+  balanceErrorTitle: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    lineHeight: TypographyV2.body.lineHeight,
+    textAlign: 'center' },
+  balanceErrorRetry: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.label.fontFamily },
 
   content: { flex: 1 } });
 }

@@ -12,7 +12,7 @@
  * @module layerUtils
  */
 
-import type { CreatorLayer } from '../composition';
+import type { CreatorLayer } from '../core/projectStore/composition';
 
 /**
  * Returns a human-readable label for a creator layer type.

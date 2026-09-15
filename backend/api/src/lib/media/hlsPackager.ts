@@ -43,8 +43,16 @@ const KEYFRAME_INTERVAL = SEGMENT_DURATION_SECONDS * 30; // 30fps assumption
  * The output directory must exist before invocation. The master playlist is
  * written to `<outputDir>/master.m3u8` and each rendition has its own
  * sub-playlist and fMP4 segments.
+ *
+ * `hasAudio` must reflect whether the input actually carries an audio
+ * stream — mapping a non-existent `0:a` fails the whole invocation.
  */
-export function buildHlsArgs(inputPath: string, outputDir: string): string[] {
+export function buildHlsArgs(
+  inputPath: string,
+  outputDir: string,
+  options: { hasAudio?: boolean } = {},
+): string[] {
+  const hasAudio = options.hasAudio ?? true;
   const args: string[] = [
     '-y',
     '-i', inputPath,
@@ -69,8 +77,12 @@ export function buildHlsArgs(inputPath: string, outputDir: string): string[] {
   }
 
   // Map the audio stream once per rendition so each playlist is self-contained.
-  for (const rendition of RENDITIONS) {
-    args.push('-map', '0:a');
+  // Skipped entirely for sources without audio — `-map 0:a` would fail the
+  // invocation and an `a:` entry in var_stream_map would have nothing to bind.
+  if (hasAudio) {
+    for (const rendition of RENDITIONS) {
+      args.push('-map', '0:a');
+    }
   }
 
   // Per-stream encoding parameters. Stream order is v_240p, v_360p, ...,
@@ -81,11 +93,10 @@ export function buildHlsArgs(inputPath: string, outputDir: string): string[] {
     args.push(
       `-c:v:${streamIndex}`, 'libx264',
       `-x264-params:v:${streamIndex}`,
-      `keyint=${KEYFRAME_INTERVAL}:min-keyint=${KEYFRAME_INTERVAL}:scenecut=0:closed-coder=1`,
+      `keyint=${KEYFRAME_INTERVAL}:min-keyint=${KEYFRAME_INTERVAL}:scenecut=0:open-gop=0`,
       `-b:v:${streamIndex}`, rendition.videoBitrate,
       `-maxrate:v:${streamIndex}`, rendition.maxRate,
       `-bufsize:v:${streamIndex}`, rendition.bufSize,
-      `-vf:v:${streamIndex}`, `scale=${rendition.width}:${rendition.height}`,
     );
     streamIndex += 1;
   }
@@ -113,7 +124,7 @@ export function buildHlsArgs(inputPath: string, outputDir: string): string[] {
 
   // Per-rendition variant stream mapping.
   const varStreamMap = RENDITIONS.map((rendition, index) => {
-    return `v:${index},a:${index}`;
+    return hasAudio ? `v:${index},a:${index}` : `v:${index}`;
   }).join(' ');
   args.push('-var_stream_map', varStreamMap);
 

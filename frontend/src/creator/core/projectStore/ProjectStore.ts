@@ -29,8 +29,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Directory, File, Paths } from 'expo-file-system';
 
 import { createStableId } from '../../../utils/createStableId';
-import type { CreatorDocument } from '../../composition';
-import { createEmptyDocument } from '../../composition';
+import type { CreatorDocument } from './composition';
+import { createEmptyDocument } from './composition';
 import { migrateProject } from './ProjectMigrations';
 import { validateProject } from './ProjectSchema';
 import type {

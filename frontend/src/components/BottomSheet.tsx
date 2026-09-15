@@ -207,7 +207,14 @@ export function BottomSheet({
     return () => sub.remove();
   }, [visible, close]);
 
+  // Nested-scroll arbitration (sheet-over-scroll grammar): the content's
+  // ScrollView owns vertical drags while it can still scroll; only when
+  // it fails — at the top edge pulling down — does the dismiss pan take
+  // over. Without this the sheet pan steals every downward drag inside
+  // the content and the sheet dismisses instead of scrolling.
+  const nativeScrollGesture = React.useMemo(() => Gesture.Native(), []);
   const panGesture = Gesture.Pan()
+    .requireExternalGestureToFail(nativeScrollGesture)
     .onStart(() => {
       'worklet';
       contextY.value = translateY.value;
@@ -286,14 +293,16 @@ export function BottomSheet({
             <View style={styles.handle} />
           </View>
 
-          <KeyboardAwareScrollView
-            style={styles.contentWrap}
-            contentContainerStyle={{ flex: 1 }}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
-          >
-            {children}
-          </KeyboardAwareScrollView>
+          <GestureDetector gesture={nativeScrollGesture}>
+            <KeyboardAwareScrollView
+              style={styles.contentWrap}
+              contentContainerStyle={{ flex: 1 }}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+            >
+              {children}
+            </KeyboardAwareScrollView>
+          </GestureDetector>
         </Reanimated.View>
       </GestureDetector>
     </View>

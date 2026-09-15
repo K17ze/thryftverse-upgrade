@@ -41,7 +41,7 @@ import {
   type ListingApiItem } from '../../../services/listingsApi';
 import { useStore } from '../../../store/useStore';
 import { createStableId } from '../../../utils/createStableId';
-import { SheetContainer, PressScale } from '../../CreatorAnimations';
+import { SheetContainer, PressScale } from '../../shared/CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { AppIcon } from '../../../components/common/AppIcon';
 import { IconSize } from '../../../theme/iconTokens';

@@ -28,8 +28,10 @@ export interface ItemDetailDismissContext {
   reducedMotion: boolean;
   /** Named spring configs from useMotionConfig(). */
   spring: ReturnType<typeof useMotionConfig>['spring'];
-  /** The actions-hook double-tap handler (haptic + optimistic fav). */
-  onDoubleTap: () => void;
+  /** The actions-hook double-tap handler (haptic + optimistic fav).
+   *  Returns true only when the save was not auth-blocked — the heart
+   *  animation runs exclusively on that result. */
+  onDoubleTap: () => boolean;
 }
 
 /**
@@ -173,7 +175,9 @@ export function useItemDetailDismiss(ctx: ItemDetailDismissContext) {
   // (the animation SharedValues live in the screen because they are
   // Reanimated worklet state bound to the media stage).
   const handleDoubleTap = () => {
-    onDoubleTap();
+    // Only celebrate a save that actually happened — the auth wall
+    // returning false means no wishlist write occurred, so no heart.
+    if (!onDoubleTap()) return;
     if (reducedMotion) {
       bigHeartOpacity.value = 0;
       bigHeartScale.value = 0;

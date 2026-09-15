@@ -300,7 +300,11 @@ export default function AddressFormScreen({ navigation, route }: Props) {
 
       {/* Save error display */}
       {saveError ? (
-        <View style={styles.saveErrorRow}>
+        <View
+          style={styles.saveErrorRow}
+          accessibilityRole="alert"
+          accessibilityLiveRegion="polite"
+        >
           <AppIcon name="warning" size={IconSize.xs} color="danger" opticalCenter accessible={false} />
           <Text style={styles.saveErrorText}>{saveError}</Text>
         </View>

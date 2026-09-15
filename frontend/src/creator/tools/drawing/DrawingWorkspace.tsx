@@ -55,7 +55,7 @@ import { Motion, REDUCED_SPRING } from '../../../theme/motionTokens';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { ConfirmationSheet } from '../../../components/ConfirmationSheet';
-import { PressScale } from '../../CreatorAnimations';
+import { PressScale } from '../../shared/CreatorAnimations';
 import {
   CreatorSlider,
   CreatorSegmentControl,

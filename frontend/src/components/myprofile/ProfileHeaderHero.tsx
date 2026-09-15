@@ -12,7 +12,6 @@ import Reanimated, {
 import type { SharedValue } from 'react-native-reanimated';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { FlagshipProfileMedia } from '../flagship';
-import { UploadProgressRing } from '../flagship/FlagshipProfileMedia';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, FontFamily, Control } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
@@ -31,15 +30,13 @@ export interface ProfileHeaderHeroProps {
   username: string;
   onSettings: () => void;
   onShare: () => void;
-  onEditCover: () => void;
-  onRetryCover: () => void;
-  onRevertCover: () => void;
 }
 
 /**
  * Cover/header region — full-width cover media, floating personalisation
- * controls (settings, share), cover edit/retry/revert with UploadProgressRing,
- * and the collapsed scroll header. Extracted from MyProfileScreen.
+ * controls (settings, share), upload progress passthrough, and the collapsed
+ * scroll header. Cover editing lives in Edit Profile; this surface is
+ * display-only. Extracted from MyProfileScreen.
  */
 export function ProfileHeaderHero({
   coverMedia,
@@ -49,10 +46,7 @@ export function ProfileHeaderHero({
   scrollY,
   username,
   onSettings,
-  onShare,
-  onEditCover,
-  onRetryCover,
-  onRevertCover }: ProfileHeaderHeroProps) {
+  onShare }: ProfileHeaderHeroProps) {
   const { colors } = useAppTheme();
   const { t: tt } = useAppTranslation('myProfile');
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -156,61 +150,6 @@ export function ProfileHeaderHero({
             </AnimatedPressable>
           </View>
         </Reanimated.View>
-
-        {coverState.status === 'failed' ? (
-          <View style={styles.coverFailure}>
-            <View style={styles.coverFailureCopy}>
-              <Ionicons name="alert-circle-outline" size={16} color={colors.scrimTextPrimary} aria-hidden={true} />
-              <Text style={styles.coverFailureText} numberOfLines={1} maxFontSizeMultiplier={2}>
-                {coverState.error || tt('cover.uploadFailed')}
-              </Text>
-            </View>
-            <AnimatedPressable
-              style={styles.coverFailureAction}
-              onPress={onRetryCover}
-              accessibilityRole="button"
-              accessibilityLabel={tt('accessibility.retryCoverUpload')}
-              hitSlop={5}
-            >
-              <Text style={styles.coverFailureActionText}>{tt('cover.retry')}</Text>
-            </AnimatedPressable>
-            <AnimatedPressable
-              style={styles.coverFailureAction}
-              onPress={onRevertCover}
-              accessibilityRole="button"
-              accessibilityLabel={tt('accessibility.cancelCoverChange')}
-              hitSlop={5}
-            >
-              <Text style={styles.coverFailureActionText}>{tt('cover.cancel')}</Text>
-            </AnimatedPressable>
-          </View>
-        ) : (
-          <AnimatedPressable
-            style={styles.coverEditTarget}
-            onPress={onEditCover}
-            hapticFeedback="light"
-            disabled={coverState.status === 'uploading'}
-            accessibilityRole="button"
-            accessibilityLabel={
-              coverState.status === 'uploading'
-                ? tt('accessibility.uploadingCover')
-                : tt('accessibility.changeCover')
-            }
-            accessibilityState={{ disabled: coverState.status === 'uploading', busy: coverState.status === 'uploading' }}
-          >
-            <View style={styles.coverEditVisible}>
-              {coverState.status === 'uploading' ? (
-                <UploadProgressRing
-                  progress={coverState.progress}
-                  active={coverState.status === 'uploading'}
-                  size={28}
-                />
-              ) : (
-                <Ionicons name="image-outline" size={16} color={colors.scrimTextPrimary} aria-hidden={true} />
-              )}
-            </View>
-          </AnimatedPressable>
-        )}
       </Reanimated.View>
 
       {/* ── COLLAPSED SCROLL HEADER ── */}
@@ -282,58 +221,6 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
       backgroundColor: colors.overlay,
       borderColor: colors.scrimTextTertiary },
-    coverEditTarget: {
-      position: 'absolute',
-      right: Space.md - 2,
-      bottom: Space.sm,
-      width: Control.hit,
-      height: Control.hit,
-      alignItems: 'center',
-      justifyContent: 'center' },
-    coverEditVisible: {
-      width: Space.xl + 2,
-      height: Space.xl + 2,
-      borderRadius: RadiusRoleValue.dominantPanel,
-      borderWidth: StyleSheet.hairlineWidth,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.overlay,
-      borderColor: colors.scrimTextTertiary },
-    coverFailure: {
-      position: 'absolute',
-      left: Space.md - 2,
-      right: Space.md - 2,
-      bottom: Space.sm,
-      minHeight: Control.hit,
-      paddingLeft: Space.smMd,
-      paddingRight: Space.xs + 1,
-      borderRadius: RadiusRoleValue.sheetDialog,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-      backgroundColor: colors.overlay },
-    coverFailureCopy: {
-      flex: 1,
-      minWidth: 0,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs + 3 },
-    coverFailureText: {
-      flexShrink: 1,
-      fontFamily: FontFamily.semibold,
-      fontSize: TypographyV2.meta.size,
-      color: colors.scrimTextPrimary },
-    coverFailureAction: {
-      minWidth: Space.xxl + 4,
-      minHeight: Space.xl + 2,
-      paddingHorizontal: Space.sm,
-      alignItems: 'center',
-      justifyContent: 'center' },
-    coverFailureActionText: {
-      fontFamily: FontFamily.semibold,
-      fontSize: TypographyV2.meta.size,
-      color: colors.scrimTextPrimary },
-
     // Collapsed header
     floatingHeader: {
       position: 'absolute',

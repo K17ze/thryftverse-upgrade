@@ -43,7 +43,13 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import {
   fetchLiveSessions,
+  type LiveSession,
   type LiveSessionSummary } from '../services/liveShoppingApi';
+import {
+  remindBroadcastSession,
+  unremindBroadcastSession,
+  persistLocalReminder,
+  LiveRemindersUnavailableError } from '../components/live/liveBroadcastApi';
 import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -180,6 +186,11 @@ export default function LiveShoppingHomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>(ALL_CATEGORY);
+  // Reminder state — the affordance hides itself when the backend reports
+  // the remind endpoints don't exist (404 → LiveRemindersUnavailableError).
+  const [remindAvailable, setRemindAvailable] = useState(true);
+  const [remindPendingIds, setRemindPendingIds] = useState<ReadonlySet<string>>(new Set());
+  const [remindErrors, setRemindErrors] = useState<Record<string, string>>({});
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) {
@@ -273,6 +284,57 @@ export default function LiveShoppingHomeScreen() {
   const handleRetry = useCallback(() => {
     void load();
   }, [load]);
+
+  // "Remind me" on a scheduled show. Not optimistic — the toggle flips only
+  // after the backend confirms. A 404 means the remind routes aren't
+  // deployed: the affordance is hidden for the rest of the session rather
+  // than faking state. Other failures surface inline on the row.
+  const handleToggleReminder = useCallback(
+    async (session: LiveSession) => {
+      if (remindPendingIds.has(session.id)) return;
+      const nextReminded = !session.reminderSet;
+      setRemindPendingIds((prev) => new Set(prev).add(session.id));
+      setRemindErrors((prev) => {
+        if (!(session.id in prev)) return prev;
+        const next = { ...prev };
+        delete next[session.id];
+        return next;
+      });
+      try {
+        if (nextReminded) {
+          await remindBroadcastSession(session.id);
+        } else {
+          await unremindBroadcastSession(session.id);
+        }
+        setSummary((prev) =>
+          prev
+            ? {
+                ...prev,
+                sessions: prev.sessions.map((s) =>
+                  s.id === session.id ? { ...s, reminderSet: nextReminded } : s,
+                ),
+              }
+            : prev,
+        );
+        void persistLocalReminder(session.id, nextReminded);
+        haptic.selection();
+      } catch (e) {
+        if (e instanceof LiveRemindersUnavailableError) {
+          setRemindAvailable(false);
+        } else {
+          setRemindErrors((prev) => ({ ...prev, [session.id]: t('upcoming.remindFailed') }));
+          haptic.error();
+        }
+      } finally {
+        setRemindPendingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(session.id);
+          return next;
+        });
+      }
+    },
+    [remindPendingIds, haptic, t],
+  );
 
   const showLoading = loading && !summary;
   const showError = !loading && error && !summary;
@@ -394,6 +456,9 @@ export default function LiveShoppingHomeScreen() {
                       key={session.id}
                       session={session}
                       formatScheduled={formatScheduled}
+                      onToggleReminder={remindAvailable ? handleToggleReminder : undefined}
+                      reminderPending={remindPendingIds.has(session.id)}
+                      remindError={remindErrors[session.id] ?? null}
                     />
                   ))}
                 </View>

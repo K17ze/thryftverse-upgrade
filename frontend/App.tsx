@@ -70,6 +70,7 @@ import { initializeSslPinning } from './src/utils/sslPinning';
 import { linking } from './src/navigation/linking';
 import { SignupWallProvider } from './src/hooks/useSignupWall';
 import { usePushNotificationTap, setNavigationReady } from './src/hooks/usePushNotificationTap';
+import { surfacePersistedNotifications } from './src/services/inAppNotificationsApi';
 import { useUnreadNotificationCount } from './src/hooks/useUnreadNotificationCount';
 import { usePushTokenCleanup } from './src/hooks/usePushTokenCleanup';
 import { useDeepLinkAuth } from './src/hooks/useDeepLinkAuth';
@@ -216,6 +217,14 @@ Notifications.setNotificationCategoryAsync('social', [
 ]).catch(() => { /* best-effort */ });
 
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
+
+// Register the app's navigation ref immediately — it is the single source of
+// truth for every out-of-navigation navigation path: push taps
+// (usePushNotificationTap), in-app banner actions (InAppNotificationCenter),
+// and error-boundary recovery (resetNavigationToHome). Registering at module
+// scope (not just onReady) means the ref is available to holders before the
+// container finishes its first transition; callers still gate on isReady().
+registerAppNavigationRef(navigationRef);
 
 let lastListingDraftSyncAt = 0;
 const LISTING_DRAFT_SYNC_MIN_INTERVAL_MS = 60_000;
@@ -370,6 +379,11 @@ export default function App() {
         resumeCreatorUploads().catch(() => undefined);
         drainChatOutbox().catch(() => undefined);
         runSyncListingDraft();
+        // Surface notifications that were persisted while the app was
+        // backgrounded (safety outcomes, order updates) as in-app banners.
+        if (useStore.getState().isAuthenticated) {
+          surfacePersistedNotifications().catch(() => undefined);
+        }
       }
     });
     return () => subscription.remove();
@@ -760,6 +774,11 @@ export default function App() {
                         linking={linking}
                         onStateChange={onNavigationStateChange}
                         onReady={() => {
+                          // Belt-and-braces re-registration (the ref was
+                          // registered at module scope): keeps the holder
+                          // pointed at the live container across any future
+                          // ref re-creation.
+                          registerAppNavigationRef(navigationRef);
                           setNavigationReady(true);
 
                           // Register the navigation container with Sentry's

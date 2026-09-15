@@ -61,6 +61,9 @@ export interface Message {
   replyToMessageId?: string;
   mediaUri?: string;
   mediaType?: 'image' | 'video';
+  /** Poster still for video media — the mediaUri may be an HLS playlist no
+   *  image loader can decode; bubbles and media grids render this instead. */
+  posterUri?: string;
   uploadStatus?: 'uploading' | 'failed' | 'sent';
   // Voice messages — report 19.
   voiceUri?: string;

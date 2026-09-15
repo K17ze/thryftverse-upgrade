@@ -165,3 +165,158 @@ export async function requestReturnStepIn(
     },
   );
 }
+
+// ── State-machine transitions ────────────────────────────────────────────
+// Each wrapper mirrors one backend route in routes/returns.ts. The server
+// validates role + transition legality (409 on an illegal move) — the
+// client only renders actions the current status/role permits.
+
+/** Buyer uploads additional evidence while the case is open
+ *  (requested / evidence_review). */
+export async function submitReturnEvidence(
+  returnCaseId: string,
+  evidenceMediaUrls: string[],
+): Promise<{ ok: true; returnCaseId: string; status: ReturnCaseStatus }> {
+  return fetchJson(
+    `/return-cases/${encodeURIComponent(returnCaseId)}/evidence`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ evidenceMediaUrls }),
+    },
+  );
+}
+
+/** Seller decision on a pending return request — approved moves the case
+ *  to 'approved' (awaiting reverse shipment); rejected to 'rejected'
+ *  (buyer may then appeal). */
+export async function respondToReturnCase(
+  returnCaseId: string,
+  input: { decision: 'approved' | 'rejected'; reason: string },
+): Promise<{ ok: true; returnCaseId: string; status: ReturnCaseStatus; decision: 'approved' | 'rejected' }> {
+  return fetchJson(
+    `/return-cases/${encodeURIComponent(returnCaseId)}/decision`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+/** Seller provides return shipping details — carrier + tracking, and
+ *  optionally a hosted return label URL. Moves the case to
+ *  'reverse_shipped'. */
+export async function provideReturnShipment(
+  returnCaseId: string,
+  input: { carrier: string; trackingNumber: string; labelUrl?: string },
+): Promise<{
+  ok: true;
+  returnCaseId: string;
+  status: ReturnCaseStatus;
+  returnCarrier: string;
+  returnTrackingNumber: string;
+}> {
+  return fetchJson(
+    `/return-cases/${encodeURIComponent(returnCaseId)}/reverse-shipment`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+/** Seller confirms the returned item has arrived. */
+export async function confirmReturnReceipt(
+  returnCaseId: string,
+): Promise<{ ok: true; returnCaseId: string; status: ReturnCaseStatus }> {
+  return fetchJson(
+    `/return-cases/${encodeURIComponent(returnCaseId)}/receipt`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    },
+  );
+}
+
+/** Seller records the inspection outcome (notes + condition) before
+ *  proposing a remedy. */
+export async function recordReturnInspection(
+  returnCaseId: string,
+  input: { notes: string; condition: string },
+): Promise<{ ok: true; returnCaseId: string; status: ReturnCaseStatus }> {
+  return fetchJson(
+    `/return-cases/${encodeURIComponent(returnCaseId)}/inspection`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+/** Seller proposes a remedy after inspection. `amountGbp` is required for
+ *  'partial_refund' and must not be sent for any other remedy — the server
+ *  rejects a non-partial remedy that carries an explicit amount. */
+export async function proposeReturnRemedy(
+  returnCaseId: string,
+  input: { remedy: ReturnRemedy; amountGbp?: number; notes?: string },
+): Promise<{ ok: true; returnCaseId: string; status: ReturnCaseStatus }> {
+  return fetchJson(
+    `/return-cases/${encodeURIComponent(returnCaseId)}/remedy`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+/** Buyer accepts the proposed remedy — moves to 'remedy_accepted' while
+ *  the refund/replacement executes. */
+export async function acceptReturnRemedy(
+  returnCaseId: string,
+): Promise<{ ok: true; returnCaseId: string; status: ReturnCaseStatus }> {
+  return fetchJson(
+    `/return-cases/${encodeURIComponent(returnCaseId)}/remedy/accept`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    },
+  );
+}
+
+/** Buyer rejects the proposed remedy — escalates the case to 'appealed'
+ *  for platform review. */
+export async function rejectReturnRemedy(
+  returnCaseId: string,
+  reason: string,
+): Promise<{ ok: true; returnCaseId: string; status: ReturnCaseStatus }> {
+  return fetchJson(
+    `/return-cases/${encodeURIComponent(returnCaseId)}/remedy/reject`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    },
+  );
+}
+
+/** Buyer appeals a rejected return — moves the case to 'appealed' for
+ *  platform review. */
+export async function appealReturnCase(
+  returnCaseId: string,
+  reason: string,
+): Promise<{ ok: true; returnCaseId: string; status: ReturnCaseStatus }> {
+  return fetchJson(
+    `/return-cases/${encodeURIComponent(returnCaseId)}/appeal`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    },
+  );
+}

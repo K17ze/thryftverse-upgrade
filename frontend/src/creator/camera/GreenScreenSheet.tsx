@@ -23,7 +23,7 @@ import { Space, Radius, FontFamily, Control, Stroke, IconGrammar } from '../../t
 import { TypographyV2 } from '../../theme/typography.v2';
 import { Motion } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { PressScale } from '../CreatorAnimations';
+import { PressScale } from '../shared/CreatorAnimations';
 import { useHaptic } from '../../hooks/useHaptic';
 import { ConfirmationSheet } from '../../components/ConfirmationSheet';
 

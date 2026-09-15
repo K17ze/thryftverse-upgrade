@@ -39,7 +39,7 @@ import { CreatorGlyph } from '../../controls/CreatorGlyph';
 import { TEXT_STYLE_PRESETS, getPresetById, type TextStylePreset } from './textStylePresets';
 import { toHexString } from '../../color/ColorMath';
 
-import type { CreatorLayer } from '../../composition';
+import type { CreatorLayer } from '../../core/projectStore/composition';
 
 type TextLayer = Extract<CreatorLayer, { type: 'text' }>;
 

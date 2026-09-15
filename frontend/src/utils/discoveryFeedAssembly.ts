@@ -139,20 +139,20 @@ export function assembleDiscoveryFeed(
 
 function buildLookUnits(looks: LookApiItem[]): LookFeedUnit[] {
   return looks
-    .filter((look) => (
-      look.status === 'published'
-      && look.visibility === 'public'
-      && look.mediaUrl.trim().length > 0
-      && look.mediaType !== 'video'
-      && !isVideoUri(look.mediaUrl)
-    ))
+    .filter((look) => look.status === 'published' && look.visibility === 'public')
+    .map((look) => {
+      const isVideo = look.mediaType === 'video' || isVideoUri(look.mediaUrl);
+      const coverImageUri = isVideo ? (look.posterUrl ?? '') : look.mediaUrl;
+      return { look, coverImageUri };
+    })
+    .filter((entry) => entry.coverImageUri.trim().length > 0)
     .slice(0, 4)
-    .map((look) => ({
+    .map(({ look, coverImageUri }) => ({
       id: `look:${look.id}`,
       type: 'look' as const,
       look,
       title: look.title || look.caption || 'Look',
-      coverImageUri: look.mediaUrl,
+      coverImageUri,
       aspectRatio: 4 / 5,
       itemIds: look.tags.flatMap((tag) => tag.listingId ? [tag.listingId] : []),
     }));
@@ -162,15 +162,17 @@ function buildPosterUnits(posters: PosterStory[]): PosterFeedUnit[] {
   return posters
     .filter((story) => story.status === 'active' && story.audience === 'public')
     .flatMap((story): PosterFeedUnit[] => {
-      const coverFrame = story.frames.find((frame) => (
-        frame.mediaType === 'image' && frame.mediaUrl.trim().length > 0
-      ));
+      const coverFrame = story.frames.find((frame) => frame.mediaUrl.trim().length > 0);
       if (!coverFrame) return [];
+      const coverUri = coverFrame.mediaType === 'video'
+        ? (coverFrame.posterUrl ?? '')
+        : coverFrame.mediaUrl;
+      if (!coverUri.trim()) return [];
       return [{
         id: `poster:${story.id}`,
         type: 'poster',
         story,
-        coverUri: coverFrame.mediaUrl,
+        coverUri,
         aspectRatio: 9 / 16,
       }];
     })

@@ -1,4 +1,4 @@
-const VIDEO_EXT_RE = /\.(mp4|mov|m4v|webm|mkv|avi|3gp)(\?.*)?$/i;
+const VIDEO_EXT_RE = /\.(mp4|mov|m4v|webm|mkv|avi|3gp|m3u8)(\?.*)?$/i;
 
 export function isVideoUri(uri?: string | null): boolean {
   if (!uri) {

@@ -16,7 +16,14 @@ import { db } from '../../db/pool.js';
 import { sweepDueLiveLots } from '../../routes/liveLotEngine.js';
 
 export async function sweepExpiredLiveLots(reason: 'interval' | 'manual'): Promise<number> {
-  const { closedLots } = await sweepDueLiveLots(db);
-  void reason;
+  const { closedLots, failedLots } = await sweepDueLiveLots(db);
+  // A persistently failing lot must be observable — otherwise it is re-swept
+  // forever with zero trace. Log each failure; the sweep itself is per-lot
+  // isolated so one bad lot never aborts the pass.
+  for (const failure of failedLots ?? []) {
+    console.error(
+      `[live-lot-sweep] close failed for lot ${failure.lotId} (session=${failure.sessionId}, reason=${reason}): ${failure.error}`,
+    );
+  }
   return closedLots.length;
 }

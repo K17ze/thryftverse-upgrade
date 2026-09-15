@@ -6,6 +6,7 @@ export interface GroupInfoConfirmSheetState {
   title: string;
   message: string;
   confirmLabel?: string;
+  cancelLabel?: string;
   onConfirm: () => void;
   variant?: 'default' | 'danger';
 }

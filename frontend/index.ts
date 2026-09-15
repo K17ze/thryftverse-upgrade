@@ -5,7 +5,21 @@ import './polyfills/hermes-defineProperty';
 // Sentry must initialise before any other code runs.
 import './src/lib/sentry';
 
+import { Platform } from 'react-native';
 import { registerRootComponent } from 'expo';
+
+// LiveKit: register WebRTC globals before any room code runs. Guarded so a
+// missing native module (Expo Go, web) degrades to the honest 'unavailable'
+// state in useLiveKitRoom instead of crashing app startup. require() (not a
+// static import) so a hard failure during the package's module init is
+// caught here too.
+if (Platform.OS !== 'web') {
+  try {
+    require('@livekit/react-native').registerGlobals();
+  } catch {
+    // Native module absent — useLiveKitRoom's native probe reports it.
+  }
+}
 
 import App from './App';
 import { ObserveRoot } from './src/platform/monitoring';

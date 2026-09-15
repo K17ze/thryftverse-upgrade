@@ -33,7 +33,7 @@ import { useCallback, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 
 import type { NativeStackNavigationProp, RootStackParamList, CreatorInitialMedia } from '../../navigation/types';
-import type { CreatorContentTransform } from '../CreatorEntryEditorCrossfade';
+import type { CreatorContentTransform } from '../studio/CreatorEntryEditorCrossfade';
 import type { CaptureViewport } from '../capture/CaptureViewport';
 
 // ── Types ────────────────────────────────────────────────────────────

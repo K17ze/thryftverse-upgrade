@@ -326,9 +326,8 @@ export function useAnalyticsInsights({ listings, selectedListingId, analytics, p
     return result;
   }, [funnelPipeline]);
 
-  const peerConversionBenchmark = 3.2; // Top 20% second-hand archival peer benchmark
   const aovValue = analytics?.aovGbpMinor != null ? analytics.aovGbpMinor / 100 : avgOrderValue;
   const repeatBuyerRate = analytics?.repeatBuyerPct ?? null;
 
- return { currentListingItem, heroLabel, heroValue, itemsSold, totalViews, activeListings, avgRating, reviewCount, avgOrderValue, aovValue, repeatBuyerRate, conversionRate, peerConversionBenchmark, funnelBottleneck, deltaPct, revenueDelta, itemsSoldDelta, viewsDelta, prevRevenueGbp, periodDays, periodLabel, dimensionChartData, chartSeries, salesSparklineValues, categoryMix, funnelPipeline, topPerformers, needsAttention };
+ return { currentListingItem, heroLabel, heroValue, itemsSold, totalViews, activeListings, avgRating, reviewCount, avgOrderValue, aovValue, repeatBuyerRate, conversionRate, funnelBottleneck, deltaPct, revenueDelta, itemsSoldDelta, viewsDelta, prevRevenueGbp, periodDays, periodLabel, dimensionChartData, chartSeries, salesSparklineValues, categoryMix, funnelPipeline, topPerformers, needsAttention };
 }

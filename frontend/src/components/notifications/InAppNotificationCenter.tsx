@@ -11,6 +11,10 @@ import {
   type InAppNotification,
 } from '../../services/inAppNotificationsApi';
 import { getAppNavigationRef } from '../../platform/monitoring/appNavigation';
+import {
+  resolveNotificationRoute,
+  type NotificationRoute,
+} from '../../utils/notificationRouting';
 
 /**
  * Global notification container — renders active banners as a stacked overlay
@@ -41,17 +45,35 @@ export function InAppNotificationCenter() {
     if (!notification.actionTarget) return;
     const ref = getAppNavigationRef();
     if (!ref || !ref.isReady()) return;
-    // actionTarget format: "screenName" or "screenName:{jsonParams}"
+    // actionTarget format: "screenName" or "screenName:{jsonParams}".
+    // Run the decoded route through the same validated resolver used by the
+    // list rows and push-tap path so alias routes ('support_case') resolve
+    // and unknown screens can never reach the navigator.
     const target = notification.actionTarget;
     const colonIdx = target.indexOf(':');
     const screen = colonIdx >= 0 ? target.slice(0, colonIdx) : target;
     const paramsJson = colonIdx >= 0 ? target.slice(colonIdx + 1) : undefined;
-    let params: unknown;
+    let params: Record<string, unknown> | undefined;
     if (paramsJson) {
-      try { params = JSON.parse(paramsJson); } catch { return; }
+      try {
+        const parsed: unknown = JSON.parse(paramsJson);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          params = parsed as Record<string, unknown>;
+        }
+      } catch {
+        // Malformed params — resolve on screen name alone.
+      }
     }
+    const route: NotificationRoute = { screen, params };
+    const resolved = resolveNotificationRoute(route);
     const nav = ref as { navigate: (screen: string, params?: unknown) => void };
-    nav.navigate(screen, params);
+    if (resolved === null) {
+      // The event exists in the persisted feed — NotificationsList is the
+      // honest fallback, matching the push-tap null-route behaviour.
+      nav.navigate('NotificationsList');
+    } else {
+      nav.navigate(resolved.screen, 'params' in resolved ? resolved.params : undefined);
+    }
     dismissNotification(notification.id);
   }, []);
 

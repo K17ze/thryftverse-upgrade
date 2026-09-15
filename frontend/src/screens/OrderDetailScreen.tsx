@@ -33,7 +33,18 @@ import { OrderSupportSection } from '../components/orders/OrderSupportSection';
 import { OrderAuthenticationSection } from '../components/orders/OrderAuthenticationSection';
 import { ReturnCaseCard } from '../components/orders/ReturnCaseCard';
 import { useReturnCase } from '../hooks/useReturnCase';
-import { requestReturnStepIn } from '../services/returnsApi';
+import {
+  requestReturnStepIn,
+  respondToReturnCase,
+  provideReturnShipment,
+  confirmReturnReceipt,
+  recordReturnInspection,
+  proposeReturnRemedy,
+  acceptReturnRemedy,
+  rejectReturnRemedy,
+  appealReturnCase,
+} from '../services/returnsApi';
+import type { ReturnCaseAction } from '../components/orders/ReturnCaseActions';
 import { parseApiError } from '../lib/apiClient';
 import { useToast } from '../context/ToastContext';
 import { OrderDetailSkeleton } from '../components/orders/OrderDetailSkeleton';
@@ -66,6 +77,7 @@ export default function OrderDetailScreen() {
   // Active return/refund case for this order (null when none exists).
   const { returnCase, refresh: refreshReturnCase } = useReturnCase(orderId);
   const [isStepInSubmitting, setIsStepInSubmitting] = React.useState(false);
+  const [isReturnActionSubmitting, setIsReturnActionSubmitting] = React.useState(false);
 
   // Theme-aware color overrides for the static styles. The static
   // StyleSheet contains only non-color properties; colors are applied
@@ -135,6 +147,64 @@ export default function OrderDetailScreen() {
           if (isMountedRef.current) setIsStepInSubmitting(false);
         }
       } });
+  };
+
+  // Return-case state machine — dispatches the legal transition the card
+  // surfaces. The server re-validates role + transition; on success the
+  // case is refreshed so the card re-renders its next legal moves.
+  const handleReturnCaseAction = async (action: ReturnCaseAction) => {
+    if (!returnCase || isReturnActionSubmitting) return;
+    haptics.tap();
+    setIsReturnActionSubmitting(true);
+    try {
+      switch (action.type) {
+        case 'decision':
+          await respondToReturnCase(returnCase.id, { decision: action.decision, reason: action.reason });
+          show(action.decision === 'approved' ? 'Return approved.' : 'Return declined.', 'success');
+          break;
+        case 'reverse_shipment':
+          await provideReturnShipment(returnCase.id, {
+            carrier: action.carrier,
+            trackingNumber: action.trackingNumber,
+            labelUrl: action.labelUrl,
+          });
+          show('Return tracking added.', 'success');
+          break;
+        case 'receipt':
+          await confirmReturnReceipt(returnCase.id);
+          show('Return marked as received.', 'success');
+          break;
+        case 'inspection':
+          await recordReturnInspection(returnCase.id, { notes: action.notes, condition: action.condition });
+          show('Inspection recorded.', 'success');
+          break;
+        case 'remedy':
+          await proposeReturnRemedy(returnCase.id, {
+            remedy: action.remedy,
+            amountGbp: action.amountGbp,
+            notes: action.notes,
+          });
+          show('Remedy proposed to the buyer.', 'success');
+          break;
+        case 'remedy_accept':
+          await acceptReturnRemedy(returnCase.id);
+          show('Remedy accepted.', 'success');
+          break;
+        case 'remedy_reject':
+          await rejectReturnRemedy(returnCase.id, action.reason);
+          show('Declined — Thryft will review this case.', 'success');
+          break;
+        case 'appeal':
+          await appealReturnCase(returnCase.id, action.reason);
+          show('Appeal submitted — Thryft will review this case.', 'success');
+          break;
+      }
+      await refreshReturnCase();
+    } catch (error) {
+      show(parseApiError(error).message, 'error');
+    } finally {
+      if (isMountedRef.current) setIsReturnActionSubmitting(false);
+    }
   };
 
   // --- Interaction handlers + footer/overflow action configs ---
@@ -212,7 +282,11 @@ export default function OrderDetailScreen() {
         />
 
         {loadError && backendOrder ? (
-          <View style={styles.refreshErrorRow}>
+          <View
+            style={styles.refreshErrorRow}
+            accessibilityRole="alert"
+            accessibilityLiveRegion="polite"
+          >
             <Ionicons name="alert-circle-outline" size={16} color={colors.textMuted} aria-hidden={true} />
             <Text style={[styles.refreshErrorText, themed.refreshErrorText]}>{loadError}</Text>
             <Pressable
@@ -236,7 +310,7 @@ export default function OrderDetailScreen() {
           priceLabel={formatFromFiat(orderSubtotal ?? 0, 'GBP', fiatOpts)}
           listingAvailable={listingExists}
           onPress={listingExists && listingId ? () => {
-            haptics.tap();
+            // Pure navigation — silent per the haptic grammar.
             openProductDetail(navigation, { referenceKind: 'listing', canonicalId: listingId, sourceSurface: 'OrderDetailSummary' });
           } : undefined}
         />
@@ -305,15 +379,15 @@ export default function OrderDetailScreen() {
             hasReview={hasReview}
             onLeaveReview={() => { haptics.tap(); openReviewPrompt(); }}
             onBuyAgain={() => {
-              haptics.tap();
+              // Pure navigation — silent per the haptic grammar.
               if (counterparty) {
                 openProfile(navigation, counterparty.id, currentUser?.id);
               } else if (backendOrder?.sellerId) {
                 openProfile(navigation, backendOrder.sellerId, currentUser?.id);
               }
             }}
-            onViewReceipt={() => { haptics.tap(); navigation.navigate('OrderReceipt', { orderId }); }}
-            onViewSupportHistory={() => { haptics.tap(); navigation.navigate('OrderSupport', { orderId }); }}
+            onViewReceipt={() => navigation.navigate('OrderReceipt', { orderId })}
+            onViewSupportHistory={() => navigation.navigate('OrderSupport', { orderId })}
           />
         ) : null}
 
@@ -401,6 +475,8 @@ export default function OrderDetailScreen() {
               onStepIn={handleStepIn}
               onOpenLabel={(url) => { void handleOpenShippingLabel(url); }}
               formatPrice={(amountGbp) => formatFromFiat(amountGbp, 'GBP', fiatOpts)}
+              onAction={(action) => void handleReturnCaseAction(action)}
+              isActionSubmitting={isReturnActionSubmitting}
             />
             <View style={[styles.sectionDivider, themed.sectionDivider]} />
           </>

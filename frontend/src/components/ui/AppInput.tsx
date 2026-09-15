@@ -168,6 +168,7 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
             placeholder={placeholder}
             placeholderTextColor={placeholderTextColor ?? colors.textMuted}
             multiline={multiline}
+            aria-invalid={hasError || undefined}
             onFocus={(e) => { setIsFocused(true); onFocus?.(e); }}
             onBlur={(e) => { setIsFocused(false); onBlur?.(e); }}
             style={[
@@ -182,7 +183,11 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
         </View>
 
         {hasError ? (
-          <Text style={[sectionStyles.errorText, { color: colors.danger }, helperStyle]}>{errorText}</Text>
+          <Text
+            style={[sectionStyles.errorText, { color: colors.danger }, helperStyle]}
+            accessibilityRole="alert"
+            accessibilityLiveRegion="polite"
+          >{errorText}</Text>
         ) : helperText ? (
           <Text style={[sectionStyles.helperText, { color: colors.textMuted }, helperStyle]}>{helperText}</Text>
         ) : null}
@@ -247,12 +252,19 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
           style={[styles.input, { color: colors.textPrimary }, inputStyle]}
           accessibilityLabel={passedAccessibilityLabel ?? label ?? placeholder}
           accessibilityLabelledBy={label ? (passedAccessibilityLabelledBy ?? labelId) : passedAccessibilityLabelledBy}
+          aria-invalid={hasError || undefined}
           onFocus={(e) => { setIsFocused(true); onFocus?.(e); }}
           onBlur={(e) => { setIsFocused(false); onBlur?.(e); }}
         />
         {trailingNode}
       </View>
-      {errorText ? <Text style={[styles.errorText, { color: colors.danger }, helperStyle]}>{errorText}</Text> : null}
+      {errorText ? (
+        <Text
+          style={[styles.errorText, { color: colors.danger }, helperStyle]}
+          accessibilityRole="alert"
+          accessibilityLiveRegion="polite"
+        >{errorText}</Text>
+      ) : null}
       {!errorText && helperText ? <Text style={[styles.helperText, { color: colors.textMuted }, helperStyle]}>{helperText}</Text> : null}
     </View>
   );

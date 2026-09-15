@@ -8,6 +8,7 @@ import Reanimated, {
   withSpring,
   withTiming,
   withDelay,
+  withSequence,
   Easing,
   interpolate,
   Extrapolation,
@@ -75,14 +76,16 @@ export function FocusReticle({ focusPoint, size = DEFAULT_SIZE, onDismiss }: Foc
 
     haptic.light(); // light impact on tap
 
-    // Entrance: 0→1 with bouncy spring
+    // Entrance → hold → exit as ONE animation. The previous code assigned
+    // the delayed fade directly, which cancelled the spring and animated
+    // 0→0 — the reticle was invisible for its entire lifecycle.
     focusAnim.value = 0;
-    focusAnim.value = withSpring(1, spring.lift);
-
-    // Auto-dismiss after 1.2s with fade
-    focusAnim.value = withDelay(
-      1200,
-      withTiming(0, { duration: reducedMotion ? 0 : 300, easing: Easing.in(Easing.cubic) }),
+    focusAnim.value = withSequence(
+      withSpring(1, spring.lift),
+      withDelay(
+        1200,
+        withTiming(0, { duration: reducedMotion ? 0 : 300, easing: Easing.in(Easing.cubic) }),
+      ),
     );
 
     const timeout = setTimeout(() => {
@@ -128,6 +131,5 @@ export function FocusReticle({ focusPoint, size = DEFAULT_SIZE, onDismiss }: Foc
 const styles = StyleSheet.create({
   reticle: {
     position: 'absolute',
-    pointerEvents: 'none',
   },
 });

@@ -5,6 +5,8 @@ import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { publishRealtimeEvent } from '../lib/realtime.js';
 import { emitOrderCommerceCard } from '../lib/orderChatCards.js';
+import { getSellerReach } from '../lib/sellerReach.js';
+import { cancelOrderOnReservationExpiry } from '../lib/commerceCheckoutLifecycle.js';
 
 // ── Local helpers (mirrored from routes/orders.ts) ───────────────────────────
 
@@ -559,11 +561,13 @@ export const registerLiveLotEngineRoutes = ({
         throw createApiError('LISTING_NOT_FOUND', `Listing ${payload.listingId} not found`);
       }
       // The listing must be active (or already paused/reserved by a prior lot
-      // in the same session) to be eligible for auction.
+      // in the same session) to be eligible for auction. 'risk_pending' is
+      // excluded: a listing held by the risk decision system or a
+      // visibility_restriction enforcement must not be auctioned while it is
+      // suppressed from distribution.
       if (
         listing.status !== 'active'
         && listing.status !== 'paused'
-        && listing.status !== 'risk_pending'
       ) {
         await client.query('ROLLBACK');
         reply.code(409);
@@ -710,6 +714,27 @@ export const registerLiveLotEngineRoutes = ({
           ok: false,
           error: `Lot cannot be opened from status '${lot.status}'`,
           code: 'LOT_NOT_OPENABLE',
+        };
+      }
+
+      // Re-verify the listing is still auction-eligible before opening a
+      // bidding window — the same set lot scheduling enforces. A listing
+      // held at 'risk_pending' (or moved to any non-auctionable state)
+      // after the lot was scheduled/passed must not produce a live round:
+      // the bid path would reject every bid and the lot could only die as
+      // a dead, unbiddable row.
+      const listingStatusResult = await client.query<{ status: string }>(
+        `SELECT status FROM listings WHERE id = $1 LIMIT 1`,
+        [lot.listing_id],
+      );
+      const listingStatus = listingStatusResult.rows[0]?.status ?? null;
+      if (listingStatus !== 'active' && listingStatus !== 'paused') {
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return {
+          ok: false,
+          error: `Listing is not eligible for auction (status='${listingStatus ?? 'missing'}')`,
+          code: 'LISTING_NOT_ELIGIBLE',
         };
       }
 
@@ -1113,14 +1138,44 @@ export const registerLiveLotEngineRoutes = ({
         [lot.listing_id],
       );
       if (expiredReservation.rowCount) {
-        expiredReservationOrderId = expiredReservation.rows[0].order_id;
-        await client.query(
-          `UPDATE orders
-              SET status = 'cancelled', updated_at = NOW()
-            WHERE id = $1 AND status = 'created'`,
-          [expiredReservation.rows[0].order_id],
+        const staleOrderId = expiredReservation.rows[0].order_id;
+        const cancelOutcome = await cancelOrderOnReservationExpiry(client, staleOrderId);
+        if (cancelOutcome === 'blocked_in_flight') {
+          // A payment attempt is still in flight for this listing —
+          // cancelling the order would orphan a late provider capture.
+          // The lot cannot settle against a listing whose checkout is
+          // already being paid.
+          await client.query('ROLLBACK');
+          reply.code(409);
+          return {
+            ok: false,
+            error: 'This listing is reserved — a payment is already in progress',
+            code: 'LISTING_CHECKOUT_RESERVED',
+          };
+        }
+        if (cancelOutcome === 'already_terminal') {
+          // Drifted reservation bound to a terminal/missing order: cancel
+          // it directly — the order-status trigger can no longer reach it.
+          await client.query(
+            `UPDATE listing_checkout_reservations
+               SET status = 'cancelled',
+                   cancelled_at = NOW(),
+                   failure_reason = COALESCE(failure_reason, 'reservation_expired'),
+                   updated_at = NOW()
+             WHERE order_id = $1 AND status = 'active'`,
+            [staleOrderId],
+          );
+        }
+        expiredReservationOrderId = staleOrderId;
+        // Re-read the listing: the checkout trigger restores 'paused' →
+        // 'active' only when the pause is reservation-owned
+        // (pause_source='checkout_reservation'). A seller pause survives
+        // expiry — 'paused' is still settlable for this lot below.
+        const refreshedListing = await client.query<{ status: string }>(
+          `SELECT status FROM listings WHERE id = $1 LIMIT 1`,
+          [lot.listing_id],
         );
-        listing.status = 'active';
+        listing.status = refreshedListing.rows[0]?.status ?? listing.status;
       }
 
       // The listing must be active or already paused/reserved for this lot.
@@ -1131,6 +1186,21 @@ export const registerLiveLotEngineRoutes = ({
           ok: false,
           error: `Listing cannot be settled from status '${listing.status}'`,
           code: 'LISTING_NOT_SETTLABLE',
+        };
+      }
+
+      // Seller reach: a suspended seller's lot must not settle into a
+      // payable order — the winner would be asked to pay into a checkout
+      // that /payments/intents rejects with SELLER_RESTRICTED anyway.
+      // 'limited' only demotes discovery and does NOT block settlement.
+      const sellerReach = await getSellerReach(client, listing.seller_id);
+      if (sellerReach?.state === 'suspended') {
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return {
+          ok: false,
+          error: 'This seller is currently restricted — their listings are not available for purchase',
+          code: 'SELLER_RESTRICTED',
         };
       }
 
@@ -1274,9 +1344,12 @@ export const registerLiveLotEngineRoutes = ({
         ],
       );
 
-      // Pause the listing so it cannot be purchased elsewhere.
+      // Pause the listing so it cannot be purchased elsewhere. Pause
+      // provenance (migration 305) marks this as reservation-owned so
+      // expiry restores can safely reactivate it — a seller pause
+      // ('seller') is never touched by those paths.
       await client.query(
-        `UPDATE listings SET status = 'paused', updated_at = NOW() WHERE id = $1`,
+        `UPDATE listings SET status = 'paused', pause_source = 'checkout_reservation', updated_at = NOW() WHERE id = $1`,
         [listing.id],
       );
 

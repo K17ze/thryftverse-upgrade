@@ -633,8 +633,12 @@ export function BidSheet({
             })()}
 
             {error && (
-              <View style={styles.errorRow}>
-                <Ionicons name="alert-circle-outline" size={14} color={themed.danger} />
+              <View
+                style={styles.errorRow}
+                accessibilityRole="alert"
+                accessibilityLiveRegion="polite"
+              >
+                <Ionicons name="alert-circle-outline" size={14} color={themed.danger} accessible={false} />
                 <Text style={styles.errorText}>{error.message}</Text>
               </View>
             )}
@@ -732,8 +736,12 @@ export function BidSheet({
             </View>
 
             {error && (
-              <View style={styles.errorRow}>
-                <Ionicons name="alert-circle-outline" size={14} color={themed.danger} />
+              <View
+                style={styles.errorRow}
+                accessibilityRole="alert"
+                accessibilityLiveRegion="polite"
+              >
+                <Ionicons name="alert-circle-outline" size={14} color={themed.danger} accessible={false} />
                 <Text style={styles.errorText}>{error.message}</Text>
               </View>
             )}

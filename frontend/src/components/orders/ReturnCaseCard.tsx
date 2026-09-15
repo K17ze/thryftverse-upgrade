@@ -7,6 +7,7 @@ import { TypographyV2 } from '../../theme/typography.v2';
 import { haptics } from '../../utils/haptics';
 import { getStepInState, getReturnCaseStatusLabel } from '../../utils/returnCase';
 import type { ReturnCase } from '../../services/returnsApi';
+import { ReturnCaseActions, type ReturnCaseAction } from './ReturnCaseActions';
 
 interface Props {
   returnCase: ReturnCase;
@@ -16,6 +17,10 @@ interface Props {
   onStepIn: () => void;
   onOpenLabel: (url: string) => void;
   formatPrice: (amountGbp: number) => string;
+  /** Legal state-machine transition dispatch — wired to returnsApi in the
+   *  parent. When absent the card renders status only. */
+  onAction?: (action: ReturnCaseAction) => void;
+  isActionSubmitting?: boolean;
 }
 
 function formatDateTime(iso: string): string {
@@ -41,7 +46,9 @@ export function ReturnCaseCard({
   isStepInSubmitting,
   onStepIn,
   onOpenLabel,
-  formatPrice }: Props) {
+  formatPrice,
+  onAction,
+  isActionSubmitting = false }: Props) {
   const { colors } = useAppTheme();
 
   const themed = useMemo(() => ({
@@ -144,6 +151,18 @@ export function ReturnCaseCard({
           {returnCase.returnCarrier ? `${returnCase.returnCarrier} · ` : ''}
           {returnCase.returnTrackingNumber}
         </Text>
+      ) : null}
+
+      {/* Role/state-legal transitions — the server still re-validates; the
+          card only surfaces moves the current status permits. */}
+      {onAction ? (
+        <ReturnCaseActions
+          returnCase={returnCase}
+          role={isBuyer ? 'buyer' : 'seller'}
+          isSubmitting={isActionSubmitting}
+          onAction={onAction}
+          formatPrice={formatPrice}
+        />
       ) : null}
     </View>
   );

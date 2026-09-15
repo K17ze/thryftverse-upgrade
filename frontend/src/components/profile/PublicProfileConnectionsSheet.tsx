@@ -142,10 +142,10 @@ export function PublicProfileConnectionsSheet({
       snapPoints={[{ fraction: 0.75 }]}
     >
       <View style={styles.container}>
-        {/* One title ΓÇö "Connections" */}
+        {/* One title — "Connections" */}
         <Text style={styles.title}>Connections</Text>
 
-        {/* Animated segment indicator ΓÇö same system as the main profile */}
+        {/* Animated segment indicator — same system as the main profile */}
         <SegmentedControl
           segments={[
             { key: 'followers', label: `Followers ${followerCount}` },
@@ -219,7 +219,7 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: { paddingHorizontal: Space.md, paddingVertical: Space.sm, flex: 1 },
   title: { fontSize: TypographyV2.priceList.size, fontFamily: TypographyV2.priceList.fontFamily, color: colors.textPrimary, letterSpacing: -0.4, marginBottom: Space.sm },
-  // Rows ΓÇö no chevron, pressed feedback, divider rhythm
+  // Rows — no chevron, pressed feedback, divider rhythm
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: Space.sm + 2, minHeight: Space.xxl + Space.xxl + Space.xs },
   rowPressed: { opacity: 0.6 },
   rowDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 56 },

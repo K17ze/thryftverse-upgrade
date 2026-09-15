@@ -68,53 +68,60 @@ test('partial refund: penny-rounding on the total is tolerated', () => {
 const WINDOW_MS = SELLER_RESPONSE_WINDOW_HOURS * 60 * 60 * 1000;
 
 test('step-in: not eligible while inside the seller response window', () => {
-  const createdAt = '2026-01-10T12:00:00.000Z';
-  const now = new Date(new Date(createdAt).getTime() + WINDOW_MS - 60_000);
-  const result = computeStepInEligibility({ status: 'requested', createdAt, now });
+  const referenceAt = '2026-01-10T12:00:00.000Z';
+  const now = new Date(new Date(referenceAt).getTime() + WINDOW_MS - 60_000);
+  const result = computeStepInEligibility({ status: 'requested', referenceAt, now });
   assert.equal(result.eligible, false);
   assert.equal(
     result.eligibleAt,
-    new Date(new Date(createdAt).getTime() + WINDOW_MS).toISOString(),
+    new Date(new Date(referenceAt).getTime() + WINDOW_MS).toISOString(),
   );
 });
 
 test('step-in: eligible once the seller response window has elapsed', () => {
-  const createdAt = '2026-01-10T12:00:00.000Z';
-  const now = new Date(new Date(createdAt).getTime() + WINDOW_MS + 60_000);
-  const result = computeStepInEligibility({ status: 'requested', createdAt, now });
+  const referenceAt = '2026-01-10T12:00:00.000Z';
+  const now = new Date(new Date(referenceAt).getTime() + WINDOW_MS + 60_000);
+  const result = computeStepInEligibility({ status: 'requested', referenceAt, now });
   assert.equal(result.eligible, true);
 });
 
-test('step-in: evidence_review is still a seller-waiting state', () => {
-  const createdAt = '2026-01-10T12:00:00.000Z';
-  const now = new Date(new Date(createdAt).getTime() + WINDOW_MS + 1);
-  const result = computeStepInEligibility({ status: 'evidence_review', createdAt, now });
-  assert.equal(result.eligible, true);
-});
-
-test('step-in: not applicable once the seller has responded or case resolved', () => {
-  const createdAt = '2026-01-10T12:00:00.000Z';
-  const now = new Date(new Date(createdAt).getTime() + WINDOW_MS * 10);
+test('step-in: every seller-waiting status is covered post-window', () => {
+  // A case stalled in ANY seller-action state must be escapable by the
+  // buyer — approval without follow-through is not a response.
+  const referenceAt = '2026-01-10T12:00:00.000Z';
+  const now = new Date(new Date(referenceAt).getTime() + WINDOW_MS + 1);
   for (const status of [
+    'requested',
+    'evidence_review',
     'approved',
-    'rejected',
     'reverse_shipped',
     'received',
     'inspected',
-    'remedy_proposed',
     'remedy_accepted',
+  ] as const) {
+    const result = computeStepInEligibility({ status, referenceAt, now });
+    assert.equal(result.eligible, true, `status ${status} should be step-in eligible after the window`);
+  }
+});
+
+test('step-in: not applicable in buyer-action or resolved states', () => {
+  const referenceAt = '2026-01-10T12:00:00.000Z';
+  const now = new Date(new Date(referenceAt).getTime() + WINDOW_MS * 10);
+  for (const status of [
+    'rejected',
+    'remedy_proposed',
     'refund_confirmed',
     'appealed',
     'closed',
   ] as const) {
-    const result = computeStepInEligibility({ status, createdAt, now });
+    const result = computeStepInEligibility({ status, referenceAt, now });
     assert.equal(result.eligible, false, `status ${status} should not be step-in eligible`);
     assert.equal(result.eligibleAt, null);
   }
 });
 
 test('step-in: eligibleAt is null for statuses outside the waiting set', () => {
-  assert.equal(computeStepInEligibleAt('approved', '2026-01-10T12:00:00.000Z'), null);
+  assert.equal(computeStepInEligibleAt('remedy_proposed', '2026-01-10T12:00:00.000Z'), null);
   assert.equal(computeStepInEligibleAt('closed', '2026-01-10T12:00:00.000Z'), null);
 });
 
@@ -133,7 +140,9 @@ test('state machine: appealed remains reachable from rejected (existing appeal p
 test('state machine: appealed is not reachable from resolved/terminal states', () => {
   assert.equal(validateTransition('closed', 'appealed'), false);
   assert.equal(validateTransition('refund_confirmed', 'appealed'), false);
-  assert.equal(validateTransition('remedy_accepted', 'appealed'), false);
+  // remedy_accepted CAN appeal — an accepted replacement/repair that never
+  // arrives must be escalable, and a stalled refund needs a platform path.
+  assert.equal(validateTransition('remedy_accepted', 'appealed'), true);
 });
 
 // ── Return-request eligibility (order status + return window) ──

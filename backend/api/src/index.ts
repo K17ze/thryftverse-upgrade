@@ -105,11 +105,31 @@ import {
   type MoneyProvider,
   type ProviderAmountUnit,
 } from './lib/money.js';
+import {
+  applyWalletLedgerDelta,
+  computeOnezeToFiatConversionQuote,
+  findWalletIzeOperationByPaymentIntentId,
+  getWalletIdempotentResponse,
+  hashWalletIdempotencyPayload,
+  isPostgresUniqueViolation,
+  materializeMintOperationForPaymentIntent,
+  planCommerceOrderRefundRecovery,
+  refundOnezeInternalWalletDebit,
+  saveWalletIdempotentResponse,
+} from './lib/walletMoneyPath.js';
 // P0.8: Exact decimal string formatting for Co-Own trading API responses.
 // Avoids IEEE 754 representation error in the JSON wire format by emitting
 // decimal string variants (e.g. "49.2500") alongside legacy number fields.
 import { formatGbp } from './lib/moneyFormat.js';
+import { listingPatchSchema } from './lib/listingPatch.js';
+import { canListingTransition } from './lib/listingCommandService.js';
 import { fetchSellerAwayState } from './lib/sellerAway.js';
+import {
+  getSellerReach,
+  REACH_LIMITED_MULTIPLIER,
+  reachExcludedSql,
+  reachJoinSql,
+} from './lib/sellerReach.js';
 import {
   createMobileCustomerSession,
   getOrCreateStripeCustomer,
@@ -137,6 +157,9 @@ import {
   enqueueAnalyticsAggregationJob,
   enqueuePushReceiptReconciliationJob,
   enqueueScheduledPublicationSweepJob,
+  enqueueMediaIngestReconcileJob,
+  enqueueMultipartSessionSweepJob,
+  enqueueOrphanUploadIntentSweepJob,
   enqueueOnezeWithdrawalExecuteJob,
   enqueuePushNotificationJob,
   enqueueMediaIngestJob,
@@ -274,6 +297,7 @@ import { processMediaAsset } from './lib/media/pipeline.js';
 import {
   loadListingMedia,
   listingImageUrls,
+  listingMediaImageUrl,
   type ListingMediaItem,
 } from './lib/media/listingMediaProjection.js';
 import {
@@ -302,6 +326,9 @@ import {
   processSellerTrustRecompute,
   processAutoFeedbackSweep,
   processDomainOutboxBatch,
+  reconcileMediaIngestJobs,
+  expireStaleMultipartSessions,
+  sweepOrphanedUploadIntents,
 } from './workers/handlers/index.js';
 import {
   evaluatePriceAlertsForListing,
@@ -344,6 +371,7 @@ import { registerSellerHubRoutes } from './routes/sellerHub.js';
 import { registerPoliciesRoutes } from './routes/policies.js';
 import { registerAuthenticationRoutes } from './routes/authentication.js';
 import { registerFeedRoutes } from './routes/feed.js';
+import { registerPromotionRoutes } from './routes/promotions.js';
 import { registerGalleriaRoutes } from './routes/galleria.js';
 import { registerMoodboardRoutes } from './routes/moodboards.js';
 import { registerConversationalSearchRoutes } from './routes/conversationalSearch.js';
@@ -395,7 +423,21 @@ import {
   getPersistedSellerRiskTier,
 } from './lib/sellerRiskTiering.js';
 import type { SellerRiskTier } from './lib/sellerRiskTiering.js';
-import { compensateTerminalCommercePayment } from './lib/commerceCheckoutLifecycle.js';
+import {
+  cancelOrderOnReservationExpiry,
+  compensateTerminalCommercePayment,
+  flagOrphanedCommercePayment,
+  hasInFlightPaymentIntent,
+} from './lib/commerceCheckoutLifecycle.js';
+import {
+  classifyStaleSubmission,
+  computeOnezeDebitQuote,
+  isRetriableProviderPaymentFailure,
+  onezeUnitsToAmount,
+  readOnezeBalanceUnitsForUpdate,
+} from './lib/commercePayments.js';
+import type { OnezeDebitQuote } from './lib/commercePayments.js';
+import { registerOrderFulfilmentRoutes } from './routes/orderFulfilment.js';
 import {
   emitOrderCommerceCard,
   type OrderCommerceCardState,
@@ -2182,7 +2224,7 @@ function toWalletPayload(row: WalletRow) {
   };
 }
 
-function toWalletLedgerPayload(row: WalletLedgerRow) {
+function toWalletLedgerPayload(row: WalletLedgerRow, fiatCurrency = 'GBP') {
   const asset = row.asset;
   const amount = Number(row.amount);
   const balanceAfter = Number(row.balance_after);
@@ -2195,9 +2237,12 @@ function toWalletLedgerPayload(row: WalletLedgerRow) {
     txId: row.tx_id,
     asset,
     amount,
-    amountDisplay: asset === '1ZE' ? unitsToOnezeAmount(amount) : amount,
+    // FIAT amounts are stored in minor units — display fields must be major
+    // units so clients don't render a 100× inflation.
+    amountDisplay: asset === '1ZE' ? unitsToOnezeAmount(amount) : fromFiatMinor(amount, fiatCurrency),
     balanceAfter,
-    balanceAfterDisplay: asset === '1ZE' ? unitsToOnezeAmount(balanceAfter) : balanceAfter,
+    balanceAfterDisplay: asset === '1ZE' ? unitsToOnezeAmount(balanceAfter) : fromFiatMinor(balanceAfter, fiatCurrency),
+    currency: asset === 'FIAT' ? fiatCurrency : '1ZE',
     kind: row.kind,
     refType: row.ref_type,
     refId: row.ref_id,
@@ -2870,81 +2915,9 @@ async function assertOnezeMintBurnNotHalted(): Promise<void> {
   );
 }
 
-function hashWalletIdempotencyPayload(payload: unknown): string {
-  return crypto.createHash('sha256').update(toJsonString(payload ?? {})).digest('hex');
-}
-
-async function getWalletIdempotentResponse(
-  client: DbQueryable,
-  input: {
-    userId: string;
-    operation: string;
-    idempotencyKey: string;
-    requestHash: string;
-  }
-): Promise<Record<string, unknown> | null> {
-  const result = await client.query<{
-    request_hash: string;
-    response_payload: Record<string, unknown>;
-  }>(
-    `
-      SELECT request_hash, response_payload
-      FROM wallet_idempotency_keys
-      WHERE user_id = $1
-        AND operation = $2
-        AND idempotency_key = $3
-      LIMIT 1
-    `,
-    [input.userId, input.operation, input.idempotencyKey]
-  );
-
-  const row = result.rows[0];
-  if (!row) {
-    return null;
-  }
-
-  if (row.request_hash !== input.requestHash) {
-    throw createApiError(
-      'IDEMPOTENCY_KEY_REUSED',
-      'Idempotency key was already used with a different request payload'
-    );
-  }
-
-  return row.response_payload;
-}
-
-async function saveWalletIdempotentResponse(
-  client: DbQueryable,
-  input: {
-    userId: string;
-    operation: string;
-    idempotencyKey: string;
-    requestHash: string;
-    responsePayload: Record<string, unknown>;
-  }
-): Promise<void> {
-  await client.query(
-    `
-      INSERT INTO wallet_idempotency_keys (
-        user_id,
-        operation,
-        idempotency_key,
-        request_hash,
-        response_payload
-      )
-      VALUES ($1, $2, $3, $4, $5::jsonb)
-      ON CONFLICT (user_id, operation, idempotency_key)
-      DO NOTHING
-    `,
-    [
-      input.userId,
-      input.operation,
-      input.idempotencyKey,
-      input.requestHash,
-      toJsonString(input.responsePayload),
-    ]
-  );
-}
+// Wallet idempotency helpers (hashWalletIdempotencyPayload,
+// getWalletIdempotentResponse, saveWalletIdempotentResponse) live in
+// lib/walletMoneyPath.ts so the money-path primitives are unit-testable.
 
 // â”€â”€ Co-Own order idempotency (spec 10 Â§1) â”€â”€
 // Prevents duplicate order placement on network retry. The client generates
@@ -3245,126 +3218,6 @@ async function ensureWallet(
   );
 
   return syncedResult.rows[0] ?? wallet;
-}
-
-async function loadWalletForUpdate(client: DbQueryable, walletId: string): Promise<WalletRow> {
-  const result = await client.query<WalletRow>(
-    `
-      SELECT
-        id,
-        user_id,
-        oneze_balance_units,
-        fiat_balance_minor,
-        fiat_currency,
-        version,
-        created_at::text,
-        updated_at::text
-      FROM wallets
-      WHERE id = $1
-      LIMIT 1
-      FOR UPDATE
-    `,
-    [walletId]
-  );
-
-  const wallet = result.rows[0];
-  if (!wallet) {
-    throw createApiError('WALLET_NOT_FOUND', 'Wallet not found', { walletId });
-  }
-
-  return wallet;
-}
-
-async function applyWalletLedgerDelta(
-  client: DbQueryable,
-  input: {
-    walletId: string;
-    txId: string;
-    asset: '1ZE' | 'FIAT';
-    amount: number;
-    kind: string;
-    refType?: string;
-    refId?: string;
-    anchorValueInInr?: number;
-    metadata?: Record<string, unknown>;
-  }
-): Promise<number> {
-  if (!Number.isSafeInteger(input.amount)) {
-    throw createApiError('WALLET_AMOUNT_INVALID', 'Wallet ledger amount must be an integer unit');
-  }
-
-  const wallet = await loadWalletForUpdate(client, input.walletId);
-  const currentBalance = Number(
-    input.asset === '1ZE' ? wallet.oneze_balance_units : wallet.fiat_balance_minor
-  );
-  const nextBalance = currentBalance + input.amount;
-
-  if (nextBalance < 0) {
-    throw createApiError('WALLET_INSUFFICIENT_BALANCE', 'Wallet balance is insufficient for this operation', {
-      walletId: input.walletId,
-      asset: input.asset,
-      currentBalance,
-      attemptedDelta: input.amount,
-    });
-  }
-
-  if (input.asset === '1ZE') {
-    await client.query(
-      `
-        UPDATE wallets
-        SET
-          oneze_balance_units = $2,
-          version = version + 1,
-          updated_at = NOW()
-        WHERE id = $1
-      `,
-      [input.walletId, nextBalance]
-    );
-  } else {
-    await client.query(
-      `
-        UPDATE wallets
-        SET
-          fiat_balance_minor = $2,
-          version = version + 1,
-          updated_at = NOW()
-        WHERE id = $1
-      `,
-      [input.walletId, nextBalance]
-    );
-  }
-
-  await client.query(
-    `
-      INSERT INTO wallet_ledger (
-        wallet_id,
-        tx_id,
-        asset,
-        amount,
-        balance_after,
-        kind,
-        ref_type,
-        ref_id,
-        anchor_value_in_inr,
-        metadata
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
-    `,
-    [
-      input.walletId,
-      input.txId,
-      input.asset,
-      input.amount,
-      nextBalance,
-      input.kind,
-      input.refType ?? null,
-      input.refId ?? null,
-      input.anchorValueInInr ?? null,
-      toJsonString(input.metadata ?? {}),
-    ]
-  );
-
-  return nextBalance;
 }
 
 function normalizeOnezeCountryTag(country: string | null | undefined): string {
@@ -5328,11 +5181,18 @@ async function postCommerceOrderRefundLedgerReversal(
     metadata: { refundRef },
   });
 
-  const orderResult = await client.query<{ buyer_protection_fee_gbp: number, postage_fee_gbp: number }>(
-    `SELECT buyer_protection_fee_gbp, postage_fee_gbp FROM orders WHERE id = $1`, [orderId]
+  const orderResult = await client.query<{
+    buyer_protection_fee_gbp: number,
+    postage_fee_gbp: number,
+    seller_id: string | null,
+    subtotal_gbp: number,
+  }>(
+    `SELECT buyer_protection_fee_gbp, postage_fee_gbp, seller_id, subtotal_gbp FROM orders WHERE id = $1`, [orderId]
   );
   const platformChargeGbp = Number(orderResult.rows[0]?.buyer_protection_fee_gbp ?? 0);
   const postageFeeGbp = Number(orderResult.rows[0]?.postage_fee_gbp ?? 0);
+  const sellerId = orderResult.rows[0]?.seller_id ?? null;
+  const subtotalGbp = Number(orderResult.rows[0]?.subtotal_gbp ?? 0);
 
   const platformRevenueAccountId = await ensureLedgerAccount(
     client,
@@ -5384,6 +5244,52 @@ async function postCommerceOrderRefundLedgerReversal(
       sourceId: orderId,
       lineType: 'postage_fee_reversal',
       metadata: { refundRef },
+    });
+  }
+
+  // Refund-after-payout recovery. When seller escrow was already released,
+  // the buyer_refund legs above drove escrow_liability negative — recover the
+  // goods value from the seller. Only the subtotal is clawed back: platform
+  // fees and postage are reversed by their own legs and never reached the
+  // seller. A seller_payable driven negative is an honest receivable — it is
+  // recovered against future earnings; withdrawal_pending is not touched
+  // because those funds back a specific payout_requests row whose settlement
+  // path reconciles it separately.
+  const recoveryPlan = planCommerceOrderRefundRecovery({
+    sellerEscrowReleased: await hasCommerceOrderSellerEscrowReleased(client, orderId),
+    sellerId,
+    subtotalGbp,
+    platformChargeGbp,
+    postageFeeGbp,
+    totalGbp,
+  });
+  if (recoveryPlan.postSellerRecovery && sellerId) {
+    const sellerPayableAccountId = await ensureLedgerAccount(
+      client,
+      'user',
+      sellerId,
+      'seller_payable'
+    );
+
+    await appendLedgerEntry(client, {
+      accountId: sellerPayableAccountId,
+      counterpartyAccountId: escrowAccountId,
+      direction: 'debit',
+      amountGbp: recoveryPlan.sellerRecoveryAmount,
+      sourceType: 'refund',
+      sourceId: orderId,
+      lineType: 'seller_payable_recovery',
+      metadata: { refundRef, sellerId },
+    });
+    await appendLedgerEntry(client, {
+      accountId: escrowAccountId,
+      counterpartyAccountId: sellerPayableAccountId,
+      direction: 'credit',
+      amountGbp: recoveryPlan.sellerRecoveryAmount,
+      sourceType: 'refund',
+      sourceId: orderId,
+      lineType: 'seller_payable_recovery',
+      metadata: { refundRef, sellerId },
     });
   }
 
@@ -6754,6 +6660,13 @@ async function createGatewayRefund(input: {
   refundAmount: number;
   reason?: string;
   metadata: Record<string, unknown>;
+  /**
+   * Optional transaction client. Required for atomicity when the caller is
+   * inside BEGIN…COMMIT — the oneze_internal branch joins that transaction so
+   * the wallet re-credit commits or rolls back with the refund row. When
+   * omitted, the internal refund opens its own transaction on the pool.
+   */
+  client?: DbQueryable;
 }): Promise<{
   providerRefundRef: string;
   refundStatus: 'pending' | 'succeeded' | 'failed' | 'cancelled';
@@ -7030,6 +6943,61 @@ async function createGatewayRefund(input: {
   }
 
   // â”€â”€ Mock (dev only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // 1ZE internal wallet: a oneze_internal commerce payment debited the
+  // buyer's wallets.oneze_balance_units inside settlePaymentIntent — the
+  // money never left the platform, so the refund re-credits the same wallet
+  // in 1ZE units at the original locked rate. refundOnezeInternalWalletDebit
+  // is idempotent on refundOperationId and caps cumulative refunds at the
+  // original debit. The escrow→buyer ledger reversal stays in the caller and
+  // remains GBP-denominated — no double counting.
+  if (input.gatewayId === 'oneze_internal') {
+    const refundOperationId =
+      typeof input.metadata?.refundOperationId === 'string'
+        ? input.metadata.refundOperationId
+        : null;
+    if (!refundOperationId) {
+      throw createApiError(
+        'REFUND_PROVIDER_UNAVAILABLE',
+        'oneze_internal refunds require a stable refundOperationId for idempotent wallet crediting',
+        { gatewayId: input.gatewayId }
+      );
+    }
+
+    const runRefund = (refundClient: DbQueryable) =>
+      refundOnezeInternalWalletDebit(refundClient, {
+        intentId: input.intentId,
+        refundAmount: input.refundAmount,
+        refundOperationId,
+        reason: input.reason,
+        metadata: refundMetadata,
+      });
+
+    const result = input.client
+      ? await runRefund(input.client)
+      : await (async () => {
+          // No caller transaction to join — the wallet credit and its ledger
+          // row must still be atomic, so open a dedicated one on the pool.
+          const ownClient = await db.connect();
+          try {
+            await ownClient.query('BEGIN');
+            const inner = await runRefund(ownClient);
+            await ownClient.query('COMMIT');
+            return inner;
+          } catch (innerError) {
+            await ownClient.query('ROLLBACK').catch(() => {});
+            throw innerError;
+          } finally {
+            ownClient.release();
+          }
+        })();
+
+    return {
+      providerRefundRef: result.providerRefundRef,
+      refundStatus: 'succeeded',
+      ...providerMoney,
+    };
+  }
+
   if (config.nodeEnv !== 'production' && config.apiEnableMockWebhooks) {
     return {
       providerRefundRef: createRuntimeId(`refund_${input.gatewayId}`),
@@ -7055,6 +7023,15 @@ async function settlePaymentIntent(
     failureCode?: string;
     failureMessage?: string;
     rawPayload?: unknown;
+    /**
+     * oneze_internal only: the debit quote the caller already resolved for
+     * the balance preflight and the client-facing requiredOnezeUnits. The
+     * ledger debit MUST use this exact rate object — re-resolving the live
+     * FX rate under READ COMMITTED could debit rate B while the buyer saw
+     * (and was balance-checked against) rate A (FX TOCTOU). Only used when
+     * it covers this order's total; anything else resolves the rate here.
+     */
+    resolvedOnezeDebitQuote?: OnezeDebitQuote;
   }
 ): Promise<{
   intent: ReturnType<typeof toPaymentIntentPayload>;
@@ -7383,9 +7360,28 @@ async function settlePaymentIntent(
         }
 
         const totalGbp = roundTo(Number(paidOrder.total_gbp), 2);
-        // At-par pricing: resolve GBP â†’ USD FX rate (1 1ZE = $1 USD).
-        const gbpPricingQuote = await resolveCountryPricingQuoteByCurrency(client, 'GBP');
-        const gbpToUsdRate = gbpPricingQuote.fxRate;
+        // At-par pricing: 1 1ZE = $1 USD, so 1ZE amount = GBP / fxRate.
+        // When the caller already resolved the debit quote for THIS order
+        // total (the same object used for the balance preflight and the
+        // requiredOnezeUnits the buyer saw), reuse it verbatim — resolving
+        // the live rate again would be an FX time-of-check/time-of-use
+        // race that can debit a different amount than was quoted.
+        const presetQuote =
+          input.resolvedOnezeDebitQuote != null
+          && Math.abs(input.resolvedOnezeDebitQuote.totalGbp - totalGbp) < 0.005
+            ? input.resolvedOnezeDebitQuote
+            : undefined;
+
+        let gbpToUsdRate: number;
+        let anchorValueInInr: number;
+        if (presetQuote) {
+          gbpToUsdRate = presetQuote.gbpToUsdRate;
+          anchorValueInInr = presetQuote.anchorValueInInr;
+        } else {
+          const gbpPricingQuote = await resolveCountryPricingQuoteByCurrency(client, 'GBP');
+          gbpToUsdRate = gbpPricingQuote.fxRate;
+          anchorValueInInr = gbpPricingQuote.anchorValueInInr;
+        }
         if (!Number.isFinite(gbpToUsdRate) || gbpToUsdRate <= 0) {
           throw createApiError(
             'PAYMENT_PROVIDER_UNAVAILABLE',
@@ -7394,8 +7390,9 @@ async function settlePaymentIntent(
           );
         }
 
-        // GBP â†’ USD (at par with 1ZE): 1ZE amount = GBP / fxRate
-        const izeAmount = Number((totalGbp / gbpToUsdRate).toFixed(6));
+        const izeAmount = presetQuote
+          ? presetQuote.izeAmount
+          : Number((totalGbp / gbpToUsdRate).toFixed(6));
         if (!Number.isFinite(izeAmount) || izeAmount <= 0) {
           throw createApiError(
             'IZE_AMOUNT_INVALID',
@@ -7404,7 +7401,9 @@ async function settlePaymentIntent(
           );
         }
 
-        const debitUnits = onezeAmountToUnits(izeAmount);
+        const debitUnits = presetQuote
+          ? presetQuote.debitUnits
+          : onezeAmountToUnits(izeAmount);
         const buyerWallet = await ensureWallet(client, paidOrder.buyer_id, 'GBP');
         const walletTxId = createRuntimeId('wtx');
 
@@ -7420,7 +7419,7 @@ async function settlePaymentIntent(
           kind: 'PURCHASE',
           refType: 'commerce_order',
           refId: paidOrder.id,
-          anchorValueInInr: gbpPricingQuote.anchorValueInInr,
+          anchorValueInInr,
           metadata: {
             orderId: paidOrder.id,
             intentId: updatedIntent.id,
@@ -7430,6 +7429,7 @@ async function settlePaymentIntent(
             izeAmount,
             debitUnits,
             pricingSource: 'fixed_par:GBP:1ZE',
+            quoteSource: presetQuote ? 'preflight_resolved' : 'settlement_resolved',
             conversionTrace: 'GBPâ†’USD(at-par)â†’1ZE',
           },
         });
@@ -7530,6 +7530,65 @@ async function settlePaymentIntent(
         postageFeeCreditedGbp,
         shipment,
       };
+    } else {
+      // The intent is now 'succeeded' — money was captured — but the bound
+      // order is no longer 'created' (cancelled by an expiry path that ran
+      // before the in-flight guard, a manual cancel, or a drifted row).
+      // Previously this branch silently dropped the paid-order UPDATE,
+      // leaving captured funds with no payable order and the listing free
+      // to sell again. Flag it for ops/reconciliation instead.
+      const orderState = await client.query<{ status: string }>(
+        `SELECT status FROM orders WHERE id = $1 LIMIT 1`,
+        [updatedIntent.order_id],
+      );
+      const orphanOrderStatus = orderState.rows[0]?.status ?? 'missing';
+      // 'paid' means an idempotent double-settle — already reconciled.
+      if (orphanOrderStatus !== 'paid') {
+        const { flagged } = await flagOrphanedCommercePayment(client, {
+          orderId: updatedIntent.order_id,
+          intentId: updatedIntent.id,
+          gatewayId: updatedIntent.gateway_id,
+          actorUserId: updatedIntent.user_id,
+          orderStatus: orphanOrderStatus,
+          amountGbp: Number(updatedIntent.amount_gbp),
+          currency: updatedIntent.amount_currency,
+        });
+        if (flagged) {
+          app.log.error(
+            {
+              intentId: updatedIntent.id,
+              orderId: updatedIntent.order_id,
+              orderStatus: orphanOrderStatus,
+              gatewayId: updatedIntent.gateway_id,
+              amountGbp: Number(updatedIntent.amount_gbp),
+            },
+            'Payment settled as succeeded but the bound order is not payable — flagged for reconciliation',
+          );
+          try {
+            await dispatchOpsAlert({
+              code: 'captured_payment_orphaned',
+              severity: 'critical',
+              message: `Payment intent ${updatedIntent.id} settled 'succeeded' but order ${updatedIntent.order_id} is '${orphanOrderStatus}' — captured funds need manual reconciliation`,
+              metricValue: Number(updatedIntent.amount_gbp),
+              threshold: 0,
+              metadata: {
+                intentId: updatedIntent.id,
+                orderId: updatedIntent.order_id,
+                orderStatus: orphanOrderStatus,
+                gatewayId: updatedIntent.gateway_id,
+              },
+            });
+          } catch (alertError) {
+            // The durable order_events + reconciliation_breaks rows are
+            // already written in this transaction — alert delivery must
+            // not roll the settlement back.
+            app.log.error(
+              { err: alertError, intentId: updatedIntent.id },
+              'Failed dispatching orphaned-payment ops alert',
+            );
+          }
+        }
+      }
     }
   }
 
@@ -7545,6 +7604,11 @@ async function settlePaymentIntent(
  * Mark a payment intent as failed after a provider call error.
  * Used when the provider I/O phase fails after the intent was already
  * persisted in 'provider_submission_pending' state.
+ *
+ * P1: terminal failures must compensate the bound commerce order in the
+ * same transaction — previously this only flipped the intent status,
+ * leaving the order stuck in 'created' with its listing reservation held
+ * (a zombie order the buyer/seller could never act on).
  */
 async function markIntentFailed(
   db: DbQueryable,
@@ -7552,20 +7616,537 @@ async function markIntentFailed(
   failureCode: string,
   failureMessage: string
 ): Promise<void> {
+  // Callers pass the shared pool (autocommit) — acquire a dedicated client
+  // so the intent update and order compensation commit atomically.
+  const ownsClient = typeof (db as { connect?: unknown }).connect === 'function';
+  const client = ownsClient ? await (db as unknown as Pool).connect() : (db as PoolClient);
   try {
-    await db.query(
+    if (ownsClient) {
+      await client.query('BEGIN');
+    }
+    const intentResult = await client.query<{
+      id: string;
+      user_id: string;
+      channel: string;
+      order_id: string | null;
+      failure_code: string | null;
+    }>(
       `UPDATE payment_intents
        SET status = 'failed',
            failure_code = $2,
            failure_message = $3,
            updated_at = NOW()
-       WHERE id = $1 AND status = 'provider_submission_pending'`,
+       WHERE id = $1
+         AND status NOT IN ('succeeded', 'failed', 'cancelled')
+       RETURNING id, user_id, channel, order_id, failure_code`,
       [intentId, failureCode, failureMessage]
     );
-  } catch {
-    // Best-effort â€” the intent stays in provider_submission_pending
-    // for recovery by the background worker.
+    const intent = intentResult.rows[0];
+    if (intent && intent.channel === 'commerce' && intent.order_id) {
+      const compensation = await compensateTerminalCommercePayment(client, {
+        orderId: intent.order_id,
+        intentId: intent.id,
+        actorUserId: intent.user_id,
+        status: 'failed',
+        failureCode: intent.failure_code,
+      });
+      if (compensation.orderCancelled) {
+        await appendDomainEvent(client, {
+          aggregateType: 'payment',
+          aggregateId: intent.id,
+          eventType: 'payment.failed',
+          actorId: intent.user_id,
+          idempotencyKey: intent.id,
+          deduplicationKey: `payment.failed:${intent.id}`,
+          payload: {
+            intentId: intent.id,
+            orderId: intent.order_id,
+            buyerId: intent.user_id,
+            status: 'failed',
+            failureCode: intent.failure_code,
+          },
+        });
+      }
+    }
+    if (ownsClient) {
+      await client.query('COMMIT');
+    }
+  } catch (error) {
+    if (ownsClient) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // Already aborted — nothing more to do.
+      }
+    }
+    // Best-effort — the intent stays in provider_submission_pending for
+    // the bounded-TTL reconciler (reconcileStaleProviderSubmissions).
+    app.log.warn({ err: error, intentId }, 'Failed to mark intent failed / compensate order');
+  } finally {
+    if (ownsClient) {
+      (client as PoolClient).release();
+    }
   }
+}
+
+/**
+ * P1: idempotent replay of POST /payments/intents must re-verify that the
+ * bound order is still payable before re-serving a non-terminal intent —
+ * an intent minted before a seller suspension, order cancellation, or
+ * reservation expiry must not be returned as still-confirmable.
+ */
+async function verifyReplayedOrderPayable(
+  db: DbQueryable,
+  orderId: string,
+  buyerId: string
+): Promise<
+  | { payable: true }
+  | { payable: false; httpStatus: number; code: string; error: string }
+> {
+  const result = await db.query<{
+    status: string;
+    buyer_id: string;
+    seller_id: string;
+    checkout_expires_at: string | null;
+    reservation_status: string | null;
+    reservation_expires_at: string | null;
+  }>(
+    `SELECT
+       o.status,
+       o.buyer_id,
+       o.seller_id,
+       o.checkout_expires_at::text,
+       reservation.status AS reservation_status,
+       reservation.expires_at::text AS reservation_expires_at
+     FROM orders o
+     LEFT JOIN listing_checkout_reservations reservation
+       ON reservation.order_id = o.id
+     WHERE o.id = $1
+     LIMIT 1`,
+    [orderId]
+  );
+  const orderRow = result.rows[0];
+  if (!orderRow) {
+    return { payable: false, httpStatus: 404, code: 'ORDER_NOT_FOUND', error: 'Order not found' };
+  }
+  if (orderRow.buyer_id !== buyerId) {
+    return {
+      payable: false,
+      httpStatus: 400,
+      code: 'ORDER_BUYER_MISMATCH',
+      error: 'Order does not belong to this user',
+    };
+  }
+  if (orderRow.status !== 'created') {
+    return {
+      payable: false,
+      httpStatus: 409,
+      code: 'ORDER_NOT_PAYABLE',
+      error: `Order cannot create a payment intent from status '${orderRow.status}'`,
+    };
+  }
+  const sellerReach = await getSellerReach(db as Pool | PoolClient, orderRow.seller_id);
+  if (sellerReach?.state === 'suspended') {
+    return {
+      payable: false,
+      httpStatus: 409,
+      code: 'SELLER_RESTRICTED',
+      error: 'This seller is currently restricted — this order cannot be paid',
+    };
+  }
+  const checkoutExpiry = orderRow.reservation_expires_at ?? orderRow.checkout_expires_at;
+  if (
+    checkoutExpiry
+    && (orderRow.reservation_status !== 'active' || Date.parse(checkoutExpiry) <= Date.now())
+  ) {
+    // A lapsed TTL no longer means unpayable on its own: while a payment
+    // attempt is in flight the order is shielded from every expiry-cancel
+    // path and the 'active' reservation still settles past its display
+    // TTL. Re-serving that intent is correct — failing it here would just
+    // re-create the orphan-capture defect through the replay door.
+    if (await hasInFlightPaymentIntent(db, orderId)) {
+      return { payable: true };
+    }
+    return {
+      payable: false,
+      httpStatus: 410,
+      code: 'CHECKOUT_RESERVATION_EXPIRED',
+      error: 'Checkout reservation has expired',
+    };
+  }
+  return { payable: true };
+}
+
+// ─── P1: provider_submission_pending reconciler ─────────────────────────────
+// An intent parks in 'provider_submission_pending' when the provider call in
+// POST /payments/intents Phase 2/3 throws or times out. Without a reconciler
+// the intent (and its bound 'created' order + listing reservation) would sit
+// forever. This sweep gives the provider a bounded TTL to report via webhook,
+// then queries the provider when a deterministic client-side reference exists
+// (Stripe pi_, Mollie tr_, Razorpay order_, Flutterwave tx_ref = intentId,
+// Tap chg_). If nothing can be proven about the submission, the intent is
+// failed and the bound order is compensated.
+const STALE_PROVIDER_SUBMISSION_TTL_MS = 15 * 60 * 1000;
+const STALE_PROVIDER_SUBMISSION_SWEEP_LIMIT = 50;
+const EXPIRED_CHECKOUT_RESERVATION_SWEEP_LIMIT = 100;
+
+type StaleSubmissionRow = {
+  id: string;
+  user_id: string;
+  gateway_id: string;
+  channel: string;
+  order_id: string | null;
+  provider_intent_ref: string | null;
+};
+
+/**
+ * Query the provider for the authoritative status of a submitted intent.
+ * Returns a PaymentIntentStatus, 'query_failed' on provider I/O error, or
+ * null when no deterministic client-side reference exists to query with.
+ * Never throws — provider calls here are best-effort evidence gathering.
+ */
+async function queryProviderIntentStatus(
+  intent: StaleSubmissionRow
+): Promise<PaymentIntentStatus | 'query_failed' | null> {
+  try {
+    const ref = intent.provider_intent_ref;
+
+    if (intent.gateway_id === 'stripe_americas' && stripe && ref && ref.startsWith('pi_')) {
+      const paymentIntent = await stripe.paymentIntents.retrieve(ref);
+      return mapStripePaymentIntentStatus(paymentIntent.status);
+    }
+
+    if (
+      intent.gateway_id === 'mollie_eu'
+      && config.mollieApiKey
+      && ref
+      && ref.startsWith('tr_')
+    ) {
+      const { createMollieClient } = await import('@mollie/api-client');
+      const mollie = createMollieClient({ apiKey: config.mollieApiKey });
+      const payment = await mollie.payments.get(ref);
+      return mapMolliePaymentStatus(payment.status as string | undefined);
+    }
+
+    if (
+      intent.gateway_id === 'razorpay_in'
+      && config.razorpayKeyId
+      && config.razorpayKeySecret
+      && ref
+      && ref.startsWith('order_')
+    ) {
+      const razorpay = new Razorpay({
+        key_id: config.razorpayKeyId,
+        key_secret: config.razorpayKeySecret,
+      });
+      const order = await razorpay.orders.fetch(ref);
+      const status = String((order as { status?: unknown }).status ?? '');
+      return status === 'paid' ? 'succeeded' : 'requires_confirmation';
+    }
+
+    if (intent.gateway_id === 'flutterwave_africa' && config.flutterwaveSecretKey) {
+      // tx_ref is our own intent id — a deterministic client-side reference
+      // even when the provider response never made it back to Phase 3.
+      const txRef = ref ?? intent.id;
+      const response = await fetch(
+        `https://api.flutterwave.com/v3/transactions?tx_ref=${encodeURIComponent(txRef)}`,
+        { headers: { Authorization: `Bearer ${config.flutterwaveSecretKey}` } }
+      );
+      if (!response.ok) {
+        return 'query_failed';
+      }
+      const payload = (await response.json()) as Record<string, unknown>;
+      const rows = Array.isArray(payload.data) ? payload.data : [];
+      if (rows.length === 0) {
+        // Provider has no record of the submission — provably lost.
+        return 'failed';
+      }
+      const status = String((rows[0] as Record<string, unknown>).status ?? '');
+      if (status === 'successful') return 'succeeded';
+      if (status === 'failed' || status === 'cancelled') return 'failed';
+      return 'requires_confirmation';
+    }
+
+    if (intent.gateway_id === 'tap_gulf' && config.tapSecretKey && ref && ref.startsWith('chg_')) {
+      const response = await fetch(`https://api.tap.company/v2/charges/${encodeURIComponent(ref)}`, {
+        headers: { Authorization: `Bearer ${config.tapSecretKey}` },
+      });
+      if (!response.ok) {
+        return 'query_failed';
+      }
+      const payload = (await response.json()) as Record<string, unknown>;
+      const status = String(payload.status ?? '');
+      if (status === 'CAPTURED' || status === 'AUTHORIZED') return 'succeeded';
+      if (status === 'FAILED' || status === 'DECLINED' || status === 'CANCELLED' || status === 'VOID') return 'failed';
+      return 'requires_confirmation';
+    }
+
+    return null;
+  } catch {
+    return 'query_failed';
+  }
+}
+
+async function reconcileStaleProviderSubmissions(
+  reason: string
+): Promise<{ scanned: number; settled: number; recovered: number; failed: number }> {
+  const stale = await db.query<StaleSubmissionRow>(
+    `SELECT id, user_id, gateway_id, channel, order_id, provider_intent_ref
+     FROM payment_intents
+     WHERE status = 'provider_submission_pending'
+       AND updated_at <= NOW() - ($1 || ' milliseconds')::interval
+     ORDER BY updated_at ASC
+     LIMIT $2`,
+    [String(STALE_PROVIDER_SUBMISSION_TTL_MS), STALE_PROVIDER_SUBMISSION_SWEEP_LIMIT]
+  );
+
+  let settled = 0;
+  let recovered = 0;
+  let failed = 0;
+
+  for (const intent of stale.rows) {
+    // Provider I/O happens OUTSIDE the transaction — the §5.1 gate forbids
+    // external calls while holding row locks.
+    const queried = await queryProviderIntentStatus(intent);
+    const decision = classifyStaleSubmission(queried);
+
+    const client = await db.connect();
+    try {
+      await client.query('BEGIN');
+      // Re-check under lock — a webhook may have settled the intent between
+      // the stale scan and this transaction.
+      const lockCheck = await client.query<{ status: string }>(
+        `SELECT status FROM payment_intents WHERE id = $1 FOR UPDATE`,
+        [intent.id]
+      );
+      if (!lockCheck.rowCount || lockCheck.rows[0].status !== 'provider_submission_pending') {
+        await client.query('ROLLBACK');
+        continue;
+      }
+
+      let settledResult: Awaited<ReturnType<typeof settlePaymentIntent>> | null = null;
+      if (decision.action === 'settle') {
+        settledResult = await settlePaymentIntent(client, {
+          intentId: intent.id,
+          finalStatus: decision.finalStatus,
+          providerAttemptRef: `reconcile_submission:${intent.id}`,
+          failureCode: decision.finalStatus === 'succeeded' ? undefined : 'PROVIDER_RECONCILED',
+          failureMessage:
+            decision.finalStatus === 'succeeded'
+              ? undefined
+              : `Provider reported '${queried}' for a stale submission`,
+          rawPayload: { source: 'stale_submission_reconcile', queriedStatus: queried, reason },
+        });
+        settled += 1;
+      } else if (decision.action === 'recover') {
+        await transitionPaymentIntentStatus(client, {
+          intentId: intent.id,
+          nextStatus: decision.status,
+          providerStatus: decision.status,
+          metadataPatch: { recoveredBy: 'stale_submission_reconcile', reason },
+        });
+        recovered += 1;
+      } else {
+        settledResult = await settlePaymentIntent(client, {
+          intentId: intent.id,
+          finalStatus: 'failed',
+          failureCode: 'PROVIDER_SUBMISSION_LOST',
+          failureMessage:
+            queried === 'query_failed'
+              ? 'Provider submission could not be verified within the reconciliation window'
+              : 'Payment submission never reached the provider',
+          rawPayload: { source: 'stale_submission_reconcile', queriedStatus: queried, reason },
+        });
+        failed += 1;
+      }
+      await client.query('COMMIT');
+
+      if (settledResult) {
+        if (!settledResult.alreadyFinal && settledResult.orderSettlement?.orderId) {
+          try {
+            await queueCommercePaymentNotifications({
+              orderId: settledResult.orderSettlement.orderId,
+              source: 'stale_submission_reconcile',
+            });
+          } catch (notificationError) {
+            app.log.error(
+              { err: notificationError, orderId: settledResult.orderSettlement.orderId },
+              'Failed to queue payment notifications after submission reconcile'
+            );
+          }
+          await emitOrderCommerceCard({
+            orderId: settledResult.orderSettlement.orderId,
+            stateType: 'payment_confirmed',
+          });
+          await emitOrderCommerceCard({
+            orderId: settledResult.orderSettlement.orderId,
+            stateType: 'label_created',
+            trackingNumber: settledResult.orderSettlement.shipment?.trackingNumber ?? null,
+            carrier: settledResult.orderSettlement.shipment?.shippingProvider ?? null,
+          });
+        }
+        if (settledResult.orderCancelledOrderId) {
+          await emitOrderCommerceCard({
+            orderId: settledResult.orderCancelledOrderId,
+            stateType: 'order_cancelled',
+          });
+        }
+      }
+    } catch (error) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // Client may already be released.
+      }
+      app.log.warn(
+        { err: error, intentId: intent.id },
+        'Stale provider submission reconcile failed for intent'
+      );
+    } finally {
+      client.release();
+    }
+  }
+
+  return { scanned: stale.rows.length, settled, recovered, failed };
+}
+
+/**
+ * P1: periodic reconciler for expired checkout reservations. The lazy path
+ * in POST /orders only heals a listing when a NEW buyer attempts checkout —
+ * a listing whose buyer abandons checkout stays 'paused' indefinitely. This
+ * sweep cancels the bound 'created' order so the
+ * reconcile_listing_checkout_from_order trigger marks the reservation
+ * cancelled and restores the listing to 'active' only when no other active
+ * reservation remains — identical to the lazy release path.
+ */
+async function sweepExpiredCheckoutReservations(
+  reason: string
+): Promise<{ swept: number; ordersCancelled: number }> {
+  const client = await db.connect();
+  const sweptOrders: Array<{ orderId: string; listingId: string }> = [];
+  try {
+    await client.query('BEGIN');
+    const stale = await client.query<{
+      reservation_id: string;
+      order_id: string;
+      listing_id: string;
+      buyer_id: string;
+    }>(
+      `SELECT r.id AS reservation_id, r.order_id, r.listing_id, r.buyer_id
+       FROM listing_checkout_reservations r
+       WHERE r.status = 'active'
+         AND r.expires_at <= NOW()
+       ORDER BY r.expires_at ASC
+       LIMIT $1
+       FOR UPDATE OF r SKIP LOCKED`,
+      [EXPIRED_CHECKOUT_RESERVATION_SWEEP_LIMIT]
+    );
+
+    for (const row of stale.rows) {
+      // Cancelling the bound order drives the trigger: reservation →
+      // 'cancelled', accepted offer updated, listing → 'active' when no
+      // other active reservation remains. The cancel is GUARDED: an order
+      // whose payment intent is still in flight must not be cancelled —
+      // a late provider 'succeeded' would then capture money against a
+      // cancelled order and fail the paid-order transition.
+      const cancelOutcome = await cancelOrderOnReservationExpiry(client, row.order_id);
+      if (cancelOutcome === 'blocked_in_flight') {
+        // Leave the reservation 'active': the reconcile trigger converts
+        // it on the paid transition, and the stale-submission reconciler
+        // owns the in-flight intent. Next sweep re-evaluates it.
+        app.log.info(
+          { orderId: row.order_id, reservationId: row.reservation_id },
+          'Skipping expired reservation — payment intent still in flight',
+        );
+        continue;
+      }
+      if (cancelOutcome === 'cancelled') {
+        await client.query(
+          `INSERT INTO order_events (
+             order_id, event_type, actor_id, source, deduplication_key, metadata
+           )
+           VALUES ($1, 'reservation.expired', $2, 'reservation_sweep', $3, $4::jsonb)
+           ON CONFLICT (order_id, deduplication_key)
+             WHERE deduplication_key IS NOT NULL
+           DO NOTHING`,
+          [
+            row.order_id,
+            row.buyer_id,
+            `reservation.expired:${row.order_id}`,
+            toJsonString({ reservationId: row.reservation_id, reason }),
+          ]
+        );
+        sweptOrders.push({ orderId: row.order_id, listingId: row.listing_id });
+      } else {
+        // Order already terminal but the reservation row drifted — cancel
+        // the reservation directly and restore the listing under the same
+        // "no other active reservation" condition the trigger enforces.
+        await client.query(
+          `UPDATE listing_checkout_reservations
+           SET status = 'cancelled',
+               cancelled_at = NOW(),
+               failure_reason = COALESCE(failure_reason, 'reservation_expired'),
+               updated_at = NOW()
+           WHERE id = $1 AND status = 'active'`,
+          [row.reservation_id]
+        );
+        const restored = await client.query<{ id: string }>(
+          `UPDATE listings
+           SET status = 'active', pause_source = NULL, updated_at = NOW()
+           WHERE id = $1
+             AND status = 'paused'
+             AND pause_source = 'checkout_reservation'
+             AND NOT EXISTS (
+               SELECT 1 FROM listing_checkout_reservations
+               WHERE listing_id = $1 AND status = 'active'
+             )
+           RETURNING id`,
+          [row.listing_id]
+        );
+        if (restored.rowCount) {
+          sweptOrders.push({ orderId: row.order_id, listingId: row.listing_id });
+        }
+      }
+    }
+
+    await client.query('COMMIT');
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      // Client may already be released.
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  // Post-commit effects, mirroring the lazy release path.
+  for (const swept of sweptOrders) {
+    try {
+      await emitOrderCommerceCard({
+        orderId: swept.orderId,
+        stateType: 'order_cancelled',
+      });
+    } catch (cardError) {
+      app.log.warn(
+        { err: cardError, orderId: swept.orderId },
+        'Failed to emit order_cancelled card after reservation sweep'
+      );
+    }
+    void evaluateSavedSearchAlertsForListing({
+      db,
+      listingId: swept.listingId,
+      queueNotification: queueUserNotification,
+    }).catch((matchError) => {
+      app.log.warn(
+        { err: matchError, listingId: swept.listingId },
+        'Failed to evaluate saved-search alerts after reservation sweep'
+      );
+    });
+  }
+
+  return { swept: sweptOrders.length, ordersCancelled: sweptOrders.length };
 }
 
 async function transitionPaymentIntentStatus(
@@ -8533,7 +9114,15 @@ const NOTIFICATION_EVENT_TYPES = [
   'offer_created', 'offer_countered', 'offer_accepted', 'offer_declined',
   'offer_expired', 'offer_cancelled',
   'auction_outbid', 'auction_won', 'auction_ending_soon',
+  'auction_bid', 'auction_cancelled', 'auction_reserve_not_met',
+  'auction_sold_awaiting_payment', 'auction_payment_expired', 'auction_sold',
   'new_follower', 'new_listing_from_followed_seller',
+  'live_started',
+  'payment_failed', 'dispatch_extension_proposed', 'dispatch_extension_responded',
+  'review_response_received', 'review_moderated',
+  'scheduled_publication_success', 'scheduled_publication_blocked', 'scheduled_publication_failed',
+  'support.operator_reply', 'support.information_requested', 'support.case_resolved',
+  'coown_buyout_accepted', 'coown_verification_responded', 'ops_alert',
   'safety_outcome',
   'generic',
 ] as const;
@@ -8558,19 +9147,31 @@ function mapEventToPushCategory(eventType: string): NotificationPushCategory | n
   // Saved-search matches ride the `wishlist` preference — a user who opted
   // into alerts on a saved search is asking for item-interest pushes.
   if (eventType === 'saved_search_match') return 'wishlist';
-  if (eventType === 'auction_outbid' || eventType === 'auction_won' || eventType === 'auction_ending_soon') return 'auctionAlerts';
+  // Prefix match covers the whole auction_* family (outbid, won, ending
+  // soon, bid received, cancelled, reserve not met, sold, payment expired).
+  if (eventType.startsWith('auction_')) return 'auctionAlerts';
   if (eventType === 'new_follower' || eventType === 'new_listing_from_followed_seller') return 'followers';
-  if (eventType === 'review_received') return 'wishlist';
+  // Go-live alerts ride the followers preference — same opt-in audience as
+  // new_listing_from_followed_seller.
+  if (eventType === 'live_started') return 'followers';
+  if (eventType.startsWith('review_')) return 'wishlist';
+  // Transactional order-adjacent events — payment failures, dispatch
+  // extension lifecycle, co-own trade outcomes.
+  if (eventType === 'payment_failed' || eventType.startsWith('dispatch_extension_') || eventType.startsWith('coown_')) return 'orderUpdates';
+  // Support-case lifecycle is a conversation thread — gate by messages.
+  if (eventType.startsWith('support.')) return 'messages';
+  if (eventType.startsWith('scheduled_publication_') || eventType === 'ops_alert') return 'news';
   if (eventType === 'generic' || eventType === 'safety_outcome') return 'news';
   return null;
 }
 
 function mapEventTypeToChannelId(eventType: string): string {
   if (eventType.startsWith('order_') || eventType === 'payout_processed' || eventType === 'refund_completed') return 'orders';
+  if (eventType === 'payment_failed' || eventType.startsWith('dispatch_extension_') || eventType.startsWith('coown_')) return 'orders';
   if (eventType.startsWith('auction_')) return 'auctions';
-  if (eventType === 'chat_message') return 'messages';
-  if (eventType === 'new_follower' || eventType === 'new_listing_from_followed_seller' || eventType === 'review_received') return 'social';
-  if (eventType === 'price_drop' || eventType === 'saved_search_match' || eventType.startsWith('offer_') || eventType === 'generic' || eventType === 'safety_outcome') return 'news';
+  if (eventType === 'chat_message' || eventType.startsWith('support.')) return 'messages';
+  if (eventType === 'new_follower' || eventType === 'new_listing_from_followed_seller' || eventType.startsWith('review_') || eventType === 'live_started') return 'social';
+  if (eventType === 'price_drop' || eventType === 'saved_search_match' || eventType.startsWith('offer_') || eventType === 'generic' || eventType === 'safety_outcome' || eventType === 'ops_alert' || eventType.startsWith('scheduled_publication_')) return 'news';
   if (eventType === 'resolution_opened' || eventType === 'resolution_status_changed') return 'orders';
   return 'default';
 }
@@ -8579,19 +9180,28 @@ function mapEventTypeToInterruptionLevel(eventType: string): 'passive' | 'active
   if (eventType === 'auction_ending_soon' || eventType === 'auction_outbid' || eventType === 'auction_won') return 'timeSensitive';
   if (eventType === 'order_dispatched' || eventType === 'order_out_for_delivery') return 'timeSensitive';
   if (eventType === 'resolution_opened' || eventType === 'safety_outcome') return 'timeSensitive';
-  if (eventType === 'new_follower' || eventType === 'new_listing_from_followed_seller' || eventType === 'price_drop' || eventType === 'generic' || eventType === 'review_received') return 'passive';
+  if (eventType === 'new_follower' || eventType === 'new_listing_from_followed_seller' || eventType === 'price_drop' || eventType === 'generic' || eventType.startsWith('review_')) return 'passive';
+  if (eventType === 'auction_bid' || eventType === 'scheduled_publication_success') return 'passive';
+  // live_started stays 'active': a live show is ephemeral, so a passive
+  // (silent, no-wake) push would usually arrive too late to be useful.
   return 'active';
 }
 
 function mapEventTypeToRelevanceScore(eventType: string): number {
   if (eventType === 'auction_won') return 1.0;
   if (eventType === 'auction_ending_soon' || eventType === 'auction_outbid') return 0.9;
+  if (eventType === 'ops_alert') return 0.9;
   if (eventType.startsWith('order_') || eventType === 'payout_processed' || eventType === 'refund_completed') return 0.8;
   if (eventType === 'resolution_opened' || eventType === 'safety_outcome') return 0.8;
+  if (eventType === 'payment_failed' || eventType.startsWith('dispatch_extension_') || eventType.startsWith('coown_')) return 0.8;
   if (eventType.startsWith('offer_')) return 0.7;
+  if (eventType.startsWith('auction_')) return 0.7;
+  if (eventType.startsWith('support.')) return 0.7;
   if (eventType === 'chat_message') return 0.6;
+  // Go-live alerts are ephemeral — rank with chat so summary surfaces them.
+  if (eventType === 'live_started') return 0.6;
   if (eventType === 'price_drop') return 0.4;
-  if (eventType === 'review_received') return 0.3;
+  if (eventType.startsWith('review_') || eventType.startsWith('scheduled_publication_')) return 0.3;
   if (eventType === 'new_follower' || eventType === 'new_listing_from_followed_seller') return 0.2;
   return 0.1;
 }
@@ -8599,6 +9209,7 @@ function mapEventTypeToRelevanceScore(eventType: string): number {
 const CRITICAL_EVENT_TYPES_SET = new Set([
   'auction_won', 'auction_ending_soon', 'auction_outbid',
   'order_cancelled', 'resolution_opened', 'safety_outcome',
+  'dispatch_extension_proposed',
 ]);
 
 function isCriticalEventType(eventType: string): boolean {
@@ -9594,6 +10205,194 @@ function stopScheduledPublicationSweepScheduler(): void {
   scheduledPublicationSweepTimer = null;
 }
 
+// ─── Media ingest reconciliation ────────────────────────────────────────────
+// The durable media_processing_jobs row commits before the BullMQ enqueue —
+// an enqueue failure (or a lost/evicted queue job) leaves the row with no
+// drive. This sweep re-enqueues claimable rows; claimProcessingJob remains
+// the atomic arbiter so a healthy in-flight drive is never duplicated.
+let mediaIngestReconcileTimer: NodeJS.Timeout | null = null;
+let mediaIngestReconcileStartupTimer: NodeJS.Timeout | null = null;
+
+function startMediaIngestReconcileScheduler(): void {
+  if (mediaIngestReconcileTimer) {
+    return;
+  }
+
+  const enqueueSweep = () => {
+    void enqueueMediaIngestReconcileJob('scheduled').catch((error) => {
+      app.log.error({ err: error }, 'Failed scheduling media ingest reconcile job');
+    });
+  };
+
+  // Every 60s — recovery SLO is ~2 minutes (60s pending grace + next tick).
+  mediaIngestReconcileTimer = setInterval(enqueueSweep, 60_000);
+  mediaIngestReconcileTimer.unref?.();
+
+  // One startup pass catches rows orphaned while the API was down.
+  mediaIngestReconcileStartupTimer = setTimeout(enqueueSweep, 15_000);
+  mediaIngestReconcileStartupTimer.unref?.();
+}
+
+function stopMediaIngestReconcileScheduler(): void {
+  if (mediaIngestReconcileStartupTimer) {
+    clearTimeout(mediaIngestReconcileStartupTimer);
+    mediaIngestReconcileStartupTimer = null;
+  }
+  if (!mediaIngestReconcileTimer) {
+    return;
+  }
+  clearInterval(mediaIngestReconcileTimer);
+  mediaIngestReconcileTimer = null;
+}
+
+// ─── Multipart session expiry sweep ─────────────────────────────────────────
+// upload_multipart_sessions rows carry expires_at and every endpoint rejects
+// an expired session, but nothing aborted the S3 upload behind abandoned
+// sessions — parts billed storage forever. The sweep claims expired rows and
+// aborts their S3 multipart uploads.
+let multipartSessionSweepTimer: NodeJS.Timeout | null = null;
+let multipartSessionSweepStartupTimer: NodeJS.Timeout | null = null;
+
+function startMultipartSessionSweepScheduler(): void {
+  if (multipartSessionSweepTimer) {
+    return;
+  }
+
+  const enqueueSweep = () => {
+    void enqueueMultipartSessionSweepJob('scheduled').catch((error) => {
+      app.log.error({ err: error }, 'Failed scheduling multipart session sweep job');
+    });
+  };
+
+  // Every 5 minutes — session hygiene, not latency-sensitive.
+  multipartSessionSweepTimer = setInterval(enqueueSweep, 5 * 60 * 1000);
+  multipartSessionSweepTimer.unref?.();
+
+  // Startup pass clears sessions that expired while the API was down.
+  multipartSessionSweepStartupTimer = setTimeout(enqueueSweep, 30_000);
+  multipartSessionSweepStartupTimer.unref?.();
+}
+
+function stopMultipartSessionSweepScheduler(): void {
+  if (multipartSessionSweepStartupTimer) {
+    clearTimeout(multipartSessionSweepStartupTimer);
+    multipartSessionSweepStartupTimer = null;
+  }
+  if (!multipartSessionSweepTimer) {
+    return;
+  }
+  clearInterval(multipartSessionSweepTimer);
+  multipartSessionSweepTimer = null;
+}
+
+// Orphaned upload-intent sweep — drives the /internal/media/orphans/cleanup
+// claim-and-delete logic in-process so single-PUT orphan collection does not
+// depend on an external cron hitting the internal route.
+let orphanIntentSweepTimer: NodeJS.Timeout | null = null;
+let orphanIntentSweepStartupTimer: NodeJS.Timeout | null = null;
+
+function startOrphanIntentSweepScheduler(): void {
+  if (orphanIntentSweepTimer) {
+    return;
+  }
+
+  const enqueueSweep = () => {
+    void enqueueOrphanUploadIntentSweepJob('scheduled').catch((error) => {
+      app.log.error({ err: error }, 'Failed scheduling orphan upload-intent sweep job');
+    });
+  };
+
+  // Every 5 minutes — storage hygiene, not latency-sensitive.
+  orphanIntentSweepTimer = setInterval(enqueueSweep, 5 * 60 * 1000);
+  orphanIntentSweepTimer.unref?.();
+
+  // Startup pass clears intents that expired while the API was down.
+  orphanIntentSweepStartupTimer = setTimeout(enqueueSweep, 60_000);
+  orphanIntentSweepStartupTimer.unref?.();
+}
+
+function stopOrphanIntentSweepScheduler(): void {
+  if (orphanIntentSweepStartupTimer) {
+    clearTimeout(orphanIntentSweepStartupTimer);
+    orphanIntentSweepStartupTimer = null;
+  }
+  if (!orphanIntentSweepTimer) {
+    return;
+  }
+  clearInterval(orphanIntentSweepTimer);
+  orphanIntentSweepTimer = null;
+}
+
+// ─── P1: stale payment-submission + expired-checkout-reservation reconcilers ─
+// Both are direct in-process DB sweeps (like the oneze reconciliation jobs)
+// guarded by withScheduledJobGuard. The submission reconciler runs every
+// 5 minutes and only touches intents past the 15-minute bounded TTL; the
+// reservation sweeper runs every minute and only touches 'active'
+// reservations whose expires_at has passed — both backed by partial indexes.
+let providerSubmissionReconcileTimer: NodeJS.Timeout | null = null;
+let providerSubmissionReconcileStartupTimer: NodeJS.Timeout | null = null;
+
+function startProviderSubmissionReconcileScheduler(): void {
+  if (providerSubmissionReconcileTimer) {
+    return;
+  }
+
+  const run = (reason: string) => {
+    void withScheduledJobGuard('provider_submission_reconcile', reason, () =>
+      reconcileStaleProviderSubmissions(reason));
+  };
+
+  providerSubmissionReconcileTimer = setInterval(() => run('interval'), 5 * 60 * 1000);
+  providerSubmissionReconcileTimer.unref?.();
+
+  providerSubmissionReconcileStartupTimer = setTimeout(() => run('startup'), 45_000);
+  providerSubmissionReconcileStartupTimer.unref?.();
+}
+
+function stopProviderSubmissionReconcileScheduler(): void {
+  if (providerSubmissionReconcileStartupTimer) {
+    clearTimeout(providerSubmissionReconcileStartupTimer);
+    providerSubmissionReconcileStartupTimer = null;
+  }
+  if (!providerSubmissionReconcileTimer) {
+    return;
+  }
+  clearInterval(providerSubmissionReconcileTimer);
+  providerSubmissionReconcileTimer = null;
+}
+
+let checkoutReservationSweepTimer: NodeJS.Timeout | null = null;
+let checkoutReservationSweepStartupTimer: NodeJS.Timeout | null = null;
+
+function startCheckoutReservationSweepScheduler(): void {
+  if (checkoutReservationSweepTimer) {
+    return;
+  }
+
+  const run = (reason: string) => {
+    void withScheduledJobGuard('checkout_reservation_sweep', reason, () =>
+      sweepExpiredCheckoutReservations(reason));
+  };
+
+  checkoutReservationSweepTimer = setInterval(() => run('interval'), 60 * 1000);
+  checkoutReservationSweepTimer.unref?.();
+
+  checkoutReservationSweepStartupTimer = setTimeout(() => run('startup'), 20_000);
+  checkoutReservationSweepStartupTimer.unref?.();
+}
+
+function stopCheckoutReservationSweepScheduler(): void {
+  if (checkoutReservationSweepStartupTimer) {
+    clearTimeout(checkoutReservationSweepStartupTimer);
+    checkoutReservationSweepStartupTimer = null;
+  }
+  if (!checkoutReservationSweepTimer) {
+    return;
+  }
+  clearInterval(checkoutReservationSweepTimer);
+  checkoutReservationSweepTimer = null;
+}
+
 function startAuctionSweepScheduler(): void {
   if (auctionSweepTimer) {
     return;
@@ -10347,9 +11146,23 @@ async function processMintOperationPaymentWebhook(
   mintOperation: ReturnType<typeof toMintOperationPayload> | null;
   enqueueReserveAllocation: boolean;
 }> {
-  const operation = await loadMintOperationByPaymentIntentId(client, input.paymentIntentId, {
+  let operation = await loadMintOperationByPaymentIntentId(client, input.paymentIntentId, {
     forUpdate: true,
   });
+
+  if (!operation) {
+    // The quote route no longer persists mint_operations — it only writes the
+    // payment intent carrying the locked quote metadata. A real payment event
+    // is the first durable signal, so materialize the operation row now (in
+    // PAYMENT_PENDING, exactly where the old quote flow left it) and let the
+    // transition logic below run unchanged.
+    const materialized = await materializeMintOperationForPaymentIntent(client, input.paymentIntentId);
+    if (materialized) {
+      operation = await loadMintOperationByPaymentIntentId(client, input.paymentIntentId, {
+        forUpdate: true,
+      });
+    }
+  }
 
   if (!operation) {
     return {
@@ -11284,6 +12097,7 @@ async function dispatchOpsAlert(alert: OpsAlert): Promise<void> {
           userId,
           title: alert.severity === 'critical' ? 'Critical Ops Alert' : 'Ops Alert',
           body: alert.message,
+          eventType: 'ops_alert',
           payload: {
             event: 'ops_alert',
             code: alert.code,
@@ -12006,6 +12820,33 @@ app.post('/ops/escrow/release-sweep', async (request, reply) => {
         [order.id]
       );
       if (openDispute.rows[0]?.exists) {
+        continue;
+      }
+
+      // Re-check blocking support tickets at release time — the hold was
+      // persisted as a fixed timestamp, and a claim opened during the hold
+      // window must still hold the funds. Same topic set as the deliver path.
+      const openTicket = await client.query<{ exists: boolean }>(
+        `SELECT EXISTS (
+           SELECT 1 FROM support_tickets
+           WHERE order_id = $1 AND status = 'open'
+             AND topic_id IN ('buyer_protection', 'buyer_protection_claim', 'item_not_as_described', 'refund_request', 'return')
+         ) AS exists`,
+        [order.id]
+      );
+      if (openTicket.rows[0]?.exists) {
+        continue;
+      }
+
+      // Open return cases keep a refund path live — never release under one.
+      const openReturn = await client.query<{ exists: boolean }>(
+        `SELECT EXISTS (
+           SELECT 1 FROM return_cases
+           WHERE order_id = $1 AND status NOT IN ('closed', 'refund_confirmed')
+         ) AS exists`,
+        [order.id]
+      );
+      if (openReturn.rows[0]?.exists) {
         continue;
       }
 
@@ -13059,7 +13900,7 @@ registerCoOwnRoutes({
 // Co-Own market depth & trade tape (public read endpoints).
 void app.register(coOwnDepthRoutes);
 
-registerSellerRoutes({ app, db, readDb });
+registerSellerRoutes({ app, db, readDb, queueUserNotification });
 
 registerStorefrontRoutes({ app, db, readDb, resolveAuthenticatedUserId });
 
@@ -15144,6 +15985,70 @@ app.delete('/users/me', async (request, reply) => {
       },
     });
 
+    // Deletion is blocked while the account has in-flight money commitments.
+    // Erasing an account mid-transaction would strand escrowed funds, orphan
+    // the counterparty's recourse, and forfeit pending payouts. The blockers
+    // list lets the client render specific copy rather than a generic error.
+    const blockerQueries: Array<{ key: string; table: string; sql: string }> = [
+      {
+        key: 'open_orders',
+        table: 'orders',
+        sql: `SELECT COUNT(*)::text AS n FROM orders
+              WHERE (buyer_id = $1 OR seller_id = $1)
+                AND LOWER(status) IN (
+                  'created', 'paid', 'processing', 'preparing',
+                  'shipped', 'in transit', 'out for delivery', 'refunding'
+                )`,
+      },
+      {
+        key: 'open_return_cases',
+        table: 'return_cases',
+        sql: `SELECT COUNT(*)::text AS n FROM return_cases rc
+              JOIN orders o ON o.id = rc.order_id
+              WHERE (o.buyer_id = $1 OR o.seller_id = $1)
+                AND rc.status::text NOT IN ('closed', 'refund_confirmed', 'rejected')`,
+      },
+      {
+        key: 'pending_payouts',
+        table: 'payout_requests',
+        sql: `SELECT COUNT(*)::text AS n FROM payout_requests
+              WHERE user_id = $1 AND status IN ('requested', 'processing')`,
+      },
+      {
+        key: 'inflight_withdrawals',
+        table: 'withdrawals',
+        sql: `SELECT COUNT(*)::text AS n FROM withdrawals
+              WHERE user_id = $1 AND status IN ('QUOTED', 'ACCEPTED', 'RESERVED')`,
+      },
+    ];
+
+    const blockers: string[] = [];
+    for (const { key, table, sql } of blockerQueries) {
+      // Skip cleanly on partially-migrated databases rather than 500ing the
+      // whole erasure route — the codebase's to_regclass convention.
+      const exists = await client.query<{ exists: boolean }>(
+        `SELECT to_regclass($1) IS NOT NULL AS exists`,
+        [`public.${table}`]
+      );
+      if (!exists.rows[0]?.exists) continue;
+      const result = await client.query<{ n: string }>(sql, [userId]);
+      if (Number(result.rows[0]?.n ?? '0') > 0) blockers.push(key);
+    }
+
+    if (blockers.length > 0) {
+      await appendComplianceAuditSafe(request, {
+        eventType: 'gdpr.erasure.blocked',
+        subjectUserId: userId,
+        payload: { blockers },
+      });
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'Account has unresolved orders, returns, or payouts',
+        blockers,
+      };
+    }
+
     gdprRequestId = createComplianceId('gdpr_erasure');
 
     await client.query('BEGIN');
@@ -15371,6 +16276,7 @@ app.get('/listings', async (request) => {
       FROM listings l
       LEFT JOIN users u ON u.id = l.seller_id
       WHERE ${conditions.join(' AND ')}
+        ${reachExcludedSql('u')}
       ORDER BY ${orderBy}
       LIMIT $${args.length + 1}
     `,
@@ -15386,7 +16292,7 @@ app.get('/listings', async (request) => {
   const imagesByListing = new Map<string, string[]>();
   const primaryGeometryByListing = new Map<string, { width: number; height: number } | null>();
   for (const [listingRowId, mediaItems] of mediaByListing) {
-    imagesByListing.set(listingRowId, mediaItems.map((m) => m.uri));
+    imagesByListing.set(listingRowId, mediaItems.map(listingMediaImageUrl));
     const primary = mediaItems[0];
     primaryGeometryByListing.set(
       listingRowId,
@@ -15415,7 +16321,7 @@ app.get('/listings', async (request) => {
         title: row.title,
         description: row.description,
         priceGbp: Number(row.price_gbp),
-        imageUrl: row.image_url,
+        imageUrl: listingImageUrls(mediaByListing.get(row.id), row.image_url)[0] ?? row.image_url,
         images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
         media: mediaByListing.get(row.id) ?? [],
         mediaWidth: primaryGeometry?.width ?? null,
@@ -15447,7 +16353,7 @@ app.get('/listings', async (request) => {
 });
 
 // â”€â”€ Search extended routes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-registerSearchExtendedRoutes({ app, readDb, redis });
+registerSearchExtendedRoutes({ app, db, readDb, redis });
 
 registerFeedRoutes({ app, db, readDb });
 
@@ -15558,6 +16464,74 @@ app.post('/listings', {
       };
     }
   }
+
+  // Authoritative risk decision for the publish transition (FR-13). The
+  // listing.publish.requested event is emitted BEFORE the mutation:
+  //   allow                            → listing goes active
+  //   step_up / manual_review / delay /
+  //   quarantine / allow_with_limits   → status='risk_pending' — a real,
+  //     seller-visible state (GET /listings/:id returns it), never a
+  //     silent shadowban; risk clearance re-activates via the normal path
+  //   deny                             → publish refused outright
+  // Evaluation failure fails open to allow, matching the chat-send
+  // convention — the legacy checkFraudNonBlocking shadow log below is
+  // retained either way.
+  let publishDecision: Awaited<ReturnType<typeof evaluateRisk>> | null = null;
+  if (targetStatus === 'active') {
+    try {
+      publishDecision = await evaluateRisk(
+        {
+          db,
+          redis,
+          logger: request.log,
+          shadowService: fraudShadowService,
+          ipReputationProvider,
+        },
+        {
+          eventType: 'listing.publish.requested',
+          subjectRef: actorUserId,
+          actionRef: payload.id,
+          amountMinor: Math.round(payload.priceGbp * 100),
+          currency: 'GBP',
+          userId: actorUserId,
+          headers: request.headers as Record<string, string | string[] | undefined>,
+          ip: request.ip,
+          context: { listingId: payload.id, priceGbp: payload.priceGbp },
+        },
+      );
+    } catch (publishRiskError) {
+      request.log.error(
+        { err: publishRiskError, listingId: payload.id },
+        'evaluateRisk failed for listing publish — failing open to allow',
+      );
+    }
+  }
+  const publishOutcome = publishDecision?.ownerDecision ?? 'allow';
+  if (publishOutcome === 'deny') {
+    if (publishDecision) {
+      try {
+        await recordExecution(db, {
+          decisionId: publishDecision.decisionId,
+          ownerService: 'listings',
+          executionStatus: 'executed',
+          domainEntityType: 'listing',
+          domainEntityId: payload.id,
+        });
+      } catch {
+        // Execution bookkeeping must never block the refusal itself.
+      }
+    }
+    reply.code(403);
+    return {
+      ok: false,
+      error: 'Listing cannot be published',
+      code: 'RISK_PUBLISH_DENIED',
+    };
+  }
+  const effectiveStatus =
+    targetStatus === 'active' && publishOutcome !== 'allow'
+      ? 'risk_pending'
+      : targetStatus;
 
   const listingText = `${payload.title}\n${payload.description}`;
   const textModerationResult = await moderateListingText(payload.id, listingText);
@@ -15672,16 +16646,17 @@ app.post('/listings', {
       `
         INSERT INTO listings (
           id, seller_id, title, description, price_gbp, image_url,
-          status, category, brand, size, condition,
+          status, pause_source, category, brand, size, condition,
           original_price_gbp, shipping_method, shipping_payer
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
         ON CONFLICT (id) DO UPDATE
         SET title = EXCLUDED.title,
             description = EXCLUDED.description,
             price_gbp = EXCLUDED.price_gbp,
             image_url = EXCLUDED.image_url,
             status = EXCLUDED.status,
+            pause_source = EXCLUDED.pause_source,
             category = EXCLUDED.category,
             brand = EXCLUDED.brand,
             size = EXCLUDED.size,
@@ -15700,7 +16675,11 @@ app.post('/listings', {
         payload.description,
         payload.priceGbp,
         resolvedCoverImageUrl,
-        payload.status ?? 'active',
+        effectiveStatus,
+        // Pause provenance (migration 305): a seller-authored upsert that
+        // lands 'paused' is a seller pause; anything else clears
+        // reservation/auction ownership.
+        effectiveStatus === 'paused' ? 'seller' : null,
         payload.category ?? null,
         payload.brand ?? null,
         payload.size ?? null,
@@ -15786,7 +16765,7 @@ app.post('/listings', {
     // idempotency key would dedupe notifications anyway. Non-blocking:
     // the listing is durable regardless of notification delivery.
     if (
-      targetStatus === 'active'
+      effectiveStatus === 'active'
       && (!existingListing.rowCount || existingListing.rows[0].status !== 'active')
     ) {
       void evaluateSavedSearchAlertsForListing({
@@ -15865,10 +16844,33 @@ app.post('/listings', {
       app.log.error({ err: cacheError, listingId: payload.id }, 'Failed to invalidate search cache after listing upsert');
     });
 
-    // Sync the new/updated listing into the search index (fire-and-forget)
-    void syncSingleListing(db, payload.id).catch(() => {});
+    // Sync the new/updated listing into the search index (fire-and-forget).
+    // A risk-held listing must never enter the index — evict any previously
+    // indexed document instead.
+    if (effectiveStatus === 'risk_pending') {
+      void removeListingFromIndex(payload.id).catch(() => {});
+    } else {
+      void syncSingleListing(db, payload.id).catch(() => {});
+    }
 
-    return { ok: true, listingId: payload.id };
+    // Record how the publish decision was executed (FR-13 separation).
+    if (publishDecision) {
+      try {
+        await recordExecution(db, {
+          decisionId: publishDecision.decisionId,
+          ownerService: 'listings',
+          executionStatus: 'executed',
+          domainEntityType: 'listing',
+          domainEntityId: payload.id,
+        });
+      } catch {
+        // Bookkeeping is best-effort; the listing write is durable.
+      }
+    }
+
+    // `status` is returned truthfully so a seller sees 'risk_pending'
+    // rather than a silent hold.
+    return { ok: true, listingId: payload.id, status: effectiveStatus };
   } catch (error) {
     await client.query('ROLLBACK');
     app.log.error({ err: error }, 'Failed to create listing');
@@ -15905,7 +16907,11 @@ app.get('/listings/:listingId', async (request, reply) => {
     shipping_method: string | null;
     shipping_payer: string | null;
     created_at: string;
+    updated_at: string | null;
     media_frozen_at: string | null;
+    sustainability_grade: string | null;
+    material_composition: string | null;
+    weight_kg: number | string | null;
     seller_username: string | null;
   }>(
     `
@@ -15913,7 +16919,8 @@ app.get('/listings/:listingId', async (request, reply) => {
         l.id, l.seller_id, l.title, l.description, l.price_gbp, l.image_url,
         l.status, l.category, l.brand, l.size, l.condition,
         l.original_price_gbp, l.shipping_method, l.shipping_payer, l.created_at,
-        l.media_frozen_at,
+        l.updated_at, l.media_frozen_at,
+        l.sustainability_grade, l.material_composition, l.weight_kg,
         u.username AS seller_username
       FROM listings l
       LEFT JOIN users u ON u.id = l.seller_id
@@ -16036,7 +17043,7 @@ app.get('/listings/:listingId', async (request, reply) => {
       title: row.title,
       description: row.description,
       priceGbp: itemPrice,
-      imageUrl: row.image_url,
+      imageUrl: listingImageUrls(listingMedia, row.image_url)[0] ?? row.image_url,
       images: listingImageUrls(listingMedia, row.image_url),
       media: listingMedia,
       status: row.status,
@@ -16048,7 +17055,13 @@ app.get('/listings/:listingId', async (request, reply) => {
       shippingMethod: row.shipping_method,
       shippingPayer: row.shipping_payer,
       createdAt: row.created_at,
+      updatedAt: row.updated_at,
       mediaFrozenAt: row.media_frozen_at,
+      // Real listings columns only — category evidence reads these via the
+      // mapper; nothing else about category attributes exists in the schema.
+      sustainabilityGrade: row.sustainability_grade,
+      materialComposition: row.material_composition,
+      weightKg: row.weight_kg === null ? null : Number(row.weight_kg),
       seller: row.seller_username
         ? {
             id: row.seller_id,
@@ -16324,6 +17337,13 @@ app.post('/listings/:listingId/questions', async (request, reply) => {
      RETURNING id, created_at`,
     [questionId, listingId, request.authUser.userId, text]
   );
+  // Return the real asker display name — the GET endpoint joins users for
+  // asker_name, and the POST response must match so the newly posted
+  // question doesn't render as a generic "Member" until a refetch.
+  const askerResult = await db.query<{ username: string | null }>(
+    `SELECT username FROM users WHERE id = $1 LIMIT 1`,
+    [request.authUser.userId]
+  );
   reply.code(201);
   return {
     ok: true,
@@ -16331,6 +17351,7 @@ app.post('/listings/:listingId/questions', async (request, reply) => {
       id: result.rows[0].id,
       listingId,
       askerId: request.authUser.userId,
+      askerName: askerResult.rows[0]?.username ?? null,
       text,
       createdAt: result.rows[0].created_at,
       answer: null,
@@ -16370,11 +17391,18 @@ app.post('/listings/:listingId/questions/:questionId/answer', async (request, re
     reply.code(404);
     return { ok: false, error: 'Question not found' };
   }
+  // Return the responder's real display name — the GET endpoint joins
+  // users for responder_name; 'Seller' here fabricated the label and
+  // produced "Seller · Seller" until a refetch.
+  const responderResult = await db.query<{ username: string | null }>(
+    `SELECT username FROM users WHERE id = $1 LIMIT 1`,
+    [request.authUser.userId]
+  );
   return {
     ok: true,
     answer: {
       text,
-      responderName: 'Seller',
+      responderName: responderResult.rows[0]?.username ?? null,
       createdAt: result.rows[0].answered_at,
     },
   };
@@ -16425,6 +17453,7 @@ app.get('/listings/:listingId/related', async (request, reply) => {
       WHERE l.id != $1
         AND l.status = 'active'
         AND (l.category = $2 OR l.brand ILIKE $3)
+        ${reachExcludedSql('u')}
       ORDER BY l.created_at DESC
       LIMIT 8
     `,
@@ -16436,7 +17465,7 @@ app.get('/listings/:listingId/related', async (request, reply) => {
 
   const imagesByListing = new Map<string, string[]>();
   for (const [listingRowId, mediaItems] of mediaByListing) {
-    imagesByListing.set(listingRowId, mediaItems.map((m) => m.uri));
+    imagesByListing.set(listingRowId, mediaItems.map(listingMediaImageUrl));
   }
 
   return {
@@ -16447,7 +17476,7 @@ app.get('/listings/:listingId/related', async (request, reply) => {
       title: row.title,
       description: row.description,
       priceGbp: Number(row.price_gbp),
-      imageUrl: row.image_url,
+      imageUrl: listingImageUrls(mediaByListing.get(row.id), row.image_url)[0] ?? row.image_url,
       images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
       media: mediaByListing.get(row.id) ?? [],
       status: row.status,
@@ -16542,6 +17571,7 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
     original_price_gbp: number | string | null;
     created_at: string;
     seller_username: string | null;
+    seller_reach_state: string;
   };
 
   const fetchCandidates = async (whereClause: string, args: unknown[], limitCount: number) => {
@@ -16550,10 +17580,12 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
         SELECT
           l.id, l.seller_id, l.title, l.description, l.price_gbp, l.image_url,
           l.status, l.category, l.brand, l.size, l.condition, l.original_price_gbp, l.created_at,
-          u.username AS seller_username
+          u.username AS seller_username,
+          COALESCE(u.reach_state, 'normal') AS seller_reach_state
         FROM listings l
         LEFT JOIN users u ON u.id = l.seller_id
         WHERE ${whereClause}
+          ${reachExcludedSql('u')}
         ORDER BY l.created_at DESC
         LIMIT $${args.length + 1}
       `,
@@ -16565,7 +17597,7 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
 
     const imagesByListing = new Map<string, string[]>();
     for (const [listingRowId, mediaItems] of mediaByListing) {
-      imagesByListing.set(listingRowId, mediaItems.map((m) => m.uri));
+      imagesByListing.set(listingRowId, mediaItems.map(listingMediaImageUrl));
     }
 
     return result.rows.map((row) => ({
@@ -16626,12 +17658,19 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
   const shouldInclude = (key: string) => !requestedSections || requestedSections.includes(key);
 
   const usedListingIds = new Set<string>();
-  const scoreCandidate = (candidate: CandidateRow): number =>
-    scoreProductRecommendation({
+  const scoreCandidate = (candidate: CandidateRow): number => {
+    const base = scoreProductRecommendation({
       candidate,
       source,
       asOf: recommendationAsOf,
     }).score;
+    // Reach demotion: 'limited' sellers keep 30% of scored distribution
+    // (lib/sellerReach.ts); 'suspended' rows are already filtered out by
+    // reachExcludedSql in fetchCandidates.
+    return candidate.seller_reach_state === 'limited'
+      ? base * REACH_LIMITED_MULTIPLIER
+      : base;
+  };
 
   const dedupeAndMap = (
     candidates: Array<{ row: CandidateRow; images: string[]; media: ListingMediaItem[] }>,
@@ -16805,7 +17844,9 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
       creator_username: string | null;
     }>(
       `
-        SELECT lt.look_id, l.title AS look_title, l.media_url, l.creator_id, u.username AS creator_username
+        SELECT lt.look_id, l.title AS look_title,
+               COALESCE(l.poster_url, l.media_url) AS media_url,
+               l.creator_id, u.username AS creator_username
         FROM look_tags lt
         JOIN looks l ON l.id = lt.look_id
         LEFT JOIN users u ON u.id = l.creator_id
@@ -16894,10 +17935,12 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
         SELECT
           l.id, l.seller_id, l.title, l.description, l.price_gbp, l.image_url,
           l.status, l.category, l.brand, l.size, l.condition, l.original_price_gbp, l.created_at,
-          u.username AS seller_username
+          u.username AS seller_username,
+          COALESCE(u.reach_state, 'normal') AS seller_reach_state
         FROM listings l
         LEFT JOIN users u ON u.id = l.seller_id
         WHERE l.id != $1 AND l.status = 'active'
+          ${reachExcludedSql('u')}
           ${cursorCreatedAt && cursorId ? 'AND (l.created_at, l.id) < ($2, $3)' : ''}
         ORDER BY l.created_at DESC, l.id DESC
         LIMIT $${cursorCreatedAt && cursorId ? 4 : 2}
@@ -16912,7 +17955,7 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
 
     const imagesByListing = new Map<string, string[]>();
     for (const [listingRowId, mediaItems] of mediaByListing) {
-      imagesByListing.set(listingRowId, mediaItems.map((m) => m.uri));
+      imagesByListing.set(listingRowId, mediaItems.map(listingMediaImageUrl));
     }
 
     const mapped = candidates.rows
@@ -16963,23 +18006,10 @@ app.patch('/listings/:listingId', async (request, reply) => {
   const paramsSchema = z.object({ listingId: z.string().min(2) });
   const { listingId } = paramsSchema.parse(request.params);
 
-  const bodySchema = z.object({
-    title: z.string().min(3).optional(),
-    description: z.string().min(10).optional(),
-    priceGbp: z.number().nonnegative().optional(),
-    imageUrl: z.string().url().optional(),
-    coverFinalizationId: z.string().min(2).max(120).optional(),
-    status: z.enum(['draft', 'active', 'paused', 'sold', 'deleted']).optional(),
-    category: z.string().min(1).optional(),
-    brand: z.string().min(1).optional(),
-    size: z.string().min(1).optional(),
-    condition: z.string().min(1).optional(),
-    originalPriceGbp: z.number().nonnegative().optional(),
-    shippingMethod: z.string().min(1).optional(),
-    shippingPayer: z.string().min(1).optional(),
-  });
-
-  const payload = bodySchema.parse(request.body);
+  // Field whitelist is the shared listingPatchSchema (lib/listingPatch.ts)
+  // — the same contract the seller-hub batch 'edit' command reuses, so the
+  // two surfaces can never drift.
+  const payload = listingPatchSchema.parse(request.body);
 
   const sets: string[] = [];
   const values: unknown[] = [];
@@ -16994,6 +18024,14 @@ app.patch('/listings/:listingId', async (request, reply) => {
   add('price_gbp', payload.priceGbp);
   add('image_url', payload.imageUrl);
   add('status', payload.status);
+  // Pause provenance (migration 305): a seller-initiated pause stamps
+  // 'seller' so reservation-expiry restores never undo it; any other
+  // status transition clears automated pause ownership.
+  if (payload.status === 'paused') {
+    sets.push(`pause_source = 'seller'`);
+  } else if (payload.status !== undefined) {
+    sets.push('pause_source = NULL');
+  }
   add('category', payload.category);
   add('brand', payload.brand);
   add('size', payload.size);
@@ -17010,6 +18048,12 @@ app.patch('/listings/:listingId', async (request, reply) => {
   sets.push('updated_at = NOW()');
   values.push(listingId);
 
+  // Hoisted so the post-commit tail (index sync, execution bookkeeping,
+  // response) can see the publish-risk outcome.
+  let patchPublishDecision: Awaited<ReturnType<typeof evaluateRisk>> | null = null;
+  let patchPublishHeld = false;
+  let priorListingStatus: string | null = null;
+
   const client = await db.connect();
   let priceEvent:
     | { id: number; previousPriceGbp: number; newPriceGbp: number }
@@ -17024,8 +18068,10 @@ app.patch('/listings/:listingId', async (request, reply) => {
       price_gbp: number | string;
       image_url: string | null;
       status: string;
+      title: string;
+      description: string;
     }>(
-      `SELECT id, seller_id, price_gbp, image_url, status
+      `SELECT id, seller_id, price_gbp, image_url, status, title, description
        FROM listings
        WHERE id = $1
        LIMIT 1
@@ -17041,6 +18087,162 @@ app.patch('/listings/:listingId', async (request, reply) => {
       await client.query('ROLLBACK');
       reply.code(403);
       return { ok: false, error: 'Only the seller can update this listing' };
+    }
+
+    // Lifecycle transition validation — the owner-facing status write uses
+    // the same transition table the canonical command service enforces
+    // (lib/listingCommandService.ts): 'sold'/'deleted' are terminal (no
+    // deleted→draft→active resurrection or sold→draft relist), and a
+    // 'risk_pending' listing is held pending risk review — the owner cannot
+    // move it in any direction, including paused/draft escape hatches.
+    // A same-status write is an idempotent no-op, not a transition.
+    priorListingStatus = existing.rows[0].status;
+    if (payload.status !== undefined && payload.status !== priorListingStatus) {
+      if (priorListingStatus === 'risk_pending') {
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return {
+          ok: false,
+          error: 'Listing is held pending risk review and its status cannot be changed',
+          code: 'LISTING_STATUS_HELD',
+        };
+      }
+      if (!canListingTransition(priorListingStatus, payload.status)) {
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return {
+          ok: false,
+          error: `Transition ${priorListingStatus} -> ${payload.status} is not allowed`,
+          code: 'LISTING_INVALID_TRANSITION',
+        };
+      }
+    }
+
+    // Publish transition (draft/paused → active): the same authoritative
+    // risk decision as POST /listings. A non-allow outcome writes
+    // 'risk_pending' instead of 'active' — a real, seller-visible status,
+    // never a silent shadowban. 'deny' refuses the transition.
+    if (payload.status === 'active' && existing.rows[0].status !== 'active') {
+      try {
+        patchPublishDecision = await evaluateRisk(
+          {
+            db,
+            redis,
+            logger: request.log,
+            shadowService: fraudShadowService,
+            ipReputationProvider,
+          },
+          {
+            eventType: 'listing.publish.requested',
+            subjectRef: actorUserId,
+            actionRef: listingId,
+            amountMinor: Math.round(
+              Number(payload.priceGbp ?? existing.rows[0].price_gbp) * 100,
+            ),
+            currency: 'GBP',
+            userId: actorUserId,
+            headers: request.headers as Record<string, string | string[] | undefined>,
+            ip: request.ip,
+            context: {
+              listingId,
+              previousStatus: existing.rows[0].status,
+            },
+          },
+        );
+      } catch (publishRiskError) {
+        request.log.error(
+          { err: publishRiskError, listingId },
+          'evaluateRisk failed for listing publish transition — failing open to allow',
+        );
+      }
+      const outcome = patchPublishDecision?.ownerDecision ?? 'allow';
+      if (outcome === 'deny') {
+        await client.query('ROLLBACK');
+        if (patchPublishDecision) {
+          try {
+            await recordExecution(db, {
+              decisionId: patchPublishDecision.decisionId,
+              ownerService: 'listings',
+              executionStatus: 'executed',
+              domainEntityType: 'listing',
+              domainEntityId: listingId,
+            });
+          } catch {
+            // Best-effort bookkeeping; the refusal stands.
+          }
+        }
+        reply.code(403);
+        return {
+          ok: false,
+          error: 'Listing cannot be published',
+          code: 'RISK_PUBLISH_DENIED',
+        };
+      }
+      if (outcome !== 'allow') {
+        patchPublishHeld = true;
+        const statusSetIndex = sets.findIndex((entry) => entry.startsWith('status ='));
+        if (statusSetIndex >= 0) {
+          values[statusSetIndex] = 'risk_pending';
+        }
+        // A held listing must not leave live lots biddable — cancel every
+        // non-terminal lot in this transaction so nothing can close 'sold'
+        // against a listing settlement will refuse. The bid path also
+        // re-checks the listing status for lots opened concurrently.
+        const cancelledLots = await client.query<{
+          id: string;
+          session_id: string;
+          version: number;
+        }>(
+          `UPDATE live_lots
+              SET status = 'cancelled',
+                  version = version + 1,
+                  updated_at = NOW()
+            WHERE listing_id = $1
+              AND status IN ('scheduled', 'open', 'closing', 'passed')
+            RETURNING id, session_id, version`,
+          [listingId],
+        );
+        for (const lot of cancelledLots.rows) {
+          await client.query(
+            `INSERT INTO live_lot_events
+               (id, lot_id, session_id, event_type, event_version, actor_id, payload)
+             VALUES ($1, $2, $3, 'lot.cancelled', $4, $5, $6::jsonb)`,
+            [
+              crypto.randomUUID(),
+              lot.id,
+              lot.session_id,
+              lot.version,
+              actorUserId,
+              JSON.stringify({ lotId: lot.id, reason: 'listing_risk_hold' }),
+            ],
+          );
+        }
+      }
+    }
+
+    // Text moderation — the same gate POST /listings applies — whenever the
+    // edit rewrites title or description. The merged text (patched fields
+    // over the locked current values) is what gets evaluated: 'rejected'
+    // refuses the whole patch, 'review' proceeds with a flag in the logs.
+    if (payload.title !== undefined || payload.description !== undefined) {
+      const mergedListingText = `${payload.title ?? existing.rows[0].title}\n${payload.description ?? existing.rows[0].description}`;
+      const textModerationResult = await moderateListingText(listingId, mergedListingText);
+      if (textModerationResult.status === 'rejected') {
+        await client.query('ROLLBACK');
+        reply.code(422);
+        return {
+          ok: false,
+          error: 'Listing text was rejected by content moderation',
+          code: 'MODERATION_REJECTED',
+          labels: textModerationResult.labels,
+        };
+      }
+      if (textModerationResult.status === 'review') {
+        request.log.warn(
+          { listingId, labels: textModerationResult.labels },
+          'Listing text edit flagged for human review',
+        );
+      }
     }
 
     const previousPriceGbp = Number(existing.rows[0].price_gbp);
@@ -17188,7 +18390,8 @@ app.patch('/listings/:listingId', async (request, reply) => {
     // Saved-search matcher — a PATCH that transitions a listing into
     // 'active' (e.g. publishing a draft) is an activation, same as the
     // POST upsert path. Best-effort and idempotent per (search, listing).
-    if (payload.status === 'active' && existing.rows[0].status !== 'active') {
+    // A risk-held transition wrote 'risk_pending', not 'active' — no alerts.
+    if (payload.status === 'active' && !patchPublishHeld && existing.rows[0].status !== 'active') {
       void evaluateSavedSearchAlertsForListing({
         db,
         listingId,
@@ -17242,10 +18445,36 @@ app.patch('/listings/:listingId', async (request, reply) => {
     app.log.error({ err: cacheError, listingId }, 'Failed to invalidate search cache after listing update');
   });
 
-  // Sync the updated listing into the search index (fire-and-forget)
-  void syncSingleListing(db, listingId).catch(() => {});
+  // Sync the updated listing into the search index (fire-and-forget).
+  // A risk-held listing must leave the index, not enter it.
+  if (patchPublishHeld) {
+    void removeListingFromIndex(listingId).catch(() => {});
+  } else {
+    void syncSingleListing(db, listingId).catch(() => {});
+  }
 
-  return { ok: true, listingId, alertEvaluation };
+  if (patchPublishDecision) {
+    try {
+      await recordExecution(db, {
+        decisionId: patchPublishDecision.decisionId,
+        ownerService: 'listings',
+        executionStatus: 'executed',
+        domainEntityType: 'listing',
+        domainEntityId: listingId,
+      });
+    } catch {
+      // Bookkeeping is best-effort; the listing write is durable.
+    }
+  }
+
+  // `status` is returned truthfully so a held publish is visible to the
+  // seller as 'risk_pending' rather than appearing silently swallowed.
+  return {
+    ok: true,
+    listingId,
+    alertEvaluation,
+    status: patchPublishHeld ? 'risk_pending' : (payload.status ?? priorListingStatus),
+  };
 });
 
 app.delete('/listings/:listingId', async (request, reply) => {
@@ -17274,7 +18503,7 @@ app.delete('/listings/:listingId', async (request, reply) => {
   // historical references. Media objects can be garbage-collected only after
   // their retention window and reference count reach zero.
   await db.query(
-    `UPDATE listings SET status = 'deleted', updated_at = NOW() WHERE id = $1`,
+    `UPDATE listings SET status = 'deleted', pause_source = NULL, updated_at = NOW() WHERE id = $1`,
     [listingId],
   );
 
@@ -17290,6 +18519,7 @@ app.delete('/listings/:listingId', async (request, reply) => {
 });
 
 registerSellerHubRoutes({ app, readDb, db });
+registerPromotionRoutes({ app, db });
 
 app.get('/users/:userId/listings', async (request) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
@@ -17300,6 +18530,14 @@ app.get('/users/:userId/listings', async (request) => {
 
   const { userId } = paramsSchema.parse(request.params);
   const { status, limit } = querySchema.parse(request.query);
+
+  // Seller reach (lib/sellerReach.ts): a suspended seller's listings are
+  // excluded from distribution — this rail is the public storefront listing
+  // surface, so buyers see no sellable items. The seller themselves (or an
+  // admin) still sees their own inventory: reach restricts distribution,
+  // not the owner's view of their own stock.
+  const viewerUserId = request.authUser?.userId ?? null;
+  const viewerIsOwner = viewerUserId === userId || request.authUser?.role === 'admin';
 
   const conditions: string[] = ['seller_id = $1'];
   const args: unknown[] = [userId];
@@ -17334,6 +18572,7 @@ app.get('/users/:userId/listings', async (request) => {
       FROM listings l
       LEFT JOIN users u ON u.id = l.seller_id
       WHERE ${conditions.join(' AND ')}
+        ${viewerIsOwner ? '' : reachExcludedSql('u')}
       ORDER BY l.created_at DESC
       LIMIT $${args.length + 1}
     `,
@@ -17346,7 +18585,7 @@ app.get('/users/:userId/listings', async (request) => {
   const imagesByListing = new Map<string, string[]>();
   const primaryGeometryByListing = new Map<string, { width: number; height: number } | null>();
   for (const [listingRowId, mediaItems] of mediaByListing) {
-    imagesByListing.set(listingRowId, mediaItems.map((m) => m.uri));
+    imagesByListing.set(listingRowId, mediaItems.map(listingMediaImageUrl));
     const primary = mediaItems[0];
     primaryGeometryByListing.set(
       listingRowId,
@@ -17365,7 +18604,7 @@ app.get('/users/:userId/listings', async (request) => {
         title: row.title,
         description: row.description,
         priceGbp: Number(row.price_gbp),
-        imageUrl: row.image_url,
+        imageUrl: listingImageUrls(mediaByListing.get(row.id), row.image_url)[0] ?? row.image_url,
         images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
         media: mediaByListing.get(row.id) ?? [],
         mediaWidth: primaryGeometry?.width ?? null,
@@ -17454,6 +18693,7 @@ app.post('/listing-images', async (request, reply) => {
       asset_height: number | null;
       asset_focal_x: string | number | null;
       asset_focal_y: string | number | null;
+      asset_poster_url: string | null;
     }>(
       `SELECT finalization.public_url, finalization.content_type,
               finalization.status, finalization.owner_id,
@@ -17464,7 +18704,8 @@ app.post('/listing-images', async (request, reply) => {
               asset.width AS asset_width,
               asset.height AS asset_height,
               asset.focal_x AS asset_focal_x,
-              asset.focal_y AS asset_focal_y
+              asset.focal_y AS asset_focal_y,
+              asset.metadata->>'posterUrl' AS asset_poster_url
        FROM upload_finalizations finalization
        LEFT JOIN media_assets asset
          ON asset.id = finalization.media_asset_id
@@ -17544,7 +18785,11 @@ app.post('/listing-images', async (request, reply) => {
         verifiedUpload.asset_width ?? payload.mediaWidth ?? null,
         verifiedUpload.asset_height ?? payload.mediaHeight ?? null,
         payload.mediaType,
-        payload.posterUrl ?? null,
+        // Prefer the client-supplied poster (e.g. a cover frame the client
+        // rendered) but fall back to the pipeline-generated poster still —
+        // without it a video listing's `uri` is an m3u8 playlist no image
+        // context can render.
+        payload.posterUrl ?? verifiedUpload.asset_poster_url ?? null,
         // Backfill the blurhash the media pipeline computed — the client
         // never holds it because processing finishes after upload.
         payload.blurhash ?? verifiedUpload.asset_blurhash ?? null,
@@ -18955,72 +20200,12 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
       expiresAt: rateExpiresAt.toISOString(),
     });
 
-    await client.query(
-      `
-        INSERT INTO mint_operations (
-          id,
-          user_id,
-          state,
-          fiat_amount_minor,
-          fiat_currency,
-          net_fiat_amount_minor,
-          platform_fee_minor,
-          ize_amount_units,
-          rate_per_gram,
-          rate_source,
-          rate_locked_at,
-          rate_expires_at,
-          payment_intent_id,
-          metadata
-        )
-        VALUES (
-          $1,
-          $2,
-          'INITIATED',
-          $3,
-          $4,
-          $5,
-          $6,
-          $7,
-          $8,
-          $9,
-          $10,
-          $11,
-          NULL,
-          $12::jsonb
-        )
-      `,
-      [
-        mintOperationId,
-        actorUserId,
-        toFiatMinor(feeBreakdown.grossFiatAmount, fiatCurrency),
-        fiatCurrency,
-        toFiatMinor(feeBreakdown.netFiatAmount, fiatCurrency),
-        toFiatMinor(feeBreakdown.platformFeeAmount, fiatCurrency),
-        amountUnits,
-        mintUnitPrice,
-        fiatCurrency === 'GBP' ? 'fixed_par:GBP:1ZE' : `internal_pricing:${pricingQuote.countryCode}:buy`,
-        rateLockedAt.toISOString(),
-        rateExpiresAt.toISOString(),
-        toJsonString({
-          quoteRequestedAt: rateLockedAt.toISOString(),
-          quoteValidForSeconds: config.onezeMintQuoteTtlSeconds,
-          feeBreakdown,
-          pricingCountry: pricingQuote.countryCode,
-          pricingCurrency: pricingQuote.currency,
-          pricingModel: 'controlled_anchor',
-          quoteHash,
-          sourceMoney: topupMoney,
-          targetAssetAmount: {
-            asset: '1ZE',
-            baseUnitAmount: String(amountUnits),
-            baseUnit: 'units',
-            scale: 3,
-          },
-          ...(payload.metadata ?? {}),
-        }),
-      ]
-    );
+    // The quote no longer persists a mint_operations row — debounced preview
+    // calls used to leak one row per keystroke. The locked quote rides on the
+    // payment intent's metadata (mintQuote below) and the mint operation is
+    // materialized lazily when a real payment event arrives
+    // (processMintOperationPaymentWebhook →
+    // materializeMintOperationForPaymentIntent).
 
     let stripeCustomerId: string | null = null;
     let stripePaymentMethodId: string | null = null;
@@ -19174,57 +20359,75 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
             scale: 3,
           },
           quoteRateSource: `internal_pricing:${pricingQuote.countryCode}:buy`,
+          // Everything needed to materialize the mint_operations row when a
+          // payment event settles this intent.
+          mintQuote: {
+            fiatAmountMinor: toFiatMinor(feeBreakdown.grossFiatAmount, fiatCurrency),
+            netFiatAmountMinor: toFiatMinor(feeBreakdown.netFiatAmount, fiatCurrency),
+            platformFeeMinor: toFiatMinor(feeBreakdown.platformFeeAmount, fiatCurrency),
+            izeAmountUnits: amountUnits,
+            ratePerGram: mintUnitPrice,
+            rateSource:
+              fiatCurrency === 'GBP'
+                ? 'fixed_par:GBP:1ZE'
+                : `internal_pricing:${pricingQuote.countryCode}:buy`,
+            rateLockedAt: rateLockedAt.toISOString(),
+            rateExpiresAt: rateExpiresAt.toISOString(),
+          },
           ...(payload.metadata ?? {}),
         }),
       ]
     );
 
-    const operationResult = await client.query<MintOperationRow>(
-      `
-        UPDATE mint_operations
-        SET
-          state = 'PAYMENT_PENDING',
-          payment_intent_id = $2,
-          metadata = metadata || $3::jsonb,
-          updated_at = NOW()
-        WHERE id = $1
-        RETURNING
-          id,
-          user_id,
-          state,
-          fiat_amount_minor::text,
-          fiat_currency,
-          net_fiat_amount_minor::text,
-          platform_fee_minor::text,
-          ize_amount_units::text,
-          rate_per_gram::text,
-          rate_source,
-          rate_locked_at::text,
-          rate_expires_at::text,
-          payment_intent_id,
-          lot_id,
-          custodian_ref,
-          escrow_ledger_tx_id,
-          wallet_credit_tx_id,
-          purchase_attempted_at::text,
-          settled_at::text,
-          last_error,
-          metadata,
-          created_at::text,
-          updated_at::text
-      `,
-      [
-        mintOperationId,
+    // The operation payload is synthesized — the mint_operations row is only
+    // persisted once a payment event arrives. Shape is identical to the
+    // persisted version so clients cannot distinguish quote from execution.
+    const operation = toMintOperationPayload({
+      id: mintOperationId,
+      user_id: actorUserId,
+      state: 'PAYMENT_PENDING',
+      fiat_amount_minor: toFiatMinor(feeBreakdown.grossFiatAmount, fiatCurrency),
+      fiat_currency: fiatCurrency,
+      net_fiat_amount_minor: toFiatMinor(feeBreakdown.netFiatAmount, fiatCurrency),
+      platform_fee_minor: toFiatMinor(feeBreakdown.platformFeeAmount, fiatCurrency),
+      ize_amount_units: amountUnits,
+      rate_per_gram: mintUnitPrice,
+      rate_source:
+        fiatCurrency === 'GBP' ? 'fixed_par:GBP:1ZE' : `internal_pricing:${pricingQuote.countryCode}:buy`,
+      rate_locked_at: rateLockedAt.toISOString(),
+      rate_expires_at: rateExpiresAt.toISOString(),
+      payment_intent_id: paymentIntentId,
+      lot_id: null,
+      custodian_ref: null,
+      escrow_ledger_tx_id: null,
+      wallet_credit_tx_id: null,
+      purchase_attempted_at: null,
+      settled_at: null,
+      last_error: null,
+      metadata: {
+        quoteRequestedAt: rateLockedAt.toISOString(),
+        quoteValidForSeconds: config.onezeMintQuoteTtlSeconds,
+        feeBreakdown,
+        pricingCountry: pricingQuote.countryCode,
+        pricingCurrency: pricingQuote.currency,
+        pricingModel: 'controlled_anchor',
+        quoteHash,
+        sourceMoney: topupMoney,
+        targetAssetAmount: {
+          asset: '1ZE',
+          baseUnitAmount: String(amountUnits),
+          baseUnit: 'units',
+          scale: 3,
+        },
+        persistedOnPaymentEvent: true,
+        paymentIntentCreatedAt: new Date().toISOString(),
         paymentIntentId,
-        toJsonString({
-          paymentIntentCreatedAt: new Date().toISOString(),
-          paymentIntentId,
-          gatewayId,
-        }),
-      ]
-    );
-
-    const operation = toMintOperationPayload(operationResult.rows[0]);
+        gatewayId,
+        ...(payload.metadata ?? {}),
+      },
+      created_at: rateLockedAt.toISOString(),
+      updated_at: rateLockedAt.toISOString(),
+    });
     const intent = toPaymentIntentPayload(paymentIntentResult.rows[0]);
     const responsePayload: Record<string, unknown> = {
       ok: true,
@@ -19687,6 +20890,64 @@ app.post('/wallet/1ze/mint', async (request, reply) => {
     return responsePayload;
   } catch (error) {
     await client.query('ROLLBACK');
+    // Replay safety (migration 307): wallet_ize_operations.payment_intent_id
+    // is unique where non-null, so a payment intent can fund exactly one
+    // mint. When the insert raced a committed retry, surface that operation
+    // instead of a 500 — the 1ZE was already credited exactly once by the
+    // winning transaction.
+    if (payload.paymentIntentId && isPostgresUniqueViolation(error)) {
+      const committed = await findWalletIzeOperationByPaymentIntentId(db, payload.paymentIntentId);
+      if (committed) {
+        const committedMeta = asObject(committed.metadata);
+        const walletTopup = asObject(committedMeta.walletTopup);
+        const replayWallet = await db.query<{ id: string; oneze_balance_units: string }>(
+          'SELECT id, oneze_balance_units::text FROM wallets WHERE user_id = $1 LIMIT 1',
+          [actorUserId]
+        );
+        const reserveSnapshot = await getPlatformIzeReserveSnapshot(db);
+        const replayBalanceUnits = Number(replayWallet.rows[0]?.oneze_balance_units ?? 0);
+        // Canonical read — wallets is authoritative; the legacy ize_wallet
+        // ledger account can diverge.
+        const walletBalanceIze = unitsToOnezeAmount(replayBalanceUnits);
+        return {
+          ok: true,
+          replayed: true,
+          operation: {
+            id: committed.id,
+            type: committed.operation_type,
+            userId: committed.user_id,
+            fiatAmount: Number(committed.fiat_amount),
+            grossFiatAmount: Number(walletTopup.grossFiatAmount ?? committed.fiat_amount),
+            netFiatAmount: Number(walletTopup.netFiatAmount ?? committed.fiat_amount),
+            platformFeeRate: Number(walletTopup.platformFeeRate ?? 0),
+            platformFeeAmount: Number(walletTopup.platformFeeAmount ?? 0),
+            fiatCurrency: committed.fiat_currency,
+            izeAmount: Number(committed.ize_amount),
+            ratePerGram: Number(committed.rate_per_gram),
+            rateSource:
+              typeof committedMeta.pricingSource === 'string'
+                ? committedMeta.pricingSource
+                : 'internal_pricing:GB:buy',
+            fundingGatewayId: null,
+          },
+          balances: {
+            userIze: walletBalanceIze,
+            outstandingIze: reserveSnapshot.outstandingIze,
+            circulatingIze: reserveSnapshot.circulatingIze,
+            supplyDeltaIze: reserveSnapshot.supplyDeltaIze,
+            supplyParityRatio: reserveSnapshot.supplyParityRatio,
+            liquidityBufferIze: reserveSnapshot.liquidityBufferIze,
+          },
+          architecture: replayWallet.rows[0]
+            ? {
+                walletId: replayWallet.rows[0].id,
+                walletBalanceUnits: replayBalanceUnits,
+                walletBalanceOneze: unitsToOnezeAmount(replayBalanceUnits),
+              }
+            : null,
+        };
+      }
+    }
     const apiError = getApiError(error);
     if (apiError) {
       reply.code(statusCodeForApiError(apiError.code));
@@ -20110,6 +21371,9 @@ app.post('/wallet/convert-1ze-to-fiat', async (request, reply) => {
     izeAmount: z.number().positive(),
     fiatCurrency: z.string().length(3).default('GBP'),
     idempotencyKey: z.string().min(8).max(140).optional(),
+    // When true the route returns the identical quote payload but performs no
+    // balance mutation, no ledger writes, and no operation persistence.
+    preview: z.boolean().optional(),
   });
 
   const payload = bodySchema.parse(request.body ?? {});
@@ -20162,7 +21426,7 @@ app.post('/wallet/convert-1ze-to-fiat', async (request, reply) => {
     }
 
     // â”€â”€ Bug 2 fix: idempotency check â”€â”€
-    const idempotencyRequestHash = payload.idempotencyKey
+    const idempotencyRequestHash = payload.idempotencyKey && !payload.preview
       ? hashWalletIdempotencyPayload({
           userId: actorUserId,
           izeAmount: normalizedIzeAmount,
@@ -20188,15 +21452,19 @@ app.post('/wallet/convert-1ze-to-fiat', async (request, reply) => {
     // 1 1ZE = $1.00 USD. Convert to the target fiat currency via the USDâ†’local
     // FX rate. The platform spread is applied as a separate transparent fee,
     // not baked into the exchange rate.
-    const pricingQuote = await resolveCountryPricingQuoteByCurrency(client, fiatCurrency);
-    const onezeAmountFromUnits = unitsToOnezeAmount(amountUnits);
-    const fxRate = (await resolveInternalFxRate(client, 'USD', fiatCurrency)).rate;
-    const principalAmount = Number((onezeAmountFromUnits * fxRate).toFixed(6));
-
-    // â”€â”€ Charge PLATFORM_CONVERT_FEE_BPS â”€â”€
-    const feeBps = PLATFORM_CONVERT_FEE_BPS;
-    const feeAmount = Number((principalAmount * feeBps / 10_000).toFixed(6));
-    const netRedemption = Number((principalAmount - feeAmount).toFixed(6));
+    // The quote math lives in computeOnezeToFiatConversionQuote so preview and
+    // execution share one source of truth and can never drift apart.
+    const conversionQuote = await computeOnezeToFiatConversionQuote(client, {
+      izeAmount: normalizedIzeAmount,
+      fiatCurrency,
+      feeBps: PLATFORM_CONVERT_FEE_BPS,
+    });
+    const pricingQuote = conversionQuote.pricingQuote;
+    const fxRate = conversionQuote.fxRate;
+    const principalAmount = conversionQuote.principalAmount;
+    const feeBps = conversionQuote.feeBps;
+    const feeAmount = conversionQuote.feeAmount;
+    const netRedemption = conversionQuote.netRedemption;
 
     // Validate 1ze balance
     const wallet = await ensureWallet(client, actorUserId, fiatCurrency);
@@ -20210,6 +21478,30 @@ app.post('/wallet/convert-1ze-to-fiat', async (request, reply) => {
         message: 'Insufficient 1ze balance for conversion',
         currentBalanceUnits: currentIzeBalance,
         requestedAmountUnits: amountUnits,
+      };
+    }
+
+    // Read-only preview: return the identical payload shape an execution
+    // would produce, then roll the transaction back so the preview writes
+    // nothing — no ledger entries, no balance mutation, no operation row,
+    // no idempotent record.
+    if (payload.preview) {
+      await client.query('ROLLBACK');
+      return {
+        ok: true,
+        preview: true,
+        userId: actorUserId,
+        wallet: toWalletPayload(wallet),
+        conversion: {
+          izeAmount: normalizedIzeAmount,
+          principalAmount,
+          feeAmount,
+          feeBps,
+          netRedemption,
+          fiatAmount: netRedemption,
+          fiatCurrency,
+          fxRate,
+        },
       };
     }
 
@@ -20401,13 +21693,55 @@ app.post('/wallet/buy-1ze', async (request, reply) => {
     };
   }
 
+  // Mint-side operation: subject to the same reconciliation halt gate as
+  // /wallet/1ze/mint and /wallet/convert-1ze-to-fiat.
+  try {
+    await assertOnezeMintBurnNotHalted();
+  } catch (error) {
+    const apiError = getApiError(error);
+    if (apiError) {
+      reply.code(statusCodeForApiError(apiError.code));
+      return {
+        ok: false,
+        error: apiError.message,
+        details: apiError.details,
+      };
+    }
+
+    throw error;
+  }
+
   const client = await db.connect();
   try {
     await client.query('BEGIN');
     await ensureUserExists(actorUserId);
 
     const fiatCurrency = payload.fiatCurrency.toUpperCase();
-    const fiatAmountMinor = Math.round(payload.fiatAmount * 100);
+    const fiatAmountMinor = toFiatMinor(payload.fiatAmount, fiatCurrency);
+
+    // Idempotent replay: a retried buy-1ze must return the stored response
+    // instead of debiting fiat and minting 1ZE a second time.
+    const idempotencyRequestHash = payload.idempotencyKey
+      ? hashWalletIdempotencyPayload({
+          userId: actorUserId,
+          fiatAmount: Number(payload.fiatAmount.toFixed(6)),
+          fiatCurrency,
+        })
+      : null;
+
+    if (payload.idempotencyKey && idempotencyRequestHash) {
+      const idempotentResponse = await getWalletIdempotentResponse(client, {
+        userId: actorUserId,
+        operation: 'buy_1ze',
+        idempotencyKey: payload.idempotencyKey,
+        requestHash: idempotencyRequestHash,
+      });
+
+      if (idempotentResponse) {
+        await client.query('COMMIT');
+        return idempotentResponse;
+      }
+    }
 
     // â”€â”€ Compliance gate: verify user can issue (load) 1ZE â”€â”€
     const issueCapability = await evaluateWalletCapability(client, actorUserId, 'issue', {
@@ -20493,12 +21827,11 @@ app.post('/wallet/buy-1ze', async (request, reply) => {
       },
     });
 
-    await client.query('COMMIT');
-
-    // Reload wallet to get updated balances
+    // Reload inside the transaction — same-tx reads see the deltas above —
+    // so the stored idempotent response carries the post-purchase balances.
     const updatedWallet = await ensureWallet(client, actorUserId, fiatCurrency);
 
-    return {
+    const responsePayload: Record<string, unknown> = {
       ok: true,
       userId: actorUserId,
       wallet: toWalletPayload(updatedWallet),
@@ -20512,8 +21845,31 @@ app.post('/wallet/buy-1ze', async (request, reply) => {
         rateUsed: fxRate,
       },
     };
+
+    if (payload.idempotencyKey && idempotencyRequestHash) {
+      await saveWalletIdempotentResponse(client, {
+        userId: actorUserId,
+        operation: 'buy_1ze',
+        idempotencyKey: payload.idempotencyKey,
+        requestHash: idempotencyRequestHash,
+        responsePayload,
+      });
+    }
+
+    await client.query('COMMIT');
+    return responsePayload;
   } catch (error) {
     await client.query('ROLLBACK');
+    const apiError = getApiError(error);
+    if (apiError) {
+      reply.code(statusCodeForApiError(apiError.code));
+      return {
+        ok: false,
+        error: apiError.message,
+        details: apiError.details,
+      };
+    }
+
     throw error;
   } finally {
     client.release();
@@ -21918,7 +23274,7 @@ app.get('/wallet/1ze/:userId/ledger', async (request, reply) => {
     return {
       ok: true,
       wallet: toWalletPayload(wallet),
-      items: result.rows.map((row) => toWalletLedgerPayload(row)),
+      items: result.rows.map((row) => toWalletLedgerPayload(row, wallet.fiat_currency)),
     };
   } catch (error) {
     await client.query('ROLLBACK');
@@ -22018,7 +23374,7 @@ app.get('/wallet/1ze/:userId/position', async (request, reply) => {
   resolveAuthenticatedUserId(request, userId);
   const { fiatCurrency } = querySchema.parse(request.query);
 
-  if (!(await onezeTablesAvailable(db))) {
+  if (!(await onezeTablesAvailable(db)) || !(await onezeArchitectureTablesAvailable(db))) {
     reply.code(503);
     return {
       ok: false,
@@ -22026,9 +23382,16 @@ app.get('/wallet/1ze/:userId/position', async (request, reply) => {
     };
   }
 
-  const [pricingQuote, userIze, reserveSnapshot, reservedResult, redemptionResult, sequenceResult, haltState] = await Promise.all([
+  // Canonical position read: the wallets table is the authoritative 1ZE
+  // store (ensureWallet/applyWalletLedgerDelta maintain it). The legacy
+  // ize_wallet ledger account can diverge from it — reading it here would
+  // report a stale position.
+  const [pricingQuote, userWalletResult, reserveSnapshot, reservedResult, redemptionResult, sequenceResult, haltState] = await Promise.all([
     resolveCountryPricingQuoteByCurrency(db, fiatCurrency),
-    getLedgerAccountBalance(db, 'user', userId, 'ize_wallet', 'IZE'),
+    db.query<{ oneze_balance_units: string }>(
+      'SELECT oneze_balance_units::text FROM wallets WHERE user_id = $1 LIMIT 1',
+      [userId]
+    ),
     getPlatformIzeReserveSnapshot(db),
     db.query<{ reserved_1ze_units: string }>(
       `
@@ -22065,6 +23428,9 @@ app.get('/wallet/1ze/:userId/position', async (request, reply) => {
     ),
     getOnezeMintBurnHaltState(),
   ]);
+  const userIze = unitsToOnezeAmount(
+    Number(userWalletResult.rows[0]?.oneze_balance_units ?? 0)
+  );
   const reservedForOrdersUnits = Number(reservedResult.rows[0]?.reserved_1ze_units ?? 0);
   const reservedForOrders = reservedForOrdersUnits / 1000;
   const redemptionInProgress = Number(redemptionResult.rows[0]?.redemption_ize ?? 0);
@@ -23407,37 +24773,126 @@ app.post('/ops/payouts/schedule-sweep', async (request, reply) => {
       continue;
     }
 
-    // Create a payout request for the available balance.
+    // Create a payout request for the available balance and reserve the
+    // funds atomically — seller_payable → withdrawal_pending, mirroring the
+    // manual payout-request route. Without the reservation a second sweep
+    // (or a manual request) could spend the same balance twice.
     const requestId = createRuntimeId('po');
+    const payoutMoney = moneyFromMinor('GBP', String(toFiatMinor(availableGbp, 'GBP')));
+    const scheduleKey = `sched_${account.id}_${new Date().toISOString().slice(0, 10)}`;
+
+    const client = await db.connect();
     try {
-      await db.query(
-        `INSERT INTO payout_requests (id, user_id, payout_account_id, amount_gbp, amount_currency, status, idempotency_key, request_hash, metadata, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, 'requested', $6, $7, $8::jsonb, NOW(), NOW())`,
+      await client.query('BEGIN');
+
+      if (!(await ledgerTablesAvailable(client))) {
+        // Cannot reserve honestly — skip rather than emit an unfunded payout.
+        await client.query('ROLLBACK');
+        request.log.warn(
+          { userId: account.user_id, payoutAccountId: account.id },
+          'Scheduled payout skipped: ledger tables unavailable for reservation'
+        );
+        continue;
+      }
+
+      // Serialize on the same seller_payable ledger_accounts row lock the
+      // manual payout-request route takes — without it a manual request and
+      // this sweep can both read the same balance and both reserve it.
+      const sellerPayableAccountId = await ensureLedgerAccount(client, 'user', account.user_id, 'seller_payable');
+      const withdrawalPendingAccountId = await ensureLedgerAccount(client, 'user', account.user_id, 'withdrawal_pending');
+      await client.query(`SELECT id FROM ledger_accounts WHERE id = $1 FOR UPDATE`, [sellerPayableAccountId]);
+
+      // Re-check the balance inside the transaction under the account lock —
+      // another payout may have reserved funds since the outer read.
+      const reservedBalanceGbp = await getLedgerAccountBalance(
+        client,
+        'user',
+        account.user_id,
+        'seller_payable'
+      );
+      if (availableGbp > reservedBalanceGbp + 1e-6) {
+        await client.query('ROLLBACK');
+        await db.query(
+          `UPDATE payout_accounts SET next_scheduled_payout_at = NULL WHERE id = $1`,
+          [account.id]
+        );
+        continue;
+      }
+
+      await client.query(
+        `INSERT INTO payout_requests (
+           id, user_id, payout_account_id, amount_gbp, amount_currency,
+           amount_minor, currency_exponent, money_registry_version,
+           money_conversion_trace, status, idempotency_key, request_hash,
+           metadata, created_at, updated_at
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, 'requested', $10, $11, $12::jsonb, NOW(), NOW())`,
         [
           requestId,
           account.user_id,
           account.id,
           availableGbp,
-          account.currency,
-          `sched_${account.id}_${new Date().toISOString().slice(0, 10)}`,
-          `sched_${account.id}_${new Date().toISOString().slice(0, 10)}`,
-          toJsonString({ source: 'schedule_sweep' }),
+          // amount_currency is the canonical payout currency — GBP funds the
+          // request even when the destination account settles in another
+          // currency (the settlement rail converts at execution).
+          payoutMoney.currency,
+          payoutMoney.minorAmount,
+          payoutMoney.exponent,
+          payoutMoney.registryVersion,
+          toJsonString({
+            direction: 'request_to_canonical',
+            canonicalMoney: payoutMoney,
+            legacyGbpValuation: availableGbp,
+            fxRate: null,
+          }),
+          scheduleKey,
+          scheduleKey,
+          toJsonString({ source: 'schedule_sweep', payoutAccountCurrency: account.currency }),
         ]
       );
+
+      await appendLedgerEntry(client, {
+        accountId: sellerPayableAccountId,
+        counterpartyAccountId: withdrawalPendingAccountId,
+        direction: 'debit',
+        amountGbp: availableGbp,
+        sourceType: 'payout',
+        sourceId: requestId,
+        lineType: 'payout_requested',
+        metadata: { payoutAccountId: account.id, source: 'schedule_sweep' },
+      });
+      await appendLedgerEntry(client, {
+        accountId: withdrawalPendingAccountId,
+        counterpartyAccountId: sellerPayableAccountId,
+        direction: 'credit',
+        amountGbp: availableGbp,
+        sourceType: 'payout',
+        sourceId: requestId,
+        lineType: 'payout_requested',
+        metadata: { payoutAccountId: account.id, source: 'schedule_sweep' },
+      });
+
+      await client.query(
+        `UPDATE payout_accounts SET next_scheduled_payout_at = NULL, updated_at = NOW() WHERE id = $1`,
+        [account.id]
+      );
+
+      await client.query('COMMIT');
       created.push({
         userId: account.user_id,
         payoutAccountId: account.id,
         amountGbp: availableGbp,
       });
     } catch (error) {
-      request.log.error({ err: error, userId: account.user_id }, 'Scheduled payout creation failed');
+      await client.query('ROLLBACK').catch(() => {});
+      // A duplicate scheduleKey (same-day re-sweep) lands here via 23505 —
+      // that is the intended dedupe, not a failure worth paging on.
+      if (!isPostgresUniqueViolation(error)) {
+        request.log.error({ err: error, userId: account.user_id }, 'Scheduled payout creation failed');
+      }
+    } finally {
+      client.release();
     }
-
-    // Clear the next scheduled payout time.
-    await db.query(
-      `UPDATE payout_accounts SET next_scheduled_payout_at = NULL, updated_at = NOW() WHERE id = $1`,
-      [account.id]
-    );
   }
 
   return {
@@ -24380,6 +25835,14 @@ app.post('/users/:userId/payout-requests', async (request, reply) => {
 
     let sellerPayableBalanceBefore = 0;
     if (await ledgerTablesAvailable(client)) {
+      // Serialize concurrent payout requests on the seller_payable account
+      // row: without this lock two same-seller requests (different
+      // idempotency keys, different sessions) both read the same balance,
+      // both pass the sufficiency check, and both debit — overdrawing the
+      // account. Holding the account row lock makes the read→debit sequence
+      // atomic per seller.
+      const sellerPayableAccountId = await ensureLedgerAccount(client, 'user', userId, 'seller_payable');
+      await client.query(`SELECT id FROM ledger_accounts WHERE id = $1 FOR UPDATE`, [sellerPayableAccountId]);
       sellerPayableBalanceBefore = await getLedgerAccountBalance(client, 'user', userId, 'seller_payable');
       if (amountGbp > sellerPayableBalanceBefore + 1e-6) {
         await client.query('ROLLBACK');
@@ -26100,10 +27563,42 @@ app.post('/payments/intents', async (request, reply) => {
           code: 'IDEMPOTENCY_PAYLOAD_MISMATCH',
         };
       }
+      // P1: re-verify the bound order is still payable before re-serving a
+      // non-terminal intent. A replay must not hand back a confirmable
+      // intent minted before a seller suspension, order cancellation, or
+      // reservation expiry — settle would then either fail server-side or
+      // worse, mark the intent succeeded against a dead order.
+      const replayedIntent = existing.rows[0];
+      const replayTerminal = ['succeeded', 'failed', 'cancelled'].includes(replayedIntent.status);
+      if (
+        !replayTerminal
+        && replayedIntent.channel === 'commerce'
+        && replayedIntent.order_id
+      ) {
+        const payability = await verifyReplayedOrderPayable(
+          db,
+          replayedIntent.order_id,
+          actorUserId
+        );
+        if (!payability.payable) {
+          await markIntentFailed(
+            db,
+            replayedIntent.id,
+            payability.code,
+            payability.error
+          );
+          reply.code(payability.httpStatus);
+          return {
+            ok: false,
+            error: payability.error,
+            code: payability.code,
+          };
+        }
+      }
       return {
         ok: true,
         idempotent: true,
-        intent: toPaymentIntentPayload(existing.rows[0]),
+        intent: toPaymentIntentPayload(replayedIntent),
       };
     }
   }
@@ -26208,6 +27703,21 @@ app.post('/payments/intents', async (request, reply) => {
           error: `Order cannot create a payment intent from status '${orderRow.status}'`,
         };
       }
+
+      // Seller reach (lib/sellerReach.ts): the order may predate the
+      // restriction — a seller suspended mid-checkout must not take the
+      // buyer's money. 'limited' does not block payment.
+      const orderSellerReach = await getSellerReach(client, orderRow.seller_id);
+      if (orderSellerReach?.state === 'suspended') {
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return {
+          ok: false,
+          error: 'This seller is currently restricted — this order cannot be paid',
+          code: 'SELLER_RESTRICTED',
+        };
+      }
+
       if (!orderRow.address_id || !orderRow.shipping_quote_id) {
         await client.query('ROLLBACK');
         reply.code(409);
@@ -26227,12 +27737,43 @@ app.post('/payments/intents', async (request, reply) => {
           || Date.parse(checkoutExpiry) <= Date.now()
         )
       ) {
-        await client.query(
-          `UPDATE orders
-           SET status = 'cancelled', updated_at = NOW()
-           WHERE id = $1 AND status = 'created'`,
-          [orderRow.id]
-        );
+        const cancelOutcome = await cancelOrderOnReservationExpiry(client, orderRow.id);
+        if (cancelOutcome === 'blocked_in_flight') {
+          // The reservation TTL lapsed but a payment attempt is still in
+          // flight — cancelling here is exactly the orphan-capture defect:
+          // a late provider 'succeeded' would settle against a cancelled
+          // order. Hand the buyer the live intent so the client keeps
+          // polling; the stale-submission reconciler owns resolution.
+          const inFlightIntent = await client.query<PaymentIntentRow>(
+            `SELECT
+               id, user_id, gateway_id, channel, order_id, coOwn_order_id,
+               instrument_id, amount_gbp, amount_currency, status,
+               provider_intent_ref, client_secret, provider_status,
+               next_action_url, sca_expires_at, settled_at,
+               failure_code, failure_message, created_at, updated_at
+             FROM payment_intents
+             WHERE (order_id = $1 OR id = $2)
+               AND status NOT IN ('succeeded', 'failed', 'cancelled')
+             ORDER BY updated_at DESC
+             LIMIT 1`,
+            [orderRow.id, orderRow.payment_intent_id ?? '']
+          );
+          if (inFlightIntent.rowCount) {
+            await client.query('COMMIT');
+            return {
+              ok: true,
+              idempotent: true,
+              intent: toPaymentIntentPayload(inFlightIntent.rows[0]),
+            };
+          }
+          await client.query('ROLLBACK');
+          reply.code(409);
+          return {
+            ok: false,
+            error: 'A payment attempt is already in progress for this order',
+            code: 'ORDER_PAYMENT_IN_PROGRESS',
+          };
+        }
         await client.query(
           `INSERT INTO order_events (
              order_id, event_type, actor_id, source, deduplication_key, metadata
@@ -26703,6 +28244,113 @@ app.post('/payments/intents', async (request, reply) => {
         ]
       );
 
+      // ─── P0: synchronous 1ZE settlement ────────────────────────────────
+      // oneze_internal has no external provider round-trip — createGatewayPaymentIntent
+      // only records the intent. Previously the wallet debit lived only inside
+      // settlePaymentIntent() which nothing in the client flow could reach,
+      // leaving the intent parked in requires_confirmation forever. Settle it
+      // now, inside THIS transaction: balance check → wallet debit → order
+      // paid → escrow ledger → shipment provisioning all commit atomically.
+      if (gatewayId === 'oneze_internal' && channel === 'commerce' && orderId) {
+        const debitQuote = await computeOnezeDebitQuote(settleClient, amountGbp);
+        const buyerWallet = await ensureWallet(settleClient, actorUserId, 'GBP');
+        // FOR UPDATE — the observed balance cannot be spent concurrently
+        // before applyWalletLedgerDelta debits it inside this transaction.
+        const availableUnits = await readOnezeBalanceUnitsForUpdate(settleClient, buyerWallet.id);
+
+        if (availableUnits < debitQuote.debitUnits) {
+          // Terminal failure inside the same tx: intent → failed, order →
+          // cancelled via compensateTerminalCommercePayment (which also
+          // releases the checkout reservation via the DB trigger). No
+          // partial debit, no zombie 'created' order.
+          const failed = await settlePaymentIntent(settleClient, {
+            intentId,
+            finalStatus: 'failed',
+            failureCode: 'WALLET_INSUFFICIENT_BALANCE',
+            failureMessage: `Insufficient 1ZE balance — requires ${debitQuote.izeAmount} 1ZE, wallet holds ${onezeUnitsToAmount(availableUnits)} 1ZE`,
+            rawPayload: {
+              source: 'oneze_internal_settlement',
+              requiredOnezeUnits: debitQuote.debitUnits,
+              availableOnezeUnits: availableUnits,
+            },
+          });
+          await settleClient.query('COMMIT');
+          if (failed.orderCancelledOrderId) {
+            await emitOrderCommerceCard({
+              orderId: failed.orderCancelledOrderId,
+              stateType: 'order_cancelled',
+              log: request.log,
+            });
+          }
+          reply.code(402);
+          return {
+            ok: false,
+            error: 'Insufficient 1ZE balance',
+            code: 'WALLET_INSUFFICIENT_BALANCE',
+            requiredOnezeUnits: debitQuote.debitUnits,
+            requiredOnezeAmount: debitQuote.izeAmount,
+            availableOnezeUnits: availableUnits,
+            onezeBalance: onezeUnitsToAmount(availableUnits),
+            intent: failed.intent,
+          };
+        }
+
+        const settled = await settlePaymentIntent(settleClient, {
+          intentId,
+          finalStatus: 'succeeded',
+          providerAttemptRef: `oneze_settle:${intentId}`,
+          // FX TOCTOU: the ledger debit must use the SAME quote the balance
+          // check above and the requiredOnezeUnits response are based on —
+          // never a second live FX resolution inside settlement.
+          resolvedOnezeDebitQuote: debitQuote,
+          rawPayload: {
+            source: 'oneze_internal_settlement',
+            requiredOnezeUnits: debitQuote.debitUnits,
+            gbpToUsdRate: debitQuote.gbpToUsdRate,
+          },
+        });
+        const remainingUnits = await readOnezeBalanceUnitsForUpdate(settleClient, buyerWallet.id);
+        await settleClient.query('COMMIT');
+
+        if (!settled.alreadyFinal && settled.orderSettlement?.orderId) {
+          try {
+            await queueCommercePaymentNotifications({
+              orderId: settled.orderSettlement.orderId,
+              source: 'oneze_internal_settlement',
+            });
+          } catch (notificationError) {
+            request.log.error(
+              { err: notificationError, orderId: settled.orderSettlement.orderId },
+              'Failed to queue payment notifications after 1ZE settlement'
+            );
+          }
+          await emitOrderCommerceCard({
+            orderId: settled.orderSettlement.orderId,
+            stateType: 'payment_confirmed',
+            log: request.log,
+          });
+          await emitOrderCommerceCard({
+            orderId: settled.orderSettlement.orderId,
+            stateType: 'label_created',
+            trackingNumber: settled.orderSettlement.shipment?.trackingNumber ?? null,
+            carrier: settled.orderSettlement.shipment?.shippingProvider ?? null,
+            log: request.log,
+          });
+        }
+
+        reply.code(201);
+        return {
+          ok: true,
+          idempotent: false,
+          intent: settled.intent,
+          orderSettlement: settled.orderSettlement,
+          requiredOnezeUnits: debitQuote.debitUnits,
+          requiredOnezeAmount: debitQuote.izeAmount,
+          onezeBalanceUnits: remainingUnits,
+          onezeBalance: onezeUnitsToAmount(remainingUnits),
+        };
+      }
+
       await settleClient.query('COMMIT');
 
       reply.code(201);
@@ -26713,6 +28361,29 @@ app.post('/payments/intents', async (request, reply) => {
       };
     } catch (settleError) {
       await settleClient.query('ROLLBACK');
+      // A 1ZE settle failure (capability gate, expired reservation trigger,
+      // ledger error) must not park the intent in provider_submission_pending
+      // — mark it failed and compensate the bound order best-effort so the
+      // listing is released.
+      if (gatewayId === 'oneze_internal' && channel === 'commerce' && orderId) {
+        const failureCode = getApiError(settleError)?.code ?? 'PAYMENT_SETTLEMENT_FAILED';
+        const failureMessage = settleError instanceof Error ? settleError.message : '1ZE settlement failed';
+        await markIntentFailed(db, intentId, failureCode, failureMessage);
+        if (failureCode === 'WALLET_INSUFFICIENT_BALANCE') {
+          reply.code(402);
+        } else if (failureCode === 'CHECKOUT_RESERVATION_EXPIRED' || /LISTING_CHECKOUT_RESERVATION/.test(failureMessage)) {
+          reply.code(410);
+        } else {
+          reply.code(409);
+        }
+        return {
+          ok: false,
+          error: failureMessage,
+          code: /LISTING_CHECKOUT_RESERVATION/.test(failureMessage)
+            ? 'CHECKOUT_RESERVATION_EXPIRED'
+            : failureCode,
+        };
+      }
       // The provider intent was created but we couldn't persist the result.
       // The intent stays in 'provider_submission_pending' â€” a background
       // worker will query the provider and reconcile.
@@ -27200,8 +28871,13 @@ app.post('/payments/intents/:intentId/refunds', async (request, reply) => {
         money: refundMoney,
         refundAmount: amount,
         reason: payload.reason,
+        // oneze_internal re-credits the buyer's 1ZE wallet inside this same
+        // transaction so the credit and the payment_refunds row commit
+        // together.
+        client,
         metadata: {
           source: 'manual_refund_request',
+          refundOperationId,
           ...(payload.metadata ?? {}),
         },
       });
@@ -28306,6 +29982,9 @@ app.post('/webhooks/:provider', async (request, reply) => {
     let refundCompletedEventKey: string | null = null;
     let mintOperation: ReturnType<typeof toMintOperationPayload> | undefined;
     let mintReserveEnqueueOperationId: string | null = null;
+    /** P2-7: true when a 'failed' webhook was a retriable attempt failure —
+     *  the intent (and any linked mint operation) must stay non-terminal. */
+    let retriablePaymentFailure = false;
 
     if (event.paymentStatus && intentRow) {
       if (
@@ -28330,7 +30009,52 @@ app.post('/webhooks/:provider', async (request, reply) => {
           }
         );
       }
-      if (['succeeded', 'failed', 'cancelled'].includes(event.paymentStatus)) {
+      // P2-7: a 'failed' webhook event is not always a terminal intent
+      // failure. Stripe fires payment_intent.payment_failed after every
+      // declined ATTEMPT while the PaymentIntent stays confirmable
+      // (requires_payment_method / requires_action during SCA). Terminalizing
+      // here would cancel the bound order mid-payment-sheet — and a later
+      // payment_intent.succeeded would then hit an already-terminal intent,
+      // capturing money against a cancelled order. When the provider object
+      // is still actionable, record the attempt and keep the intent alive.
+      if (
+        event.paymentStatus === 'failed'
+        && isRetriableProviderPaymentFailure(provider, event.rawPayload)
+      ) {
+        retriablePaymentFailure = true;
+        await client.query(
+          `INSERT INTO payment_attempts (
+             intent_id, gateway_id, status, amount_gbp, provider_fee_gbp,
+             provider_attempt_ref, raw_payload
+           )
+           VALUES ($1, $2, 'failed', $3, 0, $4, $5::jsonb)
+           ON CONFLICT (gateway_id, provider_attempt_ref) DO NOTHING`,
+          [
+            intentRow.id,
+            expectedGateway,
+            Number(intentRow.amount_gbp),
+            event.providerEventId ?? createRuntimeId('attempt'),
+            toJsonString({ source: 'provider_webhook', retriable: true, eventType: event.eventType }),
+          ]
+        );
+        const refreshed = await client.query<PaymentIntentRow>(
+          `UPDATE payment_intents
+           SET provider_status = $2, updated_at = NOW()
+           WHERE id = $1
+           RETURNING
+             id, user_id, gateway_id, channel, order_id, coOwn_order_id,
+             instrument_id, amount_gbp, amount_currency, amount_minor,
+             currency_exponent, money_registry_version, provider_amount,
+             provider_amount_unit, money_conversion_trace, money_quarantined,
+             status, provider_intent_ref, client_secret, provider_status,
+             next_action_url, sca_expires_at, settled_at, failure_code,
+             failure_message, created_at, updated_at`,
+          [intentRow.id, event.eventType]
+        );
+        settledIntent = refreshed.rows[0]
+          ? toPaymentIntentPayload(refreshed.rows[0])
+          : toPaymentIntentPayload(intentRow);
+      } else if (['succeeded', 'failed', 'cancelled'].includes(event.paymentStatus)) {
         const settled = await settlePaymentIntent(client, {
           intentId: intentRow.id,
           finalStatus: event.paymentStatus as PaymentIntentTerminalStatus,
@@ -28362,7 +30086,7 @@ app.post('/webhooks/:provider', async (request, reply) => {
         settledIntent = transitioned.intent;
       }
 
-      if (intentRow.channel === 'wallet_topup') {
+      if (intentRow.channel === 'wallet_topup' && !retriablePaymentFailure) {
         const mintTransition = await processMintOperationPaymentWebhook(client, {
           paymentIntentId: intentRow.id,
           paymentStatus: event.paymentStatus,
@@ -29692,14 +31416,43 @@ app.post('/orders', async (request, reply) => {
       [payload.listingId]
     );
     if (expiredReservation.rowCount) {
-      expiredReservationOrderId = expiredReservation.rows[0].order_id;
-      await client.query(
-        `UPDATE orders
-         SET status = 'cancelled', updated_at = NOW()
-         WHERE id = $1 AND status = 'created'`,
-        [expiredReservation.rows[0].order_id]
+      const staleOrderId = expiredReservation.rows[0].order_id;
+      const cancelOutcome = await cancelOrderOnReservationExpiry(client, staleOrderId);
+      if (cancelOutcome === 'blocked_in_flight') {
+        // A payment attempt is still in flight for this listing — the
+        // reservation stays 'active' and the listing stays reserved. The
+        // new buyer must not start a competing checkout.
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return {
+          ok: false,
+          error: 'This listing is reserved — a payment is already in progress',
+          code: 'LISTING_CHECKOUT_RESERVED',
+        };
+      }
+      if (cancelOutcome === 'already_terminal') {
+        // Drifted reservation bound to a terminal/missing order: cancel it
+        // directly — the order-status trigger can no longer reach it.
+        await client.query(
+          `UPDATE listing_checkout_reservations
+           SET status = 'cancelled',
+               cancelled_at = NOW(),
+               failure_reason = COALESCE(failure_reason, 'reservation_expired'),
+               updated_at = NOW()
+           WHERE order_id = $1 AND status = 'active'`,
+          [staleOrderId]
+        );
+      }
+      expiredReservationOrderId = staleOrderId;
+      // Re-read the listing: the checkout trigger restores 'paused' →
+      // 'active' only when the pause came from a checkout reservation
+      // (pause_source provenance, migration 305). A seller pause survives
+      // expiry and must keep rejecting the new checkout below.
+      const refreshedListing = await client.query<{ status: string }>(
+        `SELECT status FROM listings WHERE id = $1 LIMIT 1`,
+        [payload.listingId]
       );
-      listing.status = 'active';
+      listing.status = refreshedListing.rows[0]?.status ?? listing.status;
     }
 
     if (listing.status !== 'active') {
@@ -29731,6 +31484,21 @@ app.post('/orders', async (request, reply) => {
         code: 'SELLER_AWAY',
         sellerAwayUntil: sellerAway.awayUntil,
         awayMessage: sellerAway.awayMessage,
+      };
+    }
+
+    // Seller reach (lib/sellerReach.ts): a 'suspended' seller is excluded
+    // from distribution entirely — their status='active' listings must not
+    // be purchasable, so the order bind is rejected here. 'limited' only
+    // demotes discovery and does NOT block purchase.
+    const sellerReach = await getSellerReach(client, listing.seller_id);
+    if (sellerReach?.state === 'suspended') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'This seller is currently restricted — their listings are not available for purchase',
+        code: 'SELLER_RESTRICTED',
       };
     }
 
@@ -29953,7 +31721,7 @@ app.post('/orders', async (request, reply) => {
     );
     await client.query(
       `UPDATE listings
-       SET status = 'paused', updated_at = NOW()
+       SET status = 'paused', pause_source = 'checkout_reservation', updated_at = NOW()
        WHERE id = $1`,
       [listing.id]
     );
@@ -30175,11 +31943,20 @@ app.patch('/orders/:orderId/checkout', async (request, reply) => {
       order.checkout_expires_at
       && Date.parse(order.checkout_expires_at) <= Date.now()
     ) {
-      await client.query(
-        `UPDATE orders SET status = 'cancelled', updated_at = NOW()
-         WHERE id = $1 AND status = 'created'`,
-        [orderId]
-      );
+      const cancelOutcome = await cancelOrderOnReservationExpiry(client, orderId);
+      if (cancelOutcome === 'blocked_in_flight') {
+        // A payment attempt is in flight — the reservation-expiry cancel
+        // must not orphan a late provider capture. (Normally unreachable:
+        // a bound intent already failed the payment_intent_id check above,
+        // but an order_id-linked intent can exist without the bind.)
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return {
+          ok: false,
+          error: 'A payment attempt is already in progress for this order',
+          code: 'ORDER_PAYMENT_IN_PROGRESS',
+        };
+      }
       await client.query('COMMIT');
       // In-thread commerce card: the checkout reservation lapsed and the
       // pending order was cancelled.
@@ -30751,6 +32528,8 @@ app.get('/orders/:orderId/parcel/events', async (request, reply) => {
 
   const orderResult = await db.query<{
     id: string;
+    buyer_id: string;
+    seller_id: string;
     status: string;
     tracking_number: string | null;
     shipping_provider: string | null;
@@ -30760,6 +32539,8 @@ app.get('/orders/:orderId/parcel/events', async (request, reply) => {
     `
       SELECT
         id,
+        buyer_id,
+        seller_id,
         status,
         tracking_number,
         shipping_provider,
@@ -30778,6 +32559,17 @@ app.get('/orders/:orderId/parcel/events', async (request, reply) => {
       ok: false,
       error: 'Order not found',
     };
+  }
+
+  // Participant gate — tracking numbers, carrier, and provider payloads are
+  // PII-adjacent fulfilment data. Same gate as /orders/:orderId/events.
+  const actor = request.authUser;
+  const canRead = actor?.role === 'admin'
+    || actor?.userId === orderResult.rows[0].buyer_id
+    || actor?.userId === orderResult.rows[0].seller_id;
+  if (!canRead) {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden: parcel events access denied' };
   }
 
   const order = orderResult.rows[0];
@@ -30850,6 +32642,10 @@ app.get('/orders/:orderId/parcel/events', async (request, reply) => {
   };
 });
 
+// Seller fulfilment: POST /orders/:orderId/shipping-label and
+// POST /orders/:orderId/fulfilment/handoff-assertion (src/routes/orderFulfilment.ts).
+registerOrderFulfilmentRoutes({ app, db });
+
 app.get('/orders/:orderId/events', async (request, reply) => {
   const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
   const { orderId } = paramsSchema.parse(request.params);
@@ -30907,9 +32703,27 @@ app.get('/orders/:orderId/events', async (request, reply) => {
 //   GET /authentication/certificates/:id      — public certificate verify
 registerAuthenticationRoutes({ app, db, redis });
 
-app.get('/orders/:orderId/ledger', async (request) => {
+app.get('/orders/:orderId/ledger', async (request, reply) => {
   const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
   const { orderId } = paramsSchema.parse(request.params);
+
+  // Participant gate — ledger rows expose amounts and account/owner ids.
+  const orderParties = await db.query<{ buyer_id: string; seller_id: string }>(
+    `SELECT buyer_id, seller_id FROM orders WHERE id = $1 LIMIT 1`,
+    [orderId]
+  );
+  if (!orderParties.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Order not found' };
+  }
+  const actor = request.authUser;
+  const canRead = actor?.role === 'admin'
+    || actor?.userId === orderParties.rows[0].buyer_id
+    || actor?.userId === orderParties.rows[0].seller_id;
+  if (!canRead) {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden: order ledger access denied' };
+  }
 
   if (!(await ledgerTablesAvailable(db))) {
     return {
@@ -31315,11 +33129,30 @@ app.get('/users/:userId/orders', async (request) => {
     }
   }
 
-  // Classification filter
-  if (classification) {
+  // Classification filter — needs_action is role-aware: a 'created' order is
+  // work for the buyer (pay), a 'paid' order is work for the seller
+  // (dispatch). Under role=all each row qualifies only via the viewer's role
+  // on that order. The 'active' set mirrors the client ACTIVE_STATUSES —
+  // transit statuses must not vanish from the Active filter.
+  if (classification === 'needs_action') {
+    if (role === 'buyer') {
+      conditions.push(`LOWER(o.status) = 'created'`);
+    } else if (role === 'seller') {
+      conditions.push(`LOWER(o.status) = 'paid'`);
+    } else {
+      conditions.push(`(
+        (o.buyer_id = $${paramIdx} AND LOWER(o.status) = 'created')
+        OR (o.seller_id = $${paramIdx} AND LOWER(o.status) = 'paid')
+      )`);
+      paramIdx++;
+      params.push(userId);
+    }
+  } else if (classification) {
     const classificationSets: Record<string, string[]> = {
-      needs_action: ['created', 'paid'],
-      active: ['created', 'paid', 'shipped'],
+      active: [
+        'created', 'paid', 'processing', 'preparing',
+        'shipped', 'in transit', 'out for delivery',
+      ],
       completed: ['delivered', 'completed'],
       // 'refunding' is the in-flight refund state — group it with the
       // cancelled/refunded bucket so refunding orders stay visible in the
@@ -31358,10 +33191,19 @@ app.get('/users/:userId/orders', async (request) => {
   }
 
   // Cursor pagination â€” createdBefore or cursor (ISO timestamp)
-  const cursorDate = cursor ?? createdBefore;
-  if (cursorDate) {
-    conditions.push(`o.created_at < $${paramIdx++}`);
-    params.push(cursorDate);
+  // Composite (created_at, id) cursor so orders sharing a timestamp aren't
+  // dropped at the page boundary; legacy ISO-only cursors still parse.
+  const cursorRaw = cursor ?? createdBefore;
+  if (cursorRaw) {
+    const [cursorTs, cursorId] = cursorRaw.split('|');
+    if (cursorId) {
+      conditions.push(`(o.created_at < $${paramIdx} OR (o.created_at = $${paramIdx} AND o.id < $${paramIdx + 1}))`);
+      paramIdx += 2;
+      params.push(cursorTs, cursorId);
+    } else {
+      conditions.push(`o.created_at < $${paramIdx++}`);
+      params.push(cursorTs);
+    }
   }
 
   const whereClause = conditions.join(' AND ');
@@ -31404,6 +33246,7 @@ app.get('/users/:userId/orders', async (request) => {
     paid_at: string | null;
     dispatch_sla_days: number | null;
     extension_ship_by: string | null;
+    has_review: boolean | null;
   }>(
     `
       SELECT
@@ -31426,7 +33269,11 @@ app.get('/users/:userId/orders', async (request) => {
         l.title AS listing_title,
         l.image_url AS listing_image_url,
         bu.username AS buyer_username,
-        su.username AS seller_username
+        su.username AS seller_username,
+        EXISTS (
+          SELECT 1 FROM order_reviews rv
+          WHERE rv.order_id = o.id AND rv.is_auto IS NOT TRUE
+        ) AS has_review
       FROM orders o
       LEFT JOIN listings l ON l.id = o.listing_id
       LEFT JOIN users bu ON bu.id = o.buyer_id
@@ -31434,7 +33281,7 @@ app.get('/users/:userId/orders', async (request) => {
       LEFT JOIN order_seller_rights_snapshot srs ON srs.order_id = o.id
       ${extensionJoin}
       WHERE ${whereClause}
-      ORDER BY o.created_at DESC
+      ORDER BY o.created_at DESC, o.id DESC
       LIMIT $${paramIdx}
     `,
     [...params, limit + 1]
@@ -31443,7 +33290,7 @@ app.get('/users/:userId/orders', async (request) => {
   const hasMore = result.rows.length > limit;
   const items = hasMore ? result.rows.slice(0, limit) : result.rows;
   const nextCursor = hasMore && items.length > 0
-    ? items[items.length - 1].created_at
+    ? `${items[items.length - 1].created_at}|${items[items.length - 1].id}`
     : null;
 
   return {
@@ -31470,6 +33317,7 @@ app.get('/users/:userId/orders', async (request) => {
         createdAt: row.created_at,
         buyerUsername: row.buyer_username,
         sellerUsername: row.seller_username,
+        hasReview: row.has_review === true,
         // Server-derived ship-by deadline (SLA snapshot or accepted extension).
         shipByDate,
         fulfilmentSnapshot: dispatchSlaDays !== null
@@ -31794,17 +33642,28 @@ app.post('/orders/:orderId/ship', async (request, reply) => {
 
     const provider = body.shippingProvider ?? order.shipping_provider ?? 'manual';
     const sellerTracking = body.trackingNumber ?? order.tracking_number ?? null;
-    const tracking = sellerTracking ?? `TV-${orderId.toUpperCase()}`;
+
+    // Never fabricate tracking: the old `TV-<orderId>` fallback wrote a
+    // synthetic string into tracking_number that buyer surfaces rendered as
+    // a real tracking reference. Shipping requires either an explicit
+    // tracking number or one already on the row (carrier label path).
+    if (!sellerTracking) {
+      reply.code(422);
+      return {
+        ok: false,
+        error: 'A tracking number is required to mark this order as shipped',
+        code: 'TRACKING_REQUIRED',
+      };
+    }
 
     await client.query(
       `UPDATE orders SET status = 'shipped', shipped_at = NOW(), shipping_provider = $2, tracking_number = $3, updated_at = NOW() WHERE id = $1`,
-      [orderId, provider, tracking]
+      [orderId, provider, sellerTracking]
     );
 
     await client.query('COMMIT');
     // In-thread commerce card: order shipped. Only seller/carrier-issued
-    // tracking may be rendered — the `TV-` placeholder is an internal
-    // fallback id, not a real tracking number, so it is passed as null.
+    // tracking may be rendered.
     await emitOrderCommerceCard({
       orderId,
       stateType: 'order_shipped',
@@ -31812,7 +33671,7 @@ app.post('/orders/:orderId/ship', async (request, reply) => {
       carrier: provider,
       log: request.log,
     });
-    return { ok: true, orderId, status: 'shipped', trackingNumber: tracking, shippingProvider: provider };
+    return { ok: true, orderId, status: 'shipped', trackingNumber: sellerTracking, shippingProvider: provider };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -31885,10 +33744,22 @@ app.post('/orders/:orderId/deliver', async (request, reply) => {
     const blockingTicketsResult = await client.query<{ id: string; topic_id: string }>(
       `SELECT id, topic_id FROM support_tickets
        WHERE order_id = $1 AND status = 'open'
-         AND topic_id IN ('buyer_protection', 'buyer_protection_claim', 'item_not_as_described', 'refund_request')`,
+         AND topic_id IN ('buyer_protection', 'buyer_protection_claim', 'item_not_as_described', 'refund_request', 'return')`,
       [orderId]
     );
     const hasOpenBlockingDispute = blockingTicketsResult.rows.length > 0;
+
+    // Return cases: an open case means a refund/remedy path is still live —
+    // escrow must not release underneath it. 'closed'/'refund_confirmed' are
+    // the only states that can no longer move money.
+    const openReturnCase = await client.query<{ exists: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1 FROM return_cases
+         WHERE order_id = $1 AND status NOT IN ('closed', 'refund_confirmed')
+       ) AS exists`,
+      [orderId]
+    );
+    const hasOpenReturnCase = Boolean(openReturnCase.rows[0]?.exists);
 
     // Payment-gateway disputes: parity with POST /ops/escrow/release-sweep —
     // buyer confirmation must not release money while a PSP dispute is open.
@@ -31907,7 +33778,7 @@ app.post('/orders/:orderId/deliver', async (request, reply) => {
       hasOpenGatewayDispute = Boolean(gatewayDispute.rows[0]?.exists);
     }
 
-    const holdActive = hasOpenBlockingDispute || hasOpenGatewayDispute;
+    const holdActive = hasOpenBlockingDispute || hasOpenGatewayDispute || hasOpenReturnCase;
     const ledgerReady = await ledgerTablesAvailable(client);
 
     if (holdActive || !ledgerReady) {
@@ -31934,6 +33805,7 @@ app.post('/orders/:orderId/deliver', async (request, reply) => {
           orderId,
           ticketIds: blockingTicketsResult.rows.map(r => r.id),
           hasOpenGatewayDispute,
+          hasOpenReturnCase,
           ledgerReady,
         },
         'Escrow release blocked — delivery confirmed, funds held for sweep'
@@ -32634,6 +34506,7 @@ app.get('/users/:userId/transactions', async (request, reply) => {
     line_type: string;
     created_at: string;
     metadata: Record<string, unknown> | null;
+    account_currency: string;
   }>(
     `
       SELECT
@@ -32644,7 +34517,8 @@ app.get('/users/:userId/transactions', async (request, reply) => {
         le.source_id,
         le.line_type,
         le.created_at::text,
-        le.metadata
+        le.metadata,
+        la.currency AS account_currency
       FROM ledger_entries le
       INNER JOIN ledger_accounts la ON la.id = le.account_id
       WHERE la.owner_type = 'user' AND la.owner_id = $1
@@ -32672,10 +34546,13 @@ app.get('/users/:userId/transactions', async (request, reply) => {
       type: row.source_type,
       lineType: row.line_type,
       amount: Number(row.amount_gbp),
-      currency: 'GBP',
+      currency: row.account_currency,
       direction: row.direction,
       sourceId: row.source_id,
-      status: 'completed',
+      // Ledger entries are posted-only facts — a row exists iff settlement
+      // was committed. 'posted' is the truthful status, not a fabricated
+      // 'completed' that could mask pending/failed upstream states.
+      status: 'posted',
       createdAt: row.created_at,
       description: row.metadata && typeof row.metadata === 'object' ? (row.metadata as any).description ?? null : null,
     })),
@@ -32861,30 +34738,48 @@ app.get('/auctions/home', async (request, reply) => {
       a.starting_bid_gbp, a.current_bid_gbp, a.buy_now_price_gbp,
       a.reserve_price_gbp, a.min_increment_gbp, a.bid_count, a.status, a.cancelled_at, a.settled_at,
       a.winner_bidder_id AS auction_winner_id, a.created_at,
-      l.title, l.image_url, l.brand, l.category, l.condition AS condition_label,
+      l.title,
+      COALESCE(
+        CASE WHEN cover_media.media_type = 'video' THEN cover_media.poster_url END,
+        l.image_url
+      ) AS image_url,
+      l.brand, l.category, l.condition AS condition_label,
       u.username AS seller_username, u.avatar AS seller_avatar, u.display_name AS seller_display_name
       ${viewerSelect}
     FROM auctions a
     LEFT JOIN listings l ON l.id = a.listing_id
+    LEFT JOIN LATERAL (
+      SELECT li.media_type, li.poster_url
+      FROM listing_images li
+      WHERE li.listing_id = l.id
+      ORDER BY li.sort_order, li.created_at
+      LIMIT 1
+    ) cover_media ON true
     LEFT JOIN users u ON u.id = a.seller_id
     WHERE a.cancelled_at IS NULL
   `;
 
   const viewerParams = viewerUserId ? [viewerUserId] : [];
 
-  // Fetch live (including closing soon), upcoming, ended, seller, watchlist, and categories in parallel
+  // Fetch live (including closing soon), upcoming, ended, seller, watchlist, and categories in parallel.
+  // Seller reach (lib/sellerReach.ts): the public rails (live/upcoming/
+  // ended/categories) exclude suspended sellers — their auctions cannot
+  // be bid on, so they must not be distributed. The seller's own rail
+  // (sellerRes) and the viewer's own watchlist stay unfiltered: reach
+  // restricts distribution to others, not the owner's view of their stock.
+  const reachExclusion = reachExcludedSql('u');
   const [liveRes, upcomingRes, endedRes, sellerRes, watchlistRes, categoryRes, upcomingCategoryRes] = await Promise.all([
-    db.query(baseSelect + ` AND a.starts_at <= NOW() AND a.ends_at > NOW() ORDER BY a.ends_at ASC LIMIT 30`, viewerParams),
-    db.query(baseSelect + ` AND a.starts_at > NOW() ORDER BY a.starts_at ASC LIMIT 20`, viewerParams),
-    db.query(baseSelect + ` AND a.ends_at <= NOW() ORDER BY a.ends_at DESC LIMIT 20`, viewerParams),
+    db.query(baseSelect + ` AND a.starts_at <= NOW() AND a.ends_at > NOW() ${reachExclusion} ORDER BY a.ends_at ASC LIMIT 30`, viewerParams),
+    db.query(baseSelect + ` AND a.starts_at > NOW() ${reachExclusion} ORDER BY a.starts_at ASC LIMIT 20`, viewerParams),
+    db.query(baseSelect + ` AND a.ends_at <= NOW() ${reachExclusion} ORDER BY a.ends_at DESC LIMIT 20`, viewerParams),
     viewerUserId
       ? db.query(baseSelect + ` AND a.seller_id = $1 ORDER BY a.ends_at DESC LIMIT 20`, [viewerUserId])
       : Promise.resolve({ rows: [] as any[] }),
     viewerUserId
       ? db.query(baseSelect + ` AND EXISTS (SELECT 1 FROM auction_watchlist aw WHERE aw.auction_id = a.id AND aw.user_id = $1) ORDER BY a.ends_at ASC LIMIT 20`, [viewerUserId])
       : Promise.resolve({ rows: [] as any[] }),
-    db.query(`SELECT DISTINCT COALESCE(l.category, '') AS category FROM auctions a LEFT JOIN listings l ON l.id = a.listing_id WHERE a.cancelled_at IS NULL AND a.starts_at <= NOW() AND a.ends_at > NOW() AND COALESCE(l.category, '') != '' ORDER BY category ASC`),
-    db.query(`SELECT DISTINCT COALESCE(l.category, '') AS category FROM auctions a LEFT JOIN listings l ON l.id = a.listing_id WHERE a.cancelled_at IS NULL AND a.starts_at > NOW() AND COALESCE(l.category, '') != '' ORDER BY category ASC`),
+    db.query(`SELECT DISTINCT COALESCE(l.category, '') AS category FROM auctions a LEFT JOIN listings l ON l.id = a.listing_id LEFT JOIN users u ON u.id = a.seller_id WHERE a.cancelled_at IS NULL AND a.starts_at <= NOW() AND a.ends_at > NOW() ${reachExclusion} AND COALESCE(l.category, '') != '' ORDER BY category ASC`),
+    db.query(`SELECT DISTINCT COALESCE(l.category, '') AS category FROM auctions a LEFT JOIN listings l ON l.id = a.listing_id LEFT JOIN users u ON u.id = a.seller_id WHERE a.cancelled_at IS NULL AND a.starts_at > NOW() ${reachExclusion} AND COALESCE(l.category, '') != '' ORDER BY category ASC`),
   ]);
 
   // â”€â”€ Row mapper (shared with /auctions list endpoint) â”€â”€
@@ -33152,6 +35047,13 @@ app.get('/auctions', async (request, reply) => {
   const whereParams: Array<string | number | boolean> = [];
   let paramIdx = 0;
 
+  // Seller reach (lib/sellerReach.ts): a suspended seller's auctions are
+  // excluded from public distribution — bidding/buy-now is already gated,
+  // so they must not surface here either. seller=me is the owner's
+  // inventory view and stays unfiltered (same convention as
+  // /users/:userId/listings).
+  const reachExclusion = sellerMe ? '' : ` ${reachExcludedSql('u')}`;
+
   if (sellerMe) {
     whereParams.push(viewerUserId!);
     paramIdx++;
@@ -33245,7 +35147,7 @@ app.get('/auctions', async (request, reply) => {
   const limitParam = paramIdx;
   whereParams.push(limit + 1);
 
-  const whereClause = `WHERE ${whereConditions.join(' AND ')}${cursorCondition}`;
+  const whereClause = `WHERE ${whereConditions.join(' AND ')}${reachExclusion}${cursorCondition}`;
 
   const viewerParamIdx = paramIdx + 1;
   const viewerSelect = viewerUserId
@@ -33303,7 +35205,10 @@ app.get('/auctions', async (request, reply) => {
         a.winner_bidder_id AS auction_winner_id,
         a.created_at,
         l.title,
-        l.image_url,
+        COALESCE(
+          CASE WHEN cover_media.media_type = 'video' THEN cover_media.poster_url END,
+          l.image_url
+        ) AS image_url,
         l.brand,
         l.category,
         l.condition AS condition_label,
@@ -33313,6 +35218,13 @@ app.get('/auctions', async (request, reply) => {
         ${viewerSelect}
       FROM auctions a
       LEFT JOIN listings l ON l.id = a.listing_id
+      LEFT JOIN LATERAL (
+        SELECT li.media_type, li.poster_url
+        FROM listing_images li
+        WHERE li.listing_id = l.id
+        ORDER BY li.sort_order, li.created_at
+        LIMIT 1
+      ) cover_media ON true
       LEFT JOIN users u ON u.id = a.seller_id
       ${whereClause}
       ORDER BY ${orderBy}
@@ -33596,7 +35508,7 @@ app.post('/auctions', async (request, reply) => {
     // reactivated by the auction settlement sweep.
     await client.query(
       `UPDATE listings
-       SET status = 'paused', updated_at = NOW()
+       SET status = 'paused', pause_source = 'auction', updated_at = NOW()
        WHERE id = $1 AND status = 'active'`,
       [payload.listingId]
     );
@@ -33766,6 +35678,7 @@ app.post('/auctions/:auctionId/bids', {
     const auctionResult = await client.query<{
       id: string;
       seller_id: string;
+      listing_id: string;
       starts_at: string;
       ends_at: string;
       current_bid_gbp: number | string;
@@ -33776,12 +35689,30 @@ app.post('/auctions/:auctionId/bids', {
       settled_at: string | null;
       winner_bidder_id: string | null;
       winner_bid_id: number | null;
+      listing_title: string | null;
+      listing_image_url: string | null;
     }>(
       `
-        SELECT id, seller_id, starts_at, ends_at, current_bid_gbp, min_increment_gbp, bid_count, buy_now_price_gbp, cancelled_at, settled_at, winner_bidder_id, winner_bid_id
-        FROM auctions
-        WHERE id = $1
-        FOR UPDATE
+        SELECT a.id, a.seller_id, a.listing_id, a.starts_at, a.ends_at,
+               a.current_bid_gbp, a.min_increment_gbp, a.bid_count,
+               a.buy_now_price_gbp, a.cancelled_at, a.settled_at,
+               a.winner_bidder_id, a.winner_bid_id,
+               l.title AS listing_title,
+               COALESCE(
+                 CASE WHEN cover_media.media_type = 'video' THEN cover_media.poster_url END,
+                 l.image_url
+               ) AS listing_image_url
+        FROM auctions a
+        LEFT JOIN listings l ON l.id = a.listing_id
+        LEFT JOIN LATERAL (
+          SELECT li.media_type, li.poster_url
+          FROM listing_images li
+          WHERE li.listing_id = l.id
+          ORDER BY li.sort_order, li.created_at
+          LIMIT 1
+        ) cover_media ON true
+        WHERE a.id = $1
+        FOR UPDATE OF a
       `,
       [auctionId]
     );
@@ -33852,6 +35783,20 @@ app.post('/auctions/:auctionId/bids', {
         code: 'SELLER_AWAY',
         sellerAwayUntil: sellerAway.awayUntil,
         awayMessage: sellerAway.awayMessage,
+      };
+    }
+
+    // Seller reach (lib/sellerReach.ts): a 'suspended' seller is excluded
+    // from distribution — a winning bid would bind the buyer to a purchase
+    // that cannot settle, so the bid itself is rejected.
+    const bidSellerReach = await getSellerReach(client, auction.seller_id);
+    if (bidSellerReach?.state === 'suspended') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'This seller is currently restricted — their auctions are not available',
+        code: 'SELLER_RESTRICTED',
       };
     }
 
@@ -34083,9 +36028,13 @@ app.post('/auctions/:auctionId/bids', {
       await queueUserNotification({
         userId: auction.seller_id,
         title: 'New auction bid',
-        body: `A new bid of ${amountGbp.toFixed(2)} GBP was placed on auction ${auctionId}.`,
+        body: `A new bid of ${amountGbp.toFixed(2)} GBP was placed on ${auction.listing_title ?? `auction ${auctionId}`}.`,
+        eventType: 'auction_bid',
         payload: {
           auctionId,
+          listingId: auction.listing_id,
+          auctionTitle: auction.listing_title ?? undefined,
+          listingImage: auction.listing_image_url ?? undefined,
           bidderId,
           amountGbp,
           event: 'auction_bid',
@@ -34105,13 +36054,21 @@ app.post('/auctions/:auctionId/bids', {
         await queueUserNotification({
           userId: previousTopBidderId,
           title: 'You\'ve been outbid',
-          body: `Someone outbid you with ${amountGbp.toFixed(2)} GBP. Place a new bid to reclaim the top spot.`,
+          body: `Someone outbid you with ${amountGbp.toFixed(2)} GBP${auction.listing_title ? ` on ${auction.listing_title}` : ''}. Place a new bid to reclaim the top spot.`,
+          eventType: 'auction_outbid',
           payload: {
             auctionId,
+            listingId: auction.listing_id,
             event: 'auction_outbid',
             newBidAmountGbp: amountGbp,
+            // The next bid must beat the bid that just landed — the client
+            // reads this to prefill the bid sheet (notificationRouting.ts).
+            minimumNextBidGbp: roundTo(amountGbp + minIncrement, 2),
+            openBidSheet: true,
+            auctionTitle: auction.listing_title ?? undefined,
+            listingImage: auction.listing_image_url ?? undefined,
           },
-          route: { screen: 'AuctionDetail', params: { auctionId } },
+          route: { screen: 'AuctionDetail', params: { auctionId, openBidSheet: true } },
           metadata: {
             source: 'auction_outbid_route',
           },
@@ -34304,6 +36261,20 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
         code: 'SELLER_AWAY',
         sellerAwayUntil: sellerAway.awayUntil,
         awayMessage: sellerAway.awayMessage,
+      };
+    }
+
+    // Seller reach (lib/sellerReach.ts): a 'suspended' seller's listing
+    // must not be purchasable — Buy Now binds an order below, so it is
+    // rejected before the bid/order writes.
+    const buyNowSellerReach = await getSellerReach(client, auction.seller_id);
+    if (buyNowSellerReach?.state === 'suspended') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'This seller is currently restricted — their listings are not available for purchase',
+        code: 'SELLER_RESTRICTED',
       };
     }
 
@@ -34524,7 +36495,7 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
     // via the reconcile_listing_checkout_from_order trigger.
     await client.query(
       `UPDATE listings
-       SET status = 'sold', updated_at = NOW()
+       SET status = 'sold', pause_source = NULL, updated_at = NOW()
        WHERE id = $1`,
       [auction.listing_id]
     );
@@ -34575,6 +36546,7 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
         userId: auction.seller_id,
         title: 'Auction won via Buy Now',
         body: `Your auction was won via Buy Now for ${transactionAmountGbp.toFixed(2)} GBP.`,
+        eventType: 'auction_sold',
         payload: {
           auctionId,
           buyerId,
@@ -34698,7 +36670,10 @@ app.get('/auctions/:auctionId', async (request, reply) => {
         a.reserve_price_gbp,
         a.created_at,
         l.title,
-        l.image_url,
+        COALESCE(
+          CASE WHEN cover_media.media_type = 'video' THEN cover_media.poster_url END,
+          l.image_url
+        ) AS image_url,
         l.brand,
         l.category,
         l.condition AS condition_label,
@@ -34712,6 +36687,13 @@ app.get('/auctions/:auctionId', async (request, reply) => {
         ${viewerUserId ? `(SELECT MAX(ab.amount_gbp)::text FROM auction_bids ab WHERE ab.auction_id = a.id AND ab.bidder_id = $2)` : 'NULL::text'} AS viewer_highest_bid
       FROM auctions a
       LEFT JOIN listings l ON l.id = a.listing_id
+      LEFT JOIN LATERAL (
+        SELECT li.media_type, li.poster_url
+        FROM listing_images li
+        WHERE li.listing_id = l.id
+        ORDER BY li.sort_order, li.created_at
+        LIMIT 1
+      ) cover_media ON true
       LEFT JOIN users u ON u.id = a.seller_id
       WHERE a.id = $1
       LIMIT 1
@@ -34829,7 +36811,7 @@ app.get('/auctions/:auctionId', async (request, reply) => {
         avatarUrl: row.seller_avatar ?? null,
       },
       title: row.title ?? 'Untitled',
-      imageUrl: row.image_url ?? null,
+      imageUrl: (auctionMedia[0] ? listingMediaImageUrl(auctionMedia[0]) : row.image_url) ?? null,
       // Per spec 02_AUCTION Â§7: canonical media array. Empty until
       // the listing_media table is populated. imageUrl remains as a
       // compatibility field.
@@ -34962,7 +36944,10 @@ app.get('/auctions/watchlist', async (request, reply) => {
         a.cancelled_at,
         a.created_at,
         l.title,
-        l.image_url,
+        COALESCE(
+          CASE WHEN cover_media.media_type = 'video' THEN cover_media.poster_url END,
+          l.image_url
+        ) AS image_url,
         l.brand,
         l.category,
         l.condition AS condition_label,
@@ -34974,6 +36959,13 @@ app.get('/auctions/watchlist', async (request, reply) => {
       FROM auction_watchlist aw
       INNER JOIN auctions a ON a.id = aw.auction_id
       LEFT JOIN listings l ON l.id = a.listing_id
+      LEFT JOIN LATERAL (
+        SELECT li.media_type, li.poster_url
+        FROM listing_images li
+        WHERE li.listing_id = l.id
+        ORDER BY li.sort_order, li.created_at
+        LIMIT 1
+      ) cover_media ON true
       LEFT JOIN users u ON u.id = a.seller_id
       WHERE aw.user_id = $1 AND a.cancelled_at IS NULL${cursorCondition}
       ORDER BY aw.created_at DESC, aw.id DESC
@@ -35166,12 +37158,22 @@ app.get('/users/me/auction-bids', async (request, reply) => {
         a.settled_at,
         a.cancelled_at,
         l.title,
-        l.image_url,
+        COALESCE(
+          CASE WHEN cover_media.media_type = 'video' THEN cover_media.poster_url END,
+          l.image_url
+        ) AS image_url,
         a.seller_id,
         u.username AS seller_username
       FROM auction_bids ab
       INNER JOIN auctions a ON a.id = ab.auction_id
       LEFT JOIN listings l ON l.id = a.listing_id
+      LEFT JOIN LATERAL (
+        SELECT li.media_type, li.poster_url
+        FROM listing_images li
+        WHERE li.listing_id = l.id
+        ORDER BY li.sort_order, li.created_at
+        LIMIT 1
+      ) cover_media ON true
       LEFT JOIN users u ON u.id = a.seller_id
       WHERE ab.bidder_id = $1${cursorCondition}
       ORDER BY ab.created_at DESC, ab.id DESC
@@ -35446,6 +37448,15 @@ const start = async () => {
         handleScheduledPublicationSweepJob: async ({ reason }) => {
           await sweepScheduledPublications(reason);
         },
+        handleMediaIngestReconcileJob: async ({ reason }) => {
+          await reconcileMediaIngestJobs(reason);
+        },
+        handleMultipartSessionSweepJob: async ({ reason }) => {
+          await expireStaleMultipartSessions(reason);
+        },
+        handleOrphanUploadIntentSweepJob: async ({ reason }) => {
+          await sweepOrphanedUploadIntents(reason);
+        },
         handleAnalyticsAggregationJob: async () => {
           await aggregateAnalyticsDaily();
         },
@@ -35482,6 +37493,9 @@ const start = async () => {
     startPushReceiptReconciliationScheduler();
     startAutoFeedbackSweepScheduler();
     startScheduledPublicationSweepScheduler();
+    startMediaIngestReconcileScheduler();
+    startMultipartSessionSweepScheduler();
+    startOrphanIntentSweepScheduler();
     startPlatformReconciliationScheduler();
     startPlatformRevenueSweepScheduler();
     startOpsAlertingScheduler();
@@ -35489,6 +37503,8 @@ const start = async () => {
     startOnezeDailyAttestationScheduler();
     startOnezeFxSyncScheduler();
     startOnezeAutoAdjustScheduler();
+    startProviderSubmissionReconcileScheduler();
+    startCheckoutReservationSweepScheduler();
 
     // Configure the search index settings on startup (fire-and-forget).
     // Errors are swallowed inside configureSearchIndex so a misconfigured
@@ -35651,8 +37667,11 @@ async function getAccessiblePosterFrame(
     duration_ms: number;
     background_color: string | null;
     text_overlay: string | null;
+    poster_url: string | null;
+    download_media_url: string | null;
   }>(
-    `SELECT id, story_id, creator_id, media_url, caption, poster_caption, media_type, sort_order, duration_ms, background_color, text_overlay
+    `SELECT id, story_id, creator_id, media_url, caption, poster_caption, media_type, sort_order, duration_ms, background_color, text_overlay,
+            poster_url, download_media_url
      FROM posters WHERE id = $1 LIMIT 1`,
     [frameId]
   );
@@ -35680,8 +37699,11 @@ async function enrichPosterFrames(
     duration_ms: number;
     background_color: string | null;
     text_overlay: string | null;
+    poster_url: string | null;
+    download_media_url: string | null;
   }>(
-    `SELECT id, media_url, caption, poster_caption, media_type, sort_order, duration_ms, background_color, text_overlay
+    `SELECT id, media_url, caption, poster_caption, media_type, sort_order, duration_ms, background_color, text_overlay,
+            poster_url, download_media_url
      FROM posters WHERE story_id = $1 ORDER BY sort_order ASC`,
     [storyId]
   );
@@ -35771,6 +37793,8 @@ async function enrichPosterFrames(
   return framesResult.rows.map((row) => ({
     id: row.id,
     mediaUrl: row.media_url,
+    posterUrl: row.poster_url,
+    downloadUrl: row.download_media_url,
     caption: row.poster_caption || row.caption,
     mediaType: row.media_type,
     sortOrder: row.sort_order,
@@ -36063,6 +38087,8 @@ app.post('/poster-stories', async (request, reply) => {
       finalizationId: string;
       mediaAssetId: string | null;
       resolvedUrl: string;
+      posterUrl: string | null;
+      progressiveUrl: string;
     }>();
     for (const frame of payload.frames) {
       if (frame.mediaType === 'text') continue;
@@ -36077,13 +38103,15 @@ app.post('/poster-stories', async (request, reply) => {
         media_asset_id: string | null;
         media_asset_status: string | null;
         canonical_url: string | null;
+        media_asset_poster_url: string | null;
       }>(
         `SELECT finalization.id, finalization.owner_id,
                 finalization.public_url, finalization.content_type,
                 finalization.status, finalization.scope_ref_id,
                 finalization.media_asset_id,
                 asset.status AS media_asset_status,
-                asset.canonical_url
+                asset.canonical_url,
+                asset.metadata->>'posterUrl' AS media_asset_poster_url
          FROM upload_finalizations finalization
          LEFT JOIN media_assets asset
            ON asset.id = finalization.media_asset_id
@@ -36137,6 +38165,8 @@ app.post('/poster-stories', async (request, reply) => {
         resolvedUrl: config.mediaPublicationGateEnabled
           ? receipt.canonical_url!
           : (receipt.canonical_url ?? receipt.public_url),
+        posterUrl: receipt.media_asset_poster_url ?? null,
+        progressiveUrl: receipt.public_url,
       });
     }
 
@@ -36184,11 +38214,11 @@ app.post('/poster-stories', async (request, reply) => {
            id, creator_id, media_url, caption, poster_caption,
            background_color, layout, status, expiry_hours, story_id,
            media_type, sort_order, duration_ms, upload_finalization_id,
-           media_asset_id
+           media_asset_id, poster_url, download_media_url
          )
          VALUES (
            $1, $2, $3, $4, $4, $5, 'single', 'published', $6, $7,
-           $8, $9, $10, $11, $12
+           $8, $9, $10, $11, $12, $13, $14
          )`,
         [
           frame.id,
@@ -36203,6 +38233,8 @@ app.post('/poster-stories', async (request, reply) => {
           frame.durationMs,
           verifiedMedia?.finalizationId ?? null,
           verifiedMedia?.mediaAssetId ?? null,
+          frame.mediaType === 'video' ? verifiedMedia?.posterUrl ?? null : null,
+          frame.mediaType === 'video' ? verifiedMedia?.progressiveUrl ?? null : null,
         ]
       );
 
@@ -36963,8 +38995,12 @@ app.get('/users/:userId/poster-highlights', async (request) => {
       poster_caption: string;
       caption: string;
       background_color: string | null;
+      preview_url: string | null;
+      download_url: string | null;
     }>(
-      `SELECT phi.frame_id, phi.sort_order, p.media_url, p.media_type, p.poster_caption, p.caption, p.background_color
+      `SELECT phi.frame_id, phi.sort_order, p.media_url, p.media_type, p.poster_caption, p.caption, p.background_color,
+              COALESCE(p.poster_url, p.media_url) AS preview_url,
+              p.download_media_url AS download_url
        FROM poster_highlight_items phi
        JOIN posters p ON p.id = phi.frame_id
        WHERE phi.highlight_id = $1
@@ -36974,11 +39010,11 @@ app.get('/users/:userId/poster-highlights', async (request) => {
 
     let coverUrl: string | null = null;
     if (h.cover_frame_id) {
-      const coverResult = await db.query<{ media_url: string }>(
-        `SELECT media_url FROM posters WHERE id = $1 LIMIT 1`,
+      const coverResult = await db.query<{ preview_url: string | null }>(
+        `SELECT COALESCE(poster_url, media_url) AS preview_url FROM posters WHERE id = $1 LIMIT 1`,
         [h.cover_frame_id]
       );
-      coverUrl = coverResult.rows[0]?.media_url ?? null;
+      coverUrl = coverResult.rows[0]?.preview_url ?? null;
     }
 
     highlights.push({
@@ -36992,6 +39028,8 @@ app.get('/users/:userId/poster-highlights', async (request) => {
         frameId: r.frame_id,
         sortOrder: r.sort_order,
         mediaUrl: r.media_url,
+        previewUrl: r.preview_url,
+        downloadUrl: r.download_url,
         mediaType: r.media_type,
         caption: r.poster_caption || r.caption,
         backgroundColor: r.background_color,
@@ -37324,7 +39362,7 @@ registerListingIntelligenceRoutes({
 registerChatComposerStateRoutes({ app, db, resolveAuthenticatedUserId });
 registerVoiceMessageRoutes({ app, db, resolveAuthenticatedUserId });
 
-registerStreamingRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
+registerStreamingRoutes({ app, db, createApiError, resolveAuthenticatedUserId, queueUserNotification });
 
 registerLiveLotEngineRoutes({
   app,
@@ -37378,6 +39416,9 @@ const shutdown = async () => {
   stopPushReceiptReconciliationScheduler();
   stopAutoFeedbackSweepScheduler();
   stopScheduledPublicationSweepScheduler();
+  stopMediaIngestReconcileScheduler();
+  stopMultipartSessionSweepScheduler();
+  stopOrphanIntentSweepScheduler();
   stopPlatformReconciliationScheduler();
   stopPlatformRevenueSweepScheduler();
   stopOpsAlertingScheduler();
@@ -37385,6 +39426,8 @@ const shutdown = async () => {
   stopOnezeDailyAttestationScheduler();
   stopOnezeFxSyncScheduler();
   stopOnezeAutoAdjustScheduler();
+  stopProviderSubmissionReconcileScheduler();
+  stopCheckoutReservationSweepScheduler();
 
   try {
     await app.close();

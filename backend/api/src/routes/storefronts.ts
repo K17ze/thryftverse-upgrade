@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
+import { reachExcludedSql, reachJoinSql } from '../lib/sellerReach.js';
 
 // ── Storefront route dependencies ─────────────────────────────────────
 // Mirrors the pattern used by sellers.ts and creatorPublications.ts.
@@ -228,10 +229,15 @@ export const registerStorefrontRoutes = ({
       image_url: string | null;
       status: string;
     }>(
+      // Seller reach (lib/sellerReach.ts): a suspended seller's listings
+      // are excluded from distribution — the public storefront must not
+      // feature sellable items from a restricted seller.
       `SELECT l.id AS listing_id, l.title, l.price_gbp, l.image_url, l.status
        FROM storefront_featured_listings fl
        JOIN listings l ON l.id = fl.listing_id
+       ${reachJoinSql('reach_u', 'l.seller_id')}
        WHERE fl.storefront_id = $1
+         ${reachExcludedSql('reach_u')}
        ORDER BY fl.rank ASC`,
       [storefront.id]
     );

@@ -198,6 +198,12 @@ export function createPublishStyles(colors: ThemeColorsType) {
       lineHeight: TypographyV2.bodyStrong.lineHeight,
       letterSpacing: TypographyV2.bodyStrong.letterSpacing,
       color: colors.textPrimary },
+    progressSubLabel: {
+      fontFamily: TypographyV2.caption.fontFamily,
+      fontSize: TypographyV2.caption.size,
+      lineHeight: TypographyV2.caption.lineHeight,
+      letterSpacing: TypographyV2.caption.letterSpacing,
+      color: colors.textSecondary },
     progressBarTrack: {
       width: '100%',
       height: 4,

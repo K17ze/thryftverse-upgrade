@@ -1,11 +1,11 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
 import { Linking } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useToast } from '../../context/ToastContext';
 import { haptics } from '../../utils/haptics';
-import { parseApiError, fetchJson } from '../../lib/apiClient';
-import { shipOrder, assertHandoff, proposeDispatchExtension } from '../../services/commerceApi';
+import { parseApiError } from '../../lib/apiClient';
+import { shipOrder, assertHandoff, proposeDispatchExtension, generateShippingLabel } from '../../services/commerceApi';
 import {
   classifyShippingError,
   SHIPPING_ERROR_RECOVERY,
@@ -88,18 +88,24 @@ export function useSellerFulfilmentActions({
   const navigation = useNavigation<any>();
   const { show } = useToast();
 
+  // Synchronous in-flight guard for the money-adjacent dispatch mutations.
+  // `isDispatching` is React state — a double-tap reads the stale `false`
+  // before re-render and fires shipOrder twice (success toast + 409 error
+  // toast). The ref closes that window, mirroring useListingPublishPipeline.
+  const dispatchInFlightRef = useRef(false);
+  const extensionInFlightRef = useRef(false);
+
   const handleGenerateLabel = useCallback(async () => {
-    if (isGeneratingLabel) return;
+    // In-flight and already-labelled guards: the endpoint is idempotent but
+    // the CTA must not fire while a label exists or a request is running.
+    if (isGeneratingLabel || generatedLabelUrl) return;
     setIsGeneratingLabel(true);
     setLabelError(null);
     setLabelErrorCode(null);
     haptics.tap();
     try {
       const carrier = (snapshot?.carrierId ?? shippingProvider) || 'Royal Mail';
-      const res = await fetchJson<{ shippingLabelUrl?: string; trackingNumber?: string }>(
-        `/orders/${orderId}/shipping-label`,
-        { method: 'POST', body: JSON.stringify({ carrier }) }
-      );
+      const res = await generateShippingLabel(orderId, carrier);
       if (!isMountedRef.current) return;
       if (res.shippingLabelUrl) {
         setGeneratedLabelUrl(res.shippingLabelUrl);
@@ -108,16 +114,24 @@ export function useSellerFulfilmentActions({
       if (res.trackingNumber && !trackingNumber) {
         setTrackingNumber(res.trackingNumber);
       }
+      // The order carries the canonical label/tracking — refresh so the
+      // header state and any other surface reflect the persisted artifact.
+      await fetchOrder();
     } catch (error) {
       if (!isMountedRef.current) return;
       // Typed error classification via provider registry — no free-text matching.
       const errorCode = classifyShippingError(error);
       setLabelErrorCode(errorCode);
       setLabelError(SHIPPING_ERROR_RECOVERY[errorCode]);
+      if (errorCode === 'LABEL_ALREADY_CREATED') {
+        // A label already exists server-side — refresh so the persisted
+        // label surfaces instead of an error-only dead end.
+        await fetchOrder();
+      }
     } finally {
       if (isMountedRef.current) setIsGeneratingLabel(false);
     }
-  }, [isGeneratingLabel, orderId, snapshot, shippingProvider, trackingNumber, show, isMountedRef]);
+  }, [isGeneratingLabel, generatedLabelUrl, orderId, snapshot, shippingProvider, trackingNumber, show, isMountedRef, fetchOrder, setIsGeneratingLabel, setLabelError, setLabelErrorCode, setGeneratedLabelUrl, setTrackingNumber]);
 
   const handleShowQR = useCallback(() => {
     if (!generatedLabelUrl) return;
@@ -143,7 +157,7 @@ export function useSellerFulfilmentActions({
 
   // Manual dispatch: seller enters tracking and confirms.
   const handleManualDispatch = useCallback(async () => {
-    if (!canDispatch || isDispatching) return;
+    if (!canDispatch || isDispatching || dispatchInFlightRef.current) return;
     const tn = trackingNumber.trim();
     const carrier = shippingProvider.trim();
     if (!tn) {
@@ -154,6 +168,7 @@ export function useSellerFulfilmentActions({
       show('Select a carrier to confirm dispatch', 'info');
       return;
     }
+    dispatchInFlightRef.current = true;
     setIsDispatching(true);
     haptics.heavyPress();
     try {
@@ -165,6 +180,7 @@ export function useSellerFulfilmentActions({
     } catch (error) {
       show(parseApiError(error).message, 'error');
     } finally {
+      dispatchInFlightRef.current = false;
       if (isMountedRef.current) setIsDispatching(false);
     }
   }, [canDispatch, isDispatching, orderId, trackingNumber, shippingProvider, show, navigation, isMountedRef]);
@@ -176,7 +192,8 @@ export function useSellerFulfilmentActions({
   // It does NOT mutate the canonical order status — it only records the
   // seller's handoff claim for reconciliation purposes.
   const handleDroppedOffRecovery = useCallback(async () => {
-    if (isDispatching) return;
+    if (isDispatching || dispatchInFlightRef.current) return;
+    dispatchInFlightRef.current = true;
     setIsDispatching(true);
     haptics.heavyPress();
     try {
@@ -185,21 +202,26 @@ export function useSellerFulfilmentActions({
         shippingProvider: serviceName ?? undefined,
         labelUrl: generatedLabelUrl ?? undefined });
       show('Handoff recorded. Waiting for carrier scan to confirm tracking.', 'success');
-      navigation.goBack();
+      // Refresh the order — the handoff claim is persisted server-side and
+      // the screen stays on the "waiting for carrier scan" state, which is
+      // the truthful representation until the scan webhook arrives.
+      await fetchOrder();
     } catch (error) {
       show(parseApiError(error).message, 'error');
     } finally {
+      dispatchInFlightRef.current = false;
       if (isMountedRef.current) setIsDispatching(false);
     }
     // Defect fix: `generatedLabelUrl` is read above but was missing from the
     // original dep list — the callback closed over the stale (usually null)
     // value, so `labelUrl` was sent as undefined even after a label existed.
-  }, [canDispatch, isDispatching, orderId, trackingNumber, serviceName, generatedLabelUrl, show, navigation, isMountedRef]);
+  }, [canDispatch, isDispatching, orderId, trackingNumber, serviceName, generatedLabelUrl, show, isMountedRef, fetchOrder]);
 
   // Dispatch extension: seller proposes extra days; the new deadline takes
   // effect only if the buyer accepts. 409 = one already pending.
   const handleProposeExtension = useCallback(async () => {
-    if (!canProposeExtension || isProposingExtension || extensionDays == null) return;
+    if (!canProposeExtension || isProposingExtension || extensionDays == null || extensionInFlightRef.current) return;
+    extensionInFlightRef.current = true;
     setIsProposingExtension(true);
     haptics.tap();
     try {
@@ -211,6 +233,7 @@ export function useSellerFulfilmentActions({
     } catch (error) {
       show(parseApiError(error).message, 'error');
     } finally {
+      extensionInFlightRef.current = false;
       if (isMountedRef.current) setIsProposingExtension(false);
     }
   }, [canProposeExtension, isProposingExtension, extensionDays, orderId, show, fetchOrder, isMountedRef]);
@@ -218,6 +241,10 @@ export function useSellerFulfilmentActions({
   // Footer press — opens the confirmation sheet. A populated form gets the
   // real confirm action; an empty form gets an informational sheet.
   const handleDispatchConfirmPress = useCallback(() => {
+    // ConfirmationSheet does not auto-dismiss on confirm — every confirm
+    // path must close the sheet itself or the CTA reads as dead.
+    const closeSheet = () =>
+      setConfirmSheet((prev) => ({ ...prev, visible: false }));
     if (trackingNumber.trim() && shippingProvider.trim()) {
       setConfirmSheet({
         visible: true,
@@ -225,16 +252,21 @@ export function useSellerFulfilmentActions({
         message: `The order will be dispatched with ${shippingProvider} tracking number ${trackingNumber.trim()}. The buyer will be notified.`,
         confirmLabel: 'Confirm dispatch',
         cancelLabel: 'Not yet',
-        onConfirm: handleManualDispatch,
+        onConfirm: () => {
+          closeSheet();
+          void handleManualDispatch();
+        },
         variant: 'default' });
     } else {
+      // Informational sheet — 'Got it' dismisses; it is not a no-op action
+      // under a "Confirm dispatch?" title.
       setConfirmSheet({
         visible: true,
-        title: 'Confirm dispatch?',
+        title: 'Tracking details needed',
         message: 'Enter a tracking number and carrier to confirm dispatch.',
-        confirmLabel: 'OK',
+        confirmLabel: 'Got it',
         cancelLabel: 'Not yet',
-        onConfirm: () => {},
+        onConfirm: closeSheet,
         variant: 'default' });
     }
   }, [trackingNumber, shippingProvider, handleManualDispatch, setConfirmSheet]);

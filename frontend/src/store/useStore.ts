@@ -75,12 +75,13 @@ import {
 import {
   createCollection as createCollectionOnApi,
   listCollections as listCollectionsFromApi,
-  getCollection as getCollectionFromApi,
   addListingToCollection as addListingToCollectionOnApi,
   removeListingFromCollection as removeListingFromCollectionOnApi,
   updateCollection as updateCollectionOnApi,
   deleteCollectionOnApi,
 } from '../services/collectionsApi';
+import { fetchSavedList, setSavedListItem } from '../services/savedListsApi';
+import { trackListingInteraction } from '../services/listingsApi';
 
 export interface User {
   id: string;
@@ -417,8 +418,16 @@ interface StoreState {
   // Auth
   currentUser: User | null;
   isAuthenticated: boolean;
+  /**
+   * One-shot flag set when logout was triggered by an expired/invalid session
+   * (refresh-token failure), not by the user. AuthLanding renders an explicit
+   * "session expired" notice once and clears it — a forced sign-out must never
+   * be a silent redirect.
+   */
+  sessionExpiredNotice: boolean;
+  clearSessionExpiredNotice: () => void;
   login: (user: User) => void;
-  logout: () => void;
+  logout: (opts?: { sessionExpired?: boolean }) => void;
   updateUserProfile: (updates: Partial<User>) => void;
   fetchMyProfile: () => Promise<void>;
   /**
@@ -445,6 +454,10 @@ interface StoreState {
   savedProducts: string[];
   toggleSavedProduct: (id: string) => void;
   isSavedProduct: (id: string) => boolean;
+  /** Pull the server-canonical wishlist + saved id lists (post-login and
+   *  Closet mount). Local-only entries for this device are preserved via a
+   *  merge so an offline save never vanishes on hydrate. */
+  hydrateSavedLists: () => Promise<void>;
   // Collections (replaces simple saved)
   collections: Collection[];
   createCollection: (name: string, description?: string, isPrivate?: boolean) => string;
@@ -453,7 +466,6 @@ interface StoreState {
   deleteCollection: (id: string) => void;
   deleteCollectionOnApi: (id: string) => Promise<void>;
   renameCollection: (id: string, name: string) => void;
-  reorderCollections: (fromIndex: number, toIndex: number) => void;
   updateCollectionOnApi: (id: string, fields: { name?: string; description?: string | null; isPrivate?: boolean }) => Promise<void>;
   addToCollection: (collectionId: string, itemId: string) => void;
   addToCollectionOnApi: (collectionId: string, itemId: string) => Promise<void>;
@@ -772,6 +784,8 @@ export const useStore = create<StoreState>()(
     (set, get) => ({
   currentUser: null, // Note: For a real app, load this from secure storage initially
   isAuthenticated: false,
+  sessionExpiredNotice: false,
+  clearSessionExpiredNotice: () => set({ sessionExpiredNotice: false }),
   biometricLoginPending: false,
   setBiometricLoginPending: (value) => set({ biometricLoginPending: value }),
   hasCompletedOnboarding: false,
@@ -800,13 +814,16 @@ export const useStore = create<StoreState>()(
     // Saved searches: pull the server-canonical list and backfill any
     // local-only entries so the server-side matcher covers this account.
     get().hydrateSavedSearches().catch(() => undefined);
+    // Saved lists: same adoption pattern — local-only saves (made while
+    // logged out or offline) are pushed up so the account owns them.
+    get().hydrateSavedLists().catch(() => undefined);
     // Account preferences: holidayMode is persisted locally but the
     // server is authoritative — rehydrate so a stale cached flag can't
     // keep the shop visually paused (or unpaused) after relogin.
     get().hydrateAccountPreferences().catch(() => undefined);
   },
-  logout: () => {
-    set({ currentUser: null, isAuthenticated: false, twoFactorEnabled: false, biometricLoginPending: false, blockedUsers: [], mutedUsers: [], restrictedUsers: [], coOwnWatchlist: [], coOwnWatchStatus: {}, savedSearches: [] });
+  logout: (opts) => {
+    set({ currentUser: null, isAuthenticated: false, twoFactorEnabled: false, biometricLoginPending: false, blockedUsers: [], mutedUsers: [], restrictedUsers: [], coOwnWatchlist: [], coOwnWatchStatus: {}, savedSearches: [], wishlist: [], savedProducts: [], collections: [], sessionExpiredNotice: opts?.sessionExpired === true });
     persistLocalAuthSnapshot(null, false);
     // Scrub Sentry user context on logout so subsequent crashes are anonymous.
     setSentryUser(null);
@@ -871,15 +888,17 @@ export const useStore = create<StoreState>()(
     set({ wishlist: next });
     queryClient.setQueryData<string[]>(queryKeys.wishlist.items, next);
     if (!get().isAuthenticated) return;
-    void fetchJson<{ ok: boolean; itemIds?: string[] }>('/users/me/wishlist', {
-      method: 'POST',
-      body: JSON.stringify({ listingId: id, action: isFav ? 'remove' : 'add' }),
-    })
-      .then((res) => {
-        if (res.ok && Array.isArray(res.itemIds)) {
-          set({ wishlist: res.itemIds });
-          queryClient.setQueryData<string[]>(queryKeys.wishlist.items, res.itemIds);
-        }
+    // Engagement signal: the heart is the 'like' vocabulary (stored as
+    // 'wishlist' — what seller analytics count). The deterministic key means
+    // a save/unsave/save cycle still records exactly once.
+    if (!isFav) {
+      void trackListingInteraction(id, 'like', { idempotencyKey: `like_${id}` })
+        .catch(() => undefined);
+    }
+    void setSavedListItem('wishlist', id, isFav ? 'remove' : 'add')
+      .then((itemIds) => {
+        set({ wishlist: itemIds });
+        queryClient.setQueryData<string[]>(queryKeys.wishlist.items, itemIds);
       })
       .catch(() => {
         // Sync failure keeps the local toggle (offline / guest semantics).
@@ -887,16 +906,48 @@ export const useStore = create<StoreState>()(
   },
   isWishlisted: (id) => get().wishlist.includes(id),
   savedProducts: [],
-  toggleSavedProduct: (id) =>
-    set((state) => {
-      const isSaved = state.savedProducts.includes(id);
-      return {
-        savedProducts: isSaved
-          ? state.savedProducts.filter((savedId) => savedId !== id)
-          : [...state.savedProducts, id],
-      };
-    }),
+  // Same contract as toggleWishlist: instant local toggle, server sync when
+  // authenticated. A failed sync keeps the local toggle (offline / guest
+  // semantics) — hydrateSavedLists adopts it on next login.
+  toggleSavedProduct: (id) => {
+    const previous = get().savedProducts;
+    const isSaved = previous.includes(id);
+    const next = isSaved
+      ? previous.filter((savedId) => savedId !== id)
+      : [...previous, id];
+    set({ savedProducts: next });
+    if (!get().isAuthenticated) return;
+    void setSavedListItem('saved', id, isSaved ? 'remove' : 'add')
+      .then((itemIds) => set({ savedProducts: itemIds }))
+      .catch(() => {
+        // Sync failure keeps the local toggle (offline / guest semantics).
+      });
+  },
   isSavedProduct: (id) => get().savedProducts.includes(id),
+  hydrateSavedLists: async () => {
+    if (!get().isAuthenticated) return;
+    const [wishlistRes, savedRes] = await Promise.all([
+      fetchSavedList('wishlist'),
+      fetchSavedList('saved'),
+    ]);
+    // Adopt local-only entries: saves made while logged out/offline are
+    // pushed up so the account owns them, then the union becomes state.
+    const adopt = async (list: 'wishlist' | 'saved', serverIds: string[], localIds: string[]) => {
+      const serverSet = new Set(serverIds);
+      const orphans = localIds.filter((id) => !serverSet.has(id));
+      await Promise.all(orphans.map((id) =>
+        setSavedListItem(list, id, 'add').catch(() => undefined)));
+      return orphans.length > 0
+        ? [...serverIds, ...orphans]
+        : serverIds;
+    };
+    const [wishlist, savedProducts] = await Promise.all([
+      adopt('wishlist', wishlistRes.itemIds, get().wishlist),
+      adopt('saved', savedRes.itemIds, get().savedProducts),
+    ]);
+    set({ wishlist, savedProducts });
+    queryClient.setQueryData<string[]>(queryKeys.wishlist.items, wishlist);
+  },
   collections: [],
   createCollection: (name, description, isPrivate) => {
     const id = makeStableId('collection', 9);
@@ -929,16 +980,21 @@ export const useStore = create<StoreState>()(
   },
   loadCollectionsFromApi: async () => {
     const apiCollections = await listCollectionsFromApi();
-    set(() => ({
-      collections: apiCollections.map((c) => ({
-        id: c.id,
-        name: c.name,
-        description: c.description ?? undefined,
-        isPrivate: c.isPrivate,
-        itemIds: c.itemIds,
-        createdAt: new Date(c.createdAt).getTime(),
-        updatedAt: new Date(c.updatedAt).getTime(),
-      })),
+    set((state) => ({
+      collections: [
+        ...apiCollections.map((c) => ({
+          id: c.id,
+          name: c.name,
+          description: c.description ?? undefined,
+          isPrivate: c.isPrivate,
+          itemIds: c.itemIds,
+          createdAt: new Date(c.createdAt).getTime(),
+          updatedAt: new Date(c.updatedAt).getTime(),
+        })),
+        // Local-id collections (legacy local path / pre-auth creates) aren't
+        // server rows — dropping them would silently wipe user-made boards.
+        ...state.collections.filter((c) => c.id.startsWith('collection_')),
+      ],
     }));
   },
   deleteCollection: (id) =>
@@ -951,13 +1007,6 @@ export const useStore = create<StoreState>()(
         c.id === id ? { ...c, name, updatedAt: Date.now() } : c
       ),
     })),
-  reorderCollections: (fromIndex, toIndex) =>
-    set((state) => {
-      const next = [...state.collections];
-      const [moved] = next.splice(fromIndex, 1);
-      if (moved) next.splice(toIndex, 0, moved);
-      return { collections: next };
-    }),
   updateCollectionOnApi: async (id, fields) => {
     await updateCollectionOnApi(id, fields);
     set((state) => ({

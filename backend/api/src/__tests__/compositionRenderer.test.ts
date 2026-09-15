@@ -19,15 +19,29 @@ import { Buffer } from 'node:buffer';
 
 const ffmpegMock = vi.hoisted(() => ({
   runFfmpeg: vi.fn(),
+  runFfmpegStreaming: vi.fn(),
 }));
 
 const ffprobeMock = vi.hoisted(() => ({
   probeMedia: vi.fn(),
 }));
 
+const s3Mock = vi.hoisted(() => ({
+  createMultipartUpload: vi.fn(),
+  uploadPartObject: vi.fn(),
+  completeMultipartUpload: vi.fn(),
+  abortMultipartUpload: vi.fn(),
+  putBinaryObject: vi.fn(),
+}));
+
 vi.mock('../lib/media/ffmpeg.js', () => ({
   runFfmpeg: ffmpegMock.runFfmpeg,
+  runFfmpegStreaming: ffmpegMock.runFfmpegStreaming,
 }));
+
+// compositionRenderer transitively imports lib/s3 via streamingUpload —
+// mock it so no AWS config/credentials are needed under test.
+vi.mock('../lib/s3.js', () => s3Mock);
 
 vi.mock('../lib/media/ffprobe.js', () => ({
   probeMedia: ffprobeMock.probeMedia,
@@ -962,5 +976,373 @@ describe('isCompositionNonTrivial — filter effects', () => {
 
   it('returns false for a plain image with no effects', () => {
     expect(isCompositionNonTrivial(imageDocWithEffects([]))).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Keyframe export realization — authored layer animation must reach the
+// rendered artifact (preview/export parity). The backend ports the frontend
+// evaluator and samples it once per output frame.
+// ---------------------------------------------------------------------------
+
+const KF_POSITION = [
+  { id: 'k1', layerId: 'text_1', property: 'position', timeMs: 0, value: 0.2, easing: 'linear' },
+  { id: 'k2', layerId: 'text_1', property: 'position', timeMs: 1000, value: 0.8, easing: 'linear' },
+];
+
+const KF_SCALE = [
+  { id: 'k1', layerId: 's', property: 'scale', timeMs: 0, value: 1, easing: 'ease-in-out' },
+  { id: 'k2', layerId: 's', property: 'scale', timeMs: 500, value: 1.5, easing: 'ease-in-out' },
+];
+
+describe('keyframe render-path classification', () => {
+  it('isCompositionNonTrivial is true when a media layer carries keyframes', () => {
+    const doc = videoDoc({ videoDurationMs: 10000 }) as {
+      pages: Array<{ layers: Array<Record<string, unknown>> }>;
+    };
+    doc.pages[0]!.layers[0]!['keyframes'] = KF_SCALE;
+    expect(isCompositionNonTrivial(doc)).toBe(true);
+  });
+
+  it('isCompositionNonTrivial is true when an overlay layer carries keyframes', () => {
+    const doc = videoDocWithLayers(
+      [{
+        id: 'text_1', type: 'text', x: 0.5, y: 0.2, width: 0.8, height: 0.12,
+        scale: 1, rotation: 0, zIndex: 1, hidden: false, opacity: 1,
+        keyframes: KF_POSITION,
+        payload: { text: 'Hi', textColor: '#ffffff', fontSize: 48 },
+      }],
+      { videoDurationMs: 10000 },
+    );
+    expect(isCompositionNonTrivial(doc)).toBe(true);
+  });
+
+  it('classifies a keyframed media layer as transcode (never trivial/remux)', () => {
+    const doc = videoDoc({ videoDurationMs: 10000 }) as {
+      pages: Array<{ layers: Array<Record<string, unknown>> }>;
+    };
+    doc.pages[0]!.layers[0]!['keyframes'] = KF_SCALE;
+    expect(getVideoRenderPath(doc)).toBe('transcode');
+  });
+
+  it('classifies a keyframed overlay layer as transcode', () => {
+    const doc = videoDocWithLayers(
+      [{
+        id: 'sticker_1', type: 'mention', x: 0.5, y: 0.85, width: 0.3, height: 0.08,
+        scale: 1, rotation: 0, zIndex: 1, hidden: false, opacity: 1,
+        keyframes: KF_SCALE,
+        payload: { username: 'creator' },
+      }],
+      { videoDurationMs: 10000 },
+    );
+    expect(getVideoRenderPath(doc)).toBe('transcode');
+  });
+});
+
+describe('renderComposition — keyframed layers', () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    fetchSpy = vi.spyOn(globalThis, 'fetch');
+    ffmpegMock.runFfmpeg.mockReset();
+    ffprobeMock.probeMedia.mockReset();
+    fsMock.writeFile.mockReset();
+    fsMock.readFile.mockReset();
+    fsMock.rm.mockReset();
+
+    ffmpegMock.runFfmpeg.mockResolvedValue(undefined);
+    ffprobeMock.probeMedia.mockResolvedValue(defaultProbeResult());
+    fsMock.writeFile.mockResolvedValue(undefined);
+    fsMock.readFile.mockResolvedValue(FAKE_MP4);
+    fsMock.rm.mockResolvedValue(undefined);
+    fetchSpy.mockResolvedValue(new Response(FAKE_MP4, { status: 200 }));
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('expresses position/opacity keyframes as drawtext t-expressions', async () => {
+    const doc = videoDocWithLayers(
+      [{
+        id: 'text_1', type: 'text', x: 0.5, y: 0.2, width: 0.8, height: 0.12,
+        scale: 1, rotation: 0, zIndex: 1, hidden: false, opacity: 1,
+        keyframes: [
+          ...KF_POSITION,
+          { id: 'k3', layerId: 'text_1', property: 'opacity', timeMs: 0, value: 0.4, easing: 'linear' },
+        ],
+        payload: { text: 'Moving', textColor: '#ffffff', fontSize: 48 },
+      }],
+      { videoDurationMs: 10000 },
+    );
+
+    await renderComposition(doc, 'https://cdn.example.com/clip.mp4');
+
+    const args = ffmpegMock.runFfmpeg.mock.calls[0]![0] as string[];
+    const allArgs = args.join(' ');
+    // drawtext x is a per-frame staircase expression, not a static number.
+    expect(allArgs).toContain('drawtext');
+    expect(allArgs).toMatch(/x='\(?if\(between\(t,/);
+    // Opacity keyframes emit an alpha expression folding the static opacity.
+    expect(allArgs).toMatch(/alpha='\(/);
+  });
+
+  it('routes scale/rotation-keyframed text through the animated PNG path', async () => {
+    const doc = videoDocWithLayers(
+      [{
+        id: 'text_1', type: 'text', x: 0.5, y: 0.5, width: 0.6, height: 0.1,
+        scale: 1, rotation: 0, zIndex: 1, hidden: false, opacity: 1,
+        keyframes: KF_SCALE,
+        payload: { text: 'Scaling', textColor: '#ffffff', fontSize: 48 },
+      }],
+      { videoDurationMs: 10000 },
+    );
+
+    await renderComposition(doc, 'https://cdn.example.com/clip.mp4');
+
+    const args = ffmpegMock.runFfmpeg.mock.calls[0]![0] as string[];
+    // A looped PNG input is added for the animated layer.
+    expect(args).toContain('-loop');
+    const fc = args[args.indexOf('-filter_complex') + 1] as string;
+    // Per-frame scale is realized via eval=frame on the PNG input.
+    expect(fc).toContain('scale=eval=frame');
+    expect(fc).toContain('overlay');
+  });
+
+  it('emits an animated input chain for keyframed sticker layers', async () => {
+    const doc = videoDocWithLayers(
+      [{
+        id: 'sticker_1', type: 'mention', x: 0.5, y: 0.85, width: 0.3, height: 0.08,
+        scale: 1, rotation: 15, zIndex: 1, hidden: false, opacity: 1,
+        keyframes: KF_SCALE,
+        payload: { username: 'creator' },
+      }],
+      { videoDurationMs: 10000 },
+    );
+
+    await renderComposition(doc, 'https://cdn.example.com/clip.mp4');
+
+    const args = ffmpegMock.runFfmpeg.mock.calls[0]![0] as string[];
+    const fc = args[args.indexOf('-filter_complex') + 1] as string;
+    // Static rotation (15°) folds into the rotate filter — previously the
+    // static composite path dropped rotation entirely.
+    expect(fc).toContain('rotate');
+    expect(fc).toContain('15.0000');
+    // Centre-anchored overlay with per-frame size.
+    expect(fc).toMatch(/overlay=x='\([^']*\)\*main_w-overlay_w\/2'/);
+  });
+
+  it('wraps keyframed media onto a canvas background before compositing', async () => {
+    const doc = videoDoc({ videoDurationMs: 10000 }) as {
+      pages: Array<{ layers: Array<Record<string, unknown>> }>;
+    };
+    doc.pages[0]!.layers[0]!['keyframes'] = [
+      { id: 'k1', layerId: 'media_1', property: 'position', timeMs: 0, value: 0.5, easing: 'linear' },
+      { id: 'k2', layerId: 'media_1', property: 'position', timeMs: 1000, value: 0.5, easing: 'linear' },
+    ];
+
+    await renderComposition(doc, 'https://cdn.example.com/clip.mp4');
+
+    const args = ffmpegMock.runFfmpeg.mock.calls[0]![0] as string[];
+    const fc = args[args.indexOf('-filter_complex') + 1] as string;
+    // The media stream is animated and composited over a canvas-colour bg.
+    expect(fc).toContain('color=c=');
+    expect(fc).toContain('[vmed]');
+    expect(fc).toMatch(/\[bgv\]\[vmed\]overlay/);
+  });
+
+  it('keeps unkeyframed text on the cheap -vf drawtext path', async () => {
+    const doc = videoDocWithLayers(
+      [{
+        id: 'text_1', type: 'text', x: 0.5, y: 0.2, width: 0.8, height: 0.12,
+        scale: 1, rotation: 0, zIndex: 1, hidden: false, opacity: 1,
+        payload: { text: 'Static', textColor: '#ffffff', fontSize: 48 },
+      }],
+      { videoDurationMs: 10000 },
+    );
+
+    await renderComposition(doc, 'https://cdn.example.com/clip.mp4');
+
+    const args = ffmpegMock.runFfmpeg.mock.calls[0]![0] as string[];
+    // No keyframes → simple -vf path, no -filter_complex, no loop inputs.
+    expect(args).toContain('-vf');
+    expect(args).not.toContain('-filter_complex');
+    expect(args).not.toContain('-loop');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Transcode-upload overlap — when the caller supplies a streamOutput target,
+// the transcode writes fragmented MP4 to a pipe whose byte ranges upload as
+// S3 multipart parts while FFmpeg is still encoding.
+// ---------------------------------------------------------------------------
+
+describe('renderComposition — streamed transcode upload', () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  const speedDoc = () => videoDoc({ speed: 2, videoDurationMs: 10000 });
+  const streamTarget = {
+    objectKey: 'renders/doc-1/composition_test.mp4',
+    contentType: 'video/mp4',
+    cacheControl: 'public, max-age=31536000, immutable',
+  };
+
+  beforeEach(() => {
+    fetchSpy = vi.spyOn(globalThis, 'fetch');
+    ffmpegMock.runFfmpeg.mockReset();
+    ffmpegMock.runFfmpegStreaming.mockReset();
+    ffprobeMock.probeMedia.mockReset();
+    fsMock.writeFile.mockReset();
+    fsMock.readFile.mockReset();
+    fsMock.rm.mockReset();
+    s3Mock.createMultipartUpload.mockReset();
+    s3Mock.uploadPartObject.mockReset();
+    s3Mock.completeMultipartUpload.mockReset();
+    s3Mock.abortMultipartUpload.mockReset();
+    s3Mock.putBinaryObject.mockReset();
+
+    ffmpegMock.runFfmpeg.mockResolvedValue(undefined);
+    ffprobeMock.probeMedia.mockResolvedValue(defaultProbeResult());
+    fsMock.writeFile.mockResolvedValue(undefined);
+    fsMock.readFile.mockResolvedValue(FAKE_MP4);
+    fsMock.rm.mockResolvedValue(undefined);
+    fetchSpy.mockResolvedValue(new Response(FAKE_MP4, { status: 200 }));
+
+    s3Mock.createMultipartUpload.mockResolvedValue({
+      uploadId: 'upl-1', key: streamTarget.objectKey, bucket: 'b',
+    });
+    s3Mock.uploadPartObject.mockImplementation(
+      (_k: string, _u: string, partNumber: number) =>
+        Promise.resolve({ etag: `etag-${partNumber}` }),
+    );
+    s3Mock.completeMultipartUpload.mockResolvedValue({
+      location: `https://cdn.example.com/media/${streamTarget.objectKey}`,
+      key: streamTarget.objectKey,
+      bucket: 'b',
+    });
+    s3Mock.abortMultipartUpload.mockResolvedValue(undefined);
+    s3Mock.putBinaryObject.mockResolvedValue(
+      `https://cdn.example.com/media/${streamTarget.objectKey}`,
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('emits a fragmented-MP4 pipe output instead of a faststart file', async () => {
+    ffmpegMock.runFfmpegStreaming.mockImplementation(
+      async (_args: string[], onChunk?: (c: Buffer) => Promise<void>) => {
+        await onChunk?.(FAKE_MP4);
+      },
+    );
+
+    const rendered = await renderComposition(speedDoc(), 'https://cdn.example.com/clip.mp4', {
+      streamOutput: streamTarget,
+    });
+
+    expect(ffmpegMock.runFfmpegStreaming).toHaveBeenCalledTimes(1);
+    expect(ffmpegMock.runFfmpeg).not.toHaveBeenCalled();
+    const args = ffmpegMock.runFfmpegStreaming.mock.calls[0]![0] as string[];
+    expect(args[args.length - 1]).toBe('pipe:1');
+    const movflags = args[args.indexOf('-movflags') + 1];
+    expect(movflags).toContain('frag_keyframe');
+    expect(movflags).toContain('empty_moov');
+    expect(movflags).not.toContain('faststart');
+
+    // Small stream (< one 8MB part) completes via plain PutObject.
+    expect(s3Mock.createMultipartUpload).not.toHaveBeenCalled();
+    expect(s3Mock.putBinaryObject).toHaveBeenCalledWith(
+      streamTarget.objectKey, FAKE_MP4, 'video/mp4',
+      { cacheControl: streamTarget.cacheControl },
+    );
+    expect(rendered?.url).toBe(`https://cdn.example.com/media/${streamTarget.objectKey}`);
+    expect(rendered?.buffer).toBeUndefined();
+  });
+
+  it('uploads >=8MB ranges as multipart parts while encoding', async () => {
+    const partSize = 8 * 1024 * 1024;
+    ffmpegMock.runFfmpegStreaming.mockImplementation(
+      async (_args: string[], onChunk?: (c: Buffer) => Promise<void>) => {
+        // One full part + a trailing partial part.
+        await onChunk?.(Buffer.alloc(partSize, 1));
+        await onChunk?.(Buffer.alloc(1024, 2));
+      },
+    );
+
+    const rendered = await renderComposition(speedDoc(), 'https://cdn.example.com/clip.mp4', {
+      streamOutput: streamTarget,
+    });
+
+    expect(s3Mock.createMultipartUpload).toHaveBeenCalledWith(
+      streamTarget.objectKey, 'video/mp4', { cacheControl: streamTarget.cacheControl },
+    );
+    expect(s3Mock.uploadPartObject).toHaveBeenCalledTimes(2);
+    expect(s3Mock.completeMultipartUpload).toHaveBeenCalledWith(
+      streamTarget.objectKey, 'upl-1',
+      [{ partNumber: 1, etag: 'etag-1' }, { partNumber: 2, etag: 'etag-2' }],
+    );
+    expect(s3Mock.putBinaryObject).not.toHaveBeenCalled();
+    expect(rendered?.url).toBe(`https://cdn.example.com/media/${streamTarget.objectKey}`);
+    expect(rendered?.sizeBytes).toBe(partSize + 1024);
+  });
+
+  it('aborts the multipart session when the transcode fails mid-stream', async () => {
+    const partSize = 8 * 1024 * 1024;
+    ffmpegMock.runFfmpegStreaming.mockImplementation(
+      async (_args: string[], onChunk?: (c: Buffer) => Promise<void>) => {
+        await onChunk?.(Buffer.alloc(partSize, 1));
+        throw new Error('ffmpeg exploded');
+      },
+    );
+
+    const rendered = await renderComposition(speedDoc(), 'https://cdn.example.com/clip.mp4', {
+      streamOutput: streamTarget,
+    });
+
+    // Non-trivial render failure → null (caller aborts publication).
+    expect(rendered).toBeNull();
+    expect(s3Mock.abortMultipartUpload).toHaveBeenCalledWith(streamTarget.objectKey, 'upl-1');
+    expect(s3Mock.completeMultipartUpload).not.toHaveBeenCalled();
+  });
+
+  it('keeps the buffered path when streamOutput is not supplied', async () => {
+    const rendered = await renderComposition(speedDoc(), 'https://cdn.example.com/clip.mp4');
+
+    expect(ffmpegMock.runFfmpegStreaming).not.toHaveBeenCalled();
+    expect(ffmpegMock.runFfmpeg).toHaveBeenCalledTimes(1);
+    const args = ffmpegMock.runFfmpeg.mock.calls[0]![0] as string[];
+    expect(args[args.indexOf('-movflags') + 1]).toBe('+faststart');
+    expect(rendered?.buffer).toBeDefined();
+  });
+});
+
+describe('static media-layer transforms', () => {
+  it('classifies static media rotation as transcode', () => {
+    const doc = videoDoc({ videoDurationMs: 10000 }) as {
+      pages: Array<{ layers: Array<Record<string, unknown>> }>;
+    };
+    doc.pages[0]!.layers[0]!['rotation'] = 15;
+    expect(getVideoRenderPath(doc)).toBe('transcode');
+    expect(isCompositionNonTrivial(doc)).toBe(true);
+  });
+
+  it('classifies static media scale as transcode', () => {
+    const doc = videoDoc({ videoDurationMs: 10000 }) as {
+      pages: Array<{ layers: Array<Record<string, unknown>> }>;
+    };
+    doc.pages[0]!.layers[0]!['scale'] = 0.7;
+    expect(getVideoRenderPath(doc)).toBe('transcode');
+  });
+
+  it('classifies off-centre or partial-size media as transcode', () => {
+    const doc = videoDoc({ videoDurationMs: 10000 }) as {
+      pages: Array<{ layers: Array<Record<string, unknown>> }>;
+    };
+    doc.pages[0]!.layers[0]!['x'] = 0.3;
+    expect(getVideoRenderPath(doc)).toBe('transcode');
+    doc.pages[0]!.layers[0]!['x'] = 0.5;
+    doc.pages[0]!.layers[0]!['width'] = 0.8;
+    expect(getVideoRenderPath(doc)).toBe('transcode');
   });
 });

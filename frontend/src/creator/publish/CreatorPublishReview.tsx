@@ -3,9 +3,9 @@ import { View, Text, Pressable, ScrollView, TextInput, Switch, useWindowDimensio
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, IconGrammar } from '../../theme/designTokens';
-import { useCreator } from '../CreatorContext';
-import { CreatorCanvas } from '../CreatorCanvas';
-import { PressScale } from '../CreatorAnimations';
+import { useCreator } from '../studio/CreatorContext';
+import { CreatorCanvas } from '../studio/CreatorCanvas';
+import { PressScale } from '../shared/CreatorAnimations';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useConnectivity } from '../../hooks/useConnectivity';
 import { KeyboardAwareScrollView, KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';

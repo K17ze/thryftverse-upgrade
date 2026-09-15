@@ -1,13 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
 import type { LookApiItem } from '../../services/looksApi';
-import {
-  fetchPublicProfileAggregate,
-  followUser,
-  unfollowUser,
-  type PublicProfileAggregate } from '../../services/profileApi';
+import type { PublicProfileAggregate } from '../../services/profileApi';
+import { usePublicProfileQuery } from '../../platform/server/usePublicProfileQuery';
+import { useFollowMutation } from '../../platform/server/useProfileSocialQueries';
 import { useHaptic } from '../useHaptic';
 import { useToast } from '../../context/ToastContext';
 
@@ -25,6 +23,10 @@ export interface UseCreatorFollowResult {
 /**
  * Owns the creator-relationship domain: the public-profile aggregate fetch
  * (follow state + provenance) and the optimistic follow/unfollow toggle.
+ *
+ * Uses the shared React Query profile cache and the canonical
+ * useFollowMutation so follow state stays consistent across look detail,
+ * profiles, connection lists and the following feed.
  */
 export function useCreatorFollow(
   look: LookApiItem | null,
@@ -34,61 +36,29 @@ export function useCreatorFollow(
   const haptic = useHaptic();
   const { show } = useToast();
 
-  // Creator relationship — fetched so the Follow button reflects server truth.
-  const [creatorProfile, setCreatorProfile] = useState<PublicProfileAggregate | null>(null);
-  const [isFollowing, setIsFollowing] = useState(false);
-  const [followBusy, setFollowBusy] = useState(false);
+  const creatorId = look?.creator?.id;
+  const profileQuery = usePublicProfileQuery(creatorId);
+  const followMutation = useFollowMutation(creatorId ?? '');
 
-  // Fetch the creator's public profile (for follow state + provenance).
-  // Runs after the look loads.
-  useEffect(() => {
-    if (!look?.creator?.id) return;
-    const creatorId = look.creator.id;
-    let cancelled = false;
-
-    fetchPublicProfileAggregate(creatorId)
-      .then((agg) => {
-        if (cancelled) return;
-        setCreatorProfile(agg);
-        setIsFollowing(agg.viewer?.isFollowing ?? false);
-      })
-      .catch(() => {
-        // Profile fetch is non-fatal — the Follow button simply stays in its
-        // default resting state.
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [look]);
+  const creatorProfile = profileQuery.aggregate ?? null;
+  const isFollowing = creatorProfile?.viewer?.isFollowing ?? false;
+  const followBusy = followMutation.isPending;
 
   const handleFollow = useCallback(async () => {
-    if (!look?.creator?.id) return;
+    if (!creatorId) return;
     if (!currentUserId) {
       show('Sign in to follow creators', 'info');
       navigation.navigate('Login');
       return;
     }
     if (followBusy) return;
-    const next = !isFollowing;
-    setFollowBusy(true);
     haptic.light();
-    // Optimistic update.
-    setIsFollowing(next);
     try {
-      if (next) {
-        await followUser(look.creator.id);
-      } else {
-        await unfollowUser(look.creator.id);
-      }
+      await followMutation.mutateAsync(!isFollowing);
     } catch {
-      // Revert on failure.
-      setIsFollowing(!next);
       show('Unable to update follow status', 'error');
-    } finally {
-      setFollowBusy(false);
     }
-  }, [look, currentUserId, followBusy, isFollowing, haptic, show, navigation]);
+  }, [creatorId, currentUserId, followBusy, isFollowing, haptic, show, navigation, followMutation]);
 
   return { creatorProfile, isFollowing, followBusy, handleFollow };
 }

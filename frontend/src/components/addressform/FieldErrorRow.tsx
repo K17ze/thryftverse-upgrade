@@ -14,7 +14,11 @@ export function FieldErrorRow({ message }: { message: string }) {
   const styles = useMemo(() => createAddressFormStyles(colors), [colors]);
 
   return (
-    <View style={styles.errorRow}>
+    <View
+      style={styles.errorRow}
+      accessibilityRole="alert"
+      accessibilityLiveRegion="polite"
+    >
       <AppIcon name="warning" size={IconSize.xs} color="danger" opticalCenter accessible={false} />
       <Text style={styles.errorText}>{message}</Text>
     </View>

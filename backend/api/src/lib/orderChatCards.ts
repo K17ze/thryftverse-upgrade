@@ -166,9 +166,20 @@ export async function emitOrderCommerceCard(
     }>(
       `SELECT o.id, o.buyer_id, o.seller_id, o.listing_id, o.status,
               o.tracking_number, o.shipping_provider, o.shipping_label_url,
-              l.title AS item_title, l.image_url AS item_image
+              l.title AS item_title,
+              COALESCE(
+                CASE WHEN cover_media.media_type = 'video' THEN cover_media.poster_url END,
+                l.image_url
+              ) AS item_image
        FROM orders o
        LEFT JOIN listings l ON l.id = o.listing_id
+       LEFT JOIN LATERAL (
+         SELECT li.media_type, li.poster_url
+         FROM listing_images li
+         WHERE li.listing_id = l.id
+         ORDER BY li.sort_order, li.created_at
+         LIMIT 1
+       ) cover_media ON true
        WHERE o.id = $1
        LIMIT 1`,
       [input.orderId],

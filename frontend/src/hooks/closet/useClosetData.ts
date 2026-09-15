@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../../store/useStore';
 import { useBackendData } from '../../context/BackendDataContext';
+import { fetchSavedList } from '../../services/savedListsApi';
 import type { Listing } from '../../domain';
 import {
   sortClosetItems,
@@ -51,6 +52,25 @@ export function useClosetData({
   const [collectionsLoading, setCollectionsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Server-hydrated saved/wishlist items — the saved tabs render these rather
+  // than intersecting ids with the paginated feed snapshot (which made any
+  // saved listing not in a loaded page invisible).
+  const [hydratedSavedItems, setHydratedSavedItems] = useState<Listing[]>([]);
+  const [hydratedWishlistItems, setHydratedWishlistItems] = useState<Listing[]>([]);
+
+  const loadSavedLists = useCallback(async () => {
+    const [wishlistRes, savedRes] = await Promise.all([
+      fetchSavedList('wishlist'),
+      fetchSavedList('saved'),
+    ]);
+    setHydratedWishlistItems(wishlistRes.items);
+    setHydratedSavedItems(savedRes.items);
+    // Keep the id lists (heart/bookmark state) in sync with the server.
+    useStore.setState({
+      wishlist: wishlistRes.itemIds,
+      savedProducts: savedRes.itemIds,
+    });
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -58,18 +78,19 @@ export function useClosetData({
     void loadCollectionsFromApi()
       .then(() => { if (mounted) { setCollectionsSyncError(false); setCollectionsLoading(false); } })
       .catch(() => { if (mounted) { setCollectionsSyncError(true); setCollectionsLoading(false); } });
+    void loadSavedLists().catch(() => undefined);
     return () => {
       mounted = false;
       if (refreshTimerRef.current) {
         clearTimeout(refreshTimerRef.current);
       }
     };
-  }, [loadCollectionsFromApi]);
+  }, [loadCollectionsFromApi, loadSavedLists]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.all([refreshListings(), loadCollectionsFromApi()]);
+      await Promise.all([refreshListings(), loadCollectionsFromApi(), loadSavedLists()]);
       setCollectionsSyncError(false);
     } catch {
       setCollectionsSyncError(true);
@@ -80,17 +101,28 @@ export function useClosetData({
         setRefreshing(false);
       }, 350);
     }
-  }, [refreshListings, loadCollectionsFromApi]);
+  }, [refreshListings, loadCollectionsFromApi, loadSavedLists]);
 
-  const savedItems = useMemo(
-    () => listings.filter((l) => savedProductIds?.includes(l.id) ?? false),
-    [listings, savedProductIds]
-  );
+  // Hydrated items filtered by the live id lists (so removes reflect
+  // instantly) plus any feed-resident listing for a just-added id the
+  // hydrate predates.
+  const savedItems = useMemo(() => {
+    const ids = new Set(savedProductIds ?? []);
+    const hydratedIds = new Set(hydratedSavedItems.map((l) => l.id));
+    return [
+      ...hydratedSavedItems.filter((l) => ids.has(l.id)),
+      ...listings.filter((l) => ids.has(l.id) && !hydratedIds.has(l.id)),
+    ];
+  }, [hydratedSavedItems, listings, savedProductIds]);
 
-  const wishlistItems = useMemo(
-    () => listings.filter((l) => wishlistIds?.includes(l.id) ?? false),
-    [listings, wishlistIds]
-  );
+  const wishlistItems = useMemo(() => {
+    const ids = new Set(wishlistIds ?? []);
+    const hydratedIds = new Set(hydratedWishlistItems.map((l) => l.id));
+    return [
+      ...hydratedWishlistItems.filter((l) => ids.has(l.id)),
+      ...listings.filter((l) => ids.has(l.id) && !hydratedIds.has(l.id)),
+    ];
+  }, [hydratedWishlistItems, listings, wishlistIds]);
 
   const sortItems = useCallback(
     (items: Listing[]) =>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MutableRefObject } from 'react';
 
 import type { Listing } from '../../domain';
@@ -17,11 +17,22 @@ interface UseBrowseBackendListingsOptions {
   refreshTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
 }
 
+const SORT_MAP: Record<string, 'newest' | 'price_asc' | 'price_desc' | 'most_liked' | 'ending_soon'> = {
+  Newest: 'newest',
+  'Price: Low to High': 'price_asc',
+  'Price: High to Low': 'price_desc',
+  'Most liked': 'most_liked',
+  'Ending soon': 'ending_soon' };
+
 /**
  * Keeps browseFilters.query in sync with the route's search context, then
  * fetches backend-filtered listings whenever any backend-capable filter is
  * active. Extracted verbatim from BrowseScreen — both effects retain their
  * original order (query-sync first, fetch second).
+ *
+ * Pagination: the response `nextCursor` is retained so the grid can load
+ * subsequent pages with the same filter set. Any filter/category change
+ * re-issues a first-page request and resets the cursor.
  */
 export function useBrowseBackendListings({
   categoryId,
@@ -33,6 +44,12 @@ export function useBrowseBackendListings({
   const [backendListings, setBackendListings] = useState<Listing[] | null>(null);
   const [backendLoading, setBackendLoading] = useState(false);
   const [backendError, setBackendError] = useState<string | null>(null);
+  const [backendNextCursor, setBackendNextCursor] = useState<string | null>(null);
+  const [backendLoadingMore, setBackendLoadingMore] = useState(false);
+
+  // The active request params for pagination — mirrors the fetch effect's
+  // serialization so a next-page request reuses the identical filter set.
+  const requestParamsRef = useRef<Parameters<typeof fetchFilteredListings>[0] | null>(null);
 
   useEffect(() => {
     if (categoryId === 'search' && searchQuery && browseFilters.query !== searchQuery) {
@@ -46,13 +63,6 @@ export function useBrowseBackendListings({
   }, [categoryId, searchQuery, browseFilters.query, updateBrowseFilters]);
 
   useEffect(() => {
-    const sortMap: Record<string, 'newest' | 'price_asc' | 'price_desc' | 'most_liked' | 'ending_soon'> = {
-      Newest: 'newest',
-      'Price: Low to High': 'price_asc',
-      'Price: High to Low': 'price_desc',
-      'Most liked': 'most_liked',
-      'Ending soon': 'ending_soon' };
-
     const hasBackendFilters =
       browseFilters.query.trim().length > 0 ||
       browseFilters.brands.length > 0 ||
@@ -64,26 +74,36 @@ export function useBrowseBackendListings({
 
     if (!hasBackendFilters) {
       setBackendListings(null);
+      setBackendNextCursor(null);
+      requestParamsRef.current = null;
       return;
     }
+
+    // GET /listings accepts a single brand/size value (ILIKE match). When
+    // the user multi-selects, sending only [0] silently narrows to the
+    // first pick — omit the param instead and let useBrowseListings apply
+    // the full multi-select predicate client-side over the returned page.
+    const requestParams: Parameters<typeof fetchFilteredListings>[0] = {
+      query: browseFilters.query.trim() || undefined,
+      category: categoryId !== 'search' && categoryId !== 'all' ? categoryId : undefined,
+      brand: browseFilters.brands.length === 1 ? browseFilters.brands[0] : undefined,
+      size: browseFilters.sizes.length === 1 ? browseFilters.sizes[0] : undefined,
+      condition: browseFilters.condition !== 'Any' ? browseFilters.condition : undefined,
+      minPrice: browseFilters.priceMin ?? undefined,
+      maxPrice: browseFilters.priceMax ?? undefined,
+      sort: SORT_MAP[browseFilters.sort] || 'newest',
+      sustainableOnly: browseFilters.sustainableOnly };
+    requestParamsRef.current = requestParams;
 
     let cancelled = false;
     setBackendLoading(true);
     setBackendError(null);
 
-    fetchFilteredListings({
-      query: browseFilters.query.trim() || undefined,
-      category: categoryId !== 'search' && categoryId !== 'all' ? categoryId : undefined,
-      brand: browseFilters.brands[0],
-      size: browseFilters.sizes[0],
-      condition: browseFilters.condition !== 'Any' ? browseFilters.condition : undefined,
-      minPrice: browseFilters.priceMin ?? undefined,
-      maxPrice: browseFilters.priceMax ?? undefined,
-      sort: sortMap[browseFilters.sort] || 'newest',
-      sustainableOnly: browseFilters.sustainableOnly })
+    fetchFilteredListings(requestParams)
       .then((result) => {
         if (cancelled) return;
         setBackendListings(result.listings);
+        setBackendNextCursor(result.nextCursor ?? null);
         setBackendError(result.error ?? null);
       })
       .catch((error) => {
@@ -101,5 +121,34 @@ export function useBrowseBackendListings({
     };
   }, [browseFilters, categoryId]);
 
-  return { backendListings, backendLoading, backendError };
+  // Next-page fetch — reuses the serialized params of the in-flight filter
+  // set and appends deduped rows. A page-level failure keeps the loaded
+  // items and leaves the cursor unchanged so the next end-reached retries
+  // the same page.
+  const loadMoreBackendListings = useCallback(() => {
+    const params = requestParamsRef.current;
+    if (!params || !backendNextCursor || backendLoading || backendLoadingMore) return;
+
+    setBackendLoadingMore(true);
+    fetchFilteredListings({ ...params, cursor: backendNextCursor })
+      .then((result) => {
+        setBackendListings((prev) => {
+          const existing = new Set((prev ?? []).map((l) => l.id));
+          const appended = result.listings.filter((l) => !existing.has(l.id));
+          return [...(prev ?? []), ...appended];
+        });
+        setBackendNextCursor(result.nextCursor ?? null);
+      })
+      .catch(() => undefined)
+      .finally(() => setBackendLoadingMore(false));
+  }, [backendNextCursor, backendLoading, backendLoadingMore]);
+
+  return {
+    backendListings,
+    backendLoading,
+    backendError,
+    backendNextCursor,
+    backendHasMore: backendListings !== null && Boolean(backendNextCursor),
+    backendLoadingMore,
+    loadMoreBackendListings };
 }

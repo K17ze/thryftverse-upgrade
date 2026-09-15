@@ -2,6 +2,11 @@ export { useInventoryData } from './useInventoryData';
 export { useInventoryFilters } from './useInventoryFilters';
 export { useInventorySelection } from './useInventorySelection';
 export { useInventoryActions } from './useInventoryActions';
+export { useSellerPromotions } from './useSellerPromotions';
+export type {
+  SellerPromotionAction,
+  SellerPromotionsController,
+} from './useSellerPromotions';
 export type {
   InventoryFilterTab,
   InventorySortOption,

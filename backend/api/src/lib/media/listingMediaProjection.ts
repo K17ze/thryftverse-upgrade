@@ -278,13 +278,24 @@ export async function loadListingMedia(
  * Convenience accessor mirroring the legacy `imagesByListing` shape used by
  * feed serializers: the flat ordered URL array plus the geometry of the
  * primary media item.
+ *
+ * `images[]` is an image-context contract — consumers feed entries to image
+ * loaders. A video item's `uri` may be an HLS playlist (`canonical_url`),
+ * which no image loader can decode, so video entries project their poster
+ * still (falling back to `uri` only when no poster exists yet). The full
+ * playable media objects remain available on `media[]`.
  */
 export function listingImageUrls(
   media: ListingMediaItem[] | undefined,
   fallbackImageUrl: string | null,
 ): string[] {
   if (media && media.length > 0) {
-    return media.map((item) => item.uri);
+    return media.map(listingMediaImageUrl);
   }
   return fallbackImageUrl ? [fallbackImageUrl] : [];
+}
+
+/** Image-context URL for a media item: poster still for video, uri else. */
+export function listingMediaImageUrl(item: ListingMediaItem): string {
+  return item.kind === 'video' ? item.poster ?? item.uri : item.uri;
 }

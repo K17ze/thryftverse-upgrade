@@ -28,6 +28,11 @@ export interface ShutterButtonProps {
   onLongPress?: () => void;
   /** Called when the user releases the shutter (stop video recording). */
   onPressOut?: () => void;
+  /** Finger-down origin (screen coords) — captured for hold-drag grammar. */
+  onHoldTouchStart?: (pageX: number, pageY: number) => void;
+  /** Finger position while held (screen coords) — drives slide-to-zoom
+   *  and slide-to-lock during recording (Snap/IG shutter grammar). */
+  onHoldTouchMove?: (pageX: number, pageY: number) => void;
   /** Whether a recording is currently in progress (changes inner shape). */
   isRecording: boolean;
   /** Disables the shutter (e.g. during countdown). */
@@ -58,6 +63,8 @@ export function ShutterButton({
   onPress,
   onLongPress,
   onPressOut,
+  onHoldTouchStart,
+  onHoldTouchMove,
   isRecording,
   disabled,
   recordingProgress,
@@ -105,6 +112,8 @@ export function ShutterButton({
       onPressIn={handlePressIn}
       onLongPress={videoCaptureEnabled && !handsFreeMode ? onLongPress : undefined}
       onPressOut={videoCaptureEnabled ? onPressOut : undefined}
+      onTouchStart={(e) => onHoldTouchStart?.(e.nativeEvent.pageX, e.nativeEvent.pageY)}
+      onTouchMove={(e) => onHoldTouchMove?.(e.nativeEvent.pageX, e.nativeEvent.pageY)}
       delayLongPress={250}
       hitSlop={24}
       accessibilityLabel={accessibilityLabel}

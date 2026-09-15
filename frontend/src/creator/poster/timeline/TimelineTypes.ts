@@ -12,7 +12,7 @@
 // pages/layers with inconsistent timing semantics.
 // ───────────────────────────────────────────────────────────────────────────
 
-import type { CreatorDocument, CreatorLayer } from '../../composition';
+import type { CreatorDocument, CreatorLayer } from '../../core/projectStore/composition';
 import type { SpeedCurve } from '../speedcurves/SpeedCurveTypes';
 import type { AudioConfig } from '../../tools/audio/AudioTypes';
 import type { FrameTransition } from '../transitions/TransitionTypes';

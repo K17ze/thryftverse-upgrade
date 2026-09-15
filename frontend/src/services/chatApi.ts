@@ -264,6 +264,7 @@ export function mapApiMessageToConversationMessage(
         : 'sent',
     mediaUri: typeof meta.mediaUri === 'string' ? meta.mediaUri : undefined,
     mediaType: meta.mediaType === 'image' || meta.mediaType === 'video' ? meta.mediaType : undefined,
+    posterUri: typeof meta.posterUri === 'string' ? meta.posterUri : undefined,
     voiceUri: typeof meta.mediaUri === 'string' && isVoice ? meta.mediaUri : undefined,
     voiceDurationMs: voice?.durationMs ?? (typeof meta.durationMs === 'number' ? meta.durationMs : undefined),
     voiceWaveform: voice?.waveform?.samples,
@@ -1122,6 +1123,7 @@ export async function fetchConversationMediaFromApi(
   id: string;
   mediaUri: string;
   mediaType: 'image' | 'video' | 'document';
+  posterUri?: string;
   senderUserId: string | null;
   createdAt: string;
   documentName?: string;
@@ -1135,6 +1137,7 @@ export async function fetchConversationMediaFromApi(
         id: string;
         mediaUri: string;
         mediaType: 'image' | 'video' | 'document';
+        posterUri?: string;
         senderUserId: string | null;
         createdAt: string;
         documentName?: string;

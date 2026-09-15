@@ -17,6 +17,8 @@ export interface UseConvertDataOptions {
 export function useConvertData({ userId, currencyCode }: UseConvertDataOptions) {
   const [availableIze, setAvailableIze] = useState(0);
   const [isHydratingBalance, setIsHydratingBalance] = useState(true);
+  const [balanceError, setBalanceError] = useState<string | null>(null);
+  const [reloadNonce, setReloadNonce] = useState(0);
 
   // -- Balance hydration (available 1ZE) --
   useEffect(() => {
@@ -28,6 +30,7 @@ export function useConvertData({ userId, currencyCode }: UseConvertDataOptions) 
         return;
       }
       setIsHydratingBalance(true);
+      setBalanceError(null);
       try {
         const position = await getIzePosition(userId, currencyCode);
         if (!isCancelled) {
@@ -35,7 +38,9 @@ export function useConvertData({ userId, currencyCode }: UseConvertDataOptions) 
         }
       } catch {
         if (!isCancelled) {
-          setAvailableIze(0);
+          // Honest failure — a fabricated 0 would render a false "insufficient
+          // balance" and hide real spendable funds.
+          setBalanceError('We could not load your 1ZE balance.');
         }
       } finally {
         if (!isCancelled) {
@@ -49,11 +54,15 @@ export function useConvertData({ userId, currencyCode }: UseConvertDataOptions) 
     return () => {
       isCancelled = true;
     };
-  }, [userId, currencyCode]);
+  }, [userId, currencyCode, reloadNonce]);
+
+  const reloadBalance = () => setReloadNonce((n) => n + 1);
 
   return {
     availableIze,
     setAvailableIze,
     isHydratingBalance,
+    balanceError,
+    reloadBalance,
   };
 }

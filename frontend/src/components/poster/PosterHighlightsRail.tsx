@@ -20,6 +20,7 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { Ionicons } from '@expo/vector-icons';
 import type { PosterHighlight } from '../../services/postersApi';
+import { isVideoUrl } from '../../utils/posterPhysics';
 
 /** Spring config shape returned by useMotionConfig().spring.* */
 type SpringConfig = { damping: number; stiffness: number; mass: number };
@@ -165,13 +166,17 @@ export function PosterHighlightsRail({
    * but coverFrameId points to a known frame in the highlight.
    */
   const resolveCoverUrl = (highlight: PosterHighlight): string | null => {
-    if (highlight.coverUrl) return highlight.coverUrl;
+    const asImage = (url: string | null | undefined) =>
+      url && !isVideoUrl(url) ? url : null;
+    if (highlight.coverUrl) return asImage(highlight.coverUrl);
     if (highlight.coverFrameId) {
       const coverFrame = highlight.frames.find((f) => f.frameId === highlight.coverFrameId);
-      if (coverFrame) return coverFrame.mediaUrl;
+      if (coverFrame) return asImage(coverFrame.previewUrl ?? coverFrame.mediaUrl);
     }
     // Last resort: first frame
-    if (highlight.frames.length > 0) return highlight.frames[0].mediaUrl;
+    if (highlight.frames.length > 0) {
+      return asImage(highlight.frames[0].previewUrl ?? highlight.frames[0].mediaUrl);
+    }
     return null;
   };
 

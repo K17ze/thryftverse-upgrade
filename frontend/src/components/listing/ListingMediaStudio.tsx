@@ -16,7 +16,7 @@ import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { SortablePhotoStrip } from '../SortablePhotoStrip';
 import { FocalImage } from '../media/FocalImage';
-import { CreatorCropSheet } from '../../creator/CreatorCropSheet';
+import { CreatorCropSheet } from '../../creator/surfaces/CreatorCropSheet';
 import { ListingMediaDraftItem } from '../../utils/mediaUploadAsset';
 import { UploadQueueItem } from '../../services/mediaUploadQueue';
 import { isVideoUri } from '../../utils/media';

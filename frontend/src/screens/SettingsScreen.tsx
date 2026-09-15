@@ -13,7 +13,6 @@ import { SettingsListSkeleton } from '../components/skeletons/SettingsListSkelet
 import {
   SettingsIdentityRow,
   SettingsBalanceCard,
-  SettingsVerificationPrompt,
   SettingsHealthPills,
   SettingsSearchResults,
   SettingsAccountSection,
@@ -138,15 +137,11 @@ export default function SettingsScreen({ navigation }: Props) {
           {/* ── Thryft Balance Card — Depop flagship benchmark (settings reference.png) ── */}
           <SettingsBalanceCard walletBalance={walletBalance} />
 
-          {/* ── Verification prompt — shows when identity/seller verification
-              is not yet complete. Email verification alone does not grant
-              a trust badge (P0-UI-3). ── */}
-          <SettingsVerificationPrompt />
-
           {/* ── ACCOUNT HEALTH INDICATOR — compact status pills ──
               Shows completed security steps at a glance. Each pill is a
               checkmark + label. Incomplete steps are omitted (not shown as
-              red warnings — the verification prompt above handles that). */}
+              red warnings — the Verification row in Edit Profile is the
+              single verification entry point). */}
           <SettingsHealthPills />
 
           {/* ── YOUR ACCOUNT (profile, security, privacy) ── */}

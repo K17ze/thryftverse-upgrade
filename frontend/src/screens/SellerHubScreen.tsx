@@ -1,15 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, RefreshControl, ScrollView } from 'react-native';
+import { RefreshControl, ScrollView } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, FontFamily, DockConstants } from '../theme/designTokens';
-import { TypographyV2 } from '../theme/typography.v2';
-import { RootStackParamList, ROOT_STACK_ROUTES, type RootStackRouteName } from '../navigation/types';
+import { useAppTheme } from '../theme/ThemeContext';
+import { RootStackParamList } from '../navigation/types';
 
-import { FlagshipScreen, FlagshipHeader, FlagshipState, SellerHubSkeleton } from '../components/flagship';
-import { AppIcon } from '../components/common/AppIcon';
-import { IconSize } from '../theme/iconTokens';
+import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { createSellerHubScreenStyles } from '../components/seller/sellerHubScreenStyles';
@@ -22,7 +18,13 @@ import {
   type DailyBreakdownPoint,
 } from '../services/commerceApi';
 import { fetchUserListingsFromApi, type ListingApiItem } from '../services/listingsApi';
-import { fetchSellerHubOverview, type SellerHubOverview, type SellerHubTask } from '../services/sellerHubApi';
+import { fetchSellerHubOverview, type SellerHubOverview } from '../services/sellerHubApi';
+import {
+  fetchSellerStandards,
+  submitStandardsAppeal,
+  type SellerStandards,
+  type SubmitStandardsAppealInput,
+} from '../services/sellerStandardsApi';
 import { fetchImportBatches, type BatchSummaryDTO } from '../services/catalogImportApi';
 import { track } from '../analytics';
 
@@ -35,7 +37,11 @@ import { SellerAnalyticsModule, type SellerSparklinePoint } from '../components/
 import { SellerClosetModule } from '../components/seller/SellerClosetModule';
 import { SellerListingsModule } from '../components/seller/SellerListingsModule';
 import { SellerOpportunitiesModule } from '../components/seller/SellerOpportunitiesModule';
+import { SellerStandardsModule } from '../components/seller/SellerStandardsModule';
 import { SellerHubDock } from '../components/seller/SellerHubDock';
+import { SellerHubGate } from '../components/seller/SellerHubGate';
+import { SellerHubNotices } from '../components/seller/SellerHubNotices';
+import { useSellerHubTaskNavigation } from '../components/seller/useSellerHubTaskNavigation';
 import {
   formatGbp,
   toOrderPreviews,
@@ -85,9 +91,11 @@ export default function SellerHubScreen() {
   const [sellingOrders, setSellingOrders] = useState<CommerceUserOrder[] | null>(null);
   const [ownListings, setOwnListings] = useState<ListingApiItem[] | null>(null);
   const [dailyPoints, setDailyPoints] = useState<DailyBreakdownPoint[] | null>(null);
+  const [standards, setStandards] = useState<SellerStandards | null>(null);
   const [sellingOrdersStatus, setSellingOrdersStatus] = useState<ResourceStatus>('loading');
   const [ownListingsStatus, setOwnListingsStatus] = useState<ResourceStatus>('loading');
   const [dailyPointsStatus, setDailyPointsStatus] = useState<ResourceStatus>('loading');
+  const [standardsStatus, setStandardsStatus] = useState<ResourceStatus>('loading');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -110,6 +118,16 @@ export default function SellerHubScreen() {
     if (!userId) return Promise.resolve();
     return fetchHubResource('daily breakdown', () => fetchDailyBreakdown(userId, '30d'), setDailyPoints, setDailyPointsStatus);
   }, [currentUser?.id]);
+  const loadStandards = useCallback(() => {
+    const userId = currentUser?.id;
+    if (!userId) return Promise.resolve();
+    return fetchHubResource('standards', () => fetchSellerStandards(userId), setStandards, setStandardsStatus);
+  }, [currentUser?.id]);
+  const handleSubmitAppeal = useCallback((input: SubmitStandardsAppealInput) => {
+    const userId = currentUser?.id;
+    if (!userId) return Promise.reject(new Error('Not signed in'));
+    return submitStandardsAppeal(userId, input);
+  }, [currentUser?.id]);
 
   const load = useCallback(async () => {
     if (!currentUser?.id) return;
@@ -123,6 +141,7 @@ export default function SellerHubScreen() {
         loadOrders(),
         loadOwnListings(),
         loadDailyPoints(),
+        loadStandards(),
       ]);
       setOverview(hubOverview);
       // P1 fix: propagate import batch data and error flag into state —
@@ -133,7 +152,7 @@ export default function SellerHubScreen() {
     } catch {
       setLoadError(true);
     }
-  }, [currentUser?.id, loadOrders, loadOwnListings, loadDailyPoints]);
+  }, [currentUser?.id, loadOrders, loadOwnListings, loadDailyPoints, loadStandards]);
 
   useEffect(() => {
     let mounted = true;
@@ -173,25 +192,15 @@ export default function SellerHubScreen() {
     setIsRefreshing(false);
   };
 
-  const handleNavigateToTask = (task: SellerHubTask) => {
-    const route = task.actionRoute as string;
-    if (!ROOT_STACK_ROUTES.includes(route as RootStackRouteName)) {
-      console.warn(`[SellerHub] Unknown task route: ${route}`);
-      return;
-    }
-    const typedRoute = route as RootStackRouteName;
-    if (typedRoute === 'CatalogImportProgress') {
-      const activeBatch = importBatches.find((b) => b.status !== 'completed' && b.status !== 'cancelled');
-      if (!activeBatch) {
-        // batchId is a required param; without a known active batch there is
-        // nothing truthful to open. Pull-to-refresh recovers the batch list.
-        return;
-      }
-      navigation.navigate(typedRoute, { batchId: activeBatch.id });
-      return;
-    }
-    (navigation.navigate as (screen: RootStackRouteName) => void)(typedRoute);
+  const retryInitialLoad = () => {
+    setLoadError(false);
+    setIsLoading(true);
+    void load().finally(() => setIsLoading(false));
   };
+
+  // Task-route dispatch lives in its own hook — it only needs the batch
+  // list to resolve CatalogImportProgress' required batchId.
+  const handleNavigateToTask = useSellerHubTaskNavigation(importBatches);
 
   // S0 haptic grammar: pure navigation pushes are silent — the pushed screen
   // is the confirmation. Haptics live on the pressables that need them
@@ -208,49 +217,23 @@ export default function SellerHubScreen() {
   const handleNavigateToCloset = () => { navigation.navigate('Closet'); };
   const handleNavigateToAnalytics = () => { navigation.navigate('SellerAnalytics'); };
 
-  if (isLoading) {
+  // Full-surface fallback before the overview exists: skeleton → error →
+  // empty. Once data is in, failures degrade per-rail, never the screen.
+  if (isLoading || (loadError && !overview) || !overview) {
     return (
-      <FlagshipScreen header={<FlagshipHeader title="Seller Hub" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
-        <SellerHubSkeleton />
-      </FlagshipScreen>
+      <SellerHubGate
+        phase={isLoading ? 'loading' : loadError && !overview ? 'error' : 'empty'}
+        onBack={() => navigation.goBack()}
+        onRetry={retryInitialLoad}
+        onListItem={() => navigation.navigate('Sell')}
+      />
     );
   }
 
-  if (loadError && !overview) {
-    return (
-      <FlagshipScreen header={<FlagshipHeader title="Seller Hub" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
-        <FlagshipState
-          variant="error"
-          title="Couldn't load your store"
-          subtitle="Check your network connection and retry."
-          actionLabel="Retry"
-          onAction={() => {
-            setLoadError(false);
-            setIsLoading(true);
-            void load().finally(() => setIsLoading(false));
-          }}
-        />
-      </FlagshipScreen>
-    );
-  }
-
-  if (!overview) {
-    return (
-      <FlagshipScreen header={<FlagshipHeader title="Seller Hub" onBack={() => navigation.goBack()} />} scrollEnabled={false}>
-        <FlagshipState
-          variant="empty"
-          title="No store data yet"
-          subtitle="Start selling to see your store"
-          actionLabel="List an item"
-          onAction={() => navigation.navigate('Sell')}
-        />
-      </FlagshipScreen>
-    );
-  }
-
-  const { topTask, tasks, money, inventory, businessPulse, freshness, trust, opportunities } = overview;
+  const { topTask, tasks, money, inventory, businessPulse, freshness, trust, opportunities, away } =
+    overview;
   const { pendingOrdersCount, atStakeGbp } = summarizeTriage(tasks);
-  const tasksStale = ['orders', 'offers', 'payout_holds'].some(
+  const tasksStale = ['orders', 'offers', 'payout_holds', 'catalog_imports', 'verification_demands'].some(
     (source) => freshness[source]?.state !== 'fresh'
   );
 
@@ -277,15 +260,12 @@ export default function SellerHubScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
       >
-        {/* Partial-state notice when import status failed. */}
-        {importError && (
-          <View style={styles.importErrorBanner}>
-            <AppIcon concept="warning" size={IconSize.xs} color="warning" opticalCenter accessible={false} />
-            <Text style={[styles.importErrorText, { color: colors.textSecondary }]}>
-              Couldn't load import status. Pull to retry.
-            </Text>
-          </View>
-        )}
+        {/* Ambient notices — import partial-state banner + away row. */}
+        <SellerHubNotices
+          importError={importError}
+          away={away}
+          pendingOrdersCount={pendingOrdersCount}
+        />
 
         {/* Zone 1 · The work — orders to dispatch (media rail with SLA
             chips), then the flat task queue (offers, listing issues,
@@ -322,6 +302,7 @@ export default function SellerHubScreen() {
         <SellerTrustStrip
           trust={trust ?? null}
           stale={freshness.trust?.state !== 'fresh'}
+          awayActive={away?.active === true}
         />
 
         {/* Zone 3 · Destinations — quick-access grid demoted below the
@@ -365,6 +346,20 @@ export default function SellerHubScreen() {
           isSparklineFailed={dailyPointsStatus === 'failed'}
           formatMoney={formatGbp}
           onPress={handleNavigateToAnalytics}
+        />
+
+        {/* Standards — the seller's program tier and real defects, with an
+            appeal entry point. Sits with performance, after analytics. */}
+        {standardsStatus === 'failed' && (
+          <SyncRetryBanner message="Couldn't load seller standards." onRetry={() => void loadStandards()}
+            telemetryContext="seller_hub_standards" containerStyle={styles.resourceErrorBanner} />
+        )}
+        <SellerStandardsModule
+          standards={standards}
+          isLoading={standardsStatus === 'loading' && standards === null}
+          isFailed={standardsStatus === 'failed'}
+          formatMoney={formatGbp}
+          onSubmitAppeal={handleSubmitAppeal}
         />
 
         {/* Closet: saved pieces rail — the least operational destination. */}

@@ -24,7 +24,7 @@ import {
   getPaymentIntentStatus,
   type CommerceOrder,
 } from '../../services/commerceApi';
-import { parseApiError } from '../../lib/apiClient';
+import { parseApiError, ApiRequestError, isRecord } from '../../lib/apiClient';
 import { waitForPaymentIntentSettlement } from '../../services/checkoutPaymentIntent';
 import {
   type CheckoutStage,
@@ -46,6 +46,64 @@ const safeMark = (name: string) => {
     performance.mark(name);
   }
 };
+
+// Backend ONEZE_UNITS_PER_IZE — server wallet amounts arrive in integer
+// units; 1000 units = 1 1ZE.
+const ONEZE_UNITS_PER_IZE = 1000;
+
+/**
+ * Payment-level issue that outlives a single attempt. Distinct from
+ * `orderError` (the copy) — this drives which affordance is truthful:
+ *  - 'insufficient_oneze' → wallet shortfall; card/top-up is the fix, not retry
+ *  - 'released'           → terminal failure cancelled the order; "Buy again"
+ *                           creates a fresh order with a fresh idempotency key
+ *  - 'sold'               → listing left a purchasable state; terminal
+ *  - 'seller_unavailable' → SELLER_RESTRICTED; terminal
+ *  - 'reserved'           → LISTING_CHECKOUT_RESERVED; transient, retry ok
+ */
+export type CheckoutPaymentIssue =
+  | 'insufficient_oneze'
+  | 'released'
+  | 'sold'
+  | 'seller_unavailable'
+  | 'reserved';
+
+export interface OnezeShortfall {
+  /** 1ZE the order requires (converted from server units when provided). */
+  requiredIze: number | null;
+  /** 1ZE the buyer holds. */
+  availableIze: number | null;
+}
+
+/**
+ * Extracts required/available 1ZE from a WALLET_INSUFFICIENT_BALANCE
+ * payload. Tolerant by design: the settled contract carries
+ * `requiredOnezeUnits` (integer units) and `onezeBalance` (1ZE amount);
+ * the underlying ledger error carries `attemptedDelta`/`currentBalance`
+ * (integer units).
+ */
+function parseOnezeShortfall(error: unknown): OnezeShortfall {
+  if (!(error instanceof ApiRequestError) || !isRecord(error.details)) {
+    return { requiredIze: null, availableIze: null };
+  }
+  const d = error.details;
+  const unitsToIze = (v: unknown): number | null =>
+    typeof v === 'number' && Number.isFinite(v) ? v / ONEZE_UNITS_PER_IZE : null;
+  const num = (v: unknown): number | null =>
+    typeof v === 'number' && Number.isFinite(v) ? v : null;
+
+  const requiredIze =
+    unitsToIze(d.requiredOnezeUnits)
+    ?? unitsToIze(d.requiredUnits)
+    ?? num(d.requiredOneze)
+    ?? (typeof d.attemptedDelta === 'number' ? unitsToIze(Math.abs(d.attemptedDelta)) : null);
+  const availableIze =
+    unitsToIze(d.availableOnezeUnits)
+    ?? unitsToIze(d.currentBalance)
+    ?? num(d.onezeBalance)
+    ?? num(d.availableOneze);
+  return { requiredIze, availableIze };
+}
 
 // The store's SavedPaymentMethod shape is not exported — this structural
 // type mirrors the fields the payment flow reads.
@@ -80,7 +138,12 @@ export interface UseCheckoutPaymentFlowOptions {
   useBalance: boolean;
   walletBalance: number;
   useOnezePayment: boolean;
+  /** Buyer's 1ZE wallet balance in 1ZE (not GBP, not wallet units). */
   onezeBalance: number;
+  /** Client-side GBP→1ZE conversion of the gross total — the eligibility
+   *  pre-check. The server-side `requiredOnezeUnits` overrides this once
+   *  known; the wallet debit is always computed server-side. */
+  onezeRequiredEstimateIze?: number;
   setHasAttemptedPay: (value: boolean) => void;
 }
 
@@ -109,6 +172,7 @@ export function useCheckoutPaymentFlow({
   walletBalance,
   useOnezePayment,
   onezeBalance,
+  onezeRequiredEstimateIze,
   setHasAttemptedPay,
 }: UseCheckoutPaymentFlowOptions) {
   const navigation = useNavigation<any>();
@@ -124,6 +188,14 @@ export function useCheckoutPaymentFlow({
   // Order-bound dead end: set when the server reports the bound order's
   // reservation expired or the order left a payable state mid-attempt.
   const [boundOrderIssue, setBoundOrderIssue] = useState<'expired' | 'unavailable' | null>(null);
+  // Payment-level issue — drives whether "Retry" is truthful or the CTA
+  // must be "Buy again" / "switch to card" / nothing at all.
+  const [paymentIssue, setPaymentIssue] = useState<CheckoutPaymentIssue | null>(null);
+  const [onezeShortfall, setOnezeShortfall] = useState<OnezeShortfall | null>(null);
+  // Server-authoritative 1ZE requirement — populated from the intent
+  // response / WALLET_INSUFFICIENT_BALANCE payload. When set it gates the
+  // 1ZE rail so a second insufficient attempt can't be submitted.
+  const [onezeRequiredIze, setOnezeRequiredIze] = useState<number | null>(null);
 
   const createdOrderIdRef = useRef<string | null>(null);
   const createdOrderSignatureRef = useRef<string | null>(null);
@@ -150,6 +222,9 @@ export function useCheckoutPaymentFlow({
   // --- Eligibility ---
   const checkoutEligible = useMemo(() => {
     if (!userId) return false;
+    // Offline: the Pay CTA must not submit into a guaranteed network failure
+    // — the banner communicates state; eligibility blocks the attempt.
+    if (isOffline) return false;
     // Order-bound: totals come from the order, not the listing.
     const subtotalGbp = boundOrder ? boundOrder.subtotalGbp : item?.price;
     if (subtotalGbp == null) return false;
@@ -158,9 +233,16 @@ export function useCheckoutPaymentFlow({
     if (!postageOption.carrierId || !postageOption.quoteId) return false;
     const platformChargeGbp = boundOrder?.platformChargeGbp ?? calculatePlatformChargeGbp(subtotalGbp);
     const grossTotal = subtotalGbp + platformChargeGbp + postageOption.priceFromGbp;
-    // 1ZE wallet payment — no card payment method needed, just check balance
+    // Terminal payment issues disable Pay — the retry affordance lives on
+    // the error card (Buy again / switch to card), not the footer.
+    if (paymentIssue === 'sold' || paymentIssue === 'seller_unavailable') return false;
+    // 1ZE wallet payment — no card payment method needed. The gate compares
+    // like units: 1ZE balance against the server-provided requirement when
+    // known, else the client-side GBP→1ZE estimate. Comparing the 1ZE
+    // balance against a GBP total would silently under/over-gate.
     if (useOnezePayment) {
-      return onezeBalance >= grossTotal;
+      const required = onezeRequiredIze ?? onezeRequiredEstimateIze;
+      return required != null ? onezeBalance >= required : onezeBalance > 0;
     }
     // If balance covers the full total, payment method is not required.
     // (Order-bound checkout has no split-tender endpoint — wallet balance
@@ -171,7 +253,7 @@ export function useCheckoutPaymentFlow({
       if (!isPaymentMethodAllowed(checkoutCapabilities, savedPaymentMethod.type)) return false;
     }
     return true;
-  }, [userId, item, boundOrder, boundOrderId, isHydrating, isInteractionLocked, savedAddressId, savedPaymentMethod?.id, postageOption.carrierId, postageOption.quoteId, checkoutCapabilities, savedPaymentMethod?.type, useBalance, walletBalance, postageOption.priceFromGbp, useOnezePayment, onezeBalance]);
+  }, [userId, isOffline, item, boundOrder, boundOrderId, isHydrating, isInteractionLocked, savedAddressId, savedPaymentMethod?.id, postageOption.carrierId, postageOption.quoteId, checkoutCapabilities, savedPaymentMethod?.type, useBalance, walletBalance, postageOption.priceFromGbp, useOnezePayment, onezeBalance, onezeRequiredIze, onezeRequiredEstimateIze, paymentIssue]);
 
   // --- Mount / unmount ---
   useEffect(() => {
@@ -285,6 +367,22 @@ export function useCheckoutPaymentFlow({
 
       return true;
     } catch {
+      // The cancel may have raced a server-side cancellation (a terminal
+      // payment failure already released the order). Refetch once — a dead
+      // order is already "cancelled" for our purposes, so clear the refs
+      // and let the flow continue with a fresh order.
+      try {
+        const fresh = await getOrder(orderId);
+        if (fresh?.status !== 'created') {
+          createdOrderIdRef.current = null;
+          createdOrderSignatureRef.current = null;
+          orderIdempotencyKeyRef.current = null;
+          pendingIntentIdRef.current = null;
+          return true;
+        }
+      } catch {
+        // Refetch failed — report the retryable error below.
+      }
       setOrderError(
         'Your existing order could not be cancelled. Checkout details have not been changed.'
       );
@@ -293,6 +391,64 @@ export function useCheckoutPaymentFlow({
       setIsCancellingOrder(false);
     }
   }, [stage, queryClient, itemId, boundOrderId, item?.sellerId, refreshListings]);
+
+  // Clears every ref bound to a dead order — a released/cancelled order can
+  // never be paid again, so the next attempt must mint a fresh order and a
+  // fresh idempotency key rather than reuse the corpse.
+  const resetDeadOrderRefs = useCallback(() => {
+    createdOrderIdRef.current = null;
+    createdOrderSignatureRef.current = null;
+    orderIdempotencyKeyRef.current = null;
+    boundCheckoutSignatureRef.current = null;
+    pendingIntentIdRef.current = null;
+  }, []);
+
+  /**
+   * Terminal payment failure handling. A 'failed'/'cancelled' commerce
+   * intent compensates the still-'created' order to 'cancelled' server-side
+   * (commerceCheckoutLifecycle) — retrying that order is a guaranteed
+   * ORDER_NOT_PAYABLE dead end. The order is refetched once to confirm:
+   * dead → released state + "Buy again"; still created → retryable error.
+   * Bound orders can't be recreated — their dead end is the guard state.
+   */
+  const handleTerminalIntentFailure = useCallback(
+    async (orderId: string, attemptId: number, failureCode: string | null) => {
+      let orderReleased = false;
+      try {
+        const fresh = await getOrder(orderId);
+        orderReleased = fresh?.status !== 'created';
+      } catch {
+        // Refetch failed — fall through to the retryable copy below.
+      }
+      if (!isMountedRef.current || paymentAttemptRef.current !== attemptId) return;
+
+      setStage('payment_failed');
+      pendingIntentIdRef.current = null;
+
+      if (failureCode === 'WALLET_INSUFFICIENT_BALANCE') {
+        if (orderReleased && !boundOrderId) resetDeadOrderRefs();
+        setPaymentIssue('insufficient_oneze');
+        setOrderError('Not enough 1ZE for this order. Pay by card or top up your 1ZE wallet.');
+        return;
+      }
+
+      if (orderReleased) {
+        if (boundOrderId) {
+          setBoundOrderIssue('unavailable');
+        } else {
+          resetDeadOrderRefs();
+          setPaymentIssue('released');
+          setOrderError('Payment didn’t go through — the order was released. Tap “Buy again” to try once more.');
+        }
+        return;
+      }
+
+      setPaymentIssue(null);
+      setOrderError('Payment could not be completed. Try again.');
+      showError('Payment failed', 'Payment could not be completed. Try again.');
+    },
+    [boundOrderId, resetDeadOrderRefs, showError]
+  );
 
   // --- Handle Pay ---
   const handlePay = useCallback(async () => {
@@ -340,8 +496,16 @@ export function useCheckoutPaymentFlow({
     const attemptId = ++paymentAttemptRef.current;
     navigationHandledRef.current = false;
 
+    // A 'released' issue means the previous terminal failure cancelled the
+    // order — this press is a "Buy again": drop every dead-order ref so a
+    // fresh order is created under a fresh idempotency key.
+    if (paymentIssue === 'released') {
+      resetDeadOrderRefs();
+    }
+
     isSubmittingRef.current = true;
     setOrderError(null);
+    setPaymentIssue(null);
 
     try {
       let orderId: string;
@@ -461,12 +625,13 @@ export function useCheckoutPaymentFlow({
       setStage('opening_payment');
 
       // ── 1ZE wallet payment path ──
-      // When the buyer selects 1ZE, we create a oneze_internal payment
-      // intent. The backend debits the 1ZE wallet atomically and settles
-      // inline — no Stripe PaymentSheet is needed. The intent returns
-      // already 'succeeded', so we go straight to settlement polling.
+      // POST /payments/intents with gatewayId 'oneze_internal' settles
+      // synchronously: the response status is authoritative. A shortfall
+      // rejects with WALLET_INSUFFICIENT_BALANCE (handled in the catch).
+      // No Stripe PaymentSheet exists for this rail.
       if (useOnezePayment) {
-        const intent = await createOnezeCheckoutIntent(orderId);
+        const onezeResult = await createOnezeCheckoutIntent(orderId);
+        const intent = onezeResult.intent;
 
         if (
           !isMountedRef.current
@@ -475,13 +640,38 @@ export function useCheckoutPaymentFlow({
           return;
         }
 
-        pendingIntentIdRef.current = intent.intentId;
+        pendingIntentIdRef.current = intent.id;
+        // Server-provided requirement — the eligibility gate uses this
+        // exact figure for subsequent attempts rather than the estimate.
+        if (typeof onezeResult.requiredOnezeUnits === 'number' && Number.isFinite(onezeResult.requiredOnezeUnits)) {
+          setOnezeRequiredIze(onezeResult.requiredOnezeUnits / ONEZE_UNITS_PER_IZE);
+        }
         trackFunnelStep('checkout', 'payment_submitted', { order_id: orderId, method: 'oneze' });
 
-        // Poll for settlement (the intent should already be 'succeeded')
+        const intentStatus = intent.status?.trim().toLowerCase() ?? '';
+
+        if (intentStatus === 'succeeded') {
+          setStage('payment_succeeded');
+          pendingIntentIdRef.current = null;
+          isSubmittingRef.current = false;
+          safeMark('checkout:complete');
+          track('purchase_completed', { item_id: listingId, total: itemPriceGbp + PLATFORM_CHARGE + POSTAGE_FEE, payment_method: 'oneze' });
+          trackFunnelStep('checkout', 'purchase_completed', { order_id: orderId });
+          handleSettlementNavigation('succeeded', orderId, attemptId);
+          return;
+        }
+
+        if (intentStatus === 'failed' || intentStatus === 'cancelled') {
+          await handleTerminalIntentFailure(orderId, attemptId, intent.failureCode ?? null);
+          return;
+        }
+
+        // Defensive fallback — an intent that returns non-terminal (older
+        // builds leave oneze_internal in requires_confirmation) is polled
+        // for the authoritative outcome instead of being parked.
         setStage('awaiting_payment');
         const settlementStatus = await waitForPaymentIntentSettlement(
-          intent.intentId,
+          intent.id,
           () => isMountedRef.current && paymentAttemptRef.current === attemptId
         );
 
@@ -514,17 +704,19 @@ export function useCheckoutPaymentFlow({
           return;
         }
 
-        // Failed
-        setStage('payment_failed');
-        pendingIntentIdRef.current = null;
-        setOrderError('1ZE payment could not be completed. Try again.');
-        showError('Payment failed', '1ZE payment could not be completed. Try again.');
+        // Failed — surface the intent's failure code (insufficient balance
+        // is a distinct truthful state, not a generic retry).
+        let failureCode: string | null = null;
+        try {
+          failureCode = (await getPaymentIntentStatus(intent.id)).failureCode ?? null;
+        } catch { /* keep null — generic terminal handling below */ }
+        await handleTerminalIntentFailure(orderId, attemptId, failureCode);
         isSubmittingRef.current = false;
         return;
       }
 
       // ── Stripe card payment path ──
-      const intent = await createCommercePaymentIntent({
+      const { intent, idempotent: intentReused } = await createCommercePaymentIntent({
         orderId,
         idempotencyKey: `payment_${orderId}`,
       });
@@ -536,7 +728,72 @@ export function useCheckoutPaymentFlow({
         return;
       }
 
-      pendingIntentIdRef.current = intent.intentId;
+      pendingIntentIdRef.current = intent.id;
+
+      // Bound-intent replay: the order already carries a payment intent
+      // (one intent per order) — the server returned it instead of minting
+      // a second one. Its status/gateway are authoritative: it may be
+      // settled, in-flight, terminal, or on a non-Stripe rail (e.g. a
+      // failed 1ZE attempt). Never assume a usable clientSecret exists.
+      if (intentReused) {
+        const boundStatus = intent.status?.trim().toLowerCase() ?? '';
+
+        if (boundStatus === 'succeeded') {
+          setStage('payment_succeeded');
+          pendingIntentIdRef.current = null;
+          isSubmittingRef.current = false;
+          safeMark('checkout:complete');
+          track('purchase_completed', { item_id: listingId, total: itemPriceGbp + PLATFORM_CHARGE + POSTAGE_FEE, payment_method: savedPaymentMethod?.type ?? 'wallet' });
+          trackFunnelStep('checkout', 'purchase_completed', { order_id: orderId });
+          handleSettlementNavigation('succeeded', orderId, attemptId);
+          return;
+        }
+
+        if (boundStatus === 'failed' || boundStatus === 'cancelled') {
+          await handleTerminalIntentFailure(orderId, attemptId, intent.failureCode ?? null);
+          return;
+        }
+
+        if (intent.gatewayId !== 'stripe_americas') {
+          // Non-Stripe bound intent (e.g. a 1ZE intent still settling):
+          // there is no PaymentSheet to open — poll for the outcome.
+          setStage('awaiting_payment');
+          const boundSettlement = await waitForPaymentIntentSettlement(
+            intent.id,
+            () => isMountedRef.current && paymentAttemptRef.current === attemptId
+          );
+
+          if (boundSettlement === 'aborted') {
+            return;
+          }
+          if (
+            !isMountedRef.current
+            || paymentAttemptRef.current !== attemptId
+          ) {
+            return;
+          }
+          if (boundSettlement === 'succeeded') {
+            setStage('payment_succeeded');
+            pendingIntentIdRef.current = null;
+            isSubmittingRef.current = false;
+            safeMark('checkout:complete');
+            track('purchase_completed', { item_id: listingId, total: itemPriceGbp + PLATFORM_CHARGE + POSTAGE_FEE, payment_method: savedPaymentMethod?.type ?? 'wallet' });
+            trackFunnelStep('checkout', 'purchase_completed', { order_id: orderId });
+            handleSettlementNavigation('succeeded', orderId, attemptId);
+            return;
+          }
+          if (boundSettlement === 'pending') {
+            setStage('payment_pending');
+            isSubmittingRef.current = false;
+            handleSettlementNavigation('pending', orderId, attemptId);
+            return;
+          }
+          await handleTerminalIntentFailure(orderId, attemptId, null);
+          return;
+        }
+        // In-flight Stripe bound intent — the sheet endpoint resolves the
+        // bound intent itself, so falling through re-opens its sheet.
+      }
 
       const sheet = await createStripeOrderSheet(orderId);
       await configureStripeMobile(sheet.publishableKey);
@@ -591,7 +848,7 @@ export function useCheckoutPaymentFlow({
       // Poll for settlement
       setStage('awaiting_payment');
       const settlementStatus = await waitForPaymentIntentSettlement(
-        intent.intentId,
+        intent.id,
         () => isMountedRef.current && paymentAttemptRef.current === attemptId
       );
 
@@ -627,11 +884,9 @@ export function useCheckoutPaymentFlow({
         return;
       }
 
-      // Failed
-      setStage('payment_failed');
-      pendingIntentIdRef.current = null;
-      setOrderError('Payment could not be completed. Try again.');
-      showError('Payment failed', 'Payment could not be completed. Try again.');
+      // Failed — terminal intents cancel the 'created' order server-side;
+      // retrying it is a guaranteed dead end, so detect and release first.
+      await handleTerminalIntentFailure(orderId, attemptId, null);
     } catch (error: unknown) {
       if (
         !isMountedRef.current
@@ -642,61 +897,151 @@ export function useCheckoutPaymentFlow({
 
       const errorCode = (error as { code?: string })?.code;
       const isNetworkError = isOffline || errorCode === 'NETWORK_ERROR' || errorCode === 'ECONNABORTED';
+      const parsed = parseApiError(error);
 
-      // Seller-away pause — POST /orders rejects checkout while the
-      // seller's holiday mode is active (409 SELLER_AWAY). Not a payment
-      // failure: surface the pause verbatim with no retry affordance
-      // (retry cannot succeed until the seller returns).
-      if (parseApiError(error).code === 'SELLER_AWAY') {
-        setStage('idle');
+      // ── Error-code switch — each server code maps to its truthful state
+      // instead of collapsing into a generic retryable failure. ──
+      switch (parsed.code) {
+        // Seller-away pause — POST /orders rejects checkout while the
+        // seller's holiday mode is active (409 SELLER_AWAY). Not a payment
+        // failure: surface the pause verbatim with no retry affordance
+        // (retry cannot succeed until the seller returns).
+        case 'SELLER_AWAY': {
+          setStage('idle');
+          pendingIntentIdRef.current = null;
+          const message = error instanceof Error && error.message
+            ? error.message
+            : 'This seller is away — checkout is paused until they return.';
+          setOrderError(message);
+          return;
+        }
+        // Seller restricted mid-checkout — terminal, no retry can succeed.
+        case 'SELLER_RESTRICTED': {
+          setStage('payment_failed');
+          pendingIntentIdRef.current = null;
+          setPaymentIssue('seller_unavailable');
+          setOrderError('This seller is currently restricted — this order cannot be paid.');
+          return;
+        }
+        // Another checkout holds the listing reservation — transient.
+        case 'LISTING_CHECKOUT_RESERVED': {
+          setStage('payment_failed');
+          pendingIntentIdRef.current = null;
+          setPaymentIssue('reserved');
+          setOrderError('This item is being checked out by another buyer. Try again in a moment.');
+          return;
+        }
+        // 1ZE wallet shortfall — required vs available come from the
+        // server payload; retry on this rail is pointless until the
+        // balance changes, so the state is distinct from a generic failure.
+        case 'WALLET_INSUFFICIENT_BALANCE': {
+          setStage('payment_failed');
+          pendingIntentIdRef.current = null;
+          const shortfall = parseOnezeShortfall(error);
+          if (shortfall.requiredIze != null) {
+            setOnezeRequiredIze(shortfall.requiredIze);
+          }
+          setOnezeShortfall(shortfall);
+          setPaymentIssue('insufficient_oneze');
+          const requiredLabel = shortfall.requiredIze != null
+            ? `${Math.ceil(shortfall.requiredIze).toLocaleString()} 1ZE`
+            : null;
+          const availableLabel = shortfall.availableIze != null
+            ? `${Math.floor(shortfall.availableIze).toLocaleString()} 1ZE`
+            : null;
+          setOrderError(
+            requiredLabel && availableLabel
+              ? `Not enough 1ZE — this order needs ${requiredLabel} and you have ${availableLabel}. Pay by card or top up your 1ZE wallet.`
+              : 'Not enough 1ZE for this order. Pay by card or top up your 1ZE wallet.'
+          );
+          return;
+        }
+        // Checkout reservation lapsed — the server already cancelled the
+        // order. Bound orders surface the guard state; listing checkout
+        // releases so "Buy again" mints a fresh order and reservation.
+        case 'CHECKOUT_RESERVATION_EXPIRED': {
+          setStage('payment_failed');
+          pendingIntentIdRef.current = null;
+          if (boundOrderId) {
+            setBoundOrderIssue('expired');
+          } else {
+            resetDeadOrderRefs();
+            setPaymentIssue('released');
+            setOrderError('Your checkout reservation expired. Tap “Buy again” to reserve the item once more.');
+          }
+          return;
+        }
+        default:
+          break;
+      }
+
+      // Listing gone — 404 on create, or the 409 "cannot be purchased"
+      // branch (which carries no code). Terminal: the Pay button is gated
+      // off by the 'sold' issue and the copy must not offer a retry.
+      if (
+        (!boundOrderId && parsed.status === 404)
+        || (parsed.status === 409 && /cannot be purchased/i.test(parsed.message))
+      ) {
+        setStage('payment_failed');
         pendingIntentIdRef.current = null;
-        const message = error instanceof Error && error.message
-          ? error.message
-          : 'This seller is away — checkout is paused until they return.';
-        setOrderError(message);
+        setPaymentIssue('sold');
+        setOrderError('This item is no longer available to buy.');
         return;
       }
 
-      // Order-bound dead ends — surface honestly instead of a generic
-      // payment failure. The server cancels the order when the checkout
-      // reservation lapses (410 / CHECKOUT_RESERVATION_EXPIRED). A bare 409
-      // is ambiguous: the order may have left a payable state (paid
-      // elsewhere, cancelled) OR the payment intent may already be bound —
-      // re-binding after a selection change is rejected even though the
-      // order is still payable. Refetch before declaring a dead end.
-      if (boundOrderId) {
-        const parsed = parseApiError(error);
-        if (parsed.code === 'CHECKOUT_RESERVATION_EXPIRED' || parsed.status === 410) {
-          setStage('payment_failed');
-          pendingIntentIdRef.current = null;
-          setBoundOrderIssue('expired');
-          return;
-        }
-        if (
-          parsed.status === 409
-          && parsed.code !== 'SHIPPING_QUOTE_INVALID'
-          && parsed.code !== 'FALLBACK_QUOTE_NOT_CHARGEABLE'
-          && parsed.code !== 'CHECKOUT_DETAILS_REQUIRED'
-        ) {
-          let stillPayable = false;
+      // A bare 409 on the payment step is ambiguous: the order may have
+      // left a payable state (paid elsewhere, cancelled) OR the payment
+      // intent may already be bound — re-binding after a selection change
+      // is rejected even though the order is still payable. Refetch before
+      // declaring a dead end.
+      if (
+        parsed.status === 409
+        && parsed.code !== 'SHIPPING_QUOTE_INVALID'
+        && parsed.code !== 'FALLBACK_QUOTE_NOT_CHARGEABLE'
+        && parsed.code !== 'CHECKOUT_DETAILS_REQUIRED'
+        && parsed.code !== 'SHIPPING_QUOTE_REQUIRED'
+      ) {
+        const targetOrderId = boundOrderId ?? createdOrderIdRef.current;
+        let stillPayable = false;
+        if (targetOrderId) {
           try {
-            const fresh = await getOrder(boundOrderId);
+            const fresh = await getOrder(targetOrderId);
             stillPayable = fresh?.status === 'created';
           } catch {
             // Refetch failed — fall through to the retryable error below.
           }
-          if (!isMountedRef.current || paymentAttemptRef.current !== attemptId) return;
-          setStage('payment_failed');
-          pendingIntentIdRef.current = null;
-          if (stillPayable) {
-            // The order is still awaiting payment — only the re-bind was
-            // rejected. Show a retryable error, not a terminal dead end.
-            setOrderError('We could not update your checkout details. Try again.');
-          } else {
-            setBoundOrderIssue('unavailable');
-          }
-          return;
         }
+        if (!isMountedRef.current || paymentAttemptRef.current !== attemptId) return;
+        setStage('payment_failed');
+        pendingIntentIdRef.current = null;
+        if (stillPayable) {
+          // The order is still awaiting payment — only the bind was
+          // rejected. Show a retryable error, not a terminal dead end.
+          setOrderError('We could not update your checkout details. Try again.');
+        } else if (boundOrderId) {
+          setBoundOrderIssue('unavailable');
+        } else {
+          // The order left 'created' — released. The next press mints a
+          // fresh order under a fresh idempotency key.
+          resetDeadOrderRefs();
+          setPaymentIssue('released');
+          setOrderError('This order is no longer payable — the item was released. Tap “Buy again” to try once more.');
+        }
+        return;
+      }
+
+      // A 410 without a code still means the reservation lapsed.
+      if (parsed.status === 410) {
+        setStage('payment_failed');
+        pendingIntentIdRef.current = null;
+        if (boundOrderId) {
+          setBoundOrderIssue('expired');
+        } else {
+          resetDeadOrderRefs();
+          setPaymentIssue('released');
+          setOrderError('Your checkout reservation expired. Tap “Buy again” to reserve the item once more.');
+        }
+        return;
       }
 
       if (isNetworkError && pendingIntentIdRef.current) {
@@ -729,11 +1074,13 @@ export function useCheckoutPaymentFlow({
           handleSettlementNavigation('pending', createdOrderIdRef.current ?? '', attemptId);
           return;
         }
-        // Confirmed failed
-        setStage('payment_failed');
-        pendingIntentIdRef.current = null;
-        setOrderError('Payment could not be completed. Try again.');
-        showError('Payment failed', 'Payment could not be completed. Try again.');
+        // Confirmed failed — the order may already be cancelled; release it
+        // rather than offering a retry that cannot succeed.
+        await handleTerminalIntentFailure(
+          createdOrderIdRef.current ?? boundOrderId ?? '',
+          attemptId,
+          null
+        );
       } else {
         setStage('payment_failed');
         const message = isNetworkError
@@ -757,10 +1104,14 @@ export function useCheckoutPaymentFlow({
     postageOption.quoteId,
     savedAddressId,
     savedPaymentMethod?.id,
+    savedPaymentMethod?.type,
     showError,
     showInfo,
     handleSettlementNavigation,
     cancelStaleOrder,
+    handleTerminalIntentFailure,
+    resetDeadOrderRefs,
+    paymentIssue,
     useBalance,
     walletBalance,
     useOnezePayment,
@@ -805,10 +1156,11 @@ export function useCheckoutPaymentFlow({
         }
         handleSettlementNavigation('succeeded', createdOrderIdRef.current ?? '', attemptId);
       } else if (status === 'failed' || status === 'cancelled') {
-        setStage('payment_failed');
-        pendingIntentIdRef.current = null;
-        setOrderError('Payment could not be completed. Try again.');
-        showError('Payment failed', 'Payment could not be completed. Try again.');
+        await handleTerminalIntentFailure(
+          createdOrderIdRef.current ?? boundOrderId ?? '',
+          attemptId,
+          latest.failureCode ?? null
+        );
       } else {
         // Still in flight at the gateway — keep the unknown_outcome banner.
         showInfo('Still checking', 'Your bank has not confirmed the payment yet. Please do not retry.');
@@ -825,8 +1177,10 @@ export function useCheckoutPaymentFlow({
     }
   }, [
     handleSettlementNavigation,
+    handleTerminalIntentFailure,
     item,
     boundOrder,
+    boundOrderId,
     postageOption.priceFromGbp,
     savedPaymentMethod?.type,
     showError,
@@ -861,8 +1215,11 @@ export function useCheckoutPaymentFlow({
               pendingIntentIdRef.current = null;
               handleSettlementNavigation('succeeded', orderId, attemptId);
             } else if (status === 'failed' || status === 'cancelled') {
-              pendingIntentIdRef.current = null;
-              setStage('payment_failed');
+              await handleTerminalIntentFailure(
+                orderId ?? boundOrderId ?? '',
+                attemptId,
+                latest.failureCode ?? null
+              );
             }
             // Pending: keep pending feedback, do not navigate twice
           } catch {
@@ -874,7 +1231,7 @@ export function useCheckoutPaymentFlow({
     });
 
     return () => subscription.remove();
-  }, [handleSettlementNavigation]);
+  }, [handleSettlementNavigation, handleTerminalIntentFailure, boundOrderId]);
 
   // Invalidates the in-flight payment attempt and clears the pending intent —
   // used by the close-confirmation flow when the user leaves mid-payment.
@@ -893,6 +1250,11 @@ export function useCheckoutPaymentFlow({
     orderError,
     setOrderError,
     boundOrderIssue,
+    paymentIssue,
+    onezeShortfall,
+    /** Server-authoritative 1ZE requirement when known — overrides the
+     *  client estimate for display and eligibility. */
+    onezeRequiredIze,
     handlePay,
     cancelStaleOrder,
     handleCheckPaymentStatus,

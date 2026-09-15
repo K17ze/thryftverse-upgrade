@@ -13,12 +13,15 @@
 //
 // (AGENTS.md §4.2 — microphone permission ownership)
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
 import {
   useCameraPermission,
   useMicrophonePermission,
 } from 'react-native-vision-camera';
 
+// 'denied' is a *re-askable* state (native 'not-determined': never asked,
+// or Android soft-denial without "don't ask again"). 'blocked' is the
+// permanent state (native 'denied'/'restricted') that requires Settings.
 export type MicPermissionState = 'granted' | 'denied' | 'blocked';
 
 export interface CreatorCapturePermissions {
@@ -65,20 +68,18 @@ export function useCreatorCapturePermissions(): CreatorCapturePermissions {
   const {
     hasPermission: hasMic,
     requestPermission: reqMic,
+    status: micStatus,
   } = useMicrophonePermission();
 
-  const [micState, setMicState] = useState<MicPermissionState>(
-    hasMic ? 'granted' : 'denied',
-  );
-  // Track whether we've attempted a mic permission request this session.
-  // We don't auto-request mic on mount — only when the user initiates video.
-  const [micRequested, setMicRequested] = useState(false);
-
-  // Sync micState when the underlying permission changes (e.g. after
-  // returning from Settings).
-  useEffect(() => {
-    setMicState(hasMic ? 'granted' : (micRequested ? 'blocked' : 'denied'));
-  }, [hasMic, micRequested]);
+  // Derive micState from the platform permission status instead of
+  // session bookkeeping. The previous implementation set 'blocked' after
+  // any single denial — a soft Android denial (re-askable) was conflated
+  // with a permanent denial, so a "not now" answer disabled re-asking for
+  // the rest of the session. The native status is also the source of truth
+  // for grants made in Settings while the app was backgrounded.
+  const micState: MicPermissionState = hasMic
+    ? 'granted'
+    : micStatus === 'not-determined' ? 'denied' : 'blocked';
 
   const requestCamera = useCallback(async () => {
     const granted = await reqCamera();
@@ -86,16 +87,9 @@ export function useCreatorCapturePermissions(): CreatorCapturePermissions {
   }, [reqCamera]);
 
   const requestMic = useCallback(async () => {
-    setMicRequested(true);
+    // The platform only shows a dialog while status is 'not-determined';
+    // a permanently denied mic resolves false immediately.
     const granted = await reqMic();
-    if (granted) {
-      setMicState('granted');
-    } else {
-      // After a denial, check if we can still ask again. VisionCamera
-      // doesn't expose canRequestPermission for mic directly, but if
-      // the request returns false on iOS, it means permanently denied.
-      setMicState('blocked');
-    }
     return granted;
   }, [reqMic]);
 

@@ -6,8 +6,8 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, FontFamily } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { isVideoUri } from '../../utils/media';
-import { safeValidateDocument, type CreatorDocument } from '../../creator/composition';
-import { CreatorCanvas } from '../../creator/CreatorCanvas';
+import { safeValidateDocument, type CreatorDocument } from '../../creator/core/projectStore/composition';
+import { CreatorCanvas } from '../../creator/studio/CreatorCanvas';
 import type { PosterStory } from '../../services/postersApi';
 
 const POSTER_CARD_WIDTH = 76;
@@ -37,6 +37,12 @@ export const PosterStoryArtwork = React.memo(function PosterStoryArtwork({ story
   }
 
   if (isVideoUri(firstFrame?.mediaUrl ?? '')) {
+    // A still poster is the right rail artwork — mounting a video player
+    // per rail tile is wasteful, and processed mediaUrl is an m3u8
+    // playlist. Fall back to the player only when no poster exists.
+    if (firstFrame?.posterUrl) {
+      return <CachedImage uri={firstFrame.posterUrl} style={styles.posterImage} contentFit="cover" priority="high" />;
+    }
     return (
       <Video
         source={{ uri: firstFrame.mediaUrl }}

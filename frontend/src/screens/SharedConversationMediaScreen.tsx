@@ -81,7 +81,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
         isVideo: m.mediaType === 'video' || isVideoUri(m.mediaUri!),
         senderLabel: m.senderId === 'me' ? 'You' : 'Thryft user',
         timestamp: m.timestamp,
-        thumbnailUri: undefined as string | undefined }));
+        thumbnailUri: m.posterUri ?? undefined }));
   }, [conversation]);
 
   // ── Remote media fetch ──
@@ -111,7 +111,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
           isVideo: it.mediaType === 'video' || isVideoUri(it.mediaUri),
           senderLabel: 'Thryft user',
           timestamp: it.createdAt,
-          thumbnailUri: undefined,
+          thumbnailUri: it.posterUri,
         }));
       setRemoteMedia((prev) => {
         const seen = new Set(prev.map((m) => m.id));

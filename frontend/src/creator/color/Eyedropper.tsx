@@ -74,7 +74,7 @@ import { TypographyV2 } from '../../theme/typography.v2';
 import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
-import { PressScale } from '../CreatorAnimations';
+import { PressScale } from '../shared/CreatorAnimations';
 import { extractMediaPalette, fallbackPalette } from './MediaPalette';
 import { toHexString } from './ColorMath';
 import type { CreatorColor, MediaPaletteEntry } from './ColorTypes';

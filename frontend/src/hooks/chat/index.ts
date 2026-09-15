@@ -10,6 +10,7 @@ export { useChatHeaderData } from "./useChatHeaderData";
 export { useChatContextualStack } from "./useChatContextualStack";
 export { useChatSearchScroll } from "./useChatSearchScroll";
 export { useNewMessageTracker } from "./useNewMessageTracker";
+export { useUnreadDividerAnchor } from "./useUnreadDividerAnchor";
 export type { Message } from "./types";
 export {
   INITIAL_MESSAGES,

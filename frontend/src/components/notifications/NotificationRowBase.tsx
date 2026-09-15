@@ -4,7 +4,9 @@ import {
   Text,
   StyleSheet,
   ViewStyle,
-  StyleProp } from 'react-native';
+  StyleProp,
+  AccessibilityActionEvent,
+  AccessibilityActionInfo } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { CachedImage } from '../CachedImage';
@@ -61,9 +63,18 @@ export interface NotificationRowBaseProps {
   inAttentionSection?: boolean;
   /** Press handler for the row body. */
   onPress: () => void;
-  /** Optional action button label + handler for action-required events. */
+  /**
+   * Quiet action affordance for action-required rows ("Dispatch now",
+   * "Respond"). Rendered as a text button under the body — no pill chrome.
+   * Presenters that render their own trailing action (auction, resolution)
+   * leave these undefined.
+   */
   actionLabel?: string;
   onActionPress?: () => void;
+  /** Screen-reader actions for the row (mark read / delete) — forwarded to
+   *  the row pressable so swipe gestures have non-gesture equivalents. */
+  accessibilityActions?: AccessibilityActionInfo[];
+  onAccessibilityAction?: (event: AccessibilityActionEvent) => void;
   /** Leading visual — avatar, status icon, or thumbnail (rendered by presenter). */
   leading: React.ReactNode;
   /** Main content — title + body (rendered by presenter). */
@@ -75,14 +86,6 @@ export interface NotificationRowBaseProps {
   style?: StyleProp<ViewStyle>;
 }
 
-const DELIVERY_STATUS_CONFIG: Record<
-  string,
-  { label: string; icon: keyof typeof Ionicons.glyphMap; colorKey: 'textMuted' | 'danger' | 'textSecondary' }
-> = {
-  suppressed: { label: 'Silenced', icon: 'moon-outline', colorKey: 'textMuted' },
-  failed: { label: 'Delivery failed', icon: 'alert-circle-outline', colorKey: 'danger' },
-  queued: { label: 'Pending', icon: 'time-outline', colorKey: 'textSecondary' } };
-
 export function NotificationRowBase({
   event,
   time,
@@ -91,6 +94,8 @@ export function NotificationRowBase({
   onPress,
   actionLabel,
   onActionPress,
+  accessibilityActions,
+  onAccessibilityAction,
   leading,
   children,
   trailing,
@@ -100,7 +105,6 @@ export function NotificationRowBase({
   const styles = useMemo(() => createStyles(colors), [colors]);
   const isUnread = !event.readAt;
   const timeColor = resolveTimestampColor(event.createdAt, colors);
-  const deliveryConfig = DELIVERY_STATUS_CONFIG[event.status];
 
   return (
     <AnimatedPressable
@@ -114,6 +118,8 @@ export function NotificationRowBase({
       activeOpacity={0.7}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      accessibilityActions={accessibilityActions}
+      onAccessibilityAction={onAccessibilityAction}
       hapticFeedback="light"
     >
       {/* Leading visual slot — avatar/icon with unread dot at bottom-right */}
@@ -136,9 +142,26 @@ export function NotificationRowBase({
             {time}
           </Text>
         </View>
+        {actionLabel && onActionPress ? (
+          <AnimatedPressable
+            style={styles.actionButton}
+            onPress={onActionPress}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={actionLabel}
+            hapticFeedback="light"
+          >
+            <Text style={styles.actionLabel} numberOfLines={1}>
+              {actionLabel}
+            </Text>
+          </AnimatedPressable>
+        ) : null}
         {aggregatedCount && aggregatedCount > 1 ? (
           <View style={styles.metaRow}>
-            <View style={styles.aggregatedBadge}>
+            <View
+              style={styles.aggregatedBadge}
+              accessibilityLabel={`${aggregatedCount} similar notifications`}
+            >
               <Text style={styles.aggregatedText}>+{aggregatedCount - 1}</Text>
             </View>
           </View>
@@ -293,11 +316,6 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
       flexDirection: 'column',
       gap: 2 },
-    headerRow: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      justifyContent: 'space-between',
-      gap: Space.sm },
     metaRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -322,13 +340,17 @@ function createStyles(colors: ThemeColors) {
       fontSize: TypographyV2.meta.size - 2,
       fontFamily: FontFamily.bold,
       color: colors.background },
-    deliveryStatus: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs / 2 },
-    deliveryStatusText: {
+    // Quiet action affordance — a text button, not a pill (AGENTS.md §4).
+    // Sits under the body copy so the row keeps its list silhouette.
+    actionButton: {
+      alignSelf: 'flex-start',
+      marginTop: Space.xs / 2,
+      minHeight: Control.hit / 2 },
+    actionLabel: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: FontFamily.regular },
+      fontFamily: FontFamily.semibold,
+      color: colors.brand,
+      letterSpacing: 0.1 },
     trailing: {
       alignItems: 'center',
       justifyContent: 'center',

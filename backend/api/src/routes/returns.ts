@@ -90,10 +90,20 @@ export function evaluateReturnRequestEligibility(input: {
   return { ok: true };
 }
 
-/** Statuses in which the case is still waiting on the seller to respond. */
+/**
+ * Statuses in which the case is waiting on the seller (or, post-approval,
+ * on the seller/operator to keep moving). A case that stalls in any of
+ * these states for the response window can be escalated by the buyer —
+ * approval is not a response, it is the start of the seller's work.
+ */
 const STEP_IN_WAITING_STATUSES: ReadonlySet<ReturnCaseStatus> = new Set([
   'requested',
   'evidence_review',
+  'approved',
+  'reverse_shipped',
+  'received',
+  'inspected',
+  'remedy_accepted',
 ]);
 
 function round2(value: number): number {
@@ -173,30 +183,32 @@ export function resolveRemedyAmountGbp(input: {
 }
 
 /**
- * When the seller response window closes for a case created at `createdAt`.
- * Returns null for statuses where step-in is not applicable (the seller has
- * already responded, or the case is resolved).
+ * When the response window closes for a case that entered `status` at
+ * `referenceAt` (the row's updated_at — the window runs from when the case
+ * became stalled, not from creation, so post-approval stalls are covered).
+ * Returns null for statuses where step-in is not applicable.
  */
 export function computeStepInEligibleAt(
   status: ReturnCaseStatus,
-  createdAt: string,
+  referenceAt: string,
 ): string | null {
   if (!STEP_IN_WAITING_STATUSES.has(status)) return null;
-  const created = new Date(createdAt).getTime();
-  if (!Number.isFinite(created)) return null;
-  return new Date(created + SELLER_RESPONSE_WINDOW_MS).toISOString();
+  const entered = new Date(referenceAt).getTime();
+  if (!Number.isFinite(entered)) return null;
+  return new Date(entered + SELLER_RESPONSE_WINDOW_MS).toISOString();
 }
 
 /**
  * Step-in eligibility: the case must still be waiting on the seller AND the
- * response window must have elapsed.
+ * response window must have elapsed. `referenceAt` is the time the case
+ * entered the stalled status (updated_at for loaded rows).
  */
 export function computeStepInEligibility(input: {
   status: ReturnCaseStatus;
-  createdAt: string;
+  referenceAt: string;
   now?: Date;
 }): { eligible: boolean; eligibleAt: string | null } {
-  const eligibleAt = computeStepInEligibleAt(input.status, input.createdAt);
+  const eligibleAt = computeStepInEligibleAt(input.status, input.referenceAt);
   if (eligibleAt === null) return { eligible: false, eligibleAt: null };
   const now = (input.now ?? new Date()).getTime();
   return { eligible: now >= new Date(eligibleAt).getTime(), eligibleAt };
@@ -246,18 +258,22 @@ interface ReturnCaseEventRow {
 // ── State machine ──
 
 const VALID_TRANSITIONS: Record<ReturnCaseStatus, ReturnCaseStatus[]> = {
-  // 'appealed' from requested/evidence_review is the platform step-in path:
-  // reachable only via POST /return-cases/:id/step-in after the seller
-  // response window has elapsed (the endpoint enforces the timing).
+  // 'appealed' is the platform step-in path: reachable only via
+  // POST /return-cases/:id/step-in after the response window has elapsed
+  // (the endpoint enforces the timing). It is reachable from every state
+  // that is still waiting on the seller — an approved case whose seller
+  // goes silent must not dead-end the buyer.
   requested: ['evidence_review', 'approved', 'rejected', 'appealed'],
   evidence_review: ['approved', 'rejected', 'appealed'],
-  approved: ['reverse_shipped'],
+  approved: ['reverse_shipped', 'appealed'],
   rejected: ['appealed'],
-  reverse_shipped: ['received'],
-  received: ['inspected'],
-  inspected: ['remedy_proposed'],
-  remedy_proposed: ['remedy_accepted', 'appealed'],
-  remedy_accepted: ['refund_confirmed', 'closed'],
+  reverse_shipped: ['received', 'appealed'],
+  received: ['inspected', 'appealed'],
+  inspected: ['remedy_proposed', 'appealed'],
+  // 'closed' from remedy_proposed is the buyer-accepts-'reject' path:
+  // accepting a rejection settles the case — nothing is left to do.
+  remedy_proposed: ['remedy_accepted', 'appealed', 'closed'],
+  remedy_accepted: ['refund_confirmed', 'closed', 'appealed'],
   appealed: ['remedy_proposed', 'closed'],
   refund_confirmed: ['closed'],
   closed: [],
@@ -314,7 +330,7 @@ function serializeReturnCase(row: ReturnCaseRow) {
      * the waiting states. Clients must render step-in copy from this value,
      * not a locally assumed window.
      */
-    stepInEligibleAt: computeStepInEligibleAt(row.status, row.created_at),
+    stepInEligibleAt: computeStepInEligibleAt(row.status, row.updated_at),
     resolutionNotes: row.resolution_notes,
     resolvedAt: row.resolved_at,
     appealReason: row.appeal_reason,
@@ -856,7 +872,7 @@ export function registerReturnRoutes({
 
       const eligibility = computeStepInEligibility({
         status: returnCase.status,
-        createdAt: returnCase.created_at,
+        referenceAt: returnCase.updated_at,
       });
 
       if (eligibility.eligibleAt === null) {
@@ -1045,7 +1061,9 @@ export function registerReturnRoutes({
   });
 
   // POST /return-cases/:returnCaseId/reverse-shipment
-  // Seller or platform provides return tracking details.
+  // Seller or platform provides return tracking details; the buyer may also
+  // record their own dispatch — they are the party physically shipping, and
+  // a seller who approves then goes silent must not dead-end the case.
   app.post('/return-cases/:returnCaseId/reverse-shipment', async (request, reply) => {
     const authUserId = resolveAuthenticatedUserId(request);
     if (!authUserId) {
@@ -1095,10 +1113,14 @@ export function registerReturnRoutes({
 
       const returnCase = result.rows[0];
 
-      if (returnCase.seller_id !== authUserId && !isOperator) {
+      if (
+        returnCase.seller_id !== authUserId &&
+        returnCase.buyer_id !== authUserId &&
+        !isOperator
+      ) {
         await client.query('ROLLBACK');
         reply.code(403);
-        return { ok: false, error: 'Only the seller or an operator can provide reverse shipment details' };
+        return { ok: false, error: 'Only a case participant or an operator can provide reverse shipment details' };
       }
 
       const previousStatus = returnCase.status;
@@ -1113,7 +1135,11 @@ export function registerReturnRoutes({
         };
       }
 
-      const actorRole = isOperator ? 'operator' : 'seller';
+      const actorRole = isOperator
+        ? 'operator'
+        : returnCase.buyer_id === authUserId
+          ? 'buyer'
+          : 'seller';
 
       await client.query(
         `UPDATE return_cases
@@ -1551,7 +1577,14 @@ export function registerReturnRoutes({
       }
 
       const previousStatus = returnCase.status;
-      const targetStatus: ReturnCaseStatus = 'remedy_accepted';
+      // Accepting a 'reject' remedy settles the case outright — there is no
+      // fulfilment left to track, so holding it open at remedy_accepted
+      // would park it until an operator notices.
+      const isRefundRemedy =
+        returnCase.proposed_remedy === 'full_refund' ||
+        returnCase.proposed_remedy === 'partial_refund';
+      const targetStatus: ReturnCaseStatus =
+        returnCase.proposed_remedy === 'reject' ? 'closed' : 'remedy_accepted';
 
       if (!validateTransition(previousStatus, targetStatus)) {
         await client.query('ROLLBACK');
@@ -1564,7 +1597,9 @@ export function registerReturnRoutes({
 
       await client.query(
         `UPDATE return_cases
-         SET status = $2, updated_at = NOW()
+         SET status = $2,
+             resolved_at = CASE WHEN $2 = 'closed' THEN NOW() ELSE resolved_at END,
+             updated_at = NOW()
          WHERE id = $1`,
         [returnCaseId, targetStatus],
       );
@@ -1576,7 +1611,7 @@ export function registerReturnRoutes({
         targetStatus,
         authUserId,
         'buyer',
-        'Remedy accepted',
+        targetStatus === 'closed' ? 'Remedy accepted — case closed' : 'Remedy accepted',
         { remedy: returnCase.proposed_remedy },
       );
 
@@ -1586,6 +1621,44 @@ export function registerReturnRoutes({
       // execution linked to this case (refund_executions.return_case_id)
       // succeeds, at which point confirmReturnCaseRefund advances it to
       // refund_confirmed. See routes/refunds.ts.
+      //
+      // Acceptance now creates that linked execution itself: previously
+      // nothing did — "Refund approved — processing" could sit forever with
+      // no refund process existing. The execution is created with
+      // maker_check_status='pending_check' regardless of amount, so a human
+      // checker always confirms remedy-linked refunds.
+      if (isRefundRemedy && targetStatus === 'remedy_accepted') {
+        const orderRow = await client.query<{ total_gbp: number | string }>(
+          `SELECT total_gbp FROM orders WHERE id = $1 LIMIT 1`,
+          [returnCase.order_id],
+        );
+        const agreedAmount = Number(
+          returnCase.remedy_amount_gbp ?? orderRow.rows[0]?.total_gbp ?? 0,
+        );
+        if (Number.isFinite(agreedAmount) && agreedAmount > 0) {
+          const requestHash = crypto
+            .createHash('sha256')
+            .update(`return_case_remedy:${returnCaseId}:${agreedAmount}`)
+            .digest('hex');
+          await client.query(
+            `INSERT INTO refund_executions (
+               id, order_id, return_case_id, request_hash, amount_gbp,
+               initiator_id, initiator_role, status,
+               maker_check_status, maker_check_threshold_gbp
+             )
+             VALUES ($1, $2, $3, $4, $5, 'system', 'system', 'pending', 'pending_check', 0)
+             ON CONFLICT (request_hash) DO NOTHING`,
+            [
+              `rex_${crypto.randomUUID().replace(/-/g, '')}`,
+              returnCase.order_id,
+              returnCaseId,
+              requestHash,
+              agreedAmount,
+            ],
+          );
+        }
+      }
+
       await client.query('COMMIT');
 
       return { ok: true, returnCaseId, status: targetStatus };

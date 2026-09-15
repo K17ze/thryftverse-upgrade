@@ -8,7 +8,7 @@ import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useAppTheme } from '../../theme/ThemeContext';
-import type { CreatorPage } from '../composition';
+import type { CreatorPage } from '../core/projectStore/composition';
 
 // ── Poster Frame Tray ──────────────────────────────────────────────
 // A compact horizontal filmstrip of 9:16 frame thumbnails that floats

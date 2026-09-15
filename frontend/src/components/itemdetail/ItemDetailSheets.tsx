@@ -18,7 +18,7 @@ import {
   MakeOfferSheet,
   type MakeOfferSheetProps,
 } from '../commerce/detail';
-import type { ListingCommerceContext } from '../../platform/product';
+import type { ListingCommerceContext, ProductMediaItem } from '../../platform/product';
 import type { ItemDetailMediaResult } from '../../hooks/itemDetail/useItemDetailMedia';
 import type {
   ItemDetailOverlayVisibility,
@@ -49,6 +49,10 @@ export interface ItemDetailSheetsProps {
   currentUserName: string;
   formatFromFiat: FormatFromFiat;
 
+  /** Canonical PDP media — the same ProductMediaItem[] the hero stage
+   *  renders (kind, focal point, poster, blurhash/LQIP, derivatives),
+   *  forwarded verbatim to the fullscreen viewer. */
+  mediaItems: ProductMediaItem[];
   /** Media-stage state — owns the fullscreen viewer index/visibility. */
   media: ItemDetailMediaResult;
   /** Screen-owned overlay visibility + dismissers. */
@@ -85,6 +89,7 @@ export function ItemDetailSheets({
   isSeller,
   currentUserName,
   formatFromFiat,
+  mediaItems,
   media,
   visibility,
   dismiss,
@@ -129,7 +134,7 @@ export function ItemDetailSheets({
   return (
     <>
       <FullscreenMediaViewer
-        images={item.images}
+        media={mediaItems}
         initialIndex={media.activeIndex}
         visible={media.isViewerVisible}
         onActiveIndexChange={media.setActiveIndex}
@@ -239,20 +244,32 @@ export function ItemDetailSheets({
           <CommerceDetailMetricRow
             label="Returns"
             value={
-              commerce.returnPolicy?.accepted
+              commerce.returnPolicy?.accepted === true
                 ? commerce.returnPolicy.windowDays
                   ? `${commerce.returnPolicy.windowDays} days`
                   : 'Accepted'
-                : 'Not accepted'
+                : commerce.returnPolicy?.accepted === false
+                  ? 'Not accepted'
+                  // accepted === null — undetermined; prefer the
+                  // server-authored summary, else the truthful
+                  // checkout-confirmation fallback. Null is not
+                  // "not accepted".
+                  : commerce.returnPolicy?.summary ?? 'Confirmed at checkout'
             }
           />
           {commerce.authenticity && commerce.authenticity.status !== 'not_offered' && (
             <CommerceDetailMetricRow
               label="Authenticity"
-              value={commerce.authenticity.label ?? 'Eligible'}
+              value={
+                commerce.authenticity.label
+                  ?? (commerce.authenticity.status === 'verified'
+                    ? 'Verified'
+                    : commerce.authenticity.status === 'in_progress'
+                      ? 'Verification in progress'
+                      : 'Eligible')
+              }
             />
           )}
-          <CommerceDetailMetricRow label="Payment" value="Thryftverse checkout" muted />
         </View>
       </BottomSheet>
 
@@ -349,7 +366,7 @@ export function ItemDetailSheets({
           price: item.price ?? 0,
           image: item.images?.[0],
         } : null}
-        sellerId={item?.seller?.id ?? null}
+        sellerId={item?.sellerId ?? item?.seller?.id ?? null}
         onSent={onOfferSent}
       />
 

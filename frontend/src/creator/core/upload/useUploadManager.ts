@@ -22,13 +22,18 @@ export function getSharedManager(): UploadManager {
     // reconnect); coming back online kicks the queue. `isConnected` can
     // be null on an ambiguous probe — only an explicit false parks the
     // queue, so a flaky NetInfo read never stalls a healthy upload.
+    // `isInternetReachable === false` (interface up but no usable route —
+    // captive portal, walled garden) parks the queue too: uploading into
+    // a dead pipe burns per-part retries for nothing.
+    const deriveOnline = (state: { isConnected: boolean | null; isInternetReachable?: boolean | null }) =>
+      state.isConnected !== false && state.isInternetReachable !== false;
     NetInfo.fetch()
-      .then((state) => sharedManager?.setOnline(state.isConnected !== false))
+      .then((state) => sharedManager?.setOnline(deriveOnline(state)))
       .catch(() => {
         // NetInfo unavailable (bare bridge) — stay online by default.
       });
     NetInfo.addEventListener((state) => {
-      sharedManager?.setOnline(state.isConnected !== false);
+      sharedManager?.setOnline(deriveOnline(state));
     });
   }
   return sharedManager;
@@ -93,6 +98,12 @@ export interface UseUploadManagerResult {
   totalBytes: number;
   /** Total uploaded bytes across all jobs for the active project. */
   uploadedBytes: number;
+  /** Aggregate rolling throughput (bytes/s) across in-flight jobs.
+   *  Undefined until a real rate is measurable. */
+  bytesPerSecond?: number;
+  /** Estimated seconds remaining for the project's in-flight jobs at the
+   *  current rolling rate. Undefined when the rate is unknown or zero. */
+  etaSeconds?: number;
   queueUpload: (params: QueueParams) => Promise<string>;
   pauseJob: (jobId: string) => void;
   resumeJob: (jobId: string) => Promise<void>;
@@ -241,6 +252,12 @@ export function useUploadManager(projectId?: string): UseUploadManagerResult {
     [filteredJobs, uploadedBytes, totalBytes, progress],
   );
 
+  // Rolling throughput + ETA — read live each render (tick bumps on every
+  // progress event, throttled to ~10fps above).
+  const { bytesPerSecond, etaSeconds } = projectId
+    ? manager.getTransferStats(projectId)
+    : { bytesPerSecond: undefined, etaSeconds: undefined };
+
   const isProjectComplete = useMemo(
     () =>
       filteredJobs.length > 0 &&
@@ -286,6 +303,8 @@ export function useUploadManager(projectId?: string): UseUploadManagerResult {
       progress,
       totalBytes,
       uploadedBytes,
+      bytesPerSecond,
+      etaSeconds,
       queueUpload,
       pauseJob,
       resumeJob,
@@ -305,6 +324,8 @@ export function useUploadManager(projectId?: string): UseUploadManagerResult {
       progress,
       totalBytes,
       uploadedBytes,
+      bytesPerSecond,
+      etaSeconds,
       queueUpload,
       pauseJob,
       resumeJob,

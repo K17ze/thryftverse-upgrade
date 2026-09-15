@@ -29,7 +29,7 @@ import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { Motion } from '../../theme/motionTokens';
-import { PressScale, SheetContainer } from '../CreatorAnimations';
+import { PressScale, SheetContainer } from '../shared/CreatorAnimations';
 import { CreatorSlider } from '../controls/CreatorSlider';
 import { AppIcon } from '../../components/common/AppIcon';
 import { IconSize } from '../../theme/iconTokens';

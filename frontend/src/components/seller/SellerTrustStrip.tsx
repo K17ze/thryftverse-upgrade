@@ -12,6 +12,12 @@ export interface SellerTrustStripProps {
   trust: SellerHubTrust | null;
   /** True when the projection is older than the recompute cadence. Qualifies, never hides. */
   stale?: boolean;
+  /**
+   * True while the seller's holiday-mode pause is effective. While away,
+   * new orders are paused — the "Ships in ~N days" chip would advertise a
+   * dispatch promise the seller cannot currently make, so it is withheld.
+   */
+  awayActive?: boolean;
 }
 
 interface TrustChip {
@@ -32,7 +38,7 @@ function formatDispatch(days: number): string {
  * count ("96% positive · 212 sales"), response and dispatch are stated as
  * facts, and anything without a backend row is omitted — never placeholder.
  */
-export const SellerTrustStrip: React.FC<SellerTrustStripProps> = ({ trust, stale = false }) => {
+export const SellerTrustStrip: React.FC<SellerTrustStripProps> = ({ trust, stale = false, awayActive = false }) => {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -59,11 +65,11 @@ export const SellerTrustStrip: React.FC<SellerTrustStripProps> = ({ trust, stale
         text: `${Math.round(trust.responseRatePct)}% response rate`,
       });
     }
-    if (trust.avgDispatchDays != null) {
+    if (trust.avgDispatchDays != null && !awayActive) {
       out.push({ id: 'dispatch', icon: 'package', text: formatDispatch(trust.avgDispatchDays) });
     }
     return out;
-  }, [trust]);
+  }, [trust, awayActive]);
 
   if (chips.length === 0) return null;
 

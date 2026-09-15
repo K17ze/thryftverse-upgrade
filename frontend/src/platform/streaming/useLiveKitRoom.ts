@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Platform } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 
 export type LiveKitConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
+
+/** A published or subscribed LiveKit video track (camera or screen share). */
+export type LiveKitVideoTrack = import('livekit-client').VideoTrack;
 
 export interface LiveKitTrackInfo {
   trackSid: string;
@@ -26,6 +29,17 @@ export interface UseLiveKitRoomResult {
   error: string | null;
   localParticipant: LiveKitParticipantInfo | null;
   remoteParticipants: LiveKitParticipantInfo[];
+  /** The local camera track once publishing has started — null before
+   *  `setCameraEnabled(true)` resolves or after it is disabled. */
+  localVideoTrack: LiveKitVideoTrack | null;
+  /** The first subscribed remote video track — camera preferred, screen
+   *  share as fallback. Null until a remote track is actually subscribed. */
+  remoteVideoTrack: LiveKitVideoTrack | null;
+  /** Publish the local camera. Rejects when the room is not connected or
+   *  the capture/permission request fails — callers must handle it. */
+  setCameraEnabled: (enabled: boolean) => Promise<void>;
+  /** Publish the local microphone. Same contract as setCameraEnabled. */
+  setMicrophoneEnabled: (enabled: boolean) => Promise<void>;
   disconnect: () => Promise<void>;
   isNativeModuleAvailable: boolean;
 }
@@ -41,6 +55,12 @@ interface LiveKitRoomInternal {
 }
 
 type RoomEventListener = (...args: unknown[]) => void;
+
+type LiveKitTrackKind = import('livekit-client').Track.Kind;
+type LiveKitTrackSource = import('livekit-client').Track.Source;
+
+const VIDEO_KIND = 'video' as LiveKitTrackKind;
+const CAMERA_SOURCE = 'camera' as LiveKitTrackSource;
 
 const extractTrackInfo = (publication: {
   trackSid: string;
@@ -77,17 +97,50 @@ const extractParticipantInfo = (
   tracks: Array.from(participant.trackPublications.values()).map(extractTrackInfo),
 });
 
+const isVideoTrack = (track: unknown): track is LiveKitVideoTrack =>
+  typeof track === 'object' && track !== null
+  && (track as { kind?: string }).kind === VIDEO_KIND;
+
+const extractLocalVideoTrack = (
+  participant: import('livekit-client').LocalParticipant,
+): LiveKitVideoTrack | null => {
+  const track = participant.getTrackPublication(CAMERA_SOURCE)?.track;
+  return isVideoTrack(track) ? track : null;
+};
+
+const extractRemoteVideoTrack = (
+  participants: Map<string, import('livekit-client').RemoteParticipant>,
+): LiveKitVideoTrack | null => {
+  let fallback: LiveKitVideoTrack | null = null;
+  for (const participant of participants.values()) {
+    for (const publication of participant.trackPublications.values()) {
+      // On a remote publication `track` is only set once the subscription
+      // has delivered a real media track — no metadata guessing.
+      const track = publication.track;
+      if (!isVideoTrack(track)) continue;
+      if (publication.source === CAMERA_SOURCE) return track;
+      if (!fallback) fallback = track;
+    }
+  }
+  return fallback;
+};
+
 let liveKitNativeAvailable: boolean | null = null;
 
-async function checkNativeModuleAvailable(): Promise<boolean> {
+function checkNativeModuleAvailable(): boolean {
   if (liveKitNativeAvailable !== null) return liveKitNativeAvailable;
   if (Platform.OS === 'web') {
     liveKitNativeAvailable = false;
-    return false;
+    return liveKitNativeAvailable;
   }
   try {
-    await import('@livekit/react-native');
-    liveKitNativeAvailable = true;
+    // Real probe: the JS modules always import under Metro — only the
+    // registered native modules prove the dev-client actually contains
+    // WebRTC. WebRTCModule ships in @livekit/react-native-webrtc,
+    // LivekitReactNativeModule in @livekit/react-native.
+    liveKitNativeAvailable = Boolean(
+      NativeModules.WebRTCModule && NativeModules.LivekitReactNativeModule,
+    );
   } catch {
     liveKitNativeAvailable = false;
   }
@@ -101,8 +154,10 @@ async function createRoom(): Promise<LiveKitRoomInternal> {
 
 /**
  * Connect to a LiveKit room using a token and manage connection lifecycle.
- * Gracefully degrades when the native module is unavailable — the hook
- * returns an `error` state instead of crashing.
+ * Exposes publish controls (camera/mic) and the raw video track objects so
+ * surfaces can render real media. Gracefully degrades when the native
+ * module is unavailable — the hook returns an `error` state instead of
+ * crashing.
  */
 export function useLiveKitRoom(
   url: string | null,
@@ -112,12 +167,12 @@ export function useLiveKitRoom(
   const [error, setError] = useState<string | null>(null);
   const [localParticipant, setLocalParticipant] = useState<LiveKitParticipantInfo | null>(null);
   const [remoteParticipants, setRemoteParticipants] = useState<LiveKitParticipantInfo[]>([]);
+  const [localVideoTrack, setLocalVideoTrack] = useState<LiveKitVideoTrack | null>(null);
+  const [remoteVideoTrack, setRemoteVideoTrack] = useState<LiveKitVideoTrack | null>(null);
   const [isNativeModuleAvailable, setIsNativeModuleAvailable] = useState(true);
 
   const roomRef = useRef<LiveKitRoomInternal | null>(null);
-  const listenersRef = useRef<RoomEventListener[]>([]);
-  const connectTokenRef = useRef<string | null>(null);
-  const connectUrlRef = useRef<string | null>(null);
+  const listenersRef = useRef<Array<{ event: string; fn: RoomEventListener }>>([]);
 
   const syncParticipants = useCallback(() => {
     const room = roomRef.current;
@@ -150,7 +205,24 @@ export function useLiveKitRoom(
         ),
       ),
     );
+
+    setLocalVideoTrack(extractLocalVideoTrack(room.localParticipant));
+    setRemoteVideoTrack(extractRemoteVideoTrack(room.remoteParticipants));
   }, []);
+
+  const setCameraEnabled = useCallback(async (enabled: boolean) => {
+    const room = roomRef.current;
+    if (!room) throw new Error('Cannot change camera — the room is not connected');
+    await room.localParticipant.setCameraEnabled(enabled);
+    syncParticipants();
+  }, [syncParticipants]);
+
+  const setMicrophoneEnabled = useCallback(async (enabled: boolean) => {
+    const room = roomRef.current;
+    if (!room) throw new Error('Cannot change microphone — the room is not connected');
+    await room.localParticipant.setMicrophoneEnabled(enabled);
+    syncParticipants();
+  }, [syncParticipants]);
 
   const disconnect = useCallback(async () => {
     const room = roomRef.current;
@@ -168,13 +240,12 @@ export function useLiveKitRoom(
     const connect = async () => {
       if (!url || !token) {
         setState('disconnected');
+        setLocalVideoTrack(null);
+        setRemoteVideoTrack(null);
         return;
       }
 
-      connectUrlRef.current = url;
-      connectTokenRef.current = token;
-
-      const nativeAvailable = await checkNativeModuleAvailable();
+      const nativeAvailable = checkNativeModuleAvailable();
       if (cancelled) return;
       setIsNativeModuleAvailable(nativeAvailable);
 
@@ -203,26 +274,26 @@ export function useLiveKitRoom(
           else if (stateStr === 'disconnected') setState('disconnected');
         };
 
-        const onParticipantConnected: RoomEventListener = () => syncParticipants();
-        const onParticipantDisconnected: RoomEventListener = () => syncParticipants();
-        const onTrackPublished: RoomEventListener = () => syncParticipants();
-        const onTrackSubscribed: RoomEventListener = () => syncParticipants();
-        const onTrackUnsubscribed: RoomEventListener = () => syncParticipants();
-        const onParticipantSpeaking: RoomEventListener = () => syncParticipants();
+        const onParticipantChanged: RoomEventListener = () => syncParticipants();
 
         const listeners: Array<{ event: string; fn: RoomEventListener }> = [
           { event: 'ConnectionStateChanged', fn: onConnectionStateChanged },
-          { event: 'ParticipantConnected', fn: onParticipantConnected },
-          { event: 'ParticipantDisconnected', fn: onParticipantDisconnected },
-          { event: 'TrackPublished', fn: onTrackPublished },
-          { event: 'TrackSubscribed', fn: onTrackSubscribed },
-          { event: 'TrackUnsubscribed', fn: onTrackUnsubscribed },
-          { event: 'ActiveSpeakersChanged', fn: onParticipantSpeaking },
+          { event: 'ParticipantConnected', fn: onParticipantChanged },
+          { event: 'ParticipantDisconnected', fn: onParticipantChanged },
+          { event: 'TrackPublished', fn: onParticipantChanged },
+          { event: 'TrackUnpublished', fn: onParticipantChanged },
+          { event: 'TrackSubscribed', fn: onParticipantChanged },
+          { event: 'TrackUnsubscribed', fn: onParticipantChanged },
+          { event: 'TrackMuted', fn: onParticipantChanged },
+          { event: 'TrackUnmuted', fn: onParticipantChanged },
+          { event: 'LocalTrackPublished', fn: onParticipantChanged },
+          { event: 'LocalTrackUnpublished', fn: onParticipantChanged },
+          { event: 'ActiveSpeakersChanged', fn: onParticipantChanged },
         ];
 
-        for (const { event, fn } of listeners) {
-          room.on(event, fn);
-          listenersRef.current.push(fn);
+        for (const listener of listeners) {
+          room.on(listener.event, listener.fn);
+          listenersRef.current.push(listener);
         }
 
         await room.connect(url, token);
@@ -245,19 +316,15 @@ export function useLiveKitRoom(
       cancelled = true;
       const room = roomRef.current;
       if (room) {
-        for (const fn of listenersRef.current) {
-          room.off('ConnectionStateChanged', fn);
-          room.off('ParticipantConnected', fn);
-          room.off('ParticipantDisconnected', fn);
-          room.off('TrackPublished', fn);
-          room.off('TrackSubscribed', fn);
-          room.off('TrackUnsubscribed', fn);
-          room.off('ActiveSpeakersChanged', fn);
+        for (const { event, fn } of listenersRef.current) {
+          room.off(event, fn);
         }
         listenersRef.current = [];
         void room.disconnect(true).catch(() => {});
         roomRef.current = null;
       }
+      setLocalVideoTrack(null);
+      setRemoteVideoTrack(null);
     };
   }, [url, token, syncParticipants]);
 
@@ -266,6 +333,10 @@ export function useLiveKitRoom(
     error,
     localParticipant,
     remoteParticipants,
+    localVideoTrack,
+    remoteVideoTrack,
+    setCameraEnabled,
+    setMicrophoneEnabled,
     disconnect,
     isNativeModuleAvailable,
   };

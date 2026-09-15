@@ -49,7 +49,7 @@ const ProfileLookTile = React.memo(function ProfileLookTile({
         sharedTransitionTag={`look-${item.id}`}
       >
         <CachedImage
-          uri={item.mediaUrl}
+          uri={isVideo ? (item.posterUrl ?? item.mediaUrl) : item.mediaUrl}
           style={styles.lookImage}
           containerStyle={{ width: '100%', height: '100%', borderRadius: Radius.sm }}
           contentFit="cover"

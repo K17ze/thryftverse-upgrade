@@ -17,7 +17,7 @@ import { Motion } from '../../theme/motionTokens';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useAppTranslation } from '../../i18n/useAppTranslation';
 
-export type MessageAction = 'copy' | 'reply' | 'react' | 'forward' | 'save' | 'askAgent' | 'edit' | 'delete' | 'retry' | 'report';
+export type MessageAction = 'copy' | 'reply' | 'react' | 'forward' | 'pin' | 'save' | 'askAgent' | 'edit' | 'delete' | 'retry' | 'report';
 
 interface MessageContextMenuProps {
   visible: boolean;
@@ -37,6 +37,15 @@ interface MessageContextMenuProps {
   /** Deleted-for-everyone tombstone — suppresses all content actions;
    *  only "Unsave" is offered when the actor has a prior save. */
   isDeleted?: boolean;
+  /** Forward gating — only offered when the message payload can be
+   *  faithfully re-sent into another conversation. */
+  canForward?: boolean;
+  /** Pin gating — backed by real endpoints; backend permits group
+   *  admins/owners only. Defaults hidden. */
+  canPin?: boolean;
+  /** Whether the selected message is the current pin — drives the
+   *  "Unpin message" label. */
+  isPinned?: boolean;
 }
 
 export function MessageContextMenu({
@@ -50,6 +59,9 @@ export function MessageContextMenu({
   canSave,
   isSaved,
   isDeleted,
+  canForward,
+  canPin,
+  isPinned,
 }: MessageContextMenuProps) {
   const { colors } = useAppTheme();
   const { t } = useAppTranslation('messaging');
@@ -66,8 +78,11 @@ export function MessageContextMenu({
       canSave: Boolean(canSave),
       isSaved: Boolean(isSaved),
       isDeletedMessage: Boolean(isDeleted),
+      canForward,
+      canPin: Boolean(canPin),
+      isPinned: Boolean(isPinned),
     });
-  }, [messageText, isOwnMessage, isFailed, canEdit, canSave, isSaved, isDeleted]);
+  }, [messageText, isOwnMessage, isFailed, canEdit, canSave, isSaved, isDeleted, canForward, canPin, isPinned]);
   const slideAnim = React.useRef(new Animated.Value(screenHeight)).current;
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
 

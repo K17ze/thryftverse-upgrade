@@ -8,6 +8,10 @@ import { isUserOnline, markPresenceHidden, unmarkPresenceHidden } from '../lib/p
 import { publishPresenceTransition } from './realtime.js';
 import { logger } from '../lib/logger.js';
 import { recordConsumerReport } from '../lib/safetyCaseService.js';
+import {
+  loadListingMedia,
+  listingImageUrls,
+} from '../lib/media/listingMediaProjection.js';
 
 // ── ProfileUserRow (mirrors the type in index.ts) ────────────────────
 type ProfileUserRow = {
@@ -219,8 +223,9 @@ app.patch('/users/me', async (request, reply) => {
       resolvedAvatarUrl = null;
     } else {
       const urlCheck = await db.query<{ id: string }>(
-        `SELECT id FROM upload_finalizations
-         WHERE owner_id = $1 AND (public_url = $2 OR canonical_url = $2)
+        `SELECT uf.id FROM upload_finalizations uf
+         LEFT JOIN media_assets ma ON ma.id = uf.media_asset_id
+         WHERE uf.owner_id = $1 AND (uf.public_url = $2 OR ma.canonical_url = $2)
          LIMIT 1`,
         [request.authUser.userId, payload.avatar]
       );
@@ -268,8 +273,9 @@ app.patch('/users/me', async (request, reply) => {
       resolvedCoverUrl = null;
     } else {
       const urlCheck = await db.query<{ id: string }>(
-        `SELECT id FROM upload_finalizations
-         WHERE owner_id = $1 AND (public_url = $2 OR canonical_url = $2)
+        `SELECT uf.id FROM upload_finalizations uf
+         LEFT JOIN media_assets ma ON ma.id = uf.media_asset_id
+         WHERE uf.owner_id = $1 AND (uf.public_url = $2 OR ma.canonical_url = $2)
          LIMIT 1`,
         [request.authUser.userId, payload.coverPhoto]
       );
@@ -1071,6 +1077,33 @@ app.patch('/users/me/activity-status', async (request, reply) => {
   return { ok: true, activityStatusVisible: visible };
 });
 
+// GET /users/me/privacy-preferences — hydrate the privacy settings screen.
+// The PATCH routes below have written these columns for a while, but the
+// screen's mount fetch had no route — every visit rendered the error canvas.
+app.get('/users/me/privacy-preferences', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const result = await db.query<{
+    activity_status_visible: boolean;
+    search_visibility: string;
+  }>(
+    `SELECT activity_status_visible, search_visibility FROM users WHERE id = $1 LIMIT 1`,
+    [request.authUser.userId]
+  );
+  const row = result.rows[0];
+
+  return {
+    ok: true,
+    privacyPreferences: {
+      activityStatusVisible: row?.activity_status_visible ?? true,
+      searchVisibility: row?.search_visibility === 'hidden' ? 'hidden' : 'visible',
+    },
+  };
+});
+
 /* â”€â”€ Search Visibility â”€â”€ */
 
 // PATCH /users/me/search-visibility â€” toggle search visibility
@@ -1488,7 +1521,7 @@ app.post('/users/:userId/follow', async (request, reply) => {
         userId,
         title: 'New follower',
         body: `${followerName} started following you`,
-        eventType: 'follow_received',
+        eventType: 'new_follower',
         actorUserId: followerId,
         imageUrl: follower?.avatar ?? undefined,
         payload: { followerId },
@@ -1497,7 +1530,7 @@ app.post('/users/:userId/follow', async (request, reply) => {
         metadata: { source: 'user_follow' },
       });
     } catch (notifErr) {
-      app.log.error({ err: notifErr }, 'Failed to queue follow_received notification');
+      app.log.error({ err: notifErr }, 'Failed to queue new_follower notification');
     }
   }
 
@@ -2661,4 +2694,128 @@ app.patch('/users/me/consent', async (request, reply) => {
     },
   };
 });
+
+/* ─── Saved listings (wishlist heart + saved bookmark) ───
+ * The client has called /users/me/wishlist since the save UI shipped, but no
+ * route ever backed it — toggles were MMKV-local while the UI announced
+ * persistence. user_saved_listings (migration 306) is the source of truth;
+ * `list` discriminates the heart ('wishlist') from the bookmark ('saved').
+ */
+
+type SavedList = 'wishlist' | 'saved';
+
+const fetchSavedListingIds = async (userId: string, list: SavedList): Promise<string[]> => {
+  const result = await db.query<{ listing_id: string }>(
+    `SELECT listing_id FROM user_saved_listings WHERE user_id = $1 AND list = $2 ORDER BY created_at DESC`,
+    [userId, list],
+  );
+  return result.rows.map((row) => row.listing_id);
+};
+
+// Hydrated listing summaries in the feed's ListingSummary shape — saved
+// surfaces (Closet tabs) render these directly instead of intersecting ids
+// with whatever feed pages happen to be resident. Sold/paused listings are
+// included so a saved item never silently disappears; `status` lets the
+// client label them honestly.
+const fetchSavedListingItems = async (userId: string, list: SavedList) => {
+  const rows = (
+    await db.query<{
+      id: string;
+      seller_id: string;
+      title: string;
+      description: string | null;
+      price_gbp: number | string;
+      image_url: string | null;
+      status: string;
+      category: string | null;
+      brand: string | null;
+      size: string | null;
+      condition: string | null;
+      original_price_gbp: number | string | null;
+      created_at: string;
+    }>(
+      `SELECT l.id, l.seller_id, l.title, l.description, l.price_gbp, l.image_url,
+              l.status, l.category, l.brand, l.size, l.condition,
+              l.original_price_gbp, l.created_at
+       FROM user_saved_listings usl
+       JOIN listings l ON l.id = usl.listing_id
+       WHERE usl.user_id = $1 AND usl.list = $2
+       ORDER BY usl.created_at DESC`,
+      [userId, list],
+    )
+  ).rows;
+  const mediaByListing = await loadListingMedia(readDb, rows.map((row) => row.id));
+  return rows.map((row) => ({
+    id: row.id,
+    sellerId: row.seller_id,
+    title: row.title,
+    description: row.description ?? '',
+    priceGbp: Number(row.price_gbp),
+    imageUrl: listingImageUrls(mediaByListing.get(row.id), row.image_url)[0] ?? row.image_url,
+    images: listingImageUrls(mediaByListing.get(row.id), row.image_url),
+    media: mediaByListing.get(row.id) ?? [],
+    status: row.status,
+    category: row.category,
+    brand: row.brand,
+    size: row.size,
+    condition: row.condition,
+    originalPriceGbp: row.original_price_gbp === null ? null : Number(row.original_price_gbp),
+    createdAt: row.created_at,
+  }));
+};
+
+const savedListBodySchema = z.object({
+  listingId: z.string().min(1),
+  action: z.enum(['add', 'remove']),
+});
+
+const registerSavedListRoutes = (path: string, list: SavedList) => {
+  app.get(path, async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.authUser) {
+      reply.code(401);
+      return { ok: false, error: 'Unauthorized' };
+    }
+    const userId = request.authUser.userId;
+    const itemIds = await fetchSavedListingIds(userId, list);
+    return { ok: true, itemIds, items: await fetchSavedListingItems(userId, list) };
+  });
+
+  app.post(path, async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.authUser) {
+      reply.code(401);
+      return { ok: false, error: 'Unauthorized' };
+    }
+    const parsed = savedListBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      reply.code(400);
+      return { ok: false, error: 'listingId and action (add|remove) are required' };
+    }
+    const { listingId, action } = parsed.data;
+    if (action === 'add') {
+      // The FK would surface as 23503 anyway; an explicit check returns the
+      // honest 404 the client maps to "listing unavailable" states.
+      const listing = await db.query<{ id: string }>(
+        `SELECT id FROM listings WHERE id = $1 LIMIT 1`,
+        [listingId],
+      );
+      if ((listing.rowCount ?? 0) === 0) {
+        reply.code(404);
+        return { ok: false, error: 'Listing not found' };
+      }
+      await db.query(
+        `INSERT INTO user_saved_listings (user_id, listing_id, list) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+        [request.authUser.userId, listingId, list],
+      );
+    } else {
+      await db.query(
+        `DELETE FROM user_saved_listings WHERE user_id = $1 AND listing_id = $2 AND list = $3`,
+        [request.authUser.userId, listingId, list],
+      );
+    }
+    return { ok: true, itemIds: await fetchSavedListingIds(request.authUser.userId, list) };
+  });
+};
+
+registerSavedListRoutes('/users/me/wishlist', 'wishlist');
+registerSavedListRoutes('/users/me/saved', 'saved');
 };

@@ -13,6 +13,9 @@ export function createInventoryScreenStyles(colors: ThemeColors) {
       height: Control.hit,
       justifyContent: 'center',
       alignItems: 'center' },
+    headerActions: {
+      flexDirection: 'row',
+      alignItems: 'center' },
     searchWrap: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -50,6 +53,12 @@ export function createInventoryScreenStyles(colors: ThemeColors) {
       fontFamily: TypographyV2.body.fontFamily,
       letterSpacing: TypographyV2.body.letterSpacing },
     summaryLabel: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
+    summaryPartialNote: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.xs,
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
       letterSpacing: TypographyV2.meta.letterSpacing },

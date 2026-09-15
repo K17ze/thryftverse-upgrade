@@ -7,6 +7,8 @@ import {
   StatusBar,
   Platform,
   RefreshControl,
+  AccessibilityInfo,
+  findNodeHandle,
 } from 'react-native';
 import { useA11yAudit } from '../hooks/useA11yAudit';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -47,6 +49,7 @@ import { getListingCoverUri } from '../utils/media';
 import { Space, FontFamily } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { useCheckoutData } from '../hooks/checkout/useCheckoutData';
+import { toIze } from '../utils/currency';
 import { useCheckoutHydration } from '../hooks/checkout/useCheckoutHydration';
 import { useCheckoutPaymentFlow } from '../hooks/checkout/useCheckoutPaymentFlow';
 import { useCheckoutSelectionActions } from '../hooks/checkout/useCheckoutSelectionActions';
@@ -107,7 +110,7 @@ export default function CheckoutScreen() {
   // stored order flag is the source of truth (hydrated below).
   const [verificationRequested, setVerificationRequested] = useState(false);
   const { showError } = useNotifications();
-  const { formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat, fxRates } = useFormattedPrice();
 
   const item = listings.find((l) => l.id === itemId);
 
@@ -166,6 +169,17 @@ export default function CheckoutScreen() {
   // Errors clear automatically as fields become valid (computed from state).
   const [hasAttemptedPay, setHasAttemptedPay] = useState(false);
 
+  // 1ZE requirement estimate — the same GBP→1ZE conversion the wallet
+  // debit applies (at-par via the FX bridge). The server-provided
+  // `onezeRequiredIze` overrides this once an intent response carries it.
+  const estimatedGrossGbp = (boundOrder?.subtotalGbp ?? item?.price ?? 0)
+    + (boundOrder?.platformChargeGbp ?? calculatePlatformChargeGbp(boundOrder?.subtotalGbp ?? item?.price ?? 0))
+    + postageOption.priceFromGbp;
+  const onezeRequiredEstimate = useMemo(
+    () => toIze(estimatedGrossGbp, 'GBP', fxRates),
+    [estimatedGrossGbp, fxRates]
+  );
+
   const {
     stage,
     isSubmitting,
@@ -174,6 +188,8 @@ export default function CheckoutScreen() {
     isCheckingPaymentStatus,
     orderError,
     boundOrderIssue,
+    paymentIssue,
+    onezeRequiredIze,
     handlePay,
     cancelStaleOrder,
     handleCheckPaymentStatus,
@@ -196,6 +212,7 @@ export default function CheckoutScreen() {
     walletBalance,
     useOnezePayment,
     onezeBalance,
+    onezeRequiredEstimateIze: onezeRequiredEstimate,
     setHasAttemptedPay,
   });
 
@@ -397,6 +414,30 @@ export default function CheckoutScreen() {
     backendPaymentMethods.length,
   ]);
 
+  // Accessibility: payment/order errors must take screen-reader focus — the
+  // error card sits mid-scroll and a screen reader would otherwise miss the
+  // failure entirely. Focus moves to the error text (the announcement is the
+  // fallback for platforms where focus fails). Sheets announce their own
+  // title+message on open — and BottomSheet moves focus to sheet content via
+  // useModalFocusManagement — so the modal context switch is explicit
+  // (audit P3-15).
+  const orderErrorRef = useRef<Text>(null);
+  useEffect(() => {
+    if (orderError) {
+      AccessibilityInfo.announceForAccessibility(orderError);
+      const node = findNodeHandle(orderErrorRef.current);
+      if (node) {
+        AccessibilityInfo.setAccessibilityFocus(node);
+      }
+    }
+  }, [orderError]);
+
+  useEffect(() => {
+    if (confirmSheet.visible && confirmSheet.title) {
+      AccessibilityInfo.announceForAccessibility(`${confirmSheet.title}. ${confirmSheet.message}`);
+    }
+  }, [confirmSheet.visible, confirmSheet.title, confirmSheet.message]);
+
   // --- Render ---
 
   // Order-bound guards resolve before any listing-derived state: the order
@@ -581,7 +622,8 @@ export default function CheckoutScreen() {
     stage,
     isSubmitting,
     useOnezePayment,
-    grossTotal: GROSS_TOTAL,
+    onezeRequiredIze: onezeRequiredIze ?? onezeRequiredEstimate,
+    orderReleased: paymentIssue === 'released',
     walletAvailable,
     formattedTotal: formatFromFiat(TOTAL, 'GBP'),
   });
@@ -592,6 +634,7 @@ export default function CheckoutScreen() {
       hasCarrier: !!postageOption.carrierId,
       useOnezePayment,
       onezeBalance,
+      onezeRequiredIze: onezeRequiredIze ?? onezeRequiredEstimate,
       grossTotal: GROSS_TOTAL,
       savedPaymentMethod,
       checkoutCapabilities,
@@ -760,7 +803,9 @@ export default function CheckoutScreen() {
           onezeOption={onezeBalance > 0 && !balanceLoading && !useOnezePayment
             ? {
                 onezeBalance,
-                neededAmount: GROSS_TOTAL,
+                // 1ZE-denominated requirement — the option renders this as
+                // "N 1ZE needed", so it must be a 1ZE amount, not GBP.
+                neededAmount: onezeRequiredIze ?? onezeRequiredEstimate,
                 onPress: () => { haptics.tap(); setUseOnezePayment(true); setHasAttemptedPay(false); if (useBalance) setUseBalance(false); },
               }
             : undefined}
@@ -829,9 +874,30 @@ export default function CheckoutScreen() {
 
         {orderError ? (
           <CheckoutOrderError
+            ref={orderErrorRef}
             message={orderError}
-            showRetry={stage === 'payment_failed'}
-            onRetry={handlePay}
+            // Terminal issues never offer a retry that cannot succeed —
+            // 'sold'/'seller_unavailable' get no action; 'released' gets a
+            // "Buy again" that mints a fresh order; an insufficient 1ZE
+            // balance gets the card switch, not a doomed wallet retry.
+            showRetry={
+              stage === 'payment_failed'
+              && paymentIssue !== 'sold'
+              && paymentIssue !== 'seller_unavailable'
+              && !(paymentIssue === 'insufficient_oneze' && !useOnezePayment)
+            }
+            onRetry={
+              paymentIssue === 'insufficient_oneze'
+                ? () => { haptics.tap(); setUseOnezePayment(false); setHasAttemptedPay(false); }
+                : handlePay
+            }
+            retryLabel={
+              paymentIssue === 'released'
+                ? 'Buy again'
+                : paymentIssue === 'insufficient_oneze'
+                  ? 'Pay by card'
+                  : 'Retry payment'
+            }
           />
         ) : null}
 

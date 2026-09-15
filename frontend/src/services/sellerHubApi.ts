@@ -21,6 +21,7 @@ export type SellerHubTaskType =
   | 'respond_offer'
   | 'listing_issue'
   | 'catalogue_awaiting'
+  | 'verification_demand'
   | 'payout_hold';
 
 export type SellerHubTaskPriority = 'critical' | 'high' | 'normal' | 'low';
@@ -33,6 +34,12 @@ export interface SellerHubTask {
   dueAt: string | null;
   consequence: { kind: 'money' | 'buyer' | 'trust' | 'listing'; amountGbp?: number } | null;
   actionRoute: string;
+  /**
+   * Backend-emitted deep-link params for `actionRoute` — e.g. the seller/
+   * needs-action scope for MyOrders, or the real batchId for
+   * CatalogImportProgress. Absent params mean the route's default surface.
+   */
+  actionParams?: Record<string, unknown>;
   actionLabel: string;
 }
 
@@ -75,6 +82,18 @@ export interface SellerHubOpportunity {
   views30d: number;
 }
 
+/**
+ * The seller's own away state, evaluated server-side with the same
+ * effective-away predicate the commerce gates use. `active` is only true
+ * while the pause is in force — a past return date already expired it.
+ * Null when the source row could not be read; the UI renders nothing.
+ */
+export interface SellerHubAway {
+  active: boolean;
+  until: string | null;
+  message: string | null;
+}
+
 export interface SellerHubBusinessPulse {
   period: '30d';
   grossSalesGbp: number;
@@ -113,6 +132,7 @@ export interface SellerHubOverview {
   businessPulse: SellerHubBusinessPulse | null;
   trust: SellerHubTrust | null;
   opportunities: SellerHubOpportunity[] | null;
+  away: SellerHubAway | null;
 }
 
 interface SellerHubOverviewResponse {
@@ -145,11 +165,32 @@ export async function fetchSellerInventoryTotals(): Promise<SellerInventoryTotal
 
 // ── Batch command types ──
 
-export type SellerHubBatchCommand = 'pause' | 'resume' | 'delete';
+export type SellerHubBatchCommand = 'pause' | 'resume' | 'delete' | 'edit';
+
+/**
+ * Field-edit patch for the 'edit' batch command. Mirrors the backend
+ * `listingEditPatchSchema` — the same whitelist PATCH /listings/:id
+ * accepts, minus `status` (lifecycle transitions go through the canonical
+ * command service) and cover media (verified-upload flow is per-listing).
+ */
+export interface SellerHubListingEditPatch {
+  title?: string;
+  description?: string;
+  priceGbp?: number;
+  category?: string;
+  brand?: string;
+  size?: string;
+  condition?: string;
+  originalPriceGbp?: number;
+  shippingMethod?: string;
+  shippingPayer?: string;
+}
 
 export interface SellerHubBatchItem {
   listingId: string;
   expectedVersion?: number;
+  /** 'edit' command only — the field patch to apply. */
+  patch?: SellerHubListingEditPatch;
 }
 
 export interface SellerHubBatchResult {
@@ -158,6 +199,8 @@ export interface SellerHubBatchResult {
   newStatus?: string;
   reason?: string;
   currentStatus?: string;
+  /** 'edit' command only — the field keys actually written. */
+  appliedFields?: string[];
 }
 
 export interface SellerHubBatchResponse {

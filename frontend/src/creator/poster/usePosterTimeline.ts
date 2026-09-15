@@ -42,14 +42,14 @@
  * usePosterPlayback.ts.
  */
 
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
-import type { CreatorDocument, CreatorLayer, CreatorPage } from '../composition';
-import { updateLayerInPage } from '../composition';
+import type { CreatorDocument, CreatorLayer, CreatorPage } from '../core/projectStore/composition';
+import { updateLayerInPage } from '../core/projectStore/composition';
 import type { useHaptic } from '../../hooks/useHaptic';
 import type { ToastType } from '../../context/ToastContext';
 import type { PlaybackClock, PlaybackState } from '../core/playback';
-import type { AssetPickerMode } from '../CreatorAssetPicker';
+import type { AssetPickerMode } from '../surfaces/CreatorAssetPicker';
 import type {
   PosterClip,
   OverlayLayer,
@@ -148,6 +148,12 @@ export interface UsePosterTimelineResult {
   timelineClips: PosterClip[];
   /** Which page each clip originated from. */
   clipPageIndices: number[];
+  /**
+   * The canonical timeline projection — clips carry `timelineStartMs`,
+   * `durationMs`, and `pageId`, used for playhead→page sync, clip-relative
+   * time derivation, and freeze/active-clip resolution on the canvas.
+   */
+  projectedTimeline: ReturnType<typeof projectTimeline>;
   /** Transition preset IDs for each clip boundary. */
   clipTransitionIds: (string | null)[];
   /** Clip-anchored overlay resolution (timed overlay layers). */
@@ -248,6 +254,28 @@ export function usePosterTimeline({
       setSelectedClipId(null);
     }
   }, [selectedClipId, timelineClips, setSelectedClipId]);
+
+  // ── Preview-follows-playhead (CapCut/Edits grammar) ────────────────
+  // currentTimeMs only changes via playback-clock ticks or an explicit
+  // timeline seek — so whenever it lands inside a different clip, the
+  // active page follows. The canvas and every page-scoped mutation then
+  // always target what the user sees. The ref gate is essential: doc
+  // edits re-run this effect without a playhead move and must not yank
+  // the user back to the playhead's page mid-edit.
+  const lastSyncTRef = useRef(playbackState.currentTimeMs);
+  useEffect(() => {
+    const t = playbackState.currentTimeMs;
+    if (t === lastSyncTRef.current) return;
+    lastSyncTRef.current = t;
+    const clip = projectedTimeline.clips.find(
+      (c) => t >= c.timelineStartMs && t < c.timelineStartMs + c.durationMs,
+    );
+    if (!clip) return;
+    const pageIndex = document.pages.findIndex((p) => p.id === clip.pageId);
+    if (pageIndex >= 0 && pageIndex !== activePageIndex) {
+      setActivePageIndex(pageIndex);
+    }
+  }, [playbackState.currentTimeMs, projectedTimeline, document.pages, activePageIndex, setActivePageIndex]);
 
   // ── Transition preset IDs for each clip boundary ───────────────────
   // Length = clips.length - 1. Index i is the transition between clip[i]
@@ -428,49 +456,50 @@ export function usePosterTimeline({
             .flatMap((p) => p.layers)
             .find((l) => l.id === op.clipId);
           if (!layer || layer.type !== 'media') return;
-          // Magnetic snapping: snap trim edges to the playhead position
-          // and to adjacent clip boundaries when within 150ms.
+          // The gesture delta arrives in *timeline* ms (px→ms over the
+          // clip's wall-clock duration). Source time is consumed at
+          // `speed`× that rate — convert once, after snapping/quantizing
+          // in timeline space. (Speed-curve clips use the average speed
+          // stored on clip.speed — the same approximation the projector
+          // uses for duration.)
+          const frameMs = 1000 / (document.canvas.fps ?? 30);
+          const speed = clip.speed > 0 ? clip.speed : 1;
+          const clipIdx = timelineClips.findIndex((c) => c.id === op.clipId);
+          let clipStartMs = 0;
+          for (let i = 0; i < clipIdx; i++) clipStartMs += timelineClips[i].durationMs;
+          const edgeStartMs = op.edge === 'end' ? clipStartMs + clip.durationMs : clipStartMs;
+          // Frame-quantize the requested drag on the project fps grid.
+          let timelineDeltaMs = Math.round(op.deltaMs / frameMs) * frameMs;
           const SNAP_MS = 150;
           const playheadMs = playbackState.currentTimeMs;
-          let newTrimStart = op.edge === 'start'
-            ? Math.max(0, clip.trimStartMs + op.deltaMs)
-            : clip.trimStartMs;
-          let newTrimEnd = op.edge === 'end'
-            ? Math.max(newTrimStart + 100, clip.trimEndMs + op.deltaMs)
-            : clip.trimEndMs;
-          // Snap to playhead
-          if (op.edge === 'start' && Math.abs(newTrimStart - playheadMs) < SNAP_MS) {
-            newTrimStart = playheadMs;
+          // Snap the edge's timeline position to the playhead.
+          if (Math.abs(edgeStartMs + timelineDeltaMs - playheadMs) < SNAP_MS) {
+            timelineDeltaMs = playheadMs - edgeStartMs;
           }
-          if (op.edge === 'end' && Math.abs(newTrimEnd - playheadMs) < SNAP_MS) {
-            newTrimEnd = playheadMs;
-          }
-          // Snap to adjacent clip boundaries
-          const clipIdx = timelineClips.findIndex((c) => c.id === op.clipId);
+          let sourceDeltaMs = timelineDeltaMs * speed;
+          // Snap to adjacent clip boundaries — only meaningful when the
+          // neighbor shares the same source asset (split siblings), since
+          // trim values are source-time, not timeline-time.
           if (op.edge === 'start' && clipIdx > 0) {
             const prevClip = timelineClips[clipIdx - 1];
-            const prevEnd = prevClip.trimEndMs ?? 0;
-            if (Math.abs(newTrimStart - prevEnd) < SNAP_MS) {
-              newTrimStart = prevEnd;
+            if (prevClip.sourceUri === clip.sourceUri
+              && Math.abs(clip.trimStartMs + sourceDeltaMs - prevClip.trimEndMs) < SNAP_MS) {
+              sourceDeltaMs = prevClip.trimEndMs - clip.trimStartMs;
             }
           }
           if (op.edge === 'end' && clipIdx < timelineClips.length - 1) {
             const nextClip = timelineClips[clipIdx + 1];
-            const nextStart = nextClip.trimStartMs ?? 0;
-            if (Math.abs(newTrimEnd - nextStart) < SNAP_MS) {
-              newTrimEnd = nextStart;
+            if (nextClip.sourceUri === clip.sourceUri
+              && Math.abs(clip.trimEndMs + sourceDeltaMs - nextClip.trimStartMs) < SNAP_MS) {
+              sourceDeltaMs = nextClip.trimStartMs - clip.trimEndMs;
             }
           }
-          // Route the snapped value through the pure timeline operation so
-          // bounds are validated (MIN_TRIM floor, no negative duration) and
-          // durationMs is recomputed consistently. The snapped target is
-          // converted to a delta — the pure function clamps and validates.
-          const snappedDelta = op.edge === 'start'
-            ? newTrimStart - clip.trimStartMs
-            : newTrimEnd - clip.trimEndMs;
+          // Route through the pure timeline operation so bounds are
+          // validated (MIN_TRIM floor, no negative duration) and
+          // durationMs is recomputed consistently.
           const trimmedClips = op.edge === 'start'
-            ? trimClipStart(timelineClips, op.clipId, snappedDelta)
-            : trimClipEnd(timelineClips, op.clipId, snappedDelta);
+            ? trimClipStart(timelineClips, op.clipId, sourceDeltaMs)
+            : trimClipEnd(timelineClips, op.clipId, sourceDeltaMs);
           const trimmedClip = trimmedClips.find((c) => c.id === op.clipId);
           if (!trimmedClip) break;
           updateLayer(op.clipId, {
@@ -493,7 +522,11 @@ export function usePosterTimeline({
           if (clipIdx < 0) break;
           const clip = timelineClips[clipIdx];
           if (clip.mediaType === 'image') break;
-          const slippedClips = slipClip(timelineClips, op.clipId, op.deltaMs);
+          const slipFrameMs = 1000 / (document.canvas.fps ?? 30);
+          const slippedClips = slipClip(
+            timelineClips, op.clipId,
+            Math.round(op.deltaMs / slipFrameMs) * slipFrameMs,
+          );
           const slippedClip = slippedClips.find((c) => c.id === op.clipId);
           if (!slippedClip || slippedClip.trimStartMs === clip.trimStartMs) break;
           const pageIndex = clipPageIndices[clipIdx];
@@ -570,8 +603,14 @@ export function usePosterTimeline({
             clipStartMs += timelineClips[i].durationMs;
           }
 
-          // Calculate the offset within this clip (timeline time → source time)
-          const offsetInClip = Math.max(0, op.atMs - clipStartMs);
+          // Quantize the split on the *timeline* frame grid (offset within
+          // the clip's wall-clock duration), then map to source time —
+          // speed scales source consumption, so the frame grid lives in
+          // timeline space.
+          const splitFrameMs = 1000 / (document.canvas.fps ?? 30);
+          const offsetInClip = Math.round(
+            Math.max(0, op.atMs - clipStartMs) / splitFrameMs,
+          ) * splitFrameMs;
           const splitPoint = clip.trimStartMs + offsetInClip * clip.speed;
 
           // Clamp the split point to be safely within the trim range
@@ -636,14 +675,31 @@ export function usePosterTimeline({
           // mutators (which each push their own snapshot inside a deferred
           // React state updater — a timing model that makes a
           // suspend/resume transaction on the HistoryStack unsafe).
+          // Keyframe timeMs is clip-relative — the second half's
+          // animation must continue from the split, not restart. Drop
+          // keyframes fully inside the first half and shift the rest by
+          // the split offset (timeline space: offsetInClip was already
+          // quantized on the frame grid above).
+          const secondKeyframes = layer.keyframes
+            ?.filter((kf) => kf.timeMs > offsetInClip)
+            .map((kf) => ({ ...kf, timeMs: kf.timeMs - offsetInClip }));
           const secondLayer: CreatorLayer = {
             ...layer,
             id: secondClip.id,
             zIndex: 0, // reset zIndex — new page, fresh z-stack
+            keyframes: secondKeyframes && secondKeyframes.length > 0
+              ? secondKeyframes
+              : undefined,
             payload: {
               ...layer.payload,
               trimStartMs: secondClip.trimStartMs,
               trimEndMs: secondClip.trimEndMs,
+              // A freeze offset inside the discarded first half is
+              // meaningless on the second half.
+              freezeFrameMs:
+                layer.payload.freezeFrameMs != null && layer.payload.freezeFrameMs > offsetInClip
+                  ? layer.payload.freezeFrameMs - offsetInClip
+                  : undefined,
               // Clear the thumbnail so it regenerates for the new clip.
               thumbnailUri: undefined,
             },
@@ -797,6 +853,7 @@ export function usePosterTimeline({
   return {
     timelineClips,
     clipPageIndices,
+    projectedTimeline,
     clipTransitionIds,
     timelineOverlays,
     timelineTotalDurationMs,

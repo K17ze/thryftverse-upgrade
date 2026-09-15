@@ -1391,6 +1391,7 @@ export async function dispatchOpsAlert(alert: {
           userId,
           title: alert.severity === 'critical' ? 'Critical Ops Alert' : 'Ops Alert',
           body: alert.message,
+          eventType: 'ops_alert',
           payload: {
             event: 'ops_alert',
             code: alert.code,

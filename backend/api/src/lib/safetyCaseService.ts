@@ -5,6 +5,14 @@ import { logger } from './logger.js';
 import { hasNcmecReport, submitNcmecReport } from './ncmecReporting.js';
 import type { WorkforcePrincipal, WorkforceSession } from './workforceAuth.js';
 import { sendOutcomeNotification } from './safetyNotifications.js';
+import {
+  getSellerReach,
+  restoreSellerReach,
+  setSellerReach,
+  type ReachActor,
+  type SellerReachSnapshot,
+} from './sellerReach.js';
+import { cancelBiddableLiveLotsForListing } from './listingCommandService.js';
 
 // ── Safety case service ─────────────────────────────────────────────────
 //
@@ -373,7 +381,24 @@ export async function recordConsumerReport(
     idempotencyKey?: string | null;
     subjectSnapshot?: Record<string, unknown>;
   },
-): Promise<{ reportId: string; noticeId: string; duplicated: boolean }> {
+): Promise<{
+  reportId: string;
+  noticeId: string;
+  duplicated: boolean;
+  /**
+   * Present when the report's severity>=3 reason code triggered the
+   * auto-limit policy: the automated case/decision and the executed
+   * visibility_restriction action that set the subject's
+   * reach_state='limited' pending operator review.
+   */
+  autoEnforcement: {
+    caseId: string;
+    decisionId: string;
+    actionId: string | null;
+    applied: boolean;
+    skipReason?: string;
+  } | null;
+}> {
   const reasonCode = mapConsumerReportReasonToSafetyCode(input.reason);
   const client = await db.connect();
   try {
@@ -495,8 +520,35 @@ export async function recordConsumerReport(
       idempotency_key: consumerReportNoticeIdempotencyKey(input.kind, effectiveReportId),
     });
 
+    // Auto-limit on high-severity signals (user-approved policy): a
+    // severity>=3 report materialises the rest of the pipeline in the same
+    // transaction — an automated case + 'restrict' decision + an executed
+    // visibility_restriction that sets the subject's reach_state='limited'
+    // pending operator review. Reversal is truthful (the action's scope
+    // stores the prior reach snapshot) via reverseEnforcement/decideAppeal.
+    // Runs inside the report transaction so a failed enforcement can never
+    // leave a report silently filed with no reach effect — fail-closed.
+    const autoEnforcement = duplicated
+      ? null
+      : await maybeAutoLimitReachForNotice(client, {
+          noticeId: notice.id,
+          subjectType: input.kind,
+          subjectId: input.subjectId,
+          reasonCode,
+          urgency: EMERGENCY_REASON_CODES.has(reasonCode)
+            ? 'emergency'
+            : ELEVATED_REASON_CODES.has(reasonCode)
+              ? 'elevated'
+              : 'normal',
+        });
+
     await client.query('COMMIT');
-    return { reportId: effectiveReportId, noticeId: notice.id, duplicated };
+    return {
+      reportId: effectiveReportId,
+      noticeId: notice.id,
+      duplicated,
+      autoEnforcement,
+    };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -759,6 +811,52 @@ export async function recordDecision(
       `UPDATE safety_cases SET status = $2, updated_at = NOW()${closeClause} WHERE id = $1`,
       [caseId, nextStatus],
     );
+
+    // Auto-limit (user-approved policy): a restrictive decision on a
+    // severity>=3 case immediately suppresses the subject's reach —
+    // reach_state='limited' pending review — by creating and executing a
+    // visibility_restriction enforcement action against the resolved
+    // subject user. The prior reach snapshot is stored in the action's
+    // scope so reverseEnforcement / an overturned appeal restores it
+    // truthfully. Never downgrades an existing 'suspended' state.
+    if (input.decision === 'restrict' || input.decision === 'emergency_hold') {
+      const subjectResult = await client.query<{
+        severity: number;
+        subject_type: string | null;
+        subject_id: string | null;
+      }>(
+        `SELECT sc.severity, sn.subject_type, sn.subject_id
+         FROM safety_cases sc
+         LEFT JOIN safety_notices sn ON sn.id = sc.notice_id
+         WHERE sc.id = $1`,
+        [caseId],
+      );
+      const subject = subjectResult.rows[0];
+      if (
+        subject
+        && subject.severity >= AUTO_REACH_LIMIT_SEVERITY
+        && subject.subject_id
+      ) {
+        const targetUserId = await resolveSubjectUserId(
+          client,
+          subject.subject_type,
+          subject.subject_id,
+        );
+        if (targetUserId) {
+          await autoLimitSellerReach(client, {
+            caseId,
+            decisionId,
+            userId: targetUserId,
+            reasonCode: input.user_reason_code,
+            actor: {
+              principalType: 'workforce',
+              principalId: input.principal.id,
+              workforceSessionId: input.session.id,
+            },
+          });
+        }
+      }
+    }
 
     await writeSafetyAuditEvent(client, {
       caseId,
@@ -1141,6 +1239,467 @@ export async function addEvidenceToCase(
   }
 }
 
+// ── Visibility-restriction effects (the executor that isn't a ledger) ───
+//
+// enforcement_actions used to be write-only: executeEnforcement flipped
+// status to 'executed' and nothing in the product changed. These helpers
+// apply and revert the real distribution effect inside the enforcement
+// transaction:
+//
+//   target_type 'user'    → users.reach_state (scope.state:
+//                           'limited' | 'suspended', default 'limited')
+//   target_type 'listing' → listings.status = 'risk_pending'
+//                           (dead state since migration 157 — excluded from
+//                           every active-only serving query)
+//
+// The prior state is stored in the action's `scope` so reversal is
+// truthful, and the merge-back UPDATE keeps scope as the single record of
+// what was applied and what to restore.
+
+/** Severity at or above which the auto-limit policy fires. */
+const AUTO_REACH_LIMIT_SEVERITY = 3;
+
+/** The policy version recorded on automated decisions. */
+const AUTO_DECISION_POLICY_RULE = 'auto.reach_limit.severity_gte_3';
+
+interface EnforcementActionRow {
+  id: string;
+  action_type: string;
+  target_type: string;
+  target_id: string;
+  scope: Record<string, unknown>;
+}
+
+/**
+ * Resolve a notice/case subject to the user whose reach it controls.
+ * 'user' subjects are direct; 'listing' subjects resolve to the seller.
+ * Other subject types (message/conversation/media/auction/live_session)
+ * have no single accountable user resolvable here — returns null so the
+ * caller skips rather than guessing.
+ */
+async function resolveSubjectUserId(
+  client: PoolClient,
+  subjectType: string | null,
+  subjectId: string,
+): Promise<string | null> {
+  if (subjectType === 'user') {
+    return subjectId;
+  }
+  if (subjectType === 'listing') {
+    const listingResult = await client.query<{ seller_id: string }>(
+      `SELECT seller_id FROM listings WHERE id = $1 LIMIT 1`,
+      [subjectId],
+    );
+    return listingResult.rows[0]?.seller_id ?? null;
+  }
+  return null;
+}
+
+/**
+ * Apply the distribution effect of a visibility_restriction action and
+ * return the scope merged with `applied` + `prior` bookkeeping. The caller
+ * persists the returned scope on the action row in the same transaction.
+ */
+async function applyVisibilityRestrictionEffect(
+  client: PoolClient,
+  action: EnforcementActionRow,
+  actor: ReachActor,
+): Promise<Record<string, unknown>> {
+  const scope: Record<string, unknown> = { ...(action.scope ?? {}) };
+
+  if (action.target_type === 'user') {
+    const desired: Exclude<SellerReachSnapshot['state'], 'normal'> =
+      scope.state === 'suspended' ? 'suspended' : 'limited';
+    const reason =
+      typeof scope.reason === 'string' && scope.reason.length > 0
+        ? scope.reason
+        : `visibility_restriction ${action.id}`;
+    // Locks the user row and returns the prior snapshot for the ledger.
+    const prior = await setSellerReach(client, {
+      userId: action.target_id,
+      state: desired,
+      reason,
+      actor,
+    });
+    scope.state = desired;
+    scope.applied = { kind: 'user_reach', state: desired };
+    scope.prior = prior;
+    return scope;
+  }
+
+  if (action.target_type === 'listing') {
+    const listingResult = await client.query<{ status: string }>(
+      `SELECT status FROM listings WHERE id = $1 LIMIT 1 FOR UPDATE`,
+      [action.target_id],
+    );
+    const priorStatus = listingResult.rows[0]?.status ?? null;
+    scope.prior = { listing_status: priorStatus };
+    if (priorStatus === null) {
+      scope.applied = { kind: 'listing_visibility', applied: false, note: 'listing_not_found' };
+      return scope;
+    }
+    if (priorStatus === 'risk_pending') {
+      scope.applied = { kind: 'listing_visibility', applied: false, note: 'already_held' };
+      return scope;
+    }
+    if (priorStatus === 'sold' || priorStatus === 'deleted') {
+      // Terminal lifecycle states are never resurrected into a hold.
+      scope.applied = {
+        kind: 'listing_visibility',
+        applied: false,
+        note: `terminal_${priorStatus}`,
+      };
+      return scope;
+    }
+    await client.query(
+      `UPDATE listings SET status = 'risk_pending', updated_at = NOW() WHERE id = $1`,
+      [action.target_id],
+    );
+    // A held listing must not leave biddable live lots behind — bids would
+    // keep landing on lots settlement can never complete (settlement
+    // rejects 'risk_pending', leaving the lot to loop in failedLots).
+    // Cancel every non-terminal lot in the same transaction.
+    const cancelledLots = await cancelBiddableLiveLotsForListing(client, {
+      listingId: action.target_id,
+      actorId: actor.principalId,
+      reason: `visibility_restriction:${action.id}`,
+    });
+    scope.applied = {
+      kind: 'listing_visibility',
+      applied: true,
+      to: 'risk_pending',
+      live_lots_cancelled: cancelledLots.length,
+    };
+    return scope;
+  }
+
+  // Other target types have no reach executor yet — the ledger records the
+  // intent and scope records that no distribution effect was applied, so
+  // the row never claims an effect it did not produce.
+  scope.applied = { kind: 'none', note: `unsupported_target:${action.target_type}` };
+  return scope;
+}
+
+/**
+ * Revert the distribution effect of an executed visibility_restriction
+ * action, restoring the prior snapshot recorded in `scope.prior`. Guarded:
+ * a user/listing whose state changed since the action executed (e.g. an
+ * operator escalated reach to 'suspended', or a held listing was sold) is
+ * never clobbered — the skip is recorded in scope.reversal instead.
+ */
+async function revertVisibilityRestrictionEffect(
+  client: PoolClient,
+  action: EnforcementActionRow,
+  actor: ReachActor,
+): Promise<Record<string, unknown>> {
+  const scope: Record<string, unknown> = { ...(action.scope ?? {}) };
+  const applied = scope.applied as
+    | { kind?: string; applied?: boolean; state?: string; to?: string }
+    | undefined;
+  const prior = scope.prior as Record<string, unknown> | undefined;
+
+  if (action.target_type === 'user' && applied?.kind === 'user_reach' && prior) {
+    const current = await getSellerReach(client, action.target_id, { forUpdate: true });
+    if (current && current.state === applied.state) {
+      const priorSnapshot: SellerReachSnapshot = {
+        state:
+          prior.state === 'limited' || prior.state === 'suspended'
+            ? prior.state
+            : 'normal',
+        reason: (prior.reason as string | null) ?? null,
+        setAt: (prior.setAt as string | null) ?? null,
+      };
+      await restoreSellerReach(client, {
+        userId: action.target_id,
+        prior: priorSnapshot,
+        reason: `reversal of enforcement action ${action.id}`,
+        actor,
+      });
+      scope.reversal = { restored: true, to: priorSnapshot.state };
+    } else {
+      scope.reversal = {
+        restored: false,
+        note: 'state_changed_since_apply',
+        current: current?.state ?? 'user_not_found',
+      };
+    }
+    return scope;
+  }
+
+  if (action.target_type === 'listing' && applied?.kind === 'listing_visibility' && prior) {
+    const priorStatus = typeof prior.listing_status === 'string' ? prior.listing_status : null;
+    const listingResult = await client.query<{ status: string }>(
+      `SELECT status FROM listings WHERE id = $1 LIMIT 1 FOR UPDATE`,
+      [action.target_id],
+    );
+    const currentStatus = listingResult.rows[0]?.status ?? null;
+    if (applied.applied === true && currentStatus === 'risk_pending' && priorStatus) {
+      // Restore pause provenance too (migration 305): a 'paused' landing
+      // keeps whatever source the row carried into the hold — COALESCE
+      // keeps an existing 'checkout_reservation'/'auction' provenance and
+      // falls back to 'seller' when there was none.
+      await client.query(
+        `UPDATE listings
+            SET status = $2,
+                pause_source = CASE WHEN $2 = 'paused' THEN COALESCE(pause_source, 'seller') ELSE NULL END,
+                updated_at = NOW()
+          WHERE id = $1`,
+        [action.target_id, priorStatus],
+      );
+      scope.reversal = { restored: true, to: priorStatus };
+    } else {
+      scope.reversal = {
+        restored: false,
+        note: 'status_changed_since_apply',
+        current: currentStatus,
+      };
+    }
+    return scope;
+  }
+
+  scope.reversal = { restored: false, note: 'no_effect_recorded' };
+  return scope;
+}
+
+/**
+ * Create AND execute a `visibility_restriction` action limiting a user's
+ * reach. Used by the auto-limit policy — the executor executes immediately,
+ * so "pending review" is expressed as scope.pending_review on an already-
+ * executed, fully reversible action. Returns applied=false (with a
+ * skipReason recorded on a case audit event) when the user is already
+ * restricted — a 'suspended' user is never downgraded to 'limited'.
+ */
+async function autoLimitSellerReach(
+  client: PoolClient,
+  input: {
+    caseId: string | null;
+    decisionId: string;
+    userId: string;
+    reasonCode: string;
+    actor: ReachActor;
+  },
+): Promise<{ actionId: string | null; applied: boolean; skipReason?: string }> {
+  const current = await getSellerReach(client, input.userId, { forUpdate: true });
+  if (!current) {
+    return { actionId: null, applied: false, skipReason: 'user_not_found' };
+  }
+  if (current.state !== 'normal') {
+    await client.query(
+      `INSERT INTO safety_audit_events (id, case_id, actor_id, event_type, event_data)
+       VALUES ($1, $2, NULL, 'enforcement.auto_limit_skipped', $3)`,
+      [
+        crypto.randomUUID(),
+        input.caseId,
+        JSON.stringify({
+          decisionId: input.decisionId,
+          userId: input.userId,
+          reasonCode: input.reasonCode,
+          reason: `reach_state_${current.state}`,
+        }),
+      ],
+    );
+    return { actionId: null, applied: false, skipReason: `reach_state_${current.state}` };
+  }
+
+  const actionId = `enf_${crypto.randomUUID()}`;
+  const baseScope = {
+    state: 'limited',
+    auto: true,
+    pending_review: true,
+    reasonCode: input.reasonCode,
+  };
+  await client.query(
+    `INSERT INTO enforcement_actions (id, decision_id, action_type, target_type, target_id, scope, status)
+     VALUES ($1, $2, 'visibility_restriction', 'user', $3, $4, 'pending')`,
+    [actionId, input.decisionId, input.userId, JSON.stringify(baseScope)],
+  );
+
+  const reason = `auto-limit: severity>=${AUTO_REACH_LIMIT_SEVERITY} signal (${input.reasonCode}) pending operator review`;
+  const prior = await setSellerReach(client, {
+    userId: input.userId,
+    state: 'limited',
+    reason,
+    actor: { ...input.actor, caseId: input.caseId },
+  });
+
+  const mergedScope = {
+    ...baseScope,
+    reason,
+    applied: { kind: 'user_reach', state: 'limited' },
+    prior,
+  };
+  await client.query(
+    `UPDATE enforcement_actions
+     SET status = 'executed', executed_at = NOW(), scope = $2
+     WHERE id = $1`,
+    [actionId, JSON.stringify(mergedScope)],
+  );
+
+  // actor_id references users(id): a fully automated application records
+  // NULL; an operator-driven decision records the deciding principal.
+  await client.query(
+    `INSERT INTO safety_audit_events (id, case_id, actor_id, event_type, event_data)
+     VALUES ($1, $2, $3, 'enforcement.auto_executed', $4)`,
+    [
+      crypto.randomUUID(),
+      input.caseId,
+      input.actor.principalId,
+      JSON.stringify({
+        actionId,
+        decisionId: input.decisionId,
+        actionType: 'visibility_restriction',
+        targetType: 'user',
+        targetId: input.userId,
+        state: 'limited',
+        auto: true,
+        actorType: input.actor.principalType,
+      }),
+    ],
+  );
+
+  return { actionId, applied: true };
+}
+
+/**
+ * Auto-limit trigger for the live intake path. A severity>=3 consumer
+ * report materialises the rest of the safety pipeline in one transaction:
+ * an automated case (status 'enforcement_pending' — the queue item an
+ * operator reviews), an automated 'restrict' decision under the current
+ * policy version, and — when the subject resolves to a user whose reach is
+ * 'normal' — an executed visibility_restriction that sets
+ * reach_state='limited'. Returns null when the signal is below threshold
+ * or the subject has no resolvable user.
+ */
+async function maybeAutoLimitReachForNotice(
+  client: PoolClient,
+  input: {
+    noticeId: string;
+    subjectType: ConsumerReportKind;
+    subjectId: string;
+    reasonCode: string;
+    urgency: SafetyUrgency;
+  },
+): Promise<{
+  caseId: string;
+  decisionId: string;
+  actionId: string | null;
+  applied: boolean;
+  skipReason?: string;
+} | null> {
+  const reasonResult = await client.query<{
+    severity_class: number;
+    uk_priority_offence: string | null;
+  }>(
+    `SELECT severity_class, uk_priority_offence
+     FROM safety_reason_codes
+     WHERE code = $1 AND superseded_at IS NULL`,
+    [input.reasonCode],
+  );
+  const reason = reasonResult.rows[0];
+  if (!reason || reason.severity_class < AUTO_REACH_LIMIT_SEVERITY) {
+    return null;
+  }
+
+  const userId = await resolveSubjectUserId(client, input.subjectType, input.subjectId);
+  if (!userId) {
+    return null;
+  }
+
+  // The decision must cite a policy version in force; without one the
+  // enforcement chain cannot be built — skip rather than fabricate a
+  // policy row (the report itself still persists).
+  const policyResult = await client.query<{ id: string }>(
+    `SELECT id FROM policy_versions
+     WHERE effective_until IS NULL
+     ORDER BY effective_from DESC
+     LIMIT 1`,
+  );
+  const policyVersionId = policyResult.rows[0]?.id ?? null;
+  if (!policyVersionId) {
+    return null;
+  }
+
+  const severity = reason.severity_class;
+  const involvesMinor =
+    reason.uk_priority_offence?.includes('child') === true ||
+    reason.uk_priority_offence?.includes('minor') === true ||
+    input.reasonCode === 'minor_safety';
+  const slaClass = computeSlaClass(input.urgency, severity, involvesMinor);
+  const slaDeadline = computeSlaDeadline(slaClass);
+
+  const caseId = `sc_${crypto.randomUUID()}`;
+  await client.query(
+    `INSERT INTO safety_cases (
+       id, notice_id, owner_team, severity, involves_minor, involves_vulnerable_user,
+       virality_score, exposure_count, sla_class, sla_deadline, status,
+       linked_case_ids, policy_version_id, jurisdiction
+     ) VALUES (
+       $1, $2, 'trust_safety', $3, $4, FALSE,
+       0, 0, $5, $6, 'enforcement_pending',
+       '{}', $7, NULL
+     )`,
+    [caseId, input.noticeId, severity, involvesMinor, slaClass, slaDeadline, policyVersionId],
+  );
+
+  const decisionId = `sdec_${crypto.randomUUID()}`;
+  await client.query(
+    `INSERT INTO safety_decisions (
+       id, case_id, decision, policy_rule_id, policy_version_id, evidence_ids,
+       territorial_scope, duration_kind, duration_until, user_reason_code,
+       internal_reason, automated_means
+     ) VALUES (
+       $1, $2, 'restrict', $3, $4, '{}',
+       '{}', 'temporary', NULL, $5,
+       $6, TRUE
+     )`,
+    [
+      decisionId,
+      caseId,
+      AUTO_DECISION_POLICY_RULE,
+      policyVersionId,
+      input.reasonCode,
+      `Automated reach limit: ${input.subjectType} report '${input.reasonCode}' (severity ${severity}) — distribution suppressed pending operator review`,
+    ],
+  );
+
+  const actor: ReachActor = { principalType: 'system', principalId: null };
+  const limitResult = await autoLimitSellerReach(client, {
+    caseId,
+    decisionId,
+    userId,
+    reasonCode: input.reasonCode,
+    actor,
+  });
+
+  await client.query(
+    `INSERT INTO safety_audit_events (id, case_id, actor_id, event_type, event_data)
+     VALUES ($1, $2, NULL, 'case.auto_opened', $3)`,
+    [
+      crypto.randomUUID(),
+      caseId,
+      JSON.stringify({
+        noticeId: input.noticeId,
+        subjectType: input.subjectType,
+        subjectId: input.subjectId,
+        reasonCode: input.reasonCode,
+        severity,
+        decisionId,
+        enforcementActionId: limitResult.actionId,
+        applied: limitResult.applied,
+        skipReason: limitResult.skipReason ?? null,
+      }),
+    ],
+  );
+
+  return {
+    caseId,
+    decisionId,
+    actionId: limitResult.actionId,
+    applied: limitResult.applied,
+    skipReason: limitResult.skipReason,
+  };
+}
+
 // ── Execute a pending enforcement action ────────────────────────────────
 
 export async function executeEnforcement(
@@ -1153,19 +1712,38 @@ export async function executeEnforcement(
   try {
     await client.query('BEGIN');
 
+    // Lock the pending action first. The real-world effect is applied
+    // BEFORE the ledger flip so a failed effect rolls the whole
+    // transaction back and the action stays 'pending' rather than lying
+    // about being executed.
+    const pendingResult = await client.query(
+      `SELECT * FROM enforcement_actions WHERE id = $1 AND status = 'pending' FOR UPDATE`,
+      [actionId],
+    );
+    const pending = pendingResult.rows[0];
+    if (!pending) {
+      throw new Error('Enforcement action not found or not pending');
+    }
+
+    let mergedScope: Record<string, unknown> =
+      (pending.scope as Record<string, unknown>) ?? {};
+    if (pending.action_type === 'visibility_restriction') {
+      mergedScope = await applyVisibilityRestrictionEffect(client, pending, {
+        principalType: 'workforce',
+        principalId: principal.id,
+        workforceSessionId: session.id,
+      });
+    }
+
     const result = await client.query(
       `
         UPDATE enforcement_actions
-        SET status = 'executed', executed_at = NOW()
+        SET status = 'executed', executed_at = NOW(), scope = $2
         WHERE id = $1 AND status = 'pending'
         RETURNING *
       `,
-      [actionId],
+      [actionId, JSON.stringify(mergedScope)],
     );
-
-    if (!result.rows[0]) {
-      throw new Error('Enforcement action not found or not pending');
-    }
 
     const action = result.rows[0];
     const decisionResult = await client.query<{ case_id: string }>(
@@ -1211,19 +1789,38 @@ export async function reverseEnforcement(
   try {
     await client.query('BEGIN');
 
+    // Lock the executed action; revert its real-world effect inside the
+    // same transaction so the ledger never claims a reversal that did not
+    // happen.
+    const executedResult = await client.query(
+      `SELECT * FROM enforcement_actions WHERE id = $1 AND status = 'executed' FOR UPDATE`,
+      [actionId],
+    );
+    const executed = executedResult.rows[0];
+    if (!executed) {
+      throw new Error('Enforcement action not found or not executed');
+    }
+
+    let mergedScope: Record<string, unknown> =
+      (executed.scope as Record<string, unknown>) ?? {};
+    if (executed.action_type === 'visibility_restriction') {
+      mergedScope = await revertVisibilityRestrictionEffect(client, executed, {
+        principalType: 'workforce',
+        principalId: principal.id,
+        workforceSessionId: session.id,
+      });
+    }
+
     const result = await client.query(
       `
         UPDATE enforcement_actions
-        SET status = 'reversed', reversed_at = NOW(), reversed_by = $2, reversal_reason = $3
+        SET status = 'reversed', reversed_at = NOW(), reversed_by = $2, reversal_reason = $3,
+            scope = $4
         WHERE id = $1 AND status = 'executed'
         RETURNING *
       `,
-      [actionId, principal.id, reason],
+      [actionId, principal.id, reason, JSON.stringify(mergedScope)],
     );
-
-    if (!result.rows[0]) {
-      throw new Error('Enforcement action not found or not executed');
-    }
 
     const action = result.rows[0];
     const decisionResult = await client.query<{ case_id: string }>(
@@ -1487,22 +2084,46 @@ export async function decideAppeal(
     );
     const caseId = decisionResult.rows[0]?.case_id ?? null;
 
-    // Overturned → reverse every executed enforcement action for the decision
+    // Overturned → reverse every executed enforcement action for the
+    // decision. This is the appeal-driven reversal path: the real-world
+    // effect (reach state / listing hold) is reverted in the same
+    // transaction as the ledger flip, restoring the prior snapshot stored
+    // in the action's scope at execute time.
     if (input.status === 'overturned') {
-      const enforcementResult = await client.query<{ id: string }>(
-        `SELECT id FROM enforcement_actions WHERE decision_id = $1 AND status = 'executed'`,
+      const enforcementResult = await client.query<{
+        id: string;
+        action_type: string;
+        target_type: string;
+        target_id: string;
+        scope: Record<string, unknown>;
+      }>(
+        `SELECT * FROM enforcement_actions WHERE decision_id = $1 AND status = 'executed' FOR UPDATE`,
         [appeal.decision_id],
       );
 
       for (const row of enforcementResult.rows) {
+        let mergedScope = row.scope ?? {};
+        if (row.action_type === 'visibility_restriction') {
+          mergedScope = await revertVisibilityRestrictionEffect(client, row, {
+            principalType: 'workforce',
+            principalId: input.independent_reviewer_id,
+            workforceSessionId: input.session.id,
+            caseId,
+          });
+        }
         await client.query(
           `
             UPDATE enforcement_actions
             SET status = 'reversed', reversed_at = NOW(), reversed_by = $2,
-                reversal_reason = $3
+                reversal_reason = $3, scope = $4
             WHERE id = $1 AND status = 'executed'
           `,
-          [row.id, input.independent_reviewer_id, `Appeal overturned: ${input.outcome_reason}`],
+          [
+            row.id,
+            input.independent_reviewer_id,
+            `Appeal overturned: ${input.outcome_reason}`,
+            JSON.stringify(mergedScope),
+          ],
         );
       }
 

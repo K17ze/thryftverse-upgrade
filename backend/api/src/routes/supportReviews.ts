@@ -49,6 +49,36 @@ const orderReviewBodySchema = z.object({
   photoUrls: z.array(z.string().url()).max(4).optional(),
 });
 
+/**
+ * Every submitted media URL must reference one of the requester's own
+ * finalized uploads — arbitrary external URLs must never be persisted and
+ * rendered inside the app. Mirrors the avatar/cover gate in users.ts.
+ * Returns the subset of `urls` the user does not own.
+ */
+async function findUnownedMediaUrls(
+  db: Pool,
+  userId: string,
+  urls: string[],
+): Promise<string[]> {
+  if (urls.length === 0) return [];
+  // canonical_url lives on media_assets (joined via media_asset_id), not on
+  // upload_finalizations — both URL shapes must be matched.
+  const ownedCheck = await db.query<{ public_url: string | null; canonical_url: string | null }>(
+    `SELECT uf.public_url, ma.canonical_url
+     FROM upload_finalizations uf
+     LEFT JOIN media_assets ma ON ma.id = uf.media_asset_id
+     WHERE uf.owner_id = $1
+       AND (uf.public_url = ANY($2) OR ma.canonical_url = ANY($2))`,
+    [userId, urls],
+  );
+  const ownedUrls = new Set<string>();
+  for (const row of ownedCheck.rows) {
+    if (row.public_url) ownedUrls.add(row.public_url);
+    if (row.canonical_url) ownedUrls.add(row.canonical_url);
+  }
+  return urls.filter((u) => !ownedUrls.has(u));
+}
+
 const reviewResponseBodySchema = z.object({
   text: z.string().min(1).max(500),
 });
@@ -169,6 +199,16 @@ export const registerSupportReviewRoutes = ({
 
     const ticketId = `ticket_${crypto.randomUUID()}`;
     const evidenceUrls = payload.evidenceMediaUrls ?? [];
+
+    const unownedEvidence = await findUnownedMediaUrls(db, userId, evidenceUrls);
+    if (unownedEvidence.length > 0) {
+      reply.code(422);
+      return {
+        ok: false,
+        error: "Evidence media must come from your own uploads",
+        code: "MEDIA_NOT_OWNED",
+      };
+    }
 
     await db.query(
       `
@@ -513,6 +553,20 @@ export const registerSupportReviewRoutes = ({
     // review id so dedupe/idempotent replays stay stable. Crucially, an
     // is_auto row is never echoed back as if the buyer authored it.
     const photoUrls = body.photoUrls ?? [];
+
+    // Provenance: review photos must be URLs from the reviewer's own uploads
+    // — previously any external URL was accepted into review_media and then
+    // rendered on public seller profiles. Same gate as avatar/cover URLs.
+    const unownedPhotos = await findUnownedMediaUrls(db, userId, photoUrls);
+    if (unownedPhotos.length > 0) {
+      reply.code(422);
+      return {
+        ok: false,
+        error: "Review photos must come from your own uploads",
+        code: "MEDIA_NOT_OWNED",
+      };
+    }
+
     let reviewId = `review_${crypto.randomUUID()}`;
     let supersededAutoReview = false;
     let supersededCreatedAt: string | null = null;

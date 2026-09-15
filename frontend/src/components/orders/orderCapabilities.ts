@@ -26,7 +26,10 @@ const ACTIVE_STATUSES = new Set([
   'shipped', 'in transit', 'out for delivery',
 ]);
 const COMPLETED_STATUSES = new Set(['delivered', 'completed']);
-const CANCELLED_STATUSES = new Set(['cancelled', 'refunded']);
+// 'refunding' groups with the cancelled bucket — the backend history filter
+// does the same — but it is NOT terminal: the provider outcome is still
+// resolving, so the UI shows it as pending money, not a settled loss.
+const CANCELLED_STATUSES = new Set(['cancelled', 'refunded', 'refunding']);
 const TERMINAL_STATUSES = new Set([
   'delivered', 'completed', 'cancelled', 'refunded', 'returned',
 ]);
@@ -52,7 +55,7 @@ export function isTerminalStatus(status: string): boolean {
 
 export function isCancelledStatus(status: string): boolean {
   const key = normaliseOrderStatus(status);
-  return key === 'cancelled' || key === 'refunded';
+  return key === 'cancelled' || key === 'refunded' || key === 'refunding';
 }
 
 export function needsBuyerAction(status: string): boolean {
@@ -84,6 +87,7 @@ const STATUS_LABELS: Record<string, string> = {
   completed: 'Completed',
   cancelled: 'Cancelled',
   refunded: 'Refunded',
+  refunding: 'Refund in progress',
   'delivery failed': 'Delivery failed',
   returned: 'Returned',
 };
@@ -152,6 +156,7 @@ export function getStatusColor(
 
 export function getStatusTone(status: string): StatusTone {
   const key = normaliseOrderStatus(status);
+  if (key === 'refunding') return 'pending';
   if (CANCELLED_STATUSES.has(key)) return 'danger';
   if (COMPLETED_STATUSES.has(key)) return 'success';
   if (NEEDS_ACTION_BUYER_STATUSES.has(key) || NEEDS_ACTION_SELLER_STATUSES.has(key)) return 'pending';
@@ -339,7 +344,11 @@ export function resolveCapabilities(ctx: OrderCapabilityContext): OrderCapabilit
   // an explicit policy version/reason, but the client must never infer it
   // from a transit status string.
   const canConfirmDelivery = ctx.role === 'buyer' && isDelivered && !submitting;
-  const canCancel = ctx.role === 'buyer' && (isCreated || isPaid) && !ctx.hasOpenResolution && !submitting;
+  // Cancellation is only legal while the order is unpaid ('created') —
+  // POST /orders/:id/cancel rejects paid orders with 409 and directs the
+  // buyer to the return/refund flow, which `report_issue` below already
+  // surfaces for every non-created, non-cancelled order.
+  const canCancel = ctx.role === 'buyer' && isCreated && !ctx.hasOpenResolution && !submitting;
   const canReportIssue = !isCancelled && !isCreated && !ctx.hasOpenResolution && !submitting;
   const shouldViewResolution = ctx.hasOpenResolution;
   const canReview = ctx.role === 'buyer' && isDelivered && !ctx.hasReview && !submitting;

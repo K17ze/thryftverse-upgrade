@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { Space, FontFamily } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { CommerceDetailTransactionSurface } from '../commerce/detail';
@@ -13,13 +12,18 @@ interface Props {
   isTerminal: boolean;
   priceLabel: DetailPriceLabel;
   priceText: string;
+  /** Subordinate conversion line under the headline value (local fiat
+   *  equivalent in dual-currency mode). Demoted — never headline size. */
+  priceEquivalentText?: string | null;
   primaryState: { text: string; color: string } | null;
   reserveStatus: ReserveStatus | 'none';
   subordinateStateText: string | null;
   isLive: boolean;
   viewerState: AuctionViewerState;
   bidCount: number;
-  minimumNextBidGbp: number;
+  /** Primary-unit text for the "Minimum to lead" row; null when the
+   *  backend reports no minimum. */
+  minimumNextBidText: string | null;
 }
 
 /**
@@ -36,16 +40,16 @@ export function AuctionBidPanel({
   isTerminal,
   priceLabel,
   priceText,
+  priceEquivalentText,
   primaryState,
   reserveStatus,
   subordinateStateText,
   isLive,
   viewerState,
   bidCount,
-  minimumNextBidGbp,
+  minimumNextBidText,
 }: Props) {
   const { colors } = useAppTheme();
-  const { formatFromFiat } = useFormattedPrice();
 
   if (isTerminal) return null;
 
@@ -56,6 +60,7 @@ export function AuctionBidPanel({
       surfaceColor={colors.surface}
       primaryLabel={priceLabel}
       primaryValue={priceText}
+      primaryEquivalent={priceEquivalentText ?? undefined}
       headlineAside={
         primaryState ? (
           <Text
@@ -87,22 +92,28 @@ export function AuctionBidPanel({
         </Text>
       ) : null}
       <View style={[styles.transactionBidActivityRow, { borderTopColor: colors.border }]}>
-        <Text style={[styles.transactionBidActivityLabel, { color: colors.textSecondary }]}>
+        <Text style={[styles.transactionBidActivityLabel, { color: colors.textSecondary }]} numberOfLines={1}>
           {isLive ? 'Live bids' : 'Bid activity'}
         </Text>
-        <Text style={[styles.transactionBidActivityValue, { color: colors.textPrimary }]}>
+        <Text style={[styles.transactionBidActivityValue, { color: colors.textPrimary }]} numberOfLines={1}>
           {bidCount} {bidCount === 1 ? 'bid' : 'bids'}
         </Text>
       </View>
       {/* Minimum to lead (outbid) — actionable emphasis inside the
-          surface. The dock carries the "Bid again" action. */}
-      {isLive && viewerState === 'outbid' && minimumNextBidGbp > 0 && (
+          surface. The dock carries the "Bid again" action. Primary
+          unit only — the conversion already rides under the headline. */}
+      {isLive && viewerState === 'outbid' && minimumNextBidText != null && (
         <View style={[styles.transactionMinRow, { borderTopColor: colors.border }]}>
-          <Text style={[styles.transactionMinLabel, { color: colors.textSecondary }]}>
+          <Text style={[styles.transactionMinLabel, { color: colors.textSecondary }]} numberOfLines={1}>
             Minimum to lead
           </Text>
-          <Text style={[styles.transactionMinValue, { color: colors.textPrimary }]}>
-            {formatFromFiat(minimumNextBidGbp, 'GBP')}
+          <Text
+            style={[styles.transactionMinValue, { color: colors.textPrimary }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+          >
+            {minimumNextBidText}
           </Text>
         </View>
       )}
@@ -160,6 +171,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'space-between',
+    gap: Space.sm,
     paddingVertical: Space.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
@@ -169,6 +181,7 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.semibold,
     textTransform: 'uppercase',
     letterSpacing: TypographyV2.label.letterSpacing,
+    flexShrink: 1,
   },
   transactionMinValue: {
     fontSize: TypographyV2.priceList.size,
@@ -176,6 +189,8 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
     textAlign: 'right',
+    flexShrink: 1,
+    minWidth: 0,
   },
   transactionStatusRow: {
     gap: Space.xs,

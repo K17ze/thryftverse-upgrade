@@ -28,12 +28,21 @@ interface BrowseResultsProps {
   lastError: string | null;
   displayListings: Listing[];
   hasAnyFiltering: boolean;
+  /** Route category — 'all'/'search' are unscoped modes, so the regular
+   *  empty state's "Explore all" CTA must not re-navigate to this same
+   *  (already-unscoped) screen; it degrades to a refresh instead. */
+  categoryId: string;
   gridDensity: GridDensity;
   onClearFilters: () => void;
   onRetryListings: () => void;
   onItemSaveToggle?: (listing: DiscoveryListingSummary) => void;
   onItemSaveLongPress?: (listing: DiscoveryListingSummary) => void;
   isItemSaved?: (listingId: string) => boolean;
+  /** Pagination — the grid calls onEndReached near the bottom; hasMore
+   *  reflects the active data path (backend cursor or shared listings). */
+  onEndReached?: () => void;
+  isLoadingMore?: boolean;
+  hasMore?: boolean;
 }
 
 export function BrowseResults({
@@ -48,12 +57,16 @@ export function BrowseResults({
   lastError,
   displayListings,
   hasAnyFiltering,
+  categoryId,
   gridDensity,
   onClearFilters,
   onRetryListings,
   onItemSaveToggle,
   onItemSaveLongPress,
-  isItemSaved }: BrowseResultsProps) {
+  isItemSaved,
+  onEndReached,
+  isLoadingMore,
+  hasMore }: BrowseResultsProps) {
   const navigation = useNavigation<any>();
 
   const renderBrowseLoadingState = () => (
@@ -99,6 +112,9 @@ export function BrowseResults({
           testIDPrefix="golden-browse-product-card"
           firstItemTestID="golden-browse-first-product"
           enableImagePrefetch
+          onEndReached={onEndReached}
+          isLoadingMore={isLoadingMore}
+          hasMore={hasMore}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -123,14 +139,26 @@ export function BrowseResults({
       ) : (
         // Regular empty — no data at all for this category/search. Distinct
         // from filtered-empty: there is nothing to show regardless of filters.
+        // 'all'/'search' are already unscoped, so "Explore all" would only
+        // push an identical empty screen — degrade to an honest refresh.
         <View style={{ flex: 1 }}>
-          <EmptyState
-            icon="bag-handle-outline"
-            title="No items here yet"
-            subtitle="New listings arrive daily — check back soon or explore everything."
-            ctaLabel="Explore all"
-            onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
-          />
+          {categoryId === 'all' || categoryId === 'search' ? (
+            <EmptyState
+              icon="bag-handle-outline"
+              title="No items here yet"
+              subtitle="New listings arrive daily — check back soon."
+              ctaLabel="Refresh"
+              onCtaPress={onRetryListings}
+            />
+          ) : (
+            <EmptyState
+              icon="bag-handle-outline"
+              title="No items here yet"
+              subtitle="New listings arrive daily — check back soon or explore everything."
+              ctaLabel="Explore all"
+              onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
+            />
+          )}
         </View>
       )}
     </View>

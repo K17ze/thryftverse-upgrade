@@ -5,7 +5,7 @@ import {
   addLayerToPage,
   type CreatorDocument,
   type CreatorLayer,
-} from '../creator/composition';
+} from '../creator/core/projectStore/composition';
 import {
   validateForPublish,
   serialiseToLookPayload,
@@ -14,8 +14,8 @@ import {
   COMPOSITION_SCHEMA_VERSION,
   MIN_SUPPORTED_SCHEMA_VERSION,
   MAX_SUPPORTED_SCHEMA_VERSION,
-} from '../creator/compositionContract';
-import { CreatorDraftService } from '../creator/drafts';
+} from '../creator/core/projectStore/compositionContract';
+import { CreatorDraftService } from '../creator/core/projectStore/drafts';
 
 // ── Helpers ───────────────────────────────────────────────────────
 

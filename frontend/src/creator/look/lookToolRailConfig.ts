@@ -4,7 +4,7 @@
  */
 
 import type { ToolContext, ToolGroup, ToolDefinition } from '../core/toolRegistry';
-import type { CreatorLayer } from '../composition';
+import type { CreatorLayer } from '../core/projectStore/composition';
 
 // ── Types ────────────────────────────────────────────────────────────
 

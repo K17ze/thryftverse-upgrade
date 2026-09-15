@@ -24,6 +24,7 @@ import { useToast } from '../context/ToastContext';
 import { fetchPosterStoryArchive, deletePosterStory, fetchPosterHighlights } from '../services/postersApi';
 import type { PosterStory, PosterHighlight } from '../services/postersApi';
 import { CachedImage } from '../components/CachedImage';
+import { isVideoUrl } from '../utils/posterPhysics';
 import { useStore } from '../store/useStore';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 
@@ -169,9 +170,9 @@ export default function PosterArchiveScreen({ navigation }: Props) {
         accessibilityRole="button"
       >
         <View style={styles.cardMedia}>
-          {firstFrame?.mediaUrl ? (
+          {(firstFrame?.posterUrl ?? (firstFrame?.mediaUrl && !isVideoUrl(firstFrame.mediaUrl) ? firstFrame.mediaUrl : null)) ? (
             <CachedImage
-              uri={firstFrame.mediaUrl}
+              uri={(firstFrame?.posterUrl ?? firstFrame?.mediaUrl) as string}
               style={StyleSheet.absoluteFill}
               contentFit="cover"
               containerStyle={{ borderRadius: Radius.none, overflow: 'hidden' }}
@@ -232,7 +233,8 @@ export default function PosterArchiveScreen({ navigation }: Props) {
   };
 
   const renderHighlightItem = ({ item }: { item: PosterHighlight }) => {
-    const coverUrl = item.coverUrl ?? item.frames[0]?.mediaUrl;
+    const rawCover = item.coverUrl ?? item.frames[0]?.previewUrl ?? item.frames[0]?.mediaUrl;
+    const coverUrl = rawCover && !isVideoUrl(rawCover) ? rawCover : null;
     const frameCount = item.frames.length;
 
     return (

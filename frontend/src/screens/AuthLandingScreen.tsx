@@ -48,6 +48,8 @@ export default function AuthLandingScreen() {
   const [isMagicLinkLoading, setIsMagicLinkLoading] = useState(false);
   const [isDevBypassLoading, setIsDevBypassLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const sessionExpiredNotice = useStore((state) => state.sessionExpiredNotice);
+  const clearSessionExpiredNotice = useStore((state) => state.clearSessionExpiredNotice);
   const [magicLinkTwoFactorRequired, setMagicLinkTwoFactorRequired] = useState(false);
   // Retain the magic-link token + email for inline 2FA retry. The backend
   // does NOT consume the token when TWO_FACTOR_REQUIRED is returned (the
@@ -59,6 +61,16 @@ export default function AuthLandingScreen() {
   const [magicLinkUseRecovery, setMagicLinkUseRecovery] = useState(false);
   const [isMagicLinkTwoFactorVerifying, setIsMagicLinkTwoFactorVerifying] = useState(false);
   const [magicLinkTwoFactorError, setMagicLinkTwoFactorError] = useState<string | null>(null);
+
+  // Forced sign-out (refresh-token failure) lands here after the navigator
+  // remount — surface the reason once via the existing error banner, then
+  // clear the flag so a manual visit doesn't re-announce it.
+  useEffect(() => {
+    if (sessionExpiredNotice) {
+      setAuthError('You were signed out — your session expired. Sign in again to continue.');
+      clearSessionExpiredNotice();
+    }
+  }, [sessionExpiredNotice, clearSessionExpiredNotice]);
 
   // Prevent crash when OAuth client IDs are not configured in dev builds
   const hasGoogleOAuth = Boolean(

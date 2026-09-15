@@ -9,7 +9,7 @@
  */
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Radius, Space } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
@@ -131,19 +131,31 @@ export const LiveSessionCard = React.memo(function LiveSessionCard({
 export const UpcomingSessionRow = React.memo(function UpcomingSessionRow({
   session,
   formatScheduled,
+  onToggleReminder,
+  reminderPending = false,
+  remindError = null,
 }: {
   session: LiveSession;
   formatScheduled: (iso: string) => string;
+  /**
+   * Remind-me toggle. When undefined the affordance is hidden entirely —
+   * the screen drops it when the backend does not expose the remind
+   * endpoints (404) rather than faking reminder state.
+   */
+  onToggleReminder?: (session: LiveSession) => void;
+  reminderPending?: boolean;
+  remindError?: string | null;
 }) {
   const { colors } = useAppTheme();
   const { t } = useAppTranslation('liveShopping');
   const scheduledLabel = session.scheduledAt ? formatScheduled(session.scheduledAt) : '';
+  const reminded = session.reminderSet === true;
 
   return (
     <View
       style={[styles.upcomingRow, { borderBottomColor: colors.border }]}
       accessibilityRole="text"
-      accessibilityLabel={`${session.title}${session.sellerName ? ` by ${session.sellerName}` : ''}. ${scheduledLabel}.`}
+      accessibilityLabel={`${session.title}${session.sellerName ? ` by ${session.sellerName}` : ''}. ${scheduledLabel}.${reminded ? ` ${t('upcoming.notified')}.` : ''}`}
     >
       <View style={[styles.upcomingThumb, { backgroundColor: colors.surfaceAlt }]}>
         {session.thumbnail ? (
@@ -183,7 +195,34 @@ export const UpcomingSessionRow = React.memo(function UpcomingSessionRow({
             </Text>
           </View>
         ) : null}
+        {remindError ? (
+          <Text style={[styles.upcomingMeta, { color: colors.danger }]}>{remindError}</Text>
+        ) : null}
       </View>
+      {onToggleReminder ? (
+        <AnimatedPressable
+          style={styles.remindHit}
+          onPress={() => onToggleReminder(session)}
+          disabled={reminderPending}
+          hapticFeedback="selection"
+          scaleValue={0.96}
+          accessibilityRole="button"
+          accessibilityLabel={reminded ? t('upcoming.notified') : t('upcoming.notifyMe')}
+          accessibilityState={{ selected: reminded, busy: reminderPending }}
+        >
+          {reminderPending ? (
+            <ActivityIndicator size="small" color={colors.brand} />
+          ) : (
+            <AppIcon
+              name="notifications"
+              variant={reminded ? 'filled' : 'outline'}
+              size={IconSize.md}
+              color={reminded ? 'brand' : 'textSecondary'}
+              accessible={false}
+            />
+          )}
+        </AnimatedPressable>
+      ) : null}
     </View>
   );
 });
@@ -403,6 +442,12 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
     fontVariant: ['tabular-nums'],
+  },
+  remindHit: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   // ── Replay card ──
   replayMedia: {

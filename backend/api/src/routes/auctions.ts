@@ -6,6 +6,7 @@ import { ledgerTablesAvailable } from '../lib/workerHelpers.js';
 import { emitOrderCommerceCard } from '../lib/orderChatCards.js';
 import { postAuctionSettlementLedgerEntries } from '../lib/workerRuntime.js';
 import { advanceSecondChanceOffer } from '../workers/handlers/auctionSweepHandler.js';
+import { getSellerReach } from '../lib/sellerReach.js';
 
 // ── Local helpers ──
 
@@ -190,8 +191,8 @@ app.post('/auctions/:auctionId/cancel', async (request, reply) => {
       [auctionId, userId, payload.reason ?? null],
     );
     await client.query(
-      `UPDATE listings SET status = 'active', updated_at = NOW()
-       WHERE id = $1 AND status = 'paused'`,
+      `UPDATE listings SET status = 'active', pause_source = NULL, updated_at = NOW()
+       WHERE id = $1 AND status = 'paused' AND pause_source = 'auction'`,
       [auction.listing_id],
     );
 
@@ -224,7 +225,7 @@ app.post('/auctions/:auctionId/cancel', async (request, reply) => {
           body: payload.reason
             ? `The seller cancelled this auction: ${payload.reason}`
             : 'The seller has cancelled this auction.',
-          eventType: 'auction_outbid',
+          eventType: 'auction_cancelled',
           payload: { auctionId, event: 'auction_cancelled' },
           route: { screen: 'AuctionDetail', params: { auctionId } },
           idempotencyKey: `auction-cancel-${auctionId}-${row.bidder_id}`,
@@ -324,6 +325,21 @@ app.post('/auctions/:auctionId/payment', async (request, reply) => {
       return { ok: false, error: 'Payment already confirmed', code: 'PAYMENT_ALREADY_CONFIRMED' };
     }
 
+    // Seller reach (lib/sellerReach.ts): this is the order-bind point —
+    // settlement below inserts a 'paid' order. A seller suspended after the
+    // auction was won must not take the winner's money. 'limited' does not
+    // block settlement.
+    const sellerReach = await getSellerReach(client, auction.seller_id);
+    if (sellerReach?.state === 'suspended') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'This seller is currently restricted — this auction cannot be paid',
+        code: 'SELLER_RESTRICTED',
+      };
+    }
+
     const winningBidGbp = Number(auction.current_bid_gbp);
     const platformFeeGbp = calculateAuctionPlatformFeeGbp(winningBidGbp);
 
@@ -339,7 +355,7 @@ app.post('/auctions/:auctionId/payment', async (request, reply) => {
 
     // Mark listing as sold — payment is now confirmed
     await client.query(
-      `UPDATE listings SET status = 'sold', updated_at = NOW() WHERE id = $1`,
+      `UPDATE listings SET status = 'sold', pause_source = NULL, updated_at = NOW() WHERE id = $1`,
       [auction.listing_id],
     );
 
@@ -412,7 +428,7 @@ app.post('/auctions/:auctionId/payment', async (request, reply) => {
         userId: auction.seller_id,
         title: 'Payment received',
         body: `Payment of £${winningBidGbp.toFixed(2)} received for ${auctionId}. The auction is settled.`,
-        eventType: 'auction_won',
+        eventType: 'auction_sold',
         payload: { auctionId, event: 'auction_payment_confirmed', orderId: effectiveOrderId },
         route: { screen: 'AuctionDetail', params: { auctionId } },
         idempotencyKey: `auction-payment-${auctionId}`,
@@ -502,6 +518,17 @@ app.post('/auctions/:auctionId/second-chance/accept', async (request, reply) => 
       await client.query('ROLLBACK');
       reply.code(409);
       return { ok: false, error: 'Second-chance deadline has passed', code: 'SECOND_CHANCE_EXPIRED' };
+    }
+
+    // Seller reach (lib/sellerReach.ts): accepting binds this bidder to a
+    // payment obligation toward the seller — a suspended seller's auction
+    // can never settle (the payment route rejects it), so don't move the
+    // bidder into awaiting_payment in the first place.
+    const scSellerReach = await getSellerReach(client, auction.seller_id);
+    if (scSellerReach?.state === 'suspended') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'This seller is currently restricted — this auction cannot be paid', code: 'SELLER_RESTRICTED' };
     }
 
     // Transition to awaiting_payment with the new winner
@@ -682,6 +709,16 @@ app.post('/auctions/:auctionId/accept-highest-bid', async (request, reply) => {
       await client.query('ROLLBACK');
       reply.code(409);
       return { ok: false, error: 'Auction is not in reserve-not-met state', code: 'NOT_RESERVE_NOT_MET' };
+    }
+
+    // Seller reach (lib/sellerReach.ts): accepting binds the highest bidder
+    // to a payment obligation. A suspended seller cannot sell — reject here
+    // so the winner is never locked into a sale that cannot settle.
+    const acceptBidSellerReach = await getSellerReach(client, auction.seller_id);
+    if (acceptBidSellerReach?.state === 'suspended') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'This seller is currently restricted — this auction cannot proceed to payment', code: 'SELLER_RESTRICTED' };
     }
 
     // Find the highest bid

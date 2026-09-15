@@ -106,7 +106,12 @@ export type PosterMediaType = 'image' | 'video' | 'text';
 
 export interface PosterFrame {
   id: string;
+  /** Playback URL — an m3u8 master playlist for processed videos. */
   mediaUrl: string;
+  /** JPEG preview for video frames — use wherever a still image is needed. */
+  posterUrl?: string | null;
+  /** Progressive MP4 for save/share — use instead of mediaUrl for downloads. */
+  downloadUrl?: string | null;
   caption: string;
   mediaType: PosterMediaType;
   sortOrder: number;
@@ -848,6 +853,10 @@ export interface PosterHighlightFrame {
   frameId: string;
   sortOrder: number;
   mediaUrl: string;
+  /** Still-image preview URL (poster for video frames, media otherwise). */
+  previewUrl?: string | null;
+  /** Progressive MP4 for save/share on video frames — mediaUrl may be m3u8. */
+  downloadUrl?: string | null;
   mediaType: string;
   caption: string;
   backgroundColor: string | null;

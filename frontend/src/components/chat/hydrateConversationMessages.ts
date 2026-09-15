@@ -130,6 +130,8 @@ export function hydrateConversationMessages(
 
       mediaUri: entry.mediaUri,
 
+      posterUri: entry.posterUri,
+
       mediaType: entry.mediaType,
 
       uploadStatus: entry.uploadStatus,

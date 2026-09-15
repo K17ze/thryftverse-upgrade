@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useState } from "react";
 
 import * as Clipboard from "expo-clipboard";
 
@@ -13,10 +13,11 @@ import { MessageContextMenu } from "./MessageContextMenu";
 import { ForwardSheet } from "./ForwardSheet";
 import { ScrollToBottomFAB } from "./ScrollToBottomFAB";
 import { ConfirmationSheet } from "../ConfirmationSheet";
-
 import {
-  reportConversationOnApi,
-  sendConversationMessageOnApi } from "../../services/chatApi";
+  forwardMessageToConversation,
+  isForwardableMessage } from "./forwardMessage";
+
+import { reportConversationOnApi } from "../../services/chatApi";
 
 import { type Message } from "../../hooks/chat";
 import type { ConversationConfirmationRequest } from "../../hooks/chat/useConversationMessages";
@@ -69,6 +70,11 @@ export interface ChatSheetsProps {
   /** Save-in-chat toggle — negotiated persistence (Snapchat-style);
    *  either party may save or unsave, the marker is shared state. */
   onSaveMessage: (msg: Message) => void;
+  /** Pin/unpin — backed by real endpoints; backend permits group
+   *  admins/owners only, so callers gate the action entirely. */
+  canPinMessage?: boolean;
+  pinnedMessageId?: string | null;
+  onPinMessage?: (msg: Message) => void;
   onRetryUpload: (msgId: string) => void;
   onRetrySendMessage: (msgId: string) => void;
   onPrefillComposer: (text: string) => void;
@@ -111,6 +117,9 @@ export function ChatSheets({
   onReactToMessage,
   onDeleteMessage,
   onSaveMessage,
+  canPinMessage = false,
+  pinnedMessageId,
+  onPinMessage,
   onRetryUpload,
   onRetrySendMessage,
   onPrefillComposer,
@@ -155,28 +164,10 @@ export function ChatSheets({
   const [forwardSheetVisible, setForwardSheetVisible] = useState(false);
   const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
 
-  const forwardMessageToConversation = useCallback(
-    async (targetConversationId: string, text: string, mediaUri?: string, mediaType?: string) => {
-      try {
-        const options: { type?: 'text' | 'image' | 'video'; mediaUri?: string } = {};
-        if (mediaUri && mediaType) {
-          options.type = mediaType === 'video' ? 'video' : 'image';
-          options.mediaUri = mediaUri;
-        }
-        await sendConversationMessageOnApi(
-          targetConversationId,
-          text,
-          undefined,
-          undefined,
-          options,
-          currentUserId,
-        );
-      } catch (err) {
-        show("Failed to forward message", "error");
-      }
-    },
-    [currentUserId, show],
-  );
+  // Forward is only honest for payloads we can re-send faithfully —
+  // offers, polls, documents and commerce cards have no cross-thread
+  // send path, so the context menu must not offer it.
+  const canForwardSelectedMessage = isForwardableMessage(selectedMessage);
 
   return (
     <>
@@ -267,6 +258,9 @@ export function ChatSheets({
             case "save":
               onSaveMessage(selectedMessage);
               break;
+            case "pin":
+              onPinMessage?.(selectedMessage);
+              break;
             case "retry":
               if (selectedMessage.uploadStatus === "failed") {
                 onRetryUpload(selectedMessage.id);
@@ -314,6 +308,11 @@ export function ChatSheets({
         canSave={canSaveSelectedMessage}
         isSaved={selectedMessageSavedByMe}
         isDeleted={selectedMessage?.isDeleted === true}
+        canForward={canForwardSelectedMessage}
+        canPin={canPinMessage}
+        isPinned={Boolean(
+          selectedMessage && pinnedMessageId === selectedMessage.id,
+        )}
       />
 
       <ForwardSheet
@@ -321,20 +320,20 @@ export function ChatSheets({
         conversations={conversations.filter((c) => c.id !== conversationId)}
         currentConversationId={conversationId}
         onForward={(targetConversationId) => {
-          if (forwardingMessage) {
-            const text = forwardingMessage.text ?? "";
-            if (text) {
-              forwardMessageToConversation(
-                targetConversationId,
-                text,
-                forwardingMessage.mediaUri,
-                forwardingMessage.mediaType,
-              );
-            }
-          }
+          const msg = forwardingMessage;
           setForwardSheetVisible(false);
           setForwardingMessage(null);
-          show("Message forwarded", "success");
+          if (!msg) return;
+          // Defence in depth: the context menu gates Forward on
+          // forwardability, but never claim success for a payload we
+          // can't deliver.
+          if (!isForwardableMessage(msg)) {
+            show("This message can't be forwarded", "error");
+            return;
+          }
+          forwardMessageToConversation(targetConversationId, msg, currentUserId)
+            .then(() => show("Message forwarded", "success"))
+            .catch(() => show("Failed to forward message", "error"));
         }}
         onClose={() => {
           setForwardSheetVisible(false);

@@ -125,6 +125,9 @@ const LIVE_LOT_ROW = (overrides: Record<string, unknown> = {}) => ({
   extension_count: 0,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
+  // Joined listings.status the bid path re-checks — the listing must stay
+  // biddable ('active'/'paused') for a bid to land.
+  listing_status: 'active',
   ...overrides,
 });
 
@@ -250,6 +253,11 @@ function createEngineClient(lotRows: Record<string, unknown>[]) {
       }
       if (sql.includes('UPDATE live_lots')) {
         return { rows: [] };
+      }
+      // The open route re-verifies the lot's listing is still
+      // auction-eligible before opening a bidding window.
+      if (sql.includes('FROM listings')) {
+        return { rows: [{ status: 'active' }] };
       }
       return { rows: [] };
     },

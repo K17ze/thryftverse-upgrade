@@ -24,6 +24,7 @@ export const KNOWN_STATUSES = new Set([
   'completed',
   'cancelled',
   'refunded',
+  'refunding',
   'delivery failed',
   'returned',
 ]);
@@ -49,6 +50,7 @@ export function humaniseStatus(normalised: string): string {
     'completed': 'Completed',
     'cancelled': 'Cancelled',
     'refunded': 'Refunded',
+    'refunding': 'Refund in progress',
     'delivery failed': 'Delivery failed',
     'returned': 'Returned',
   };
@@ -80,6 +82,7 @@ export function getStatusExplanation(normalised: string): string {
     'completed': 'This order is complete.',
     'cancelled': 'This order was cancelled.',
     'refunded': 'This order was refunded.',
+    'refunding': 'A refund is in progress for this order. The outcome will update automatically.',
     'delivery failed': 'The carrier could not complete delivery.',
     'returned': 'The parcel was returned to the sender.',
   };
@@ -98,6 +101,7 @@ export function getStatusTone(normalised: string): StatusTone {
   if (normalised === 'paid' || normalised === 'processing' || normalised === 'preparing') return 'active';
   if (normalised === 'shipped' || normalised === 'in transit' || normalised === 'out for delivery') return 'active';
   if (normalised === 'delivered' || normalised === 'completed') return 'success';
+  if (normalised === 'refunding') return 'pending';
   if (normalised === 'cancelled' || normalised === 'refunded' || normalised === 'delivery failed' || normalised === 'returned') return 'danger';
   return 'muted';
 }

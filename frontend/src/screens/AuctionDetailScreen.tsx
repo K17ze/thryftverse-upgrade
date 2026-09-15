@@ -316,13 +316,14 @@ export default function AuctionDetailScreen() {
           isTerminal={derived.isTerminal}
           priceLabel={derived.priceLabel}
           priceText={derived.priceText}
+          priceEquivalentText={derived.priceEquivalentText}
           primaryState={derived.primaryState}
           reserveStatus={derived.reserveStatus}
           subordinateStateText={derived.subordinateStateText}
           isLive={derived.isLive}
           viewerState={derived.viewerState}
           bidCount={auction.bidCount}
-          minimumNextBidGbp={auction.minimumNextBidGbp}
+          minimumNextBidText={derived.minimumNextBidLockup?.izeText ?? null}
         />
 
         {/* ── Terminal result — one compact module, no duplicate title/brand ──

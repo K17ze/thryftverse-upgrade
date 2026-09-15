@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useRef } from 'react';
-import type { CreatorLayer, CreatorPage } from '../composition';
+import type { CreatorLayer, CreatorPage } from '../core/projectStore/composition';
 import type { useHaptic } from '../../hooks/useHaptic';
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -26,10 +26,6 @@ type Haptic = ReturnType<typeof useHaptic>;
 /**
  * Mutation function signatures from CreatorContext.
  */
-type UpdateLayersLiveFn = (
-  updates: Array<{ id: string; x?: number; y?: number }>,
-) => void;
-
 type CommitMultiLayerTransformFn = (
   updates: Array<{ id: string; updates: Partial<CreatorLayer> }>,
   label: string,
@@ -52,7 +48,6 @@ export function useLookMultiSelect(
   selectedLayerIds: string[],
   multiSelectMode: boolean,
   mutations: {
-    updateLayersLive: UpdateLayersLiveFn;
     commitMultiLayerTransform: CommitMultiLayerTransformFn;
     bringSelectedToFront: BringSelectedToFrontFn;
     sendSelectedToBack: SendSelectedToBackFn;
@@ -62,7 +57,6 @@ export function useLookMultiSelect(
   haptic: Haptic,
 ) {
   const {
-    updateLayersLive,
     commitMultiLayerTransform,
     bringSelectedToFront,
     sendSelectedToBack,
@@ -70,17 +64,18 @@ export function useLookMultiSelect(
     selectLayer,
   } = mutations;
 
-  // Snapshot of selected layers' start positions at drag begin — used to
-  // apply the drag delta to all peers in real-time and commit on drag end.
+  // Snapshot of selected layers' start positions at drag begin — the live
+  // visual drag runs on the UI thread via shared values (CreatorCanvas),
+  // so JS only sees drag start and the final commit.
   const multiDragSnapshotRef = useRef<Map<string, { x: number; y: number }>>(
     new Map(),
   );
 
   // ── Multi-select drag: move all selected layers together ──────────
   // On drag start, snapshot all selected layers' positions. During drag,
-  // apply the normalized delta to peers via updateLayersLive (no history).
-  // On drag end, commit all selected layers' new positions in a single
-  // history entry via commitMultiLayerTransform.
+  // peers follow the gesture owner's shared-value delta on the UI thread
+  // (no per-frame JS crossing). On drag end, commit all selected layers'
+  // new positions in a single history entry via commitMultiLayerTransform.
   const handleMultiDragStart = useCallback(() => {
     const snapshot = new Map<string, { x: number; y: number }>();
     const layers = page?.layers ?? [];
@@ -90,19 +85,6 @@ export function useLookMultiSelect(
     }
     multiDragSnapshotRef.current = snapshot;
   }, [selectedLayerIds, page]);
-
-  const handleMultiDragUpdate = useCallback(
-    (deltaXNorm: number, deltaYNorm: number) => {
-      const snapshot = multiDragSnapshotRef.current;
-      if (snapshot.size === 0) return;
-      const updates: Array<{ id: string; x?: number; y?: number }> = [];
-      for (const [id, start] of snapshot) {
-        updates.push({ id, x: start.x + deltaXNorm, y: start.y + deltaYNorm });
-      }
-      updateLayersLive(updates);
-    },
-    [updateLayersLive],
-  );
 
   const handleMultiDragCommit = useCallback(
     (deltaXNorm: number, deltaYNorm: number) => {
@@ -252,7 +234,6 @@ export function useLookMultiSelect(
 
   return {
     handleMultiDragStart,
-    handleMultiDragUpdate,
     handleMultiDragCommit,
     handleOverlapCycle,
     handleMultiFront,

@@ -13,6 +13,11 @@ type QueueUserNotificationInput = {
   body: string;
   payload?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
+  eventType?: string;
+  actorUserId?: string;
+  imageUrl?: string;
+  route?: Record<string, unknown>;
+  idempotencyKey?: string;
 };
 
 type SecureMessagesRouteDependencies = {
@@ -140,12 +145,14 @@ export const registerSecureMessagesRoutes = ({
           userId: payload.recipientId,
           title: 'New message',
           body: 'You have a new secure message in Thryftverse.',
+          eventType: 'chat_message',
           payload: {
             conversationId: payload.conversationId,
             messageId: result.rows[0].id,
             senderId,
             event: 'chat_message',
           },
+          route: { screen: 'Chat', params: { conversationId: payload.conversationId } },
           metadata: {
             source: 'secure_messages',
           },

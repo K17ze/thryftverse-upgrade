@@ -35,17 +35,22 @@ export interface ListingQuestion {
   } | null;
 }
 
-function mapApiQuestion(q: ListingQuestionApi): ListingQuestion {
+function mapApiQuestion(q: ListingQuestionApi, fallbackAskerName?: string): ListingQuestion {
   return {
     id: q.id,
     listingId: q.listingId,
-    askerName: q.askerName ?? 'Member',
+    // The POST response carries the real asker username; fall back to the
+    // signed-in viewer's name for their own just-posted question, then the
+    // neutral 'Member' label — never a fabricated name.
+    askerName: q.askerName ?? fallbackAskerName ?? 'Member',
     text: q.text,
     createdAt: Date.parse(q.createdAt) || Date.now(),
     answer: q.answer
       ? {
           text: q.answer.text,
-          responderName: q.answer.responderName,
+          // Only the seller can answer — the role label is truthful when
+          // the username is absent.
+          responderName: q.answer.responderName ?? 'Seller',
           createdAt: Date.parse(q.answer.createdAt) || Date.now() }
       : null };
 }
@@ -86,7 +91,7 @@ export function ListingQA({
     try {
       const items = await fetchListingQuestions(listingId);
       if (cancelledRef.current) return;
-      setQuestions(items.map(mapApiQuestion));
+      setQuestions(items.map((q) => mapApiQuestion(q)));
       setLoadState('ready');
     } catch {
       if (!cancelledRef.current) setLoadState('error');
@@ -111,7 +116,7 @@ export function ListingQA({
     haptic.light();
     try {
       const posted = await askListingQuestion(listingId, trimmed);
-      setQuestions((prev) => [mapApiQuestion(posted), ...prev]);
+      setQuestions((prev) => [mapApiQuestion(posted, currentUserName), ...prev]);
       setAskText('');
       show('Question posted', 'success');
     } catch (err) {
@@ -119,7 +124,7 @@ export function ListingQA({
     } finally {
       setIsSubmitting(false);
     }
-  }, [askText, listingId, requireAuth, haptic, show]);
+  }, [askText, listingId, currentUserName, requireAuth, haptic, show]);
 
   const handleAnswer = useCallback(async (questionId: string) => {
     const trimmed = answerText.trim();
@@ -135,7 +140,7 @@ export function ListingQA({
       const mapped = answer
         ? {
             text: answer.text,
-            responderName: answer.responderName,
+            responderName: answer.responderName ?? 'Seller',
             createdAt: Date.parse(answer.createdAt) || Date.now() }
         : null;
       setQuestions((prev) =>

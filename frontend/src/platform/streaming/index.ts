@@ -4,4 +4,5 @@ export {
   type LiveKitConnectionState,
   type LiveKitParticipantInfo,
   type LiveKitTrackInfo,
+  type LiveKitVideoTrack,
 } from './useLiveKitRoom';

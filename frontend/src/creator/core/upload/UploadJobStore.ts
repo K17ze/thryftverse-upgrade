@@ -40,6 +40,31 @@ export class UploadJobStore {
    * Discards jobs in the old format (missing `localPath`).
    */
   async loadJobs(): Promise<UploadJob[]> {
+    return (await this.readJobs()).map((job) => {
+      // A process kill cannot leave an active native/XHR task attached to
+      // this JS runtime. Rehydrate transient work as queued so the manager
+      // restarts it instead of polling an impossible `uploading` state.
+      if (job.status === 'uploading' || job.status === 'initiating'
+        || job.status === 'stalled' || job.status === 'confirming') {
+        return { ...job, status: 'queued' as const, error: undefined };
+      }
+      // Versionless jobs completed by the old manager contain only an
+      // unverified presign URL. They must re-enter the trusted pipeline.
+      if (job.status === 'completed' && (!job.finalizationId || !job.remoteUrl)) {
+        return {
+          ...job,
+          status: 'queued' as const,
+          progress: 0,
+          remoteUrl: undefined,
+          error: undefined,
+          retries: 0,
+        };
+      }
+      return job;
+    });
+  }
+
+  private async readJobs(): Promise<UploadJob[]> {
     try {
       const raw = await AsyncStorage.getItem(this.storageKey);
       if (!raw) return [];
@@ -54,27 +79,7 @@ export class UploadJobStore {
           j !== null &&
           'localPath' in j &&
           'status' in j,
-      ).map((job) => {
-        // A process kill cannot leave an active native/XHR task attached to
-        // this JS runtime. Rehydrate transient work as queued so the manager
-        // restarts it instead of polling an impossible `uploading` state.
-        if (job.status === 'uploading' || job.status === 'initiating') {
-          return { ...job, status: 'queued' as const, error: undefined };
-        }
-        // Versionless jobs completed by the old manager contain only an
-        // unverified presign URL. They must re-enter the trusted pipeline.
-        if (job.status === 'completed' && !job.finalizationId) {
-          return {
-            ...job,
-            status: 'queued' as const,
-            progress: 0,
-            remoteUrl: undefined,
-            error: undefined,
-            retries: 0,
-          };
-        }
-        return job;
-      });
+      );
     } catch {
       // Corrupt or unreadable store — start fresh rather than crashing
       // the publish flow. The caller will re-queue from source of truth.
@@ -92,7 +97,7 @@ export class UploadJobStore {
   /** Add a new job and persist. */
   async addJob(job: UploadJob): Promise<void> {
     await this.enqueueMutation(async () => {
-      const jobs = await this.loadJobs();
+      const jobs = await this.readJobs();
       jobs.push(job);
       await this.writeJobs(jobs);
     });
@@ -101,7 +106,7 @@ export class UploadJobStore {
   /** Apply partial updates to a job and persist. */
   async updateJob(jobId: string, updates: Partial<UploadJob>): Promise<void> {
     await this.enqueueMutation(async () => {
-      const jobs = await this.loadJobs();
+      const jobs = await this.readJobs();
       const idx = jobs.findIndex((j) => j.id === jobId);
       if (idx === -1) return;
       jobs[idx] = {
@@ -116,7 +121,7 @@ export class UploadJobStore {
   /** Remove a job and persist. */
   async removeJob(jobId: string): Promise<void> {
     await this.enqueueMutation(async () => {
-      const jobs = await this.loadJobs();
+      const jobs = await this.readJobs();
       const next = jobs.filter((j) => j.id !== jobId);
       await this.writeJobs(next);
     });

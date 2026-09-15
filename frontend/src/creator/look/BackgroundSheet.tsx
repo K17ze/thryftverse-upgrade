@@ -35,7 +35,7 @@ import { Space, Radius, Typography, FontFamily, Stroke, Control } from '../../th
 import { TypographyV2 } from '../../theme/typography.v2';
 import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { SheetContainer, PressScale } from '../CreatorAnimations';
+import { SheetContainer, PressScale } from '../shared/CreatorAnimations';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { CreatorSlider } from '../controls/CreatorSlider';
@@ -54,7 +54,7 @@ import Reanimated, {
   useAnimatedStyle,
   withSpring } from 'react-native-reanimated';
 import { Motion } from '../../theme/motionTokens';
-import type { CreatorBackground, CreatorLayer } from '../composition';
+import type { CreatorBackground, CreatorLayer } from '../core/projectStore/composition';
 
 // ── Presets ───────────────────────────────────────────────────────────
 // These are user-facing canvas background values — intentionally hardcoded

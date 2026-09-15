@@ -1,7 +1,7 @@
 import React from 'react';
 import { useStore } from '../../store/useStore';
 import { useBiometricGate } from '../useBiometricGate';
-import { getWalletSnapshot } from '../../services/walletApi';
+import { getSellerWalletBalances } from '../../services/walletApi';
 
 export interface UseSettingsScreenDataResult {
   /** True while the persist store is still rehydrating user/session data. */
@@ -25,10 +25,10 @@ export function useSettingsScreenData(): UseSettingsScreenDataResult {
   React.useEffect(() => {
     if (!currentUser?.id) return;
     let cancelled = false;
-    getWalletSnapshot(currentUser.id)
-      .then((snap) => {
-        if (!cancelled && snap) {
-          setWalletBalance(snap.snapshot?.availableGbp ?? 0);
+    getSellerWalletBalances(currentUser.id)
+      .then((res) => {
+        if (!cancelled && res) {
+          setWalletBalance(res.balances?.availableGbp ?? 0);
         }
       })
       .catch(() => {

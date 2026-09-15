@@ -34,7 +34,7 @@ export function useDiscoveryFeed({
   moodboards,
   isDiscoveryLoading,
   discoveryError }: UseDiscoveryFeedInput) {
-  const { listings: backendListings, refreshListings, isSyncing, lastError } = useBackendData();
+  const { listings: backendListings, refreshListings, isSyncing, lastError, hasMore, isLoadingMore, loadMoreListings } = useBackendData();
   const forYouFeed = useForYouFeed('discovery');
 
   // ── Personalised listings: For You feed when available, else backend cursor ──
@@ -42,6 +42,14 @@ export function useDiscoveryFeed({
     if (forYouFeed.listings.length > 0) return forYouFeed.listings;
     return backendListings;
   }, [forYouFeed.listings, backendListings]);
+
+  // ── Pagination — the recommendations API serves a fixed page, so the
+  //  For You path honestly reports no further pages. When the shared
+  //  listings cursor is the base, it paginates normally. ──
+  const usingForYouPage = forYouFeed.listings.length > 0;
+  const feedHasMore = !usingForYouPage && hasMore;
+  const feedIsLoadingMore = !usingForYouPage && isLoadingMore;
+  const loadMore = usingForYouPage ? undefined : () => void loadMoreListings();
 
   // ── Category filter — dynamically matches category, brand, style or recency ──
   const personalisedListings = useMemo(() => {
@@ -88,5 +96,12 @@ export function useDiscoveryFeed({
     showError,
     showEmpty,
     showFilteredEmpty,
+    // Staleness — surfaced as a quiet retry banner when content is on
+    // screen but the last listings sync failed.
+    lastError,
+    isSyncing,
+    feedHasMore,
+    feedIsLoadingMore,
+    loadMore,
   };
 }

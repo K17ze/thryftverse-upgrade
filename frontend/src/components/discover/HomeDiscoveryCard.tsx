@@ -47,6 +47,7 @@ import { MediaPreview as CanonicalMediaPreview } from '../MediaPreview';
 import { useStore } from '../../store/useStore';
 import { useHaptic } from '../../hooks/useHaptic';
 import { ProductAnalytics } from '../../platform/product/productAnalytics';
+import { recordPromotionClick } from '../../services/promotionsApi';
 import { Space, FontFamily, Radius, Control, GlyphShadow } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
@@ -79,6 +80,9 @@ export const HomeDiscoveryCard = React.memo(function HomeDiscoveryCard({
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const toggleWishlist = useStore((state) => state.toggleWishlist);
+  const isWishlisted = useStore((state) =>
+    item.routeId ? state.isWishlisted(item.routeId) : false
+  );
   const haptic = useHaptic();
 
   const sharedTag = item.media.kind === 'image' && item.routeId
@@ -88,12 +92,14 @@ export const HomeDiscoveryCard = React.memo(function HomeDiscoveryCard({
   const mediaHeight = Math.round(tileWidth * item.aspectRatio);
 
   const handleDoubleTapLike = React.useCallback(() => {
-    if (item.routeId) {
+    if (item.routeId && !isWishlisted) {
+      // Double-tap never removes — the universal save convention (PDP
+      // already refuses the unlike; this card previously toggled it off).
       toggleWishlist(item.routeId);
       ProductAnalytics.itemSave(item.routeId);
       haptic.success();
     }
-  }, [item.routeId, toggleWishlist, haptic]);
+  }, [item.routeId, isWishlisted, toggleWishlist, haptic]);
 
   const handleSavePress = React.useCallback(() => {
     if (item.routeId) {
@@ -102,6 +108,13 @@ export const HomeDiscoveryCard = React.memo(function HomeDiscoveryCard({
       haptic.light();
     }
   }, [item.routeId, toggleWishlist, haptic]);
+
+  // Paid-placement tap-through — record the click for seller stats, then
+  // navigate. Fire-and-forget; analytics never blocks the press.
+  const handleTilePress = React.useCallback(() => {
+    if (item.promotionId) recordPromotionClick(item.promotionId);
+    onPress(item.routeId);
+  }, [item.promotionId, item.routeId, onPress]);
 
   // Video tiles keep overlay price (editorial role) — price is a secondary
   // signal over ambient video media. Standard image tiles put price below
@@ -144,7 +157,7 @@ export const HomeDiscoveryCard = React.memo(function HomeDiscoveryCard({
     <View style={[styles.card, { width: tileWidth }]}>
       <AnimatedPressable
         style={styles.pressable}
-        onPress={() => onPress(item.routeId)}
+        onPress={handleTilePress}
         onLongPress={() => onLongPress(item)}
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="button"
@@ -206,6 +219,7 @@ export const HomeDiscoveryCard = React.memo(function HomeDiscoveryCard({
             style={styles.saveButton}
             accessibilityLabel={item.saved ? 'Unsave item' : 'Save item'}
             accessibilityRole="button"
+            accessibilityState={{ selected: item.saved }}
           >
             <Ionicons
               name={item.saved ? 'heart' : 'heart-outline'}
@@ -235,6 +249,13 @@ export const HomeDiscoveryCard = React.memo(function HomeDiscoveryCard({
         {/* ── Identity + price below media (standard commerce tile) ── */}
         {!useOverlayPrice && (
           <View style={styles.meta}>
+            {/* Paid-placement disclosure — server-stamped verbatim. Quiet
+                meta label above identity; never synthesised from promoted. */}
+            {item.disclosure ? (
+              <Text style={styles.disclosureLabel} numberOfLines={1}>
+                {item.disclosure}
+              </Text>
+            ) : null}
             <Text
               style={styles.identity}
               numberOfLines={2}
@@ -270,6 +291,11 @@ export const HomeDiscoveryCard = React.memo(function HomeDiscoveryCard({
         {/* Overlay price tiles still show identity below for commerce readability */}
         {useOverlayPrice && (
           <View style={styles.meta}>
+            {item.disclosure ? (
+              <Text style={styles.disclosureLabel} numberOfLines={1}>
+                {item.disclosure}
+              </Text>
+            ) : null}
             <Text
               style={styles.identity}
               numberOfLines={1}
@@ -379,6 +405,15 @@ const createStyles = (colors: ThemeColors) =>
     meta: {
       paddingTop: Space.xs + 1,
       paddingHorizontal: Space.xxs },
+    // Paid-placement disclosure — quiet text-only label above the identity.
+    // Server-stamped verbatim; subtle muted ink, no pill, no icon chrome
+    // (same treatment as ProductDiscoveryTile's disclosureLabel).
+    disclosureLabel: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted,
+      letterSpacing: TypographyV2.meta.letterSpacing } as TextStyle,
     // Identity: 14sp, medium weight, max 2 lines
     identity: {
       fontSize: TypographyV2.body.size,

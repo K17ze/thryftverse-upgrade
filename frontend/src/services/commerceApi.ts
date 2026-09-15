@@ -253,19 +253,34 @@ export interface ShippingQuoteResponse {
   quotes: ShippingQuoteItem[];
 }
 
-interface PayOrderResponse {
-  ok: true;
-  id: string;
-  status: string;
-  updatedAt: string;
-}
-
 export interface PaymentIntentStatusResponse {
-  intentId: string;
+  /** Server intent id — the backend serializer emits `id` (payment_intents.id). */
+  id: string;
   gatewayId: string;
+  channel?: string;
+  orderId?: string | null;
   status: string;
   clientSecret: string | null;
   nextActionUrl: string | null;
+  providerStatus?: string | null;
+  failureCode?: string | null;
+  failureMessage?: string | null;
+}
+
+/**
+ * Result of POST /payments/intents.
+ *
+ * `idempotent: true` means the server returned an EXISTING intent — either
+ * an idempotency-key replay or the intent already bound to the order
+ * (order-payment-binding rule: one intent per order). Callers must read
+ * `intent.status`/`intent.gatewayId` rather than assuming a usable
+ * `clientSecret`: a bound intent can be in-flight, terminal, or on a
+ * different gateway (e.g. a failed oneze_internal intent replayed to a
+ * card-payment request).
+ */
+export interface CreatePaymentIntentResult {
+  intent: PaymentIntentStatusResponse;
+  idempotent: boolean;
 }
 
 export interface CommerceUserOrder {
@@ -290,6 +305,8 @@ export interface CommerceUserOrder {
   shipByDate?: string | null;
   /** Immutable purchased-service snapshot (optional for older orders). */
   fulfilmentSnapshot?: FulfilmentSnapshot | null;
+  /** Whether a buyer-authored review exists for this order (server-derived). */
+  hasReview?: boolean;
 }
 
 export interface OrderParcelEvent {
@@ -652,8 +669,12 @@ export async function checkShippingServiceability(
 
 export async function createCommercePaymentIntent(
   input: { orderId: string; idempotencyKey: string }
-): Promise<PaymentIntentStatusResponse> {
-  const payload = await fetchJson<{ ok: true; intent: PaymentIntentStatusResponse }>(
+): Promise<CreatePaymentIntentResult> {
+  const payload = await fetchJson<{
+    ok: true;
+    idempotent?: boolean;
+    intent: PaymentIntentStatusResponse;
+  }>(
     '/payments/intents',
     {
       method: 'POST',
@@ -666,7 +687,14 @@ export async function createCommercePaymentIntent(
     }
   );
 
-  return payload.intent;
+  return { intent: payload.intent, idempotent: payload.idempotent === true };
+}
+
+export interface OnezeCheckoutIntentResult extends CreatePaymentIntentResult {
+  /** Server-computed required debit in 1ZE wallet units (1 1ZE = 1000 units). */
+  requiredOnezeUnits?: number | null;
+  /** Buyer's 1ZE wallet balance echoed back by the server. */
+  onezeBalance?: number | null;
 }
 
 /**
@@ -676,11 +704,23 @@ export async function createCommercePaymentIntent(
  * triggers the internal 1ZE payment flow — the buyer's 1ZE wallet is debited
  * atomically at the at-par rate (1 1ZE ≈ 1 GBP) and the GBP amount is credited
  * to escrow. No Stripe PaymentSheet is needed.
+ *
+ * Contract: the POST settles synchronously — `intent.status` is 'succeeded'
+ * on success; an insufficient wallet rejects with WALLET_INSUFFICIENT_BALANCE
+ * carrying requiredOnezeUnits/onezeBalance. Older builds may still return a
+ * non-terminal status — callers must treat the response status as the truth
+ * and poll GET /payments/intents/:id only as a recovery fallback.
  */
 export async function createOnezeCheckoutIntent(
   orderId: string
-): Promise<PaymentIntentStatusResponse> {
-  const payload = await fetchJson<{ ok: true; intent: PaymentIntentStatusResponse }>(
+): Promise<OnezeCheckoutIntentResult> {
+  const payload = await fetchJson<{
+    ok: true;
+    idempotent?: boolean;
+    intent: PaymentIntentStatusResponse;
+    requiredOnezeUnits?: number | null;
+    onezeBalance?: number | null;
+  }>(
     '/payments/intents',
     {
       method: 'POST',
@@ -694,7 +734,12 @@ export async function createOnezeCheckoutIntent(
     }
   );
 
-  return payload.intent;
+  return {
+    intent: payload.intent,
+    idempotent: payload.idempotent === true,
+    requiredOnezeUnits: payload.requiredOnezeUnits ?? null,
+    onezeBalance: payload.onezeBalance ?? null,
+  };
 }
 
 export async function getPaymentIntentStatus(intentId: string): Promise<PaymentIntentStatusResponse> {
@@ -705,12 +750,41 @@ export async function getPaymentIntentStatus(intentId: string): Promise<PaymentI
   return payload.intent;
 }
 
-export async function payOrder(orderId: string): Promise<PayOrderResponse> {
-  return fetchJson<PayOrderResponse>(`/orders/${encodeURIComponent(orderId)}/pay`, {
+export interface ShippingLabelResult {
+  /** Server-generated label URL — null when the carrier produced tracking
+   *  without a hosted label artifact. */
+  shippingLabelUrl: string | null;
+  trackingNumber: string | null;
+}
+
+/**
+ * POST /orders/:id/shipping-label — seller-authenticated, idempotent.
+ * The backend contract returns `shipping_label_url` (snake_case); the
+ * mapping tolerates camelCase variants so a serializer change cannot
+ * silently drop the label.
+ */
+export async function generateShippingLabel(
+  orderId: string,
+  carrier?: string
+): Promise<ShippingLabelResult> {
+  const payload = await fetchJson<{
+    ok?: boolean;
+    shipping_label_url?: string | null;
+    shippingLabelUrl?: string | null;
+    labelUrl?: string | null;
+    tracking_number?: string | null;
+    trackingNumber?: string | null;
+  }>(`/orders/${encodeURIComponent(orderId)}/shipping-label`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({}),
+    body: JSON.stringify(carrier ? { carrier } : {}),
   });
+
+  return {
+    shippingLabelUrl:
+      payload.shipping_label_url ?? payload.shippingLabelUrl ?? payload.labelUrl ?? null,
+    trackingNumber: payload.tracking_number ?? payload.trackingNumber ?? null,
+  };
 }
 
 export async function listUserOrders(
@@ -848,17 +922,6 @@ export async function respondDispatchExtension(
     }
   );
   return { extension: payload.extension, shipByDate: payload.shipByDate };
-}
-
-export async function refundOrder(orderId: string, reason?: string) {
-  return fetchJson<{ ok: true; orderId: string; status: string; refunded: boolean; reason: string | null }>(
-    `/orders/${encodeURIComponent(orderId)}/refund`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reason }),
-    }
-  );
 }
 
 export interface UserTransaction {

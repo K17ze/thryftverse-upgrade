@@ -1,0 +1,2313 @@
+import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  Image,
+  GestureResponderEvent,
+  Linking,
+  ScrollView,
+  AppState,
+  AppStateStatus } from 'react-native';
+import {
+  Camera,
+  type CameraRef,
+  useCameraDevice,
+  usePhotoOutput,
+  useVideoOutput } from 'react-native-vision-camera';
+import { SkiaCamera, type SkiaCameraRef } from 'react-native-vision-camera-skia';
+import * as MediaLibrary from 'expo-media-library/legacy';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Typography, Radius, Space, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
+import { IconGrammar } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
+import { useToast } from '../../context/ToastContext';
+import { makeStableId } from '../../utils/createStableId';
+import { useHaptic } from '../../hooks/useHaptic';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useMotionConfig } from '../../hooks/useMotionConfig';
+import { Motion } from '../../theme/motionTokens';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withSequence,
+  withDelay,
+  withRepeat,
+  Easing,
+  runOnJS } from 'react-native-reanimated';
+import { FocusReticle } from '../camera/FocusReticle';
+import { ShutterButton } from '../camera/ShutterButton';
+import { GalleryCarousel } from '../camera/GalleryCarousel';
+import { PermissionState } from '../camera/PermissionState';
+import { GreenScreenSheet, type GreenScreenSettings } from '../camera/GreenScreenSheet';
+import { CaptureToolsSheet, type TimerOption as SheetTimerOption } from '../camera/CaptureToolsSheet';
+import { useCameraEffectProcessor } from '../camera/useCameraEffectProcessor';
+import type { CameraEffectId } from '../camera/CameraEffectBar';
+import { CreatorAnalytics } from '../shared/creatorAnalytics';
+import { Video, ResizeMode } from '../../components/compat/Video';
+import type { CreatorInitialMedia } from '../../navigation/types';
+import { useCreatorCapturePermissions } from './useCreatorCapturePermissions';
+import {
+  useCaptureViewport,
+  type CaptureViewport } from './CaptureViewport';
+import { isCapabilitySupported } from '../capabilities/registry';
+import { POSTER_DEFAULT_ASPECT_RATIO, LOOK_DEFAULT_ASPECT_RATIO } from '../core/projectStore/composition';
+
+// ── CreatorCamera ────────────────────────────────────────────────────
+// Camera component with tap-to-focus, tap=photo / press-and-hold=video,
+// multi-capture staging tray, grid overlay, self-timer, and quick-review.
+
+// Shutter constants kept in sync with ShutterButton.tsx (78pt outer, 60pt inner).
+const CORNER_SIZE = 32;
+const CORNER_STROKE = 2;
+// Camera countdown shutter glyph — not a typographic token. This is a
+// large display effect glyph for the countdown overlay, not body text.
+const SHUTTER_GLYPH_SIZE = 96;
+// Video capture is gated by the capability registry — the single source
+// of truth for which creator capabilities have verified edit, viewer,
+// export, and backend support.
+const CAMERA_VIDEO_CAPTURE_ENABLED = isCapabilitySupported('videoCapture');
+// Zoom is a numeric value passed to vision-camera's zoom prop. UI labels
+// (1×, 2×, 3×) map to device zoom multipliers.
+const ZOOM_STEPS = [
+  { label: '1×', value: 1 },
+  { label: '2×', value: 2 },
+  { label: '3×', value: 3 },
+] as const;
+const FOCUS_RETICLE_SIZE = 70;
+const RECORDING_MAX_DURATION = 15000; // 15s max for video
+// Swipe-down-to-dismiss is a top-strip gesture only. Touches beginning
+// below this height (relative to the viewfinder root) belong to capture
+// grammar — focus taps, shutter hold-drag, staging tray — never dismissal.
+const DISMISS_ZONE_HEIGHT = 120; // pt from the top edge
+// Press-and-hold threshold for video recording is 250ms, set in
+// ShutterButton.tsx via delayLongPress. A quick tap lands as a photo;
+// a hold beyond that threshold starts video recording.
+
+// ── Hands-free capture ──
+// 3-second countdown, then recording begins automatically and stops at
+// HANDS_FREE_DEFAULT_DURATION. The user can tap to stop early.
+const HANDS_FREE_COUNTDOWN = 3; // seconds
+const HANDS_FREE_DEFAULT_DURATION = 10000; // 10s default
+const HANDS_FREE_MAX_DURATION = 30000; // 30s max
+
+// ── Capture speed modes ──
+// vision-camera supports native fps control via the video output's
+// recording options. The selected speed multiplier is stored in the clip
+// metadata (CreatorInitialMedia.speed) so the timeline/export engine
+// can apply it at playback, and the native recording fps is adjusted
+// for true slow-motion (high fps) or fast-motion (low fps).
+const DEFAULT_SPEED = '1';
+
+type FlashMode = 'off' | 'on' | 'auto';
+type ZoomStepIndex = 0 | 1 | 2;
+type TimerOption = 0 | 3 | 5 | 10;
+type CapturedMediaMetadata = Pick<
+  CreatorInitialMedia,
+  'width' | 'height' | 'durationMs' | 'mimeType'
+>;
+
+function getPhotoMimeType(containerFormat: string): string | undefined {
+  switch (containerFormat.toLowerCase()) {
+    case 'jpeg':
+    case 'jpg':
+      return 'image/jpeg';
+    case 'heif':
+    case 'heic':
+      return 'image/heif';
+    case 'png':
+      return 'image/png';
+    case 'dng':
+      return 'image/x-adobe-dng';
+    default:
+      return undefined;
+  }
+}
+
+export interface CreatorCameraProps {
+  /** Camera mode — determines framing guide + labels */
+  mode: 'poster' | 'look' | 'visual-search' | 'moodboard';
+  /** Called when the user captures a photo and confirms it via quick-review.
+   *  Used for single captures and backward-compatible callers (visual search,
+   *  legacy poster CameraCapture). */
+  onCapture: (uri: string) => void;
+  /** Called when the user finishes a batch capture (multi-capture or single
+   *  capture in poster/look mode). Every capture is retained as a
+   *  CreatorInitialMedia entry in deterministic order. When provided, this
+   *  takes precedence over onCapture for poster/look modes. */
+  onCaptureBatch?: (captures: CreatorInitialMedia[]) => void;
+  /** Called when the user taps the gallery thumbnail */
+  onGallery: () => void;
+  /** Optional: called when the user long-presses the gallery thumbnail.
+   *  When provided, replaces the default recent-photos carousel behavior
+   *  so the parent can route the long-press to a custom browser (progressive
+   *  disclosure: tap = ordinary path, long-press = power-user path). */
+  onGalleryLongPress?: () => void;
+  /** Called when the user taps close */
+  onClose: () => void;
+  /** Optional render prop for the bottom overlay (e.g. mode switcher) */
+  renderBottomOverlay?: () => React.ReactNode;
+  /** Optional control rendered beside the canonical flash control. */
+  renderTopRightAccessory?: () => React.ReactNode;
+  /** Called whenever the measured capture viewport changes. The parent
+   *  uses this to build the camera→editor transition snapshot with the
+   *  source content transform (the guide frame rect in screen coordinates)
+   *  so the destination can calculate its crop/focal point from the
+   *  source content transform. */
+  onViewportChange?: (viewport: CaptureViewport | null) => void;
+  /** Arm multi-capture (staging tray) on mount — listing flows open with
+   *  Multi Snap accumulation rather than the single-capture review. */
+  initialMultiCapture?: boolean;
+  /** Maximum captures the staging tray will accept. Reaching the cap
+   *  refuses the next shutter press with honest feedback instead of
+   *  silently accumulating media the caller cannot accept. */
+  maxCaptures?: number;
+}
+
+export default function CreatorCamera({
+  mode,
+  onCapture,
+  onCaptureBatch,
+  onGallery,
+  onGalleryLongPress,
+  onClose,
+  renderBottomOverlay,
+  renderTopRightAccessory,
+  onViewportChange,
+  initialMultiCapture = false,
+  maxCaptures }: CreatorCameraProps) {
+  const { show } = useToast();
+  const haptic = useHaptic();
+  const reducedMotion = useReducedMotion();
+  const { spring } = useMotionConfig();
+  const insets = useSafeAreaInsets();
+  const { colors } = useAppTheme();
+  const cameraRef = useRef<CameraRef | SkiaCameraRef>(null);
+  const [facing, setFacing] = useState<'back' | 'front'>('back');
+  const device = useCameraDevice(facing);
+  // Single permission owner: useCreatorCapturePermissions wraps both
+  // camera and microphone permission state. Do not call useCameraPermission
+  // directly — that creates a duplicate owner and divergent state.
+  const capturePermissions = useCreatorCapturePermissions();
+  const { cameraGranted: hasPermission, canRequestCamera: canRequestPermission, requestCamera: requestPermission } = capturePermissions;
+  const photoOutput = usePhotoOutput({ qualityPrioritization: 'balanced', quality: 0.92 });
+  // Gate audio on microphone permission — if mic is denied or not yet
+  // requested, record muted video. The mic permission is requested
+  // lazily on the first video recording attempt (see beginVideoRecording).
+  // VisionCamera v5: "Enabling Audio requires microphone permission."
+  const videoOutput = useVideoOutput({ enableAudio: capturePermissions.shouldRecordAudio });
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraInitError, setCameraInitError] = useState(false);
+  // "Starting camera" label is delayed so a fast init never flashes text.
+  // Only surfaces if the camera takes more than 800ms to report ready.
+  const [showInitLabel, setShowInitLabel] = useState(false);
+  // Camera init spinner rotation — 1.2s linear loop
+  const spinnerRotation = useSharedValue(0);
+  // Deactivate the camera on unmount to release the native CameraSession
+  // promptly. Without this, the native session can linger until GC, causing
+  // "A resource failed to call release" warnings and blocking other camera
+  // consumers (e.g. VisualSearchCamera) from acquiring the device.
+  const [cameraActive, setCameraActive] = useState(true);
+  // Reveal the "Starting camera" label only when init exceeds 800ms.
+  // A fast init never shows the label, keeping the overlay a pure spinner.
+  // The spinner rotates continuously at 1.2s/rev while the camera initializes.
+  useEffect(() => {
+    if (cameraReady) {
+      setShowInitLabel(false);
+      spinnerRotation.value = 0;
+      return;
+    }
+    const t = setTimeout(() => setShowInitLabel(true), 800);
+    if (!reducedMotion) {
+      spinnerRotation.value = withRepeat(
+        withTiming(360, { duration: 1200, easing: Easing.linear }),
+        -1,
+        false,
+      );
+    }
+    return () => clearTimeout(t);
+  }, [cameraReady, reducedMotion, spinnerRotation]);
+  const [flash, setFlash] = useState<FlashMode>('off');
+  const [zoomIndex, setZoomIndex] = useState<ZoomStepIndex>(0);
+  // ── Real-time camera effect (Skia frame processor) ──
+  // The selected effect is applied to the live preview via a GPU Skia
+  // frame processor (useSkiaFrameProcessor). The effect is also attached
+  // to the captured media payload so the timeline/export engine applies
+  // the same color matrix post-capture.
+  const [cameraEffect, setCameraEffect] = useState<CameraEffectId>('none');
+  const effectFrameProcessor = useCameraEffectProcessor(cameraEffect);
+  const [timerOption, setTimerOption] = useState<TimerOption>(0);
+  const [showGrid, setShowGrid] = useState(false);
+  // ── Explicit framing mode ──
+  // Brackets and crosshair are NOT shown for ordinary capture — only for
+  // Visual Search or when the user explicitly enables framing mode via Tools.
+  const [framingMode, setFramingMode] = useState(false);
+  const [focusPoint, setFocusPoint] = useState<{ x: number; y: number } | null>(null);
+  const [lastImageUri, setLastImageUri] = useState<string | null>(null);
+  const [recentImages, setRecentImages] = useState<string[]>([]);
+  const [showRecentCarousel, setShowRecentCarousel] = useState(false);
+  const [capturedUri, setCapturedUri] = useState<string | null>(null);
+  // Track whether the current capture is a photo or video so the
+  // confirmed capture is sent with the correct kind. Without this, video
+  // recordings are misclassified as images, breaking playback in the
+  // poster/look canvas.
+  const [capturedKind, setCapturedKind] = useState<'image' | 'video'>('image');
+  const [capturedMetadata, setCapturedMetadata] = useState<CapturedMediaMetadata>({});
+  const [countdown, setCountdown] = useState<number | null>(null);
+  // Cancellation token for the photo timer countdown — same grammar as the
+  // hands-free token: any cancel path increments it and the loop exits.
+  const photoCountdownTokenRef = useRef(0);
+  const reviewOpacity = useSharedValue(0);
+  const captureFlash = useSharedValue(0);
+  // ── Multi-capture mode ──
+  // Every capture is retained as a CreatorInitialMedia entry. Poster maps
+  // captures to frames; Look maps captures to layers. Single capture is the
+  // default; multi-capture is an explicit mode in Tools that accumulates
+  // into the staging tray.
+  const [multiCaptureMode, setMultiCaptureMode] = useState(initialMultiCapture);
+  const [multiCaptures, setMultiCaptures] = useState<CreatorInitialMedia[]>([]);
+
+  // ── Hands-free capture mode ──
+  // When enabled, tapping the shutter starts a 3-second countdown, then
+  // recording begins automatically and stops at the configured duration.
+  const [handsFreeMode, setHandsFreeMode] = useState(false);
+  const [handsFreeCountdown, setHandsFreeCountdown] = useState<number | null>(null);
+  // Cancellation token for the hands-free countdown — incremented by any
+  // cancel path (toggle off, shutter tap, unmount, close). The async loop
+  // checks the token after each tick instead of holding an unkillable timer.
+  const handsFreeTokenRef = useRef(0);
+
+  // ── Capture speed mode ──
+  // Stored as a string for CreatorSegmentControl; converted to number
+  // when building CreatorInitialMedia metadata.
+  const [speedMode, setSpeedMode] = useState<string>(DEFAULT_SPEED);
+
+  // ── Green screen (post-capture) ──
+  // Settings are preserved in CreatorInitialMedia.greenScreen so the
+  // timeline can re-render the composite.
+  const [showGreenScreenSheet, setShowGreenScreenSheet] = useState(false);
+  const [greenScreenSettings, setGreenScreenSettings] = useState<GreenScreenSettings | null>(null);
+
+  // ── Shared animation values ──
+  // Flip animation (double-tap to switch camera) — a quick fade, not a
+  // full rotation. The device switch is hidden by a brief opacity dip.
+  const flipOpacity = useSharedValue(1);
+  // Zoom indicator spring appearance
+  const zoomIndicatorOpacity = useSharedValue(0);
+  const zoomIndicatorScale = useSharedValue(0.8);
+  // Permission entrance animation
+  const permissionEntrance = useSharedValue(0);
+  // Recording state + ring progress
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingElapsed, setRecordingElapsed] = useState(0);
+  // Muted recording indicator — true when recording video without audio
+  // because microphone permission was denied or not granted.
+  const [isMutedRecording, setIsMutedRecording] = useState(false);
+  const recordingProgress = useSharedValue(0);
+  const recordingRingScale = useSharedValue(1);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // UI-thread mirror of isRecording so the dismiss gesture can fail fast on
+  // the gesture thread without a runOnJS hop per touch.
+  const isRecordingSV = useSharedValue(false);
+  useEffect(() => { isRecordingSV.value = isRecording; }, [isRecording, isRecordingSV]);
+  // ── Native recording recorder ref (P0.1 — one recording lifecycle) ──
+  // recorderRef is declared in beginVideoRecording scope above.
+  // Countdown Reanimated values
+  const countdownScale = useSharedValue(1.5);
+  const countdownOpacity = useSharedValue(0);
+  // ── Tools sheet (secondary tools behind a Tools button in the top bar) ──
+  const [showToolsSheet, setShowToolsSheet] = useState(false);
+  // ── Press-and-hold video: track long-press state to suppress photo on release ──
+  const isLongPressRef = useRef(false);
+  // Synchronous hold state — unlike isLongPressRef (reset on a delay to
+  // suppress the trailing tap event), this clears the instant the finger
+  // lifts so a pending mic-permission await can abort the recording start.
+  const pressHeldRef = useRef(false);
+
+  // Capture intent is owned by the studio shell. Entry-mode changes remount
+  // the correct canonical composer before media is committed.
+  const isPoster = mode === 'poster' || mode === 'moodboard';
+  const isVisualSearch = mode === 'visual-search';
+  const zoomLabel = ZOOM_STEPS[zoomIndex].label;
+  const zoomValue = ZOOM_STEPS[zoomIndex].value;
+
+  // ── Measured capture viewport ──────────────────────────────────────
+  // The guide frame adapts to real device dimensions via onLayout instead
+  // of hardcoded offsets. Brackets/crosshair are shown ONLY for Visual
+  // Search or explicit framing mode. The authored aspect ratio insets the
+  // guide frame within the available area so brackets describe the actual
+  // capture crop.
+  const showFramingGuides = isVisualSearch || framingMode;
+  const authoredAspectRatio = isPoster ? POSTER_DEFAULT_ASPECT_RATIO : isVisualSearch ? undefined : LOOK_DEFAULT_ASPECT_RATIO;
+  const { viewport, onViewportLayout } = useCaptureViewport({
+    authoredAspectRatio,
+    showFramingGuides });
+
+  // Notify the parent of viewport changes so the camera→editor transition
+  // snapshot can include the source content transform (the guide frame rect
+  // in screen coordinates). The destination calculates its crop/focal point
+  // from this transform, preserving content continuity across the transition.
+  useEffect(() => {
+    onViewportChange?.(viewport);
+  }, [viewport, onViewportChange]);
+
+  // Visual search must analyse the unstyled source. If the user changes from
+  // a creation mode with an active effect, fail closed to the identity matrix.
+  useEffect(() => {
+    if (isVisualSearch && cameraEffect !== 'none') setCameraEffect('none');
+  }, [cameraEffect, isVisualSearch]);
+
+  const captureFlashStyle = useAnimatedStyle(() => ({ opacity: captureFlash.value }));
+
+  // ── Camera init spinner rotation — 1.2s linear loop ──
+  const spinnerStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${spinnerRotation.value}deg` }] }));
+
+  // ── Quick-review overlay opacity ──
+  const reviewOpacityStyle = useAnimatedStyle(() => ({ opacity: reviewOpacity.value }));
+
+  // ── Framing-guide opacity (crossfade on mode switch) ──
+
+  // ── Flip: quick opacity fade (1→0→1) to hide the device switch ──
+  const cameraFlipStyle = useAnimatedStyle(() => ({ opacity: flipOpacity.value }));
+
+  // ── Zoom indicator: spring appearance ──
+  const zoomIndicatorStyle = useAnimatedStyle(() => ({
+    opacity: zoomIndicatorOpacity.value,
+    transform: [{ scale: zoomIndicatorScale.value }] }));
+
+  // ── Countdown: spring scale (1.5→1.0 bouncy) + fade ──
+  const countdownTextStyle = useAnimatedStyle(() => ({
+    opacity: countdownOpacity.value,
+    transform: [{ scale: countdownScale.value }] }));
+
+  // ── Permission entrance: timing slide-up + fade when denied ──
+  // Per §5.14: entrance uses timing (ease-out), not spring.
+  useEffect(() => {
+    if (!hasPermission) {
+      permissionEntrance.value = 0;
+      if (!reducedMotion) {
+        permissionEntrance.value = withDelay(
+          100,
+          withTiming(1, { duration: Motion.duration.slow, easing: Motion.easing.entrance }),
+        );
+      } else {
+        permissionEntrance.value = 1;
+      }
+    }
+  }, [hasPermission, reducedMotion, permissionEntrance]);
+
+  // ── Load recent gallery photos for thumbnail + carousel ──
+  useEffect(() => {
+    let cancelled = false;
+    async function loadRecent() {
+      try {
+        // Never ambush the creator with a broad photo-library permission
+        // merely to decorate the gallery control. If access already exists,
+        // show a recent thumbnail; otherwise the glyph remains truthful and
+        // the system picker asks only when the user chooses Gallery.
+        const mediaPermission = await MediaLibrary.getPermissionsAsync(false);
+        if (!mediaPermission.granted || cancelled) return;
+        const page = await MediaLibrary.getAssetsAsync({
+          mediaType: ['photo', 'video'],
+          sortBy: [['creationTime', false]],
+          first: 10 });
+        if (!cancelled && page.assets.length > 0) {
+          const uris = page.assets.map((a) => a.uri).filter(Boolean);
+          setRecentImages(uris);
+          setLastImageUri(uris[0]);
+        }
+      } catch {
+        // The thumbnail is optional; camera capture remains usable if the
+        // platform library is unavailable or its permission changes.
+      }
+    }
+    void loadRecent();
+    return () => { cancelled = true; };
+  }, []);
+
+  // ── Camera controls ──
+  const cycleFlash = useCallback(() => {
+    haptic.light();
+    setFlash((p) => p === 'off' ? 'on' : p === 'on' ? 'auto' : 'off');
+  }, [haptic]);
+
+  const toggleFacing = useCallback(() => {
+    // Swapping the device mid-take reconfigures the camera session under a
+    // live recorder — refuse instead of corrupting the recording.
+    if (isRecording) return;
+    haptic.selection();
+    setCameraReady(false);
+    setCameraInitError(false);
+    // Quick fade out → swap → fade in. No full rotation; a flip is a
+    // device swap, not a spectacle.
+    if (!reducedMotion) {
+      flipOpacity.value = withSequence(
+        withTiming(0, { duration: Motion.duration.fast, easing: Motion.easing.exit }),
+        withTiming(1, { duration: Motion.duration.normal, easing: Motion.easing.entrance }),
+      );
+    }
+    setFacing((p) => (p === 'back' ? 'front' : 'back'));
+    // device is reactive — useCameraDevice(facing) will resolve the new device
+  }, [haptic, reducedMotion, flipOpacity, isRecording]);
+
+  // ── Double-tap to switch camera ──
+  const doubleTapGesture = useMemo(() => {
+    return Gesture.Tap()
+      .numberOfTaps(2)
+      .onEnd(() => {
+        'worklet';
+        runOnJS(toggleFacing)();
+      });
+  }, [toggleFacing]);
+
+  // ── Swipe-down to dismiss ──
+  // A fast downward swipe from the top area closes the camera. Only
+  // activates when the swipe starts in the top 120pt region and moves
+  // predominantly downward, so it doesn't conflict with tap-to-focus
+  // or the pinch-to-zoom gesture.
+  const swipeDownDismiss = useMemo(() => {
+    return Gesture.Pan()
+      .minDistance(40)
+      .minPointers(1)
+      .maxPointers(1)
+      // Directional grammar: only a committed downward drag activates.
+      // Upward swipes and predominantly horizontal drags (staging tray
+      // scroll, sheet pans) fail the gesture natively before activation.
+      .activeOffsetY(30)
+      .failOffsetY(-15)
+      .failOffsetX([-30, 30])
+      .onTouchesDown((e, manager) => {
+        'worklet';
+        // Origin gate: dismissal only applies to touches starting inside
+        // the top strip. While recording, no region may dismiss — the take
+        // owns the surface until it ends.
+        const touch = e.changedTouches[0] ?? e.allTouches[0];
+        if (!touch || touch.y > DISMISS_ZONE_HEIGHT || isRecordingSV.value) manager.fail();
+      })
+      .onEnd((e) => {
+        'worklet';
+        // Only dismiss for predominantly downward swipes with sufficient velocity
+        if (e.translationY > 80 && Math.abs(e.translationY) > Math.abs(e.translationX) * 2) {
+          runOnJS(onClose)();
+        }
+      });
+  }, [onClose, isRecordingSV]);
+
+  // ── Tools sheet open/close ──
+  const openToolsSheet = useCallback(() => {
+    haptic.light();
+    setShowToolsSheet(true);
+  }, [haptic]);
+
+  const closeToolsSheet = useCallback(() => {
+    haptic.light();
+    setShowToolsSheet(false);
+  }, [haptic]);
+
+  // ── Timer change from the CaptureToolsSheet ──
+  const handleTimerChange = useCallback((option: SheetTimerOption) => {
+    setTimerOption(option);
+  }, []);
+
+  const handleEffectChange = useCallback((nextEffect: CameraEffectId) => {
+    // Crossing the native Camera/SkiaCamera boundary reconfigures the camera
+    // session. Block the shutter until the replacement preview reports ready.
+    if ((cameraEffect === 'none') !== (nextEffect === 'none')) {
+      setCameraReady(false);
+      setCameraInitError(false);
+    }
+    setCameraEffect(nextEffect);
+    CreatorAnalytics.cameraEffectSelected(nextEffect);
+  }, [cameraEffect]);
+
+  // ── Hands-free mode toggle ──
+  const cancelHandsFreeCountdown = useCallback(() => {
+    handsFreeTokenRef.current += 1;
+    setHandsFreeCountdown(null);
+  }, []);
+
+  const toggleHandsFree = useCallback(() => {
+    haptic.selection();
+    setHandsFreeMode((p) => !p);
+    // Cancel any in-progress hands-free countdown
+    cancelHandsFreeCountdown();
+  }, [haptic, cancelHandsFreeCountdown]);
+
+  // ── Speed mode change ──
+  const handleSpeedChange = useCallback((value: string) => {
+    haptic.selection();
+    setSpeedMode(value);
+  }, [haptic]);
+
+  // ── Green screen toggle ──
+  const toggleGreenScreen = useCallback(() => {
+    haptic.selection();
+    if (greenScreenSettings) {
+      // Toggle off — clear settings
+      setGreenScreenSettings(null);
+    } else {
+      // Open the sheet to configure
+      setShowGreenScreenSheet(true);
+    }
+  }, [haptic, greenScreenSettings]);
+
+  const handleGreenScreenApply = useCallback((settings: GreenScreenSettings) => {
+    haptic.light();
+    setGreenScreenSettings(settings);
+    setShowGreenScreenSheet(false);
+  }, [haptic]);
+
+  const handleGreenScreenCancel = useCallback(() => {
+    haptic.light();
+    setShowGreenScreenSheet(false);
+  }, [haptic]);
+
+  // ── P0.1: One unified recording lifecycle ────────────────────────
+  // vision-camera V5 uses a callback-based Recorder: createRecorder() →
+  // startRecording(onFinished, onError) → stopRecording(). The onFinished
+  // callback receives a filePath (filesystem path, not file:// URI).
+  // We prepend "file://" for downstream consumers that expect URIs.
+  const recorderRef = useRef<import('react-native-vision-camera').Recorder | null>(null);
+
+  const stopRecording = useCallback(() => {
+    if (!isRecording) return;
+    haptic.medium();
+    // Stop native recording — this triggers the onRecordingFinished callback
+    void recorderRef.current?.stopRecording();
+  }, [isRecording, haptic]);
+
+  const beginVideoRecording = useCallback(async (customMaxDuration?: number) => {
+    if (!cameraReady || isRecording || !videoOutput) return;
+
+    // ── P0: Microphone permission ownership ────────────────────────
+    // On the first transition from shutter press to video intent,
+    // request microphone permission before recording. If denied,
+    // record muted video and show a visible "muted" indicator.
+    //
+    // VisionCamera v5: "Enabling Audio requires microphone permission."
+    // The videoOutput's enableAudio flag is baked in at creation time
+    // by useVideoOutput (useMemo on enableAudio). If mic was NOT granted
+    // at the last render, the videoOutput in this closure has
+    // enableAudio: false. Even if requestMic() grants permission during
+    // this call, the current videoOutput still records muted — React
+    // hasn't re-rendered yet to create a new videoOutput with
+    // enableAudio: true. The NEXT recording will have audio after
+    // re-render. We set isMutedRecording truthfully so the user sees
+    // the mic-off indicator on this first recording.
+    let willRecordMuted = !capturePermissions.shouldRecordAudio;
+    if (!capturePermissions.micGranted && capturePermissions.micState !== 'blocked') {
+      // Request mic permission on first video attempt — this updates
+      // micState so the next render creates a videoOutput with audio.
+      await capturePermissions.requestMic();
+    }
+    // If the shutter was released while the mic prompt was pending, the
+    // hold grammar ended — starting now would record past the release and
+    // leave an orphaned take. Hands-free (customMaxDuration) needs no hold.
+    if (customMaxDuration === undefined && !pressHeldRef.current) return;
+    setIsMutedRecording(willRecordMuted);
+
+    haptic.medium(); // medium on recording start
+    setIsRecording(true);
+    setRecordingElapsed(0);
+    recordingProgress.value = 0;
+    // Ring scale pulse on start
+    if (!reducedMotion) {
+      recordingRingScale.value = withSequence(
+        withSpring(1.15, spring.tap),
+        withSpring(1, spring.entrance),
+      );
+    }
+    // Use custom duration (hands-free) or fall back to the standard max
+    const maxDuration = Math.min(customMaxDuration ?? RECORDING_MAX_DURATION, HANDS_FREE_MAX_DURATION);
+    const startTime = Date.now();
+    recordingTimerRef.current = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      // Update the shared value every tick (no re-render) for the progress ring.
+      // Update React state at a coarser 200ms cadence for the timer text —
+      // 5 updates/sec is smooth enough for a "0:03" display while avoiding
+      // 20 re-renders/sec (the old 50ms interval caused jank on low-end devices).
+      recordingProgress.value = Math.min(1, elapsed / maxDuration);
+      if (elapsed % 200 < 50) {
+        setRecordingElapsed(elapsed);
+      }
+      if (elapsed >= maxDuration) {
+        // Auto-stop at max duration — drive the recorder directly. A stale
+        // `stopRecording` closure here can observe isRecording=false and
+        // silently never fire, letting the take run past the cap.
+        void recorderRef.current?.stopRecording();
+      }
+    }, 50);
+
+    // Create a Recorder and start recording with callbacks
+    try {
+      const recorder = await videoOutput.createRecorder({});
+      recorderRef.current = recorder;
+      await recorder.startRecording(
+        (filePath) => {
+          // onRecordingFinished — filePath is a filesystem path
+          const uri = `file://${filePath}`;
+          const durationMs = Math.max(1, Date.now() - startTime);
+          haptic.medium();
+          // Capture flash — white overlay
+          if (!reducedMotion) {
+            captureFlash.value = withSequence(
+              withTiming(0.8, { duration: Motion.duration.touch, easing: Motion.easing.entrance }),
+              withTiming(0, { duration: Motion.duration.fast, easing: Motion.easing.exit }),
+            );
+          }
+          // ── Multi-capture: accumulate directly to the staging tray ──
+          if (multiCaptureMode && !isVisualSearch) {
+            const media: CreatorInitialMedia = {
+              id: makeStableId('capture'),
+              uri,
+              kind: 'video',
+              durationMs,
+              mimeType: 'video/mp4' };
+            if (cameraEffect !== 'none') {
+              media.cameraEffect = cameraEffect;
+            }
+            if (speedMode !== DEFAULT_SPEED) {
+              media.speed = parseFloat(speedMode);
+            }
+            if (greenScreenSettings) {
+              media.greenScreen = {
+                backgroundUri: greenScreenSettings.backgroundUri,
+                keyColor: greenScreenSettings.keyColor,
+                tolerance: greenScreenSettings.tolerance,
+                feather: greenScreenSettings.feather };
+            }
+            setMultiCaptures((prev) => [...prev, media]);
+          } else {
+            setCapturedKind('video');
+            setCapturedMetadata({ durationMs, mimeType: 'video/mp4' });
+            setCapturedUri(uri);
+          }
+          CreatorAnalytics.captureVideo(isPoster ? 'poster' : 'look', Date.now() - startTime);
+          // Cleanup UI state
+          setIsRecording(false);
+          setIsMutedRecording(false);
+          if (recordingTimerRef.current) {
+            clearInterval(recordingTimerRef.current);
+            recordingTimerRef.current = null;
+          }
+          recordingProgress.value = withSpring(0, spring.entrance);
+          recorderRef.current = null;
+        },
+        (_error) => {
+          // onRecordingError
+          show('Failed to record video', 'error');
+          setIsRecording(false);
+          setIsMutedRecording(false);
+          if (recordingTimerRef.current) {
+            clearInterval(recordingTimerRef.current);
+            recordingTimerRef.current = null;
+          }
+          recordingProgress.value = withSpring(0, spring.entrance);
+          recorderRef.current = null;
+        },
+      );
+    } catch {
+      show('Failed to start recording', 'error');
+      setIsRecording(false);
+      setIsMutedRecording(false);
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+      recordingProgress.value = withSpring(0, spring.entrance);
+    }
+  }, [cameraReady, isRecording, haptic, reducedMotion, recordingProgress, recordingRingScale, show, spring, captureFlash, isPoster, multiCaptureMode, isVisualSearch, speedMode, greenScreenSettings, cameraEffect, videoOutput, capturePermissions]);
+
+  // ── Hands-free countdown → auto-record ──
+  // Starts a 3-second countdown with haptic ticks, then begins recording.
+  // Recording auto-stops at HANDS_FREE_DEFAULT_DURATION. The user can
+  // tap the shutter to stop early.
+  const startHandsFreeCapture = useCallback(async () => {
+    if (!cameraRef.current || isRecording || handsFreeCountdown !== null) return;
+    haptic.medium(); // medium on countdown start
+    const token = ++handsFreeTokenRef.current;
+
+    for (let i = HANDS_FREE_COUNTDOWN; i > 0; i--) {
+      setHandsFreeCountdown(i);
+      // Reanimated spring countdown: scale 1.5→1.0 bouncy + fade in/out
+      if (!reducedMotion) {
+        countdownScale.value = 1.5;
+        countdownOpacity.value = 0;
+        countdownScale.value = withSpring(1, spring.lift);
+        countdownOpacity.value = withSequence(
+          withTiming(1, { duration: Motion.duration.fast }),
+          withDelay(700, withTiming(0, { duration: Motion.duration.normal })),
+        );
+      } else {
+        countdownScale.value = 1;
+        countdownOpacity.value = 1;
+        countdownOpacity.value = withDelay(800, withTiming(0, { duration: 0 }));
+      }
+      haptic.light(); // tick on each number
+      await new Promise((r) => setTimeout(r, 1000));
+      if (handsFreeTokenRef.current !== token) {
+        // Cancelled mid-countdown — leave without starting a recording.
+        setHandsFreeCountdown(null);
+        return;
+      }
+    }
+    setHandsFreeCountdown(null);
+
+    // Begin recording with the hands-free duration
+    beginVideoRecording(HANDS_FREE_DEFAULT_DURATION);
+  }, [cameraRef, isRecording, handsFreeCountdown, haptic, reducedMotion, countdownScale, countdownOpacity, spring, beginVideoRecording]);
+
+  const toggleGrid = useCallback(() => {
+    haptic.selection();
+    setShowGrid((p) => !p);
+  }, [haptic]);
+
+  // ── Framing mode toggle ──
+  // Explicit framing shows brackets + crosshair for ordinary Poster/Look
+  // capture. Visual Search always shows framing guides regardless of this
+  // toggle. Framing chrome is opt-in, not default.
+  const toggleFramingMode = useCallback(() => {
+    haptic.selection();
+    setFramingMode((p) => !p);
+  }, [haptic]);
+
+  // ── Pinch-to-zoom ──
+  // Tracks two-finger pinch and maps it to the normalized 0..1 zoom range
+  // required by Expo Camera's zoom prop. The pinch delta is added to the
+  // stepped zoom baseline and clamped to 0..1. On release, it snaps to the
+  // nearest zoom step.
+  // Shared value (not useRef) so it can be read inside worklet closures
+  // without triggering Reanimated's "Tried to modify key `current`" freeze
+  // warning, which logs synchronously on the Android UI thread and causes
+  // ANRs (input dispatch timeout).
+  const pinchStartZoom = useSharedValue(0);
+  // Pinch zoom delta — shared value for UI-thread updates during pinch,
+  // mirrored to React state on a throttled basis (every 50ms) to avoid
+  // per-frame JS re-renders while keeping the Camera prop responsive.
+  const pinchZoomDeltaSV = useSharedValue(0);
+  const [pinchZoomDelta, setPinchZoomDelta] = useState(0);
+  const lastZoomBridgeMs = useSharedValue(0);
+
+  const showZoomIndicator = useCallback(() => {
+    if (!reducedMotion) {
+      zoomIndicatorOpacity.value = withSpring(1, spring.tap);
+      zoomIndicatorScale.value = withSpring(1, spring.lift);
+      zoomIndicatorOpacity.value = withDelay(1200, withTiming(0, { duration: Motion.duration.normal }));
+      // Per §5.14: auto-dismiss exit uses timing, not spring.
+      zoomIndicatorScale.value = withDelay(1200, withTiming(0.8, { duration: Motion.duration.normal, easing: Motion.easing.exit }));
+    }
+  }, [reducedMotion, zoomIndicatorOpacity, zoomIndicatorScale, spring]);
+
+  const snapPinchToStep = useCallback((zoom: number) => {
+    // Snap to nearest step: 1 (1×), 2 (2×), 3 (3×)
+    if (zoom < 1.5) setZoomIndex(0);
+    else if (zoom < 2.5) setZoomIndex(1);
+    else setZoomIndex(2);
+  }, []);
+
+  const pinchGesture = useMemo(
+    () =>
+      Gesture.Pinch()
+        .onStart(() => {
+          'worklet';
+          pinchStartZoom.value = zoomValue;
+        })
+        .onUpdate((e) => {
+          'worklet';
+          // Map pinch scale to zoom delta. A scale of 2 doubles the zoom.
+          const newZoom = Math.max(1, pinchStartZoom.value + (e.scale - 1) * 0.5);
+          pinchZoomDeltaSV.value = newZoom - pinchStartZoom.value;
+          // Throttle JS bridge to every 50ms — smooth enough for the Camera
+          // zoom prop while avoiding per-frame React re-renders.
+          const now = global.performance?.now?.() ?? Date.now();
+          if (now - lastZoomBridgeMs.value > 50) {
+            lastZoomBridgeMs.value = now;
+            runOnJS(setPinchZoomDelta)(pinchZoomDeltaSV.value);
+          }
+        })
+        .onEnd((e) => {
+          'worklet';
+          const finalZoom = Math.max(1, pinchStartZoom.value + (e.scale - 1) * 0.5);
+          pinchZoomDeltaSV.value = 0;
+          runOnJS(setPinchZoomDelta)(0);
+          runOnJS(snapPinchToStep)(finalZoom);
+          runOnJS(haptic.light)();
+          runOnJS(showZoomIndicator)();
+        }),
+    [zoomValue, snapPinchToStep, haptic, showZoomIndicator, pinchStartZoom, pinchZoomDeltaSV, lastZoomBridgeMs],
+  );
+
+  // Effective zoom = stepped baseline + pinch delta, clamped to device range
+  const effectiveZoom = Math.max(1, zoomValue + pinchZoomDelta);
+
+  // ── Capture with optional timer ──
+  const takePhoto = useCallback(async () => {
+    if (!cameraRef.current || !cameraReady || countdown !== null) return;
+
+    if (timerOption > 0) {
+      haptic.medium(); // medium on countdown start
+      const token = ++photoCountdownTokenRef.current;
+      for (let i = timerOption; i > 0; i--) {
+        setCountdown(i);
+        // Reanimated spring countdown: scale 1.5→1.0 bouncy + fade in/out
+        if (!reducedMotion) {
+          countdownScale.value = 1.5;
+          countdownOpacity.value = 0;
+          countdownScale.value = withSpring(1, spring.lift);
+          countdownOpacity.value = withSequence(
+            withTiming(1, { duration: Motion.duration.fast }),
+            withDelay(700, withTiming(0, { duration: Motion.duration.normal })),
+          );
+        } else {
+          countdownScale.value = 1;
+          countdownOpacity.value = 1;
+          countdownOpacity.value = withDelay(800, withTiming(0, { duration: 0 }));
+        }
+        haptic.light(); // tick on each number
+        await new Promise((r) => setTimeout(r, 1000));
+        if (photoCountdownTokenRef.current !== token) {
+          // Cancelled mid-countdown — do not capture.
+          setCountdown(null);
+          return;
+        }
+      }
+      setCountdown(null);
+    }
+
+    try {
+      // Immediate haptic the instant the shutter fires — before the async
+      // capture completes — so the user feels instant response.
+      haptic.medium();
+      const captureStart = Date.now();
+      // vision-camera V5: capturePhoto returns an in-memory Photo object.
+      // Save to temp file and dispose to free native memory.
+      const photo = await photoOutput.capturePhoto(
+        { flashMode: flash },
+        {},
+      );
+      const photoMetadata: CapturedMediaMetadata = {
+        width: photo.width,
+        height: photo.height,
+        mimeType: getPhotoMimeType(photo.containerFormat) };
+      const filePath = await photo.saveToTemporaryFileAsync();
+      const photoUri = `file://${filePath}`;
+      photo.dispose();
+      const captureLatencyMs = Date.now() - captureStart;
+      if (photoUri) {
+        // Capture flash — white overlay 0→0.8→0 over 200ms. This is the
+        // capture completion feedback signal (the haptic already fired at
+        // shutter press). Runs regardless of whether the capture goes
+        // direct-to-editor or through the review overlay.
+        if (!reducedMotion) {
+          captureFlash.value = withSequence(
+            withTiming(0.8, { duration: Motion.duration.touch, easing: Motion.easing.entrance }),
+            withTiming(0, { duration: Motion.duration.fast, easing: Motion.easing.exit })
+          );
+        }
+        setCapturedKind('image');
+        setCapturedMetadata(photoMetadata);
+        // ── Multi-capture: accumulate directly to the staging tray ──
+        // When multi-capture is explicitly enabled, photo captures pile up
+        // silently — no per-capture review overlay. The user finishes via
+        // the Done button in the staging tray. Visual search is excluded
+        // (different intent — single capture with a confirm step).
+        if (multiCaptureMode && !isVisualSearch) {
+          // Photo media is constructed inline because buildCaptureMedia is
+          // declared below and would otherwise be used before declaration.
+          const media: CreatorInitialMedia = {
+            id: makeStableId('capture'),
+            uri: photoUri,
+            kind: 'image',
+            ...photoMetadata };
+          if (cameraEffect !== 'none') {
+            media.cameraEffect = cameraEffect;
+          }
+          if (greenScreenSettings) {
+            media.greenScreen = { ...greenScreenSettings };
+          }
+          setMultiCaptures((prev) => [...prev, media]);
+        } else if (!!onCaptureBatch && !isVisualSearch) {
+          // ── Single-capture direct-to-edit (poster/look) ──
+          // Per .devin/surfaces/creator-poster.md: in poster/look mode
+          // a single photo capture goes direct-to-editor with no quick-review
+          // overlay — the capture commits and retake/undo lives in the editor,
+          // preserving the continuous gesture. This path is reached when the
+          // user has explicitly toggled multi-capture OFF in Tools.
+          const media: CreatorInitialMedia = {
+            id: makeStableId('capture'),
+            uri: photoUri,
+            kind: 'image',
+            ...photoMetadata };
+          if (cameraEffect !== 'none') {
+            media.cameraEffect = cameraEffect;
+          }
+          if (greenScreenSettings) {
+            media.greenScreen = { ...greenScreenSettings };
+          }
+          onCaptureBatch([media]);
+        } else {
+          // Review overlay (visual search, or legacy single capture)
+          setCapturedUri(photoUri);
+        }
+        // ── Capture latency telemetry ──
+        // Tracks shutter-to-photo-ready time so we can monitor camera
+        // performance regressions across devices and OS versions.
+        CreatorAnalytics.capturePhoto(isPoster ? 'poster' : 'look', captureLatencyMs);
+      }
+    } catch {
+      show('Failed to capture photo', 'error');
+    }
+  }, [photoOutput, flash, cameraReady, countdown, haptic, reducedMotion, show, timerOption, countdownScale, countdownOpacity, captureFlash, spring, onCaptureBatch, isVisualSearch, multiCaptureMode, isPoster, cameraEffect, greenScreenSettings]);
+
+  // ── Cleanup recording on unmount / interruption ──
+  useEffect(() => {
+    return () => {
+      // Deactivate the camera first so the native CameraSession releases
+      // the device immediately, before we stop recording. This prevents
+      // "A resource failed to call release" finalizer warnings.
+      setCameraActive(false);
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+      // Stop any active native recording to prevent orphaned recordings
+      if (recorderRef.current) {
+        void recorderRef.current.stopRecording();
+        recorderRef.current = null;
+      }
+      // Cancel any in-progress countdowns
+      handsFreeTokenRef.current += 1;
+      photoCountdownTokenRef.current += 1;
+    };
+  }, []);
+
+  // ── Cleanup recording on app background ────────────────────────────
+  // When the app goes to background (user switches apps, notification
+  // overlay, etc.), stop any active recording immediately. An orphaned
+  // recording promise on background can hang indefinitely on iOS.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state: AppStateStatus) => {
+      if (state === 'background' || state === 'inactive') {
+        if (recorderRef.current) {
+          void recorderRef.current.stopRecording();
+        }
+        if (recordingTimerRef.current) {
+          clearInterval(recordingTimerRef.current);
+          recordingTimerRef.current = null;
+        }
+      }
+    });
+    return () => subscription.remove();
+  }, []);
+
+  // ── Shutter: tap=photo, press-and-hold=video ──
+  // Quick tap takes a photo. Press-and-hold (beyond 250ms — see
+  // ShutterButton.tsx delayLongPress) starts video recording; releasing
+  // stops it. This eliminates the need for permanent Photo/Video/Boomerang
+  // mode tabs.
+  //
+  // In hands-free mode, a tap starts the 3-second countdown then auto-records.
+  // A tap during recording stops it early. Long-press is disabled in
+  // hands-free mode since the user doesn't need to hold the button.
+  const handleShutterPress = useCallback(() => {
+    // If recording, tap stops early (hands-free or normal)
+    if (isRecording) {
+      stopRecording();
+      return;
+    }
+    // A photo timer counting down — a second tap cancels it instead of
+    // being swallowed by takePhoto's countdown guard.
+    if (countdown !== null) {
+      photoCountdownTokenRef.current += 1;
+      setCountdown(null);
+      return;
+    }
+    // A countdown already running — a second tap cancels it (Snap grammar:
+    // tap to arm, tap to abort) instead of being swallowed.
+    if (handsFreeCountdown !== null) {
+      cancelHandsFreeCountdown();
+      return;
+    }
+    // Hands-free: tap starts countdown → auto-record
+    if (handsFreeMode) {
+      startHandsFreeCapture();
+      return;
+    }
+    // Tray is at the caller's cap — refuse honestly instead of
+    // accumulating media the host cannot accept.
+    if (multiCaptureMode && maxCaptures !== undefined && multiCaptures.length >= maxCaptures) {
+      show(`All ${maxCaptures} slots filled — tap Done to continue`, 'info');
+      return;
+    }
+    // Quick tap — take photo (only if the long-press didn't fire)
+    if (!isLongPressRef.current) {
+      takePhoto();
+    }
+  }, [takePhoto, isRecording, handsFreeMode, handsFreeCountdown, cancelHandsFreeCountdown, startHandsFreeCapture, stopRecording, countdown, multiCaptureMode, maxCaptures, multiCaptures.length, show]);
+
+  const handleShutterLongPress = useCallback(() => {
+    // Long-press disabled in hands-free mode
+    if (handsFreeMode) return;
+    // Same tray cap as the tap path — video captures accumulate too.
+    if (multiCaptureMode && maxCaptures !== undefined && multiCaptures.length >= maxCaptures) {
+      show(`All ${maxCaptures} slots filled — tap Done to continue`, 'info');
+      return;
+    }
+    // Press-and-hold — start video recording
+    isLongPressRef.current = true;
+    pressHeldRef.current = true;
+    beginVideoRecording();
+  }, [beginVideoRecording, handsFreeMode, multiCaptureMode, maxCaptures, multiCaptures.length, show]);
+
+  // ── Hold-drag grammar (Snap/IG) ──────────────────────────────────
+  // While the shutter is held and recording, the same finger can:
+  //   • slide up/down to zoom continuously (pinch needs a second hand —
+  //     impossible mid-hold), and
+  //   • slide up-left onto the lock pill to keep recording hands-free.
+  const holdOriginRef = useRef<{ x: number; y: number } | null>(null);
+  const [recordLocked, setRecordLocked] = useState(false);
+  const [lockHot, setLockHot] = useState(false);
+  const lockZoneRef = useRef<View>(null);
+  const lockZoneRectRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
+
+  // Measure the lock zone once per recording so move events can hit-test
+  // without paying measureInWindow per frame.
+  useEffect(() => {
+    if (isRecording) {
+      lockZoneRef.current?.measureInWindow((x, y, w, h) => {
+        lockZoneRectRef.current = { x, y, w, h };
+      });
+    } else {
+      lockZoneRectRef.current = null;
+      setRecordLocked(false);
+      setLockHot(false);
+    }
+  }, [isRecording]);
+
+  const handleHoldTouchStart = useCallback((_x: number, y: number) => {
+    holdOriginRef.current = { x: _x, y };
+  }, []);
+
+  const handleHoldTouchMove = useCallback((pageX: number, pageY: number) => {
+    const origin = holdOriginRef.current;
+    if (!origin || !isRecording || handsFreeMode || recordLocked) return;
+    // Slide-to-zoom: vertical drag maps to the pinch-delta pipeline so the
+    // zoom indicator and effectiveZoom stay consistent. 160pt of travel
+    // adds ~2×; clamped so effective zoom stays >= 1.
+    const dy = origin.y - pageY;
+    const delta = Math.max(-(zoomValue - 1), Math.min(3, dy / 80));
+    pinchZoomDeltaSV.value = delta;
+    setPinchZoomDelta(delta);
+    // Slide-to-lock: finger inside the lock pill latches recording.
+    const z = lockZoneRectRef.current;
+    if (z) {
+      const inZone = pageX >= z.x - 12 && pageX <= z.x + z.w + 12 && pageY >= z.y - 12 && pageY <= z.y + z.h + 12;
+      if (inZone !== lockHot) setLockHot(inZone);
+      if (inZone) {
+        setRecordLocked(true);
+        haptic.medium();
+        show('Recording locked — tap to stop', 'info');
+      }
+    }
+  }, [isRecording, handsFreeMode, recordLocked, zoomValue, pinchZoomDeltaSV, lockHot, haptic, show]);
+
+  const handleShutterPressOut = useCallback(() => {
+    holdOriginRef.current = null;
+    pressHeldRef.current = false;
+    setLockHot(false);
+    // Locked recording survives release — tap-to-stop handles it. In
+    // hands-free mode, release does nothing (recording auto-stops).
+    if (!recordLocked && !handsFreeMode && isRecording) {
+      stopRecording();
+    }
+    // Reset long-press flag after a tick so onPress doesn't also fire.
+    // This must run on every release — the early returns above used to
+    // leave it set, swallowing the next photo tap after a locked take.
+    setTimeout(() => { isLongPressRef.current = false; }, 50);
+  }, [isRecording, stopRecording, handsFreeMode, recordLocked]);
+
+  // ── Quick-review flow ──
+  useEffect(() => {
+    if (capturedUri) {
+      if (reducedMotion) {
+        reviewOpacity.value = 1;
+      } else {
+        reviewOpacity.value = 0;
+        reviewOpacity.value = withSpring(1, spring.entrance);
+      }
+    }
+  }, [capturedUri, reducedMotion, reviewOpacity, spring]);
+
+  const handleRetake = useCallback(() => {
+    haptic.selection();
+    if (!reducedMotion) {
+      reviewOpacity.value = withSpring(0, spring.entrance, () => {
+        runOnJS(setCapturedUri)(null);
+        runOnJS(setCapturedKind)('image');
+        runOnJS(setCapturedMetadata)({});
+      });
+    } else {
+      reviewOpacity.value = 0;
+      setCapturedUri(null);
+      setCapturedKind('image');
+      setCapturedMetadata({});
+    }
+  }, [haptic, reducedMotion, reviewOpacity, spring]);
+
+  // ── Build a CreatorInitialMedia with capture-intent metadata ──
+  // Speed: vision-camera supports native fps control; the multiplier is
+  //   also stored in metadata so the timeline/export engine can apply it.
+  // GreenScreen: chroma key settings are preserved so the timeline can
+  //   re-render the composite via Skia.
+  const buildCaptureMedia = useCallback((
+    uri: string,
+    kind: 'image' | 'video',
+    metadata: CapturedMediaMetadata = {},
+  ): CreatorInitialMedia => {
+    const media: CreatorInitialMedia = {
+      id: makeStableId('capture'),
+      uri,
+      kind,
+      ...metadata };
+    // Attach speed metadata for video captures (1× is the default and
+    // omitted to keep backward-compatible payloads clean)
+    if (kind === 'video' && speedMode !== DEFAULT_SPEED) {
+      media.speed = parseFloat(speedMode);
+    }
+    // Keep capture WYSIWYG: the Skia preview is non-destructive, so the
+    // editor/export scene must receive the same selected color matrix.
+    if (cameraEffect !== 'none') {
+      media.cameraEffect = cameraEffect;
+    }
+    // Attach green screen settings if active
+    if (greenScreenSettings) {
+      media.greenScreen = {
+        backgroundUri: greenScreenSettings.backgroundUri,
+        keyColor: greenScreenSettings.keyColor,
+        tolerance: greenScreenSettings.tolerance,
+        feather: greenScreenSettings.feather };
+    }
+    return media;
+  }, [speedMode, greenScreenSettings, cameraEffect]);
+
+  const handleConfirmCapture = useCallback(() => {
+    if (!capturedUri) return;
+    haptic.light();
+    // Single-capture path only — multi-capture mode accumulates directly
+    // to the staging tray without setting capturedUri, so this handler is
+    // only reached by the legacy review path or visual search (which always
+    // keeps a confirm step because the intent is search, not creation).
+    if (onCaptureBatch && !isVisualSearch) {
+      onCaptureBatch([buildCaptureMedia(capturedUri, capturedKind, capturedMetadata)]);
+    } else {
+      onCapture(capturedUri);
+    }
+  }, [capturedUri, capturedKind, capturedMetadata, haptic, onCapture, onCaptureBatch, isVisualSearch, buildCaptureMedia]);
+
+  // ── Multi-capture: finish and send ALL captures ──
+  // Every capture is retained and sent as a CreatorInitialMedia[] batch.
+  // Poster maps captures to frames; Look maps captures to layers.
+  // Speed and greenScreen metadata are preserved on each clip so the
+  // timeline/export engine can apply them at playback.
+  // Triggered from the Done button in the staging tray.
+  const handleFinishMultiCapture = useCallback(() => {
+    if (multiCaptures.length === 0) return;
+    haptic.medium();
+    if (onCaptureBatch) {
+      onCaptureBatch(multiCaptures);
+    } else if (multiCaptures.length > 0) {
+      onCapture(multiCaptures[0].uri);
+    }
+    setMultiCaptures([]);
+    // Mode state can remain active until the camera unmounts; returning to
+    // the creator entry remounts the camera in the one-tap default mode.
+  }, [multiCaptures, haptic, onCapture, onCaptureBatch]);
+
+  // ── Multi-capture: toggle mode ──
+  const toggleMultiCapture = useCallback(() => {
+    haptic.selection();
+    setMultiCaptureMode((p) => !p);
+    if (multiCaptures.length > 0) setMultiCaptures([]);
+  }, [haptic, multiCaptures.length]);
+
+  // ── Multi-capture: remove a specific capture from the tray ──
+  const handleRemoveCapture = useCallback((captureId: string) => {
+    haptic.selection();
+    setMultiCaptures((prev) => prev.filter((c) => c.id !== captureId));
+  }, [haptic]);
+
+  // ── P0: Real tap-to-focus via VisionCamera focusTo() ──────────────
+  // VisionCamera v5 exposes CameraRef.focusTo(viewPoint, options?) which
+  // performs real AE/AF/AWB metering at the tapped point. The Camera/
+  // PreviewView converts view coordinates to camera sensor coordinates
+  // internally via convertViewPointToCameraPoint(...).
+  //
+  // The tap point is routed through the measured viewport so the reticle
+  // and any guide-relative overlays position themselves within the
+  // authored crop. focusTo still receives raw view coordinates (relative
+  // to the Camera view) because the native PreviewView handles the
+  // sensor conversion — the viewport is used for guide-relative math,
+  // not for the native focus call.
+  const handleTapFocus = useCallback((evt: GestureResponderEvent) => {
+    const { locationX, locationY } = evt.nativeEvent;
+    setFocusPoint({ x: locationX, y: locationY });
+    // FocusReticle handles its own spring animation + haptic + auto-dismiss
+
+    // Perform real focus metering if the device supports it.
+    // focusTo takes view coordinates (relative to the Camera view) and
+    // converts them to camera coordinates internally.
+    const cam = cameraRef.current;
+    if (cam && device?.supportsFocusMetering) {
+      void cam.focusTo(
+        { x: locationX, y: locationY },
+        {
+          responsiveness: isRecording ? 'steady' : 'snappy',
+          adaptiveness: 'continuous',
+          autoResetAfter: 5 },
+      ).catch(() => {
+        // Focus request failed — the reticle still showed as a tap
+        // indicator, but we don't surface an error toast for a focus
+        // failure. The camera continues with its own autofocus.
+      });
+    }
+  }, [device, isRecording]);
+
+  const handleOpenSettings = useCallback(() => Linking.openSettings(), []);
+
+  const handleRetryCameraInit = useCallback(() => {
+    haptic.light();
+    setCameraInitError(false);
+    setCameraReady(false);
+    setCameraActive(false);
+    setTimeout(() => setCameraActive(true), 100);
+  }, [haptic]);
+
+  const handleGalleryLongPress = useCallback(() => {
+    // When the parent provides a custom long-press handler (e.g. to open
+    // the full library browser), it takes precedence over the default
+    // recent-photos carousel. This follows progressive disclosure: the
+    // ordinary tap is the fast path, the long-press is the power-user path.
+    if (onGalleryLongPress) {
+      haptic.selection();
+      onGalleryLongPress();
+      return;
+    }
+    if (recentImages.length > 1) {
+      haptic.selection();
+      setShowRecentCarousel((p) => !p);
+    }
+  }, [haptic, recentImages.length, onGalleryLongPress]);
+
+  // ── Permission: permanently denied ──
+  if (!hasPermission && !canRequestPermission) {
+    return <PermissionState status="denied" isPoster={isPoster} entrance={permissionEntrance} onEnable={handleOpenSettings} onGallery={onGallery} />;
+  }
+
+  // ── Permission: undetermined — ask ──
+  if (!hasPermission) {
+    return <PermissionState status="undetermined" isPoster={isPoster} entrance={permissionEntrance} onEnable={() => requestPermission()} onGallery={onGallery} />;
+  }
+
+  // ── No camera device available (simulator or no camera) ──
+  // Distinct from permission-denied: Settings cannot add camera hardware,
+  // so we render the `unavailable` state — a camera-outline icon, an
+  // informational message, and a gallery fallback (no Settings CTA).
+  if (!device) {
+    return <PermissionState status="unavailable" isPoster={isPoster} entrance={permissionEntrance} onEnable={handleOpenSettings} onGallery={onGallery} />;
+  }
+
+  // ── Camera init failure — dedicated error overlay with retry ──
+  if (cameraInitError) {
+    return (
+      <View style={StyleSheet.absoluteFill}>
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }]}>
+          <Ionicons name="camera-outline" size={IconGrammar.hero} color={colors.textSecondary} style={{ marginBottom: Space.xs }} />
+          <Text style={{ fontFamily: Typography.family.semibold, fontSize: TypographyV2.sectionTitle.size, color: colors.textPrimary, marginTop: Space.xs }}>
+            Camera couldn't start
+          </Text>
+          <Text style={{ fontFamily: Typography.family.regular, fontSize: TypographyV2.body.size, lineHeight: TypographyV2.body.lineHeight, color: colors.textSecondary, textAlign: 'center', paddingHorizontal: 40 }}>
+            {`Something went wrong initializing the camera. Try again or use your gallery to create your ${isPoster ? 'story' : 'look'}.`}
+          </Text>
+          <Pressable
+            style={({ pressed }) => [styles.cameraInitErrorBtn, { backgroundColor: colors.brand }, pressed && styles.btnPressed]}
+            onPress={handleRetryCameraInit}
+            accessibilityRole="button"
+            accessibilityLabel="Try again"
+            accessibilityHint="Re-initializes the camera"
+          >
+            <Text style={[styles.cameraInitErrorBtnText, { color: colors.textInverse }]}>Try again</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.cameraInitErrorGalleryBtn, pressed && styles.btnPressed]}
+            onPress={onGallery}
+            accessibilityRole="button"
+            accessibilityLabel="Use gallery instead"
+            accessibilityHint="Opens your photo library"
+          >
+            <Text style={[styles.cameraInitErrorGalleryText, { color: colors.textSecondary }]}>Use gallery instead</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  // ── Camera viewfinder ──
+  return (
+    <GestureDetector gesture={Gesture.Race(pinchGesture, swipeDownDismiss)}>
+      <View style={StyleSheet.absoluteFill}>
+        {/* Double-tap gesture for camera flip (wrapped around camera feed) */}
+        <GestureDetector gesture={doubleTapGesture}>
+          <View style={StyleSheet.absoluteFill}>
+            {/* Full-screen camera feed with tap-to-focus visual indicator + 3D flip rotation */}
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={handleTapFocus}
+              accessibilityRole="button"
+              accessibilityLabel="Camera viewfinder"
+              accessibilityHint="Tap to focus at that point"
+            >
+              <Reanimated.View style={[StyleSheet.absoluteFill, cameraFlipStyle]}>
+                {cameraEffect !== 'none' ? (
+                  <SkiaCamera
+                    ref={cameraRef as React.RefObject<SkiaCameraRef>}
+                    style={StyleSheet.absoluteFill}
+                    device={device}
+                    isActive={cameraActive}
+                    outputs={[photoOutput, videoOutput]}
+                    torchMode={flash === 'on' ? 'on' : 'off'}
+                    zoom={effectiveZoom}
+                    orientationSource="interface"
+                    onFrame={effectFrameProcessor}
+                    onStarted={() => { setCameraReady(true); setCameraInitError(false); }}
+                    onError={() => {
+                      setCameraReady(false);
+                      setCameraInitError(true);
+                      show('Camera could not start. Try again or use your gallery.', 'error');
+                    }}
+                  />
+                ) : (
+                  <Camera
+                    ref={cameraRef as React.RefObject<CameraRef>}
+                    style={StyleSheet.absoluteFill}
+                    device={device}
+                    isActive={cameraActive}
+                    outputs={[photoOutput, videoOutput]}
+                    torchMode={flash === 'on' ? 'on' : 'off'}
+                    zoom={effectiveZoom}
+                    orientationSource="interface"
+                    onStarted={() => { setCameraReady(true); setCameraInitError(false); }}
+                    onError={() => {
+                      setCameraReady(false);
+                      setCameraInitError(true);
+                      show('Camera could not start. Try again or use your gallery.', 'error');
+                    }}
+                  />
+                )}
+                {/* Camera initialization loading overlay — shown between
+                    permission granted and cameraReady=true. A subtle
+                    spinner on the dark preview communicates "starting"
+                    instead of a black screen with no feedback. */}
+                {!cameraReady && (
+                  <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                    <View style={[styles.cameraInitOverlay, { backgroundColor: colors.mediaOverlayScrim }]} />
+                    <View style={styles.cameraInitSpinnerWrap}>
+                      <Reanimated.View style={[styles.cameraInitSpinner, { borderColor: colors.scrimTextTertiary, borderTopColor: colors.scrimTextPrimary }, spinnerStyle]} />
+                      {showInitLabel && (
+                        <Text style={[styles.cameraInitLabel, { color: colors.scrimTextSecondary }]}>Starting camera</Text>
+                      )}
+                    </View>
+                  </View>
+                )}
+              </Reanimated.View>
+            </Pressable>
+          </View>
+        </GestureDetector>
+
+      {/* Capture flash — subtle white overlay on capture */}
+      <Reanimated.View
+        style={[styles.captureFlash, { backgroundColor: colors.scrimTextPrimary }, captureFlashStyle]}
+        pointerEvents="none"
+      />
+
+      {/* Gradient overlays — 0.18 top, 0.28 bottom (legibility only, not a wash) */}
+      <LinearGradient
+        colors={['rgba(0,0,0,0.18)', 'rgba(0,0,0,0)']}
+        style={styles.topGradient}
+        pointerEvents="none"
+      />
+      <LinearGradient
+        colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.28)']}
+        style={styles.bottomGradient}
+        pointerEvents="none"
+      />
+
+      {/* One unobscured capture viewport owns every composition guide. The
+          guide frame is measured via onLayout so it adapts to real device
+          dimensions instead of hardcoded offsets. Brackets and crosshair
+          are shown ONLY for Visual Search or explicit framing mode. For
+          ordinary Poster/Look capture, only an optional rule-of-thirds
+          grid is shown. */}
+      <View
+        style={[
+          styles.captureGuideViewport,
+          {
+            top: Math.max(insets.top, 16) + 72,
+            bottom: Math.max(insets.bottom, 16) + (renderBottomOverlay ? 184 : 140),
+            left: isVisualSearch ? 52 : isPoster ? 24 : 36,
+            right: isVisualSearch ? 52 : isPoster ? 24 : 36 },
+        ]}
+        onLayout={onViewportLayout}
+        pointerEvents="none"
+      >
+        {/* Rule-of-thirds grid — available in all modes via Tools toggle.
+            For ordinary capture this is the only guide (no brackets). */}
+        {showGrid ? (
+          <View style={styles.gridOverlay}>
+            <View style={[styles.gridLineV1, { backgroundColor: colors.scrimTextTertiary }]} />
+            <View style={[styles.gridLineV2, { backgroundColor: colors.scrimTextTertiary }]} />
+            <View style={[styles.gridLineH1, { backgroundColor: colors.scrimTextTertiary }]} />
+            <View style={[styles.gridLineH2, { backgroundColor: colors.scrimTextTertiary }]} />
+          </View>
+        ) : null}
+        {/* Corner brackets + crosshair — Visual Search or explicit framing
+            mode only. The guide frame is inset within the measured viewport
+            to match the authored aspect ratio so brackets describe the
+            actual capture crop. */}
+        {showFramingGuides && viewport ? (
+          <View
+            style={[
+              styles.framingFrame,
+              {
+                left: viewport.viewRect.x,
+                top: viewport.viewRect.y,
+                width: viewport.viewRect.width,
+                height: viewport.viewRect.height },
+            ]}
+          >
+            <View style={[styles.bracketTL, { borderColor: colors.scrimTextSecondary }]} />
+            <View style={[styles.bracketTR, { borderColor: colors.scrimTextSecondary }]} />
+            <View style={[styles.bracketBL, { borderColor: colors.scrimTextSecondary }]} />
+            <View style={[styles.bracketBR, { borderColor: colors.scrimTextSecondary }]} />
+            <View style={styles.crosshair}>
+              <View style={[styles.crosshairH, { backgroundColor: colors.scrimTextTertiary }]} />
+              <View style={[styles.crosshairV, { backgroundColor: colors.scrimTextTertiary }]} />
+            </View>
+          </View>
+        ) : null}
+      </View>
+
+      {/* Focus reticle — real AE/AF/AWB metering via focusTo() on
+          supported devices; visual tap indicator on unsupported ones. */}
+      <FocusReticle
+        focusPoint={focusPoint}
+        size={FOCUS_RETICLE_SIZE}
+        onDismiss={() => {
+          setFocusPoint(null);
+        }}
+      />
+
+      {/* Countdown overlay — Reanimated spring scale + fade.
+          Shows the self-timer countdown OR the hands-free countdown. */}
+      {(countdown !== null || handsFreeCountdown !== null) && (
+        <View style={styles.countdownOverlay} pointerEvents="none">
+          <Reanimated.Text
+            style={[styles.countdownText, { color: colors.scrimTextPrimary, textShadowColor: colors.shadow }, countdownTextStyle]}
+          >
+            {countdown ?? handsFreeCountdown}
+          </Reanimated.Text>
+        </View>
+      )}
+
+      {/* Top controls — close (left), flash + tools (right) */}
+      <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 16) + 8 }]} pointerEvents="box-none">
+        <Pressable
+          style={({ pressed }) => [styles.topIconBtn, pressed && styles.btnPressed]}
+          onPress={onClose}
+          hitSlop={12}
+          accessibilityLabel="Close camera"
+          accessibilityHint="Closes the camera without capturing"
+          accessibilityRole="button"
+        >
+          <Ionicons name="close" size={IconGrammar.standard} color={colors.scrimTextPrimary} />
+        </Pressable>
+
+        <View style={styles.topRightControls}>
+          {renderTopRightAccessory?.()}
+          {/* Flash — subtle 20pt glyph in a 44pt target; no background unless active */}
+          <Pressable
+            style={({ pressed }) => [styles.topIconBtn, pressed && styles.btnPressed, flash !== 'off' && { backgroundColor: colors.scrimTextTertiary }]}
+            onPress={cycleFlash}
+            hitSlop={12}
+            accessibilityLabel={`Flash ${flash}`}
+            accessibilityHint="Cycles flash between off, on, and auto"
+            accessibilityRole="button"
+          >
+            <Ionicons
+              name={flash === 'off' ? 'flash-off' : flash === 'auto' ? 'flash-outline' : 'flash'}
+              size={20}
+              color={flash === 'off' ? colors.scrimTextPrimary : colors.brand}
+            />
+          </Pressable>
+          {/* Tools — single "more" affordance, transparent 20pt ellipsis */}
+          <Pressable
+            style={({ pressed }) => [styles.topIconBtn, pressed && styles.btnPressed]}
+            onPress={openToolsSheet}
+            hitSlop={12}
+            accessibilityLabel="Camera tools"
+            accessibilityHint="Opens timer, grid, hands-free, speed, green screen, and multi-capture"
+            accessibilityRole="button"
+          >
+            <Ionicons name="ellipsis-horizontal" size={20} color={colors.scrimTextPrimary} />
+          </Pressable>
+        </View>
+      </View>
+
+      {/* ── Multi-snap staging tray ──
+          Whenever captures exist, a persistent horizontal row of captured
+          thumbnails is visible on the camera surface so the user sees their
+          sequence accumulate while shooting. Each thumbnail is tappable to
+          drop that frame. A Done button at the end lets the user finish and
+          enter the editor. The tray is visible whenever captures exist,
+          regardless of the multi-capture toggle, so accumulated captures
+          are never hidden. */}
+      {multiCaptures.length > 0 && (
+        <View
+          style={[styles.stagingTray, { top: Math.max(insets.top, 16) + 56 }]}
+          pointerEvents="box-none"
+        >
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.stagingTrayContent}
+          >
+            {multiCaptures.map((cap, i) => (
+              <Pressable
+                key={cap.id}
+                style={styles.stagingThumbWrap}
+                onPress={() => handleRemoveCapture(cap.id)}
+                hitSlop={4}
+                accessibilityLabel={`Frame ${i + 1} of ${multiCaptures.length}, tap to remove`}
+                accessibilityHint="Removes this capture from the batch"
+                accessibilityRole="button"
+              >
+                {cap.kind === 'video' ? (
+                  // RN Image cannot decode a local .mp4 — render a truthful
+                  // video tile (play glyph + duration) instead of a blank.
+                  <View style={[styles.stagingThumb, styles.stagingThumbVideo, { borderColor: colors.scrimTextPrimary, backgroundColor: colors.mediaOverlayScrim }]}>
+                    <Ionicons name="play" size={12} color={colors.scrimTextPrimary} />
+                    {cap.durationMs ? (
+                      <Text style={[styles.stagingThumbDuration, { color: colors.scrimTextPrimary }]}>
+                        {`${Math.max(1, Math.round(cap.durationMs / 1000))}s`}
+                      </Text>
+                    ) : null}
+                  </View>
+                ) : (
+                  <Image source={{ uri: cap.uri }} style={[styles.stagingThumb, { borderColor: colors.scrimTextPrimary }]} />
+                )}
+                {/* Order index — bottom-left, the verified multi-select pattern */}
+                <View style={[styles.stagingOrderBadge, { backgroundColor: colors.mediaOverlayScrim }]}>
+                  <Text style={[styles.stagingOrderText, { color: colors.scrimTextPrimary }]}>{i + 1}</Text>
+                </View>
+              </Pressable>
+            ))}
+            {/* Done button — finish multi-capture and enter the editor
+                with the full batch. */}
+            <Pressable
+              style={({ pressed }) => [styles.stagingDoneBtn, { backgroundColor: colors.scrimTextTertiary }, pressed && styles.btnPressed]}
+              onPress={handleFinishMultiCapture}
+              hitSlop={4}
+              accessibilityLabel={`Done, ${multiCaptures.length} captures selected`}
+              accessibilityHint="Finishes multi-capture and opens the editor with all captures"
+              accessibilityRole="button"
+            >
+              <Ionicons name="checkmark" size={12} color={colors.scrimTextPrimary} />
+              <Text style={[styles.stagingDoneText, { color: colors.scrimTextPrimary }]}>Done ({multiCaptures.length})</Text>
+            </Pressable>
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Bottom controls — gallery (left), shutter (center), flip (right) */}
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]} pointerEvents="box-none">
+        {/* Gallery thumbnail + recent photos carousel */}
+        <GalleryCarousel
+          lastImageUri={lastImageUri}
+          recentImages={recentImages}
+          showRecentCarousel={showRecentCarousel}
+          carouselBottom={Math.max(insets.bottom, 16) + 112}
+          onGallery={onGallery}
+          onLongPress={handleGalleryLongPress}
+        />
+
+        {/* Shutter — the hero control with recording ring */}
+        {/* Slide-to-lock pill (Snap grammar): appears while a hold
+            recording is live. Dragging the held finger up-left onto it
+            latches recording so releasing the shutter keeps capturing.
+            pointerEvents none — the touch responder must stay on the
+            shutter so move events keep arriving. */}
+        {isRecording && !recordLocked && !handsFreeMode && (
+          <View
+            ref={lockZoneRef}
+            pointerEvents="none"
+            style={[
+              styles.recordLockPill,
+              { backgroundColor: lockHot ? colors.brand : colors.mediaOverlayScrim },
+            ]}
+            accessibilityElementsHidden={true}
+            importantForAccessibility="no"
+          >
+            <Ionicons
+              name={lockHot ? 'lock-closed' : 'lock-open-outline'}
+              size={18}
+              color={colors.scrimTextPrimary}
+            />
+          </View>
+        )}
+
+        <ShutterButton
+          onPress={handleShutterPress}
+          onLongPress={CAMERA_VIDEO_CAPTURE_ENABLED && cameraEffect === 'none' ? handleShutterLongPress : undefined}
+          onPressOut={CAMERA_VIDEO_CAPTURE_ENABLED && cameraEffect === 'none' ? handleShutterPressOut : undefined}
+          onHoldTouchStart={handleHoldTouchStart}
+          onHoldTouchMove={handleHoldTouchMove}
+          isRecording={isRecording}
+          disabled={!cameraReady || countdown !== null || handsFreeCountdown !== null}
+          recordingProgress={recordingProgress}
+          recordingRingScale={recordingRingScale}
+          handsFreeMode={handsFreeMode}
+          speedMode={speedMode}
+          videoCaptureEnabled={CAMERA_VIDEO_CAPTURE_ENABLED && cameraEffect === 'none'}
+        />
+
+        {/* Flip camera — transparent 44pt target. The bottom scrim provides
+            legibility; no persistent dark plate. */}
+        <Pressable
+          style={({ pressed }) => [styles.flipBtn, pressed && { backgroundColor: colors.scrimTextTertiary, transform: [{ scale: 0.97 }] }]}
+          onPress={toggleFacing}
+          hitSlop={12}
+          accessibilityLabel="Flip camera"
+          accessibilityHint="Switches between front and back camera"
+          accessibilityRole="button"
+        >
+          <Ionicons name="camera-reverse-outline" size={22} color={colors.scrimTextPrimary} />
+        </Pressable>
+      </View>
+
+      {/* ── Consolidated status region ───────────────────────────────────
+          One top-center pill shows the single most-relevant status so the
+          top area never hosts competing badges. Priority:
+          recording > hands-free > green-screen > zoom. The zoom indicator
+          is the transient fallback (animated opacity, invisible unless a
+          pinch just occurred). One consistent pill style:
+          colors.mediaOverlayScrim fill, colors.scrimTextPrimary text,
+          Radius.full. */}
+      <View style={[styles.statusRegion, { top: Math.max(insets.top, 16) + 60 }]} pointerEvents="none">
+        {isRecording ? (
+          <View style={[styles.statusPill, { backgroundColor: colors.mediaOverlayScrim }]}>
+            <View style={[styles.recordingDot, { backgroundColor: colors.danger }]} />
+            <Text style={[styles.statusPillText, { color: colors.scrimTextPrimary }]}>
+              {Math.floor(recordingElapsed / 1000)}s
+              {speedMode !== DEFAULT_SPEED && `  ${speedMode}×`}
+            </Text>
+            {isMutedRecording && (
+              <View style={styles.mutedIndicator}>
+                <Ionicons name="mic-off" size={10} color={colors.scrimTextPrimary} />
+              </View>
+            )}
+          </View>
+        ) : handsFreeMode && handsFreeCountdown === null ? (
+          <View style={[styles.statusPill, { backgroundColor: colors.mediaOverlayScrim }]}>
+            <Ionicons name="hand-right-outline" size={12} color={colors.scrimTextSecondary} />
+            <Text style={[styles.statusPillText, { color: colors.scrimTextPrimary }]}>Hands-free</Text>
+          </View>
+        ) : greenScreenSettings && !showGreenScreenSheet ? (
+          <View style={[styles.statusPill, { backgroundColor: colors.mediaOverlayScrim }]}>
+            <Image
+              source={{ uri: greenScreenSettings.backgroundUri }}
+              style={styles.greenScreenThumb}
+            />
+            <Text style={[styles.statusPillText, { color: colors.scrimTextPrimary }]}>Green Screen</Text>
+          </View>
+        ) : (
+          <Reanimated.View style={[styles.statusPill, { backgroundColor: colors.mediaOverlayScrim }, zoomIndicatorStyle]}>
+            <Text style={[styles.statusPillText, { color: colors.scrimTextPrimary }]}>
+              {zoomLabel}
+            </Text>
+          </Reanimated.View>
+        )}
+      </View>
+
+      {/* Green screen sheet — background image picker, key color,
+          tolerance, feather. Settings are saved with the capture and
+          the chroma key effect is rendered on the timeline via Skia. */}
+      <GreenScreenSheet
+        visible={showGreenScreenSheet}
+        onApply={handleGreenScreenApply}
+        onCancel={handleGreenScreenCancel}
+      />
+
+      {/* ── Capture tools sheet ──────────────────────────────────────── */}
+      {/* Bottom sheet containing all secondary camera tools: Timer, Grid,
+          Hands-free, Speed, Green Screen, Multi-capture. Opens from the
+          Tools button in the top bar. Camera effects live in this sheet so
+          capture intent remains unobstructed. Each supported tool applies
+          immediately; the sheet can stay open or be dismissed. */}
+      <CaptureToolsSheet
+        visible={showToolsSheet}
+        onClose={closeToolsSheet}
+        timerOption={timerOption}
+        onTimerChange={handleTimerChange}
+        showGrid={showGrid}
+        onToggleGrid={toggleGrid}
+        framingMode={framingMode}
+        onToggleFramingMode={toggleFramingMode}
+        activeEffect={cameraEffect}
+        onEffectChange={handleEffectChange}
+        handsFreeMode={handsFreeMode}
+        onToggleHandsFree={toggleHandsFree}
+        speedMode={speedMode}
+        onSpeedChange={handleSpeedChange}
+        greenScreenActive={!!greenScreenSettings}
+        onOpenGreenScreen={() => {
+          setShowToolsSheet(false);
+          if (!greenScreenSettings) {
+            setShowGreenScreenSheet(true);
+          } else {
+            // Toggle off — clear settings
+            toggleGreenScreen();
+          }
+        }}
+        multiCaptureMode={multiCaptureMode}
+        onToggleMultiCapture={toggleMultiCapture}
+        multiCaptureCount={multiCaptures.length}
+        hasCapturedUri={!!capturedUri}
+        isVisualSearch={isVisualSearch}
+        isRecording={isRecording}
+        videoCaptureEnabled={CAMERA_VIDEO_CAPTURE_ENABLED && cameraEffect === 'none'}
+      />
+
+      {/* Optional bottom overlay (e.g. mode switcher) */}
+      {renderBottomOverlay?.()}
+
+      {/* ── Quick-review overlay ── */}
+      {capturedUri && (
+        <Reanimated.View
+          style={[
+            styles.reviewOverlay,
+            { backgroundColor: colors.background },
+            reviewOpacityStyle,
+          ]}
+        >
+          {capturedKind === 'video' ? (
+            // Review a recorded clip with real playback — an <Image> cannot
+            // decode a local .mp4 and would render a blank frame.
+            <Video
+              source={{ uri: capturedUri }}
+              style={styles.reviewImage}
+              resizeMode={ResizeMode.COVER}
+              shouldPlay
+              isLooping
+              isMuted={false}
+              accessibilityRole="image"
+              accessibilityLabel="Recorded video preview"
+            />
+          ) : (
+            <Image source={{ uri: capturedUri }} style={styles.reviewImage} />
+          )}
+
+          {/* Top scrim for close-area legibility over bright captures */}
+          <LinearGradient
+            colors={['rgba(0,0,0,0.35)', 'rgba(0,0,0,0)']}
+            style={styles.reviewTopScrim}
+            pointerEvents="none"
+          />
+
+          {/* Retake — top-left quiet text-only button (no icon chrome).
+              Saving lives in the editor, not the camera review, so the
+              only secondary affordance is retake. */}
+          <Pressable
+            style={({ pressed }) => [styles.reviewRetakeBtn, { top: Math.max(insets.top, 16) + 8 }, pressed && styles.reviewRetakePressed]}
+            onPress={handleRetake}
+            hitSlop={12}
+            accessibilityLabel="Retake photo"
+            accessibilityHint="Discards the current photo and returns to the camera"
+            accessibilityRole="button"
+          >
+            <Text style={[styles.reviewRetakeText, { color: colors.scrimTextPrimary }]}>Retake</Text>
+          </Pressable>
+
+          {/* Use — single confident primary action, full-width brand
+              button at the bottom. One obvious next step, not a row of
+              equals. */}
+          <View style={[styles.reviewPrimaryWrap, { paddingBottom: Math.max(insets.bottom, 16) + 24 }]}>
+            <Pressable
+              style={({ pressed }) => [styles.reviewPrimaryFullBtn, { backgroundColor: colors.textPrimary }, pressed && styles.reviewPrimaryPressed]}
+              onPress={handleConfirmCapture}
+              hitSlop={16}
+              accessibilityLabel={isVisualSearch ? 'Search with this photo' : 'Use this photo'}
+              accessibilityHint={isVisualSearch ? 'Starts a visual search with the captured photo' : 'Opens the studio editor with this photo'}
+              accessibilityRole="button"
+            >
+              <Text style={[styles.reviewPrimaryFullLabel, { color: colors.background }]}>
+                {isVisualSearch ? 'Search' : 'Use'}
+              </Text>
+            </Pressable>
+          </View>
+        </Reanimated.View>
+      )}
+      </View>
+    </GestureDetector>
+  );
+}
+
+// ── Styles ────────────────────────────────────────────────────────
+
+const styles = StyleSheet.create({
+  // ── Camera initialization loading overlay ──
+  cameraInitOverlay: {
+    ...StyleSheet.absoluteFill,
+    // backgroundColor applied inline via colors.mediaOverlayScrim
+  },
+  cameraInitSpinnerWrap: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  cameraInitSpinner: {
+    width: 24,
+    height: 24,
+    borderRadius: Radius.lg,
+    borderWidth: 2,
+    // borderColor / borderTopColor applied inline via scrim text tokens
+  },
+  cameraInitLabel: {
+    marginTop: Space.sm,
+    fontSize: TypographyV2.caption.size,
+    // color applied inline via colors.scrimTextSecondary
+    fontFamily: Typography.family.regular },
+  cameraInitErrorBtn: {
+    marginTop: Space.md,
+    height: 50,
+    paddingHorizontal: Space.xl,
+    borderRadius: Radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  cameraInitErrorBtnText: {
+    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size },
+  cameraInitErrorGalleryBtn: {
+    marginTop: Space.sm,
+    height: 44,
+    paddingHorizontal: Space.md,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  cameraInitErrorGalleryText: {
+    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size },
+  // ── Camera-overlay text colours ────────────────────────────────────
+  // The camera preview is always dark regardless of app theme, so overlay
+  // controls (brackets, crosshair, grid, labels, shutter ring, review
+  // secondary actions) use the theme's scrim text tokens —
+  // `scrimTextPrimary`, `scrimTextSecondary`, `scrimTextTertiary` — which
+  // resolve to white / rgba-white in both light and dark themes. The
+  // `mediaOverlayScrim` token is used for pill backgrounds. These are
+  // applied via inline overrides above because StyleSheet.create is static
+  // and cannot reference theme tokens. Semantic colours (danger,
+  // antiqueGold) and non-overlay surfaces (review overlay, primary button)
+  // use theme tokens directly.
+  btnPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.97 }] },
+  // Gradient overlays
+  topGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 120 },
+  bottomGradient: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 140 },
+  // One geometry owner for rule-of-thirds, framing corners and crosshair.
+  captureGuideViewport: {
+    position: 'absolute' },
+  // Framing frame — the aspect-ratio-fitted guide rect inside the measured
+  // viewport. Brackets and crosshair are positioned relative to this frame
+  // so they describe the actual capture crop, not the available space.
+  framingFrame: {
+    position: 'absolute' },
+  // Grid overlay (rule-of-thirds)
+  gridOverlay: {
+    ...StyleSheet.absoluteFill },
+  gridLineV1: {
+    position: 'absolute',
+    left: '33.33%',
+    top: 0,
+    bottom: 0,
+    width: 1,
+    // backgroundColor applied inline via colors.scrimTextTertiary
+  },
+  gridLineV2: {
+    position: 'absolute',
+    left: '66.66%',
+    top: 0,
+    bottom: 0,
+    width: 1,
+    // backgroundColor applied inline via colors.scrimTextTertiary
+  },
+  gridLineH1: {
+    position: 'absolute',
+    top: '33.33%',
+    left: 0,
+    right: 0,
+    height: 1,
+    // backgroundColor applied inline via colors.scrimTextTertiary
+  },
+  gridLineH2: {
+    position: 'absolute',
+    top: '66.66%',
+    left: 0,
+    right: 0,
+    height: 1,
+    // backgroundColor applied inline via colors.scrimTextTertiary
+  },
+  // Capture flash — full-screen white overlay
+  captureFlash: {
+    ...StyleSheet.absoluteFill,
+    // backgroundColor applied inline via colors.scrimTextPrimary
+  },
+  // Countdown overlay
+  countdownOverlay: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  countdownText: {
+    fontFamily: Typography.family.bold,
+    fontSize: SHUTTER_GLYPH_SIZE,
+    // color applied inline via colors.scrimTextPrimary
+    // textShadowColor applied inline via colors.shadow
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8 },
+  // Corner brackets — refined 1.5pt stroke, 6pt radius
+  bracketTL: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: CORNER_SIZE,
+    height: CORNER_SIZE,
+    borderTopWidth: CORNER_STROKE,
+    borderLeftWidth: CORNER_STROKE,
+    // borderColor applied inline via colors.scrimTextSecondary
+    borderTopLeftRadius: 6 },
+  bracketTR: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: CORNER_SIZE,
+    height: CORNER_SIZE,
+    borderTopWidth: CORNER_STROKE,
+    borderRightWidth: CORNER_STROKE,
+    // borderColor applied inline via colors.scrimTextSecondary
+    borderTopRightRadius: 6 },
+  bracketBL: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    width: CORNER_SIZE,
+    height: CORNER_SIZE,
+    borderBottomWidth: CORNER_STROKE,
+    borderLeftWidth: CORNER_STROKE,
+    // borderColor applied inline via colors.scrimTextSecondary
+    borderBottomLeftRadius: 6 },
+  bracketBR: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: CORNER_SIZE,
+    height: CORNER_SIZE,
+    borderBottomWidth: CORNER_STROKE,
+    borderRightWidth: CORNER_STROKE,
+    // borderColor applied inline via colors.scrimTextSecondary
+    borderBottomRightRadius: 6 },
+  // Crosshair — centered in the framing guide area
+  crosshair: {
+    position: 'absolute',
+    left: '50%',
+    top: '50%',
+    width: 16,
+    height: 16,
+    marginLeft: -8,
+    marginTop: -8,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  crosshairH: {
+    position: 'absolute',
+    width: 16,
+    height: 1,
+    // backgroundColor applied inline via colors.scrimTextTertiary
+  },
+  crosshairV: {
+    position: 'absolute',
+    width: 1,
+    height: 16,
+    // backgroundColor applied inline via colors.scrimTextTertiary
+  },
+  // Top bar
+  topBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingBottom: Space.sm },
+  topRightControls: {
+    flexDirection: 'row',
+    gap: 8 },
+  // Top bar buttons — transparent 44pt targets
+  topIconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  // Flash active state — subtle accent background so the user can read
+  // the toggle state at a glance without a heavy fill.
+  topIconBtnActive: {
+    // backgroundColor applied inline via colors.scrimTextTertiary
+  },
+  // ── Multi-snap staging tray ──
+  // A persistent horizontal row of captured thumbnails below the top bar.
+  // Flat canvas, hairline-edged thumbs, no enclosing card.
+  stagingTray: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    zIndex: 15 },
+  stagingTrayContent: {
+    gap: 6,
+    alignItems: 'center' },
+  stagingThumbWrap: {
+    position: 'relative' },
+  // 36x48pt thumbnail — compact and elegant. 2pt ring, 4px radius.
+  stagingThumb: {
+    width: 36,
+    height: 48,
+    borderRadius: Radius.sm,
+    borderWidth: Stroke.emphasis,
+    // borderColor applied inline via colors.scrimTextPrimary
+  },
+  // Video captures have no decodable still — a dark tile carrying the
+  // play glyph and duration reads as media, not a broken image.
+  stagingThumbVideo: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2 },
+  stagingThumbDuration: {
+    fontSize: Typography.size.micro,
+    fontFamily: Typography.family.medium },
+  // Order index badge — 12pt diameter, bottom-left.
+  stagingOrderBadge: {
+    position: 'absolute',
+    bottom: 2,
+    left: 2,
+    width: 12,
+    height: 12,
+    borderRadius: Radius.full,
+    // backgroundColor applied inline via colors.mediaOverlayScrim
+    alignItems: 'center',
+    justifyContent: 'center' },
+  stagingOrderText: {
+    // color applied inline via colors.scrimTextPrimary
+    fontSize: Typography.size.micro,
+    fontFamily: Typography.family.medium },
+  // Done button — finishes multi-capture and enters the editor.
+  // Compact pill with a checkmark that commits the accumulated batch.
+  stagingDoneBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    height: 36,
+    borderRadius: Radius.full,
+    // backgroundColor applied inline via colors.scrimTextTertiary
+  },
+  stagingDoneText: {
+    // color applied inline via colors.scrimTextPrimary
+    fontSize: TypographyV2.caption.size,
+    fontFamily: Typography.family.semibold },
+  // Bottom bar — gallery (left) | shutter (center) | flip (right).
+  // The viewfinder dominates; controls are compact and purposeful.
+  bottomBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingHorizontal: Space.lg,
+    paddingTop: 10,
+    minHeight: 100 },
+  // Slide-to-lock pill — floats up-left of the shutter while a hold
+  // recording is live (Snap grammar). pointerEvents none; hit-tested
+  // against the held finger's screen coordinates.
+  recordLockPill: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: -56,
+    marginLeft: -120,
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    // backgroundColor applied inline (brand when hot, scrim otherwise)
+  },
+  // Flip camera — transparent 44pt target. No persistent dark plate; the
+  // bottom scrim provides legibility over bright previews.
+  flipBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  // Flip press feedback — subtle background circle only while pressed.
+  // Applied inline via colors.scrimTextTertiary + scale transform.
+  flipBtnPressed: {
+    // backgroundColor / transform applied inline
+  },
+  // Recording dot — used inside the consolidated status pill.
+  recordingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: Radius.full,
+    // backgroundColor applied inline via colors.danger (theme token)
+  },
+  recordingTimerText: {
+    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.caption.size,
+    // color applied inline via colors.scrimTextPrimary
+    fontVariant: ['tabular-nums'] },
+  // Muted recording indicator — mic-off icon shown when recording without audio
+  mutedIndicator: {
+    marginLeft: 2,
+    opacity: 0.8 },
+  // Quick-review overlay
+  reviewOverlay: {
+    ...StyleSheet.absoluteFill,
+    // backgroundColor applied inline via colors.background (theme token)
+    zIndex: 100 },
+  reviewImage: {
+    ...StyleSheet.absoluteFill,
+    resizeMode: 'contain' },
+  // Top scrim for the review overlay — ensures any top chrome is legible
+  // over bright captures (white backgrounds, light product photography).
+  reviewTopScrim: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 100 },
+  reviewActions: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingHorizontal: Space.xl,
+    paddingTop: Space.md },
+  reviewBtn: {
+    alignItems: 'center',
+    gap: 6 },
+  reviewBtnLabel: {
+    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.captionElevated.size,
+    // color applied inline via colors.scrimTextPrimary
+  },
+  reviewPrimaryBtn: {
+    height: 52,
+    paddingHorizontal: Space.lg,
+    borderRadius: Radius.full,
+    // backgroundColor applied inline via colors.textPrimary (theme token)
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: Space.xs },
+  reviewPrimaryPressed: {
+    transform: [{ scale: 0.97 }] },
+  reviewPrimaryLabel: {
+    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.captionElevated.size,
+    // color applied inline via colors.background (theme token)
+  },
+  // ── Consolidated status region (replaces separate top badges) ──
+  statusRegion: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+  },
+  statusPillText: {
+    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    letterSpacing: 0.3,
+  },
+  // ── Simplified review actions ──
+  reviewRetakeBtn: {
+    position: 'absolute',
+    left: Space.md,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
+  },
+  reviewRetakePressed: {
+    opacity: 0.6,
+  },
+  reviewRetakeText: {
+    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+  },
+  reviewPrimaryWrap: {
+    position: 'absolute',
+    left: Space.md,
+    right: Space.md,
+    bottom: 0,
+  },
+  reviewPrimaryFullBtn: {
+    height: 52,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reviewPrimaryFullLabel: {
+    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.bodyStrong.size,
+  },
+  // ── Green screen thumbnail (used inside the consolidated status pill) ──
+  greenScreenThumb: {
+    width: 24,
+    height: 24,
+    borderRadius: Radius.sm },
+  });

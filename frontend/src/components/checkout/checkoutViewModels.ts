@@ -106,27 +106,34 @@ export function getCheckoutPayLabel({
   stage,
   isSubmitting,
   useOnezePayment,
-  grossTotal,
+  onezeRequiredIze,
+  orderReleased,
   walletAvailable,
   formattedTotal,
 }: {
   stage: CheckoutStage;
   isSubmitting: boolean;
   useOnezePayment: boolean;
-  grossTotal: number;
+  /** Required 1ZE amount (server figure wins over the client estimate). */
+  onezeRequiredIze: number;
+  /** The previous terminal failure released the order — the CTA mints a
+   *  fresh order rather than retrying a dead one. */
+  orderReleased: boolean;
   walletAvailable: boolean;
   formattedTotal: string;
 }): string {
   return isSubmitting
     ? STAGE_LABELS[stage] || 'Processing'
-    : stage === 'payment_failed'
+    : orderReleased
+      ? 'Buy again'
+      : stage === 'payment_failed'
       ? 'Retry payment'
       : stage === 'payment_pending'
         ? 'Waiting for confirmation'
         : stage === 'unknown_outcome'
           ? 'Checking payment'
           : useOnezePayment
-          ? `Pay ${Math.ceil(grossTotal).toLocaleString()} 1ZE`
+          ? `Pay ${Math.ceil(onezeRequiredIze).toLocaleString()} 1ZE`
           : walletAvailable
             ? 'Pay with card'
             : `Pay ${formattedTotal}`;
@@ -142,6 +149,7 @@ export function computeCheckoutStepCompletion({
   hasCarrier,
   useOnezePayment,
   onezeBalance,
+  onezeRequiredIze,
   grossTotal,
   savedPaymentMethod,
   checkoutCapabilities,
@@ -153,6 +161,9 @@ export function computeCheckoutStepCompletion({
   hasCarrier: boolean;
   useOnezePayment: boolean;
   onezeBalance: number;
+  /** Required 1ZE amount for the order (server figure or client estimate) —
+   *  compared against `onezeBalance` which is also denominated in 1ZE. */
+  onezeRequiredIze: number;
   grossTotal: number;
   savedPaymentMethod: CheckoutPaymentMethodLike | null;
   checkoutCapabilities: UserCountryCapabilities | null;
@@ -162,7 +173,7 @@ export function computeCheckoutStepCompletion({
 }): { deliveryStepComplete: boolean; paymentStepComplete: boolean; reviewStepComplete: boolean } {
   const deliveryStepComplete = hasSavedAddressId && hasCarrier;
   const paymentStepComplete = useOnezePayment
-    ? onezeBalance >= grossTotal
+    ? onezeBalance >= onezeRequiredIze
     : (!!savedPaymentMethod?.id && isPaymentMethodAllowed(checkoutCapabilities, savedPaymentMethod.type))
       || (useBalance && walletBalance >= grossTotal);
   const reviewStepComplete = checkoutEligible;

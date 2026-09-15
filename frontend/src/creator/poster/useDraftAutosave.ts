@@ -10,7 +10,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 
-import type { CreatorDocument } from '../composition';
+import type { CreatorDocument } from '../core/projectStore/composition';
 
 export interface UseDraftAutosaveInput {
   /** Whether the document has unsaved changes. */

@@ -11,8 +11,13 @@
  * P0 FIX (report 18): Category toggles now sync to the server via
  * notificationsApi, not just device-local AsyncStorage. The false "Most
  * preferences sync across devices" banner has been removed — preferences
- * DO sync now. The false quiet-hours "held until" claim has been replaced
- * with a truthful description of device-local quiet hours.
+ * DO sync now.
+ *
+ * Quiet hours and the notification-preview policy are also server-persisted
+ * (user-level fields on the preferences PUT). Local state stays as the
+ * instant-reactive cache — the server is reconciled on mount and every
+ * change is pushed with rollback on failure, matching the category-toggle
+ * pattern.
  *
  * The progress meter gamification ("5 of 8 enabled") has been removed.
  * Interruption is not a completion game — per AGENTS.md §4 anti-AI design.
@@ -72,7 +77,6 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
   const {
     pushNotificationToggles: toggles,
     pushEnabledCount: enabledCount,
-    pushTotalCount,
     setPushNotificationToggle,
     setAllPushNotificationToggles,
     quietHours,
@@ -91,17 +95,27 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
       .catch(() => setPushPermissionStatus(null));
   }, []);
 
-  // Sync server preferences on mount — categories are server-persisted.
+  // Sync server preferences on mount — categories, quiet hours, and the
+  // preview policy are all server-persisted. Local state is the cache; the
+  // server is authoritative when it returns a value.
   React.useEffect(() => {
     let mounted = true;
     (async () => {
       try {
         const serverPrefs = await getNotificationPreferences();
         if (!mounted) return;
-        for (const [key, enabled] of Object.entries(serverPrefs)) {
+        for (const [key, enabled] of Object.entries(serverPrefs.preferences)) {
           if (toggles[key] !== undefined && toggles[key] !== enabled) {
             setPushNotificationToggle(key, enabled);
           }
+        }
+        if (serverPrefs.quietHours) {
+          setQuietHours(serverPrefs.quietHours);
+        }
+        if (serverPrefs.previewPolicy) {
+          const preview = serverPrefs.previewPolicy !== 'hidden';
+          setShowPreview(preview);
+          AsyncStorage.setItem(SHOW_PREVIEW_KEY, String(preview)).catch(() => {});
         }
       } catch {
         // best-effort — local state remains as cache
@@ -128,11 +142,43 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
     return () => { mounted = false; };
   }, []);
 
+  // Preview policy — persisted server-side so the lock-screen posture
+  // follows the account, not the device. AsyncStorage stays as the local
+  // cache; rollback mirrors the category-toggle pattern.
   const handleShowPreviewChange = React.useCallback((v: boolean) => {
     haptic.selection();
+    const previous = showPreview;
     setShowPreview(v);
     AsyncStorage.setItem(SHOW_PREVIEW_KEY, String(v)).catch(() => {});
-  }, [haptic]);
+    updateNotificationPreferences({
+      preferences: { ...toggles },
+      previewPolicy: v ? 'full' : 'hidden',
+    }).catch(() => {
+      setShowPreview(previous);
+      AsyncStorage.setItem(SHOW_PREVIEW_KEY, String(previous)).catch(() => {});
+      show('Failed to update preview setting. Try again.', 'error');
+    });
+  }, [haptic, showPreview, toggles, show]);
+
+  // Quiet hours — user-level on the server so every device honours the
+  // same DND window. Local state applies instantly; failure rolls back.
+  const applyQuietHours = React.useCallback(
+    async (patch: Partial<typeof quietHours>) => {
+      const previous = quietHours;
+      const next = { ...quietHours, ...patch };
+      setQuietHours(patch);
+      try {
+        await updateNotificationPreferences({
+          preferences: { ...toggles },
+          quietHours: next,
+        });
+      } catch {
+        setQuietHours(previous);
+        show('Failed to update quiet hours. Try again.', 'error');
+      }
+    },
+    [quietHours, toggles, setQuietHours, show]
+  );
 
   const masterOn = enabledCount > 0;
 
@@ -145,7 +191,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
       for (const key of Object.keys(toggles)) {
         allPrefs[key] = v;
       }
-      await updateNotificationPreferences(allPrefs);
+      await updateNotificationPreferences({ preferences: allPrefs });
     } catch {
       for (const [key, value] of Object.entries(previousToggles)) {
         setPushNotificationToggle(key, value);
@@ -160,7 +206,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
     setPushNotificationToggle(key, nextEnabled);
     setSyncingKeys((prev) => new Set(prev).add(key));
     try {
-      await updateNotificationPreferences({ [key]: nextEnabled });
+      await updateNotificationPreferences({ preferences: { [key]: nextEnabled } });
     } catch {
       // Rollback on failure
       setPushNotificationToggle(key, !nextEnabled);
@@ -279,7 +325,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
             icon="moon-outline"
             title="Do Not Disturb"
             toggleValue={quietHours.enabled}
-            onToggle={() => { haptic.selection(); setQuietHours({ enabled: !quietHours.enabled }); }}
+            onToggle={() => { haptic.selection(); void applyQuietHours({ enabled: !quietHours.enabled }); }}
             isFirst
             isLast={!quietHours.enabled}
           />
@@ -335,9 +381,9 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
                       onPress={() => {
                         haptic.light();
                         if (editingQuietTime === 'start') {
-                          setQuietHours({ startHour: h });
+                          void applyQuietHours({ startHour: h });
                         } else {
-                          setQuietHours({ endHour: h });
+                          void applyQuietHours({ endHour: h });
                         }
                         setEditingQuietTime(null);
                       }}
@@ -356,7 +402,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           {quietHours.enabled ? (
             <SettingsInfoBanner
               icon="moon-outline"
-              text={`Urgent alerts still arrive. Non-urgent push is silenced between ${formatHour(quietHours.startHour)} and ${formatHour(quietHours.endHour)} on this device.`}
+              text={`Urgent alerts still arrive. Non-urgent push is silenced between ${formatHour(quietHours.startHour)} and ${formatHour(quietHours.endHour)}.`}
             />
           ) : null}
         </SettingsSection>
@@ -430,9 +476,6 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm + 2,
       minHeight: Space.xxl },
-    quietTimePickerPressed: {
-      opacity: 0.7,
-      transform: [{ scale: 0.98 }] },
     quietTimeLabel: {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
@@ -464,9 +507,6 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center' },
     quietHourCellActive: {
       backgroundColor: colors.brand },
-    quietHourCellPressed: {
-      opacity: 0.7,
-      transform: [{ scale: 0.96 }] },
     quietHourCellText: {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,

@@ -21,7 +21,7 @@
  *   - SpeedCurveTypes.ts: SpeedCurve, averageSpeed
  *   - TimelineTypes.ts: PosterClip, OverlayLayer
  */
-import type { CreatorDocument, CreatorPage, CreatorLayer } from '../../composition';
+import type { CreatorDocument, CreatorPage, CreatorLayer } from '../projectStore/composition';
 import type { SpeedCurve } from '../../poster/speedcurves/SpeedCurveTypes';
 import { averageSpeed } from '../../poster/speedcurves/SpeedCurveTypes';
 

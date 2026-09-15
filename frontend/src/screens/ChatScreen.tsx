@@ -26,7 +26,9 @@ import { useBackendData } from "../context/BackendDataContext";
 import { useStore } from "../store/useStore";
 
 import {
-  clearComposerStateOnApi } from "../services/chatApi";
+  clearComposerStateOnApi,
+  pinMessageOnApi,
+  unpinMessageOnApi } from "../services/chatApi";
 
 import { useToast } from "../context/ToastContext";
 
@@ -70,7 +72,8 @@ import {
   useChatHeaderData,
   useChatContextualStack,
   useChatSearchScroll,
-  useNewMessageTracker } from "../hooks/chat";
+  useNewMessageTracker,
+  type Message } from "../hooks/chat";
 import { useTypingIndicator, useChatGroupIdentityEvent } from "../services/realtimeClient";
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
@@ -129,7 +132,48 @@ export default function ChatScreen({ navigation, route }: Props) {
   // ── Pinned message ──────────────────────────────────────────────────
   // Fetch the conversation's pinned message on mount and when realtime
   // pin/unpin events arrive. Only group chats support pinning.
-  const pinnedMessage = usePinnedMessage(conversationId, isGroup, conversations);
+  const { pinnedMessage, refresh: refreshPinnedMessage } = usePinnedMessage(
+    conversationId,
+    isGroup,
+    conversations,
+  );
+
+  // Pin — real endpoint, group admins/owners only (enforced server-side).
+  const currentMemberRole = currentUser?.id
+    ? conversation?.memberRoles?.[currentUser.id]
+    : undefined;
+  const canPinMessage =
+    isGroup && (currentMemberRole === "owner" || currentMemberRole === "admin");
+
+  const handlePinMessage = useCallback(
+    (msg: Message) => {
+      if (!conversationId || !canPinMessage) return;
+      const isPinned = pinnedMessage?.messageId === msg.id;
+      const request = isPinned
+        ? unpinMessageOnApi(conversationId, msg.id)
+        : pinMessageOnApi(conversationId, msg.id);
+      request
+        .then(() => {
+          refreshPinnedMessage();
+          show(isPinned ? "Message unpinned" : "Message pinned", "success");
+        })
+        .catch(() =>
+          show(
+            isPinned
+              ? "Failed to unpin message. Please try again."
+              : "Failed to pin message. Please try again.",
+            "error",
+          ),
+        );
+    },
+    [
+      conversationId,
+      canPinMessage,
+      pinnedMessage?.messageId,
+      refreshPinnedMessage,
+      show,
+    ],
+  );
 
   // ─── Controller hook: hydrated messages + sender-label lookups ───
   // useHydratedChatMessages owns the bot/user lookup maps, the store→Message
@@ -339,6 +383,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   // When a message edit is armed the composer commits via the edit API
   // instead of a new send (P2-03).
   const handleSend = useCallback(() => {
+    if (isPartnerBlockedRef.current) return;
     notifyStoppedTyping();
     if (editingMessage) {
       hookEditMessage(editingMessage.id, input);
@@ -399,6 +444,14 @@ export default function ChatScreen({ navigation, route }: Props) {
     currentUser,
     userLookup,
     isTyping });
+
+  // Blocked-partner send guard — the composer renders an explanatory
+  // notice instead of an input when blocked, but gate the send path too
+  // so a stale callback can never dispatch into a blocked thread. A ref
+  // keeps the earlier-defined handleSend callback honest without
+  // reordering the hook block.
+  const isPartnerBlockedRef = useRef(false);
+  isPartnerBlockedRef.current = isPartnerBlocked;
 
   // Per spec 16: "Do not stack quick replies + agent suggestions." When agent
   // suggestions are active (agent deployed, suggestions available, no input),
@@ -693,6 +746,14 @@ export default function ChatScreen({ navigation, route }: Props) {
           isVoiceRecording={isVoiceRecording}
           onVoiceRecordingChange={setIsVoiceRecording}
           isSending={composerSending}
+          blockedNotice={
+            isPartnerBlocked
+              ? {
+                  message: "You blocked this user.",
+                  actionLabel: "Unblock to message.",
+                  onAction: handleUnblockPartner }
+              : undefined
+          }
           dangerWarning={composerDangerWarning?.message}
           cautionWarning={composerCautionWarning?.message}
           onDismissDangerWarning={() => setDangerWarningDismissed(true)}
@@ -771,6 +832,9 @@ export default function ChatScreen({ navigation, route }: Props) {
           onReactToMessage={setReactingToMessage}
           onDeleteMessage={handleDeleteMessage}
           onSaveMessage={toggleSaveInChat}
+          canPinMessage={canPinMessage}
+          pinnedMessageId={pinnedMessage?.messageId}
+          onPinMessage={handlePinMessage}
           onRetryUpload={handleRetryUpload}
           onRetrySendMessage={handleRetrySendMessage}
           onPrefillComposer={setInput}

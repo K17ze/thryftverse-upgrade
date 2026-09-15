@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Text, StyleSheet } from 'react-native';
+import { Text, StyleSheet, AccessibilityActionEvent, AccessibilityActionInfo } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import {
@@ -28,6 +28,12 @@ export interface SystemNotificationRowProps {
   inAttentionSection?: boolean;
   onPress: () => void;
   onAction?: () => void;
+  /** Quiet action affordance for action-required events without a bespoke
+   *  trailing action — rendered as a text line under the body. */
+  actionLabel?: string;
+  onActionPress?: () => void;
+  accessibilityActions?: AccessibilityActionInfo[];
+  onAccessibilityAction?: (event: AccessibilityActionEvent) => void;
 }
 
 interface SystemVisual {
@@ -54,7 +60,11 @@ export function SystemNotificationRow({
   aggregatedCount,
   inAttentionSection = false,
   onPress,
-  onAction }: SystemNotificationRowProps) {
+  onAction,
+  actionLabel,
+  onActionPress,
+  accessibilityActions,
+  onAccessibilityAction }: SystemNotificationRowProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -106,6 +116,10 @@ export function SystemNotificationRow({
       aggregatedCount={aggregatedCount}
       inAttentionSection={inAttentionSection}
       onPress={onPress}
+      actionLabel={visual.actionLabel && event.requiresAction ? undefined : actionLabel}
+      onActionPress={visual.actionLabel && event.requiresAction ? undefined : onActionPress}
+      accessibilityActions={accessibilityActions}
+      onAccessibilityAction={onAccessibilityAction}
       leading={leading}
       trailing={trailing}
       accessibilityLabel={accessibilityLabel}

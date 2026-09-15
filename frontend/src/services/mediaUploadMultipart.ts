@@ -140,8 +140,9 @@ export async function completeMultipartUpload(
 
 /**
  * Abort a multipart session. Best-effort: never throws — a failed abort
- * leaves orphaned parts in S3 (reclaimed by the bucket lifecycle) but must
- * not mask the original upload error.
+ * leaves orphaned parts in S3 until the server's `multipart_session_sweep`
+ * job aborts the session once `expires_at` passes — but must not mask the
+ * original upload error.
  */
 export async function abortMultipartUploadSession(
   sessionId: string,
@@ -188,7 +189,7 @@ function atobPolyfill(input: string): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
   let str = input.replace(/=+$/, '');
   let output = '';
-  for (let bc = 0, bs = 0, buffer = 0, i = 0; i < str.length; i++) {
+  for (let bs = 0, buffer = 0, i = 0; i < str.length; i++) {
     const idx = chars.indexOf(str.charAt(i));
     if (idx === -1) continue;
     buffer = (buffer << 6) | idx;

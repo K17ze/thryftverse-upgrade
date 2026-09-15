@@ -32,7 +32,7 @@ import {
 import {
   isVideoExportAvailable as isThryftVideoExportAvailable,
 } from '../../../modules/thryft-video-export/src';
-import type { CreatorDocument } from '../composition';
+import type { CreatorDocument } from '../core/projectStore/composition';
 
 // ── Intent presets ───────────────────────────────────────────────────
 

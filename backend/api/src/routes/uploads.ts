@@ -6,6 +6,7 @@ import { config } from '../config.js';
 import {
   abortMultipartUpload,
   assertObjectMatchesUploadPolicy,
+  UploadedObjectPolicyError,
   assertUploadPolicy,
   completeMultipartUpload,
   createMultipartUpload,
@@ -16,6 +17,15 @@ import { mediaKindForContentType } from '../lib/mediaLifecycle.js';
 import { createModerationProvider } from '../lib/moderation/index.js';
 import { moderateImageAsset } from '../lib/moderation/moderationService.js';
 import { enqueueMediaIngestJob } from '../lib/queues.js';
+
+const MULTIPART_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+function multipartSessionExpiry(session: { initiated_at: Date | string; expires_at: Date | string }): number {
+  return Math.max(
+    new Date(session.expires_at).getTime(),
+    new Date(session.initiated_at).getTime() + MULTIPART_SESSION_TTL_MS,
+  );
+}
 
 type UploadRouteDependencies = {
   app: FastifyInstance;
@@ -113,6 +123,16 @@ type FinalizationRow = {
   created_at: string;
   updated_at: string;
 };
+
+// Deterministic CompleteMultipartUpload rejections driven by the caller's
+// part manifest — retrying with the same manifest can never succeed.
+const S3_MANIFEST_ERRORS = new Set([
+  'InvalidPart',
+  'InvalidPartOrder',
+  'EntityTooSmall',
+  'EntityTooLarge',
+  'InvalidRequest',
+]);
 
 export const registerUploadRoutes = ({
   app,
@@ -529,7 +549,9 @@ export const registerUploadRoutes = ({
             { err: queueError, assetId: mediaAsset.id },
             'Failed to enqueue media ingest job — falling back to inline moderation',
           );
-          // Fallback: inline moderation if the queue is unavailable.
+          // The committed media_processing_jobs row remains the durable
+          // record — the media_ingest_reconcile sweep re-drives it within
+          // ~2 minutes, so non-image kinds recover without the inline path.
           if (mediaAsset.mediaKind === 'image' && createModerationProvider().name !== 'mock') {
             void moderateImageAsset(mediaAsset.id, row.public_url)
               .then((outcome) => {
@@ -763,7 +785,14 @@ export const registerUploadRoutes = ({
   });
 
   // POST /uploads/multipart/initiate
-  app.post('/uploads/multipart/initiate', async (request, reply) => {
+  app.post('/uploads/multipart/initiate', {
+    config: {
+      rateLimit: {
+        max: 20,
+        timeWindow: '1 minute',
+      },
+    },
+  }, async (request, reply) => {
     const actorUserId = resolveAuthenticatedUserId(request);
     const payload = multipartInitiateSchema.parse(request.body);
 
@@ -788,10 +817,12 @@ export const registerUploadRoutes = ({
     const key = `${payload.folder}/${actorUserId}/${crypto.randomUUID()}_${safeName}`;
     const partCount = Math.ceil(payload.sizeBytes / payload.partSize);
 
-    const { uploadId, bucket } = await createMultipartUpload(key, payload.contentType);
+    const { uploadId, bucket } = await createMultipartUpload(key, payload.contentType, {
+      sizeBytes: payload.sizeBytes,
+    });
 
     const sessionId = `ump_${crypto.randomUUID()}`;
-    const expiresAt = new Date(Date.now() + config.s3PresignTtlSeconds * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + MULTIPART_SESSION_TTL_MS).toISOString();
 
     // Persist the session so it can be resumed after an app restart.
     await db.query(
@@ -843,7 +874,14 @@ export const registerUploadRoutes = ({
 
   // POST /uploads/multipart/:id/parts — request presigned URLs for
   // additional parts (resumable uploads).
-  app.post('/uploads/multipart/:id/parts', async (request, reply) => {
+  app.post('/uploads/multipart/:id/parts', {
+    config: {
+      rateLimit: {
+        max: 60,
+        timeWindow: '1 minute',
+      },
+    },
+  }, async (request, reply) => {
     const actorUserId = resolveAuthenticatedUserId(request);
     const { id } = z.object({ id: z.string().min(2).max(120) }).parse(request.params);
     const { partNumbers } = partNumbersSchema.parse(request.body);
@@ -854,9 +892,11 @@ export const registerUploadRoutes = ({
       bucket: string;
       owner_id: string;
       status: string;
+      part_count: number;
+      initiated_at: Date | string;
       expires_at: Date | string;
     }>(
-      `SELECT upload_id, object_key, bucket, owner_id, status, expires_at
+      `SELECT upload_id, object_key, bucket, owner_id, status, part_count, initiated_at, expires_at
        FROM upload_multipart_sessions
        WHERE id = $1 LIMIT 1`,
       [id],
@@ -875,9 +915,14 @@ export const registerUploadRoutes = ({
       reply.code(409);
       return { ok: false, error: `Session is ${session.status}, not active` };
     }
-    if (new Date(session.expires_at).getTime() < Date.now()) {
+    const expiresAt = multipartSessionExpiry(session);
+    if (expiresAt <= Date.now()) {
       reply.code(410);
       return { ok: false, error: 'Session has expired' };
+    }
+    if (partNumbers.some((partNumber) => partNumber > session.part_count)) {
+      reply.code(400);
+      return { ok: false, error: 'Part number exceeds the declared upload' };
     }
 
     const presignedParts: Array<{ url: string; partNumber: number; expiresInSeconds: number }> = [];
@@ -886,12 +931,19 @@ export const registerUploadRoutes = ({
       presignedParts.push(part);
     }
 
-    return { ok: true, presignedParts };
+    return { ok: true, presignedParts, expiresAt: new Date(expiresAt).toISOString() };
   });
 
   // POST /uploads/multipart/:id/complete — assemble the final object and
   // create an upload finalization record.
-  app.post('/uploads/multipart/:id/complete', async (request, reply) => {
+  app.post('/uploads/multipart/:id/complete', {
+    config: {
+      rateLimit: {
+        max: 20,
+        timeWindow: '1 minute',
+      },
+    },
+  }, async (request, reply) => {
     const actorUserId = resolveAuthenticatedUserId(request);
     const { id } = z.object({ id: z.string().min(2).max(120) }).parse(request.params);
     const { parts } = multipartCompleteSchema.parse(request.body);
@@ -906,10 +958,11 @@ export const registerUploadRoutes = ({
       size_bytes: string;
       part_count: number;
       status: string;
+      initiated_at: Date | string;
       expires_at: Date | string;
     }>(
       `SELECT upload_id, object_key, bucket, owner_id, folder, content_type,
-              size_bytes::text, part_count, status, expires_at
+              size_bytes::text, part_count, status, initiated_at, expires_at
        FROM upload_multipart_sessions
        WHERE id = $1 LIMIT 1`,
       [id],
@@ -926,40 +979,86 @@ export const registerUploadRoutes = ({
     }
     if (session.status === 'completed') {
       // Idempotent — return the existing finalization if one exists.
-      const existingFinalization = await db.query<{ id: string }>(
-        `SELECT id FROM upload_finalizations
-         WHERE object_key = $1 AND owner_id = $2 AND status = 'finalized'
+      const existingFinalization = await db.query<{
+        id: string;
+        object_key: string;
+        public_url: string;
+        content_type: string;
+        size_bytes: string;
+        media_asset_id: string;
+        asset_status: string;
+        media_kind: 'image' | 'video' | 'audio' | 'document';
+        canonical_url: string | null;
+      }>(
+        `SELECT f.id, f.object_key, f.public_url, f.content_type, f.size_bytes::text,
+                a.id AS media_asset_id, a.status AS asset_status,
+                a.media_kind::text, a.canonical_url
+         FROM upload_finalizations f
+         JOIN media_assets a ON a.upload_finalization_id = f.id AND a.owner_id = f.owner_id
+         WHERE f.object_key = $1 AND f.owner_id = $2 AND f.bucket = $3 AND f.status = 'finalized'
          LIMIT 1`,
-        [session.object_key, actorUserId],
+        [session.object_key, actorUserId, session.bucket],
       );
       if (existingFinalization.rowCount) {
-        return { ok: true, finalizationId: existingFinalization.rows[0].id, duplicate: true };
+        const existing = existingFinalization.rows[0];
+        return {
+          ok: true,
+          finalizationId: existing.id,
+          duplicate: true,
+          objectKey: existing.object_key,
+          publicUrl: existing.public_url,
+          sizeBytes: Number(existing.size_bytes),
+          contentType: existing.content_type,
+          mediaAsset: {
+            id: existing.media_asset_id,
+            status: existing.asset_status,
+            mediaKind: existing.media_kind,
+            canonicalUrl: existing.canonical_url,
+            publishable: existing.asset_status === 'publishable' || existing.asset_status === 'published',
+            processingRequired: ['integrity_verified', 'processing', 'moderation_pending', 'processing_failed'].includes(existing.asset_status),
+          },
+        };
       }
     }
     if (session.status !== 'active' && session.status !== 'completed') {
       reply.code(409);
       return { ok: false, error: `Session is ${session.status}` };
     }
-    if (new Date(session.expires_at).getTime() < Date.now()) {
+    if (session.status === 'active' && multipartSessionExpiry(session) <= Date.now()) {
       reply.code(410);
       return { ok: false, error: 'Session has expired' };
     }
 
     // Complete the S3 multipart upload.
     const sortedParts = [...parts].sort((a, b) => a.partNumber - b.partNumber);
-    const { location } = await completeMultipartUpload(
-      session.object_key,
-      session.upload_id,
-      sortedParts,
-    );
-
-    // Mark the session as completed.
-    await db.query(
-      `UPDATE upload_multipart_sessions
-       SET status = 'completed', completed_at = NOW()
-       WHERE id = $1`,
-      [id],
-    );
+    if (sortedParts.length !== session.part_count
+      || sortedParts.some((part, index) => part.partNumber !== index + 1)) {
+      reply.code(400);
+      return { ok: false, error: 'A complete, unique part manifest is required' };
+    }
+    let location = `${config.s3CdnBaseUrl.replace(/\/$/, '')}/${session.bucket}/${session.object_key}`;
+    if (session.status === 'active') {
+      try {
+        const completed = await completeMultipartUpload(
+          session.object_key,
+          session.upload_id,
+          sortedParts,
+        );
+        location = completed.location;
+      } catch (error) {
+        const errorName = error instanceof Error ? error.name : '';
+        if (errorName === 'NoSuchUpload') {
+          // A prior complete may have succeeded while its response was lost;
+          // fall through to object verification to recover the receipt.
+        } else if (S3_MANIFEST_ERRORS.has(errorName)) {
+          // Deterministic manifest rejection — retrying is futile.
+          reply.code(400);
+          return { ok: false, error: 'S3 rejected the part manifest' };
+        } else {
+          throw error;
+        }
+      }
+    }
 
     // Verify the assembled object exists in S3 and matches the declared size.
     const sizeBytes = Number(session.size_bytes);
@@ -970,8 +1069,27 @@ export const registerUploadRoutes = ({
         { err: verifyError, objectKey: session.object_key },
         'Multipart upload verification failed',
       );
+      // Policy mismatches are permanent; transient HEAD failures rethrow so
+      // the request stays retryable and the session remains active.
+      if (!(verifyError instanceof UploadedObjectPolicyError)) throw verifyError;
       reply.code(422);
       return { ok: false, error: 'Assembled object verification failed' };
+    }
+
+    // Mark the session as completed — guarded on 'active' so a concurrent
+    // abort cannot be overwritten back to completed. A repair pass on an
+    // already-completed session skips this write.
+    if (session.status === 'active') {
+      const completedResult = await db.query(
+        `UPDATE upload_multipart_sessions
+         SET status = 'completed', completed_at = NOW()
+         WHERE id = $1 AND status = 'active'`,
+        [id],
+      );
+      if (!completedResult.rowCount) {
+        reply.code(409);
+        return { ok: false, error: 'Multipart session was concurrently aborted' };
+      }
     }
 
     // Create the finalization record — same table as single-PUT uploads so
@@ -1119,6 +1237,9 @@ export const registerUploadRoutes = ({
           { err: queueError, assetId: mediaAsset.id },
           'Failed to enqueue media ingest job — falling back to inline moderation',
         );
+        // The committed media_processing_jobs row remains the durable
+        // record — the media_ingest_reconcile sweep re-drives it within
+        // ~2 minutes, so non-image kinds recover without the inline path.
         if (mediaAsset.mediaKind === 'image' && createModerationProvider().name !== 'mock') {
           void moderateImageAsset(mediaAsset.id, location)
             .then((outcome) => {
@@ -1172,7 +1293,14 @@ export const registerUploadRoutes = ({
 
   // POST /uploads/multipart/:id/abort — cancel the session and free S3
   // storage consumed by uploaded parts.
-  app.post('/uploads/multipart/:id/abort', async (request, reply) => {
+  app.post('/uploads/multipart/:id/abort', {
+    config: {
+      rateLimit: {
+        max: 20,
+        timeWindow: '1 minute',
+      },
+    },
+  }, async (request, reply) => {
     const actorUserId = resolveAuthenticatedUserId(request);
     const { id } = z.object({ id: z.string().min(2).max(120) }).parse(request.params);
 
@@ -1181,8 +1309,9 @@ export const registerUploadRoutes = ({
       object_key: string;
       owner_id: string;
       status: string;
+      bucket: string;
     }>(
-      `SELECT upload_id, object_key, owner_id, status
+      `SELECT upload_id, object_key, owner_id, status, bucket
        FROM upload_multipart_sessions
        WHERE id = $1 LIMIT 1`,
       [id],
@@ -1201,13 +1330,26 @@ export const registerUploadRoutes = ({
       return { ok: true, duplicate: true, status: session.status };
     }
 
-    await abortMultipartUpload(session.object_key, session.upload_id);
-    await db.query(
+    try {
+      await abortMultipartUpload(session.object_key, session.upload_id, session.bucket);
+    } catch (error) {
+      // NoSuchUpload means S3 already terminated the session — completed or
+      // previously aborted. The caller asked to cancel; record the terminal
+      // state and report success rather than a transient 500.
+      if (!(error instanceof Error) || error.name !== 'NoSuchUpload') throw error;
+    }
+    // Guard on 'active' so a concurrent complete cannot be overwritten back
+    // to aborted after winning the S3 race.
+    const aborted = await db.query(
       `UPDATE upload_multipart_sessions
        SET status = 'aborted'
-       WHERE id = $1`,
+       WHERE id = $1 AND status = 'active'`,
       [id],
     );
+    if (!aborted.rowCount) {
+      reply.code(409);
+      return { ok: false, error: 'Multipart session was concurrently completed' };
+    }
 
     return { ok: true };
   });

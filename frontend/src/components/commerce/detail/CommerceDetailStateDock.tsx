@@ -15,6 +15,13 @@ import type { CommerceDetailDockLayout } from './types';
 
 const COMPACT_STACK_THRESHOLD = COMMERCE_DETAIL_COMPACT_WIDTH;
 
+// Per spec 05 §4 the dock already stacks on compact widths to prevent
+// label truncation; the same defence applies to large accessibility
+// text. Above this font scale the action row claims a full-width row
+// so the primary CTA can never be squeezed past the screen edge.
+// Mirrors the transaction surface's fontScale > 1.2 breakpoint.
+const DOCK_STACK_FONT_SCALE = 1.2;
+
 /**
  * Sticky state/action dock — the bottom dock that holds the current
  * actionable value and one primary action (at most one secondary).
@@ -72,6 +79,11 @@ export interface CommerceDetailStateDockProps {
   /** Optional original price shown with strikethrough above the current
    *  value. Used for discounted items (Depop/eBay pattern). */
   originalValue?: string;
+  /** Optional subordinate conversion line rendered directly under the
+   *  value (e.g. the local-currency equivalent of a 1ZE amount). It is
+   *  demoted to a quiet caption so the value pair never competes at one
+   *  size or widens the cluster enough to push the CTA off-screen. */
+  valueEquivalent?: string;
   /** Optional label under the value (e.g. "Current bid"). */
   valueLabel?: string;
   /** Optional state badge rendered on the left in place of value (e.g.
@@ -120,6 +132,7 @@ export interface CommerceDetailStateDockProps {
 export function CommerceDetailStateDock({
   value,
   originalValue,
+  valueEquivalent,
   valueLabel,
   stateBadge,
   subtitle,
@@ -138,7 +151,7 @@ export function CommerceDetailStateDock({
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   const haptic = useHaptic();
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth, fontScale } = useWindowDimensions();
   const safeBottom = bottomInset ?? insets.bottom;
   const [primaryLabelWidth, setPrimaryLabelWidth] = useState<number | null>(null);
 
@@ -152,7 +165,8 @@ export function CommerceDetailStateDock({
   const primaryIsEmphasized = primaryAction?.primary !== false;
   const shouldStack =
     layout === 'stacked' ||
-    (layout === 'auto' && hasSecondary && screenWidth < COMPACT_STACK_THRESHOLD);
+    (layout === 'auto' && hasSecondary && screenWidth < COMPACT_STACK_THRESHOLD) ||
+    (layout === 'auto' && fontScale > DOCK_STACK_FONT_SCALE);
 
   // Haptic ownership: the dock fires the commitment haptic (medium,
   // synchronous on press) only for actions that declare commitment.
@@ -273,9 +287,17 @@ export function CommerceDetailStateDock({
                 accessibilityRole="text"
                 numberOfLines={1}
                 adjustsFontSizeToFit
-                minimumFontScale={0.85}
+                minimumFontScale={0.7}
               >
                 {value}
+              </Text>
+            ) : null}
+            {valueEquivalent ? (
+              <Text
+                style={[styles.valueEquivalent, { color: colors.textMuted }]}
+                numberOfLines={1}
+              >
+                {valueEquivalent}
               </Text>
             ) : null}
             {valueLabel ? (
@@ -347,6 +369,9 @@ export function CommerceDetailStateDock({
                         ? colors.textMuted
                         : colors.textSecondary },
                   ]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.75}
                 >
                   {secondaryAction.label}
                 </Text>
@@ -395,6 +420,9 @@ export function CommerceDetailStateDock({
                           ? colors.textInverse
                           : colors.textPrimary },
                   ]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.75}
                   onLayout={(e) => {
                     const w = e.nativeEvent.layout.width;
                     if (w > 0) setPrimaryLabelWidth(w);
@@ -471,14 +499,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    flexShrink: 0,
-    minWidth: 84 },
+    // The value cluster must yield space to the action cluster: it
+    // grows into whatever remains and shrinks below its intrinsic
+    // width so a long price can never push the CTA off the right
+    // edge. The action cluster stays flexShrink:0 — the primary
+    // action is never squeezed.
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0 },
   // Text cluster inside the value cluster — holds value, label, subtitle.
   // Needed so the thumbnail sits to the left and text stacks vertically.
+  // flex:1 bounds the text width so numberOfLines + adjustsFontSizeToFit
+  // on the value can actually take effect.
   valueTextCluster: {
     flexDirection: 'column',
     gap: 2,
-    flexShrink: 0 },
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0 },
   // Product thumbnail — tokenized via CommerceLayout.dockThumbnailSize.
   // Radius.md (8px) matches the primary action radius for visual coherence.
   thumbnail: {
@@ -493,6 +531,15 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.priceList.lineHeight,
     fontFamily: TypographyV2.priceList.fontFamily,
     letterSpacing: TypographyV2.priceList.letterSpacing,
+    fontVariant: ['tabular-nums'] },
+  // Subordinate conversion line — the fiat/1ZE equivalent demoted
+  // beneath the primary value. Same quiet caption grammar as the
+  // shipping hint.
+  valueEquivalent: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     fontVariant: ['tabular-nums'] },
   // Strikethrough original price — quiet, muted, shown above current
   // value when a discount is active. Depop/eBay pattern.

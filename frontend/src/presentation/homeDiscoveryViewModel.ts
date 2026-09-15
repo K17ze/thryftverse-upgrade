@@ -68,6 +68,21 @@ export interface HomeDiscoveryItemVM {
   /** Seller display info for Following-mode context. */
   sellerUsername?: string | null;
   sellerAvatar?: string | null;
+  /**
+   * Paid-placement marker — true only when the backend stamped this unit as
+   * a promoted ("Sponsored") slot. The card never infers sponsorship.
+   */
+  promoted?: boolean;
+  /**
+   * Server-generated disclosure label (e.g. "Sponsored") — rendered verbatim
+   * only when present; never synthesised from `promoted` or `isBumped`.
+   */
+  disclosure?: string | null;
+  /**
+   * Promotion id on promoted units — posted to /promotions/:id/click on
+   * tap-through so seller stats count real taps. Organic tiles never carry it.
+   */
+  promotionId?: string | null;
 }
 
 // ============================================================================
@@ -309,6 +324,11 @@ export function toHomeDiscoveryItemVM(
     isVideo,
     sellerUsername: listing.seller?.username ?? null,
     sellerAvatar: listing.seller?.avatar ?? null,
+    // Paid placement — fail-closed: only units the server stamped promoted
+    // carry the flag, the verbatim disclosure and the click-tracking id.
+    promoted: listing.promoted === true ? true : undefined,
+    disclosure: listing.promoted === true ? (listing.disclosure ?? null) : undefined,
+    promotionId: listing.promoted === true ? (listing.promotionId ?? null) : undefined,
   };
 }
 

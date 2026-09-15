@@ -93,6 +93,24 @@ export interface DiscoveryListingSummary {
   views?: number;
   /** Whether the listing is bumped/boosted. */
   isBumped?: boolean;
+  /**
+   * Paid-placement marker — true only when the backend stamped this summary
+   * as a promoted ("Sponsored") slot. The client never infers sponsorship;
+   * absent/undefined means organic.
+   */
+  promoted?: boolean;
+  /**
+   * Server-generated disclosure label for a paid placement (e.g.
+   * "Sponsored"). Rendered verbatim only when present — the client must not
+   * synthesise this label from `promoted`, `isBumped`, or any local state.
+   */
+  disclosure?: string | null;
+  /**
+   * Promotion id for paid-placement units — present only when `promoted` is
+   * true. The client posts it to /promotions/:id/click on tap-through so
+   * seller stats count real taps; organic units never carry it.
+   */
+  promotionId?: string | null;
   /** Whether the listing is sold. */
   isSold?: boolean;
   /** Listing lifecycle status. */
@@ -146,6 +164,12 @@ export interface ListingLike {
   likes: number | null;
   views?: number;
   isBumped?: boolean;
+  /** Server-stamped paid-placement flag (see DiscoveryListingSummary). */
+  promoted?: boolean;
+  /** Server-generated disclosure label — pass through verbatim, never invent. */
+  disclosure?: string | null;
+  /** Promotion id on promoted units — posted to /promotions/:id/click on tap. */
+  promotionId?: string | null;
   isSold?: boolean;
   status?: string | null;
   sellerId: string;
@@ -192,6 +216,9 @@ export function mapListingToDiscoverySummary(
     likes: source.likes ?? null,
     views: source.views,
     isBumped: source.isBumped,
+    promoted: source.promoted === true ? true : undefined,
+    disclosure: source.promoted === true ? (source.disclosure ?? null) : undefined,
+    promotionId: source.promoted === true ? (source.promotionId ?? null) : undefined,
     isSold: source.isSold,
     status: (source.status as DiscoveryListingSummary['status']) ?? undefined,
     sellerId: source.sellerId,

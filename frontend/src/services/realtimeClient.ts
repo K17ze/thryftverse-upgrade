@@ -58,6 +58,11 @@ export const CHAT_MESSAGE_UNSAVED_EVENT = 'chat.message.unsaved';
 /** P0.7: Read receipt. */
 export const CHAT_MESSAGE_READ_EVENT = 'chat.message.read';
 
+/** Poll vote/unvote — carries the post-change `voteCounts` plus the voter's
+ *  identity and full vote set so every member's PollMessageBubble converges
+ *  live without a message refetch. */
+export const CHAT_POLL_VOTED_EVENT = 'chat.poll.voted';
+
 /** Group identity updated — emitted when an admin changes the group name,
  *  avatar, cover photo, or description. Other participants must merge this
  *  into their local store so the chat header and info screen stay current
@@ -115,6 +120,18 @@ export interface ChatMessageCreatedPayload {
   /** Save-in-chat shared state — present only when non-empty. */
   savedBy?: string[];
   savedAt?: string | null;
+  /** Poll snapshot for poll-type messages (see backend serializer — the
+   *  `chat_polls` row joined at send/read time). */
+  poll?: {
+    id: string;
+    question: string;
+    options: string[];
+    allowMultiple: boolean;
+    isAnonymous: boolean;
+    closesAt?: string;
+    voteCounts: number[];
+    myVotes: number[];
+  } | null;
 }
 
 /** Payload shape for `chat.message.deleted`. */
@@ -133,6 +150,12 @@ export interface ChatMessageEditedPayload {
   editVersion: number;
   editedAt: string | null;
   actorUserId: string;
+  /** Offer snapshot — present when the "edit" is a commerce metadata sync
+   *  (offer status flip emitted by offerChatCards.syncOfferChatCardStatus),
+   *  not a body edit. Consumers must not flag `isEdited` for these. */
+  offer?: ChatMessageCreatedPayload['offer'] | null;
+  /** Full post-sync metadata — carried alongside `offer` for completeness. */
+  metadata?: Record<string, unknown>;
 }
 
 /** Payload shape for `chat.reaction.added` / `chat.reaction.removed`. */
@@ -168,6 +191,22 @@ export interface ChatTypingUpdatePayload {
   conversationId: string;
   userId: string;
   isTyping: boolean;
+}
+
+/** Payload shape for `chat.poll.voted` — emitted on both vote and unvote so
+ *  every member's PollMessageBubble converges without a refetch. */
+export interface ChatPollVotedPayload {
+  conversationId: string;
+  messageId: string;
+  pollId: string;
+  /** Post-change per-option vote totals. Absent on legacy payloads. */
+  voteCounts?: number[];
+  userId: string;
+  optionIndex?: number;
+  action?: 'added' | 'removed';
+  /** The voter's full post-change vote set — lets the voter's other devices
+   *  sync `myVotes` verbatim (single-vote polls replace the whole set). */
+  voterVotes?: number[];
 }
 
 /** Payload shape for `chat.group.identity.updated`. Mirrors the backend
@@ -299,6 +338,9 @@ export function realtimePayloadToMessage(
       : typeof meta.mediaUri === 'string'
         ? meta.mediaUri
         : undefined;
+  // Poster still for video media — mediaUri may be an HLS playlist that no
+  // image loader can decode; bubbles/grids render this instead.
+  const posterUri = typeof meta.posterUri === 'string' ? meta.posterUri : undefined;
 
   let type: ConversationMessage['type'];
   if (commerceState) {
@@ -339,6 +381,7 @@ export function realtimePayloadToMessage(
     type,
     sender: isCurrentUser ? 'me' : payload.senderType === 'system' ? 'system' : 'other',
     mediaUri,
+    posterUri,
     mediaType:
       !isVoice && (meta.mediaType === 'image' || meta.mediaType === 'video')
         ? (meta.mediaType as 'image' | 'video')
@@ -402,6 +445,9 @@ export function realtimePayloadToMessage(
     replyToMessageId: payload.replyToMessageId ?? undefined,
     // Order lifecycle snapshot — populated only for `commerce_state` cards.
     commerceState,
+    // Poll snapshot — populated only for poll messages; live counts are
+    // patched by `chat.poll.voted` events afterwards.
+    poll: payload.poll ?? undefined,
   };
 }
 
@@ -476,6 +522,7 @@ export function useTypingUsers(conversationId: string | undefined): {
   const clearTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const ctx = useRealtimeSafe();
   const client = ctx?.client;
+  const selfId = useStore((s) => s.currentUser?.id);
 
   const topic = conversationId ? chatConversationTopic(conversationId) : null;
 
@@ -494,6 +541,9 @@ export function useTypingUsers(conversationId: string | undefined): {
       }
       const userId = payload.userId;
       if (!userId) return;
+      // Never surface our own typing echo — the backend excludes the actor
+      // from fan-out; this is the belt-filter for stale/duplicate delivery.
+      if (selfId && userId === selfId) return;
 
       if (payload.isTyping) {
         setTypingUserIds((prev) => prev.includes(userId) ? prev : [...prev, userId]);
@@ -525,9 +575,15 @@ export function useTypingUsers(conversationId: string | undefined): {
       clearTimersRef.current.clear();
       setTypingUserIds([]);
     };
-  }, [client, topic, conversationId]);
+  }, [client, topic, conversationId, selfId]);
 
-  return { typingUserIds, isTyping: typingUserIds.length > 0 };
+  // Belt at the render boundary too: a self-echo that arrives while the
+  // store is still hydrating (selfId === null) bypasses the event-time
+  // filter above — re-filtering here evicts it as soon as selfId resolves.
+  const filteredTypingUserIds = selfId
+    ? typingUserIds.filter((id) => id !== selfId)
+    : typingUserIds;
+  return { typingUserIds: filteredTypingUserIds, isTyping: filteredTypingUserIds.length > 0 };
 }
 
 // ── Inbox-wide message event hook ───────────────────────────────────
@@ -827,6 +883,9 @@ export function useChatMessageEditedEvent(
     editVersion: number;
     editedAt: string | null;
     editedBy: string;
+    /** Present on commerce metadata syncs (offer status flips) — not a body
+     *  edit; consumers must not flag `isEdited` when this is set. */
+    offer?: ChatMessageCreatedPayload['offer'] | null;
   }) => void,
 ): void {
   const handlerRef = useRef(onEdited);
@@ -850,7 +909,44 @@ export function useChatMessageEditedEvent(
         editVersion: payload.editVersion,
         editedAt: payload.editedAt,
         editedBy: payload.actorUserId,
+        offer: payload.offer ?? undefined,
       });
+    });
+
+    return () => {
+      unsubscribe();
+      client.unsubscribe([topic]);
+    };
+  }, [client, topic]);
+}
+
+// ── Poll vote event hook ────────────────────────────────────────────
+
+/**
+ * useChatPollVotedEvent — subscribe to `chat.poll.voted` events for a single
+ * conversation. Emitted by the backend on both vote and unvote; the payload
+ * carries the post-change `voteCounts`, the voter's identity, and the
+ * voter's full vote set (`voterVotes`) so every member's PollMessageBubble
+ * converges live without a message refetch.
+ */
+export function useChatPollVotedEvent(
+  conversationId: string | undefined,
+  onVoted: (event: ChatPollVotedPayload) => void,
+): void {
+  const handlerRef = useRef(onVoted);
+  handlerRef.current = onVoted;
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
+
+  const topic = conversationId ? chatConversationTopic(conversationId) : null;
+
+  useEffect(() => {
+    if (!topic || !client) return;
+
+    client.subscribe([topic]);
+    const unsubscribe = client.on<ChatPollVotedPayload>(topic, (envelope) => {
+      if (envelope.type !== CHAT_POLL_VOTED_EVENT) return;
+      handlerRef.current(envelope.payload);
     });
 
     return () => {

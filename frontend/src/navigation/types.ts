@@ -220,7 +220,19 @@ export type RootStackParamList = {
   SellerEarnings: undefined;
   WalletConvert: undefined;
   WalletHistory: undefined;
-  MyOrders: undefined;
+  /**
+   * Orders ledger — optional deep-link scope. `tab` selects the rail
+   * ('selling' scopes to seller-side orders); `classification` pre-applies
+   * the same filter the orders filter sheet offers ('needs_action' is the
+   * seller "orders to ship" view). Both mirror MyOrdersScreen's own
+   * state — no values exist here that the screen cannot express.
+   */
+  MyOrders:
+    | {
+        tab?: 'all' | 'buying' | 'selling' | 'completed';
+        classification?: 'all' | 'needs_action' | 'active' | 'completed' | 'cancelled';
+      }
+    | undefined;
 
   // ── Settings & Account ──
   Personalisation: { fromOnboarding?: boolean } | undefined;

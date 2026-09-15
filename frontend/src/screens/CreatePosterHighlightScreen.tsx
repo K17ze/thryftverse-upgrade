@@ -77,6 +77,7 @@ export default function CreatePosterHighlightScreen({ navigation, route }: Props
       key: string;
       frameId: string;
       mediaUrl: string | null;
+      posterUrl: string | null;
       caption: string;
       mediaType: string;
       backgroundColor: string | null;
@@ -89,6 +90,7 @@ export default function CreatePosterHighlightScreen({ navigation, route }: Props
           key: `${story.id}-${frame.id}`,
           frameId: frame.id,
           mediaUrl: frame.mediaUrl,
+          posterUrl: frame.posterUrl ?? null,
           caption: frame.caption || '',
           mediaType: frame.mediaType,
           backgroundColor: frame.backgroundColor,
@@ -203,9 +205,9 @@ export default function CreatePosterHighlightScreen({ navigation, route }: Props
         accessibilityState={{ selected: isSelected }}
       >
         <View style={[styles.thumb, isSelected && styles.thumbSelected, isCover && styles.thumbCover]}>
-          {item.mediaUrl ? (
+          {(item.posterUrl ?? (item.mediaType !== 'video' ? item.mediaUrl : null)) ? (
             <CachedImage
-              uri={item.mediaUrl}
+              uri={(item.posterUrl ?? item.mediaUrl) as string}
               style={styles.thumbImage}
               contentFit="cover"
               containerStyle={{ borderRadius: Radius.md, overflow: 'hidden' }}
@@ -333,9 +335,9 @@ export default function CreatePosterHighlightScreen({ navigation, route }: Props
             <Text style={styles.coverSectionLabel}>Cover</Text>
             <View style={styles.coverPreviewWrap}>
               <View style={styles.coverPreview}>
-                {coverFrame.mediaUrl ? (
+                {(coverFrame.posterUrl ?? (coverFrame.mediaType !== 'video' ? coverFrame.mediaUrl : null)) ? (
                   <CachedImage
-                    uri={coverFrame.mediaUrl}
+                    uri={(coverFrame.posterUrl ?? coverFrame.mediaUrl) as string}
                     style={styles.coverPreviewImage}
                     contentFit="cover"
                     containerStyle={{ borderRadius: Radius.md, overflow: 'hidden' }}
@@ -373,9 +375,9 @@ export default function CreatePosterHighlightScreen({ navigation, route }: Props
                       accessibilityRole="button"
                       accessibilityState={{ selected: isCover }}
                     >
-                      {frame.mediaUrl ? (
+                      {(frame.posterUrl ?? (frame.mediaType !== 'video' ? frame.mediaUrl : null)) ? (
                         <CachedImage
-                          uri={frame.mediaUrl}
+                          uri={(frame.posterUrl ?? frame.mediaUrl) as string}
                           style={styles.coverThumb}
                           contentFit="cover"
                           containerStyle={{ borderRadius: Radius.sm, overflow: 'hidden' }}

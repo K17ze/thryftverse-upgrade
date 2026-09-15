@@ -28,35 +28,36 @@ import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { makeStableId } from '../../utils/createStableId';
-import { useCreator } from '../CreatorContext';
+import { useCreator } from '../studio/CreatorContext';
 import type { CreatorInitialMedia, NativeStackNavigationProp, RootStackParamList } from '../../navigation/types';
-import type { CreatorLayer } from '../composition';
-import { computeLookLayout, LOOK_DEFAULT_ASPECT_RATIO, safeValidateDocument } from '../composition';
+import type { CreatorLayer } from '../core/projectStore/composition';
+import { computeLookLayout, LOOK_DEFAULT_ASPECT_RATIO, safeValidateDocument } from '../core/projectStore/composition';
 import { layerTypeLabel } from '../shared/layerUtils';
-import { CreatorCanvas } from '../CreatorCanvas';
-import { LayerFloatingMenu, type LayerFloatingMenuAction } from '../LayerFloatingMenu';
-import { InstantCutSheet } from '../InstantCutSheet';
-import { CreatorLayersSheet } from '../CreatorLayersSheet';
-import { CreatorPublishSheet } from '../CreatorPublishSheet';
-import { CreatorSettingsSheet } from '../CreatorSettingsSheet';
-import { CreatorAssetPicker, type AssetPickerMode } from '../CreatorAssetPicker';
-import { CreatorTemplateBrowser } from '../CreatorTemplateBrowser';
-import { CreatorPreviewOverlay } from '../CreatorPreviewOverlay';
-import { CreatorEntryScreen } from '../CreatorEntryScreen';
-import { CreatorEntryEditorCrossfade, type CreatorContentTransform } from '../CreatorEntryEditorCrossfade';
-import { CreatorCropSheet } from '../CreatorCropSheet';
-import { CreatorCutoutSheet } from '../CreatorCutoutSheet';
+import { CreatorCanvas } from '../studio/CreatorCanvas';
+import { LayerFloatingMenu, type LayerFloatingMenuAction } from '../surfaces/LayerFloatingMenu';
+import { InstantCutSheet } from '../surfaces/InstantCutSheet';
+import { CreatorLayersSheet } from '../surfaces/CreatorLayersSheet';
+import { CreatorPublishSheet } from '../publish/CreatorPublishSheet';
+import { CreatorSettingsSheet } from '../surfaces/CreatorSettingsSheet';
+import { CreatorAssetPicker, type AssetPickerMode } from '../surfaces/CreatorAssetPicker';
+import { CreatorTemplateBrowser } from '../surfaces/CreatorTemplateBrowser';
+import { CreatorPreviewOverlay } from '../surfaces/CreatorPreviewOverlay';
+import { CreatorEntryScreen } from '../studio/CreatorEntryScreen';
+import { CreatorEntryEditorCrossfade, type CreatorContentTransform } from '../studio/CreatorEntryEditorCrossfade';
+import { CreatorCropSheet } from '../surfaces/CreatorCropSheet';
+import { CreatorCutoutSheet } from '../surfaces/CreatorCutoutSheet';
 import { CutoutPreviewSheet } from '../surfaces/CutoutPreviewSheet';
 import { AccessibilityMoveSheet } from '../surfaces/AccessibilityMoveSheet';
 import { AccessibilityZOrderSheet, type ZOrderLayer } from '../surfaces/AccessibilityZOrderSheet';
 import { cutoutService, type CutoutResult } from '../core/cutout/CutoutService';
-import { PressScale } from '../CreatorAnimations';
+import { PressScale } from '../shared/CreatorAnimations';
+import { safeZoneInsets } from '../shared/safeZone';
 import type { CaptureViewport } from '../capture/CaptureViewport';
 import { InlineTextEditor } from '../tools/text/InlineTextEditor';
 import { TEXT_STYLE_PRESETS } from '../tools/text/textStylePresets';
 import { TrashZone } from '../surfaces/TrashZone';
 import { BackgroundSheet } from './BackgroundSheet';
-import type { CreatorBackground } from '../composition';
+import type { CreatorBackground } from '../core/projectStore/composition';
 import { OverflowItem } from '../studio/OverflowMenu';
 import { LookSourceTray, SourceTrayPeek } from './LookSourceTray';
 import { ContextToolRail } from '../surfaces/ContextToolRail';
@@ -78,25 +79,25 @@ import {
 import { LayoutPreviewRail } from './layout/LayoutPreviewRail';
 import { autoCompose } from './layout/autoCompose';
 import type { AssetTransform, LayoutPreview, LayoutId } from './layout/layoutTypes';
-// LookAutoLayout icon bar removed — LayoutPreviewRail is the single
+// LookAutoLayout icon bar removed â€” LayoutPreviewRail is the single
 // layout surface now (one engine, one coordinate convention, one commit path).
 import { useHaptic } from '../../hooks/useHaptic';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { Motion } from '../../theme/motionTokens';
 import { ConfirmationSheet } from '../../components/ConfirmationSheet';
 import { fetchLookByIdFromApi } from '../../services/looksApi';
-import { lookToDocument } from '../viewerAdapters';
-import type { CreatorTemplate } from '../templates';
+import { lookToDocument } from '../export/viewerAdapters';
+import type { CreatorTemplate } from '../studio/templates';
 import { useLookEffects } from './useLookEffects';
 import { useBackendData } from '../../context/BackendDataContext';
 import { useLookMultiSelect } from './useLookMultiSelect';
 import { deriveLookToolContext, buildLookToolGroups } from './lookToolRailConfig';
 import { lookEditorReducer, initialLookEditorState, type LookEditorAction } from './lookEditorState';
 
-// ── Look Composer V3 — Collage-Native Workspace ─────────────────────
+// â”€â”€ Look Composer V3 â€” Collage-Native Workspace â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Per spec 10 (Look Architecture V3):
 //   Poster is temporal. Look is spatial.
-//   This screen is a dedicated collage-native workspace — NOT a shared
+//   This screen is a dedicated collage-native workspace â€” NOT a shared
 //   editor with isPoster/isLook branching. The mental model is direct
 //   object manipulation on a 4:5 canvas.
 //
@@ -106,12 +107,12 @@ import { lookEditorReducer, initialLookEditorState, type LookEditorAction } from
 //   - direct object manipulation via CreatorCanvas
 //
 // Default bottom actions (spec 10):
-//   Add item · Add photo · Crop · Text · Layout
+//   Add item Â· Add photo Â· Crop Â· Text Â· Layout
 //
 // Selected object produces a context toolbar (not a permanent dock).
 // Global Layers remains More/Advanced.
 
-// ── Bottom surface state machine ──────────────────────────────────────
+// â”€â”€ Bottom surface state machine â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Per spec: "One lower interaction surface at a time." The Look screen
 // shows exactly ONE bottom surface at any moment. The default is 'tools'
 // (the ContextToolRail). Tapping "Items" / "Layout" / "Effects" swaps
@@ -120,12 +121,12 @@ import { lookEditorReducer, initialLookEditorState, type LookEditorAction } from
 // LayoutPreviewRail, LookSourceTray) competing with the canvas.
 type BottomSurface = 'tools' | 'items' | 'layout' | 'effects' | null;
 
-// ── Text color cycling palette ──────────────────────────────────────
-// ── SlideUpSurface — wraps a bottom surface with a slide-up entrance ──
+// â”€â”€ Text color cycling palette â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€ SlideUpSurface â€” wraps a bottom surface with a slide-up entrance â”€â”€
 // Per spec: "Reanimated for surface transitions (slide in/out)." Each
 // bottom surface (items, layout, effects) slides up from below when it
 // mounts. Under reduced motion, the transition is instant.
-// Per §5.14: entrance uses timing (ease-out), not spring — spring is
+// Per Â§5.14: entrance uses timing (ease-out), not spring â€” spring is
 // reserved for direct manipulation or mode selection.
 function SlideUpSurface({ children }: { children: React.ReactNode }) {
   const motionConfig = useMotionConfig();
@@ -146,7 +147,7 @@ function SlideUpSurface({ children }: { children: React.ReactNode }) {
 type LookComposerRouteProp = RouteProp<RootStackParamList, 'CreatorStudio'>;
 type LookComposerNavProp = NativeStackNavigationProp<RootStackParamList, 'CreatorStudio'>;
 
-// ── Global overflow groups ──────────────────────────────────────────
+// â”€â”€ Global overflow groups â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Grouped like the Poster composer's overflow sheet: Canvas, Project,
 // Accessibility, Help. Context tools render above these.
 type GlobalOverflowItem = {
@@ -178,7 +179,6 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     clearMultiSelect,
     deleteMultiSelected,
     commitMultiLayerTransform,
-    updateLayersLive,
     bringSelectedToFront,
     sendSelectedToBack,
     canUndo,
@@ -209,7 +209,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     recoverCrashedProject,
     dismissRecovery } = useCreator();
 
-  // ── Sheet / overlay state (single state machine) ──────────────────
+  // â”€â”€ Sheet / overlay state (single state machine) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Replaces 13 parallel `show*` booleans with one discriminated-union
   // mode. Only one non-idle mode is active at a time. `showSafeZone` and
   // `showOverflow` are orthogonal (can be on in any mode).
@@ -222,7 +222,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
   const showOverflow = state.showOverflow;
   const [pickerMode, setPickerMode] = useState<AssetPickerMode | null>(null);
   const [editingLayer, setEditingLayer] = useState<CreatorLayer | null>(null);
-  // ── In-place text content editing (Snapchat/Instagram pattern) ──────
+  // â”€â”€ In-place text content editing (Snapchat/Instagram pattern) â”€â”€â”€â”€â”€â”€
   // When set, an InlineTextEditor renders AT the text layer's position on
   // the canvas so the user can type in place. The bottom contextual rail
   // remains the single styling surface for the selected text layer.
@@ -230,12 +230,12 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
   const [entryComplete, setEntryComplete] = useState(Boolean(route.params?.startBlank));
   const [cropTarget, setCropTarget] = useState<CreatorLayer | null>(null);
   const [cutoutTarget, setCutoutTarget] = useState<CreatorLayer | null>(null);
-  // ── Text color picker sheet (local state) ──
+  // â”€â”€ Text color picker sheet (local state) â”€â”€
   // Opens a CreatorColorPicker sheet for the selected text layer's fill
   // color. Replaces the former hardcoded palette cycling.
   const [showTextColorPicker, setShowTextColorPicker] = useState(false);
   const { recents: colorRecents, commitColor: commitRecentColor } = useCreatorColorHistory();
-  // ── True cutout (segmentation) state ───────────────────────────────
+  // â”€â”€ True cutout (segmentation) state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // `cutoutPreviewTarget` holds the media layer being previewed in the
   // CutoutPreviewSheet (true segmentation). `cutoutSupported` is probed
   // once on mount so the tool label can honestly say "Cutout" when the
@@ -244,8 +244,8 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
   const [cutoutSupported, setCutoutSupported] = useState(false);
   useEffect(() => {
     // Check if the Skia-based brush cutout is available. This is an
-    // honest capability check — brushRefinement is true when Skia is
-    // linked (AGENTS.md §11: never fake a capability).
+    // honest capability check â€” brushRefinement is true when Skia is
+    // linked (AGENTS.md Â§11: never fake a capability).
     const cap = cutoutService.getCapability();
     setCutoutSupported(cap.brushRefinement);
   }, []);
@@ -253,7 +253,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
   const [isLoadingSourceLook, setIsLoadingSourceLook] = useState(false);
   const [sourceLookError, setSourceLookError] = useState(false);
   const [sourceLookRetryNonce, setSourceLookRetryNonce] = useState(0);
-  // ── Bottom surface state machine ───────────────────────────────────
+  // â”€â”€ Bottom surface state machine â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Controls which bottom surface is visible. Only ONE renders at a time.
   // 'tools' = ContextToolRail (default). 'items' = Items drawer.
   // 'layout' = Layout panel. 'effects' = Effects panel (incl. AI effects).
@@ -267,27 +267,27 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     onConfirm: () => void;
   }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
-  // ── Multi-select mode ──────────────────────────────────────────────
+  // â”€â”€ Multi-select mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Long-press enters multi-select mode. In multi-select, tapping a layer
   // toggles it in the selection set. Dragging any selected layer moves all
   // selected layers together. A "Done" button and selection count badge
   // appear at the top. Tapping empty canvas exits multi-select.
   const [multiSelectMode, setMultiSelectMode] = useState(false);
-  // Align sub-menu state — toggles a small horizontal align picker above
+  // Align sub-menu state â€” toggles a small horizontal align picker above
   // the tool rail in multi-select mode. (Now part of the editor state machine.)
-  // ── Canvas layout ref for drag-to-canvas coordinate conversion ──
+  // â”€â”€ Canvas layout ref for drag-to-canvas coordinate conversion â”€â”€
   // Stores the canvas container's screen-space position so drag-to-canvas
-  // drop coordinates can be converted to normalized (0–1) canvas coordinates.
+  // drop coordinates can be converted to normalized (0â€“1) canvas coordinates.
   const canvasLayoutRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
   const handleCanvasLayout = useCallback((e: LayoutChangeEvent) => {
     canvasLayoutRef.current = e.nativeEvent.layout;
   }, []);
 
-  // ── State machine dispatch wrappers ────────────────────────────────
+  // â”€â”€ State machine dispatch wrappers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // These preserve the (show: boolean) => void signatures expected by
   // lookToolRailConfig and sheet onClose handlers, while routing through
   // the reducer for mutually-exclusive modes. A single factory generates
-  // all the mode-switching wrappers — one pattern, not 10 copies.
+  // all the mode-switching wrappers â€” one pattern, not 10 copies.
   const modeSetter = useCallback(
     (enterAction: LookEditorAction) => (show: boolean) => {
       dispatch(show ? enterAction : { type: 'BACK' });
@@ -314,7 +314,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
   const sourceDocumentId = route.params?.sourceDocumentId;
   const sourceMode = route.params?.sourceMode ?? 'edit';
 
-  // ── Edit mode: load an existing published look for editing ────────
+  // â”€â”€ Edit mode: load an existing published look for editing â”€â”€â”€â”€â”€â”€â”€â”€
   // When sourceDocumentId refers to a published look (not a local draft),
   // fetch it from the API and load it into the canvas as the working
   // document. The remix path in CreatorContext handles local-draft
@@ -384,17 +384,17 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
 
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
-  // ── Canvas geometry ───────────────────────────────────────────────
+  // â”€â”€ Canvas geometry â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // The authored coordinate space is always the document's canvas aspect
   // ratio (4:5 for looks). The edit surface letterboxes around this
-  // authored space — it never mutates the document geometry to match the
+  // authored space â€” it never mutates the document geometry to match the
   // physical screen. Full-bleed media is achieved by the media layer's
   // contentFit="cover" filling the authored canvas, not by changing the
   // canvas dimensions. This ensures editor, viewer, thumbnail, and export
   // all use the same coordinate space.
   const canvasWidth = screenWidth;
   const canvasHeight = useMemo(() => {
-    // Always use the authored aspect ratio — never the physical screen ratio.
+    // Always use the authored aspect ratio â€” never the physical screen ratio.
     return Math.floor(screenWidth / document.canvas.aspectRatio);
   }, [screenWidth, document.canvas.aspectRatio]);
 
@@ -404,7 +404,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     return Math.floor((screenHeight - canvasHeight) / 2);
   }, [canvasHeight, screenHeight]);
 
-  // ── Truthful back — offers Save Draft / Discard / Keep Editing ─────
+  // â”€â”€ Truthful back â€” offers Save Draft / Discard / Keep Editing â”€â”€â”€â”€â”€
   const handleBack = useCallback(() => {
     if (!isDirty) {
       navigation.goBack();
@@ -432,7 +432,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
       } });
   }, [isDirty, navigation, saveDraft]);
 
-  // ── Periodic autosave (30s debounce) ────────────────────────────────
+  // â”€â”€ Periodic autosave (30s debounce) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // The Look composer previously only saved on back press. A crash between
   // edits would lose everything. This 30-second debounce timer fires
   // whenever the document is dirty, saving silently in the background.
@@ -443,13 +443,13 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     if (!isDirty) return;
     const timer = setTimeout(() => {
       saveDraft().catch(() => {
-        // Silent failure — the user will be prompted to save on back
+        // Silent failure â€” the user will be prompted to save on back
       });
     }, 30_000);
     return () => clearTimeout(timer);
   }, [isDirty, saveDraft]);
 
-  // ── Multi-select: exit helper ──────────────────────────────────────
+  // â”€â”€ Multi-select: exit helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Defined early so it's available to the keyboard shortcut handler and
   // hardware back button handler below.
   const exitMultiSelect = useCallback(() => {
@@ -458,7 +458,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     haptic.light();
   }, [selectLayers, haptic]);
 
-  // Multi-select bulk delete — defined early for keyboard shortcut access.
+  // Multi-select bulk delete â€” defined early for keyboard shortcut access.
   const handleMultiDelete = useCallback(() => {
     haptic.medium();
     haptic.warning();
@@ -466,7 +466,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     setMultiSelectMode(false);
   }, [deleteMultiSelected, haptic]);
 
-  // ── Shared back-button priority cascade ─────────────────────────────
+  // â”€â”€ Shared back-button priority cascade â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Single source of truth for the "close topmost surface" priority order
   // used by BOTH the hardware back button (useFocusEffect) and the keyboard
   // Escape handler. Returns true if a surface was closed (caller should
@@ -515,7 +515,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     return () => window.removeEventListener('keydown', handler);
   }, [canUndo, canRedo, undo, redo, closeTopmostSurface, handleBack, multiSelectMode, selectedLayerIds, handleMultiDelete, selectedLayerId, removeLayer]);
 
-  // Hardware back button — intercept to close sheets first
+  // Hardware back button â€” intercept to close sheets first
   useFocusEffect(
     useCallback(() => {
       const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -542,7 +542,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     }
   }, [multiSelectMode, selectedLayerIds.length]);
 
-  // ── Reset bottom surface to 'tools' when the selection changes ──
+  // â”€â”€ Reset bottom surface to 'tools' when the selection changes â”€â”€
   // When the user selects or deselects a layer, any open bottom surface
   // (items / layout / effects) closes so the ContextToolRail can adapt to
   // the new selection context. This ensures only one surface is visible
@@ -580,13 +580,13 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
 
   const selectedLayer = page?.layers.find((l) => l.id === selectedLayerId) ?? null;
 
-  // ── Floating z-order / context menu for the selected layer ──
+  // â”€â”€ Floating z-order / context menu for the selected layer â”€â”€
   // Appears above the selected layer's top edge. Provides quick access
   // to z-order, duplicate, lock, and delete without opening the Layers
-  // sheet (§3.3 gap: "z-order hidden in a sheet").
+  // sheet (Â§3.3 gap: "z-order hidden in a sheet").
   const [floatingMenuVisible, setFloatingMenuVisible] = useState(false);
 
-  // ── Instant Cut sheet (Snapchat Quick Cut equivalent) ──
+  // â”€â”€ Instant Cut sheet (Snapchat Quick Cut equivalent) â”€â”€
   // One-tap auto-compose + publish path for the casual majority.
   const [instantCutVisible, setInstantCutVisible] = useState(false);
 
@@ -683,9 +683,9 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
   const chromeFadeStyle = useAnimatedStyle(() => ({
     opacity: chromeOpacitySV.value }));
 
-  // ── Entry screen media handling ────────────────────────────────────
+  // â”€â”€ Entry screen media handling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // For Look, each asset becomes an auto-arranged media layer on page 0
-  // via computeLookLayout — never N identical full-bleed overlaps.
+  // via computeLookLayout â€” never N identical full-bleed overlaps.
   const [entryPinnedUri, setEntryPinnedUri] = useState<string | null>(null);
   const [entryPinnedKind, setEntryPinnedKind] = useState<'image' | 'video'>('image');
   const [entryPinnedDestination, setEntryPinnedDestination] = useState<{
@@ -694,7 +694,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     width: number;
     height: number;
   } | null>(null);
-  // Source content transform — the camera viewport guide rect captured at
+  // Source content transform â€” the camera viewport guide rect captured at
   // the moment of capture. The transition animates the pinned media from
   // this frame to the editor canvas frame, preserving the focal point.
   const [entrySourceTransform, setEntrySourceTransform] = useState<CreatorContentTransform | null>(null);
@@ -768,7 +768,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     navigation.goBack();
   }, [navigation]);
 
-  // ── Object action handlers (context toolbar) ───────────────────────
+  // â”€â”€ Object action handlers (context toolbar) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleDeleteLayer = useCallback((id: string) => {
     haptic.medium();
     removeLayer(id);
@@ -792,19 +792,19 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     else if (layer.type === 'mention') setPickerMode('mention');
   }, []);
 
-  // Replace media — opens the asset picker to swap the photo
+  // Replace media â€” opens the asset picker to swap the photo
   const handleReplaceMedia = useCallback((layer: CreatorLayer) => {
     setEditingLayer(layer);
     setPickerMode('media');
   }, []);
 
-  // Link/change item — opens the product picker to link a marketplace listing
+  // Link/change item â€” opens the product picker to link a marketplace listing
   const handleLinkItem = useCallback((layer: CreatorLayer) => {
     setEditingLayer(layer);
     setPickerMode('product');
   }, []);
 
-  // ── Source tray: add item from closet/listings/search ──
+  // â”€â”€ Source tray: add item from closet/listings/search â”€â”€
   // Tapping an item in the items drawer adds it as a product tag layer
   // via addLookProduct. The tray stays open so the user can add multiple
   // items in quick succession.
@@ -821,10 +821,10 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
       snapshotPriceGbp: item.snapshotPriceGbp });
   }, [addLookProduct]);
 
-  // ── Source tray: drag-to-canvas product drop ──
+  // â”€â”€ Source tray: drag-to-canvas product drop â”€â”€
   // When the user drags a product from the source tray and releases over
   // the canvas, the product is placed at the drop position (normalized to
-  // 0–1 canvas coordinates). Falls back to center placement if the canvas
+  // 0â€“1 canvas coordinates). Falls back to center placement if the canvas
   // layout hasn't been measured yet.
   const handleDropProduct = useCallback((item: {
     listingId: string;
@@ -849,7 +849,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     haptic.light();
   }, [addLookProduct, haptic]);
 
-  // ── Bottom surface switching ──────────────────────────────────────
+  // â”€â”€ Bottom surface switching â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Each handler swaps the bottom surface to the requested panel and fires
   // a haptic. Closing a panel returns to 'tools' (the ContextToolRail).
   const handleOpenItems = useCallback(() => {
@@ -877,11 +877,11 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     setPickerMode('text');
   }, [haptic]);
 
-  // Cutout from the default toolbar — opens true subject segmentation
+  // Cutout from the default toolbar â€” opens true subject segmentation
   // (CutoutPreviewSheet) when the native backend is available, or falls
   // back to the manual crop workflow (CreatorCutoutSheet) when it is not.
-  // Per spec 07 §7: true cutout uses segmentation, not a trace bounding
-  // box. Per AGENTS.md §11: never fake a cutout success.
+  // Per spec 07 Â§7: true cutout uses segmentation, not a trace bounding
+  // box. Per AGENTS.md Â§11: never fake a cutout success.
   const handleCutoutAction = useCallback(() => {
     if (!selectedLayer || selectedLayer.type !== 'media') {
       haptic.light();
@@ -889,18 +889,18 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     }
     haptic.medium();
     if (cutoutSupported) {
-      // Native segmentation available — open the true cutout preview.
+      // Native segmentation available â€” open the true cutout preview.
       setCutoutPreviewTarget(selectedLayer);
     } else {
-      // Fallback — manual rectangular crop (truthful label is "Crop").
+      // Fallback â€” manual rectangular crop (truthful label is "Crop").
       setCutoutTarget(selectedLayer);
     }
   }, [selectedLayer, haptic, cutoutSupported]);
 
-  // ── Adjust action for selected media ────────────────────────────────
+  // â”€â”€ Adjust action for selected media â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Opens the effects bottom surface which contains the AdjustPanel
   // (fine-tuning sliders for brightness, contrast, saturation, etc).
-  // This is the correct surface for "Adjust" — not the cutout sheet
+  // This is the correct surface for "Adjust" â€” not the cutout sheet
   // (which is background removal, a separate tool in overflow).
   const handleAdjustAction = useCallback(() => {
     if (!selectedLayer || selectedLayer.type !== 'media') {
@@ -911,7 +911,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     setBottomSurface('effects');
   }, [selectedLayer, haptic]);
 
-  // ── Effects action for selected media ───────────────────────────────
+  // â”€â”€ Effects action for selected media â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Opens the effects bottom surface for the selected media layer. The
   // surface shows the EffectPreviewRail (filter thumbnails using the
   // layer's own media as the preview source), AI effects, and the
@@ -926,7 +926,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     setBottomSurface('effects');
   }, [selectedLayer, haptic]);
 
-  // ── Effects sheet — derived state & handlers (extracted to useLookEffects) ──
+  // â”€â”€ Effects sheet â€” derived state & handlers (extracted to useLookEffects) â”€â”€
   const {
     selectedMediaLayer,
     effectsSourceUri,
@@ -946,7 +946,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     handleAIEffectApply,
     handleAIEffectRemove } = useLookEffects(selectedLayer, updateLayer, updateLayerLive);
 
-  // ── Text editing actions ────────────────────────────────────────────
+  // â”€â”€ Text editing actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleTextEditAction = useCallback(() => {
     if (!selectedLayer || selectedLayer.type !== 'text') {
       haptic.light();
@@ -955,7 +955,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     handleEditLayer(selectedLayer);
   }, [selectedLayer, handleEditLayer, haptic]);
 
-  // Font tool — cycles through curated text style presets with haptic
+  // Font tool â€” cycles through curated text style presets with haptic
   // feedback. Each tap advances to the next preset and updates the layer
   // in real-time so the user sees the change immediately.
   const handleTextFontAction = useCallback(() => {
@@ -973,7 +973,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     }, 'Change font style');
   }, [selectedLayer, updateLayer, haptic]);
 
-  // Color tool — opens the CreatorColorPicker sheet for the selected
+  // Color tool â€” opens the CreatorColorPicker sheet for the selected
   // text layer. Replaces the former hardcoded palette cycling.
   const handleTextColorAction = useCallback(() => {
     if (!selectedLayer || selectedLayer.type !== 'text') {
@@ -984,7 +984,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     setShowTextColorPicker(true);
   }, [selectedLayer, haptic]);
 
-  // Align tool — cycles left → center → right → left. The tool rail
+  // Align tool â€” cycles left â†’ center â†’ right â†’ left. The tool rail
   // glyph updates to reflect the current alignment.
   const handleTextAlignAction = useCallback(() => {
     if (!selectedLayer || selectedLayer.type !== 'text') {
@@ -1000,10 +1000,9 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     }, 'Change alignment');
   }, [selectedLayer, updateLayer, haptic]);
 
-  // ── Multi-select operations (extracted to useLookMultiSelect) ──────
+  // â”€â”€ Multi-select operations (extracted to useLookMultiSelect) â”€â”€â”€â”€â”€â”€
   const {
     handleMultiDragStart,
-    handleMultiDragUpdate,
     handleMultiDragCommit,
     handleOverlapCycle,
     handleMultiFront,
@@ -1013,7 +1012,6 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     selectedLayerIds,
     multiSelectMode,
     {
-      updateLayersLive,
       commitMultiLayerTransform,
       bringSelectedToFront,
       sendSelectedToBack,
@@ -1022,7 +1020,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     haptic,
   );
 
-  // ── Context-sensitive tool rail (extracted to lookToolRailConfig) ──
+  // â”€â”€ Context-sensitive tool rail (extracted to lookToolRailConfig) â”€â”€
   // The rail adapts its visible tool set based on the current selection
   // state. Tool group definitions and accessibility labels live in
   // lookToolRailConfig.ts; the screen passes its handlers and state
@@ -1094,8 +1092,8 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     ],
   );
 
-  // ── Context overflow tools ──────────────────────────────────────────
-  // Resolved from the active context's tool group — these are the
+  // â”€â”€ Context overflow tools â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Resolved from the active context's tool group â€” these are the
   // selection-specific actions (Effects, Cutout, Front, Back, Duplicate,
   // Delete, etc.) that belong in the "More" menu ahead of the global
   // editor tools. Each tool's `onPress` is already wired in
@@ -1105,11 +1103,11 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     [activeToolContext, toolGroups],
   );
 
-  // ── Draft export (Edits parity: export without posting) ────────────
+  // â”€â”€ Draft export (Edits parity: export without posting) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Renders the look to an image via the export service (native module
   // or JS Skia fallback) and saves to the camera roll. The control is
   // omitted when the service can't render the content (e.g. a video
-  // media layer without the native module — JS Skia decodes stills
+  // media layer without the native module â€” JS Skia decodes stills
   // only), never shown as a fake affordance.
   const canExportDraft = isImageExportAvailable(document, page?.id);
   const isExportingRef = useRef(false);
@@ -1140,8 +1138,8 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     }
   }, [document, page, haptic, show]);
 
-  // ── Global overflow groups ──────────────────────────────────────────
-  // Canvas / Project / Accessibility / Help — grouped like the Poster
+  // â”€â”€ Global overflow groups â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Canvas / Project / Accessibility / Help â€” grouped like the Poster
   // composer's overflow sheet. Rendered after the context tools and one
   // hairline divider.
   const globalOverflowGroups: GlobalOverflowGroup[] = [
@@ -1179,7 +1177,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     },
   ];
 
-  // Dedup safety net — a context tool never repeats a global tool (by id or label).
+  // Dedup safety net â€” a context tool never repeats a global tool (by id or label).
   const globalToolKeys = new Set<string>();
   for (const group of globalOverflowGroups) {
     for (const item of group.items) {
@@ -1196,7 +1194,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     return true;
   });
 
-  // ── Layout preview rail (autoCompose) ───────────────────────────────
+  // â”€â”€ Layout preview rail (autoCompose) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Replaces the blind "Try arrangement" cycling button. When the user
   // has 2+ media assets on the canvas, the LayoutPreviewRail shows real
   // preview thumbnails computed by autoCompose. Selecting a layout
@@ -1206,7 +1204,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     [page],
   );
 
-  // ── Canvas listing IDs for source tray dedup (§8.3) ────────────────
+  // â”€â”€ Canvas listing IDs for source tray dedup (Â§8.3) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // The set of listing IDs already on the canvas as product layers.
   // Passed to LookSourceTray so items already on canvas show a dedup
   // indicator and offer "Add again" instead of silent duplication.
@@ -1220,7 +1218,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     return ids;
   }, [page]);
 
-  // ── Source tray peek thumbnails (§8.3: source tray peeking from bottom) ──
+  // â”€â”€ Source tray peek thumbnails (Â§8.3: source tray peeking from bottom) â”€â”€
   // A few recent listing thumbnails shown as a thin peek strip above the
   // tool rail, making the source tray always visible as "creative supply."
   const { listings: backendListings } = useBackendData();
@@ -1285,7 +1283,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     haptic.selection();
   }, [allLayouts, mediaLayers, commitLayerTransform, transformToLayerUpdate, haptic]);
 
-  // Temporary preview state — long-press shows the layout without
+  // Temporary preview state â€” long-press shows the layout without
   // committing. We store the preview layout id and revert on release.
   const [previewLayoutId, setPreviewLayoutId] = useState<LayoutId | null>(null);
 
@@ -1301,8 +1299,8 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
   // history. Uses updateLayer (no history entry) for a live preview.
   // NOTE: mediaLayers is intentionally excluded from the dependency array.
   // Including it would cause an infinite loop: the effect calls updateLayer
-  // → document changes → page changes → mediaLayers changes (new array from
-  // .filter()) → effect re-runs → updateLayer again → ...
+  // â†’ document changes â†’ page changes â†’ mediaLayers changes (new array from
+  // .filter()) â†’ effect re-runs â†’ updateLayer again â†’ ...
   // Instead, we read mediaLayers via a ref so the effect only re-runs when
   // previewLayoutId or allLayouts changes (the actual triggers for a
   // preview application).
@@ -1320,7 +1318,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [previewLayoutId, allLayouts, updateLayer, transformToLayerUpdate]);
 
-  // ── Camera → Editor crossfade ─────────────────────────────────────
+  // â”€â”€ Camera â†’ Editor crossfade â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Per the human-flow reconstruction spec, the captured/selected media
   // should appear to stay in place while editor chrome fades in around it.
   // Both the entry (camera) and editor are mounted simultaneously during a
@@ -1342,7 +1340,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
 
   const editorContent = (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* ── Crash recovery banner ────────────────────────────────────── */}
+      {/* â”€â”€ Crash recovery banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {/* When a pending crash journal entry is detected, show a recovery
           prompt at the top of the composer. The user can recover the
           last saved project or dismiss the prompt. */}
@@ -1368,7 +1366,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
           </PressScale>
         </View>
       )}
-      {/* ── Neutral workspace canvas ─────────────────────────────────── */}
+      {/* â”€â”€ Neutral workspace canvas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {/* Look is spatial. The 4:5 canvas sits in a neutral dark workspace
           with breathing room. Media objects are directly manipulated. */}
       <View style={styles.canvasStage}>
@@ -1391,7 +1389,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
               }
               const l = page?.layers.find((x) => x.id === layerId);
               if (l?.type === 'text') {
-                // In-place content editing — the TextInput renders AT the
+                // In-place content editing â€” the TextInput renders AT the
                 // layer's position on the canvas. The canvas stays visible.
                 setEditingTextLayerId(l.id);
               }
@@ -1403,34 +1401,33 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
               selectLayers([layerId]);
             }}
             onMultiDragStart={handleMultiDragStart}
-            onMultiDragUpdate={handleMultiDragUpdate}
             onMultiDragCommit={handleMultiDragCommit}
             onLayerDelete={removeLayer}
             onTrashZoneEnter={() => {
               // Medium haptic when the dragged layer enters the trash
-              // zone — "you're about to delete" feedback.
+              // zone â€” "you're about to delete" feedback.
               haptic.medium();
               haptic.warning();
             }}
             showSafeZone={showSafeZone}
-            safeZoneTop={insets.top + 56}
-            safeZoneBottom={insets.bottom + 120}
+            safeZoneTop={safeZoneInsets(insets).top}
+            safeZoneBottom={safeZoneInsets(insets).bottom}
             manipulationActiveSV={manipulationActiveSV}
             onManipulationChange={setIsManipulating}
             isInTrashZoneSV={isInTrashZoneSV}
           />
 
-          {/* Drag-to-trash overlay — fades in during layer drag, highlights
+          {/* Drag-to-trash overlay â€” fades in during layer drag, highlights
               when the dragged layer enters the bottom zone. Visual-only. */}
           <TrashZone
             manipulationActiveSV={manipulationActiveSV}
             isInTrashZoneSV={isInTrashZoneSV}
           />
 
-          {/* ── Floating z-order / context menu for the selected layer ── */}
+          {/* â”€â”€ Floating z-order / context menu for the selected layer â”€â”€ */}
           {/* Appears above the selected layer. Provides quick access to
               z-order, duplicate, lock, and delete without opening the
-              Layers sheet (§3.3 gap: "z-order hidden in a sheet"). */}
+              Layers sheet (Â§3.3 gap: "z-order hidden in a sheet"). */}
           <LayerFloatingMenu
             visible={floatingMenuVisible && !isManipulating}
             actions={floatingMenuActions}
@@ -1438,7 +1435,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
             y={floatingMenuPos.y}
           />
 
-          {/* ── In-place text content editor (Snapchat/Instagram pattern) ── */}
+          {/* â”€â”€ In-place text content editor (Snapchat/Instagram pattern) â”€â”€ */}
           {/* Renders a TextInput AT the text layer's position so the user can
               type in place while the canvas stays visible. The modal
               TextEditorSheet is reserved for advanced styling (More button). */}
@@ -1471,7 +1468,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
           </View>
         )}
 
-        {/* Source look error banner — minimal, one line + retry button */}
+        {/* Source look error banner â€” minimal, one line + retry button */}
         {sourceLookError && !isLoadingSourceLook && (
           <View style={[styles.sourceLookErrorBanner, { backgroundColor: colors.surfaceAlt }]}>
             <Text style={[styles.sourceLookErrorText, { color: colors.danger }]}>
@@ -1490,16 +1487,16 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
           </View>
         )}
 
-        {/* Canvas dim overlay — emphasises selected layers in multi-select */}
+        {/* Canvas dim overlay â€” emphasises selected layers in multi-select */}
         {multiSelectMode && (
           <View style={styles.canvasDimOverlay} pointerEvents="none" />
         )}
       </View>
 
-      {/* ── Top bar — minimal, neutral ────────────────────────────────── */}
+      {/* â”€â”€ Top bar â€” minimal, neutral â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {/* Look uses a neutral top bar (not the full-bleed gradient scrim
-          of Poster). Close · Undo · Redo on the left; Next on the right.
-          During selection: Done · object label · More. */}
+          of Poster). Close Â· Undo Â· Redo on the left; Next on the right.
+          During selection: Done Â· object label Â· More. */}
       <Reanimated.View style={[styles.topBarContainer, { paddingTop: insets.top }, chromeFadeStyle]} pointerEvents={isManipulating ? 'none' : 'auto'}>
         <LinearGradient
           colors={Scrim.top.colors}
@@ -1645,20 +1642,20 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
         </View>
       </Reanimated.View>
 
-      {/* ── Bottom surface state machine ────────────────────────────────── */}
+      {/* â”€â”€ Bottom surface state machine â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {/* Per spec: "One lower interaction surface at a time." Only ONE of
           the following surfaces renders at any moment. The default is
           'tools' (the ContextToolRail). Tapping Items / Layout / Effects
           swaps the surface; closing returns to 'tools'. No permanent
           rails compete with the canvas. */}
 
-      {/* ── 'tools' surface: ContextToolRail ── */}
+      {/* â”€â”€ 'tools' surface: ContextToolRail â”€â”€ */}
       {/* The rail adapts its visible tool set based on the current selection
-          state. No selection → look-default (Add, Items, Text, Layout, More).
-          Media selected → look-media-selected (Replace, Crop, Auto, Adjust, Effects).
-          Text selected → look-text-selected (Edit, Font, Color, Align).
-          Product selected → look-product-selected (Item, Tag Style, Price, Duplicate).
-          Each tool's onPress calls an EXISTING handler — no new capabilities. */}
+          state. No selection â†’ look-default (Add, Items, Text, Layout, More).
+          Media selected â†’ look-media-selected (Replace, Crop, Auto, Adjust, Effects).
+          Text selected â†’ look-text-selected (Edit, Font, Color, Align).
+          Product selected â†’ look-product-selected (Item, Tag Style, Price, Duplicate).
+          Each tool's onPress calls an EXISTING handler â€” no new capabilities. */}
       {bottomSurface === 'tools' && (
         <Reanimated.View style={[styles.bottomBarContainer, { paddingBottom: insets.bottom }, chromeFadeStyle]} pointerEvents={isManipulating ? 'none' : 'auto'}>
           <LinearGradient
@@ -1668,7 +1665,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
             pointerEvents="none"
           />
           <View style={styles.bottomBar}>
-            {/* ── Source tray peek strip (§8.3: source tray peeking from bottom) ── */}
+            {/* â”€â”€ Source tray peek strip (Â§8.3: source tray peeking from bottom) â”€â”€ */}
             {/* A thin strip of item thumbnails above the tool rail, making
                 the source tray always visible as "creative supply." Tapping
                 opens the full items surface. Only shown when no layer is
@@ -1689,7 +1686,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
         </Reanimated.View>
       )}
 
-      {/* ── 'items' surface: Items drawer (LookSourceTray expanded) ── */}
+      {/* â”€â”€ 'items' surface: Items drawer (LookSourceTray expanded) â”€â”€ */}
       {/* Replaces the tools rail temporarily. Shows Closet / Listings /
           Search tabs. Tapping an item adds it to the canvas. Closing
           the drawer returns to 'tools'. The LookSourceTray's peek bar
@@ -1710,8 +1707,8 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
         </SlideUpSurface>
       )}
 
-      {/* ── 'layout' surface: Layout panel ── */}
-      {/* Layout panel — single surface using LayoutPreviewRail with real
+      {/* â”€â”€ 'layout' surface: Layout panel â”€â”€ */}
+      {/* Layout panel â€” single surface using LayoutPreviewRail with real
           preview thumbnails. The legacy icon-only LookAutoLayoutBar has
           been removed: the thumbnail rail IS the style picker now, which
           is the Instagram/Canva pattern. One engine, one coordinate
@@ -1746,11 +1743,11 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
         </SlideUpSurface>
       )}
 
-      {/* ── 'effects' surface: Effects panel (includes AI effects) ── */}
+      {/* â”€â”€ 'effects' surface: Effects panel (includes AI effects) â”€â”€ */}
       {/* Replaces the tools rail temporarily. Shows the EffectPreviewRail
           (filter thumbnails), an AI Effects entry button, the AutoAdjust
           button, and the AdjustPanel (fine-tuning sliders). AI effects
-          are folded in here — no separate AI destination. */}
+          are folded in here â€” no separate AI destination. */}
       {bottomSurface === 'effects' && selectedMediaLayer && (
         <SlideUpSurface>
           <View style={[styles.bottomBarContainer, { paddingBottom: insets.bottom }]}>
@@ -1784,10 +1781,10 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
                 onIntensityChange={handleEffectIntensityChange}
                 onIntensityCommit={handleEffectIntensityCommit}
               />
-              {/* ── Style effects entry (folded under Effects) ── */}
+              {/* â”€â”€ Style effects entry (folded under Effects) â”€â”€ */}
               {/* Opens the AIEffectBrowserSheet from within the effects
-                  panel. Effects are not a separate destination — they
-                  live inside the effects surface. §11: label says "Styles"
+                  panel. Effects are not a separate destination â€” they
+                  live inside the effects surface. Â§11: label says "Styles"
                   not "AI" because the current effect set is deterministic
                   filters, not ML/generative. */}
               <PressScale
@@ -1823,7 +1820,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
         </SlideUpSurface>
       )}
 
-      {/* ── 'effects' surface empty state ── */}
+      {/* â”€â”€ 'effects' surface empty state â”€â”€ */}
       {/* When the user opens Effects without a media layer selected, show a
           minimal prompt instead of the full effects panel. */}
       {bottomSurface === 'effects' && !selectedMediaLayer && (
@@ -1856,7 +1853,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
         </SlideUpSurface>
       )}
 
-      {/* ── Overflow menu (context tools, then grouped global tools) ────── */}
+      {/* â”€â”€ Overflow menu (context tools, then grouped global tools) â”€â”€â”€â”€â”€â”€ */}
       {showOverflow && (
         <View style={[styles.overflowContainer, { top: insets.top + 48 }]}>
           <View
@@ -1903,7 +1900,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
         </View>
       )}
 
-      {/* ── Sheets ────────────────────────────────────────────────────── */}
+      {/* â”€â”€ Sheets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {state.mode.type === 'previewing' && (
         <CreatorPreviewOverlay
           visible={true}
@@ -1917,7 +1914,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
       <CreatorLayersSheet visible={state.mode.type === 'arrangingLayers'} onClose={() => setShowLayers(false)} />
       <CreatorPublishSheet visible={state.mode.type === 'publishing'} onClose={() => setShowPublish(false)} editingLookId={editingLookId ?? undefined} />
 
-      {/* ── Instant Cut sheet (Snapchat Quick Cut equivalent) ── */}
+      {/* â”€â”€ Instant Cut sheet (Snapchat Quick Cut equivalent) â”€â”€ */}
       {/* One-tap auto-compose + publish path. Opens from the source tray
           when the user has 2+ media assets selected. */}
       <InstantCutSheet
@@ -1926,7 +1923,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
         onClose={() => setInstantCutVisible(false)}
         onPublish={(layoutId) => {
           // Commit the user's selected layout to the document before
-          // entering the publish flow — otherwise the choice is silently
+          // entering the publish flow â€” otherwise the choice is silently
           // discarded (the sheet only previews, it never applies).
           handleLayoutSelect(layoutId as LayoutId);
           setInstantCutVisible(false);
@@ -1941,7 +1938,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
       />
       <CreatorSettingsSheet visible={state.mode.type === 'settings'} onClose={() => setShowSettings(false)} />
       <HelpShortcutsSheet visible={state.mode.type === 'help'} onClose={() => setShowHelp(false)} />
-      {/* ── Background picker sheet ─────────────────────────────────── */}
+      {/* â”€â”€ Background picker sheet â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {/* Bottom sheet for picking the canvas background (solid, gradient,
           blurred photo, or image). On confirm, commits the selected
           background to document.canvas.background via updateCanvas. */}
@@ -1955,7 +1952,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
         }}
         onClose={() => setShowBackground(false)}
       />
-      {/* ── AI Effects browser sheet ──────────────────────────────────── */}
+      {/* â”€â”€ AI Effects browser sheet â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {/* Bottom sheet for browsing and applying photo effects from
           the AIEffectRegistry. Each effect is a composed stack of real
           Skia render nodes. When applied, the effect is stored as a
@@ -1968,7 +1965,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
         onRemove={handleAIEffectRemove}
         onClose={() => setShowAIEffects(false)}
       />
-      {/* ── Accessibility sheets (drag alternatives) ─────────────────── */}
+      {/* â”€â”€ Accessibility sheets (drag alternatives) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {/* Per spec 09: keyboard/button-based alternatives for users who
           cannot perform drag gestures. onMove wires to updateLayer;
           onReorder wires to reorderLayer. */}
@@ -2001,11 +1998,11 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
           setDocument(doc);
         }}
       />
-      {/* In-canvas crop overlay — non-destructive crop handles rendered
-          directly over the canvas (spec 07 §6, spec 04 §1). The
+      {/* In-canvas crop overlay â€” non-destructive crop handles rendered
+          directly over the canvas (spec 07 Â§6, spec 04 Â§1). The
           composition remains visible while the user adjusts the crop. */}
-      {/* Crop sheet — legacy fallback for aspect-ratio crop (kept as
-          fallback per spec — not removed). */}
+      {/* Crop sheet â€” legacy fallback for aspect-ratio crop (kept as
+          fallback per spec â€” not removed). */}
       {cropTarget && cropTarget.type === 'media' && (
         <CreatorCropSheet
           visible={!!cropTarget}
@@ -2035,10 +2032,10 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
           }}
         />
       )}
-      {/* Crop sheet — manual rectangular cropping as a real visual operation.
+      {/* Crop sheet â€” manual rectangular cropping as a real visual operation.
           Per spec 10: if high-quality removal is unavailable, keep the
           original media rectangle. NEVER pretend a cutout succeeded.
-          The CreatorCutoutSheet handles this truthfully — it only calls
+          The CreatorCutoutSheet handles this truthfully â€” it only calls
           onCutoutComplete with a real result URI. */}
       {cutoutTarget && cutoutTarget.type === 'media' && (
         <CreatorCutoutSheet
@@ -2060,7 +2057,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
           }}
         />
       )}
-      {/* True cutout preview sheet — native subject segmentation.
+      {/* True cutout preview sheet â€” native subject segmentation.
           Opens when the user taps "Cutout" and the native backend is
           available. Shows a before/after preview over a checkerboard.
           On confirm, replaces the media URI with the transparent PNG
@@ -2074,7 +2071,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
             if (cutoutPreviewTarget && cutoutPreviewTarget.type === 'media') {
               // Replace the media layer's URI with the transparent PNG
               // result. Store the maskRef id on the layer so the render
-              // pipeline can composite with the alpha mask (spec 07 §7).
+              // pipeline can composite with the alpha mask (spec 07 Â§7).
               updateLayer(cutoutPreviewTarget.id, {
                 type: 'media',
                 payload: {
@@ -2087,7 +2084,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
           }}
         />
       )}
-      {/* ── Text color picker sheet ──────────────────────────────────── */}
+      {/* â”€â”€ Text color picker sheet â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {showTextColorPicker && selectedLayer && selectedLayer.type === 'text' && (
         <CreatorColorPicker
           color={selectedLayer.payload.fill ?? fromHexString(selectedLayer.payload.textColor ?? '#ffffff') ?? { space: 'srgb', r: 1, g: 1, b: 1, a: 1 }}
@@ -2127,7 +2124,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
         onClose={() => { setPickerMode(null); setEditingLayer(null); }}
         onAddLayer={(layer) => {
           if (editingLayer) {
-            // Editing existing layer — for media, use swapLookAsset to
+            // Editing existing layer â€” for media, use swapLookAsset to
             // preserve position (stable position when replacing media
             // per spec 10). For other types, update in place.
             if (editingLayer.type === 'media' && layer.type === 'media') {
@@ -2136,7 +2133,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
                 mediaType: layer.payload.mediaType,
                 contentFit: layer.payload.contentFit });
             } else if (editingLayer.type === 'product' && layer.type === 'product') {
-              // Link/change item — update the product layer in place
+              // Link/change item â€” update the product layer in place
               updateLayer(editingLayer.id, layer, 'Change item');
             } else {
               updateLayer(editingLayer.id, layer, 'Edit object');
@@ -2175,7 +2172,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
   );
 }
 
-// ── LayoutPanel — bottom surface for layout selection ─────────────────
+// â”€â”€ LayoutPanel â€” bottom surface for layout selection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // A panel with a header (title + Done button) that wraps the
 // LookAutoLayoutBar and LayoutPreviewRail. Replaces the ContextToolRail
 // temporarily when the user taps "Layout".
@@ -2214,7 +2211,7 @@ const LayoutPanel = React.memo(function LayoutPanel({
   );
 });
 
-// ── Screen — wraps in CreatorProvider (shared state) ────────────────
+// â”€â”€ Screen â€” wraps in CreatorProvider (shared state) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // This is the full screen with CreatorProvider. It is used by the
 // CreatorStudioScreen wrapper in CreatorStudioShell which branches on
 // document type. The wrapper there passes route params to this component.
@@ -2229,7 +2226,7 @@ export function LookComposerScreen(props: {
   onEntryTypeChange: (type: 'look' | 'poster' | 'moodboard') => void;
 }) {
   // Lazy import to avoid circular dependency at module load time
-  const { CreatorProvider } = require('../CreatorContext');
+  const { CreatorProvider } = require('../studio/CreatorContext');
   return (
     <CreatorProvider
       initialType="look"
@@ -2247,9 +2244,9 @@ export function LookComposerScreen(props: {
 const styles = StyleSheet.create({
   container: {
     flex: 1 },
-  // ── Crash recovery banner (inline notification, not a card) ──
+  // â”€â”€ Crash recovery banner (inline notification, not a card) â”€â”€
   // Calm but noticeable: soft tinted background + left accent bar gives the
-  // banner proper visual hierarchy (accent → text → action) without heavy chrome.
+  // banner proper visual hierarchy (accent â†’ text â†’ action) without heavy chrome.
   recoveryBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2271,10 +2268,10 @@ const styles = StyleSheet.create({
   recoveryDismiss: {
     padding: 8,
     marginLeft: 4 },
-  // ── Canvas stage ──
+  // â”€â”€ Canvas stage â”€â”€
   canvasStage: {
     ...StyleSheet.absoluteFill },
-  // ── Top bar ──
+  // â”€â”€ Top bar â”€â”€
   topBarContainer: {
     position: 'absolute',
     top: 0,
@@ -2336,13 +2333,13 @@ const styles = StyleSheet.create({
     borderRadius: RadiusRoleValue.pillAvatar,
     marginLeft: -Space.xs,
     marginTop: Space.xs + 2 },
-  // ── Canvas loading overlay ──
+  // â”€â”€ Canvas loading overlay â”€â”€
   canvasLoadingOverlay: {
     ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 50 },
-  // ── Source look error banner ──
+  // â”€â”€ Source look error banner â”€â”€
   sourceLookErrorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2363,7 +2360,7 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.bodyStrong.size,
     lineHeight: TypographyV2.bodyStrong.lineHeight,
     fontWeight: TypographyV2.bodyStrong.weight },
-  // ── AI Effects button (inline button, not a card) ──
+  // â”€â”€ AI Effects button (inline button, not a card) â”€â”€
   // Premium button: subtle tinted fill + refined hairline border + radius.
   aiEffectsBtn: {
     flexDirection: 'row',
@@ -2379,7 +2376,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: FontSize.body,
     fontFamily: FontFamily.semibold },
-  // ── Bottom surface container (shared by all surfaces) ──
+  // â”€â”€ Bottom surface container (shared by all surfaces) â”€â”€
   bottomBarContainer: {
     position: 'absolute',
     bottom: 0,
@@ -2390,7 +2387,7 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs },
   toolRail: {
     flex: 1 },
-  // ── Layout panel ──
+  // â”€â”€ Layout panel â”€â”€
   layoutPanel: {
     maxHeight: '70%' },
   layoutPanelContent: {
@@ -2401,13 +2398,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: Space.lg,
     paddingHorizontal: Space.md },
-  // ── Effects surface ──
+  // â”€â”€ Effects surface â”€â”€
   effectsSurface: {
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     maxHeight: '85%',
     overflow: 'hidden' },
-  // ── Overflow menu ──
+  // â”€â”€ Overflow menu â”€â”€
   overflowContainer: {
     position: 'absolute',
     right: Space.sm,
@@ -2429,7 +2426,7 @@ const styles = StyleSheet.create({
     gap: Space.sm },
   overflowGroupGap: {
     marginTop: Space.md },
-  // ── Effects surface (shared header styles) ──
+  // â”€â”€ Effects surface (shared header styles) â”€â”€
   effectsSheetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2463,7 +2460,7 @@ const styles = StyleSheet.create({
   effectsAutoRow: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs },
-  // ── Multi-select ──
+  // â”€â”€ Multi-select â”€â”€
   selectionCountBadge: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs,

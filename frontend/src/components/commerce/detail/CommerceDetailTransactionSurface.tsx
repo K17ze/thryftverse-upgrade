@@ -32,6 +32,11 @@ import type { CommerceDetailFamily } from './types';
 export interface CommerceDetailTransactionSurfaceProps {
   /** Optional dominant value (current bid / last trade / price). */
   primaryValue?: string;
+  /** Optional subordinate conversion line rendered beneath the primary
+   *  value (e.g. the local-currency equivalent of a 1ZE amount). Kept
+   *  small and muted so the conversion never renders at headline size
+   *  or wraps the headline row. */
+  primaryEquivalent?: string;
   /** Optional label for the dominant value (e.g. "Current bid"). */
   primaryLabel?: string;
   /** Optional secondary value line (e.g. "Minimum next bid £45"). */
@@ -62,6 +67,7 @@ export interface CommerceDetailTransactionSurfaceProps {
 
 export function CommerceDetailTransactionSurface({
   primaryValue,
+  primaryEquivalent,
   primaryLabel,
   secondaryValue,
   secondaryLabel,
@@ -104,11 +110,25 @@ export function CommerceDetailTransactionSurface({
             { color: colors.textPrimary },
           ]}
           accessibilityRole="text"
-          adjustsFontSizeToFit={family !== 'auction'}
-          minimumFontScale={0.78}
-          numberOfLines={family === 'auction' ? undefined : 1}
+          // Single line + shrink-to-fit for every family — the auction
+          // headline is the same size class as a hero price, and a
+          // wrapped multi-line price consumes the first viewport and
+          // crowds out the transaction state beside it.
+          adjustsFontSizeToFit
+          minimumFontScale={family === 'auction' ? 0.6 : 0.78}
+          numberOfLines={1}
+          maxFontSizeMultiplier={2}
         >
           {primaryValue}
+        </Text>
+      ) : null}
+      {primaryEquivalent ? (
+        <Text
+          style={[styles.primaryEquivalent, { color: colors.textMuted }]}
+          numberOfLines={1}
+          maxFontSizeMultiplier={2}
+        >
+          {primaryEquivalent}
         </Text>
       ) : null}
     </View>
@@ -207,7 +227,12 @@ const styles = StyleSheet.create({
   // label for horizontal space. The gap creates clear hierarchy.
   primaryRow: {
     flexDirection: 'column',
-    gap: Space.xs + 2 },
+    gap: Space.xs + 2,
+    // Bound the column inside the auction headline row so the value's
+    // shrink-to-fit has a width to fit into and the state aside is
+    // never pushed off-screen.
+    flexShrink: 1,
+    minWidth: 0 },
   primaryRowCoOwn: {
     gap: Space.xs + 2 },
   label: {
@@ -233,6 +258,15 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.priceList.size,
     lineHeight: TypographyV2.priceList.lineHeight,
     letterSpacing: -0.3 },
+  // Subordinate conversion line — the local-currency equivalent under
+  // the dominant value. Same demotion grammar as the auction value
+  // lockup (featured 28pt → local 14pt) and the Buy Now sheet's
+  // equivalent line.
+  primaryEquivalent: {
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    fontVariant: ['tabular-nums'] },
   auctionHeadline: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -242,6 +276,7 @@ const styles = StyleSheet.create({
   auctionAsideStacked: { alignItems: 'flex-start', paddingBottom: 0 },
   auctionHeadlineAside: {
     flexShrink: 1,
+    minWidth: 0,
     alignItems: 'flex-end',
     justifyContent: 'flex-end',
     paddingBottom: Space.xs },

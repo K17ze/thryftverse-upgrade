@@ -53,6 +53,9 @@ export interface LookMediaCarouselPage {
   id: string;
   uri: string;
   isVideo: boolean;
+  /** Still image shown until the video renders its first frame (HLS
+   *  sources take real time to buffer — a black viewport reads broken). */
+  posterUri?: string | null;
 }
 
 interface LookMediaCarouselProps {
@@ -329,6 +332,7 @@ const VideoPage = React.memo(function VideoPage({
   const [duration, setDuration] = useState(0);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [failed, setFailed] = useState(false);
+  const [firstFrameRendered, setFirstFrameRendered] = useState(false);
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userIsScrubbingRef = useRef(false);
 
@@ -526,7 +530,22 @@ const VideoPage = React.memo(function VideoPage({
         style={subComponentStyles.image}
         contentFit="contain"
         nativeControls={false}
+        onFirstFrameRender={() => setFirstFrameRendered(true)}
       />
+
+      {/* Still poster over the video until the first frame lands — HLS
+          sources buffer before rendering, and a black viewport reads
+          broken. */}
+      {item.posterUri && !firstFrameRendered && (
+        <ExpoImage
+          source={{ uri: item.posterUri }}
+          style={StyleSheet.absoluteFill}
+          contentFit="contain"
+          cachePolicy="memory-disk"
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        />
+      )}
 
       {/* Tap layer to toggle controls */}
       <Pressable

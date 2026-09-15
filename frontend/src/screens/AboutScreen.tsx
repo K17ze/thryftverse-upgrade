@@ -17,6 +17,8 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import * as StoreReview from 'expo-store-review';
+import Constants from 'expo-constants';
 
 import { Space, Radius } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
@@ -84,10 +86,25 @@ export default function AboutScreen({ navigation }: Props) {
 
   const handleRateApp = () => {
     haptic.light();
-    const url = Platform.OS === 'ios'
-      ? 'itms-apps://itunes.apple.com/app/id-thryftverse?action=write-review'
-      : 'market://details?id=com.thryftverse.app';
-    void handleOpenExternal(url);
+    // Native in-app review prompt first — no store URL needed. If unavailable
+    // (e.g. Expo Go, or the OS quota is exhausted), fall back to the store
+    // listing URL built from the real app identifiers — never a placeholder.
+    void (async () => {
+      try {
+        if (await StoreReview.isAvailableAsync()) {
+          await StoreReview.requestReview();
+          return;
+        }
+        const url = StoreReview.storeUrl();
+        if (url) {
+          await handleOpenExternal(url);
+        } else {
+          show('Ratings open once the app is listed on the store', 'info');
+        }
+      } catch {
+        show('Unable to open link', 'error');
+      }
+    })();
   };
 
   return (
@@ -112,7 +129,7 @@ export default function AboutScreen({ navigation }: Props) {
                 hitSlop={16}
               >
                 <Text maxFontSizeMultiplier={1.5} style={styles.brandVersion}>
-                  Version 1.0.0 (Build 2026.06.05)
+                  {`Version ${Constants.expoConfig?.version ?? '1.0.0'} (Build ${Constants.expoConfig?.ios?.buildNumber ?? Constants.expoConfig?.android?.versionCode ?? 'dev'})`}
                   {developerMode ? ' · Developer' : ''}
                 </Text>
               </AnimatedPressable>

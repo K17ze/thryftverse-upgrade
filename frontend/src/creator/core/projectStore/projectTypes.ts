@@ -11,7 +11,7 @@
  * the source of truth.
  */
 
-import type { CreatorDocument } from '../../composition';
+import type { CreatorDocument } from './composition';
 
 // ── Schema versioning ──────────────────────────────────────────────
 

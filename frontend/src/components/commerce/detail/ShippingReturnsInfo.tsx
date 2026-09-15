@@ -24,13 +24,14 @@ import { useFormattedPrice } from '../../../hooks/useFormattedPrice';
 import { CommerceDetailMetricRow } from './CommerceDetailMetricRow';
 import type { ListingCommerceContext } from '../../../platform/product';
 import type { SupportedCurrencyCode } from '../../../constants/currencies';
-import { formatShortDate } from '../../../utils/dateFormat';
 
 export interface ShippingReturnsInfoProps {
   commerce: ListingCommerceContext;
   /** Truthful backend flag — only render the carbon-neutral badge when true. */
   carbonNeutral?: boolean;
-  /** Optional restocking fee (GBP). When omitted, "No restocking fee" is shown. */
+  /** Optional restocking fee (GBP) from a real backend field. When
+   *  omitted the restocking row is not rendered — absence of data is
+   *  never rendered as "No restocking fee" (a fabricated claim). */
   restockingFeeGbp?: number | null;
 }
 
@@ -60,15 +61,6 @@ export function ShippingReturnsInfo({
     return 'Shipping calculated at checkout';
   })();
 
-  const deliveryWindow = (() => {
-    const start = commerce.estimatedDeliveryStart;
-    const end = commerce.estimatedDeliveryEnd;
-    if (!start && !end) return null;
-    const fmt = (iso: string) => formatShortDate(iso);
-    if (start && end) return `${fmt(start)}–${fmt(end)}`;
-    return fmt(start ?? end!);
-  })();
-
   const returnsLabel = commerce.returnPolicy
     ? commerce.returnPolicy.accepted === true
       ? commerce.returnPolicy.windowDays
@@ -76,16 +68,12 @@ export function ShippingReturnsInfo({
         : 'Returns accepted'
       : commerce.returnPolicy.accepted === false
         ? 'No returns'
-        : 'Confirmed at checkout'
+        // accepted === null — undetermined; prefer the server-authored
+        // summary, else the truthful checkout-confirmation fallback.
+        : commerce.returnPolicy.summary ?? 'Confirmed at checkout'
     : 'Confirmed at checkout';
 
-  const restockingLabel = restockingFeeGbp != null && restockingFeeGbp > 0
-    ? formatFromFiat(restockingFeeGbp, (commerce.currency || currencyCode) as SupportedCurrencyCode, { displayMode: 'fiat' })
-    : 'No restocking fee';
-
-  const summaryLine = [shippingCostLabel, deliveryWindow ? `Est. delivery: ${deliveryWindow}` : null]
-    .filter(Boolean)
-    .join(' · ');
+  const summaryLine = shippingCostLabel;
 
   return (
     <View style={styles.container}>
@@ -136,8 +124,8 @@ export function ShippingReturnsInfo({
           />
           <CommerceDetailMetricRow
             label="Estimated delivery"
-            value={deliveryWindow ?? 'Confirmed at checkout'}
-            muted={!deliveryWindow}
+            value="Confirmed at checkout"
+            muted
           />
           <CommerceDetailMetricRow
             label="Carrier"
@@ -162,11 +150,18 @@ export function ShippingReturnsInfo({
             value={returnsLabel}
             muted={!commerce.returnPolicy}
           />
-          <CommerceDetailMetricRow
-            label="Restocking fee"
-            value={restockingLabel}
-            muted={restockingFeeGbp == null}
-          />
+          {/* Restocking fee — only rendered when a real backend value
+              exists. An explicit 0 means "No restocking fee"; null means
+              unknown and the row is omitted rather than fabricating a
+              negative claim. */}
+          {restockingFeeGbp != null ? (
+            <CommerceDetailMetricRow
+              label="Restocking fee"
+              value={restockingFeeGbp > 0
+                ? formatFromFiat(restockingFeeGbp, (commerce.currency || currencyCode) as SupportedCurrencyCode, { displayMode: 'fiat' })
+                : 'No restocking fee'}
+            />
+          ) : null}
           {commerce.returnPolicy?.conditions ? (
             <Text style={[styles.conditions, { color: colors.textSecondary }]}>
               {commerce.returnPolicy.conditions}
@@ -214,7 +209,6 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.label.lineHeight,
     fontFamily: TypographyV2.label.fontFamily,
     letterSpacing: TypographyV2.label.letterSpacing,
-    textTransform: 'uppercase',
     paddingBottom: Space.xs },
   badgeRow: {
     flexDirection: 'row',

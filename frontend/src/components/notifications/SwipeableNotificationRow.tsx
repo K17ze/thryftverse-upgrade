@@ -15,7 +15,7 @@ import { CommerceNotificationRow } from './CommerceNotificationRow';
 import { AuctionNotificationRow } from './AuctionNotificationRow';
 import { FinancialNotificationRow } from './FinancialNotificationRow';
 import { SystemNotificationRow } from './SystemNotificationRow';
-import type { NotificationCard } from './notificationViewModels';
+import { resolveCardActionLabel, type NotificationCard } from './notificationViewModels';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -102,6 +102,10 @@ function SwipeableNotificationRowBase({
       const v2Event = item.v2Event;
       const inAttention = item.requiresAction;
       const onPress = () => onOpen(item);
+      // Quiet action affordance ("Dispatch now", "Review offer", "Respond") —
+      // only present when the event requires action and resolves a route.
+      // The press delegates to open: mark read, then follow the route.
+      const actionLabel = resolveCardActionLabel(item);
 
       switch (v2Event.semanticRole) {
         case 'social':
@@ -113,6 +117,8 @@ function SwipeableNotificationRowBase({
               aggregatedActors={item.aggregatedActors}
               inAttentionSection={inAttention}
               onPress={onPress}
+              actionLabel={actionLabel}
+              onActionPress={actionLabel ? onPress : undefined}
               onActorPress={
                 item.actorUserId
                   ? () => openProfile(navigation, item.actorUserId!, currentUserId)
@@ -128,6 +134,8 @@ function SwipeableNotificationRowBase({
               aggregatedCount={item.aggregatedCount}
               inAttentionSection={inAttention}
               onPress={onPress}
+              actionLabel={actionLabel}
+              onActionPress={actionLabel ? onPress : undefined}
             />
           );
         case 'auction':
@@ -149,6 +157,8 @@ function SwipeableNotificationRowBase({
               aggregatedCount={item.aggregatedCount}
               inAttentionSection={inAttention}
               onPress={onPress}
+              actionLabel={actionLabel}
+              onActionPress={actionLabel ? onPress : undefined}
             />
           );
         case 'system':
@@ -161,6 +171,8 @@ function SwipeableNotificationRowBase({
               inAttentionSection={inAttention}
               onPress={onPress}
               onAction={onPress}
+              actionLabel={actionLabel}
+              onActionPress={actionLabel ? onPress : undefined}
             />
           );
       }

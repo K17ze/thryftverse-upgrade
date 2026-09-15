@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  getWalletSnapshot,
+  getSellerWalletBalances,
   listPayoutAccounts,
   listPayoutRequests,
   type PayoutAccountPayload,
@@ -21,6 +21,8 @@ export interface UseWithdrawDataOptions {
 export function useWithdrawData({ userId }: UseWithdrawDataOptions) {
   const [availableBalance, setAvailableBalance] = useState(0);
   const [isHydratingBalance, setIsHydratingBalance] = useState(true);
+  const [balanceError, setBalanceError] = useState<string | null>(null);
+  const [balanceReloadNonce, setBalanceReloadNonce] = useState(0);
   const [payoutAccount, setPayoutAccount] = useState<PayoutAccountPayload | null>(null);
   const [countryCapabilities, setCountryCapabilities] = useState<UserCountryCapabilities | null>(null);
   const [withdrawals, setWithdrawals] = useState<PayoutRequestPayload[]>([]);
@@ -35,14 +37,19 @@ export function useWithdrawData({ userId }: UseWithdrawDataOptions) {
         return;
       }
       setIsHydratingBalance(true);
+      setBalanceError(null);
       try {
-        const snapshot = await getWalletSnapshot(userId);
+        // Ledger-backed balances — the wallet snapshot endpoint accepts a
+        // client-asserted blob, so it cannot be the source for money UI.
+        const balances = await getSellerWalletBalances(userId);
         if (!isCancelled) {
-          setAvailableBalance(snapshot.snapshot.availableGbp);
+          setAvailableBalance(balances.balances.availableGbp);
         }
       } catch {
         if (!isCancelled) {
-          setAvailableBalance(0);
+          // Honest failure — a fabricated £0 would hide real seller funds
+          // and invite the user to think their balance is gone.
+          setBalanceError('We could not load your available balance.');
         }
       } finally {
         if (!isCancelled) {
@@ -56,7 +63,7 @@ export function useWithdrawData({ userId }: UseWithdrawDataOptions) {
     return () => {
       isCancelled = true;
     };
-  }, [userId]);
+  }, [userId, balanceReloadNonce]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -157,6 +164,8 @@ export function useWithdrawData({ userId }: UseWithdrawDataOptions) {
     availableBalance,
     setAvailableBalance,
     isHydratingBalance,
+    balanceError,
+    reloadBalance: () => setBalanceReloadNonce((n) => n + 1),
     countryCapabilities,
     setCountryCapabilities,
     payoutAccount,

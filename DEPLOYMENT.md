@@ -333,6 +333,27 @@ MEDIA_PUBLICATION_GATE_ENABLED=true
 
 > **Key difference from local dev:** `S3_FORCE_PATH_STYLE` must be `false` for R2 (it was `true` for local MinIO). No code changes needed — this is only an env var.
 
+#### 6.5 Abort-incomplete-multipart lifecycle rule (required)
+
+The API sweeps expired `upload_multipart_sessions` rows and aborts their S3 uploads, but a crash between `CreateMultipartUpload` and the session-row insert leaves an S3 upload the sweep cannot see. A bucket-level rule is the backstop.
+
+- **R2 dashboard:** bucket → **Settings** → **Object lifecycle rules** → add rule: *Abort incomplete multipart uploads after 7 days* (matches `MULTIPART_SESSION_TTL_MS`; 8 days is also fine — the code tolerates either ordering via `NoSuchUpload`).
+- **S3 API equivalent:**
+  ```bash
+  aws s3api put-bucket-lifecycle-configuration \
+    --bucket thryftverse-media \
+    --endpoint-url "$S3_ENDPOINT" \
+    --lifecycle-configuration '{
+      "Rules": [{
+        "ID": "abort-incomplete-multipart-7d",
+        "Status": "Enabled",
+        "Filter": { "Prefix": "" },
+        "AbortIncompleteMultipartUpload": { "DaysAfterInitiation": 7 }
+      }]
+    }'
+  ```
+- Apply to **every** environment bucket (staging, `thryftverse-media-backup`, etc.). MinIO dev needs no rule — the in-process sweep handles it.
+
 ---
 
 ## 7. Email — Resend

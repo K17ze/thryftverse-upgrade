@@ -341,7 +341,9 @@ export default function HomeScreen() {
         if (!mounted) return;
         const lookItems = res.items.map((l) => ({
           id: l.id,
-          mediaUri: l.mediaUrl,
+          // Rail tiles are still images — video looks must use the poster,
+          // not the m3u8 playback URL.
+          mediaUri: l.mediaType === 'video' ? (l.posterUrl ?? l.mediaUrl) : l.mediaUrl,
           title: l.title,
           sellerUsername: l.creator.username ?? undefined,
           sellerAvatar: l.creator.avatar ?? undefined,

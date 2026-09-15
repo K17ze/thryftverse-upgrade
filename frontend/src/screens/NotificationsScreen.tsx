@@ -19,10 +19,14 @@ import {
   NotificationHeaderActions,
   QuietHoursBadge,
   NotificationsList } from '../components/notifications';
-import type { NotificationListItem } from '../components/notifications/notificationViewModels';
+import type { NotificationListItem, NotificationFilter } from '../components/notifications/notificationViewModels';
 import { useNotificationFeed, useNotificationActions } from '../hooks/notifications';
 import { Space } from '../theme/designTokens';
 type NavT = NativeStackNavigationProp<RootStackParamList>;
+
+// Server filter counts arrive after the first sync — until then each tab
+// renders with no badge rather than a fabricated zero count.
+const EMPTY_FILTER_COUNTS = {} as Record<NotificationFilter, number>;
 
 export default function NotificationsScreen() {
   const navigation = useNavigation<NavT>();
@@ -119,7 +123,7 @@ export default function NotificationsScreen() {
       {/* Primary filter tabs — pill-style, always visible */}
       <NotificationFilterTabs
         activeFilter={activeFilter}
-        filterCounts={filterCounts}
+        filterCounts={filterCounts ?? EMPTY_FILTER_COUNTS}
         onSelect={setActiveFilter}
       />
 
@@ -163,7 +167,7 @@ export default function NotificationsScreen() {
         visible={overflowVisible}
         onDismiss={() => setOverflowVisible(false)}
         activeFilter={activeFilter}
-        filterCounts={filterCounts}
+        filterCounts={filterCounts ?? EMPTY_FILTER_COUNTS}
         onSelect={(filter) => {
           setActiveFilter(filter);
           setOverflowVisible(false);

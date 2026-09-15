@@ -65,31 +65,18 @@ export function CommerceActionDock({
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
-  // ── Delivery estimate ──
-  // The server commerce context carries an estimated delivery window.
-  // Per Chapter 12 ("keep shipping, returns and protection adjacent to
-  // the buying decision") the estimate rides inside the dock's shipping
-  // hint so it stays visible next to the commitment action — the buyer
-  // sees *when* it arrives beside *how much* it costs.
-  const deliveryWindow = (() => {
-    const start = commerce.estimatedDeliveryStart
-      ? formatShortDate(commerce.estimatedDeliveryStart)
-      : '';
-    const end = commerce.estimatedDeliveryEnd
-      ? formatShortDate(commerce.estimatedDeliveryEnd)
-      : '';
-    if (start && end) return `${start}–${end}`;
-    return start || end || null;
-  })();
-
-  const shippingHint = [
+  // ── Shipping hint ──
+  // Only facts the PDP endpoint actually emits: who pays shipping. The
+  // dead estimatedDeliveryStart/End contract fields were removed — no
+  // dispatch/courier signal is persisted, so no delivery window is ever
+  // fabricated next to the commitment action.
+  const shippingHint = (
     commerce.shippingPayer === 'seller'
       ? 'Free shipping'
       : commerce.shippingMethod
         ? 'Shipping calculated at checkout'
-        : null,
-    deliveryWindow ? `Est. ${deliveryWindow}` : null,
-  ].filter(Boolean).join(' · ') || undefined;
+        : null
+  ) || undefined;
 
   // ── Zone I — Sticky action dock ──
   //   Buyer: price + Buy now + Make offer.
@@ -154,6 +141,28 @@ export function CommerceActionDock({
           </Text>
         }
         subtitle={unavailableCopy.subtitle}
+        primaryAction={{
+          label: t('product.browseSimilar'),
+          onPress: onBrowseSimilar,
+        }}
+      />
+    );
+  }
+
+  // ── Seller suspended — no purchase affordance ──
+  // users.reach_state === 'suspended' means the account is restricted:
+  // the backend reports 0 active listings for the seller and any buy or
+  // offer can only fail. Render a factual state dock instead of the
+  // purchase actions.
+  if (seller?.reachState === 'suspended') {
+    return (
+      <CommerceDetailStateDock
+        stateBadge={
+          <Text style={[styles.dockStateBadge, { color: colors.textSecondary }]} maxFontSizeMultiplier={2}>
+            Unavailable
+          </Text>
+        }
+        subtitle="This seller's account is currently restricted"
         primaryAction={{
           label: t('product.browseSimilar'),
           onPress: onBrowseSimilar,

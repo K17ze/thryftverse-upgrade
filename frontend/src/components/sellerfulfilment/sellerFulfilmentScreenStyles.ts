@@ -193,6 +193,12 @@ export function createSellerFulfilmentStyles(colors: ThemeColors) {
       fontSize: TypographyV2.bodyStrong.size,
       fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textPrimary },
+    trackingInputRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm },
+    trackingInputField: {
+      flex: 1 },
     hintText: {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,

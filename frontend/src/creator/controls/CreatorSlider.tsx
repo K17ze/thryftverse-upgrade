@@ -142,6 +142,9 @@ export function CreatorSlider({
   const isDraggingSV = useSharedValue(false);
   const prevWasPositiveSV = useSharedValue(true);
   const valueSV = useSharedValue(value);
+  // Last value emitted to onValueChange — dedupe so identical step-
+  // quantized values never cross the bridge twice.
+  const lastEmittedSV = useSharedValue(value);
 
   const [width, setWidth] = React.useState(0);
   const RANGE = max - min;
@@ -162,7 +165,8 @@ export function CreatorSlider({
         : withTiming(clampedRatio * width, { duration: Motion.duration.fast });
     }
     valueSV.value = value;
-  }, [value, width, min, RANGE, reduceMotion, thumbPos, isDraggingSV, valueSV]);
+    lastEmittedSV.value = value;
+  }, [value, width, min, RANGE, reduceMotion, thumbPos, isDraggingSV, valueSV, lastEmittedSV]);
 
   const handleLayout = useCallback((e: LayoutChangeEvent) => {
     const w = e.nativeEvent.layout.width;
@@ -197,13 +201,14 @@ export function CreatorSlider({
       thumbPos.value = newRatio * w;
       valueSV.value = newVal;
 
-      if (onValueChange) {
+      if (onValueChange && newVal !== lastEmittedSV.value) {
+        lastEmittedSV.value = newVal;
         runOnJS(onValueChange)(newVal);
       }
 
-      // Haptic at neutral (0) crossing
+      // Haptic at neutral crossing
       if (hapticAtNeutral) {
-        const isPositive = newVal > 0;
+        const isPositive = newVal > neutralValue;
         if (isPositive !== prevWasPositiveSV.value) {
           const now = Date.now();
           if (now - lastHapticSV.value > HAPTIC_DEBOUNCE_MS) {
@@ -215,7 +220,7 @@ export function CreatorSlider({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [min, RANGE, step, hapticAtNeutral, onValueChange, haptic],
+    [min, RANGE, step, hapticAtNeutral, onValueChange, haptic, neutralValue],
   );
 
   // Pan gesture — worklet-based, runs on UI thread
@@ -237,7 +242,6 @@ export function CreatorSlider({
         })
         .onEnd(() => {
           'worklet';
-          setPressed(false);
           const w = widthSV.value;
           if (w > 0) {
             // Settle the thumb with timing, not a spring — no overshoot
@@ -246,8 +250,6 @@ export function CreatorSlider({
               ? withTiming(thumbPos.value, { duration: 0 })
               : withTiming(thumbPos.value, { duration: Motion.duration.fast });
           }
-          isDraggingSV.value = false;
-          if (onDragStateChange) runOnJS(onDragStateChange)(false);
           if (onCommit) {
             const ratio = w > 0 ? Math.max(0, Math.min(1, thumbPos.value / w)) : 0;
             let finalVal = min + ratio * RANGE;
@@ -258,6 +260,15 @@ export function CreatorSlider({
             runOnJS(haptic.light)();
             runOnJS(onCommit)(finalVal);
           }
+        })
+        .onFinalize(() => {
+          'worklet';
+          // Runs after END, FAIL and CANCEL — without this a cancelled pan
+          // left isDraggingSV stuck true, permanently ignoring external
+          // value writes and leaking the pressed scale.
+          setPressed(false);
+          isDraggingSV.value = false;
+          if (onDragStateChange) runOnJS(onDragStateChange)(false);
         }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [disabled, reduceMotion, min, RANGE, step, onCommit, onDragStateChange, updateFromPosition, setPressed, haptic],
@@ -278,6 +289,8 @@ export function CreatorSlider({
             if (step && step > 0) {
               finalVal = Math.round(finalVal / step) * step;
             }
+            // Same release haptic as the pan commit path.
+            runOnJS(haptic.light)();
             runOnJS(onCommit)(finalVal);
           }
         }),
@@ -351,6 +364,7 @@ export function CreatorSlider({
           onLayout={handleLayout}
           accessible
           accessibilityRole={'adjustable' as AccessibilityRole}
+          accessibilityState={{ disabled }}
           accessibilityLabel={accessibilityLabel ?? label ?? 'Slider'}
           accessibilityHint={accessibilityHint}
           accessibilityValue={{
