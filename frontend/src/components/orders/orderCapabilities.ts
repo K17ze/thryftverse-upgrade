@@ -24,6 +24,10 @@ const NEEDS_ACTION_SELLER_STATUSES = new Set(['paid']);
 const ACTIVE_STATUSES = new Set([
   'created', 'paid', 'processing', 'preparing',
   'shipped', 'in transit', 'out for delivery',
+  // Carrier-failure states stay Active — the shipment failed but money is
+  // still in flight and the order needs resolution. Mirrors the backend
+  // classification set; burying them in history would hide live money.
+  'delivery failed', 'returned',
 ]);
 const COMPLETED_STATUSES = new Set(['delivered', 'completed']);
 // 'refunding' groups with the cancelled bucket — the backend history filter
@@ -40,6 +44,10 @@ const TERMINAL_STATUSES = new Set([
 const IN_TRANSIT_STATUSES = new Set([
   'shipped', 'in transit', 'out for delivery',
 ]);
+
+// Carrier-failure statuses — the parcel is not moving toward the buyer but
+// the tracking trail remains the authoritative evidence both parties need.
+const CARRIER_FAILURE_STATUSES = new Set(['delivery failed', 'returned']);
 
 export function classifyOrder(status: string): OrderClassification {
   const key = normaliseOrderStatus(status);
@@ -157,6 +165,8 @@ export function getStatusColor(
 export function getStatusTone(status: string): StatusTone {
   const key = normaliseOrderStatus(status);
   if (key === 'refunding') return 'pending';
+  // Carrier failure is not a calm active state — it needs attention.
+  if (key === 'delivery failed' || key === 'returned') return 'danger';
   if (CANCELLED_STATUSES.has(key)) return 'danger';
   if (COMPLETED_STATUSES.has(key)) return 'success';
   if (NEEDS_ACTION_BUYER_STATUSES.has(key) || NEEDS_ACTION_SELLER_STATUSES.has(key)) return 'pending';
@@ -312,6 +322,7 @@ export function resolveCapabilities(ctx: OrderCapabilityContext): OrderCapabilit
   const isCancelled = CANCELLED_STATUSES.has(key);
   const isDelivered = key === 'delivered' || key === 'completed';
   const isInTransit = IN_TRANSIT_STATUSES.has(key);
+  const isCarrierFailure = CARRIER_FAILURE_STATUSES.has(key);
   const isPaid = key === 'paid';
   const isCreated = key === 'created';
   const isTerminal = TERMINAL_STATUSES.has(key);
@@ -335,7 +346,9 @@ export function resolveCapabilities(ctx: OrderCapabilityContext): OrderCapabilit
     : null;
   const canProposeExtension = ctx.role === 'seller' && isPaid && !pendingExtension && !submitting;
   const canRespondExtension = ctx.role === 'buyer' && isPaid && pendingExtension != null && !submitting;
-  const canTrack = isInTransit && ctx.hasTracking;
+  // Tracking evidence stays useful through carrier failure — the trail is
+  // exactly what a failed-delivery or returned-parcel dispute needs.
+  const canTrack = (isInTransit || isCarrierFailure) && ctx.hasTracking;
   const canInspect = ctx.role === 'buyer' && isDelivered && !ctx.hasReview && !submitting;
   // Receipt confirmation releases escrowed funds — a high-consequence money
   // action. It must NOT be available while the parcel is merely in transit.
@@ -367,6 +380,10 @@ export function resolveCapabilities(ctx: OrderCapabilityContext): OrderCapabilit
       // tracking there is NO primary — never 'confirm_delivery': it
       // releases escrowed funds and must wait for authoritative delivery.
       primaryAction = canTrack ? 'track_order' : null;
+    } else if (isCarrierFailure) {
+      // Money is still in flight — the buyer's primary is the resolution
+      // path, not tracking. Tracking remains a secondary evidence action.
+      primaryAction = ctx.hasOpenResolution ? 'view_resolution' : 'report_issue';
     } else if (isDelivered) {
       // After delivery, the buyer should inspect before confirming/reviewing.
       primaryAction = canInspect ? 'inspect' : (ctx.hasReview ? 'view_review' : 'leave_review');
@@ -374,10 +391,12 @@ export function resolveCapabilities(ctx: OrderCapabilityContext): OrderCapabilit
   } else {
     // Seller: paid → guided dispatch. Never a direct generic mark-shipped.
     if (isPaid) primaryAction = 'dispatch';
+    // Carrier failure — the seller's evidence action is the tracking trail.
+    else if (isCarrierFailure && canTrack) primaryAction = 'track_order';
   }
 
   // Secondary actions — ordered by priority/relevance.
-  if (shouldViewResolution) {
+  if (shouldViewResolution && primaryAction !== 'view_resolution') {
     secondaryActions.push('view_resolution');
   }
   // Tracking is always useful when in-transit, even if it's the primary.
@@ -390,7 +409,7 @@ export function resolveCapabilities(ctx: OrderCapabilityContext): OrderCapabilit
   if (canConfirmDelivery) {
     secondaryActions.push('confirm_delivery');
   }
-  if (canReportIssue && !shouldViewResolution) {
+  if (canReportIssue && !shouldViewResolution && primaryAction !== 'report_issue') {
     secondaryActions.push('report_issue');
   }
   if (canReview && primaryAction !== 'leave_review') {
@@ -468,6 +487,8 @@ function getNextActionHintInternal(
 
   if (role === 'buyer') {
     if (key === 'created') return 'Complete payment';
+    if (key === 'delivery failed') return 'Report the failed delivery';
+    if (key === 'returned') return 'Report the returned parcel';
     if (isInTransit) return 'Track your parcel';
     if (isDelivered) {
       // Inspection window first, then review. Auto feedback is labelled
@@ -479,6 +500,8 @@ function getNextActionHintInternal(
 
   if (role === 'seller') {
     if (key === 'paid') return 'Dispatch this order';
+    if (key === 'delivery failed') return 'Carrier reported a failed delivery';
+    if (key === 'returned') return 'Parcel is being returned to you';
     if (isDelivered) return 'Order complete';
   }
 

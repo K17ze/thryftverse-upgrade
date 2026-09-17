@@ -687,9 +687,29 @@ async function serializeChatMessageRows(
     });
   }
 
+  // Read-receipt privacy: receipt rows are always written (badges/unread
+  // keep working) but visibility is filtered — readers who disabled
+  // receipts stay invisible (except to themselves, so isReadByMe still
+  // works), readers who restricted the viewer never leak a receipt to
+  // them, and a pending request leaks nothing until accepted.
   const readReceiptsResult = await db.query<{ message_id: string; user_id: string }>(
-    `SELECT message_id, user_id FROM chat_message_read_receipts WHERE message_id = ANY($1::text[])`,
-    [messageIds]
+    `SELECT rr.message_id, rr.user_id
+     FROM chat_message_read_receipts rr
+     JOIN users u ON u.id = rr.user_id AND (u.read_receipts_enabled OR rr.user_id = $2)
+     JOIN chat_messages m ON m.id = rr.message_id
+     WHERE rr.message_id = ANY($1::text[])
+       AND NOT EXISTS (
+         SELECT 1 FROM user_relationship_states urs
+         WHERE urs.owner_id = rr.user_id AND urs.target_id = $2
+           AND urs.kind = 'restrict'
+           AND (urs.expires_at IS NULL OR urs.expires_at > NOW())
+       )
+       AND NOT EXISTS (
+         SELECT 1 FROM chat_conversation_user_state cus
+         WHERE cus.user_id = rr.user_id AND cus.conversation_id = m.conversation_id
+           AND cus.request_status = 'pending'
+       )`,
+    [messageIds, actorUserId]
   );
   const readByMessage = new Map<string, string[]>();
   for (const r of readReceiptsResult.rows) {
@@ -1279,6 +1299,20 @@ app.post('/chat/dm', async (request, reply) => {
       },
     });
 
+    // User-level inbox signal — the recipient isn't subscribed to the new
+    // conversation topic yet, so the per-conversation event above can never
+    // reach them. This is the only path that tells their inbox to refetch.
+    publishRealtimeEvent({
+      topic: `chat.user:${payload.recipientUserId}`,
+      type: 'chat.dm.created',
+      payload: {
+        conversationId,
+        ownerId: actorUserId,
+        participantIds: [actorUserId, payload.recipientUserId],
+        requestStatus,
+      },
+    });
+
     // Only notify the recipient if the request is accepted (pending requests
     // appear in the Requests inbox, not as push notifications)
     if (requestStatus === 'accepted') {
@@ -1409,7 +1443,14 @@ app.post('/chat/groups', async (request, reply) => {
   try {
     await client.query('BEGIN');
 
+    // Serialize same-key retries: without this lock two concurrent first-
+    // requests both miss the idempotency lookup, both create conversations,
+    // and return different conversationIds — duplicated groups on retry.
     if (idempotencyKey) {
+      await client.query(
+        `SELECT pg_advisory_xact_lock(hashtext($1))`,
+        [`chat-group-create:${actorUserId}:${idempotencyKey}`]
+      );
       cachedResponse = await getChatGroupIdempotentResponse(client, {
         creatorId: actorUserId,
         idempotencyKey,
@@ -1591,6 +1632,21 @@ app.post('/chat/groups', async (request, reply) => {
     },
   });
 
+  // User-level inbox signals — new members aren't subscribed to the group
+  // topic yet, so this is the only realtime path that reaches them.
+  for (const memberId of notifyMemberIds) {
+    publishRealtimeEvent({
+      topic: `chat.user:${memberId}`,
+      type: 'chat.group.created',
+      payload: {
+        conversationId,
+        title,
+        ownerId: actorUserId,
+        participantIds: normalizedMemberIds,
+      },
+    });
+  }
+
   reply.code(201);
   return {
     ok: true,
@@ -1674,10 +1730,25 @@ app.get('/chat/conversations', async (request) => {
         SELECT id, body, body_ciphertext, key_version, created_at
         FROM chat_messages
         WHERE conversation_id = c.id
+          AND deleted_for_everyone_at IS NULL
+          AND moderation_state <> 'denied'
+          AND (moderation_state <> 'quarantined' OR sender_user_id = $1)
+          AND NOT EXISTS (
+            SELECT 1 FROM chat_message_deletions cmd
+            WHERE cmd.message_id = chat_messages.id AND cmd.user_id = $1
+          )
         ORDER BY created_at DESC
         LIMIT 1
       ) lm ON TRUE
       WHERE cm.user_id = $1
+        -- A declined message request is out of the inbox — it resurfaces
+        -- only if the sender writes again, which resets the state to
+        -- 'pending' (declined → pending transition in the send path).
+        AND COALESCE(
+          (SELECT cus.request_status FROM chat_conversation_user_state cus
+           WHERE cus.user_id = $1 AND cus.conversation_id = c.id),
+          'accepted'
+        ) <> 'declined'
       ORDER BY COALESCE(lm.created_at, c.updated_at) DESC
       LIMIT $2
     `,
@@ -1692,7 +1763,7 @@ app.get('/chat/conversations', async (request) => {
     };
   }
 
-  const [memberRows, botRows, stateRows, readStateRows, blockedMemberRows, relationshipRows] = await Promise.all([
+  const [memberRows, botRows, stateRows, blockedMemberRows, relationshipRows, unreadCountRows] = await Promise.all([
     db.query<{
       conversation_id: string;
       user_id: string;
@@ -1742,17 +1813,6 @@ app.get('/chat/conversations', async (request) => {
       `,
       [actorUserId, conversationIds]
     ),
-    db.query<{
-      conversation_id: string;
-      last_read_at: string | null;
-    }>(
-      `
-        SELECT conversation_id, last_read_at::text
-        FROM chat_members
-        WHERE user_id = $1 AND conversation_id = ANY($2::text[])
-      `,
-      [actorUserId, conversationIds]
-    ),
     db.query<{ conversation_id: string }>(
       `
         SELECT cm.conversation_id
@@ -1778,7 +1838,35 @@ app.get('/chat/conversations', async (request) => {
       `,
       [conversationIds, actorUserId]
     ),
+    // Batch unread counts — messages after the viewer's last_read_at that
+    // they didn't send, honoring tombstones, per-user deletions, and the
+    // same moderation visibility rules as the read paths.
+    db.query<{ conversation_id: string; unread_count: string }>(
+      `
+        SELECT m.conversation_id, COUNT(*)::text AS unread_count
+        FROM chat_messages m
+        INNER JOIN chat_members cm
+          ON cm.conversation_id = m.conversation_id AND cm.user_id = $1
+        WHERE m.conversation_id = ANY($2::text[])
+          AND m.deleted_for_everyone_at IS NULL
+          AND m.moderation_state <> 'denied'
+          AND (m.moderation_state <> 'quarantined' OR m.sender_user_id = $1)
+          AND (m.sender_user_id IS NULL OR m.sender_user_id <> $1)
+          AND m.created_at > COALESCE(cm.last_read_at, '-infinity'::timestamptz)
+          AND NOT EXISTS (
+            SELECT 1 FROM chat_message_deletions cmd
+            WHERE cmd.message_id = m.id AND cmd.user_id = $1
+          )
+        GROUP BY m.conversation_id
+      `,
+      [actorUserId, conversationIds]
+    ),
   ]);
+
+  const unreadCountByConversation = new Map<string, number>();
+  for (const row of unreadCountRows.rows) {
+    unreadCountByConversation.set(row.conversation_id, Number(row.unread_count));
+  }
 
   const blockedConversationIds = new Set(blockedMemberRows.rows.map((r) => r.conversation_id));
   const authorMutedConversationIds = new Set<string>();
@@ -1836,12 +1924,6 @@ app.get('/chat/conversations', async (request) => {
     });
   }
 
-  // Build last_read_at map for unread computation.
-  const lastReadByConversation = new Map<string, string | null>();
-  for (const row of readStateRows.rows) {
-    lastReadByConversation.set(row.conversation_id, row.last_read_at);
-  }
-
   // PII encryption: decrypt last-message preview for each conversation.
   await Promise.all(conversationsResult.rows.map(async (row) => {
     if (row.last_message !== null && row.last_message_id) {
@@ -1879,12 +1961,12 @@ app.get('/chat/conversations', async (request) => {
         botIds: botsByConversation.get(row.id) ?? [],
         lastMessage: row.last_message ?? (row.type === 'group' ? `${row.title ?? 'Group'} created.` : 'No messages yet'),
         lastMessageTime: row.last_message_created_at ?? row.updated_at,
-        unread: (() => {
-          const lastRead = lastReadByConversation.get(row.id);
-          const lastMsgTime = row.last_message_created_at ?? row.updated_at;
-          if (!lastRead || !lastMsgTime) return false;
-          return new Date(lastRead) < new Date(lastMsgTime);
-        })(),
+        // Derive `unread` from the authoritative count — a NULL
+        // last_read_at means the viewer never opened the thread, so any
+        // incoming message is unread. The previous timestamp comparison
+        // returned false in exactly that case.
+        unread: (unreadCountByConversation.get(row.id) ?? 0) > 0,
+        unreadCount: unreadCountByConversation.get(row.id) ?? 0,
         isMuted: state?.isMuted ?? false,
         isArchived: state?.isArchived ?? false,
         requestStatus: state?.requestStatus ?? 'accepted',
@@ -1933,6 +2015,8 @@ app.get('/chat/conversations/:conversationId/media', async (request) => {
      FROM chat_messages m
      WHERE m.conversation_id = $1
        AND m.deleted_for_everyone_at IS NULL
+       AND m.moderation_state <> 'denied'
+       AND (m.moderation_state <> 'quarantined' OR m.sender_user_id = $3)
        AND NOT EXISTS (SELECT 1 FROM chat_message_deletions cmd WHERE cmd.message_id = m.id AND cmd.user_id = $3)
        AND m.metadata ? 'mediaUri'
      ORDER BY m.created_at DESC, m.id DESC
@@ -2053,6 +2137,8 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
          FROM chat_messages m
          WHERE m.conversation_id = $1
            AND m.deleted_for_everyone_at IS NULL
+           AND m.moderation_state <> 'denied'
+           AND (m.moderation_state <> 'quarantined' OR m.sender_user_id = $5)
            AND NOT EXISTS (SELECT 1 FROM chat_message_deletions cmd WHERE cmd.message_id = m.id AND cmd.user_id = $5)
            AND (m.created_at, m.id) < ($2, $3)
          ORDER BY m.created_at DESC, m.id DESC
@@ -2083,6 +2169,8 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
          FROM chat_messages m
          WHERE m.conversation_id = $1
            AND m.deleted_for_everyone_at IS NULL
+           AND m.moderation_state <> 'denied'
+           AND (m.moderation_state <> 'quarantined' OR m.sender_user_id = $5)
            AND NOT EXISTS (SELECT 1 FROM chat_message_deletions cmd WHERE cmd.message_id = m.id AND cmd.user_id = $5)
            AND (m.created_at, m.id) >= ($2, $3)
          ORDER BY m.created_at ASC, m.id ASC
@@ -2156,6 +2244,8 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
       FROM chat_messages m
       WHERE m.conversation_id = $1
         AND m.deleted_for_everyone_at IS NULL
+        AND m.moderation_state <> 'denied'
+        AND (m.moderation_state <> 'quarantined' OR m.sender_user_id = ${cursorCreatedAt ? '$5' : '$3'})
         AND NOT EXISTS (SELECT 1 FROM chat_message_deletions cmd WHERE cmd.message_id = m.id AND cmd.user_id = ${cursorCreatedAt ? '$5' : '$3'})
         ${cursorCreatedAt ? (isAfter
           ? 'AND (m.created_at, m.id) > ($2, $3)'
@@ -2218,7 +2308,7 @@ app.post('/chat/conversations/:conversationId/messages', {
     body: {
       type: 'object',
       properties: {
-        type: { type: 'string', enum: ['text', 'image', 'video', 'voice', 'document'] },
+        type: { type: 'string', enum: ['text', 'image', 'video', 'voice', 'document', 'poll'] },
         text: { type: 'string', maxLength: 4000 },
         mediaUri: { type: 'string', minLength: 1, maxLength: 2048 },
         metadata: { type: 'object' },
@@ -2397,8 +2487,24 @@ app.post('/chat/conversations/:conversationId/messages', {
   // an empty string so the column constraint is satisfied while the media
   // URI lives in metadata for the read path.
   const bodyText = payload.text ?? '';
+  // Client metadata is untrusted: a sender must not be able to inject
+  // server-owned keys. `commerceState`/`offerPayload`/`offerCard` render
+  // forged order/offer cards; `event` fabricates system messages;
+  // `scamWarning`/`scamPatterns` are server-computed flags; `mediaUri`,
+  // `mediaType`, `posterUri`, `documentUri`, `voiceMessage` are bound below
+  // from the verified media asset — a client-supplied `mediaUri` on a text
+  // message would poison the shared-media tab with an arbitrary URL.
+  const CLIENT_METADATA_DENYLIST = new Set([
+    'commerceState', 'offerPayload', 'offerCard', 'commerceCard',
+    'event', 'scamWarning', 'scamPatterns', 'moderationState',
+    'mediaUri', 'mediaType', 'posterUri', 'documentUri', 'voiceMessage',
+  ]);
+  const clientMetadata: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(payload.metadata ?? {})) {
+    if (!CLIENT_METADATA_DENYLIST.has(key)) clientMetadata[key] = value;
+  }
   const mergedMetadata: Record<string, unknown> = {
-    ...(payload.metadata ?? {}),
+    ...clientMetadata,
     ...(isMediaMessage
       ? { mediaUri: payload.mediaUri, mediaType: payload.type }
       : {}),
@@ -2411,7 +2517,7 @@ app.post('/chat/conversations/:conversationId/messages', {
       ? { mediaUri: payload.mediaUri, mediaType: 'voice', voiceMessage: true }
       : {}),
     ...(isDocumentMessage
-      ? { mediaUri: payload.mediaUri, mediaType: 'document', documentUri: payload.mediaUri, ...(payload.metadata ?? {}) }
+      ? { mediaUri: payload.mediaUri, mediaType: 'document', documentUri: payload.mediaUri, ...clientMetadata }
       : {}),
   };
 
@@ -2603,6 +2709,15 @@ app.post('/chat/conversations/:conversationId/messages', {
     ]
   );
 
+  // The sender has seen their own message — advance last_read_at so the
+  // send doesn't flip the sender's own inbox row to unread on next fetch.
+  await db.query(
+    `UPDATE chat_members
+     SET last_read_at = NOW()
+     WHERE conversation_id = $1 AND user_id = $2`,
+    [conversationId, actorUserId],
+  );
+
   // P0-MSG-2: Race-condition backstop. Two concurrent retries with the same
   // clientMessageId can both pass the SELECT lookup above. The partial unique
   // index makes the second INSERT a no-op (DO NOTHING); detect that and
@@ -2649,6 +2764,14 @@ app.post('/chat/conversations/:conversationId/messages', {
         },
       };
     }
+  }
+
+  // rowCount === 0 with no replay hit: the conflicting row was visible to
+  // the unique index but is gone now (deleted/rolled back). Nothing below
+  // may touch result.rows[0] — fail honestly instead of throwing.
+  if (result.rowCount === 0) {
+    reply.code(500);
+    return { ok: false, error: 'Message could not be recorded' };
   }
 
   if ((isMediaMessage || isVoiceMessage || isDocumentMessage) && payload.mediaUri) {
@@ -2807,6 +2930,21 @@ app.post('/chat/conversations/:conversationId/messages', {
       suppressedUserIds.add(row.owner_id);
     }
     notifiableRecipientIds = recipientIds.filter((id) => !suppressedUserIds.has(id));
+
+    // A new message re-surfaces a declined request as pending — the
+    // decliner's inbox stays clean (declined rows are filtered from the
+    // list) but the request tab shows the sender wrote again. Without
+    // this, declining silently swallowed all future messages forever.
+    if (conversation.type === 'dm') {
+      await db.query(
+        `UPDATE chat_conversation_user_state
+         SET request_status = 'pending', updated_at = NOW()
+         WHERE conversation_id = $1
+           AND request_status = 'declined'
+           AND user_id = ANY($2::text[])`,
+        [conversationId, recipientIds]
+      );
+    }
   }
 
   // â”€â”€ FR-05: Authoritative risk decision BEFORE fan-out â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -2856,6 +2994,28 @@ app.post('/chat/conversations/:conversationId/messages', {
     ownerDecision === 'delay';
   const suppressRealtimeAndBots =
     ownerDecision === 'quarantine' || ownerDecision === 'deny';
+
+  // Persist the moderation outcome on the row — the fan-out suppression
+  // above only affects push/realtime; without a stored state the message
+  // stays recipient-visible on every REST refetch, making 'quarantine' and
+  // 'deny' cosmetic decisions. Read paths filter on moderation_state.
+  if (ownerDecision === 'quarantine' || ownerDecision === 'deny') {
+    try {
+      await db.query(
+        `UPDATE chat_messages
+         SET moderation_state = $2
+         WHERE id = $1`,
+        [result.rows[0].id, ownerDecision === 'quarantine' ? 'quarantined' : 'denied']
+      );
+    } catch (err) {
+      // If the column doesn't exist yet (pre-migration deploy), log and
+      // continue — fan-out suppression still applies for this request.
+      request.log.error(
+        { err, messageId: result.rows[0].id, ownerDecision },
+        'Failed to persist chat message moderation state',
+      );
+    }
+  }
 
   if (ownerDecision === 'quarantine') {
     request.log.warn(
@@ -3104,10 +3264,25 @@ app.delete('/chat/conversations/:conversationId/messages/:messageId', async (req
 
     await db.query(
       `UPDATE chat_messages
-       SET deleted_for_everyone_at = NOW(), deleted_by_user_id = $3, body = ''
+       SET deleted_for_everyone_at = NOW(), deleted_by_user_id = $3,
+           body = '', body_ciphertext = NULL, key_version = NULL, metadata = '{}'::jsonb
        WHERE id = $1 AND conversation_id = $2`,
       [messageId, conversationId, actorUserId]
     );
+
+    // Voice messages: revoke playback — the migration's "access is
+    // fail-closed on delete" contract is only honored if revoked_at is set.
+    // Without this, remaining members can still mint signed playback URLs
+    // for a message that was deleted for everyone.
+    await db.query(
+      `UPDATE voice_messages
+       SET revoked_at = NOW(), revocation_reason = 'message_deleted'
+       WHERE message_id = $1 AND revoked_at IS NULL`,
+      [messageId]
+    ).catch((err) => {
+      // voice_messages may not exist on older schemas — non-fatal.
+      request.log.warn({ err, messageId }, 'voice_messages revoke on delete-for-everyone failed');
+    });
 
     publishRealtimeEvent({
       topic: `chat.conversation:${conversationId}`,
@@ -3193,6 +3368,20 @@ app.patch('/chat/conversations/:conversationId/messages/:messageId', async (requ
     return { ok: false, error: 'Editing is only available within the edit window' };
   }
 
+  // The edit path must not be a scanner bypass — "send benign text, then
+  // edit in 'pay me directly via bank transfer'" would evade the send-time
+  // high-severity block. Re-run the same scan on the new body: high →
+  // reject the edit; medium → stamp the scam warning on metadata so the
+  // flag follows the content.
+  const editScamScan = scanMessageForScamPatterns(newText);
+  if (editScamScan.severity === 'high') {
+    reply.code(400);
+    return {
+      ok: false,
+      error: 'This message contains patterns associated with scams. Please keep payments on the platform.',
+    };
+  }
+
   // Re-encrypt the edited body using the same dual-write pattern as creation.
   // The message ID is reused as AAD so the ciphertext stays bound to this row.
   let bodyToStore = newText;
@@ -3216,13 +3405,18 @@ app.patch('/chat/conversations/:conversationId/messages/:messageId', async (requ
            body_ciphertext = $4,
            key_version = $5,
            edit_version = edit_version + 1,
-           edited_at = NOW()
+           edited_at = NOW(),
+           metadata = CASE
+             WHEN $6::boolean THEN metadata || jsonb_build_object('scamWarning', true, 'scamPatterns', $7::jsonb)
+             ELSE metadata - 'scamWarning' - 'scamPatterns'
+           END
      WHERE id = $1 AND conversation_id = $2
      RETURNING id, sender_type, sender_user_id, sender_bot_id, body,
                body_ciphertext, key_version, metadata, created_at::text,
                client_message_id, reply_to_message_id, deleted_for_everyone_at,
                edit_version, edited_at::text`,
-    [messageId, conversationId, bodyToStore, bodyCiphertext, keyVersion]
+    [messageId, conversationId, bodyToStore, bodyCiphertext, keyVersion,
+     editScamScan.severity === 'medium', toJsonString(editScamScan.patterns ?? [])]
   );
 
   if (!updated.rowCount) {
@@ -3559,10 +3753,17 @@ app.post('/chat/conversations/:conversationId/messages/:messageId/poll/vote', as
 
   await ensureChatConversationAccess(db, conversationId, actorUserId);
 
-  // Fetch the poll row
-  const pollResult = await db.query<{ id: string; options: string[]; allow_multiple: boolean; closes_at: string | null }>(
-    `SELECT id, options, allow_multiple, closes_at FROM chat_polls WHERE message_id = $1`,
-    [messageId],
+  // Fetch the poll row — scoped to the path conversation and a live
+  // message, so a messageId from another conversation (or a deleted one)
+  // can't be voted on by a member here.
+  const pollResult = await db.query<{ id: string; options: string[]; allow_multiple: boolean; is_anonymous: boolean; closes_at: string | null }>(
+    `SELECT p.id, p.options, p.allow_multiple, p.is_anonymous, p.closes_at
+     FROM chat_polls p
+     JOIN chat_messages m ON m.id = p.message_id
+     WHERE p.message_id = $1
+       AND m.conversation_id = $2
+       AND m.deleted_for_everyone_at IS NULL`,
+    [messageId, conversationId],
   );
   if (pollResult.rows.length === 0) {
     reply.code(404);
@@ -3587,17 +3788,33 @@ app.post('/chat/conversations/:conversationId/messages/:messageId/poll/vote', as
       [poll.id, actorUserId, optionIndex],
     );
   } else {
-    // Single-vote: remove any existing votes by this user, then insert
-    await db.query(
-      `DELETE FROM chat_poll_votes WHERE poll_id = $1 AND user_id = $2`,
-      [poll.id, actorUserId],
-    );
-    await db.query(
-      `INSERT INTO chat_poll_votes (poll_id, user_id, option_index)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (poll_id, user_id, option_index) DO NOTHING`,
-      [poll.id, actorUserId, optionIndex],
-    );
+    // Single-vote: remove any existing votes by this user, then insert.
+    // The per-(poll,user) advisory lock serializes concurrent votes so two
+    // simultaneous taps can't interleave DELETE;INSERT and land two options.
+    const voteClient = await db.connect();
+    try {
+      await voteClient.query('BEGIN');
+      await voteClient.query(
+        `SELECT pg_advisory_xact_lock(hashtext($1 || ':' || $2))`,
+        [poll.id, actorUserId],
+      );
+      await voteClient.query(
+        `DELETE FROM chat_poll_votes WHERE poll_id = $1 AND user_id = $2`,
+        [poll.id, actorUserId],
+      );
+      await voteClient.query(
+        `INSERT INTO chat_poll_votes (poll_id, user_id, option_index)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (poll_id, user_id, option_index) DO NOTHING`,
+        [poll.id, actorUserId, optionIndex],
+      );
+      await voteClient.query('COMMIT');
+    } catch (err) {
+      await voteClient.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      voteClient.release();
+    }
   }
 
   // Fetch updated vote counts
@@ -3617,9 +3834,12 @@ app.post('/chat/conversations/:conversationId/messages/:messageId/poll/vote', as
   );
   const myVotes = myVotesResult.rows.map((r) => r.option_index);
 
-  // Live propagation: every member's PollMessageBubble applies voteCounts;
-  // the voter's other devices apply voterVotes verbatim so "your vote"
-  // stays consistent across devices (single-vote polls replace the set).
+  // Live propagation: every member's PollMessageBubble applies voteCounts.
+  // For anonymous polls the broadcast must NOT carry voter identity — the
+  // REST serializer hides it, and leaking userId/optionIndex/voterVotes on
+  // the wire would deanonymize every vote to any topic subscriber. The
+  // voter still gets their own myVotes in the HTTP response (per-actor),
+  // so multi-device consistency survives without a broadcast identity.
   publishRealtimeEvent({
     topic: `chat.conversation:${conversationId}`,
     type: 'chat.poll.voted',
@@ -3628,10 +3848,10 @@ app.post('/chat/conversations/:conversationId/messages/:messageId/poll/vote', as
       messageId,
       pollId: poll.id,
       voteCounts,
-      userId: actorUserId,
-      optionIndex,
       action: 'added',
-      voterVotes: myVotes,
+      ...(poll.is_anonymous
+        ? {}
+        : { userId: actorUserId, optionIndex, voterVotes: myVotes }),
     },
   });
 
@@ -3653,9 +3873,14 @@ app.post('/chat/conversations/:conversationId/messages/:messageId/poll/unvote', 
 
   await ensureChatConversationAccess(db, conversationId, actorUserId);
 
-  const pollResult = await db.query<{ id: string; closes_at: string | null }>(
-    `SELECT id, closes_at FROM chat_polls WHERE message_id = $1`,
-    [messageId],
+  const pollResult = await db.query<{ id: string; is_anonymous: boolean; closes_at: string | null }>(
+    `SELECT p.id, p.is_anonymous, p.closes_at
+     FROM chat_polls p
+     JOIN chat_messages m ON m.id = p.message_id
+     WHERE p.message_id = $1
+       AND m.conversation_id = $2
+       AND m.deleted_for_everyone_at IS NULL`,
+    [messageId, conversationId],
   );
   if (pollResult.rows.length === 0) {
     reply.code(404);
@@ -3700,10 +3925,10 @@ app.post('/chat/conversations/:conversationId/messages/:messageId/poll/unvote', 
       messageId,
       pollId: poll.id,
       voteCounts,
-      userId: actorUserId,
-      optionIndex,
       action: 'removed',
-      voterVotes,
+      ...(poll.is_anonymous
+        ? {}
+        : { userId: actorUserId, optionIndex, voterVotes }),
     },
   });
 
@@ -3731,15 +3956,23 @@ app.get('/chat/conversations/:conversationId/search', async (request) => {
 
   // ILIKE for case-insensitive substring search. This is sufficient for
   // chat-scale message volumes; a GIN/pg_trgm index can be added later
-  // if performance requires it.
+  // if performance requires it. The query is escaped so '%' and '_' in the
+  // user's input match literally instead of acting as wildcards.
+  // Honest limitation: rows written post-encryption store body='[encrypted]'
+  // and cannot substring-match — that is a structural constraint, surfaced
+  // truthfully (empty results) rather than scanned ciphertext.
+  const escaped = q.replace(/[\\%_]/g, (c) => `\\${c}`);
   const result = await db.query<{ id: string; created_at: string }>(
     `SELECT id, created_at FROM chat_messages
      WHERE conversation_id = $1
        AND deleted_for_everyone_at IS NULL
-       AND body ILIKE '%' || $2 || '%'
+       AND moderation_state <> 'denied'
+       AND (moderation_state <> 'quarantined' OR sender_user_id = $4)
+       AND NOT EXISTS (SELECT 1 FROM chat_message_deletions cmd WHERE cmd.message_id = chat_messages.id AND cmd.user_id = $4)
+       AND body ILIKE '%' || $2 || '%' ESCAPE '\\'
      ORDER BY created_at DESC
      LIMIT $3`,
-    [conversationId, q, limit],
+    [conversationId, escaped, limit, actorUserId],
   );
 
   return {
@@ -3810,10 +4043,14 @@ app.post('/chat/conversations/:conversationId/report', async (request, reply) =>
     },
   });
 
+  // A report must never broadcast to the conversation topic — every member,
+  // including the reported party, would see that a report was filed. The
+  // report is between the reporter and trust & safety; the reporter gets
+  // the confirmation via the HTTP response.
   publishRealtimeEvent({
-    topic: `chat.conversation:${conversationId}`,
+    topic: `notifications.user:${actorUserId}`,
     type: 'chat.conversation.reported',
-    payload: { conversationId, reportId: effectiveReportId, reason: payload.reason },
+    payload: { conversationId, reportId: effectiveReportId, status: 'submitted' },
   });
 
   reply.code(201);
@@ -3906,17 +4143,13 @@ app.post('/chat/conversations/:conversationId/read', async (request) => {
   const body = bodySchema.parse(request.body ?? {});
   await ensureChatConversationAccess(db, conversationId, actorUserId);
 
-  await db.query(
-    `
-      UPDATE chat_members
-      SET last_read_at = NOW()
-      WHERE conversation_id = $1 AND user_id = $2
-    `,
-    [conversationId, actorUserId],
-  );
-
-  let markedMessageIds: string[] = [];
-
+  // Resolve the read cursor FIRST — last_read_at must advance to the
+  // message the client actually read up to, not unconditionally NOW().
+  // A client that marks "read up to message X" must not silently mark
+  // everything read; the unread badge would clear while newer messages
+  // remain unseen.
+  let cursorCreatedAt: string | null = null;
+  let cursorId: string | null = null;
   if (body?.upToMessageId) {
     const cursorResult = await db.query<{ created_at: string; id: string }>(
       `SELECT created_at::text, id FROM chat_messages
@@ -3924,25 +4157,53 @@ app.post('/chat/conversations/:conversationId/read', async (request) => {
       [body.upToMessageId, conversationId]
     );
     if (cursorResult.rowCount) {
-      const cursor = cursorResult.rows[0];
-      const messagesResult = await db.query<{ id: string }>(
-        `SELECT id FROM chat_messages
-         WHERE conversation_id = $1
-           AND deleted_for_everyone_at IS NULL
-           AND (created_at, id) <= ($2, $3)
-         ORDER BY created_at ASC, id ASC`,
-        [conversationId, cursor.created_at, cursor.id]
-      );
-      markedMessageIds = messagesResult.rows.map((r) => r.id);
+      cursorCreatedAt = cursorResult.rows[0].created_at;
+      cursorId = cursorResult.rows[0].id;
     }
   } else if (body?.upToTimestamp) {
+    cursorCreatedAt = body.upToTimestamp;
+  }
+
+  // Monotonic advance: last_read_at never regresses (GREATEST), and moves
+  // to the cursor's timestamp when one resolves — NOW() only when the
+  // client marks the whole conversation read.
+  await db.query(
+    `
+      UPDATE chat_members
+      SET last_read_at = GREATEST(COALESCE(last_read_at, '-infinity'::timestamptz), $3::timestamptz)
+      WHERE conversation_id = $1 AND user_id = $2
+    `,
+    [conversationId, actorUserId, cursorCreatedAt ?? new Date().toISOString()],
+  );
+
+  // Per-message receipts are the detail record; last_read_at is the cursor.
+  // Cap the fan-out — on a long-lived conversation an unbounded id list both
+  // blows the 65,535 bind-param limit and produces a megabyte-scale WS
+  // payload. The cursor above is the authoritative "read up to" signal; the
+  // receipt rows only need to cover the visible tail.
+  const RECEIPT_FANOUT_LIMIT = 500;
+  let markedMessageIds: string[] = [];
+
+  if (cursorId && cursorCreatedAt) {
+    const messagesResult = await db.query<{ id: string }>(
+      `SELECT id FROM chat_messages
+       WHERE conversation_id = $1
+         AND deleted_for_everyone_at IS NULL
+         AND (created_at, id) <= ($2, $3)
+       ORDER BY created_at DESC, id DESC
+       LIMIT $4`,
+      [conversationId, cursorCreatedAt, cursorId, RECEIPT_FANOUT_LIMIT]
+    );
+    markedMessageIds = messagesResult.rows.map((r) => r.id);
+  } else if (cursorCreatedAt) {
     const messagesResult = await db.query<{ id: string }>(
       `SELECT id FROM chat_messages
        WHERE conversation_id = $1
          AND deleted_for_everyone_at IS NULL
          AND created_at <= $2
-       ORDER BY created_at ASC, id ASC`,
-      [conversationId, body.upToTimestamp]
+       ORDER BY created_at DESC, id DESC
+       LIMIT $3`,
+      [conversationId, cursorCreatedAt, RECEIPT_FANOUT_LIMIT]
     );
     markedMessageIds = messagesResult.rows.map((r) => r.id);
   } else {
@@ -3950,8 +4211,9 @@ app.post('/chat/conversations/:conversationId/read', async (request) => {
       `SELECT id FROM chat_messages
        WHERE conversation_id = $1
          AND deleted_for_everyone_at IS NULL
-       ORDER BY created_at ASC, id ASC`,
-      [conversationId]
+       ORDER BY created_at DESC, id DESC
+       LIMIT $2`,
+      [conversationId, RECEIPT_FANOUT_LIMIT]
     );
     markedMessageIds = messagesResult.rows.map((r) => r.id);
   }
@@ -4012,9 +4274,29 @@ app.post('/chat/conversations/:conversationId/read', async (request) => {
         conversationId,
         userId: actorUserId,
         readAt: new Date().toISOString(),
+        // The cursor is the truthful read signal; the bounded receipt tail
+        // is detail for per-message glyphs, not the state contract.
+        upToMessageId: cursorId,
         messageIds: markedMessageIds,
       },
       excludeUserIds: restrictedParticipantIds,
+    });
+  } else {
+    // Receipts are socially suppressed (preference off, pending request, or
+    // restricted parties) — but syncing the reader's own other devices
+    // leaks nothing. Deliver a self-targeted event so their inbox/badge
+    // still converges without a refetch.
+    publishRealtimeEvent({
+      topic: `chat.conversation:${conversationId}`,
+      type: 'chat.message.read',
+      payload: {
+        conversationId,
+        userId: actorUserId,
+        readAt: new Date().toISOString(),
+        upToMessageId: cursorId,
+        messageIds: markedMessageIds,
+      },
+      userId: actorUserId,
     });
   }
 
@@ -4085,6 +4367,20 @@ app.post('/chat/conversations/:conversationId/messages/:messageId/read', async (
       },
       excludeUserIds: restrictedParticipantIds,
     });
+  } else {
+    // Self-targeted sync — the reader's other devices still converge even
+    // when the receipt is socially suppressed.
+    publishRealtimeEvent({
+      topic: `chat.conversation:${conversationId}`,
+      type: 'chat.message.read',
+      payload: {
+        conversationId,
+        userId: actorUserId,
+        readAt: readAt.toISOString(),
+        messageIds: [messageId],
+      },
+      userId: actorUserId,
+    });
   }
 
   return {
@@ -4103,9 +4399,28 @@ app.get('/chat/conversations/:conversationId/messages/:messageId/receipts', asyn
   const { conversationId, messageId } = paramsSchema.parse(request.params);
   await ensureChatConversationAccess(db, conversationId, actorUserId);
 
+  // Same privacy contract as serialized readBy: readers with receipts
+  // disabled stay invisible (except to themselves), readers who
+  // restricted the viewer leak nothing, pending requests stay invisible.
   const result = await db.query<{ user_id: string; read_at: string }>(
-    `SELECT user_id, read_at::text FROM chat_message_read_receipts WHERE message_id = $1 ORDER BY read_at ASC`,
-    [messageId]
+    `SELECT rr.user_id, rr.read_at::text
+     FROM chat_message_read_receipts rr
+     JOIN users u ON u.id = rr.user_id AND (u.read_receipts_enabled OR rr.user_id = $2)
+     JOIN chat_messages m ON m.id = rr.message_id
+     WHERE rr.message_id = $1
+       AND NOT EXISTS (
+         SELECT 1 FROM user_relationship_states urs
+         WHERE urs.owner_id = rr.user_id AND urs.target_id = $2
+           AND urs.kind = 'restrict'
+           AND (urs.expires_at IS NULL OR urs.expires_at > NOW())
+       )
+       AND NOT EXISTS (
+         SELECT 1 FROM chat_conversation_user_state cus
+         WHERE cus.user_id = rr.user_id AND cus.conversation_id = m.conversation_id
+           AND cus.request_status = 'pending'
+       )
+     ORDER BY rr.read_at ASC`,
+    [messageId, actorUserId]
   );
 
   return {
@@ -4237,6 +4552,22 @@ app.post('/chat/conversations/:conversationId/members', async (request) => {
     });
   }
 
+  // User-level inbox signals — newly added members aren't subscribed to the
+  // conversation topic yet, so the event above can't reach them. Their
+  // inbox refetches on this event and the group appears immediately.
+  for (const memberId of addedMemberIds) {
+    publishRealtimeEvent({
+      topic: `chat.user:${memberId}`,
+      type: 'chat.member.added',
+      payload: {
+        conversationId,
+        actorUserId,
+        memberIds: addedMemberIds,
+        messageId: updateMessage?.id ?? null,
+      },
+    });
+  }
+
   return {
     ok: true,
     conversationId,
@@ -4276,6 +4607,21 @@ app.delete('/chat/conversations/:conversationId/members/:memberUserId', async (r
 
   try {
     await client.query('BEGIN');
+
+    // Lock the conversation row and re-check ownership inside the
+    // transaction — the pre-transaction read is stale if a concurrent
+    // transfer-ownership just promoted the member we're about to remove.
+    const convRow = await client.query<{ owner_id: string | null }>(
+      `SELECT owner_id FROM chat_conversations WHERE id = $1 FOR UPDATE`,
+      [conversationId]
+    );
+    if (convRow.rows[0]?.owner_id === memberUserId) {
+      await client.query('ROLLBACK');
+      throw createApiError('CHAT_CANNOT_REMOVE_OWNER', 'The group owner cannot be removed. Transfer ownership first.', {
+        conversationId,
+        memberUserId,
+      });
+    }
 
     const deleteResult = await client.query<{ user_id: string }>(
       `
@@ -4575,6 +4921,36 @@ app.delete('/chat/conversations/:conversationId', async (request) => {
 
   try {
     await client.query('BEGIN');
+
+    // Lock the conversation row so a leave can't race a concurrent
+    // transfer-ownership (which updates the same row). Re-read owner_id
+    // under the lock — the pre-transaction read above is stale by now.
+    const convRow = await client.query<{ owner_id: string | null; type: string }>(
+      `SELECT owner_id, type FROM chat_conversations WHERE id = $1 FOR UPDATE`,
+      [conversationId]
+    );
+    const lockedOwnerId = convRow.rows[0]?.owner_id ?? null;
+    const lockedType = convRow.rows[0]?.type ?? conversation.type;
+
+    // The owner can't abandon an owned group — the group would lose its
+    // management authority (owner_id pointing at a non-member). They must
+    // transfer ownership first; leaving as the sole remaining member is
+    // fine — that's just dissolving the conversation.
+    if (lockedType === 'group' && lockedOwnerId === actorUserId) {
+      const otherMembers = await client.query<{ n: string }>(
+        `SELECT COUNT(*)::text AS n FROM chat_members
+         WHERE conversation_id = $1 AND user_id <> $2`,
+        [conversationId, actorUserId]
+      );
+      if (Number(otherMembers.rows[0]?.n ?? 0) > 0) {
+        await client.query('ROLLBACK');
+        throw createApiError(
+          'CHAT_OWNER_MUST_TRANSFER',
+          'Transfer ownership before leaving the group',
+          { conversationId, actorUserId },
+        );
+      }
+    }
 
     const deleteResult = await client.query<{ user_id: string }>(
       `

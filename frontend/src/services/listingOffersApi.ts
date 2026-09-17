@@ -1,4 +1,5 @@
 import { fetchJson } from '../lib/apiClient';
+import { parseServerDate } from '../utils/dateFormat';
 
 /**
  * Server-authoritative listing offers.
@@ -34,6 +35,9 @@ export interface ListingOffer {
   conversationId: string | null;
   parentOfferId: string | null;
   offeredByUserId: string;
+  /** The order this offer is bound to once accepted — lets the Offers
+   * surface deep-link to OrderDetail. */
+  orderId: string | null;
   metadata: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
@@ -64,6 +68,29 @@ export interface AcceptListingOfferResult {
   checkout: AcceptedOfferCheckout;
 }
 
+/**
+ * The backend emits Postgres `::text` timestamps ('2026-07-28 12:34:56.789+00')
+ * — non-ISO, NaN-producing on Hermes. Normalize to ISO at the boundary so
+ * every downstream `Date.parse`/`new Date` is safe. Unparseable values
+ * pass through unchanged (renderers already guard with Number.isFinite).
+ */
+function normalizeOffer(offer: ListingOffer): ListingOffer {
+  const iso = (v: string | null) => {
+    const d = parseServerDate(v);
+    return v == null ? v : (d ? d.toISOString() : v);
+  };
+  return {
+    ...offer,
+    expiresAt: iso(offer.expiresAt)!,
+    acceptedAt: iso(offer.acceptedAt),
+    declinedAt: iso(offer.declinedAt),
+    expiredAt: iso(offer.expiredAt),
+    cancelledAt: iso(offer.cancelledAt),
+    createdAt: iso(offer.createdAt)!,
+    updatedAt: iso(offer.updatedAt)!,
+  };
+}
+
 export async function createListingOfferOnApi(
   input: CreateListingOfferInput
 ): Promise<ListingOffer> {
@@ -82,7 +109,7 @@ export async function createListingOfferOnApi(
       }),
     }
   );
-  return payload.offer;
+  return normalizeOffer(payload.offer);
 }
 
 export async function counterListingOfferOnApi(
@@ -107,7 +134,7 @@ export async function counterListingOfferOnApi(
       }),
     }
   );
-  return payload.offer;
+  return normalizeOffer(payload.offer);
 }
 
 export async function fetchListingOffersFromApi(
@@ -121,7 +148,7 @@ export async function fetchListingOffersFromApi(
   const payload = await fetchJson<{ ok: true; offers: ListingOffer[] }>(
     `/listings/${encodeURIComponent(listingId)}/offers${query}`
   );
-  return payload.offers;
+  return payload.offers.map(normalizeOffer);
 }
 
 export async function fetchMyOffersFromApi(
@@ -134,7 +161,7 @@ export async function fetchMyOffersFromApi(
   const payload = await fetchJson<{ ok: true; offers: ListingOffer[] }>(
     `/users/me/offers${query}`
   );
-  return payload.offers;
+  return payload.offers.map(normalizeOffer);
 }
 
 export async function acceptListingOfferOnApi(offerId: string): Promise<AcceptListingOfferResult> {
@@ -177,7 +204,7 @@ export async function lookupOfferByIdempotencyKey(
     const payload = await fetchJson<{ ok: true; status: 'acknowledged'; offer: ListingOffer }>(
       `/users/me/offers/lookup-by-key/${encodeURIComponent(idempotencyKey)}`,
     );
-    return { status: 'acknowledged', value: payload.offer };
+    return { status: 'acknowledged', value: normalizeOffer(payload.offer) };
   } catch (error: unknown) {
     const status = (error as { status?: number }).status;
     if (status === 404) {

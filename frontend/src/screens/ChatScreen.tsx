@@ -351,6 +351,7 @@ export default function ChatScreen({ navigation, route }: Props) {
   const {
     handleAcceptOffer,
     handleDeclineOffer,
+    handleCancelOffer,
     handleCounterOffer,
     handleOfferExpired } = useConversationCommerce({
     messages,
@@ -575,6 +576,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     isNewMessage,
     onAcceptOffer: handleAcceptOffer,
     onDeclineOffer: handleDeclineOffer,
+    onCancelOffer: handleCancelOffer,
     onCounterOffer: handleCounterOffer,
     onOfferExpired: handleOfferExpired,
     onOpenContextMenu: (msg) => {

@@ -248,6 +248,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
     handleDeleteMessage,
     handleUndoDelete,
     handleSendPendingAttachment: hookSendPendingAttachment,
+    handleSendPendingDocument: hookSendPendingDocument,
     confirmation: conversationConfirmation,
     clearConfirmation: clearConversationConfirmation,
     unreadDividerIndex,
@@ -359,9 +360,9 @@ export default function GroupChatScreen({ navigation, route }: Props) {
 
   const handleSendPendingDocument = useCallback(
     () => {
-      setPendingDocument(null);
+      hookSendPendingDocument(pendingDocument, setPendingDocument);
     },
-    [setPendingDocument],
+    [hookSendPendingDocument, pendingDocument, setPendingDocument],
   );
 
   // ─── Context menu + reactions ───────────────────────────────────────

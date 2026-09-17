@@ -1,5 +1,6 @@
 import type { ChatAgentConfig, ChatBot, Conversation, Message } from '../domain';
 import { parseMessageCommerceState } from '../domain';
+import type { ConversationContext } from '../domain/conversationContext';
 import { fetchJson } from '../lib/apiClient';
 
 type ApiConversationType = 'dm' | 'group';
@@ -38,6 +39,10 @@ interface ApiConversationPayload {
   requestStatus?: 'pending' | 'accepted' | 'declined';
   pinnedRank?: number;
   markedUnread?: boolean;
+  /** Server-derived count of messages after the viewer's last_read_at. */
+  unreadCount?: number;
+  /** Server-derived transaction context (listing/offer/order/protection). */
+  context?: ConversationContext | null;
 }
 
 interface ApiMessageReaction {
@@ -205,6 +210,11 @@ export function mapApiMessageToConversationMessage(
   const listingShare = meta.listingShare as Record<string, unknown> | undefined;
   const isListingShare = Boolean(listingShare && typeof listingShare.listingId === 'string');
 
+  // Document messages: the backend stamps mediaType 'document' and carries
+  // documentUri/documentName/documentMimeType in metadata. They render a
+  // document row, not an image bubble — keep them out of the media path.
+  const isDocument = meta.mediaType === 'document';
+
   // In-thread commerce cards (marketplace audit P1): system-authored order
   // lifecycle messages carry the order snapshot in `metadata.commerceState`.
   // The parsed snapshot drives `type: 'commerce_state'` below so
@@ -234,7 +244,9 @@ export function mapApiMessageToConversationMessage(
           ? 'listing_share'
           : isVoice
             ? 'voice'
-            : 'text',
+            : isDocument
+              ? 'document'
+              : 'text',
     sender: payload.senderType === 'system'
       ? 'system'
       : isMine
@@ -262,8 +274,13 @@ export function mapApiMessageToConversationMessage(
       isMine && (payload.readBy ?? []).some((uid) => uid !== currentUserId)
         ? 'read'
         : 'sent',
-    mediaUri: typeof meta.mediaUri === 'string' ? meta.mediaUri : undefined,
+    mediaUri: typeof meta.mediaUri === 'string' && !isDocument ? meta.mediaUri : undefined,
     mediaType: meta.mediaType === 'image' || meta.mediaType === 'video' ? meta.mediaType : undefined,
+    documentUri: isDocument
+      ? (typeof meta.documentUri === 'string' ? meta.documentUri : typeof meta.mediaUri === 'string' ? meta.mediaUri : undefined)
+      : undefined,
+    documentName: isDocument && typeof meta.documentName === 'string' ? meta.documentName : undefined,
+    documentMimeType: isDocument && typeof meta.documentMimeType === 'string' ? meta.documentMimeType : undefined,
     posterUri: typeof meta.posterUri === 'string' ? meta.posterUri : undefined,
     voiceUri: typeof meta.mediaUri === 'string' && isVoice ? meta.mediaUri : undefined,
     voiceDurationMs: voice?.durationMs ?? (typeof meta.durationMs === 'number' ? meta.durationMs : undefined),
@@ -285,6 +302,7 @@ export function mapApiMessageToConversationMessage(
           price: typeof offerSource.offerPrice === 'number' ? offerSource.offerPrice : undefined,
           expiresAt: typeof offerSource.expiresAt === 'string' ? offerSource.expiresAt : undefined,
           counterRound: typeof offerSource.counterRound === 'number' ? offerSource.counterRound : undefined,
+          offeredByUserId: typeof offerSource.offeredByUserId === 'string' ? offerSource.offeredByUserId : undefined,
         }
       : undefined,
     listing: isListingShare && listingShare
@@ -315,22 +333,10 @@ function mapApiConversationToApp(
 ): Conversation {
   const latestMessage = payload.lastMessage || messages[messages.length - 1]?.text || 'No messages yet';
   const latestMessageTime = payload.lastMessageTime || messages[messages.length - 1]?.timestamp || 'just now';
-  const resolvedMessages: Message[] = messages.length
-    ? messages
-    : payload.lastMessage
-      ? [
-          {
-            id: `sync_${payload.id}`,
-            senderId: 'system',
-            text: payload.lastMessage,
-            timestamp: latestMessageTime,
-            isSystem: true,
-            systemTitle: payload.type === 'group' ? 'Group update' : 'Conversation update',
-            type: 'system' as const,
-            sender: 'system' as const,
-          },
-        ]
-      : [];
+  // No synthetic placeholder: an empty messages array is the honest state —
+  // the thread fetches real history on open. A fabricated `sync_` row would
+  // render a system message that never existed server-side.
+  const resolvedMessages: Message[] = messages;
 
   return {
     id: payload.id,
@@ -346,7 +352,13 @@ function mapApiConversationToApp(
     botIds: payload.botIds,
     lastMessage: latestMessage,
     lastMessageTime: latestMessageTime,
-    unread: payload.unread,
+    // A user-marked-unread conversation is unread regardless of server
+    // last_read_at — the mark is the user's explicit intent. Prefer the
+    // authoritative unreadCount: the server's `unread` boolean returns
+    // false for never-read conversations (NULL last_read_at), while the
+    // count correctly treats NULL as "everything is unread".
+    unread: (payload.unreadCount ?? 0) > 0 || payload.unread || (payload.markedUnread ?? false),
+    unreadCount: payload.unreadCount ?? 0,
     messages: resolvedMessages,
     memberRoles: normalizeMemberRoles(payload.memberRoles),
     isMuted: payload.isMuted ?? false,
@@ -358,6 +370,7 @@ function mapApiConversationToApp(
     requestStatus: payload.requestStatus ?? 'accepted',
     isPinned: (payload.pinnedRank ?? 0) > 0,
     markedUnread: payload.markedUnread ?? false,
+    context: payload.context ?? undefined,
   };
 }
 
@@ -491,11 +504,13 @@ export async function sendConversationMessageOnApi(
   metadata?: Record<string, unknown>,
   clientMessageId?: string,
   options?: {
-    type?: 'text' | 'image' | 'video' | 'voice';
+    type?: 'text' | 'image' | 'video' | 'voice' | 'document';
     mediaUri?: string;
     replyToMessageId?: string;
     voiceDurationMs?: number;
     voiceWaveform?: number[];
+    documentName?: string;
+    documentMimeType?: string;
   },
   currentUserId?: string,
 ): Promise<Message> {
@@ -529,6 +544,15 @@ export async function sendConversationMessageOnApi(
   }
   if (options?.voiceWaveform !== undefined) {
     body.voiceWaveform = options.voiceWaveform;
+  }
+  // Document display metadata — the backend reads documentName /
+  // documentMimeType from `metadata` when type === 'document'.
+  if (options?.type === 'document') {
+    body.metadata = {
+      ...(body.metadata as Record<string, unknown> | undefined),
+      ...(options.documentName ? { documentName: options.documentName } : {}),
+      ...(options.documentMimeType ? { documentMimeType: options.documentMimeType } : {}),
+    };
   }
   const payload = await fetchJson<{
     ok: true;

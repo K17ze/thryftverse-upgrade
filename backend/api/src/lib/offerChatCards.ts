@@ -59,6 +59,9 @@ export interface OfferChatCardPayload {
   status: 'pending' | 'accepted' | 'declined' | 'countered' | 'expired' | 'cancelled';
   expiresAt: string;
   counterRound: number;
+  /** Who authored the pending offer — the card needs it to render
+   *  role-correct actions (buyer exits via cancel, seller via decline). */
+  offeredByUserId?: string;
   listingTitle?: string;
 }
 
@@ -183,6 +186,7 @@ function buildOfferPayload(offer: OfferRow): OfferChatCardPayload {
     status: offer.status as OfferChatCardPayload['status'],
     expiresAt: offer.expires_at,
     counterRound: offer.counter_round,
+    offeredByUserId: offer.offered_by_user_id ?? offer.buyer_id,
     listingTitle: offer.item_title ?? undefined,
   };
 }

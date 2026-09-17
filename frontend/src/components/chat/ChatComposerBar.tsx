@@ -243,20 +243,35 @@ export function ChatComposerBar({
               <Ionicons name="send" size={18} color={canSend ? colors.textInverse : colors.textMuted} />
             )}
           </AnimatedPressable>
-        ) : onCameraPress ? (
-          <AnimatedPressable
-            onPress={onCameraPress}
-            style={styles.actionBtn}
-            activeOpacity={0.7}
-            scaleValue={0.9}
-            hapticFeedback="light"
-            accessibilityLabel={t('compose.openCamera')}
-            accessibilityRole="button"
-            disabled={disabled || isSending}
-          >
-            <Ionicons name="camera-outline" size={24} color={colors.textSecondary} />
-          </AnimatedPressable>
-        ) : null}
+        ) : (
+          <>
+            {onCameraPress ? (
+              <AnimatedPressable
+                onPress={onCameraPress}
+                style={styles.actionBtn}
+                activeOpacity={0.7}
+                scaleValue={0.9}
+                hapticFeedback="light"
+                accessibilityLabel={t('compose.openCamera')}
+                accessibilityRole="button"
+                disabled={disabled || isSending}
+              >
+                <Ionicons name="camera-outline" size={24} color={colors.textSecondary} />
+              </AnimatedPressable>
+            ) : null}
+            {/* Voice entry point — the recorder's idle state is the mic
+                button; mounting it here is what makes voice reachable.
+                While recording it reports state via onRecordingStateChange,
+                which swaps the text input for the recorder above. */}
+            {!isVoiceRecording ? (
+              <VoiceMessageRecorder
+                onSend={onVoiceRecord}
+                onRecordingStateChange={onVoiceRecordingChange}
+                disabled={disabled || isSending}
+              />
+            ) : null}
+          </>
+        )}
       </View>
     </View>
   );

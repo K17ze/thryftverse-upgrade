@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -25,6 +26,10 @@ export interface MakeOfferListingResult {
   platformChargeGbp: number;
   total: number;
   discountPct: number | null;
+  /** Live listing price in GBP once fetched — falls back to the route
+   *  param. All money math (seed, cap, discount, summary) must read this,
+   *  never the possibly-stale navigation payload. */
+  livePriceGbp: number;
   itemImageUri: string | undefined;
 }
 
@@ -43,10 +48,17 @@ export function useMakeOfferListing(params: {
   const { itemId, price, isCounterOffer, previousOffer } = params;
   const { currencyCode, fxRates } = useCurrencyContext();
   const { show } = useToast();
-  const [offerPrice, setOfferPrice] = useState('');
+  const [offerPrice, setOfferPriceState] = useState('');
   const [listing, setListing] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const isMountedRef = useRef(true);
+  // True once the user has typed/tapped an amount — the live-price reseed
+  // must never stomp an in-progress edit.
+  const userEditedRef = useRef(false);
+  const setOfferPrice = useCallback((value: SetStateAction<string>) => {
+    userEditedRef.current = true;
+    setOfferPriceState(value);
+  }, []);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -66,12 +78,20 @@ export function useMakeOfferListing(params: {
     return () => { mounted = false; };
   }, [itemId, show]);
 
+  // Live listing price wins over the navigation payload — the param can be
+  // stale by minutes (price drop between PDP tap and sheet submit).
+  const livePriceGbp =
+    listing && Number.isFinite(listing.priceGbp) && listing.priceGbp > 0
+      ? listing.priceGbp
+      : price;
+
   useEffect(() => {
+    if (userEditedRef.current) return;
     // For counter-offers, default to halfway between previous offer and asking price
-    const basePrice = isCounterOffer && previousOffer ? (previousOffer + price) / 2 : price;
+    const basePrice = isCounterOffer && previousOffer ? (previousOffer + livePriceGbp) / 2 : livePriceGbp;
     const defaultOffer = convertGbpToDisplayAmount(basePrice, currencyCode, fxRates);
-    setOfferPrice((Number.isFinite(defaultOffer) ? defaultOffer : basePrice).toFixed(2));
-  }, [currencyCode, fxRates, price, isCounterOffer, previousOffer]);
+    setOfferPriceState((Number.isFinite(defaultOffer) ? defaultOffer : basePrice).toFixed(2));
+  }, [currencyCode, fxRates, livePriceGbp, isCounterOffer, previousOffer]);
 
   const numericOffer = parseFloat(offerPrice) || 0;
   const {
@@ -83,11 +103,11 @@ export function useMakeOfferListing(params: {
   // shown dynamically as the buyer adjusts their offer. Resale
   // marketplaces all show this prominently.
   const discountPct = useMemo(() => {
-    if (!price || price <= 0) return null;
-    const pct = ((price - numericOfferGbp) / price) * 100;
+    if (!livePriceGbp || livePriceGbp <= 0) return null;
+    const pct = ((livePriceGbp - numericOfferGbp) / livePriceGbp) * 100;
     if (pct <= 0) return null;
     return Math.round(pct);
-  }, [price, numericOfferGbp]);
+  }, [livePriceGbp, numericOfferGbp]);
 
   // Item image — use listing image if available, fall back to icon
   const itemImageUri = listing?.images?.[0] ?? listing?.imageUrl;
@@ -103,5 +123,6 @@ export function useMakeOfferListing(params: {
     platformChargeGbp,
     total,
     discountPct,
+    livePriceGbp,
     itemImageUri };
 }

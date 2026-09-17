@@ -53,6 +53,7 @@ import { fetchPublicProfile } from '../services/profileApi';
 import { useBackendData } from '../context/BackendDataContext';
 import { useStore } from '../store/useStore';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useUserOfferEvent } from '../services/realtimeClient';
 import { useNotifications } from '../hooks/useNotifications';
 import { useHaptic } from '../hooks/useHaptic';
 import { useVisuallyComplete } from '../performance/visuallyComplete';
@@ -133,6 +134,15 @@ export default function OffersScreen() {
   }, [showError]);
 
   useFocusEffect(
+    useCallback(() => {
+      void loadOffers();
+    }, [loadOffers]),
+  );
+
+  // Offer lifecycle events arrive participant-privately on the user topic —
+  // refetch so accept/decline/counter/expiry land without a manual refresh.
+  useUserOfferEvent(
+    currentUserId,
     useCallback(() => {
       void loadOffers();
     }, [loadOffers]),
@@ -388,7 +398,11 @@ export default function OffersScreen() {
 
   const handleRowPress = useCallback(
     (offer: ListingOffer) => {
-      if (offer.conversationId) {
+      // An accepted offer is a deal in flight — its truthful destination is
+      // the bound order, not the negotiation thread.
+      if (offer.orderId) {
+        navigation.navigate('OrderDetail', { orderId: offer.orderId });
+      } else if (offer.conversationId) {
         navigation.navigate('Chat', { conversationId: offer.conversationId });
       } else {
         navigation.navigate('ItemDetail', { itemId: offer.listingId });

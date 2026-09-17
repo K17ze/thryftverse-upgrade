@@ -158,6 +158,11 @@ function MediaPage({
       translateY.value = withSpring(ty, { ...Motion.spring.press, velocity: reducedMotion ? 0 : e.velocityY });
     });
 
+  // Zoom and save are separate gestures: an unzoomed double-tap is the
+  // wishlist gesture (big-heart), a zoomed double-tap resets the zoom.
+  // Previously the zoom-in branch ALSO fired onDoubleTap — one gesture
+  // both magnified the photo and silently wishlisted the listing.
+  // Inline zoom-in stays on pinch + the fullscreen viewer (single tap).
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
     .onEnd(() => {
@@ -169,12 +174,8 @@ function MediaPage({
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
         runOnJS(setIsZoomed)(false);
-      } else {
-        const target = reducedMotion ? 2 : 2.5;
-        scale.value = withSpring(target, Motion.spring.success);
-        savedScale.value = target;
-        runOnJS(setIsZoomed)(true);
-        if (onDoubleTap) runOnJS(onDoubleTap)();
+      } else if (onDoubleTap) {
+        runOnJS(onDoubleTap)();
       }
     });
 

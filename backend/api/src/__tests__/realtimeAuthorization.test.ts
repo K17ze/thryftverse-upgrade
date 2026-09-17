@@ -31,6 +31,24 @@ test('realtime authorization restricts notification topics to their owner', asyn
   );
 });
 
+test('realtime authorization restricts per-user chat inbox topics to their owner', async () => {
+  const db = {
+    query: async () => ({ rows: [{ allowed: false }] }),
+  };
+
+  // The `chat.user:{id}` topic carries new-conversation signals (dm created,
+  // group created, member added) — it must be owner-only and must not hit
+  // the database for authorization.
+  assert.equal(
+    await canUserSubscribeToRealtimeTopic(db, 'user_1', 'chat.user:user_1'),
+    true
+  );
+  assert.equal(
+    await canUserSubscribeToRealtimeTopic(db, 'user_1', 'chat.user:user_2'),
+    false
+  );
+});
+
 test('realtime authorization resolves chat membership through the database', async () => {
   const seen: unknown[][] = [];
   const db = {

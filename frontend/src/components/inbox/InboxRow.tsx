@@ -185,10 +185,10 @@ function InboxRowBase({
       lastMessage={item.lastMessage ?? ''}
       lastMessageTime={formatInboxTimestamp(item.lastMessageTime)}
       unread={!!item.unread}
-      // No truthful unread count exists client-side (the list payload has
-      // no per-message read cursor), so render the plain unread dot rather
-      // than fabricate a number from message history length.
-      unreadCount={undefined}
+      // Authoritative server count — honors read cursor, moderation, and
+      // per-user deletions. Zero collapses to the plain unread dot when the
+      // user only marked the thread unread manually.
+      unreadCount={item.unreadCount && item.unreadCount > 0 ? item.unreadCount : undefined}
       deliveryStatus={deriveInboxDeliveryStatus(lastStoredMessage)}
       isPinned={!!item.isPinned}
       isMuted={isMuted}

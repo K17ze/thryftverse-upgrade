@@ -15,6 +15,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   resolveCapabilities,
+  classifyOrder,
+  getStatusTone,
   type OrderCapabilityContext,
 } from '../components/orders/orderCapabilities';
 import {
@@ -50,6 +52,41 @@ describe('in-transit orders never offer confirm_delivery', () => {
       expect(cap.secondaryActions).not.toContain('confirm_delivery');
     });
   }
+});
+
+describe('carrier-failure orders (delivery failed / returned)', () => {
+  for (const status of ['delivery failed', 'returned']) {
+    it(`buyer '${status}' — primary is the resolution path, never confirm_delivery`, () => {
+      const cap = resolveCapabilities({ ...base, status, hasTracking: true });
+      expect(cap.canConfirmDelivery).toBe(false);
+      expect(cap.primaryAction).toBe('report_issue');
+      expect(cap.secondaryActions).not.toContain('confirm_delivery');
+      // Tracking survives failure — it is the dispute evidence.
+      expect(cap.canTrack).toBe(true);
+      expect(cap.secondaryActions).toContain('track_order');
+      // report_issue is primary → not duplicated in secondaries.
+      expect(cap.secondaryActions).not.toContain('report_issue');
+    });
+
+    it(`buyer '${status}' with an open resolution — primary is view_resolution`, () => {
+      const cap = resolveCapabilities({ ...base, status, hasTracking: true, hasOpenResolution: true });
+      expect(cap.primaryAction).toBe('view_resolution');
+      expect(cap.secondaryActions).not.toContain('view_resolution');
+    });
+
+    it(`seller '${status}' — tracking is the primary evidence action`, () => {
+      const cap = resolveCapabilities({ ...base, status, role: 'seller', hasTracking: true });
+      expect(cap.primaryAction).toBe('track_order');
+      expect(cap.canConfirmDelivery).toBe(false);
+    });
+  }
+
+  it('classifies carrier-failure statuses as active — money is still in flight', () => {
+    expect(classifyOrder('delivery failed')).toBe('active');
+    expect(classifyOrder('returned')).toBe('active');
+    expect(getStatusTone('delivery failed')).toBe('danger');
+    expect(getStatusTone('returned')).toBe('danger');
+  });
 });
 
 describe('delivered orders grant confirm_delivery', () => {

@@ -3,6 +3,8 @@ import { useStore } from '../../store/useStore';
 import {
   useInboxMessageEvent,
   useInboxGroupIdentityEvent,
+  useInboxUserEvent,
+  useInboxReadEvent,
   realtimePayloadToMessage,
 } from '../../services/realtimeClient';
 
@@ -59,11 +61,43 @@ export function useInboxRealtime(loadConversations: () => Promise<void>) {
           lastMessage: nextLastMessage,
           lastMessageTime: domainMessage.timestamp,
           unread: isOwnMessage ? existing.unread : true,
+          unreadCount: isOwnMessage || alreadyStored
+            ? (existing.unreadCount ?? 0)
+            : (existing.unreadCount ?? 0) + 1,
           messages: alreadyStored ? existing.messages : [...existing.messages, domainMessage],
         });
       },
       [conversations, currentUser?.id, upsertConversation, loadConversations],
     ),
+  );
+
+  // Multi-device read sync — reading a thread on another device broadcasts
+  // a read cursor carrying my userId. Clear the row's unread state locally;
+  // receipts from other users don't affect my unread badge.
+  useInboxReadEvent(
+    useCallback(
+      (payload) => {
+        if (!currentUser?.id || payload.userId !== currentUser.id) return;
+        const existing = conversations.find((c) => c.id === payload.conversationId);
+        if (!existing || (!existing.unread && !(existing.unreadCount ?? 0))) return;
+        upsertConversation({
+          ...existing,
+          unread: false,
+          unreadCount: 0,
+        });
+      },
+      [conversations, currentUser?.id, upsertConversation],
+    ),
+  );
+
+  // Per-user inbox signals — a new DM, a new group, or being added to a
+  // group can never arrive on a per-conversation topic (we don't subscribe
+  // to conversations we don't know about). Refetch so the thread appears.
+  useInboxUserEvent(
+    currentUser?.id,
+    useCallback(() => {
+      void loadConversations();
+    }, [loadConversations]),
   );
 
   // Realtime group identity updates — when an admin changes the group name,

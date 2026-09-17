@@ -12,7 +12,6 @@ export interface MakeOfferPriceSectionProps {
   isCounterOffer: boolean;
   previousOffer: number | undefined;
   price: number;
-  listing: any;
   offerPrice: string;
   numericOfferGbp: number;
   discountPct: number | null;
@@ -22,13 +21,11 @@ export interface MakeOfferPriceSectionProps {
 
 /** Price entry section for MakeOfferScreen: the large centered amount
  *  input with a hairline underline, live discount readout, quick-offer
- *  chips (80/90/95% of asking), counter-offer compare strip and the
- *  seller minimum-offer floor notice. */
+ *  chips (80/90/95% of asking) and the counter-offer compare strip. */
 export function MakeOfferPriceSection({
   isCounterOffer,
   previousOffer,
   price,
-  listing,
   offerPrice,
   numericOfferGbp,
   discountPct,
@@ -133,19 +130,6 @@ export function MakeOfferPriceSection({
         </View>
       )}
 
-      {/* Seller minimum offer floor notice */}
-      {(() => {
-        const sellerMinOffer = listing?.minimumOfferGbp ?? listing?.minimum_offer_gbp ?? 0;
-        if (sellerMinOffer <= 0) return null;
-        return (
-          <View style={styles.contextRow}>
-            <Ionicons name="information-circle-outline" size={14} color={colors.textSecondary} />
-            <Text style={[styles.contextText, { color: colors.textSecondary }]}>
-              {t('makeOffer.sellerMinOffer.label', { amount: formatFromFiat(sellerMinOffer, 'GBP') })}
-            </Text>
-          </View>
-        );
-      })()}
     </View>
     </View>
   );

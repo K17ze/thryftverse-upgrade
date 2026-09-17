@@ -93,8 +93,11 @@ export class RealtimeClient {
   private heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
   private isIntentionallyClosed = false;
 
-  /** Topics the client wants to be subscribed to. */
-  private desiredTopics: Set<string>;
+  /** Topics the client wants to be subscribed to, with a reference count.
+   *  Multiple consumers (inbox list, open thread, pinned message hook) can
+   *  hold the same topic; the server subscription only drops when the last
+   *  consumer unsubscribes. */
+  private desiredTopics: Map<string, number>;
   /** Topics the server has confirmed subscription for. */
   private subscribedTopics: Set<string> = new Set();
   /** Last seen sequence number per topic (for gap detection). */
@@ -116,7 +119,9 @@ export class RealtimeClient {
       enableGapReplay: config.enableGapReplay ?? true,
       sequenceStorage: config.sequenceStorage,
     };
-    this.desiredTopics = new Set(this.config.initialTopics);
+    this.desiredTopics = new Map(
+      this.config.initialTopics.map((t) => [t, 1]),
+    );
   }
 
   // ── Public API ───────────────────────────────────────────────────
@@ -156,25 +161,41 @@ export class RealtimeClient {
     this.subscribedTopics.clear();
   }
 
-  /** Subscribe to additional topics (sends control message if connected). */
+  /** Subscribe to additional topics (sends control message if connected).
+   *  Only topics transitioning 0→1 references produce a server subscribe —
+   *  a topic already held by another consumer just increments its count. */
   subscribe(topics: string[]): void {
+    const newlyDesired: string[] = [];
     for (const t of topics) {
-      this.desiredTopics.add(t);
+      const count = this.desiredTopics.get(t) ?? 0;
+      this.desiredTopics.set(t, count + 1);
+      if (count === 0) newlyDesired.push(t);
     }
-    if (this.state === 'connected') {
-      this.sendControl({ action: 'subscribe', topics });
+    if (this.state === 'connected' && newlyDesired.length) {
+      this.sendControl({ action: 'subscribe', topics: newlyDesired });
     }
   }
 
-  /** Unsubscribe from topics (sends control message if connected). */
+  /** Unsubscribe from topics (sends control message if connected).
+   *  The server subscription is dropped only when the last reference is
+   *  released — other consumers of the same topic keep receiving events. */
   unsubscribe(topics: string[]): void {
+    const fullyReleased: string[] = [];
     for (const t of topics) {
-      this.desiredTopics.delete(t);
+      const count = this.desiredTopics.get(t) ?? 0;
+      if (count <= 1) {
+        this.desiredTopics.delete(t);
+        if (count === 1) fullyReleased.push(t);
+      } else {
+        this.desiredTopics.set(t, count - 1);
+      }
     }
-    if (this.state === 'connected') {
-      this.sendControl({ action: 'unsubscribe', topics });
-      for (const t of topics) {
+    if (fullyReleased.length) {
+      for (const t of fullyReleased) {
         this.subscribedTopics.delete(t);
+      }
+      if (this.state === 'connected') {
+        this.sendControl({ action: 'unsubscribe', topics: fullyReleased });
       }
     }
   }
@@ -233,7 +254,7 @@ export class RealtimeClient {
       return;
     }
 
-    const topics = Array.from(this.desiredTopics);
+    const topics = Array.from(this.desiredTopics.keys());
     const url = apiUrlToWsUrl(this.config.apiUrl, '/realtime/ws', {
       topics: topics.join(','),
     });

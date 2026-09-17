@@ -72,7 +72,7 @@ export function ChatMessageList({
   // is never squeezed below ~40% of screen height (audit).
   return (
     <View style={styles.messageListContainer}>
-      {isSyncing ? (
+      {isSyncing && messages.length === 0 ? (
         <SkeletonChatLoader count={6} />
       ) : syncError && !messages.length ? (
         <RetryState

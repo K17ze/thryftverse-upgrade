@@ -724,3 +724,72 @@ User-reported defect class: filter/sort behaved like "a different page" across e
 **Verification**: backend tsc clean, frontend tsc clean, frontend vitest 2065/2065 (112 files), backend node:test 45/45 order-fulfilment + 22/22 money-path guards, eslint 0 errors on all touched files.
 
 **Residual**: `notificationSystem.test.ts` still parks `node --test` on Redis handles (pre-existing). Seller 'delivery_failed'/'returned' statuses render as danger-tone terminal but have no dedicated seller-action vocabulary yet — the resolution path is support-ticket driven, which is the honest interim state.
+
+### Wave AG (2026-09-17): Messaging/inbox — the chat department, rebuilt at the contract layer.
+
+**Backend privacy P0s:**
+- **Deleted-message leak**: delete-for-everyone now clears `body`, `body_ciphertext`, `key_version`, and `metadata` — tombstones no longer leak ciphertext or commerce metadata into inbox previews/search; voice media is revoked on delete.
+- **Persisted moderation**: new `chat_messages.moderation_state` column (migration 314); send path persists the risk decision. All read paths suppress `denied` for everyone and `quarantined` from recipients (sender still sees own) — main reads, aroundMessageId pages, inbox LATERAL preview, media listing, and search.
+- **Anonymous poll de-anonymization**: vote/unvote broadcasts carried `userId`/voterVotes regardless of `is_anonymous`. Poll lookups are now conversation-scoped, read `is_anonymous`, and withhold voter identity for anonymous polls while preserving counts and the actor's own vote state.
+- **Client-metadata forgery**: server-owned commerce identity keys are stripped from client `metadata` — commerce cards derive only from authoritative backend context.
+
+**Backend correctness P1s:**
+- `POST /read` rewritten: `last_read_at` honors `upToMessageId`, receipt fan-out is bounded, broadcast carries the cursor (`upToMessageId`) + bounded `messageIds`; send path stamps sender `last_read_at` (self-unread eliminated).
+- Read-receipt privacy on REST: batch serialization + `/receipts` now honor `read_receipts_enabled`, pending-request suppression, and restrict-direction invisibility (previously realtime-only).
+- `'poll'` added to send enum; missed-replay `result.rows[0]` crash fixed; group-create advisory lock; report events no longer reach the reported user; owner-leave and member-removal hardened with transaction-local row locks (a group can never lose its owner mid-transfer); message edits re-run the scam scanner.
+- **Realtime revocation**: `deliverLocalEvent` drops a removed/left member's topic subscription on every instance — local AND Redis-fanned delivery.
+- **Declined-request lifecycle**: declined conversations are excluded from `/chat/conversations`; a new DM message from the counterparty resets `declined`→`pending` (resurfaces in Requests, never silently swallowed).
+
+**Inbox contract:**
+- `GET /chat/conversations` now emits batch-computed `unreadCount` (honors read cursor incl. NULL last_read_at, moderation, per-user deletions) plus `context`; `unread` derives from the count (the old timestamp comparison returned false for never-read threads).
+- **New `chat.user:{userId}` realtime topic**: authorization is owner-only; `chat.dm.created`, `chat.group.created`, and `chat.member.added` now publish user-level signals — recipients previously could never learn about conversations they weren't subscribed to.
+
+**Frontend:**
+- `RealtimeClient` topic refcounting — `desiredTopics` is now a count map; a chat screen unmounting no longer cuts the inbox's subscription to the same topic (server controls fire only on 0↔1 transitions).
+- `useInboxUserEvent` + `useInboxReadEvent`: new-conversation signals refetch the inbox; my own `chat.message.read` events clear unread locally (multi-device sync — published self-targeted even when receipts are socially suppressed).
+- `chatApi` mapper preserves `context` + `unreadCount`; `unread` = count>0 || server || markedUnread; `InboxRow` renders the truthful count badge (99+ cap already existed).
+- Chat thread: `VoiceMessageRecorder` reachable from the empty composer (dead entry point fixed); document send is real (upload → canonical URL → optimistic → reconcile/failed/reconciling+outbox); `BLOCKED_BY_RECIPIENT`/terminal 400/403 mark failed, never enqueued; resnapshot preserves loaded older history and only fails own missing sends; populated lists never blank to skeletons during background sync; poll-only and document messages render (null-gate fixed); `listing_share` routes to commerce cards; `ChatTransactionStrip` consumes `resolveOrderCapabilities` (carrier-failure → danger tone).
+
+**Regression coverage**: `realtimeTopicRefcount.test.ts` 5/5 (0→1 subscribe only, last-release unsubscribe, no-op unknown topic, reconnect URL carries held topics); `realtimeAuthorization.test.ts` +1 (chat.user owner-only) → 6/6; frontend chat/inbox suites 111/111; backend chat suites 16/16.
+
+**Verification**: backend tsc clean, frontend tsc clean, eslint 0 errors on touched files.
+
+### Wave AH (2026-09-17): Offers lifecycle + Smart Sell — commerce truthfulness end-to-end.
+
+**Backend P1s:**
+- **Offer events off dead topics**: every `offer.*` realtime publish moved from `listing:{id}` (unauthorized — dead writes) to participant-scoped `chat.user:{buyerId}`/`chat.user:{sellerId}` via `publishOfferEventToParticipants`.
+- **Accepted-offer reservation lapse**: the sweeps (`index.ts` + offer mutation pre-passes) now flip `accepted` offers whose reservation died and emit `offer.checkout_expired` in-transaction; the drain notifies BOTH parties and syncs the in-thread card. Accept-replay self-heals a terminal reservation (410, not a stale `accepted` echo).
+- **Smart Sell auto-accept was a no-op**: the durable accept transition extracted to `lib/offerAcceptance.ts` (order + reservation + offer flip + sibling declines + listing pause + offer.accepted + order_events) and shared by the manual route AND Smart Sell evaluate; post-commit `emitOrderCommerceCard` parity.
+- **`smart_sell_decision.*` dead-lettered**: drain branch added — notifies the SELLER that automation acted (counterparty is already covered by the sibling `offer.*` event); `smart_sell_decision` registered in backend registry + frontend notification contract (commerce role, important attention).
+
+**Backend P2s:**
+- **Computed expiry on reads**: `mapRow` reports overdue `pending` as `expired`; `offerStatusFilterClause` keeps pending/expired filters consistent with the computed status.
+- **410 contract everywhere**: accept/decline/cancel/counter share `expireOverdueOffers` + `expireOfferInTransaction` (sub-ms race fallback); expired rows answer 410, not 409.
+- **23505 → idempotent replay**: concurrent same-key creates/counters recover the committed winner (request-hash match → replay, mismatch → `IDEMPOTENCY_PAYLOAD_MISMATCH`).
+- **Conversation membership validation**: client-supplied `conversationId` must be a real conversation where BOTH buyer and seller are `chat_members` — no attaching offers to arbitrary threads.
+- **Authorship-aware notifications**: `offeredByUserId` + `cancelledByUserId`/`cancellationReason` threaded through decline/cancel/expire/sibling-decline payloads; drain notifies the author (expiry, sibling-decline) or the counterparty of the actor (decline→buyer, buyer-cancel→seller, seller-cancel→author) with truthful copy ("withdrew their counter-offer" vs "your offer was declined").
+- **Seller-away guard on Smart Sell**: automation is not seller activity — an away seller's policy no longer auto-binds them to unfulfillable orders.
+- **`order_id` emitted on offer rows**: accepted offers deep-link to OrderDetail.
+- **`correlationId` on countered events**; `40P01`/`40001` → 409 `OFFER_CONFLICT` across all five mutation catches.
+
+**Frontend:**
+- `resolveOfferActions` honors the counterparty-accept rule (buyer can accept a seller-authored counter); accepted rows route to OrderDetail via `orderId`.
+- Chat offer cards: `viewerIsOfferBuyer` → buyers see **Cancel** (was Pass→decline-shaped), wired `handleCancelOffer` through `useConversationCommerce` → `ChatMessageItem` → `ChatCommerceCard`.
+- `useUserOfferEvent` + OffersScreen subscription — `offer.*`/`smart_sell_decision.*` on `chat.user:{me}` refetch the list in realtime.
+- Make Offer: live `priceGbp` seeds and validates (route param is fallback only, user edits never stomped), re-entrancy ref guard, counter-depth cap (10) client-side, idempotency key regenerates after deterministic failures (network keeps the key for reconciliation), phantom `minimumOfferGbp` removed, compose-phase Retry actually retries (was a dead `if (showReview)` branch).
+
+**Product detail (PDP) P1s:**
+- **Stale-CTA under keepPreviousData**: `openProductDetail` uses `push` (PDP→PDP gets its own screen + query lifecycle); `expectedItemId` gates every mutating/navigating action in `useItemDetailActions`; screen guards buy/offer/manage/quick-save and hides the dock while `item.id !== itemId`; self-recommendation taps are dropped.
+- **Status normalization**: `normalizeStatus` is case/whitespace-insensitive — 'Active' no longer collapses to `unknown` and disables commerce.
+- **Double-tap zoom/save collision**: unzoomed double-tap = wishlist heart only; zoomed double-tap = reset zoom only. Inline zoom-in remains on pinch + fullscreen.
+- **Seller CTA dead-ends**: view/message/enquire resolve `seller?.id ?? item.sellerId ?? item.seller?.id` — a username-less trust payload no longer silently no-ops.
+- **Authored media dims**: flat-URI hero fallback threads listing-level `mediaWidth`/`mediaHeight` (`mediaAspectRatio` as unit-height dims) onto the cover item — no masonry/geometry change.
+- **Media index reset**: `activeIndex` resets on `item.id` change.
+- **Condition deduplication**: removed from `attributeLine` (chip covers Zone B) and from the CategoryEvidence spec input (evidence block covers Zone D) — was rendering 4×.
+- **Dead PDP components deleted**: `ProductActionBar`, `ProductMediaGallery`, `ProductCommerceSummary`, `ProductIdentitySummary`, `PriceInsightStrip` + barrel exports (only consumer was a non-containment test).
+
+**Regression coverage**: new `offerLifecycleTransitions.test.ts` → 8/8 (acceptance transition completeness incl. seller-authored sibling payload, computed-status mapRow, status-filter clause, participant topics, drain recipients, smart-sell guards, 23505/membership/author-accept/conflict contract); `checkoutMoneyPathGuards` source-assertion retargeted to `offerAcceptance.ts` → 22/22.
+
+**Verification**: backend tsc clean, frontend tsc clean, frontend vitest 2077/2077 (113 files), backend targeted 62/62, eslint 0 errors on touched files.
+
+**Residual**: nine further `components/product/*` files have zero live consumers (`CuratedCollectionsRail`, `OfferToLikersSheet`, `ProductAttributeChips`, `ProductDescription`, `ProductDetailHeader`, `ProductErrorState`, `ProductFamilyBadge`, `ProductPolicySheet`, `SizeGuideSheet`, `SustainabilityBadge`, `PaginationDots` count≤1) — candidates for a dedicated dead-code sweep, left out of scope pending audit confirmation they aren't referenced via lazy/dynamic paths.

@@ -71,6 +71,13 @@ export type ProductNavTarget =
  * Navigate to the correct product detail screen for a given reference.
  * Drop-in replacement for ad-hoc `navigation.navigate('ItemDetail', ...)`
  * calls that bypassed the canonical resolver.
+ *
+ * Uses `push` when the navigator supports it: `navigate` to a detail route
+ * already on the stack pops back to that screen with new params, so a
+ * PDP → PDP transition reuses the mounted screen and keepPreviousData
+ * serves the OLD listing's content (and commerce CTAs) under the new
+ * itemId. A pushed screen has its own query lifecycle — the stale-CTA
+ * seam cannot exist.
  */
 export function openProductDetail(
   navigation: ProductNavTarget,
@@ -78,7 +85,13 @@ export function openProductDetail(
 ): void {
   const dest = resolveProductDestination(ref);
   // The route name is resolved dynamically from the reference kind, so we cast
-  // to `any` to satisfy the overloaded `navigate` signature — the param names
-  // are verified against RootStackParamList in resolveProductDestination.
+  // to `any` to satisfy the overloaded `navigate`/`push` signatures — the
+  // param names are verified against RootStackParamList in
+  // resolveProductDestination.
+  const maybePushing = navigation as { push?: (route: string, params?: unknown) => void };
+  if (typeof maybePushing.push === 'function') {
+    maybePushing.push(dest.route, dest.params);
+    return;
+  }
   (navigation.navigate as any)(dest.route, dest.params);
 }

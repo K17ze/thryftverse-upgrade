@@ -134,6 +134,7 @@ export default function ItemDetailScreen() {
   // make-offer, price-alert toggle, enquire / request viewing) ──
   const actions = useItemDetailActions({
     listing: item,
+    expectedItemId: itemId,
     seller,
     currentUserId: currentUser?.id,
     navigation,
@@ -271,7 +272,13 @@ export default function ItemDetailScreen() {
   // commitment, reversible with a second tap. Long-press = "file to
   // board" — opens the collection picker. Both tiers are gated by the
   // save auth wall.
+  // True while the listing query is serving keepPreviousData for a
+  // previous itemId — rendered content is stale, so commerce/save CTAs
+  // must no-op rather than act on the wrong listing.
+  const listingIsCurrent = item.id === itemId;
+
   const handleQuickSave = () => {
+    if (!listingIsCurrent) return;
     if (!requireAuth('save_item')) return;
     haptic.patterns.save();
     // The bookmark icon reflects saved-anywhere (Saved list ∪ collections),
@@ -308,6 +315,8 @@ export default function ItemDetailScreen() {
     recReasonCode?: string,
     recPersonalised?: boolean,
   ) => {
+    // A rail item that is the current listing must not push a duplicate PDP.
+    if (recItem.id === itemId) return;
     openProductDetail(navigation, {
       referenceKind: 'listing',
       canonicalId: recItem.id,
@@ -602,7 +611,11 @@ export default function ItemDetailScreen() {
       {/* ── Zone I — Sticky action dock ──
           Buyer: price + Buy now + Make offer.
           Seller: Manage listing.
-          Sold/unavailable: factual state + one next action. */}
+          Sold/unavailable: factual state + one next action.
+          Hidden while placeholder data is on screen — a dock quoting the
+          previous listing's price with dead CTAs is worse than no dock
+          for the brief swap window. */}
+      {listingIsCurrent ? (
       <CommerceActionDock
         item={item}
         capabilities={capabilities}
@@ -611,9 +624,13 @@ export default function ItemDetailScreen() {
         formattedPrice={formattedPrice}
         formattedOriginal={formattedOriginal}
         hasDiscount={hasDiscount}
-        onManageListing={() => navigation.navigate('ManageListing', { itemId: item.id })}
+        onManageListing={() => {
+          if (!listingIsCurrent) return;
+          navigation.navigate('ManageListing', { itemId: item.id });
+        }}
         onBrowseSimilar={() => navigation.navigate('MainTabs', { screen: 'Explore' })}
         onBuyNow={() => {
+          if (!listingIsCurrent) return;
           if (!requireAuth('purchase')) return;
           if (item) ProductAnalytics.checkoutStart(item.id);
           // Do not fire a success haptic before the purchase has
@@ -625,6 +642,7 @@ export default function ItemDetailScreen() {
           navigation.navigate('Checkout', { itemId: item.id });
         }}
         onMakeOffer={() => {
+          if (!listingIsCurrent) return;
           if (!requireAuth('purchase')) return;
           if (item) ProductAnalytics.offerStart(item.id);
           overlay.open.makeOffer();
@@ -632,6 +650,7 @@ export default function ItemDetailScreen() {
         onEnquire={handleEnquire}
         onRequestViewing={handleRequestViewing}
       />
+      ) : null}
       </View>
 
       {/* ── Sheets & modals ──

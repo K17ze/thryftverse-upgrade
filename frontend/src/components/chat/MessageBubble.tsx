@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
   withTiming,
@@ -392,6 +392,28 @@ function MessageBubbleBase({
             </>
           ) : null}
 
+          {documentUri ? (
+            <Pressable
+              onPress={() => { Linking.openURL(documentUri).catch(() => undefined); }}
+              style={[styles.documentRow, { borderColor: isMe ? colors.scrimTextTertiary : colors.border }]}
+              accessibilityRole="button"
+              accessibilityLabel={documentName ? `Open document ${documentName}` : 'Open document'}
+            >
+              <Ionicons name="document-outline" size={22} color={isMe ? colors.textInverse : colors.brand} />
+              <View style={styles.documentMeta}>
+                <Text style={[styles.documentName, { color: bubbleText }]} numberOfLines={1}>
+                  {documentName ?? 'Document'}
+                </Text>
+                {documentMimeType ? (
+                  <Text style={[styles.documentMime, { color: metaColor }]} numberOfLines={1}>
+                    {documentMimeType}
+                  </Text>
+                ) : null}
+              </View>
+              <Ionicons name="download-outline" size={16} color={metaColor} />
+            </Pressable>
+          ) : null}
+
           {text ? (
             <>
               {isDraft ? (
@@ -733,6 +755,25 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: TypographyV2.label.letterSpacing },
+  documentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.sm,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs + 2,
+    minWidth: 180,
+    marginBottom: 2 },
+  documentMeta: {
+    flex: 1,
+    gap: 1 },
+  documentName: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
+  documentMime: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   mediaWrap: {
     backgroundColor: 'transparent',
     position: 'relative' },

@@ -7,6 +7,7 @@ import { emitOrderCommerceCard } from '../lib/orderChatCards.js';
 import { fetchSellerAwayState } from '../lib/sellerAway.js';
 import { getSellerReach } from '../lib/sellerReach.js';
 import { cancelOrderOnReservationExpiry } from '../lib/commerceCheckoutLifecycle.js';
+import { executeOfferAcceptance } from '../lib/offerAcceptance.js';
 
 type ListingOffersRouteDependencies = {
   app: FastifyInstance;
@@ -26,9 +27,6 @@ type ListingOffersRouteDependencies = {
 
 const MAX_OFFER_HOURS = 168; // 7 days
 const MIN_OFFER_HOURS = 1;
-const OFFER_CHECKOUT_RESERVATION_MINUTES = 30;
-const CHECKOUT_QUOTE_VERSION = 'commerce-gbp-2026-07-28.1';
-
 const createOfferSchema = z.object({
   listingId: z.string().min(2).max(120).optional(),
   offerPriceGbp: z.number().positive().max(1_000_000),
@@ -56,7 +54,7 @@ const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 
-type ListingOfferRow = {
+export type ListingOfferRow = {
   id: string;
   listing_id: string;
   buyer_id: string;
@@ -74,11 +72,12 @@ type ListingOfferRow = {
   parent_offer_id: string | null;
   metadata: unknown;
   offered_by_user_id?: string | null;
+  order_id?: string | null;
   created_at: string;
   updated_at: string;
 };
 
-function mapRow(row: ListingOfferRow) {
+export function mapRow(row: ListingOfferRow) {
   return {
     id: row.id,
     listingId: row.listing_id,
@@ -87,7 +86,14 @@ function mapRow(row: ListingOfferRow) {
     offerPriceGbp: Number(row.offer_price_gbp),
     originalPriceGbp: Number(row.original_price_gbp),
     counterRound: row.counter_round,
-    status: row.status,
+    // Read-path lazy expiry: a `pending` row past expires_at reports
+    // 'expired' even before a mutation sweeps it — the API must not claim
+    // an expired offer is still actionable. The durable flip stays owned by
+    // expireOverdueOffers (which emits the domain event); this is computed
+    // status only.
+    status: row.status === 'pending' && Date.parse(row.expires_at) <= Date.now()
+      ? 'expired'
+      : row.status,
     expiresAt: row.expires_at,
     acceptedAt: row.accepted_at,
     declinedAt: row.declined_at,
@@ -97,6 +103,9 @@ function mapRow(row: ListingOfferRow) {
     parentOfferId: row.parent_offer_id,
     metadata: row.metadata,
     offeredByUserId: row.offered_by_user_id ?? row.buyer_id,
+    // The order an accepted offer is bound to — lets the Offers surface
+    // deep-link straight to OrderDetail instead of the negotiation thread.
+    orderId: row.order_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -110,6 +119,7 @@ type ExpiredOfferRow = {
   offer_price_gbp: string;
   conversation_id: string | null;
   expires_at: string;
+  offered_by_user_id: string | null;
 };
 
 /**
@@ -127,9 +137,76 @@ async function expireOverdueOffers(
      SET status = 'expired', expired_at = NOW(), updated_at = NOW()
      WHERE status = 'pending' AND expires_at <= NOW()
      RETURNING id, listing_id, buyer_id, seller_id, offer_price_gbp::text,
-               conversation_id, expires_at::text`,
+               conversation_id, expires_at::text, offered_by_user_id`,
   );
   return result.rows;
+}
+
+/**
+ * Status filter for offer list reads, aligned with mapRow's computed
+ * expiry: 'pending' must exclude overdue rows and 'expired' must include
+ * them, or a filtered list contradicts the row statuses it returns.
+ * `params` is mutated only for literal-status matches.
+ */
+export function offerStatusFilterClause(
+  status: string | undefined,
+  params: unknown[],
+): string {
+  if (!status) return '';
+  if (status === 'pending') {
+    return `AND status = 'pending' AND expires_at > NOW()`;
+  }
+  if (status === 'expired') {
+    return `AND (status = 'expired' OR (status = 'pending' AND expires_at <= NOW()))`;
+  }
+  params.push(status);
+  return `AND status = $${params.length}`;
+}
+
+/**
+ * Sub-millisecond-race fallback for the mutation routes: expireOverdueOffers
+ * sweeps in bulk at transaction start, but an offer can cross expires_at
+ * between that sweep and its row read. Flips this row + appends the durable
+ * event (deduped by `offer.expired:{id}`); the caller then answers 410.
+ */
+async function expireOfferInTransaction(
+  client: { query: Pool['query'] },
+  offer: {
+    listing_id: string;
+    buyer_id: string;
+    seller_id: string;
+    offer_price_gbp: string;
+    conversation_id: string | null;
+    expires_at: string;
+    offered_by_user_id?: string | null;
+  },
+  offerId: string,
+  correlationId: string | null,
+): Promise<void> {
+  await client.query(
+    `UPDATE listing_offers SET status = 'expired', expired_at = NOW(), updated_at = NOW() WHERE id = $1`,
+    [offerId],
+  );
+  await appendDomainEvent(client, {
+    aggregateType: 'offer',
+    aggregateId: offerId,
+    eventType: 'offer.expired',
+    correlationId,
+    deduplicationKey: `offer.expired:${offerId}`,
+    payload: {
+      offerId,
+      listingId: offer.listing_id,
+      buyerId: offer.buyer_id,
+      sellerId: offer.seller_id,
+      offerPriceGbp: Number(offer.offer_price_gbp),
+      conversationId: offer.conversation_id,
+      offeredByUserId: offer.offered_by_user_id ?? offer.buyer_id,
+      // expires_at::text renders Postgres format ('2026-07-28 12:34:56.789+00')
+      // which the drain handler's z.string().datetime() schema rejects —
+      // normalise to ISO-8601 so the event does not dead-letter.
+      expiresAt: new Date(offer.expires_at).toISOString(),
+    },
+  });
 }
 
 /**
@@ -157,6 +234,7 @@ async function appendOfferExpiredEvents(
         sellerId: expiredOffer.seller_id,
         offerPriceGbp: Number(expiredOffer.offer_price_gbp),
         conversationId: expiredOffer.conversation_id,
+        offeredByUserId: expiredOffer.offered_by_user_id ?? expiredOffer.buyer_id,
         // expires_at::text renders Postgres format ('2026-07-28 12:34:56.789+00')
         // which the drain handler's z.string().datetime() schema rejects —
         // normalise to ISO-8601 here so the event does not dead-letter.
@@ -164,6 +242,54 @@ async function appendOfferExpiredEvents(
       },
     });
   }
+}
+
+type OfferReplayRow = ListingOfferRow & { request_hash: string | null };
+
+const OFFER_REPLAY_SELECT = `SELECT id, listing_id, buyer_id, seller_id,
+       offer_price_gbp::text, original_price_gbp::text,
+       counter_round, status, expires_at::text,
+       accepted_at::text, declined_at::text, expired_at::text, cancelled_at::text, order_id,
+       conversation_id, parent_offer_id, metadata, offered_by_user_id,
+       request_hash, created_at::text, updated_at::text
+FROM listing_offers
+WHERE offered_by_user_id = $1 AND idempotency_key = $2
+LIMIT 1`;
+
+/**
+ * Looks up an offer by its author's idempotency key — used both for the
+ * in-transaction replay pre-check (FOR UPDATE) and the post-rollback 23505
+ * recovery path (plain read; the aborted transaction cannot query).
+ */
+async function lookupOfferByIdempotencyKey(
+  queryable: { query: Pool['query'] },
+  actorUserId: string,
+  idempotencyKey: string,
+  forUpdate: boolean,
+): Promise<OfferReplayRow | null> {
+  const result = await queryable.query<OfferReplayRow>(
+    `${OFFER_REPLAY_SELECT}${forUpdate ? '\nFOR UPDATE' : ''}`,
+    [actorUserId, idempotencyKey],
+  );
+  return result.rows[0] ?? null;
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === 'object' && error !== null
+    && (error as { code?: string }).code === '23505';
+}
+
+/**
+ * Serialization failure (40001) or deadlock (40P01) — transient contention
+ * between concurrent offer mutations (e.g. create's listing→offer lock
+ * order vs accept's offer→listing order). Same contract as the bid path:
+ * 409 OFFER_CONFLICT tells the client the write is retryable.
+ */
+function isSerializationConflict(error: unknown): boolean {
+  const code = typeof error === 'object' && error !== null
+    ? (error as { code?: string }).code
+    : undefined;
+  return code === '40001' || code === '40P01';
 }
 
 export const registerListingOfferRoutes = ({
@@ -186,36 +312,26 @@ export const registerListingOfferRoutes = ({
       return { ok: false, error: 'Listing ID does not match the route' };
     }
 
+    const requestHash = crypto
+      .createHash('sha256')
+      .update(JSON.stringify({
+        listingId,
+        offerPriceGbp: payload.offerPriceGbp,
+        expiryHours: payload.expiryHours,
+        conversationId: payload.conversationId ?? null,
+      }))
+      .digest('hex');
     const client = await db.connect();
     try {
       await client.query('BEGIN');
       const expiredOffers = await expireOverdueOffers(client);
       await appendOfferExpiredEvents(client, expiredOffers, request.id);
-      const requestHash = crypto
-        .createHash('sha256')
-        .update(JSON.stringify({
-          listingId,
-          offerPriceGbp: payload.offerPriceGbp,
-          expiryHours: payload.expiryHours,
-          conversationId: payload.conversationId ?? null,
-        }))
-        .digest('hex');
       if (payload.idempotencyKey) {
-        const replay = await client.query<ListingOfferRow & { request_hash: string | null }>(
-          `SELECT id, listing_id, buyer_id, seller_id,
-                  offer_price_gbp::text, original_price_gbp::text,
-                  counter_round, status, expires_at::text,
-                  accepted_at::text, declined_at::text, expired_at::text, cancelled_at::text,
-                  conversation_id, parent_offer_id, metadata, offered_by_user_id,
-                  request_hash, created_at::text, updated_at::text
-           FROM listing_offers
-           WHERE offered_by_user_id = $1 AND idempotency_key = $2
-           LIMIT 1
-           FOR UPDATE`,
-          [actorUserId, payload.idempotencyKey],
+        const replay = await lookupOfferByIdempotencyKey(
+          client, actorUserId, payload.idempotencyKey, true,
         );
-        if (replay.rowCount) {
-          if (replay.rows[0].request_hash !== requestHash) {
+        if (replay) {
+          if (replay.request_hash !== requestHash) {
             await client.query('ROLLBACK');
             reply.code(409);
             return {
@@ -225,7 +341,7 @@ export const registerListingOfferRoutes = ({
             };
           }
           await client.query('COMMIT');
-          return { ok: true, idempotent: true, offer: mapRow(replay.rows[0]) };
+          return { ok: true, idempotent: true, offer: mapRow(replay) };
         }
       }
 
@@ -292,6 +408,36 @@ export const registerListingOfferRoutes = ({
           code: 'SELLER_RESTRICTED',
         };
       }
+      // A client-supplied conversationId decides where offer notifications
+      // deep-link and where the in-thread offer card lands — verify it is a
+      // real thread with BOTH participants as members rather than trusting
+      // the payload blindly.
+      if (payload.conversationId) {
+        const convoResult = await client.query(
+          `SELECT 1 FROM chat_conversations c
+           WHERE c.id = $1
+             AND EXISTS (
+               SELECT 1 FROM chat_members m
+               WHERE m.conversation_id = c.id AND m.user_id = $2
+             )
+             AND EXISTS (
+               SELECT 1 FROM chat_members m
+               WHERE m.conversation_id = c.id AND m.user_id = $3
+             )
+           LIMIT 1`,
+          [payload.conversationId, actorUserId, listing.seller_id],
+        );
+        if (!convoResult.rowCount) {
+          await client.query('ROLLBACK');
+          reply.code(422);
+          return {
+            ok: false,
+            error: 'conversationId is not a thread between the offer participants',
+            code: 'OFFER_CONVERSATION_INVALID',
+          };
+        }
+      }
+
       const originalPriceGbp = Number(listing.price_gbp);
       if (payload.offerPriceGbp > originalPriceGbp * 2) {
         await client.query('ROLLBACK');
@@ -353,7 +499,7 @@ export const registerListingOfferRoutes = ({
          RETURNING id, listing_id, buyer_id, seller_id,
                    offer_price_gbp::text, original_price_gbp::text,
                    counter_round, status, expires_at::text,
-                   accepted_at::text, declined_at::text, expired_at::text, cancelled_at::text,
+                   accepted_at::text, declined_at::text, expired_at::text, cancelled_at::text, order_id,
                    conversation_id, parent_offer_id, metadata, offered_by_user_id,
                    created_at::text, updated_at::text`,
         [
@@ -413,6 +559,30 @@ export const registerListingOfferRoutes = ({
       return { ok: true, offer: mapRow(result.rows[0]) };
     } catch (error) {
       await client.query('ROLLBACK');
+      // Unique violation on (offered_by_user_id, idempotency_key): a
+      // concurrent request with the same key committed first — this is an
+      // idempotent replay, not a failure. Recover the winner's row after
+      // rollback (the aborted transaction cannot query).
+      if (isUniqueViolation(error) && payload.idempotencyKey) {
+        const replayed = await lookupOfferByIdempotencyKey(
+          db, actorUserId, payload.idempotencyKey, false,
+        );
+        if (replayed) {
+          if (replayed.request_hash !== requestHash) {
+            reply.code(409);
+            return {
+              ok: false,
+              error: 'Idempotency key was already used with a different offer payload',
+              code: 'IDEMPOTENCY_PAYLOAD_MISMATCH',
+            };
+          }
+          return { ok: true, idempotent: true, offer: mapRow(replayed) };
+        }
+      }
+      if (isSerializationConflict(error)) {
+        reply.code(409);
+        return { ok: false, error: 'Offer conflict — please retry', code: 'OFFER_CONFLICT' };
+      }
       app.log.error({ err: error }, 'Failed to create listing offer');
       reply.code(500);
       return { ok: false, error: 'Failed to create offer' };
@@ -439,21 +609,11 @@ export const registerListingOfferRoutes = ({
       await client.query('BEGIN');
       const expiredOffers = await expireOverdueOffers(client);
       await appendOfferExpiredEvents(client, expiredOffers, request.id);
-      const replay = await client.query<ListingOfferRow & { request_hash: string | null }>(
-        `SELECT id, listing_id, buyer_id, seller_id,
-                offer_price_gbp::text, original_price_gbp::text,
-                counter_round, status, expires_at::text,
-                accepted_at::text, declined_at::text, expired_at::text, cancelled_at::text,
-                conversation_id, parent_offer_id, metadata, offered_by_user_id,
-                request_hash, created_at::text, updated_at::text
-         FROM listing_offers
-         WHERE offered_by_user_id = $1 AND idempotency_key = $2
-         LIMIT 1
-         FOR UPDATE`,
-        [actorUserId, payload.idempotencyKey],
+      const replay = await lookupOfferByIdempotencyKey(
+        client, actorUserId, payload.idempotencyKey, true,
       );
-      if (replay.rowCount) {
-        if (replay.rows[0].request_hash !== requestHash) {
+      if (replay) {
+        if (replay.request_hash !== requestHash) {
           await client.query('ROLLBACK');
           reply.code(409);
           return {
@@ -463,14 +623,14 @@ export const registerListingOfferRoutes = ({
           };
         }
         await client.query('COMMIT');
-        return { ok: true, idempotent: true, offer: mapRow(replay.rows[0]) };
+        return { ok: true, idempotent: true, offer: mapRow(replay) };
       }
 
       const parentResult = await client.query<ListingOfferRow>(
         `SELECT id, listing_id, buyer_id, seller_id,
                 offer_price_gbp::text, original_price_gbp::text,
                 counter_round, status, expires_at::text,
-                accepted_at::text, declined_at::text, expired_at::text, cancelled_at::text,
+                accepted_at::text, declined_at::text, expired_at::text, cancelled_at::text, order_id,
                 conversation_id, parent_offer_id, metadata, offered_by_user_id,
                 created_at::text, updated_at::text
          FROM listing_offers
@@ -497,8 +657,19 @@ export const registerListingOfferRoutes = ({
       }
       if (parent.status !== 'pending') {
         await client.query('ROLLBACK');
+        // Same contract as accept: a lazily-expired row answers 410.
+        if (parent.status === 'expired') {
+          reply.code(410);
+          return { ok: false, error: 'Offer has expired' };
+        }
         reply.code(409);
         return { ok: false, error: `A ${parent.status} offer cannot be countered` };
+      }
+      if (Date.parse(parent.expires_at) <= Date.now()) {
+        await expireOfferInTransaction(client, parent, offerId, request.id);
+        await client.query('COMMIT');
+        reply.code(410);
+        return { ok: false, error: 'Offer has expired' };
       }
       if (parent.counter_round >= 10) {
         await client.query('ROLLBACK');
@@ -559,6 +730,35 @@ export const registerListingOfferRoutes = ({
         return { ok: false, error: 'Counter amount is unreasonably high' };
       }
 
+      // Same contract as create: an explicitly-passed conversationId must
+      // be a real thread between both participants — it drives notification
+      // routing and card placement.
+      if (payload.conversationId) {
+        const convoResult = await client.query(
+          `SELECT 1 FROM chat_conversations c
+           WHERE c.id = $1
+             AND EXISTS (
+               SELECT 1 FROM chat_members m
+               WHERE m.conversation_id = c.id AND m.user_id = $2
+             )
+             AND EXISTS (
+               SELECT 1 FROM chat_members m
+               WHERE m.conversation_id = c.id AND m.user_id = $3
+             )
+           LIMIT 1`,
+          [payload.conversationId, parent.buyer_id, parent.seller_id],
+        );
+        if (!convoResult.rowCount) {
+          await client.query('ROLLBACK');
+          reply.code(422);
+          return {
+            ok: false,
+            error: 'conversationId is not a thread between the offer participants',
+            code: 'OFFER_CONVERSATION_INVALID',
+          };
+        }
+      }
+
       const nextOfferId = `offer_${crypto.randomUUID()}`;
       const nextRound = parent.counter_round + 1;
       const expiresAt = new Date(Date.now() + payload.expiryHours * 3600_000).toISOString();
@@ -580,7 +780,7 @@ export const registerListingOfferRoutes = ({
          RETURNING id, listing_id, buyer_id, seller_id,
                    offer_price_gbp::text, original_price_gbp::text,
                    counter_round, status, expires_at::text,
-                   accepted_at::text, declined_at::text, expired_at::text, cancelled_at::text,
+                   accepted_at::text, declined_at::text, expired_at::text, cancelled_at::text, order_id,
                    conversation_id, parent_offer_id, metadata, offered_by_user_id,
                    created_at::text, updated_at::text`,
         [
@@ -604,6 +804,7 @@ export const registerListingOfferRoutes = ({
         aggregateId: nextOfferId,
         eventType: 'offer.countered',
         actorId: actorUserId,
+        correlationId: request.id,
         idempotencyKey: payload.idempotencyKey,
         deduplicationKey: `offer.countered:${nextOfferId}`,
         payload: {
@@ -629,6 +830,28 @@ export const registerListingOfferRoutes = ({
       return { ok: true, idempotent: false, offer: mapRow(inserted.rows[0]) };
     } catch (error) {
       await client.query('ROLLBACK');
+      // Same 23505 recovery as create — a concurrent counter with the same
+      // idempotency key committed first.
+      if (isUniqueViolation(error)) {
+        const replayed = await lookupOfferByIdempotencyKey(
+          db, actorUserId, payload.idempotencyKey, false,
+        );
+        if (replayed) {
+          if (replayed.request_hash !== requestHash) {
+            reply.code(409);
+            return {
+              ok: false,
+              error: 'Idempotency key was already used with a different counter payload',
+              code: 'IDEMPOTENCY_PAYLOAD_MISMATCH',
+            };
+          }
+          return { ok: true, idempotent: true, offer: mapRow(replayed) };
+        }
+      }
+      if (isSerializationConflict(error)) {
+        reply.code(409);
+        return { ok: false, error: 'Offer conflict — please retry', code: 'OFFER_CONFLICT' };
+      }
       app.log.error({ err: error, offerId }, 'Failed to counter listing offer');
       reply.code(500);
       return { ok: false, error: 'Failed to counter offer' };
@@ -657,11 +880,7 @@ export const registerListingOfferRoutes = ({
     const params: unknown[] = [listingId];
     if (!isSeller) params.push(actorUserId);
     const buyerClause = isSeller ? '' : `AND buyer_id = $${params.length}`;
-    let statusClause = '';
-    if (status) {
-      params.push(status);
-      statusClause = `AND status = $${params.length}`;
-    }
+    const statusClause = offerStatusFilterClause(status, params);
     params.push(limit);
     const limitClause = `LIMIT $${params.length}`;
 
@@ -669,7 +888,7 @@ export const registerListingOfferRoutes = ({
       `SELECT id, listing_id, buyer_id, seller_id,
               offer_price_gbp::text, original_price_gbp::text,
               counter_round, status, expires_at::text,
-              accepted_at::text, declined_at::text, expired_at::text, cancelled_at::text,
+              accepted_at::text, declined_at::text, expired_at::text, cancelled_at::text, order_id,
               conversation_id, parent_offer_id, metadata, offered_by_user_id,
               created_at::text, updated_at::text
        FROM listing_offers
@@ -689,11 +908,7 @@ export const registerListingOfferRoutes = ({
     const { status, limit } = listQuerySchema.parse(request.query ?? {});
 
     const params: unknown[] = [actorUserId];
-    let statusClause = '';
-    if (status) {
-      params.push(status);
-      statusClause = `AND status = $${params.length}`;
-    }
+    const statusClause = offerStatusFilterClause(status, params);
     params.push(limit);
     const limitClause = `LIMIT $${params.length}`;
 
@@ -701,7 +916,7 @@ export const registerListingOfferRoutes = ({
       `SELECT id, listing_id, buyer_id, seller_id,
               offer_price_gbp::text, original_price_gbp::text,
               counter_round, status, expires_at::text,
-              accepted_at::text, declined_at::text, expired_at::text, cancelled_at::text,
+              accepted_at::text, declined_at::text, expired_at::text, cancelled_at::text, order_id,
               conversation_id, parent_offer_id, metadata, offered_by_user_id,
               created_at::text, updated_at::text
        FROM listing_offers
@@ -735,7 +950,7 @@ export const registerListingOfferRoutes = ({
       `SELECT id, listing_id, buyer_id, seller_id,
               offer_price_gbp::text, original_price_gbp::text,
               counter_round, status, expires_at::text,
-              accepted_at::text, declined_at::text, expired_at::text, cancelled_at::text,
+              accepted_at::text, declined_at::text, expired_at::text, cancelled_at::text, order_id,
               conversation_id, parent_offer_id, metadata, offered_by_user_id,
               created_at::text, updated_at::text
        FROM listing_offers
@@ -802,6 +1017,49 @@ export const registerListingOfferRoutes = ({
            LIMIT 1`,
           [offer.reservation_id],
         );
+        // Self-heal: a reservation already flipped to a terminal state by a
+        // path the sweep doesn't re-scan leaves this offer stuck on
+        // 'accepted' — converge it here with the same durable event so
+        // chat cards and notifications fire.
+        if (reservation.rowCount && reservation.rows[0].status !== 'active') {
+          await client.query(
+            `UPDATE listing_offers
+             SET status = 'expired', expired_at = COALESCE(expired_at, NOW()),
+                 metadata = COALESCE(metadata, '{}'::jsonb)
+                   || '{"checkoutStatus":"reservation_expired"}'::jsonb,
+                 updated_at = NOW()
+             WHERE id = $1 AND status = 'accepted'`,
+            [offerId],
+          );
+          await appendDomainEvent(client, {
+            aggregateType: 'offer',
+            aggregateId: offerId,
+            eventType: 'offer.checkout_expired',
+            correlationId: request.id,
+            deduplicationKey: `offer.checkout_expired:${offerId}`,
+            payload: {
+              offerId,
+              listingId: offer.listing_id,
+              orderId: offer.order_id,
+              reservationId: offer.reservation_id,
+              buyerId: offer.buyer_id,
+              sellerId: offer.seller_id,
+            },
+          });
+          await client.query('COMMIT');
+          try {
+            await enqueueOutboxDrain();
+          } catch (error) {
+            app.log.error({ err: error, offerId }, 'Failed to enqueue offer outbox drain');
+          }
+          reply.code(410);
+          return {
+            ok: false,
+            offerId,
+            status: 'expired',
+            error: 'The checkout reservation for this offer has expired',
+          };
+        }
         await client.query('COMMIT');
         return {
           ok: true,
@@ -848,28 +1106,7 @@ export const registerListingOfferRoutes = ({
         return { ok: false, error: `A ${offer.status} offer cannot be accepted` };
       }
       if (Date.parse(offer.expires_at) <= Date.now()) {
-        await client.query(
-          `UPDATE listing_offers SET status = 'expired', expired_at = NOW(), updated_at = NOW() WHERE id = $1`,
-          [offerId],
-        );
-        await appendDomainEvent(client, {
-          aggregateType: 'offer',
-          aggregateId: offerId,
-          eventType: 'offer.expired',
-          correlationId: request.id,
-          deduplicationKey: `offer.expired:${offerId}`,
-          payload: {
-            offerId,
-            listingId: offer.listing_id,
-            buyerId: offer.buyer_id,
-            sellerId: offer.seller_id,
-            offerPriceGbp: Number(offer.offer_price_gbp),
-            conversationId: offer.conversation_id,
-            // Same ::text → ISO normalisation as appendOfferExpiredEvents —
-            // the drain schema requires ISO-8601 (z.string().datetime()).
-            expiresAt: new Date(offer.expires_at).toISOString(),
-          },
-        });
+        await expireOfferInTransaction(client, offer, offerId, request.id);
         await client.query('COMMIT');
         reply.code(410);
         return { ok: false, error: 'Offer has expired' };
@@ -935,167 +1172,24 @@ export const registerListingOfferRoutes = ({
         return { ok: false, error: 'Listing is no longer available for an offer checkout' };
       }
 
-      const subtotalGbp = Number(offer.offer_price_gbp);
-      const platformChargeGbp = calculatePlatformChargeGbp(subtotalGbp);
-      const totalGbp = Number((subtotalGbp + platformChargeGbp).toFixed(2));
-      const orderId = `ord_offer_${crypto.randomUUID()}`;
-      const reservationId = `lres_${crypto.randomUUID()}`;
-      const reservationExpiresAt = new Date(
-        Date.now() + OFFER_CHECKOUT_RESERVATION_MINUTES * 60_000,
-      ).toISOString();
-      const quoteSnapshot = {
-        source: 'accepted_offer',
+      const acceptance = await executeOfferAcceptance(client, {
         offerId,
         listingId: offer.listing_id,
+        buyerId: offer.buyer_id,
+        sellerId: offer.seller_id,
+        offerPriceGbp: Number(offer.offer_price_gbp),
+        actorUserId,
+        correlationId: request.id,
+        calculatePlatformChargeGbp,
+      });
+      const {
+        orderId,
+        reservationId,
+        reservationExpiresAt,
         subtotalGbp,
         platformChargeGbp,
-        postageFeeGbp: 0,
         totalGbp,
-        currency: 'GBP',
-        expiresAt: reservationExpiresAt,
-        policyVersion: CHECKOUT_QUOTE_VERSION,
-      };
-      const quoteHash = crypto
-        .createHash('sha256')
-        .update(JSON.stringify(quoteSnapshot))
-        .digest('hex');
-
-      await client.query(
-        `INSERT INTO orders (
-           id, buyer_id, seller_id, listing_id,
-           subtotal_gbp, buyer_protection_fee_gbp,
-           postage_fee_gbp, total_gbp, status,
-           checkout_expires_at, quote_version, quote_hash, quote_snapshot
-         )
-         VALUES ($1, $2, $3, $4, $5, $6, 0, $7, 'created', $8, $9, $10, $11::jsonb)`,
-        [
-          orderId,
-          offer.buyer_id,
-          offer.seller_id,
-          offer.listing_id,
-          subtotalGbp,
-          platformChargeGbp,
-          totalGbp,
-          reservationExpiresAt,
-          CHECKOUT_QUOTE_VERSION,
-          quoteHash,
-          JSON.stringify(quoteSnapshot),
-        ],
-      );
-
-      await client.query(
-        `INSERT INTO listing_checkout_reservations (
-           id, offer_id, listing_id, buyer_id, seller_id,
-           order_id, source, status, expires_at
-         )
-         VALUES ($1, $2, $3, $4, $5, $6, 'offer', 'active', $7)`,
-        [
-          reservationId,
-          offerId,
-          offer.listing_id,
-          offer.buyer_id,
-          offer.seller_id,
-          orderId,
-          reservationExpiresAt,
-        ],
-      );
-
-      await client.query(
-        `UPDATE listing_offers
-         SET status = 'accepted',
-             accepted_at = NOW(),
-             order_id = $2,
-             reservation_id = $3,
-             metadata = COALESCE(metadata, '{}'::jsonb)
-               || '{"checkoutStatus":"accepted_pending_checkout"}'::jsonb,
-             updated_at = NOW()
-         WHERE id = $1`,
-        [offerId, orderId, reservationId],
-      );
-      // Decline other pending offers on the same listing — once one is accepted
-      // the rest are moot.
-      const siblingResult = await client.query<{
-        id: string;
-        buyer_id: string;
-        offer_price_gbp: string;
-        conversation_id: string | null;
-      }>(
-        `UPDATE listing_offers
-         SET status = 'declined', declined_at = NOW(), updated_at = NOW()
-         WHERE listing_id = (SELECT listing_id FROM listing_offers WHERE id = $1)
-           AND id <> $1 AND status = 'pending'
-         RETURNING id, buyer_id, offer_price_gbp::text, conversation_id`,
-        [offerId],
-      );
-      await client.query(
-        `UPDATE listings
-         SET status = 'paused', pause_source = 'checkout_reservation', updated_at = NOW()
-         WHERE id = $1`,
-        [offer.listing_id],
-      );
-      const acceptedEventId = await appendDomainEvent(client, {
-        aggregateType: 'offer',
-        aggregateId: offerId,
-        eventType: 'offer.accepted',
-        actorId: actorUserId,
-        correlationId: request.id,
-        idempotencyKey: offerId,
-        deduplicationKey: `offer.accepted:${offerId}`,
-        payload: {
-          offerId,
-          listingId: offer.listing_id,
-          orderId,
-          reservationId,
-          buyerId: offer.buyer_id,
-          sellerId: offer.seller_id,
-          subtotalGbp,
-          platformChargeGbp,
-          totalGbp,
-          reservationExpiresAt,
-        },
-      });
-      // First-accept-wins: every sibling declined as a side effect gets its
-      // own domain event so the losing buyers are notified.
-      for (const sibling of siblingResult.rows) {
-        await appendDomainEvent(client, {
-          aggregateType: 'offer',
-          aggregateId: sibling.id,
-          eventType: 'offer.sibling_declined',
-          actorId: actorUserId,
-          correlationId: request.id,
-          causationId: acceptedEventId,
-          deduplicationKey: `offer.sibling_declined:${sibling.id}`,
-          payload: {
-            offerId: sibling.id,
-            listingId: offer.listing_id,
-            buyerId: sibling.buyer_id,
-            sellerId: offer.seller_id,
-            offerPriceGbp: Number(sibling.offer_price_gbp),
-            conversationId: sibling.conversation_id,
-            acceptedOfferId: offerId,
-            orderId,
-          },
-        });
-      }
-      await client.query(
-        `INSERT INTO order_events (
-           order_id, event_type, actor_id, source, deduplication_key, metadata
-         )
-         VALUES
-           ($1, 'order.created', $2, 'accepted_offer', $3, $4::jsonb),
-           ($1, 'payment.required', $2, 'accepted_offer', $5, $6::jsonb)
-         ON CONFLICT (order_id, deduplication_key)
-           WHERE deduplication_key IS NOT NULL
-         DO NOTHING`,
-        [
-          orderId,
-          actorUserId,
-          `order.created:${orderId}`,
-          JSON.stringify({ offerId, reservationId, quoteHash }),
-          `payment.required:${orderId}`,
-          JSON.stringify({ expiresAt: reservationExpiresAt, totalGbp }),
-        ],
-      );
+      } = acceptance;
       await client.query('COMMIT');
       // In-thread commerce card: the accepted offer placed an order. The emit
       // resolves the thread via listing_offers.conversation_id — the same
@@ -1129,6 +1223,10 @@ export const registerListingOfferRoutes = ({
       };
     } catch (error) {
       await client.query('ROLLBACK');
+      if (isSerializationConflict(error)) {
+        reply.code(409);
+        return { ok: false, error: 'Offer conflict — please retry', code: 'OFFER_CONFLICT' };
+      }
       app.log.error({ err: error }, 'Failed to accept listing offer');
       reply.code(500);
       return { ok: false, error: 'Failed to accept offer' };
@@ -1154,9 +1252,11 @@ export const registerListingOfferRoutes = ({
         offer_price_gbp: string;
         conversation_id: string | null;
         status: string;
+        expires_at: string;
+        offered_by_user_id: string | null;
       }>(
         `SELECT seller_id, buyer_id, listing_id, offer_price_gbp::text,
-                conversation_id, status
+                conversation_id, status, expires_at::text, offered_by_user_id
          FROM listing_offers WHERE id = $1 FOR UPDATE`,
         [offerId],
       );
@@ -1173,8 +1273,20 @@ export const registerListingOfferRoutes = ({
       }
       if (offer.status !== 'pending') {
         await client.query('ROLLBACK');
+        // Same contract as accept: a lazily-expired row answers 410, not
+        // the generic 409.
+        if (offer.status === 'expired') {
+          reply.code(410);
+          return { ok: false, error: 'Offer has expired' };
+        }
         reply.code(409);
         return { ok: false, error: `A ${offer.status} offer cannot be declined` };
+      }
+      if (Date.parse(offer.expires_at) <= Date.now()) {
+        await expireOfferInTransaction(client, offer, offerId, request.id);
+        await client.query('COMMIT');
+        reply.code(410);
+        return { ok: false, error: 'Offer has expired' };
       }
 
       await client.query(
@@ -1197,6 +1309,7 @@ export const registerListingOfferRoutes = ({
           sellerId: offer.seller_id,
           offerPriceGbp: Number(offer.offer_price_gbp),
           conversationId: offer.conversation_id,
+          offeredByUserId: offer.offered_by_user_id ?? offer.buyer_id,
         },
       });
       await client.query('COMMIT');
@@ -1210,6 +1323,10 @@ export const registerListingOfferRoutes = ({
       return { ok: true, offerId, status: 'declined' };
     } catch (error) {
       await client.query('ROLLBACK');
+      if (isSerializationConflict(error)) {
+        reply.code(409);
+        return { ok: false, error: 'Offer conflict — please retry', code: 'OFFER_CONFLICT' };
+      }
       app.log.error({ err: error }, 'Failed to decline listing offer');
       reply.code(500);
       return { ok: false, error: 'Failed to decline offer' };
@@ -1225,6 +1342,8 @@ export const registerListingOfferRoutes = ({
     const client = await db.connect();
     try {
       await client.query('BEGIN');
+      const expiredOffers = await expireOverdueOffers(client);
+      await appendOfferExpiredEvents(client, expiredOffers, request.id);
       const result = await client.query<{
         buyer_id: string;
         seller_id: string;
@@ -1232,9 +1351,11 @@ export const registerListingOfferRoutes = ({
         offer_price_gbp: string;
         conversation_id: string | null;
         status: string;
+        expires_at: string;
+        offered_by_user_id: string | null;
       }>(
         `SELECT buyer_id, seller_id, listing_id, offer_price_gbp::text,
-                conversation_id, status
+                conversation_id, status, expires_at::text, offered_by_user_id
          FROM listing_offers WHERE id = $1 FOR UPDATE`,
         [offerId],
       );
@@ -1251,8 +1372,20 @@ export const registerListingOfferRoutes = ({
       }
       if (offer.status !== 'pending') {
         await client.query('ROLLBACK');
+        // Same contract as accept: a lazily-expired row answers 410, not
+        // the generic 409.
+        if (offer.status === 'expired') {
+          reply.code(410);
+          return { ok: false, error: 'Offer has expired' };
+        }
         reply.code(409);
         return { ok: false, error: `A ${offer.status} offer cannot be cancelled` };
+      }
+      if (Date.parse(offer.expires_at) <= Date.now()) {
+        await expireOfferInTransaction(client, offer, offerId, request.id);
+        await client.query('COMMIT');
+        reply.code(410);
+        return { ok: false, error: 'Offer has expired' };
       }
 
       await client.query(
@@ -1275,6 +1408,10 @@ export const registerListingOfferRoutes = ({
           sellerId: offer.seller_id,
           offerPriceGbp: Number(offer.offer_price_gbp),
           conversationId: offer.conversation_id,
+          offeredByUserId: offer.offered_by_user_id ?? offer.buyer_id,
+          // Buyer-initiated (this route is buyer-only) — the drain notifies
+          // the seller, not the actor.
+          cancelledByUserId: actorUserId,
         },
       });
       await client.query('COMMIT');
@@ -1288,6 +1425,10 @@ export const registerListingOfferRoutes = ({
       return { ok: true, offerId, status: 'cancelled' };
     } catch (error) {
       await client.query('ROLLBACK');
+      if (isSerializationConflict(error)) {
+        reply.code(409);
+        return { ok: false, error: 'Offer conflict — please retry', code: 'OFFER_CONFLICT' };
+      }
       app.log.error({ err: error }, 'Failed to cancel listing offer');
       reply.code(500);
       return { ok: false, error: 'Failed to cancel offer' };
@@ -1332,19 +1473,50 @@ export const registerListingOfferRoutes = ({
       const expiredOrderCandidates = await client.query<{
         order_id: string;
         listing_id: string;
+        offer_id: string | null;
       }>(
-        `SELECT r.order_id, r.listing_id
+        `SELECT r.order_id, r.listing_id, r.offer_id
          FROM listing_checkout_reservations r
          JOIN orders o ON o.id = r.order_id
          WHERE r.status = 'active'
            AND r.expires_at <= NOW()
            AND o.status = 'created'`,
       );
-      const cancelledOrders: Array<{ order_id: string; listing_id: string }> = [];
+      let checkoutExpiredEventsAppended = 0;
+      const cancelledOrders: Array<{ order_id: string; listing_id: string; offer_id: string | null }> = [];
       for (const candidate of expiredOrderCandidates.rows) {
         const outcome = await cancelOrderOnReservationExpiry(client, candidate.order_id);
         if (outcome === 'cancelled') {
           cancelledOrders.push(candidate);
+          // The reconcile trigger flips the bound accepted offer to
+          // cancelled/expired silently — emit a domain event so the drain
+          // notifies both parties and flips the in-thread offer card.
+          if (candidate.offer_id) {
+            const offerRow = await client.query<{
+              id: string; buyer_id: string; seller_id: string;
+            }>(
+              `SELECT id, buyer_id, seller_id FROM listing_offers
+               WHERE id = $1 AND status IN ('cancelled', 'expired') LIMIT 1`,
+              [candidate.offer_id]
+            );
+            if (offerRow.rowCount) {
+              await appendDomainEvent(client, {
+                aggregateType: 'offer',
+                aggregateId: candidate.offer_id,
+                eventType: 'offer.checkout_expired',
+                actorId: null,
+                deduplicationKey: `offer.checkout_expired:${candidate.offer_id}`,
+                payload: {
+                  offerId: candidate.offer_id,
+                  listingId: candidate.listing_id,
+                  orderId: candidate.order_id,
+                  buyerId: offerRow.rows[0].buyer_id,
+                  sellerId: offerRow.rows[0].seller_id,
+                },
+              });
+              checkoutExpiredEventsAppended += 1;
+            }
+          }
         }
       }
 
@@ -1357,6 +1529,7 @@ export const registerListingOfferRoutes = ({
       const expiredReservations = await client.query<{
         listing_id: string;
         order_id: string;
+        offer_id: string | null;
       }>(
         `UPDATE listing_checkout_reservations r
          SET status = 'expired', updated_at = NOW()
@@ -1368,10 +1541,45 @@ export const registerListingOfferRoutes = ({
              WHERE o.id = r.order_id
                AND o.status = 'created'
            )
-         RETURNING r.listing_id, r.order_id`,
+         RETURNING r.listing_id, r.order_id, r.offer_id`,
       );
 
       if (expiredReservations.rowCount) {
+        // Drifted offer rows: the bound order is already terminal so the
+        // reconcile trigger can never reach them — flip 'accepted' offers
+        // here and emit the same event as the trigger-driven path.
+        for (const row of expiredReservations.rows) {
+          if (!row.offer_id) continue;
+          const flipped = await client.query<{
+            id: string; buyer_id: string; seller_id: string;
+          }>(
+            `UPDATE listing_offers
+             SET status = 'expired', expired_at = COALESCE(expired_at, NOW()),
+                 metadata = COALESCE(metadata, '{}'::jsonb)
+                   || '{"checkoutStatus":"reservation_expired"}'::jsonb,
+                 updated_at = NOW()
+             WHERE id = $1 AND status = 'accepted'
+             RETURNING id, buyer_id, seller_id`,
+            [row.offer_id]
+          );
+          if (flipped.rowCount) {
+            await appendDomainEvent(client, {
+              aggregateType: 'offer',
+              aggregateId: row.offer_id,
+              eventType: 'offer.checkout_expired',
+              actorId: null,
+              deduplicationKey: `offer.checkout_expired:${row.offer_id}`,
+              payload: {
+                offerId: row.offer_id,
+                listingId: row.listing_id,
+                orderId: row.order_id,
+                buyerId: flipped.rows[0].buyer_id,
+                sellerId: flipped.rows[0].seller_id,
+              },
+            });
+            checkoutExpiredEventsAppended += 1;
+          }
+        }
         const listingIds = expiredReservations.rows.map((row) => row.listing_id);
         await client.query(
           `UPDATE listings l
@@ -1405,7 +1613,7 @@ export const registerListingOfferRoutes = ({
           log: request.log,
         });
       }
-      if (count > 0) {
+      if (count > 0 || checkoutExpiredEventsAppended > 0) {
         try {
           await enqueueOutboxDrain();
         } catch (error) {

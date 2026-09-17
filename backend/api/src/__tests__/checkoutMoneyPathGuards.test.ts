@@ -400,11 +400,13 @@ test("migration 305 down migration restores the 071 trigger and drops the column
 
 test("every reservation-driven listing pause writes checkout_reservation provenance", () => {
   const index = repoSrc("index.ts");
-  const offers = repoSrc("routes/listingOffers.ts");
+  // The offer-accept pause lives in the shared transition — Smart Sell and
+  // the manual route both funnel through lib/offerAcceptance.ts.
+  const offerAccept = repoSrc("lib/offerAcceptance.ts");
   const liveLot = repoSrc("routes/liveLotEngine.ts");
   for (const [name, source] of [
     ["index.ts (direct checkout)", index],
-    ["listingOffers.ts (offer accept)", offers],
+    ["offerAcceptance.ts (offer accept)", offerAccept],
     ["liveLotEngine.ts (live lot)", liveLot],
   ] as const) {
     assert.ok(

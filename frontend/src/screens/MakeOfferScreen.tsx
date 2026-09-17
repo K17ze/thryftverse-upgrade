@@ -49,6 +49,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
     platformChargeGbp,
     total,
     discountPct,
+    livePriceGbp,
     itemImageUri } = useMakeOfferListing({
     itemId,
     price,
@@ -70,10 +71,13 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
     handleMessageSeller } = useMakeOfferSubmission({
     navigation,
     itemId,
-    price,
+    // Live fetched price wins over the (possibly stale) route param for
+    // every money decision — cap, summary, originalPriceGbp metadata.
+    price: livePriceGbp,
     title,
     isCounterOffer,
     previousOffer,
+    counterRound,
     parentOfferId,
     routeConversationId,
     listing,
@@ -102,7 +106,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
       >
         <MakeOfferItemSummary
           title={title}
-          price={price}
+          price={livePriceGbp}
           itemImageUri={itemImageUri}
           onMessageSeller={handleMessageSeller}
         />
@@ -110,8 +114,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
         <MakeOfferPriceSection
           isCounterOffer={isCounterOffer}
           previousOffer={previousOffer}
-          price={price}
-          listing={listing}
+          price={livePriceGbp}
           offerPrice={offerPrice}
           numericOfferGbp={numericOfferGbp}
           discountPct={discountPct}
@@ -133,11 +136,12 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
         {!!errorMsg && !showReview && (
           <MakeOfferErrorBlock
             message={errorMsg}
+            // Compose-phase retry re-runs validation and advances to the
+            // review step — clearing the message alone would be a dead
+            // button labelled "Retry".
             onRetry={() => {
               setErrorMsg('');
-              if (showReview) {
-                void handleSendOffer();
-              }
+              handleReviewOffer();
             }}
           />
         )}
@@ -154,7 +158,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
           previousOffer={previousOffer}
           itemImageUri={itemImageUri}
           title={title}
-          price={price}
+          price={livePriceGbp}
           numericOfferGbp={numericOfferGbp}
           platformChargeGbp={platformChargeGbp}
           total={total}

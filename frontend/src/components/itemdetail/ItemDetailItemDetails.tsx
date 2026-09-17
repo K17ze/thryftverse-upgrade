@@ -176,7 +176,9 @@ export function ItemDetailItemDetails({
           subcategory: item.subcategory,
           brand: item.brand,
           size: item.size,
-          condition: item.condition,
+          // Condition is omitted — the condition-evidence block directly
+          // above already renders the grade + definition. Repeating it as
+          // a spec row inside the same section is duplication, not signal.
           description: item.description,
           // Watch / jewellery / electronics / art extras
           // `material` resolves from the real listings.material_composition

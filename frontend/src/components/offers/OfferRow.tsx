@@ -29,14 +29,13 @@ export function effectiveOfferStatus(offer: ListingOffer, nowMs: number): Listin
 /**
  * Actions derived from the server's actual authorization rules
  * (POST /offers/:id/accept|decline|cancel|counter):
- *   - Only the seller can accept or decline.
- *   - Only the buyer can cancel.
+ *   - The participant who did NOT author the pending offer may accept —
+ *     the seller accepts a buyer's offer; the buyer accepts a seller's
+ *     counter (`offered_by_user_id !== actor` is the server's own check).
+ *   - Only the seller can decline; only the buyer can cancel — cancel is
+ *     the buyer's exit whether or not the pending offer is theirs.
  *   - Either participant can counter, but only when the pending offer was
- *     made by the OTHER party (`offeredByUserId !== actor`).
- *
- * The legacy client-side `offerStateMachine.getQuickActions` is deliberately
- * not used here — it predates the server contract and would grant the buyer
- * an "accept" the server always rejects.
+ *     made by the OTHER party.
  */
 export function resolveOfferActions(
   offer: ListingOffer,
@@ -49,7 +48,7 @@ export function resolveOfferActions(
   const isBuyer = offer.buyerId === currentUserId;
   const ownMove = offer.offeredByUserId === currentUserId;
   if (isSeller && !ownMove) return ['accept', 'counter', 'decline'];
-  if (isBuyer && !ownMove) return ['counter', 'cancel'];
+  if (isBuyer && !ownMove) return ['accept', 'counter', 'cancel'];
   if (isBuyer && ownMove) return ['cancel'];
   return [];
 }

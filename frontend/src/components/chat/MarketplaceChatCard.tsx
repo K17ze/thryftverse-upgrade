@@ -79,6 +79,10 @@ export interface MarketplaceChatCardProps {
   };
   onAccept?: () => void;
   onDecline?: () => void;
+  /** Label for the decline/exit button — "Pass" for a seller declining,
+   *  "Cancel" for a buyer withdrawing (cancel is the buyer's only exit;
+   *  decline is seller-only server-side). */
+  declineLabel?: string;
   onCounter?: () => void;
   onViewListing?: () => void;
   onMakeOffer?: () => void;
@@ -148,6 +152,7 @@ export function MarketplaceChatCard({
   commerceState,
   onAccept,
   onDecline,
+  declineLabel,
   onCounter,
   onViewListing,
   onMakeOffer,
@@ -384,9 +389,9 @@ export function MarketplaceChatCard({
               scaleValue={0.96}
               hapticFeedback="light"
               accessibilityRole="button"
-              accessibilityLabel={t('offers.declineOffer')}
+              accessibilityLabel={declineLabel ?? t('offers.declineOffer')}
             >
-              <Text style={styles.offerPassText}>{t('offers.pass')}</Text>
+              <Text style={styles.offerPassText}>{declineLabel ?? t('offers.pass')}</Text>
             </AnimatedPressable>
 
             {onCounter && (

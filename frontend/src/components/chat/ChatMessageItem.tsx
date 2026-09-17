@@ -66,6 +66,8 @@ export interface ChatMessageItemProps {
   isNewMessage: (id: string) => boolean;
   onAcceptOffer: (msgId: string) => void;
   onDeclineOffer: (msgId: string) => void;
+  /** Buyer exit on a seller-authored offer (decline is seller-only). */
+  onCancelOffer: (msgId: string) => void;
   onCounterOffer: (
     msgId: string,
     offerPrice?: number,
@@ -105,6 +107,7 @@ export function ChatMessageItem({
   isNewMessage,
   onAcceptOffer,
   onDeclineOffer,
+  onCancelOffer,
   onCounterOffer,
   onOfferExpired,
   onOpenContextMenu,
@@ -332,6 +335,7 @@ export function ChatMessageItem({
         navigation={navigation}
         onAcceptOffer={onAcceptOffer}
         onDeclineOffer={onDeclineOffer}
+        onCancelOffer={onCancelOffer}
         onCounterOffer={onCounterOffer}
         onOfferExpired={onOfferExpired}
       />
@@ -348,7 +352,13 @@ export function ChatMessageItem({
 
   const isMedia = msg.type === "media" && msg.mediaUri;
   const isVoice = msg.type === "voice" && msg.voiceUri;
-  if (!msg.text && !isMedia && !isVoice) return null;
+  const isPoll = Boolean(msg.poll);
+  const isDocument = msg.type === "document" && Boolean(msg.documentUri ?? msg.mediaUri);
+  if (!msg.text && !isMedia && !isVoice && !isPoll && !isDocument) return null;
+
+  // A poll-only message has no bubble chrome — the poll card IS the
+  // content. Rendering MessageBubble would draw an empty pill above it.
+  const hasBubbleContent = Boolean(msg.text) || isMedia || isVoice || isDocument;
 
   const bubble = (
     <View style={[styles.selectionRow, isMe && styles.selectionRowRight]}>
@@ -383,6 +393,7 @@ export function ChatMessageItem({
           { marginTop: spacingTop, marginBottom },
         ]}
       >
+        {hasBubbleContent ? (
         <MessageBubble
           id={msg.id}
           conversationId={conversationId ?? ''}
@@ -494,7 +505,11 @@ export function ChatMessageItem({
           showAvatar={!isMe && isFirstInCluster}
           isNew={isNewMessage(msg.id)}
           searchHighlight={isSearchActive ? searchQuery : undefined}
+          documentUri={msg.documentUri}
+          documentName={msg.documentName}
+          documentMimeType={msg.documentMimeType}
         />
+        ) : null}
         {!isMedia && !isVoice &&
           (() => {
             const url = extractFirstUrl(msg.text ?? "");

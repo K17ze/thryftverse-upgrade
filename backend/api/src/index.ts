@@ -8107,8 +8107,9 @@ async function sweepExpiredCheckoutReservations(
       order_id: string;
       listing_id: string;
       buyer_id: string;
+      offer_id: string | null;
     }>(
-      `SELECT r.id AS reservation_id, r.order_id, r.listing_id, r.buyer_id
+      `SELECT r.id AS reservation_id, r.order_id, r.listing_id, r.buyer_id, r.offer_id
        FROM listing_checkout_reservations r
        WHERE r.status = 'active'
          AND r.expires_at <= NOW()
@@ -8152,6 +8153,34 @@ async function sweepExpiredCheckoutReservations(
             toJsonString({ reservationId: row.reservation_id, reason }),
           ]
         );
+        // The reconcile trigger flipped the bound accepted offer silently —
+        // emit a domain event so the drain notifies both parties and syncs
+        // the in-thread offer card.
+        if (row.offer_id) {
+          const offerRow = await client.query<{
+            id: string; buyer_id: string; seller_id: string;
+          }>(
+            `SELECT id, buyer_id, seller_id FROM listing_offers
+             WHERE id = $1 AND status IN ('cancelled', 'expired') LIMIT 1`,
+            [row.offer_id]
+          );
+          if (offerRow.rowCount) {
+            await appendDomainEvent(client, {
+              aggregateType: 'offer',
+              aggregateId: row.offer_id,
+              eventType: 'offer.checkout_expired',
+              actorId: null,
+              deduplicationKey: `offer.checkout_expired:${row.offer_id}`,
+              payload: {
+                offerId: row.offer_id,
+                listingId: row.listing_id,
+                orderId: row.order_id,
+                buyerId: offerRow.rows[0].buyer_id,
+                sellerId: offerRow.rows[0].seller_id,
+              },
+            });
+          }
+        }
         sweptOrders.push({ orderId: row.order_id, listingId: row.listing_id });
       } else {
         // Order already terminal but the reservation row drifted — cancel
@@ -8166,6 +8195,38 @@ async function sweepExpiredCheckoutReservations(
            WHERE id = $1 AND status = 'active'`,
           [row.reservation_id]
         );
+        // The order is already terminal so the reconcile trigger can't
+        // reach a still-'accepted' bound offer — flip it and notify.
+        if (row.offer_id) {
+          const flippedOffer = await client.query<{
+            id: string; buyer_id: string; seller_id: string;
+          }>(
+            `UPDATE listing_offers
+             SET status = 'expired', expired_at = COALESCE(expired_at, NOW()),
+                 metadata = COALESCE(metadata, '{}'::jsonb)
+                   || '{"checkoutStatus":"reservation_expired"}'::jsonb,
+                 updated_at = NOW()
+             WHERE id = $1 AND status = 'accepted'
+             RETURNING id, buyer_id, seller_id`,
+            [row.offer_id]
+          );
+          if (flippedOffer.rowCount) {
+            await appendDomainEvent(client, {
+              aggregateType: 'offer',
+              aggregateId: row.offer_id,
+              eventType: 'offer.checkout_expired',
+              actorId: null,
+              deduplicationKey: `offer.checkout_expired:${row.offer_id}`,
+              payload: {
+                offerId: row.offer_id,
+                listingId: row.listing_id,
+                orderId: row.order_id,
+                buyerId: flippedOffer.rows[0].buyer_id,
+                sellerId: flippedOffer.rows[0].seller_id,
+              },
+            });
+          }
+        }
         const restored = await client.query<{ id: string }>(
           `UPDATE listings
            SET status = 'active', pause_source = NULL, updated_at = NOW()
@@ -9201,7 +9262,7 @@ const NOTIFICATION_EVENT_TYPES = [
   'review_received', 'chat_message', 'payout_processed', 'refund_completed',
   'price_drop', 'saved_search_match',
   'offer_created', 'offer_countered', 'offer_accepted', 'offer_declined',
-  'offer_expired', 'offer_cancelled',
+  'offer_expired', 'offer_cancelled', 'smart_sell_decision',
   'auction_outbid', 'auction_won', 'auction_ending_soon',
   'auction_bid', 'auction_cancelled', 'auction_reserve_not_met',
   'auction_sold_awaiting_payment', 'auction_payment_expired', 'auction_sold',
@@ -9229,6 +9290,9 @@ function mapEventToPushCategory(eventType: string): NotificationPushCategory | n
   // Prefix match mirrors the order_/auction_ handling so a future offer_*
   // event type cannot silently fail closed into in-app-only delivery.
   if (eventType.startsWith('offer_')) return 'offers';
+  // Smart Sell acting on the seller's behalf is offer lifecycle — same
+  // preference gate.
+  if (eventType === 'smart_sell_decision') return 'offers';
   if (eventType.startsWith('order_')) return 'orderUpdates';
   if (eventType === 'resolution_opened' || eventType === 'resolution_status_changed') return 'orderUpdates';
   if (eventType === 'payout_processed' || eventType === 'refund_completed') return 'orderUpdates';
@@ -9262,6 +9326,7 @@ function mapEventTypeToChannelId(eventType: string): string {
   if (eventType === 'new_follower' || eventType === 'new_listing_from_followed_seller' || eventType.startsWith('review_') || eventType === 'live_started') return 'social';
   if (eventType === 'price_drop' || eventType === 'saved_search_match' || eventType.startsWith('offer_') || eventType === 'generic' || eventType === 'safety_outcome' || eventType === 'ops_alert' || eventType.startsWith('scheduled_publication_')) return 'news';
   if (eventType === 'resolution_opened' || eventType === 'resolution_status_changed') return 'orders';
+  if (eventType === 'smart_sell_decision') return 'orders';
   return 'default';
 }
 
