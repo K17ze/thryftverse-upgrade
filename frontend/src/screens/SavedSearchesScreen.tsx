@@ -41,7 +41,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
   const removeSavedSearch = useStore((s) => s.removeSavedSearch);
   const toggleSavedSearchAlerts = useStore((s) => s.toggleSavedSearchAlerts);
   const markAllSavedSearchesSeen = useStore((s) => s.markAllSavedSearchesSeen);
-  const updateBrowseFilters = useStore((s) => s.updateBrowseFilters);
+  const updateBrowseFiltersForContext = useStore((s) => s.updateBrowseFiltersForContext);
   const hydrateSavedSearches = useStore((s) => s.hydrateSavedSearches);
   const alertResults = useSavedSearchAlerts();
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
@@ -85,7 +85,10 @@ export default function SavedSearchesScreen({ navigation }: Props) {
   // Fields absent from the saved search are reset so stale browse filters
   // from another surface can't contaminate the replay.
   const handleSearchPress = (search: (typeof savedSearches)[number]) => {
-    updateBrowseFilters({
+    const categoryId = search.filters.category ?? 'search';
+    // Write the destination context's bucket directly — the pushed Browse
+    // screen activates `browse:<category>` on mount and replays this set.
+    updateBrowseFiltersForContext(`browse:${categoryId}`, {
       query: search.query,
       brands: search.filters.brands ?? [],
       sizes: search.filters.sizes ?? [],
@@ -95,7 +98,6 @@ export default function SavedSearchesScreen({ navigation }: Props) {
       priceMax: search.filters.maxPrice ?? null,
       sustainableOnly: false,
     });
-    const categoryId = search.filters.category ?? 'search';
     navigation.navigate('Browse', {
       categoryId,
       title: search.query,

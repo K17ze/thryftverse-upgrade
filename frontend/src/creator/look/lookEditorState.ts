@@ -18,6 +18,7 @@ export type LookEditorMode =
   | { type: 'aiEffects' }
   | { type: 'a11yMove' }
   | { type: 'a11yZOrder' }
+  | { type: 'a11yTransform' }
   | { type: 'alignPicker' }
   | { type: 'previewing' }
   | { type: 'publishing' }
@@ -43,6 +44,7 @@ export type LookEditorAction =
   | { type: 'SHOW_AI_EFFECTS' }
   | { type: 'SHOW_A11Y_MOVE' }
   | { type: 'SHOW_A11Y_ZORDER' }
+  | { type: 'SHOW_A11Y_TRANSFORM' }
   | { type: 'SHOW_ALIGN_PICKER' }
   | { type: 'SHOW_PREVIEW' }
   | { type: 'SHOW_PUBLISH' }
@@ -103,6 +105,9 @@ export function lookEditorReducer(
 
     case 'SHOW_A11Y_ZORDER':
       return { ...state, mode: { type: 'a11yZOrder' }, showOverflow: false };
+
+    case 'SHOW_A11Y_TRANSFORM':
+      return { ...state, mode: { type: 'a11yTransform' }, showOverflow: false };
 
     case 'SHOW_ALIGN_PICKER':
       return { ...state, mode: { type: 'alignPicker' }, showOverflow: false };

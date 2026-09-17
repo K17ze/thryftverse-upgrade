@@ -59,6 +59,9 @@ export interface Listing {
   subcategory?: string | null;
   description: string;
   createdAt?: string;
+  /** Live-auction end timestamp when the listing has one — server-sourced,
+   *  drives truthful 'Ending soon' ordering. Null/absent otherwise. */
+  auctionEndsAt?: string | null;
   shippingMethod?: string | null;
   shippingPayer?: string | null;
   /** Pinned/featured listing — shown first in the Shop grid when true. */

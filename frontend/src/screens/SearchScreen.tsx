@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppIcon } from '../components/common/AppIcon';
 import { IconSize } from '../theme/iconTokens';
 import { useAppTheme } from '../theme/ThemeContext';
-import { useNavigation } from '@react-navigation/native';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
@@ -45,6 +45,12 @@ export default function SearchScreen() {
   const navigation = useNavigation<NavT>();
   const { listings, isSyncing, lastError, refreshListings, loadMoreListings, isLoadingMore, hasMore } = useBackendData();
   const currentUser = useStore((state) => state.currentUser);
+  // Context-scoped filters: Search owns the `search` bucket — filters
+  // applied in Browse or Category surfaces never leak into search.
+  const isFocused = useIsFocused();
+  useEffect(() => {
+    if (isFocused) useStore.getState().activateBrowseContext('search');
+  }, [isFocused]);
   const browseFilters = useStore((state) => state.browseFilters);
   const isSavedProduct = useStore((state) => state.isSavedProduct);
   const upsertConversation = useStore((state) => state.upsertConversation);

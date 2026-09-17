@@ -111,11 +111,17 @@ export interface UseUploadManagerResult {
   retryJob: (jobId: string) => Promise<void>;
   isProjectComplete: boolean;
   /**
-   * Wait until all jobs for the active project reach a terminal state
-   * (`completed` or `failed`). Resolves with the final job list so the
-   * caller can inspect `remoteUrl` on each completed job.
+   * Wait until all jobs for the active project reach a settled state
+   * (`completed`, `failed`, or `paused`). Resolves with the latest job
+   * list so the caller can inspect `remoteUrl` on each completed job.
+   * Pass `opts.signal` / `opts.timeoutMs` to bound the wait — without
+   * them the wait can hang indefinitely when a connectivity drop
+   * re-queues in-flight jobs (queued is not a settled state).
    */
-  waitForCompletion: () => Promise<UploadJob[]>;
+  waitForCompletion: (opts?: {
+    signal?: AbortSignal;
+    timeoutMs?: number;
+  }) => Promise<UploadJob[]>;
   /** Aggregate progress snapshot for the active project. */
   projectProgress: ProjectProgress;
   /** Remove all completed/failed jobs for the active project from storage. */
@@ -278,7 +284,8 @@ export function useUploadManager(projectId?: string): UseUploadManagerResult {
   const retryJob = useCallback((jobId: string) => manager.retryJob(jobId), [manager]);
 
   const waitForCompletion = useCallback(
-    () => manager.waitForProjectCompletion(projectId ?? ''),
+    (opts?: { signal?: AbortSignal; timeoutMs?: number }) =>
+      manager.waitForProjectCompletion(projectId ?? '', undefined, opts),
     [manager, projectId],
   );
 

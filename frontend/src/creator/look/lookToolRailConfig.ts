@@ -5,6 +5,7 @@
 
 import type { ToolContext, ToolGroup, ToolDefinition } from '../core/toolRegistry';
 import type { CreatorLayer } from '../core/projectStore/composition';
+import { LAYER_TYPE_TO_PICKER_MODE } from '../shared/layerEditModes';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -33,6 +34,8 @@ export interface LookToolRailParams {
   handleDuplicateLayer: (id: string) => void;
   handleDeleteLayer: (id: string) => void;
   handleLinkItem: (layer: CreatorLayer) => void;
+  /** Opens the layer's dedicated editor (interactive stickers, media, …). */
+  handleEditLayer: (layer: CreatorLayer) => void;
   handleTextEditAction: () => void;
   handleTextFontAction: () => void;
   handleTextColorAction: () => void;
@@ -51,6 +54,12 @@ export interface LookToolRailParams {
 
   // ── State setters (for overflow / sheet tools) ──
   setCropTarget: (layer: CreatorLayer) => void;
+  /** Opens the sticker browser (decorative + interactive stickers). */
+  handleAddStickers: () => void;
+  /** Opens the GIF picker. */
+  handleAddGif: () => void;
+  /** Opens the shape picker. */
+  handleAddShape: () => void;
 }
 
 // ── Active context derivation ────────────────────────────────────────
@@ -75,44 +84,19 @@ export function deriveLookToolContext(
 
 // ── Tool group builder ───────────────────────────────────────────────
 
-/**
- * Builds the full ToolGroup[] for the Look composer's context tool rail.
- */
-export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
+function buildLookDefaultGroup(params: LookToolRailParams): ToolGroup {
   const {
-    selectedLayer,
-    cutoutSupported,
     handleAddPhoto,
     handleOpenItems,
     handleAddText,
     handleOpenLayout,
-    handleCutoutAction,
-    handleReplaceMedia,
-    handleAdjustAction,
-    handleAutoAdjust,
-    handleEffectsAction,
-    handleReorderLayer,
-    handleDuplicateLayer,
-    handleDeleteLayer,
-    handleLinkItem,
-    handleTextEditAction,
-    handleTextFontAction,
-    handleTextColorAction,
-    handleTextAlignAction,
-    handleCopyLayer,
-    handlePasteLayer,
-    canPaste,
-    handleMultiFront,
-    handleMultiBack,
-    handleMultiDelete,
-    handleMultiAlign,
-    setCropTarget,
+    handleAddStickers,
+    handleAddGif,
+    handleAddShape,
   } = params;
 
-  const groups: ToolGroup[] = [];
-
   // ── look-default: Photo, Items, Text, Layout ──
-  groups.push({
+  return {
     context: 'look-default',
     primary: [
       {
@@ -157,11 +141,66 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         weight: 'secondary',
       },
     ],
-    overflow: [],
-  });
+    overflow: [
+      {
+        id: 'look-stickers',
+        label: 'Stickers',
+        icon: 'happy-outline',
+        glyph: 'sticker',
+        onPress: handleAddStickers,
+        accessibilityLabel: 'Add stickers',
+        accessibilityHint: 'Opens the sticker picker',
+        hapticFeedback: 'light',
+        weight: 'secondary',
+      },
+      {
+        id: 'look-gif',
+        label: 'GIF',
+        icon: 'film-outline',
+        onPress: handleAddGif,
+        accessibilityLabel: 'Add GIF',
+        accessibilityHint: 'Opens the GIF picker',
+        hapticFeedback: 'light',
+        capabilityId: 'layerGif',
+        weight: 'secondary',
+      },
+      {
+        id: 'look-shape',
+        label: 'Shape',
+        icon: 'shapes-outline',
+        onPress: handleAddShape,
+        accessibilityLabel: 'Add shape',
+        accessibilityHint: 'Opens the shape picker',
+        hapticFeedback: 'light',
+        capabilityId: 'layerDecorative',
+        weight: 'secondary',
+      },
+    ],
+  };
+}
+
+function buildLookMediaGroup(params: LookToolRailParams): ToolGroup {
+  const {
+    selectedLayer,
+    cutoutSupported,
+    handleReplaceMedia,
+    handleAdjustAction,
+    handleAutoAdjust,
+    handleEffectsAction,
+    handleReorderLayer,
+    handleDuplicateLayer,
+    handleDeleteLayer,
+    handleCutoutAction,
+    handleCopyLayer,
+    handlePasteLayer,
+    canPaste,
+    setCropTarget,
+  } = params;
 
   // ── look-media-selected: Replace, Crop, Adjust, Effects ──
-  groups.push({
+  // Crop/cutout are still-image tools — gated off for video media.
+  const isVideoMedia = selectedLayer?.type === 'media' && selectedLayer.payload.mediaType === 'video';
+  return {
     context: 'look-media-selected',
     primary: [
       {
@@ -173,7 +212,9 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         hapticFeedback: 'light',
         weight: 'secondary',
       },
-      {
+      // Crop is still-image only — CreatorCropSheet runs the URI through
+      // manipulateAsync, which cannot process video. Hidden on video.
+      ...((isVideoMedia ? [] : [{
         id: 'look-media-crop',
         label: 'Crop',
         icon: 'crop-outline',
@@ -182,7 +223,7 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         accessibilityLabel: 'Crop',
         hapticFeedback: 'medium',
         weight: 'primary',
-      },
+      }]) as ToolDefinition[]),
       {
         id: 'look-media-adjust',
         label: 'Adjust',
@@ -216,7 +257,9 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         accessibilityHint: 'Apply one-tap color correction',
         hapticFeedback: 'medium',
       },
-      {
+      // Cutout/mask is still-image only (brush mask rasterizes to PNG via
+      // image manipulation) — hidden on video layers.
+      ...((isVideoMedia ? [] : [{
         id: 'look-media-cutout',
         label: cutoutSupported ? 'Cutout' : 'Crop',
         icon: cutoutSupported ? 'cut-outline' : 'crop-outline',
@@ -224,10 +267,10 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         onPress: handleCutoutAction,
         accessibilityLabel: cutoutSupported ? 'Cutout' : 'Crop',
         accessibilityHint: cutoutSupported
-          ? 'Remove background with subject segmentation'
+          ? 'Paint a mask to keep or remove parts of the photo'
           : 'Crop media to a rectangle',
         hapticFeedback: 'medium',
-      },
+      }]) as ToolDefinition[]),
       {
         id: 'look-media-front',
         label: 'Front',
@@ -280,7 +323,23 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         hapticFeedback: 'medium',
       },
     ],
-  });
+  };
+}
+
+function buildLookTextGroup(params: LookToolRailParams): ToolGroup {
+  const {
+    selectedLayer,
+    handleReorderLayer,
+    handleDuplicateLayer,
+    handleDeleteLayer,
+    handleTextEditAction,
+    handleTextFontAction,
+    handleTextColorAction,
+    handleTextAlignAction,
+    handleCopyLayer,
+    handlePasteLayer,
+    canPaste,
+  } = params;
 
   // ── look-text-selected: Edit, Font, Color, Align, More ──
   const lookCurrentAlignment = selectedLayer?.type === 'text'
@@ -290,7 +349,7 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
     lookCurrentAlignment === 'left' ? 'align-left'
     : lookCurrentAlignment === 'right' ? 'align-right'
     : 'align-center';
-  groups.push({
+  return {
     context: 'look-text-selected',
     primary: [
       {
@@ -384,10 +443,20 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         hapticFeedback: 'medium',
       },
     ],
-  });
+  };
+}
+
+function buildLookProductGroup(params: LookToolRailParams): ToolGroup {
+  const {
+    selectedLayer,
+    handleReorderLayer,
+    handleDuplicateLayer,
+    handleDeleteLayer,
+    handleLinkItem,
+  } = params;
 
   // ── look-product-selected: Item, Duplicate ──
-  groups.push({
+  return {
     context: 'look-product-selected',
     primary: [
       {
@@ -435,10 +504,19 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         hapticFeedback: 'medium',
       },
     ],
-  });
+  };
+}
+
+function buildLookMultiSelectGroup(params: LookToolRailParams): ToolGroup {
+  const {
+    handleMultiFront,
+    handleMultiBack,
+    handleMultiDelete,
+    handleMultiAlign,
+  } = params;
 
   // ── look-multi-select: Front, Back, Delete + align overflow ──
-  groups.push({
+  return {
     context: 'look-multi-select',
     primary: [
       {
@@ -487,12 +565,35 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         hapticFeedback: 'light',
       },
     ],
-  });
+  };
+}
 
-  // ── look-sticker-selected: Duplicate, Delete, Front/Back ──
-  groups.push({
+function buildLookStickerGroup(params: LookToolRailParams): ToolGroup {
+  const {
+    selectedLayer,
+    handleReorderLayer,
+    handleDuplicateLayer,
+    handleDeleteLayer,
+    handleEditLayer,
+  } = params;
+
+  // ── look-sticker-selected: Edit (interactive only), Duplicate, Delete, Front/Back ──
+  const lookStickerEdit: ToolDefinition[] = selectedLayer && LAYER_TYPE_TO_PICKER_MODE[selectedLayer.type]
+    ? [{
+        id: 'look-sticker-edit',
+        label: 'Edit',
+        icon: 'create-outline',
+        onPress: () => handleEditLayer(selectedLayer),
+        accessibilityLabel: 'Edit sticker',
+        accessibilityHint: 'Reopens this sticker in its editor',
+        hapticFeedback: 'light',
+        weight: 'secondary',
+      }]
+    : [];
+  return {
     context: 'look-sticker-selected',
     primary: [
+      ...lookStickerEdit,
       {
         id: 'look-sticker-duplicate',
         label: 'Duplicate',
@@ -528,7 +629,19 @@ export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
         hapticFeedback: 'light',
       },
     ],
-  });
+  };
+}
 
-  return groups;
+/**
+ * Builds the full ToolGroup[] for the Look composer's context tool rail.
+ */
+export function buildLookToolGroups(params: LookToolRailParams): ToolGroup[] {
+  return [
+    buildLookDefaultGroup(params),
+    buildLookMediaGroup(params),
+    buildLookTextGroup(params),
+    buildLookProductGroup(params),
+    buildLookMultiSelectGroup(params),
+    buildLookStickerGroup(params),
+  ];
 }

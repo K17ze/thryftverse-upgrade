@@ -228,6 +228,7 @@ export function KeyframeEditor({
               accessibilityRole="tab"
               accessibilityState={{ selected: active }}
               accessibilityLabel={`${KEYFRAME_PROPERTY_LABELS[prop]} property`}
+              accessibilityHint="Shows keyframes for this property"
               style={[
                 styles.propertyButton,
                 { backgroundColor: active ? colors.surfaceElevated : 'transparent' },
@@ -271,6 +272,7 @@ export function KeyframeEditor({
                     onLayout={() => {}}
                     accessibilityRole="button"
                     accessibilityLabel={`Keyframe at ${kf.timeMs} milliseconds, value ${kf.value}`}
+                    accessibilityHint="Drag to move this keyframe in time"
                     style={[
                       styles.diamond,
                       diamondAnimStyle,
@@ -290,6 +292,7 @@ export function KeyframeEditor({
                 hitSlop={Control.hit / 2 - DIAMOND_SIZE / 2}
                 accessibilityRole="button"
                 accessibilityLabel={`Keyframe at ${kf.timeMs} milliseconds, value ${kf.value}`}
+                accessibilityHint="Selects this keyframe"
                 style={[
                   styles.diamond,
                   {
@@ -318,6 +321,7 @@ export function KeyframeEditor({
                 style={styles.stepButton}
                 accessibilityRole="button"
                 accessibilityLabel="Decrease value"
+                accessibilityHint="Lowers the keyframe value by one step"
                 hitSlop={Control.hit / 2}
               >
                 <Ionicons name="remove" size={IconGrammar.metadata} color={colors.textPrimary} />
@@ -332,6 +336,7 @@ export function KeyframeEditor({
                 style={styles.stepButton}
                 accessibilityRole="button"
                 accessibilityLabel="Increase value"
+                accessibilityHint="Raises the keyframe value by one step"
                 hitSlop={Control.hit / 2}
               >
                 <Ionicons name="add" size={IconGrammar.metadata} color={colors.textPrimary} />
@@ -354,6 +359,7 @@ export function KeyframeEditor({
                     accessibilityRole="radio"
                     accessibilityState={{ checked: active }}
                     accessibilityLabel={KEYFRAME_EASING_LABELS[ease]}
+                    accessibilityHint="Sets this easing for the keyframe"
                     style={[
                       styles.easingButton,
                       { backgroundColor: active ? colors.surfaceElevated : 'transparent' },
@@ -385,6 +391,7 @@ export function KeyframeEditor({
             onPress={handleDelete}
             accessibilityRole="button"
             accessibilityLabel="Delete keyframe"
+            accessibilityHint="Removes this keyframe"
             style={styles.deleteButton}
             hitSlop={Control.hit / 2}
           >

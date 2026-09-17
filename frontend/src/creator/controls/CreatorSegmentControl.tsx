@@ -17,7 +17,7 @@
  *   - AGENTS.md §27.3 (entrance spring config: damping 22, stiffness 180)
  *   - AGENTS.md §27.9 (tab switch: sliding indicator + selection haptic + crossfade)
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Pressable, View, Text, type LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
@@ -176,6 +176,7 @@ export function CreatorSegmentControl({
               onPress={() => handleSelect(index, segment.value)}
               accessibilityRole="tab"
               accessibilityLabel={segment.label}
+              accessibilityHint="Switches to this segment"
               accessibilityState={{ selected: isActive }}
               style={styles.segment}
               hitSlop={{ top: 4, bottom: 4, left: 0, right: 0 }}

@@ -117,6 +117,13 @@ export function ShutterButton({
       delayLongPress={250}
       hitSlop={24}
       accessibilityLabel={accessibilityLabel}
+      accessibilityHint={isRecording
+        ? 'Stops the recording'
+        : handsFreeMode
+          ? 'Starts a timed capture'
+          : videoCaptureEnabled
+            ? 'Captures a photo; hold to record video'
+            : 'Captures a photo'}
       accessibilityRole="button"
       accessibilityState={{ disabled: !!disabled }}
       disabled={disabled}

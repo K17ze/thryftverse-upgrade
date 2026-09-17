@@ -11,7 +11,7 @@
  */
 
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
-import type { CreatorColor, MediaPaletteEntry } from './ColorTypes';
+import type { MediaPaletteEntry } from './ColorTypes';
 import { normalize, rgb255 } from './ColorMath';
 
 // Skia is used for pixel readback (same pattern as AutoAdjust.ts)
@@ -41,8 +41,6 @@ interface PixelBucket {
 
 /** Downscale target for quantization — small enough to be fast, large enough to be representative */
 const QUANTIZE_SIZE = 48;
-/** Number of buckets for color quantization */
-const NUM_BUCKETS = 16;
 /** Minimum number of palette entries to return */
 const MIN_ENTRIES = 5;
 /** Maximum number of palette entries to return */

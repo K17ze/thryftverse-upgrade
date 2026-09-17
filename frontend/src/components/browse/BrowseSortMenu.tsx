@@ -22,18 +22,18 @@ export function BrowseSortMenu({
   searchQuery,
   activeSort,
   onSelect }: BrowseSortMenuProps) {
+  const sortOptions = getSortOptions(categoryId, searchQuery);
   return (
     <View style={styles.sortMenu}>
-      {getSortOptions(categoryId, searchQuery).map((opt, idx) => {
-        const sortOpts = getSortOptions(categoryId, searchQuery);
+      {sortOptions.map((opt, idx) => {
         const isActive = activeSort === opt.value;
         return (
           <Pressable
             key={opt.value}
             onPress={() => onSelect(opt.value)}
-            style={[styles.sortMenuItem, idx === sortOpts.length - 1 && { borderBottomWidth: 0 }]}
+            style={[styles.sortMenuItem, idx === sortOptions.length - 1 && { borderBottomWidth: 0 }]}
             hitSlop={8}
-            accessibilityRole="button"
+            accessibilityRole="radio"
             accessibilityLabel={`Sort by ${opt.label}`}
             accessibilityState={{ selected: isActive }}
           >

@@ -8,29 +8,20 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   useWindowDimensions,
-  Image as RNImage,
-  Pressable,
-  type DimensionValue } from 'react-native';
-import { Image } from 'expo-image';
-import { Ionicons } from '@expo/vector-icons';
+  Image as RNImage } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
-import Reanimated, {
+import { Gesture } from 'react-native-gesture-handler';
+import {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  withTiming,
   runOnJS } from 'react-native-reanimated';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
-import { Space, Radius, Typography, FontFamily, Stroke, IconGrammar, Control } from '../../theme/designTokens';
-import { TypographyV2 } from '../../theme/typography.v2';
+import { Space } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { Motion } from '../../theme/motionTokens';
 import { PressScale, SheetContainer } from '../shared/CreatorAnimations';
-import { CreatorSlider } from '../controls/CreatorSlider';
 import { AppIcon } from '../../components/common/AppIcon';
 import { IconSize } from '../../theme/iconTokens';
 import {
@@ -39,85 +30,17 @@ import {
   type CutoutResult,
   type CutoutMask,
   type CutoutCapability } from '../core/cutout/CutoutService';
-import { MaskedPreview } from '../core/cutout/MaskCompositor';
 import type { MaskStroke } from '../core/cutout/MaskRenderer';
-
-
-
-// ── Brush colours ──────────────────────────────────────────────────
-// Green = keep (add to mask), red = erase (remove from mask).
-const BRUSH_RADIUS = 18;
-
-// ── Brush mode ids ─────────────────────────────────────────────────
-type BrushMode = 'keep-person' | 'keep-object' | 'erase';
-type ModeId = BrushMode | 'restore';
-
-// ── Checkerboard pattern for transparency preview ──────────────────
-// A 2-tone checkerboard so the user can see transparent regions in the
-// cutout result. Rendered as a repeating grid of squares.
-const CHECKER_SIZE = 16;
-
-// ── SkeletonBlock — one-time shimmer sweep ──────
-function SkeletonBlock({ width, height, radius }: { width: DimensionValue; height: number; radius?: number }) {
-  const { colors } = useAppTheme();
-  const reduceMotion = useReducedMotion();
-  const shimmerSV = useSharedValue(0);
-
-  useEffect(() => {
-    if (reduceMotion) return;
-    shimmerSV.value = 0;
-    shimmerSV.value = withTiming(1, { duration: Motion.duration.crawl });
-  }, [reduceMotion, shimmerSV]);
-
-  const style = useAnimatedStyle(() => ({
-    backgroundColor: colors.surfaceAlt,
-    opacity: 0.5 + 0.3 * shimmerSV.value }));
-
-  return (
-    <Reanimated.View style={[{ width, height, borderRadius: radius ?? Radius.sm }, style]} />
-  );
-}
-
-// ── CutoutPreviewSkeleton — placeholder rectangle matching the preview area ──
-function CutoutPreviewSkeleton({ width, height }: { width: number; height: number }) {
-  const { colors } = useAppTheme();
-  return (
-    <View style={{ alignItems: 'center', paddingVertical: Space.sm }}>
-      <SkeletonBlock width={width} height={height} radius={Radius.md} />
-      <Text style={{ fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size, color: colors.textPrimary, marginTop: Space.md }}>
-        Removing background…
-      </Text>
-      <Text style={{ fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textSecondary, textAlign: 'center', marginTop: Space.xs }}>
-        Generating alpha mask.
-      </Text>
-    </View>
-  );
-}
-
-function Checkerboard({ size }: { size: { width: number; height: number } }) {
-  const { colors } = useAppTheme();
-  const cols = Math.ceil(size.width / CHECKER_SIZE);
-  const rows = Math.ceil(size.height / CHECKER_SIZE);
-  const squares: React.ReactNode[] = [];
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const isLight = (r + c) % 2 === 0;
-      squares.push(
-        <View
-          key={`${r}-${c}`}
-          style={{
-            position: 'absolute',
-            left: c * CHECKER_SIZE,
-            top: r * CHECKER_SIZE,
-            width: CHECKER_SIZE,
-            height: CHECKER_SIZE,
-            backgroundColor: isLight ? colors.surfaceAlt : colors.border }}
-        />,
-      );
-    }
-  }
-  return <View style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]}>{squares}</View>;
-}
+import {
+  BRUSH_RADIUS,
+  type BrushMode,
+  type ModeId,
+  type ModeButton } from './cutoutPreview/cutoutPreviewShared';
+import { styles } from './cutoutPreview/cutoutPreviewStyles';
+import { CutoutPreviewSkeleton } from './cutoutPreview/CutoutPreviewSkeleton';
+import { CutoutPreviewStatus } from './cutoutPreview/CutoutPreviewStatus';
+import { CutoutPreviewStage } from './cutoutPreview/CutoutPreviewStage';
+import { CutoutPreviewControls } from './cutoutPreview/CutoutPreviewControls';
 
 export interface CutoutPreviewSheetProps {
   visible: boolean;
@@ -160,10 +83,13 @@ export function CutoutPreviewSheet({
 
   // ── Refine state ──────────────────────────────────────────────────
   // strokes are MaskStroke[] (keep/erase) for the Skia MaskedPreview.
-  const [refineMode, setRefineMode] = useState(true);
+  const [, setRefineMode] = useState(true);
   const [brushMode, setBrushMode] = useState<BrushMode | null>(null);
   const [strokes, setStrokes] = useState<MaskStroke[]>([]);
-  const [currentPoints, setCurrentPoints] = useState<{ x: number; y: number }[]>([]);
+  // Live brush points live on the UI thread — the gesture accumulates
+  // into this shared value and MaskedPreview derives the stroke path
+  // there; JS is touched once per stroke (commit), not per move event.
+  const livePointsSV = useSharedValue<{ x: number; y: number }[]>([]);
 
   // ── Compare / feather / invert state ──────────────────────────────
   const [comparing, setComparing] = useState(false);
@@ -189,7 +115,7 @@ export function CutoutPreviewSheet({
     setRefineMode(true);
     setBrushMode(null);
     setStrokes([]);
-    setCurrentPoints([]);
+    livePointsSV.value = [];
     setComparing(false);
     setFeatherPx(0);
     setInvert(false);
@@ -246,7 +172,7 @@ export function CutoutPreviewSheet({
     return () => {
       cancelled = true;
     };
-  }, [visible, imageUri, haptic]);
+  }, [visible, imageUri, haptic, livePointsSV]);
 
   // ── Retry mask creation after a failure ──────────────────────────────
   const handleRetry = useCallback(async () => {
@@ -301,46 +227,33 @@ export function CutoutPreviewSheet({
         // Non-fatal — preview will use a default size.
       },
     );
-  }, [visible, imageUri]);
+  }, [visible, imageUri, screenWidth]);
 
-  // ── Brush stroke handlers (called from the gesture worklet via runOnJS) ──
-  // Strokes are rasterized into the CutoutService mask surface AND added
-  // to the strokes array for the Skia MaskedPreview. The mask coordinates
-  // are in the preview's local space (scaled to match the mask resolution).
-  const startStroke = useCallback((x: number, y: number) => {
-    if (!brushMode) return;
-    setCurrentPoints([{ x, y }]);
-  }, [brushMode]);
-
-  const addStrokePoint = useCallback((x: number, y: number) => {
-    if (!brushMode) return;
-    setCurrentPoints((prev) => [...prev, { x, y }]);
-  }, [brushMode]);
-
-  const endStroke = useCallback(() => {
-    if (!brushMode) return;
-    setCurrentPoints((curr) => {
-      if (curr.length > 0) {
-        const mode: 'keep' | 'erase' = brushMode === 'erase' ? 'erase' : 'keep';
-        const stroke: MaskStroke = {
-          mode,
-          points: curr,
-          brushSize: BRUSH_RADIUS * 2 };
-        setStrokes((prev) => [...prev, stroke]);
-        // Rasterize into the CutoutService mask surface for export.
-        if (mask) {
-          const scaledPoints = curr.map((p) => ({
-            x: (p.x / displaySize.width) * mask.width,
-            y: (p.y / displaySize.height) * mask.height }));
-          if (mode === 'erase') {
-            cutoutService.eraseStroke(mask, scaledPoints, BRUSH_RADIUS * 2 * (mask.width / displaySize.width));
-          } else {
-            cutoutService.keepStroke(mask, scaledPoints, BRUSH_RADIUS * 2 * (mask.width / displaySize.width));
-          }
-        }
+  // ── Brush stroke handlers ─────────────────────────────────────────
+  // Points accumulate on the UI thread; the JS thread is touched once per
+  // stroke — at commit — with the full point array. Committed strokes are
+  // rasterized into the CutoutService mask surface AND added to the
+  // strokes array for the Skia MaskedPreview. The mask coordinates are in
+  // the preview's local space (scaled to match the mask resolution).
+  const endStroke = useCallback((points: { x: number; y: number }[]) => {
+    if (!brushMode || points.length === 0) return;
+    const mode: 'keep' | 'erase' = brushMode === 'erase' ? 'erase' : 'keep';
+    const stroke: MaskStroke = {
+      mode,
+      points,
+      brushSize: BRUSH_RADIUS * 2 };
+    setStrokes((prev) => [...prev, stroke]);
+    // Rasterize into the CutoutService mask surface for export.
+    if (mask) {
+      const scaledPoints = points.map((p) => ({
+        x: (p.x / displaySize.width) * mask.width,
+        y: (p.y / displaySize.height) * mask.height }));
+      if (mode === 'erase') {
+        cutoutService.eraseStroke(mask, scaledPoints, BRUSH_RADIUS * 2 * (mask.width / displaySize.width));
+      } else {
+        cutoutService.keepStroke(mask, scaledPoints, BRUSH_RADIUS * 2 * (mask.width / displaySize.width));
       }
-      return [];
-    });
+    }
     haptic.light();
   }, [brushMode, haptic, mask, displaySize]);
 
@@ -348,13 +261,21 @@ export function CutoutPreviewSheet({
   // Recreated each render so the worklet captures the latest brushMode.
   const panGesture = Gesture.Pan()
     .onBegin((e) => {
-      runOnJS(startStroke)(e.x, e.y);
+      'worklet';
+      if (!brushMode) return;
+      livePointsSV.value = [{ x: e.x, y: e.y }];
     })
     .onUpdate((e) => {
-      runOnJS(addStrokePoint)(e.x, e.y);
+      'worklet';
+      if (!brushMode) return;
+      livePointsSV.value = [...livePointsSV.value, { x: e.x, y: e.y }];
     })
     .onEnd(() => {
-      runOnJS(endStroke)();
+      'worklet';
+      if (!brushMode) return;
+      const pts = livePointsSV.value;
+      livePointsSV.value = [];
+      runOnJS(endStroke)(pts);
     });
 
   // ── Mode selection ────────────────────────────────────────────────
@@ -402,14 +323,14 @@ export function CutoutPreviewSheet({
       }
       return next;
     });
-  }, [strokes.length, haptic, modeUnderlineXSV, modeUnderlineWSV, modeUnderlineOpacitySV]);
+  }, [strokes, haptic, modeUnderlineXSV, modeUnderlineWSV, modeUnderlineOpacitySV, displaySize.width, displaySize.height, mask]);
 
   // ── Reset mask — clears all strokes and recreates the mask ────────
   const handleResetMask = useCallback(() => {
     if (!mask) return;
     haptic.selection();
     setStrokes([]);
-    setCurrentPoints([]);
+    livePointsSV.value = [];
     setBrushMode(null);
     modeUnderlineOpacitySV.value = withSpring(0, Motion.spring.indicator);
     // Recreate the mask surface (fully opaque — everything kept).
@@ -419,7 +340,7 @@ export function CutoutPreviewSheet({
     cutoutService.disposeMask(mask);
     setMask(null);
     cutoutService.createBrushMask(mediaAssetId, w, h).then(setMask);
-  }, [mask, haptic, modeUnderlineOpacitySV]);
+  }, [mask, haptic, modeUnderlineOpacitySV, livePointsSV]);
 
   // ── Invert toggle ─────────────────────────────────────────────────
   const handleInvertToggle = useCallback(() => {
@@ -470,7 +391,7 @@ export function CutoutPreviewSheet({
     brushMode === 'erase' ? colors.danger : colors.success;
 
   // ── Mode button config ────────────────────────────────────────────
-  const modeButtons: { id: ModeId; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  const modeButtons: ModeButton[] = [
     { id: 'keep-person', label: 'Keep Person', icon: 'person-outline' },
     { id: 'keep-object', label: 'Keep Object', icon: 'image-outline' },
     { id: 'erase', label: 'Erase', icon: 'remove-circle-outline' },
@@ -494,6 +415,7 @@ export function CutoutPreviewSheet({
             onPress={onClose}
             style={styles.closeBtn}
             accessibilityLabel="Close cutout"
+            accessibilityHint="Closes the preview"
             accessibilityRole="button"
           >
             <AppIcon name="close" size={IconSize.lg} color="textPrimary" opticalCenter={true} accessible={false} />
@@ -505,16 +427,13 @@ export function CutoutPreviewSheet({
         </View>
 
         {/* ── Body ── */}
-        {capability && !capability.brushRefinement && (
-          <View style={styles.messageContainer}>
-            <Text style={[styles.messageTitle, { color: colors.textPrimary }]}>
-              Cutout unavailable
-            </Text>
-            <Text style={[styles.messageBody, { color: colors.textSecondary }]}>
-              Brush cutout requires Skia, which isn&rsquo;t linked in this build.
-            </Text>
-          </View>
-        )}
+        <CutoutPreviewStatus
+          capability={capability}
+          processing={processing}
+          error={error}
+          onRetry={handleRetry}
+          colors={colors}
+        />
 
         {capability?.brushRefinement && processing && (
           <View style={styles.previewContainer}>
@@ -522,242 +441,39 @@ export function CutoutPreviewSheet({
           </View>
         )}
 
-        {capability?.brushRefinement && !processing && error && (
-          <View style={styles.messageContainer}>
-            <Text style={[styles.messageTitle, { color: colors.textPrimary }]}>
-              Could not initialise the cutout
-            </Text>
-            <Text style={[styles.messageBody, { color: colors.textSecondary }]}>
-              {error}
-            </Text>
-            <PressScale
-              onPress={handleRetry}
-              style={[styles.retryBtn, { backgroundColor: colors.brand }]}
-              accessibilityLabel="Retry cutout"
-              accessibilityHint="Attempts to create the brush mask again"
-              accessibilityRole="button"
-            >
-              <Text style={[styles.retryBtnText, { color: colors.textInverse }]}>
-                Retry
-              </Text>
-            </PressScale>
-          </View>
-        )}
-
         {capability?.brushRefinement && !processing && mask && (
           <View style={styles.previewContainer}>
-            {/* ── Preview area ── */}
-            {comparing ? (
-              // Hold-to-compare: show the original image full-width.
-              // Reduce Motion-safe: no animation, just an instant swap.
-              <View style={[styles.previewRow, { height: previewSize.height + Space.sm * 2 }]}>
-                <View style={styles.previewCell}>
-                  <View style={[styles.previewFrame, { width: previewSize.width, height: previewSize.height, borderColor: colors.border }]}>
-                    <Image
-                      source={{ uri: imageUri }}
-                      style={{ width: '100%', height: '100%' }}
-                      contentFit="contain"
-                    />
-                  </View>
-                </View>
-              </View>
-            ) : (
-              // Real-time Skia MaskedPreview with brush drawing.
-              // The checkerboard shows through erased regions.
-              <View style={[styles.previewRow, { height: previewSize.height + Space.sm * 2 }]}>
-                <View style={styles.previewCell}>
-                  <GestureHandlerRootView style={styles.gestureRoot}>
-                    <GestureDetector gesture={panGesture}>
-                      <View
-                        style={[
-                          styles.previewFrame,
-                          {
-                            width: previewSize.width,
-                            height: previewSize.height,
-                            borderColor: brushMode ? currentBrushColor : colors.border },
-                        ]}
-                      >
-                        <Checkerboard size={{ width: previewSize.width, height: previewSize.height }} />
-                        {/* Skia MaskedPreview — real-time alpha-masked cutout */}
-                        <MaskedPreview
-                          imageUri={imageUri}
-                          width={previewSize.width}
-                          height={previewSize.height}
-                          strokes={strokes}
-                          livePoints={currentPoints}
-                          liveMode={brushMode === 'erase' ? 'erase' : brushMode ? 'keep' : null}
-                          brushSize={BRUSH_RADIUS * 2}
-                          showLiveOverlay={!!brushMode}
-                        />
-                      </View>
-                    </GestureDetector>
-                  </GestureHandlerRootView>
-                </View>
-              </View>
-            )}
-
-            {/* ── Compare / reset / invert controls ── */}
-            <View style={styles.controlRow}>
-              {/* Reset — clears all strokes and recreates the mask */}
-              <PressScale
-                onPress={handleResetMask}
-                disabled={!canRefine || strokes.length === 0}
-                style={[
-                  styles.controlBtn,
-                  {
-                    backgroundColor: 'transparent',
-                    borderColor: colors.border,
-                    opacity: canRefine && strokes.length > 0 ? 1 : 0.4 },
-                ]}
-                accessibilityLabel="Reset mask"
-                accessibilityHint="Clears all brush strokes and starts over"
-                accessibilityRole="button"
-              >
-                <AppIcon
-                  name="refresh"
-                  size={IconSize.sm}
-                  color="textSecondary"
-                  opticalCenter={true}
-                  accessible={false}
-                />
-                <Text
-                  style={[
-                    styles.controlBtnLabel,
-                    { color: colors.textSecondary },
-                  ]}
-                >
-                  Reset
-                </Text>
-              </PressScale>
-
-              {/* Hold to compare — shows the original image. Reduce Motion-safe:
-                  instant swap, no animation. */}
-              <Pressable
-                onPressIn={() => { haptic.light(); setComparing(true); }}
-                onPressOut={() => setComparing(false)}
-                disabled={!canRefine}
-                style={({ pressed }) => [
-                  styles.controlBtn,
-                  {
-                    backgroundColor: pressed ? colors.surfaceAlt : 'transparent',
-                    borderColor: colors.border,
-                    opacity: canRefine ? 1 : 0.4 },
-                ]}
-                accessibilityLabel="Hold to compare original"
-                accessibilityRole="button"
-              >
-                <AppIcon name="eye" size={IconSize.sm} color="textSecondary" opticalCenter={true} accessible={false} />
-                <Text style={[styles.controlBtnLabel, { color: colors.textSecondary }]}>
-                  Compare
-                </Text>
-              </Pressable>
-
-              {/* Invert toggle */}
-              <PressScale
-                onPress={handleInvertToggle}
-                disabled={!canRefine}
-                style={[
-                  styles.controlBtn,
-                  {
-                    backgroundColor: invert ? colors.brand : 'transparent',
-                    borderColor: invert ? colors.brand : colors.border,
-                    opacity: canRefine ? 1 : 0.4 },
-                ]}
-                accessibilityLabel="Invert mask"
-                accessibilityRole="button"
-                accessibilityState={{ selected: invert }}
-              >
-                <AppIcon
-                  name="swap-horizontal-outline"
-                  size={IconSize.sm}
-                  color={invert ? 'textInverse' : 'textSecondary'}
-                  opticalCenter={true}
-                  accessible={false}
-                />
-                <Text
-                  style={[
-                    styles.controlBtnLabel,
-                    { color: invert ? colors.textInverse : colors.textSecondary },
-                  ]}
-                >
-                  Invert
-                </Text>
-              </PressScale>
-            </View>
-
-            {/* ── Mode selector — text-only tabs with spring underline ── */}
-            <View style={styles.modeRow}>
-              {modeButtons.map((btn) => {
-                const isRestore = btn.id === 'restore';
-                const selected = !isRestore && brushMode === btn.id;
-                return (
-                  <PressScale
-                    key={btn.id}
-                    onPress={() => handleModeSelect(btn.id)}
-                    disabled={!canRefine}
-                    onLayout={!isRestore ? (e) => {
-                      modeTabLayouts.current.set(btn.id as BrushMode, {
-                        x: e.nativeEvent.layout.x,
-                        width: e.nativeEvent.layout.width });
-                      if (brushMode === btn.id) {
-                        modeUnderlineXSV.value = e.nativeEvent.layout.x;
-                        modeUnderlineWSV.value = e.nativeEvent.layout.width;
-                        modeUnderlineOpacitySV.value = 1;
-                      }
-                    } : undefined}
-                    style={styles.modeTab}
-                    accessibilityLabel={btn.label}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                  >
-                    <Text
-                      style={[
-                        styles.modeTabText,
-                        {
-                          color: selected ? colors.brand : colors.textSecondary,
-                          opacity: !canRefine ? 0.4 : 1 },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {btn.label}
-                    </Text>
-                  </PressScale>
-                );
-              })}
-              {/* Spring-animated underline indicator (brand color, 2pt) */}
-              <Reanimated.View
-                style={[styles.modeUnderline, modeUnderlineStyle, { backgroundColor: colors.brand }]}
-                pointerEvents="none"
-              />
-            </View>
-
-            {/* ── Edge Softness slider ── */}
-            <View style={styles.sliderRow}>
-              <View style={styles.sliderHeader}>
-                <Text style={[styles.sliderLabel, { color: colors.textPrimary }]}>
-                  Edge Softness
-                </Text>
-                <Text style={[styles.sliderValue, { color: colors.textMuted }]}>
-                  {featherPx}px
-                </Text>
-              </View>
-              <CreatorSlider
-                value={featherPx}
-                min={0}
-                max={10}
-                step={1}
-                onValueChange={setFeatherPx}
-                onCommit={setFeatherPx}
-                accessibilityLabel="Edge softness"
-              />
-            </View>
-
-            {/* ── Hint ── */}
-            <Text style={[styles.hint, { color: colors.textMuted }]}>
-              {brushMode
-                ? `Draw to ${brushMode === 'erase' ? 'erase' : 'keep'}.`
-                : 'Select a brush mode, then draw.'}
-            </Text>
+            <CutoutPreviewStage
+              comparing={comparing}
+              previewSize={previewSize}
+              imageUri={imageUri}
+              panGesture={panGesture}
+              brushMode={brushMode}
+              currentBrushColor={currentBrushColor}
+              strokes={strokes}
+              livePointsSV={livePointsSV}
+              colors={colors}
+            />
+            <CutoutPreviewControls
+              colors={colors}
+              canRefine={canRefine}
+              strokesCount={strokes.length}
+              invert={invert}
+              brushMode={brushMode}
+              featherPx={featherPx}
+              modeButtons={modeButtons}
+              modeTabLayouts={modeTabLayouts}
+              modeUnderlineXSV={modeUnderlineXSV}
+              modeUnderlineWSV={modeUnderlineWSV}
+              modeUnderlineOpacitySV={modeUnderlineOpacitySV}
+              modeUnderlineStyle={modeUnderlineStyle}
+              onResetMask={handleResetMask}
+              onCompareIn={() => { haptic.light(); setComparing(true); }}
+              onCompareOut={() => setComparing(false)}
+              onInvertToggle={handleInvertToggle}
+              onModeSelect={handleModeSelect}
+              onFeatherChange={setFeatherPx}
+            />
           </View>
         )}
 
@@ -777,6 +493,7 @@ export function CutoutPreviewSheet({
             onPress={onClose}
             style={[styles.footerBtn, styles.footerCancel]}
             accessibilityLabel="Cancel cutout"
+            accessibilityHint="Closes without applying"
             accessibilityRole="button"
           >
             <Text style={[styles.footerCancelText, { color: colors.textSecondary }]}>
@@ -794,6 +511,7 @@ export function CutoutPreviewSheet({
                 opacity: !mask || processing ? 0.4 : 1 },
             ]}
             accessibilityLabel="Apply cutout"
+            accessibilityHint="Applies the cutout to the canvas"
             accessibilityRole="button"
           >
             <Text style={[styles.footerConfirmText, { color: colors.textInverse }]}>
@@ -805,151 +523,3 @@ export function CutoutPreviewSheet({
     </SheetContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    height: 44 },
-  title: {
-    fontFamily: Typography.family.semibold,
-    fontSize: TypographyV2.bodyStrong.size,
-    textAlign: 'center' },
-  closeBtn: {
-    width: Control.hit,
-    height: Control.hit,
-    justifyContent: 'center',
-    alignItems: 'center' },
-  // ── Message / state container ──
-  messageContainer: {
-    alignItems: 'center',
-    paddingHorizontal: Space.lg,
-    paddingVertical: Space.xl,
-    gap: Space.xs },
-  messageTitle: {
-    fontFamily: Typography.family.semibold,
-    fontSize: TypographyV2.bodyStrong.size,
-    textAlign: 'center' },
-  messageBody: {
-    fontFamily: Typography.family.regular,
-    fontSize: TypographyV2.body.size,
-    textAlign: 'center',
-    lineHeight: TypographyV2.body.lineHeight },
-  retryBtn: {
-    paddingHorizontal: Space.lg,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.lg,
-    marginTop: Space.sm,
-    minHeight: 44,
-    justifyContent: 'center',
-    alignItems: 'center' },
-  retryBtnText: {
-    fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.bodyStrong.size },
-  // ── Preview ──
-  previewContainer: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm },
-  previewRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: Space.sm },
-  previewCell: {
-    alignItems: 'center' },
-  previewFrame: {
-    borderRadius: Radius.md,
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'transparent' },
-  gestureRoot: {
-    alignItems: 'center',
-    justifyContent: 'center' },
-  hint: {
-    fontFamily: Typography.family.regular,
-    fontSize: TypographyV2.meta.size,
-    textAlign: 'center',
-    marginTop: Space.md,
-    lineHeight: TypographyV2.meta.lineHeight,
-    paddingHorizontal: Space.sm },
-  // ── Control row (Refine / Hold to Compare / Invert) ──
-  controlRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: Space.sm,
-    marginTop: Space.md,
-    paddingHorizontal: Space.xs },
-  controlBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.xs,
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.sm,
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    minHeight: 44 },
-  controlBtnLabel: {
-    fontFamily: Typography.family.medium,
-    fontSize: TypographyV2.meta.size },
-  // ── Mode selector row — text-only tabs with underline ──
-  modeRow: {
-    flexDirection: 'row',
-    marginTop: Space.sm,
-    paddingHorizontal: Space.xs,
-    position: 'relative' },
-  modeTab: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Space.sm,
-    minHeight: 44 },
-  modeTabText: {
-    fontFamily: Typography.family.medium,
-    fontSize: TypographyV2.meta.size },
-  modeUnderline: {
-    position: 'absolute',
-    bottom: 0,
-    height: Stroke.emphasis,
-    borderRadius: Radius.full },
-  // ── Edge Softness slider ──
-  sliderRow: {
-    marginTop: Space.md,
-    paddingHorizontal: Space.xs },
-  sliderHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Space.xs },
-  sliderLabel: {
-    fontFamily: Typography.family.medium,
-    fontSize: TypographyV2.meta.size },
-  sliderValue: {
-    fontFamily: Typography.family.medium,
-    fontSize: TypographyV2.meta.size },
-  // ── Footer — premium Cancel / Apply buttons ──
-  footer: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth },
-  footerBtn: {
-    flex: 1,
-    height: 50,
-    borderRadius: Radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  footerCancel: {
-    backgroundColor: 'transparent' },
-  footerCancelText: {
-    fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.bodyStrong.size },
-  footerConfirm: {
-    // backgroundColor set inline
-  },
-  footerConfirmText: {
-    fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.bodyStrong.size } });

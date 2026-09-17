@@ -23,20 +23,19 @@ import {
 } from 'react-native';
 import { TextInput } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
   useAnimatedStyle,
   withTiming,
 } from 'react-native-reanimated';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
-import { Typography, Space, Radius, Stroke, IconGrammar } from '../../../theme/designTokens';
+import { Typography, Space, Radius } from '../../../theme/designTokens';
 import { Motion } from '../../../theme/motionTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { CreatorGlyph } from '../../controls/CreatorGlyph';
-import { TEXT_STYLE_PRESETS, getPresetById, type TextStylePreset } from './textStylePresets';
+import { TEXT_STYLE_PRESETS, getPresetById } from './textStylePresets';
 import { toHexString } from '../../color/ColorMath';
 
 import type { CreatorLayer } from '../../core/projectStore/composition';
@@ -58,7 +57,7 @@ export interface InlineTextEditorProps {
     styleUpdates?: {
       textStyle?: TextStylePresetId;
       alignment?: 'left' | 'center' | 'right';
-      background?: any;
+      background?: TextLayer['payload']['background'];
       textColor?: string;
     }
   ) => void;
@@ -108,7 +107,7 @@ export function InlineTextEditor({
   canvasWidth,
   canvasHeight,
   canvasTopOffset,
-  screenWidth,
+  screenWidth: _screenWidth,
   screenHeight,
   onCommit,
   onDismiss,
@@ -153,7 +152,7 @@ export function InlineTextEditor({
     const trimmed = value.trim();
     const finalContent = trimmed.length > 0 ? trimmed : payload.text;
 
-    let backgroundPayload: any = undefined;
+    let backgroundPayload: TextLayer['payload']['background'] = undefined;
     let finalTextColor = resolveColor(layer, colors.scrimTextPrimary);
 
     if (highlightMode === 'semi') {
@@ -234,7 +233,7 @@ export function InlineTextEditor({
     if (highlightMode === 'solid') return colors.background;
     if (highlightMode === 'semi') return colors.scrimTextPrimary;
     return resolveColor(layer, colors.scrimTextPrimary);
-  }, [highlightMode, layer, colors.scrimTextPrimary]);
+  }, [highlightMode, layer, colors.scrimTextPrimary, colors.background]);
 
   const textAlign: TextStyle['textAlign'] = alignment;
 
@@ -288,6 +287,7 @@ export function InlineTextEditor({
             ]}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             accessibilityLabel={`Text alignment: ${alignment}. Tap to toggle.`}
+            accessibilityHint="Cycles the text alignment"
             accessibilityRole="button"
           >
             <CreatorGlyph name={alignGlyph} size={18} color="#FFFFFF" />
@@ -303,6 +303,7 @@ export function InlineTextEditor({
             ]}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             accessibilityLabel={`Text highlight: ${highlightMode}. Tap to cycle.`}
+            accessibilityHint="Cycles the highlight mode"
             accessibilityRole="button"
           >
             <View
@@ -335,6 +336,7 @@ export function InlineTextEditor({
             ]}
             hitSlop={{ top: 10, bottom: 10, left: 14, right: 14 }}
             accessibilityLabel="Done editing text"
+            accessibilityHint="Applies the text changes"
             accessibilityRole="button"
           >
             <Text style={styles.doneButtonText}>Done</Text>
@@ -422,6 +424,7 @@ export function InlineTextEditor({
                   pressed && styles.pillPressed,
                 ]}
                 accessibilityLabel={`Font style ${item.name}`}
+                accessibilityHint="Applies this font style"
                 accessibilityRole="button"
                 accessibilityState={{ selected: isSelected }}
               >

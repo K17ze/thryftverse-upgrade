@@ -38,12 +38,14 @@ export function SafeZoneOverlay({ visible, topHeight, bottomHeight, style }: Saf
         <View
           style={[styles.topBand, { top: 0, height: topHeight, backgroundColor: colors.brandSubtle, borderBottomColor: colors.brand }]}
           accessibilityLabel="Top safe area"
+          accessibilityHint="Marks the area covered by system UI"
         />
       )}
       {bottomHeight > 0 && (
         <View
           style={[styles.bottomBand, { bottom: 0, height: bottomHeight, backgroundColor: colors.brandSubtle, borderTopColor: colors.brand }]}
           accessibilityLabel="Bottom safe area"
+          accessibilityHint="Marks the area covered by system UI"
         />
       )}
       {topHeight > 0 && bottomHeight > 0 && (

@@ -168,6 +168,7 @@ export function TransitionPreviewRail({
       contentContainerStyle={styles.content}
       accessibilityRole="list"
       accessibilityLabel="Transition presets"
+      accessibilityHint="Swipe horizontally to browse transitions"
     >
       {presets.map((preset) => {
         const selected = preset.id === selectedId;

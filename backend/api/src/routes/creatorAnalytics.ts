@@ -228,7 +228,9 @@ async function queryTimelineFromRaw(
     profile_visits: string;
   }>(
     `SELECT
-       date_trunc('day', occurred_at AT TIME ZONE 'UTC')::date AS date,
+       -- ::text forces node-pg to return 'YYYY-MM-DD' rather than parsing
+       -- the DATE into a JS Date — the timeline merge keys on the string.
+       date_trunc('day', occurred_at AT TIME ZONE 'UTC')::date::text AS date,
        COUNT(*) FILTER (WHERE event_type = 'view')           AS views,
        COUNT(*) FILTER (WHERE event_type = 'qualified_view') AS qualified_views,
        COUNT(*) FILTER (WHERE event_type = 'like')           AS likes,
@@ -591,6 +593,23 @@ export const registerCreatorAnalyticsRoutes = ({
       );
       if (aggResult.rows.length > 0) {
         timelineRows = aggResult.rows;
+        // Union the raw tail: the aggregate worker folds events in with a
+        // lag, so days after the last aggregated row (typically today)
+        // would render as flat zeros. Raw rows are strictly after the
+        // aggregate watermark — no double counting.
+        const lastAggDate = aggResult.rows[aggResult.rows.length - 1].date;
+        const tailStart = new Date(`${lastAggDate}T00:00:00.000Z`);
+        tailStart.setUTCDate(tailStart.getUTCDate() + 1);
+        if (tailStart.getTime() < current.endExclusive.getTime()) {
+          const rawTail = await queryTimelineFromRaw(
+            db,
+            actorUserId,
+            { start: tailStart, endExclusive: current.endExclusive },
+            contentType,
+            contentId,
+          );
+          timelineRows = [...aggResult.rows, ...rawTail];
+        }
       } else {
         // Fall back to raw events
         timelineRows = await queryTimelineFromRaw(db, actorUserId, current, contentType, contentId);
@@ -799,9 +818,15 @@ export const registerCreatorAnalyticsRoutes = ({
         total_minor: string;
         entry_count: string;
       }>(
+        // Gross positive sums: the negative 'payout' entry offsets its held/
+        // paid sources in the same status bucket, so an unfiltered SUM nets
+        // every payout to zero — 'paid' would display £0 forever and 'held'
+        // would stay invisible while a bank payout is in flight. Buckets are
+        // display projections of earned money; payout entries are the
+        // offsetting record, not the earnings themselves.
         `SELECT status,
-                COALESCE(SUM(amount_minor), 0)::text AS total_minor,
-                COUNT(*)::text AS entry_count
+                COALESCE(SUM(amount_minor) FILTER (WHERE amount_minor > 0), 0)::text AS total_minor,
+                COUNT(*) FILTER (WHERE amount_minor > 0)::text AS entry_count
          FROM creator_earning_entries
          WHERE creator_id = $1
          GROUP BY status`,
@@ -1088,10 +1113,11 @@ export const registerCreatorAnalyticsRoutes = ({
       const payoutInsert = await client.query(
         `INSERT INTO creator_earning_entries (
            id, creator_id, agreement_version, entry_type, amount_minor,
-           currency, status, description, created_at
+           currency, status, description, created_at,
+           related_payout_request_id
          )
          VALUES ($1, $2, 'payout-v1', 'payout', $3, 'GBP', $4,
-                 $5, $6)
+                 $5, $6, $7)
          ON CONFLICT (id) DO NOTHING
          RETURNING id`,
         [
@@ -1103,6 +1129,9 @@ export const registerCreatorAnalyticsRoutes = ({
             ? `Payout to wallet ${walletId}`
             : `Bank payout request ${payoutRequestId}`,
           now.toISOString(),
+          // First-class link so settlement can flip held→paid (or release
+          // on failure) without parsing the description text.
+          destination === 'wallet' ? null : payoutRequestId,
         ],
       );
 

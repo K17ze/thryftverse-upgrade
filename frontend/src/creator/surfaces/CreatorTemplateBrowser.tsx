@@ -7,7 +7,6 @@ import {
   ScrollView,
   FlatList,
   useWindowDimensions,
-  ViewStyle,
   TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
@@ -255,7 +254,7 @@ export function CreatorTemplateBrowser({
         </Pressable>
       );
     },
-    [handleApply, styles, screenWidth],
+    [handleApply, styles, screenWidth, colors.textPrimary],
   );
 
   const renderStandardItem = useCallback(

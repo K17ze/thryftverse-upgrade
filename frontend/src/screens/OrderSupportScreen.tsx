@@ -22,7 +22,8 @@ import { useHaptic } from '../hooks/useHaptic';
 import { Caption, Meta } from '../components/ui/Text';
 import { CommerceOrder, getOrder } from '../services/commerceApi';
 import { requestReturn } from '../services/returnsApi';
-import { validateRequestedRefundAmount, isWithinReturnWindow } from '../utils/returnCase';
+import { validateRequestedRefundAmount } from '../utils/returnCase';
+import { filterSupportTopics, SUPPORT_TOPIC_RULES, type SupportTopicRule } from '../utils/supportTopics';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { normaliseOrderStatus } from '../components/orders/orderCapabilities';
 import { CachedImage } from '../components/CachedImage';
@@ -35,26 +36,24 @@ import { t } from '../i18n';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'OrderSupport'>;
 
-interface SupportTopic {
-  id: string;
+interface SupportTopic extends SupportTopicRule {
   icon: React.ComponentProps<typeof Ionicons>['name'];
-  label: string;
-  description: string;
-  requiresStatus: string[] | null;
 }
 
-const ALL_SUPPORT_TOPICS: SupportTopic[] = [
-  { id: 'not_received', icon: 'car-outline', label: 'Item not received', description: 'My order has not arrived within the expected timeframe.', requiresStatus: ['shipped', 'in transit', 'out for delivery', 'delivered'] },
-  { id: 'not_as_described', icon: 'alert-circle-outline', label: 'Not as described', description: 'The item condition, size, or authenticity does not match the listing.', requiresStatus: ['delivered'] },
-  { id: 'damaged', icon: 'bandage-outline', label: 'Item arrived damaged', description: 'The item was damaged during shipping or arrived broken.', requiresStatus: ['delivered'] },
-  { id: 'wrong_item', icon: 'shuffle-outline', label: 'Wrong item sent', description: 'I received a different item than what I ordered.', requiresStatus: ['delivered'] },
-  // The 'return' topic additionally requires the order to be inside the
-  // return window — enforced in the topic filter below via
-  // isWithinReturnWindow(order.deliveredAt).
-  { id: 'return', icon: 'return-down-back-outline', label: 'Request a return', description: 'I want to return the item for a refund.', requiresStatus: ['delivered', 'completed'] },
-  { id: 'payment_issue', icon: 'card-outline', label: 'Payment issue', description: 'There was a problem with payment or billing.', requiresStatus: ['created', 'paid'] },
-  { id: 'other', icon: 'chatbubble-outline', label: 'Other issue', description: 'Something else is wrong with my order.', requiresStatus: null },
-];
+const TOPIC_ICONS: Record<string, SupportTopic['icon']> = {
+  not_received: 'car-outline',
+  not_as_described: 'alert-circle-outline',
+  damaged: 'bandage-outline',
+  wrong_item: 'shuffle-outline',
+  return: 'return-down-back-outline',
+  payment_issue: 'card-outline',
+  other: 'chatbubble-outline',
+};
+
+const ALL_SUPPORT_TOPICS: SupportTopic[] = SUPPORT_TOPIC_RULES.map((rule) => ({
+  ...rule,
+  icon: TOPIC_ICONS[rule.id] ?? 'chatbubble-outline',
+}));
 
 /**
  * Reason-specific evidence guidance.
@@ -90,8 +89,15 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
   const { show } = useToast();
   const haptic = useHaptic();
   const { formatFromFiat } = useFormattedPrice();
+  const viewerId = useStore((state) => state.currentUser?.id ?? null);
 
-  const [selectedTopic, setSelectedTopic] = useState<string | null>(categoryId ?? null);
+  // Whitelist the deep-linked category — an arbitrary param value must not
+  // preselect a topic that isn't in the picker.
+  const [selectedTopic, setSelectedTopic] = useState<string | null>(
+    categoryId && ALL_SUPPORT_TOPICS.some((topic) => topic.id === categoryId)
+      ? categoryId
+      : null
+  );
   const [details, setDetails] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -140,17 +146,24 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
   const openTicket = existingTickets.find((t) => t.status === 'open');
 
   const orderStatus = normaliseOrderStatus(order?.status ?? 'unknown');
-  const availableTopics = ALL_SUPPORT_TOPICS.filter((topic) => {
-    if (topic.requiresStatus !== null && !topic.requiresStatus.includes(orderStatus)) {
-      return false;
-    }
-    // The return window (14 days from delivery) is enforced server-side too;
-    // gating here just keeps an ineligible topic out of the picker.
-    if (topic.id === 'return' && !isWithinReturnWindow(order?.deliveredAt ?? null)) {
-      return false;
-    }
-    return true;
+  // Role gating: buyer-claim topics are meaningless (and dishonest) when
+  // filed by the seller on the same order.
+  const viewerIsBuyer = order ? order.buyerId === viewerId : false;
+  const availableTopics = filterSupportTopics(ALL_SUPPORT_TOPICS, {
+    orderStatus,
+    viewerIsBuyer,
+    orderLoaded: order != null,
+    deliveredAt: order?.deliveredAt ?? null,
   });
+
+  // A preselected topic that turns out ineligible (wrong role, wrong status,
+  // expired window) must not survive the order load — reset it.
+  React.useEffect(() => {
+    if (!order || !selectedTopic) return;
+    if (!availableTopics.some((topic) => topic.id === selectedTopic)) {
+      setSelectedTopic(null);
+    }
+  }, [order, selectedTopic, availableTopics]);
 
   const canSubmit = selectedTopic && details.trim().length > 10 && !isSubmitting && !isSubmitted && !isUploadingEvidence;
 

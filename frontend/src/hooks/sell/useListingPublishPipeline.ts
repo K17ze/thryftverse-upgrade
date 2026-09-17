@@ -31,6 +31,7 @@ interface ListingPublishPipelineParams {
   price: string;
   originalPrice: string;
   category: string;
+  subcategory: string;
   brand: string;
   size: string;
   condition: string;
@@ -69,6 +70,7 @@ export function useListingPublishPipeline(params: ListingPublishPipelineParams) 
     price,
     originalPrice,
     category,
+    subcategory,
     brand,
     size,
     condition,
@@ -202,6 +204,7 @@ export function useListingPublishPipeline(params: ListingPublishPipelineParams) 
         description: trimmedDescription,
         priceGbp: numericPrice,
         category,
+        subcategory: subcategory || undefined,
         brand: brand || undefined,
         size,
         condition,
@@ -260,7 +263,7 @@ export function useListingPublishPipeline(params: ListingPublishPipelineParams) 
 
     isPublishingRef.current = false;
     setIsPublishing(false);
-  }, [isPublishing, listingMode, mediaDraftItems, title, desc, price, startingBid, category, size, condition, shareCountInput, sharePriceInput, offeringWindowHours, authPhotos, clearSellDraft, navigation, currentUser, brand, originalPrice, shippingMethod, shippingPayer, isOffline, completeness, uploadQueueRef, setMediaDraftItems, setPhotos, setErrors, setErrorMsg, syncMediaFromQueue]);
+  }, [isPublishing, listingMode, mediaDraftItems, title, desc, price, startingBid, category, subcategory, size, condition, shareCountInput, sharePriceInput, offeringWindowHours, authPhotos, clearSellDraft, navigation, currentUser, brand, originalPrice, shippingMethod, shippingPayer, isOffline, completeness, uploadQueueRef, setMediaDraftItems, setPhotos, setErrors, setErrorMsg, syncMediaFromQueue]);
 
   return {
     isPublishing,

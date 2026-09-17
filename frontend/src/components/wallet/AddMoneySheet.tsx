@@ -114,6 +114,11 @@ export function AddMoneySheet({
   } | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
   const amountRef = useRef<TextInput>(null);
+  // Persisted across retries: the backend replays a stored response for a
+  // repeated (userId, 'buy_1ze', key) — a retry after a lost response must
+  // not debit fiat and mint 1ZE twice. Reset when the amount changes (the
+  // stored payload hash covers amount+currency) or on success.
+  const fiatBuyKeyRef = useRef<string | null>(null);
 
   // Reset internal state whenever the sheet is reopened.
   React.useEffect(() => {
@@ -124,10 +129,16 @@ export function AddMoneySheet({
       setIsProcessing(false);
       setCardQuote(null);
       setQuoteLoading(false);
+      fiatBuyKeyRef.current = null;
     }
   }, [visible]);
 
   const fiatValue = Number(amountInput || '0');
+  // A changed amount/currency is a different purchase — the stored payload
+  // hash would mismatch, so the key resets with the inputs.
+  React.useEffect(() => {
+    fiatBuyKeyRef.current = null;
+  }, [amountInput, currencyCode]);
   // ── At-par model: 1 1ZE = $1.00 USD ──
   // The user enters an amount in their display currency. We convert to GBP
   // (the settlement currency the backend quotes), then issue 1ZE at par. The
@@ -361,16 +372,19 @@ export function AddMoneySheet({
 
     setIsProcessing(true);
     try {
-      const idempotencyKey =
-        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-          ? crypto.randomUUID()
-          : `buy_${userId}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      if (!fiatBuyKeyRef.current) {
+        fiatBuyKeyRef.current =
+          typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+            ? crypto.randomUUID()
+            : `buy_${userId}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      }
       const result = await buyIze({
         userId,
         fiatAmount: fiatValue,
         fiatCurrency: currencyCode,
-        idempotencyKey });
+        idempotencyKey: fiatBuyKeyRef.current });
       const p = result.purchase;
+      fiatBuyKeyRef.current = null;
       setAmountInput('');
       setReceipt({
         title: `${formatIzeAmount(p.izeAmount)} added to your wallet`,

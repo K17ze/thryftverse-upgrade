@@ -169,6 +169,7 @@ export const Playhead = React.memo(function Playhead({
           handleAnimStyle,
         ]}
         accessibilityLabel="Playhead"
+        accessibilityHint="Drag to scrub the timeline"
         accessibilityRole="adjustable"
         accessibilityValue={{ text: formatTimecode(positionMs) }}
         accessibilityLiveRegion="polite"

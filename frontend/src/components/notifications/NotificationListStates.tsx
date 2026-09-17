@@ -51,7 +51,10 @@ export function NotificationListFooter() {
 export interface NotificationListEmptyProps {
   isLoading: boolean;
   hasSyncError: boolean;
+  /** Whether the currently rendered (filtered) list has items. */
   hasNotifications: boolean;
+  /** Whether the feed has any notifications across all filters. */
+  hasAnyNotifications: boolean;
   activeFilter: NotificationFilter;
   onRetry: () => void;
   onDiscover: () => void;
@@ -68,6 +71,7 @@ export function NotificationListEmpty({
   isLoading,
   hasSyncError,
   hasNotifications,
+  hasAnyNotifications,
   activeFilter,
   onRetry,
   onDiscover,
@@ -93,7 +97,7 @@ export function NotificationListEmpty({
     );
   }
 
-  if (activeFilter !== 'all' && hasNotifications) {
+  if (activeFilter !== 'all' && hasAnyNotifications) {
     return (
       <EmptyState
         density="compact"

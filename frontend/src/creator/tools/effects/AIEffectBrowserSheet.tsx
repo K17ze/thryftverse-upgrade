@@ -20,15 +20,13 @@
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, type ViewStyle } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 
 import {
   Space,
   Radius,
   Stroke,
   FontFamily,
-  FontSize,
-  IconGrammar } from '../../../theme/designTokens';
+  FontSize } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../shared/CreatorAnimations';
@@ -222,6 +220,7 @@ export function AIEffectBrowserSheet({
             onCommit={handleIntensityChange}
             label="Intensity"
             accessibilityLabel="Effect intensity"
+            accessibilityHint="Adjusts the effect strength"
             disabled={!hasSelection}
           />
 

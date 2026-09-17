@@ -30,6 +30,7 @@ export type ActiveSheet =
   | 'help'
   | 'a11yMove'
   | 'a11yZOrder'
+  | 'a11yTransform'
   | 'transitions'
   | 'keyframes'
   | 'speedCurve'

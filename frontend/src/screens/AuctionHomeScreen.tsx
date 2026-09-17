@@ -314,10 +314,12 @@ export default function AuctionHomeScreen() {
           </View>
         )}
 
-        {/* Active filter chips — individually removable, with result count */}
+        {/* Active filter chips — individually removable, with result count.
+            The count is only honest once the complete filtered set is loaded
+            (no nextCursor) — a partial page is not a total. */}
         <FilterChipsBar
           chips={activeFilterChips}
-          resultCount={browseResult.status === 'ready' ? browseResult.items.length : undefined}
+          resultCount={browseResult.status === 'ready' && !browseResult.cursor ? browseResult.items.length : undefined}
           onRemoveChip={removeFilterChip}
           onClearAll={clearAllFilters}
         />
@@ -345,6 +347,7 @@ export default function AuctionHomeScreen() {
             paginationError={paginationError}
             onRetryBrowse={() => setBrowseRefreshTick((t) => t + 1)}
             onClearFilters={clearAllFilters}
+            onAuthenticate={() => navigation.navigate('AuthLanding')}
           />
         </SegmentContentTransition>
 

@@ -106,6 +106,7 @@ class PreviewCanvasBoundary extends Component<BoundaryProps, BoundaryState> {
             ]}
             accessibilityRole="button"
             accessibilityLabel="Go back"
+            accessibilityHint="Returns to the editor"
           >
             <Text style={[styles.stateActionText, { color: colors.textInverse }]}>
               Go back
@@ -130,7 +131,6 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
 
   const pageCount = document.pages.length;
   const page = document.pages[pageIndex];
-  const isPoster = document.type === 'poster';
 
   // A composition is "empty" when every page has no layers — the canvas
   // would render a blank surface, so we surface a hint instead.
@@ -313,6 +313,7 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
           onPress={onClose}
           style={styles.topBtn}
           accessibilityLabel="Close preview"
+          accessibilityHint="Returns to the editor"
         >
           <Ionicons name="close" size={IconGrammar.hero} color={colors.scrimTextPrimary} />
         </PressScale>
@@ -335,6 +336,7 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
             isOffline ? styles.publishBtnDisabled : {},
           ]}
           accessibilityLabel="Publish"
+          accessibilityHint="Opens the publish flow"
           accessibilityState={{ disabled: isOffline }}
           scale={0.95}
           disabled={isOffline}

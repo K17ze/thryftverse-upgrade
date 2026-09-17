@@ -1,7 +1,7 @@
 import React from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Radius, Space, Stroke} from '../../theme/designTokens';
+import { Radius, Space} from '../../theme/designTokens';
 import { IconGrammar } from '../../theme/designTokens';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -13,11 +13,16 @@ import { useAppTheme } from '../../theme/ThemeContext';
 const GALLERY_THUMB_SIZE = 44;
 const RECENT_THUMB_SIZE = 40;
 
+export interface GalleryItem {
+  uri: string;
+  isVideo: boolean;
+}
+
 export interface GalleryCarouselProps {
-  /** Most recent gallery image URI (shown as the 44×44 thumbnail). */
-  lastImageUri: string | null;
-  /** Recent gallery image URIs for the long-press carousel. */
-  recentImages: string[];
+  /** Most recent gallery item (shown as the 44×44 thumbnail). */
+  lastItem: GalleryItem | null;
+  /** Recent gallery items for the long-press carousel. */
+  recentItems: GalleryItem[];
   /** Whether the recent-photos carousel is currently expanded. */
   showRecentCarousel: boolean;
   /** Bottom offset (safe-area + bottom-bar clearance) for the carousel. */
@@ -40,8 +45,8 @@ export interface GalleryCarouselProps {
  * available a restrained placeholder (images-outline) is shown.
  */
 export function GalleryCarousel({
-  lastImageUri,
-  recentImages,
+  lastItem,
+  recentItems,
   showRecentCarousel,
   carouselBottom,
   onGallery,
@@ -53,31 +58,40 @@ export function GalleryCarousel({
 
   return (
     <>
-      {/* Recent photos carousel (long-press gallery) */}
-      {showRecentCarousel && recentImages.length > 1 && (
+      {/* Recent items carousel (long-press gallery) */}
+      {showRecentCarousel && recentItems.length > 1 && (
         <View style={[styles.recentCarousel, { bottom: carouselBottom, backgroundColor: colors.mediaOverlayScrim }]} pointerEvents="box-none">
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.recentCarouselContent}
           >
-            {recentImages.map((uri, i) => (
+            {recentItems.map((item, i) => (
               <Pressable
-                key={`${uri}-${i}`}
+                key={`${item.uri}-${i}`}
                 style={({ pressed }) => [styles.recentThumbWrap, pressed && styles.btnPressed]}
                 onPress={() => {
                   haptic.selection();
-                  if (onRecentPhotoPress) {
-                    onRecentPhotoPress(uri);
+                  if (onRecentPhotoPress && !item.isVideo) {
+                    onRecentPhotoPress(item.uri);
                   } else {
                     onGallery();
                   }
                 }}
                 hitSlop={12}
-                accessibilityLabel={`Recent photo ${i + 1}`}
+                accessibilityLabel={`Recent ${item.isVideo ? 'video' : 'photo'} ${i + 1}`}
+                accessibilityHint="Opens this recent item"
                 accessibilityRole="button"
               >
-                <Image source={{ uri }} style={styles.recentThumb} />
+                {item.isVideo ? (
+                  // Videos can't render through <Image> — show an honest
+                  // film tile rather than a blank thumbnail.
+                  <View style={[styles.recentThumb, styles.videoThumb, { backgroundColor: colors.mediaOverlayScrim }]}>
+                    <Ionicons name="videocam" size={16} color={colors.scrimTextPrimary} />
+                  </View>
+                ) : (
+                  <Image source={{ uri: item.uri }} style={styles.recentThumb} />
+                )}
               </Pressable>
             ))}
           </ScrollView>
@@ -98,10 +112,17 @@ export function GalleryCarousel({
         onLongPress={onLongPress}
         hitSlop={16}
         accessibilityLabel="Choose photos from gallery"
+        accessibilityHint="Opens the photo gallery"
         accessibilityRole="button"
       >
-        {lastImageUri ? (
-          <Image source={{ uri: lastImageUri }} style={styles.galleryThumb} />
+        {lastItem ? (
+          lastItem.isVideo ? (
+            <View style={[styles.galleryThumb, styles.videoThumb, { backgroundColor: colors.mediaOverlayScrim }]}>
+              <Ionicons name="videocam" size={18} color={colors.scrimTextPrimary} />
+            </View>
+          ) : (
+            <Image source={{ uri: lastItem.uri }} style={styles.galleryThumb} />
+          )
         ) : (
           // Transparent 44pt target + glyph only. No fill, no bordered box.
           // The glyph reads as "gallery" on its own over the dark preview.
@@ -160,6 +181,12 @@ const styles = StyleSheet.create({
     width: GALLERY_THUMB_SIZE,
     height: GALLERY_THUMB_SIZE,
     borderRadius: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Video tiles render as a scrim tile + glyph — honest "this is a video"
+  // affordance instead of a broken <Image> on a non-decodable URI.
+  videoThumb: {
     alignItems: 'center',
     justifyContent: 'center',
   },

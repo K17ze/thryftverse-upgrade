@@ -421,7 +421,13 @@ export function createFilterStyles(colors: ThemeColors) {
     fontSize: TypographyV2.body.size,
     fontFamily: TypographyV2.body.fontFamily,
     color: colors.textMuted,
-    marginTop: Space.md + Space.xs } });
+    marginTop: Space.md + Space.xs },
+  priceRangeError: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.danger,
+    paddingHorizontal: Space.xl,
+    marginTop: Space.sm } });
 }
 
 export type FilterStyles = ReturnType<typeof createFilterStyles>;

@@ -14,7 +14,6 @@
 import React from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 
-import { Space } from '../../theme/designTokens';
 import { SheetContainer } from '../shared/CreatorAnimations';
 
 // ── Types ─────────────────────────────────────────────────────────────

@@ -21,8 +21,7 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-  AccessibilityInfo } from 'react-native';
+  ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Space, Radius, Typography, FontFamily, Stroke } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';

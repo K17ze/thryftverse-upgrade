@@ -91,9 +91,10 @@ services:
       KEY_SERVICE_URL: http://localhost:4100
       KEY_SERVICE_CLIENT_TOKEN: local-key-client-token
       KEY_SERVICE_ADMIN_TOKEN: local-key-admin-token
-      # Meilisearch — full-text search
+      # Meilisearch — full-text search. The API key must equal the service's
+      # MEILI_MASTER_KEY below — a mismatch fails every search call.
       MEILISEARCH_URL: http://meilisearch:7700
-      MEILISEARCH_API_KEY: local-meilisearch-api-key
+      MEILISEARCH_API_KEY: local-meilisearch-master-key
       MEILISEARCH_INDEX_PREFIX: thryftverse_
       S3_ENDPOINT: http://localhost:9000
       S3_PUBLIC_ENDPOINT: http://localhost:9000

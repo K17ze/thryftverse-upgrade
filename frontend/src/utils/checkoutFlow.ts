@@ -124,6 +124,10 @@ export function buildOrderSignature(params: {
   addressId?: number;
   paymentMethodId?: number;
   carrierId?: string;
+  /** Server-issued shipping quote id — part of the signature so a fresh
+   *  quote at the same price still re-keys the order rather than silently
+   *  replaying a consumed/stale quote. */
+  quoteId?: string | null;
   platformCharge: number;
   postageFee: number;
   walletDebit?: number;
@@ -138,6 +142,7 @@ export function buildOrderSignature(params: {
     params.addressId ?? 'none',
     params.paymentMethodId ?? 'none',
     params.carrierId ?? 'none',
+    params.quoteId ?? 'none',
     params.platformCharge.toFixed(2),
     params.postageFee.toFixed(2),
     params.walletDebit?.toFixed(2) ?? 'none',

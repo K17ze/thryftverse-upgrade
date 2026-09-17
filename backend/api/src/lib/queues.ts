@@ -951,7 +951,10 @@ export function startBackgroundWorkers(
   }
 }
 
-export async function enqueuePushNotificationJob(input: PushJobData): Promise<void> {
+export async function enqueuePushNotificationJob(
+  input: PushJobData,
+  options?: { delayMs?: number },
+): Promise<void> {
   await pushQueue.add('push_send', input, {
     jobId: `push_${input.eventId}`,
     attempts: 4,
@@ -959,6 +962,10 @@ export async function enqueuePushNotificationJob(input: PushJobData): Promise<vo
       type: 'exponential',
       delay: 2_000,
     },
+    // Quiet-hours deferral — delivery is delayed to the window's end
+    // rather than dropped. Capped at 24h so a malformed window cannot
+    // park a notification forever.
+    delay: Math.max(0, Math.min(options?.delayMs ?? 0, 86_400_000)),
     removeOnComplete: true,
     removeOnFail: 500,
   });

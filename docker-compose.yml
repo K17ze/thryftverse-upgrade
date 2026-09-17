@@ -108,6 +108,7 @@ services:
       done;
       mc mb --ignore-existing local/${S3_BUCKET:-thryftverse-media};
       mc anonymous set download local/${S3_BUCKET:-thryftverse-media};
+      mc ilm rule add local/${S3_BUCKET:-thryftverse-media} --abort-incomplete-days 7 || true;
       "
     deploy:
       resources:
@@ -220,7 +221,8 @@ services:
       WISE_API_KEY: ${WISE_API_KEY:-}
       WISE_WEBHOOK_SECRET: ${WISE_WEBHOOK_SECRET:-}
       MEILISEARCH_URL: http://meilisearch:7700
-      MEILISEARCH_API_KEY: ${MEILISEARCH_API_KEY:-local-meilisearch-master-key}
+      # Either var drives both sides — setting only one must not desync auth.
+      MEILISEARCH_API_KEY: ${MEILISEARCH_API_KEY:-${MEILISEARCH_MASTER_KEY:-local-meilisearch-master-key}}
       MEILISEARCH_INDEX_PREFIX: ${MEILISEARCH_INDEX_PREFIX:-thryftverse_}
     ports:
       - "4000:4000"
@@ -277,7 +279,7 @@ services:
     container_name: thryftverse-meilisearch
     restart: unless-stopped
     environment:
-      MEILI_MASTER_KEY: ${MEILISEARCH_MASTER_KEY:-local-meilisearch-master-key}
+      MEILI_MASTER_KEY: ${MEILISEARCH_MASTER_KEY:-${MEILISEARCH_API_KEY:-local-meilisearch-master-key}}
       MEILI_ENV: development
       MEILI_NO_ANALYTICS: "true"
     ports:

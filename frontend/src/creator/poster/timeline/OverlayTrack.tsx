@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, LayoutChangeEvent } from 'react-native';
+import { View, Text, StyleSheet, LayoutChangeEvent } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
   useSharedValue,
@@ -68,6 +68,7 @@ export const OverlayTrack = React.memo(function OverlayTrack({
         },
       ]}
       accessibilityLabel="Overlay track"
+      accessibilityHint="Timeline row for overlay items"
     >
       {overlays.map((ov) => {
         const left = Math.max(0, ov.timeRange.startMs) * pxPerMs;
@@ -187,6 +188,7 @@ const OverlayBar = React.memo(function OverlayBar({
     <GestureDetector gesture={moveGesture}>
       <Reanimated.View
         accessibilityLabel={`${overlay.type} overlay: ${overlay.label}`}
+        accessibilityHint="Tap to select; drag to reposition"
         accessibilityRole="button"
         style={[
           overlayTrackStyles.bar,

@@ -157,6 +157,11 @@ export default function NotificationsScreen() {
         isLoadingMore={isLoadingMore}
         hasSyncError={hasSyncError}
         hasNotifications={notifications.length > 0}
+        // `filterCounts.all` is the server-truthful "feed has items" signal —
+        // the filtered page can be empty while other filters have items.
+        hasAnyNotifications={
+          (filterCounts?.all ?? notifications.length) > 0
+        }
         activeFilter={activeFilter}
         onRetry={() => void syncNotifications()}
         onDiscover={() => navigation.navigate('MainTabs')}

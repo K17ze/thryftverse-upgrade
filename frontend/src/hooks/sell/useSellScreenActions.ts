@@ -131,14 +131,14 @@ export function useSellScreenActions(params: SellScreenActionsParams): SellScree
   } = data;
 
   const {
-    title, desc, price, originalPrice, tags, tagInput, category, brand, size, condition,
+    title, desc, price, originalPrice, tags, tagInput, category, subcategory, brand, size, condition,
     shippingMethod, shippingPayer, listingMode, coOwnEnabled,
     shareCountInput, sharePriceInput, offeringWindowHours, authPhotos,
     startingBid,
   } = values;
 
   const {
-    setTitle, setBrand, setCategory, setTags, setTagInput,
+    setTitle, setBrand, setCategory, setSubcategory, setTags, setTagInput,
     setPrice, setShareCountInput, setListingMode,
     setAuthPhotos,
   } = setters;
@@ -341,6 +341,7 @@ export function useSellScreenActions(params: SellScreenActionsParams): SellScree
     price,
     originalPrice,
     category,
+    subcategory,
     brand,
     size,
     condition,
@@ -373,16 +374,18 @@ export function useSellScreenActions(params: SellScreenActionsParams): SellScree
   const getPickerSelected = useCallback(() => {
     switch (pickerMode) {
       case 'Category': return category;
+      case 'Subcategory': return subcategory;
       case 'Brand': return brand;
       case 'Size': return size;
       case 'Condition': return condition;
       case 'Format': return getListingModeLabel(listingMode);
       default: return '';
     }
-  }, [pickerMode, category, brand, size, condition, listingMode]);
+  }, [pickerMode, category, subcategory, brand, size, condition, listingMode]);
 
   const handlePickerSelect = useCallback((val: string) => {
-    if (pickerMode === 'Category') { setCategory(val); updateSellDraft({ categoryId: val, subcategoryId: undefined }); }
+    if (pickerMode === 'Category') { setCategory(val); setSubcategory(''); updateSellDraft({ categoryId: val, subcategoryId: undefined }); }
+    if (pickerMode === 'Subcategory') { setSubcategory(val); updateSellDraft({ subcategoryId: val }); }
     if (pickerMode === 'Brand') { setBrand(val); updateSellDraft({ brand: val }); }
     if (pickerMode === 'Size') { setters.setSize(val); updateSellDraft({ size: val }); }
     if (pickerMode === 'Condition') { setters.setCondition(val); updateSellDraft({ condition: val }); }
@@ -396,7 +399,7 @@ export function useSellScreenActions(params: SellScreenActionsParams): SellScree
     if (pickerMode !== 'Format') {
       haptics.tap();
     }
-  }, [pickerMode, updateSellDraft, setCategory, setBrand, setters, setListingMode, setPickerMode]);
+  }, [pickerMode, updateSellDraft, setCategory, setSubcategory, setBrand, setters, setListingMode, setPickerMode]);
 
   /* -- preview handler -- */
   const handlePreview = useCallback(() => {

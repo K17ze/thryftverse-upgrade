@@ -180,6 +180,86 @@ export function isPushEligibleEventType(eventType: string): boolean {
   return mapEventToPushCategory(eventType) !== null;
 }
 
+// ─── Quiet hours ────────────────────────────────────────────────────────────
+
+export interface QuietHoursConfig {
+  enabled?: boolean;
+  startHour?: number;
+  endHour?: number;
+  /** IANA timezone name written by the preferences PUT ('Europe/London'). */
+  timezone?: string;
+}
+
+export interface QuietWindowDecision {
+  inWindow: boolean;
+  /** Milliseconds until the window's endHour in the user's timezone. */
+  msUntilEnd: number;
+}
+
+/** Current hour-of-day (0-23) in the given IANA timezone, UTC on bad input. */
+function hourInTimezone(tz: string, at: Date): number {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric',
+      hour12: false,
+      timeZone: tz,
+    }).formatToParts(at);
+    const hour = Number(parts.find((p) => p.type === 'hour')?.value);
+    return Number.isFinite(hour) ? hour % 24 : at.getUTCHours();
+  } catch {
+    return at.getUTCHours();
+  }
+}
+
+/** Milliseconds from `at` until the next `hour`:00 in the given timezone. */
+function msUntilHourInTimezone(hour: number, tz: string, at: Date): number {
+  try {
+    // Wall-clock arithmetic in the zone, mapped back through its current
+    // UTC offset. Offsets are stable within a single quiet window.
+    const wall = new Date(at.toLocaleString('en-US', { timeZone: tz }));
+    const offsetMs = wall.getTime() - at.getTime();
+    const target = new Date(wall);
+    target.setHours(hour, 0, 0, 0);
+    if (target.getTime() <= wall.getTime()) {
+      target.setDate(target.getDate() + 1);
+    }
+    return Math.max(0, target.getTime() - offsetMs - at.getTime());
+  } catch {
+    const target = new Date(at);
+    target.setUTCHours(hour, 0, 0, 0);
+    if (target.getTime() <= at.getTime()) {
+      target.setUTCDate(target.getUTCDate() + 1);
+    }
+    return Math.max(0, target.getTime() - at.getTime());
+  }
+}
+
+/**
+ * Evaluate a stored quiet_hours config against `now` in the user's
+ * timezone. Returns inWindow=false for malformed/absent config.
+ */
+export function quietWindowDecision(
+  quietHours: unknown,
+  now: Date = new Date(),
+): QuietWindowDecision {
+  const none: QuietWindowDecision = { inWindow: false, msUntilEnd: 0 };
+  if (!quietHours || typeof quietHours !== 'object') return none;
+  const qh = quietHours as QuietHoursConfig;
+  if (!qh.enabled || typeof qh.startHour !== 'number' || typeof qh.endHour !== 'number') {
+    return none;
+  }
+  const tz = typeof qh.timezone === 'string' && qh.timezone.length > 0 ? qh.timezone : 'UTC';
+  const currentHour = hourInTimezone(tz, now);
+  const { startHour, endHour } = qh;
+  const inWindow = startHour <= endHour
+    ? currentHour >= startHour && currentHour < endHour
+    : currentHour >= startHour || currentHour < endHour;
+  return {
+    inWindow,
+    msUntilEnd: inWindow ? msUntilHourInTimezone(endHour, tz, now) : 0,
+  };
+}
+
 /**
  * Map a notification event type to an Android notification channel ID.
  * The channel IDs match the client-side channel definitions in pushPermission.ts:

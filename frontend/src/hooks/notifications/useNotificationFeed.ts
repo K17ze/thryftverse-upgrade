@@ -1,6 +1,8 @@
 import React from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { Swipeable } from 'react-native-gesture-handler';
+import { useRealtimeSafe } from '../../platform/realtime';
+import { useStore } from '../../store/useStore';
 import {
   listNotificationEvents,
   type ListNotificationEventsOptions } from '../../services/notificationsApi';
@@ -144,6 +146,30 @@ export function useNotificationFeed() {
       void syncRef.current();
     }, [])
   );
+
+  // Realtime: a `notification.queued` event on the user's topic means the
+  // feed is stale — silently resync so the new row and its filter-count
+  // deltas appear without a pull-to-refresh. Debounced: a burst of queued
+  // events (batch sends) collapses into one fetch.
+  const rtCtx = useRealtimeSafe();
+  const rtClient = rtCtx?.client;
+  const rtUserId = useStore((s) => s.currentUser?.id);
+  React.useEffect(() => {
+    if (!rtClient || !rtUserId) return;
+    const topic = `notifications.user:${rtUserId}`;
+    rtClient.subscribe([topic]);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const unsubscribe = rtClient.on(topic, (envelope) => {
+      if (envelope.type !== 'notification.queued') return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => void syncRef.current({ silent: true }), 400);
+    });
+    return () => {
+      if (timer) clearTimeout(timer);
+      unsubscribe();
+      rtClient.unsubscribe([topic]);
+    };
+  }, [rtClient, rtUserId]);
 
   // Refetch when the filter changes — the server (or the local fallback
   // filter pass) narrows the result set, and pagination must restart from

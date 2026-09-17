@@ -13,7 +13,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SheetContainer, PressScale } from '../shared/CreatorAnimations';
-import { Space, Radius, FontFamily, Stroke, IconGrammar } from '../../theme/designTokens';
+import { Space, Radius, FontFamily, IconGrammar } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';

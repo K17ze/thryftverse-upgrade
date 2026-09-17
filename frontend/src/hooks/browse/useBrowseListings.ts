@@ -4,34 +4,9 @@ import type { Listing } from '../../domain';
 import type { BrowseFilterState } from '../../store/useStore';
 import { matchesSignal } from '../../services/algorithmicSignalsService';
 import type { DynamicSignalChip } from '../../services/algorithmicSignalsService';
+import { getSubcategoryToken } from '../../utils/subcategoryToken';
 
 const toKey = (value: string) => value.trim().toLowerCase();
-
-function getSubcategoryToken(categoryId: string, subcategoryId?: string, title?: string) {
-  if (subcategoryId) {
-    return subcategoryId
-      .toLowerCase()
-      .replace(/^[^-]+-/, '')
-      .replace(/-/g, ' ')
-      .trim();
-  }
-
-  if (!title) {
-    return '';
-  }
-
-  const loweredTitle = title.toLowerCase().replace(/["']/g, '').trim();
-  if (loweredTitle.startsWith('all ')) {
-    return '';
-  }
-
-  const cleanedCategoryId = categoryId.toLowerCase();
-  if (loweredTitle.startsWith(cleanedCategoryId)) {
-    return loweredTitle.slice(cleanedCategoryId.length).trim();
-  }
-
-  return loweredTitle;
-}
 
 interface UseBrowseListingsOptions {
   listings: Listing[];
@@ -149,9 +124,11 @@ export function useBrowseListings({
         sorted.sort((a, b) => b.likes - a.likes);
         break;
       case 'Ending soon':
+        // Order by real auction end time; listings without a live auction
+        // sink to the end rather than masquerading as ending soon.
         sorted.sort((a, b) => {
-          const aDate = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const bDate = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          const aDate = a.auctionEndsAt ? new Date(a.auctionEndsAt).getTime() : Infinity;
+          const bDate = b.auctionEndsAt ? new Date(b.auctionEndsAt).getTime() : Infinity;
           return aDate - bDate;
         });
         break;
@@ -182,10 +159,25 @@ export function useBrowseListings({
         const wanted = new Set(browseFilters.sizes.map((s) => s.toLowerCase()));
         result = result.filter((l) => wanted.has(l.size?.toLowerCase() ?? ''));
       }
+      // The listings table has no subcategory column — the predicate is a
+      // client-side token match, so it must also run over backend results or
+      // a subcategory browse silently shows the whole parent category.
+      const subcategoryToken = getSubcategoryToken(categoryId, subcategoryId, title);
+      const isUnscopedCategory = toKey(categoryId) === 'search' || toKey(categoryId) === 'all';
+      if (!isUnscopedCategory && subcategoryToken) {
+        result = result.filter(
+          (l) => l.subcategory?.toLowerCase()?.includes(subcategoryToken) ?? false,
+        );
+      }
       if (browseFilters.sustainableOnly) {
         result = result.filter(
           (l) => l.sustainabilityGrade === 'A' || l.sustainabilityGrade === 'B',
         );
+      }
+      // Signal rail predicates are client-only (engagement heuristics) — the
+      // backend path previously bypassed them, rendering the rail inert.
+      if (activeSignal.filterKey !== 'all') {
+        result = result.filter((l) => matchesSignal(l, activeSignal));
       }
       return result;
     }
@@ -194,7 +186,7 @@ export function useBrowseListings({
     return base.filter((listing) =>
       listing.sustainabilityGrade === 'A' || listing.sustainabilityGrade === 'B',
     );
-  }, [backendListings, dataToRender, browseFilters.sustainableOnly, browseFilters.brands, browseFilters.sizes]);
+  }, [backendListings, dataToRender, browseFilters.sustainableOnly, browseFilters.brands, browseFilters.sizes, categoryId, subcategoryId, title, activeSignal]);
 
   return { dataToRender, displayListings, displayCount: displayListings.length };
 }

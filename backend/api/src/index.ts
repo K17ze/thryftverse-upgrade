@@ -21,6 +21,8 @@ import {
   type ApiVersion,
 } from './lib/apiVersioning.js';
 import { validateCompositionDocument } from './lib/compositionValidation.js';
+import { settleCreatorEarningEntries } from './lib/creatorPayoutSettlement.js';
+import { buildListingSortPlan } from './lib/listingSort.js';
 import { performUserErasure } from './lib/userErasure.js';
 import {
   propagateUserDeletion,
@@ -121,6 +123,8 @@ import {
 // Avoids IEEE 754 representation error in the JSON wire format by emitting
 // decimal string variants (e.g. "49.2500") alongside legacy number fields.
 import { formatGbp } from './lib/moneyFormat.js';
+import { quietWindowDecision } from './lib/workerHelpers.js';
+import { queueUserNotification as queueCanonicalUserNotification } from './lib/workerRuntime.js';
 import { listingPatchSchema } from './lib/listingPatch.js';
 import { canListingTransition } from './lib/listingCommandService.js';
 import { fetchSellerAwayState } from './lib/sellerAway.js';
@@ -428,6 +432,7 @@ import {
   compensateTerminalCommercePayment,
   flagOrphanedCommercePayment,
   hasInFlightPaymentIntent,
+  releaseParkedPaymentIntent,
 } from './lib/commerceCheckoutLifecycle.js';
 import {
   classifyStaleSubmission,
@@ -977,6 +982,11 @@ const COMMERCE_ORDER_STATUSES = [
   // The admin force-status endpoint must accept every persisted status.
   'refunded',
   'refunding',
+  // Carrier-failure states (migration 313): parcel events advance the order
+  // here so a failed/returned shipment never sits at 'shipped' with escrow
+  // held and no truthful buyer-facing state.
+  'delivery_failed',
+  'returned',
 ] as const;
 type CommerceOrderStatus = (typeof COMMERCE_ORDER_STATUSES)[number];
 
@@ -5887,12 +5897,35 @@ async function applyOrderParcelEvent(
 
   let nextStatus = order.status;
   if (PARCEL_DELIVERY_RELEASE_EVENTS.has(input.eventType)) {
-    if (order.status === 'paid' || order.status === 'shipped') {
+    // 'delivery_failed' included: a failed attempt that later delivers is a
+    // normal carrier retry — the escrow path must not be gated on the
+    // parcel never having failed.
+    if (
+      order.status === 'paid'
+      || order.status === 'shipped'
+      || order.status === 'delivery_failed'
+    ) {
       nextStatus = 'delivered';
     }
   } else if (PARCEL_SHIPPING_PROGRESS_EVENTS.has(input.eventType)) {
-    if (order.status === 'paid') {
+    // 'delivery_failed' recovers to 'shipped' — the carrier is moving the
+    // parcel again after a failed attempt.
+    if (order.status === 'paid' || order.status === 'delivery_failed') {
       nextStatus = 'shipped';
+    }
+  } else if (input.eventType === 'delivery_failed') {
+    // Carrier truth the old state machine dropped: a failed/lost parcel
+    // must not sit at 'shipped' forever with escrow held. 'paid' orders
+    // stay put — a failure event pre-dispatch is anomalous evidence, not
+    // a state transition.
+    if (order.status === 'shipped') {
+      nextStatus = 'delivery_failed';
+    }
+  } else if (input.eventType === 'returned') {
+    // Return-to-sender is terminal for the shipment. Escrow can never
+    // release here — the sweep only pays 'delivered' orders.
+    if (order.status === 'shipped' || order.status === 'delivery_failed') {
+      nextStatus = 'returned';
     }
   }
 
@@ -5981,6 +6014,7 @@ async function applyOrderParcelEvent(
     if (
       order.status !== 'paid' &&
       order.status !== 'shipped' &&
+      order.status !== 'delivery_failed' &&
       order.status !== 'delivered' &&
       order.status !== 'completed'
     ) {
@@ -7887,6 +7921,48 @@ async function queryProviderIntentStatus(
   }
 }
 
+/**
+ * Best-effort provider-side cancel for an internally-cancelled parked
+ * intent. A PaymentIntent left open at the provider can still be confirmed
+ * by a replayed client call — capturing money against an order we've
+ * already released. Gateways without a deterministic cancel API
+ * (Razorpay orders auto-expire; Flutterwave/Tap pending charges lapse)
+ * are no-ops; their providers cannot be re-confirmed by our client flow.
+ *
+ * Never throws and never runs inside a transaction — callers invoke it
+ * after COMMIT with the refs `releaseParkedPaymentIntent` returned.
+ */
+async function cancelProviderParkedIntent(
+  intent: { id: string; provider_intent_ref: string | null; gateway_id: string },
+  log: { warn: (obj: unknown, msg: string) => void },
+): Promise<void> {
+  const ref = intent.provider_intent_ref;
+  if (!ref) return;
+  try {
+    if (intent.gateway_id === 'stripe_americas' && stripe && ref.startsWith('pi_')) {
+      await stripe.paymentIntents.cancel(ref);
+      return;
+    }
+    if (
+      intent.gateway_id === 'mollie_eu'
+      && config.mollieApiKey
+      && ref.startsWith('tr_')
+    ) {
+      const { createMollieClient } = await import('@mollie/api-client');
+      const mollie = createMollieClient({ apiKey: config.mollieApiKey });
+      await mollie.payments.cancel(ref);
+    }
+  } catch (error) {
+    // Non-fatal: the provider may already have cancelled/expired it, and
+    // the internal status is already 'cancelled' — a stray capture still
+    // lands in flagOrphanedCommercePayment at settle time.
+    log.warn(
+      { err: error, intentId: intent.id, gatewayId: intent.gateway_id },
+      'Provider-side cancel failed for released parked payment intent'
+    );
+  }
+}
+
 async function reconcileStaleProviderSubmissions(
   reason: string
 ): Promise<{ scanned: number; settled: number; recovered: number; failed: number }> {
@@ -8966,6 +9042,19 @@ async function settlePayoutRequest(
     ]
   );
 
+  // Creator-earnings settlement: bank-destination creator payouts park the
+  // source entries and the payout entry in 'held' until the rail settles.
+  // On 'paid' both flip to 'paid'; on 'failed'/'cancelled' the money never
+  // moved, so sources release back to 'available' and the payout entry is
+  // marked 'reversed' — the creator can re-request the same earnings.
+  if (
+    input.targetStatus === 'paid'
+    || input.targetStatus === 'failed'
+    || input.targetStatus === 'cancelled'
+  ) {
+    await settleCreatorEarningEntries(client, input.requestId, input.targetStatus);
+  }
+
   return {
     payoutRequest: toPayoutRequestPayload(updated.rows[0]),
     idempotent: false,
@@ -9206,16 +9295,10 @@ function mapEventTypeToRelevanceScore(eventType: string): number {
   return 0.1;
 }
 
-const CRITICAL_EVENT_TYPES_SET = new Set([
-  'auction_won', 'auction_ending_soon', 'auction_outbid',
-  'order_cancelled', 'resolution_opened', 'safety_outcome',
-  'dispatch_extension_proposed',
-]);
-
-function isCriticalEventType(eventType: string): boolean {
-  return CRITICAL_EVENT_TYPES_SET.has(eventType);
-}
-
+// Notification queueing delegates to the canonical implementation in
+// lib/workerRuntime.ts — the previous local copy had drifted (missing the
+// critical-event forcePush path, marking in-app-only events as invisible
+// 'suppressed', and publishing realtime for events the feed never shows).
 async function queueUserNotification(input: {
   userId: string;
   title: string;
@@ -9227,200 +9310,9 @@ async function queueUserNotification(input: {
   imageUrl?: string;
   route?: Record<string, unknown>;
   idempotencyKey?: string;
+  forcePush?: boolean;
 }): Promise<string | null> {
-  const eventType = input.eventType ?? 'generic';
-  const idempotencyKey = input.idempotencyKey ?? null;
-  const eventId = createRuntimeId('notif');
-
-  // Atomic idempotent insertion: INSERT ... ON CONFLICT ... RETURNING
-  // Determines whether this invocation actually inserted a new event.
-  const insertResult = await db.query<{ id: string }>(
-    `
-      INSERT INTO notification_events (
-        id, user_id, channel, title, body, payload, status, metadata,
-        event_type, actor_user_id, image_url, route, idempotency_key
-      )
-      VALUES ($1, $2, 'push', $3, $4, $5::jsonb, 'queued', $6::jsonb, $7, $8, $9, $10::jsonb, $11)
-      ON CONFLICT (user_id, idempotency_key)
-      WHERE idempotency_key IS NOT NULL
-      DO NOTHING
-      RETURNING id
-    `,
-    [
-      eventId,
-      input.userId,
-      input.title,
-      input.body,
-      toJsonString(input.payload ?? {}),
-      toJsonString(input.metadata ?? {}),
-      eventType,
-      input.actorUserId ?? null,
-      input.imageUrl ?? null,
-      toJsonString(input.route ?? {}),
-      idempotencyKey,
-    ]
-  );
-
-  // If no row was returned, a concurrent insert won the race.
-  // Return the existing event ID without enqueuing push or publishing realtime.
-  if (!insertResult.rowCount) {
-    if (idempotencyKey) {
-      const existing = await db.query<{
-        id: string;
-        user_id: string;
-        title: string;
-        body: string;
-        payload: Record<string, unknown>;
-        event_type: string;
-        actor_user_id: string | null;
-        route: Record<string, unknown> | null;
-        status: string;
-      }>(
-        `SELECT id, user_id, title, body, payload, event_type,
-                actor_user_id, route, status
-         FROM notification_events
-         WHERE user_id = $1 AND idempotency_key = $2
-         LIMIT 1`,
-        [input.userId, idempotencyKey]
-      );
-      const existingEvent = existing.rows[0];
-      // A durable event may have been inserted just before Redis became
-      // unavailable. Retrying the producer repairs that boundary. BullMQ's
-      // event-based job ID prevents duplicate queued jobs.
-      //
-      // P0 FIX: Re-evaluate push preference before re-enqueueing. A previously
-      // queued event may have been suppressed by a preference change since the
-      // original insert. Re-enqueueing without re-checking would defeat
-      // suppression â€” the retry would send a push the user opted out of.
-      if (existingEvent?.status === 'queued') {
-        const retryCategory = mapEventToPushCategory(existingEvent.event_type);
-        let retryShouldPush = false; // fail closed for unmapped types
-        if (retryCategory) {
-          const retryPref = await db.query<{ enabled: boolean }>(
-            `SELECT enabled FROM notification_preferences WHERE user_id = $1 AND category = $2 LIMIT 1`,
-            [existingEvent.user_id, retryCategory]
-          );
-          retryShouldPush = !retryPref.rowCount || retryPref.rows[0].enabled;
-        }
-        if (retryShouldPush) {
-          await enqueuePushNotificationJob({
-            eventId: existingEvent.id,
-            userId: existingEvent.user_id,
-            title: existingEvent.title,
-            body: existingEvent.body,
-            payload: existingEvent.payload,
-            eventType: existingEvent.event_type,
-            actorUserId: existingEvent.actor_user_id,
-            route: existingEvent.route,
-          });
-        } else {
-          // Preference now suppresses this event â€” mark it suppressed
-          await db.query(
-            `UPDATE notification_events SET status = 'suppressed', suppression_reason = 'preference' WHERE id = $1`,
-            [existingEvent.id]
-          );
-          recordPushDelivery({ provider: 'expo', status: 'suppressed' });
-        }
-      }
-      return existingEvent?.id ?? null;
-    }
-    return null;
-  }
-
-  const insertedEventId = insertResult.rows[0].id;
-
-  // Push preference check â€” fail closed for unknown event types.
-  // Unknown events (mapEventToPushCategory returns null) are in-app only;
-  // they never bypass preferences with shouldPush=true.
-  const pushCategory = mapEventToPushCategory(eventType);
-  let shouldPush = false;
-  let suppressionReason: string | null = null;
-  if (!pushCategory) {
-    // Unknown event type â€” in-app only, no push
-    shouldPush = false;
-    suppressionReason = 'unmapped_event_type';
-  } else {
-    const prefResult = await db.query<{ enabled: boolean }>(
-      `SELECT enabled FROM notification_preferences WHERE user_id = $1 AND category = $2 LIMIT 1`,
-      [input.userId, pushCategory]
-    );
-    if (prefResult.rowCount && !prefResult.rows[0].enabled) {
-      shouldPush = false;
-      suppressionReason = 'preference';
-    } else {
-      shouldPush = true;
-    }
-  }
-
-  // Server-side quiet hours enforcement.
-  // If the user has quiet hours configured and the current time falls within
-  // the quiet window, suppress non-critical push notifications. Critical
-  // event types (auction won, safety, resolution) bypass quiet hours.
-  if (shouldPush && pushCategory && !isCriticalEventType(eventType)) {
-    const qhResult = await db.query<{ quiet_hours: unknown }>(
-      `SELECT quiet_hours FROM notification_preferences WHERE user_id = $1 AND category = $2 LIMIT 1`,
-      [input.userId, pushCategory]
-    );
-    const qhRaw = qhResult.rows[0]?.quiet_hours;
-    if (qhRaw && typeof qhRaw === 'object') {
-      const qh = qhRaw as { enabled?: boolean; startHour?: number; endHour?: number };
-      if (qh.enabled && typeof qh.startHour === 'number' && typeof qh.endHour === 'number') {
-        const nowUtc = new Date();
-        const currentHour = nowUtc.getUTCHours();
-        const start = qh.startHour;
-        const end = qh.endHour;
-        const inQuietWindow = start <= end
-          ? (currentHour >= start && currentHour < end)
-          : (currentHour >= start || currentHour < end);
-        if (inQuietWindow) {
-          shouldPush = false;
-          suppressionReason = 'quiet_hours';
-        }
-      }
-    }
-  }
-
-  if (shouldPush) {
-    await enqueuePushNotificationJob({
-      eventId: insertedEventId,
-      userId: input.userId,
-      title: input.title,
-      body: input.body,
-      payload: input.payload,
-      eventType,
-      actorUserId: input.actorUserId ?? null,
-      route: input.route ?? null,
-    });
-    recordPushDelivery({
-      provider: 'expo',
-      status: 'queued',
-    });
-  } else {
-    // Mark the event as suppressed with the reason
-    await db.query(
-      `UPDATE notification_events SET status = 'suppressed', suppression_reason = $2 WHERE id = $1`,
-      [insertedEventId, suppressionReason]
-    );
-    recordPushDelivery({ provider: 'expo', status: 'suppressed' });
-  }
-
-  publishRealtimeEvent({
-    topic: `notifications.user:${input.userId}`,
-    type: 'notification.queued',
-    userId: input.userId,
-    payload: {
-      id: insertedEventId,
-      title: input.title,
-      body: input.body,
-      eventType,
-      actorUserId: input.actorUserId ?? null,
-      imageUrl: input.imageUrl ?? null,
-      route: input.route ?? null,
-      ...input.payload,
-    },
-  });
-
-  return insertedEventId;
+  return queueCanonicalUserNotification(input);
 }
 
 function formatGbpAmount(amountGbp: number): string {
@@ -12850,6 +12742,23 @@ app.post('/ops/escrow/release-sweep', async (request, reply) => {
         continue;
       }
 
+      // Carrier truth after the 'delivered' scan: a refused parcel returning
+      // to sender leaves status='delivered' but the buyer never kept the
+      // item — releasing escrow would pay the seller for a parcel on its
+      // way back. Hold until the return is resolved via return_cases.
+      if (await orderParcelEventsTableAvailable(client)) {
+        const carrierReturned = await client.query<{ exists: boolean }>(
+          `SELECT EXISTS (
+             SELECT 1 FROM order_parcel_events
+             WHERE order_id = $1 AND event_type = 'returned'
+           ) AS exists`,
+          [order.id]
+        );
+        if (carrierReturned.rows[0]?.exists) {
+          continue;
+        }
+      }
+
       // Skip orders with pending first-sale reviews.
       try {
         const pendingReview = await client.query<{ exists: boolean }>(
@@ -16167,22 +16076,31 @@ app.delete('/users/me', async (request, reply) => {
   };
 });
 
-app.get('/listings', async (request) => {
+app.get('/listings', async (request, reply) => {
   const querySchema = z.object({
     q: z.string().trim().min(1).max(120).optional(),
     category: z.string().optional(),
+    subcategory: z.string().optional(),
     brand: z.string().optional(),
     size: z.string().optional(),
     condition: z.string().optional(),
     minPrice: z.coerce.number().nonnegative().optional(),
     maxPrice: z.coerce.number().nonnegative().optional(),
-    sort: z.enum(['newest', 'price_asc', 'price_desc']).optional().default('newest'),
+    // The browse sort contract — the client sends these for every category
+    // browse, so rejecting any of them fails the whole listing fetch.
+    sort: z.enum(['newest', 'price_asc', 'price_desc', 'most_liked', 'recommended', 'ending_soon']).optional().default('newest'),
+    sustainableOnly: z.literal('true').optional(),
     limit: z.coerce.number().int().min(1).max(200).optional().default(100),
     cursor: z.string().optional(),
   });
   const params = querySchema.parse(request.query ?? {});
 
-  const conditions: string[] = ["status = 'active'"];
+  if (params.minPrice !== undefined && params.maxPrice !== undefined && params.minPrice > params.maxPrice) {
+    reply.code(400);
+    return { items: [], error: 'minPrice must not exceed maxPrice' };
+  }
+
+  const conditions: string[] = ["l.status = 'active'"];
   const args: unknown[] = [];
 
   if (params.q) {
@@ -16196,58 +16114,55 @@ app.get('/listings', async (request) => {
   }
 
   if (params.category) {
-    conditions.push(`category = $${args.length + 1}`);
+    // Stored categories are taxonomy display names ("Women") while clients
+    // send route ids ("women") — normalize both sides to compare.
+    conditions.push(`LOWER(l.category) = LOWER($${args.length + 1})`);
     args.push(params.category);
   }
+  if (params.subcategory) {
+    conditions.push(`l.subcategory ILIKE $${args.length + 1}`);
+    args.push(`%${params.subcategory}%`);
+  }
   if (params.brand) {
-    conditions.push(`brand ILIKE $${args.length + 1}`);
+    conditions.push(`l.brand ILIKE $${args.length + 1}`);
     args.push(`%${params.brand}%`);
   }
   if (params.size) {
-    conditions.push(`size ILIKE $${args.length + 1}`);
+    conditions.push(`l.size ILIKE $${args.length + 1}`);
     args.push(`%${params.size}%`);
   }
   if (params.condition) {
-    conditions.push(`condition ILIKE $${args.length + 1}`);
+    conditions.push(`l.condition ILIKE $${args.length + 1}`);
     args.push(`%${params.condition}%`);
   }
   if (params.minPrice !== undefined) {
-    conditions.push(`price_gbp >= $${args.length + 1}`);
+    conditions.push(`l.price_gbp >= $${args.length + 1}`);
     args.push(params.minPrice);
   }
   if (params.maxPrice !== undefined) {
-    conditions.push(`price_gbp <= $${args.length + 1}`);
+    conditions.push(`l.price_gbp <= $${args.length + 1}`);
     args.push(params.maxPrice);
   }
+  if (params.sustainableOnly) {
+    // Mirrors the client predicate — grades A/B only.
+    conditions.push(`l.sustainability_grade IN ('A', 'B')`);
+  }
 
-  let cursorData: { sortValue: string | number; id: string } | null = null;
+  let cursorData: { sortValue: string | number | null; id: string } | null = null;
   if (params.cursor) {
     try {
       const decoded = JSON.parse(Buffer.from(params.cursor, 'base64').toString('utf-8'));
       cursorData = { sortValue: decoded.sortValue, id: decoded.id };
     } catch {
-      // Invalid cursor â€” ignore it, start from beginning
+      // Invalid cursor — ignore it, start from beginning
     }
   }
 
-  const orderBy =
-    params.sort === 'price_asc'
-      ? 'price_gbp ASC, l.id ASC'
-      : params.sort === 'price_desc'
-        ? 'price_gbp DESC, l.id DESC'
-        : 'l.created_at DESC, l.id DESC';
-
-  if (cursorData) {
-    if (params.sort === 'price_asc') {
-      conditions.push(`(price_gbp, l.id) > ($${args.length + 1}, $${args.length + 2})`);
-      args.push(cursorData.sortValue, cursorData.id);
-    } else if (params.sort === 'price_desc') {
-      conditions.push(`(price_gbp, l.id) < ($${args.length + 1}, $${args.length + 2})`);
-      args.push(cursorData.sortValue, cursorData.id);
-    } else {
-      conditions.push(`(l.created_at, l.id) < ($${args.length + 1}, $${args.length + 2})`);
-      args.push(cursorData.sortValue, cursorData.id);
-    }
+  const sortPlan = buildListingSortPlan(params.sort, cursorData, args.length);
+  const orderBy = sortPlan.orderBy;
+  if (sortPlan.cursorCondition) {
+    conditions.push(sortPlan.cursorCondition);
+    args.push(...sortPlan.cursorArgs);
   }
 
   const fetchLimit = params.limit + 1;
@@ -16261,20 +16176,32 @@ app.get('/listings', async (request) => {
     image_url: string | null;
     status: string;
     category: string | null;
+    subcategory: string | null;
     brand: string | null;
     size: string | null;
     condition: string | null;
     original_price_gbp: number | string | null;
     created_at: string;
     seller_username: string | null;
+    like_count: number;
+    auction_ends_at: string | null;
   }>(
     `
       SELECT
         l.id, l.seller_id, l.title, l.description, l.price_gbp, l.image_url,
-        l.status, l.category, l.brand, l.size, l.condition, l.original_price_gbp, l.created_at,
-        u.username AS seller_username
+        l.status, l.category, l.subcategory, l.brand, l.size, l.condition, l.original_price_gbp, l.created_at,
+        u.username AS seller_username,
+        COALESCE(li.like_count, 0) AS like_count,
+        a.ends_at AS auction_ends_at
       FROM listings l
       LEFT JOIN users u ON u.id = l.seller_id
+      LEFT JOIN (
+        SELECT listing_id, COUNT(*)::int AS like_count
+        FROM interactions
+        WHERE action = 'wishlist'
+        GROUP BY listing_id
+      ) li ON li.listing_id = l.id
+      LEFT JOIN auctions a ON a.listing_id = l.id AND a.status = 'live'
       WHERE ${conditions.join(' AND ')}
         ${reachExcludedSql('u')}
       ORDER BY ${orderBy}
@@ -16307,7 +16234,11 @@ app.get('/listings', async (request) => {
     ? Buffer.from(JSON.stringify({
         sortValue: params.sort === 'price_asc' || params.sort === 'price_desc'
           ? Number(lastRow.price_gbp)
-          : lastRow.created_at,
+          : params.sort === 'most_liked' || params.sort === 'recommended'
+            ? lastRow.like_count
+            : params.sort === 'ending_soon'
+              ? lastRow.auction_ends_at
+              : lastRow.created_at,
         id: lastRow.id,
       })).toString('base64')
     : undefined;
@@ -16331,11 +16262,13 @@ app.get('/listings', async (request) => {
           : null,
         status: row.status,
         category: row.category,
+        subcategory: row.subcategory,
         brand: row.brand,
         size: row.size,
         condition: row.condition,
         originalPriceGbp: row.original_price_gbp === null ? null : Number(row.original_price_gbp),
         createdAt: row.created_at,
+        auctionEndsAt: row.auction_ends_at,
         seller: row.seller_username
           ? {
               id: row.seller_id,
@@ -16399,6 +16332,7 @@ app.post('/listings', {
         coverFinalizationId: { type: 'string', minLength: 2, maxLength: 120 },
         status: { type: 'string', enum: ['draft', 'active', 'paused', 'sold', 'deleted'] },
         category: { type: 'string', minLength: 1 },
+        subcategory: { type: 'string', minLength: 1, maxLength: 120 },
         brand: { type: 'string', minLength: 1 },
         size: { type: 'string', minLength: 1 },
         condition: { type: 'string', minLength: 1 },
@@ -16420,6 +16354,7 @@ app.post('/listings', {
     coverFinalizationId: z.string().min(2).max(120).optional(),
     status: z.enum(['draft', 'active', 'paused', 'sold', 'deleted']).optional(),
     category: z.string().min(1).optional(),
+    subcategory: z.string().min(1).max(120).optional(),
     brand: z.string().min(1).optional(),
     size: z.string().min(1).optional(),
     condition: z.string().min(1).optional(),
@@ -16447,7 +16382,7 @@ app.post('/listings', {
       description: payload.description,
       price: payload.priceGbp,
       category: payload.category,
-      subcategory: null,
+      subcategory: payload.subcategory ?? null,
       brand: payload.brand,
       size: payload.size,
       condition: payload.condition,
@@ -16646,10 +16581,10 @@ app.post('/listings', {
       `
         INSERT INTO listings (
           id, seller_id, title, description, price_gbp, image_url,
-          status, pause_source, category, brand, size, condition,
+          status, pause_source, category, subcategory, brand, size, condition,
           original_price_gbp, shipping_method, shipping_payer
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
         ON CONFLICT (id) DO UPDATE
         SET title = EXCLUDED.title,
             description = EXCLUDED.description,
@@ -16658,6 +16593,7 @@ app.post('/listings', {
             status = EXCLUDED.status,
             pause_source = EXCLUDED.pause_source,
             category = EXCLUDED.category,
+            subcategory = EXCLUDED.subcategory,
             brand = EXCLUDED.brand,
             size = EXCLUDED.size,
             condition = EXCLUDED.condition,
@@ -16681,6 +16617,7 @@ app.post('/listings', {
         // reservation/auction ownership.
         effectiveStatus === 'paused' ? 'seller' : null,
         payload.category ?? null,
+        payload.subcategory ?? null,
         payload.brand ?? null,
         payload.size ?? null,
         payload.condition ?? null,
@@ -16900,6 +16837,7 @@ app.get('/listings/:listingId', async (request, reply) => {
     image_url: string | null;
     status: string;
     category: string | null;
+    subcategory: string | null;
     brand: string | null;
     size: string | null;
     condition: string | null;
@@ -16917,7 +16855,7 @@ app.get('/listings/:listingId', async (request, reply) => {
     `
       SELECT
         l.id, l.seller_id, l.title, l.description, l.price_gbp, l.image_url,
-        l.status, l.category, l.brand, l.size, l.condition,
+        l.status, l.category, l.subcategory, l.brand, l.size, l.condition,
         l.original_price_gbp, l.shipping_method, l.shipping_payer, l.created_at,
         l.updated_at, l.media_frozen_at,
         l.sustainability_grade, l.material_composition, l.weight_kg,
@@ -17048,6 +16986,7 @@ app.get('/listings/:listingId', async (request, reply) => {
       media: listingMedia,
       status: row.status,
       category: row.category,
+      subcategory: row.subcategory,
       brand: row.brand,
       size: row.size,
       condition: row.condition,
@@ -23432,7 +23371,7 @@ app.get('/wallet/1ze/:userId/position', async (request, reply) => {
     Number(userWalletResult.rows[0]?.oneze_balance_units ?? 0)
   );
   const reservedForOrdersUnits = Number(reservedResult.rows[0]?.reserved_1ze_units ?? 0);
-  const reservedForOrders = reservedForOrdersUnits / 1000;
+  const reservedForOrders = unitsToOnezeAmount(reservedForOrdersUnits);
   const redemptionInProgress = Number(redemptionResult.rows[0]?.redemption_ize ?? 0);
   const availableIze = Math.max(0, userIze - reservedForOrders);
   const settledCustomerClaim = userIze + redemptionInProgress;
@@ -31194,6 +31133,69 @@ const handleShippingWebhook = async (request: FastifyRequest, reply: FastifyRepl
 app.post('/webhooks/shipping/:carrier', async (request, reply) => handleShippingWebhook(request, reply));
 app.post('/shipping/webhooks/:carrier', async (request, reply) => handleShippingWebhook(request, reply));
 
+type CheckoutOrderRow = {
+  id: string;
+  buyer_id: string;
+  seller_id: string;
+  listing_id: string;
+  subtotal_gbp: number | string;
+  buyer_protection_fee_gbp: number | string;
+  postage_fee_gbp: number | string;
+  total_gbp: number | string;
+  status: string;
+  address_id: number | null;
+  payment_method_id: number | null;
+  shipping_carrier_id: string | null;
+  shipping_provider: string | null;
+  tracking_number: string | null;
+  shipping_label_url: string | null;
+  shipping_quote_gbp: number | string | null;
+  verification_requested: boolean | null;
+  shipped_at: string | null;
+  delivered_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+const CHECKOUT_ORDER_COLUMNS = `
+  id, buyer_id, seller_id, listing_id,
+  subtotal_gbp, buyer_protection_fee_gbp, postage_fee_gbp, total_gbp,
+  status, address_id, payment_method_id, shipping_carrier_id,
+  shipping_provider, tracking_number, shipping_label_url,
+  shipping_quote_gbp, verification_requested,
+  shipped_at::text, delivered_at::text,
+  created_at::text, updated_at::text`;
+
+function serializeCheckoutOrder(row: CheckoutOrderRow) {
+  return {
+    id: row.id,
+    buyerId: row.buyer_id,
+    sellerId: row.seller_id,
+    listingId: row.listing_id,
+    subtotalGbp: Number(row.subtotal_gbp),
+    buyerProtectionFeeGbp: Number(row.buyer_protection_fee_gbp),
+    // orders has no separate platform-charge column — the buyer-protection
+    // fee IS the platform charge in this schema (same mapping as the
+    // settlement ledger at the payments layer).
+    platformChargeGbp: Number(row.buyer_protection_fee_gbp),
+    postageFeeGbp: Number(row.postage_fee_gbp),
+    totalGbp: Number(row.total_gbp),
+    status: row.status,
+    addressId: row.address_id,
+    paymentMethodId: row.payment_method_id,
+    shippingCarrierId: row.shipping_carrier_id,
+    shippingProvider: row.shipping_provider,
+    trackingNumber: row.tracking_number,
+    shippingLabelUrl: row.shipping_label_url,
+    shippingQuoteGbp: row.shipping_quote_gbp === null ? null : Number(row.shipping_quote_gbp),
+    verificationRequested: row.verification_requested === true,
+    shippedAt: row.shipped_at,
+    deliveredAt: row.delivered_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 app.post('/orders', async (request, reply) => {
   const bodySchema = z.object({
     orderId: z.string().min(4).max(64).optional(),
@@ -31280,37 +31282,8 @@ app.post('/orders', async (request, reply) => {
             code: 'IDEMPOTENCY_PAYLOAD_MISMATCH',
           };
         }
-        const existingOrderResult = await client.query<{
-          id: string;
-          buyer_id: string;
-          seller_id: string;
-          listing_id: string;
-          subtotal_gbp: number | string;
-          buyer_protection_fee_gbp: number | string;
-          postage_fee_gbp: number | string;
-          total_gbp: number | string;
-          status: string;
-          address_id: number | null;
-          payment_method_id: number | null;
-          shipping_carrier_id: string | null;
-          shipping_provider: string | null;
-          tracking_number: string | null;
-          shipping_label_url: string | null;
-          shipping_quote_gbp: number | string | null;
-          verification_requested: boolean | null;
-          shipped_at: string | null;
-          delivered_at: string | null;
-          created_at: string;
-          updated_at: string;
-        }>(
-          `SELECT
-             id, buyer_id, seller_id, listing_id,
-             subtotal_gbp, buyer_protection_fee_gbp, postage_fee_gbp, total_gbp,
-             status, address_id, payment_method_id, shipping_carrier_id,
-             shipping_provider, tracking_number, shipping_label_url,
-             shipping_quote_gbp, verification_requested,
-             shipped_at::text, delivered_at::text,
-             created_at::text, updated_at::text
+        const existingOrderResult = await client.query<CheckoutOrderRow>(
+          `SELECT ${CHECKOUT_ORDER_COLUMNS}
            FROM orders
            WHERE id = $1
            LIMIT 1`,
@@ -31351,32 +31324,7 @@ app.post('/orders', async (request, reply) => {
         return {
           ok: true,
           idempotent: true,
-          order: {
-            id: existing.id,
-            buyerId: existing.buyer_id,
-            sellerId: existing.seller_id,
-            listingId: existing.listing_id,
-            subtotalGbp: Number(existing.subtotal_gbp),
-            buyerProtectionFeeGbp: Number(existing.buyer_protection_fee_gbp),
-            platformChargeGbp: Number(existing.buyer_protection_fee_gbp),
-            postageFeeGbp: Number(existing.postage_fee_gbp),
-            totalGbp: Number(existing.total_gbp),
-            status: existing.status,
-            addressId: existing.address_id,
-            paymentMethodId: existing.payment_method_id,
-            shippingCarrierId: existing.shipping_carrier_id,
-            shippingProvider: existing.shipping_provider,
-            trackingNumber: existing.tracking_number,
-            shippingLabelUrl: existing.shipping_label_url,
-            shippingQuoteGbp: existing.shipping_quote_gbp === null
-              ? null
-              : Number(existing.shipping_quote_gbp),
-            verificationRequested: existing.verification_requested === true,
-            shippedAt: existing.shipped_at,
-            deliveredAt: existing.delivered_at,
-            createdAt: existing.created_at,
-            updatedAt: existing.updated_at,
-          },
+          order: serializeCheckoutOrder(existing),
         };
       }
     }
@@ -31502,8 +31450,12 @@ app.post('/orders', async (request, reply) => {
       };
     }
 
-    const conflictingReservation = await client.query<{ id: string }>(
-      `SELECT id
+    const conflictingReservation = await client.query<{
+      id: string;
+      buyer_id: string;
+      order_id: string | null;
+    }>(
+      `SELECT id, buyer_id, order_id
        FROM listing_checkout_reservations
        WHERE listing_id = $1
          AND status = 'active'
@@ -31511,7 +31463,32 @@ app.post('/orders', async (request, reply) => {
        LIMIT 1`,
       [payload.listingId]
     );
-    if (conflictingReservation.rowCount) {
+    const conflict = conflictingReservation.rows[0];
+    if (conflict) {
+      // Own-reservation resume: the buyer already holds an active
+      // reservation on this listing from an earlier checkout attempt whose
+      // response was lost (app restart, dropped connection). Creating a
+      // second order for the same reservation would double-bind the
+      // listing — return the bound 'created' order so the client can
+      // continue to payment instead of dead-ending on RESERVED.
+      if (conflict.buyer_id === actorUserId && conflict.order_id) {
+        const boundOrderResult = await client.query<CheckoutOrderRow>(
+          `SELECT ${CHECKOUT_ORDER_COLUMNS}
+           FROM orders
+           WHERE id = $1
+           LIMIT 1`,
+          [conflict.order_id]
+        );
+        const bound = boundOrderResult.rows[0];
+        if (bound && bound.status === 'created') {
+          await client.query('COMMIT');
+          return {
+            ok: true,
+            resumed: true,
+            order: serializeCheckoutOrder(bound),
+          };
+        }
+      }
       await client.query('ROLLBACK');
       reply.code(409);
       return {
@@ -31630,29 +31607,7 @@ app.post('/orders', async (request, reply) => {
       .update(JSON.stringify(quoteSnapshot))
       .digest('hex');
 
-    const insertResult = await client.query<{
-      id: string;
-      buyer_id: string;
-      seller_id: string;
-      listing_id: string;
-      subtotal_gbp: number | string;
-      buyer_protection_fee_gbp: number | string;
-      postage_fee_gbp: number | string;
-      total_gbp: number | string;
-      status: string;
-      address_id: number | null;
-      payment_method_id: number | null;
-      shipping_carrier_id: string | null;
-      shipping_provider: string | null;
-      tracking_number: string | null;
-      shipping_label_url: string | null;
-      shipping_quote_gbp: number | string | null;
-      verification_requested: boolean | null;
-      shipped_at: string | null;
-      delivered_at: string | null;
-      created_at: string;
-      updated_at: string;
-    }>(
+    const insertResult = await client.query<CheckoutOrderRow>(
       `INSERT INTO orders (
          id, buyer_id, seller_id, listing_id,
          subtotal_gbp, buyer_protection_fee_gbp, postage_fee_gbp, total_gbp,
@@ -31666,14 +31621,7 @@ app.post('/orders', async (request, reply) => {
          'created', $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb, $18,
          $19
        )
-       RETURNING
-         id, buyer_id, seller_id, listing_id,
-         subtotal_gbp, buyer_protection_fee_gbp, postage_fee_gbp, total_gbp,
-         status, address_id, payment_method_id, shipping_carrier_id,
-         shipping_provider, tracking_number, shipping_label_url,
-         shipping_quote_gbp, verification_requested,
-         shipped_at::text, delivered_at::text,
-         created_at::text, updated_at::text`,
+       RETURNING ${CHECKOUT_ORDER_COLUMNS}`,
       [
         orderId,
         actorUserId,
@@ -31840,30 +31788,7 @@ app.post('/orders', async (request, reply) => {
         quoteVersion,
         quoteHash,
       },
-      order: {
-        id: row.id,
-        buyerId: row.buyer_id,
-        sellerId: row.seller_id,
-        listingId: row.listing_id,
-        subtotalGbp: Number(row.subtotal_gbp),
-        buyerProtectionFeeGbp: Number(row.buyer_protection_fee_gbp),
-        platformChargeGbp: Number(row.buyer_protection_fee_gbp),
-        postageFeeGbp: Number(row.postage_fee_gbp),
-        totalGbp: Number(row.total_gbp),
-        status: row.status,
-        addressId: row.address_id,
-        paymentMethodId: row.payment_method_id,
-        shippingCarrierId: row.shipping_carrier_id,
-        shippingProvider: row.shipping_provider,
-        trackingNumber: row.tracking_number,
-        shippingLabelUrl: row.shipping_label_url,
-        shippingQuoteGbp: row.shipping_quote_gbp === null ? null : Number(row.shipping_quote_gbp),
-        verificationRequested: row.verification_requested === true,
-        shippedAt: row.shipped_at,
-        deliveredAt: row.delivered_at,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-      },
+      order: serializeCheckoutOrder(row),
     };
   } catch (error) {
     await client.query('ROLLBACK');
@@ -31929,15 +31854,32 @@ app.patch('/orders/:orderId/checkout', async (request, reply) => {
       reply.code(403);
       return { ok: false, error: 'Only the buyer can complete checkout details' };
     }
-    if (order.status !== 'created' || order.payment_intent_id) {
+    if (order.status !== 'created') {
       await client.query('ROLLBACK');
       reply.code(409);
       return {
         ok: false,
-        error: order.payment_intent_id
-          ? 'Checkout details cannot change after payment has started'
-          : `Checkout details cannot change from order status '${order.status}'`,
+        error: `Checkout details cannot change from order status '${order.status}'`,
       };
+    }
+    const releasedIntentRefs: { id: string; provider_intent_ref: string | null; gateway_id: string }[] = [];
+    if (order.payment_intent_id) {
+      // Re-binding checkout details is itself an explicit buyer abandon of
+      // the current attempt — release parked intents so a dismissed
+      // PaymentSheet cannot wedge the order (the bare payment_intent_id
+      // check made every selection change a guaranteed 409). Provider-owned
+      // in-flight intents still block.
+      const release = await releaseParkedPaymentIntent(client, orderId);
+      if (release.outcome === 'blocked_in_flight' || release.outcome === 'terminal') {
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return {
+          ok: false,
+          error: 'Checkout details cannot change after payment has started',
+          code: 'ORDER_PAYMENT_IN_PROGRESS',
+        };
+      }
+      releasedIntentRefs.push(...release.releasedIntents);
     }
     if (
       order.checkout_expires_at
@@ -32138,6 +32080,13 @@ app.patch('/orders/:orderId/checkout', async (request, reply) => {
       ]
     );
     await client.query('COMMIT');
+
+    // Provider-side cancel for the released parked intents — post-commit,
+    // best-effort (a stray confirm on a still-open provider intent is the
+    // orphan-capture path; internal status alone doesn't close it).
+    for (const intent of releasedIntentRefs) {
+      await cancelProviderParkedIntent(intent, request.log);
+    }
 
     // Item verification add-on (order-bound checkout): the pipeline create
     // is idempotent per orderId (deterministic request id), so attempting
@@ -32843,6 +32792,7 @@ app.get('/orders/:orderId', async (request, reply) => {
     quote_carrier_id: string | null;
     quote_carrier_label: string | null;
     quote_source: string | null;
+    has_open_resolution: boolean | null;
   }>(
     `
       SELECT
@@ -32880,7 +32830,18 @@ app.get('/orders/:orderId', async (request, reply) => {
         sq.quote_hash AS shipping_quote_hash,
         sq.carrier_id AS quote_carrier_id,
         sq.carrier_label AS quote_carrier_label,
-        sq.source AS quote_source
+        sq.source AS quote_source,
+        (
+          EXISTS (
+            SELECT 1 FROM support_tickets st
+            WHERE st.order_id = o.id AND st.status = 'open'
+              AND st.topic_id IN ('buyer_protection', 'buyer_protection_claim', 'item_not_as_described', 'refund_request', 'return')
+          )
+          OR EXISTS (
+            SELECT 1 FROM return_cases rc
+            WHERE rc.order_id = o.id AND rc.status NOT IN ('closed', 'refund_confirmed')
+          )
+        ) AS has_open_resolution
       FROM orders o
       LEFT JOIN users bu ON bu.id = o.buyer_id
       LEFT JOIN users su ON su.id = o.seller_id
@@ -32934,7 +32895,9 @@ app.get('/orders/:orderId', async (request, reply) => {
       if (ext.status === 'accepted' && !acceptedShipBy) {
         acceptedShipBy = ext.proposed_ship_by;
       }
-      if (ext.status === 'pending' && !pendingExtension) {
+      // A pending extension is only a live offer while the order awaits
+      // dispatch — on any other status it's stale history, never a CTA.
+      if (ext.status === 'pending' && !pendingExtension && row.status === 'paid') {
         pendingExtension = ext;
       }
     }
@@ -33052,6 +33015,10 @@ app.get('/orders/:orderId', async (request, reply) => {
       inspectionDeadlineAt,
       slaBreach,
       fulfilmentSnapshot,
+      // Server-derived open-resolution flag — the same predicate the list
+      // endpoint projects, so detail and list agree and the client does not
+      // depend on a separately-fetched ticket store that may lag.
+      hasOpenResolution: row.has_open_resolution === true,
       dispatchExtension: pendingExtension
         ? {
             id: pendingExtension.id,
@@ -33149,9 +33116,13 @@ app.get('/users/:userId/orders', async (request) => {
     }
   } else if (classification) {
     const classificationSets: Record<string, string[]> = {
+      // 'delivery_failed'/'returned' stay in Active — the shipment failed
+      // but the order still needs resolution (refund/protection claim);
+      // burying them in history would hide money-in-flight.
       active: [
         'created', 'paid', 'processing', 'preparing',
         'shipped', 'in transit', 'out for delivery',
+        'delivery_failed', 'returned',
       ],
       completed: ['delivered', 'completed'],
       // 'refunding' is the in-flight refund state — group it with the
@@ -33247,6 +33218,13 @@ app.get('/users/:userId/orders', async (request) => {
     dispatch_sla_days: number | null;
     extension_ship_by: string | null;
     has_review: boolean | null;
+    has_open_resolution: boolean | null;
+    shipping_quote_id: string | null;
+    shipping_carrier_id: string | null;
+    shipping_quote_hash: string | null;
+    quote_carrier_id: string | null;
+    quote_carrier_label: string | null;
+    quote_source: string | null;
   }>(
     `
       SELECT
@@ -33262,8 +33240,14 @@ app.get('/users/:userId/orders', async (request) => {
         o.shipping_provider,
         o.shipped_at::text,
         o.delivered_at::text,
-        o.created_at,
+        o.created_at::text,
         o.paid_at::text,
+        o.shipping_quote_id,
+        o.shipping_carrier_id,
+        sq.quote_hash AS shipping_quote_hash,
+        sq.carrier_id AS quote_carrier_id,
+        sq.carrier_label AS quote_carrier_label,
+        sq.source AS quote_source,
         srs.dispatch_sla_days,
         ${extensionSelect}
         l.title AS listing_title,
@@ -33273,11 +33257,23 @@ app.get('/users/:userId/orders', async (request) => {
         EXISTS (
           SELECT 1 FROM order_reviews rv
           WHERE rv.order_id = o.id AND rv.is_auto IS NOT TRUE
-        ) AS has_review
+        ) AS has_review,
+        (
+          EXISTS (
+            SELECT 1 FROM support_tickets st
+            WHERE st.order_id = o.id AND st.status = 'open'
+              AND st.topic_id IN ('buyer_protection', 'buyer_protection_claim', 'item_not_as_described', 'refund_request', 'return')
+          )
+          OR EXISTS (
+            SELECT 1 FROM return_cases rc
+            WHERE rc.order_id = o.id AND rc.status NOT IN ('closed', 'refund_confirmed')
+          )
+        ) AS has_open_resolution
       FROM orders o
       LEFT JOIN listings l ON l.id = o.listing_id
       LEFT JOIN users bu ON bu.id = o.buyer_id
       LEFT JOIN users su ON su.id = o.seller_id
+      LEFT JOIN commerce_shipping_quotes sq ON sq.id = o.shipping_quote_id
       LEFT JOIN order_seller_rights_snapshot srs ON srs.order_id = o.id
       ${extensionJoin}
       WHERE ${whereClause}
@@ -33293,12 +33289,57 @@ app.get('/users/:userId/orders', async (request) => {
     ? `${items[items.length - 1].created_at}|${items[items.length - 1].id}`
     : null;
 
+  // Needs-action count is server-truthful — a page-scoped count would
+  // under-report once the user has >1 page of orders. It honors the same
+  // `role` scope as the list: 'created' needs the buyer to pay, 'paid'
+  // needs the seller to dispatch.
+  const needsActionResult = role === 'buyer'
+    ? await db.query<{ n: string }>(
+        `SELECT COUNT(*)::text AS n
+         FROM orders o
+         WHERE o.buyer_id = $1 AND LOWER(o.status) = 'created'`,
+        [userId],
+      )
+    : role === 'seller'
+      ? await db.query<{ n: string }>(
+          `SELECT COUNT(*)::text AS n
+           FROM orders o
+           WHERE o.seller_id = $1 AND LOWER(o.status) = 'paid'`,
+          [userId],
+        )
+      : await db.query<{ n: string }>(
+          `SELECT COUNT(*)::text AS n
+           FROM orders o
+           WHERE (o.buyer_id = $1 OR o.seller_id = $2)
+             AND (
+               (o.buyer_id = $1 AND LOWER(o.status) = 'created')
+               OR (o.seller_id = $2 AND LOWER(o.status) = 'paid')
+             )`,
+          [userId, userId],
+        );
+  const needsActionCount = Number(needsActionResult.rows[0]?.n ?? 0);
+
   return {
     ok: true,
+    needsActionCount,
     items: items.map((row) => {
       const dispatchSlaDays = row.dispatch_sla_days === null ? null : Number(row.dispatch_sla_days);
       const shipByDate = row.extension_ship_by
         ?? computeBaseShipByDate(row.paid_at, row.created_at, dispatchSlaDays);
+      // Purchased-service snapshot — mirrors the detail endpoint's
+      // projection so list rows can show the exact service the buyer paid
+      // for (previously all evidence fields were null here → dead UI).
+      const deliveryMode: 'integrated' | 'manual' | 'unknown' =
+        row.quote_source === 'live' ||
+        (row.shipping_provider !== null &&
+          row.shipping_provider !== 'manual' &&
+          row.shipping_provider !== 'untracked' &&
+          row.shipping_provider !== 'seller_assertion')
+          ? 'integrated'
+          : row.shipping_provider !== null || row.shipping_quote_id !== null
+            ? 'manual'
+            : 'unknown';
+      const hasFulfilmentEvidence = dispatchSlaDays !== null || row.shipping_quote_id !== null;
       return {
         id: row.id,
         buyerId: row.buyer_id,
@@ -33318,19 +33359,20 @@ app.get('/users/:userId/orders', async (request) => {
         buyerUsername: row.buyer_username,
         sellerUsername: row.seller_username,
         hasReview: row.has_review === true,
+        hasOpenResolution: row.has_open_resolution === true,
         // Server-derived ship-by deadline (SLA snapshot or accepted extension).
         shipByDate,
-        fulfilmentSnapshot: dispatchSlaDays !== null
+        fulfilmentSnapshot: hasFulfilmentEvidence
           ? {
-              quoteId: null,
-              quoteHash: null,
-              carrierId: null,
+              quoteId: row.shipping_quote_id,
+              quoteHash: row.shipping_quote_hash,
+              carrierId: row.quote_carrier_id ?? row.shipping_carrier_id,
               serviceCode: null,
-              serviceName: null,
-              deliveryMode: 'unknown' as const,
+              serviceName: row.quote_carrier_label,
+              deliveryMode,
               etaMinDays: null,
               etaMaxDays: null,
-              trackingIncluded: row.tracking_number !== null,
+              trackingIncluded: row.quote_source === 'live' ? true : row.tracking_number !== null,
               shipByDate,
               destinationSummary: null,
               parcelProfile: null,
@@ -33442,8 +33484,13 @@ app.post('/orders/:orderId/protection/claim', {
   });
   const { reason, description, evidenceUrls } = bodySchema.parse(request.body ?? {});
 
-  const orderResult = await db.query<{ buyer_id: string; status: string }>(
-    `SELECT buyer_id, status FROM orders WHERE id = $1 LIMIT 1`,
+  const orderResult = await db.query<{
+    buyer_id: string;
+    status: string;
+    delivered_at: string | null;
+    created_at: string;
+  }>(
+    `SELECT buyer_id, status, delivered_at, created_at FROM orders WHERE id = $1 LIMIT 1`,
     [orderId]
   );
 
@@ -33452,9 +33499,61 @@ app.post('/orders/:orderId/protection/claim', {
     return { ok: false, error: 'Order not found' };
   }
 
-  if (orderResult.rows[0].buyer_id !== request.authUser.userId) {
+  const order = orderResult.rows[0];
+  if (order.buyer_id !== request.authUser.userId) {
     reply.code(403);
     return { ok: false, error: 'Only the buyer can file a protection claim' };
+  }
+
+  // Eligibility: claims only make sense once money moved (paid and beyond)
+  // and inside the same window GET /protection advertises (delivered_at+30d
+  // or created_at+60d). Previously any order accepted claims — including
+  // 'created' and 'cancelled'.
+  // 'delivery_failed'/'returned' are exactly when the buyer needs
+  // protection — a lost or returned parcel with escrow held is the
+  // canonical claim case.
+  const claimableStatuses = ['paid', 'processing', 'preparing', 'shipped', 'delivered', 'completed', 'delivery_failed', 'returned'];
+  const status = order.status.trim().toLowerCase();
+  if (!claimableStatuses.includes(status)) {
+    reply.code(409);
+    return {
+      ok: false,
+      error: `A protection claim cannot be filed while the order is ${order.status}`,
+      code: 'CLAIM_NOT_ELIGIBLE',
+    };
+  }
+  const eligibleUntilMs = order.delivered_at
+    ? new Date(order.delivered_at).getTime() + 30 * 24 * 60 * 60 * 1000
+    : new Date(order.created_at).getTime() + 60 * 24 * 60 * 60 * 1000;
+  if (Date.now() > eligibleUntilMs) {
+    reply.code(409);
+    return {
+      ok: false,
+      error: 'The buyer protection window for this order has closed',
+      code: 'CLAIM_WINDOW_EXPIRED',
+    };
+  }
+
+  // Idempotent per (order, open claim): fetchWithRetry re-sends POSTs on
+  // network timeouts, so a claim that committed but whose response was lost
+  // must replay the existing ticket, not insert a duplicate.
+  const existingClaim = await db.query<{ id: string; status: string; created_at: string }>(
+    `SELECT id, status, created_at FROM support_tickets
+     WHERE order_id = $1 AND topic_id = 'buyer_protection_claim' AND status = 'open'
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [orderId]
+  );
+  if (existingClaim.rows[0]) {
+    return {
+      ok: true,
+      claim: {
+        ticketId: existingClaim.rows[0].id,
+        status: existingClaim.rows[0].status,
+        createdAt: existingClaim.rows[0].created_at,
+      },
+      deduplicated: true,
+    };
   }
 
   const ticketId = `ticket_${crypto.randomUUID()}`;
@@ -33536,14 +33635,23 @@ app.post('/orders/:orderId/cancel', async (request, reply) => {
           : `Cannot cancel an order that is already ${order.status}`,
       };
     }
+    const releasedIntentRefs: { id: string; provider_intent_ref: string | null; gateway_id: string }[] = [];
     if (order.payment_intent_id) {
-      await client.query('ROLLBACK');
-      reply.code(409);
-      return {
-        ok: false,
-        error: 'A payment attempt is already attached to this order',
-        code: 'ORDER_PAYMENT_IN_PROGRESS',
-      };
+      // An explicit buyer cancel releases a parked intent — the sheet was
+      // dismissed, so requires_confirmation/requires_payment_method can
+      // never be confirmed without them. Provider-owned in-flight intents
+      // still shield the order (a capture may be in flight).
+      const release = await releaseParkedPaymentIntent(client, orderId);
+      if (release.outcome === 'blocked_in_flight' || release.outcome === 'terminal') {
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return {
+          ok: false,
+          error: 'A payment attempt is already attached to this order',
+          code: 'ORDER_PAYMENT_IN_PROGRESS',
+        };
+      }
+      releasedIntentRefs.push(...release.releasedIntents);
     }
 
     await client.query(`UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE id = $1`, [orderId]);
@@ -33559,6 +33667,10 @@ app.post('/orders/:orderId/cancel', async (request, reply) => {
     );
 
     await client.query('COMMIT');
+    // Close the released intents provider-side — post-commit, best-effort.
+    for (const intent of releasedIntentRefs) {
+      await cancelProviderParkedIntent(intent, request.log);
+    }
     // In-thread commerce card: order cancelled.
     await emitOrderCommerceCard({
       orderId,
@@ -33660,6 +33772,17 @@ app.post('/orders/:orderId/ship', async (request, reply) => {
       `UPDATE orders SET status = 'shipped', shipped_at = NOW(), shipping_provider = $2, tracking_number = $3, updated_at = NOW() WHERE id = $1`,
       [orderId, provider, sellerTracking]
     );
+
+    // A pending dispatch extension is stale once the order ships — cancel
+    // it so it can never resurface as a buyer CTA on a shipped order.
+    if (await orderDispatchExtensionsTableAvailable(client)) {
+      await client.query(
+        `UPDATE order_dispatch_extensions
+         SET status = 'cancelled', responded_at = NOW()
+         WHERE order_id = $1 AND status = 'pending'`,
+        [orderId]
+      );
+    }
 
     await client.query('COMMIT');
     // In-thread commerce card: order shipped. Only seller/carrier-issued
@@ -34158,8 +34281,8 @@ app.post('/orders/:orderId/dispatch-extension/respond', async (request, reply) =
       return { ok: false, error: 'Dispatch extensions are unavailable. Run migrations first.' };
     }
 
-    const orderResult = await client.query<{ buyer_id: string }>(
-      `SELECT buyer_id FROM orders WHERE id = $1 LIMIT 1 FOR UPDATE`,
+    const orderResult = await client.query<{ buyer_id: string; status: string }>(
+      `SELECT buyer_id, status FROM orders WHERE id = $1 LIMIT 1 FOR UPDATE`,
       [orderId]
     );
     const order = orderResult.rows[0];
@@ -34172,6 +34295,17 @@ app.post('/orders/:orderId/dispatch-extension/respond', async (request, reply) =
       await client.query('ROLLBACK');
       reply.code(403);
       return { ok: false, error: 'Only the buyer can respond to a dispatch extension' };
+    }
+    // Extensions are only meaningful pre-dispatch — a pending extension on
+    // a shipped/completed order is stale state, not a live offer.
+    if (order.status !== 'paid') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return {
+        ok: false,
+        error: `Dispatch extensions cannot be answered once the order is ${order.status}`,
+        code: 'ORDER_EXTENSION_STALE',
+      };
     }
 
     const extensionResult = await client.query<{
@@ -35020,20 +35154,152 @@ app.get('/auctions/home', async (request, reply) => {
   };
 });
 
+// Faceted counts for the auction filter sheet — categories, the selectable
+// price range, and per-scope totals. Follows standard faceted-search
+// semantics: a dimension's facet ignores its own filter (selecting a
+// category must not collapse the category list), while every other active
+// constraint still applies.
+app.get('/auctions/facets', async (request) => {
+  await optionalAuthenticate(request, '/auctions/facets');
+  const querySchema = z.object({
+    status: z.enum(['live', 'scheduled', 'ended', 'all']).optional(),
+    query: z.string().min(1).max(200).optional(),
+    category: z.string().min(1).max(80).optional(),
+    categories: z.string().min(1).max(400).optional(),
+    priceMin: z.coerce.number().nonnegative().optional(),
+    priceMax: z.coerce.number().nonnegative().optional(),
+  });
+  const params = querySchema.parse(request.query ?? {});
+  const viewerUserId = request.authUser?.userId ?? null;
+  const reachExclusion = ` ${reachExcludedSql('u')}`;
+
+  const categoryList = [
+    ...(params.categories?.split(',').map((c) => c.trim()).filter(Boolean) ?? []),
+    ...(params.category ? [params.category] : []),
+  ];
+
+  const baseConds: string[] = ['a.cancelled_at IS NULL'];
+  const baseParams: Array<string | number | string[]> = [];
+  if (params.query) {
+    baseParams.push(`%${params.query}%`);
+    baseConds.push(`(COALESCE(l.title, '') ILIKE $1 OR COALESCE(l.brand, '') ILIKE $1)`);
+  }
+
+  const buildWhere = (opts: { withCategory: boolean; withPrice: boolean }) => {
+    const conds = [...baseConds];
+    const ps = [...baseParams];
+    let idx = baseParams.length;
+    if (opts.withCategory && categoryList.length > 0) {
+      idx++;
+      ps.push(categoryList);
+      conds.push(`COALESCE(l.category, '') = ANY($${idx}::text[])`);
+    }
+    if (opts.withPrice && params.priceMin !== undefined) {
+      idx++;
+      ps.push(params.priceMin);
+      conds.push(`a.current_bid_gbp >= $${idx}`);
+    }
+    if (opts.withPrice && params.priceMax !== undefined) {
+      idx++;
+      ps.push(params.priceMax);
+      conds.push(`a.current_bid_gbp <= $${idx}`);
+    }
+    return {
+      where: `WHERE ${conds.join(' AND ')}${reachExclusion}`,
+      params: ps,
+      nextIdx: idx,
+    };
+  };
+
+  const [categoriesResult, statusResult, priceResult] = await Promise.all([
+    // Category facet ignores the category constraint itself.
+    db.query<{ id: string; count: string }>(
+      `SELECT l.category AS id, COUNT(*)::text AS count
+       FROM auctions a
+       LEFT JOIN listings l ON l.id = a.listing_id
+       LEFT JOIN users u ON u.id = a.seller_id
+       ${buildWhere({ withCategory: false, withPrice: true }).where}
+         AND l.category IS NOT NULL AND l.category <> ''
+       GROUP BY l.category
+       ORDER BY count DESC, l.category ASC`,
+      buildWhere({ withCategory: false, withPrice: true }).params
+    ),
+    // Scope counts honor every constraint except the status scope itself.
+    (() => {
+      const w = buildWhere({ withCategory: true, withPrice: true });
+      const viewerIdx = w.nextIdx + 1;
+      const watchingExpr = viewerUserId
+        ? `COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM auction_watchlist aw WHERE aw.auction_id = a.id AND aw.user_id = $${viewerIdx}))::text AS watching`
+        : `0::text AS watching`;
+      return db.query<{ live: string; upcoming: string; results: string; watching: string }>(
+        `SELECT
+           COUNT(*) FILTER (WHERE a.starts_at <= NOW() AND a.ends_at > NOW())::text AS live,
+           COUNT(*) FILTER (WHERE a.starts_at > NOW())::text AS upcoming,
+           COUNT(*) FILTER (WHERE a.ends_at <= NOW())::text AS results,
+           ${watchingExpr}
+         FROM auctions a
+         LEFT JOIN listings l ON l.id = a.listing_id
+         LEFT JOIN users u ON u.id = a.seller_id
+         ${w.where}`,
+        viewerUserId ? [...w.params, viewerUserId] : w.params
+      );
+    })(),
+    // Price range shows the full selectable spectrum for the current
+    // category/query — it ignores the price bounds themselves.
+    db.query<{ min: string | null; max: string | null }>(
+      `SELECT MIN(a.current_bid_gbp)::text AS min, MAX(a.current_bid_gbp)::text AS max
+       FROM auctions a
+       LEFT JOIN listings l ON l.id = a.listing_id
+       LEFT JOIN users u ON u.id = a.seller_id
+       ${buildWhere({ withCategory: true, withPrice: false }).where}`,
+      buildWhere({ withCategory: true, withPrice: false }).params
+    ),
+  ]);
+
+  return {
+    ok: true as const,
+    facets: {
+      categories: categoriesResult.rows.map((r) => ({ id: r.id, label: r.id, count: Number(r.count) })),
+      price: {
+        min: Number(priceResult.rows[0]?.min ?? 0),
+        max: Number(priceResult.rows[0]?.max ?? 0),
+      },
+      statusCounts: {
+        live: Number(statusResult.rows[0]?.live ?? 0),
+        upcoming: Number(statusResult.rows[0]?.upcoming ?? 0),
+        results: Number(statusResult.rows[0]?.results ?? 0),
+        watching: Number(statusResult.rows[0]?.watching ?? 0),
+      },
+    },
+    serverNow: new Date().toISOString(),
+  };
+});
+
 app.get('/auctions', async (request, reply) => {
   await optionalAuthenticate(request, '/auctions');
   const querySchema = z.object({
     status: z.enum(['live', 'scheduled', 'ended', 'all']).default('all'),
     query: z.string().min(1).max(200).optional(),
     category: z.string().min(1).max(80).optional(),
+    // CSV of categories — the filter sheet is multi-select; `category`
+    // remains accepted for single-value callers.
+    categories: z.string().min(1).max(400).optional(),
     sort: z.enum(['endingSoon', 'newest', 'mostBids', 'priceLow', 'priceHigh']).default('endingSoon'),
     watchedOnly: z.coerce.boolean().default(false),
     seller: z.enum(['me']).optional(),
+    // Price bounds filter on the auction's live price (current bid).
+    priceMin: z.coerce.number().nonnegative().optional(),
+    priceMax: z.coerce.number().nonnegative().optional(),
     cursor: z.string().optional(),
     limit: z.coerce.number().int().min(1).max(60).default(30),
   });
 
-  const { status, query: searchQuery, category, sort, watchedOnly, seller, cursor, limit } = querySchema.parse(request.query);
+  const { status, query: searchQuery, category, categories: categoriesCsv, sort, watchedOnly, seller, priceMin, priceMax, cursor, limit } = querySchema.parse(request.query);
+
+  if (priceMin !== undefined && priceMax !== undefined && priceMin > priceMax) {
+    reply.code(400);
+    return { ok: false, error: 'priceMin must not exceed priceMax' };
+  }
 
   const viewerUserId = request.authUser?.userId ?? null;
   const sellerMe = seller === 'me' && viewerUserId;
@@ -35044,7 +35310,7 @@ app.get('/auctions', async (request, reply) => {
   }
 
   const whereConditions: string[] = ['a.cancelled_at IS NULL'];
-  const whereParams: Array<string | number | boolean> = [];
+  const whereParams: Array<string | number | boolean | string[]> = [];
   let paramIdx = 0;
 
   // Seller reach (lib/sellerReach.ts): a suspended seller's auctions are
@@ -35076,6 +35342,27 @@ app.get('/auctions', async (request, reply) => {
     paramIdx++;
     whereParams.push(category);
     whereConditions.push(`COALESCE(l.category, '') = $${paramIdx}`);
+  }
+
+  if (categoriesCsv) {
+    const categoryList = categoriesCsv.split(',').map((c) => c.trim()).filter(Boolean);
+    if (categoryList.length > 0) {
+      paramIdx++;
+      whereParams.push(categoryList);
+      whereConditions.push(`COALESCE(l.category, '') = ANY($${paramIdx}::text[])`);
+    }
+  }
+
+  if (priceMin !== undefined) {
+    paramIdx++;
+    whereParams.push(priceMin);
+    whereConditions.push(`a.current_bid_gbp >= $${paramIdx}`);
+  }
+
+  if (priceMax !== undefined) {
+    paramIdx++;
+    whereParams.push(priceMax);
+    whereConditions.push(`a.current_bid_gbp <= $${paramIdx}`);
   }
 
   const now = new Date();

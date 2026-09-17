@@ -1284,6 +1284,7 @@ app.get('/users/me/email-preferences', async (request, reply) => {
         messageNotifications: true,
         priceDropAlerts: true,
         newListingsFromFollowing: true,
+        auctionAlerts: true,
         marketing: false,
         securityAlerts: true,
         distributionNotices: true,
@@ -1300,6 +1301,7 @@ app.get('/users/me/email-preferences', async (request, reply) => {
       messageNotifications: row.message_notifications,
       priceDropAlerts: row.price_drop_alerts,
       newListingsFromFollowing: row.new_listings_from_following,
+      auctionAlerts: row.auction_alerts ?? true,
       marketing: row.marketing,
       securityAlerts: row.security_alerts,
       distributionNotices: row.distribution_notices,
@@ -1320,6 +1322,7 @@ app.put('/users/me/email-preferences', async (request, reply) => {
     messageNotifications: z.boolean().optional(),
     priceDropAlerts: z.boolean().optional(),
     newListingsFromFollowing: z.boolean().optional(),
+    auctionAlerts: z.boolean().optional(),
     marketing: z.boolean().optional(),
     securityAlerts: z.boolean().optional(),
     distributionNotices: z.boolean().optional(),
@@ -1333,6 +1336,7 @@ app.put('/users/me/email-preferences', async (request, reply) => {
   if (payload.messageNotifications !== undefined) columns.message_notifications = payload.messageNotifications;
   if (payload.priceDropAlerts !== undefined) columns.price_drop_alerts = payload.priceDropAlerts;
   if (payload.newListingsFromFollowing !== undefined) columns.new_listings_from_following = payload.newListingsFromFollowing;
+  if (payload.auctionAlerts !== undefined) columns.auction_alerts = payload.auctionAlerts;
   if (payload.marketing !== undefined) columns.marketing = payload.marketing;
   if (payload.securityAlerts !== undefined) columns.security_alerts = payload.securityAlerts;
   if (payload.distributionNotices !== undefined) columns.distribution_notices = payload.distributionNotices;

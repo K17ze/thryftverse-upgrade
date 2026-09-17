@@ -73,7 +73,7 @@ export function BrowseFilterBar({
           accessibilityState={{ expanded: sortMenuOpen }}
         >
           <AppIcon
-            name="filter"
+            name="sort"
             size={IconSize.sm}
             color={browseFilters.sort !== 'Recommended' ? 'textPrimary' : 'textMuted'}
             accessible={false}

@@ -1,7 +1,7 @@
-import React, { useMemo } from 'react';
-import { StatusBar, useWindowDimensions } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Pressable, StatusBar, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { RouteProp, useNavigation, useRoute, useScrollToTop } from '@react-navigation/native';
+import { RouteProp, useIsFocused, useNavigation, useRoute, useScrollToTop } from '@react-navigation/native';
 
 import { useAppTheme } from '../theme/ThemeContext';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
@@ -59,8 +59,20 @@ export default function BrowseScreen() {
   // Grid density preference (AsyncStorage-backed)
   const { gridDensity, handleGridDensityChange } = useBrowseGridDensity();
 
+  // Context-scoped filters: this surface owns the `browse:<category>` bucket.
+  // Activation runs on focus — back-navigation from a pushed screen (or a
+  // stacked sibling BrowseScreen) re-asserts the correct bucket before the
+  // backend fetch below observes it.
+  const isFocused = useIsFocused();
+  const browseContextKey = `browse:${categoryId}${subcategoryId ? `:${subcategoryId}` : ''}`;
+  useEffect(() => {
+    if (isFocused) useStore.getState().activateBrowseContext(browseContextKey);
+  }, [isFocused, browseContextKey]);
+
   // Sort dropdown + persisted sort preference
-  const { sortMenuOpen, setSortMenuOpen, handleSortSelect } = useBrowseSortMenu(categoryId, searchQuery);
+  const { sortMenuOpen, setSortMenuOpen, handleSortSelect } = useBrowseSortMenu(categoryId, searchQuery, browseContextKey);
+  // Measured bottom edge of the signal rail — anchors the sort-menu overlay.
+  const [sortMenuTop, setSortMenuTop] = useState(0);
 
   // Pull-to-refresh: shared scroll offset, scroll-to-top ref, refresh timer
   const { refreshing, scrollY, scrollRef, refreshTimerRef, handleRefresh } = useBrowseRefresh();
@@ -71,7 +83,10 @@ export default function BrowseScreen() {
   // preserved: query-sync runs before the fetch effect, as before).
   const { backendListings, backendLoading, backendError, backendHasMore, backendLoadingMore, loadMoreBackendListings } = useBrowseBackendListings({
     categoryId,
+    subcategoryId,
+    title,
     searchQuery,
+    contextKey: browseContextKey,
     refreshTimerRef });
 
   // Derived filter status + clear-all
@@ -134,26 +149,41 @@ export default function BrowseScreen() {
         updateBrowseFilters={updateBrowseFilters}
       />
 
-      {/* Dynamic Algorithmic Signal Rail for Current Browse Context */}
-      <BrowseSignalRail
-        styles={styles}
-        signals={browseSignals}
-        activeSignal={activeBrowseSignal}
-        onSelectSignal={selectBrowseSignal}
-      />
+      {/* Dynamic Algorithmic Signal Rail for Current Browse Context —
+          measured so the sort-menu overlay can anchor directly below it
+          without reflowing the grid. */}
+      <View onLayout={(e) => setSortMenuTop(e.nativeEvent.layout.y + e.nativeEvent.layout.height)}>
+        <BrowseSignalRail
+          styles={styles}
+          signals={browseSignals}
+          activeSignal={activeBrowseSignal}
+          onSelectSignal={selectBrowseSignal}
+        />
+      </View>
 
       {sortMenuOpen ? (
-        <BrowseSortMenu
-          styles={styles}
-          colors={colors}
-          categoryId={categoryId}
-          searchQuery={searchQuery}
-          activeSort={browseFilters.sort}
-          onSelect={handleSortSelect}
-        />
+        <View
+          style={[styles.sortMenuOverlay, { top: sortMenuTop }]}
+          pointerEvents="box-none"
+        >
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setSortMenuOpen(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss sort menu"
+          />
+          <BrowseSortMenu
+            styles={styles}
+            colors={colors}
+            categoryId={categoryId}
+            searchQuery={searchQuery}
+            activeSort={browseFilters.sort}
+            onSelect={handleSortSelect}
+          />
+        </View>
       ) : null}
 
-      {hasActiveFilters ? (
+      {hasActiveFilters || browseFilters.query.trim().length > 0 ? (
         <BrowseActiveFilterBadges
           styles={styles}
           colors={colors}

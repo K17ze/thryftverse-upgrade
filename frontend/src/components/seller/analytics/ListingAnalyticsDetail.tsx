@@ -6,6 +6,7 @@ import { AppIcon } from '../../common/AppIcon';
 import { IconSize } from '../../../theme/iconTokens';
 import { openProductDetail } from '../../../platform/product/openProductDetail';
 import { adjustListingPrice } from '../../../services/commerceApi';
+import { ConfirmationSheet } from '../../ConfirmationSheet';
 import { haptics } from '../../../utils/haptics';
 import type { SellerAnalyticsModel } from './useSellerAnalytics';
 
@@ -25,10 +26,19 @@ export function ListingAnalyticsDetail({ model }: { model: SellerAnalyticsModel 
   } = model;
 
   const [isAdjusting, setIsAdjusting] = React.useState(false);
+  // Repricing a live listing is a real money mutation — it confirms first.
+  const [pendingReprice, setPendingReprice] = React.useState<number | null>(null);
 
-  const handleQuickReprice = async (targetPrice: number) => {
+  const handleQuickReprice = (targetPrice: number) => {
     if (!currentUser?.id || !selectedListingId || isAdjusting) return;
     haptics.selection();
+    setPendingReprice(targetPrice);
+  };
+
+  const confirmReprice = async () => {
+    const targetPrice = pendingReprice;
+    setPendingReprice(null);
+    if (targetPrice == null || !currentUser?.id || !selectedListingId) return;
     setIsAdjusting(true);
     try {
       await adjustListingPrice(currentUser.id, selectedListingId, targetPrice);
@@ -200,14 +210,14 @@ export function ListingAnalyticsDetail({ model }: { model: SellerAnalyticsModel 
                 <View style={styles.productStatItem}>
                   <Text style={[styles.productStatLabel, { color: colors.textMuted }]}>Views</Text>
                   <Text style={[styles.productStatValue, { color: colors.textPrimary }]}>
-                    {listingAnalytics?.views ?? 0}
+                    {listingAnalytics?.views ?? (listingError ? '—' : 0)}
                   </Text>
                 </View>
                 <View style={[styles.productStatDivider, { backgroundColor: colors.border }]} />
                 <View style={styles.productStatItem}>
                   <Text style={[styles.productStatLabel, { color: colors.textMuted }]}>Saves</Text>
                   <Text style={[styles.productStatValue, { color: colors.textPrimary }]}>
-                    {listingAnalytics?.saves ?? 0}
+                    {listingAnalytics?.saves ?? (listingError ? '—' : 0)}
                   </Text>
                 </View>
                 <View style={[styles.productStatDivider, { backgroundColor: colors.border }]} />
@@ -226,7 +236,7 @@ export function ListingAnalyticsDetail({ model }: { model: SellerAnalyticsModel 
                 <View style={styles.productStatItem}>
                   <Text style={[styles.productStatLabel, { color: colors.textMuted }]}>Offers</Text>
                   <Text style={[styles.productStatValue, { color: colors.textPrimary }]}>
-                    {listingAnalytics?.offers ?? 0}
+                    {listingAnalytics?.offers ?? (listingError ? '—' : 0)}
                   </Text>
                 </View>
                 <View style={[styles.productStatDivider, { backgroundColor: colors.border }]} />
@@ -368,7 +378,7 @@ export function ListingAnalyticsDetail({ model }: { model: SellerAnalyticsModel 
                     <View style={styles.quickRepriceRow}>
                       <Pressable
                         style={({ pressed }) => [styles.quickRepriceButton, isAdjusting && { opacity: 0.5 }, pressed && { opacity: 0.7 }]}
-                        onPress={() => void handleQuickReprice(p5)}
+                        onPress={() => handleQuickReprice(p5)}
                         disabled={isAdjusting}
                         accessibilityRole="button"
                         accessibilityLabel={`Sell faster at 5% discount, price ${formatFromFiat(p5, undefined, { displayMode: 'fiat' })}`}
@@ -382,7 +392,7 @@ export function ListingAnalyticsDetail({ model }: { model: SellerAnalyticsModel 
 
                       <Pressable
                         style={({ pressed }) => [styles.quickRepriceButton, isAdjusting && { opacity: 0.5 }, pressed && { opacity: 0.7 }]}
-                        onPress={() => void handleQuickReprice(p10)}
+                        onPress={() => handleQuickReprice(p10)}
                         disabled={isAdjusting}
                         accessibilityRole="button"
                         accessibilityLabel={`Aggressive velocity at 10% discount, price ${formatFromFiat(p10, undefined, { displayMode: 'fiat' })}`}
@@ -397,7 +407,7 @@ export function ListingAnalyticsDetail({ model }: { model: SellerAnalyticsModel 
                       {canMatchMedian ? (
                         <Pressable
                           style={({ pressed }) => [styles.quickRepriceButton, isAdjusting && { opacity: 0.5 }, pressed && { opacity: 0.7 }]}
-                          onPress={() => void handleQuickReprice(medP)}
+                          onPress={() => handleQuickReprice(medP)}
                           disabled={isAdjusting}
                           accessibilityRole="button"
                           accessibilityLabel={`Match market median price of ${formatFromFiat(medP, undefined, { displayMode: 'fiat' })}`}
@@ -444,5 +454,19 @@ export function ListingAnalyticsDetail({ model }: { model: SellerAnalyticsModel 
               </View>
             ) : null}
           </View>
+
+      <ConfirmationSheet
+        visible={pendingReprice != null}
+        onDismiss={() => setPendingReprice(null)}
+        title="Update listing price?"
+        message={
+          pendingReprice != null
+            ? `This changes the live listing price to ${formatFromFiat(pendingReprice, undefined, { displayMode: 'fiat' })} immediately. Buyers will see the new price right away.`
+            : undefined
+        }
+        confirmLabel="Update price"
+        onConfirm={() => void confirmReprice()}
+        variant="default"
+      />
  </>);
 }

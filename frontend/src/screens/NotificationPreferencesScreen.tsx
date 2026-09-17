@@ -57,6 +57,7 @@ import {
   PUSH_NOTIFICATION_GROUPS } from '../preferences/settingsPreferences';
 import {
   getNotificationPreferences,
+  sendTestPushNotification,
   updateNotificationPreferences } from '../services/notificationsApi';
 import { Space, Radius, Typography } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
@@ -170,7 +171,12 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
       try {
         await updateNotificationPreferences({
           preferences: { ...toggles },
-          quietHours: next,
+          quietHours: {
+            ...next,
+            // The window is wall-clock in the user's zone — the server
+            // evaluates it there, not UTC.
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          },
         });
       } catch {
         setQuietHours(previous);
@@ -228,15 +234,15 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
         show('Enable push notifications to test them.', 'error');
         return;
       }
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: 'Test notification 🔔',
-          body: 'Your notification settings are working correctly.',
-          data: { type: 'test' } },
-        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 2 } });
-      show('Test notification scheduled — check your notifications.', 'success');
+      // Exercise the real pipeline (queue → Expo → device) — a local
+      // scheduled notification proves nothing about server delivery.
+      await sendTestPushNotification({
+        title: 'Test notification',
+        body: 'Your notification settings are working correctly.',
+      });
+      show('Test push sent — it should arrive shortly.', 'success');
     } catch {
-      show('Could not schedule test notification.', 'error');
+      show('Could not send test notification.', 'error');
     }
   };
 

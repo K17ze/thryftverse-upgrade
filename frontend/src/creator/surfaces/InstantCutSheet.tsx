@@ -36,7 +36,6 @@ import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { autoCompose } from '../look/layout/autoCompose';
 import { LayoutPreviewRenderer } from '../look/layout/LayoutPreviewRenderer';
-import type { LayoutPreview } from '../look/layout/layoutTypes';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -151,6 +150,7 @@ export function InstantCutSheet({
               onPress={onClose}
               accessibilityRole="button"
               accessibilityLabel="Close instant cut"
+              accessibilityHint="Closes the instant cut sheet"
             >
               <Ionicons name="close" size={22} color={colors.textPrimary} />
             </Pressable>
@@ -186,6 +186,7 @@ export function InstantCutSheet({
                       ]}
                       accessibilityRole="button"
                       accessibilityLabel={`Layout: ${layout.name}`}
+                      accessibilityHint="Applies this layout"
                       accessibilityState={{ selected: isSelected }}
                     >
                       <LayoutPreviewRenderer
@@ -209,6 +210,7 @@ export function InstantCutSheet({
                 onPress={handleOpenEditor}
                 accessibilityRole="button"
                 accessibilityLabel="Open in editor"
+                accessibilityHint="Opens the cut in the full editor"
               >
                 <Ionicons name="create-outline" size={18} color={colors.textPrimary} />
                 <Text style={styles.secondaryBtnText}>Edit</Text>
@@ -220,6 +222,7 @@ export function InstantCutSheet({
               disabled={isPublishing}
               accessibilityRole="button"
               accessibilityLabel="Publish instant cut"
+              accessibilityHint="Opens the publish flow"
             >
               {isPublishing ? (
                 <ActivityIndicator size="small" color={colors.textInverse} />

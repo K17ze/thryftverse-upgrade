@@ -68,6 +68,7 @@ export default function CreatorCameraWeb({
           containerVariant="blur"
           onPress={onClose}
           accessibilityLabel="Close creator"
+          accessibilityHint="Exits the creator"
         />
         {renderTopRightAccessory ? renderTopRightAccessory() : <View style={styles.balance} />}
       </View>

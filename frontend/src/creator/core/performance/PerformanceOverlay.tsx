@@ -27,7 +27,6 @@ import { TypographyV2 } from '../../../theme/typography.v2';
 // ── Constants ──────────────────────────────────────────────────────────
 
 const OVERLAY_WIDTH = 180;
-const OVERLAY_HEIGHT = 220;
 const GRAPH_HEIGHT = 60;
 const GRAPH_BAR_WIDTH = OVERLAY_WIDTH - 24; // padding
 const GRAPH_BAR_GAP = 1;
@@ -132,6 +131,7 @@ function OverlayInner({
           onPress={() => setVisible(true)}
           style={styles.toggleBtn}
           accessibilityLabel="Show performance overlay"
+          accessibilityHint="Expands the performance panel"
           accessibilityRole="button"
         >
           <Text style={styles.toggleBtnText}>PERF</Text>
@@ -153,6 +153,7 @@ function OverlayInner({
               accessibilityLabel={
                 profilingEnabled ? 'Pause profiling' : 'Start profiling'
               }
+              accessibilityHint="Toggles performance profiling"
               accessibilityRole="button"
             >
               <Text style={styles.miniBtnText}>
@@ -163,6 +164,7 @@ function OverlayInner({
               onPress={() => setVisible(false)}
               style={styles.miniBtn}
               accessibilityLabel="Hide performance overlay"
+              accessibilityHint="Collapses the performance panel"
               accessibilityRole="button"
             >
               <Text style={styles.miniBtnText}>✕</Text>

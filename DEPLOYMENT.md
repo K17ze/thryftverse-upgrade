@@ -352,7 +352,7 @@ The API sweeps expired `upload_multipart_sessions` rows and aborts their S3 uplo
       }]
     }'
   ```
-- Apply to **every** environment bucket (staging, `thryftverse-media-backup`, etc.). MinIO dev needs no rule — the in-process sweep handles it.
+- Apply to **every** environment bucket (staging, `thryftverse-media-backup`, etc.). MinIO dev is already covered — `minio-init` in `docker-compose.yml` applies the same 7-day rule via `mc ilm rule add --abort-incomplete-days 7` on every `docker compose up`.
 
 ---
 

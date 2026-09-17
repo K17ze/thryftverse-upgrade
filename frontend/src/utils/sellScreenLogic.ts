@@ -3,10 +3,11 @@ import type { ListingFieldKey } from '../contracts/listingCategoryPolicy';
 import type { ListingMode } from '../components/listing/ListingModeSelector';
 import { getListingModeOptions } from '../components/listing/ListingModeSelector';
 
-export type PickerMode = 'Brand' | 'Size' | 'Condition' | 'Category' | 'Format' | null;
+export type PickerMode = 'Brand' | 'Size' | 'Condition' | 'Category' | 'Subcategory' | 'Format' | null;
 
 export interface PickerTaxonomyOptions {
   category: readonly string[];
+  subcategory: readonly string[];
   brand: readonly string[];
   size: readonly string[];
   condition: readonly string[];
@@ -16,6 +17,8 @@ export function getPickerOptionsForMode(mode: PickerMode, taxonomy: PickerTaxono
   switch (mode) {
     case 'Category':
       return [...taxonomy.category];
+    case 'Subcategory':
+      return [...taxonomy.subcategory];
     case 'Brand':
       return [...taxonomy.brand];
     case 'Size':

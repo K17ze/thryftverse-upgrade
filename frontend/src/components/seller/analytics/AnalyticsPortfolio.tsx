@@ -25,7 +25,7 @@ export function AnalyticsPortfolio({ model }: { model: SellerAnalyticsModel }) {
   return (
     <>
       {/* ── Conversion Funnel — flat metric rows ── */}
-      {funnelPipeline && funnelPipeline.stages.some((s) => s.value > 0) ? (
+      {funnelPipeline && funnelPipeline.stages.some((s) => (s.value ?? 0) > 0) ? (
         <View style={styles.funnelSection}>
           <View style={styles.sectionHeaderRow}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Conversion journey</Text>
@@ -37,12 +37,21 @@ export function AnalyticsPortfolio({ model }: { model: SellerAnalyticsModel }) {
           <View style={styles.funnelList}>
             {funnelPipeline.stages.map((stage, idx) => {
               const prevValue = idx > 0 ? funnelPipeline.stages[idx - 1].value : stage.value;
-              const stepConversion = idx > 0 && prevValue > 0 ? Math.round((stage.value / prevValue) * 100) : null;
+              const stepConversion =
+                idx > 0 && prevValue != null && prevValue > 0 && stage.value != null
+                  ? Math.round((stage.value / prevValue) * 100)
+                  : null;
               return (
                 <FlagshipMetricLine
                   key={stage.id}
                   label={stage.label}
-                  value={stepConversion != null ? `${stage.value.toLocaleString()} · ${stepConversion}%` : stage.value.toLocaleString()}
+                  value={
+                    stage.value == null
+                      ? 'Unavailable'
+                      : stepConversion != null
+                        ? `${stage.value.toLocaleString()} · ${stepConversion}%`
+                        : stage.value.toLocaleString()
+                  }
                   separated={idx > 0}
                 />
               );

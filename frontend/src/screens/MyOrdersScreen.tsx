@@ -96,10 +96,27 @@ export default function MyOrdersScreen() {
   const [orders, setOrders] = useState<CommerceUserOrder[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  // Pagination state also lives in refs: fetchOrders must not take
+  // nextCursor/isLoadingMore as useCallback deps — the reset effect keys
+  // on fetchOrders, so a page-2 request would wipe the list back to
+  // page 1 mid-flight (audit P0: load-more collapsed the list).
+  const nextCursorRef = useRef<string | null>(null);
+  const isLoadingMoreRef = useRef(false);
+  const setNextCursorSynced = useCallback((cursor: string | null) => {
+    nextCursorRef.current = cursor;
+    setNextCursor(cursor);
+  }, []);
+  const setIsLoadingMoreSynced = useCallback((loading: boolean) => {
+    isLoadingMoreRef.current = loading;
+    setIsLoadingMore(loading);
+  }, []);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [paginationError, setPaginationError] = useState<string | null>(null);
+  // Server-truthful needs-action count — the page-scoped filter count
+  // under-reports once the user has more orders than PAGE_SIZE.
+  const [serverNeedsActionCount, setServerNeedsActionCount] = useState<number | null>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -171,7 +188,8 @@ export default function MyOrdersScreen() {
       }
 
       if (cursor) {
-        if (isLoadingMore || !nextCursor) return;
+        if (isLoadingMoreRef.current || !nextCursorRef.current) return;
+        isLoadingMoreRef.current = true;
         setIsLoadingMore(true);
         setPaginationError(null);
       } else {
@@ -192,7 +210,9 @@ export default function MyOrdersScreen() {
           });
         } else {
           setOrders(result.items);
+          setServerNeedsActionCount(result.needsActionCount);
         }
+        nextCursorRef.current = result.nextCursor;
         setNextCursor(result.nextCursor);
         setLoadError(null);
       } catch (err: unknown) {
@@ -202,9 +222,11 @@ export default function MyOrdersScreen() {
         } else {
           setLoadError(message);
           setOrders([]);
+          setServerNeedsActionCount(null);
         }
       } finally {
         if (cursor) {
+          isLoadingMoreRef.current = false;
           setIsLoadingMore(false);
         } else {
           setIsInitialLoading(false);
@@ -212,13 +234,16 @@ export default function MyOrdersScreen() {
         }
       }
     },
-    [viewerId, buildParams, isLoadingMore, nextCursor]
+    [viewerId, buildParams]
   );
 
   useEffect(() => {
     setIsInitialLoading(true);
     setOrders([]);
+    nextCursorRef.current = null;
+    isLoadingMoreRef.current = false;
     setNextCursor(null);
+    setIsLoadingMore(false);
     setLoadError(null);
     setPaginationError(null);
     void fetchOrders();
@@ -245,11 +270,14 @@ export default function MyOrdersScreen() {
   const handleRefresh = useCallback(async () => {
     if (!viewerId) return;
     setIsRefreshing(true);
+    nextCursorRef.current = null;
     setNextCursor(null);
     setPaginationError(null);
     try {
       const result = await listUserOrders(viewerId, buildParams());
       setOrders(result.items);
+      setServerNeedsActionCount(result.needsActionCount);
+      nextCursorRef.current = result.nextCursor;
       setNextCursor(result.nextCursor);
       setLoadError(null);
     } catch (err: unknown) {
@@ -261,10 +289,10 @@ export default function MyOrdersScreen() {
   }, [viewerId, buildParams]);
 
   const handleLoadMore = useCallback(() => {
-    if (nextCursor && !isLoadingMore) {
-      void fetchOrders(nextCursor);
+    if (nextCursorRef.current && !isLoadingMoreRef.current) {
+      void fetchOrders(nextCursorRef.current);
     }
-  }, [nextCursor, isLoadingMore, fetchOrders]);
+  }, [fetchOrders]);
 
   const handleClearSearch = useCallback(() => {
     setSearchQuery('');
@@ -279,12 +307,11 @@ export default function MyOrdersScreen() {
 
       // Canonical capability projection (P0-3): the list consumes the same
       // resolver as Order Detail rather than reinterpreting status strings.
-      // hasReview now arrives on the list payload; hasOpenResolution stays
-      // resolved in the detail screen, which remains the authority for it.
+      // hasReview and hasOpenResolution now both arrive on the list payload.
       const capabilities = resolveCapabilities({
         status: order.status,
         role,
-        hasOpenResolution: false,
+        hasOpenResolution: order.hasOpenResolution === true,
         hasReview: order.hasReview === true,
         hasTracking: order.trackingNumber != null,
         fulfilmentSnapshot: order.fulfilmentSnapshot ?? null });
@@ -316,13 +343,17 @@ export default function MyOrdersScreen() {
         serviceName: order.fulfilmentSnapshot?.serviceName ?? order.fulfilmentSnapshot?.carrierId ?? null,
         deliveredAt: order.deliveredAt,
         etaWindow: capabilities.etaWindow,
+        hasOpenResolution: order.hasOpenResolution === true,
         nextActionLabel };
     });
   }, [orders, viewerId]);
 
+  // Prefer the server count (all orders, not just the loaded page); fall
+  // back to the page-scoped count for older backends that omit the field.
   const needsActionCount = useMemo(
-    () => orderViewModels.filter((o) => needsAction(o.status, o.role)).length,
-    [orderViewModels]
+    () => serverNeedsActionCount
+      ?? orderViewModels.filter((o) => needsAction(o.status, o.role)).length,
+    [serverNeedsActionCount, orderViewModels]
   );
 
   const availableYears = useMemo(() => {

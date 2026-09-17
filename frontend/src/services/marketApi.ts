@@ -652,6 +652,8 @@ export interface ListAuctionsOptions {
   status?: 'live' | 'scheduled' | 'ended' | 'all';
   query?: string;
   category?: string;
+  /** CSV of categories — the filter sheet is multi-select. */
+  categories?: string;
   sort?: AuctionSortMode;
   watchedOnly?: boolean;
   seller?: 'me';
@@ -834,6 +836,7 @@ export async function listAuctions(options: ListAuctionsOptions = {}): Promise<{
     status: options.status,
     query: options.query,
     category: options.category,
+    categories: options.categories,
     sort: options.sort,
     watchedOnly: options.watchedOnly,
     seller: options.seller,
@@ -854,6 +857,8 @@ export interface AuctionFacetsOptions {
   scope?: AuctionScope;
   query?: string;
   category?: string;
+  /** CSV of categories — multi-select. */
+  categories?: string;
   priceMin?: number;
   priceMax?: number;
 }
@@ -876,6 +881,7 @@ export async function getAuctionFacets(options: AuctionFacetsOptions = {}): Prom
     status: scopeStatus,
     query: options.query,
     category: options.category,
+    categories: options.categories,
     priceMin: options.priceMin,
     priceMax: options.priceMax,
   });

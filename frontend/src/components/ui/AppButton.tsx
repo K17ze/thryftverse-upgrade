@@ -1,5 +1,5 @@
 import React from 'react';
-import { AccessibilityRole, ActivityIndicator, StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
+import { AccessibilityRole, ActivityIndicator, PressableProps, StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
 import { Radius, Space, Stroke } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -37,6 +37,8 @@ interface AppButtonProps {
   accessibilityLabel?: string;
   accessibilityHint?: string;
   accessibilityRole?: AccessibilityRole;
+  accessibilityState?: PressableProps['accessibilityState'];
+  onLongPress?: PressableProps['onLongPress'];
 }
 
 type VariantTokens = {
@@ -109,7 +111,9 @@ export function AppButton({
   hapticFeedback,
   accessibilityLabel,
   accessibilityHint,
-  accessibilityRole }: AppButtonProps) {
+  accessibilityRole,
+  accessibilityState,
+  onLongPress }: AppButtonProps) {
   const { colors } = useAppTheme();
   const tokens = resolveVariantTokens(variant, colors);
   const resolvedAlign = align ?? (subtitle ? 'start' : 'center');
@@ -140,6 +144,8 @@ export function AppButton({
       accessibilityLabel={accessibilityLabel ?? title}
       accessibilityHint={accessibilityHint}
       accessibilityRole={accessibilityRole}
+      accessibilityState={accessibilityState}
+      onLongPress={onLongPress}
     >
       <View style={[styles.contentRow, resolvedAlign === 'center' && styles.contentCentered, contentStyle]}>
         {loading ? (

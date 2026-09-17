@@ -145,6 +145,7 @@ export default function OrderDetailScreen() {
           show(parseApiError(error).message, 'error');
         } finally {
           if (isMountedRef.current) setIsStepInSubmitting(false);
+          setConfirmSheet((prev) => ({ ...prev, visible: false }));
         }
       } });
   };
@@ -363,7 +364,11 @@ export default function OrderDetailScreen() {
                 message: 'By confirming, you confirm the item matches the listing. This releases the held funds to the seller. This action cannot be undone.',
                 confirmLabel: 'Confirm receipt',
                 cancelLabel: 'Not yet',
-                onConfirm: handleDeliver,
+                onConfirm: () => {
+                  void handleDeliver().finally(() => {
+                    setConfirmSheet((prev) => ({ ...prev, visible: false }));
+                  });
+                },
                 variant: 'default' });
             }}
             onReportIssue={() => {
@@ -521,6 +526,7 @@ export default function OrderDetailScreen() {
         onSelectIssue={handleIssueCategorySelect}
         onCloseIssueSelector={() => setIssueSelectorVisible(false)}
         confirmSheet={confirmSheet}
+        confirmSheetBusy={orderMutation != null || isStepInSubmitting || isReturnActionSubmitting}
         onDismissConfirmSheet={dismissConfirmSheet}
       />
     </OrderDetailChrome>

@@ -134,6 +134,7 @@ export function EffectPreviewRail({
             onValueChange={onIntensityChange}
             onCommit={onIntensityCommit ?? (() => {})}
             accessibilityLabel="Filter intensity"
+            accessibilityHint="Adjusts the filter strength"
             hapticAtNeutral
           />
         </View>

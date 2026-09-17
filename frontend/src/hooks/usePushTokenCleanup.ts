@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
-import Constants from 'expo-constants';
 import { useStore } from '../store/useStore';
 import {
-  listNotificationDevices,
-  deactivateNotificationDevice,
-} from '../services/notificationsApi';
+  getStoredPushDeviceId,
+  registerCurrentPushDevice,
+} from '../lib/pushDevice';
+import { deactivateNotificationDevice } from '../services/notificationsApi';
 
 /**
  * Stale push-token cleanup.
@@ -20,10 +20,12 @@ import {
  * token needs cleaning up.
  *
  * When the device token rolls we:
- *   1. Fetch the current Expo push token (the new valid one).
- *   2. List devices registered with our backend.
- *   3. Deactivate any whose token no longer matches — they are stale and
- *      would otherwise accumulate as dead delivery targets.
+ *   1. Register the NEW token (upsert) — otherwise the account keeps
+ *      targeting the dead token and this device silently goes dark.
+ *   2. Deactivate THIS device's previous registration row, identified by
+ *      the device id persisted at last registration. Other devices on the
+ *      account are left alone — a token roll here says nothing about the
+ *      user's iPad, and deactivating it would silently kill its pushes.
  *
  * The hook is best-effort: every step is guarded and failures are swallowed
  * so a cleanup hiccup never disrupts the foreground experience. It only
@@ -47,30 +49,28 @@ export function usePushTokenCleanup() {
       isCleaningRef.current = true;
 
       try {
-        const projectId = (Constants.expoConfig as { extra?: { eas?: { projectId?: string } } } | null)
-          ?.extra?.eas?.projectId;
-        const tokenResponse = projectId
-          ? await Notifications.getExpoPushTokenAsync({ projectId })
-          : await Notifications.getExpoPushTokenAsync();
-        const currentToken = tokenResponse.data;
+        // Capture the previously registered id BEFORE registering — the
+        // upsert below overwrites it with the new row's id.
+        const previousDeviceId = await getStoredPushDeviceId();
 
-        const devices = await listNotificationDevices();
-        // Tokens are now redacted in the server response, so we can't
-        // compare them client-side. Instead, deactivate all active devices
-        // except the most recent one (which is most likely the current device).
-        // The server-side receipt reconciler handles DeviceNotRegistered
-        // authoritatively — this is a client-side best-effort cleanup.
-        const activeDevices = devices.filter((device) => device.isActive);
-        const stale = activeDevices.slice(1); // Keep the most recent
+        // Register the NEW token first — without this the roll leaves the
+        // account pointing at the dead token and this device silently stops
+        // receiving pushes. Registration upserts on token and returns the
+        // device id, which also refreshes our persisted this-device id.
+        const currentDevice = await registerCurrentPushDevice();
 
-        // Deactivate in parallel — each is independent and best-effort.
-        await Promise.all(
-          stale.map((device) =>
-            deactivateNotificationDevice(device.id).catch(() => {
-              // A single deactivation failure must not abort the rest.
-            }),
-          ),
-        );
+        // Deactivate only this device's previous registration — the row
+        // pointing at the now-dead token. Tokens are redacted in list
+        // responses, so the persisted id is the truthful match.
+        if (
+          previousDeviceId !== null &&
+          previousDeviceId !== currentDevice.id
+        ) {
+          await deactivateNotificationDevice(previousDeviceId).catch(() => {
+            // Best-effort — the dead token row is pruned server-side on
+            // DeviceNotRegistered receipts regardless.
+          });
+        }
       } catch {
         // Network or permission errors are transient; the next roll will retry.
       } finally {

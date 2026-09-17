@@ -39,6 +39,7 @@ interface PressScaleProps extends Omit<PressableProps, 'style'> {
   style?: ViewStyle | ViewStyle[];
   scale?: number; // override default scale
   accessibilityLabel: string;
+  accessibilityHint?: string;
   accessibilityRole?: 'button' | 'image' | 'link' | 'menuitem';
   disabled?: boolean;
 }
@@ -48,6 +49,7 @@ export function PressScale({
   style,
   scale,
   accessibilityLabel,
+  accessibilityHint,
   accessibilityRole = 'button',
   disabled,
   onPressIn,
@@ -72,6 +74,7 @@ export function PressScale({
       {...rest}
       disabled={disabled}
       accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint}
       accessibilityRole={accessibilityRole}
       onPressIn={(e) => {
         pressedSV.value = withSpring(1, Motion.spring.tap);
@@ -270,6 +273,7 @@ export function SheetContainer({
             style={sheetStyles.handleContainer}
             accessibilityRole="adjustable"
             accessibilityLabel="Drag down to close"
+            accessibilityHint="Drag downward to dismiss this sheet"
           >
             <View style={[sheetStyles.handle, { backgroundColor: colors.textMuted }]} />
           </View>

@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -7,7 +7,7 @@ import {
   Pressable } from 'react-native';
 // Note: ScrollView is retained for the horizontal subcategory rail only.
 // The vertical scroll surface is owned by the FlashList inside PinterestMasonryGrid.
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useTaxonomy } from '../context/TaxonomyContext';
@@ -44,6 +44,14 @@ export default function CategoryDetailScreen() {
   const { colors } = useAppTheme();
   const reducedMotionEnabled = useReducedMotion();
   const categoryId = route.params?.categoryId as string | undefined;
+  // Context-scoped filters: this surface owns the `category:<id>` bucket so
+  // its filter state never leaks into Browse/Search surfaces (or vice versa).
+  const isFocused = useIsFocused();
+  useEffect(() => {
+    if (isFocused && categoryId) {
+      useStore.getState().activateBrowseContext(`category:${categoryId}`);
+    }
+  }, [isFocused, categoryId]);
   const browseFilters = useStore((state) => state.browseFilters);
   const updateBrowseFilters = useStore((state) => state.updateBrowseFilters);
   const haptic = useHaptic();

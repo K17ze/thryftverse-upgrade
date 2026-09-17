@@ -50,6 +50,7 @@ export interface AdjustPanelProps {
           hitSlop={Space.sm}
           accessibilityRole="button"
           accessibilityLabel="Reset adjustments"
+          accessibilityHint="Restores the default adjustment values"
           style={({ pressed }) => [
             styles.resetButton,
             { opacity: pressed ? 0.6 : 1, minHeight: Control.hit, minWidth: Control.hit },
@@ -137,6 +138,7 @@ function AdjustSliderRow({
         onCommit={onCommit}
         onDragStateChange={onDragStateChange}
         accessibilityLabel={label}
+        accessibilityHint="Adjusts the value"
         hapticAtNeutral={isBidirectional}
         showNeutralTick={isBidirectional}
       />

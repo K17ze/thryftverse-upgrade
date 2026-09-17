@@ -59,7 +59,7 @@ export interface SellScreenFormResult {
 export function useSellScreenForm(params: SellScreenFormParams): SellScreenFormResult {
   const { values, photos, soldComps, errors, setErrors } = params;
   const {
-    title, desc, price, originalPrice, category, brand, size, condition,
+    title, desc, price, originalPrice, category, subcategory, brand, size, condition,
     shippingMethod, shippingPayer, listingMode, shareCountInput, sharePriceInput,
     authPhotos, startingBid,
   } = values;
@@ -93,6 +93,7 @@ export function useSellScreenForm(params: SellScreenFormParams): SellScreenFormR
       description: desc.trim() || null,
       price: numericPrice > 0 ? numericPrice : null,
       category: category || null,
+      subcategory: subcategory || null,
       brand: brand || null,
       size: size || null,
       condition: condition || null,
@@ -101,7 +102,7 @@ export function useSellScreenForm(params: SellScreenFormParams): SellScreenFormR
       shippingPayer: shippingPayer || null,
     };
     return evaluateListingCompleteness(fieldValues);
-  }, [title, desc, numericPrice, category, brand, size, condition, photos, shippingMethod, shippingPayer]);
+  }, [title, desc, numericPrice, category, subcategory, brand, size, condition, photos, shippingMethod, shippingPayer]);
 
   const publishReady = useMemo(() => {
     // Category-aware: use the policy's canActivate as the base floor,

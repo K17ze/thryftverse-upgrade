@@ -65,6 +65,31 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
   const content = useDiscoveryContent();
   const categories = useDiscoveryCategories();
   const search = useDiscoverySearch(route.params?.initialQuery);
+
+  // ── Save-search: persist the live query + applied filters with match
+  //  alerts enabled. Dedup mirrors addSavedSearch's normalized-query key. ──
+  const savedSearches = useStore((s) => s.savedSearches);
+  const addSavedSearch = useStore((s) => s.addSavedSearch);
+  const isSearchSaved = savedSearches.some(
+    (s) => s.query.trim().toLowerCase() === search.query.trim().toLowerCase(),
+  );
+  const handleSaveSearch = useCallback(() => {
+    if (search.query.trim().length < 2 || isSearchSaved) return;
+    haptic.light();
+    // The discovery context is active while this screen is focused — its
+    // bucket holds the filters the user applied via the Filter sheet.
+    const filters = useStore.getState().browseFilters;
+    addSavedSearch({
+      query: search.query.trim(),
+      filters: {
+        brands: filters.brands,
+        sizes: filters.sizes,
+        condition: filters.condition,
+        sort: filters.sort,
+        minPrice: filters.priceMin ?? undefined,
+        maxPrice: filters.priceMax ?? undefined },
+      alertsEnabled: true });
+  }, [search.query, isSearchSaved, addSavedSearch, haptic]);
   const feed = useDiscoveryFeed({
     activeCategory: categories.activeCategory,
     activeSignalChip: categories.activeSignalChip,
@@ -145,6 +170,8 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
             isSearching={search.isSearching}
             isSearchingPeople={search.isSearchingPeople}
             peopleResults={search.peopleResults}
+            peopleError={search.peopleError}
+            onRetryPeople={search.retryPeopleSearch}
             searchScope={search.searchScope}
             searchError={search.searchError}
             onRetry={search.retrySearch}
@@ -152,6 +179,14 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
             activeFilterCount={search.activeSearchFilterCount}
             onOpenFilters={() => navigation.navigate('Filter', { categoryId: 'search', title: 'Search' })}
             onClearFilters={search.clearSearchFilters}
+            usedFallback={search.searchUsedFallback}
+            resultCount={search.searchResults.length}
+            hasMore={search.searchHasMore}
+            isLoadingMore={search.isSearchingMore}
+            onEndReached={search.loadMoreSearch}
+            onClearSearch={() => search.setQuery('')}
+            onSaveSearch={handleSaveSearch}
+            isSearchSaved={isSearchSaved}
             onListingPress={handleListingPress}
             onLookPress={handleLookPress}
             onPosterPress={handlePosterPress}

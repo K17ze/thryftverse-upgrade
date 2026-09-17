@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 
 import { parseApiError } from '../../lib/apiClient';
@@ -58,6 +58,21 @@ export function useConvertSubmission({
   const [isExecuting, setIsExecuting] = useState(false);
   const [result, setResult] = useState<ConversionResult | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
+  // Persisted across retries: the server replays a stored response for a
+  // repeated (userId, 'convert_1ze_to_fiat', key) — so "Try again" after a
+  // lost response cannot burn the balance a second time. Mirrors the
+  // idempotency-key lifecycle in useWithdrawSubmission.
+  const idempotencyKeyRef = useRef<string | null>(null);
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
+  // A changed amount/currency is a different request — the stored payload
+  // hash would mismatch, so the key resets when the inputs do.
+  useEffect(() => {
+    idempotencyKeyRef.current = null;
+  }, [izeValue, currencyCode]);
 
   const canReview =
     Number.isFinite(izeValue) &&
@@ -117,10 +132,13 @@ export function useConvertSubmission({
     setStep('executing');
     setIsExecuting(true);
     try {
-      const idempotencyKey =
-        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-          ? crypto.randomUUID()
-          : `convert_${userId}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      if (!idempotencyKeyRef.current) {
+        idempotencyKeyRef.current =
+          typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+            ? crypto.randomUUID()
+            : `convert_${userId}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      }
+      const idempotencyKey = idempotencyKeyRef.current;
 
       const response = await convertIzeToFiat({
         userId,
@@ -144,22 +162,26 @@ export function useConvertSubmission({
         timestamp: new Date().toISOString() });
 
       haptic.success();
+      idempotencyKeyRef.current = null;
       setStep('receipt');
     } catch (error) {
       const isNetworkError =
         isOffline ||
         (error instanceof Error && /network|fetch|timeout/i.test(error.message));
+      // On a lost response the server may have committed — the idempotency
+      // key is kept so Try again replays the stored result rather than
+      // burning the balance twice, and the copy must not claim failure.
       const parsed = parseApiError(
         error,
         isNetworkError
-          ? 'You appear to be offline. Check your connection and try again.'
+          ? 'The connection dropped while converting. Try again — the same request will resume safely, or check your wallet history.'
           : 'Unable to convert 1ZE right now.'
       );
       setErrorMessage(parsed.message);
       haptic.error();
       setStep('error');
     } finally {
-      setIsExecuting(false);
+      if (isMountedRef.current) setIsExecuting(false);
     }
   };
 

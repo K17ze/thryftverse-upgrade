@@ -68,6 +68,130 @@ export function noInFlightPaymentGuardSql(orderAlias = 'orders'): string {
       )`;
 }
 
+export type ReleaseParkedIntentOutcome =
+  /** The order had a parked intent; it is now cancelled + unbound. */
+  | 'released'
+  /** A provider-owned in-flight intent shields the order — do NOT proceed. */
+  | 'blocked_in_flight'
+  /** The bound intent is already terminal/succeeded — nothing to release. */
+  | 'terminal'
+  /** No intent is bound to the order. */
+  | 'none';
+
+export type ReleasedIntentRef = {
+  id: string;
+  provider_intent_ref: string | null;
+  gateway_id: string;
+};
+
+export type ReleaseParkedIntentResult = {
+  outcome: ReleaseParkedIntentOutcome;
+  /** Parked intents cancelled internally — the caller should best-effort
+   *  cancel them provider-side AFTER commit (provider I/O never runs
+   *  inside a row-lock transaction in this codebase). A parked-but-open
+   *  provider intent can still be confirmed by a replayed client call —
+   *  provider cancel is what makes the release real. */
+  releasedIntents: ReleasedIntentRef[];
+};
+
+/**
+ * Release a *parked* payment intent when the buyer explicitly abandons the
+ * flow — cancelling the order or re-binding checkout selections.
+ *
+ * Distinct from `hasInFlightPaymentIntent`'s recency shield: that 2-hour
+ * window exists for *background sweepers* (a recently-touched parked intent
+ * may still be mid-confirm from the buyer's perspective). An explicit
+ * buyer action means the payment sheet was dismissed — nothing can confirm
+ * the intent without them — so ANY parked status releases, regardless of
+ * recency. Provider-owned statuses (processing / submission pending /
+ * unknown) and `succeeded` still block: money may already be moving and
+ * cancelling under it is the orphan-capture defect this file exists to
+ * prevent.
+ *
+ * The internal status is set to 'cancelled' and `orders.payment_intent_id`
+ * cleared inside the caller's transaction. If a stray provider capture
+ * lands afterwards, `flagOrphanedCommercePayment` records the break — the
+ * order is already terminal so settle cannot mark it paid.
+ */
+export async function releaseParkedPaymentIntent(
+  client: Pick<PoolClient, 'query'>,
+  orderId: string,
+): Promise<ReleaseParkedIntentResult> {
+  const intents = await client.query<{
+    id: string;
+    status: string;
+    provider_intent_ref: string | null;
+    gateway_id: string;
+  }>(
+    `SELECT pi.id, pi.status, pi.provider_intent_ref, pi.gateway_id
+     FROM payment_intents pi
+     LEFT JOIN orders o ON o.id = $1
+     WHERE pi.order_id = $1 OR pi.id = o.payment_intent_id
+     ORDER BY pi.updated_at DESC`,
+    [orderId],
+  );
+
+  // Gate first, mutate second: a provider-owned intent anywhere in the
+  // bound set blocks the release entirely — we never want a caller that
+  // proceeds anyway to inherit a half-cancelled intent set.
+  for (const intent of intents.rows) {
+    if (
+      intent.status === 'provider_submission_pending'
+      || intent.status === 'processing'
+      || intent.status === 'unknown'
+      || intent.status === 'succeeded'
+    ) {
+      return {
+        outcome: intent.status === 'succeeded' ? 'terminal' : 'blocked_in_flight',
+        releasedIntents: [],
+      };
+    }
+  }
+
+  const releasedIntents: ReleasedIntentRef[] = [];
+  for (const intent of intents.rows) {
+    if (
+      intent.status === 'requires_confirmation'
+      || intent.status === 'requires_payment_method'
+    ) {
+      // Re-check the status in the UPDATE predicate: a provider webhook can
+      // flip a parked intent to 'processing'/'succeeded' between our SELECT
+      // and this statement — without it we'd mark a moving charge cancelled.
+      const cancelled = await client.query<{ id: string }>(
+        `UPDATE payment_intents
+         SET status = 'cancelled', updated_at = NOW()
+         WHERE id = $1
+           AND status IN ('requires_confirmation', 'requires_payment_method')
+         RETURNING id`,
+        [intent.id],
+      );
+      if (cancelled.rowCount) {
+        releasedIntents.push({
+          id: intent.id,
+          provider_intent_ref: intent.provider_intent_ref,
+          gateway_id: intent.gateway_id,
+        });
+      }
+    }
+    // 'failed' / 'cancelled' intents need no release — they never bind.
+  }
+
+  // If a concurrent webhook moved every parked intent forward mid-release,
+  // the bound intent may now be provider-owned — re-check before unbinding.
+  if (await hasInFlightPaymentIntent(client, orderId)) {
+    return { outcome: 'blocked_in_flight', releasedIntents };
+  }
+
+  if (releasedIntents.length > 0) {
+    await client.query(
+      `UPDATE orders SET payment_intent_id = NULL, updated_at = NOW() WHERE id = $1`,
+      [orderId],
+    );
+    return { outcome: 'released', releasedIntents };
+  }
+  return { outcome: intents.rowCount ? 'terminal' : 'none', releasedIntents };
+}
+
 export type ReservationExpiryCancelOutcome =
   /** The order was 'created' with no in-flight intent and is now cancelled. */
   | 'cancelled'

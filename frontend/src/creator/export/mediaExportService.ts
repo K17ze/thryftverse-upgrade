@@ -31,8 +31,12 @@ import {
 // HybridObject is not linked, preserving the existing fallback behaviour.
 import {
   isVideoExportAvailable as isThryftVideoExportAvailable,
+  exportVideo as exportVideoNative,
+  cancelVideoExport as cancelNativeVideoExport,
 } from '../../../modules/thryft-video-export/src';
 import type { CreatorDocument } from '../core/projectStore/composition';
+import { LOOK_DEFAULT_ASPECT_RATIO } from '../core/projectStore/composition';
+import { buildSingleClipVideoRequest } from './videoExportAdapter';
 
 // ── Intent presets ───────────────────────────────────────────────────
 
@@ -199,6 +203,8 @@ export interface ExportOptions {
   quality: 'feed' | 'hd';
   /** Called with progress 0..1 during export. */
   onProgress?: (progress: number) => void;
+  /** Optional stable job id — pass one to make `cancelExport(jobId)` reachable. */
+  jobId?: string;
 }
 
 export interface ExportedImageResult {
@@ -224,7 +230,7 @@ export async function exportDocumentImage(
     ? { ...LOOK_CARD_INTENT, maxWidth: 1920, maxHeight: 2400 }
     : LOOK_CARD_INTENT;
 
-  const jobId = `export-img-${document.id}-${Date.now()}`;
+  const jobId = options?.jobId ?? `export-img-${document.id}-${Date.now()}`;
 
   // ── Native path (preferred — full filter + video pipeline) ──
   const module = getMediaExport();
@@ -274,11 +280,53 @@ export async function exportDocumentVideo(
   document: CreatorDocument,
   options?: ExportOptions,
 ): Promise<ExportedImageResult | null> {
+  const intent = options?.quality === 'hd' ? MARKETPLACE_HD_INTENT : MARKETPLACE_FEED_INTENT;
+  const jobId = options?.jobId ?? `export-vid-${document.id}-${Date.now()}`;
+
+  // ── Native single-clip path (ThryftVideoExport — AVFoundation/Media3) ──
+  // Preferred when the document is a single video clip: trim/speed/curve/
+  // reverse/freeze run through the platform encoder; overlay layers are
+  // rasterised to a transparent PNG via the Skia export path and burned in
+  // per-frame, matching the authored preview.
+  if (isThryftVideoExportAvailable() && document.pages.length === 1) {
+    const aspect = document.canvas.aspectRatio || LOOK_DEFAULT_ASPECT_RATIO;
+    // Fit the canvas aspect into the intent's max-dimension box.
+    const maxW = intent.maxWidth ?? 1080;
+    const maxH = intent.maxHeight ?? 1350;
+    let width = maxW;
+    let height = Math.round(maxW / aspect);
+    if (height > maxH) {
+      height = maxH;
+      width = Math.round(maxH * aspect);
+    }
+    // Encoder-friendly even dimensions.
+    width -= width % 2;
+    height -= height % 2;
+
+    try {
+      const request = await buildSingleClipVideoRequest(
+        document, document.pages[0].id, { width, height }, jobId);
+      if (request) {
+        const { promise } = exportVideoNative(request, options?.onProgress);
+        const result = await promise;
+        return {
+          uri: result.uri,
+          width: result.width,
+          height: result.height,
+          sizeBytes: result.sizeBytes,
+        };
+      }
+    } catch (error) {
+      // A native failure is honest — rethrow typed errors the caller can
+      // react to (e.g. 'cancelled'); unexpected shapes propagate as-is.
+      throw error;
+    }
+  }
+
+  // ── Full-document native path (ThryftMediaExport) ──
   const module = getMediaExport();
   if (!module) return null;
 
-  const intent = options?.quality === 'hd' ? MARKETPLACE_HD_INTENT : MARKETPLACE_FEED_INTENT;
-  const jobId = `export-vid-${document.id}-${Date.now()}`;
   const result: ExportResult = await module.exportVideo(
     JSON.stringify(document),
     intent,
@@ -347,7 +395,9 @@ export async function exportThumbnail(
  * Cancel an in-progress export by job ID.
  */
 export function cancelExport(jobId: string): void {
+  // Route to whichever native path may own the job — both are idempotent
+  // on unknown session ids.
+  cancelNativeVideoExport(jobId);
   const module = getMediaExport();
-  if (!module) return;
-  module.cancelExport(jobId);
+  if (module) module.cancelExport(jobId);
 }

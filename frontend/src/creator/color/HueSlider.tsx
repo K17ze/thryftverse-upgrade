@@ -27,7 +27,6 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Radius, Stroke } from '../../theme/designTokens';
 import { Motion } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
-import type { HSV } from './ColorTypes';
 
 // ── Timing ───────────────────────────────────────────────────────────
 const SNAP_TIMING = { duration: Motion.duration.snapToGuide, easing: Motion.easing.entrance };
@@ -114,7 +113,7 @@ export function HueSlider({
         const h = ratio * 360;
         runOnJS(onCommit)(h);
       });
-  }, [thumbX, onChange, onCommit, layoutWidth]);
+  }, [thumbX, onChange, onCommit, layoutWidth, lastHueBucketSV]);
 
   // Animated thumb style
   const thumbStyle = useAnimatedStyle(() => {
@@ -143,6 +142,7 @@ export function HueSlider({
         ]}
         accessibilityRole="adjustable"
         accessibilityLabel={accessibilityLabel}
+        accessibilityHint="Drag to change the hue"
         accessibilityValue={{
           min: 0,
           max: 360,

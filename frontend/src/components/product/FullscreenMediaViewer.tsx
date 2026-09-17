@@ -41,15 +41,7 @@ import type { ProductMediaItem } from '../../platform/product/productDetailViewM
 
 const MAX_ZOOM = 5;
 const MIN_ZOOM = 1;
-const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
-
-// Rubber-band clamp for drag-to-dismiss resistance.
-function rubberBand(value: number, min: number, max: number, friction = 0.3): number {
-  'worklet';
-  if (value < min) return min + (value - min) * friction;
-  if (value > max) return max + (value - max) * friction;
-  return value;
-}
+import { clamp, rubberBand } from '../../utils/posterPhysics';
 
 interface FullscreenImagePageProps {
   item: ProductMediaItem;

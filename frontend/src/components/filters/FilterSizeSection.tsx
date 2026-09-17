@@ -1,11 +1,10 @@
 import React from 'react';
-import { View, Text, ScrollView, Pressable } from 'react-native';
+import { View, Text, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { AppButton } from '../ui/AppButton';
 import { useSettingsPreferences } from '../../context/SettingsPreferencesContext';
 import { useToast } from '../../context/ToastContext';
-import { haptics } from '../../utils/haptics';
 import { FilterSection } from './FilterSection';
 import { createFilterStyles } from './filterStyles';
 
@@ -64,31 +63,26 @@ function FilterSizeSectionBase({ expanded, onToggle, sizeOptions, selectedSizes,
             const isActive = selectedSizes.includes(s);
             const isMySize = mySizes.includes(s);
             return (
-              <Pressable
+              <AppButton
                 key={s}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                title={s}
+                icon={isMySize ? <Ionicons name="star" size={12} color={colors.brand} aria-hidden={true} /> : undefined}
+                variant="secondary"
+                size="sm"
+                style={[styles.chip, styles.sizeChip, isActive && styles.chipActive, isMySize && styles.mySizeMarkedChip]}
+                titleStyle={[styles.chipText, isActive && styles.chipTextActive]}
+                onPress={() => onToggleSize(s)}
                 onLongPress={() => {
                   toggleMySize(s);
-                  haptics.press();
                   show(
                     mySizes.includes(s) ? `Removed ${s} from your sizes` : `Saved ${s} to your sizes`,
                     'success'
                   );
                 }}
-                delayLongPress={400}
-              accessibilityRole="switch" accessibilityLabel="Toggle size filter"
-              >
-                <AppButton
-                  title={s}
-                  icon={isMySize ? <Ionicons name="star" size={12} color={colors.brand} aria-hidden={true} /> : undefined}
-                  variant="secondary"
-                  size="sm"
-                  style={[styles.chip, styles.sizeChip, isActive && styles.chipActive, isMySize && styles.mySizeMarkedChip]}
-                  titleStyle={[styles.chipText, isActive && styles.chipTextActive]}
-                  onPress={() => onToggleSize(s)}
-                  accessibilityLabel={`Toggle size filter ${s}. Long press to ${mySizes.includes(s) ? 'remove from' : 'save to'} your sizes.`}
-                />
-              </Pressable>
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: isActive }}
+                accessibilityLabel={`${s}. Long press to ${isMySize ? 'remove from' : 'save to'} your sizes`}
+              />
             );
           })
         ) : (

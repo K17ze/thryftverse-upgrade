@@ -18,7 +18,6 @@ import { OfflineBanner } from '../components/OfflineBanner';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useHaptic } from '../hooks/useHaptic';
 import { useA11yAudit } from '../hooks/useA11yAudit';
-import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import type { ContentRankingItem } from '../services/creatorAnalyticsApi';
 import {
   useCreatorAnalyticsDashboard,
@@ -41,6 +40,16 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
+// Backend sends machine tokens (dimension 'audience', reason
+// 'insufficient_data') — translate at the render layer, never leak raw
+// internal vocabulary into product copy.
+const SUPPRESSED_DIMENSION_LABELS: Record<string, string> = {
+  audience: 'Audience',
+};
+const SUPPRESSED_REASON_LABELS: Record<string, string> = {
+  insufficient_data: 'hidden until you have more data',
+};
+
 // ── Main screen ───────────────────────────────────────────────────────
 export default function CreatorAnalyticsDashboardScreen() {
   const a11yRef = useRef<any>(null);
@@ -49,7 +58,7 @@ export default function CreatorAnalyticsDashboardScreen() {
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
   const { isOffline } = useConnectivity();
-  const { currencyCode } = useFormattedPrice();
+
   const styles = useMemo(() => createCreatorAnalyticsStyles(colors), [colors]);
 
   const {
@@ -62,6 +71,7 @@ export default function CreatorAnalyticsDashboardScreen() {
     isRefreshing,
     partialError,
     fatalError,
+    isStalePeriodData,
     isEmpty,
     chartData,
     chartA11ySummary,
@@ -198,6 +208,14 @@ export default function CreatorAnalyticsDashboardScreen() {
         {/* ── 1. DATA FRESHNESS ────────────────────────────────────── */}
         <CreatorAnalyticsFreshnessStrip summary={summary} />
 
+        {isStalePeriodData ? (
+          <View style={[styles.partialBanner, { backgroundColor: colors.surfaceAlt }]}>
+            <Text style={[styles.partialText, { color: colors.textMuted }]}>
+              Showing previous period · updating…
+            </Text>
+          </View>
+        ) : null}
+
         {/* ── 2. PERFORMANCE HERO — media-anchored ─────────────────── */}
         <CreatorAnalyticsHero views={s.views} heroThumbnail={heroThumbnail} />
 
@@ -211,7 +229,9 @@ export default function CreatorAnalyticsDashboardScreen() {
           <View style={styles.suppressedCallout}>
             <Ionicons name="information-circle-outline" size={13} color={colors.textMuted} />
             <Text style={[styles.suppressedText, { color: colors.textMuted }]}>
-              {currentSummary.suppressedDimensions.map(d => `${d.dimension}: ${d.reason}`).join(' · ')}
+              {currentSummary.suppressedDimensions
+                .map((d) => `${SUPPRESSED_DIMENSION_LABELS[d.dimension] ?? d.dimension} ${SUPPRESSED_REASON_LABELS[d.reason] ?? 'unavailable'}`)
+                .join(' · ')}
             </Text>
           </View>
         )}
@@ -242,16 +262,16 @@ export default function CreatorAnalyticsDashboardScreen() {
         {/* ── 9. EARNINGS — flat ledger, not a dashboard card ──────── */}
         <CreatorAnalyticsEarnings
           earnings={earnings}
-          currencyCode={currencyCode}
           isPayoutLoading={isPayoutLoading}
+          isOffline={isOffline}
           payoutError={payoutError}
           onPayout={onPayout}
         />
 
-        {/* ── 10. DATA QUALITY FOOTER ──────────────────────────────── */}
+        {/* ── 10. DATA FRESHNESS FOOTER ────────────────────────────── */}
         <View style={styles.footer}>
           <Text style={[styles.footerText, { color: colors.textMuted }]}>
-            {currentSummary.metricVersion}
+            {`Updated ${new Date(currentSummary.generatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
           </Text>
         </View>
 

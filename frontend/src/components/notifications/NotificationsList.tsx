@@ -20,6 +20,7 @@ export interface NotificationsListProps {
   isLoadingMore: boolean;
   hasSyncError: boolean;
   hasNotifications: boolean;
+  hasAnyNotifications: boolean;
   activeFilter: NotificationFilter;
   onRetry: () => void;
   onDiscover: () => void;
@@ -41,6 +42,7 @@ export function NotificationsList({
   isLoadingMore,
   hasSyncError,
   hasNotifications,
+  hasAnyNotifications,
   activeFilter,
   onRetry,
   onDiscover,
@@ -94,6 +96,7 @@ export function NotificationsList({
           isLoading={isLoading}
           hasSyncError={hasSyncError}
           hasNotifications={hasNotifications}
+          hasAnyNotifications={hasAnyNotifications}
           activeFilter={activeFilter}
           onRetry={onRetry}
           onDiscover={onDiscover}

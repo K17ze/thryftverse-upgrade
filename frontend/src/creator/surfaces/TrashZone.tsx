@@ -10,8 +10,7 @@
  * CreatorCanvas's pan gesture `.onEnd()` handler.
  */
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { StyleSheet } from 'react-native';
 import Reanimated, {
   useAnimatedStyle,
   withTiming,
@@ -72,6 +71,7 @@ export function TrashZone({ manipulationActiveSV, isInTrashZoneSV }: TrashZonePr
       <Reanimated.View
         style={[styles.band, bandStyle, { backgroundColor: colors.dangerSubtle }]}
         accessibilityLabel="Drag here to delete"
+        accessibilityHint="Drop the layer here to delete it"
         accessibilityLiveRegion="polite"
       >
         <Reanimated.View style={iconWrapStyle}>

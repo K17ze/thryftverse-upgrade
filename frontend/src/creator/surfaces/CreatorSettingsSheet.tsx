@@ -107,7 +107,8 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
     <SheetContainer visible={visible} onClose={handleClose} maxHeight={0.8}>
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>Settings</Text>
-          <PressScale onPress={handleClose} style={styles.closeBtn} accessibilityLabel="Close settings">
+          <PressScale onPress={handleClose} style={styles.closeBtn} accessibilityLabel="Close settings"
+          accessibilityHint="Closes the settings sheet">
             <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
           </PressScale>
         </View>
@@ -124,6 +125,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
             placeholder="Untitled"
             placeholderTextColor={colors.textMuted}
             accessibilityLabel="Document title"
+            accessibilityHint="Type the document title"
           />
 
           {/* Shared: Caption */}
@@ -144,6 +146,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
             multiline
             maxLength={2200}
             accessibilityLabel="Caption"
+            accessibilityHint="Type the caption"
           />
 
           {/* Shared: Accessibility description */}
@@ -158,6 +161,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
             placeholderTextColor={colors.textMuted}
             multiline
             accessibilityLabel="Accessibility description"
+            accessibilityHint="Type alt text for screen readers"
           />
 
           {/* Shared: Recreate attribution — shows the source composition this
@@ -191,6 +195,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
                   onValueChange={(v) => updateMetadata({ visibility: v ? 'public' : 'private' })}
                   trackColor={{ false: colors.border, true: colors.brand }}
                   accessibilityLabel="Public visibility"
+                  accessibilityHint="Makes the look visible to everyone"
                 />
               </View>
 
@@ -202,6 +207,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
                   onValueChange={(v) => updateMetadata({ allowRemix: v })}
                   trackColor={{ false: colors.border, true: colors.brand }}
                   accessibilityLabel="Allow recreate"
+                  accessibilityHint="Lets others recreate from this look"
                 />
               </View>
             </>
@@ -218,6 +224,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
                   onValueChange={(v) => updateMetadata({ visibility: v ? 'public' : 'private' })}
                   trackColor={{ false: colors.border, true: colors.brand }}
                   accessibilityLabel="Public audience"
+                  accessibilityHint="Makes the post visible to everyone"
                 />
               </View>
 
@@ -229,6 +236,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
                   onValueChange={(v) => updateMetadata({ allowReplies: v })}
                   trackColor={{ false: colors.border, true: colors.brand }}
                   accessibilityLabel="Allow replies"
+                  accessibilityHint="Lets viewers reply to this post"
                 />
               </View>
 
@@ -240,6 +248,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
                   onValueChange={(v) => updateMetadata({ allowReactions: v })}
                   trackColor={{ false: colors.border, true: colors.brand }}
                   accessibilityLabel="Allow reactions"
+                  accessibilityHint="Lets viewers react to this post"
                 />
               </View>
 
@@ -255,6 +264,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
                 onBlur={() => setFocusedField(null)}
                 keyboardType="numeric"
                 accessibilityLabel="Expiry in hours"
+                accessibilityHint="Type the number of hours before expiry"
               />
             </>
           )}
@@ -280,6 +290,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
                   }}
                   style={styles.bgTileWrap}
                   accessibilityLabel={`Background ${bg.label}${isActive ? ', selected' : ''}`}
+                  accessibilityHint="Applies this canvas background"
                   accessibilityRole="button"
                 >
                   <View
@@ -347,7 +358,8 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
                  autosaveStatus === 'failed' ? 'Save failed' : 'Idle'}
               </Text>
               {autosaveStatus === 'failed' && (
-                <Pressable onPress={retryAutosave} style={styles.retryBtn} accessibilityLabel="Retry save" accessibilityRole="button">
+                <Pressable onPress={retryAutosave} style={styles.retryBtn} accessibilityLabel="Retry save"
+                accessibilityHint="Retries the failed autosave" accessibilityRole="button">
                   <Text style={styles.retryText}>Retry</Text>
                 </Pressable>
               )}
@@ -357,6 +369,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
               style={[styles.saveBtn, !isDirty && styles.saveBtnDisabled]}
               disabled={!isDirty}
               accessibilityLabel="Save draft manually"
+              accessibilityHint="Saves the draft now"
               accessibilityRole="button"
             >
               <Ionicons name="save-outline" size={IconGrammar.metadata} color={colors.surface} />
@@ -384,6 +397,7 @@ function RatioButton({ label, ratio, current, onSelect }: { label: string; ratio
         { borderColor: isActive ? colors.brand : colors.border, borderWidth: isActive ? Stroke.emphasis : Stroke.standard, backgroundColor: isActive ? withAlpha(colors.brand, 0.06) : 'transparent' },
       ]}
       accessibilityLabel={`Canvas ratio ${label}${isActive ? ', current' : ''}`}
+      accessibilityHint="Sets the canvas aspect ratio"
       accessibilityRole="button"
     >
       <View style={[

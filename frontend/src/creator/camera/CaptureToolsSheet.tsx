@@ -106,7 +106,6 @@ const SPEED_MODES = [
 ];
 
 const ROW_HEIGHT = 52; // ≥44pt touch target
-const ICON_SIZE = IconGrammar.standard;
 const ROW_ICON_SIZE = IconGrammar.standard;
 
 // ── Component ──────────────────────────────────────────────────────
@@ -137,7 +136,7 @@ export function CaptureToolsSheet({
   videoCaptureEnabled = true }: CaptureToolsSheetProps): React.ReactElement {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const styles = useSheetStyles(colors);
+  const styles = useSheetStyles();
 
   const handleClose = useCallback(() => {
     onClose();
@@ -230,6 +229,7 @@ export function CaptureToolsSheet({
                       borderRadius: Radius.full }] : []),
                   ]}
                   accessibilityLabel={`Timer ${opt.label}`}
+                  accessibilityHint="Sets the countdown timer"
                   accessibilityRole="button"
                   accessibilityState={{ selected: isActive }}
                 >
@@ -479,7 +479,7 @@ function NavRow({
 
 // ── Styles ─────────────────────────────────────────────────────────
 
-function useSheetStyles(colors: ThemeColors) {
+function useSheetStyles() {
   return React.useMemo(
     () =>
       StyleSheet.create({
@@ -584,6 +584,6 @@ function useSheetStyles(colors: ThemeColors) {
         divider: {
           height: StyleSheet.hairlineWidth,
           marginVertical: Space.xs } }),
-    [colors],
+    [],
   );
 }

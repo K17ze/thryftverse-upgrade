@@ -109,7 +109,11 @@ const notificationPreferencesSchema = z.object({
   // `null` clears the window.
   quietHours: z.union([quietHoursSchema, z.null()]).optional(),
   // Per-category lock-screen preview policy: full | sender_only | hidden.
-  previewPolicy: z.record(z.enum(PREVIEW_POLICIES)).optional(),
+  // A scalar is the user-level form — applied uniformly to every
+  // category — which is what the single-toggle preferences UI sends.
+  previewPolicy: z
+    .union([z.enum(PREVIEW_POLICIES), z.record(z.enum(PREVIEW_POLICIES))])
+    .optional(),
 });
 
 const notificationPushTestSchema = z.object({
@@ -188,7 +192,10 @@ const decodeCursor = (
     }
     const createdAt = decoded.slice(0, separator);
     const id = decoded.slice(separator + 1);
-    if (!Number.isFinite(Date.parse(createdAt)) || id.length > 128) {
+    // PG `::text` emits '2026-01-05 14:23:45.123456+00' — normalize to ISO
+    // before Date.parse so a parser regression can't 400 every page-2.
+    const normalized = createdAt.replace(' ', 'T');
+    if (!Number.isFinite(Date.parse(normalized)) || id.length > 128) {
       return null;
     }
     return { createdAt, id };
@@ -678,10 +685,18 @@ export const registerNotificationRoutes = ({
     );
     const quietHoursRow = result.rows.find((row) => row.quiet_hours != null);
 
+    // Scalar form for single-toggle clients: the uniform value when every
+    // category agrees; 'sender_only' honestly reports a mixed posture.
+    const policyValues = Object.values(previewPolicies);
+    const previewPolicy = policyValues.every((v) => v === policyValues[0])
+      ? policyValues[0]
+      : "sender_only";
+
     return {
       ok: true,
       preferences,
       previewPolicies,
+      previewPolicy,
       quietHours: quietHoursRow?.quiet_hours ?? null,
     };
   });
@@ -705,7 +720,16 @@ export const registerNotificationRoutes = ({
         code: "INVALID_PREFERENCE_CATEGORY",
       };
     }
-    const previewEntries = Object.entries(payload.previewPolicy ?? {});
+    const previewEntries = Object.entries(
+      typeof payload.previewPolicy === "string"
+        ? Object.fromEntries(
+            notificationPushCategories.map((category) => [
+              category,
+              payload.previewPolicy as string,
+            ]),
+          )
+        : (payload.previewPolicy ?? {}),
+    );
     const invalidPreviewCategory = previewEntries.find(
       ([category]) => !notificationPushCategories.includes(category),
     );

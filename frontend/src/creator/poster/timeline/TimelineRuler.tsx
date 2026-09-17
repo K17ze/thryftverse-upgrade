@@ -130,6 +130,7 @@ export const TimelineRuler = React.memo(function TimelineRuler({
       ]}
       hitSlop={{ bottom: SCRUB_HIT_BOTTOM }}
       accessibilityLabel="Timeline ruler — drag to scrub"
+      accessibilityHint="Drag to move the playhead"
       accessibilityRole="adjustable"
       accessibilityValue={{ text: 'Drag horizontally to move the playhead' }}
     >

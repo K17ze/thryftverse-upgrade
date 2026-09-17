@@ -36,6 +36,7 @@ export function ScopeComposition({
   onEndReached,
   onRetryBrowse,
   onClearFilters,
+  onAuthenticate,
   isLoadingMore = false,
   paginationError = null }: {
   isBrowsing: boolean;
@@ -51,6 +52,8 @@ export function ScopeComposition({
   onEndReached: () => void;
   onRetryBrowse: () => void;
   onClearFilters: () => void;
+  /** Sign-in CTA for the watching-scope 'auth' state. */
+  onAuthenticate?: () => void;
   isLoadingMore?: boolean;
   paginationError?: string | null;
 }) {
@@ -69,6 +72,17 @@ export function ScopeComposition({
   if (isBrowsing) {
     // When filters are active, show API-fetched browse results in-place
     if (browseResult.status === 'loading') return <AuctionSkeletons />;
+    if (browseResult.status === 'auth') {
+      return (
+        <EmptyState
+          icon="eye-outline"
+          title="Sign in to see watched auctions"
+          subtitle="Your watchlist lives on your account — sign in to view it."
+          ctaLabel="Sign in"
+          onCtaPress={onAuthenticate}
+        />
+      );
+    }
     if (browseResult.status === 'error') {
       return (
         <EmptyState

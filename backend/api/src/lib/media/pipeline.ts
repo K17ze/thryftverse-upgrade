@@ -209,6 +209,77 @@ export async function listClaimableIngestJobs(db: Pool, limit = 50): Promise<Cla
   return result.rows.map((row) => ({ id: row.id, mediaAssetId: row.media_asset_id }));
 }
 
+/**
+ * Lists 'processing' rows at max_attempts whose lock went stale — the
+ * wedge claimProcessingJob can never rescue: the final attempt claimed
+ * the row, then the worker died before posting results. Both the claim
+ * and `listClaimableIngestJobs` require `attempt_count < max_attempts`,
+ * so without this dead-letter pass the job — and the asset it pins in
+ * 'processing' — stays wedged forever.
+ */
+export async function listDeadLetterableIngestJobs(db: Pool, limit = 50): Promise<ClaimableIngestJob[]> {
+  const result = await db.query<{ id: string; media_asset_id: string }>(
+    `SELECT j.id, j.media_asset_id
+     FROM media_processing_jobs j
+     JOIN media_assets a ON a.id = j.media_asset_id
+     WHERE j.job_type IN ('inspect_scan_process_moderate', 'retry_processing')
+       AND j.status = 'processing'
+       AND j.attempt_count >= j.max_attempts
+       AND j.locked_at < NOW() - ($1::bigint * INTERVAL '1 millisecond')
+       AND a.status = 'processing'
+     ORDER BY j.locked_at
+     LIMIT $2`,
+    [STALE_PROCESSING_LOCK_MS, limit],
+  );
+  return result.rows.map((row) => ({ id: row.id, mediaAssetId: row.media_asset_id }));
+}
+
+/**
+ * Dead-letters a wedged ingest job and releases its asset: job → 'dead',
+ * asset → 'processing_failed' so the creator can retry it explicitly
+ * (retry_processing inserts a fresh job row) instead of staring at an
+ * asset that never leaves 'processing'. Both updates are guarded on
+ * current state so a claim or result-post that raced ahead wins.
+ */
+export async function deadLetterIngestJob(db: Pool, jobId: string, assetId: string): Promise<boolean> {
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    const jobResult = await client.query(
+      `UPDATE media_processing_jobs
+       SET status = 'dead',
+           last_error = 'Attempts exhausted with a stale worker lock',
+           completed_at = NOW(),
+           locked_at = NULL,
+           locked_by = NULL
+       WHERE id = $1
+         AND status = 'processing'
+         AND attempt_count >= max_attempts`,
+      [jobId],
+    );
+    if (!jobResult.rowCount) {
+      await client.query('COMMIT');
+      return false;
+    }
+    await client.query(
+      `UPDATE media_assets
+       SET status = 'processing_failed',
+           processing_status = 'processing_failed',
+           failure_reason = 'Processing attempts exhausted with a stale worker lock'
+       WHERE id = $1
+         AND status = 'processing'`,
+      [assetId],
+    );
+    await client.query('COMMIT');
+    return true;
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function fetchAsset(db: Pool, assetId: string): Promise<MediaAssetRecord | null> {
   const result = await db.query<MediaAssetRecord>(
     `SELECT id, bucket, object_key, declared_content_type,

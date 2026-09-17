@@ -73,6 +73,7 @@ import { usePushNotificationTap, setNavigationReady } from './src/hooks/usePushN
 import { surfacePersistedNotifications } from './src/services/inAppNotificationsApi';
 import { useUnreadNotificationCount } from './src/hooks/useUnreadNotificationCount';
 import { usePushTokenCleanup } from './src/hooks/usePushTokenCleanup';
+import { useNotificationRealtime } from './src/hooks/notifications/useNotificationRealtime';
 import { useDeepLinkAuth } from './src/hooks/useDeepLinkAuth';
 import { useScreenshotTracking } from './src/platform/screenCapture';
 import { trackScreenView } from './src/lib/telemetry';
@@ -237,6 +238,12 @@ function runSyncListingDraft(): void {
   lastListingDraftSyncAt = now;
   const domain: SyncDomain = 'listing_draft';
   runSync(domain).catch(() => undefined);
+}
+
+/** Renders nothing — hosts the notifications realtime subscription. */
+function NotificationRealtimeBridge() {
+  useNotificationRealtime();
+  return null;
 }
 
 let globalTypographyApplied = false;
@@ -814,6 +821,9 @@ export default function App() {
               </BackendDataProvider>
               <ToastContainer />
               <PushSoftAskOverlay />
+              {/* Realtime consumer for notifications.user:{id} — must live
+                  inside RealtimeProvider so it can reach the WS client. */}
+              <NotificationRealtimeBridge />
               <UpdateManager />
             </ToastProvider>
             </RealtimeProvider>

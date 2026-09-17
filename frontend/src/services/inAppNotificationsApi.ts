@@ -12,6 +12,7 @@
  */
 
 import { makeStableId } from '../utils/createStableId';
+import { useStore } from '../store/useStore';
 import { listNotificationEvents, markNotificationRead } from './notificationsApi';
 
 // ---------------------------------------------------------------------------
@@ -54,6 +55,13 @@ export interface InAppNotification {
   isRead: boolean;
   /** True when the notification is mock/illustrative (demo mode). */
   isDemo: boolean;
+  /**
+   * Backend `notification_events.id` when this banner mirrors a persisted
+   * event. The persisted event is marked read only when the banner leaves
+   * the screen (auto-dismiss, manual dismiss, or action tap) — not when it
+   * was fetched. Surfacing ≠ reading.
+   */
+  persistedEventId?: string;
 }
 
 export interface NotificationQueue {
@@ -195,6 +203,7 @@ export function showNotification(input: ShowNotificationInput): string {
     createdAt: Date.now(),
     isRead: false,
     isDemo: NOTIFICATION_DEMO_MODE,
+    persistedEventId: input.persistedEventId,
   };
 
   if (queue.active.length < MAX_ACTIVE) {
@@ -211,8 +220,20 @@ export function showNotification(input: ShowNotificationInput): string {
 
 /** Dismiss a single notification by id (removes from active + pending). */
 export function dismissNotification(id: string): void {
+  const dismissed =
+    queue.active.find((n) => n.id === id) ??
+    queue.pending.find((n) => n.id === id);
   queue.active = queue.active.filter((n) => n.id !== id);
   queue.pending = queue.pending.filter((n) => n.id !== id);
+  // A banner that left the screen was seen by the user — mark the persisted
+  // event read now (not at fetch time) and drop the unread badge it carried
+  // (realtime bumped it +1 on arrival). Best-effort: the banner is already
+  // gone regardless of the mutation's outcome.
+  if (dismissed?.persistedEventId) {
+    markNotificationRead(dismissed.persistedEventId).catch(() => {});
+    const s = useStore.getState();
+    s.setNotificationCount(Math.max(0, s.notificationCount - 1));
+  }
   const timer = dismissTimers.get(id);
   if (timer) {
     clearTimeout(timer);
@@ -274,6 +295,50 @@ export function subscribe(
 
 const surfacedEventIds = new Set<string>();
 
+/** Minimal shape shared by the feed API row and the realtime payload. */
+export interface PersistedNotificationEventLike {
+  id: string;
+  eventType: string;
+  title: string;
+  body: string;
+  route?: { screen: string; params?: Record<string, unknown> } | null;
+}
+
+/**
+ * Claim an event id in the surfaced set. Returns true when the event was
+ * not seen before. Realtime consumers use this to dedupe badge bumps even
+ * when no banner should show (e.g. quiet-hours-deferred pushes).
+ */
+export function claimPersistedEventSurface(eventId: string): boolean {
+  if (surfacedEventIds.has(eventId)) return false;
+  surfacedEventIds.add(eventId);
+  return true;
+}
+
+/**
+ * Surface a single persisted event as an in-app banner, deduplicated by
+ * event id. Shared by the catch-up poll (surfacePersistedNotifications) and
+ * the realtime `notification.queued` consumer so an event can never banner
+ * twice. Returns true when a banner was newly queued.
+ */
+export function surfacePersistedEvent(
+  event: PersistedNotificationEventLike,
+): boolean {
+  if (!claimPersistedEventSurface(event.id)) return false;
+  showNotification({
+    type: mapEventTypeToBannerType(event.eventType),
+    title: event.title,
+    body: event.body,
+    actionLabel: event.route ? 'View' : undefined,
+    actionTarget: event.route
+      ? `${event.route.screen}${event.route.params ? `:${JSON.stringify(event.route.params)}` : ''}`
+      : undefined,
+    priority: 'normal',
+    persistedEventId: event.id,
+  });
+  return true;
+}
+
 function mapEventTypeToBannerType(eventType: string): NotificationType {
   if (eventType === 'safety_outcome') return 'info';
   if (eventType.startsWith('order_') || eventType === 'refund_completed') return 'order';
@@ -286,8 +351,11 @@ function mapEventTypeToBannerType(eventType: string): NotificationType {
 /**
  * Fetch unread persisted notifications from the backend and surface any
  * not already shown as in-app banners. Returns the count of newly surfaced
- * notifications. Each surfaced notification is marked as read on the server
- * so it does not reappear on the next call.
+ * notifications.
+ *
+ * Read-state contract: an event stays unread until its banner leaves the
+ * screen (see dismissNotification). Merely fetching and queueing a banner
+ * must not consume the unread state — the user may never see it.
  */
 export async function surfacePersistedNotifications(): Promise<number> {
   let surfaced = 0;
@@ -298,25 +366,9 @@ export async function surfacePersistedNotifications(): Promise<number> {
     const { items, nextCursor } = await listNotificationEvents({ limit: 30, cursor });
     for (const event of items) {
       if (event.readAt) continue;
-      if (surfacedEventIds.has(event.id)) continue;
-
-      surfacedEventIds.add(event.id);
-      showNotification({
-        type: mapEventTypeToBannerType(event.eventType),
-        title: event.title,
-        body: event.body,
-        actionLabel: event.route ? 'View' : undefined,
-        actionTarget: event.route
-          ? `${event.route.screen}${event.route.params ? `:${JSON.stringify(event.route.params)}` : ''}`
-          : undefined,
-        priority: 'normal',
-      });
-      surfaced += 1;
-
-      // Mark as read so the unread count stays accurate.
-      markNotificationRead(event.id).catch(() => {
-        // Best-effort — the banner was already shown.
-      });
+      if (surfacePersistedEvent(event)) {
+        surfaced += 1;
+      }
     }
     if (!nextCursor) break;
     cursor = nextCursor;

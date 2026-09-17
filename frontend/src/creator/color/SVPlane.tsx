@@ -126,7 +126,7 @@ export function SVPlane({
         const finalHsv: HSV = { h: hsv.h, s, v };
         runOnJS(onCommit)(finalHsv);
       });
-  }, [hsv.h, indicatorX, indicatorY, onChange, onCommit, layoutWidth, layoutHeight]);
+  }, [hsv.h, indicatorX, indicatorY, onChange, onCommit, layoutWidth, layoutHeight, lastSVBucketSV]);
 
   // Animated indicator style
   const indicatorStyle = useAnimatedStyle(() => {
@@ -166,6 +166,7 @@ export function SVPlane({
         ]}
         accessibilityRole="adjustable"
         accessibilityLabel={accessibilityLabel}
+        accessibilityHint="Drag to adjust saturation and brightness"
         accessibilityValue={{
           text: `Saturation ${Math.round(hsv.s * 100)} percent, Value ${Math.round(hsv.v * 100)} percent`,
         }}

@@ -8,6 +8,7 @@ import {
   type SellerMetrics,
 } from '../lib/sellerPerformance.js';
 import { isEffectivelyAway } from '../lib/sellerAway.js';
+import { createApiError } from '../lib/workerHelpers.js';
 
 type SellerRouteDependencies = {
   app: FastifyInstance;
@@ -587,17 +588,38 @@ export const registerSellerRoutes = ({ app, db, readDb, queueUserNotification }:
     if ('startDate' in input) {
       const start = new Date(input.startDate + 'T00:00:00.000Z');
       const endExclusive = new Date(input.endDate + 'T00:00:00.000Z');
+      // Server-side parity with the client's validateCustomRange — the UI
+      // is not the trust boundary. Rejects inverted, future, malformed and
+      // unbounded ranges (each extra day generates a daily series row).
+      if (isNaN(start.getTime()) || isNaN(endExclusive.getTime())) {
+        throw createApiError('ANALYTICS_RANGE_INVALID', 'Dates must be valid YYYY-MM-DD');
+      }
+      const todayEnd = new Date();
+      todayEnd.setUTCHours(23, 59, 59, 999);
+      if (start.getTime() > todayEnd.getTime() || endExclusive.getTime() > todayEnd.getTime()) {
+        throw createApiError('ANALYTICS_RANGE_INVALID', 'Dates cannot be in the future');
+      }
+      if (start.getTime() > endExclusive.getTime()) {
+        throw createApiError('ANALYTICS_RANGE_INVALID', 'Start must be before end');
+      }
       endExclusive.setUTCDate(endExclusive.getUTCDate() + 1); // make exclusive
       const days = Math.max(1, Math.round((endExclusive.getTime() - start.getTime()) / 86400000));
+      if (days > 366) {
+        throw createApiError('ANALYTICS_RANGE_INVALID', 'Range cannot exceed one year');
+      }
       const prevEnd = new Date(start); // exclusive = start of current range
       const prevStart = new Date(start);
       prevStart.setUTCDate(prevStart.getUTCDate() - days);
       return { start, end: endExclusive, prevStart, prevEnd, days };
     }
-    // Preset path
+    // Preset path — day-boundary snapped, matching the daily-bucketed
+    // charts: '7d' = the last 7 UTC calendar days (today included as a
+    // partial final day), not a rolling 7×24h window ending mid-day.
     const periodDays = input.period === '7d' ? 7 : input.period === '90d' ? 90 : 30;
-    const end = new Date(); // now
-    const start = new Date();
+    const end = new Date();
+    end.setUTCHours(0, 0, 0, 0);
+    end.setUTCDate(end.getUTCDate() + 1); // exclusive = tomorrow 00:00 UTC
+    const start = new Date(end);
     start.setUTCDate(start.getUTCDate() - periodDays);
     const prevEnd = new Date(start);
     const prevStart = new Date(start);
@@ -647,6 +669,13 @@ export const registerSellerRoutes = ({ app, db, readDb, queueUserNotification }:
     // period queries (engagement + orders) for the comparison field, daily
     // trend series (current + previous) for the trend chart, and a funnel
     // query (impressions → views → saves → offers → purchases).
+    // recommendation_impressions is optional (migration 077) — when absent
+    // the funnel reports impressions: null rather than failing the request.
+    const impressionsTableCheck = await readDb.query<{ exists: boolean }>(
+      `SELECT to_regclass('public.recommendation_impressions') IS NOT NULL AS exists`
+    );
+    const hasImpressionsTable = impressionsTableCheck.rows[0]?.exists === true;
+
     const [
       engagementResult,
       ordersResult,
@@ -814,9 +843,17 @@ export const registerSellerRoutes = ({ app, db, readDb, queueUserNotification }:
         `,
         [sellerId, prevStart, prevEnd]
       ),
-      // 9. Conversion funnel — impressions, views, saves, offers, purchases
+      // 9. Conversion funnel — impressions, views, saves, offers, purchases.
+      //    Each stage is an independent scalar subquery: joining interactions,
+      //    orders and impressions in one FROM cross-multiplies rows and
+      //    inflates every stage by the sibling join's cardinality.
+      //
+      //    Impressions come from recommendation_impressions (the only table
+      //    that records surfaced listings) — interactions has no 'impression'
+      //    action. Offers are 'offer_submitted' (offer_started fires on
+      //    sheet open and would count abandoned negotiations).
       readDb.query<{
-        impressions: string | number;
+        impressions: string | number | null;
         views: string | number;
         saves: string | number;
         offers: string | number;
@@ -824,20 +861,37 @@ export const registerSellerRoutes = ({ app, db, readDb, queueUserNotification }:
       }>(
         `
           SELECT
-            COUNT(i.id) FILTER (WHERE i.action = 'impression') AS impressions,
-            COUNT(i.id) FILTER (WHERE i.action IN ('view', 'qualified_detail_view')) AS views,
-            COUNT(i.id) FILTER (WHERE i.action = 'save') AS saves,
-            COUNT(i.id) FILTER (WHERE i.action = 'offer_start') AS offers,
-            COUNT(DISTINCT o.id) AS purchases
-          FROM listings l
-          LEFT JOIN interactions i ON i.listing_id = l.id
-            AND i.created_at >= $2 AND i.created_at < $3
-          LEFT JOIN orders o ON o.listing_id = l.id
-            AND o.seller_id = $1
-            AND o.status IN ('paid', 'shipped', 'delivered', 'completed')
-            AND o.paid_at IS NOT NULL
-            AND o.paid_at >= $2 AND o.paid_at < $3
-          WHERE l.seller_id = $1
+            ${hasImpressionsTable
+              ? `(SELECT COUNT(*)
+                   FROM recommendation_impressions ri
+                   JOIN listings li ON li.id = ri.listing_id
+                  WHERE li.seller_id = $1
+                    AND ri.created_at >= $2 AND ri.created_at < $3)`
+              : 'NULL'} AS impressions,
+            (SELECT COUNT(*)
+               FROM interactions i
+               JOIN listings li ON li.id = i.listing_id
+              WHERE li.seller_id = $1 AND li.status != 'deleted'
+                AND i.action IN ('view', 'qualified_detail_view')
+                AND i.created_at >= $2 AND i.created_at < $3) AS views,
+            (SELECT COUNT(*)
+               FROM interactions i
+               JOIN listings li ON li.id = i.listing_id
+              WHERE li.seller_id = $1 AND li.status != 'deleted'
+                AND i.action = 'save'
+                AND i.created_at >= $2 AND i.created_at < $3) AS saves,
+            (SELECT COUNT(*)
+               FROM interactions i
+               JOIN listings li ON li.id = i.listing_id
+              WHERE li.seller_id = $1 AND li.status != 'deleted'
+                AND i.action = 'offer_submitted'
+                AND i.created_at >= $2 AND i.created_at < $3) AS offers,
+            (SELECT COUNT(*)
+               FROM orders o
+              WHERE o.seller_id = $1
+                AND o.status IN ('paid', 'shipped', 'delivered', 'completed')
+                AND o.paid_at IS NOT NULL
+                AND o.paid_at >= $2 AND o.paid_at < $3) AS purchases
         `,
         [sellerId, start, end]
       ),
@@ -978,7 +1032,9 @@ export const registerSellerRoutes = ({ app, db, readDb, queueUserNotification }:
 
     // ── Conversion funnel ─────────────────────────────────────────────
     const funnelData = {
-      impressions: Number(funnel.impressions ?? 0),
+      // null when recommendation_impressions is absent — the client renders
+      // the stage as unavailable rather than a fabricated zero.
+      impressions: funnel.impressions === null ? null : Number(funnel.impressions ?? 0),
       views: Number(funnel.views ?? 0),
       saves: Number(funnel.saves ?? 0),
       offers: Number(funnel.offers ?? 0),
@@ -1229,7 +1285,7 @@ export const registerSellerRoutes = ({ app, db, readDb, queueUserNotification }:
                 AND i.created_at >= $2 AND i.created_at < $3) AS views,
               COUNT(i.id) FILTER (WHERE i.action = 'wishlist'
                 AND i.created_at >= $2 AND i.created_at < $3) AS likes,
-              COUNT(i.id) FILTER (WHERE i.action = 'offer_start'
+              COUNT(i.id) FILTER (WHERE i.action = 'offer_submitted'
                 AND i.created_at >= $2 AND i.created_at < $3) AS offers
        FROM listings l
        LEFT JOIN interactions i ON i.listing_id = l.id
@@ -1337,7 +1393,7 @@ export const registerSellerRoutes = ({ app, db, readDb, queueUserNotification }:
             SELECT
               COUNT(i.id) FILTER (WHERE i.action IN ('view', 'qualified_detail_view')) AS views,
               COUNT(i.id) FILTER (WHERE i.action = 'save') AS saves,
-              COUNT(i.id) FILTER (WHERE i.action = 'offer_start') AS offers,
+              COUNT(i.id) FILTER (WHERE i.action = 'offer_submitted') AS offers,
               COUNT(i.id) FILTER (WHERE i.action = 'wishlist') AS likes
             FROM interactions i
             WHERE i.listing_id = $1 AND i.created_at >= $2 AND i.created_at < $3

@@ -20,7 +20,6 @@
  */
 import React, { useCallback } from 'react';
 import { StyleSheet, View, Text, Pressable } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -42,7 +41,6 @@ import { IconSize } from '../../theme/iconTokens';
 
 const HIT_TARGET = 48;
 const HIT_MIN = Control.hit;
-const GLYPH_SIZE = 23;
 const BACKPLATE_SIZE = 32;
 const PRESS_SCALE = 0.97;
 const DISABLED_OPACITY = 0.4;

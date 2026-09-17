@@ -95,7 +95,7 @@ export function AnalyticsOverview({ model }: { model: SellerAnalyticsModel }) {
                 <View style={styles.chartTitleBlock}>
                   <Text style={[styles.chartActiveTitle, { color: colors.textPrimary }]}>
                     {activeDimension === 'sales'
-                      ? 'Net Sales Trajectory'
+                      ? 'Sales Trajectory'
                       : activeDimension === 'orders'
                       ? 'Order Volume'
                       : activeDimension === 'views'

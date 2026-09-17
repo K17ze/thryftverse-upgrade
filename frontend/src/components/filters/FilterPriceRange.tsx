@@ -13,10 +13,12 @@ interface Props {
   priceMax: string;
   onChangeMin: (next: string) => void;
   onChangeMax: (next: string) => void;
+  /** Inline validation message (e.g. min > max) — renders under the inputs. */
+  error?: string;
 }
 
 // Price Range section — paired min/max numeric inputs.
-function FilterPriceRangeBase({ expanded, onToggle, priceMin, priceMax, onChangeMin, onChangeMax }: Props) {
+function FilterPriceRangeBase({ expanded, onToggle, priceMin, priceMax, onChangeMin, onChangeMax, error }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createFilterStyles(colors), [colors]);
   const { formatFromFiat } = useFormattedPrice();
@@ -58,6 +60,9 @@ function FilterPriceRangeBase({ expanded, onToggle, priceMin, priceMax, onChange
           />
         </View>
       </View>
+      {error ? (
+        <Text style={styles.priceRangeError} accessibilityLiveRegion="polite">{error}</Text>
+      ) : null}
     </FilterSection>
   );
 }

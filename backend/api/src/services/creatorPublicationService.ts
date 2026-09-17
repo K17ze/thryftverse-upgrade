@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { appendDomainEvent } from '../lib/domainOutbox.js';
+import { canonicalizeJson } from '../lib/canonicalJson.js';
 import { validateCompositionDocument } from '../lib/compositionValidation.js';
 import { getVideoRenderPath, isCompositionNonTrivial, renderComposition } from '../lib/media/compositionRenderer.js';
 import { generateRenderedVideoHls } from '../lib/media/pipeline.js';
@@ -356,8 +357,14 @@ function checkStaleDocument(
     // Use the server-computed hash from the documents table when present;
     // otherwise compute from the canonical stored document_json. This is
     // the server's authoritative hash, not a client re-computation.
+    // JSONB stores normalised text — hashing the raw column can never
+    // equal the client's canonicalised hash. Re-canonicalise the parsed
+    // document so the fallback matches what the save path wrote into
+    // `document_hash`.
     const serverHash = documentRow.document_hash
-      ?? crypto.createHash('sha256').update(documentRow.document_json).digest('hex');
+      ?? crypto.createHash('sha256')
+        .update(canonicalizeJson(JSON.parse(documentRow.document_json)))
+        .digest('hex');
     if (expectedDocumentHash !== serverHash) {
       throw new StaleDocumentError(
         'Document content hash mismatch — the document was modified since the client last saved. Reload the latest version or duplicate your changes.',
@@ -1388,7 +1395,7 @@ export async function publishCreatorDocumentTransaction(
       status: string;
       updated_at: string;
     }>(
-      `SELECT creator_id, document_json, document_hash, lock_version, head_revision, status, updated_at
+      `SELECT creator_id, document_json::text AS document_json, document_hash, lock_version, head_revision, status, updated_at
        FROM creator_documents
        WHERE id = $1
        LIMIT 1
@@ -1403,61 +1410,11 @@ export async function publishCreatorDocumentTransaction(
 
     const docRow = docResult.rows[0];
 
-    // 1b. Optimistic concurrency — reject stale publishes.
-    // The client sends expectedLockVersion and expectedDocumentHash from
-    // its last successful save. If the document has changed since (another
-    // device edited and saved, or the document was re-published), the
-    // publish must fail with 409 rather than silently publishing stale
-    // content. This check runs INSIDE the transaction, after the FOR UPDATE
-    // row lock, so the row cannot change between the check and the write.
-    try {
-      checkStaleDocument(
-        docRow,
-        command.expectedLockVersion,
-        command.expectedDocumentHash,
-      );
-    } catch (error) {
-      if (error instanceof StaleDocumentError) {
-        await client.query('ROLLBACK');
-        const serverHash = docRow.document_hash
-          ?? crypto.createHash('sha256').update(docRow.document_json).digest('hex');
-        return {
-          ok: false,
-          status: 409,
-          error: error.message,
-          code: error.code,
-          serverLockVersion: docRow.lock_version,
-          serverDocumentHash: serverHash,
-          serverUpdatedAt: docRow.updated_at,
-          serverHeadRevision: docRow.head_revision,
-        };
-      }
-      throw error;
-    }
-
-    // P2.12: Collaborator-aware ownership check.
-    // The owner (creator_id) can always publish. Editors can also publish.
-    // Viewers and non-collaborators are denied.
-    const isOwner = docRow.creator_id === actorUserId;
-    if (!isOwner) {
-      const collabResult = await client.query<{ role: string }>(
-        `SELECT role FROM creator_collaborators
-         WHERE document_id = $1 AND user_id = $2 AND state = 'active'
-         LIMIT 1`,
-        [documentId, actorUserId],
-      );
-      const collabRole = collabResult.rows[0]?.role;
-      if (collabRole !== 'editor') {
-        await client.query('ROLLBACK');
-        return {
-          ok: false,
-          status: 403,
-          error: 'Access denied — only the owner or editors can publish',
-        };
-      }
-    }
-
-    // 2. Check for idempotent replay (same key + same hash).
+    // 1b. Idempotent replay BEFORE the stale check. A retried publish of an
+    // already-committed attempt must return the original result even when
+    // the document has since advanced — the retry is not a new publish, so
+    // optimistic concurrency does not apply to it. Running the stale check
+    // first turned every legitimate retry into a false 409.
     const existingPub = await client.query<{
       id: string;
       target_id: string;
@@ -1499,6 +1456,62 @@ export async function publishCreatorDocumentTransaction(
       };
     }
 
+    // 1c. Optimistic concurrency — reject stale publishes.
+    // The client sends expectedLockVersion and expectedDocumentHash from
+    // its last successful save. If the document has changed since (another
+    // device edited and saved, or the document was re-published), the
+    // publish must fail with 409 rather than silently publishing stale
+    // content. This check runs INSIDE the transaction, after the FOR UPDATE
+    // row lock, so the row cannot change between the check and the write.
+    try {
+      checkStaleDocument(
+        docRow,
+        command.expectedLockVersion,
+        command.expectedDocumentHash,
+      );
+    } catch (error) {
+      if (error instanceof StaleDocumentError) {
+        await client.query('ROLLBACK');
+        const serverHash = docRow.document_hash
+          ?? crypto.createHash('sha256')
+            .update(canonicalizeJson(JSON.parse(docRow.document_json)))
+            .digest('hex');
+        return {
+          ok: false,
+          status: 409,
+          error: error.message,
+          code: error.code,
+          serverLockVersion: docRow.lock_version,
+          serverDocumentHash: serverHash,
+          serverUpdatedAt: docRow.updated_at,
+          serverHeadRevision: docRow.head_revision,
+        };
+      }
+      throw error;
+    }
+
+    // P2.12: Collaborator-aware ownership check.
+    // The owner (creator_id) can always publish. Editors can also publish.
+    // Viewers and non-collaborators are denied.
+    const isOwner = docRow.creator_id === actorUserId;
+    if (!isOwner) {
+      const collabResult = await client.query<{ role: string }>(
+        `SELECT role FROM creator_collaborators
+         WHERE document_id = $1 AND user_id = $2 AND state = 'active'
+         LIMIT 1`,
+        [documentId, actorUserId],
+      );
+      const collabRole = collabResult.rows[0]?.role;
+      if (collabRole !== 'editor') {
+        await client.query('ROLLBACK');
+        return {
+          ok: false,
+          status: 403,
+          error: 'Access denied — only the owner or editors can publish',
+        };
+      }
+    }
+
     // 3. Validate the document is in a publishable state.
     if (docRow.status === 'deleted') {
       await client.query('ROLLBACK');
@@ -1529,6 +1542,9 @@ export async function publishCreatorDocumentTransaction(
           id: string;
           type: string;
           hidden?: boolean;
+          width?: number;
+          height?: number;
+          scale?: number;
           payload: {
             mediaUri?: string;
             mediaFinalizationId?: string;
@@ -1648,15 +1664,29 @@ export async function publishCreatorDocumentTransaction(
     // 7. Create the typed public projection.
     let targetId: string;
     if (command.destination === 'look') {
-      // For a Look, the cover is the primary media from the first media
-      // layer. Explicitly select role === 'primary' — a video layer may
+      // For a Look, the cover is the primary media from the largest
+      // non-hidden media layer — mirroring the client serializer
+      // (compositionContract.ts): hidden layers are not rendered, so
+      // they must not become the published cover or carousel media.
+      // Explicitly select role === 'primary' — a video layer may
       // also carry a 'thumbnail' receipt, and product/look snapshot layers
       // may coexist. Keying by layerId alone (or taking the first map
       // entry) could select the thumbnail or a snapshot instead of the
       // primary cover.
-      const firstMediaLayer = (doc.pages ?? [])
+      const visibleMediaLayers = (doc.pages ?? [])
         .flatMap((page) => page.layers)
-        .find((layer) => layer.type === 'media');
+        .filter((layer) => layer.type === 'media' && !layer.hidden);
+      const firstMediaLayer = visibleMediaLayers.reduce<
+        (typeof visibleMediaLayers)[number] | undefined
+      >(
+        (largest, current) =>
+          largest === undefined ||
+          (current.width ?? 0) * (current.height ?? 0) >
+            (largest.width ?? 0) * (largest.height ?? 0)
+            ? current
+            : largest,
+        undefined,
+      );
       const coverKey = firstMediaLayer
         ? `${firstMediaLayer.id}::primary`
         : null;
@@ -1672,9 +1702,8 @@ export async function publishCreatorDocumentTransaction(
           code: 'NO_MEDIA',
         };
       }
-      const additionalMedia = (doc.pages ?? [])
-        .flatMap((page) => page.layers)
-        .filter((layer) => layer.type === 'media' && layer.id !== firstMediaLayer?.id)
+      const additionalMedia = visibleMediaLayers
+        .filter((layer) => layer.id !== firstMediaLayer?.id)
         .map((layer) => {
           const verified = verifiedMediaByLayer.get(`${layer.id}::primary`);
           return verified

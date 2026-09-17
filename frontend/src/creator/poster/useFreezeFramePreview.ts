@@ -62,11 +62,14 @@ export function useFreezeFramePreview({
       pausedSV.value = true;
       return;
     }
-    const freezeFrameMs = activeClip.freezeFrameMs ?? 0;
-    seekSV.value = freezeFrameMs / 1000;
+    // freezeFrameMs is a source offset from the clip's trim start —
+    // seek the decoder to sourceStartMs + offset so a trimmed clip
+    // freezes the intended frame (matches computeSourceTime).
+    const freezeSourceMs = activeClip.sourceStartMs + (activeClip.freezeFrameMs ?? 0);
+    seekSV.value = freezeSourceMs / 1000;
     pausedSV.value = true;
     // Seek-while-paused workaround: imperatively re-assert the target.
-    video.seek?.(freezeFrameMs);
+    video.seek?.(freezeSourceMs);
   }, [isFrozen, activeClip, isPlaying, seekSV, pausedSV, video]);
 
   // Re-assert the seek once a frame has decoded so the hold is reliable.
@@ -74,7 +77,7 @@ export function useFreezeFramePreview({
     () => video.currentFrame.value,
     (frame) => {
       if (isFrozen && frame !== null && activeClip) {
-        video.seek?.(activeClip.freezeFrameMs ?? 0);
+        video.seek?.(activeClip.sourceStartMs + (activeClip.freezeFrameMs ?? 0));
       }
     },
     [isFrozen, activeClip, video],

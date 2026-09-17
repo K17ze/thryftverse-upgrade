@@ -441,6 +441,8 @@
       "description": "Description",
       "price": "Price",
       "category": "Category",
+      "subcategory": "Type",
+      "selectSubcategory": "Select type",
       "condition": "Condition",
       "size": "Size",
       "brand": "Brand",

@@ -1,5 +1,4 @@
 import {
-  CreatorDocumentSchema,
   CreatorDocument,
   CreatorLayer,
   safeValidateDocument,

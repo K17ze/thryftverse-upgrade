@@ -25,6 +25,8 @@ interface SharingStateViewProps {
   isConfirming?: boolean;
   /** True when an upload has stalled (no progress for an extended period). */
   isStalled?: boolean;
+  /** True when the queue is parked because there is no usable connection. */
+  isOffline?: boolean;
   /** Rolling ETA in seconds — shown only while a real rate is known. */
   etaSeconds?: number;
 }
@@ -37,6 +39,7 @@ export function SharingStateView({
   onCancel,
   isConfirming,
   isStalled,
+  isOffline,
   etaSeconds }: SharingStateViewProps) {
   const localStyles = useMemo(() => createStyles(colors), [colors]);
   const showCancel = stage === 'uploading' && !!onCancel;
@@ -50,20 +53,23 @@ export function SharingStateView({
   // server has confirmed the DB row + moderation (AGENTS.md §11).
   const phaseLabel = useMemo(() => {
     if (stage !== 'uploading') return 'Sharing…';
+    // Parked queue (no route or captive portal) takes precedence over a
+    // stall — the bytes aren't moving because nothing can leave the device.
+    if (isOffline) return 'Waiting for connection…';
     if (isStalled) return 'Taking longer than usual…';
     if (isConfirming) return 'Confirming…';
     return `Uploading… ${percentLabel}`;
-  }, [stage, isStalled, isConfirming, percentLabel]);
+  }, [stage, isOffline, isStalled, isConfirming, percentLabel]);
 
   // Time-remaining sublabel — only while a measured rate exists, so it
   // never appears fabricated during confirmation or stalls.
   const etaLabel = useMemo(() => {
-    if (stage !== 'uploading' || isStalled || isConfirming || etaSeconds === undefined) return null;
+    if (stage !== 'uploading' || isOffline || isStalled || isConfirming || etaSeconds === undefined) return null;
     if (etaSeconds < 5) return 'A few seconds left';
     if (etaSeconds < 60) return `About ${etaSeconds}s left`;
     const minutes = Math.ceil(etaSeconds / 60);
     return `About ${minutes} min left`;
-  }, [stage, isStalled, isConfirming, etaSeconds]);
+  }, [stage, isOffline, isStalled, isConfirming, etaSeconds]);
 
   return (
     <View style={localStyles.progressState}>
@@ -161,13 +167,16 @@ interface SuccessViewProps {
   reduceMotion: boolean;
   onDone: () => void;
   onView?: () => void;
+  /** Opens the system share sheet for the published post (share-out). */
+  onShare?: () => void;
 }
 
 export function SuccessView({
   colors,
   reduceMotion,
   onDone,
-  onView }: SuccessViewProps) {
+  onView,
+  onShare }: SuccessViewProps) {
   const localStyles = useMemo(() => createStyles(colors), [colors]);
   const contentOpacity = useSharedValue(reduceMotion ? 1 : 0);
   const iconScale = useSharedValue(reduceMotion ? 1 : 0.7);
@@ -200,18 +209,32 @@ export function SuccessView({
       >
         <Text style={localStyles.doneBtnText}>Done</Text>
       </PressScale>
-      {onView && (
-        <Pressable
-          onPress={onView}
-          style={localStyles.viewLink}
-          accessibilityRole="button"
-          accessibilityLabel="View post"
-          accessibilityHint="Opens the published content"
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        >
-          <Text style={localStyles.viewLinkText}>View</Text>
-        </Pressable>
-      )}
+      <View style={localStyles.successLinks}>
+        {onView && (
+          <Pressable
+            onPress={onView}
+            style={localStyles.viewLink}
+            accessibilityRole="button"
+            accessibilityLabel="View post"
+            accessibilityHint="Opens the published content"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Text style={localStyles.viewLinkText}>View</Text>
+          </Pressable>
+        )}
+        {onShare && (
+          <Pressable
+            onPress={onShare}
+            style={localStyles.viewLink}
+            accessibilityRole="button"
+            accessibilityLabel="Share post"
+            accessibilityHint="Opens the system share sheet for this post"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Text style={localStyles.viewLinkText}>Share</Text>
+          </Pressable>
+        )}
+      </View>
     </Reanimated.View>
   );
 }

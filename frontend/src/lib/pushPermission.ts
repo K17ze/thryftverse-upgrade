@@ -1,6 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { registerCurrentPushDevice } from './pushDevice';
 
 /**
  * Contextual moments where requesting push permission is appropriate.
@@ -186,6 +187,13 @@ export async function requestPushPermissionWithContext(
     if (Platform.OS === 'android') {
       await configureAndroidNotificationChannels();
     }
+
+    // Grant without registration is a dead pipeline — the backend only
+    // delivers to notification_devices rows. Register this device's Expo
+    // token every time a grant is confirmed (upsert on token, so repeats
+    // are free). Best-effort: a registration failure must not lie about
+    // the OS grant, which is what this function returns.
+    void registerCurrentPushDevice().catch(() => {});
 
     return true;
   } catch {

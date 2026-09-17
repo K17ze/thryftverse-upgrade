@@ -19,7 +19,6 @@ import {
   View,
   Text,
   ScrollView,
-  Pressable,
   StyleSheet,
   type ViewStyle,
   type TextStyle } from 'react-native';
@@ -94,6 +93,7 @@ export function AutoStickerRail({ input, onStickerSelect }: AutoStickerRailProps
           <PressScale
             key={s.sticker.id}
             accessibilityLabel={`Suggested ${s.sticker.name}. ${s.reason}`}
+            accessibilityHint="Adds this sticker to the canvas"
             accessibilityRole="button"
             onPress={() => handleSelect(s.sticker)}
             style={styles.cell}

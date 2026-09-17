@@ -148,6 +148,7 @@
     "react-native-keyboard-controller": "^1.21.9",
     "react-native-mmkv": "^4.3.2",
     "react-native-nitro-modules": "0.37.0",
+    "thryft-video-export": "file:./modules/thryft-video-export",
     "react-native-reanimated": "^4.5.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
@@ -203,6 +204,7 @@
         "exclude": [
           "react-native-nitro-image",
           "thryft-native",
+          "thryft-video-export",
           "react-native-shared-hero",
           "react-native-vision-camera-mlkit"
         ]

@@ -26,9 +26,8 @@ import Reanimated, {
   useAnimatedStyle,
   withTiming } from 'react-native-reanimated';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
-import { Space, Radius, Typography, FontFamily, Control } from '../../../theme/designTokens';
+import { Space, Radius, Typography, FontFamily } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
-import { IconGrammar } from '../../../theme/designTokens';
 import { Motion } from '../../../theme/motionTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { useFormattedPrice } from '../../../hooks/useFormattedPrice';
@@ -40,7 +39,6 @@ import {
   type ListingSearchResult,
   type ListingApiItem } from '../../../services/listingsApi';
 import { useStore } from '../../../store/useStore';
-import { createStableId } from '../../../utils/createStableId';
 import { SheetContainer, PressScale } from '../../shared/CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { AppIcon } from '../../../components/common/AppIcon';
@@ -483,6 +481,7 @@ export function ProductBrowserSheet({
                   onPress={() => { haptic.light(); setActiveTab(tab.key); }}
                   style={styles.tab}
                   accessibilityLabel={tab.label}
+                  accessibilityHint="Shows this product tab"
                   accessibilityRole="tab"
                   accessibilityState={{ selected: isActive }}
                 >
@@ -509,6 +508,7 @@ export function ProductBrowserSheet({
               autoCorrect={false}
               autoFocus
               accessibilityLabel="Search products"
+              accessibilityHint="Type to search products"
             />
             {isSearchLoading && (
               <View style={{ flex: 1 }}>
@@ -526,6 +526,7 @@ export function ProductBrowserSheet({
               onPress={handleRetry}
               style={[styles.retryBtn, { borderColor: colors.border }]}
               accessibilityLabel="Retry"
+              accessibilityHint="Retries loading products"
               accessibilityRole="button"
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
@@ -547,6 +548,7 @@ export function ProductBrowserSheet({
                   onPress={() => handleSelect(item)}
                   style={styles.productCard}
                   accessibilityLabel={`Select ${item.title}`}
+                  accessibilityHint="Adds this product to the canvas"
                   accessibilityRole="button"
                   accessibilityState={{ selected: isSelected }}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}

@@ -87,6 +87,9 @@ export interface Listing {
   subcategory?: string | null;
   description: string | null;
   createdAt?: string | null;
+  /** Live-auction end timestamp when the listing has one — server-sourced,
+   *  drives countdown surfaces; absent on fixed-price listings. */
+  auctionEndsAt?: string | null;
   status?: ListingLifecycleStatus;
   shippingMethod?: string | null;
   shippingPayer?: string | null;
@@ -114,6 +117,7 @@ interface ApiListingRow {
   mediaHeight?: number | null;
   status: string;
   category: string | null;
+  subcategory?: string | null;
   brand: string | null;
   size: string | null;
   condition: string | null;
@@ -208,6 +212,7 @@ export async function searchListingsFromApi(query: string, limit?: number): Prom
 export async function fetchFilteredListings(options?: {
   query?: string;
   category?: string;
+  subcategory?: string;
   brand?: string;
   size?: string;
   condition?: string;
@@ -221,6 +226,7 @@ export async function fetchFilteredListings(options?: {
   const params = new URLSearchParams();
   if (options?.query) params.set('q', options.query.trim());
   if (options?.category) params.set('category', options.category);
+  if (options?.subcategory) params.set('subcategory', options.subcategory);
   if (options?.brand) params.set('brand', options.brand);
   if (options?.size) params.set('size', options.size);
   if (options?.condition) params.set('condition', options.condition);
@@ -414,6 +420,7 @@ export interface ListingCreateBody {
   coverFinalizationId?: string;
   status?: 'draft' | 'active' | 'paused' | 'sold' | 'deleted';
   category?: string;
+  subcategory?: string;
   brand?: string;
   size?: string;
   condition?: string;
@@ -438,6 +445,7 @@ export interface ListingApiItem {
   images: string[];
   status: string;
   category: string | null;
+  subcategory?: string | null;
   brand: string | null;
   size: string | null;
   condition: string | null;

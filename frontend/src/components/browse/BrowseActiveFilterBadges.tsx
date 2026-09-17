@@ -3,6 +3,7 @@ import { View, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useHaptic } from '../../hooks/useHaptic';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import type { ThemeColors } from '../../theme/ThemeContext';
 import type { BrowseFilterState } from '../../store/useStore';
 import type { BrowseStyles } from './browseStyles';
@@ -22,86 +23,93 @@ export function BrowseActiveFilterBadges({
   updateBrowseFilters,
   onClearAll }: BrowseActiveFilterBadgesProps) {
   const haptic = useHaptic();
+  const { formatFromFiat } = useFormattedPrice();
+
+  // Badges are collected then joined with hairline dividers — every active
+  // filter dimension (query, price, brand, size, condition, sustainable)
+  // gets a removable badge, so a price-only or query-only filter never
+  // produces an empty badge row.
+  const badges: { key: string; label: string; accessibilityLabel: string; onRemove: () => void }[] = [];
+
+  const query = browseFilters.query.trim();
+  if (query.length > 0) {
+    badges.push({
+      key: 'query',
+      label: `"${query}"`,
+      accessibilityLabel: `Remove search filter ${query}`,
+      onRemove: () => updateBrowseFilters({ query: '' }) });
+  }
+
+  const hasPrice = browseFilters.priceMin != null || browseFilters.priceMax != null;
+  if (hasPrice) {
+    // Filter values are GBP — format through the fiat formatter so a
+    // non-GBP user sees converted amounts on the badge.
+    const priceLabel =
+      browseFilters.priceMin != null && browseFilters.priceMax != null
+        ? `${formatFromFiat(browseFilters.priceMin)} – ${formatFromFiat(browseFilters.priceMax)}`
+        : browseFilters.priceMin != null
+          ? `Over ${formatFromFiat(browseFilters.priceMin)}`
+          : `Under ${formatFromFiat(browseFilters.priceMax ?? 0)}`;
+    badges.push({
+      key: 'price',
+      label: priceLabel,
+      accessibilityLabel: 'Remove price filter',
+      onRemove: () => updateBrowseFilters({ priceMin: null, priceMax: null }) });
+  }
+
+  for (const brand of browseFilters.brands) {
+    badges.push({
+      key: `brand-${brand}`,
+      label: brand,
+      accessibilityLabel: `Remove brand filter ${brand}`,
+      onRemove: () => updateBrowseFilters({ brands: browseFilters.brands.filter((b) => b !== brand) }) });
+  }
+
+  for (const size of browseFilters.sizes) {
+    badges.push({
+      key: `size-${size}`,
+      label: size,
+      accessibilityLabel: `Remove size filter ${size}`,
+      onRemove: () => updateBrowseFilters({ sizes: browseFilters.sizes.filter((s) => s !== size) }) });
+  }
+
+  if (browseFilters.condition !== 'Any') {
+    badges.push({
+      key: 'condition',
+      label: browseFilters.condition,
+      accessibilityLabel: 'Remove condition filter',
+      onRemove: () => updateBrowseFilters({ condition: 'Any' }) });
+  }
+
+  if (browseFilters.sustainableOnly) {
+    badges.push({
+      key: 'sustainable',
+      label: 'Sustainable',
+      accessibilityLabel: 'Remove sustainable filter',
+      onRemove: () => updateBrowseFilters({ sustainableOnly: false }) });
+  }
 
   return (
     <View style={styles.activeBadgeRow}>
-      {/* Active filters grouped by category — badges within a category
-          are visually adjacent. Category prefix removed from badge text
-          (the grouping makes it redundant). A hairline divider separates
-          categories when multiple are active. */}
-      {browseFilters.brands.map((brand) => (
-        <View key={`brand-${brand}`} style={styles.activeBadge}>
-          <Text style={styles.activeBadgeText}>{brand}</Text>
-          <Pressable
-            style={styles.activeBadgeClose}
-            onPress={() => {
-              haptic.light();
-              updateBrowseFilters({ brands: browseFilters.brands.filter((b) => b !== brand) });
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={`Remove brand filter ${brand}`}
-          >
-            <Ionicons name="close" size={12} color={colors.textPrimary} aria-hidden={true} />
-          </Pressable>
-        </View>
+      {badges.map((badge, idx) => (
+        <React.Fragment key={badge.key}>
+          {idx > 0 ? <View style={styles.activeBadgeDivider} /> : null}
+          <View style={styles.activeBadge}>
+            <Text style={styles.activeBadgeText}>{badge.label}</Text>
+            <Pressable
+              style={styles.activeBadgeClose}
+              onPress={() => {
+                haptic.light();
+                badge.onRemove();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={badge.accessibilityLabel}
+            >
+              <Ionicons name="close" size={12} color={colors.textPrimary} aria-hidden={true} />
+            </Pressable>
+          </View>
+        </React.Fragment>
       ))}
-      {browseFilters.brands.length > 0 && (browseFilters.sizes.length > 0 || browseFilters.condition !== 'Any' || browseFilters.sustainableOnly) ? (
-        <View style={styles.activeBadgeDivider} />
-      ) : null}
-      {browseFilters.sizes.map((size) => (
-        <View key={`size-${size}`} style={styles.activeBadge}>
-          <Text style={styles.activeBadgeText}>{size}</Text>
-          <Pressable
-            style={styles.activeBadgeClose}
-            onPress={() => {
-              haptic.light();
-              updateBrowseFilters({ sizes: browseFilters.sizes.filter((s) => s !== size) });
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={`Remove size filter ${size}`}
-          >
-            <Ionicons name="close" size={12} color={colors.textPrimary} aria-hidden={true} />
-          </Pressable>
-        </View>
-      ))}
-      {browseFilters.sizes.length > 0 && (browseFilters.condition !== 'Any' || browseFilters.sustainableOnly) ? (
-        <View style={styles.activeBadgeDivider} />
-      ) : null}
-      {browseFilters.condition !== 'Any' ? (
-        <View style={styles.activeBadge}>
-          <Text style={styles.activeBadgeText}>{browseFilters.condition}</Text>
-          <Pressable
-            style={styles.activeBadgeClose}
-            onPress={() => {
-              haptic.light();
-              updateBrowseFilters({ condition: 'Any' });
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Remove condition filter"
-          >
-            <Ionicons name="close" size={12} color={colors.textPrimary} aria-hidden={true} />
-          </Pressable>
-        </View>
-      ) : null}
-      {browseFilters.condition !== 'Any' && browseFilters.sustainableOnly ? (
-        <View style={styles.activeBadgeDivider} />
-      ) : null}
-      {browseFilters.sustainableOnly ? (
-        <View style={styles.activeBadge}>
-          <Text style={styles.activeBadgeText}>Sustainable</Text>
-          <Pressable
-            style={styles.activeBadgeClose}
-            onPress={() => {
-              haptic.light();
-              updateBrowseFilters({ sustainableOnly: false });
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Remove sustainable filter"
-          >
-            <Ionicons name="close" size={12} color={colors.textPrimary} aria-hidden={true} />
-          </Pressable>
-        </View>
-      ) : null}
       <Pressable
         style={styles.clearAllBtn}
         onPress={onClearAll}

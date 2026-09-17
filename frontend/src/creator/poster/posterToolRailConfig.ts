@@ -34,6 +34,9 @@ import type { AssetPickerMode } from '../surfaces/CreatorAssetPicker';
 
 type Navigation = NativeStackNavigationProp<RootStackParamList, 'CreatorStudio'>;
 
+export { LAYER_TYPE_TO_PICKER_MODE } from '../shared/layerEditModes';
+import { LAYER_TYPE_TO_PICKER_MODE } from '../shared/layerEditModes';
+
 /**
  * The haptic engine returned by useHaptic.
  */
@@ -74,7 +77,7 @@ export interface BuildPosterToolRailInput {
   navigation: Navigation;
   /** Total number of pages in the document. */
   pageCount: number;
-  /** Whether true cutout (segmentation) is supported on this device. */
+  /** Whether the brush-mask cutout sheet is available on this device. */
   cutoutSupported: boolean;
   /** Whether the safe zone overlay is currently visible. */
   showSafeZone: boolean;
@@ -126,12 +129,22 @@ export interface BuildPosterToolRailInput {
   handleDeleteLayer: (id: string) => void;
   /** Opens the crop editor for the selected media. */
   handleCropAction: () => void;
-  /** Opens the cutout (segmentation) sheet for the selected media. */
+  /** Opens the cutout (brush mask) sheet for the selected media. */
   handleCutoutAction: () => void;
   /** Opens the adjust panel for the selected media. */
   handleAdjustAction: () => void;
   /** Toggles auto-adjust on the selected media. */
   handleAutoAdjust: () => void;
+
+  // ── Multi-select handlers (poster-multi-select context) ──
+  /** Brings all selected layers to the front of the z-order. */
+  handleMultiFront: () => void;
+  /** Sends all selected layers to the back of the z-order. */
+  handleMultiBack: () => void;
+  /** Deletes all selected layers and exits multi-select. */
+  handleMultiDelete: () => void;
+  /** Aligns all selected layers to the selection bounding box. */
+  handleMultiAlign: (alignment: 'center' | 'middle') => void;
 }
 
 // ── Config builder ───────────────────────────────────────────────────
@@ -179,6 +192,10 @@ export function buildPosterToolRail({
   handleCutoutAction,
   handleAdjustAction,
   handleAutoAdjust,
+  handleMultiFront,
+  handleMultiBack,
+  handleMultiDelete,
+  handleMultiAlign,
 }: BuildPosterToolRailInput): ToolGroup[] {
   const mk = (
     id: string,
@@ -248,6 +265,9 @@ export function buildPosterToolRail({
     ],
     overflow: [
       mk('effects', 'Effects', 'color-filter-outline', handleAddEffects, 'Effects', 'Opens effects for the background photo', 'filter', undefined, 'imageFilter'),
+      mk('gif', 'GIF', 'film-outline', () => setPickerMode('gif'), 'Add GIF', 'Opens the GIF picker', undefined, undefined, 'layerGif'),
+      mk('music', 'Music', 'musical-notes-outline', () => setPickerMode('music'), 'Add music', 'Opens the music picker', undefined, undefined, 'stickerMusic'),
+      mk('shape', 'Shape', 'shapes-outline', () => setPickerMode('shape'), 'Add shape', 'Opens the shape picker', undefined, undefined, 'layerDecorative'),
       mk('timeline', 'Timeline', 'film-outline', handleTimelineToggle, 'Timeline', 'Expands the timeline for editing clip timing and overlays', undefined, bottomSurface === 'timeline'),
       ...addFrameOverflow,
       ...sharedOverflow,
@@ -268,8 +288,28 @@ export function buildPosterToolRail({
     ],
     overflow: [
       mk('draw', 'Draw', 'brush-outline', handleDraw, 'Draw', 'Opens the drawing tool', 'drawing', undefined, 'layerDraw'),
+      mk('gif', 'GIF', 'film-outline', () => setPickerMode('gif'), 'Add GIF', 'Opens the GIF picker', undefined, undefined, 'layerGif'),
+      mk('music', 'Music', 'musical-notes-outline', () => setPickerMode('music'), 'Add music', 'Opens the music picker', undefined, undefined, 'stickerMusic'),
+      mk('shape', 'Shape', 'shapes-outline', () => setPickerMode('shape'), 'Add shape', 'Opens the shape picker', undefined, undefined, 'layerDecorative'),
       ...addFrameOverflow,
       ...sharedOverflow,
+    ],
+  };
+
+  // ── poster-multi-select: Front, Back, Delete + align overflow ──
+  // Mirrors the Look composer's look-multi-select group — same bulk
+  // actions (z-order, delete, bounding-box align) so both composers
+  // speak one selection grammar.
+  const multiSelect: ToolGroup = {
+    context: 'poster-multi-select',
+    primary: [
+      mk('multi-front', 'Front', 'arrow-up', handleMultiFront, 'Bring to front', 'Brings all selected layers to the front'),
+      mk('multi-back', 'Back', 'arrow-down', handleMultiBack, 'Send to back', 'Sends all selected layers to the back'),
+      mk('multi-delete', 'Delete', 'trash-outline', handleMultiDelete, 'Delete', 'Deletes all selected layers'),
+    ],
+    overflow: [
+      mk('multi-align-center', 'Center horizontally', 'swap-horizontal-outline', () => handleMultiAlign('center'), 'Center horizontally', 'Aligns selected layers to the horizontal center of the selection'),
+      mk('multi-align-middle', 'Center vertically', 'swap-vertical-outline', () => handleMultiAlign('middle'), 'Center vertically', 'Aligns selected layers to the vertical center of the selection'),
     ],
   };
 
@@ -305,7 +345,7 @@ export function buildPosterToolRail({
     overflow: [
       ...(!isVideoMedia ? [
         mk('auto', 'Auto', 'bulb-outline', handleAutoAdjust, 'Auto', 'Applies one-tap color correction', 'enhance'),
-        ...(cutoutSupported ? [mk('cutout', 'Cutout', 'cut-outline', handleCutoutAction, 'Cutout', 'Removes the photo background using on-device subject segmentation', 'cutout')] : []),
+        ...(cutoutSupported ? [mk('cutout', 'Cutout', 'cut-outline', handleCutoutAction, 'Cutout', 'Paint a mask to keep or remove parts of the photo', 'cutout')] : []),
         mk('animation', 'Animation', 'analytics-outline', () => { haptic.light(); openSheet('keyframes'); }, 'Animation', 'Opens the keyframe editor for the selected layer', 'keyframe'),
       ] : [
         // ── Video-specific advanced tools (time context) ──
@@ -383,7 +423,11 @@ export function buildPosterToolRail({
   const stickerSelected: ToolGroup = {
     context: 'poster-sticker-selected',
     primary: [
-      mk('edit', 'Edit', 'create-outline', () => { if (selectedLayer) handleEditLayer(selectedLayer); }, 'Edit sticker', 'Edits the selected sticker'),
+      // Edit only exists when the layer type has a dedicated editor —
+      // decorative/gif/music/adjustment layers get Replace + ordering only.
+      ...(selectedLayer && LAYER_TYPE_TO_PICKER_MODE[selectedLayer.type]
+        ? [mk('edit', 'Edit', 'create-outline', () => { handleEditLayer(selectedLayer); }, 'Edit sticker', 'Edits the selected sticker')]
+        : []),
       mk('replace', 'Replace', 'swap-horizontal-outline', () => { setPickerMode('stickers'); }, 'Replace sticker', 'Replaces the selected sticker'),
     ],
     overflow: [
@@ -423,6 +467,7 @@ export function buildPosterToolRail({
   return [
     photoDefault,
     videoDefault,
+    multiSelect,
     mediaSelected,
     textSelected,
     stickerSelected,

@@ -15,6 +15,7 @@ interface SellDraftPersistenceValues {
   size: string;
   condition: string;
   category: string;
+  subcategory: string;
   tags: string[];
   listingMode: ListingMode;
   shippingMethod: 'standard' | 'express' | null;
@@ -40,6 +41,7 @@ interface SellDraftPersistenceSetters {
   setSize: React.Dispatch<React.SetStateAction<string>>;
   setCondition: React.Dispatch<React.SetStateAction<string>>;
   setCategory: React.Dispatch<React.SetStateAction<string>>;
+  setSubcategory: React.Dispatch<React.SetStateAction<string>>;
   setTags: React.Dispatch<React.SetStateAction<string[]>>;
   setListingMode: React.Dispatch<React.SetStateAction<ListingMode>>;
   setShippingMethod: React.Dispatch<React.SetStateAction<'standard' | 'express' | null>>;
@@ -65,6 +67,7 @@ const DRAFT_FIELD_KEYS = [
   'size',
   'condition',
   'category',
+  'subcategory',
   'tags',
   'listingMode',
   'shippingMethod',
@@ -91,6 +94,7 @@ const STORE_KEY_BY_FIELD: Record<DraftFieldKey, string> = {
   size: 'size',
   condition: 'condition',
   category: 'categoryId',
+  subcategory: 'subcategoryId',
   tags: 'tags',
   listingMode: 'listingMode',
   shippingMethod: 'shippingMethod',
@@ -172,6 +176,7 @@ export function useSellDraftPersistence(
       if (draft.size) setters.setSize(draft.size as string);
       if (draft.condition) setters.setCondition(draft.condition as string);
       if (draft.categoryId) setters.setCategory(draft.categoryId as string);
+      if (draft.subcategoryId) setters.setSubcategory(draft.subcategoryId as string);
       if (draft.tags) setters.setTags(draft.tags as string[]);
       if (draft.listingMode) setters.setListingMode(draft.listingMode as ListingMode);
       if (draft.shippingMethod) setters.setShippingMethod(draft.shippingMethod as 'standard' | 'express' | null);
@@ -221,6 +226,7 @@ export function useSellDraftPersistence(
       size: setters.setSize,
       condition: setters.setCondition,
       category: setters.setCategory,
+      subcategory: setters.setSubcategory,
       tags: setters.setTags,
       listingMode: setters.setListingMode,
       shippingMethod: setters.setShippingMethod,
@@ -267,6 +273,7 @@ export function useSellDraftPersistence(
       size: values.size,
       condition: values.condition,
       categoryId: values.category,
+      subcategoryId: values.subcategory,
       tags: values.tags,
       listingMode: values.listingMode,
       shippingMethod: values.shippingMethod,
@@ -292,7 +299,7 @@ export function useSellDraftPersistence(
     setDraftSavedVisible(true);
     if (draftSavedTimerRef.current) clearTimeout(draftSavedTimerRef.current);
     draftSavedTimerRef.current = setTimeout(() => setDraftSavedVisible(false), 1500);
-  }, [values.photos, values.mediaDraftItems, values.title, values.desc, values.price, values.originalPrice, values.brand, values.size, values.condition, values.category, values.tags, values.listingMode, values.shippingMethod, values.shippingPayer, values.startingBid, values.reservePrice, values.auctionDurationHours, values.coOwnEnabled, values.shareCountInput, values.sharePriceInput, values.offeringWindowHours, values.authPhotos, updateSellDraft]);
+  }, [values.photos, values.mediaDraftItems, values.title, values.desc, values.price, values.originalPrice, values.brand, values.size, values.condition, values.category, values.subcategory, values.tags, values.listingMode, values.shippingMethod, values.shippingPayer, values.startingBid, values.reservePrice, values.auctionDurationHours, values.coOwnEnabled, values.shareCountInput, values.sharePriceInput, values.offeringWindowHours, values.authPhotos, updateSellDraft]);
 
   // Cleanup the transient timer on unmount
   useEffect(() => {

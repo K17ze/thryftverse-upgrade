@@ -5,10 +5,19 @@ import type { Listing } from '../../domain';
 import { useStore } from '../../store/useStore';
 import { fetchFilteredListings } from '../../services/listingsApi';
 import { friendlyBackendError } from '../../services/listingMapper';
+import { getSubcategoryToken } from '../../utils/subcategoryToken';
 
 interface UseBrowseBackendListingsOptions {
   categoryId: string;
+  subcategoryId?: string;
+  title?: string;
   searchQuery?: string;
+  /**
+   * The owning surface's browse-filter context key. Both effects are gated
+   * on this being the store's active context so a backgrounded or
+   * just-pushed screen never reads/writes another surface's filter bucket.
+   */
+  contextKey: string;
   /**
    * Shared with the pull-to-refresh timer — the fetch effect's cleanup
    * clears any pending refresh-end timeout, exactly as the original
@@ -36,10 +45,14 @@ const SORT_MAP: Record<string, 'newest' | 'price_asc' | 'price_desc' | 'most_lik
  */
 export function useBrowseBackendListings({
   categoryId,
+  subcategoryId,
+  title,
   searchQuery,
+  contextKey,
   refreshTimerRef }: UseBrowseBackendListingsOptions) {
   const browseFilters = useStore((state) => state.browseFilters);
   const updateBrowseFilters = useStore((state) => state.updateBrowseFilters);
+  const isActiveContext = useStore((state) => state.browseContextKey === contextKey);
 
   const [backendListings, setBackendListings] = useState<Listing[] | null>(null);
   const [backendLoading, setBackendLoading] = useState(false);
@@ -52,6 +65,7 @@ export function useBrowseBackendListings({
   const requestParamsRef = useRef<Parameters<typeof fetchFilteredListings>[0] | null>(null);
 
   useEffect(() => {
+    if (!isActiveContext) return;
     if (categoryId === 'search' && searchQuery && browseFilters.query !== searchQuery) {
       updateBrowseFilters({ query: searchQuery });
       return;
@@ -60,9 +74,10 @@ export function useBrowseBackendListings({
     if (categoryId !== 'search' && browseFilters.query) {
       updateBrowseFilters({ query: '' });
     }
-  }, [categoryId, searchQuery, browseFilters.query, updateBrowseFilters]);
+  }, [categoryId, searchQuery, browseFilters.query, updateBrowseFilters, isActiveContext]);
 
   useEffect(() => {
+    if (!isActiveContext) return;
     const hasBackendFilters =
       browseFilters.query.trim().length > 0 ||
       browseFilters.brands.length > 0 ||
@@ -83,9 +98,14 @@ export function useBrowseBackendListings({
     // the user multi-selects, sending only [0] silently narrows to the
     // first pick — omit the param instead and let useBrowseListings apply
     // the full multi-select predicate client-side over the returned page.
+    const subcategoryToken =
+      categoryId !== 'search' && categoryId !== 'all'
+        ? getSubcategoryToken(categoryId, subcategoryId, title)
+        : '';
     const requestParams: Parameters<typeof fetchFilteredListings>[0] = {
       query: browseFilters.query.trim() || undefined,
       category: categoryId !== 'search' && categoryId !== 'all' ? categoryId : undefined,
+      subcategory: subcategoryToken || undefined,
       brand: browseFilters.brands.length === 1 ? browseFilters.brands[0] : undefined,
       size: browseFilters.sizes.length === 1 ? browseFilters.sizes[0] : undefined,
       condition: browseFilters.condition !== 'Any' ? browseFilters.condition : undefined,
@@ -119,7 +139,7 @@ export function useBrowseBackendListings({
         clearTimeout(refreshTimerRef.current);
       }
     };
-  }, [browseFilters, categoryId]);
+  }, [browseFilters, categoryId, subcategoryId, title, isActiveContext]);
 
   // Next-page fetch — reuses the serialized params of the in-flight filter
   // set and appends deduped rows. A page-level failure keeps the loaded

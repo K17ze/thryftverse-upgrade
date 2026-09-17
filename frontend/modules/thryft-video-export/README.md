@@ -1,28 +1,36 @@
-# Thryft Video Export (Nitro Module — Contract + JS Wiring)
+# Thryft Video Export (Nitro Module)
 
 ## Overview
 
-This module defines the **Nitro HybridObject contract** and **JS-side wiring**
-for on-device, single-clip video export. It is the flagship export path used by
-CapCut, VN and Instagram Edits: a native module driving **AVFoundation** (iOS)
-and **Media3 Transformer** (Android) via Nitro Modules.
+On-device, single-clip video export — the flagship export path used by
+CapCut, VN and Instagram Edits: a native Nitro HybridObject driving
+**AVFoundation** (iOS) and **Media3 Transformer** (Android).
 
-This package ships **only** the TypeScript spec (`VideoExportModule.nitro.ts`)
-and the JS entry point (`src/index.ts`). The native Swift/Kotlin implementation
-is **deferred** — it lands in a follow-up that consumes this contract via
-Nitrogen codegen, without touching the editor.
+The module ships the TypeScript spec (`VideoExportModule.nitro.ts`), the
+Nitrogen-generated bindings (`nitrogen/generated/`), the JS entry point
+(`src/index.ts`), and the platform implementations under `ios/` and
+`android/`.
 
 ## Files
 
 - `src/VideoExportModule.nitro.ts` — the Nitro HybridObject spec. Nitrogen
-  codegen consumes this to generate `HybridVideoExportModule.swift`
-  (AVFoundation) and `HybridVideoExportModule.kt` (Media3 Transformer).
+  codegen consumes this to generate the bindings under
+  `nitrogen/generated/` (re-run `npx nitrogen` after spec changes).
 - `src/index.ts` — JS wiring. `getVideoExportModule()` returns the HybridObject
-  when linked, `null` otherwise. `exportVideoViaNative()` wraps the native call
-  and throws a `VideoExportError` on failure.
-- `src/__tests__/VideoExportModule.test.ts` — verifies the graceful fallback
-  (module not linked → `isVideoExportAvailable()` is false,
-  `exportVideoViaNative` throws `{ type: 'unsupported' }`).
+  when linked, `null` otherwise. `exportVideo(request, onProgress)` is the
+  caller-facing driver — it polls `getExportProgress` on a 250ms cadence and
+  returns a `cancel()` handle. `exportVideoViaNative()` is the raw one-shot
+  call. All failures normalise to `VideoExportError`.
+- `ios/` — Swift implementation (AVFoundation): `HybridVideoExportModule`
+  dispatches remux/transcode/compose; `VideoCompositionBuilder` builds the
+  trim → freeze → speed → reverse segment pipeline; `VideoOverlayCompositor`
+  burns overlays per frame via `AVVideoCompositing`.
+- `android/` — Kotlin implementation (Media3 Transformer): remux via
+  `MediaExtractor`/`MediaMuxer` stream-copy; transcode/compose via
+  `EditedMediaItemSequence` + `SpeedChangeEffect`/`SonicAudioProcessor`,
+  `OverlayEffect` for burn-in, `Presentation` for resize.
+- `src/__tests__/` — graceful-fallback coverage plus driver tests for
+  progress polling, cancellation and tagged-error normalisation.
 
 ## Contract
 
@@ -48,8 +56,11 @@ Discriminated by `kind`:
 - `'text'` — `text`, `fontSize`, `textColor`, optional `backgroundColor` /
   `alignment`. Geometry is normalised 0..1, matching the backend's overlay
   layer model in `compositionRenderer.ts`.
-- `'sticker'` — `stickerSvg` (the SVG markup), matching the backend's sticker
-  overlay path (`buildStickerLayerSvg` → rasterise → composite).
+- `'sticker'` — `stickerImageUri` (a pre-rasterised PNG file:// URI) or
+  `stickerSvg` for provenance. Neither AVFoundation nor Media3 rasterises
+  SVG natively, so the JS adapter rasterises overlay layers via the Skia
+  export renderer (`jsExportImage` — the same renderer the preview uses,
+  guaranteeing pixel parity) and passes `stickerImageUri`.
 
 ### `VideoExportResult`
 
@@ -119,13 +130,50 @@ path but produces a faithful render of the creator's edits.
 
 ## Native Implementation Status
 
-**Deferred.** The native Swift (AVFoundation) and Kotlin (Media3 Transformer)
-implementations are out of scope for this JS-focused session — they require
-Xcode / Android Studio and Nitrogen codegen. This package ships the contract
-+ JS wiring so the native module can land in a follow-up **without touching
-the editor**: once the native HybridObject is registered under the name
-`VideoExportModule`, `getVideoExportModule()` returns it automatically and the
-existing `mediaExportService.ts` wiring picks it up.
+**Implemented.** iOS (Swift/AVFoundation) and Android (Kotlin/Media3
+Transformer) both ship under `ios/` and `android/`:
+
+- **iOS**: `HybridVideoExportModule.swift` — session registry, serial export
+  queue, three-path dispatch, `export(to:as:)` on iOS 18+ with the
+  `exportAsynchronously` bridge for earlier releases.
+  `VideoCompositionBuilder.swift` — segment pipeline (trim → freeze →
+  speed/curve → reverse) rendered into `AVMutableComposition` via
+  `insertTimeRange`/`scaleTimeRange`; freeze = single frame scaled to the
+  hold duration; reverse = ~33ms chunks emitted in reverse order (audio
+  dropped — chunked audio reversal would stutter). `VideoOverlayCompositor.swift`
+  — `AVVideoCompositing` burn-in for text + rasterised stickers.
+- **Android**: `HybridVideoExportModule.kt` — registry + dispatch.
+  `VideoExportPipeline.kt` — true remux via `MediaExtractor`/`MediaMuxer`
+  for the no-edit fast path; Media3 `Transformer` + `EditedMediaItemSequence`
+  for transcode/compose; `MediaMetadataRetriever` frame extraction for
+  freeze holds; `OverlayEffect` for burn-in; `Presentation` for resize.
+
+### Honest limits
+
+- **Background continuation**: the export runs on native background threads
+  and survives JS teardown (progress/cancel key off `sessionId`), but if the
+  OS kills the app process the export dies with it. True OS-level background
+  completion would need a foreground service (Android) / background task
+  assertion (iOS) — deliberately out of scope; the caller's UI should treat
+  exports as foreground-lifetime jobs.
+- **Bitrate**: `outputBitrateKbps` maps to preset tiers on iOS
+  (`AVAssetExportSession` has no per-bitrate control); Android honours it
+  through the Transformer pipeline where the encoder supports it.
+- **Partial volume**: the contract carries `muteAudio` (bool). Partial
+  volume/fades remain a backend-render concern.
+- **Reverse + audio**: audio is dropped on reversed exports on both
+  platforms (chunked reversal would stutter).
+- **Multi-page / multi-media documents**: out of scope for the single-clip
+  request — `mediaExportService.ts` falls back to `ThryftMediaExport` /
+  the backend render for those.
+
+## Validation status
+
+TypeScript contract, JS wiring, adapter and driver are covered by tests +
+`tsc`. The Swift/Kotlin implementations compile at the app build step
+(`pod install` / Gradle sync after `expo prebuild`); on-device validation
+requires a development build — there is no simulator/emulator run in this
+workspace.
 
 ## Graceful Fallback
 

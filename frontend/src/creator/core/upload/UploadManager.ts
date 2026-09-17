@@ -5,13 +5,16 @@ import { finalizePresignedMedia, MediaProcessingError, waitForPublishableMedia }
 import { putFile } from '../../../platform/media/nativeUploadTransport';
 import { createStableId } from '../../../utils/createStableId';
 import { detectMimeType, deriveFileName } from './MimeDetector';
+import { abortableSleep, computeBackoff } from './UploadBackoff';
 import { MultipartUploader, UploadContractError } from './MultipartUploader';
+import type { MultipartCompleteResult } from './MultipartUploader';
 import type { UploadJobStore } from './UploadJobStore';
 import type {
   UploadEvent,
   UploadEventListener,
   UploadJob,
   UploadProgress,
+  UploadSession,
   QueueUploadParams,
   ProjectProgress,
 } from './UploadTypes';
@@ -21,10 +24,6 @@ import { MULTIPART_THRESHOLD_BYTES, STALL_THRESHOLD_MS } from './UploadTypes';
  *  last update is this old — they carry no recovery value beyond it. */
 const TERMINAL_JOB_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
-/** Base delay (ms) for exponential backoff between retry attempts. */
-const BASE_BACKOFF_MS = 1000;
-/** Upper bound (ms) for exponential backoff. */
-const MAX_BACKOFF_MS = 30_000;
 /** Default maximum concurrent uploads. */
 const DEFAULT_MAX_CONCURRENT = 2;
 /** Default maximum retry attempts per job. */
@@ -100,12 +99,14 @@ export class UploadManager {
   /** In-memory mirror of persisted jobs for synchronous access. */
   private jobsCache: Map<string, UploadJob> = new Map();
   private processing = false;
-  /** Timestamp (ms) of the last progress persist to the job store. Progress
-   *  events fire very frequently; throttling the AsyncStorage write to at
-   *  most once every 500ms avoids a storm of read-modify-write cycles that
-   *  can starve the JS thread on large multipart uploads. The in-memory
+  /** Per-job timestamp (ms) of the last progress persist to the job store.
+   *  Progress events fire very frequently; throttling the AsyncStorage
+   *  write to at most once every 500ms avoids a storm of read-modify-write
+   *  cycles that can starve the JS thread on large multipart uploads. The
+   *  throttle is keyed per job — a shared timestamp lets one chatty job
+   *  starve a concurrent job's checkpointing indefinitely. The in-memory
    *  cache is still updated on every event so the UI stays responsive. */
-  private lastProgressPersistMs = 0;
+  private readonly lastProgressPersistMs = new Map<string, number>();
   /** Multipart uploader (lazy-initialised). */
   private multipartUploader: MultipartUploader;
   /** Whether multipart transport is enabled. Defaults to true â€” the backend
@@ -360,7 +361,7 @@ export class UploadManager {
     // Abort the multipart session if one exists.
     const job = this.jobsCache.get(jobId);
     if (job?.session) {
-      await this.multipartUploader.abort(job.session);
+      await this.multipartUploader.abort(job.session, job.localPath);
     }
     this.jobsCache.delete(jobId);
     this.clearThroughput(jobId);
@@ -449,8 +450,17 @@ export class UploadManager {
   dispose(): void {
     if (this.stallCheckInterval) clearInterval(this.stallCheckInterval);
     this.stallCheckInterval = undefined;
-    for (const controller of this.activeUploads.values()) controller.abort();
-    this.activeUploads.clear();
+    // Mark each in-flight job offline-aborted AND requeue it — an
+    // unwinding attempt must not write 'failed' over a job whose only
+    // sin is the runtime going away. On the next launch the row hydrates
+    // as 'queued' and auto-resumes. The activeUploads entries stay until
+    // each processJob's finally removes them — clearing the map here
+    // would let processQueue double-drive a job mid-unwind.
+    for (const [jobId, controller] of this.activeUploads) {
+      this.offlineAborted.add(jobId);
+      controller.abort();
+      void this.persistState(jobId, { status: 'queued', error: undefined });
+    }
   }
 
   private async hydrate(): Promise<void> {
@@ -525,7 +535,7 @@ export class UploadManager {
         return jobs;
       }
       try {
-        await this.sleep(intervalMs, opts?.signal);
+        await abortableSleep(intervalMs, opts?.signal);
       } catch {
         // Aborted mid-poll — return the latest list per the contract.
         return this.getJobs(projectId);
@@ -713,8 +723,8 @@ export class UploadManager {
         }
         // If more attempts remain, back off and continue.
         if (attempt < job.maxRetries - 1) {
-          const delay = this.computeBackoff(attempt);
-          await this.sleep(delay, signal);
+          const delay = computeBackoff(attempt);
+          await abortableSleep(delay, signal);
           if (signal.aborted) {
             return { ok: false, error: 'Aborted' };
           }
@@ -861,46 +871,41 @@ export class UploadManager {
         job.sizeBytes,
         job.assetId,
         job.folder,
+        signal,
       );
       // Persist the session so it survives app kills.
       await this.persistState(job.id, { session, status: 'uploading' });
     }
 
-    // Resume / upload remaining parts.
-    const result = await this.multipartUploader.resume(
-      session,
-      job.localPath,
-      (uploadedBytes) => {
-        const progress = session!.totalBytes > 0
-          ? Math.min(1, uploadedBytes / session!.totalBytes)
-          : 0;
-        this.emitProgress(job.id, uploadedBytes, session!.totalBytes);
-        // Keep the in-memory session + progress up to date on every event
-        // so the UI is responsive, but throttle the AsyncStorage write to
-        // avoid a storm of read-modify-write cycles on every byte tick.
-        const current = this.jobsCache.get(job.id);
-        if (current) {
-          this.jobsCache.set(job.id, {
-            ...current,
-            progress,
-            session: { ...session!, uploadedBytes },
-            updatedAt: Date.now(),
-          });
-        }
-        const now = Date.now();
-        if (now - this.lastProgressPersistMs >= 500) {
-          this.lastProgressPersistMs = now;
-          void this.persistState(job.id, {
-            progress,
-            session: { ...session!, uploadedBytes },
-          });
-        }
-      },
-      signal,
-      () => {
-        void this.persistState(job.id, { session: { ...session! } });
-      },
-    );
+    // Resume / upload remaining parts. A persisted session may be dead
+    // server-side (TTL expired, aborted by the session sweep, or lost to a
+    // failed initiate) — the parts/complete endpoints then return
+    // 404/409/410, which retry classification treats as permanent. Without
+    // a reset the dead session is replayed on every retry forever, so
+    // clear it and re-initiate exactly once — mirroring the single-PUT
+    // re-presign policy — before letting the failure stand.
+    let result: Awaited<ReturnType<MultipartUploader['resume']>>;
+    try {
+      result = await this.resumeMultipartSession(job, session, signal);
+    } catch (err: unknown) {
+      const status = err instanceof ApiRequestError ? err.status : undefined;
+      if (status !== 404 && status !== 409 && status !== 410) throw err;
+      await this.persistState(job.id, {
+        session: undefined,
+        progress: 0,
+        status: 'initiating',
+      });
+      session = await this.multipartUploader.initiate(
+        job.localPath,
+        job.mimeType,
+        job.sizeBytes,
+        job.assetId,
+        job.folder,
+        signal,
+      );
+      await this.persistState(job.id, { session, status: 'uploading' });
+      result = await this.resumeMultipartSession(job, session, signal);
+    }
 
     this.emitProgress(job.id, job.sizeBytes, job.sizeBytes);
 
@@ -941,7 +946,53 @@ export class UploadManager {
     return { ok: true, remoteUrl, finalizationId, mediaAssetId };
   }
 
-  // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  /**
+   * Drive one multipart session to completion: upload remaining parts,
+   * keep the job's progress/session snapshot current, and return the
+   * complete() receipt. Progress persists are throttled to avoid a storm
+   * of read-modify-write cycles on every byte tick; part-ETag checkpoints
+   * persist unthrottled via `onPartComplete`.
+   */
+  private async resumeMultipartSession(
+    job: UploadJob,
+    session: UploadSession,
+    signal: AbortSignal,
+  ): Promise<MultipartCompleteResult> {
+    return this.multipartUploader.resume(
+      session,
+      job.localPath,
+      (uploadedBytes) => {
+        const progress = session.totalBytes > 0
+          ? Math.min(1, uploadedBytes / session.totalBytes)
+          : 0;
+        this.emitProgress(job.id, uploadedBytes, session.totalBytes);
+        const current = this.jobsCache.get(job.id);
+        if (current) {
+          this.jobsCache.set(job.id, {
+            ...current,
+            progress,
+            session: { ...session, uploadedBytes },
+            updatedAt: Date.now(),
+          });
+        }
+        const now = Date.now();
+        const lastPersist = this.lastProgressPersistMs.get(job.id) ?? 0;
+        if (now - lastPersist >= 500) {
+          this.lastProgressPersistMs.set(job.id, now);
+          void this.persistState(job.id, {
+            progress,
+            session: { ...session, uploadedBytes },
+          });
+        }
+      },
+      signal,
+      () => {
+        void this.persistState(job.id, { session: { ...session } });
+      },
+    );
+  }
+
+  // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /** Find an existing job matching the same (projectId, assetId, localPath). */
   private findExistingJob(params: QueueUploadParams): UploadJob | undefined {
@@ -1050,8 +1101,8 @@ export class UploadManager {
       });
     }
     const now = Date.now();
-    if (now - this.lastProgressPersistMs >= 500) {
-      this.lastProgressPersistMs = now;
+    if (now - (this.lastProgressPersistMs.get(jobId) ?? 0) >= 500) {
+      this.lastProgressPersistMs.set(jobId, now);
       // Persist progress (best-effort â€” don't block the upload loop).
       void this.jobStore.updateJob(jobId, { progress });
     }
@@ -1098,6 +1149,7 @@ export class UploadManager {
   private clearThroughput(jobId: string): void {
     this.throughputSamples.delete(jobId);
     this.progressSnapshots.delete(jobId);
+    this.lastProgressPersistMs.delete(jobId);
   }
 
   /**
@@ -1136,9 +1188,11 @@ export class UploadManager {
   /**
    * Periodic stall checker. Scans all jobs currently in the 'uploading'
    * state and transitions any that haven't received a progress event for
-   * longer than `STALL_THRESHOLD_MS` to 'stalled', emitting a `jobFailed`
+   * longer than `STALL_THRESHOLD_MS` to 'stalled', emitting a `jobStalled`
    * event with a descriptive message so the UI can surface feedback. The
-   * job is not marked terminal â€” when progress resumes, `emitProgress`
+   * job is not marked terminal — it may be inside a `runWithRetry` backoff
+   * sleep — so the event is `jobStalled`, not `jobFailed`; consumers must
+   * not treat it as terminal. When progress resumes, `emitProgress`
    * transitions it back to 'uploading'.
    */
   private checkStalledJobs(): void {
@@ -1154,7 +1208,7 @@ export class UploadManager {
         const stalled = this.jobsCache.get(job.id);
         if (stalled) {
           this.emit({
-            type: 'jobFailed',
+            type: 'jobStalled',
             job: stalled,
             error: 'Upload stalled â€” no progress for an extended period.',
           });
@@ -1177,36 +1231,6 @@ export class UploadManager {
     };
     this.jobsCache.set(jobId, next);
     await this.jobStore.updateJob(jobId, updates);
-  }
-
-  /**
-   * Exponential backoff with jitter:
-   * `min(MAX_BACKOFF_MS, BASE_BACKOFF_MS * 2^attempt) + random jitter`.
-   */
-  private computeBackoff(attempt: number): number {
-    const exp = BASE_BACKOFF_MS * Math.pow(2, attempt);
-    const capped = Math.min(MAX_BACKOFF_MS, exp);
-    const jitter = Math.random() * (capped * 0.25);
-    return Math.round(capped + jitter);
-  }
-
-  /** Promise-based sleep that rejects early if the signal aborts. */
-  private sleep(ms: number, signal?: AbortSignal): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-      if (signal?.aborted) {
-        reject(new Error('Aborted'));
-        return;
-      }
-      const timer = setTimeout(() => {
-        signal?.removeEventListener('abort', onAbort);
-        resolve();
-      }, ms);
-      const onAbort = () => {
-        clearTimeout(timer);
-        reject(new Error('Aborted'));
-      };
-      signal?.addEventListener('abort', onAbort, { once: true });
-    });
   }
 
   /** Broadcast an event to all subscribers. */

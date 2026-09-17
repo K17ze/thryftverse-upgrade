@@ -154,7 +154,6 @@ function base64ToBytes(base64: string, byteOffset: number, byteLength: number): 
 
   // Start char index for the byte offset
   const startChar = Math.floor(byteOffset / 3) * 4;
-  const skipBytes = byteOffset % 3;
 
   // Decode from the base64 alphabet
   const decodeChar = (c: number): number => {
@@ -167,7 +166,10 @@ function base64ToBytes(base64: string, byteOffset: number, byteLength: number): 
   };
 
   let outIdx = 0;
-  let bytePos = 0;
+  // Absolute byte index of the first decoded byte — group `startChar/4`
+  // decodes bytes (startChar/4)*3 onward, so bytePos must start there or
+  // the `absByte >= byteOffset` filter double-offsets every non-aligned read.
+  let bytePos = (startChar / 4) * 3;
   for (let i = startChar; i < chars && outIdx < actualLength; i += 4) {
     const v0 = decodeChar(base64.charCodeAt(i));
     const v1 = decodeChar(base64.charCodeAt(i + 1));

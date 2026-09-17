@@ -4,7 +4,6 @@
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,

@@ -120,7 +120,7 @@ describe('Seller Hub and Analytics Upgrade Verification', () => {
 
     // Multi-metric dimension switcher present
     expect(content).toContain('MetricDimension');
-    expect(content).toContain('Net Sales Trajectory');
+    expect(content).toContain('Sales Trajectory');
     expect(content).toContain('Order Volume');
     expect(content).toContain('Store Traffic');
     expect(content).toContain('Conversion Trajectory');

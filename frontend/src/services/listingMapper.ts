@@ -48,6 +48,9 @@ export interface BackendListingRow {
   condition?: string | null;
   originalPriceGbp?: number | string | null;
   createdAt?: string | null;
+  /** Live-auction end timestamp served by /listings — present only when the
+   *  listing has a live auction. */
+  auctionEndsAt?: string | null;
   shippingMethod?: string | null;
   shippingPayer?: string | null;
   seller?: ListingSeller | null;
@@ -244,6 +247,7 @@ export function mapBackendListingToListing(row: BackendListingRow): Listing {
     subcategory: nonBlank(row.subcategory),
     description: nonBlank(row.description),
     createdAt: nonBlank(row.createdAt),
+    auctionEndsAt: nonBlank(row.auctionEndsAt),
     status,
     shippingMethod: row.shippingMethod ?? null,
     shippingPayer: row.shippingPayer ?? null,

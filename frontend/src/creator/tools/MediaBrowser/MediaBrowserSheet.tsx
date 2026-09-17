@@ -31,555 +31,60 @@
  *   - Bottom bar: "Add N" confirm button (primary, full width)
  *   - Permission denied: centered message + "Open Settings" button
  *   - Empty: centered "No photos available" message
+ *
+ * Sub-components live in sibling files (pure extraction):
+ *   mediaBrowserTypes.ts    — shared types, constants, formatDuration
+ *   mediaBrowserStyles.ts   — createStyles + MediaBrowserStyles
+ *   MediaBrowserSkeleton.tsx— SkeletonBlock, MediaGridSkeleton
+ *   MediaGridItem.tsx       — MediaGridItem, CameraTile
+ *   MediaBrowserStates.tsx  — permission/load-error/empty states
+ *   MediaPreviewModal.tsx   — LargePreviewModal (long-press preview)
+ *   AlbumListView.tsx       — AlbumRow, AlbumListView
+ *   MediaTabBar.tsx         — tab row + animated indicator
+ *   MediaBrowserChrome.tsx  — SheetHeader, LimitedAccessBanner, ConfirmBottomBar
+ *   MediaGrid.tsx           — limited banner + FlashList
  */
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View,
-  Text,
-  StyleSheet,
-  Pressable,
-  ScrollView,
-  ActivityIndicator,
-  useWindowDimensions,
-  Modal,
-  type DimensionValue } from 'react-native';
-import { Image } from 'expo-image';
-import { FlashList, ListRenderItem } from '@shopify/flash-list';
+  useWindowDimensions } from 'react-native';
+import type { ListRenderItem } from '@shopify/flash-list';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library/legacy';
-import {
-  Space,
-  Radius,
-  Typography,
-  Stroke,
-  FontFamily,
-  Elevation } from '../../../theme/designTokens';
-import { TypographyV2 } from '../../../theme/typography.v2';
-import { IconGrammar } from '../../../theme/designTokens';
-import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
-import { SheetContainer, PressScale } from '../../shared/CreatorAnimations';
+import { Space } from '../../../theme/designTokens';
+import { useAppTheme } from '../../../theme/ThemeContext';
+import { SheetContainer } from '../../shared/CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useMotionConfig } from '../../../hooks/useMotionConfig';
-import { Motion } from '../../../theme/motionTokens';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
-import { AppIcon } from '../../../components/common/AppIcon';
-import { IconSize } from '../../../theme/iconTokens';
 import { useToast } from '../../../context/ToastContext';
-import Reanimated, {
+import {
   useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  withDelay,
-  interpolate,
-  Extrapolation } from 'react-native-reanimated';
+  withSpring } from 'react-native-reanimated';
+import {
+  GRID_COLUMNS,
+  MAX_VIDEO_DURATION_MS,
+  type GridItem,
+  type MediaAsset,
+  type MediaBrowserSheetProps,
+  type MediaTab,
+  type SelectedAsset,
+  type TabLayoutMap } from './mediaBrowserTypes';
+import { createStyles } from './mediaBrowserStyles';
+import { MediaGridSkeleton } from './MediaBrowserSkeleton';
+import { CameraTile, MediaGridItem } from './MediaGridItem';
+import {
+  MediaEmptyState,
+  MediaLoadErrorState,
+  PermissionDeniedState } from './MediaBrowserStates';
+import { LargePreviewModal } from './MediaPreviewModal';
+import { AlbumListView } from './AlbumListView';
+import { MediaTabBar } from './MediaTabBar';
+import { ConfirmBottomBar, SheetHeader } from './MediaBrowserChrome';
+import { MediaGrid } from './MediaGrid';
 
-// ── Types ───────────────────────────────────────────────────────────
-
-/**
- * A media asset selected by the user. Returned via onConfirm in tap order.
- */
-export interface SelectedAsset {
-  uri: string;
-  mediaType: 'image' | 'video';
-  width?: number;
-  height?: number;
-  /** Video duration in milliseconds (normalized at the boundary). */
-  durationMs?: number;
-  filename?: string;
-}
-
-export interface MediaBrowserSheetProps {
-  visible: boolean;
-  onClose: () => void;
-  /** Called with the selected assets in tap order when the user confirms. */
-  onConfirm: (assets: SelectedAsset[]) => void;
-  /** Maximum number of selectable assets. Default: unlimited. */
-  maxSelections?: number;
-  /** Sheet title. Default: "Select photos". */
-  title?: string;
-  /** Show the camera tile at the first grid position. Default: true. */
-  showCameraTile?: boolean;
-  /** Allow video selection. Default: true. */
-  allowVideos?: boolean;
-}
-
-// ── Internal media asset (from MediaLibrary) ────────────────────────
-
-interface MediaAsset {
-  id: string;
-  uri: string;
-  mediaType: 'image' | 'video';
-  width: number;
-  height: number;
-  /** Video duration in milliseconds (normalized at the boundary). */
-  durationMs?: number;
-  filename?: string;
-}
-
-// ── Tab model ───────────────────────────────────────────────────────
-// "Albums" tab shows a list of device albums; selecting one scopes the
-// grid to that album and switches back to the "Recents" tab showing
-// only that album's contents.
-
-type MediaTab = 'recents' | 'albums' | 'photos' | 'videos';
-
-const MEDIA_TABS: { key: MediaTab; label: string }[] = [
-  { key: 'recents', label: 'Recents' },
-  { key: 'albums', label: 'Albums' },
-  { key: 'photos', label: 'Photos' },
-  { key: 'videos', label: 'Videos' },
-];
-
-// ── Grid geometry ───────────────────────────────────────────────────
-
-const GRID_COLUMNS = 3;
-// Thumbnail size is derived from the live window width via `useWindowDimensions`
-// inside the component (not module-level `Dimensions.get('window')`) so the
-// grid responds to rotation and multi-window changes instead of being frozen
-// at import time. The hook is called in the sheet component below.
-
-// Max video duration accepted by the downstream editor/upload pipeline.
-const MAX_VIDEO_DURATION_MS = 60_000;
-
-// ── SkeletonBlock — one-time shimmer sweep (AGENTS.md §14, §17) ──────
-function SkeletonBlock({ width, height, radius }: { width: DimensionValue; height: number; radius?: number }) {
-  const { colors } = useAppTheme();
-  const reduceMotion = useReducedMotion();
-  const shimmerSV = useSharedValue(0);
-
-  useEffect(() => {
-    if (reduceMotion) return;
-    shimmerSV.value = 0;
-    shimmerSV.value = withTiming(1, { duration: Motion.duration.crawl });
-  }, [reduceMotion, shimmerSV]);
-
-  const style = useAnimatedStyle(() => ({
-    backgroundColor: colors.surfaceAlt,
-    opacity: 0.5 + 0.3 * shimmerSV.value }));
-
-  return (
-    <Reanimated.View style={[{ width, height, borderRadius: radius ?? Radius.sm }, style]} />
-  );
-}
-
-// ── MediaGridSkeleton — 3 columns of square thumbnail skeletons ──────
-function MediaGridSkeleton() {
-  const rows = 4;
-  const { width: screenWidth } = useWindowDimensions();
-  const thumbSize = Math.floor(
-    (screenWidth - Space.md * 2 - Space.xs * (GRID_COLUMNS - 1)) / GRID_COLUMNS,
-  );
-  return (
-    <View style={{ paddingHorizontal: Space.md, paddingVertical: Space.sm }}>
-      {Array.from({ length: rows }).map((_, r) => (
-        <View key={r} style={{ flexDirection: 'row', gap: Space.xs, marginBottom: Space.xs }}>
-          {Array.from({ length: GRID_COLUMNS }).map((_, c) => (
-            <SkeletonBlock key={c} width={thumbSize} height={thumbSize} radius={Radius.md} />
-          ))}
-        </View>
-      ))}
-    </View>
-  );
-}
-
-// ── Duration formatting ─────────────────────────────────────────────
-
-function formatDuration(ms: number): string {
-  const totalSeconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  if (minutes > 0) {
-    return `${minutes}:${String(seconds).padStart(2, '0')}`;
-  }
-  return `${seconds}s`;
-}
-
-// ── MediaGridItem — spring press feedback + selection badge ─────────
-
-interface MediaGridItemProps {
-  asset: MediaAsset;
-  isSelected: boolean;
-  selectionOrder: number;
-  onPress: () => void;
-  onLongPress: () => void;
-  colors: ThemeColors;
-  styles: ReturnType<typeof createStyles>;
-}
-
-function MediaGridItem({
-  asset,
-  isSelected,
-  selectionOrder,
-  onPress,
-  onLongPress,
-  colors,
-  styles }: MediaGridItemProps) {
-  const reduceMotion = useReducedMotion();
-  const { spring } = useMotionConfig();
-  const pressedSV = useSharedValue(0);
-  const badgeScaleSV = useSharedValue(isSelected ? 1 : 0);
-
-  useEffect(() => {
-    if (isSelected) {
-      badgeScaleSV.value = reduceMotion ? 1 : withSpring(1, spring.success);
-    } else {
-      badgeScaleSV.value = reduceMotion ? 0 : withSpring(0, spring.tap);
-    }
-  }, [isSelected, reduceMotion, spring, badgeScaleSV]);
-
-  const pressStyle = useAnimatedStyle(() => ({
-    transform: [
-      { scale: interpolate(pressedSV.value, [0, 1], [1, 0.95], Extrapolation.CLAMP) },
-    ] }));
-
-  const badgeStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: badgeScaleSV.value }],
-    opacity: badgeScaleSV.value }));
-
-  return (
-    <Pressable
-      onPress={onPress}
-      onLongPress={onLongPress}
-      onPressIn={() => { pressedSV.value = withSpring(1, spring.tap); }}
-      onPressOut={() => { pressedSV.value = withSpring(0, spring.tap); }}
-      accessibilityLabel={`Select ${asset.mediaType}${isSelected ? `, selected ${selectionOrder}` : ''}`}
-      accessibilityRole="button"
-      accessibilityState={{ selected: isSelected }}
-      hitSlop={{ top: 2, bottom: 2, left: 2, right: 2 }}
-    >
-      <Reanimated.View
-        style={[
-          styles.mediaGridCell,
-          isSelected && { borderColor: colors.brand, borderWidth: Stroke.emphasis },
-          pressStyle,
-        ]}
-      >
-        <Image
-          source={{ uri: asset.uri }}
-          style={styles.mediaGridThumb}
-          contentFit="cover"
-          transition={120}
-          recyclingKey={asset.id}
-        />
-        {asset.mediaType === 'video' && (
-          <View style={styles.mediaGridVideoBadge}>
-            <AppIcon name="play" size={IconSize.xs} color="textInverse" opticalCenter={true} accessible={false} />
-            {asset.durationMs != null && (
-              <Text style={styles.mediaGridDuration}>
-                {formatDuration(asset.durationMs)}
-              </Text>
-            )}
-          </View>
-        )}
-        {isSelected && (
-          <Reanimated.View
-            style={[styles.mediaGridSelectionBadge, { backgroundColor: colors.brand }, badgeStyle]}
-          >
-            <Text style={[styles.mediaGridSelectionText, { color: colors.textInverse }]}>
-              {selectionOrder}
-            </Text>
-          </Reanimated.View>
-        )}
-      </Reanimated.View>
-    </Pressable>
-  );
-}
-
-// ── StaticStateIcon — no continuous animation (AGENTS.md §17) ───────
-
-function StaticStateIcon({
-  name,
-  size,
-  color }: {
-  name: string;
-  size: number;
-  color: string;
-}) {
-  return <AppIcon name={name} size={size} color={color} opticalCenter={true} accessible={false} />;
-}
-
-// ── PermissionDeniedState — spring entrance with retry CTA ──────────
-
-interface PermissionDeniedStateProps {
-  icon: string;
-  title: string;
-  message: string;
-  ctaLabel: string;
-  onCta: () => void;
-  colors: ThemeColors;
-  styles: ReturnType<typeof createStyles>;
-}
-
-function PermissionDeniedState({
-  icon,
-  title,
-  message,
-  ctaLabel,
-  onCta,
-  colors,
-  styles }: PermissionDeniedStateProps) {
-  const reduceMotion = useReducedMotion();
-  const entranceSV = useSharedValue(reduceMotion ? 1 : 0);
-
-  useEffect(() => {
-    if (!reduceMotion) {
-      // Per §5.14: entrance uses timing (ease-out), not spring.
-      const entranceDelayMs = 100;
-      entranceSV.value = withDelay(entranceDelayMs, withTiming(1, { duration: Motion.duration.slow, easing: Motion.easing.entrance }));
-    }
-  }, [reduceMotion, entranceSV]);
-
-  const entranceStyle = useAnimatedStyle(() => ({
-    opacity: entranceSV.value,
-    transform: [
-      { translateY: interpolate(entranceSV.value, [0, 1], [20, 0], Extrapolation.CLAMP) },
-    ] }));
-
-  return (
-    <Reanimated.View style={[styles.centerState, entranceStyle]}>
-      <StaticStateIcon name={icon} size={IconGrammar.hero} color={colors.textMuted} />
-      <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>{title}</Text>
-      <Text style={[styles.stateMessage, { color: colors.textSecondary }]}>{message}</Text>
-      <PressScale
-        onPress={onCta}
-        style={[styles.stateBtn, { backgroundColor: colors.brand }]}
-        accessibilityLabel={ctaLabel}
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-      >
-        <Text style={[styles.stateBtnText, { color: colors.textInverse }]}>{ctaLabel}</Text>
-      </PressScale>
-    </Reanimated.View>
-  );
-}
-
-// ── CameraTile — first grid position, opens camera ──────────────────
-
-interface CameraTileProps {
-  onPress: () => void;
-  colors: ThemeColors;
-  styles: ReturnType<typeof createStyles>;
-}
-
-function CameraTile({ onPress, colors, styles }: CameraTileProps) {
-  return (
-    <PressScale
-      onPress={onPress}
-      style={[styles.mediaGridCell, styles.cameraTile, { backgroundColor: colors.brandSubtle }]}
-      accessibilityLabel="Take photo with camera"
-      accessibilityHint="Opens the camera to capture a new photo"
-      hitSlop={{ top: 2, bottom: 2, left: 2, right: 2 }}
-    >
-      <AppIcon name="camera-outline" size={IconSize.hero} color="brand" opticalCenter={true} accessible={false} />
-    </PressScale>
-  );
-}
-
-// ── LargePreviewModal — full-screen preview on long-press ───────────
-
-interface LargePreviewModalProps {
-  asset: MediaAsset | null;
-  onClose: () => void;
-  colors: ThemeColors;
-}
-
-function LargePreviewModal({ asset, onClose, colors }: LargePreviewModalProps) {
-  if (!asset) return null;
-  return (
-    <Modal visible={!!asset} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={[previewStyles.backdrop, { backgroundColor: colors.mediaOverlayScrim }]} onPress={onClose} accessibilityRole="image">
-        <View style={previewStyles.content}>
-          <Image
-            source={{ uri: asset.uri }}
-            style={previewStyles.image}
-            contentFit="contain"
-            transition={150}
-          />
-          {asset.mediaType === 'video' && asset.durationMs != null && (
-            <View style={[previewStyles.durationBadge, { backgroundColor: colors.mediaOverlayScrim }]}>
-              <AppIcon name="play" size={IconSize.xs} color="textInverse" opticalCenter={true} accessible={false} />
-              <Text style={[previewStyles.durationText, { color: colors.scrimTextPrimary }]}>
-                {formatDuration(asset.durationMs)}
-              </Text>
-            </View>
-          )}
-        </View>
-        <Pressable style={[previewStyles.closeBtn, { backgroundColor: colors.scrimTextTertiary }]} onPress={onClose} hitSlop={12} accessibilityLabel="Close preview" accessibilityRole="button">
-          <AppIcon name="close" size={IconSize.hero} color="textInverse" opticalCenter={true} accessible={false} />
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
-
-const previewStyles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center' },
-  content: {
-    width: '100%',
-    height: '80%' },
-  image: {
-    width: '100%',
-    height: '100%' },
-  durationBadge: {
-    position: 'absolute',
-    bottom: Space.md,
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
-    borderRadius: Radius.full },
-  durationText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-  closeBtn: {
-    position: 'absolute',
-    top: 50,
-    right: Space.md,
-    width: 44,
-    height: 44,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center' } });
-
-// ── AlbumRow — loads its own cover thumbnail (first asset in album) ──
-
-interface AlbumRowProps {
-  album: MediaLibrary.Album;
-  isActive: boolean;
-  onSelect: (albumId: string | null) => void;
-  colors: ThemeColors;
-  styles: ReturnType<typeof createStyles>;
-}
-
-function AlbumRow({ album, isActive, onSelect, colors, styles }: AlbumRowProps) {
-  const [coverUri, setCoverUri] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    MediaLibrary.getAssetsAsync({ album: album.id, first: 1, mediaType: ['photo', 'video'] })
-      .then((result) => {
-        if (!cancelled && result.assets.length > 0) {
-          setCoverUri(result.assets[0].uri);
-        }
-      })
-      .catch(() => {
-        // Cover is optional — placeholder will render.
-      });
-    return () => { cancelled = true; };
-  }, [album.id]);
-
-  return (
-    <Pressable
-      style={styles.albumRow}
-      onPress={() => onSelect(album.id)}
-      accessibilityLabel={`${album.title} album, ${album.assetCount} items`}
-      accessibilityRole="button"
-      accessibilityState={{ selected: isActive }}
-    >
-      <View style={[styles.albumThumb, { backgroundColor: colors.surfaceAlt }]}>
-        {coverUri ? (
-          <Image
-            source={{ uri: coverUri }}
-            style={styles.albumThumbImage}
-            contentFit="cover"
-            transition={120}
-            recyclingKey={album.id}
-          />
-        ) : (
-          <AppIcon name="images-outline" size={IconSize.lg} color="textMuted" opticalCenter={true} accessible={false} />
-        )}
-      </View>
-      <View style={styles.albumRowTextCol}>
-        <Text
-          style={[
-            styles.albumRowText,
-            { color: isActive ? colors.brand : colors.textPrimary },
-          ]}
-          numberOfLines={1}
-        >
-          {album.title}
-        </Text>
-        <Text style={[styles.albumRowSubtext, { color: colors.textMuted }]}>
-          {album.assetCount} items
-        </Text>
-      </View>
-      {isActive && <AppIcon name="check" size={IconSize.sm} color="brand" opticalCenter={true} accessible={false} />}
-    </Pressable>
-  );
-}
-
-// ── AlbumListView — shown when "Albums" tab is active ───────────────
-
-interface AlbumListViewProps {
-  albums: MediaLibrary.Album[];
-  activeAlbumId: string | null;
-  onSelectAlbum: (albumId: string | null) => void;
-  colors: ThemeColors;
-  styles: ReturnType<typeof createStyles>;
-}
-
-function AlbumListView({
-  albums,
-  activeAlbumId,
-  onSelectAlbum,
-  colors,
-  styles }: AlbumListViewProps) {
-  if (albums.length === 0) {
-    return (
-      <View style={styles.centerState}>
-        <StaticStateIcon name="folder-open-outline" size={IconSize.hero} color={colors.textMuted} />
-        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-          No albums found
-        </Text>
-      </View>
-    );
-  }
-
-  return (
-    <ScrollView style={styles.albumList} contentContainerStyle={styles.albumListContent}>
-      <Pressable
-        style={styles.albumRow}
-        onPress={() => onSelectAlbum(null)}
-        accessibilityLabel="All Photos album"
-        accessibilityRole="button"
-        accessibilityState={{ selected: activeAlbumId === null }}
-      >
-        <View style={[styles.albumThumb, { backgroundColor: colors.brandSubtle }]}>
-          <AppIcon name="images-outline" size={IconSize.lg} color="brand" opticalCenter={true} accessible={false} />
-        </View>
-        <View style={styles.albumRowTextCol}>
-          <Text
-            style={[
-              styles.albumRowText,
-              { color: activeAlbumId === null ? colors.brand : colors.textPrimary },
-            ]}
-          >
-            All Photos
-          </Text>
-          <Text style={[styles.albumRowSubtext, { color: colors.textMuted }]}>
-            Everything in your library
-          </Text>
-        </View>
-        {activeAlbumId === null && <AppIcon name="check" size={IconSize.sm} color="brand" opticalCenter={true} accessible={false} />}
-      </Pressable>
-      {albums.slice(0, 30).map((album) => (
-        <AlbumRow
-          key={album.id}
-          album={album}
-          isActive={activeAlbumId === album.id}
-          onSelect={onSelectAlbum}
-          colors={colors}
-          styles={styles}
-        />
-      ))}
-    </ScrollView>
-  );
-}
+// Re-exported so existing consumers (`index.ts`) keep their import path.
+export type { MediaBrowserSheetProps, SelectedAsset };
 
 // ── Main component ──────────────────────────────────────────────────
 
@@ -658,7 +163,7 @@ export function MediaBrowserSheet({
   // ── Tab indicator animation ──
   const tabIndicatorXSV = useSharedValue(0);
   const tabIndicatorWidthSV = useSharedValue(0);
-  const tabLayoutsRef = useRef<Record<MediaTab, { x: number; width: number }>>({} as any);
+  const tabLayoutsRef = useRef<TabLayoutMap>({});
 
   // ── Load media from the device library ──
   const loadRecentMedia = useCallback(
@@ -826,16 +331,19 @@ export function MediaBrowserSheet({
     Linking.openSettings();
   }, []);
 
+  // ── Limited-access management (iOS 14+ / Android 14+ picker) ──
+  const handleManageLimitedAccess = useCallback(async () => {
+    try {
+      await MediaLibrary.presentPermissionsPickerAsync();
+      loadRecentMedia(true);
+    } catch {
+      handleOpenSettings();
+    }
+  }, [loadRecentMedia, handleOpenSettings]);
+
   const selectedCount = selectedIds.length;
 
-  // ── Tab indicator animated style ──
-  const tabIndicatorStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: tabIndicatorXSV.value }],
-    width: tabIndicatorWidthSV.value }));
-
   // ── FlashList renderItem ──
-  type GridItem = MediaAsset | 'camera';
-
   const renderItem: ListRenderItem<GridItem> = useCallback(
     ({ item }) => {
       if (item === 'camera') {
@@ -870,17 +378,7 @@ export function MediaBrowserSheet({
   if (!status) {
     return (
       <SheetContainer visible={visible} onClose={onClose} maxHeight={0.95}>
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
-          <PressScale
-            onPress={onClose}
-            style={styles.closeBtn}
-            accessibilityLabel="Close"
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <AppIcon name="close" size={IconSize.lg} color="textSecondary" opticalCenter={true} accessible={false} />
-          </PressScale>
-        </View>
+        <SheetHeader title={title} onClose={onClose} colors={colors} styles={styles} />
         <View style={styles.centerState}>
           <MediaGridSkeleton />
         </View>
@@ -891,17 +389,7 @@ export function MediaBrowserSheet({
   if (!status.granted && !status.canAskAgain) {
     return (
       <SheetContainer visible={visible} onClose={onClose} maxHeight={0.95}>
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
-          <PressScale
-            onPress={onClose}
-            style={styles.closeBtn}
-            accessibilityLabel="Close"
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <AppIcon name="close" size={IconSize.lg} color="textSecondary" opticalCenter={true} accessible={false} />
-          </PressScale>
-        </View>
+        <SheetHeader title={title} onClose={onClose} colors={colors} styles={styles} />
         <PermissionDeniedState
           icon="lock-closed-outline"
           title="Photo access needed"
@@ -918,17 +406,7 @@ export function MediaBrowserSheet({
   if (!status.granted) {
     return (
       <SheetContainer visible={visible} onClose={onClose} maxHeight={0.95}>
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
-          <PressScale
-            onPress={onClose}
-            style={styles.closeBtn}
-            accessibilityLabel="Close"
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <AppIcon name="close" size={IconSize.lg} color="textSecondary" opticalCenter={true} accessible={false} />
-          </PressScale>
-        </View>
+        <SheetHeader title={title} onClose={onClose} colors={colors} styles={styles} />
         <PermissionDeniedState
           icon="images-outline"
           title="Access your photos"
@@ -955,58 +433,19 @@ export function MediaBrowserSheet({
             label-everything AI-tell of restating the count in the title, a
             badge, and the button (AGENTS.md §4). The title stays as the
             static sheet title regardless of selection state. */}
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
-          <PressScale
-            onPress={onClose}
-            style={styles.closeBtn}
-            accessibilityLabel="Close"
-            accessibilityHint="Closes the media browser"
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <AppIcon name="close" size={IconSize.lg} color="textSecondary" opticalCenter={true} accessible={false} />
-          </PressScale>
-        </View>
+        <SheetHeader title={title} onClose={onClose} colors={colors} styles={styles} />
 
         {/* Tab bar: Recents | Albums | Photos | Videos */}
-        <View style={styles.tabRow}>
-          <Reanimated.View
-            style={[styles.tabIndicator, { backgroundColor: colors.brand }, tabIndicatorStyle]}
-          />
-          {MEDIA_TABS.map((tab) => {
-            const active = activeTab === tab.key;
-            // Hide the Videos tab when videos are not allowed
-            if (tab.key === 'videos' && !allowVideos) return null;
-            return (
-              <Pressable
-                key={tab.key}
-                onPress={() => handleTabSwitch(tab.key)}
-                onLayout={(e) => {
-                  tabLayoutsRef.current[tab.key] = {
-                    x: e.nativeEvent.layout.x,
-                    width: e.nativeEvent.layout.width };
-                  if (tab.key === 'recents' && tabIndicatorWidthSV.value === 0) {
-                    tabIndicatorWidthSV.value = e.nativeEvent.layout.width;
-                  }
-                }}
-                style={styles.tab}
-                accessibilityLabel={`Tab ${tab.label}`}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: active }}
-                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-              >
-                <Text
-                  style={[
-                    styles.tabLabel,
-                    { color: active ? colors.textPrimary : colors.textSecondary },
-                  ]}
-                >
-                  {tab.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        <MediaTabBar
+          activeTab={activeTab}
+          allowVideos={allowVideos}
+          onTabPress={handleTabSwitch}
+          tabIndicatorXSV={tabIndicatorXSV}
+          tabIndicatorWidthSV={tabIndicatorWidthSV}
+          tabLayoutsRef={tabLayoutsRef}
+          colors={colors}
+          styles={styles}
+        />
 
         {/* Content area */}
         {activeTab === 'albums' ? (
@@ -1020,320 +459,43 @@ export function MediaBrowserSheet({
         ) : isLoading ? (
           <MediaGridSkeleton />
         ) : loadError && filteredAssets.length === 0 ? (
-          <View style={styles.centerState}>
-            <StaticStateIcon name="alert-circle-outline" size={IconGrammar.hero} color={colors.textMuted} />
-            <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>
-              Couldn't load photos
-            </Text>
-            <PressScale
-              onPress={() => { setLoadError(false); loadRecentMedia(true); }}
-              style={[styles.stateBtn, { backgroundColor: colors.brand }]}
-              accessibilityLabel="Retry loading photos"
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Text style={[styles.stateBtnText, { color: colors.textInverse }]}>
-                Retry
-              </Text>
-            </PressScale>
-          </View>
+          <MediaLoadErrorState
+            onRetry={() => { setLoadError(false); loadRecentMedia(true); }}
+            colors={colors}
+            styles={styles}
+          />
         ) : filteredAssets.length === 0 ? (
-          <View style={styles.centerState}>
-            <StaticStateIcon name="images-outline" size={IconGrammar.hero} color={colors.textMuted} />
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-              {activeTab === 'videos'
-                ? 'No videos available'
-                : activeTab === 'photos'
-                  ? 'No photos available'
-                  : 'No photos available'}
-            </Text>
-            {showCameraTile && (
-              <PressScale
-                onPress={handleTakePhoto}
-                style={[styles.stateBtn, { backgroundColor: colors.brand }]}
-                accessibilityLabel="Take photo"
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Text style={[styles.stateBtnText, { color: colors.textInverse }]}>
-                  Take photo
-                </Text>
-              </PressScale>
-            )}
-          </View>
+          <MediaEmptyState
+            activeTab={activeTab}
+            showCameraTile={showCameraTile}
+            onTakePhoto={handleTakePhoto}
+            colors={colors}
+            styles={styles}
+          />
         ) : (
-          <>
-            {/* Limited-access banner (iOS 14+ / Android 14+) */}
-            {status.accessPrivileges === 'limited' && (
-              <Pressable
-                style={[styles.limitedBanner, { backgroundColor: colors.surfaceAlt }]}
-                onPress={async () => {
-                  try {
-                    await MediaLibrary.presentPermissionsPickerAsync();
-                    loadRecentMedia(true);
-                  } catch {
-                    handleOpenSettings();
-                  }
-                }}
-                accessibilityLabel="Limited photo access — tap to select more photos"
-                accessibilityRole="button"
-              >
-                <AppIcon name="images-outline" size={IconSize.sm} color="textSecondary" opticalCenter={true} accessible={false} />
-                <Text style={[styles.limitedBannerText, { color: colors.textSecondary }]}>
-                  Limited access — tap to manage
-                </Text>
-                <AppIcon name="forward" size={IconSize.xs} color="textMuted" opticalCenter={true} accessible={false} />
-              </Pressable>
-            )}
-
-            {/* Media grid via FlashList */}
-            <FlashList
-              data={gridData}
-              keyExtractor={(item) => (typeof item === 'string' ? item : item.id)}
-              renderItem={renderItem}
-              numColumns={GRID_COLUMNS}
-              contentContainerStyle={styles.gridContent}
-              onEndReached={() => loadRecentMedia(false)}
-              onEndReachedThreshold={0.5}
-              ListFooterComponent={
-                loadingMore ? (
-                  <View style={styles.gridFooter}>
-                    <ActivityIndicator size="small" color={colors.textMuted} />
-                  </View>
-                ) : null
-              }
-            />
-          </>
+          <MediaGrid
+            isLimited={status.accessPrivileges === 'limited'}
+            onManageLimitedAccess={handleManageLimitedAccess}
+            gridData={gridData}
+            renderItem={renderItem}
+            loadingMore={loadingMore}
+            onEndReached={() => loadRecentMedia(false)}
+            colors={colors}
+            styles={styles}
+          />
         )}
 
         {/* Bottom bar: confirm button (full width, disabled when 0 selected) */}
-        <View style={[styles.bottomBar, { borderTopColor: colors.border }]}>
-          <PressScale
-            onPress={handleConfirm}
-            disabled={selectedCount === 0}
-            style={[
-              styles.confirmBtn,
-              {
-                backgroundColor: selectedCount > 0 ? colors.brand : colors.surfaceAlt },
-            ]}
-            accessibilityLabel={
-              selectedCount > 0
-                ? `Next, ${selectedCount} selected`
-                : 'Next button — select items first'
-            }
-            accessibilityRole="button"
-            accessibilityState={{ disabled: selectedCount === 0 }}
-          >
-            <Text
-              style={[
-                styles.confirmBtnText,
-                {
-                  color: selectedCount > 0 ? colors.textInverse : colors.textMuted },
-              ]}
-            >
-              {selectedCount > 0 ? `Next (${selectedCount})` : 'Next'}
-            </Text>
-            <AppIcon
-              name="forward"
-              size={IconSize.sm}
-              color={selectedCount > 0 ? 'textInverse' : 'textMuted'}
-              opticalCenter={true}
-              accessible={false}
-            />
-          </PressScale>
-        </View>
+        <ConfirmBottomBar
+          selectedCount={selectedCount}
+          onConfirm={handleConfirm}
+          colors={colors}
+          styles={styles}
+        />
       </SheetContainer>
 
       {/* Large preview modal (long-press) */}
       <LargePreviewModal asset={previewAsset} onClose={() => setPreviewAsset(null)} colors={colors} />
     </>
   );
-}
-
-// ── Styles ──────────────────────────────────────────────────────────
-
-function createStyles(colors: ThemeColors, thumbSize: number) {
-  return StyleSheet.create({
-    // ── Header ──
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm },
-    title: {
-      fontFamily: Typography.family.semibold,
-      fontSize: TypographyV2.screenTitle.size,
-      color: colors.textPrimary,
-      flex: 1 },
-    closeBtn: {
-      width: 44,
-      height: 44,
-      justifyContent: 'center',
-      alignItems: 'center',
-      borderRadius: Radius.sm },
-
-    // ── Tab bar ──
-    tabRow: {
-      flexDirection: 'row',
-      paddingHorizontal: Space.md,
-      position: 'relative',
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border },
-    tabIndicator: {
-      position: 'absolute',
-      bottom: 0,
-      height: Stroke.emphasis,
-      borderRadius: Stroke.emphasis },
-    tab: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingVertical: Space.smMd,
-      zIndex: 1 },
-    tabLabel: {
-      fontFamily: Typography.family.semibold,
-      fontSize: TypographyV2.bodyStrong.size },
-
-    // ── Album list ──
-    albumList: {
-      flex: 1 },
-    albumListContent: {
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm },
-    albumRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.smMd,
-      paddingVertical: Space.xs,
-      minHeight: 56 },
-    albumThumb: {
-      width: 48,
-      height: 48,
-      borderRadius: Radius.md,
-      alignItems: 'center',
-      justifyContent: 'center',
-      overflow: 'hidden' },
-    albumThumbImage: {
-      width: '100%',
-      height: '100%' },
-    albumRowTextCol: {
-      flex: 1,
-      flexDirection: 'column',
-      gap: 1 },
-    albumRowText: {
-      fontFamily: Typography.family.medium,
-      fontSize: TypographyV2.bodyStrong.size },
-    albumRowSubtext: {
-      fontFamily: Typography.family.regular,
-      fontSize: TypographyV2.meta.size },
-
-    // ── Limited-access banner ──
-    limitedBanner: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.smMd,
-      marginHorizontal: Space.md,
-      marginBottom: Space.sm,
-      borderRadius: Radius.md },
-    limitedBannerText: {
-      flex: 1,
-      fontFamily: Typography.family.medium,
-      fontSize: TypographyV2.meta.size },
-
-    // ── Media grid ──
-    gridContent: {
-      paddingHorizontal: Space.md,
-      paddingBottom: Space.xl },
-    mediaGridCell: {
-      width: thumbSize,
-      height: thumbSize,
-      borderRadius: Radius.md,
-      overflow: 'hidden',
-      justifyContent: 'center',
-      alignItems: 'center',
-      gap: Space.xxs },
-    mediaGridThumb: {
-      width: '100%',
-      height: '100%' },
-    cameraTile: {
-      justifyContent: 'center',
-      alignItems: 'center' },
-    mediaGridVideoBadge: {
-      position: 'absolute',
-      bottom: Space.xs,
-      left: Space.xs,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 2,
-      backgroundColor: colors.mediaOverlayScrim,
-      paddingHorizontal: 6,
-      paddingVertical: 2,
-      borderRadius: Radius.sm },
-    mediaGridDuration: {
-      color: colors.scrimTextPrimary,
-      fontSize: TypographyV2.meta.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: 0.2 },
-    mediaGridSelectionBadge: {
-      position: 'absolute',
-      top: Space.xs,
-      right: Space.xs,
-      width: 20,
-      height: 20,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-      ...Elevation.modal },
-    mediaGridSelectionText: {
-      fontSize: TypographyV2.meta.size,
-      fontFamily: Typography.family.bold },
-    gridFooter: {
-      paddingVertical: Space.md,
-      alignItems: 'center' },
-
-    // ── States ──
-    centerState: {
-      paddingVertical: Space.xxl,
-      alignItems: 'center',
-      gap: Space.md,
-      paddingHorizontal: Space.xl },
-    stateTitle: {
-      fontFamily: Typography.family.semibold,
-      fontSize: TypographyV2.screenTitle.size,
-      marginTop: Space.sm },
-    stateMessage: {
-      fontFamily: Typography.family.regular,
-      fontSize: TypographyV2.body.size,
-      textAlign: 'center',
-      lineHeight: 22 },
-    stateBtn: {
-      paddingHorizontal: Space.lg,
-      height: 44,
-      borderRadius: Radius.md,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginTop: Space.sm },
-    stateBtnText: {
-      fontFamily: Typography.family.semibold,
-      fontSize: TypographyV2.body.size },
-    emptyText: {
-      fontFamily: Typography.family.medium,
-      fontSize: TypographyV2.body.size },
-
-    // ── Bottom bar ──
-    bottomBar: {
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      borderTopWidth: StyleSheet.hairlineWidth },
-    confirmBtn: {
-      height: 50,
-      borderRadius: Radius.lg,
-      flexDirection: 'row',
-      justifyContent: 'center',
-      alignItems: 'center',
-      gap: Space.xxs },
-    confirmBtnText: {
-      fontFamily: FontFamily.semibold,
-      fontSize: TypographyV2.bodyStrong.size } });
 }

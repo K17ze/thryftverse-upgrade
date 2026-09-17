@@ -250,6 +250,7 @@ export function ContextToolRail({
       contentContainerStyle={styles.railContent}
       accessibilityRole="toolbar"
       accessibilityLabel="Creator tools"
+      accessibilityHint="Swipe to browse creator tools"
     >
       {weightedPrimary.map((tool) => (
         <RailToolButton

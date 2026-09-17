@@ -42,12 +42,7 @@ const DOT_MAX_PAGES = 5;
 /** Swipe hint auto-dismiss delay (Agency Effect research, 2026). */
 const SWIPE_HINT_DELAY_MS = 2800;
 
-const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
-const applyRubberBand = (v: number, min: number, max: number, friction = 0.24) => {
-  if (v < min) return min + (v - min) * friction;
-  if (v > max) return max + (v - max) * friction;
-  return v;
-};
+import { clamp, rubberBand as applyRubberBand } from '../../utils/posterPhysics';
 
 export interface LookMediaCarouselPage {
   id: string;

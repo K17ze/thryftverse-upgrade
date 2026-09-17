@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useHaptic } from '../useHaptic';
+import { useConnectivity } from '../useConnectivity';
 import { useToast } from '../../context/ToastContext';
 import {
   fetchEarningsSummary,
@@ -12,10 +13,19 @@ export function useCreatorPayout(
   onEarningsUpdated: (earnings: EarningsSummary) => void,
 ) {
   const haptic = useHaptic();
+  const { isOffline } = useConnectivity();
   const { show: showToast } = useToast();
   const [isPayoutLoading, setIsPayoutLoading] = useState(false);
   const [payoutError, setPayoutError] = useState<string | null>(null);
   const mountedRef = useRef(true);
+  // In-flight guard — state alone can't stop two rapid taps before the
+  // first rerender lands.
+  const inFlightRef = useRef(false);
+  // Idempotency key persists across retries: if the response is lost the
+  // backend replays by (userId, key); a fresh key per attempt would mint a
+  // second payoutId and double-pay. Cleared only on a confirmed success so
+  // a later, separate payout intent gets a fresh key.
+  const payoutKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -23,12 +33,17 @@ export function useCreatorPayout(
   }, []);
 
   const onPayout = useCallback(async () => {
-    if (isPayoutLoading) return;
+    if (inFlightRef.current || isOffline) return;
+    inFlightRef.current = true;
     haptic.light();
     setIsPayoutLoading(true);
     setPayoutError(null);
     try {
-      await requestPayout('wallet', `manual_${Date.now()}`);
+      if (!payoutKeyRef.current) {
+        payoutKeyRef.current = `manual_${Date.now()}`;
+      }
+      await requestPayout('wallet', payoutKeyRef.current);
+      payoutKeyRef.current = null;
       // Reload earnings after successful payout
       const fresh = await fetchEarningsSummary();
       if (mountedRef.current) onEarningsUpdated(fresh);
@@ -42,9 +57,10 @@ export function useCreatorPayout(
         showToast(message, 'error');
       }
     } finally {
+      inFlightRef.current = false;
       if (mountedRef.current) setIsPayoutLoading(false);
     }
-  }, [haptic, isPayoutLoading, showToast, onEarningsUpdated]);
+  }, [haptic, isOffline, showToast, onEarningsUpdated]);
 
   return { isPayoutLoading, payoutError, onPayout };
 }

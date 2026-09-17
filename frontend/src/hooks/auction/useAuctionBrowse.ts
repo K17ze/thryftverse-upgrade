@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { listAuctions } from '../../services/marketApi';
+import { useStore } from '../../store/useStore';
 import {
   toViewModel,
   hasActiveFilters,
@@ -11,7 +12,7 @@ import {
 } from '../../utils/auctionHomeLogic';
 
 export interface BrowseResult {
-  status: 'idle' | 'loading' | 'ready' | 'empty' | 'error';
+  status: 'idle' | 'loading' | 'ready' | 'empty' | 'error' | 'auth';
   items: AuctionHomeItem[];
   cursor: string | null;
 }
@@ -41,6 +42,11 @@ export function useAuctionBrowse({
   const browseReqIdRef = useRef(0);
 
   const isBrowsing = hasActiveFilters(browseState);
+  // 'Watching' scope requires authentication — a logged-out user has no
+  // watchlist, so the watchedOnly request would hard-401. Surface a
+  // dedicated auth state instead of a misleading "filter failed" error.
+  const viewerId = useStore((s) => s.currentUser?.id ?? null);
+  const watchingNeedsAuth = scopeUsesWatchedOnly(browseState.scope) && !viewerId;
 
   // ── Browse results fetching (when filters are active) ──
   useEffect(() => {
@@ -48,15 +54,21 @@ export function useAuctionBrowse({
       setBrowseResult({ status: 'idle', items: [], cursor: null });
       return;
     }
+    if (watchingNeedsAuth) {
+      setBrowseResult({ status: 'auth', items: [], cursor: null });
+      return;
+    }
     const reqId = ++browseReqIdRef.current;
     setBrowseResult({ status: 'loading', items: [], cursor: null });
     const apiStatus = scopeToApiStatus(browseState.scope);
     const apiSort = sortToApiSort(browseState.sort);
-    const category = browseState.categories.length > 0 ? browseState.categories[0] : undefined;
+    // Multi-select: send every selected category — the backend accepts a
+    // CSV list. Only sending categories[0] silently dropped selections 2..n.
+    const categories = browseState.categories.length > 0 ? browseState.categories.join(',') : undefined;
     listAuctions({
       status: apiStatus,
       sort: apiSort,
-      category,
+      categories,
       query: browseState.query,
       priceMin: browseState.priceMin,
       priceMax: browseState.priceMax,
@@ -76,7 +88,7 @@ export function useAuctionBrowse({
         if (reqId !== browseReqIdRef.current) return;
         setBrowseResult({ status: 'error', items: [], cursor: null });
       });
-  }, [browseState, isBrowsing, browseRefreshTick]);
+  }, [browseState, isBrowsing, browseRefreshTick, watchingNeedsAuth]);
 
   const loadMoreBrowse = useCallback(async () => {
     if (browseResult.cursor === null || isLoadingMoreBrowse) return;
@@ -86,11 +98,11 @@ export function useAuctionBrowse({
     try {
       const apiStatus = scopeToApiStatus(browseState.scope);
       const apiSort = sortToApiSort(browseState.sort);
-      const category = browseState.categories.length > 0 ? browseState.categories[0] : undefined;
+      const categories = browseState.categories.length > 0 ? browseState.categories.join(',') : undefined;
       const result = await listAuctions({
         status: apiStatus,
         sort: apiSort,
-        category,
+        categories,
         query: browseState.query,
         priceMin: browseState.priceMin,
         priceMax: browseState.priceMax,

@@ -22,6 +22,7 @@ import {
   clearNavigationState,
 } from './navigationPersistence';
 import { withScreenErrorBoundary } from '../components/ScreenErrorBoundary';
+import { GlobalUploadIndicator } from '../creator/surfaces/GlobalUploadIndicator';
 
 // Eager — initial routes needed immediately at startup.
 // AuthLandingScreen is the initial route when unauthenticated;
@@ -56,6 +57,15 @@ const formSheetScreenOptions = {
     default: 'modal' as const,
   }),
   gestureEnabled: true,
+};
+
+// Screens that render their own sheet chrome (custom overlay, snap points,
+// pan-to-dismiss). Hosting them in a native formSheet produced double
+// chrome and two competing drag gestures — transparentModal hands the
+// whole presentation to the screen's own sheet.
+const customSheetScreenOptions = {
+  presentation: 'transparentModal' as const,
+  gestureEnabled: false,
 };
 
 export default function AppNavigator() {
@@ -241,7 +251,7 @@ export default function AppNavigator() {
       <Stack.Screen name="Closet" getComponent={withScreenErrorBoundary(() => require('../screens/ClosetScreen').default, 'Closet')} />
       <Stack.Screen name="CollectionDetail" getComponent={() => require('../screens/CollectionDetailScreen').default} />
       <Stack.Screen name="CategoryTree" getComponent={() => require('../screens/CategoryTreeScreen').default} />
-      <Stack.Screen name="Filter" getComponent={() => require('../screens/FilterScreen').default} options={formSheetScreenOptions} />
+      <Stack.Screen name="Filter" getComponent={() => require('../screens/FilterScreen').default} options={customSheetScreenOptions} />
       <Stack.Screen name="NotificationsList" getComponent={() => require('../screens/NotificationsScreen').default} />
 
       {/* ── Creator Studio ── */}
@@ -478,6 +488,11 @@ export default function AppNavigator() {
         <Stack.Screen name="RuntimeSmokeTest" getComponent={() => require('../screens/RuntimeSmokeTestScreen').default} />
       )}
     </Stack.Navigator>
+    {/* Ambient upload progress — a thin top-edge bar (IG pattern) visible on
+        every screen while creator uploads are in flight, including after the
+        publish sheet is dismissed. Mounting it at the root also runs upload
+        reconciliation on cold start. */}
+    <GlobalUploadIndicator />
     {/* Global in-app notification overlay — renders above all screens but
         below native modals (modals are presented by the OS above this view). */}
     <InAppNotificationCenter />

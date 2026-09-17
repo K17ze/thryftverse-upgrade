@@ -7,6 +7,7 @@ import {
   publishCreatorDocumentTransaction,
 } from '../services/creatorPublicationService.js';
 import { appendDomainEvent } from '../lib/domainOutbox.js';
+import { canonicalizeJson } from '../lib/canonicalJson.js';
 import { enqueueScheduledPublicationSweepJob } from '../lib/queues.js';
 
 /**
@@ -278,7 +279,7 @@ export const registerCreatorPublicationRoutes = ({
 
       // 1. Lock the document row (FOR UPDATE serializes concurrent schedules).
       const docResult = await client.query<{ creator_id: string; status: string; lock_version: number; document_hash: string; document_json: string; head_revision: number; updated_at: string }>(
-        `SELECT creator_id, status, lock_version, document_hash, document_json, head_revision, updated_at
+        `SELECT creator_id, status, lock_version, document_hash, document_json::text AS document_json, head_revision, updated_at
          FROM creator_documents
          WHERE id = $1
          LIMIT 1
@@ -318,9 +319,15 @@ export const registerCreatorPublicationRoutes = ({
         return { ok: false, error: 'Document is deleted', code: 'DOCUMENT_DELETED' };
       }
 
-      // 4. Validate command evidence — expectedMedia must not be empty
-      //    for a real publication (at least one media layer required).
-      if (body.publishCommand.expectedMedia.length === 0) {
+      // 4. Validate command evidence — media receipts are required only
+      //    for destinations that require a primary media layer ('look'),
+      //    matching the sync publish path. Poster/moodboard documents may
+      //    legitimately be text-only (document validation allows pages
+      //    with media OR text), so an empty expectedMedia is valid there.
+      if (
+        body.publishCommand.expectedMedia.length === 0
+        && body.publishCommand.destination === 'look'
+      ) {
         await client.query('ROLLBACK');
         reply.code(422);
         return { ok: false, error: 'Schedule command must include media evidence', code: 'NO_MEDIA_EVIDENCE' };
@@ -342,7 +349,9 @@ export const registerCreatorPublicationRoutes = ({
           code: 'DOCUMENT_VERSION_CONFLICT',
           serverLockVersion: docRow.lock_version,
           serverDocumentHash: docRow.document_hash
-            ?? crypto.createHash('sha256').update(docRow.document_json).digest('hex'),
+            ?? crypto.createHash('sha256')
+              .update(canonicalizeJson(JSON.parse(docRow.document_json)))
+              .digest('hex'),
           serverUpdatedAt: docRow.updated_at,
           serverHeadRevision: docRow.head_revision,
         };
@@ -352,7 +361,9 @@ export const registerCreatorPublicationRoutes = ({
         body.publishCommand.expectedDocumentHash !== undefined
         && body.publishCommand.expectedDocumentHash !== (
           docRow.document_hash
-          ?? crypto.createHash('sha256').update(docRow.document_json).digest('hex')
+          ?? crypto.createHash('sha256')
+            .update(canonicalizeJson(JSON.parse(docRow.document_json)))
+            .digest('hex')
         )
       ) {
         await client.query('ROLLBACK');
@@ -363,7 +374,9 @@ export const registerCreatorPublicationRoutes = ({
           code: 'DOCUMENT_HASH_CONFLICT',
           serverLockVersion: docRow.lock_version,
           serverDocumentHash: docRow.document_hash
-            ?? crypto.createHash('sha256').update(docRow.document_json).digest('hex'),
+            ?? crypto.createHash('sha256')
+              .update(canonicalizeJson(JSON.parse(docRow.document_json)))
+              .digest('hex'),
           serverUpdatedAt: docRow.updated_at,
           serverHeadRevision: docRow.head_revision,
         };

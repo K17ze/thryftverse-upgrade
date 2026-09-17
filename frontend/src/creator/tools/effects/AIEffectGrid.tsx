@@ -20,7 +20,6 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { Space, Radius, Stroke, FontFamily, FontSize, Control } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
-import { IconGrammar } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
@@ -30,8 +29,7 @@ import { IconSize } from '../../../theme/iconTokens';
 import {
   type AIEffectCategory,
   type AIEffectDefinition,
-  type CapabilityClass,
-  AI_EFFECT_CATEGORIES } from './AIEffectRegistry';
+  type CapabilityClass } from './AIEffectRegistry';
 import {
   type EffectPreset,
   type EffectPresetCategory,
@@ -247,6 +245,7 @@ export function AIEffectGrid({
               key={tab.key}
               onPress={() => handleTabSwitch(tab.key)}
               accessibilityLabel={`${tab.label} effects`}
+              accessibilityHint="Shows this effect category"
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
               hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
@@ -302,7 +301,7 @@ export function AIEffectGrid({
                   ]}
                   accessibilityLabel={`${badge.label} capability`}
                   accessibilityRole="text"
-                  {...(badge.hint ? { accessibilityHint: badge.hint } : {})}
+                  accessibilityHint={badge.hint ?? "Shows this effect's capability tier"}
                 >
                   <Text
                     style={[

@@ -31,6 +31,11 @@ export type Period = AnalyticsPeriod;
 export type MetricDimension = 'sales' | 'orders' | 'views' | 'conversion';
 export type ChartViewMode = 'bar' | 'line';
 
+/** Stable key for period equality — custom ranges are fresh object literals. */
+function periodKey(period: Period): string {
+  return typeof period === 'string' ? period : `${period.startDate}_${period.endDate}`;
+}
+
 /**
  * Custom date range validation result.
  * Returns null when valid, or an error message describing the problem.
@@ -91,6 +96,15 @@ export function useSellerAnalytics() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isError, setIsError] = useState(false);
   const [partialError, setPartialError] = useState(false);
+  // The period that produced the currently rendered data. While a refetch
+  // for a new period is in flight (or failed), dataPeriodKey lags `period`
+  // — the difference means the UI is showing stale-period numbers.
+  const [dataPeriodKey, setDataPeriodKey] = useState<string | null>(null);
+  // Request sequencing: rapid period switches race — the LAST request to
+  // resolve wins, even when it belongs to an older selection. A monotonic
+  // seq guard drops superseded responses.
+  const generalSeq = useRef(0);
+  const listingSeq = useRef(0);
 
   useEffect(() => {
     if (route.params?.listingId && route.params.listingId !== selectedListingId) {
@@ -100,13 +114,11 @@ export function useSellerAnalytics() {
 
   const loadGeneralAnalytics = useCallback(async () => {
     if (!currentUser?.id) return;
+    const seq = ++generalSeq.current;
     try {
-      setPartialError(false);
       // Track which sources failed so we can distinguish a genuine empty
-      // result from a fetch failure. Previously, .catch(() => []) made
-      // failed top-performers / attention / daily queries look identical
-      // to "no data" — the UI would silently backfill from local listings
-      // instead of showing an error state.
+      // result from a fetch failure — a .catch(() => []) on every source
+      // makes "failed" look identical to "no data".
       let hadPartialFailure = false;
       const [listingsRes, analyticsData, topData, attentionData, dailyData] = await Promise.all([
         fetchUserListingsFromApi(currentUser.id, { limit: 100 }),
@@ -115,7 +127,12 @@ export function useSellerAnalytics() {
         fetchNeedsAttention(currentUser.id, 5, period).catch(() => { hadPartialFailure = true; return []; }),
         fetchDailyBreakdown(currentUser.id, period).catch(() => { hadPartialFailure = true; return []; }),
       ]);
-      setListings(listingsRes.items);
+      // A newer request superseded this one — drop the stale response so
+      // an old period's numbers can never overwrite the newer selection.
+      if (seq !== generalSeq.current) return;
+      // The listings endpoint returns every status; the analytics scope is
+      // real inventory only — drafts and deleted rows have no market data.
+      setListings(listingsRes.items.filter((l) => l.status !== 'draft' && l.status !== 'deleted'));
       if (analyticsData) {
         setAnalytics(analyticsData);
       } else {
@@ -126,23 +143,35 @@ export function useSellerAnalytics() {
       setDailyBreakdown(dailyData);
       setPartialError(hadPartialFailure);
       setIsError(false);
+      // Only stamp the data period when the headline analytics resolved —
+      // a partial failure keeps the prior data visibly stale rather than
+      // presenting old-period numbers under the new period's label.
+      if (!hadPartialFailure || analyticsData) {
+        setDataPeriodKey(periodKey(period));
+      }
     } catch {
+      if (seq !== generalSeq.current) return;
       setIsError(true);
     }
   }, [currentUser?.id, period]);
 
   const loadListingAnalytics = useCallback(async (listingId: string) => {
     if (!currentUser?.id) return;
+    const seq = ++listingSeq.current;
     setIsListingLoading(true);
     setListingError(false);
     try {
       const data = await fetchListingAnalytics(currentUser.id, listingId, period);
+      if (seq !== listingSeq.current) return;
       setListingAnalytics(data);
     } catch {
+      if (seq !== listingSeq.current) return;
       setListingAnalytics(null);
       setListingError(true);
     } finally {
-      setIsListingLoading(false);
+      if (seq === listingSeq.current) {
+        setIsListingLoading(false);
+      }
     }
   }, [currentUser?.id, period]);
 
@@ -194,6 +223,12 @@ export function useSellerAnalytics() {
     setActiveDimension(dim);
   };
 
-  return { a11yRef, colors, styles, navigation, currentUser, isOffline, formatFromFiat, currencyCode, selectedListingId, listings, analytics, listingAnalytics, period, setPeriod, activeDimension, chartViewMode, setChartViewMode, isLoading, isListingLoading, listingError, isRefreshing, isError, partialError, loadListingAnalytics, load, onRefresh, hasZeroListings, handleListingSelect, handleDimensionChange, ...insights };
+  // True while the rendered numbers belong to a different period than the
+  // selected one — refetch in flight or failed. The UI must label this
+  // rather than present old-period data under the new period's label.
+  const isStalePeriodData =
+    dataPeriodKey !== null && dataPeriodKey !== periodKey(period);
+
+  return { a11yRef, colors, styles, navigation, currentUser, isOffline, formatFromFiat, currencyCode, selectedListingId, listings, analytics, listingAnalytics, period, setPeriod, activeDimension, chartViewMode, setChartViewMode, isLoading, isListingLoading, listingError, isRefreshing, isError, partialError, isStalePeriodData, loadListingAnalytics, load, onRefresh, hasZeroListings, handleListingSelect, handleDimensionChange, ...insights };
 }
 export type SellerAnalyticsModel = ReturnType<typeof useSellerAnalytics>;

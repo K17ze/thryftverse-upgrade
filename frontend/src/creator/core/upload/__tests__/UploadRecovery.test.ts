@@ -355,6 +355,85 @@ describe('waitForProjectCompletion', () => {
   });
 });
 
+describe('dead multipart session', () => {
+  it.each([404, 409, 410])(
+    're-initiates once on a dead-session %i instead of replaying it forever',
+    async (status) => {
+      const dead = session();
+      const fresh = { ...session(), sessionId: 'session-2', uploadId: 's3-2' };
+      const initiate = vi.spyOn(MultipartUploader.prototype, 'initiate')
+        .mockResolvedValue(fresh);
+      const resumed: string[] = [];
+      vi.spyOn(MultipartUploader.prototype, 'resume').mockImplementation(
+        async (current) => {
+          resumed.push(current.sessionId ?? 'none');
+          if (current.sessionId === 'session-1') {
+            throw new ApiRequestError('Session gone', status);
+          }
+          return {
+            publicUrl: 'https://cdn.example.test/video.mp4',
+            finalizationId: 'fin-2',
+            mediaAssetId: 'media-1',
+          };
+        },
+      );
+
+      const seeded = { ...job(), session: dead };
+      const manager = createManager(seed([seeded]));
+      const result = await finish(manager);
+      expect(result).toMatchObject({ status: 'completed', finalizationId: 'fin-2' });
+      expect(initiate).toHaveBeenCalledTimes(1);
+      expect(resumed).toEqual(['session-1', 'session-2']);
+    },
+  );
+});
+
+describe('pause during unwind', () => {
+  it('resumeJob is a no-op while the aborted attempt is still unwinding', async () => {
+    vi.spyOn(MultipartUploader.prototype, 'initiate').mockResolvedValue(session());
+    let resumeCalls = 0;
+    let unblock: (() => void) | undefined;
+    vi.spyOn(MultipartUploader.prototype, 'resume').mockImplementation(
+      (_s, _p, _progress, signal) =>
+        new Promise((resolve, reject) => {
+          resumeCalls += 1;
+          const onAbort = () => reject(new Error('Aborted'));
+          if (signal.aborted) return onAbort();
+          signal.addEventListener('abort', onAbort, { once: true });
+          unblock = () =>
+            resolve({
+              publicUrl: 'https://cdn.example.test/video.mp4',
+              finalizationId: 'fin-1',
+              mediaAssetId: 'media-1',
+            });
+        }),
+    );
+
+    const manager = createManager(seed([job()]));
+    void manager.processQueue();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(resumeCalls).toBe(1);
+
+    // Pause aborts the attempt; the unwind is async. A resume landing
+    // inside that window must no-op — otherwise a second processJob
+    // starts while the first still owns the controller.
+    manager.pauseJob('job-1');
+    await manager.resumeJob('job-1');
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(resumeCalls).toBe(1);
+    expect((await manager.getJobs('project-1'))[0].status).toBe('paused');
+
+    // After the unwind completes, resume works and no 'failed' ghost
+    // write ever landed.
+    await manager.resumeJob('job-1');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(resumeCalls).toBe(2);
+    unblock!();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect((await manager.getJobs('project-1'))[0].status).toBe('completed');
+  });
+});
+
 describe('single-PUT intent checkpoint', () => {
   const uploadedObject = {
     uploadIntentId: 'intent-1', bucket: 'media', key: 'looks/user/photo.jpg',

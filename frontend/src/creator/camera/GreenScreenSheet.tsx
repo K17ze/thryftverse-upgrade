@@ -167,6 +167,7 @@ export function GreenScreenSheet({
           </Text>
           <PressScale
             accessibilityLabel="Close green screen settings"
+            accessibilityHint="Closes without applying changes"
             accessibilityRole="button"
             onPress={handleCancel}
             style={styles.closeButton}
@@ -197,6 +198,7 @@ export function GreenScreenSheet({
             <View style={styles.bgPreviewRow}>
               <PressScale
                 accessibilityLabel="Change background image"
+                accessibilityHint="Opens the image picker"
                 accessibilityRole="button"
                 onPress={handlePickBackground}
                 style={[
@@ -213,6 +215,7 @@ export function GreenScreenSheet({
               </PressScale>
               <PressScale
                 accessibilityLabel="Remove background image"
+                accessibilityHint="Clears the background image"
                 accessibilityRole="button"
                 onPress={handleRemoveBackground}
                 style={styles.bgRemoveBtn}
@@ -227,6 +230,7 @@ export function GreenScreenSheet({
           ) : (
             <PressScale
               accessibilityLabel="Choose background image"
+              accessibilityHint="Opens the image picker"
               accessibilityRole="button"
               onPress={handlePickBackground}
               style={[
@@ -253,6 +257,7 @@ export function GreenScreenSheet({
                 <PressScale
                   key={preset.value}
                   accessibilityLabel={`Select ${preset.label} key color`}
+                  accessibilityHint="Sets the chroma key color"
                   accessibilityRole="button"
                   onPress={() => {
                     haptic.selection();
@@ -287,6 +292,7 @@ export function GreenScreenSheet({
                 <PressScale
                   key={t}
                   accessibilityLabel={`Set tolerance to ${t.toFixed(1)}`}
+                  accessibilityHint="Sets the key color tolerance"
                   accessibilityRole="button"
                   onPress={() => {
                     haptic.selection();
@@ -320,6 +326,7 @@ export function GreenScreenSheet({
                 <PressScale
                   key={f}
                   accessibilityLabel={`Set feather to ${f} pixels`}
+                  accessibilityHint="Sets the edge feather"
                   accessibilityRole="button"
                   onPress={() => {
                     haptic.selection();
@@ -347,6 +354,7 @@ export function GreenScreenSheet({
         <View style={[styles.footer, { borderTopColor: colors.borderSubtle }]}>
           <PressScale
             accessibilityLabel="Cancel green screen"
+            accessibilityHint="Closes without applying changes"
             accessibilityRole="button"
             onPress={handleCancel}
             style={[styles.actionButton, { borderColor: colors.borderSubtle }]}
@@ -357,6 +365,7 @@ export function GreenScreenSheet({
           </PressScale>
           <PressScale
             accessibilityLabel="Apply green screen settings"
+            accessibilityHint="Applies the green screen effect"
             accessibilityRole="button"
             onPress={handleApply}
             style={[styles.actionButton, styles.applyButton, { backgroundColor: colors.brand }]}

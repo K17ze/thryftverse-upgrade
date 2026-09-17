@@ -18,8 +18,10 @@ import type { Pool, PoolClient, QueryResult } from 'pg';
 
 const putCalls: Array<{ key: string; contentType: string }> = [];
 const abortCalls: Array<{ key: string; uploadId: string; bucket?: string }> = [];
+const deleteCalls: Array<{ key: string; bucket?: string }> = [];
 let abortError: Error | null = null;
 let orphanUploads: Array<{ key: string; uploadId: string; initiated?: Date }> = [];
+let existingObjects = new Set<string>();
 
 vi.mock('../lib/s3.js', () => ({
   getObject: vi.fn(async () => Buffer.alloc(0)),
@@ -33,6 +35,10 @@ vi.mock('../lib/s3.js', () => ({
     abortCalls.push({ key, uploadId, bucket });
   }),
   listMultipartUploads: vi.fn(async () => orphanUploads),
+  objectExists: vi.fn(async (key: string) => existingObjects.has(key)),
+  deleteObject: vi.fn(async (key: string, bucket?: string) => {
+    deleteCalls.push({ key, bucket });
+  }),
 }));
 
 vi.mock('../db/pool.js', () => ({ db: { query: vi.fn(), connect: vi.fn() } }));
@@ -221,13 +227,15 @@ describe('listClaimableIngestJobs', () => {
 describe('reconcileMediaIngestJobs', () => {
   it('re-enqueues orphaned rows under a reconcile-scoped jobId (retained failed jobs cannot suppress it)', async () => {
     enqueueCalls.length = 0;
-    (mockedDb.query as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      rows: [
-        { id: 'j1', media_asset_id: 'asset-1' },
-        { id: 'j2', media_asset_id: 'asset-2' },
-      ],
-      rowCount: 2,
-    });
+    (mockedDb.query as ReturnType<typeof vi.fn>)
+      .mockResolvedValue({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({
+        rows: [
+          { id: 'j1', media_asset_id: 'asset-1' },
+          { id: 'j2', media_asset_id: 'asset-2' },
+        ],
+        rowCount: 2,
+      });
 
     const count = await reconcileMediaIngestJobs('scheduled');
     expect(count).toBe(2);
@@ -243,9 +251,43 @@ describe('reconcileMediaIngestJobs', () => {
 
   it('is a no-op when no rows are claimable', async () => {
     enqueueCalls.length = 0;
-    (mockedDb.query as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    (mockedDb.query as ReturnType<typeof vi.fn>).mockResolvedValue({ rows: [], rowCount: 0 });
     expect(await reconcileMediaIngestJobs('scheduled')).toBe(0);
     expect(enqueueCalls).toHaveLength(0);
+  });
+
+  it('dead-letters a max-attempts row holding a stale processing lock and frees its asset', async () => {
+    enqueueCalls.length = 0;
+    const queries: string[] = [];
+    const client = {
+      query: vi.fn(async (sql: string) => {
+        queries.push(sql);
+        if (sql.includes('SET status')) return { rows: [], rowCount: 1 };
+        return { rows: [], rowCount: 0 };
+      }),
+      release: vi.fn(),
+    };
+    (mockedDb.query as ReturnType<typeof vi.fn>)
+      .mockResolvedValue({ rows: [], rowCount: 0 })
+      // No claimable rows — the dead-letter pass must still run.
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      // One wedged row: 'processing', attempt_count >= max_attempts, stale lock.
+      .mockResolvedValueOnce({ rows: [{ id: 'j-dead', media_asset_id: 'asset-9' }], rowCount: 1 });
+    (mockedDb.connect as ReturnType<typeof vi.fn>).mockResolvedValue(client);
+
+    expect(await reconcileMediaIngestJobs('scheduled')).toBe(0);
+    expect(enqueueCalls).toHaveLength(0);
+
+    // Job row dead-lettered and the pinned asset released to
+    // 'processing_failed' inside one transaction.
+    const deadUpdate = queries.find((s) => s.includes("status = 'dead'"))!;
+    expect(deadUpdate).toContain("status = 'processing'");
+    expect(deadUpdate).toContain('attempt_count >= max_attempts');
+    const assetUpdate = queries.find((s) => s.includes("status = 'processing_failed'"))!;
+    expect(assetUpdate).toContain("status = 'processing'");
+    expect(queries[0]).toBe('BEGIN');
+    expect(queries[queries.length - 1]).toBe('COMMIT');
+    expect(client.release).toHaveBeenCalled();
   });
 });
 
@@ -311,6 +353,36 @@ describe('expireStaleMultipartSessions', () => {
     abortError = null;
   });
 
+  it('deletes a completed-but-unreceipted object on NoSuchUpload and keeps a referenced one', async () => {
+    deleteCalls.length = 0;
+    abortCalls.length = 0;
+    // Both sessions complete S3-side before their finalization commits.
+    abortError = Object.assign(new Error('gone'), { name: 'NoSuchUpload' });
+    existingObjects = new Set(['looks/u/orphan.mp4', 'looks/u/legit.mp4']);
+    (mockedDb.query as ReturnType<typeof vi.fn>).mockImplementation(async (sql: string, params?: unknown[]) => {
+      if (sql.includes('FOR UPDATE SKIP LOCKED')) {
+        return claimResult([
+          { id: 's-orphan', object_key: 'looks/u/orphan.mp4', upload_id: 'up-o', bucket: 'media' },
+          { id: 's-legit', object_key: 'looks/u/legit.mp4', upload_id: 'up-l', bucket: 'media' },
+        ]);
+      }
+      if (sql.includes('upload_finalizations')) {
+        // legit.mp4 is referenced by a media_assets row; orphan.mp4 is not.
+        const isLegit = params?.[1] === 'looks/u/legit.mp4';
+        return { rows: isLegit ? [{ '?column?': 1 }] : [], rowCount: isLegit ? 1 : 0 };
+      }
+      return { rows: [], rowCount: 1 };
+    });
+
+    await expireStaleMultipartSessions('scheduled');
+    // The unreceipted object is deleted; the referenced one is untouched.
+    expect(deleteCalls).toEqual([{ key: 'looks/u/orphan.mp4', bucket: 'media' }]);
+    // Both rows still converge to 'aborted'.
+    expect(abortCalls).toHaveLength(0); // NoSuchUpload — abort threw before recording
+    abortError = null;
+    existingObjects = new Set();
+  });
+
   it('aborts S3 uploads with no session row past the grace window and skips row-backed or fresh ones', async () => {
     abortCalls.length = 0;
     abortError = null;
@@ -322,20 +394,22 @@ describe('expireStaleMultipartSessions', () => {
       // Old but row-backed — the DB pass owns its lifecycle, skip.
       { key: 'tracked/t.mp4', uploadId: 'up-tracked', initiated: new Date(Date.now() - 2 * 60 * 60 * 1000) },
     ];
-    // The existence check runs per uploadId — differentiate by param.
+    // The existence check is one batched ANY() lookup per sweep.
     let checks = 0;
     (mockedDb.query as ReturnType<typeof vi.fn>).mockImplementation(async (sql: string, params?: unknown[]) => {
       if (sql.includes('FOR UPDATE SKIP LOCKED')) return { rows: [], rowCount: 0 };
       if (sql.includes('WHERE upload_id')) {
         checks += 1;
-        const uploadId = params?.[0];
-        return uploadId === 'up-tracked' ? { rows: [{ '?column?': 1 }], rowCount: 1 } : { rows: [], rowCount: 0 };
+        const ids = params?.[0] as string[];
+        return { rows: ids.filter((id) => id === 'up-tracked').map((id) => ({ upload_id: id })), rowCount: 1 };
       }
       return { rows: [], rowCount: 1 };
     });
 
     expect(await expireStaleMultipartSessions('scheduled')).toBe(1);
     expect(abortCalls).toEqual([{ key: 'orphan/old.mp4', uploadId: 'up-orphan', bucket: undefined }]);
-    expect(checks).toBe(2); // fresh upload skipped before the row check
+    // One batched query covers both stale uploads; the fresh upload is
+    // filtered out before the row check.
+    expect(checks).toBe(1);
   });
 });

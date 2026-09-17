@@ -22,7 +22,7 @@ import Reanimated, {
   withTiming,
   runOnJS,
 } from 'react-native-reanimated';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
+
 import { Radius, Stroke } from '../../theme/designTokens';
 import { Motion } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -109,7 +109,6 @@ export function AlphaSlider({
   accessibilityLabel = 'Alpha opacity slider',
 }: AlphaSliderProps) {
   const { colors } = useAppTheme();
-  const reduceMotion = useReducedMotion();
   // Shared value (not useRef) so the worklet can read the measured width
   // without triggering Reanimated's "Tried to modify key `current`" freeze
   // warning, which logs synchronously on the Android UI thread and causes
@@ -182,7 +181,7 @@ export function AlphaSlider({
         if (!success) commitPosition();
         isDraggingSV.value = false;
       });
-  }, [thumbX, onChange, commitPosition, layoutWidth, isDraggingSV]);
+  }, [thumbX, onChange, commitPosition, layoutWidth, isDraggingSV, lastAlphaBucketSV]);
 
   // Thumb tracks the finger 1:1 — a withTiming inside the animated style
   // re-arms a 120ms animation on every gesture frame and low-pass-filters

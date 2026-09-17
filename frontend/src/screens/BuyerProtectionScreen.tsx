@@ -205,7 +205,7 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
               {protection.claims.map((claim, idx) => (
                 <SettingsRow
                   key={claim.ticketId}
-                  title={claim.topic.replace(/_/g, ' ')}
+                  title={claim.topicLabel}
                   subtitle={`Updated ${formatDate(claim.createdAt)}`}
                   value={claim.status.charAt(0).toUpperCase() + claim.status.slice(1)}
                   icon={claim.status === 'open' ? 'hourglass-outline' : claim.status === 'resolved' ? 'checkmark-circle-outline' : 'alert-circle-outline'}

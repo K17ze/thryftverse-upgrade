@@ -55,7 +55,12 @@ export function useLookEffects(
   const selectedMediaLayer: MediaLayer | null =
     selectedLayer?.type === 'media' ? selectedLayer : null;
   const effectsSourceUri = selectedMediaLayer?.payload.mediaUri ?? '';
-  const currentEffects: EffectNode[] = selectedMediaLayer?.payload.effects ?? [];
+  // Memoized so `?? []` doesn't mint a fresh array each render — the 14
+  // downstream memos/callbacks key on this reference.
+  const currentEffects: EffectNode[] = useMemo(
+    () => selectedMediaLayer?.payload.effects ?? [],
+    [selectedMediaLayer],
+  );
 
   // ── Selected filter ID (from the effect stack) ────────────────────
   const selectedFilterId = useMemo(() => {

@@ -157,6 +157,7 @@ export const WaveformTrack = React.memo(function WaveformTrack({
               ? 'Audio waveform track'
               : 'Audio waveform track, no audio waveform'
       }
+      accessibilityHint="Displays the audio waveform for the clip"
     >
       {isExtracting ? (
         // ── Loading state: small spinner while extracting ──
@@ -173,6 +174,7 @@ export const WaveformTrack = React.memo(function WaveformTrack({
             style={waveStyles.errorRetry}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityLabel="Retry waveform extraction"
+            accessibilityHint="Retries loading the waveform"
             accessibilityRole="button"
           >
             <Text style={[waveStyles.errorRetryText, { color: colors.brand }]}>Retry</Text>

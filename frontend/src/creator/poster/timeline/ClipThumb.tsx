@@ -134,6 +134,29 @@ export const ClipThumb = React.memo(function ClipThumb({
   // pixels to SOURCE ms (the window span), not speed-adjusted ms.
   const sourceWindowMs = clip.trimEndMs - clip.trimStartMs;
   const sourceDurationMs = clip.sourceDurationMs ?? 0;
+  // Trim worklet bounds in px: source-time headroom converted through the
+  // wall-clock px→ms factor (source is consumed `speed`× faster than the
+  // wall clock for a constant-speed clip).
+  const trimWallMsPerPx = width > 0 ? clip.durationMs / width : 0;
+  const trimSpeed = clip.speed > 0 ? clip.speed : 1;
+  // Start handle: leftward extension limited by trimStartMs headroom;
+  // rightward shrink limited by the minimum window.
+  const startTrimMinPx = trimWallMsPerPx > 0
+    ? -(clip.trimStartMs / trimSpeed) / trimWallMsPerPx
+    : 0;
+  const startTrimMaxPx = trimWallMsPerPx > 0
+    ? ((sourceWindowMs - 1) / trimSpeed) / trimWallMsPerPx
+    : 0;
+  // End handle: rightward extension limited by media past trimEndMs
+  // (unbounded when the source duration is unknown).
+  const endTrimMaxPx = trimWallMsPerPx > 0
+    ? (sourceDurationMs > 0
+        ? Math.max(0, (sourceDurationMs - clip.trimEndMs) / trimSpeed) / trimWallMsPerPx
+        : Number.MAX_SAFE_INTEGER)
+    : 0;
+  const endTrimMinPx = trimWallMsPerPx > 0
+    ? -((sourceWindowMs - 1) / trimSpeed) / trimWallMsPerPx
+    : 0;
   // Headroom on each side in source ms — used to clamp the worklet drag
   // so the visual preview can never imply media that doesn't exist.
   const slipHeadStartMs = clip.trimStartMs;
@@ -160,7 +183,10 @@ export const ClipThumb = React.memo(function ClipThumb({
       .onChange((e) => {
         'worklet';
         // Dragging the start handle left = wider clip (earlier trim start).
-        trimDeltaSV.value += -e.changeX;
+        // Bound the preview delta to real headroom: earlier than source 0
+        // or past the minimum window would imply media that doesn't exist
+        // (the strip would grow, then snap back on commit).
+        trimDeltaSV.value = Math.min(startTrimMaxPx, Math.max(startTrimMinPx, trimDeltaSV.value - e.changeX));
         if (edgeScroll) {
           if (e.absoluteX < EDGE_SCROLL_ZONE) {
             scrollTo(edgeScroll.scrollRef as Parameters<typeof scrollTo>[0], Math.max(0, edgeScroll.scrollXSV.value - EDGE_SCROLL_STEP), 0, false);
@@ -190,7 +216,8 @@ export const ClipThumb = React.memo(function ClipThumb({
       .onChange((e) => {
         'worklet';
         // Dragging the end handle right = wider clip (later trim end).
-        trimDeltaSV.value += e.changeX;
+        // Same headroom bound — never preview media beyond the source.
+        trimDeltaSV.value = Math.min(endTrimMaxPx, Math.max(endTrimMinPx, trimDeltaSV.value + e.changeX));
         if (edgeScroll) {
           if (e.absoluteX > edgeScroll.viewportWidth - EDGE_SCROLL_ZONE) {
             scrollTo(edgeScroll.scrollRef as Parameters<typeof scrollTo>[0], edgeScroll.scrollXSV.value + EDGE_SCROLL_STEP, 0, false);
@@ -352,6 +379,7 @@ export const ClipThumb = React.memo(function ClipThumb({
       onLayout={handleLayout}
       accessibilityLabel={`Clip, ${formatTimecode(clip.durationMs)}`}
       accessibilityRole="button"
+      accessibilityHint="Selects this clip"
       style={[
         clipAnimStyle,
         {
@@ -364,6 +392,7 @@ export const ClipThumb = React.memo(function ClipThumb({
         onPressIn={() => setIsPressed(true)}
         onPressOut={() => setIsPressed(false)}
         accessibilityLabel={`Clip, ${formatTimecode(clip.durationMs)}`}
+        accessibilityHint="Selects this clip"
         accessibilityRole="button"
         style={[
           clipStyles.container,
@@ -396,7 +425,7 @@ export const ClipThumb = React.memo(function ClipThumb({
         )}
 
         {clip.locked && width > 44 && (
-          <View style={clipStyles.badgeRow} accessibilityLabel="Clip locked">
+          <View style={clipStyles.badgeRow} accessibilityLabel="Clip locked" accessibilityHint="Indicates the clip cannot be edited">
             <View style={[clipStyles.badge, { backgroundColor: colors.surfaceAlt }]}>
               <Ionicons name="lock-closed" size={10} color={colors.textPrimary} />
             </View>
@@ -408,6 +437,7 @@ export const ClipThumb = React.memo(function ClipThumb({
               <View
                 style={[clipStyles.badge, { backgroundColor: colors.surfaceAlt }]}
                 accessibilityLabel={`Speed ${clip.speed}x`}
+                accessibilityHint="Shows the clip's playback speed"
               >
                 <Text style={[clipStyles.badgeText, { color: colors.textPrimary }]}>
                   {clip.speed}x
@@ -418,6 +448,7 @@ export const ClipThumb = React.memo(function ClipThumb({
               <View
                 style={[clipStyles.badge, { backgroundColor: colors.surfaceAlt }]}
                 accessibilityLabel="Reversed playback"
+                accessibilityHint="Indicates the clip plays in reverse"
               >
                 <Ionicons name="play-skip-back" size={10} color={colors.textPrimary} />
               </View>
@@ -426,6 +457,7 @@ export const ClipThumb = React.memo(function ClipThumb({
               <View
                 style={[clipStyles.badge, { backgroundColor: colors.surfaceAlt }]}
                 accessibilityLabel="Freeze frame"
+                accessibilityHint="Indicates the clip has a freeze frame"
               >
                 <Ionicons name="snow" size={10} color={colors.textPrimary} />
               </View>
@@ -434,6 +466,7 @@ export const ClipThumb = React.memo(function ClipThumb({
               <View
                 style={[clipStyles.badge, { backgroundColor: colors.surfaceAlt }]}
                 accessibilityLabel="Audio muted"
+                accessibilityHint="Indicates the clip's audio is muted"
               >
                 <Ionicons name="volume-mute" size={10} color={colors.textPrimary} />
               </View>
@@ -442,6 +475,7 @@ export const ClipThumb = React.memo(function ClipThumb({
               <View
                 style={[clipStyles.badge, { backgroundColor: colors.surfaceAlt }]}
                 accessibilityLabel={`Volume ${Math.round(clip.volume * 100)} percent`}
+                accessibilityHint="Shows the clip's audio volume"
               >
                 <Ionicons name="volume-medium" size={10} color={colors.textPrimary} />
               </View>
@@ -471,6 +505,7 @@ export const ClipThumb = React.memo(function ClipThumb({
                 style={[clipStyles.trimHandle, clipStyles.trimHandleStart, { backgroundColor: colors.brand }]}
                 accessibilityLabel="Trim start"
                 accessibilityRole="adjustable"
+                accessibilityHint="Drag to change the clip start"
               />
             </GestureDetector>
           </View>
@@ -482,6 +517,7 @@ export const ClipThumb = React.memo(function ClipThumb({
                 style={[clipStyles.trimHandle, clipStyles.trimHandleEnd, { backgroundColor: colors.brand }]}
                 accessibilityLabel="Trim end"
                 accessibilityRole="adjustable"
+                accessibilityHint="Drag to change the clip end"
               />
             </GestureDetector>
           </View>

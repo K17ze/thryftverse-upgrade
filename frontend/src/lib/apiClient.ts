@@ -163,6 +163,15 @@ function normalizeConfiguredBaseUrlForPlatform(url: string) {
   // the standard host bridge without making every developer maintain a second
   // environment file. Production HTTPS hosts pass through unchanged.
   if (Platform.OS === 'android' && /^http:\/\/(localhost|127\.0\.0\.1)(?=[:/]|$)/i.test(normalized)) {
+    // `adb reverse` exposes the host machine's loopback as the device's own
+    // loopback. When the dev client itself is reached over loopback, the
+    // transport is a reverse tunnel — keep localhost so API traffic uses the
+    // same tunnel. Physical devices have no 10.0.2.2 bridge, so rewriting
+    // would make the configured URL unreachable.
+    const devHostName = extractRawHost(getExpoDevelopmentHostUri());
+    if (devHostName === 'localhost' || devHostName === '127.0.0.1' || devHostName === '::1' || devHostName === '[::1]') {
+      return normalized;
+    }
     return normalized.replace(/^http:\/\/(localhost|127\.0\.0\.1)/i, 'http://10.0.2.2');
   }
 
@@ -176,7 +185,7 @@ function normalizeConfiguredBaseUrlForPlatform(url: string) {
   return normalized;
 }
 
-function extractHost(input: unknown) {
+function extractRawHost(input: unknown) {
   if (typeof input !== 'string' || input.trim().length === 0) {
     return null;
   }
@@ -187,21 +196,31 @@ function extractHost(input: unknown) {
   const withoutPath = withoutScheme.split('/')[0];
   const withoutPort = withoutPath.split(':')[0];
 
-  if (!withoutPort || withoutPort === 'localhost' || withoutPort === '127.0.0.1') {
+  return withoutPort || null;
+}
+
+function extractHost(input: unknown) {
+  const host = extractRawHost(input);
+
+  if (!host || host === 'localhost' || host === '127.0.0.1') {
     return null;
   }
 
-  return withoutPort;
+  return host;
 }
 
-function getExpoDevelopmentHost() {
+function getExpoDevelopmentHostUri() {
   const fromExpoConfig = (Constants.expoConfig as { hostUri?: string } | null)?.hostUri;
   const fromManifest2 = (Constants as unknown as { manifest2?: { extra?: { expoClient?: { hostUri?: string } } } })
     .manifest2?.extra?.expoClient?.hostUri;
   const fromLegacyManifest = (Constants as unknown as { manifest?: { debuggerHost?: string } })
     .manifest?.debuggerHost;
 
-  return extractHost(fromExpoConfig) ?? extractHost(fromManifest2) ?? extractHost(fromLegacyManifest);
+  return fromExpoConfig ?? fromManifest2 ?? fromLegacyManifest ?? null;
+}
+
+function getExpoDevelopmentHost() {
+  return extractHost(getExpoDevelopmentHostUri());
 }
 
 export function getApiBaseUrl() {

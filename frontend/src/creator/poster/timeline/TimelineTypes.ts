@@ -14,8 +14,6 @@
 
 import type { CreatorDocument, CreatorLayer } from '../../core/projectStore/composition';
 import type { SpeedCurve } from '../speedcurves/SpeedCurveTypes';
-import type { AudioConfig } from '../../tools/audio/AudioTypes';
-import type { FrameTransition } from '../transitions/TransitionTypes';
 
 export interface TimeRange {
   startMs: number;
@@ -88,6 +86,13 @@ export interface PosterClip {
   thumbnailUri?: string;
   /** Computed: (trimEnd - trimStart) adjusted for speed. */
   durationMs: number;
+  /**
+   * Computed: absolute timeline start of this clip (cumulative sum of
+   * preceding clips' wall-clock durations). Sourced from the projection —
+   * more reliable than summing durations, which diverges when media-less
+   * pages occupy timeline span.
+   */
+  timelineStartMs?: number;
   /**
    * Variable speed curve (normalized-position model — the authored payload
    * shape, matching {@link PosterClipRef.speedCurve} and

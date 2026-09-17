@@ -176,6 +176,13 @@ export interface CommerceOrder {
     shipBy: string;
     detectedAt: string;
   } | null;
+  /**
+   * Server-derived open-resolution flag (open protection/return/support
+   * ticket or open return case). Same predicate as the list endpoint —
+   * the detail screen should prefer this over a separately-fetched ticket
+   * store that may lag the order payload.
+   */
+  hasOpenResolution?: boolean;
 }
 
 export interface ShippingQuoteItem {
@@ -307,6 +314,9 @@ export interface CommerceUserOrder {
   fulfilmentSnapshot?: FulfilmentSnapshot | null;
   /** Whether a buyer-authored review exists for this order (server-derived). */
   hasReview?: boolean;
+  /** Server-derived: an open protection claim / return / support ticket
+   *  is attached to this order. Drives the dispute badge in list rows. */
+  hasOpenResolution?: boolean;
 }
 
 export interface OrderParcelEvent {
@@ -319,7 +329,10 @@ export interface OrderParcelEvent {
     | 'delivered'
     | 'collection_confirmed'
     | 'delivery_failed'
-    | 'returned';
+    | 'returned'
+    // Seller-asserted drop-off for integrated-label orders — NOT carrier
+    // evidence. Written by POST /orders/:id/fulfilment/handoff-assertion.
+    | 'handoff_asserted';
   providerEventId: string | null;
   trackingId: string | null;
   occurredAt: string | null;
@@ -331,6 +344,9 @@ interface ListOrdersResponse {
   ok: true;
   items: CommerceUserOrder[];
   nextCursor: string | null;
+  /** Server-truthful count of orders needing this user's action —
+   *  a page-scoped count would under-report past page 1. */
+  needsActionCount?: number;
 }
 
 export interface ListUserOrdersParams {
@@ -346,6 +362,7 @@ export interface ListUserOrdersParams {
 export interface ListUserOrdersResult {
   items: CommerceUserOrder[];
   nextCursor: string | null;
+  needsActionCount: number | null;
 }
 
 interface ListOrderParcelEventsResponse {
@@ -806,6 +823,7 @@ export async function listUserOrders(
   return {
     items: payload.items,
     nextCursor: payload.nextCursor ?? null,
+    needsActionCount: payload.needsActionCount ?? null,
   };
 }
 
@@ -947,7 +965,9 @@ export async function listUserTransactions(userId: string, limit = 50, offset = 
 
 export interface BuyerProtectionClaim {
   ticketId: string;
-  topic: string;
+  topicId: string;
+  /** Server-rendered human label — display it directly. */
+  topicLabel: string;
   status: string;
   createdAt: string;
 }
@@ -1031,7 +1051,8 @@ export interface SellerAnalyticsTrend {
 }
 
 export interface SellerAnalyticsFunnel {
-  impressions: number;
+  /** null when the impressions source is unavailable — never fabricate 0. */
+  impressions: number | null;
   views: number;
   saves: number;
   offers: number;

@@ -25,11 +25,9 @@ import {
   TextInput,
   Keyboard,
   AccessibilityInfo } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Space, Radius, Typography, FontFamily, Stroke } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
-import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { PressScale, SheetContainer } from '../shared/CreatorAnimations';

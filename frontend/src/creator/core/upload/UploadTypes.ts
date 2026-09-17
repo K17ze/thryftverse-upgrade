@@ -164,6 +164,7 @@ export type UploadEvent =
   | { type: 'jobConfirming'; job: UploadJob }
   | { type: 'jobComplete'; job: UploadJob }
   | { type: 'jobFailed'; job: UploadJob; error: string }
+  | { type: 'jobStalled'; job: UploadJob; error: string }
   | { type: 'allComplete'; projectId: string }
   | { type: 'connectivityChanged'; online: boolean };
 

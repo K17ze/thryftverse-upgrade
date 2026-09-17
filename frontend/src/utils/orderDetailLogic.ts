@@ -181,6 +181,10 @@ export function getParcelEventDisplay(
       return { label: 'Delivery failed', subtitle: 'Carrier attempted delivery but could not complete it.' };
     case 'returned':
       return { label: 'Returned', subtitle: 'Parcel is being returned to the sender.' };
+    case 'handoff_asserted':
+      // A seller assertion, not carrier evidence — honest attribution so
+      // the buyer doesn't read it as a verified carrier scan.
+      return { label: 'Dropped off (seller reported)', subtitle: 'The seller marked the parcel as handed to the carrier — awaiting the first carrier scan.' };
     default:
       return { label: 'Carrier update', subtitle: 'Carrier event received.' };
   }
@@ -207,6 +211,7 @@ export type TimelineSemanticKey =
   | 'issue_reported'
   | 'review_submitted'
   | 'dispatch_sla_breach'
+  | 'handoff_asserted'
   | 'unknown';
 
 export const PARCEL_EVENT_SEMANTIC_KEY: Record<OrderParcelEvent['eventType'], TimelineSemanticKey> = {
@@ -217,6 +222,9 @@ export const PARCEL_EVENT_SEMANTIC_KEY: Record<OrderParcelEvent['eventType'], Ti
   collection_confirmed: 'collection_confirmed',
   delivery_failed: 'delivery_failed',
   returned: 'returned',
+  // Own key — a seller assertion must never collapse into the
+  // carrier-confirmed 'shipped' semantic.
+  handoff_asserted: 'handoff_asserted',
 };
 
 export function getStatusSemanticKey(normalisedStatus: string): TimelineSemanticKey {

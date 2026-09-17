@@ -41,6 +41,7 @@ import { CheckoutOrderError } from '../components/checkout/CheckoutOrderError';
 import { CheckoutCapabilityError } from '../components/checkout/CheckoutCapabilityError';
 import { CheckoutFooter } from '../components/checkout/CheckoutFooter';
 import { CheckoutSheets } from '../components/checkout/CheckoutSheets';
+import { isPlatformPaySupported } from '@stripe/stripe-react-native';
 import { STAGE_LABELS } from '../utils/checkoutFlow';
 import { CommerceDetailOfflineBanner } from '../components/commerce/detail';
 import { BuyerProtectionStrip } from '../components/product';
@@ -438,6 +439,22 @@ export default function CheckoutScreen() {
     }
   }, [confirmSheet.visible, confirmSheet.title, confirmSheet.message]);
 
+  // Device-level platform-pay support — queried once on mount. Lives above
+  // every early return: hooks must run unconditionally.
+  const [platformPaySupported, setPlatformPaySupported] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    // Web/SSR-safe: the shim resolves false where the native module is absent.
+    void isPlatformPaySupported()
+      .then((supported) => {
+        if (!cancelled) setPlatformPaySupported(supported === true);
+      })
+      .catch(() => {
+        if (!cancelled) setPlatformPaySupported(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
   // --- Render ---
 
   // Order-bound guards resolve before any listing-derived state: the order
@@ -598,7 +615,11 @@ export default function CheckoutScreen() {
   // path derives it from the item price as before.
   const PLATFORM_CHARGE = boundOrder?.platformChargeGbp ?? calculatePlatformChargeGbp(displayItem.price);
   const POSTAGE_FEE = postageOption.priceFromGbp;
-  const GROSS_TOTAL = displayItem.price + PLATFORM_CHARGE + POSTAGE_FEE;
+  // Money source of truth: a bound order's subtotal is the server-locked
+  // price (e.g. an accepted offer), not the listing's current price —
+  // displaying displayItem.price here would misquote the order total.
+  const orderSubtotal = boundOrder?.subtotalGbp ?? displayItem.price;
+  const GROSS_TOTAL = orderSubtotal + PLATFORM_CHARGE + POSTAGE_FEE;
   // Wallet split-tender has no order-bound endpoint — hide the toggle and
   // never subtract balance from an order-bound total.
   const balanceApplied = useBalance && !orderId ? Math.min(walletBalance, GROSS_TOTAL) : 0;
@@ -613,7 +634,12 @@ export default function CheckoutScreen() {
   // wallet is available it becomes the primary CTA and the card button
   // becomes secondary ("Pay with card"), creating a clear hierarchy that
   // surfaces biometric one-tap payment before manual card entry.
-  const walletAvailable = !isSubmitting && (
+  //
+  // The capability flag says the merchant/gateway allows the tender — the
+  // device check says this device can actually present it (a card in
+  // Wallet, Google Pay provisioned). A capability-only "Pay with Apple Pay"
+  // CTA on an unprovisioned device is a false promise — gate on both.
+  const walletAvailable = !isSubmitting && platformPaySupported && (
     (Platform.OS === 'ios' && isPaymentMethodAllowed(checkoutCapabilities, 'apple_pay'))
     || (Platform.OS === 'android' && isPaymentMethodAllowed(checkoutCapabilities, 'google_pay'))
   );

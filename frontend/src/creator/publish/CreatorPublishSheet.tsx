@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, ActivityIndicator } from 'react-native';
+import { View, Text, ActivityIndicator, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { IconGrammar } from '../../theme/designTokens';
 import { SheetContainer, PressScale } from '../shared/CreatorAnimations';
@@ -9,7 +9,7 @@ import { PublishReview } from './CreatorPublishReview';
 import { SharingStateView, ErrorStateView, SuccessView, UnknownOutcomeView, ConflictStateView, ScheduleFailedView, ConfirmationView, formatScheduledDate } from './CreatorPublishStates';
 
 export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPreview }: CreatorPublishSheetProps) {
-  const { document, navigation, colors, haptic, reduceMotion, publishState, setPublishState, isCheckingResult, serverDocMetaRef, publishGuardRef, styles, stage, progressWidth, progressAnimatedStyle, uploadManager, handleClose, handlePublish, handleSaveDraftWithState, handleCancelUpload, handleRetry, handleSaveDraftFromError, handleCheckPublishResult, handleCheckSchedule, handleRetrySchedule, errorMessage, publishedId, scheduleError } = useCreatorPublishWorkflow({ visible, onClose, editingLookId });
+  const { document, navigation, colors, haptic, reduceMotion, publishState, setPublishState, isCheckingResult, styles, stage, progressWidth, progressAnimatedStyle, uploadManager, handleClose, handlePublish, handleSaveDraftWithState, handleCancelUpload, handleRetry, handleSaveDraftFromError, handleCheckPublishResult, handleCheckSchedule, handleRetrySchedule, handleReloadFromServer, handleDuplicateAsNewDraft, errorMessage, publishedId, scheduleError } = useCreatorPublishWorkflow({ visible, onClose, editingLookId });
   if (!visible && stage === 'review') return null;
   return (
     <SheetContainer visible={visible} onClose={handleClose} maxHeight={0.85}>
@@ -40,6 +40,7 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
             onCancel={stage === 'uploading' ? handleCancelUpload : undefined}
             isConfirming={stage === 'uploading' && uploadManager.isConfirming}
             isStalled={stage === 'uploading' && uploadManager.isStalled}
+            isOffline={stage === 'uploading' && uploadManager.isOffline}
             etaSeconds={stage === 'uploading' ? uploadManager.etaSeconds : undefined}
           />
         )}
@@ -62,6 +63,19 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
               } else {
                 navigation.replace('PosterViewer', { storyId: publishedId });
               }
+            } : undefined}
+            onShare={publishedId ? () => {
+              haptic.selection();
+              // Share-out parity: poster shares carry the canonical story
+              // URL; looks carry caption + Look ID (matches LookDetail's
+              // share path — no look deep-link exists yet).
+              const isLook = document.type === 'look';
+              const message = isLook
+                ? (document.metadata.caption
+                    ? `${document.metadata.caption}\n\nLook ID: ${publishedId}`
+                    : `View this Look on Thryftverse.\n\nLook ID: ${publishedId}`)
+                : `https://thryftverse.com/story/${publishedId}`;
+              void Share.share(isLook ? { title: 'Thryftverse Look', message } : { message });
             } : undefined}
           />
         )}
@@ -140,17 +154,11 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
             errorMessage={errorMessage}
             onReload={() => {
               haptic.selection();
-              serverDocMetaRef.current = null;
-              setPublishState(REVIEW_STATE);
-              progressWidth.value = 0;
-              publishGuardRef.current.reset();
+              void handleReloadFromServer();
             }}
             onDuplicate={() => {
               haptic.selection();
-              serverDocMetaRef.current = null;
-              setPublishState(REVIEW_STATE);
-              progressWidth.value = 0;
-              publishGuardRef.current.reset();
+              handleDuplicateAsNewDraft();
             }}
           />
         )}

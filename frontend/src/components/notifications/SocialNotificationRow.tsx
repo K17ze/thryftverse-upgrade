@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, AccessibilityActionEvent, AccessibilityActionIn
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { CachedImage } from '../CachedImage';
+import { AnimatedPressable } from '../AnimatedPressable';
 import {
   NotificationRowBase,
   NotificationThumbnail } from './NotificationRowBase';
@@ -66,21 +67,33 @@ export function SocialNotificationRow({
 
   const accessibilityLabel = `${isUnread ? 'Unread. ' : ''}${description}, ${time}${onActorPress ? '. Tap to open' : ''}`;
 
-  // Leading: actor avatar (unread state shown via dot in the base)
-  const leading = (
-    <View style={styles.avatarWrap}>
-      {actor?.avatarUrl ? (
-        <CachedImage
-          uri={actor.avatarUrl}
-          style={styles.avatar}
-          contentFit="cover"
-        />
-      ) : (
-        <View style={[styles.avatar, styles.avatarFallback]}>
-          <Ionicons name="person" size={18} color={colors.textSecondary} />
-        </View>
-      )}
+  // Leading: actor avatar (unread state shown via dot in the base).
+  // The avatar is its own press target — tapping it opens the actor's
+  // profile rather than following the notification's object route.
+  const avatar = actor?.avatarUrl ? (
+    <CachedImage
+      uri={actor.avatarUrl}
+      style={styles.avatar}
+      contentFit="cover"
+    />
+  ) : (
+    <View style={[styles.avatar, styles.avatarFallback]}>
+      <Ionicons name="person" size={18} color={colors.textSecondary} />
     </View>
+  );
+  const leading = onActorPress ? (
+    <AnimatedPressable
+      onPress={onActorPress}
+      style={styles.avatarWrap}
+      accessibilityRole="button"
+      accessibilityLabel={`View ${actorName}'s profile`}
+      hitSlop={8}
+      hapticFeedback="light"
+    >
+      {avatar}
+    </AnimatedPressable>
+  ) : (
+    <View style={styles.avatarWrap}>{avatar}</View>
   );
 
   // Trailing: object thumbnail (smaller, secondary)

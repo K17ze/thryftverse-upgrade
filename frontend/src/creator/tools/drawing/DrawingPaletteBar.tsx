@@ -22,7 +22,6 @@ import {
   StyleSheet,
   type ViewStyle,
   type TextStyle } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import {
   Space,
   Radius,
@@ -65,6 +64,8 @@ export interface DrawingPaletteBarProps {
   onCommitRecent?: (color: CreatorColor) => void;
   /** Accessibility label for the palette bar container. */
   accessibilityLabel?: string;
+  /** Accessibility hint for the palette bar container. */
+  accessibilityHint?: string;
   style?: ViewStyle;
 }
 
@@ -80,6 +81,7 @@ export function DrawingPaletteBar({
   recents,
   onCommitRecent,
   accessibilityLabel = 'Drawing color palette',
+  accessibilityHint,
   style,
 }: DrawingPaletteBarProps) {
   const { colors } = useAppTheme();
@@ -173,13 +175,14 @@ export function DrawingPaletteBar({
   );
 
   return (
-    <View style={[styles.root, style]} accessibilityLabel={accessibilityLabel}>
+    <View style={[styles.root, style]} accessibilityLabel={accessibilityLabel} accessibilityHint={accessibilityHint}>
       {/* Swatch row */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.swatchRow}
         accessibilityLabel="Current palette colors"
+        accessibilityHint="Swipe horizontally to browse palette colors"
       >
         {activeColors.map((hex) => {
           const isSelected = hex.toLowerCase() === activeHex.toLowerCase();
@@ -187,6 +190,7 @@ export function DrawingPaletteBar({
             <PressScale
               key={hex}
               accessibilityLabel={`Color ${hex}`}
+              accessibilityHint="Selects this color"
               accessibilityRole="button"
               accessibilityState={{ selected: isSelected }}
               onPress={() => handleSelectColor(hex)}
@@ -203,6 +207,7 @@ export function DrawingPaletteBar({
         {/* Custom color button — opens the shared CreatorColorPicker */}
         <PressScale
           accessibilityLabel="Custom color picker"
+          accessibilityHint="Shows the custom color picker"
           accessibilityRole="button"
           accessibilityState={{ expanded: showColorPicker }}
           onPress={() => setShowColorPicker((v) => !v)}
@@ -225,6 +230,7 @@ export function DrawingPaletteBar({
         {/* Palette switcher button */}
         <PressScale
           accessibilityLabel="Switch palette"
+          accessibilityHint="Opens the palette list"
           accessibilityRole="button"
           accessibilityState={{ expanded: showPaletteSheet }}
           onPress={() => setShowPaletteSheet(true)}
@@ -259,10 +265,12 @@ export function DrawingPaletteBar({
             recents={recents}
             onCommitRecent={onCommitRecent}
             accessibilityLabel="Drawing custom color"
+            accessibilityHint="Choose a custom color"
           />
           {/* Save current color into the custom palette */}
           <PressScale
             accessibilityLabel="Save color to custom palette"
+            accessibilityHint="Adds the current color to customs"
             accessibilityRole="button"
             onPress={() => handleSaveCustomColor(color)}
             style={styles.saveCustomBtn}
@@ -292,6 +300,7 @@ export function DrawingPaletteBar({
             </Text>
             <PressScale
               accessibilityLabel="Close palettes"
+              accessibilityHint="Closes the palette list"
               accessibilityRole="button"
               onPress={() => setShowPaletteSheet(false)}
               style={styles.sheetClose}
@@ -310,6 +319,7 @@ export function DrawingPaletteBar({
                 <PressScale
                   key={pal.name}
                   accessibilityLabel={`${pal.label} palette`}
+                  accessibilityHint="Applies this palette"
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
                   onPress={() => handleSelectPalette(pal.name)}

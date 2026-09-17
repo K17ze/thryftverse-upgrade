@@ -142,16 +142,59 @@ export async function sweepScheduledPublications(
         processed++;
 
         if (result.ok) {
-          // Success — mark as published and link the publication.
-          await db.query(
+          // Success — mark as published and link the publication. The
+          // transition is gated on state='claimed': a cancel that landed
+          // while the publish transaction was in flight must not be
+          // overwritten back to 'published'.
+          const publishedUpdate = await db.query<{ id: string }>(
             `UPDATE creator_schedules
              SET state = 'published',
                  publication_id = $2,
                  claimed_at = NULL,
                  updated_at = NOW()
-             WHERE id = $1`,
+             WHERE id = $1 AND state = 'claimed'
+             RETURNING id`,
             [schedule.id, result.publicationId],
           );
+          if (!publishedUpdate.rowCount) {
+            // The schedule was cancelled (or rescheduled) mid-flight and
+            // the publication still committed — the post is live. Record
+            // the publication id on the row for traceability, restore the
+            // document to 'published' (cancel reset it to 'draft'), and
+            // notify the creator honestly rather than pretending the
+            // cancel fully rolled back.
+            await db.query(
+              `UPDATE creator_schedules
+               SET publication_id = $2, updated_at = NOW()
+               WHERE id = $1`,
+              [schedule.id, result.publicationId],
+            );
+            await db.query(
+              `UPDATE creator_documents
+               SET status = 'published', updated_at = NOW()
+               WHERE id = $1 AND status IN ('scheduled', 'draft', 'publishing')`,
+              [schedule.document_id],
+            );
+            logger.warn(
+              { scheduleId: schedule.id, documentId: schedule.document_id, publicationId: result.publicationId },
+              'scheduled_publication_committed_after_cancel',
+            );
+            await queueUserNotification({
+              userId: schedule.creator_id,
+              title: 'Post published',
+              body: 'Your post was published just before the cancellation completed.',
+              eventType: 'scheduled_publication_success',
+              payload: {
+                documentId: schedule.document_id,
+                scheduleId: schedule.id,
+                publicationId: result.publicationId,
+                targetId: result.targetId,
+              },
+              route: { screen: 'CreatorDraftList', params: {} },
+              idempotencyKey: `sched_pub_success_${schedule.id}`,
+            });
+            continue;
+          }
           recordBackgroundJob({
             queue: 'infra_ops',
             job: 'scheduled_publication',
@@ -404,6 +447,27 @@ async function executeScheduledPublication(
         ok: true,
         publicationId: result.publicationId,
         targetId: result.targetId,
+      };
+    }
+
+    // Reclaim guard: before converting any non-OK result into a failure,
+    // check whether a publication already exists under this schedule's
+    // idempotency key. A previous attempt may have committed the
+    // publication and then crashed before the schedule row updated —
+    // marking it failed would convert a live post into a false failure
+    // (and flip the document to 'failed' beneath a live publication).
+    const committed = await db.query<{ id: string; target_id: string }>(
+      `SELECT id, target_id FROM creator_publications
+       WHERE document_id = $1 AND idempotency_key = $2
+         AND state IN ('publishing', 'published')
+       LIMIT 1`,
+      [schedule.document_id, idempotencyKey],
+    );
+    if (committed.rowCount) {
+      return {
+        ok: true,
+        publicationId: committed.rows[0].id,
+        targetId: committed.rows[0].target_id,
       };
     }
 

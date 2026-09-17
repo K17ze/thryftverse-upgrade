@@ -39,6 +39,7 @@ export interface PublicationInput {
   description: string;
   priceGbp: number;
   category?: string;
+  subcategory?: string;
   brand?: string;
   size?: string;
   condition?: string;
@@ -241,6 +242,7 @@ export async function executePublication(
         coverFinalizationId,
         status: 'active',
         category: input.category,
+        subcategory: input.subcategory,
         brand: input.brand,
         size: input.size,
         condition: input.condition,

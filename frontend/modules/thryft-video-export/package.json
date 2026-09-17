@@ -6,6 +6,9 @@
   "types": "src/index.ts",
   "sideEffects": false,
   "private": true,
+  "scripts": {
+    "codegen": "nitrogen"
+  },
   "peerDependencies": {
     "react": "*",
     "react-native": "*",

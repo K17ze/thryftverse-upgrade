@@ -28,6 +28,7 @@ import {
   cancelOrderOnReservationExpiry,
   flagOrphanedCommercePayment,
   noInFlightPaymentGuardSql,
+  releaseParkedPaymentIntent,
 } from "../lib/commerceCheckoutLifecycle.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -146,6 +147,116 @@ test("noInFlightPaymentGuardSql honours the orders-table alias", () => {
   const sql = noInFlightPaymentGuardSql("o").replace(/\s+/g, " ");
   assert.ok(sql.includes("pi.order_id = o.id"));
   assert.ok(sql.includes("pi.id = o.payment_intent_id"));
+});
+
+// ── releaseParkedPaymentIntent ─────────────────────────────────────────────
+
+test("release refuses while a provider-owned intent is in flight — and mutates nothing", async () => {
+  const db = fakeClient([
+    {
+      match: "SELECT pi.id, pi.status, pi.provider_intent_ref, pi.gateway_id",
+      result: {
+        rows: [{ id: "pi_1", status: "processing", provider_intent_ref: "pi_stripe_1", gateway_id: "stripe" }],
+        rowCount: 1,
+      },
+    },
+  ]);
+
+  const outcome = await releaseParkedPaymentIntent(db as never, "ord_1");
+  assert.equal(outcome.outcome, "blocked_in_flight");
+  assert.equal(outcome.releasedIntents.length, 0);
+  assert.ok(
+    !db.calls.some((c) => c.text.includes("UPDATE payment_intents")),
+    "a provider-owned intent must not be marked cancelled",
+  );
+  assert.ok(
+    !db.calls.some((c) => c.text.includes("UPDATE orders SET payment_intent_id = NULL")),
+    "the binding must stay while money may still move",
+  );
+});
+
+test("a succeeded intent reports terminal — the capture already landed", async () => {
+  const db = fakeClient([
+    {
+      match: "SELECT pi.id, pi.status, pi.provider_intent_ref, pi.gateway_id",
+      result: {
+        rows: [{ id: "pi_1", status: "succeeded", provider_intent_ref: "pi_stripe_1", gateway_id: "stripe" }],
+        rowCount: 1,
+      },
+    },
+  ]);
+  const outcome = await releaseParkedPaymentIntent(db as never, "ord_1");
+  assert.equal(outcome.outcome, "terminal");
+  assert.ok(!db.calls.some((c) => c.text.includes("UPDATE payment_intents")));
+});
+
+test("parked intent releases: conditional UPDATE, provider ref returned, order unbound", async () => {
+  const db = fakeClient([
+    {
+      match: "SELECT pi.id, pi.status, pi.provider_intent_ref, pi.gateway_id",
+      result: {
+        rows: [{ id: "pi_1", status: "requires_confirmation", provider_intent_ref: "pi_stripe_1", gateway_id: "stripe" }],
+        rowCount: 1,
+      },
+    },
+    { match: "UPDATE payment_intents", result: { rows: [{ id: "pi_1" }], rowCount: 1 } },
+    // Post-release in-flight re-check: clean.
+    { match: "AND pi.status IN", result: { rows: [], rowCount: 0 } },
+  ]);
+
+  const outcome = await releaseParkedPaymentIntent(db as never, "ord_1");
+  assert.equal(outcome.outcome, "released");
+  assert.deepEqual(outcome.releasedIntents, [
+    { id: "pi_1", provider_intent_ref: "pi_stripe_1", gateway_id: "stripe" },
+  ]);
+
+  // The UPDATE must re-assert the parked status — a webhook flipping the
+  // intent to 'processing' between SELECT and UPDATE must lose the race.
+  const cancelCall = db.calls.find((c) => c.text.includes("UPDATE payment_intents"));
+  assert.ok(cancelCall);
+  const sql = cancelCall!.text.replace(/\s+/g, " ");
+  assert.ok(
+    sql.includes("status IN ('requires_confirmation', 'requires_payment_method')"),
+    "the release UPDATE must be conditional on a still-parked status",
+  );
+
+  // The order binding is cleared only after a successful release.
+  assert.ok(db.calls.some((c) => c.text.includes("UPDATE orders SET payment_intent_id = NULL")));
+});
+
+test("webhook race: parked intent moved mid-release → re-check blocks and keeps the binding", async () => {
+  const db = fakeClient([
+    {
+      match: "SELECT pi.id, pi.status, pi.provider_intent_ref, pi.gateway_id",
+      result: {
+        rows: [{ id: "pi_1", status: "requires_confirmation", provider_intent_ref: "pi_stripe_1", gateway_id: "stripe" }],
+        rowCount: 1,
+      },
+    },
+    // The conditional UPDATE loses the race — a webhook already flipped
+    // the intent to 'processing'.
+    { match: "UPDATE payment_intents", result: { rows: [], rowCount: 0 } },
+    // The post-release re-check now sees it in flight.
+    { match: "LIMIT 1", result: { rows: [{ id: "pi_1" }], rowCount: 1 } },
+  ]);
+
+  const outcome = await releaseParkedPaymentIntent(db as never, "ord_1");
+  assert.equal(outcome.outcome, "blocked_in_flight");
+  assert.equal(outcome.releasedIntents.length, 0);
+  assert.ok(
+    !db.calls.some((c) => c.text.includes("UPDATE orders SET payment_intent_id = NULL")),
+    "must not unbind an order whose intent may still capture",
+  );
+});
+
+test("an order with no payment intents releases trivially", async () => {
+  const db = fakeClient([
+    { match: "SELECT pi.id, pi.status", result: { rows: [], rowCount: 0 } },
+    { match: "LIMIT 1", result: { rows: [], rowCount: 0 } },
+  ]);
+  const outcome = await releaseParkedPaymentIntent(db as never, "ord_1");
+  assert.equal(outcome.outcome, "none");
+  assert.equal(outcome.releasedIntents.length, 0);
 });
 
 // ── flagOrphanedCommercePayment ─────────────────────────────────────────────

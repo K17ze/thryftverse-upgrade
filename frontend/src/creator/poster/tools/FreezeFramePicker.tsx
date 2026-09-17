@@ -260,6 +260,7 @@ function LabeledSlider({
         onCommit={onRelease}
         disabled={disabled}
         accessibilityLabel={label}
+        accessibilityHint="Adjusts the value"
       />
     </View>
   );

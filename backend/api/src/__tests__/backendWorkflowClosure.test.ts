@@ -45,6 +45,9 @@ function createReply() {
       this.statusCode = statusCode;
       return this;
     },
+    header(_name: string, _value: string) {
+      return this;
+    },
   };
 }
 

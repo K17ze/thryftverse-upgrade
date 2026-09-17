@@ -1,10 +1,9 @@
 import React, { useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, LayoutChangeEvent } from 'react-native';
+import { View, Text, StyleSheet, LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSharedValue, runOnJS } from 'react-native-reanimated';
 import { Space, FontFamily, Radius } from '../../../theme/designTokens';
-import { IconGrammar } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { RadiusRoleValue } from '../../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../../theme/ThemeContext';
@@ -236,6 +235,7 @@ const ToolButton = React.memo(function ToolButton({
       }}
       style={{ ...toolbarStyles.tool, opacity: disabled ? 0.35 : 1 }}
       accessibilityLabel={a11yLabel ?? label}
+      accessibilityHint="Activates this timeline tool"
       accessibilityRole="button"
       accessibilityState={{ disabled: !!disabled }}
       hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
@@ -271,7 +271,6 @@ const SliderRow = React.memo(function SliderRow({
   min,
   max,
   step,
-  neutralValue,
   formatValue,
   color,
   onChange,
@@ -330,6 +329,7 @@ const SliderRow = React.memo(function SliderRow({
           style={toolbarStyles.sliderTrack}
           onLayout={handleLayout}
           accessibilityLabel={getSliderLabel(label, value, min, max, formatValue)}
+          accessibilityHint="Drag to adjust the value"
           accessibilityRole="adjustable"
           accessibilityState={{ disabled: !!disabled }}
         >

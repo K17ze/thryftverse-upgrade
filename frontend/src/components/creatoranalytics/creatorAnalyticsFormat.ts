@@ -17,6 +17,7 @@ export function formatRate(ratio: number): string {
 export function formatDelta(changeRatio: number | null): string {
   if (changeRatio === null) return '';
   const pct = changeRatio * 100;
+  if (pct === 0) return '0%'; // '+0.0%' reads as a rounding artifact, not a fact
   const sign = pct > 0 ? '+' : '';
   return `${sign}${pct.toFixed(1)}%`;
 }

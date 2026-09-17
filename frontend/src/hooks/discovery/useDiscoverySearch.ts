@@ -52,25 +52,15 @@ export function useDiscoverySearch(initialQuery?: string) {
   const browseFilters = useStore((state) => state.browseFilters);
   const updateBrowseFilters = useStore((state) => state.updateBrowseFilters);
 
-  // A fresh search surface must not inherit stale facet filters from the
-  // Browse tab — reset the shared filter set once on mount. The Filter
-  // sheet edits applied during this session are preserved because the
-  // screen stays mounted while the sheet is pushed.
-  const didResetFiltersRef = useRef(false);
+  // Context-scoped filters: discovery owns the `discovery` bucket, so the
+  // old blunt reset-on-mount is unnecessary — facet filters applied in
+  // Browse/Category surfaces live in their own buckets and can no longer
+  // bleed in, while this surface's own applied filters persist across the
+  // Filter-sheet push (the sheet writes the still-active discovery bucket).
+  const activateBrowseContext = useStore((state) => state.activateBrowseContext);
   useEffect(() => {
-    if (didResetFiltersRef.current) return;
-    didResetFiltersRef.current = true;
-    updateBrowseFilters({
-      query: '',
-      sort: 'Recommended',
-      brands: [],
-      sizes: [],
-      condition: 'Any',
-      sustainableOnly: false,
-      priceMin: null,
-      priceMax: null,
-    });
-  }, [updateBrowseFilters]);
+    activateBrowseContext('discovery');
+  }, [activateBrowseContext]);
 
   const searchFilters = useMemo(() => ({
     limit: SEARCH_PAGE_SIZE,

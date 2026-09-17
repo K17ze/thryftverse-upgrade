@@ -66,7 +66,7 @@ export function useOrderDetailTracking({
   const timelineEntries = useMemo(() => {
     if (!backendOrder) return [];
     return buildTimelineEntries(normalisedStatus, backendOrder, parcelEvents, {
-      hasOpenResolution: Boolean(openTicket),
+      hasOpenResolution: backendOrder.hasOpenResolution === true || Boolean(openTicket),
       hasReview,
       reviewIsAuto: orderReview?.isAuto === true,
       reviewCreatedAt: orderReview?.createdAt ?? null,

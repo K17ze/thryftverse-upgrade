@@ -436,6 +436,18 @@ The Wave R reviews+saved audit found `/users/me/wishlist` had **no backend route
 - Caveats: Redis-dependent halt paths code-reviewed not executed (no Redis in env); bank-destination creator earnings land `'held'` — nothing yet flips `held→paid` on payout settlement (follow-up gap); `mediaPipeline.test.ts` has a pre-existing Redis-at-import failure outside this scope.
 - Note on `git diff --check`: repo blobs are committed verbatim-CRLF with `core.autocrlf=true` and no `.gitattributes`, so stock `diff --check` reports `\r` as trailing whitespace on every added line of a CRLF file. The CRLF-aware gate (`git -c core.whitespace=cr-at-eol diff --check`) is fully clean — all flags were the EOL artifact, none were real whitespace.
 
+### Wave R batch 3 (2026-09-15): PR-review findings + second wallet-mutation sweep — landed.
+Copilot review on PR #33/#34 flagged two real defects plus suppressed items; each verified against source before acting.
+
+- **P1 convert idempotency (real)**: `useConvertSubmission` generated a fresh key inside each `handleExecute` — a lost response + "Try again" created a second conversion. Now `idempotencyKeyRef` persists across retries (backend replays `(userId, 'convert_1ze_to_fiat', key)` via `getWalletIdempotentResponse`), resets when `izeValue`/`currencyCode` change (payload-hash mismatch guard), clears on success. Error copy no longer claims failure on a dropped connection.
+- **Same bug found in `AddMoneySheet` fiat path** (review missed it): `buyIze` generated a fresh key per attempt → `fiatBuyKeyRef` persisted, reset on amount/currency change + sheet reopen + success. Backend `/wallet/buy-1ze` replays stored responses, so retry is safe.
+- **Wishlist isolation (already fixed)**: `useStore.logout()` at :826 clears `wishlist`/`savedProducts`/`collections` — Copilot's snapshot predated Wave R batch 1.
+- **Meilisearch env (real, worse than flagged)**: `backend/docker-compose.yml` hardcoded `MEILISEARCH_API_KEY: local-meilisearch-api-key` while the service used `local-meilisearch-master-key` — auth failed on every search call. Now aligned. Root `docker-compose.yml` either-var-drives-both (`MEILISEARCH_API_KEY` ⇄ `MEILISEARCH_MASTER_KEY` fallback chain).
+- **VideoExportModule.test.ts**: `vi.resetModules()` in `beforeEach` couldn't touch file-scope bindings — removed the dead reset with an honest comment (all cases assert the same unlinked state).
+- **task-4-brief.md mojibake (real)**: cp1252 double-encoded `—`/`“`/`”`/`…`/`→`/`–`/`°` — repaired at byte level via cp1252→utf-8 round-trip; file now clean UTF-8.
+- **False positives verified, not "fixed"**: `coOwn_orders` casing (unquoted identifiers fold to `coown_orders` — all 83 refs unquoted, CREATE TABLE unquoted → correct); `reserved_1ze_units / 1000` (migration 217 was a terminology-only rename — units ARE milli-1ZE; `ONEZE_UNITS_PER_IZE=1000`. Swapped raw `/1000` for `unitsToOnezeAmount()` to remove the ambiguity Copilot tripped on).
+- Verified: frontend tsc clean; backend tsc clean; CRLF-aware diff check clean.
+
 ### Wave U (2026-09-15): creator department P1/P2 batch 2 — interaction, dead-data, templates, primitives — landed.
 Six domain audits (timeline, studio, primitives, publish/export, backend-media, capture) fed this batch; all findings verified against source before fixing.
 
@@ -491,3 +503,224 @@ Six domain audits (timeline, studio, primitives, publish/export, backend-media, 
 - DEPLOYMENT.md §6.5 documents the required `AbortIncompleteMultipartUpload: 7d` bucket lifecycle rule for R2/S3 (ops apply; still open).
 
 **Verification**: frontend tsc clean; backend tsc clean; creator suite 75/75 (incl. new dedup + retention tests); backend media suite 14/14 (incl. orphan-pass coverage); eslint clean on touched files. Remaining residuals: post-complete-crash orphan *objects* (S3 has the assembled object, no finalization row — needs a ListObjects-vs-DB reconciler, documented not built); MinIO dev lifecycle rule; Grafana alert on stuck `expired` rows.
+
+### Wave X (2026-09-15): Adversarial re-audit closure — all P1/P2/P3 findings dispositioned.
+
+**P1s fixed**
+- **Dead multipart session replay** (UploadManager): a persisted session whose server row was expired/swept (404/409/410 on /parts or complete) was retried forever as a permanent failure — the only escape was cancel + re-upload from byte zero. `performMultipartUpload` now clears the session, re-initiates exactly once, and retries the fresh session — parity with the UR-7 single-PUT re-presign policy. Regression: `it.each([404,409,410])` in UploadRecovery.test.ts.
+- **Pause→resume double-drive** (UploadManager): pauseJob/cancelJob aborted AND deleted the `activeUploads` entry while the owning processJob was still unwinding → resumeJob's guard passed → second processJob started → first attempt's catch wrote 'failed' over the live attempt and its finally evicted attempt #2's controller (uncancellable zombie). Fix: abort in place, entry removed only by processJob's finally (identity-checked); failure paths key off `controller.signal.aborted` not mutable status; `offlineAborted` cleared unconditionally in finally.
+
+**P2s fixed**
+- **Unbounded publish wait**: `useUploadManager.waitForCompletion` accepts `{signal, timeoutMs}` → the workflow passes the publish abortController; an aborted wait bails silently (cancel path owns the reset) and unsettled-but-not-failed jobs (paused/offline-parked) now fail honestly instead of silently publishing local URIs. Cancel dialog covers all non-terminal statuses (was queued/initiating/uploading only — stalled/confirming/paused were skipped).
+- **Wedged max-attempts ingest rows** (backend): a worker SIGKILL on the final attempt left status='processing' at attempt_count=max — unclaimable by claimProcessingJob and unlisted by the reconcile sweep → asset pinned in 'processing' forever. `listDeadLetterableIngestJobs` + `deadLetterIngestJob` (guarded transaction: job→dead, asset→processing_failed) run inside `reconcileMediaIngestJobs`; the handler's empty-claimable early-return was removed so the pass always executes.
+
+**P3s fixed**
+- Control-plane fetchJson calls (initiate/parts/complete/refresh) now forward the job AbortSignal — pause takes effect immediately, not after the 15s fetch timeout. `abort()` deliberately keeps no signal (it's invoked *because* the signal fired).
+- Stall checker emits non-terminal `jobStalled` (was `jobFailed` while a job sat in retry backoff — false failure for any consumer treating it as terminal).
+- `dispose()` marks offlineAborted + requeues in-flight before aborting — no longer worse than a hard kill.
+- `xhrPutChunk` detaches its abort listener and nulls XHR handlers on every settle path — was leaking one listener per part per job.
+- Shared `cachedBlob` → per-path `cachedBlobs` Map; one job's complete/abort can no longer evict a concurrent sibling's fallback blob. `resolvedPaths` cleaned on the same boundary.
+- Progress-persist throttle is per-job (Map) — a chatty job no longer starves a sibling's AsyncStorage checkpointing.
+- Orphan-pass existence check batched to one `upload_id = ANY($1)` per sweep.
+- Backoff/sleep helpers extracted to `UploadBackoff.ts` (max-lines hygiene).
+
+**Verification**: frontend tsc clean; backend tsc clean; creator suite 79/79 (incl. dead-session re-initiate ×3 statuses + pause-during-unwind tests); backend media suite 15/15 (incl. dead-letter pass coverage); eslint 0 errors on touched files.
+
+**Residuals (documented, not built)**: post-complete-crash orphan S3 *objects* need a ListObjects-vs-DB reconciler; old-bucket orphans after bucket rotation are invisible to the single-bucket listing; MinIO dev lifecycle rule + Grafana alert on stuck `expired` rows; per-part inner retry classification; native device validation still pending (no ADB device).
+
+### Wave Y (2026-09-15): Residual closure — per-part retry classification, post-complete orphan objects, MinIO dev lifecycle.
+
+- **Per-part inner retry classification** (UR-6 residual): part PUT failures now carry `PartUploadError.status`; `uploadPartWithRetry` skips retries on permanent 4xx (except 403 — stale-URL self-heal re-fetches a fresh presign — and 408/429). Dead-session statuses propagate immediately so the manager's re-initiate policy handles them instead of burning 3 part retries first.
+- **Post-complete-crash orphan objects** (was "documented, not built"): when the session sweep's abort gets `NoSuchUpload` on an expired row, the object may exist S3-side (assembled by CompleteMultipartUpload before the finalization tx committed). `reclaimOrphanedCompletedObject` HEADs the key, checks `upload_finalizations`/`media_assets` for a `(bucket, object_key)` reference, and `deleteObject`s only when nothing claims it. New `objectExists(key, bucket?)` helper; `deleteObject` gained an optional bucket override.
+- **MinIO dev lifecycle** (was ops-only): `minio-init` in docker-compose.yml now applies `mc ilm rule add --abort-incomplete-days 7` on every `up` — dev parity with the documented R2/S3 rule. DEPLOYMENT.md §6.5 updated.
+- Regression: mediaPipeline.test.ts 16/16 (orphan-object reclaim covered — unreceipted deleted, referenced kept); creator suite 43/43; both typechecks clean; eslint clean.
+
+### Wave Z (2026-09-16): Creator-earnings settlement — held→paid flip closed.
+
+- **Gap**: bank-destination `POST /creators/me/payouts` parked sources + the negative payout entry in `'held'` forever — `settlePayoutRequest` moved ledger money on `paid` but never touched `creator_earning_entries`, and the only request linkage was description text ("Bank payout request <id>").
+- **Fix**: migration `308_creator_earnings_payout_link` adds `related_payout_request_id` (indexed, backfilled from the description convention); the payout INSERT now writes it; `settleCreatorEarningEntries` (new `lib/creatorPayoutSettlement.ts`) is called inside the settlement transaction — `paid` flips payout entry + `held` sources to `paid`, `failed`/`cancelled` releases sources back to `available` and marks the payout entry `reversed` so the creator can re-request. Idempotent (`status='held'` guards) and safe pre-migration (`information_schema` column check → no-op).
+- **Bucket projection bug (found while wiring the UI)**: the earnings summary `SUM(amount_minor)` nets the negative payout entry against its held/paid sources in the same status bucket — 'paid' displayed £0.00 forever and 'held' stayed invisible mid-flight. Buckets now sum gross positives (`FILTER (WHERE amount_minor > 0)`); payout entries are offsetting records, not earnings.
+- **Frontend payout hook** (`useCreatorPayout`): `manual_${Date.now()}` minted a fresh idempotency key per attempt — retry after a lost response generated a new `payoutId` → double payout. Key now persists in a ref across retries (server replays by `(userId, key)`), cleared only on confirmed success. Also added the `inFlightRef` double-tap guard (state guard raced) and a hook-level `isOffline` guard.
+- **Earnings UI**: 'held' bucket rendered as "Processing" when > 0 (Available silently dropping to zero read as money vanishing); per-entry status suffix for held/pending/reversed rows; payout button disabled + `accessibilityState` while offline.
+- **Verification**: new `creatorPayoutSettlement.test.ts` 6/6 (paid flip, failed release, cancelled release, pre-migration no-op, unlinked no-op, scoping); backend tsc clean; frontend tsc clean.
+- **Residual closure**: `UploadManager` AbortSignal TS2345 was already resolved by the Wave X backoff extraction (`abortableSleep` takes optional signal); `mediaPipeline.test.ts` "Redis-at-import failure" was a wrong-runner artifact — file is Vitest (`vi.mock`), passes 16/16 under `npx vitest run`.
+
+### Wave AA (2026-09-16): Save→Publish contract hardening — publish was fully dead server-side.
+
+- **SP-P0-1 missing column**: `creator_documents.document_hash` was queried by publish/schedule but never created (067 put it on `creator_document_revisions`). Migration `309_creator_documents_document_hash.sql` adds it; save UPDATE/INSERT + remix INSERT now persist the canonicalized hash.
+- **SP-P0-2 JSONB readers**: every `document_json` SELECT treated `pg`'s already-parsed JSONB as a string — `JSON.parse(object)` throws on a real driver (mocks returned strings, masking it). All readers in `creatorDocuments.ts`/`creatorPublicationService.ts`/`creatorPublications.ts` now select `document_json::text`.
+- **SP-P1-1 hash fallback**: `document_hash` fallbacks hashed the raw JSONB column — can never equal the client's canonicalized hash → guaranteed false `DOCUMENT_HASH_CONFLICT` on any row saved before the column. `canonicalizeJson` extracted to `lib/canonicalJson.ts` (single source); all fallbacks re-canonicalize the parsed doc.
+- **SP-P1-2 schema drift**: `creatorDocumentBodySchema` was generations behind `CreatorDocumentSchema` — `time`/`weather`/`adjustment` layer types absent (hard parse failure on any doc using them), `location` required `name` vs frontend `placeName`, `gif` required `gifUri` vs `gifUrl`, `music` required `trackId`, `vote` forced exactly-2 options, `canvas.background` rejected `blur`, and zod silently stripped `keyframes`/`pin`/`clipId`/`timeRange`/`maskRef`/`focalPoint`/`fades`/`recipe`/`gradientStops`/`fps`/`renderVersion`/`assetRegistry`/`scheduledFor`/`coverPageIndex` on every save. Fixed per the documented architecture (opaque JSONB + envelope validation): `.passthrough()` at every level + missing union members + loosened mismatched required fields. Verified end-to-end — a doc exercising every new field round-trips with zero loss.
+- **SP-P1-3 scanner drift**: `scanDocumentForLocalUris` re-implemented the media walk; now derived from `walkMediaReferences` — the upload gate can't drift from the coverage contract.
+- **Stale test mock**: `backendWorkflowClosure.test.ts` `createReply()` lacked `header()` — the idempotent-replay test failed on deprecation headers, not product code. Fixed; 3/3 doc tests green.
+- **Verification**: backend tsc clean; frontend tsc clean; creator suite 79/79; allowlisted backend suite 188/195 (7 pre-existing env failures — IPv6 SSRF DNS + external embedder); allowlist-excluded `node:test` publish/remix tests verified via tsx --test.
+- **Residual**: `backendWorkflowClosure.test.ts` remains outside the vitest allowlist (other tests need live Postgres); `version` keeps `max(10)`.
+
+### Wave AB (2026-09-16): Publish-conflict UX + tools-audit closure.
+
+- **Fake conflict actions → real ops** (`useCreatorPublishWorkflow` + `CreatorPublishSheet`): "Reload" now fetches the server document, validates it through `CreatorDocumentSchema` (`safeValidateDocument` — malformed payloads surface as a retriable error, not a canvas crash), replaces the working doc via `setDocument`, and seeds `serverDocMetaRef` so the next publish carries the fresh lock version. "Duplicate" forks the local doc under a new `doc_*` id with `sourceDocumentId` provenance and `scheduledFor` cleared — preserving local edits with no stale server identity. 404 on reload produces an explicit save-as-draft path.
+- **404 self-heal on save**: a server-side-deleted document previously dead-ended every publish on update-404 forever; the update path now re-creates the row (create preserves `payload.id`, so the document id is stable).
+- **Stale `scheduleAttemptId` bug**: the id was `setState`'d inside `handlePublish`'s try but read in catch via stale closure — failure bookkeeping could be recorded against a *prior* attempt. Now tracked in a local (`schedAttemptId`) captured in the same scope; state cleared on every new attempt.
+- **Draft cleanup on schedule**: `metadata.scheduledFor` is cleared via `updateMetadataLive` after every successful schedule commit (publish path, retry path, reconcile path) — reopening the draft no longer silently re-schedules.
+- **Captive-portal pin**: `SharingStateView` now receives `isOffline` and shows "Waiting for connection…" instead of a frozen "Uploading… N%" while the queue is parked on `isInternetReachable === false`; ETA suppressed offline.
+- **Toast hygiene**: backgrounded-app copy corrected to "Upload will resume when you return" (the old "keep app open" contradicted dismiss-to-background); `GlobalUploadIndicator` now batches simultaneous job failures into a single toast instead of N.
+- **Cutout eraser made honest** (`CreatorCutoutSheet`): erase strokes previously appended to the same path list and *expanded* the crop. Strokes are now typed `{points, mode: keep|erase}`; erase removes traced points within 18px and splits traces into surviving segments — real "trim your trace" semantics. Title corrected "Cutout" → "Crop" (it produces a bbox crop, not segmentation); apply/preview gate on surviving segments; instruction copy switches per tool.
+- **Sticker dead Edit fixed per type**: `handleEditLayer` now routes through `LAYER_TYPE_TO_PICKER_MODE` — interactive stickers (quiz/question/emojiSlider/countdown/link/location/hashtag/time/weather/vote/draw) reopen their own picker in edit mode; decorative/gif/music/adjustment get Replace only, so Edit never renders dead.
+- **Relink preserves authored placement**: sticker edit previously replaced the whole layer, wiping x/y/scale/rotation/zIndex/timeRange/keyframes. Now payload merges onto the existing geometry. Media relink also clears `freezeFrameMs` (a timestamp into the *old* source) and playback-only fields when relinking to a still.
+- **Unreachable picker modes wired**: `gif`, `music`, `shape` pickers were implemented but had no entry point — added to Poster rail overflow with capability gating (`layerGif`, `stickerMusic`, `layerDecorative`).
+- **Look video gating**: Crop and Cutout were offered on video layers despite both sheets being image-only (`manipulateAsync`); now hidden when `mediaType === 'video'`.
+- **Sheet pan arbitration**: cutout sheet's image-drag pan and trace pan raced on the same single-finger touch; drag is now 2-pointer so one finger always draws, two fingers move the preview.
+- **Verification**: frontend tsc clean, backend tsc clean, creator suite 91/91, eslint 0 errors (structural max-lines warnings only). Confirmed no accidental deletions: `core/upload/index.ts` unmodified, `thryft-media-export` +416/−52 (all additions).
+
+### Wave AC (2026-09-16): Filter/Sort department — cross-surface contract + grammar repair.
+
+User-reported defect class: filter/sort behaved like "a different page" across explore/discovery/auctions, with divergent vocabularies and silently dead controls. Three parallel audits (browse, auction, discovery) found P0 contract breaks, not just polish gaps.
+
+**Backend — `GET /listings` (`index.ts`):**
+- Zod sort enum extended to the full client vocabulary (`most_liked`, `recommended`, `ending_soon`) — previously "Most liked"/"Ending soon" threw on `querySchema.parse` → empty grid + error on every category browse.
+- Server ordering implemented per sort: `most_liked`/`recommended` rank by wishlist-interaction count (new `li` aggregate join), `ending_soon` ranks by live-auction `ends_at ASC NULLS LAST` (new `a` join), price sorts qualified to `l.price_gbp`.
+- **Ambiguous-column bug caught pre-runtime**: the new `auctions a` join collided with the unqualified `status = 'active'` predicate — all listing predicates qualified to `l.*`.
+- **Keyset-cursor bug**: the `ending_soon` non-null cursor branch `(a.ends_at, l.id) > ($1,$2)` evaluates NULL for null-auction rows → the NULLS LAST tail (all fixed-price listings) was unreachable forever after the first non-null cursor. Predicate now `a.ends_at IS NULL OR (a.ends_at, l.id) > (…)`; null-tail cursors paginate on `l.id` only.
+- Sort/cursor builder extracted to `lib/listingSort.ts` (pure, testable); handler delegates. New `listingSort.test.ts` 9/9 — covers every sort's ORDER BY, keyset direction, null-tail reachability, placeholder offsets.
+- `auction_ends_at` added to the response payload so the client fallback orders on a truthful key.
+- `minPrice > maxPrice` now returns HTTP 400 (was a 200-with-error-field the client ignored).
+- `sustainableOnly=true` honored server-side (`sustainability_grade IN ('A','B')`).
+
+**Backend — `GET /auctions` + new `GET /auctions/facets`:**
+- `priceMin`/`priceMax` predicates added (were stripped → dead UI end-to-end); invalid range → 400.
+- Multi-category `categories` CSV parsed → `category = ANY($n::text[])` (was silently `categories[0]`-only via client).
+- `/auctions/facets` returns canonical category facets + status counts + price bounds honoring query/category/price constraints.
+
+**Frontend — discovery search (`UnifiedDiscoveryScreen`):**
+- Wired the previously returned-but-unconsumed `useDiscoverySearch` contract: `peopleError`/`retryPeopleSearch` (was rendered as "No people found" — transport error disguised as empty), `searchUsedFallback` (backend-fallback transparency), `searchHasMore`/`isSearchingMore`/`loadMoreSearch` (results were hard-capped at one page), `resultCount` with `+` partial indicator, `onClearSearch`, save-search.
+- Save-search now persists query + full filter state (brands/sizes/condition/sort/price) via existing `addSavedSearch` — no second implementation.
+
+**Frontend — sort vocabulary consolidation:**
+- Single canonical source in `filterTypes.ts`: `SORT_OPTIONS` + `AUCTION_SORT_OPTION` + `isAuctionSortContext(categoryId, query)` + `getContextualSortOptions`. `browse/sortOptions.ts` re-derives. FilterScreen previously checked only `categoryId` — a search for "auction watch" silently hid 'Ending soon'; now honors the query too.
+
+**Frontend — FilterScreen/FilterSheet grammar:**
+- Route presentation → `transparentModal` so the custom sheet is the single chrome (was a custom sheet inside a native formSheet → broken backdrop, double chrome, competing drag gestures — the "different page" feel).
+- Apply footer docked outside the ScrollView (was inside → CTA sat ~50% below viewport at resting detent).
+- `minPrice > maxPrice` draft validation with inline error + disabled Apply.
+- Auction `FilterSheet`: currency-symbol/preset formatting bug, `button`→checkbox roles, ~34px→44px CTAs, loading-aware CTA text, dead `facetsLoading` prop wired, duplicate "Recommended"/"Ending soon" rows (identical server order) collapsed, radius/stroke grammar tightened.
+- `FilterSizeSection`: nested `Pressable`(role=switch, generic label) wrapping an `AppButton` → two interactives, wrong semantics. `AppButton` gained `accessibilityState`/`onLongPress` passthrough (AnimatedPressable already supported both); collapsed to a single `AppButton` with role=checkbox + checked state + named label.
+
+**Frontend — browse UI:**
+- Sort trigger icon: generic `filter` glyph → semantic `sort` (swap-vertical).
+- Sort menu: dismissal overlay + scroll-to-close.
+- Active-filter badges now include query and price range (query-only/price-only filters were invisible); badge-row gate updated.
+- `useBrowseSortMenu`: AsyncStorage restore no longer clobbers the active context's staged sort.
+
+**State isolation — `browseFilterContexts.ts` (new pure module):**
+- Global `browseFilters` leaked across every surface (category browse, category detail, search, discovery all shared one object; discovery had to blunt-reset on mount).
+- Store now keeps `browseFiltersByContext` buckets + active-context mirror (FilterScreen's seed/apply flow untouched). `activateBrowseContext`/`updateBrowseFiltersForContext` added; BrowseScreen/CategoryDetail/SearchScreen/discovery activate their own keys (`browse:<cat>:<sub>`, `search`, `discovery`).
+- `displayListings` no longer bypasses subcategory/signal predicates on the backend path (client-side predicates applied over backend results — those params aren't in the server contract yet).
+- Client `ending_soon` fallback now orders on `auctionEndsAt` (was `createdAt` asc — semantically false).
+- `fetchFilteredListings` treats HTTP-200 empty arrays as honest empty, not API error.
+- Auction browse: `isPartial` distinction for cursor-paginated counts (was presented as authoritative total); logged-out `watching` scope → auth-specific state navigating to Login (was generic "Filter failed").
+- Facet fetch: debounced, scoped to facets-relevant draft fields (sort taps no longer refetch), request-ID stale-response guard.
+
+**Verification:** frontend tsc clean, backend tsc clean, `browseFilterContexts.test.ts` 7/7, `discoverySurfaces.test.ts` 13/13, `listingSort.test.ts` 9/9, eslint 0 errors on all touched files.
+
+**Residual:** subcategory/signal predicates are still client-side over backend pages (server contract lacks them — pagination can return short pages when predicates are active); auction `recommended` still aliases ending-soon server order until a ranking signal exists.
+
+### Wave AD (2026-09-16): Subcategory browse end-to-end — the column never existed.
+
+**Root cause (P0)**: every subcategory browse page (Women → Clothing, Men → Shoes, …) could never match real data. The taxonomy leaf, route `subcategoryId`, `Listing.subcategory` field, and client predicate all existed — but `listings` had **no `subcategory` column**, the API returned `subcategory: null` always, and the sell flow never captured one. Client predicate `subcategory.includes(token)` on null → empty grids everywhere.
+
+**Deeper defect found while wiring**: `l.category = $n` was case-sensitive, but sellers store display names ('Women') while browse sends route ids ('women') — every *category* browse page failed on the backend path too; only the lowercasing client fallback ever rendered. Predicate now `LOWER(l.category) = LOWER($n)`.
+
+**Chain implemented:**
+- Migration `310_listings_subcategory` — `listings.subcategory TEXT` + partial index `(category, subcategory) WHERE status='active'`.
+- `POST /listings`: accepts/upserts `subcategory`, feeds it to `validateListingActivation` (was hardcoded null).
+- `GET /listings`: `subcategory` query param (`ILIKE %token%`), column selected + returned in list and detail payloads.
+- `GET /listings/:id`: `l.subcategory` selected + emitted.
+- Sell flow: `subcategory` state in `useSellFormState`, draft persistence (`subcategoryId` key, restore + external-sync + signature), `pickerTaxonomy.subcategory` = children names of the selected root, new `'Subcategory'` picker mode, a conditional "Type" row in SellScreen (rendered only when the chosen category has children), publish pipeline → `PublicationInput.subcategory` → `ListingCreateBody.subcategory`. Category change clears subcategory.
+- Browse: shared `getSubcategoryToken` extracted to `utils/subcategoryToken.ts` (was duplicated in `useBrowseListings` + `useFilterResultCount`); `useBrowseBackendListings` sends the token as `subcategory` so server-side filtering carries it; client predicate still applies over results as backstop for legacy rows.
+- Contract types: `ApiListingRow.subcategory`, `ListingApiItem.subcategory`, `fetchFilteredListings({subcategory})`.
+
+**Also fixed (in-flight work hygiene)**: 6 files in the new `creator/studio/context/` dir imported `'../../../shared/creatorAnalytics'` (one level too deep — `src/shared` doesn't exist). Repointed all to `'../../shared/creatorAnalytics'`.
+
+**Verification**: frontend tsc clean, backend tsc clean, browse/discovery suites 20/20, eslint 0 errors on all touched files.
+
+**Residual**: existing rows have `subcategory = NULL` — leaf browse pages will be sparse until sellers populate the field (no fabricated backfill; the client predicate still falls back gracefully). `AIPoweredListingScreen` publish path doesn't send subcategory yet.
+
+### Wave AE (2026-09-16): Notifications + Analytics departments — contracts, delivery pipeline, period switching.
+
+**Notifications — root causes fixed at owner layers:**
+- **previewPolicy scalar↔record drift**: PUT accepted only a scalar while GET returned a record — the settings UI's record writes failed schema validation and silently reverted. Backend now accepts both, expands scalars to all categories, and GET derives a scalar when all categories agree.
+- **auctionAlerts dead toggle**: email/push prefs schema lacked the field entirely — toggle was cosmetic. Migration 311 adds `notification_prefs.auction_alerts`; PUT/GET round-trip it.
+- **Push pipeline dead end-to-end**: permission grant never registered the device token — Expo pushes had no target. New `lib/pushDevice.ts` registers on grant (shared by settings/onboarding/contextual asks), returns the device id, and `PushNotificationsScreen` tracks *this* device truthfully instead of guessing "most recent".
+- **Token roll unsafe**: old cleanup deactivated the new token or an unrelated device. Now registers the new token first, then deactivates all *other* devices for the user; logout deactivates this device.
+- **Quiet hours destroyed notifications** — now defers delivery to window end (`pushDelayMs` via shared `workerHelpers`), honors the client-sent timezone, and never discards.
+- **Per-device send idempotency**: push retry no longer re-sends already-ticketed devices; retry merges prior ticket pairs so all-ticketed retries don't write a false `failed`.
+- **Receipt handling**: preserves `sent_at`, aggregates per-event receipt results instead of last-write-wins, and no longer revokes an unrelated device as a fallback.
+- **safety_outcome bypassed the pipeline** (direct insert — no push, no realtime) — now routes through `queueUserNotification`.
+- **Unmapped event types** were written `suppressed` → invisible in feed AND unable to push — the worst of both. Migration 312 adds `in_app_only` status (feed-visible, push-ineligible) + repair UPDATE; realtime publish gates on feed visibility so suppressed events never ghost-banner.
+- **Duplicate `queueUserNotification`** in index.ts now delegates to the canonical workerRuntime implementation — no more drift.
+
+**Notifications frontend:**
+- Swipe semantics were inverted (rightward swipe deleted, label said mark-read) — renderers/callbacks aligned to user-perceived direction; accessibility actions (mark-read/delete) forwarded to the semantic row, not a nested wrapper that created a redundant accessible node.
+- Social row `onActorPress` was accepted but never invoked — avatar/actor now actionable.
+- Filtered-empty state used `notifications.length > 0` (false when the filter is empty) — now threads server `filterCounts.all` so "no notifications in this filter" ≠ "no notifications at all".
+- **Banner read-before-seen**: `surfacePersistedNotifications` marked events read at fetch time — unread counts vanished before the user saw anything. Mark-read moved to banner dismissal/action (`dismissNotification` on `persistedEventId`).
+- **Badge sync**: swipe-delete of unread cards decrements the global badge (incl. aggregated member events), restores on failure; realtime arrival +1 via shared claim; banner dismissal −1. Every path (open, mark-read, delete, mark-all, realtime, dismiss) is symmetric.
+- **Realtime gap**: backend published `notification.queued` on `notifications.user:{id}` with zero consumers. New `useNotificationRealtime` bridge (mounted in App.tsx under RealtimeProvider) dedupes via `surfacedEventIds`, surfaces banners, honors `deferredUntil` (quiet-hours events badge+refresh but no toast), and `useNotificationFeed` resyncs on the topic.
+- Test-notification button now exercises the real backend pipeline (was a local-only schedule).
+
+**Analytics — period switching & truth:**
+- **Stale-write race**: both `useSellerAnalytics` and `useCreatorAnalyticsDashboard` let a slow older-period response overwrite a newer selection. Request-sequence guard + `dataPeriod` tracking; screen shows "Showing previous period · updating…" while data lags the selection — stale-while-revalidate instead of a blank or a lie.
+- **Funnel vocabulary**: `offer_created`/`offer_start` action names didn't match real emitters, `impression` joined a table that wasn't the impression source, and `LEFT JOIN interactions × orders` cross-multiplied counts. Rewritten as independent scalar subqueries with the true `recommendation_impressions` source and correct offer vocab; `impressions` is now nullable (unavailable vs fabricated 0) and the frontend renders the stage as "unavailable".
+- **Raw-timeline `::text` date cast** produced driver-dependent strings — normalized to ISO day keys.
+- **"Net Sales"** label presented gross GMV — relabeled honestly.
+- **Fabricated zeros**: listing-analytics error state rendered 0s for every stat — now `—` (unknown), and `isEmpty` refuses to fire when `completeness === 'unavailable'` (pipeline down ≠ no activity).
+- **Earnings currency**: formatted with display-preference currency instead of the backend-authoritative `earnings.currency` — a GBP balance could be labeled otherwise. Fixed; unused `currencyCode` prop removed.
+- **Seller preset boundaries**: `7d/30d/90d` were rolling-hour windows misaligned with UTC-day chart buckets — now snapped to UTC day boundaries (end-exclusive = tomorrow 00:00 UTC).
+- **Custom range validation parity**: backend now rejects malformed/inverted/future/>1yr ranges with `ANALYTICS_RANGE_INVALID` (400) — UI is not the trust boundary. Date-sheet `today`/`oneYearAgo` recompute on open (were `useMemo([])` — stale while mounted).
+- **Aggregate+raw union**: timeline unions raw events after the aggregate watermark so today doesn't flatline while the worker lags (no double counting — strictly after last agg date).
+- **Reprice confirm**: quick-reprice buttons mutated a live listing's price instantly — now gated behind `ConfirmationSheet` with the exact new price in the copy.
+- **Inventory scope filter**: analytics listing picker included drafts/deleted — filtered to real inventory.
+
+**Verification**: frontend tsc clean, backend tsc clean, frontend vitest 2042/2042 (111 files), backend node:test suites for notification contract/system + creatorAnalytics all pass; backend vitest failures are pre-existing env-dependent (embedder service, IPv6 SSRF) untouched by this wave; eslint 0 errors on touched files.
+
+**Residual**: `notificationSystem.test.ts` imports the app → opens Redis connections that keep `node --test` alive after tests pass (pre-existing; tests all ✔). CodeScene MCP unavailable in this env — lint+typecheck+tests are the gate.
+
+### Wave AF (2026-09-16): Orders/checkout/fulfilment/protection — the money-path department.
+
+**Checkout ↔ payment-intent lifecycle (P0 cluster):**
+- **Parked-intent orphan risk**: explicit cancel (`POST /orders/:id/cancel`) and checkout rebind (`PATCH /orders/:id/checkout`) left parked buyer-actionable intents bound — a later confirm could capture against a cancelled/changed order. New `releaseParkedPaymentIntent` in `commerceCheckoutLifecycle.ts`: gate-first scan blocks on provider-owned states (`provider_submission_pending`/`processing`/`unknown`/`succeeded`), releases only `requires_confirmation`/`requires_payment_method`, unbinds the order, and returns provider refs for post-commit gateway cancel (no provider I/O inside the row-locked transaction).
+- **Webhook race**: the release UPDATE is conditional on the parked status AND a post-release `hasInFlightPaymentIntent` re-check runs before unbinding — a concurrent provider transition can never be overwritten.
+- **Own-reservation dead end**: `POST /orders` rejected the buyer's *own* active reservation with `LISTING_CHECKOUT_RESERVED`, dead-ending every retry/resume. Now: another buyer's reservation rejects, own reservation resumes the existing checkout path, expired stale reservations are released.
+- **`POST /orders` serializer triplicated** — extracted to a shared mapper.
+
+**List ↔ detail contract parity:**
+- `GET /users/:userId/orders`: listing title/image joins, shipping-quote + seller-rights snapshot join, accepted-extension-folded `shipByDate`, `hasOpenResolution` (open protection/return/support ticket OR open return case), role-aware `needsActionCount` companion query.
+- `GET /orders/:orderId`: added the same `hasOpenResolution` predicate — detail no longer depends on a lagging ticket store.
+- **Claims-history crash**: backend emits `topicId`/`topicLabel`; client type claimed `topic` → `undefined.replace` crashed the screen. Contract aligned.
+- **My Orders pagination collapse**: `fetchOrders` deps included `nextCursor`/`isLoadingMore`; the reset effect keyed on it collapsed page 2 into page 1. Refs for pagination state; appends dedupe.
+- `OrderLedgerRow`: restrained open-resolution indicator + deadline badge, a11y label includes resolution state.
+
+**Protection & support:**
+- `POST /orders/:id/protection/claim`: status eligibility (paid-or-later), window check (`delivered_at+30d` else `created_at+60d`), existing-open-claim replay returns `deduplicated: true` — network retries no longer duplicate.
+- Dispatch extensions: detail/detail-projection only surface pending extensions while `status='paid'`; respond route enforces the same gate. `canRespondExtension` aligned client-side.
+- **Support topics**: extracted to `utils/supportTopics.ts` — `filterSupportTopics` is role-gated (buyer-claim topics withheld from sellers and until order load proves role), status-gated ('not_received' only once shipped/failed/returned; 'not_as_described' post-delivery), return-window gated, and deep-linked `categoryId` is whitelisted + reset if it becomes ineligible.
+
+**Lifecycle honesty:**
+- `confirm_delivery` during transit selected as *primary* for untracked orders — bypassed `canConfirmDelivery` and released escrow on a moving parcel. Transit primary is now `track_order` (or none); `confirm_delivery` only surfaces post-`delivered`.
+- `handoff_asserted` mapped to its own semantic key + copy — seller assertion is evidence, NOT carrier-confirmed shipment; it no longer counts as confirmed transit.
+- Carrier `delivery_failed`/`returned` webhook events now advance order status (statuses existed in the FE vocabulary but the backend never wrote them); escrow sweep holds funds when a `returned` event lands after `delivered`.
+- Ship route no longer fabricates `TV-` tracking fallbacks — explicit or existing real tracking required.
+- `ConfirmationSheet`: `busy` state + dismiss-on-settle so destructive confirms can't double-fire.
+
+**Checkout UI truthfulness:**
+- GBP wallet split-tender (`walletDebitGbp > 0`) is server-rejected (`WALLET_SPLIT_TENDER_UNSUPPORTED`) yet the payload still sent it — removed from `createOrder` payload; toggle remains behind `CHECKOUT_SPLIT_TENDER_ENABLED`; 1ZE stays a distinct full-payment rail (`oneze_internal`).
+- Platform-pay CTA now gates on `isPlatformPaySupported()` (device provisioned) AND capability flag — capability alone promised a tender the device couldn't present. `stripe-web-shim` exports the no-op.
+- `buildOrderSignature` carries `quoteId`/`carrierId` + tender/verification identity — stale orders can't be reused under changed checkout inputs.
+- `parseApiError.isNetworkError` is the canonical classification (was ad-hoc errorCode string matching that missed raw fetch failures).
+- Bound-order totals derive from server `subtotalGbp`/`platformChargeGbp` — never the listing's live price.
+
+**Regression coverage**: `checkoutMoneyPathGuards.test.ts` +5 (release blocked in-flight/terminal/conditional-UPDATE/webhook-race/none) → 22/22; new `orderLifecycleContracts.test.ts` → 22 (transit-never-confirm ×10, extension gating ×4, support role/status gating ×6, plus window check).
+
+**Verification**: backend tsc clean, frontend tsc clean, frontend vitest 2065/2065 (112 files), backend node:test 45/45 order-fulfilment + 22/22 money-path guards, eslint 0 errors on all touched files.
+
+**Residual**: `notificationSystem.test.ts` still parks `node --test` on Redis handles (pre-existing). Seller 'delivery_failed'/'returned' statuses render as danger-tone terminal but have no dedicated seller-action vocabulary yet — the resolution path is support-ticket driven, which is the honest interim state.

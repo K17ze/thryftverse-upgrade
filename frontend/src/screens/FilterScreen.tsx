@@ -19,8 +19,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useFeatureFlag } from '../analytics';
 import { track } from '../analytics/track';
 import {
-  SORT_OPTIONS,
-  AUCTION_SORT_OPTION } from '../components/filters/filterTypes';
+  getContextualSortOptions } from '../components/filters/filterTypes';
 import { createFilterStyles } from '../components/filters/filterStyles';
 import { FilterSheetHeader } from '../components/filters/FilterSheetHeader';
 import { FilterPresets } from '../components/filters/FilterPresets';
@@ -62,15 +61,13 @@ export default function FilterScreen() {
   const title = route.params?.title;
   const subcategoryId = route.params?.subcategoryId;
 
-  // "Ending soon" is only meaningful for auction listings. Include it solely
-  // when the filter context is an auction category (mirrors BrowseScreen).
-  const isAuctionContext = categoryId.toLowerCase().includes('auction');
-  // Search context targets GET /search/listings — the client-side result
-  // count is only an approximation there, so the header stays honest.
+  // "Ending soon" is only meaningful for auction listings — the canonical
+  // predicate also honors a query mentioning auctions so a search for
+  // "auction watch" doesn't silently hide the option.
   const isSearchContext = categoryId === 'search';
   const sortOptions = React.useMemo(
-    () => (isAuctionContext ? [...SORT_OPTIONS, AUCTION_SORT_OPTION] : SORT_OPTIONS),
-    [isAuctionContext],
+    () => getContextualSortOptions(categoryId, browseFilters.query || undefined),
+    [categoryId, browseFilters.query],
   );
 
   const {
@@ -150,7 +147,17 @@ export default function FilterScreen() {
     priceMax,
     sustainableOnly });
 
+  // Min must not exceed max — surfaced inline on the price row so Apply is
+  // blocked honestly rather than silently applying an inverted range.
+  const parsedMinForCheck = priceMin.trim() ? Number(priceMin.trim()) : null;
+  const parsedMaxForCheck = priceMax.trim() ? Number(priceMax.trim()) : null;
+  const priceRangeInvalid =
+    parsedMinForCheck != null && !Number.isNaN(parsedMinForCheck) &&
+    parsedMaxForCheck != null && !Number.isNaN(parsedMaxForCheck) &&
+    parsedMinForCheck > parsedMaxForCheck;
+
   const handleApply = () => {
+    if (priceRangeInvalid) return;
     const parsedMin = priceMin.trim() ? Number(priceMin.trim()) : null;
     const parsedMax = priceMax.trim() ? Number(priceMax.trim()) : null;
     updateBrowseFilters({
@@ -192,7 +199,12 @@ export default function FilterScreen() {
   return (
     <View style={styles.container}>
       <Reanimated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay }, overlayStyle]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={closeBottomSheet} />
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={closeBottomSheet}
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss filters"
+        />
       </Reanimated.View>
 
       <GestureDetector gesture={gesture}>
@@ -288,6 +300,7 @@ export default function FilterScreen() {
                   priceMax={priceMax}
                   onChangeMin={setPriceMin}
                   onChangeMax={setPriceMax}
+                  error={priceRangeInvalid ? 'Minimum price must not exceed maximum price' : undefined}
                 />
 
                 {/* Advanced Section — collapsible, gated by the
@@ -314,15 +327,17 @@ export default function FilterScreen() {
               </>
             )}
 
-            {/* Sticky Bottom Action — Apply + Reset side by side */}
-            <FilterFooter
-              resetDisabled={!hasActiveSelection}
-              onReset={handleClear}
-              applyLabel={applyLabel}
-              applyDisabled={showFilterLoadingState}
-              onApply={handleApply}
-            />
           </ScrollView>
+
+          {/* Docked Bottom Action — outside the scroll surface so Apply is
+              always visible at the resting detent, not 50% below the fold. */}
+          <FilterFooter
+            resetDisabled={!hasActiveSelection}
+            onReset={handleClear}
+            applyLabel={priceRangeInvalid ? 'Fix price range' : applyLabel}
+            applyDisabled={showFilterLoadingState || priceRangeInvalid}
+            onApply={handleApply}
+          />
         </Reanimated.View>
       </GestureDetector>
     </View>

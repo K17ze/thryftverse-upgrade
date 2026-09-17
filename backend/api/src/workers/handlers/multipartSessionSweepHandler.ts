@@ -19,7 +19,12 @@
 
 import { db } from '../../db/pool.js';
 import { logger } from '../../lib/logger.js';
-import { abortMultipartUpload, listMultipartUploads } from '../../lib/s3.js';
+import {
+  abortMultipartUpload,
+  deleteObject,
+  listMultipartUploads,
+  objectExists,
+} from '../../lib/s3.js';
 import type { MultipartSessionSweepJobData } from '../../lib/queues.js';
 
 const MAX_SESSIONS_PER_SWEEP = 100;
@@ -69,6 +74,10 @@ export async function expireStaleMultipartSessions(
         );
         continue;
       }
+      // "Already terminated" can mean S3 *completed* the upload and the
+      // process died before the finalization transaction committed —
+      // leaving an assembled object no table references. Reclaim it.
+      await reclaimOrphanedCompletedObject(session);
     }
     const done = await db.query(
       `UPDATE upload_multipart_sessions
@@ -88,6 +97,47 @@ export async function expireStaleMultipartSessions(
 
   const orphans = await abortOrphanedS3Uploads();
   return aborted + orphans;
+}
+
+/**
+ * Reclaim an object that S3 assembled via CompleteMultipartUpload but
+ * whose finalization never committed (crash between the S3 call and the
+ * DB transaction). The session row still says active/expired and the
+ * upload is gone S3-side, so abort returns NoSuchUpload — the assembled
+ * object would bill forever with no `upload_finalizations` or
+ * `media_assets` row referencing it. HEAD the key; delete only when
+ * nothing claims it — a referenced object is a legitimately completed
+ * upload and must be left alone.
+ */
+async function reclaimOrphanedCompletedObject(session: {
+  id: string;
+  object_key: string;
+  upload_id: string;
+  bucket: string;
+}): Promise<void> {
+  try {
+    if (!(await objectExists(session.object_key, session.bucket))) return;
+    const referenced = await db.query(
+      `SELECT 1 FROM upload_finalizations WHERE bucket = $1 AND object_key = $2
+       UNION ALL
+       SELECT 1 FROM media_assets WHERE bucket = $1 AND object_key = $2
+       LIMIT 1`,
+      [session.bucket, session.object_key],
+    );
+    if (referenced.rowCount) return;
+    await deleteObject(session.object_key, session.bucket);
+    logger.warn(
+      { sessionId: session.id, objectKey: session.object_key, bucket: session.bucket },
+      '[multipartSweep] deleted completed object with no DB receipt — upload finalization never committed',
+    );
+  } catch (error) {
+    // Best-effort: a failed HEAD/DELETE must not block the row's
+    // convergence to 'aborted' — next sweep re-checks.
+    logger.warn(
+      { err: error, sessionId: session.id, objectKey: session.object_key },
+      '[multipartSweep] orphan-object reclaim check failed',
+    );
+  }
 }
 
 /**
@@ -113,14 +163,21 @@ async function abortOrphanedS3Uploads(): Promise<number> {
   if (uploads.length === 0) return 0;
 
   const cutoff = Date.now() - ORPHAN_GRACE_MS;
+  const stale = uploads.filter(
+    (u) => u.initiated && u.initiated.getTime() <= cutoff,
+  );
+  if (stale.length === 0) return 0;
+
+  // One batched lookup — a per-upload SELECT is N round-trips per sweep.
+  const known = await db.query<{ upload_id: string }>(
+    `SELECT upload_id FROM upload_multipart_sessions WHERE upload_id = ANY($1::text[])`,
+    [stale.map((u) => u.uploadId)],
+  );
+  const knownIds = new Set(known.rows.map((r) => r.upload_id));
+
   let aborted = 0;
-  for (const upload of uploads) {
-    if (!upload.initiated || upload.initiated.getTime() > cutoff) continue;
-    const row = await db.query(
-      `SELECT 1 FROM upload_multipart_sessions WHERE upload_id = $1 LIMIT 1`,
-      [upload.uploadId],
-    );
-    if (row.rowCount) continue;
+  for (const upload of stale) {
+    if (knownIds.has(upload.uploadId)) continue;
     try {
       await abortMultipartUpload(upload.key, upload.uploadId);
       aborted += 1;

@@ -12,7 +12,7 @@
  * - Disappears when the layer is deselected or the canvas is tapped
  */
 import React, { useMemo } from 'react';
-import { View, StyleSheet, Pressable } from 'react-native';
+import { StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
   useAnimatedStyle,
@@ -82,6 +82,7 @@ export function LayerFloatingMenu({ visible, actions, x, y }: LayerFloatingMenuP
           hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           accessibilityRole="button"
           accessibilityLabel={action.label}
+          accessibilityHint="Runs this action"
         >
           <Ionicons
             name={action.icon}

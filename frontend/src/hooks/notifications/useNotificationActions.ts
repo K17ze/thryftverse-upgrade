@@ -101,14 +101,25 @@ export function useNotificationActions({
   const handleSwipeDismiss = React.useCallback(
     (notification: NotificationCard) => {
       const previousNotifications = notifications;
+      // Dismissing an unread card removes it from the feed — mirror the
+      // badge decrement optimistically and restore it if the delete fails.
+      const unreadDelta = notification.read
+        ? 0
+        : (notification.aggregatedUnreadCount ?? 1);
       setNotifications((previous) => previous.filter((item) => item.id !== notification.id));
+      if (unreadDelta > 0) {
+        setNotificationCount(Math.max(0, useStore.getState().notificationCount - unreadDelta));
+      }
       haptics.tap();
       void Promise.all(memberIds(notification).map(deleteNotificationEvent)).catch(() => {
         setNotifications(previousNotifications);
+        if (unreadDelta > 0) {
+          setNotificationCount(useStore.getState().notificationCount + unreadDelta);
+        }
         show('Could not delete this notification', 'error');
       });
     },
-    [notifications, show]
+    [notifications, show, setNotificationCount]
   );
 
   const handleMarkAllAsRead = React.useCallback(async () => {

@@ -160,13 +160,37 @@ export async function assertObjectMatchesUploadPolicy(
   }
 }
 
-export async function deleteObject(key: string): Promise<void> {
+export async function deleteObject(key: string, bucket?: string): Promise<void> {
   await internalS3.send(
     new DeleteObjectCommand({
-      Bucket: config.s3Bucket,
+      Bucket: bucket ?? config.s3Bucket,
       Key: key,
     })
   );
+}
+
+/**
+ * True when the object exists. Used by the session sweep to detect an
+ * object that S3 assembled via CompleteMultipartUpload but whose
+ * finalization transaction never committed — it would otherwise bill
+ * forever with no row referencing it.
+ */
+export async function objectExists(key: string, bucket?: string): Promise<boolean> {
+  try {
+    await internalS3.send(
+      new HeadObjectCommand({
+        Bucket: bucket ?? config.s3Bucket,
+        Key: key,
+      }),
+    );
+    return true;
+  } catch (error) {
+    const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
+    if (status === 404 || (error instanceof Error && error.name === 'NotFound')) {
+      return false;
+    }
+    throw error;
+  }
 }
 
 /**

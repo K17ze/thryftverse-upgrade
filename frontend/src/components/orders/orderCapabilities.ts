@@ -334,7 +334,7 @@ export function resolveCapabilities(ctx: OrderCapabilityContext): OrderCapabilit
     ? ctx.dispatchExtension
     : null;
   const canProposeExtension = ctx.role === 'seller' && isPaid && !pendingExtension && !submitting;
-  const canRespondExtension = ctx.role === 'buyer' && pendingExtension != null && !submitting;
+  const canRespondExtension = ctx.role === 'buyer' && isPaid && pendingExtension != null && !submitting;
   const canTrack = isInTransit && ctx.hasTracking;
   const canInspect = ctx.role === 'buyer' && isDelivered && !ctx.hasReview && !submitting;
   // Receipt confirmation releases escrowed funds — a high-consequence money
@@ -363,9 +363,10 @@ export function resolveCapabilities(ctx: OrderCapabilityContext): OrderCapabilit
     if (isCreated) {
       primaryAction = 'pay';
     } else if (isInTransit) {
-      // Track parcel is the calm in-transit primary.
-      // Confirm receipt is a demoted secondary (releases funds).
-      primaryAction = canTrack ? 'track_order' : 'confirm_delivery';
+      // Track parcel is the calm in-transit primary. With no carrier
+      // tracking there is NO primary — never 'confirm_delivery': it
+      // releases escrowed funds and must wait for authoritative delivery.
+      primaryAction = canTrack ? 'track_order' : null;
     } else if (isDelivered) {
       // After delivery, the buyer should inspect before confirming/reviewing.
       primaryAction = canInspect ? 'inspect' : (ctx.hasReview ? 'view_review' : 'leave_review');
@@ -384,8 +385,9 @@ export function resolveCapabilities(ctx: OrderCapabilityContext): OrderCapabilit
     secondaryActions.push('track_order');
   }
   // Receipt confirmation — only after authoritative delivery.
-  // It releases funds and is never available during transit.
-  if (canConfirmDelivery && primaryAction !== 'confirm_delivery') {
+  // It releases funds and is never available during transit. Primary
+  // actions never include confirm_delivery, so no dedup check is needed.
+  if (canConfirmDelivery) {
     secondaryActions.push('confirm_delivery');
   }
   if (canReportIssue && !shouldViewResolution) {

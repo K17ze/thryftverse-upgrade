@@ -18,43 +18,71 @@
 
 import { db } from '../../db/pool.js';
 import { logger } from '../../lib/logger.js';
-import { listClaimableIngestJobs } from '../../lib/media/pipeline.js';
+import {
+  deadLetterIngestJob,
+  listClaimableIngestJobs,
+  listDeadLetterableIngestJobs,
+} from '../../lib/media/pipeline.js';
 import { enqueueMediaIngestJob } from '../../lib/queues.js';
 import type { MediaIngestReconcileJobData } from '../../lib/queues.js';
 
 const MAX_REENQUEUE_PER_SWEEP = 50;
+const MAX_DEADLETTER_PER_SWEEP = 50;
 
 export async function reconcileMediaIngestJobs(
   reason: MediaIngestReconcileJobData['reason'] = 'scheduled',
 ): Promise<number> {
   const orphaned = await listClaimableIngestJobs(db, MAX_REENQUEUE_PER_SWEEP);
-  if (orphaned.length === 0) {
-    return 0;
+  let reenqueued = 0;
+  if (orphaned.length > 0) {
+    // Bucket the reconcile jobId per sweep minute — a retained failed
+    // `media_ingest_${assetId}` record would otherwise suppress the
+    // re-enqueue, which is exactly the wedge this sweep exists to break.
+    const timeBucket = Math.floor(Date.now() / 60_000);
+    for (const job of orphaned) {
+      try {
+        await enqueueMediaIngestJob(
+          { assetId: job.mediaAssetId, reason: `reconcile:${reason}` },
+          { jobId: `media_ingest_${job.mediaAssetId}_recon_${timeBucket}` },
+        );
+        reenqueued += 1;
+      } catch (error) {
+        logger.warn(
+          { err: error, jobId: job.id, assetId: job.mediaAssetId },
+          '[mediaIngestReconcile] re-enqueue failed — next sweep retries',
+        );
+      }
+    }
+    logger.info(
+      { reason, orphaned: orphaned.length, reenqueued },
+      '[mediaIngestReconcile] re-drove orphaned ingest jobs',
+    );
   }
 
-  // Bucket the reconcile jobId per sweep minute — a retained failed
-  // `media_ingest_${assetId}` record would otherwise suppress the
-  // re-enqueue, which is exactly the wedge this sweep exists to break.
-  const timeBucket = Math.floor(Date.now() / 60_000);
-  let reenqueued = 0;
-  for (const job of orphaned) {
+  // Dead-letter pass: a row whose final attempt died holding the lock
+  // can never be re-driven (claim requires attempt_count < max_attempts),
+  // so it — and the asset it pins in 'processing' — would wedge forever.
+  // Release both so the asset surfaces as retryable failure, not limbo.
+  const wedged = await listDeadLetterableIngestJobs(db, MAX_DEADLETTER_PER_SWEEP);
+  let deadLettered = 0;
+  for (const job of wedged) {
     try {
-      await enqueueMediaIngestJob(
-        { assetId: job.mediaAssetId, reason: `reconcile:${reason}` },
-        { jobId: `media_ingest_${job.mediaAssetId}_recon_${timeBucket}` },
-      );
-      reenqueued += 1;
+      if (await deadLetterIngestJob(db, job.id, job.mediaAssetId)) {
+        deadLettered += 1;
+      }
     } catch (error) {
       logger.warn(
         { err: error, jobId: job.id, assetId: job.mediaAssetId },
-        '[mediaIngestReconcile] re-enqueue failed — next sweep retries',
+        '[mediaIngestReconcile] dead-letter failed — next sweep retries',
       );
     }
   }
+  if (deadLettered > 0) {
+    logger.warn(
+      { deadLettered },
+      '[mediaIngestReconcile] dead-lettered wedged ingest jobs',
+    );
+  }
 
-  logger.info(
-    { reason, orphaned: orphaned.length, reenqueued },
-    '[mediaIngestReconcile] re-drove orphaned ingest jobs',
-  );
   return reenqueued;
 }

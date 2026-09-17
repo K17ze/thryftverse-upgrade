@@ -1,5 +1,5 @@
 import React from 'react';
-import { useRoute } from '@react-navigation/native';
+import { useRoute, type RouteProp } from '@react-navigation/native';
 import type { CreatorInitialMedia } from '../../navigation/types';
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -13,8 +13,19 @@ import type { CreatorInitialMedia } from '../../navigation/types';
 // composer. The legacy CreatorStudioInner has been removed.
 // ───────────────────────────────────────────────────────────────────────────
 
+interface CreatorStudioRouteParams {
+  type?: 'look' | 'poster' | 'moodboard';
+  draftId?: string;
+  templateId?: string;
+  sourceDocumentId?: string;
+  initialMediaUri?: string;
+  initialMedia?: CreatorInitialMedia[];
+  startBlank?: boolean;
+  openTemplates?: boolean;
+}
+
 export function CreatorStudioScreen() {
-  const route = useRoute<any>();
+  const route = useRoute<RouteProp<{ params: CreatorStudioRouteParams }, 'params'>>();
   const initialType: 'look' | 'poster' | 'moodboard' =
     route.params?.type === 'poster'
       ? 'poster'
@@ -22,13 +33,13 @@ export function CreatorStudioScreen() {
       ? 'moodboard'
       : 'look';
   const [activeType, setActiveType] = React.useState<'look' | 'poster' | 'moodboard'>(initialType);
-  const draftId = route.params?.draftId as string | undefined;
-  const templateId = route.params?.templateId as string | undefined;
-  const sourceDocumentId = route.params?.sourceDocumentId as string | undefined;
-  const initialMediaUri = route.params?.initialMediaUri as string | undefined;
-  const initialMedia = route.params?.initialMedia as CreatorInitialMedia[] | undefined;
-  const startBlank = route.params?.startBlank as boolean | undefined;
-  const openTemplates = route.params?.openTemplates as boolean | undefined;
+  const draftId = route.params?.draftId;
+  const templateId = route.params?.templateId;
+  const sourceDocumentId = route.params?.sourceDocumentId;
+  const initialMediaUri = route.params?.initialMediaUri;
+  const initialMedia = route.params?.initialMedia;
+  const startBlank = route.params?.startBlank;
+  const openTemplates = route.params?.openTemplates;
 
   // React Navigation can update params without remounting this shell. Keep
   // the dispatch owner aligned with an explicit route intent while allowing

@@ -79,6 +79,9 @@ interface RegisterNotificationDeviceResponse {
   };
 }
 
+export type NotificationDevice = RegisterNotificationDeviceResponse['device'];
+export type ListedNotificationDevice = ListNotificationDevicesResponse['devices'][number];
+
 interface ListNotificationDevicesResponse {
   ok: true;
   devices: Array<{
@@ -104,7 +107,7 @@ export interface NotificationEvent {
   title: string;
   body: string;
   payload: Record<string, unknown>;
-  status: 'queued' | 'ticketed' | 'sent' | 'failed' | 'suppressed';
+  status: 'queued' | 'ticketed' | 'sent' | 'failed' | 'suppressed' | 'in_app_only';
   providerMessageId: string | null;
   providerError: string | null;
   createdAt: string;
@@ -900,6 +903,8 @@ export interface NotificationQuietHoursPatch {
   enabled: boolean;
   startHour: number;
   endHour: number;
+  /** IANA timezone — the server evaluates the window in this zone. */
+  timezone?: string;
 }
 
 interface ListNotificationEventsResponse {
@@ -1040,6 +1045,26 @@ export async function deleteNotificationEvent(eventId: string): Promise<void> {
   });
 }
 
+/**
+ * Sends a real push through the server pipeline (queue → Expo → receipts)
+ * so "test notification" actually exercises delivery, not just the local
+ * scheduler. Returns the queued event id.
+ */
+export async function sendTestPushNotification(input: {
+  title: string;
+  body: string;
+}): Promise<{ eventId: string }> {
+  const payload = await fetchJson<{ ok: true; eventId: string; status: string }>(
+    '/notifications/push/test',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+  );
+  return { eventId: payload.eventId };
+}
+
 export interface NotificationPreferencesPayload {
   /** Per-category on/off toggles keyed by push category. */
   preferences: Record<string, boolean>;
@@ -1052,6 +1077,7 @@ export interface NotificationPreferencesPayload {
     enabled: boolean;
     startHour: number;
     endHour: number;
+    timezone?: string;
   };
   /** Push preview policy applied across categories ('full' | 'hidden'). */
   previewPolicy?: NotificationPreviewPolicy;

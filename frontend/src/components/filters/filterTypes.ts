@@ -20,3 +20,27 @@ export const AUCTION_SORT_OPTION: { value: SortOption; label: string; accessibil
   value: 'Ending soon',
   label: 'Ending soon',
   accessibilityLabel: 'Sort by ending soon' };
+
+/**
+ * Single auction-context predicate — a category OR a query mentioning
+ * auctions qualifies. Previously the browse menu checked both while
+ * FilterScreen checked only the category, so a search for "auction watch"
+ * silently hid the 'Ending soon' option.
+ */
+export function isAuctionSortContext(categoryId: string, searchQuery?: string): boolean {
+  return (
+    categoryId.toLowerCase().includes('auction') ||
+    (searchQuery?.toLowerCase().includes('auction') ?? false)
+  );
+}
+
+/** Canonical sort list for a context — SORT_OPTIONS plus the auction-only
+ *  option when the context qualifies. */
+export function getContextualSortOptions(
+  categoryId: string,
+  searchQuery?: string,
+): Array<{ value: SortOption; label: string; accessibilityLabel: string }> {
+  return isAuctionSortContext(categoryId, searchQuery)
+    ? [...SORT_OPTIONS, AUCTION_SORT_OPTION]
+    : SORT_OPTIONS;
+}

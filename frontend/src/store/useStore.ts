@@ -63,6 +63,12 @@ import {
   removeMessageReactionOnApi,
 } from '../services/chatApi';
 import { fetchJson } from '../lib/apiClient';
+import {
+  DEFAULT_BROWSE_FILTERS as BROWSE_FILTER_DEFAULTS,
+  activateBrowseContextPatch,
+  updateContextPatch,
+  resetContextPatch,
+} from './browseFilterContexts';
 import { queryClient } from '../platform/server/queryClient';
 import { queryKeys } from '../platform/server/queryKeys';
 import { fetchMyProfile as fetchMyProfileFromApi, getBlockedUsers, getMutedUsers, getRestrictedUsers } from '../services/profileApi';
@@ -190,6 +196,8 @@ export interface BrowseFilterState {
   priceMin: number | null;
   priceMax: number | null;
 }
+
+export const DEFAULT_BROWSE_FILTERS: BrowseFilterState = BROWSE_FILTER_DEFAULTS;
 
 interface SavedSearch {
   id: string;
@@ -527,9 +535,20 @@ interface StoreState {
    * changes are reflected. Account-isolated: clears on logout. */
   hydrateCoOwnWatchlist: () => Promise<void>;
 
-  // Browse filters/search
+  // Browse filters/search — context-scoped. Each surface (category browse,
+  // search, discovery) owns a bucket keyed by context so filters applied on
+  // one surface never leak into another. `browseFilters` always mirrors the
+  // ACTIVE context's bucket; `activateBrowseContext` swaps it on focus.
+  browseContextKey: string;
+  browseFiltersByContext: Record<string, BrowseFilterState>;
   browseFilters: BrowseFilterState;
+  activateBrowseContext: (key: string) => void;
   updateBrowseFilters: (updates: Partial<BrowseFilterState>) => void;
+  /** Writes a specific context's bucket — for surfaces that push a
+   *  destination (saved searches, conversational search) rather than own
+   *  the active context. Mirrors into `browseFilters` when the target is
+   *  the active context. */
+  updateBrowseFiltersForContext: (key: string, updates: Partial<BrowseFilterState>) => void;
   resetBrowseFilters: () => void;
 
   // Saved searches with alerts
@@ -1539,36 +1558,17 @@ export const useStore = create<StoreState>()(
     }
   },
 
-  browseFilters: {
-    query: '',
-    sort: 'Recommended',
-    brands: [],
-    sizes: [],
-    condition: 'Any',
-    sustainableOnly: false,
-    priceMin: null,
-    priceMax: null,
-  },
+  browseContextKey: 'default',
+  browseFiltersByContext: {},
+  browseFilters: { ...DEFAULT_BROWSE_FILTERS },
+  activateBrowseContext: (key) =>
+    set((state) => activateBrowseContextPatch(state, key) ?? {}),
   updateBrowseFilters: (updates) =>
-    set((state) => ({
-      browseFilters: {
-        ...state.browseFilters,
-        ...updates,
-      },
-    })),
+    set((state) => updateContextPatch(state, state.browseContextKey, updates)),
+  updateBrowseFiltersForContext: (key, updates) =>
+    set((state) => updateContextPatch(state, key, updates)),
   resetBrowseFilters: () =>
-    set({
-      browseFilters: {
-        query: '',
-        sort: 'Recommended',
-        brands: [],
-        sizes: [],
-        condition: 'Any',
-        sustainableOnly: false,
-        priceMin: null,
-        priceMax: null,
-      },
-    }),
+    set((state) => resetContextPatch(state, state.browseContextKey)),
 
   // Saved searches — local cache is the render source; every mutation is
   // mirrored to the server (fire-and-forget) so the backend matcher can

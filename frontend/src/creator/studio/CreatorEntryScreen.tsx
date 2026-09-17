@@ -357,6 +357,7 @@ export function CreatorEntryScreen({
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             onPress={() => setShowDrafts(false)}
             accessibilityLabel="Close drafts"
+            accessibilityHint="Closes the drafts view"
             accessibilityRole="button"
           >
             <Ionicons name="close" size={IconGrammar.hero} color={colors.textPrimary} />

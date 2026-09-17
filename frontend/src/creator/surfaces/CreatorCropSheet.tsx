@@ -1,25 +1,14 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
-  Pressable,
   useWindowDimensions,
-  ScrollView,
-  ActivityIndicator,
   Image as RNImage } from 'react-native';
-import { Image } from 'expo-image';
-import { manipulateAsync, SaveFormat, FlipType, type Action } from 'expo-image-manipulator';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AppIcon } from '../../components/common/AppIcon';
-import { Space, Radius, Stroke, Typography } from '../../theme/designTokens';
-import { TypographyV2 } from '../../theme/typography.v2';
-import { IconGrammar } from '../../theme/designTokens';
+import { Space } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useToast } from '../../context/ToastContext';
-import { PressScale } from '../shared/CreatorAnimations';
-import { CreatorSlider } from '../controls';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { Motion } from '../../theme/motionTokens';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -27,107 +16,17 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  withTiming,
-  runOnJS,
-  interpolate,
-  Extrapolation } from 'react-native-reanimated';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { useAppTranslation } from '../../i18n/useAppTranslation';
-
-
-
-// ── Aspect ratio presets (Instagram/Snapchat-grade) ────────────────
-const ASPECT_PRESETS = [
-  { label: 'Original', ratio: null as number | null },
-  { label: '1:1', ratio: 1 },
-  { label: '4:5', ratio: 4 / 5 },
-  { label: '3:4', ratio: 3 / 4 },
-  { label: '9:16', ratio: 9 / 16 },
-  { label: '16:9', ratio: 16 / 9 },
-];
-
-// ── Straighten math ─────────────────────────────────────────────────
-// Largest axis-aligned rectangle of aspect `a` (w/h) inscribed in a W×H
-// rectangle rotated by θ. A centered candidate with half-height y (half-width
-// a·y) stays inside the rotated source iff its corners clear both edge pairs,
-// which gives y ≤ W / (2·(a·cosθ + sinθ)) and y ≤ H / (2·(a·sinθ + cosθ)).
-// sin uses |·| — the geometry mirrors for negative angles.
-function largestInscribedRect(
-  srcW: number,
-  srcH: number,
-  aspect: number,
-  thetaRad: number ): { width: number; height: number } {
-  const cos = Math.cos(thetaRad);
-  const sin = Math.abs(Math.sin(thetaRad));
-  const height = Math.min(srcW / (aspect * cos + sin), srcH / (aspect * sin + cos));
-  return { width: aspect * height, height };
-}
-
-// ── Focal re-normalization ──────────────────────────────────────────
-// Rotates a normalized point for a clockwise 90°k image rotation (y-down
-// coordinates — same convention as expo's rotate and the preview transform).
-function rotatePoint90(
-  p: { x: number; y: number },
-  quarterTurns: number ): { x: number; y: number } {
-  switch ((quarterTurns % 4 + 4) % 4) {
-    case 1: return { x: 1 - p.y, y: p.x };
-    case 2: return { x: 1 - p.x, y: 1 - p.y };
-    case 3: return { x: p.y, y: 1 - p.x };
-    default: return p;
-  }
-}
-
-// Maps the stored focal point through the exact confirm pipeline (flip →
-// straighten-rotate → crop → rotate 90°k) so it stays on-target relative to
-// the OUTPUT image. `crop` is the rect actually applied in the canvas the
-// crop runs in (user rect in source space, or the centered inscribed rect in
-// the rotated canvas); `rotatedW/H` are the straightened canvas dimensions
-// (0 when straighten is inactive). Clamped to [0,1] — a focal outside the
-// cropped region lands on the output edge.
-function mapFocalToOutput(
-  focal: { x: number; y: number },
-  srcW: number,
-  srcH: number,
-  flippedH: boolean,
-  flippedV: boolean,
-  straightenDeg: number,
-  crop: { originX: number; originY: number; width: number; height: number },
-  rotatedW: number,
-  rotatedH: number,
-  rotation: number ): { x: number; y: number } {
-  let fx = flippedH ? 1 - focal.x : focal.x;
-  let fy = flippedV ? 1 - focal.y : focal.y;
-  if (straightenDeg !== 0) {
-    // Signed sinθ — the feature position follows the actual rotation.
-    const theta = (straightenDeg * Math.PI) / 180;
-    const sin = Math.sin(theta);
-    const cos = Math.cos(theta);
-    const u = fx * srcW - srcW / 2;
-    const v = fy * srcH - srcH / 2;
-    fx = (u * cos - v * sin + rotatedW / 2 - crop.originX) / crop.width;
-    fy = (u * sin + v * cos + rotatedH / 2 - crop.originY) / crop.height;
-  } else {
-    fx = (fx * srcW - crop.originX) / crop.width;
-    fy = (fy * srcH - crop.originY) / crop.height;
-  }
-  const turned = rotatePoint90({ x: fx, y: fy }, Math.round(rotation / 90));
-  return {
-    x: Math.min(1, Math.max(0, turned.x)),
-    y: Math.min(1, Math.max(0, turned.y)) };
-}
-
-/** One undoable crop-sheet edit state (see the undo history block). */
-interface CropEditSnapshot {
-  cropRect: { x: number; y: number; width: number; height: number };
-  rotation: number;
-  flippedH: boolean;
-  flippedV: boolean;
-  straighten: number;
-  selectedRatio: number | null;
-  imageZoom: number;
-  imagePanX: number;
-  imagePanY: number;
-}
+  withTiming } from 'react-native-reanimated';
+import {
+  largestInscribedRect,
+  type CropDestination,
+  type CropEditSnapshot } from './cropSheet/cropSheetShared';
+import { cropSheetStyles as styles } from './cropSheet/cropSheetStyles';
+import { CropTopBar } from './cropSheet/CropTopBar';
+import { CropStage } from './cropSheet/CropStage';
+import { CropControls } from './cropSheet/CropControls';
+import { useCropGestures } from './cropSheet/useCropGestures';
+import { useCropConfirm } from './cropSheet/useCropConfirm';
 
 interface CreatorCropSheetProps {
   visible: boolean;
@@ -142,29 +41,8 @@ interface CreatorCropSheetProps {
    * that will obscure the media (header, actions, caption) so the user can
    * compose around them. Truthful, based on documented platform chrome.
    */
-  destination?: 'story' | 'reels' | 'feed' | 'marketplace';
+  destination?: CropDestination;
 }
-
-// ── Safe-zone definitions ───────────────────────────────────────────
-// Each destination has platform UI that obscures portions of the media.
-// Values are fractions of the crop frame (0–1) from the top/left.
-// These are the documented platform chrome regions, not arbitrary
-// decorative overlays.
-const SAFE_ZONES: Record<NonNullable<CreatorCropSheetProps['destination']>, {
-  // Each region is a top/bottom/left/right band (fraction of frame).
-  // `top` covers from 0 to `top`; `bottom` covers from `bottom` to 1; etc.
-  bands: { top?: number; bottom?: number; left?: number; right?: number };
-  label: string;
-}> = {
-  // Story: header (avatar + timestamp) ~12%, reply bar ~10%.
-  story: { bands: { top: 0.12, bottom: 0.78 }, label: 'Story' },
-  // Reels: header ~10%, caption + audio + actions ~22%.
-  reels: { bands: { top: 0.10, bottom: 0.78 }, label: 'Reels' },
-  // Feed: minimal header ~8%, caption ~12%.
-  feed: { bands: { top: 0.08, bottom: 0.88 }, label: 'Feed' },
-  // Marketplace: title/price bar ~15%, no bottom chrome.
-  marketplace: { bands: { top: 0.15 }, label: 'Marketplace' },
-};
 
 export function CreatorCropSheet({
   visible,
@@ -180,23 +58,17 @@ export function CreatorCropSheet({
   const { show } = useToast();
   const { spring } = useMotionConfig();
   const reduceMotion = useReducedMotion();
-  const { t } = useAppTranslation('creator');
   const { width: screenWidth } = useWindowDimensions();
 
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const [selectedRatio, setSelectedRatio] = useState<number | null>(null);
   const [cropRect, setCropRect] = useState({ x: 0, y: 0, width: 0, height: 0 });
-  const [isProcessing, setIsProcessing] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [flippedH, setFlippedH] = useState(false);
   const [flippedV, setFlippedV] = useState(false);
   const [straighten, setStraighten] = useState(0);
   const [imageLoadFailed, setImageLoadFailed] = useState(false);
   const [safeZonesOn, setSafeZonesOn] = useState(false);
-
-  // Synchronous guard against double-tap on confirm. React state
-  // (isProcessing) is async — a fast second tap can fire before re-render.
-  const confirmGuardRef = useRef(false);
 
   // Focal point is sheet-local draft state (source-image space). Tapping
   // the preview moves the marker without touching the host document —
@@ -221,9 +93,6 @@ export function CreatorCropSheet({
   const imageZoomSV = useSharedValue(1);
   const imagePanXSV = useSharedValue(0);
   const imagePanYSV = useSharedValue(0);
-  const panStartImageX = useSharedValue(0);
-  const panStartImageY = useSharedValue(0);
-  const pinchStartZoom = useSharedValue(1);
 
   // ── Undo history ─────────────────────────────────────────────────
   // Snapshots cover everything the sheet owns that lands in the crop:
@@ -414,78 +283,23 @@ export function CreatorCropSheet({
     syncCropSV(x, y, cropW, cropH);
   }, [imageSize, haptic, syncCropSV, imageZoomSV, imagePanXSV, imagePanYSV, pushUndo, captureSnapshot]);
 
-  // ── Drag to reposition crop frame (1:1, clamped) ─────────────────
-  const dragStartX = useSharedValue(0);
-  const dragStartY = useSharedValue(0);
-  const isGestureActive = useSharedValue(0);
-
-  const panGesture = Gesture.Pan()
-    .onStart(() => {
-      isGestureActive.value = 1;
-      runOnJS(beginUndoTransaction)();
-      dragStartX.value = cropXSV.value;
-      dragStartY.value = cropYSV.value;
-      panStartImageX.value = imagePanXSV.value;
-      panStartImageY.value = imagePanYSV.value;
-    })
-    .onUpdate((e) => {
-      if (imageZoomSV.value > 1.01) {
-        // Image pan mode: move the image within the frame
-        const maxPanX = (imageZoomSV.value - 1) * displayW / 2;
-        const maxPanY = (imageZoomSV.value - 1) * displayH / 2;
-        imagePanXSV.value = Math.max(-maxPanX, Math.min(maxPanX, panStartImageX.value + e.translationX));
-        imagePanYSV.value = Math.max(-maxPanY, Math.min(maxPanY, panStartImageY.value + e.translationY));
-      } else {
-        // Frame pan mode: move the crop frame within the image (existing behavior)
-        if (!imageSize.width) return;
-        const scale = imageSize.width / displayW;
-        const dx = e.translationX * scale;
-        const dy = e.translationY * scale;
-        const maxX = imageSize.width - cropWSV.value;
-        const maxY = imageSize.height - cropHSV.value;
-        cropXSV.value = Math.max(0, Math.min(maxX, dragStartX.value + dx));
-        cropYSV.value = Math.max(0, Math.min(maxY, dragStartY.value + dy));
-      }
-    })
-    .onEnd(() => {
-      isGestureActive.value = 0;
-      if (imageZoomSV.value <= 1.01) {
-        runOnJS(setCropRectFromSV)();
-      }
-      runOnJS(commitUndoTransaction)();
-    });
-
-  const setCropRectFromSV = useCallback(() => {
-    setCropRect((prev) => ({
-      ...prev,
-      x: cropXSV.value,
-      y: cropYSV.value }));
-  }, [cropXSV, cropYSV]);
-
-  // ── Pinch to zoom the image within the frame (Instagram-style) ───
-  const pinchGesture = Gesture.Pinch()
-    .onStart(() => {
-      pinchStartZoom.value = imageZoomSV.value;
-      runOnJS(beginUndoTransaction)();
-    })
-    .onUpdate((e) => {
-      const next = Math.max(1, Math.min(4, pinchStartZoom.value * e.scale));
-      imageZoomSV.value = next;
-    })
-    .onEnd(() => {
-      if (imageZoomSV.value < 1.01) {
-        imageZoomSV.value = withSpring(1, spring.tap);
-        imagePanXSV.value = withSpring(0, spring.tap);
-        imagePanYSV.value = withSpring(0, spring.tap);
-      }
-      runOnJS(commitUndoTransaction)();
-    });
-
-  // Compose pan + pinch. Suspended while straightening — the frame is owned
-  // by the inscribed-rect math until the angle returns to 0.
-  const cropGesture = Gesture.Simultaneous(
-    panGesture.enabled(straighten === 0),
-    pinchGesture.enabled(straighten === 0) );
+  // ── Drag + pinch gestures (extracted; worklets live in the hook) ──
+  const { cropGesture, isGestureActive } = useCropGestures({
+    cropXSV,
+    cropYSV,
+    cropWSV,
+    cropHSV,
+    imageZoomSV,
+    imagePanXSV,
+    imagePanYSV,
+    imageSize,
+    displayW,
+    displayH,
+    straighten,
+    spring,
+    setCropRect,
+    beginUndoTransaction,
+    commitUndoTransaction });
 
   // ── Rotate button with spring animation ──────────────────────────
   const handleRotate = useCallback(() => {
@@ -560,108 +374,26 @@ export function CreatorCropSheet({
     setStraighten(0);
   }, [straighten, haptic, pushUndo, captureSnapshot]);
 
-  // ── Execute crop via expo-image-manipulator ──────────────────────
-  const handleCrop = useCallback(async () => {
-    if (!imageUri || !cropRect.width || !cropRect.height) return;
-    if (confirmGuardRef.current) return;
-    confirmGuardRef.current = true;
-    setIsProcessing(true);
-    haptic.medium();
-    try {
-      // Adjust crop rect for image zoom/pan. When the image is zoomed, the
-      // visible portion is smaller by the zoom factor, and the pan offset
-      // shifts the visible region center within the source image.
-      const zoom = imageZoomSV.value;
-      let effectiveCropX = cropRect.x;
-      let effectiveCropY = cropRect.y;
-      let effectiveCropW = cropRect.width;
-      let effectiveCropH = cropRect.height;
-      if (zoom > 1.01) {
-        // The visible image region is smaller by the zoom factor
-        effectiveCropW = cropRect.width / zoom;
-        effectiveCropH = cropRect.height / zoom;
-        // Pan offset shifts the visible region center
-        const panScale = imageSize.width / displayW;
-        const panOffsetX = (imagePanXSV.value * panScale) / zoom;
-        const panOffsetY = (imagePanYSV.value * panScale) / zoom;
-        effectiveCropX = cropRect.x + (cropRect.width - effectiveCropW) / 2 - panOffsetX;
-        effectiveCropY = cropRect.y + (cropRect.height - effectiveCropH) / 2 - panOffsetY;
-        // Clamp to image bounds
-        effectiveCropX = Math.max(0, Math.min(imageSize.width - effectiveCropW, effectiveCropX));
-        effectiveCropY = Math.max(0, Math.min(imageSize.height - effectiveCropH, effectiveCropY));
-      }
-      // Flip first so the crop rect matches the mirrored preview. Then
-      // straighten: rotate by the slider angle (expo expands the canvas to
-      // the rotated bounding box) and crop the largest centered rect of the
-      // current crop aspect — the biggest axis-aligned region of that aspect
-      // containing no empty corners. Without straighten the crop is the
-      // user's rect in source space; the trailing 90° rotation is unchanged.
-      const actions: Action[] = [];
-      if (flippedH) actions.push({ flip: FlipType.Horizontal });
-      if (flippedV) actions.push({ flip: FlipType.Vertical });
-      // The crop rect actually applied, in the canvas the crop runs in —
-      // reused below to re-normalize the stored focal point.
-      let appliedCrop = { originX: 0, originY: 0, width: 0, height: 0 };
-      let rotatedW = 0;
-      let rotatedH = 0;
-      if (straighten !== 0 && imageSize.width > 0) {
-        const theta = (straighten * Math.PI) / 180;
-        const sin = Math.abs(Math.sin(theta));
-        const cos = Math.cos(theta);
-        const inscribed = largestInscribedRect(
-          imageSize.width,
-          imageSize.height,
-          effectiveCropW / effectiveCropH,
-          theta );
-        rotatedW = imageSize.width * cos + imageSize.height * sin;
-        rotatedH = imageSize.width * sin + imageSize.height * cos;
-        actions.push({ rotate: straighten });
-        appliedCrop = {
-          originX: Math.max(0, Math.round((rotatedW - inscribed.width) / 2)),
-          originY: Math.max(0, Math.round((rotatedH - inscribed.height) / 2)),
-          width: Math.round(inscribed.width),
-          height: Math.round(inscribed.height) };
-        actions.push({ crop: appliedCrop });
-      } else {
-        appliedCrop = {
-          originX: Math.round(effectiveCropX),
-          originY: Math.round(effectiveCropY),
-          width: Math.round(effectiveCropW),
-          height: Math.round(effectiveCropH) };
-        actions.push({ crop: appliedCrop });
-      }
-      if (rotation !== 0) {
-        actions.push({ rotate: rotation });
-      }
-      // Carry the stored focal through the exact pipeline applied above so
-      // it stays on-target relative to the output image, then emit it with
-      // the completion so the host persists the final focal.
-      const finalFocal = mapFocalToOutput(
-        draftFocal ?? focalPoint ?? { x: 0.5, y: 0.5 },
-        imageSize.width,
-        imageSize.height,
-        flippedH,
-        flippedV,
-        straighten,
-        appliedCrop,
-        rotatedW,
-        rotatedH,
-        rotation );
-      const result = await manipulateAsync(
-        imageUri,
-        actions,
-        { compress: 0.92, format: SaveFormat.JPEG },
-      );
-      onFocalPointChange?.(finalFocal);
-      onCropComplete(result.uri, result.width, result.height);
-      onClose();
-    } catch {
-      show('Crop failed. Try again.', 'error');
-    } finally {
-      confirmGuardRef.current = false;
-      setIsProcessing(false);
-    }
-  }, [imageUri, cropRect, imageSize, rotation, flippedH, flippedV, straighten, focalPoint, draftFocal, onFocalPointChange, onCropComplete, onClose, show, haptic, imageZoomSV, imagePanXSV, imagePanYSV, displayW, displayH]);
+  // ── Confirm pipeline (extracted — flip → straighten → crop → 90°) ──
+  const { handleCrop, isProcessing } = useCropConfirm({
+    imageUri,
+    cropRect,
+    imageSize,
+    rotation,
+    flippedH,
+    flippedV,
+    straighten,
+    focalPoint,
+    draftFocal,
+    onFocalPointChange,
+    onCropComplete,
+    onClose,
+    show,
+    haptic,
+    imageZoomSV,
+    imagePanXSV,
+    imagePanYSV,
+    displayW });
 
   // Focal taps are stored in SOURCE-image space (the canonical internal
   // space): the tap surface lives inside the transformed preview wrapper, so
@@ -700,74 +432,6 @@ export function CreatorCropSheet({
     opacity: stageOpacitySV.value,
     transform: [{ scale: stageScaleSV.value }] }));
 
-  // Preview transform — composition order matches the confirm pipeline
-  // (flip → straighten-rotate → crop → rotate 90°). RN composes transform
-  // arrays CSS-style: the LAST entry is applied to the point FIRST (verified
-  // against RN 0.86 Transform.cpp operator* — result = rhs × lhs — folded
-  // left-to-right in BaseViewProps::resolveTransform, with row-vector point
-  // application). The flips therefore run FIRST here, mirroring the
-  // manipulate pipeline in handleCrop below. Do not "sort" these left to
-  // right — that inverts the composition and breaks flip+rotate parity.
-  const imageStyle = useAnimatedStyle(() => ({
-    transform: [
-      { rotate: `${rotateSV.value}deg` },
-      { rotate: `${straighten}deg` },
-      { scaleX: flippedH ? -1 : 1 },
-      { scaleY: flippedV ? -1 : 1 },
-      { scale: imageZoomSV.value },
-      { translateX: imagePanXSV.value },
-      { translateY: imagePanYSV.value },
-    ] }));
-
-  // The cropped region appears on screen at the crop rect rotated by the
-  // trailing 90° steps ONLY: the flip cancels (crop coords are defined on
-  // the flipped canvas) and the straighten cancels (the inscribed rect is
-  // defined on the straightened canvas), so rotating the overlay by the
-  // 90° steps makes the visible frame wrap exactly what manipulateAsync
-  // crops. RNGH inverse-maps gesture translations into this rotated space,
-  // so the existing drag/pinch math keeps working unchanged.
-  const cropOverlayStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotateSV.value}deg` }] }));
-
-  // Crop frame animated position/size (display coordinates)
-  const scaleToDisplay = imageSize.width > 0 ? displayW / imageSize.width : 1;
-
-  const cropFrameStyle = useAnimatedStyle(() => ({
-    left: cropXSV.value * scaleToDisplay,
-    top: cropYSV.value * scaleToDisplay,
-    width: cropWSV.value * scaleToDisplay,
-    height: cropHSV.value * scaleToDisplay }));
-
-  // Dim scrims driven from the same shared values as the crop frame so
-  // they follow the frame in real time during gestures. Previously these
-  // were plain Views reading from React state (displayCropRect), which only
-  // committed on gesture end — leaving a frozen shadow around a moving frame.
-  const scrimTopStyle = useAnimatedStyle(() => ({
-    height: cropYSV.value * scaleToDisplay }));
-
-  const scrimBottomStyle = useAnimatedStyle(() => ({
-    top: (cropYSV.value + cropHSV.value) * scaleToDisplay }));
-
-  const scrimLeftStyle = useAnimatedStyle(() => ({
-    top: cropYSV.value * scaleToDisplay,
-    width: cropXSV.value * scaleToDisplay,
-    height: cropHSV.value * scaleToDisplay }));
-
-  const scrimRightStyle = useAnimatedStyle(() => ({
-    top: cropYSV.value * scaleToDisplay,
-    left: (cropXSV.value + cropWSV.value) * scaleToDisplay,
-    height: cropHSV.value * scaleToDisplay }));
-
-  // Grid lines are faintly visible at rest (0.12) and brighten during
-  // interaction (0.35). A completely invisible grid at rest is a usability
-  // defect — users cannot see the crop boundary until they start dragging.
-  const gridStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(
-      isGestureActive.value,
-      [0, 1],
-      [0.12, 0.35],
-      Extrapolation.CLAMP ) }));
-
   const isDirty = rotation !== 0 || flippedH || flippedV || straighten !== 0
     || selectedRatio !== null
     || (imageSize.width > 0 && (
@@ -786,194 +450,43 @@ export function CreatorCropSheet({
         ]}
       >
         {/* ── Top bar: close · undo · reset (dirty) · done ── */}
-        <View style={styles.topBar}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <PressScale
-              onPress={onClose}
-              style={styles.topBtn}
-              accessibilityLabel="Close crop"
-              accessibilityRole="button"
-            >
-              <AppIcon name="close" size={22} color="textPrimary" opticalCenter={true} accessible={false} />
-            </PressScale>
-            <PressScale
-              onPress={handleUndo}
-              disabled={!canUndo}
-              style={[styles.topBtn, { opacity: canUndo ? 1 : 0.35 }]}
-              accessibilityLabel="Undo last edit"
-              accessibilityHint="Restores the previous crop, rotation, flip, straighten and framing"
-              accessibilityRole="button"
-              accessibilityState={{ disabled: !canUndo }}
-            >
-              <AppIcon name="arrow-undo-outline" size={22} color="textPrimary" opticalCenter={true} accessible={false} />
-            </PressScale>
-          </View>
-
-          {isDirty ? (
-            <PressScale
-              onPress={handleResetAll}
-              style={styles.resetBtn}
-              accessibilityLabel="Reset all edits"
-              accessibilityHint="Restores the original photo, ratio, angle, flips and focal point"
-              accessibilityRole="button"
-            >
-              <Text style={[styles.resetText, { color: colors.textSecondary }]}>
-                {t('crop.reset')}
-              </Text>
-            </PressScale>
-          ) : (
-            <View style={styles.resetBtn} />
-          )}
-
-          <PressScale
-            onPress={() => void handleCrop()}
-            disabled={isProcessing || imageLoadFailed}
-            style={[styles.doneBtn, { backgroundColor: colors.brand, opacity: isProcessing ? 0.5 : 1 }]}
-            accessibilityLabel="Apply crop"
-            accessibilityRole="button"
-            accessibilityState={{ disabled: isProcessing }}
-          >
-            {isProcessing
-              ? <ActivityIndicator size="small" color={colors.textInverse} />
-              : (
-                <Text style={[styles.doneText, { color: colors.textInverse }]}>
-                  {t('crop.done')}
-                </Text>
-              )}
-          </PressScale>
-        </View>
+        <CropTopBar
+          onClose={onClose}
+          onUndo={handleUndo}
+          canUndo={canUndo}
+          isDirty={isDirty}
+          onResetAll={handleResetAll}
+          onDone={() => void handleCrop()}
+          isProcessing={isProcessing}
+          imageLoadFailed={imageLoadFailed}
+        />
 
         {/* ── Media stage ── */}
-        <View style={styles.mediaStage}>
-          <View style={[styles.previewFrame, { width: displayW, height: displayH }]}>
-            {imageLoadFailed ? (
-              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-                <Text style={{ color: colors.textSecondary, fontSize: 15, textAlign: 'center' }}>
-                  {t('crop.loadError')}
-                </Text>
-                <PressScale
-                  onPress={() => imageUri && loadImageSize(imageUri)}
-                  style={{ paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8, backgroundColor: colors.surface }}
-                  accessibilityLabel={t('crop.retry')}
-                  accessibilityRole="button"
-                >
-                  <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '600' }}>
-                    {t('crop.retry')}
-                  </Text>
-                </PressScale>
-              </View>
-            ) : (
-            <>
-            {/* Transformed image — flip → straighten → 90° steps */}
-            <Reanimated.View style={[{ width: displayW, height: displayH }, imageStyle]}>
-              <Image
-                source={{ uri: imageUri }}
-                style={{ width: displayW, height: displayH }}
-                contentFit="cover"
-              />
-            </Reanimated.View>
-
-            {/* Crop layer: dimming + frame (rotated by 90° steps only) */}
-            <Reanimated.View
-              style={[StyleSheet.absoluteFill, cropOverlayStyle]}
-              pointerEvents="box-none"
-            >
-              <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                <Reanimated.View style={[styles.dimOverlay, { backgroundColor: colors.mediaOverlayScrim, position: 'absolute', top: 0, left: 0, right: 0 }, scrimTopStyle]} />
-                <Reanimated.View style={[styles.dimOverlay, { backgroundColor: colors.mediaOverlayScrim, position: 'absolute', left: 0, right: 0, bottom: 0 }, scrimBottomStyle]} />
-                <Reanimated.View style={[styles.dimOverlay, { backgroundColor: colors.mediaOverlayScrim, position: 'absolute', left: 0 }, scrimLeftStyle]} />
-                <Reanimated.View style={[styles.dimOverlay, { backgroundColor: colors.mediaOverlayScrim, position: 'absolute', right: 0 }, scrimRightStyle]} />
-              </View>
-
-              <GestureDetector gesture={cropGesture}>
-                <Reanimated.View style={[styles.cropBorder, cropFrameStyle, { borderColor: colors.scrimTextPrimary }]}>
-                  <Reanimated.View style={[styles.gridLineV, { left: '33.33%', backgroundColor: colors.scrimTextSecondary }, gridStyle]} />
-                  <Reanimated.View style={[styles.gridLineV, { left: '66.66%', backgroundColor: colors.scrimTextSecondary }, gridStyle]} />
-                  <Reanimated.View style={[styles.gridLineH, { top: '33.33%', backgroundColor: colors.scrimTextSecondary }, gridStyle]} />
-                  <Reanimated.View style={[styles.gridLineH, { top: '66.66%', backgroundColor: colors.scrimTextSecondary }, gridStyle]} />
-                  <View style={[styles.corner, styles.cornerTL, { borderColor: colors.scrimTextPrimary }]} pointerEvents="none" />
-                  <View style={[styles.corner, styles.cornerTR, { borderColor: colors.scrimTextPrimary }]} pointerEvents="none" />
-                  <View style={[styles.corner, styles.cornerBL, { borderColor: colors.scrimTextPrimary }]} pointerEvents="none" />
-                  <View style={[styles.corner, styles.cornerBR, { borderColor: colors.scrimTextPrimary }]} pointerEvents="none" />
-
-                  {/* ── Safe-zone overlay ───────────────────────────────
-                      When enabled, renders the platform UI regions that will
-                      obscure the media at the selected destination. The
-                      unsafe bands are hatched so the user can see what will
-                      be covered and compose around them. Truthful: based on
-                      documented platform chrome, not arbitrary margins. */}
-                  {safeZonesOn && destination && SAFE_ZONES[destination] && (() => {
-                    const sz = SAFE_ZONES[destination];
-                    return (
-                      <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                        {sz.bands.top != null && (
-                          <View
-                            style={{
-                              position: 'absolute',
-                              top: 0,
-                              left: 0,
-                              right: 0,
-                              height: `${sz.bands.top * 100}%`,
-                              backgroundColor: colors.mediaOverlayScrim,
-                              opacity: 0.45,
-                            }}
-                          />
-                        )}
-                        {sz.bands.bottom != null && (
-                          <View
-                            style={{
-                              position: 'absolute',
-                              bottom: 0,
-                              left: 0,
-                              right: 0,
-                              height: `${(1 - sz.bands.bottom) * 100}%`,
-                              backgroundColor: colors.mediaOverlayScrim,
-                              opacity: 0.45,
-                            }}
-                          />
-                        )}
-                      </View>
-                    );
-                  })()}
-                </Reanimated.View>
-              </GestureDetector>
-            </Reanimated.View>
-
-            {/* Focal layer: tap-to-set + draggable reticle, in source space */}
-            <Reanimated.View style={[StyleSheet.absoluteFill, imageStyle]} pointerEvents="box-none">
-              <Pressable
-                style={StyleSheet.absoluteFill}
-                onPress={handleFocalTap}
-                accessibilityLabel="Focal point"
-                accessibilityHint="Tap to set the focal point for this image"
-                accessibilityRole="button"
-              >
-                <View
-                  style={[
-                    styles.focalReticle,
-                    {
-                      left: effectiveFocal.x * displayW - 10,
-                      top: effectiveFocal.y * displayH - 10,
-                      borderColor: colors.scrimTextPrimary },
-                  ]}
-                  pointerEvents="none"
-                />
-                <View
-                  style={[
-                    styles.focalReticleOuter,
-                    {
-                      left: effectiveFocal.x * displayW - 22,
-                      top: effectiveFocal.y * displayH - 22,
-                      borderColor: colors.scrimTextPrimary },
-                  ]}
-                  pointerEvents="none"
-                />
-              </Pressable>
-            </Reanimated.View>
-            </>
-            )}
-          </View>
-        </View>
+        <CropStage
+          imageUri={imageUri}
+          imageLoadFailed={imageLoadFailed}
+          onRetry={() => { if (imageUri) loadImageSize(imageUri); }}
+          displayW={displayW}
+          displayH={displayH}
+          imageSize={imageSize}
+          cropXSV={cropXSV}
+          cropYSV={cropYSV}
+          cropWSV={cropWSV}
+          cropHSV={cropHSV}
+          rotateSV={rotateSV}
+          imageZoomSV={imageZoomSV}
+          imagePanXSV={imagePanXSV}
+          imagePanYSV={imagePanYSV}
+          isGestureActive={isGestureActive}
+          straighten={straighten}
+          flippedH={flippedH}
+          flippedV={flippedV}
+          cropGesture={cropGesture}
+          effectiveFocal={effectiveFocal}
+          onFocalTap={handleFocalTap}
+          safeZonesOn={safeZonesOn}
+          destination={destination}
+        />
 
         {/* ── Ratio presets + tools + straighten ── */}
         <CropControls
@@ -1000,334 +513,3 @@ export function CreatorCropSheet({
     </View>
   );
 }
-
-// ─── Crop controls: ratio chips + tool row + straighten slider ──────────────
-function CropControls({
-  selectedRatio,
-  applyRatio,
-  rotation,
-  onRotate,
-  flippedH,
-  flippedV,
-  onFlipH,
-  onFlipV,
-  straighten,
-  onStraightenChange,
-  onStraightenDragState,
-  onStraightenReset,
-  destination,
-  safeZonesOn,
-  onToggleSafeZones }: {
-  selectedRatio: number | null;
-  applyRatio: (ratio: number | null) => void;
-  rotation: number;
-  onRotate: () => void;
-  flippedH: boolean;
-  flippedV: boolean;
-  onFlipH: () => void;
-  onFlipV: () => void;
-  straighten: number;
-  onStraightenChange: (value: number) => void;
-  onStraightenDragState: (dragging: boolean) => void;
-  onStraightenReset: () => void;
-  destination?: 'story' | 'reels' | 'feed' | 'marketplace';
-  safeZonesOn: boolean;
-  onToggleSafeZones: () => void;
-}) {
-  const { colors } = useAppTheme();
-  const haptic = useHaptic();
-  const [straightenTool, setStraightenTool] = useState(false);
-
-  return (
-    <>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.ratioRow}
-      >
-        {ASPECT_PRESETS.map((preset) => {
-          const active = selectedRatio === preset.ratio;
-          return (
-            <PressScale
-              key={preset.label}
-              onPress={() => applyRatio(preset.ratio)}
-              style={[
-                styles.ratioChip,
-                active
-                  ? { backgroundColor: colors.surfaceElevated }
-                  : { backgroundColor: 'transparent' },
-              ]}
-              accessibilityLabel={`Aspect ratio ${preset.label}`}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-            >
-              <Text style={[
-                styles.ratioText,
-                { color: active ? colors.textPrimary : colors.scrimTextSecondary },
-              ]}>
-                {preset.label}
-              </Text>
-            </PressScale>
-          );
-        })}
-      </ScrollView>
-
-      <View style={styles.toolRow}>
-        <PressScale
-          onPress={onRotate}
-          style={styles.toolBtn}
-          accessibilityLabel={`Rotate ${rotation} degrees`}
-          accessibilityRole="button"
-          hitSlop={8}
-        >
-          <AppIcon
-            name="refresh-outline"
-            size={IconGrammar.standard}
-            color={rotation % 360 !== 0 ? 'brand' : 'textPrimary'}
-            opticalCenter={true}
-            accessible={false}
-          />
-        </PressScale>
-        <PressScale
-          onPress={onFlipH}
-          style={styles.toolBtn}
-          accessibilityLabel="Flip horizontally"
-          accessibilityRole="button"
-          accessibilityState={{ selected: flippedH }}
-          hitSlop={8}
-        >
-          <AppIcon
-            name="swap-horizontal-outline"
-            size={IconGrammar.standard}
-            color={flippedH ? 'brand' : 'textPrimary'}
-            opticalCenter={true}
-            accessible={false}
-          />
-        </PressScale>
-        <PressScale
-          onPress={onFlipV}
-          style={styles.toolBtn}
-          accessibilityLabel="Flip vertically"
-          accessibilityRole="button"
-          accessibilityState={{ selected: flippedV }}
-          hitSlop={8}
-        >
-          <AppIcon
-            name="swap-vertical-outline"
-            size={IconGrammar.standard}
-            color={flippedV ? 'brand' : 'textPrimary'}
-            opticalCenter={true}
-            accessible={false}
-          />
-        </PressScale>
-        <PressScale
-          onPress={() => { haptic.selection(); setStraightenTool((v) => !v); }}
-          style={styles.toolBtn}
-          accessibilityLabel="Straighten"
-          accessibilityRole="button"
-          accessibilityState={{ selected: straightenTool || straighten !== 0 }}
-          hitSlop={8}
-        >
-          <AppIcon
-            name="construct-outline"
-            size={IconGrammar.standard}
-            color={straightenTool || straighten !== 0 ? 'brand' : 'textPrimary'}
-            opticalCenter={true}
-            accessible={false}
-          />
-        </PressScale>
-        {destination && (
-          <PressScale
-            onPress={() => { haptic.selection(); onToggleSafeZones(); }}
-            style={styles.toolBtn}
-            accessibilityLabel={`Safe zones ${safeZonesOn ? 'on' : 'off'} for ${SAFE_ZONES[destination].label}`}
-            accessibilityHint="Toggles preview of platform UI regions that will cover this media"
-            accessibilityRole="button"
-            accessibilityState={{ selected: safeZonesOn }}
-            hitSlop={8}
-          >
-            <AppIcon
-              name="shield-checkmark-outline"
-              size={IconGrammar.standard}
-              color={safeZonesOn ? 'brand' : 'textPrimary'}
-              opticalCenter={true}
-              accessible={false}
-            />
-          </PressScale>
-        )}
-      </View>
-
-      {(straightenTool || straighten !== 0) && (
-        <View style={styles.straightenRow}>
-          <View style={styles.straightenSlider}>
-            <CreatorSlider
-              value={straighten}
-              min={-30}
-              max={30}
-              step={0.5}
-              neutral={0}
-              onValueChange={onStraightenChange}
-              onDragStateChange={onStraightenDragState}
-              hapticAtNeutral={true}
-              showNeutralTick={true}
-              accessibilityLabel="Straighten"
-              accessibilityHint="Slide to straighten the photo between -30 and 30 degrees"
-            />
-          </View>
-          <Text style={[styles.straightenReadout, { color: colors.textSecondary }]} accessibilityLiveRegion="polite">
-            {straighten.toFixed(1)}°
-          </Text>
-          <PressScale
-            onPress={onStraightenReset}
-            disabled={straighten === 0}
-            style={[styles.straightenReset, { opacity: straighten === 0 ? 0.35 : 1 }]}
-            accessibilityLabel="Reset straighten to zero"
-            accessibilityHint="Returns the angle to 0 degrees"
-            accessibilityRole="button"
-            hitSlop={6}
-          >
-            <AppIcon name="arrow-undo-outline" size={18} color="textPrimary" opticalCenter={true} accessible={false} />
-          </PressScale>
-        </View>
-      )}
-    </>
-  );
-}
-
-const styles = StyleSheet.create({
-  stage: {
-    ...StyleSheet.absoluteFill,
-    zIndex: 300 },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    height: 52 },
-  topBtn: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center' },
-  resetBtn: {
-    minHeight: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: Space.sm },
-  resetText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: Typography.family.medium },
-  doneBtn: {
-    minHeight: 44,
-    minWidth: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: Space.lg,
-    borderRadius: Radius.full },
-  doneText: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: Typography.family.semibold },
-  mediaStage: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  previewFrame: {
-    overflow: 'hidden' },
-  dimOverlay: {},
-  cropBorder: {
-    position: 'absolute',
-    borderWidth: Stroke.emphasis },
-  gridLineV: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    width: 1 },
-  gridLineH: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 1 },
-  // Minimal corner handles — 8pt visible squares, no shadows.
-  corner: {
-    position: 'absolute',
-    width: 8,
-    height: 8 },
-  cornerTL: {
-    top: -4,
-    left: -4,
-    borderTopWidth: Stroke.emphasis,
-    borderLeftWidth: Stroke.emphasis },
-  cornerTR: {
-    top: -4,
-    right: -4,
-    borderTopWidth: Stroke.emphasis,
-    borderRightWidth: Stroke.emphasis },
-  cornerBL: {
-    bottom: -4,
-    left: -4,
-    borderBottomWidth: Stroke.emphasis,
-    borderLeftWidth: Stroke.emphasis },
-  cornerBR: {
-    bottom: -4,
-    right: -4,
-    borderBottomWidth: Stroke.emphasis,
-    borderRightWidth: Stroke.emphasis },
-  focalReticle: {
-    position: 'absolute',
-    width: 20,
-    height: 20,
-    borderRadius: Radius.full,
-    borderWidth: Stroke.emphasis },
-  focalReticleOuter: {
-    position: 'absolute',
-    width: 44,
-    height: 44,
-    borderRadius: Radius.full,
-    borderWidth: Stroke.hairline },
-  ratioRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm },
-  ratioChip: {
-    minHeight: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: Space.md,
-    borderRadius: Radius.full },
-  ratioText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: Typography.family.medium },
-  toolRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.lg,
-    paddingVertical: Space.sm },
-  toolBtn: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 44,
-    height: 44 },
-  straightenRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Space.md,
-    paddingTop: Space.xs,
-    paddingBottom: Space.sm,
-    gap: Space.sm },
-  straightenSlider: {
-    flex: 1 },
-  straightenReadout: {
-    minWidth: 44,
-    textAlign: 'right',
-    fontSize: TypographyV2.meta.size,
-    fontFamily: Typography.family.medium,
-    fontVariant: ['tabular-nums'] },
-  straightenReset: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 32,
-    height: 32 },
-});

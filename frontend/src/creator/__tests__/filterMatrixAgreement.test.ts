@@ -20,7 +20,6 @@ const IDENTITY = [
   0, 0, 0, 1, 0,
 ];
 
-type InterpolateFn = (target: number[], intensity: number) => number[];
 type BackendInterpolateFn = (
   identity: number[],
   target: number[],

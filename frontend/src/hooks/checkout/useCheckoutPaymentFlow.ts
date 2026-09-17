@@ -486,6 +486,7 @@ export function useCheckoutPaymentFlow({
       addressId: savedAddressId,
       paymentMethodId: useOnezePayment ? undefined : savedPaymentMethod?.id,
       carrierId: postageOption.carrierId ?? undefined,
+      quoteId: postageOption.quoteId,
       platformCharge: PLATFORM_CHARGE,
       postageFee: POSTAGE_FEE,
       walletDebit: useBalance && !boundOrderId ? Math.min(walletBalance, itemPriceGbp + PLATFORM_CHARGE + POSTAGE_FEE) : undefined,
@@ -603,8 +604,9 @@ export function useCheckoutPaymentFlow({
           buyerProtectionFeeGbp: PLATFORM_CHARGE,
           postageFeeGbp: POSTAGE_FEE,
           shippingCarrierId: postageOption.carrierId ?? undefined,
-          // Pass wallet balance debit so the backend can apply split-tender
-          walletDebitGbp: useBalance && !boundOrderId ? Math.min(walletBalance, itemPriceGbp + PLATFORM_CHARGE + POSTAGE_FEE) : undefined,
+          // Never send walletDebitGbp — POST /orders rejects any positive
+          // value with WALLET_SPLIT_TENDER_UNSUPPORTED. The toggle is gated
+          // off, but the dead path must not survive a future flag flip.
           // Item verification add-on flag (orders.verification_requested)
           verificationRequested,
         });
@@ -895,9 +897,10 @@ export function useCheckoutPaymentFlow({
         return;
       }
 
-      const errorCode = (error as { code?: string })?.code;
-      const isNetworkError = isOffline || errorCode === 'NETWORK_ERROR' || errorCode === 'ECONNABORTED';
       const parsed = parseApiError(error);
+      // Canonical classification — parseApiError.isNetworkError covers raw
+      // fetch failures and timeouts the ad-hoc errorCode check missed.
+      const isNetworkError = isOffline || parsed.isNetworkError;
 
       // ── Error-code switch — each server code maps to its truthful state
       // instead of collapsing into a generic retryable failure. ──

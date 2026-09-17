@@ -97,6 +97,7 @@ function NumericInput({
         keyboardType="number-pad"
         maxLength={3}
         accessibilityLabel={`${label} value, ${value} of ${max}`}
+        accessibilityHint="Type the numeric value"
         accessibilityValue={{
           min: 0,
           max,
@@ -259,6 +260,7 @@ export function NumericColorFields({
         style={styles.advancedToggle}
         accessibilityRole="button"
         accessibilityLabel={showAdvanced ? 'Hide advanced color controls' : 'Show advanced color controls'}
+        accessibilityHint="Toggles the advanced color controls"
         accessibilityState={{ expanded: showAdvanced }}
         hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
       >

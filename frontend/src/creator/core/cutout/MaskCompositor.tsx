@@ -31,13 +31,18 @@ import {
   type SkPath,
   type SkImage,
 } from '@shopify/react-native-skia';
+import type { SharedValue } from 'react-native-reanimated';
+import { useDerivedValue } from 'react-native-reanimated';
 import type { Point, MaskStroke } from './MaskRenderer';
 
 // ── Path smoothing (Catmull-Rom → cubic Bézier) ─────────────────────
 // Shared with MaskRenderer so the declarative preview and the offscreen
-// rasterizer produce identical stroke geometry.
+// rasterizer produce identical stroke geometry. The 'worklet' directive
+// lets the live-stroke derived value call it on the UI thread; it stays
+// callable from JS unchanged.
 
 function smoothSkiaPath(points: Point[], tension = 0.5): SkPath {
+  'worklet';
   const path = Skia.Path.Make();
   if (points.length === 0) return path;
   if (points.length === 1) {
@@ -84,11 +89,12 @@ export interface MaskedPreviewProps {
   /** Committed brush strokes that define the mask, in chronological order. */
   strokes: MaskStroke[];
   /**
-   * The live in-progress stroke points (not yet committed). Rendered as
-   * a colored overlay so the user sees brush feedback at 60fps without
-   * rebuilding the mask on every touch move.
+   * The live in-progress stroke points (not yet committed) as a shared
+   * value — points accumulate on the UI thread and the overlay path
+   * rebuilds in a derived value, so brush feedback stays at frame rate
+   * with zero React re-renders or runOnJS crossings per move event.
    */
-  livePoints: Point[];
+  livePointsSV: SharedValue<Point[]>;
   /** Brush mode for the live stroke: 'keep' | 'erase' | 'restore'. */
   liveMode: 'keep' | 'erase' | 'restore' | null;
   /** Brush diameter for the live stroke overlay. */
@@ -109,7 +115,7 @@ export function MaskedPreview({
   width,
   height,
   strokes,
-  livePoints,
+  livePointsSV,
   liveMode,
   brushSize,
   showLiveOverlay,
@@ -131,9 +137,11 @@ export function MaskedPreview({
     [strokes],
   );
 
-  const livePath = useMemo(
-    () => (showLiveOverlay && livePoints.length > 0 ? smoothSkiaPath(livePoints) : null),
-    [showLiveOverlay, livePoints],
+  // smoothSkiaPath returns an empty path for empty input — the derived
+  // value is always a valid SkPath and empty paths draw nothing.
+  const livePath = useDerivedValue(
+    () => smoothSkiaPath(livePointsSV.value),
+    [livePointsSV],
   );
 
   // Live stroke overlay colour: green = keep/restore, red = erase.
@@ -202,7 +210,7 @@ export function MaskedPreview({
       {/* Live in-progress stroke overlay (coloured, semi-transparent).
           Rendered on top of the masked image for 60fps brush feedback
           without rebuilding the mask mid-stroke. */}
-      {showLiveOverlay && livePath && liveMode && (
+      {showLiveOverlay && liveMode && (
         <SkiaPath
           path={livePath}
           start={0}

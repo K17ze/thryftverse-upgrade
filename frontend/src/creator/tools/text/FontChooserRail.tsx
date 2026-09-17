@@ -13,7 +13,7 @@
  *   - Light haptic on select
  */
 import React, { useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { Space, Radius, Stroke } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
@@ -57,6 +57,7 @@ export function FontChooserRail({
       contentContainerStyle={styles.content}
       accessibilityRole="list"
       accessibilityLabel="Font chooser"
+      accessibilityHint="Swipe horizontally to browse fonts"
     >
       {fonts.map((font) => {
         const isSelected = selectedId === font.id;
@@ -73,6 +74,7 @@ export function FontChooserRail({
               isSelected && styles.itemSelected,
             ]}
             accessibilityLabel={`Font ${font.name}`}
+            accessibilityHint="Applies this font"
             accessibilityRole="button"
             accessibilityState={{ selected: isSelected }}
             hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}

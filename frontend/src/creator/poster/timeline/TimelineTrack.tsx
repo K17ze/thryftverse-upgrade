@@ -128,6 +128,7 @@ export const TimelineTrack = React.memo(function TimelineTrack({
         },
       ]}
       accessibilityLabel="Timeline clip track"
+      accessibilityHint="Contains the video clips"
     >
       <View style={trackStyles.clipsRow}>
         {clips.map((clip, i) => {

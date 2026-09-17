@@ -2,33 +2,22 @@ import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   View,
   Text,
-  StyleSheet,
   Pressable,
   RefreshControl,
-  ScrollView,
-  type DimensionValue } from 'react-native';
+  ScrollView } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import Reanimated, {
+import type { NativeStackNavigationProp, RootStackParamList } from '../../navigation/types';
+import {
   useSharedValue,
-  useAnimatedStyle,
   withTiming,
-  withSpring,
-  withDelay,
-  runOnJS,
-  interpolate,
-  Extrapolation,
-  type SharedValue } from 'react-native-reanimated';
+  withSpring } from 'react-native-reanimated';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-import { Space, Radius, Typography, Control, Stroke, IconGrammar } from '../../theme/designTokens';
-import { TypographyV2 } from '../../theme/typography.v2';
-import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { IconGrammar } from '../../theme/designTokens';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { CreatorDraftService, type DraftMeta, type Folder } from '../core/projectStore/drafts';
 import { createStableId, makeStableId } from '../../utils/createStableId';
-import { formatRelativeTime } from '../../utils/dateFormat';
-import { CreatorCanvas } from './CreatorCanvas';
-import { SwipeableRow } from '../../components/SwipeableRow';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { Motion } from '../../theme/motionTokens';
@@ -37,65 +26,15 @@ import { CreatorFolderOrganizeSheet } from '../surfaces/CreatorFolderOrganizeShe
 import {
   useProjectFolderStore,
   getFolderProjectCount } from '../core/projectStore/ProjectFolderStore';
+import { createStyles } from './draftList/draftListStyles';
+import { DraftListSkeleton } from './draftList/DraftListSkeleton';
+import { FilterTab } from './draftList/FilterTab';
+import { DraftCard } from './draftList/DraftCard';
+import { EmptyDraftsState } from './draftList/EmptyDraftsState';
+import { UndoToast, DeleteConfirmSheet } from './draftList/DraftListOverlays';
 
 type FolderFilter = 'all' | 'unfiled' | { folderId: string };
 type SortBy = 'recent' | 'name' | 'type';
-
-// ── SkeletonBlock — one-time shimmer sweep (AGENTS.md §14, §17) ──────
-// A single shimmering placeholder block. The sweep runs once (0→1)
-// then holds — no continuous pulse. Uses colors.surfaceAlt.
-function SkeletonBlock({ width, height, radius }: { width: DimensionValue; height: number; radius?: number }) {
-  const { colors } = useAppTheme();
-  const reduceMotion = useReducedMotion();
-  const shimmerSV = useSharedValue(0);
-
-  useEffect(() => {
-    if (reduceMotion) return;
-    shimmerSV.value = 0;
-    shimmerSV.value = withTiming(1, { duration: Motion.duration.crawl });
-  }, [reduceMotion, shimmerSV]);
-
-  const style = useAnimatedStyle(() => ({
-    backgroundColor: colors.surfaceAlt,
-    opacity: 0.5 + 0.3 * shimmerSV.value }));
-
-  return (
-    <Reanimated.View style={[{ width, height, borderRadius: radius ?? Radius.sm }, style]} />
-  );
-}
-
-// ── DraftListSkeleton — matches draft row layout (thumbnail + 2 text lines) ──
-function DraftListSkeleton() {
-  return (
-    <View style={{ flex: 1, backgroundColor: undefined }}>
-      {[0, 1, 2, 3, 4].map((i) => (
-        <View
-          key={i}
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: Space.md,
-            padding: Space.md,
-            borderBottomWidth: Stroke.hairline,
-            borderBottomColor: 'transparent' }}
-        >
-          {/* Thumbnail rectangle */}
-          <SkeletonBlock width={48} height={48} radius={Radius.md} />
-          {/* Two text lines */}
-          <View style={{ flex: 1, gap: Space.xs }}>
-            <SkeletonBlock width={'60%'} height={TypographyV2.bodyStrong.size + 4} radius={Radius.sm} />
-            <SkeletonBlock width={'40%'} height={TypographyV2.meta.size + 2} radius={Radius.sm} />
-          </View>
-          {/* Action icons placeholder */}
-          <View style={{ flexDirection: 'row', gap: Space.xs }}>
-            <SkeletonBlock width={Control.hit} height={Control.hit} radius={Radius.sm} />
-            <SkeletonBlock width={Control.hit} height={Control.hit} radius={Radius.sm} />
-          </View>
-        </View>
-      ))}
-    </View>
-  );
-}
 
 const SORT_OPTIONS: { key: SortBy; label: string }[] = [
   { key: 'recent', label: 'Recent' },
@@ -103,82 +42,13 @@ const SORT_OPTIONS: { key: SortBy; label: string }[] = [
   { key: 'type', label: 'Type' },
 ];
 
-// ── Underline filter tab ────────────────────────────────────────────
-// Replaces pill-background chips/pills with text-only tabs + 2pt spring-
-// animated underline indicator (brand color, Stroke.emphasis).
-interface FilterTabProps {
-  label: string;
-  isActive: boolean;
-  onPress: () => void;
-  colors: ThemeColors;
-  icon?: React.ComponentProps<typeof Ionicons>['name'];
-  accessibilityLabel: string;
-}
-
-function FilterTab({ label, isActive, onPress, colors, icon, accessibilityLabel }: FilterTabProps) {
-  const underlineOpacity = useSharedValue(isActive ? 1 : 0);
-
-  useEffect(() => {
-    underlineOpacity.value = withSpring(isActive ? 1 : 0, Motion.spring.indicator);
-  }, [isActive, underlineOpacity]);
-
-  const underlineStyle = useAnimatedStyle(() => ({
-    opacity: underlineOpacity.value }));
-
-  return (
-    <Pressable
-      onPress={onPress}
-      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-      style={({ pressed }) => [
-        {
-          paddingHorizontal: Space.md,
-          paddingVertical: Space.sm,
-          alignItems: 'center',
-          marginRight: Space.xs },
-        pressed && { opacity: 0.7 },
-      ]}
-      accessibilityLabel={accessibilityLabel}
-      accessibilityRole="button"
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.xxs }}>
-        {icon && (
-          <Ionicons
-            name={icon}
-            size={IconGrammar.metadata}
-            color={isActive ? colors.textPrimary : colors.textSecondary}
-          />
-        )}
-        <Text
-          style={{
-            fontFamily: Typography.family.semibold,
-            fontSize: TypographyV2.body.size,
-            color: isActive ? colors.textPrimary : colors.textSecondary }}
-          numberOfLines={1}
-        >
-          {label}
-        </Text>
-      </View>
-      <Reanimated.View
-        style={[
-          {
-            height: Stroke.emphasis,
-            backgroundColor: colors.brand,
-            width: '100%',
-            marginTop: Space.xxs },
-          underlineStyle,
-        ]}
-      />
-    </Pressable>
-  );
-}
-
 export function CreatorDraftListScreen() {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { spring } = useMotionConfig();
   const reduceMotion = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [drafts, setDrafts] = useState<DraftMeta[]>([]);
   const [draftDocs, setDraftDocs] = useState<Record<string, CreatorDocument | null>>({});
   const [loading, setLoading] = useState(true);
@@ -413,14 +283,13 @@ export function CreatorDraftListScreen() {
         colors={colors}
         styles={styles}
         reduceMotion={reduceMotion}
-        springCfg={spring.entrance}
         onPress={() => handleOpenDraft(item)}
         onDuplicate={() => handleDuplicateDraft(item)}
         onDelete={() => handleDeleteDraft(item)}
         onSwipeDelete={() => handleSwipeDelete(item)}
       />
     );
-  }, [handleOpenDraft, handleDeleteDraft, handleSwipeDelete, handleDuplicateDraft, draftDocs, styles, colors, reduceMotion, spring.entrance]);
+  }, [handleOpenDraft, handleDeleteDraft, handleSwipeDelete, handleDuplicateDraft, draftDocs, styles, colors, reduceMotion]);
 
   if (loading) {
     return (
@@ -430,6 +299,7 @@ export function CreatorDraftListScreen() {
             onPress={() => navigation.goBack()}
             style={styles.backBtn}
             accessibilityLabel="Back"
+            accessibilityHint="Returns to the previous screen"
             accessibilityRole="button"
           >
             <Ionicons name="chevron-back" size={IconGrammar.standard} color={colors.textPrimary} />
@@ -449,6 +319,7 @@ export function CreatorDraftListScreen() {
           onPress={() => navigation.goBack()}
           style={styles.backBtn}
           accessibilityLabel="Back"
+          accessibilityHint="Returns to the previous screen"
           accessibilityRole="button"
         >
           <Ionicons name="chevron-back" size={IconGrammar.standard} color={colors.textPrimary} />
@@ -458,6 +329,7 @@ export function CreatorDraftListScreen() {
           onPress={handleOpenOrganize}
           style={({ pressed }) => [styles.organizeBtn, pressed && { opacity: 0.6 }]}
           accessibilityLabel="Organize folders"
+          accessibilityHint="Opens the folder organizer"
           accessibilityRole="button"
           hitSlop={8}
         >
@@ -477,6 +349,7 @@ export function CreatorDraftListScreen() {
           onPress={() => handleFolderFilterPress('all')}
           colors={colors}
           accessibilityLabel="Show all projects"
+          accessibilityHint="Filters the list to all projects"
         />
         <FilterTab
           label={`Unfiled (${getFolderProjectCount(storeFolders, null, drafts.length)})`}
@@ -484,6 +357,7 @@ export function CreatorDraftListScreen() {
           onPress={() => handleFolderFilterPress('unfiled')}
           colors={colors}
           accessibilityLabel="Show unfiled drafts"
+          accessibilityHint="Filters the list to unfiled drafts"
         />
         {folders.map((folder) => {
           const isActive =
@@ -503,6 +377,7 @@ export function CreatorDraftListScreen() {
               colors={colors}
               icon={isActive ? 'folder' : 'folder-outline'}
               accessibilityLabel={`Filter by folder ${folder.name}, ${count} projects`}
+              accessibilityHint="Filters the list to this folder"
             />
           );
         })}
@@ -518,6 +393,7 @@ export function CreatorDraftListScreen() {
             onPress={() => setSortBy(opt.key)}
             colors={colors}
             accessibilityLabel={`Sort by ${opt.label}`}
+            accessibilityHint="Sorts the draft list"
           />
         ))}
       </View>
@@ -532,7 +408,6 @@ export function CreatorDraftListScreen() {
         }
         ListEmptyComponent={
           <EmptyDraftsState
-            colors={colors}
             styles={styles}
             reduceMotion={reduceMotion}
             onCreate={handleStartCreating}
@@ -568,510 +443,4 @@ export function CreatorDraftListScreen() {
       />
     </View>
   );
-}
-
-interface UndoToastProps {
-  visible: boolean;
-  title: string;
-  colors: ThemeColors;
-  toastTranslateY: SharedValue<number>;
-  toastOpacity: SharedValue<number>;
-  onUndo: () => void;
-  onDismiss: () => void;
-}
-
-function UndoToast({
-  visible,
-  title,
-  colors,
-  toastTranslateY,
-  toastOpacity,
-  onUndo,
-  onDismiss }: UndoToastProps) {
-  const toastStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: toastTranslateY.value }],
-    opacity: toastOpacity.value }));
-
-  if (!visible) return null;
-
-  return (
-    <Reanimated.View
-      style={[
-        {
-          position: 'absolute',
-          bottom: Space.lg,
-          left: Space.md,
-          right: Space.md,
-          backgroundColor: colors.surfaceElevated,
-          borderRadius: Radius.lg,
-          paddingHorizontal: Space.md,
-          paddingVertical: Space.md,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: Space.sm,
-          shadowColor: colors.shadow,
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.12,
-          shadowRadius: 8,
-          elevation: 4 },
-        toastStyle,
-      ]}
-    >
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text
-          style={{
-            fontFamily: Typography.family.medium,
-            fontSize: TypographyV2.body.size,
-            color: colors.textPrimary }}
-          numberOfLines={1}
-        >
-          Draft deleted
-        </Text>
-        <Text
-          style={{
-            fontFamily: TypographyV2.body.fontFamily,
-            fontSize: TypographyV2.meta.size,
-            color: colors.textSecondary }}
-          numberOfLines={1}
-        >
-          {title}
-        </Text>
-      </View>
-      <Pressable
-        onPress={onUndo}
-        style={({ pressed }) => [
-          {
-            paddingHorizontal: Space.md,
-            paddingVertical: Space.sm,
-            minHeight: 50,
-            justifyContent: 'center',
-            borderRadius: Radius.lg,
-            backgroundColor: pressed ? colors.brandPressed : colors.brand },
-        ]}
-        accessibilityLabel="Undo delete"
-        accessibilityRole="button"
-      >
-        <Text
-          style={{
-            fontFamily: Typography.family.semibold,
-            fontSize: TypographyV2.bodyStrong.size,
-            color: colors.textInverse }}
-        >
-          Undo
-        </Text>
-      </Pressable>
-      <Pressable
-        onPress={onDismiss}
-        style={{ width: 32, height: 32, justifyContent: 'center', alignItems: 'center' }}
-        accessibilityLabel="Dismiss"
-        accessibilityRole="button"
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-      >
-        <Ionicons name="close" size={IconGrammar.metadata} color={colors.textSecondary} />
-      </Pressable>
-    </Reanimated.View>
-  );
-}
-
-// ── DraftCard with stagger entrance and spring thumbnail ───────────
-interface DraftCardProps {
-  item: DraftMeta;
-  doc: CreatorDocument | null | undefined;
-  index: number;
-  finalThumbW: number;
-  finalThumbH: number;
-  colors: ThemeColors;
-  styles: ReturnType<typeof createStyles>;
-  reduceMotion: boolean;
-  springCfg: { damping: number; stiffness: number; mass: number };
-  onPress: () => void;
-  onDuplicate: () => void;
-  onDelete: () => void;
-  onSwipeDelete: () => void;
-}
-
-function DraftCard({
-  item,
-  doc,
-  index,
-  finalThumbW,
-  finalThumbH,
-  colors,
-  styles,
-  reduceMotion,
-  springCfg,
-  onPress,
-  onDuplicate,
-  onDelete,
-  onSwipeDelete }: DraftCardProps) {
-  // Thumbnail press spring scale
-  const thumbScale = useSharedValue(1);
-  const thumbAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: thumbScale.value }] }));
-
-  // Refined stagger entrance — opacity only (no scale), 30ms delay per
-  // card, 200ms duration. Capped to the first viewport per Motion.stagger.maxItems
-  // so long lists do not animate their entire history (AGENTS §16).
-  // Respects reduceMotion (opacity = 1 immediately).
-  const entranceOpacity = useSharedValue(reduceMotion ? 1 : 0);
-  useEffect(() => {
-    if (reduceMotion) {
-      entranceOpacity.value = 1;
-    } else if (index < Motion.stagger.maxItems) {
-      entranceOpacity.value = withDelay(index * 30, withTiming(1, { duration: Motion.duration.normal, easing: Motion.easing.entrance }));
-    } else {
-      // Beyond the first viewport — appear instantly, no cascade.
-      entranceOpacity.value = 1;
-    }
-  }, [reduceMotion, index, entranceOpacity]);
-  const entranceStyle = useAnimatedStyle(() => ({
-    opacity: entranceOpacity.value }));
-
-  return (
-    <Reanimated.View style={entranceStyle}>
-    <SwipeableRow
-        accessibilityLabel={`Open draft ${item.title}`}
-        accessibilityHint="Swipe left to delete"
-        onPress={onPress}
-        rightAction={{
-          icon: 'trash-outline',
-          label: 'Delete',
-          onPress: onSwipeDelete,
-          color: colors.danger }}
-        swipeThreshold={88}
-      >
-        <View style={styles.draftRow}>
-          <Pressable
-            onPress={onPress}
-            onPressIn={() => { if (!reduceMotion) thumbScale.value = withSpring(0.95, Motion.spring.tap); }}
-            onPressOut={() => { if (!reduceMotion) thumbScale.value = withSpring(1, Motion.spring.tap); }}
-            accessibilityLabel={`Open draft ${item.title}`}
-            accessibilityRole="button"
-          >
-            <Reanimated.View style={[thumbAnimatedStyle]}>
-              {doc ? (
-                <View style={[styles.draftThumb, { width: finalThumbW, height: finalThumbH }]}>
-                  <CreatorCanvas
-                    document={doc}
-                    page={doc.pages[0]}
-                    canvasWidth={finalThumbW}
-                    canvasHeight={finalThumbH}
-                    mode="view"
-                  />
-                </View>
-              ) : (
-                <View style={[styles.draftIcon, { width: finalThumbW, height: finalThumbH, backgroundColor: colors.surfaceAlt }]}>
-                  <Ionicons
-                    name={item.type === 'look' ? 'shirt-outline' : 'film-outline'}
-                    size={20}
-                    color={colors.textMuted}
-                  />
-                </View>
-              )}
-            </Reanimated.View>
-          </Pressable>
-          <View style={styles.draftInfo}>
-            <Text style={styles.draftTitle} numberOfLines={1}>{item.title}</Text>
-            <View style={styles.draftMetaRow}>
-              <View style={[styles.draftTypeDot, item.type === 'look' ? styles.draftTypeDotLook : styles.draftTypeDotPoster]} />
-              <Text style={styles.draftMeta} numberOfLines={1}>
-                {formatRelativeTime(item.updatedAt)}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.actions}>
-            <Pressable
-              onPress={onDuplicate}
-              style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              accessibilityLabel={`Duplicate draft ${item.title}`}
-              accessibilityRole="button"
-            >
-              <Ionicons name="copy-outline" size={IconGrammar.metadata} color={colors.textSecondary} />
-            </Pressable>
-            <Pressable
-              onPress={onDelete}
-              style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              accessibilityLabel={`Delete draft ${item.title}`}
-              accessibilityRole="button"
-            >
-              <Ionicons name="trash-outline" size={IconGrammar.metadata} color={colors.danger} />
-            </Pressable>
-          </View>
-        </View>
-      </SwipeableRow>
-    </Reanimated.View>
-  );
-}
-
-// ── Empty state — static icon with one-shot entrance fade ──────────
-// Per AGENTS.md §17, continuous pulsing/breathing is prohibited on
-// empty states. A restrained entrance fade replaces the old breathing
-// animation for a calmer, more premium empty-state.
-interface EmptyDraftsStateProps {
-  colors: ThemeColors;
-  styles: ReturnType<typeof createStyles>;
-  reduceMotion: boolean;
-  onCreate: () => void;
-}
-
-function EmptyDraftsState({ colors, styles, reduceMotion, onCreate }: EmptyDraftsStateProps) {
-  const entranceSV = useSharedValue(reduceMotion ? 1 : 0);
-
-  useEffect(() => {
-    if (!reduceMotion) {
-      // Per §5.14: entrance uses timing (ease-out), not spring.
-      entranceSV.value = withDelay(100, withTiming(1, { duration: Motion.duration.slow, easing: Motion.easing.entrance }));
-    }
-  }, [reduceMotion, entranceSV]);
-
-  const entranceStyle = useAnimatedStyle(() => ({
-    opacity: entranceSV.value,
-    transform: [{ translateY: interpolate(entranceSV.value, [0, 1], [12, 0], Extrapolation.CLAMP) }] }));
-
-  return (
-    <View style={styles.emptyState}>
-      <Reanimated.View style={entranceStyle}>
-        <Text style={styles.emptyTitle}>No drafts yet</Text>
-        <Text style={styles.emptySubtitle}>Start creating to see your drafts here.</Text>
-      </Reanimated.View>
-      <Pressable
-        onPress={onCreate}
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        accessibilityLabel="New post"
-        accessibilityRole="button"
-      >
-        <Text style={styles.emptyCtaText}>New post</Text>
-      </Pressable>
-    </View>
-  );
-}
-
-// ── Delete confirmation ActionSheet ────────────────────────────────
-interface DeleteConfirmSheetProps {
-  draft: DraftMeta | null;
-  colors: ThemeColors;
-  reduceMotion: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-}
-
-function DeleteConfirmSheet({ draft, colors, reduceMotion, onCancel, onConfirm }: DeleteConfirmSheetProps) {
-  const translateY = useSharedValue(400);
-  const backdropOpacity = useSharedValue(0);
-  const mounted = useRef(false);
-
-  useEffect(() => {
-    if (draft) {
-      mounted.current = true;
-      if (reduceMotion) {
-        translateY.value = 0;
-        backdropOpacity.value = 1;
-      } else {
-        translateY.value = withSpring(0, Motion.spring.entrance);
-        backdropOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Motion.easing.entrance });
-      }
-    } else if (mounted.current) {
-      if (reduceMotion) {
-        translateY.value = 400;
-        backdropOpacity.value = 0;
-      } else {
-        translateY.value = withTiming(400, { duration: Motion.duration.normal, easing: Motion.easing.exit });
-        backdropOpacity.value = withTiming(0, { duration: Motion.duration.normal });
-      }
-    }
-  }, [draft, reduceMotion, translateY, backdropOpacity]);
-
-  const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }] }));
-
-  const backdropStyle = useAnimatedStyle(() => ({
-    opacity: backdropOpacity.value }));
-
-  if (!draft && !mounted.current) return null;
-
-  return (
-    <View style={[StyleSheet.absoluteFill, { zIndex: 500 }]} pointerEvents={draft ? 'auto' : 'none'}>
-      <Reanimated.View style={[StyleSheet.absoluteFill, backdropStyle, { backgroundColor: colors.overlay }]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onCancel} accessibilityLabel="Cancel delete" accessibilityRole="button" />
-      </Reanimated.View>
-      <Reanimated.View
-        style={[
-          {
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            backgroundColor: colors.surface,
-            borderTopLeftRadius: Radius.xl,
-            borderTopRightRadius: Radius.xl,
-            paddingTop: Space.xs,
-            paddingBottom: Space.lg,
-            paddingHorizontal: Space.md },
-          sheetStyle,
-        ]}
-      >
-        <View style={{ alignItems: 'center', paddingVertical: Space.xs }}>
-          <View style={{ width: 32, height: 4, borderRadius: Radius.sm, backgroundColor: colors.borderSubtle }} />
-        </View>
-        <Text style={{ fontFamily: TypographyV2.sectionTitle.fontFamily, fontSize: TypographyV2.sectionTitle.size, color: colors.textPrimary, marginTop: Space.sm, textAlign: 'center' }}>
-          Delete draft?
-        </Text>
-        <Text style={{ fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textSecondary, textAlign: 'center', marginTop: Space.xs, marginBottom: Space.md }}>
-          This can&rsquo;t be undone.
-        </Text>
-        <Pressable
-          onPress={onConfirm}
-          style={({ pressed }) => ({
-            backgroundColor: pressed ? colors.danger : colors.danger,
-            opacity: pressed ? 0.85 : 1,
-            paddingVertical: Space.md,
-            minHeight: 50,
-            justifyContent: 'center',
-            borderRadius: Radius.lg,
-            alignItems: 'center',
-            marginBottom: Space.sm })}
-          accessibilityLabel="Confirm delete"
-          accessibilityRole="button"
-        >
-          <Text style={{ fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size, color: colors.textInverse }}>
-            Delete
-          </Text>
-        </Pressable>
-        <Pressable
-          onPress={onCancel}
-          style={({ pressed }) => ({
-            backgroundColor: pressed ? colors.surfaceAlt : 'transparent',
-            paddingVertical: Space.md,
-            minHeight: 50,
-            justifyContent: 'center',
-            borderRadius: Radius.lg,
-            alignItems: 'center' })}
-          accessibilityLabel="Cancel"
-          accessibilityRole="button"
-        >
-          <Text style={{ fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textSecondary }}>
-            Cancel
-          </Text>
-        </Pressable>
-      </Reanimated.View>
-    </View>
-  );
-}
-
-function createStyles(colors: ThemeColors) {
-  return StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.background },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.sm },
-  backBtn: {
-    width: Control.hit,
-    height: Control.hit,
-    justifyContent: 'center',
-    alignItems: 'center' },
-  organizeBtn: {
-    width: Control.hit,
-    height: Control.hit,
-    justifyContent: 'center',
-    alignItems: 'center' },
-  headerTitle: {
-    fontFamily: Typography.family.semibold,
-    fontSize: TypographyV2.screenTitle.size,
-    color: colors.textPrimary },
-  // ── Folder tab bar ──
-  folderTabBar: {
-    flexDirection: 'row',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.xs },
-  // ── Sort bar ──
-  sortBar: {
-    flexDirection: 'row',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.xs },
-  listContent: {
-    padding: Space.md },
-  // ── Draft row ──
-  draftRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-    padding: Space.md },
-  draftRowPressed: {
-    opacity: 0.85 },
-  draftThumb: {
-    borderRadius: Radius.md,
-    overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt },
-  draftIcon: {
-    borderRadius: Radius.md,
-    justifyContent: 'center',
-    alignItems: 'center' },
-  draftInfo: {
-    flex: 1,
-    gap: Space.xxs },
-  draftTitle: {
-    fontFamily: Typography.family.semibold,
-    fontSize: TypographyV2.bodyStrong.size,
-    color: colors.textPrimary },
-  draftMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs },
-  draftTypeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 2 },
-  draftTypeDotLook: {
-    backgroundColor: colors.textPrimary },
-  draftTypeDotPoster: {
-    backgroundColor: colors.warning },
-  draftMeta: {
-    fontFamily: Typography.family.regular,
-    fontSize: TypographyV2.meta.size,
-    color: colors.textSecondary },
-  actions: {
-    flexDirection: 'row',
-    gap: Space.xs },
-  actionBtn: {
-    width: Control.hit,
-    height: Control.hit,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: Radius.sm },
-  actionBtnPressed: {
-    opacity: 0.6 },
-  // ── Empty state ──
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: Space.xl * 2,
-    gap: Space.md },
-  emptyTitle: {
-    fontFamily: Typography.family.regular,
-    fontSize: TypographyV2.body.size,
-    color: colors.textMuted,
-    textAlign: 'center' },
-  emptySubtitle: {
-    fontFamily: Typography.family.regular,
-    fontSize: TypographyV2.meta.size,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: Space.xs },
-  emptyCtaText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: TypographyV2.body.size,
-    color: colors.brand } });
 }

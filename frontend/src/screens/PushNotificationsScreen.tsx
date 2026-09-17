@@ -7,16 +7,19 @@
  * canonical NotificationPreferencesScreen, linked below.
  */
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Linking, Platform } from 'react-native';
+import { View, Text, StyleSheet, Linking } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import { parseApiError } from '../lib/apiClient';
-import { deactivateNotificationDevice, registerNotificationDevice, listNotificationDevices } from '../services/notificationsApi';
+import {
+  registerCurrentPushDevice,
+  deactivateCurrentPushDevice,
+  isCurrentDeviceRegistered,
+  getStoredPushDeviceId } from '../lib/pushDevice';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
@@ -48,29 +51,19 @@ export default function PushNotificationsScreen({ navigation }: Props) {
   React.useEffect(() => {
     void (async () => {
       try {
-        const devices = await listNotificationDevices();
-        const activeDevice = devices.find((d) => d.isActive);
-        if (activeDevice) {
-          setRegisteredDeviceId(activeDevice.id);
-          setIsDeviceRegistered(true);
+        // "This device" is identified by the device id persisted at
+        // registration time — server list responses redact tokens, so
+        // matching on "any active device" would misreport another device
+        // on the account as this one.
+        const registered = await isCurrentDeviceRegistered();
+        setIsDeviceRegistered(registered);
+        if (registered) {
+          setRegisteredDeviceId(await getStoredPushDeviceId());
         }
       } catch {
         // best-effort
       }
     })();
-  }, []);
-
-  const resolvePushPlatform = React.useCallback((): 'ios' | 'android' | 'web' => {
-    if (Platform.OS === 'ios') return 'ios';
-    if (Platform.OS === 'android') return 'android';
-    return 'web';
-  }, []);
-
-  const resolveProjectId = React.useCallback(() => {
-    const fromExpoConfig = (Constants.expoConfig as { extra?: { eas?: { projectId?: string } } } | null)
-      ?.extra?.eas?.projectId;
-    const fromEasConfig = (Constants as unknown as { easConfig?: { projectId?: string } }).easConfig?.projectId;
-    return fromExpoConfig ?? fromEasConfig;
   }, []);
 
   const ensureDeviceRegistration = React.useCallback(async () => {
@@ -86,19 +79,9 @@ export default function PushNotificationsScreen({ navigation }: Props) {
         show('Push permissions were denied on this device.', 'error');
         return;
       }
-      const projectId = resolveProjectId();
-      const tokenResponse = projectId
-        ? await Notifications.getExpoPushTokenAsync({ projectId })
-        : await Notifications.getExpoPushTokenAsync();
-      const token = tokenResponse.data;
-      await registerNotificationDevice({
-        token,
-        platform: resolvePushPlatform(),
-        appVersion: (Constants.expoConfig as { version?: string } | null)?.version,
-        metadata: { enabledNotificationTypes: enabledCount } });
-      // The server returns a redacted device — we use the id for management.
-      // The raw token is never stored in client state.
-      setRegisteredDeviceId(null); // Will be set on next device list fetch
+      const device = await registerCurrentPushDevice({
+        enabledNotificationTypes: enabledCount });
+      setRegisteredDeviceId(device.id);
       setIsDeviceRegistered(true);
       haptics.success();
       show('This device is now registered for push delivery.', 'success');
@@ -108,31 +91,17 @@ export default function PushNotificationsScreen({ navigation }: Props) {
     } finally {
       setIsSyncingDevice(false);
     }
-  }, [enabledCount, resolveProjectId, resolvePushPlatform, show]);
+  }, [enabledCount, show]);
 
   const disableDeviceRegistration = React.useCallback(async () => {
-    // If we don't have the device id, try to fetch it first
-    let deviceId = registeredDeviceId;
-    if (!deviceId) {
-      try {
-        const devices = await listNotificationDevices();
-        const activeDevice = devices.find((d) => d.isActive);
-        if (activeDevice) {
-          deviceId = activeDevice.id;
-          setRegisteredDeviceId(activeDevice.id);
-        }
-      } catch {
-        // best-effort
-      }
-    }
-    if (!deviceId) {
+    if (!registeredDeviceId) {
       setIsDeviceRegistered(false);
       show('This device is already not registered for push delivery.', 'info');
       return;
     }
     setIsSyncingDevice(true);
     try {
-      await deactivateNotificationDevice(deviceId);
+      await deactivateCurrentPushDevice();
       setIsDeviceRegistered(false);
       setRegisteredDeviceId(null);
       show('Push delivery paused for this device.', 'info');

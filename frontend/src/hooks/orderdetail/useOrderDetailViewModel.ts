@@ -191,7 +191,9 @@ export function useOrderDetailViewModel({
     return resolveCapabilities({
       status: backendOrder.status,
       role: isBuyer ? 'buyer' : 'seller',
-      hasOpenResolution: Boolean(openTicket),
+      // Server flag is authoritative; the local ticket store is OR'd in so a
+      // just-filed ticket suppresses report_issue before the refetch lands.
+      hasOpenResolution: backendOrder.hasOpenResolution === true || Boolean(openTicket),
       hasReview,
       reviewIsAuto: orderReview?.isAuto === true,
       hasTracking: Boolean(backendOrder.trackingNumber || parcelEvents.length > 0),

@@ -86,10 +86,11 @@ export default function SellScreen() {
     soldComps,
     hasDraftContent,
     aiListingAssistEnabled,
+    pickerTaxonomy,
   } = data;
 
   const {
-    title, desc, price, originalPrice, tags, tagInput, category, brand, size, condition,
+    title, desc, price, originalPrice, tags, tagInput, category, subcategory, brand, size, condition,
     shippingMethod, shippingPayer, shippingSheetOpen, listingMode,
     shareCountInput, sharePriceInput, offeringWindowHours, authPhotos,
     startingBid, reservePrice, auctionDurationHours,
@@ -467,6 +468,39 @@ export default function SellScreen() {
               <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
             </AnimatedPressable>
             {errors.category ? <Text style={[styles.fieldError, themed.fieldError]}>{errors.category}</Text> : null}
+
+            {/* "Type" — taxonomy leaf under the chosen root category. Only
+                rendered when the category actually has children; this is the
+                value the listings table stores as `subcategory`, which is
+                what subcategory browse pages filter on. */}
+            {pickerTaxonomy.subcategory.length > 0 ? (
+              <>
+                <View style={[styles.hairline, themed.hairline]} />
+                <AnimatedPressable
+                  style={styles.pickerRow}
+                  scaleValue={0.98}
+                  hapticFeedback="light"
+                  onPress={() => setPickerMode('Subcategory')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Select item type"
+                >
+                  <View style={styles.pickerRowInner}>
+                    <View style={styles.fieldLabelRow}>
+                      <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.subcategory')}</Text>
+                      {subcategory ? (
+                        <AppIcon name="verified" focused size={IconSize.micro} color="success" opticalCenter accessible={false} />
+                      ) : (
+                        <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.optional')}</Text>
+                      )}
+                    </View>
+                    <Text style={[styles.pickerValue, themed.pickerValue, !subcategory && styles.pickerPlaceholder, !subcategory && themed.pickerPlaceholder]}>
+                      {subcategory || t('listing.create.selectSubcategory')}
+                    </Text>
+                  </View>
+                  <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
+                </AnimatedPressable>
+              </>
+            ) : null}
             <View style={[styles.hairline, themed.hairline]} />
 
             <AnimatedPressable
