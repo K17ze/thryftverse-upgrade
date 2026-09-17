@@ -255,6 +255,10 @@ test('smart sell evaluate guards expiry and seller-away before binding', () => {
     'away sellers must not be bound by automation',
   );
   assert.ok(
+    smartSell.includes('getSellerReach'),
+    'suspended sellers must not be auto-bound — same SELLER_RESTRICTED gate as manual accept',
+  );
+  assert.ok(
     smartSell.includes('executeOfferAcceptance'),
     'smart sell accept must run the real durable transition',
   );
@@ -274,4 +278,46 @@ test('offer routes keep the hardened mutation contract', () => {
   assert.ok(routes.includes('OFFER_AUTHOR_CANNOT_ACCEPT'));
   // Deadlock/serialization conflicts surface as retryable 409s.
   assert.ok(routes.includes('OFFER_CONFLICT'));
+});
+
+test('accept idempotent replay only expires truly terminal reservations', () => {
+  const routes = repoSrc('routes/listingOffers.ts');
+  // A 'converted' or 'paid' reservation means checkout completed — the
+  // accept replay must return the bound checkout payload, not expire a
+  // paid order's offer. The whitelist must name the terminal statuses.
+  assert.ok(
+    routes.includes("['expired', 'cancelled', 'released'].includes(reservation.rows[0].status)"),
+    'replay self-heal must whitelist terminal reservation statuses, not blacklist active',
+  );
+});
+
+test('checkout sweep covers trigger-flipped offers and pending-offer lapses', () => {
+  const index = repoSrc('index.ts');
+  // Non-sweep cancel paths flip the bound offer via the reconcile trigger
+  // with no domain event — the sweep must emit offer.checkout_expired for
+  // them or the lapse is silent.
+  assert.ok(
+    index.includes("o.metadata->>'checkoutStatus' IN ('cancelled', 'payment_failed')"),
+    'sweep must find trigger-flipped offers missing their checkout_expired event',
+  );
+  // Pending offers that lapse with no mutation traffic must still notify —
+  // expireOverdueOffers + appendOfferExpiredEvents run inside the sweep.
+  assert.ok(
+    index.includes('expireOverdueOffers(client)') && index.includes('appendOfferExpiredEvents(client'),
+    'sweep must expire overdue pending offers and emit their events',
+  );
+});
+
+test('offer chat card emits ISO expiresAt, not raw Postgres text', () => {
+  const cards = repoSrc('lib/offerChatCards.ts');
+  // Raw expires_at::text ('2026-07-28 12:34:56.789+00') parses to NaN on
+  // Hermes — expired offers kept live Accept buttons on Android.
+  assert.ok(
+    cards.includes("TO_CHAR(o.expires_at AT TIME ZONE 'UTC'"),
+    'expiresAt must be formatted as ISO-8601 at the source',
+  );
+  assert.ok(
+    !cards.includes('o.expires_at::text'),
+    'raw Postgres ::text timestamp must not reach the card payload',
+  );
 });

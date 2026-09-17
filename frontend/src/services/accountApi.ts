@@ -114,17 +114,30 @@ export async function requestMyDataExport(): Promise<DataExportResult> {
 }
 
 /**
+ * OAuth re-authentication proof for passwordless (OAuth-only) accounts.
+ * The backend verifies `identityToken` against `auth_oauth_identities`.
+ */
+export interface DeleteAccountOauthProof {
+  provider: 'google' | 'apple';
+  identityToken: string;
+}
+
+/**
  * Permanently delete the account with server-side re-authentication.
  *
- * Sends the user's current password, the typed confirmation phrase ("DELETE"),
- * an optional departure reason, and — when 2FA is enabled — the current TOTP
- * code. The backend verifies all of these before performing GDPR erasure.
+ * Sends the typed confirmation phrase ("DELETE"), an optional departure
+ * reason, and — when 2FA is enabled — the current TOTP code. Identity is
+ * re-verified with the current password for credential accounts, or with a
+ * provider identity token (`oauth`) for OAuth-only accounts that have no
+ * password hash. The backend verifies all of these before performing GDPR
+ * erasure.
  */
 export async function requestAccountDeletion(
-  password: string,
+  password: string | undefined,
   confirmPhrase: string,
   reason?: string,
   totpCode?: string,
+  oauth?: DeleteAccountOauthProof,
 ): Promise<DeleteAccountResult> {
   const payload = await fetchJson<DeleteMyAccountResponse>('/users/me', {
     method: 'DELETE',
@@ -134,6 +147,7 @@ export async function requestAccountDeletion(
       password: password || undefined,
       confirmPhrase: confirmPhrase?.trim() || undefined,
       totpCode: totpCode?.trim() || undefined,
+      oauth: oauth ?? undefined,
     }),
   });
 
@@ -348,9 +362,20 @@ export interface ConnectedAccount {
   metadata: Record<string, unknown> | null;
 }
 
-export async function fetchConnectedAccounts(): Promise<ConnectedAccount[]> {
-  const payload = await fetchJson<{ ok: true; accounts: ConnectedAccount[] }>('/users/me/connected-accounts');
-  return payload.accounts;
+export interface ConnectedAccountsResult {
+  accounts: ConnectedAccount[];
+  /**
+   * Whether the account has an email/password credential. Sourced verbatim
+   * from the payload — `false` when the backend reports none (or omits the
+   * field on an older deploy) so the UI never claims a password exists when
+   * it may not.
+   */
+  hasPassword: boolean;
+}
+
+export async function fetchConnectedAccounts(): Promise<ConnectedAccountsResult> {
+  const payload = await fetchJson<{ ok: true; accounts: ConnectedAccount[]; hasPassword?: boolean }>('/users/me/connected-accounts');
+  return { accounts: payload.accounts ?? [], hasPassword: payload.hasPassword === true };
 }
 
 export async function unlinkConnectedAccount(id: string): Promise<void> {

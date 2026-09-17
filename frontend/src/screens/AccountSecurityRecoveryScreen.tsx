@@ -116,9 +116,10 @@ export default function AccountSecurityRecoveryScreen({ navigation, route }: Pro
       if (result.verified) {
         haptic.heavy();
         setPhase('restoring');
-        // Auto-proceed to restore
+        // Auto-proceed to restore — the single-use token proves the
+        // challenge was verified; session possession alone is insufficient.
         try {
-          const restoration = await restoreAccess(caseId);
+          const restoration = await restoreAccess(caseId, result.restoreToken);
           setIncident((prev) => prev ? {
             ...prev,
             state: restoration.state,

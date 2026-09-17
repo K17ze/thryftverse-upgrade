@@ -67,6 +67,7 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
   const { show } = useToast();
 
   const [accounts, setAccounts] = React.useState<ConnectedAccount[]>([]);
+  const [hasPassword, setHasPassword] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -84,7 +85,8 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
     try {
       setError(null);
       const data = await fetchConnectedAccounts();
-      setAccounts(data);
+      setAccounts(data.accounts);
+      setHasPassword(data.hasPassword);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load connected accounts');
     } finally {
@@ -158,10 +160,14 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
             title="Sign-in methods"
             description={`Manage the third-party accounts you use to sign in. Unlink an account as long as you have another way to access your ThryftVerse account.\n${accounts.length > 0 ? `${accounts.length} connected account${accounts.length !== 1 ? 's' : ''}` : 'Email and password'}`}
           >
+            {/* Email/password status is server-sourced (`hasPassword`). There
+                is no add-password route — ChangePassword requires a current
+                password — so the row renders truthful status text with no
+                dead CTA. */}
             <SettingsRow
               icon="mail"
               title="Email and password"
-              subtitle="Active"
+              subtitle={hasPassword ? 'Active' : 'Not set — add one'}
               isLast={accounts.length === 0}
             />
             {accounts.length === 0 ? (

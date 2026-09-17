@@ -1,7 +1,10 @@
 import React, { useCallback } from 'react';
-import { ActivityIndicator, RefreshControl, View } from 'react-native';
+import { ActivityIndicator, RefreshControl, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
 import { Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
+import { AnimatedPressable } from '../AnimatedPressable';
 import type { ThemeColors } from '../../theme/ThemeContext';
 import type { ListingApiItem } from '../../services/listingsApi';
 import type { SellerPromotion } from '../../services/promotionsApi';
@@ -32,6 +35,9 @@ export interface InventoryListProps {
   onRefresh: () => void;
   onEndReached: () => void;
   isLoadingMore: boolean;
+  /** Set when the last page fetch failed — the footer renders a retry row. */
+  loadMoreError?: string | null;
+  onRetryLoadMore?: () => void;
   selectionBarHeight: number;
 }
 
@@ -57,6 +63,8 @@ export function InventoryList({
   onRefresh,
   onEndReached,
   isLoadingMore,
+  loadMoreError,
+  onRetryLoadMore,
   selectionBarHeight }: InventoryListProps) {
   const renderItem = useCallback(({ item, index }: { item: ListingApiItem; index: number }) => (
     <InventoryRow
@@ -91,8 +99,31 @@ export function InventoryList({
       onEndReachedThreshold={0.5}
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.textMuted} />}
       ListFooterComponent={
-        <View style={{ height: selectionBarHeight || Space.xl, alignItems: 'center', justifyContent: 'center' }}>
-          {isLoadingMore ? <ActivityIndicator size="small" color={colors.textMuted} /> : null}
+        <View style={{ minHeight: selectionBarHeight || Space.xl, alignItems: 'center', justifyContent: 'center' }}>
+          {isLoadingMore ? (
+            <ActivityIndicator size="small" color={colors.textMuted} />
+          ) : loadMoreError ? (
+            <AnimatedPressable
+              onPress={onRetryLoadMore}
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading more listings"
+              hapticFeedback="light"
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: Space.xs,
+                paddingVertical: Space.xs,
+                paddingHorizontal: Space.md }}
+            >
+              <Ionicons name="alert-circle-outline" size={14} color={colors.textMuted} />
+              <Text style={{ fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, color: colors.textMuted }}>
+                {loadMoreError}
+              </Text>
+              <Text style={{ fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, color: colors.brand }}>
+                Retry
+              </Text>
+            </AnimatedPressable>
+          ) : null}
         </View>
       }
     />

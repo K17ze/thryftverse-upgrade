@@ -86,6 +86,25 @@ export function registerSearchRoutes({
     }
 
     const { q, category, condition, size, minPrice, maxPrice, limit, offset } = parsed.data;
+    const viewerUserId = request.authUser?.userId ?? null;
+
+    // Sellers blocked in either direction must not surface in results.
+    // Blocks change too fast to index, so we over-fetch and filter at read
+    // time — requesting extra rows keeps filtered pages full.
+    let excludedSellerIds: Set<string> | null = null;
+    if (viewerUserId) {
+      const blockedResult = await db.query<{ other_id: string }>(
+        `SELECT CASE WHEN blocker_id = $1 THEN blocked_id ELSE blocker_id END AS other_id
+         FROM user_blocks
+         WHERE blocker_id = $1 OR blocked_id = $1`,
+        [viewerUserId]
+      );
+      if (blockedResult.rows.length > 0) {
+        excludedSellerIds = new Set(blockedResult.rows.map((r) => r.other_id));
+      }
+    }
+
+    const fetchLimit = excludedSellerIds ? Math.min(limit + offset + 50, 200) : limit;
 
     const query: SearchQuery = {
       query: q,
@@ -96,13 +115,28 @@ export function registerSearchRoutes({
         minPrice,
         maxPrice,
       },
-      limit,
-      offset,
+      limit: fetchLimit,
+      offset: excludedSellerIds ? 0 : offset,
     };
 
     try {
       const adapter = createSearchAdapter();
-      const results = await adapter.search(query);
+      let results = await adapter.search(query);
+      if (excludedSellerIds && results.length > 0) {
+        // The index document carries no seller id — batch-resolve sellers
+        // for the candidate ids and drop blocked ones.
+        const sellerRows = await db.query<{ id: string; seller_id: string }>(
+          `SELECT id, seller_id FROM listings WHERE id = ANY($1::text[])`,
+          [results.map((r) => r.id)]
+        );
+        const sellerById = new Map(sellerRows.rows.map((r) => [r.id, r.seller_id]));
+        results = results
+          .filter((result) => {
+            const sellerId = sellerById.get(result.id);
+            return !sellerId || !excludedSellerIds!.has(sellerId);
+          })
+          .slice(offset, offset + limit);
+      }
       const info = adapter.retrievalInfo();
       const readiness = await checkEmbedderReadiness();
       const retrievalMeta: RetrievalMeta = {
@@ -191,20 +225,53 @@ export function registerSearchRoutes({
     }
 
     const { query, limit, filters } = parsed.data;
+    const viewerUserId = request.authUser?.userId ?? null;
+
+    // Same bidirectional block exclusion as lexical search — over-fetch
+    // and filter at read time since blocks aren't indexed.
+    let excludedSellerIds: Set<string> | null = null;
+    if (viewerUserId) {
+      const blockedResult = await db.query<{ other_id: string }>(
+        `SELECT CASE WHEN blocker_id = $1 THEN blocked_id ELSE blocker_id END AS other_id
+         FROM user_blocks
+         WHERE blocker_id = $1 OR blocked_id = $1`,
+        [viewerUserId]
+      );
+      if (blockedResult.rows.length > 0) {
+        excludedSellerIds = new Set(blockedResult.rows.map((r) => r.other_id));
+      }
+    }
 
     try {
       const adapter = createSearchAdapter();
       const info = adapter.retrievalInfo();
-      const { results, retrievalMeta } = await semanticSearch(query, { limit, filters });
+      const { results, retrievalMeta } = await semanticSearch(query, {
+        limit: excludedSellerIds ? Math.min(limit + 50, 200) : limit,
+        filters,
+      });
+      let visibleResults = results;
+      if (excludedSellerIds && results.length > 0) {
+        const sellerRows = await db.query<{ id: string; seller_id: string }>(
+          `SELECT id, seller_id FROM listings WHERE id = ANY($1::text[])`,
+          [results.map((r) => r.id)]
+        );
+        const sellerById = new Map(sellerRows.rows.map((r) => [r.id, r.seller_id]));
+        visibleResults = results
+          .filter((result) => {
+            const sellerId = sellerById.get(result.id);
+            return !sellerId || !excludedSellerIds!.has(sellerId);
+          })
+          .slice(0, limit);
+      }
       const readiness = await checkEmbedderReadiness();
       const serveMode = deriveServeMode(info.backend, readiness.ready, retrievalMeta.method);
       return {
         ok: true,
         query,
-        total: results.length,
+        total: visibleResults.length,
         retrievalMeta,
         serveMode,
-        items: results.map((result) => ({
+        items: visibleResults.map((result) => ({
           score: result.score,
           ...result.document,
         })),

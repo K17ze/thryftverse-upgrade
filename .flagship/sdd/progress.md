@@ -793,3 +793,46 @@ User-reported defect class: filter/sort behaved like "a different page" across e
 **Verification**: backend tsc clean, frontend tsc clean, frontend vitest 2077/2077 (113 files), backend targeted 62/62, eslint 0 errors on touched files.
 
 **Residual**: nine further `components/product/*` files have zero live consumers (`CuratedCollectionsRail`, `OfferToLikersSheet`, `ProductAttributeChips`, `ProductDescription`, `ProductDetailHeader`, `ProductErrorState`, `ProductFamilyBadge`, `ProductPolicySheet`, `SizeGuideSheet`, `SustainabilityBadge`, `PaginationDots` count≤1) — candidates for a dedicated dead-code sweep, left out of scope pending audit confirmation they aren't referenced via lazy/dynamic paths.
+
+## Wave AI — wallet integrity, account recovery, seller inventory, data rights (2026-09-17)
+
+**P0s:**
+- **Wallet convert idempotency**: `/wallet/convert-1ze-to-fiat` now saves the idempotent response INSIDE the mutation transaction (mirroring buy-1ze) — a post-commit failure can no longer leave a committed conversion without its idempotency record. Response built from the in-tx reloaded wallet.
+- **Account recovery is proof-backed**: challenge create is factor-aware with real delivery (sendAuthEmail/sendSms/TOTP/passkey step-up — no more log-only OTPs); verify mints a single-use Redis restore token consumed on `/incidents/:id/restore`; `completeRecovery` receives explicit proof; session-only restore is gone. Frontend threads `restoreToken` through `accountSecurityApi` + recovery screen.
+
+**P1s:**
+- **Convert contract**: preview + execution both emit `netFiatAmount`/`rateUsed` (kills `£NaN` on review/receipt).
+- **Transaction leaks**: explicit ROLLBACK on every early return after BEGIN — convert/buy-1ze insufficient-balance (mapped to `createApiError` + 400 status mapping preserved) and order ship/deliver (missing order, unauthorized actor, invalid status, missing tracking).
+- **Stripe webhook dedup**: `webhook_events` event-id insert moved inside the processing transaction — a processing failure rolls back the marker so Stripe retries reprocess; duplicates still answer 200 `{ok:true, duplicate:true}`.
+- **Seller inventory pagination**: `/users/:id/listings` honors `cursor` (keyset `(created_at, id)`, base64url) and emits `nextCursor`; engagement aggregates batched per page. Frontend `loadMoreError`/`retryLoadMore` on inventory + seller auction centre.
+- **Edit-listing optimistic concurrency**: PATCH accepts `expectedUpdatedAt`, enforces `WHERE updated_at = $n`, emits `updatedAt`, returns 409 on stale edits; frontend surfaces "edited elsewhere — reload" via `listing.edit.editedElsewhere`.
+- **Price-adjust canonical**: routed through `applyListingFieldPatch` (status gate, locked write, events, alerts/index invalidation); same-price pre-check preserved.
+- **Protected-change holds**: `protected_change_hold_active` enforced on phone/password/TOTP/passkey/connected-account mutations via `accountTakeoverService` helper; recovery paths exempt.
+- **Checkout honesty**: fabricated zero balance → error state; withdrawal "on its way" copy → honest requested state (wallet frontend agent).
+- **Connected-accounts truth**: `GET /users/me/connected-accounts` emits `hasPassword`; UI shows "Active"/"Not set" honestly, no dead add-password CTA.
+- **OAuth-only deletion**: `DELETE /users/me` accepts `oauth:{provider,identityToken}` verified against `auth_oauth_identities` when no `password_hash` exists (`OAUTH_REAUTH_REQUIRED` otherwise); DeleteAccountScreen renders provider re-auth buttons with session-free token acquisition, honest support dead-end, verified/change state.
+- **Data rights completeness**: export (sync route + async `dsarExportHandler`) now covers listings, own chat messages, wallet ledger + 1ZE ops, payout requests, reviews, saved listings/searches, follows, blocks, notification + email prefs. Erasure additionally deletes/anonymizes `auth_oauth_identities`, `user_connected_accounts`, `user_passkeys`, `passkey_challenges`, `user_privacy_consents`, `user_email_preferences`, `notification_preferences`, `user_blocks`, `user_relationship_states`, `user_follows`, `user_saved_listings`, `saved_searches`, and session user-agent/IP residue.
+- **Appeal idempotency**: migration `315_seller_standards_appeals` replaces per-request DDL; unique open-appeal dedupe.
+
+**P2s:**
+- **Payout 23505**: concurrent same-key payout requests replay the winner (or 409 on hash mismatch) instead of 500.
+- **P2P lock ordering**: `recordIzeTransfer` ensures both IZE ledger accounts in sorted user-id order — opposite-direction transfers can't deadlock.
+- **Address default-flip**: create wrapped in a tx with user-row serialization — failed inserts can't orphan the default flag; concurrent creates can't both default.
+- **Search/feed block leaks**: bidirectional `user_blocks` exclusion — feed moved in-SQL (was post-LIMIT single-direction, shrinking pages); lexical + semantic search over-fetch and batch-resolve seller ids to filter.
+
+**Verification**: backend tsc clean, frontend tsc clean, backend targeted 18/18 (wallet/payout/stripe), eslint 0 errors on touched files.
+
+**Deferred**: "withdraw key rotation" P2 — ambiguous in audit summary, needs the original audit detail to implement safely.
+
+## Wave AI verification pass — six residual offer P1s closed (2026-09-17)
+
+Post-implementation audit (subagent verification) found six P1s in the offers wave; all fixed and covered:
+
+- **Accept replay on converted reservation** (`listingOffers.ts`): `status !== 'active'` treated a PAID order's `converted`/`paid` reservation as lapsed — a retried accept flipped the offer to expired, emitted a false `checkout_expired`, and returned 410. Now whitelists terminal statuses (`expired`/`cancelled`/`released`); `converted`/`paid` replays the bound checkout.
+- **Trigger-flipped offers silent**: non-sweep cancel paths (checkout PATCH, payment intents, lazy reclaim, order cancel, payment-failure compensation) flip the bound offer via the `reconcile_listing_checkout_from_order` trigger with no domain event. `sweepExpiredCheckoutReservations` gained a second pass emitting deduped `offer.checkout_expired` for offers whose `metadata.checkoutStatus` is `cancelled`/`payment_failed` without a matching outbox row.
+- **Smart Sell bypassed SELLER_RESTRICTED**: evaluate now checks `getSellerReach === 'suspended'` before ANY decision (also blocks countering); stale comment claiming Smart Sell routes through the manual accept gate corrected.
+- **Seller-authored counters un-withdrawable**: `resolveOfferActions` now returns `['decline']` for `isSeller && ownMove` (server's only check is `seller_id === actor`); "Withdraw" copy via `offers.action.withdraw` + `offers.confirm.withdrawTitle/Body`; chat card gained `onWithdraw`/`withdrawLabel`/`waitingLabel`/`viewerAuthoredPending` — author-side retract renders inside the waiting row, and a counter on a buyer-authored card can't surface self-accept buttons.
+- **Chat card expiresAt NaN on Hermes**: backend emits ISO-8601 via `TO_CHAR(... AT TIME ZONE 'UTC')` instead of raw `::text`; `chatApi` boundary normalizes legacy stored payloads through `parseServerDate`. Expired offers no longer keep live Accept buttons on Android.
+- **Pending offers lapsing silently**: `expireOverdueOffers` + `appendOfferExpiredEvents` exported and run inside the 60s in-process sweep — `/offers/sweep-expired` external-cron dependency removed for the notify path.
+
+**Regression**: `offerLifecycleTransitions.test.ts` extended to 11/11 (converted-replay whitelist, sweep second pass + pending expiry, sellerReach gate, ISO expiresAt). Backend + frontend tsc clean; eslint 0 errors.

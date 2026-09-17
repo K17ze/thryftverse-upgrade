@@ -174,9 +174,14 @@ export async function createRecoveryChallenge(
 export async function verifyRecoveryChallenge(
   caseId: string,
   challengeId: string,
-  proof: string,
-): Promise<{ verified: boolean; nextAction: { label: string; route: string } }> {
-  const payload = await fetchJson<{ ok: true; verified: boolean; nextAction: { label: string; route: string } }>(
+  proof: string | Record<string, unknown>,
+): Promise<{ verified: boolean; restoreToken: string; nextAction: { label: string; route: string } }> {
+  const payload = await fetchJson<{
+    ok: true;
+    verified: boolean;
+    restoreToken: string;
+    nextAction: { label: string; route: string };
+  }>(
     `/account-security/recovery/${encodeURIComponent(caseId)}/challenges/${encodeURIComponent(challengeId)}/verify`,
     {
       method: 'POST',
@@ -184,7 +189,7 @@ export async function verifyRecoveryChallenge(
       body: JSON.stringify({ proof }),
     },
   );
-  return { verified: payload.verified, nextAction: payload.nextAction };
+  return { verified: payload.verified, restoreToken: payload.restoreToken, nextAction: payload.nextAction };
 }
 
 // ---------------------------------------------------------------------------
@@ -202,10 +207,14 @@ export interface RestoreResult {
   };
 }
 
-export async function restoreAccess(caseId: string): Promise<RestoreResult> {
+export async function restoreAccess(caseId: string, restoreToken: string): Promise<RestoreResult> {
   const payload = await fetchJson<{ ok: true; restoration: RestoreResult }>(
     `/account-security/incidents/${encodeURIComponent(caseId)}/restore`,
-    { method: 'POST' },
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ restoreToken }),
+    },
   );
   return payload.restoration;
 }

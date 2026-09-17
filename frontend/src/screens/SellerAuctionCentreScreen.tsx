@@ -52,9 +52,10 @@ export default function SellerAuctionCentreScreen() {
     error,
     cursor,
     loadingMore,
+    loadMoreError,
     fetchAuctions,
     handleRefresh,
-    handleLoadMore } = useSellerAuctionCentreData();
+    retryLoadMore } = useSellerAuctionCentreData();
 
   const { listRef, tabScrollRef, tabLayoutsRef, handleTabPress } =
     useSellerAuctionTabScroll(activeTab, setActiveTab);
@@ -158,10 +159,11 @@ export default function SellerAuctionCentreScreen() {
     return (
       <SellerAuctionLoadMore
         loadingMore={loadingMore}
-        onPress={() => void handleLoadMore()}
+        loadMoreError={loadMoreError}
+        onPress={retryLoadMore}
       />
     );
-  }, [cursor, loading, loadingMore, handleLoadMore]);
+  }, [cursor, loading, loadingMore, loadMoreError, retryLoadMore]);
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>

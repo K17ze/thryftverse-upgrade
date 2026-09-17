@@ -33,7 +33,9 @@ export function effectiveOfferStatus(offer: ListingOffer, nowMs: number): Listin
  *     the seller accepts a buyer's offer; the buyer accepts a seller's
  *     counter (`offered_by_user_id !== actor` is the server's own check).
  *   - Only the seller can decline; only the buyer can cancel — cancel is
- *     the buyer's exit whether or not the pending offer is theirs.
+ *     the buyer's exit whether or not the pending offer is theirs. Decline
+ *     on the seller's OWN pending counter retracts it (the server's only
+ *     check is `seller_id === actor`).
  *   - Either participant can counter, but only when the pending offer was
  *     made by the OTHER party.
  */
@@ -50,6 +52,7 @@ export function resolveOfferActions(
   if (isSeller && !ownMove) return ['accept', 'counter', 'decline'];
   if (isBuyer && !ownMove) return ['accept', 'counter', 'cancel'];
   if (isBuyer && ownMove) return ['cancel'];
+  if (isSeller && ownMove) return ['decline'];
   return [];
 }
 
@@ -71,14 +74,15 @@ export interface OfferRowProps {
   onAction: (offer: ListingOffer, action: OfferRowAction) => void;
 }
 
-function actionLabel(action: OfferRowAction): string {
+function actionLabel(action: OfferRowAction, ownMove: boolean): string {
   switch (action) {
     case 'accept':
       return t('offers.action.accept');
     case 'counter':
       return t('offers.action.counter');
     case 'decline':
-      return t('offers.action.decline');
+      // Retracting your own counter is a withdrawal, not a rejection.
+      return ownMove ? t('offers.action.withdraw') : t('offers.action.decline');
     case 'cancel':
       return t('offers.action.cancel');
   }
@@ -108,6 +112,7 @@ export function OfferRow({
   const status = effectiveOfferStatus(offer, nowMs);
   const tone = statusTone(status, colors);
   const actions = resolveOfferActions(offer, currentUserId, nowMs);
+  const ownMove = offer.offeredByUserId === currentUserId;
   const amount = formatFromFiat(offer.offerPriceGbp, 'GBP', { displayMode: 'fiat' });
   const counterpartyWord = direction === 'received' ? t('offers.row.from') : t('offers.row.to');
   const timeLeft = status === 'pending' ? formatTimeLeft(offer.expiresAt, nowMs) : null;
@@ -171,7 +176,7 @@ export function OfferRow({
               onPress={() => onAction(offer, action)}
               disabled={isActing}
               accessibilityRole="button"
-              accessibilityLabel={`${actionLabel(action)} — ${listingTitle ?? t('offers.row.listingFallback')}, ${amount}`}
+              accessibilityLabel={`${actionLabel(action, ownMove)} — ${listingTitle ?? t('offers.row.listingFallback')}, ${amount}`}
               accessibilityState={{ disabled: isActing, busy: isActing }}
             >
               <Text
@@ -182,7 +187,7 @@ export function OfferRow({
                   (action === 'decline' || action === 'cancel') && { color: colors.textSecondary },
                 ]}
               >
-                {actionLabel(action)}
+                {actionLabel(action, ownMove)}
               </Text>
             </Pressable>
           ))}

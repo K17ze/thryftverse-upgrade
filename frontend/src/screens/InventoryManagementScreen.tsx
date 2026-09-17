@@ -59,11 +59,13 @@ export default function InventoryManagementScreen({ navigation }: Props) {
     isLoading,
     isRefreshing,
     isLoadingMore,
+    loadMoreError,
     isOffline,
     error,
     summary,
     load,
     loadMore,
+    retryLoadMore,
     onRefresh } = useInventoryData();
 
   const {
@@ -260,6 +262,8 @@ export default function InventoryManagementScreen({ navigation }: Props) {
             }}
             onEndReached={loadMore}
             isLoadingMore={isLoadingMore}
+            loadMoreError={loadMoreError}
+            onRetryLoadMore={retryLoadMore}
             selectionBarHeight={selectionMode ? 80 : 0}
           />
         )}

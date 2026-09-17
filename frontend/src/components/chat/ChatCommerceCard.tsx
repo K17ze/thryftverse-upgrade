@@ -238,6 +238,23 @@ export function ChatCommerceCard({
     const viewerIsOfferBuyer = msg.offer?.buyerId
       ? msg.offer.buyerId === currentUserId
       : false;
+    // Author-side retract: the pending offer/counter was authored by the
+    // viewer — a buyer cancels their offer, a seller withdraws their
+    // counter (the decline route is seller-only server-side). Authoring is
+    // read from offeredByUserId, not message sender: the card message
+    // keeps the original sender when a counter lands.
+    const viewerIsOfferAuthor = msg.offer?.offeredByUserId
+      ? msg.offer.offeredByUserId === currentUserId
+      : isMe;
+    const withdrawAction = viewerIsOfferAuthor
+      ? (viewerIsOfferBuyer ? () => onCancelOffer(msg.id) : () => onDeclineOffer(msg.id))
+      : undefined;
+    const withdrawActionLabel = viewerIsOfferBuyer
+      ? t('offers.action.cancel')
+      : t('offers.action.withdraw');
+    const waitingLabel = viewerIsOfferBuyer
+      ? t('offers.waiting.forSeller')
+      : t('offers.waiting.forBuyer');
     return (
       <View
         key={msg.id}
@@ -268,6 +285,10 @@ export function ChatCommerceCard({
           onAccept={() => onAcceptOffer(msg.id)}
           onDecline={viewerIsOfferBuyer ? () => onCancelOffer(msg.id) : () => onDeclineOffer(msg.id)}
           declineLabel={viewerIsOfferBuyer ? t('offers.action.cancel') : undefined}
+          onWithdraw={withdrawAction}
+          withdrawLabel={withdrawActionLabel}
+          waitingLabel={waitingLabel}
+          viewerAuthoredPending={viewerIsOfferAuthor}
           onCounter={() => onCounterOffer(msg.id, msg.offer?.price, msg.offer?.originalPrice)}
           onExpire={() => onOfferExpired(msg.id)}
         />

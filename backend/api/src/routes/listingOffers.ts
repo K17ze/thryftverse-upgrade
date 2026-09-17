@@ -129,7 +129,7 @@ type ExpiredOfferRow = {
  * that transitioned so the caller can append `offer.expired` domain events
  * inside the same transaction — the outbox then drives notifications.
  */
-async function expireOverdueOffers(
+export async function expireOverdueOffers(
   client: { query: Pool['query'] },
 ): Promise<ExpiredOfferRow[]> {
   const result = await client.query<ExpiredOfferRow>(
@@ -215,7 +215,7 @@ async function expireOfferInTransaction(
  * derived from the offer id, so each event is appended exactly once even if
  * the caller transaction is retried.
  */
-async function appendOfferExpiredEvents(
+export async function appendOfferExpiredEvents(
   client: { query: Pool['query'] },
   expiredOffers: ExpiredOfferRow[],
   correlationId: string | null,
@@ -1021,7 +1021,13 @@ export const registerListingOfferRoutes = ({
         // path the sweep doesn't re-scan leaves this offer stuck on
         // 'accepted' — converge it here with the same durable event so
         // chat cards and notifications fire.
-        if (reservation.rowCount && reservation.rows[0].status !== 'active') {
+        // 'converted' is NOT terminal for the offer: it means checkout
+        // completed and the order was paid — the offer stays 'accepted'
+        // and the replay below returns the bound checkout payload.
+        if (
+          reservation.rowCount
+          && ['expired', 'cancelled', 'released'].includes(reservation.rows[0].status)
+        ) {
           await client.query(
             `UPDATE listing_offers
              SET status = 'expired', expired_at = COALESCE(expired_at, NOW()),
@@ -1138,8 +1144,8 @@ export const registerListingOfferRoutes = ({
       // pay the seller, so a suspended seller's offer can never convert.
       // Gated for both actors: unlike sellerAway there is no "demonstrably
       // active" exemption — the restriction is on the seller's ability to
-      // sell, not their presence in the app. This also covers Smart Sell
-      // auto-accept, which routes through this endpoint.
+      // sell, not their presence in the app. Smart Sell enforces the same
+      // gate itself in the evaluate endpoint before any decision.
       const acceptSellerReach = await getSellerReach(client, offer.seller_id);
       if (acceptSellerReach?.state === 'suspended') {
         await client.query('ROLLBACK');

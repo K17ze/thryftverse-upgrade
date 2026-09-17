@@ -38,6 +38,7 @@ import {
 } from '../lib/totp.js';
 import { resolveClientIp } from '../lib/compliance.js';
 import { checkFraudNonBlocking } from '../lib/fraudDetection.js';
+import { isProtectedChangeHoldActive } from '../lib/accountTakeoverService.js';
 import { recordUserSignup } from '../lib/metrics.js';
 import {
   evaluateRisk,
@@ -994,6 +995,18 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService, ipReput
         };
       }
 
+      // ATO hold: MFA enrolment is a protected change while a compromise
+      // case is active — an attacker-held session must not bind a new
+      // factor that locks the owner out.
+      if (await isProtectedChangeHoldActive(request.authUser.userId)) {
+        reply.code(423);
+        return {
+          ok: false,
+          error: 'Account recovery is in progress — security changes are temporarily locked',
+          code: 'PROTECTED_CHANGE_HELD',
+        };
+      }
+
       const existingFactor = await loadTotpFactor(db, user.id, false);
       const hasEnabledFactor = user.two_factor_enabled || (existingFactor?.enabled ?? false);
 
@@ -1133,6 +1146,15 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService, ipReput
         };
       }
 
+      if (await isProtectedChangeHoldActive(request.authUser.userId)) {
+        reply.code(423);
+        return {
+          ok: false,
+          error: 'Account recovery is in progress — security changes are temporarily locked',
+          code: 'PROTECTED_CHANGE_HELD',
+        };
+      }
+
       const bodySchema = z.object({
         code: z.string().trim().min(4).max(12),
       });
@@ -1230,6 +1252,15 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService, ipReput
       return {
         ok: false,
         error: 'Unauthorized',
+      };
+    }
+
+    if (await isProtectedChangeHoldActive(request.authUser.userId)) {
+      reply.code(423);
+      return {
+        ok: false,
+        error: 'Account recovery is in progress — security changes are temporarily locked',
+        code: 'PROTECTED_CHANGE_HELD',
       };
     }
 
@@ -2270,6 +2301,17 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService, ipReput
         return { ok: false, error: 'Unauthorized' };
       }
 
+      // ATO hold: password is a recovery channel — an attacker-held session
+      // must not rotate it while a compromise case is active.
+      if (await isProtectedChangeHoldActive(request.authUser.userId)) {
+        reply.code(423);
+        return {
+          ok: false,
+          error: 'Account recovery is in progress — security changes are temporarily locked',
+          code: 'PROTECTED_CHANGE_HELD',
+        };
+      }
+
       const bodySchema = z.object({
         currentPassword: z.string().min(1).max(128),
         newPassword: z.string().min(8).max(128),
@@ -2551,6 +2593,15 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService, ipReput
       return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
     }
 
+    if (await isProtectedChangeHoldActive(authUser.userId)) {
+      reply.code(423);
+      return {
+        ok: false,
+        error: 'Account recovery is in progress — security changes are temporarily locked',
+        code: 'PROTECTED_CHANGE_HELD',
+      };
+    }
+
     try {
       // Fetch user email for the registration options
       const userResult = await db.query(
@@ -2808,6 +2859,15 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService, ipReput
     if (!authUser) {
       reply.code(401);
       return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+    }
+
+    if (await isProtectedChangeHoldActive(authUser.userId)) {
+      reply.code(423);
+      return {
+        ok: false,
+        error: 'Account recovery is in progress — security changes are temporarily locked',
+        code: 'PROTECTED_CHANGE_HELD',
+      };
     }
 
     const { credentialId } = request.params as { credentialId: string };

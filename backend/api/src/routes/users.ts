@@ -8,6 +8,7 @@ import { isUserOnline, markPresenceHidden, unmarkPresenceHidden } from '../lib/p
 import { publishPresenceTransition } from './realtime.js';
 import { logger } from '../lib/logger.js';
 import { recordConsumerReport } from '../lib/safetyCaseService.js';
+import { isProtectedChangeHoldActive } from '../lib/accountTakeoverService.js';
 import {
   loadListingMedia,
   listingImageUrls,
@@ -300,6 +301,16 @@ app.patch('/users/me', async (request, reply) => {
   if (payload.isAiCreator !== undefined) allowed.is_ai_creator = payload.isAiCreator;
   if (payload.location !== undefined) allowed.location = payload.location;
   if (payload.website !== undefined) allowed.website = payload.website;
+  // Phone is a recovery channel — a protected-change hold (active
+  // compromise case) must refuse the write, not just record it.
+  if (payload.phone !== undefined && await isProtectedChangeHoldActive(request.authUser.userId)) {
+    reply.code(423);
+    return {
+      ok: false,
+      error: 'Account recovery is in progress — contact-detail changes are temporarily locked',
+      code: 'PROTECTED_CHANGE_HELD',
+    };
+  }
   if (payload.phone !== undefined) allowed.phone = payload.phone;
   if (resolvedAvatarUrl !== undefined) allowed.avatar = resolvedAvatarUrl;
   if (resolvedCoverUrl !== undefined) allowed.cover_photo = resolvedCoverUrl;
@@ -1184,22 +1195,31 @@ app.get('/users/me/connected-accounts', async (request, reply) => {
     return { ok: false, error: 'Unauthorized' };
   }
 
-  const result = await db.query<{
-    id: string;
-    provider: string;
-    provider_email: string | null;
-    linked_at: string;
-    metadata: Record<string, unknown> | null;
-  }>(
-    `SELECT id, provider, provider_email, linked_at, metadata
-     FROM user_connected_accounts
-     WHERE user_id = $1 AND unlinked_at IS NULL
-     ORDER BY linked_at ASC`,
-    [request.authUser.userId]
-  );
+  const [result, passwordRow] = await Promise.all([
+    db.query<{
+      id: string;
+      provider: string;
+      provider_email: string | null;
+      linked_at: string;
+      metadata: Record<string, unknown> | null;
+    }>(
+      `SELECT id, provider, provider_email, linked_at, metadata
+       FROM user_connected_accounts
+       WHERE user_id = $1 AND unlinked_at IS NULL
+       ORDER BY linked_at ASC`,
+      [request.authUser.userId]
+    ),
+    // The client needs to know whether password auth exists — OAuth-only
+    // accounts must not be told "Email and password — Active".
+    db.query<{ password_hash: string | null }>(
+      'SELECT password_hash FROM users WHERE id = $1',
+      [request.authUser.userId]
+    ),
+  ]);
 
   return {
     ok: true,
+    hasPassword: passwordRow.rows[0]?.password_hash != null,
     accounts: result.rows.map((row) => ({
       id: row.id,
       provider: row.provider,
@@ -1219,6 +1239,17 @@ app.delete('/users/me/connected-accounts/:id', async (request, reply) => {
 
   const paramsSchema = z.object({ id: z.string().min(1) });
   const { id } = paramsSchema.parse(request.params);
+
+  // ATO hold: unlinking an auth method is a protected change while a
+  // compromise case is active.
+  if (await isProtectedChangeHoldActive(request.authUser.userId)) {
+    reply.code(423);
+    return {
+      ok: false,
+      error: 'Account recovery is in progress — security changes are temporarily locked',
+      code: 'PROTECTED_CHANGE_HELD',
+    };
+  }
 
   // Check the user has another auth method (password or another connected account)
   const userResult = await db.query<{ password_hash: string | null }>(

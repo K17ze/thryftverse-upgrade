@@ -5,6 +5,7 @@ import { queryKeys } from '../../platform/server/queryKeys';
 import { useToast } from '../../context/ToastContext';
 import { useBackendData } from '../../context/BackendDataContext';
 import { patchListingOnApi, createListingImageOnApi } from '../../services/listingsApi';
+import { ApiRequestError } from '../../lib/apiClient';
 import type { MediaUploadQueue } from '../../services/mediaUploadQueue';
 import type { ListingMediaDraftItem } from '../../utils/mediaUploadAsset';
 import { sanitizeDecimalInput } from '../../utils/currencyAuthoringFlows';
@@ -20,6 +21,12 @@ import { t } from '../../i18n';
 interface UseEditListingSaveParams {
   itemId: string;
   isOwner: boolean;
+  /**
+   * `updatedAt` read when the listing was loaded — sent as
+   * `expectedUpdatedAt` so the backend can reject the write (409) when the
+   * listing was edited elsewhere in the meantime.
+   */
+  expectedUpdatedAt: string | null;
   values: EditListingFieldValues;
   mediaItems: ListingMediaDraftItem[];
   removedRemoteIds: string[];
@@ -39,6 +46,7 @@ interface UseEditListingSaveParams {
 export function useEditListingSave({
   itemId,
   isOwner,
+  expectedUpdatedAt,
   values,
   mediaItems,
   removedRemoteIds,
@@ -171,7 +179,8 @@ export function useEditListingSave({
         coverFinalizationId,
         attachmentOrder,
         removedAttachmentIds: removedRemoteIds.length > 0 ? removedRemoteIds : undefined,
-        coverMediaId: coverMediaId ?? null });
+        coverMediaId: coverMediaId ?? null,
+        expectedUpdatedAt: expectedUpdatedAt ?? undefined });
 
       // Results are synced into state and attachments are created — drop
       // the queue snapshot so nothing leaks into a future save.
@@ -189,13 +198,19 @@ export function useEditListingSave({
       }
       navigation.goBack();
     } catch (e) {
+      // 409 — the listing's `updatedAt` moved on since this form was loaded:
+      // another device/session edited it. Surface an honest conflict state
+      // instead of a generic failure so the user reloads rather than
+      // overwriting someone else's changes on retry.
+      const isConflict = e instanceof ApiRequestError && e.status === 409;
+      const message = isConflict ? t('listing.edit.editedElsewhere') : t('listing.edit.updateFailed');
       setSaveStage('failed_recoverable');
-      setErrorMsg(t('listing.edit.updateFailed'));
-      showToast(t('listing.edit.updateFailed'), 'error');
+      setErrorMsg(message);
+      showToast(message, 'error');
     } finally {
       setIsSaving(false);
     }
-  }, [validate, isOwner, itemId, title, description, price, brand, size, condition, category, originalPrice, shippingMethod, shippingPayer, mediaItems, removedRemoteIds, setErrorMsg, setMediaItems, uploadQueueRef, showToast, navigation, queryClient, refreshListings, currentUser?.id]);
+  }, [validate, isOwner, itemId, expectedUpdatedAt, title, description, price, brand, size, condition, category, originalPrice, shippingMethod, shippingPayer, mediaItems, removedRemoteIds, setErrorMsg, setMediaItems, uploadQueueRef, showToast, navigation, queryClient, refreshListings, currentUser?.id]);
 
   return { isSaving, saveStage, handleSave };
 }

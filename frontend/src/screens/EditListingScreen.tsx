@@ -80,6 +80,7 @@ export default function EditListingScreen() {
   const { isSaving, saveStage, handleSave } = useEditListingSave({
     itemId,
     isOwner: derived.isOwner,
+    expectedUpdatedAt: listing?.updatedAt ?? null,
     values: form.values,
     mediaItems: media.mediaItems,
     removedRemoteIds: media.removedRemoteIds,

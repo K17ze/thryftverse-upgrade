@@ -22,9 +22,14 @@ export interface UseSellerAuctionCentreDataResult {
   error: string | null;
   cursor: string | null;
   loadingMore: boolean;
+  /** Set when a load-more page fetch fails — the footer renders a retry row
+   *  instead of silently swallowing the failure. */
+  loadMoreError: string | null;
   fetchAuctions: (isRefresh: boolean) => Promise<void>;
   handleRefresh: () => void;
   handleLoadMore: () => Promise<void>;
+  /** Clears the pagination error and retries the next page. */
+  retryLoadMore: () => void;
 }
 
 export function useSellerAuctionCentreData(): UseSellerAuctionCentreDataResult {
@@ -35,6 +40,7 @@ export function useSellerAuctionCentreData(): UseSellerAuctionCentreDataResult {
   const [error, setError] = React.useState<string | null>(null);
   const [cursor, setCursor] = React.useState<string | null>(null);
   const [loadingMore, setLoadingMore] = React.useState(false);
+  const [loadMoreError, setLoadMoreError] = React.useState<string | null>(null);
 
   const requestIdRef = useRef(0);
 
@@ -47,6 +53,8 @@ export function useSellerAuctionCentreData(): UseSellerAuctionCentreDataResult {
       if (reqId !== requestIdRef.current) return;
       setAllItems(result.items.map(toViewModel));
       setCursor(result.nextCursor);
+      // A successful fresh page supersedes any stale pagination error.
+      setLoadMoreError(null);
     } catch {
       if (reqId === requestIdRef.current) {
         setError('Unable to load your auctions');
@@ -119,6 +127,7 @@ export function useSellerAuctionCentreData(): UseSellerAuctionCentreDataResult {
   const handleLoadMore = React.useCallback(async () => {
     if (!cursor || loadingMore) return;
     setLoadingMore(true);
+    setLoadMoreError(null);
     try {
       const result = await listAuctions({ seller: 'me', status: 'all', sort: 'endingSoon', cursor, limit: 50 });
       setAllItems((prev) => {
@@ -128,11 +137,17 @@ export function useSellerAuctionCentreData(): UseSellerAuctionCentreDataResult {
       });
       setCursor(result.nextCursor);
     } catch {
-      // silent
+      // Non-fatal — the footer renders a retry row so the failure is visible
+      // and recoverable without a pull-to-refresh.
+      setLoadMoreError('Unable to load more auctions');
     } finally {
       setLoadingMore(false);
     }
   }, [cursor, loadingMore]);
+
+  const retryLoadMore = React.useCallback(() => {
+    void handleLoadMore();
+  }, [handleLoadMore]);
 
   return {
     activeTab,
@@ -145,7 +160,9 @@ export function useSellerAuctionCentreData(): UseSellerAuctionCentreDataResult {
     error,
     cursor,
     loadingMore,
+    loadMoreError,
     fetchAuctions,
     handleRefresh,
-    handleLoadMore };
+    handleLoadMore,
+    retryLoadMore };
 }

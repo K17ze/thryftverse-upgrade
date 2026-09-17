@@ -106,7 +106,8 @@ async function loadOfferRow(
   const result = await queryable.query<OfferRow>(
     `SELECT o.id, o.listing_id, o.buyer_id, o.seller_id,
             o.offer_price_gbp::text, o.original_price_gbp::text,
-            o.counter_round, o.status, o.expires_at::text,
+            o.counter_round, o.status,
+            TO_CHAR(o.expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS expires_at,
             o.conversation_id, o.offered_by_user_id,
             l.title AS item_title
      FROM listing_offers o

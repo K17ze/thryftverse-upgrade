@@ -18,12 +18,15 @@ export function useCheckoutData({
   const [useBalance, setUseBalance] = useState(false);
   const [useOnezePayment, setUseOnezePayment] = useState(false);
   const [balanceLoading, setBalanceLoading] = useState(false);
+  const [balanceError, setBalanceError] = useState<string | null>(null);
+  const [balanceReloadNonce, setBalanceReloadNonce] = useState(0);
 
   // Fetch wallet and 1ZE balance
   useEffect(() => {
     if (!currentUserId) return;
     let cancelled = false;
     setBalanceLoading(true);
+    setBalanceError(null);
     getIzePosition(currentUserId, 'GBP')
       .then((position) => {
         if (!cancelled) {
@@ -33,8 +36,11 @@ export function useCheckoutData({
       })
       .catch(() => {
         if (!cancelled) {
-          setWalletBalance(0);
-          setOnezeBalance(0);
+          // Honest failure — a fabricated 0 would render a false "0 1ZE
+          // available" and hide real spendable funds. The screen shows an
+          // error + retry row instead. Mirrors useWithdrawData /
+          // useConvertData.
+          setBalanceError('We could not load your wallet balance.');
         }
       })
       .finally(() => {
@@ -43,7 +49,7 @@ export function useCheckoutData({
     return () => {
       cancelled = true;
     };
-  }, [currentUserId]);
+  }, [currentUserId, balanceReloadNonce]);
 
   return {
     walletBalance,
@@ -53,5 +59,7 @@ export function useCheckoutData({
     useOnezePayment,
     setUseOnezePayment,
     balanceLoading,
+    balanceError,
+    reloadBalance: () => setBalanceReloadNonce((n) => n + 1),
   };
 }

@@ -6,6 +6,7 @@ import { appendDomainEvent } from '../lib/domainOutbox.js';
 import { emitOrderCommerceCard } from '../lib/orderChatCards.js';
 import { executeOfferAcceptance } from '../lib/offerAcceptance.js';
 import { fetchSellerAwayState } from '../lib/sellerAway.js';
+import { getSellerReach } from '../lib/sellerReach.js';
 
 type SmartSellPolicyRouteDependencies = {
   app: FastifyInstance;
@@ -677,6 +678,16 @@ export const registerSmartSellPolicyRoutes = ({
       if (sellerAway.away) {
         await client.query('ROLLBACK');
         return { ok: true, skipped: true, reason: 'Seller is away — policy not evaluated' };
+      }
+
+      // Same SELLER_RESTRICTED gate the manual accept route enforces: a
+      // seller suspended after the offer was created must not be auto-bound
+      // by their policy. Unlike the away check this blocks ALL decisions,
+      // not just accept — a suspended seller shouldn't be countering either.
+      const sellerReach = await getSellerReach(client, offer.seller_id);
+      if (sellerReach?.state === 'suspended') {
+        await client.query('ROLLBACK');
+        return { ok: true, skipped: true, reason: 'Seller is suspended — policy not evaluated' };
       }
 
       // Check for an existing decision for this offer (idempotency).

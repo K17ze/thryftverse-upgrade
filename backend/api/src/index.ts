@@ -342,7 +342,11 @@ import {
   evaluateSavedSearchAlertsForListing,
   registerSavedSearchRoutes,
 } from './routes/savedSearches.js';
-import { registerListingOfferRoutes } from './routes/listingOffers.js';
+import {
+  appendOfferExpiredEvents,
+  expireOverdueOffers,
+  registerListingOfferRoutes,
+} from './routes/listingOffers.js';
 import { registerSmartSellPolicyRoutes } from './routes/smartSellPolicy.js';
 import { registerListingIntelligenceRoutes } from './routes/listingIntelligence.js';
 import { registerChatComposerStateRoutes } from './routes/chatComposerState.js';
@@ -1728,6 +1732,10 @@ function statusCodeForApiError(code: string): number {
 
   if (code.startsWith('P2P_TRANSFER_') && code.endsWith('_BLOCKED')) {
     return 403;
+  }
+
+  if (code.startsWith('INSUFFICIENT_') || code.endsWith('_INSUFFICIENT_BALANCE')) {
+    return 400;
   }
 
   return 409;
@@ -4891,14 +4899,19 @@ async function recordIzeTransfer(
     });
   }
 
-  const senderWalletAccountId = await ensureLedgerAccount(client, 'user', input.senderUserId, 'ize_wallet', 'IZE');
-  const recipientWalletAccountId = await ensureLedgerAccount(
-    client,
-    'user',
-    input.recipientUserId,
-    'ize_wallet',
-    'IZE'
-  );
+  // Ensure both ledger accounts in a deterministic (sorted) order. Each
+  // ensure performs an INSERT ... ON CONFLICT DO UPDATE which takes a row
+  // lock — two opposite-direction transfers (A→B, B→A) would otherwise
+  // acquire the locks in opposite order and deadlock.
+  const orderedWalletAccountIds = new Map<string, number>();
+  for (const walletUserId of [input.senderUserId, input.recipientUserId].sort()) {
+    orderedWalletAccountIds.set(
+      walletUserId,
+      await ensureLedgerAccount(client, 'user', walletUserId, 'ize_wallet', 'IZE')
+    );
+  }
+  const senderWalletAccountId = orderedWalletAccountIds.get(input.senderUserId)!;
+  const recipientWalletAccountId = orderedWalletAccountIds.get(input.recipientUserId)!;
 
   await appendLedgerEntry(client, {
     accountId: senderWalletAccountId,
@@ -8244,6 +8257,57 @@ async function sweepExpiredCheckoutReservations(
           sweptOrders.push({ orderId: row.order_id, listingId: row.listing_id });
         }
       }
+    }
+
+    // Pending-offer expiry: an offer that lapses with no mutation traffic
+    // still owes both parties the offer.expired notification and chat-card
+    // sync. expireOverdueOffers flips rows atomically; the event helper is
+    // deduped per offer so concurrent mutation routes can't double-fire.
+    const lapsedOffers = await expireOverdueOffers(client);
+    await appendOfferExpiredEvents(client, lapsedOffers, null);
+
+    // Second pass: offers flipped terminal by the reconcile trigger on
+    // non-sweep cancel paths (checkout PATCH, payment intents, lazy
+    // reclaim, order cancel, payment-failure compensation). The trigger
+    // marks checkoutStatus on the offer but cannot emit the domain event —
+    // without this pass those offers silently lapse with no notification
+    // and no chat-card sync. The dedup key makes re-emitting safe when the
+    // first pass already fired for the same offer.
+    const orphanedOffers = await client.query<{
+      id: string;
+      listing_id: string;
+      order_id: string | null;
+      buyer_id: string;
+      seller_id: string;
+    }>(
+      `SELECT o.id, o.listing_id, o.order_id, o.buyer_id, o.seller_id
+       FROM listing_offers o
+       WHERE o.status IN ('cancelled', 'expired')
+         AND o.metadata->>'checkoutStatus' IN ('cancelled', 'payment_failed')
+         AND NOT EXISTS (
+           SELECT 1 FROM domain_outbox e
+           WHERE e.deduplication_key = 'offer.checkout_expired:' || o.id
+         )
+       ORDER BY o.updated_at ASC
+       LIMIT $1`,
+      [EXPIRED_CHECKOUT_RESERVATION_SWEEP_LIMIT]
+    );
+
+    for (const offer of orphanedOffers.rows) {
+      await appendDomainEvent(client, {
+        aggregateType: 'offer',
+        aggregateId: offer.id,
+        eventType: 'offer.checkout_expired',
+        actorId: null,
+        deduplicationKey: `offer.checkout_expired:${offer.id}`,
+        payload: {
+          offerId: offer.id,
+          listingId: offer.listing_id,
+          orderId: offer.order_id,
+          buyerId: offer.buyer_id,
+          sellerId: offer.seller_id,
+        },
+      });
     }
 
     await client.query('COMMIT');
@@ -15622,6 +15686,18 @@ app.get('/users/me/export', async (request, reply) => {
       amlAlerts,
       aiUsageEvents,
       gdprHistory,
+      listings,
+      chatMessages,
+      walletLedger,
+      walletOperations,
+      payoutRequests,
+      orderReviews,
+      savedListings,
+      savedSearches,
+      follows,
+      blocks,
+      notificationPrefs,
+      emailPrefs,
     ] = await Promise.all([
       client.query('SELECT * FROM user_addresses WHERE user_id = $1 ORDER BY updated_at DESC', [userId]),
       client.query('SELECT * FROM user_payment_methods WHERE user_id = $1 ORDER BY updated_at DESC', [userId]),
@@ -15647,6 +15723,30 @@ app.get('/users/me/export', async (request, reply) => {
         [userId],
       ),
       client.query('SELECT id, request_type, status, requested_at, completed_at FROM gdpr_requests WHERE user_id = $1 ORDER BY requested_at DESC LIMIT 100', [userId]),
+      // Own listings — content the user authored is personal data under GDPR.
+      client.query('SELECT * FROM listings WHERE seller_id = $1 ORDER BY created_at DESC LIMIT 1000', [userId]),
+      // Messages authored by the user (content + metadata only).
+      client.query(
+        'SELECT id, conversation_id, kind, text, created_at, edited_at, deleted_at FROM chat_messages WHERE sender_user_id = $1 ORDER BY created_at DESC LIMIT 5000',
+        [userId]
+      ),
+      // Wallet ledger + 1ZE operations — financial records belonging to the user.
+      client.query(
+        `SELECT wl.* FROM wallet_ledger wl
+         JOIN wallets w ON w.id = wl.wallet_id
+         WHERE w.user_id = $1 ORDER BY wl.created_at DESC LIMIT 2000`,
+        [userId]
+      ),
+      client.query('SELECT * FROM wallet_ize_operations WHERE user_id = $1 ORDER BY created_at DESC LIMIT 2000', [userId]),
+      client.query('SELECT * FROM payout_requests WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1000', [userId]),
+      // Reviews the user wrote or received as seller.
+      client.query('SELECT * FROM order_reviews WHERE reviewer_id = $1 OR seller_id = $1 ORDER BY created_at DESC LIMIT 1000', [userId]),
+      client.query('SELECT * FROM user_saved_listings WHERE user_id = $1 ORDER BY created_at DESC LIMIT 2000', [userId]),
+      client.query('SELECT * FROM saved_searches WHERE user_id = $1 ORDER BY created_at DESC LIMIT 500', [userId]),
+      client.query('SELECT * FROM user_follows WHERE follower_id = $1 OR following_id = $1 ORDER BY created_at DESC LIMIT 5000', [userId]),
+      client.query('SELECT * FROM user_blocks WHERE blocker_id = $1 OR blocked_id = $1 ORDER BY created_at DESC LIMIT 1000', [userId]),
+      client.query('SELECT * FROM notification_preferences WHERE user_id = $1 LIMIT 1', [userId]),
+      client.query('SELECT * FROM user_email_preferences WHERE user_id = $1 LIMIT 1', [userId]),
     ]);
 
     const exportPayload = {
@@ -15665,6 +15765,18 @@ app.get('/users/me/export', async (request, reply) => {
       amlAlerts: amlAlerts.rows,
       aiUsageEvents: aiUsageEvents.rows,
       gdprHistory: gdprHistory.rows,
+      listings: listings.rows,
+      chatMessages: chatMessages.rows,
+      walletLedger: walletLedger.rows,
+      walletOperations: walletOperations.rows,
+      payoutRequests: payoutRequests.rows,
+      orderReviews: orderReviews.rows,
+      savedListings: savedListings.rows,
+      savedSearches: savedSearches.rows,
+      follows: follows.rows,
+      blocks: blocks.rows,
+      notificationPreferences: notificationPrefs.rows[0] ?? null,
+      emailPreferences: emailPrefs.rows[0] ?? null,
       exportedAt: new Date().toISOString(),
     };
 
@@ -15851,7 +15963,13 @@ app.delete('/users/me', async (request, reply) => {
   }
 
   const bodySchema = z.object({
-    password: z.string().min(1),
+    // Password is the default re-auth proof; OAuth-only accounts (no
+    // password_hash) re-authenticate with a fresh provider token instead.
+    password: z.string().min(1).optional(),
+    oauth: z.object({
+      provider: z.enum(['google', 'apple']),
+      identityToken: z.string().min(20),
+    }).optional(),
     confirmPhrase: z.string().min(1),
     reason: z.string().max(500).optional(),
     totpCode: z.string().optional(),
@@ -15891,17 +16009,60 @@ app.delete('/users/me', async (request, reply) => {
     }
 
     const storedHash = reauthRow.rows[0].password_hash;
-    if (!storedHash || !(await verifyPassword(payload.password, storedHash))) {
-      await appendComplianceAuditSafe(request, {
-        eventType: 'gdpr.erasure.reauth.failed',
-        subjectUserId: userId,
-        payload: { reason: 'password_mismatch' },
-      });
-      reply.code(403);
-      return {
-        ok: false,
-        error: 'Password verification failed',
-      };
+    if (storedHash) {
+      if (!payload.password || !(await verifyPassword(payload.password, storedHash))) {
+        await appendComplianceAuditSafe(request, {
+          eventType: 'gdpr.erasure.reauth.failed',
+          subjectUserId: userId,
+          payload: { reason: 'password_mismatch' },
+        });
+        reply.code(403);
+        return {
+          ok: false,
+          error: 'Password verification failed',
+        };
+      }
+    } else {
+      // OAuth-only account — a fresh provider token bound to a linked
+      // identity row is the re-auth proof. Without this path such accounts
+      // could never satisfy deletion re-auth at all.
+      if (!payload.oauth) {
+        reply.code(400);
+        return {
+          ok: false,
+          error: 'This account has no password — re-authenticate with your sign-in provider',
+          code: 'OAUTH_REAUTH_REQUIRED',
+        };
+      }
+      let identity: { provider: string; providerUserId: string } | null = null;
+      try {
+        const verified = payload.oauth.provider === 'google'
+          ? await verifyGoogleIdentityToken(payload.oauth.identityToken)
+          : await verifyAppleIdentityToken(payload.oauth.identityToken);
+        identity = { provider: verified.provider, providerUserId: verified.providerUserId };
+      } catch {
+        identity = null;
+      }
+      const linked = identity
+        ? await client.query<{ user_id: string }>(
+            `SELECT user_id FROM auth_oauth_identities
+             WHERE provider = $1 AND provider_user_id = $2 AND user_id = $3
+             LIMIT 1`,
+            [identity.provider, identity.providerUserId, userId]
+          )
+        : { rowCount: 0 };
+      if (!identity || !linked.rowCount) {
+        await appendComplianceAuditSafe(request, {
+          eventType: 'gdpr.erasure.reauth.failed',
+          subjectUserId: userId,
+          payload: { reason: 'oauth_identity_mismatch' },
+        });
+        reply.code(403);
+        return {
+          ok: false,
+          error: 'Sign-in provider verification failed',
+        };
+      }
     }
 
     if (reauthRow.rows[0].two_factor_enabled) {
@@ -18064,6 +18225,7 @@ app.patch('/listings/:listingId', async (request, reply) => {
     | null = null;
   let priceOutboxEventId: string | null = null;
   let coverMediaAssetId: string | null = null;
+  let patchedUpdatedAt: Date | string | null = null;
   try {
     await client.query('BEGIN');
     const existing = await client.query<{
@@ -18074,8 +18236,9 @@ app.patch('/listings/:listingId', async (request, reply) => {
       status: string;
       title: string;
       description: string;
+      updated_at: Date | string;
     }>(
-      `SELECT id, seller_id, price_gbp, image_url, status, title, description
+      `SELECT id, seller_id, price_gbp, image_url, status, title, description, updated_at
        FROM listings
        WHERE id = $1
        LIMIT 1
@@ -18091,6 +18254,29 @@ app.patch('/listings/:listingId', async (request, reply) => {
       await client.query('ROLLBACK');
       reply.code(403);
       return { ok: false, error: 'Only the seller can update this listing' };
+    }
+
+    // Optimistic concurrency: when the editor sends the `updatedAt` it read,
+    // refuse the write if the row has moved — two devices must not silently
+    // overwrite each other's edits.
+    const lockedUpdatedAt = existing.rows[0].updated_at;
+    if (payload.expectedUpdatedAt !== undefined) {
+      const expectedMs = Date.parse(payload.expectedUpdatedAt);
+      const lockedMs = lockedUpdatedAt instanceof Date
+        ? lockedUpdatedAt.getTime()
+        : Date.parse(String(lockedUpdatedAt));
+      if (Number.isNaN(expectedMs) || expectedMs !== lockedMs) {
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return {
+          ok: false,
+          error: 'Listing was modified since it was loaded',
+          code: 'LISTING_STALE',
+          currentUpdatedAt: lockedUpdatedAt instanceof Date
+            ? lockedUpdatedAt.toISOString()
+            : String(lockedUpdatedAt),
+        };
+      }
     }
 
     // Lifecycle transition validation — the owner-facing status write uses
@@ -18321,10 +18507,11 @@ app.patch('/listings/:listingId', async (request, reply) => {
         ? verifiedCover.media_asset_id
         : null;
     }
-    await client.query(
-      `UPDATE listings SET ${sets.join(', ')} WHERE id = $${idx}`,
+    const patchUpdate = await client.query<{ updated_at: Date | string }>(
+      `UPDATE listings SET ${sets.join(', ')} WHERE id = $${idx} RETURNING updated_at`,
       values,
     );
+    patchedUpdatedAt = patchUpdate.rows[0]?.updated_at ?? null;
 
     if (payload.priceGbp !== undefined && payload.priceGbp !== previousPriceGbp) {
       const insertedEvent = await client.query<{ id: number }>(
@@ -18478,6 +18665,9 @@ app.patch('/listings/:listingId', async (request, reply) => {
     listingId,
     alertEvaluation,
     status: patchPublishHeld ? 'risk_pending' : (payload.status ?? priorListingStatus),
+    updatedAt: patchedUpdatedAt instanceof Date
+      ? patchedUpdatedAt.toISOString()
+      : patchedUpdatedAt,
   };
 });
 
@@ -18530,10 +18720,11 @@ app.get('/users/:userId/listings', async (request) => {
   const querySchema = z.object({
     status: z.enum(['draft', 'active', 'paused', 'sold', 'deleted']).optional(),
     limit: z.coerce.number().int().min(1).max(200).default(60),
+    cursor: z.string().max(500).optional(),
   });
 
   const { userId } = paramsSchema.parse(request.params);
-  const { status, limit } = querySchema.parse(request.query);
+  const { status, limit, cursor } = querySchema.parse(request.query);
 
   // Seller reach (lib/sellerReach.ts): a suspended seller's listings are
   // excluded from distribution — this rail is the public storefront listing
@@ -18551,6 +18742,24 @@ app.get('/users/:userId/listings', async (request) => {
     args.push(status);
   }
 
+  // Keyset pagination — the client's cursor contract was previously dropped
+  // by Zod and the response never emitted nextCursor, which silently
+  // truncated seller inventories beyond the first page.
+  if (cursor) {
+    try {
+      const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf-8')) as {
+        ts?: unknown;
+        id?: unknown;
+      };
+      if (typeof decoded.ts === 'string' && typeof decoded.id === 'string') {
+        conditions.push(`(l.created_at, l.id) < ($${args.length + 1}::timestamptz, $${args.length + 2})`);
+        args.push(decoded.ts, decoded.id);
+      }
+    } catch {
+      // Malformed cursors are ignored — the first page is the safe fallback.
+    }
+  }
+
   const result = await readDb.query<{
     id: string;
     seller_id: string;
@@ -18560,31 +18769,87 @@ app.get('/users/:userId/listings', async (request) => {
     image_url: string | null;
     status: string;
     category: string | null;
+    subcategory: string | null;
     brand: string | null;
     size: string | null;
     condition: string | null;
+    shipping_method: string | null;
+    shipping_payer: string | null;
     original_price_gbp: number | string | null;
     created_at: string;
+    updated_at: string;
     seller_username: string | null;
   }>(
     `
       SELECT
         l.id, l.seller_id, l.title, l.description, l.price_gbp, l.image_url,
-        l.status, l.category, l.brand, l.size, l.condition,
-        l.original_price_gbp, l.created_at,
+        l.status, l.category, l.subcategory, l.brand, l.size, l.condition,
+        l.shipping_method, l.shipping_payer,
+        l.original_price_gbp, l.created_at, l.updated_at,
         u.username AS seller_username
       FROM listings l
       LEFT JOIN users u ON u.id = l.seller_id
       WHERE ${conditions.join(' AND ')}
         ${viewerIsOwner ? '' : reachExcludedSql('u')}
-      ORDER BY l.created_at DESC
+      ORDER BY l.created_at DESC, l.id DESC
       LIMIT $${args.length + 1}
     `,
-    [...args, limit]
+    [...args, limit + 1]
   );
 
-  const listingIds = result.rows.map((r) => r.id);
+  const hasMore = result.rows.length > limit;
+  const pageRows = hasMore ? result.rows.slice(0, limit) : result.rows;
+  const lastRow = pageRows[pageRows.length - 1];
+  const nextCursor = hasMore && lastRow
+    ? Buffer.from(JSON.stringify({ ts: lastRow.created_at, id: lastRow.id }), 'utf-8').toString('base64url')
+    : null;
+
+  const listingIds = pageRows.map((r) => r.id);
   const mediaByListing = await loadListingMedia(readDb, listingIds);
+
+  // Owner/admin-only engagement rollup — active offer counts are
+  // participant-private and never emitted on the public storefront surface.
+  const engagementByListing = new Map<string, {
+    wishlistCount: number;
+    collectionSaveCount: number;
+    activeOfferCount: number;
+  }>();
+  if (viewerIsOwner && listingIds.length > 0) {
+    const [wishlistRows, collectionRows, offerRows] = await Promise.all([
+      readDb.query<{ listing_id: string; count: string }>(
+        `SELECT listing_id, COUNT(DISTINCT user_id)::text AS count
+         FROM interactions WHERE listing_id = ANY($1) AND action = 'wishlist'
+         GROUP BY listing_id`,
+        [listingIds],
+      ),
+      readDb.query<{ listing_id: string; count: string }>(
+        `SELECT ci.listing_id, COUNT(DISTINCT c.user_id)::text AS count
+         FROM collection_items ci
+         INNER JOIN collections c ON c.id = ci.collection_id
+         WHERE ci.listing_id = ANY($1)
+         GROUP BY ci.listing_id`,
+        [listingIds],
+      ),
+      readDb.query<{ listing_id: string; count: string }>(
+        `SELECT listing_id, COUNT(*)::text AS count
+         FROM listing_offers WHERE listing_id = ANY($1) AND status = 'pending'
+         GROUP BY listing_id`,
+        [listingIds],
+      ),
+    ]);
+    const collect = (rows: Array<{ listing_id: string; count: string }>) =>
+      new Map(rows.map((r) => [r.listing_id, Number(r.count)]));
+    const wishlist = collect(wishlistRows.rows);
+    const collections = collect(collectionRows.rows);
+    const offers = collect(offerRows.rows);
+    for (const id of listingIds) {
+      engagementByListing.set(id, {
+        wishlistCount: wishlist.get(id) ?? 0,
+        collectionSaveCount: collections.get(id) ?? 0,
+        activeOfferCount: offers.get(id) ?? 0,
+      });
+    }
+  }
 
   const imagesByListing = new Map<string, string[]>();
   const primaryGeometryByListing = new Map<string, { width: number; height: number } | null>();
@@ -18600,7 +18865,7 @@ app.get('/users/:userId/listings', async (request) => {
   }
 
   return {
-    items: result.rows.map((row) => {
+    items: pageRows.map((row) => {
       const primaryGeometry = primaryGeometryByListing.get(row.id);
       return {
         id: row.id,
@@ -18618,11 +18883,24 @@ app.get('/users/:userId/listings', async (request) => {
           : null,
         status: row.status,
         category: row.category,
+        subcategory: row.subcategory,
         brand: row.brand,
         size: row.size,
         condition: row.condition,
+        shippingMethod: row.shipping_method,
+        shippingPayer: row.shipping_payer,
         originalPriceGbp: row.original_price_gbp === null ? null : Number(row.original_price_gbp),
         createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        engagement: engagementByListing.has(row.id)
+          ? {
+              listingId: row.id,
+              likes: engagementByListing.get(row.id)!.wishlistCount,
+              wishlistCount: engagementByListing.get(row.id)!.wishlistCount,
+              collectionSaveCount: engagementByListing.get(row.id)!.collectionSaveCount,
+              activeOfferCount: engagementByListing.get(row.id)!.activeOfferCount,
+            }
+          : null,
         seller: row.seller_username
           ? {
               id: row.seller_id,
@@ -18635,6 +18913,7 @@ app.get('/users/:userId/listings', async (request) => {
           : null,
       };
     }),
+    nextCursor,
   };
 });
 
@@ -21475,14 +21754,13 @@ app.post('/wallet/convert-1ze-to-fiat', async (request, reply) => {
     const currentIzeBalance = Number(wallet.oneze_balance_units);
 
     if (currentIzeBalance < amountUnits) {
-      reply.code(400);
-      return {
-        ok: false,
-        error: 'INSUFFICIENT_1ZE_BALANCE',
-        message: 'Insufficient 1ze balance for conversion',
+      // Must throw — returning here leaks the open transaction (and the wallet
+      // row lock) back to the pool because the catch owns ROLLBACK.
+      throw createApiError('INSUFFICIENT_1ZE_BALANCE', 'Insufficient 1ze balance for conversion', {
+        code: 'INSUFFICIENT_1ZE_BALANCE',
         currentBalanceUnits: currentIzeBalance,
         requestedAmountUnits: amountUnits,
-      };
+      });
     }
 
     // Read-only preview: return the identical payload shape an execution
@@ -21502,9 +21780,11 @@ app.post('/wallet/convert-1ze-to-fiat', async (request, reply) => {
           feeAmount,
           feeBps,
           netRedemption,
+          netFiatAmount: netRedemption,
           fiatAmount: netRedemption,
           fiatCurrency,
           fxRate,
+          rateUsed: fxRate,
         },
       };
     }
@@ -21621,9 +21901,8 @@ app.post('/wallet/convert-1ze-to-fiat', async (request, reply) => {
       },
     });
 
-    await client.query('COMMIT');
-
-    // Reload wallet to get updated balances
+    // Reload inside the transaction — same-tx reads see the deltas above —
+    // so the stored idempotent response carries the post-conversion balances.
     const updatedWallet = await ensureWallet(client, actorUserId, fiatCurrency);
 
     const responsePayload: Record<string, unknown> = {
@@ -21636,13 +21915,17 @@ app.post('/wallet/convert-1ze-to-fiat', async (request, reply) => {
         feeAmount,
         feeBps,
         netRedemption,
+        netFiatAmount: netRedemption,
         fiatAmount: netRedemption,
         fiatCurrency,
         fxRate,
+        rateUsed: fxRate,
       },
     };
 
-    // â”€â”€ Bug 2 fix: save idempotent response â”€â”€
+    // The idempotent response must be persisted atomically with the conversion —
+    // a post-commit save can be lost while the burn+credit stay committed,
+    // which makes a same-key retry re-execute the full conversion.
     if (payload.idempotencyKey && idempotencyRequestHash) {
       await saveWalletIdempotentResponse(client, {
         userId: actorUserId,
@@ -21653,6 +21936,7 @@ app.post('/wallet/convert-1ze-to-fiat', async (request, reply) => {
       });
     }
 
+    await client.query('COMMIT');
     return responsePayload;
   } catch (error) {
     await client.query('ROLLBACK');
@@ -21764,14 +22048,13 @@ app.post('/wallet/buy-1ze', async (request, reply) => {
     const currentFiatBalance = Number(wallet.fiat_balance_minor);
 
     if (currentFiatBalance < fiatAmountMinor) {
-      reply.code(400);
-      return {
-        ok: false,
-        error: 'INSUFFICIENT_FIAT_BALANCE',
-        message: 'Insufficient fiat balance to buy 1ze',
+      // Must throw — returning here leaks the open transaction (and the wallet
+      // row lock) back to the pool because the catch owns ROLLBACK.
+      throw createApiError('INSUFFICIENT_FIAT_BALANCE', 'Insufficient fiat balance to buy 1ze', {
+        code: 'INSUFFICIENT_FIAT_BALANCE',
         currentBalanceMinor: currentFiatBalance,
         requestedAmountMinor: fiatAmountMinor,
-      };
+      });
     }
 
     // Get pricing for conversion rate
@@ -23747,17 +24030,12 @@ app.post('/users/:userId/addresses', async (request, reply) => {
 
   await ensureUserExists(userId);
 
-  const existingCountResult = await db.query<{ count: string }>(
-    'SELECT COUNT(*)::text AS count FROM user_addresses WHERE user_id = $1',
-    [userId]
-  );
-
-  const shouldDefault = payload.isDefault || Number(existingCountResult.rows[0]?.count ?? '0') === 0;
-  if (shouldDefault) {
-    await db.query('UPDATE user_addresses SET is_default = FALSE, updated_at = NOW() WHERE user_id = $1', [userId]);
-  }
-
-  const result = await db.query<{
+  // Count → default-clear → insert must be one transaction: a failed
+  // insert after clearing is_default would otherwise leave the user with
+  // no default address at all, and concurrent creates could both pass the
+  // count check.
+  const client = await db.connect();
+  let createdAddress: {
     id: number;
     user_id: string;
     name: string;
@@ -23767,28 +24045,61 @@ app.post('/users/:userId/addresses', async (request, reply) => {
     is_default: boolean;
     created_at: string;
     updated_at: string;
-  }>(
-    `
-      INSERT INTO user_addresses (user_id, name, street, city, postcode, is_default)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING id, user_id, name, street, city, postcode, is_default, created_at, updated_at
-    `,
-    [userId, payload.name, payload.street, payload.city, payload.postcode, shouldDefault]
-  );
+  };
+  try {
+    await client.query('BEGIN');
+    // Serialize concurrent address creates for this user.
+    await client.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [userId]);
+    const existingCountResult = await client.query<{ count: string }>(
+      'SELECT COUNT(*)::text AS count FROM user_addresses WHERE user_id = $1',
+      [userId]
+    );
+
+    const shouldDefault = payload.isDefault || Number(existingCountResult.rows[0]?.count ?? '0') === 0;
+    if (shouldDefault) {
+      await client.query('UPDATE user_addresses SET is_default = FALSE, updated_at = NOW() WHERE user_id = $1', [userId]);
+    }
+
+    const result = await client.query<{
+      id: number;
+      user_id: string;
+      name: string;
+      street: string;
+      city: string;
+      postcode: string;
+      is_default: boolean;
+      created_at: string;
+      updated_at: string;
+    }>(
+      `
+        INSERT INTO user_addresses (user_id, name, street, city, postcode, is_default)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING id, user_id, name, street, city, postcode, is_default, created_at, updated_at
+      `,
+      [userId, payload.name, payload.street, payload.city, payload.postcode, shouldDefault]
+    );
+    createdAddress = result.rows[0];
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 
   reply.code(201);
   return {
     ok: true,
     item: {
-      id: result.rows[0].id,
-      userId: result.rows[0].user_id,
-      name: result.rows[0].name,
-      street: result.rows[0].street,
-      city: result.rows[0].city,
-      postcode: result.rows[0].postcode,
-      isDefault: result.rows[0].is_default,
-      createdAt: result.rows[0].created_at,
-      updatedAt: result.rows[0].updated_at,
+      id: createdAddress.id,
+      userId: createdAddress.user_id,
+      name: createdAddress.name,
+      street: createdAddress.street,
+      city: createdAddress.city,
+      postcode: createdAddress.postcode,
+      isDefault: createdAddress.is_default,
+      createdAt: createdAddress.created_at,
+      updatedAt: createdAddress.updated_at,
     },
   };
 });
@@ -25975,6 +26286,39 @@ app.post('/users/:userId/payout-requests', async (request, reply) => {
     };
   } catch (error) {
     await client.query('ROLLBACK');
+    // Concurrent same-key insert: the unique constraint on
+    // (user_id, idempotency_key) throws 23505 for the loser — replay the
+    // winner's row honestly instead of surfacing a 500.
+    if (
+      payload.idempotencyKey
+      && typeof error === 'object'
+      && error !== null
+      && (error as { code?: string }).code === '23505'
+    ) {
+      const existing = await db.query<PayoutRequestRow>(
+        `SELECT * FROM payout_requests
+         WHERE user_id = $1 AND idempotency_key = $2
+         LIMIT 1`,
+        [userId, payload.idempotencyKey]
+      );
+      const existingRow = existing.rows[0];
+      if (existingRow) {
+        if (existingRow.request_hash && existingRow.request_hash !== payoutRequestHash) {
+          reply.code(409);
+          return {
+            ok: false,
+            error: 'Idempotency key was already used with a different payout payload',
+            code: 'IDEMPOTENCY_PAYLOAD_MISMATCH',
+          };
+        }
+        reply.code(200);
+        return {
+          ok: true,
+          idempotent: true,
+          payoutRequest: toPayoutRequestPayload(existingRow),
+        };
+      }
+    }
     request.log.error({ err: error, userId, requestId }, 'Unable to create payout request');
     reply.code(500);
     return {
@@ -29790,44 +30134,44 @@ app.post('/webhooks/:provider', async (request, reply) => {
   const event = verification.event;
   const expectedGateway = expectedGatewayIdForProvider(provider);
 
-  // â”€â”€ Stripe webhook event-ID deduplication â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // The 2026 Stripe Webhook Hardening Checklist requires explicit event-ID
-  // dedup. We insert the Stripe event ID into the webhook_events table
-  // before processing. If the insert returns zero rows (ON CONFLICT DO
-  // NOTHING), the event was already processed â€” return 200 OK immediately
-  // (idempotent). This is additive to the existing payment_webhook_events
-  // dedup inside the transaction below.
-  if (provider === 'stripe' && event.providerEventId) {
-    const payloadHash = crypto
-      .createHash('sha256')
-      .update(rawBody)
-      .digest('hex');
-    const dedupInsert = await db.query<{ id: number }>(
-      `
-        INSERT INTO webhook_events (event_id, event_type, provider, payload_hash)
-        VALUES ($1, $2, 'stripe', $3)
-        ON CONFLICT (event_id) DO NOTHING
-        RETURNING id
-      `,
-      [event.providerEventId, event.eventType, payloadHash]
-    );
-
-    if (!dedupInsert.rowCount) {
-      request.log.info(
-        { providerEventId: event.providerEventId, eventType: event.eventType },
-        'Stripe webhook event already processed (event-ID dedup)'
-      );
-      reply.code(200);
-      return {
-        ok: true,
-        duplicate: true,
-      };
-    }
-  }
-
   const client = await db.connect();
   try {
     await client.query('BEGIN');
+
+    // Stripe webhook event-ID deduplication must run inside the processing
+    // transaction: an autocommit marker that survives a later ROLLBACK makes
+    // every Stripe retry look "already processed" and permanently drops the
+    // event (payout.paid never reprocessed, intent never settles). Concurrent
+    // same-event deliveries serialize on the speculative insert lock — the
+    // loser sees rowCount 0 only if the winner committed.
+    if (provider === 'stripe' && event.providerEventId) {
+      const payloadHash = crypto
+        .createHash('sha256')
+        .update(rawBody)
+        .digest('hex');
+      const dedupInsert = await client.query<{ id: number }>(
+        `
+          INSERT INTO webhook_events (event_id, event_type, provider, payload_hash)
+          VALUES ($1, $2, 'stripe', $3)
+          ON CONFLICT (event_id) DO NOTHING
+          RETURNING id
+        `,
+        [event.providerEventId, event.eventType, payloadHash]
+      );
+
+      if (!dedupInsert.rowCount) {
+        await client.query('ROLLBACK');
+        request.log.info(
+          { providerEventId: event.providerEventId, eventType: event.eventType },
+          'Stripe webhook event already processed (event-ID dedup)'
+        );
+        reply.code(200);
+        return {
+          ok: true,
+          duplicate: true,
+        };
+      }
+    }
 
     const gateway = await client.query<{ id: string }>(
       'SELECT id FROM payment_gateways WHERE id = $1 LIMIT 1',
@@ -33803,16 +34147,19 @@ app.post('/orders/:orderId/ship', async (request, reply) => {
 
     const order = orderResult.rows[0];
     if (!order) {
+      await client.query('ROLLBACK');
       reply.code(404);
       return { ok: false, error: 'Order not found' };
     }
 
     if (order.seller_id !== userId) {
+      await client.query('ROLLBACK');
       reply.code(403);
       return { ok: false, error: 'Only the seller can mark this order as shipped' };
     }
 
     if (order.status !== 'paid') {
+      await client.query('ROLLBACK');
       reply.code(409);
       return { ok: false, error: `Cannot mark as shipped from status: ${order.status}` };
     }
@@ -33825,6 +34172,7 @@ app.post('/orders/:orderId/ship', async (request, reply) => {
     // a real tracking reference. Shipping requires either an explicit
     // tracking number or one already on the row (carrier label path).
     if (!sellerTracking) {
+      await client.query('ROLLBACK');
       reply.code(422);
       return {
         ok: false,
@@ -33901,11 +34249,13 @@ app.post('/orders/:orderId/deliver', async (request, reply) => {
 
     const order = orderResult.rows[0];
     if (!order) {
+      await client.query('ROLLBACK');
       reply.code(404);
       return { ok: false, error: 'Order not found' };
     }
 
     if (order.buyer_id !== userId) {
+      await client.query('ROLLBACK');
       reply.code(403);
       return { ok: false, error: 'Only the buyer can confirm delivery' };
     }
@@ -33922,6 +34272,7 @@ app.post('/orders/:orderId/deliver', async (request, reply) => {
     // "Everything is OK" action). Previously 'delivered' returned 409, which
     // broke confirmation on every carrier-integrated order.
     if (order.status !== 'shipped' && order.status !== 'delivered') {
+      await client.query('ROLLBACK');
       reply.code(409);
       return { ok: false, error: `Cannot confirm delivery from status: ${order.status}` };
     }

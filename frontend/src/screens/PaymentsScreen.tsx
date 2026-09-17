@@ -165,11 +165,14 @@ export default function PaymentsScreen({ navigation }: Props) {
       confirmLabel: t('payments.alert.remove'),
       cancelLabel: t('payments.alert.cancel'),
       onConfirm: async () => {
+        const userId = currentUser?.id;
+        // Guard before the optimistic mutation — without a user the delete
+        // can't be sent, so removing the row locally would desync the UI
+        // from the server (method hidden here, still attached there).
+        if (!userId) return;
         const previous = backendPaymentMethods;
         setBackendPaymentMethods((prev) => prev.filter((m) => m.id !== method.id));
         show(t('payments.toast.removed'), 'info');
-        const userId = currentUser?.id;
-        if (!userId) return;
         try {
           await deleteUserPaymentMethod(userId, method.providerPaymentMethodId);
           if (method.id === defaultMethod?.id) {

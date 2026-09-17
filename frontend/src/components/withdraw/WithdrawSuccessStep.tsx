@@ -16,7 +16,8 @@ interface Props {
 }
 
 // Success step — honest "requested" confirmation with reference, amount
-// and estimated-arrival disclosure.
+// and pending-review status. No arrival ETA is promised: payout requests
+// sit in `requested` until an admin manually approves and sends them.
 export function WithdrawSuccessStep({ successData, onClose }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -66,7 +67,7 @@ export function WithdrawSuccessStep({ successData, onClose }: Props) {
             </Text>
           </View>
           <Text style={[styles.successSubtitle, { color: colors.textSecondary }]}>
-            {formatFromFiat(successData.amountGbp, 'GBP', { displayMode: 'fiat' })} is on its way
+            {formatFromFiat(successData.amountGbp, 'GBP', { displayMode: 'fiat' })} requested — we'll notify you when it's sent
           </Text>
         </View>
 
@@ -76,7 +77,7 @@ export function WithdrawSuccessStep({ successData, onClose }: Props) {
             <FlagshipMetricLine label="Amount" value={formatFromFiat(successData.amountGbp, 'GBP', { displayMode: 'fiat' })} separated />
             <FlagshipMetricLine label="Currency" value={successData.payoutCurrency} separated />
             <FlagshipMetricLine label="Requested" value={formattedDate} separated />
-            <FlagshipMetricLine label="Estimated arrival" value="1–3 business days" separated />
+            <FlagshipMetricLine label="Status" value="Pending review" separated />
           </FlagshipFormSection>
         </View>
 

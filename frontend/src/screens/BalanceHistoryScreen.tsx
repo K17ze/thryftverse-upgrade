@@ -131,7 +131,9 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
     }
   }, [isLoadingMore, hasMore, offset, currentUser?.id]);
 
-  // ── Net flow: total in minus total out (the useful hero metric) ──
+  // ── Net flow: total in minus total out across the loaded pages only.
+  // The hero must not read as a lifetime aggregate — older transactions
+  // may still be unpaginated (hasMore). ──
   const netFlow = useMemo(() => {
     return transactions.reduce((sum, tx) => {
       return sum + (tx.direction === 'credit' ? Math.abs(tx.amount) : -Math.abs(tx.amount));
@@ -169,13 +171,13 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
         <>
           {/* ── Net flow hero — flat, no card (replaces redundant count) ── */}
           <View style={styles.heroSection}>
-            <Text style={[styles.heroLabel, { color: colors.textMuted }]}>Net flow</Text>
+            <Text style={[styles.heroLabel, { color: colors.textMuted }]}>Net — loaded activity</Text>
             <Text
               style={[
                 styles.heroValue,
                 { color: netFlow >= 0 ? colors.success : colors.danger },
               ]}
-              accessibilityLabel={`Net flow ${formatFromFiat(Math.abs(netFlow), 'GBP', { displayMode: 'fiat' })}`}
+              accessibilityLabel={`Net of loaded activity ${formatFromFiat(Math.abs(netFlow), 'GBP', { displayMode: 'fiat' })}`}
             >
               {netFlow >= 0 ? '+' : '-'}{formatFromFiat(Math.abs(netFlow), 'GBP', { displayMode: 'fiat' })}
             </Text>

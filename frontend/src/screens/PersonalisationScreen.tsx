@@ -71,7 +71,7 @@ export default function PersonalisationScreen() {
       haptic.light();
 
       if (gender === 'All') {
-        updatePersonalisationPreferences({ genderFilter: ['All'] });
+        void updatePersonalisationPreferences({ genderFilter: ['All'] });
         return;
       }
 
@@ -88,7 +88,7 @@ export default function PersonalisationScreen() {
         next = [...withoutAll, gender];
       }
 
-      updatePersonalisationPreferences({ genderFilter: next });
+      void updatePersonalisationPreferences({ genderFilter: next });
     },
     [genderFilter, updatePersonalisationPreferences, haptic]
   );
@@ -120,20 +120,28 @@ export default function PersonalisationScreen() {
       ? membersPref
       : undefined;
 
+  // Applies an optimistic update and only toasts once the write resolves —
+  // success on persist, honest failure when the store rolls back.
+  const applyPreference = useCallback(
+    (updates: Parameters<typeof updatePersonalisationPreferences>[0], successMessage: string) => {
+      void updatePersonalisationPreferences(updates).then((saved) => {
+        show(saved ? successMessage : 'Could not save your preference. Try again.', saved ? 'success' : 'error');
+      });
+    },
+    [updatePersonalisationPreferences, show]
+  );
+
   const handleSelectPreference = (value: string) => {
     if (pickerMode === 'categories') {
-      updatePersonalisationPreferences({ categoriesAndSizesPref: value });
-      show('Categories and sizes preference updated.', 'success');
+      applyPreference({ categoriesAndSizesPref: value }, 'Categories and sizes preference updated.');
       return;
     }
     if (pickerMode === 'brands') {
-      updatePersonalisationPreferences({ brandsPref: value });
-      show('Brand preference updated.', 'success');
+      applyPreference({ brandsPref: value }, 'Brand preference updated.');
       return;
     }
     if (pickerMode === 'members') {
-      updatePersonalisationPreferences({ membersPref: value });
-      show('Member preference updated.', 'success');
+      applyPreference({ membersPref: value }, 'Member preference updated.');
     }
   };
 
@@ -145,12 +153,13 @@ export default function PersonalisationScreen() {
       confirmLabel: 'Reset',
       onConfirm: () => {
         haptic.medium();
-        updatePersonalisationPreferences({
+        void updatePersonalisationPreferences({
           genderFilter: DEFAULT_GENDER_FILTER,
           categoriesAndSizesPref: DEFAULT_CATEGORIES_PREF,
           brandsPref: DEFAULT_BRANDS_PREF,
-          membersPref: DEFAULT_MEMBERS_PREF });
-        show('Preferences reset to defaults.', 'success');
+          membersPref: DEFAULT_MEMBERS_PREF }).then((saved) => {
+          show(saved ? 'Preferences reset to defaults.' : 'Could not reset preferences. Try again.', saved ? 'success' : 'error');
+        });
       } });
   };
 

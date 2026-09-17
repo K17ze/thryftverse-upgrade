@@ -608,6 +608,23 @@ export async function holdProtectedChanges(
   );
 }
 
+/**
+ * Whether a protected-change hold is active for the user right now. Protected
+ * write routes (password, phone, MFA, passkeys, connected accounts, payout
+ * destination) must check this — the flag alone never blocked anything.
+ */
+export async function isProtectedChangeHoldActive(userId: string): Promise<boolean> {
+  const result = await db.query(
+    `SELECT 1 FROM account_compromise_cases
+     WHERE user_id = $1
+       AND protected_change_hold_active = TRUE
+       AND state NOT IN ('closed_genuine', 'closed_compromised')
+     LIMIT 1`,
+    [userId],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
 // ---------------------------------------------------------------------------
 // Recovery operations
 // ---------------------------------------------------------------------------

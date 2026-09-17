@@ -40,6 +40,11 @@ import {
   type SessionInventoryEntry,
 } from '../lib/accountTakeoverService.js';
 import { getUserSafeInterventionState } from '../lib/riskDecision.js';
+import { sendAuthEmail } from '../lib/authEmail.js';
+import { sendSms } from '../lib/sms/smsProvider.js';
+import { verifyTotp } from '../lib/totp.js';
+import { decryptJsonPayload } from '../lib/keyService.js';
+import { verifyPasskeyStepUp } from '../lib/passkeyService.js';
 
 export interface AccountSecurityRouteDependencies {
   app: FastifyInstance;
@@ -67,7 +72,16 @@ const createChallengeSchema = z.object({
 });
 
 const verifyChallengeSchema = z.object({
-  proof: z.string().min(1).max(500),
+  // OTP/TOTP proofs arrive as strings; a passkey assertion arrives as the
+  // WebAuthn response object.
+  proof: z.union([z.string().min(1).max(500), z.record(z.unknown())]),
+});
+
+const restoreSchema = z.object({
+  // Single-use token issued by the challenge-verify endpoint. Required for
+  // non-admin restores — recovery completion must be gated on proof of a
+  // verified challenge, never on session possession alone.
+  restoreToken: z.string().min(8).max(200),
 });
 
 /**
@@ -388,26 +402,71 @@ export const registerAccountSecurityRoutes = ({
         });
       }
 
-      // Generate a challenge — in production this sends an OTP/email/etc.
-      // For now, generate a server-side challenge with a short expiry.
       const challengeId = `recovery_challenge_${crypto.randomUUID()}`;
       const expiresInSeconds = 300; // 5 minutes
-
-      // Store the challenge in Redis for verification
       const challengeKey = `recovery:challenge:${challengeId}`;
-      const challengeCode = Math.floor(100000 + Math.random() * 900000).toString();
-      await redis.set(challengeKey, JSON.stringify({
-        caseId,
-        userId: incident.userId,
-        factor: payload.factor,
-        code: challengeCode,
-        attempts: 0,
-      }), 'EX', expiresInSeconds);
 
-      // In production, send the code via the selected factor (email, SMS, etc.)
-      // For now, log it (dev mode) — the production path would use the
-      // notification service to send to the ESTABLISHED channel, never the
-      // newly changed one.
+      if (payload.factor === 'email' || payload.factor === 'phone') {
+        // OTP over the account's ESTABLISHED channel — never a contact method
+        // changed after the compromise was declared.
+        const contact = await db.query<{ email: string | null; phone: string | null }>(
+          'SELECT email, phone FROM users WHERE id = $1 LIMIT 1',
+          [incident.userId],
+        );
+        const target = payload.factor === 'email'
+          ? contact.rows[0]?.email?.trim()
+          : contact.rows[0]?.phone?.trim();
+        if (!target) {
+          reply.code(400);
+          return {
+            ok: false,
+            error: `No ${payload.factor} on file for this account`,
+            code: 'CHANNEL_UNAVAILABLE',
+          };
+        }
+
+        const challengeCode = Math.floor(100000 + Math.random() * 900000).toString();
+        await redis.set(challengeKey, JSON.stringify({
+          caseId,
+          userId: incident.userId,
+          factor: payload.factor,
+          code: challengeCode,
+          attempts: 0,
+        }), 'EX', expiresInSeconds);
+
+        try {
+          if (payload.factor === 'email') {
+            await sendAuthEmail({
+              to: target,
+              subject: 'Your Thryftverse account recovery code',
+              html: `<p>Your account recovery code is <strong>${challengeCode}</strong>. It expires in 5 minutes. If you did not request this, your account may be compromised — review your security settings.</p>`,
+              text: `Your account recovery code is ${challengeCode}. It expires in 5 minutes.`,
+            });
+          } else {
+            await sendSms({
+              to: target,
+              body: `Your Thryftverse account recovery code is ${challengeCode}. It expires in 5 minutes.`,
+            });
+          }
+        } catch (deliveryErr) {
+          // A challenge nobody can answer is a lockout trap — fail the request
+          // honestly instead of storing an undeliverable code.
+          await redis.del(challengeKey);
+          request.log.error({ err: deliveryErr, caseId, factor: payload.factor }, 'Recovery challenge delivery failed');
+          reply.code(503);
+          return { ok: false, error: 'Could not deliver the verification code. Try again.', code: 'DELIVERY_UNAVAILABLE' };
+        }
+      } else {
+        // totp / passkey: no delivered code — verify checks the enrolled
+        // factor directly (TOTP secret or WebAuthn assertion).
+        await redis.set(challengeKey, JSON.stringify({
+          caseId,
+          userId: incident.userId,
+          factor: payload.factor,
+          attempts: 0,
+        }), 'EX', expiresInSeconds);
+      }
+
       request.log.info(
         { challengeId, caseId, factor: payload.factor, userId: incident.userId },
         'Recovery challenge created',
@@ -457,7 +516,7 @@ export const registerAccountSecurityRoutes = ({
           caseId: string;
           userId: string;
           factor: string;
-          code: string;
+          code?: string;
           attempts: number;
         };
 
@@ -474,8 +533,41 @@ export const registerAccountSecurityRoutes = ({
           return { ok: false, error: 'Too many attempts. Start a new challenge.', code: 'RATE_LIMITED' };
         }
 
-        // Check the proof
-        if (payload.proof.trim() !== challenge.code) {
+        // Factor-aware proof check — OTP codes compare against the delivered
+        // code; TOTP verifies the enrolled secret; passkey runs a real
+        // WebAuthn step-up assertion.
+        let proofValid = false;
+        let proofError: { status: number; error: string; code: string } | null = null;
+        if (challenge.factor === 'totp') {
+          const totpRow = await db.query<{ secret_ciphertext: string }>(
+            'SELECT secret_ciphertext FROM user_totp_factors WHERE user_id = $1 AND enabled = TRUE LIMIT 1',
+            [challenge.userId],
+          );
+          const ciphertext = totpRow.rows[0]?.secret_ciphertext;
+          if (!ciphertext) {
+            proofError = { status: 409, error: 'Two-factor authentication is not configured', code: 'TWO_FACTOR_NOT_CONFIGURED' };
+          } else {
+            const decrypted = await decryptJsonPayload<{ secret: string }>(ciphertext, `totp-factor:${challenge.userId}`);
+            proofValid = typeof payload.proof === 'string'
+              && !!decrypted?.secret
+              && verifyTotp(decrypted.secret, payload.proof.trim(), { stepSeconds: 30, digits: 6, window: 1 });
+          }
+        } else if (challenge.factor === 'passkey') {
+          proofValid = typeof payload.proof === 'object'
+            && await verifyPasskeyStepUp(db, challenge.userId, payload.proof as never);
+        } else {
+          proofValid = typeof payload.proof === 'string'
+            && typeof challenge.code === 'string'
+            && payload.proof.trim() === challenge.code;
+        }
+
+        if (proofError) {
+          await redis.del(challengeKey);
+          reply.code(proofError.status);
+          return { ok: false, error: proofError.error, code: proofError.code };
+        }
+
+        if (!proofValid) {
           // Increment attempts
           await redis.set(challengeKey, JSON.stringify({
             ...challenge,
@@ -485,33 +577,26 @@ export const registerAccountSecurityRoutes = ({
           return { ok: false, error: 'Incorrect code', code: 'INCORRECT_PROOF' };
         }
 
-        // Challenge verified — clean up
+        // Challenge verified — clean up and issue a single-use restore token.
+        // Recovery completes only through the restore endpoint presenting
+        // this token, so session possession alone can never finish recovery.
         await redis.del(challengeKey);
+        const restoreToken = `restore_${crypto.randomUUID()}${crypto.randomUUID().replace(/-/g, '')}`;
+        await redis.set(
+          `recovery:verified:${caseId}`,
+          JSON.stringify({ token: restoreToken, userId: challenge.userId, factor: challenge.factor }),
+          'EX',
+          600,
+        );
 
-        // Complete recovery: restore access with cooldown
-        await completeRecovery(caseId, {
-          recoveryProof: { factor: challenge.factor },
-          actorId: authUser.userId,
-        });
-
-        const updated = await getCompromiseCase(caseId);
         return {
           ok: true,
           verified: true,
+          restoreToken,
           nextAction: {
             label: 'Back to security',
             route: '/account-security',
           },
-          restoration: updated ? {
-            caseId: updated.caseId,
-            state: updated.state,
-            cooldownUntil: updated.cooldownUntil ?? '',
-            monitoredUntil: updated.monitoredUntil ?? '',
-            nextAction: {
-              label: 'Back to security',
-              route: '/account-security',
-            },
-          } : undefined,
         };
       } catch (err) {
         request.log.error({ err, caseId, challengeId }, 'Failed to verify recovery challenge');
@@ -553,7 +638,35 @@ export const registerAccountSecurityRoutes = ({
         };
       }
 
+      // Proof-of-verification gate: a non-admin restore must present the
+      // single-use token issued by challenge-verify. Session possession alone
+      // is not proof — the whole point of recovery is that the session may be
+      // attacker-held.
+      const isAdmin = authUser.role === 'admin';
+      let verifiedFactor: string | null = null;
+      if (!isAdmin) {
+        const payload = restoreSchema.parse(request.body ?? {});
+        const verifiedKey = `recovery:verified:${caseId}`;
+        const rawVerified = await redis.get(verifiedKey);
+        const verified = rawVerified
+          ? (JSON.parse(rawVerified) as { token: string; userId: string; factor: string })
+          : null;
+        if (!verified || verified.token !== payload.restoreToken || verified.userId !== incident.userId) {
+          reply.code(403);
+          return {
+            ok: false,
+            error: 'Identity verification is required before restoring access',
+            code: 'RECOVERY_PROOF_REQUIRED',
+          };
+        }
+        await redis.del(verifiedKey);
+        verifiedFactor = verified.factor;
+      }
+
       await completeRecovery(caseId, {
+        recoveryProof: isAdmin
+          ? { adminOverride: true }
+          : { factor: verifiedFactor, verifiedVia: 'recovery_challenge' },
         actorId: authUser.userId,
       });
 

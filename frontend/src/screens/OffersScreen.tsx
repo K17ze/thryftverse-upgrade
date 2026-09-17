@@ -428,12 +428,18 @@ export default function OffersScreen() {
           message: t('offers.confirm.acceptBody'),
           confirmLabel: t('offers.action.accept'),
         };
-      case 'decline':
+      case 'decline': {
+        const ownCounter = confirm.offer.offeredByUserId === currentUserId;
         return {
-          title: t('offers.confirm.declineTitle', { amount }),
-          message: t('offers.confirm.declineBody'),
-          confirmLabel: t('offers.action.decline'),
+          title: ownCounter
+            ? t('offers.confirm.withdrawTitle', { amount })
+            : t('offers.confirm.declineTitle', { amount }),
+          message: ownCounter
+            ? t('offers.confirm.withdrawBody')
+            : t('offers.confirm.declineBody'),
+          confirmLabel: ownCounter ? t('offers.action.withdraw') : t('offers.action.decline'),
         };
+      }
       case 'cancel':
       default:
         return {
@@ -442,7 +448,7 @@ export default function OffersScreen() {
           confirmLabel: t('offers.action.cancel'),
         };
     }
-  }, [confirm.offer, confirm.action, formatFromFiat]);
+  }, [confirm.offer, confirm.action, formatFromFiat, currentUserId]);
 
   const renderRow = useCallback(
     ({ item }: { item: ListingOffer }) => (

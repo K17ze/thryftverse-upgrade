@@ -280,17 +280,23 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
 
     const viewerUserId = request.authUser?.userId ?? null;
     const cursorCondition = cursor ? `AND created_at < $1` : '';
-    const cursorParams = cursor ? [cursor, limit] : [limit];
-    const limitSlot = `$${cursorParams.length}`;
-
-    let blockedSellerIds: Set<string> | null = null;
+    const cursorParams: unknown[] = cursor ? [cursor] : [];
+    // Bidirectional block exclusion in-SQL (not post-LIMIT, which would
+    // shrink pages): hide listings from sellers the viewer blocked AND
+    // from sellers who blocked the viewer.
+    let blockedClause = '';
     if (viewerUserId) {
-      const blockedResult = await readDb.query<{ blocked_id: string }>(
-        `SELECT blocked_id FROM user_blocks WHERE blocker_id = $1`,
-        [viewerUserId]
-      );
-      blockedSellerIds = new Set(blockedResult.rows.map((r) => r.blocked_id));
+      cursorParams.push(viewerUserId);
+      const viewerSlot = `$${cursorParams.length}`;
+      blockedClause = `
+        AND NOT EXISTS (
+          SELECT 1 FROM user_blocks
+          WHERE (blocker_id = ${viewerSlot} AND blocked_id = listings.seller_id)
+             OR (blocked_id = ${viewerSlot} AND blocker_id = listings.seller_id)
+        )`;
     }
+    cursorParams.push(limit);
+    const limitSlot = `$${cursorParams.length}`;
 
     const listingsResult = await readDb.query<{
       id: string;
@@ -314,18 +320,13 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
         ${reachJoinSql('reach_u', 'listings.seller_id')}
         WHERE status = 'active'
           ${reachExcludedSql('reach_u')}
+          ${blockedClause}
           ${cursorCondition}
         ORDER BY created_at DESC
         LIMIT ${limitSlot}
       `,
       cursorParams
     );
-
-    if (blockedSellerIds && blockedSellerIds.size > 0) {
-      listingsResult.rows = listingsResult.rows.filter(
-        (row) => !blockedSellerIds!.has(row.seller_id)
-      );
-    }
 
     const listingIds = listingsResult.rows.map((r) => r.id);
     const mediaByListing = await loadListingMedia(readDb, listingIds);

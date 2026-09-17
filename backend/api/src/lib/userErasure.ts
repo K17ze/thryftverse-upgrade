@@ -349,6 +349,53 @@ export async function performUserErasure(
     [userId]
   );
 
+  // ── Identity-provider and preference residue ──
+  // These rows are all keyed by user_id on an anonymised (not hard-deleted)
+  // user row, so FK CASCADE never fires. Each holds either direct PII
+  // (provider emails, credential metadata) or user-attributable
+  // relationship/preference state that must not outlive erasure.
+
+  // OAuth identities — provider email and external subject id are PII.
+  // Deleting also prevents a stale identity from silently re-linking.
+  await client.query(`DELETE FROM auth_oauth_identities WHERE user_id = $1`, [userId]);
+  await client.query(`DELETE FROM user_connected_accounts WHERE user_id = $1`, [userId]);
+
+  // Passkeys — credential ids, public keys, and device names are
+  // user-attributable. The user row is anonymised so the keys are dead.
+  await client.query(`DELETE FROM user_passkeys WHERE user_id = $1`, [userId]);
+  await client.query(`DELETE FROM passkey_challenges WHERE user_id = $1`, [userId]);
+
+  // Preference/consent state — user-attributable rows with no retention basis.
+  await client.query(`DELETE FROM user_privacy_consents WHERE user_id = $1`, [userId]);
+  await client.query(`DELETE FROM user_email_preferences WHERE user_id = $1`, [userId]);
+  await client.query(`DELETE FROM notification_preferences WHERE user_id = $1`, [userId]);
+
+  // Social graph — both directions are attributable to the user.
+  await client.query(
+    `DELETE FROM user_blocks WHERE blocker_id = $1 OR blocked_id = $1`,
+    [userId]
+  );
+  await client.query(
+    `DELETE FROM user_relationship_states WHERE owner_id = $1 OR target_id = $1`,
+    [userId]
+  );
+  await client.query(
+    `DELETE FROM user_follows WHERE follower_id = $1 OR following_id = $1`,
+    [userId]
+  );
+
+  // Saved items and searches — behavioural data attributable to the user.
+  await client.query(`DELETE FROM user_saved_listings WHERE user_id = $1`, [userId]);
+  await client.query(`DELETE FROM saved_searches WHERE user_id = $1`, [userId]);
+
+  // Session/refresh rows are revoked above but still carry the user's
+  // device fingerprint (user_agent, ip_address). Erase the PII columns now
+  // that the sessions are dead.
+  await client.query(
+    `UPDATE user_sessions SET user_agent = NULL, ip_address = NULL WHERE user_id = $1`,
+    [userId]
+  );
+
   // Record the erasure in the backup deletion manifest so that the backup
   // expiry worker can ensure all backup snapshots containing this user's
   // data are expired within 90 days (UK-GDPR Art. 17 erasure propagation

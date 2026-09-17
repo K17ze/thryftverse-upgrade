@@ -742,7 +742,14 @@ export async function trackListingInteraction(
 
 export async function patchListingOnApi(
   listingId: string,
-  patch: Partial<Omit<ListingCreateBody, 'id' | 'sellerId'>>
+  patch: Partial<Omit<ListingCreateBody, 'id' | 'sellerId'>> & {
+    /**
+     * Optimistic-concurrency guard — the `updatedAt` read when the listing
+     * was loaded. The backend rejects the write with 409 when the stored
+     * timestamp has moved on (another device/session edited the listing).
+     */
+    expectedUpdatedAt?: string | null;
+  }
 ): Promise<{ ok: boolean; listingId: string; updatedAt?: string }> {
   return fetchJson<{ ok: boolean; listingId: string; updatedAt?: string }>(`/listings/${listingId}`, {
     method: 'PATCH',

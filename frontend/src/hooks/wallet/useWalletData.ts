@@ -54,6 +54,10 @@ export function useWalletData() {
   // Fiat balance kept in parallel for the "Buy 1ZE with fiat balance" flow.
   const [availableFiatBalance, setAvailableFiatBalance] = useState(0);
   const [sellerBalances, setSellerBalances] = useState<SellerBalancesSummary | null>(null);
+  // Distinct from isError: the seller-balance fetch is swallowed inside
+  // Promise.all so a failure must surface as its own flag — otherwise a
+  // real-balance seller reads as "empty" (sellerBalances stays null).
+  const [sellerBalancesError, setSellerBalancesError] = useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isError, setIsError] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
@@ -66,6 +70,7 @@ export function useWalletData() {
     let cancelled = false;
     if (!silent) setIsLoading(true);
     setIsError(false);
+    setSellerBalancesError(false);
 
     Promise.all([
       getIzePosition(currentUser.id, currencyCode),
@@ -92,6 +97,9 @@ export function useWalletData() {
         // availableFiatBalance now reads the ledger-backed seller balances —
         // the snapshot endpoint's client-asserted blob is not a money source.
         setAvailableFiatBalance(sellerWallet?.balances.availableGbp ?? 0);
+        // A null here means the fetch failed (the API resolves an object
+        // otherwise) — flag it so the screen can refuse the empty state.
+        setSellerBalancesError(sellerWallet === null);
         if (sellerWallet) {
           setSellerBalances({
             availableGbp: sellerWallet.balances.availableGbp,
@@ -151,6 +159,7 @@ export function useWalletData() {
     balance,
     availableFiatBalance,
     sellerBalances,
+    sellerBalancesError,
     isLoading,
     isError,
     refreshing,

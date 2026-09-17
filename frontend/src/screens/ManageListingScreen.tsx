@@ -111,7 +111,6 @@ export default function ManageListingScreen() {
   // ── Performance metrics (moved before early returns for Rules of Hooks) ──
   const engagement = item?.engagement ?? null;
   const activeOfferCount = engagement?.activeOfferCount ?? 0;
-  const viewsCount: number | null = engagement?.views ?? null;
   const daysOnMarket = useMemo(() => {
     const created = item?.createdAt;
     if (!created) return null;
@@ -315,10 +314,12 @@ export default function ManageListingScreen() {
   const statusColor = isSold ? colors.brand : isPaused ? colors.warning : colors.success;
 
   // ── Real engagement data (from backend engagement summary) ──
-  const likesCount = engagement?.likes ?? 0;
-  const savesCount = engagement?.saves ?? 0;
+  // GET /listings/:id emits exactly: likes (wishlist adds), wishlistCount,
+  // collectionSaveCount, activeOfferCount, questionCount. There is no `views`
+  // or `saves` key — those were fabricated in a prior build.
+  const wishlistCount = engagement?.wishlistCount ?? engagement?.likes ?? 0;
+  const savesCount = engagement?.collectionSaveCount ?? 0;
   const questionCount = engagement?.questionCount ?? 0;
-  const answeredQuestionCount = engagement?.answeredQuestionCount ?? 0;
 
   return (
     <View style={styles.container}>
@@ -454,23 +455,21 @@ export default function ManageListingScreen() {
 
         {/* ── Buyer activity / performance (real metrics only) ──
             Views intentionally omitted — not returned by the backend
-            engagement query (was fabricated in a prior build). Likes, saves,
-            questions and offers are all real and sourced from engagement.
-            Flat composition: FlagshipFormSection variant="flat" + metric
-            lines + disclosure rows. No cards, no borders. */}
+            engagement query (was fabricated in a prior build). Wishlists,
+            saves, questions and offers are all real and sourced from
+            engagement. Flat composition: FlagshipFormSection variant="flat"
+            + metric lines + disclosure rows. No cards, no borders. */}
         <FlagshipFormSection
           variant="flat"
           title={t('manage.buyerActivity')}
           style={styles.metricsSection}
         >
-          <FlagshipMetricLine label={t('manage.views')} value={viewsCount != null ? String(viewsCount) : '—'} />
-          <FlagshipMetricLine label={t('manage.timeOnMarket')} value={daysOnMarket != null ? `${daysOnMarket} days` : '—'} separated />
-          <FlagshipMetricLine label={t('manage.likes')} value={String(likesCount)} />
+          <FlagshipMetricLine label={t('manage.timeOnMarket')} value={daysOnMarket != null ? `${daysOnMarket} days` : '—'} />
+          <FlagshipMetricLine label={t('manage.wishlists')} value={String(wishlistCount)} separated />
           <FlagshipMetricLine label={t('manage.saves')} value={String(savesCount)} separated />
           <FlagshipMetricLine
             label={t('manage.questions')}
             value={String(questionCount)}
-            subLabel={answeredQuestionCount > 0 ? t('manage.answered', { count: answeredQuestionCount }) : undefined}
             separated
           />
           <FlagshipMetricLine label={t('manage.activeOffers')} value={String(activeOfferCount)} separated />

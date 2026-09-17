@@ -83,6 +83,16 @@ export interface MarketplaceChatCardProps {
    *  "Cancel" for a buyer withdrawing (cancel is the buyer's only exit;
    *  decline is seller-only server-side). */
   declineLabel?: string;
+  /** Author-side retract on a pending offer — buyers cancel their offer,
+   *  sellers withdraw their counter (decline route is seller-only). */
+  onWithdraw?: () => void;
+  withdrawLabel?: string;
+  /** Override for the "Offer sent · Waiting…" copy (e.g. counter sent). */
+  waitingLabel?: string;
+  /** The viewer authored the pending offer/counter even when the card
+   *  message sender didn't flip (counter on a buyer-authored card) —
+   *  renders the waiting/retract state instead of response actions. */
+  viewerAuthoredPending?: boolean;
   onCounter?: () => void;
   onViewListing?: () => void;
   onMakeOffer?: () => void;
@@ -153,6 +163,10 @@ export function MarketplaceChatCard({
   onAccept,
   onDecline,
   declineLabel,
+  onWithdraw,
+  withdrawLabel,
+  waitingLabel,
+  viewerAuthoredPending,
   onCounter,
   onViewListing,
   onMakeOffer,
@@ -369,18 +383,33 @@ export function MarketplaceChatCard({
           </View>
         )}
 
-        {/* Sender Outgoing State: Waiting for response */}
-        {isPending && isMe && (
+        {/* Sender Outgoing State: Waiting for response — the author can
+            still retract a pending offer/counter (cancel for buyers,
+            withdraw for sellers). */}
+        {isPending && (isMe || viewerAuthoredPending) && (
           <View style={styles.offerWaitingRow}>
             <Ionicons name="paper-plane-outline" size={13} color={colors.textSecondary} />
             <Text style={styles.offerWaitingText}>
-              Offer sent · Waiting for seller response
+              {waitingLabel ?? 'Offer sent · Waiting for response'}
             </Text>
+            {onWithdraw && (
+              <AnimatedPressable
+                onPress={onWithdraw}
+                activeOpacity={0.8}
+                scaleValue={0.96}
+                hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel={withdrawLabel ?? 'Withdraw offer'}
+              >
+                <Text style={styles.offerWithdrawText}>{withdrawLabel ?? 'Withdraw'}</Text>
+              </AnimatedPressable>
+            )}
           </View>
         )}
 
-        {/* Recipient Incoming State: Action buttons */}
-        {isPending && !isMe && (
+        {/* Recipient Incoming State: Action buttons — suppressed when the
+            viewer authored the pending offer themselves. */}
+        {isPending && !isMe && !viewerAuthoredPending && (
           <View style={styles.offerActions}>
             <AnimatedPressable
               style={styles.offerPass}
@@ -743,8 +772,14 @@ const createStyles = (colors: ThemeColors) =>
       borderTopColor: colors.borderSubtle,
     },
     offerWaitingText: {
+      flex: 1,
       fontSize: TypographyV2.caption.size,
       fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary,
+    },
+    offerWithdrawText: {
+      fontSize: TypographyV2.caption.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textSecondary,
     },
     offerStatusBanner: {

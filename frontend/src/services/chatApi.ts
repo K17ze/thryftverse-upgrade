@@ -2,6 +2,7 @@ import type { ChatAgentConfig, ChatBot, Conversation, Message } from '../domain'
 import { parseMessageCommerceState } from '../domain';
 import type { ConversationContext } from '../domain/conversationContext';
 import { fetchJson } from '../lib/apiClient';
+import { parseServerDate } from '../utils/dateFormat';
 
 type ApiConversationType = 'dm' | 'group';
 type ApiSenderType = 'user' | 'bot' | 'system';
@@ -300,7 +301,12 @@ export function mapApiMessageToConversationMessage(
           originalPrice: typeof offerSource.originalPrice === 'number' ? offerSource.originalPrice : undefined,
           offerPrice: typeof offerSource.offerPrice === 'number' ? offerSource.offerPrice : undefined,
           price: typeof offerSource.offerPrice === 'number' ? offerSource.offerPrice : undefined,
-          expiresAt: typeof offerSource.expiresAt === 'string' ? offerSource.expiresAt : undefined,
+          // Normalize Postgres `::text` timestamps at the boundary — raw
+          // '2026-07-28 12:34:56.789+00' parses to NaN on Hermes, which
+          // would keep expired offers' Accept buttons live.
+          expiresAt: typeof offerSource.expiresAt === 'string'
+            ? (parseServerDate(offerSource.expiresAt)?.toISOString() ?? undefined)
+            : undefined,
           counterRound: typeof offerSource.counterRound === 'number' ? offerSource.counterRound : undefined,
           offeredByUserId: typeof offerSource.offeredByUserId === 'string' ? offerSource.offeredByUserId : undefined,
         }

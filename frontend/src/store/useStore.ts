@@ -593,7 +593,11 @@ interface StoreState {
   updatePostagePreferences: (updates: Partial<PostagePreferences>) => void;
   hydratePostagePreferences: () => Promise<void>;
   personalisationPreferences: PersonalisationPreferences;
-  updatePersonalisationPreferences: (updates: Partial<PersonalisationPreferences>) => void;
+  /** Applies updates optimistically and persists them server-side. Resolves
+   *  `true` when the write landed; on failure the previous preferences are
+   *  restored and it resolves `false` so callers can render honest
+   *  feedback instead of a premature success toast. */
+  updatePersonalisationPreferences: (updates: Partial<PersonalisationPreferences>) => Promise<boolean>;
 
   // Notifications
   notificationCount: number;
@@ -1810,10 +1814,18 @@ export const useStore = create<StoreState>()(
     membersPref: 'Everyone',
   },
   updatePersonalisationPreferences: (updates) => {
+    const prev = get().personalisationPreferences;
     set((state) => ({
       personalisationPreferences: { ...state.personalisationPreferences, ...updates },
     }));
-    void updateUserPersonalisation(updates);
+    return updateUserPersonalisation(updates)
+      .then(() => true)
+      .catch(() => {
+        // Rollback on failure — restore previous state so the UI stays
+        // truthful (same convention as updatePostagePreferences).
+        set({ personalisationPreferences: prev });
+        return false;
+      });
   },
 
   notificationCount: ENABLE_RUNTIME_MOCKS ? 3 : 0,
