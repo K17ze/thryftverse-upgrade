@@ -25,11 +25,14 @@
  *   - `handleTimelineOperation` — the single switch-based router that
  *     routes timeline operations (seek, play, pause, trim, speed, volume,
  *     split, duplicate, delete, replace, moveOverlay, reorder) to the
- *     document model via CreatorContext mutations.
+ *     document model via CreatorContext mutations. The clip-mutating ops
+ *     are delegated to useClipOps and the track-level ops (moveOverlay,
+ *     reorder) plus transition-tap navigation to useTrackOps — the lock
+ *     guard and dispatch stay here.
  *   - `handleSpeedCurveChange` — commits a variable speed curve to the
- *     selected media layer.
+ *     selected media layer (lives in useClipOps).
  *   - `handleTimelineTransitionTap` — navigates to the source page of a
- *     clip boundary and opens the transition drawer.
+ *     clip boundary and opens the transition drawer (lives in useTrackOps).
  *   - Selection coherence effect — validates selectedClipId against the
  *     current timeline clips and resets to null if the clip was deleted.
  *
@@ -42,14 +45,13 @@
  * usePosterPlayback.ts.
  */
 
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
-import type { CreatorDocument, CreatorLayer, CreatorPage } from '../composition';
-import { updateLayerInPage } from '../composition';
+import type { CreatorDocument, CreatorLayer } from '../core/projectStore/composition';
 import type { useHaptic } from '../../hooks/useHaptic';
 import type { ToastType } from '../../context/ToastContext';
 import type { PlaybackClock, PlaybackState } from '../core/playback';
-import type { AssetPickerMode } from '../CreatorAssetPicker';
+import type { AssetPickerMode } from '../surfaces/CreatorAssetPicker';
 import type {
   PosterClip,
   OverlayLayer,
@@ -57,17 +59,10 @@ import type {
   TimelineOperation,
 } from './timeline';
 import type { SpeedCurve } from './speedcurves/SpeedCurveTypes';
-import { averageSpeed } from './speedcurves/SpeedCurveTypes';
 import type { ActiveSheet } from './useActiveSheet';
-import {
-  trimClipStart,
-  trimClipEnd,
-  setClipSpeed,
-  setClipVolume,
-  splitClip,
-  duplicateClip,
-} from './timeline/TimelineOperations';
 import { projectTimeline } from '../core/playback';
+import { useClipOps } from './useClipOps';
+import { useTrackOps } from './useTrackOps';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -147,6 +142,12 @@ export interface UsePosterTimelineResult {
   timelineClips: PosterClip[];
   /** Which page each clip originated from. */
   clipPageIndices: number[];
+  /**
+   * The canonical timeline projection — clips carry `timelineStartMs`,
+   * `durationMs`, and `pageId`, used for playhead→page sync, clip-relative
+   * time derivation, and freeze/active-clip resolution on the canvas.
+   */
+  projectedTimeline: ReturnType<typeof projectTimeline>;
   /** Transition preset IDs for each clip boundary. */
   clipTransitionIds: (string | null)[];
   /** Clip-anchored overlay resolution (timed overlay layers). */
@@ -163,17 +164,16 @@ export interface UsePosterTimelineResult {
   handleSpeedCurveChange: (nextCurve: SpeedCurve) => void;
   /** Navigates to the source page of a clip boundary and opens transitions. */
   handleTimelineTransitionTap: (boundaryIndex: number) => void;
+  /** Toggles `locked` on the media layer owning a clip (any page). */
+  toggleClipLock: (clipId: string) => void;
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────
 
 export function usePosterTimeline({
   document,
-  updateLayer,
-  duplicateLayer,
   removeLayer,
   reorderPages,
-  addLayer,
   commitDocument,
   haptic,
   show,
@@ -205,6 +205,12 @@ export function usePosterTimeline({
     const pageIndexById = new Map(
       document.pages.map((p, i) => [p.id, i] as const),
     );
+    // Lock state lives on the media layer (canvas enforces it on layer
+    // gestures); carry it onto the clip so timeline ops can enforce the
+    // same invariant.
+    const lockedByLayerId = new Map(
+      document.pages.flatMap((p) => p.layers).map((l) => [l.id, l.locked] as const),
+    );
     const clips: PosterClip[] = projected.clips.map((pc) => ({
       id: pc.layerId,
       assetId: pc.assetId,
@@ -212,13 +218,16 @@ export function usePosterTimeline({
       mediaType: pc.mediaType,
       trimStartMs: pc.sourceStartMs,
       trimEndMs: pc.sourceEndMs,
+      sourceDurationMs: pc.sourceDurationMs,
       speed: pc.speed,
       speedCurve: pc.speedCurve,
       volume: pc.volume,
       thumbnailUri: pc.thumbnailUri,
       durationMs: pc.durationMs,
+      timelineStartMs: pc.timelineStartMs,
       reversed: pc.reversed,
       freezeFrameMs: pc.freezeFrameMs,
+      locked: lockedByLayerId.get(pc.layerId) ?? false,
     }));
     const pageIndices = projected.clips.map(
       (pc) => pageIndexById.get(pc.pageId) ?? 0,
@@ -237,6 +246,28 @@ export function usePosterTimeline({
       setSelectedClipId(null);
     }
   }, [selectedClipId, timelineClips, setSelectedClipId]);
+
+  // ── Preview-follows-playhead (CapCut/Edits grammar) ────────────────
+  // currentTimeMs only changes via playback-clock ticks or an explicit
+  // timeline seek — so whenever it lands inside a different clip, the
+  // active page follows. The canvas and every page-scoped mutation then
+  // always target what the user sees. The ref gate is essential: doc
+  // edits re-run this effect without a playhead move and must not yank
+  // the user back to the playhead's page mid-edit.
+  const lastSyncTRef = useRef(playbackState.currentTimeMs);
+  useEffect(() => {
+    const t = playbackState.currentTimeMs;
+    if (t === lastSyncTRef.current) return;
+    lastSyncTRef.current = t;
+    const clip = projectedTimeline.clips.find(
+      (c) => t >= c.timelineStartMs && t < c.timelineStartMs + c.durationMs,
+    );
+    if (!clip) return;
+    const pageIndex = document.pages.findIndex((p) => p.id === clip.pageId);
+    if (pageIndex >= 0 && pageIndex !== activePageIndex) {
+      setActivePageIndex(pageIndex);
+    }
+  }, [playbackState.currentTimeMs, projectedTimeline, document.pages, activePageIndex, setActivePageIndex]);
 
   // ── Transition preset IDs for each clip boundary ───────────────────
   // Length = clips.length - 1. Index i is the transition between clip[i]
@@ -369,11 +400,84 @@ export function usePosterTimeline({
     [timelineClips, selectedClipId],
   );
 
+  // ── Clip operation handlers (useClipOps) ───────────────────────────
+  // Clip-mutating ops resolve the clip's owning page via clipPageIndices
+  // and commit through updateLayerInPage + commitDocument. Duration-
+  // affecting ops reflow absolute overlay time ranges before commit.
+  const {
+    handleTrim,
+    handleSlip,
+    handleSpeed,
+    handleVolume,
+    handleSplit,
+    handleDuplicate,
+    handleDelete,
+    handleReplace,
+    handleSpeedCurveChange,
+    toggleClipLock,
+  } = useClipOps({
+    document,
+    timelineClips,
+    clipPageIndices,
+    playbackState,
+    commitDocument,
+    removeLayer,
+    haptic,
+    show,
+    activePageIndex,
+    setActivePageIndex,
+    setSelectedClipId,
+    setEditingLayer,
+    setPickerMode,
+    selectedLayer,
+  });
+
+  // ── Track-level handlers (useTrackOps) ─────────────────────────────
+  // Overlay moves, clip reorder, and transition-icon tap navigation —
+  // ops that act across the timeline track rather than mutating one
+  // clip's media layer.
+  const {
+    handleMoveOverlay,
+    handleReorder,
+    handleTimelineTransitionTap,
+  } = useTrackOps({
+    document,
+    timelineClips,
+    clipPageIndices,
+    playbackClock,
+    commitDocument,
+    reorderPages,
+    haptic,
+    activePageIndex,
+    selectLayer,
+    setActivePageIndex,
+    openSheet,
+  });
+
   // ── Timeline operation handler ─────────────────────────────────────
-  // Routes timeline operations to the document model. For now, trim/speed/
-  // volume map to updateLayer on the underlying media layer.
+  // Routes timeline operations to the document model. Clip-mutating ops
+  // delegate to useClipOps handlers; track-level ops to useTrackOps.
   const handleTimelineOperation = useCallback(
     (op: TimelineOperation) => {
+      // Clip-lock parity (Instagram Edits): a locked clip rejects every
+      // mutating op. Canvas gestures already honor `layer.locked`; without
+      // this guard the same clip could still be trimmed, split, deleted or
+      // reordered through the timeline. Reorder resolves the moved clip via
+      // fromIndex; moveOverlay resolves the overlay layer directly.
+      const lockTargetIds: (string | undefined)[] =
+        'clipId' in op ? [op.clipId] :
+        // Reorder displaces both endpoint clips — check both.
+        op.type === 'reorder' ? [timelineClips[op.fromIndex]?.id, timelineClips[op.toIndex]?.id] :
+        op.type === 'moveOverlay' ? [op.overlayId] : [];
+      if (lockTargetIds.length > 0) {
+        const targetLocked = lockTargetIds.some((id) =>
+          id != null && document.pages.some((p) => p.layers.some((l) => l.id === id && l.locked)));
+        if (targetLocked) {
+          haptic.error();
+          show('Clip is locked', 'info');
+          return;
+        }
+      }
       switch (op.type) {
         case 'seek':
           playbackClock.seek(op.ms);
@@ -386,340 +490,46 @@ export function usePosterTimeline({
           playbackClock.pause();
           haptic.light();
           break;
-        case 'trim': {
-          const clip = timelineClips.find((c) => c.id === op.clipId);
-          if (!clip) return;
-          // Still-image clips have no source window to trim — their display
-          // duration is the page's hold time, not a trim range. The trim
-          // handles are only rendered for video clips (ClipThumb gates on
-          // mediaType); this guard is the safety net.
-          if (clip.mediaType === 'image') break;
-          const layer = document.pages
-            .flatMap((p) => p.layers)
-            .find((l) => l.id === op.clipId);
-          if (!layer || layer.type !== 'media') return;
-          // Magnetic snapping: snap trim edges to the playhead position
-          // and to adjacent clip boundaries when within 150ms.
-          const SNAP_MS = 150;
-          const playheadMs = playbackState.currentTimeMs;
-          let newTrimStart = op.edge === 'start'
-            ? Math.max(0, clip.trimStartMs + op.deltaMs)
-            : clip.trimStartMs;
-          let newTrimEnd = op.edge === 'end'
-            ? Math.max(newTrimStart + 100, clip.trimEndMs + op.deltaMs)
-            : clip.trimEndMs;
-          // Snap to playhead
-          if (op.edge === 'start' && Math.abs(newTrimStart - playheadMs) < SNAP_MS) {
-            newTrimStart = playheadMs;
-          }
-          if (op.edge === 'end' && Math.abs(newTrimEnd - playheadMs) < SNAP_MS) {
-            newTrimEnd = playheadMs;
-          }
-          // Snap to adjacent clip boundaries
-          const clipIdx = timelineClips.findIndex((c) => c.id === op.clipId);
-          if (op.edge === 'start' && clipIdx > 0) {
-            const prevClip = timelineClips[clipIdx - 1];
-            const prevEnd = prevClip.trimEndMs ?? 0;
-            if (Math.abs(newTrimStart - prevEnd) < SNAP_MS) {
-              newTrimStart = prevEnd;
-            }
-          }
-          if (op.edge === 'end' && clipIdx < timelineClips.length - 1) {
-            const nextClip = timelineClips[clipIdx + 1];
-            const nextStart = nextClip.trimStartMs ?? 0;
-            if (Math.abs(newTrimEnd - nextStart) < SNAP_MS) {
-              newTrimEnd = nextStart;
-            }
-          }
-          // Route the snapped value through the pure timeline operation so
-          // bounds are validated (MIN_TRIM floor, no negative duration) and
-          // durationMs is recomputed consistently. The snapped target is
-          // converted to a delta — the pure function clamps and validates.
-          const snappedDelta = op.edge === 'start'
-            ? newTrimStart - clip.trimStartMs
-            : newTrimEnd - clip.trimEndMs;
-          const trimmedClips = op.edge === 'start'
-            ? trimClipStart(timelineClips, op.clipId, snappedDelta)
-            : trimClipEnd(timelineClips, op.clipId, snappedDelta);
-          const trimmedClip = trimmedClips.find((c) => c.id === op.clipId);
-          if (!trimmedClip) break;
-          updateLayer(op.clipId, {
-            type: 'media',
-            payload: {
-              ...layer.payload,
-              trimStartMs: trimmedClip.trimStartMs,
-              trimEndMs: trimmedClip.trimEndMs,
-            },
-          }, 'Trim clip');
+        case 'trim':
+          handleTrim(op);
           break;
-        }
-        case 'speed': {
-          const layer = document.pages
-            .flatMap((p) => p.layers)
-            .find((l) => l.id === op.clipId);
-          if (!layer || layer.type !== 'media') return;
-          // Route through the pure timeline operation so the speed is
-          // clamped to 0.25x–4x and durationMs is recomputed consistently.
-          // setClipSpeed also clears any existing speed curve — the clip
-          // becomes a constant-speed clip.
-          const speedClips = setClipSpeed(timelineClips, op.clipId, op.speed);
-          const speedClip = speedClips.find((c) => c.id === op.clipId);
-          if (!speedClip) break;
-          updateLayer(op.clipId, {
-            type: 'media',
-            payload: {
-              ...layer.payload,
-              speed: speedClip.speed,
-              speedCurve: undefined,
-            },
-          }, 'Change speed');
-          haptic.light();
+        case 'slip':
+          handleSlip(op);
           break;
-        }
-        case 'volume': {
-          const layer = document.pages
-            .flatMap((p) => p.layers)
-            .find((l) => l.id === op.clipId);
-          if (!layer || layer.type !== 'media') return;
-          // Route through the pure timeline operation so the volume is
-          // clamped to 0.0–1.0 before persisting. Volume does not affect
-          // the clip's wall-clock duration, so durationMs is untouched.
-          const volumeClips = setClipVolume(timelineClips, op.clipId, op.volume);
-          const volumeClip = volumeClips.find((c) => c.id === op.clipId);
-          if (!volumeClip) break;
-          updateLayer(op.clipId, {
-            type: 'media',
-            payload: { ...layer.payload, volume: volumeClip.volume },
-          }, 'Change volume');
-          haptic.light();
+        case 'speed':
+          handleSpeed(op);
           break;
-        }
-        case 'split': {
-          // Split the selected clip at the playhead position.
-          // This creates two clips from one: the first keeps the original
-          // trim range up to the split point, the second starts from the
-          // split point to the original trim end.
-          const clip = timelineClips.find((c) => c.id === op.clipId);
-          if (!clip) return;
-          // Only video clips carry a source window that can split.
-          if (clip.mediaType === 'image') break;
-
-          // Find the clip's start position in the timeline (sum of all
-          // previous clips' speed-adjusted durations).
-          const clipIndex = timelineClips.indexOf(clip);
-          let clipStartMs = 0;
-          for (let i = 0; i < clipIndex; i++) {
-            clipStartMs += timelineClips[i].durationMs;
-          }
-
-          // Calculate the offset within this clip (timeline time → source time)
-          const offsetInClip = Math.max(0, op.atMs - clipStartMs);
-          const splitPoint = clip.trimStartMs + offsetInClip * clip.speed;
-
-          // Clamp the split point to be safely within the trim range
-          const minSplit = clip.trimStartMs + 100; // min 100ms on each side
-          const maxSplit = clip.trimEndMs - 100;
-          if (splitPoint <= minSplit || splitPoint >= maxSplit) {
-            haptic.error();
-            show("Can't split here", 'info');
-            break;
-          }
-
-          // Find the original media layer
-          const layer = document.pages
-            .flatMap((p) => p.layers)
-            .find((l) => l.id === op.clipId);
-          if (!layer || layer.type !== 'media') return;
-
-          // Route through the pure timeline operation for bounds validation
-          // and consistent duration recomputation. splitClip returns a new
-          // clips array with the original clip trimmed to the split point and
-          // a new clip inserted immediately after with a fresh id.
-          const splitClips = splitClip(timelineClips, op.clipId, splitPoint);
-          if (splitClips === timelineClips) {
-            // No-op — the pure function rejected the split point.
-            haptic.error();
-            show("Can't split here", 'info');
-            break;
-          }
-          const firstClip = splitClips.find((c) => c.id === op.clipId);
-          // The new clip is the one not present in the original array.
-          const originalIds = new Set(timelineClips.map((c) => c.id));
-          const secondClip = splitClips.find((c) => !originalIds.has(c.id));
-          if (!firstClip || !secondClip) break;
-
-          // Find the clip's owning page index so we can target it
-          // directly instead of relying on activePageIndex (which may
-          // point to a different page). This is the root fix for the
-          // P0 finding that split silently targeted the wrong page.
-          const owningClipIdx = timelineClips.findIndex((c) => c.id === op.clipId);
-          if (owningClipIdx < 0) break;
-          const owningPageIndex = clipPageIndices[owningClipIdx];
-          if (owningPageIndex == null) break;
-
-          // 1. Trim the original clip's trim end to the split point on
-          //    its owning page (not the active page).
-          // 2. Create a new page for the second half. The projector only
-          //    renders one media layer per page, so adding a second media
-          //    layer to the same page would make it invisible in playback.
-          //    A new page ensures both halves render correctly and the
-          //    timeline clip order matches the page order.
-          // 3. Update the original page's duration to match the trimmed
-          //    first half so the timeline and playback agree.
-          //
-          // All three mutations are applied to a single document snapshot
-          // and committed through `commitDocument` so the split creates ONE
-          // history entry — a single undo restores the pre-split state.
-          // The previous implementation called `updateLayerOnPage`,
-          // `insertPage` and `updatePageDuration` separately, pushing three
-          // history entries and forcing the user to undo three times. We
-          // compute the combined document synchronously with the pure
-          // composition helpers instead of routing through the context
-          // mutators (which each push their own snapshot inside a deferred
-          // React state updater — a timing model that makes a
-          // suspend/resume transaction on the HistoryStack unsafe).
-          const secondLayer: CreatorLayer = {
-            ...layer,
-            id: secondClip.id,
-            zIndex: 0, // reset zIndex — new page, fresh z-stack
-            payload: {
-              ...layer.payload,
-              trimStartMs: secondClip.trimStartMs,
-              trimEndMs: secondClip.trimEndMs,
-              // Clear the thumbnail so it regenerates for the new clip.
-              thumbnailUri: undefined,
-            },
-          };
-          const secondPageDurationMs = Math.max(
-            100,
-            (secondClip.trimEndMs - secondClip.trimStartMs) / (secondClip.speed ?? 1),
-          );
-          const newPage: CreatorPage = {
-            id: `page_${Date.now()}`,
-            layers: [secondLayer],
-            durationMs: secondPageDurationMs,
-          };
-          const firstPageDurationMs = Math.max(
-            100,
-            (firstClip.trimEndMs - firstClip.trimStartMs) / (firstClip.speed ?? 1),
-          );
-
-          // Build the combined document: trim the original clip, update its
-          // page duration, then insert the new page after it. Guard the
-          // insert with the same MAX_PAGES (10) limit the context enforces
-          // so we don't exceed the page budget.
-          let splitDoc = updateLayerInPage(document, owningPageIndex, op.clipId, {
-            type: 'media',
-            payload: { ...layer.payload, trimEndMs: firstClip.trimEndMs },
-          });
-          {
-            const newPages = [...splitDoc.pages];
-            if (newPages[owningPageIndex]) {
-              newPages[owningPageIndex] = {
-                ...newPages[owningPageIndex],
-                durationMs: firstPageDurationMs,
-              };
-            }
-            splitDoc = { ...splitDoc, pages: newPages };
-          }
-          if (splitDoc.pages.length < 10) {
-            const newPages = [...splitDoc.pages];
-            newPages.splice(owningPageIndex + 1, 0, newPage);
-            splitDoc = { ...splitDoc, pages: newPages };
-          }
-          commitDocument({ ...splitDoc, updatedAt: new Date().toISOString() }, 'Split clip');
-
-          // 4. Select the new second clip so the user can immediately edit it.
-          //    Without this, selection stays on the first half.
-          setSelectedClipId(secondClip.id);
-
-          haptic.medium();
+        case 'volume':
+          handleVolume(op);
           break;
-        }
-        case 'duplicate': {
-          if (!op.clipId) break;
-          // Route through the pure timeline operation for validation —
-          // duplicateClip confirms the clip exists in the timeline model
-          // before the document-level duplication proceeds.
-          const duplicatedClips = duplicateClip(timelineClips, op.clipId);
-          if (duplicatedClips === timelineClips) break; // clip not found
-          duplicateLayer(op.clipId);
+        case 'split':
+          handleSplit(op);
           break;
-        }
+        case 'duplicate':
+          handleDuplicate(op);
+          break;
         case 'delete':
-          if (op.clipId) removeLayer(op.clipId);
-          setSelectedClipId(null);
+          handleDelete(op);
           break;
         case 'replace':
-          setEditingLayer(
-            document.pages.flatMap((p) => p.layers).find((l) => l.id === op.clipId) ?? null,
-          );
-          setPickerMode('media');
+          handleReplace(op);
           break;
-        case 'moveOverlay': {
-          const layer = document.pages
-            .flatMap((p) => p.layers)
-            .find((l) => l.id === op.overlayId);
-          if (!layer) return;
-          updateLayer(op.overlayId, {
-            timeRange: op.timeRange,
-          }, 'Move overlay');
-          haptic.light();
+        case 'moveOverlay':
+          handleMoveOverlay(op);
           break;
-        }
         case 'reorder':
-          // Clip reorder maps to page reorder
-          if (op.fromIndex !== op.toIndex) {
-            reorderPages(op.fromIndex, op.toIndex);
-          }
+          handleReorder(op);
           break;
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [timelineClips, timelineTotalDurationMs, document.pages, document, updateLayer, duplicateLayer, removeLayer, reorderPages, show, haptic, addLayer, commitDocument, playbackClock, clipPageIndices],
-  );
-
-  // ── Speed curve handler ─────────────────────────────────────────────
-  // Opens the speed curve editor for the selected media layer. The curve
-  // is stored on the media layer's `speedCurve` field. When the user
-  // clears the curve (back to constant), the field is removed.
-  const handleSpeedCurveChange = useCallback((nextCurve: SpeedCurve) => {
-    if (!selectedLayer || selectedLayer.type !== 'media') return;
-    updateLayer(selectedLayer.id, {
-      type: 'media',
-      // Keep `speed` in sync with the curve's average so consumers that
-      // read the constant field directly (viewers, fallbacks) agree with
-      // the projected duration the curve produces.
-      payload: {
-        ...selectedLayer.payload,
-        speedCurve: nextCurve,
-        speed: averageSpeed(nextCurve),
-      },
-    }, 'Edit speed curve');
-  }, [selectedLayer, updateLayer]);
-
-  // ── Transition icon tap (from the timeline clip boundary) ──────────
-  // When the user taps a transition icon between two clips in the timeline,
-  // navigate to the source page of that boundary and open the transition
-  // drawer. This is the progressive-disclosure pattern: the transition is
-  // visible as an icon between clips (only when 2+ clips exist) and opens
-  // the same drawer as the overflow "Transitions" tool.
-  const handleTimelineTransitionTap = useCallback(
-    (boundaryIndex: number) => {
-      const srcPageIdx = clipPageIndices[boundaryIndex];
-      if (srcPageIdx == null) return;
-      if (srcPageIdx !== activePageIndex) {
-        selectLayer(null);
-        setActivePageIndex(srcPageIdx);
-      }
-      openSheet('transitions');
-    },
-    [clipPageIndices, activePageIndex, selectLayer, setActivePageIndex, openSheet],
+    [timelineClips, document, haptic, show, playbackClock, handleTrim, handleSlip, handleSpeed, handleVolume, handleSplit, handleDuplicate, handleDelete, handleReplace, handleMoveOverlay, handleReorder],
   );
 
   return {
     timelineClips,
     clipPageIndices,
+    projectedTimeline,
     clipTransitionIds,
     timelineOverlays,
     timelineTotalDurationMs,
@@ -728,5 +538,6 @@ export function usePosterTimeline({
     handleTimelineOperation,
     handleSpeedCurveChange,
     handleTimelineTransitionTap,
+    toggleClipLock,
   };
 }

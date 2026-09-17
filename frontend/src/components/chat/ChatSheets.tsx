@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useState } from "react";
 
 import * as Clipboard from "expo-clipboard";
 
@@ -13,10 +13,11 @@ import { MessageContextMenu } from "./MessageContextMenu";
 import { ForwardSheet } from "./ForwardSheet";
 import { ScrollToBottomFAB } from "./ScrollToBottomFAB";
 import { ConfirmationSheet } from "../ConfirmationSheet";
-
 import {
-  reportConversationOnApi,
-  sendConversationMessageOnApi } from "../../services/chatApi";
+  forwardMessageToConversation,
+  isForwardableMessage } from "./forwardMessage";
+
+import { reportConversationOnApi } from "../../services/chatApi";
 
 import { type Message } from "../../hooks/chat";
 import type { ConversationConfirmationRequest } from "../../hooks/chat/useConversationMessages";
@@ -38,6 +39,8 @@ export interface ChatSheetsProps {
   hasLinkedListing?: boolean;
   isSeller?: boolean;
   onMakeOffer?: () => void;
+  /** Sends the conversation's linked listing as a product-share card. */
+  onShareListing?: () => void;
 
   // ── Pending attachment review ──
   pendingAttachment: { uri: string; mediaType: "image" | "video" } | null;
@@ -61,8 +64,17 @@ export interface ChatSheetsProps {
   onCloseContextMenu: () => void;
   selectedMessage: Message | null;
   onReplyMessage: (msg: Message) => void;
+  onEditMessage: (msg: Message) => void;
   onReactToMessage: (msg: Message) => void;
   onDeleteMessage: (msg: Message) => void;
+  /** Save-in-chat toggle — negotiated persistence (Snapchat-style);
+   *  either party may save or unsave, the marker is shared state. */
+  onSaveMessage: (msg: Message) => void;
+  /** Pin/unpin — backed by real endpoints; backend permits group
+   *  admins/owners only, so callers gate the action entirely. */
+  canPinMessage?: boolean;
+  pinnedMessageId?: string | null;
+  onPinMessage?: (msg: Message) => void;
   onRetryUpload: (msgId: string) => void;
   onRetrySendMessage: (msgId: string) => void;
   onPrefillComposer: (text: string) => void;
@@ -85,6 +97,7 @@ export function ChatSheets({
   hasLinkedListing = false,
   isSeller = false,
   onMakeOffer,
+  onShareListing,
   pendingAttachment,
   onClosePendingAttachment,
   onSendPendingAttachment,
@@ -100,8 +113,13 @@ export function ChatSheets({
   onCloseContextMenu,
   selectedMessage,
   onReplyMessage,
+  onEditMessage,
   onReactToMessage,
   onDeleteMessage,
+  onSaveMessage,
+  canPinMessage = false,
+  pinnedMessageId,
+  onPinMessage,
   onRetryUpload,
   onRetrySendMessage,
   onPrefillComposer,
@@ -110,32 +128,46 @@ export function ChatSheets({
   onClearConfirmation }: ChatSheetsProps) {
   const { show } = useToast();
 
+  // P2-03: Edit affordance mirrors the backend window — sender-only, text
+  // messages, not deleted, within 15 minutes of the send timestamp.
+  const MESSAGE_EDIT_WINDOW_MS = 15 * 60 * 1000;
+  const canEditSelectedMessage = Boolean(
+    selectedMessage &&
+      selectedMessage.sender === "me" &&
+      !selectedMessage.isDeleted &&
+      Boolean(selectedMessage.text?.trim()) &&
+      selectedMessage.status !== "failed" &&
+      selectedMessage.status !== "sending" &&
+      selectedMessage.status !== "reconciling" &&
+      Date.now() - new Date(selectedMessage.timestamp).getTime() < MESSAGE_EDIT_WINDOW_MS,
+  );
+
+  // Save in chat — any confirmed, non-system message may be saved by
+  // either participant. In-flight/failed/local-draft messages are excluded
+  // because the server has no row to attach the save to. Deleted
+  // tombstones stay eligible only while the actor still has a save to
+  // retract — the backend permits unsave on tombstones.
+  const selectedMessageSavedByMe = Boolean(
+    currentUserId && selectedMessage?.savedBy?.includes(currentUserId),
+  );
+  const canSaveSelectedMessage = Boolean(
+    selectedMessage &&
+      !selectedMessage.isSystem &&
+      selectedMessage.status !== "sending" &&
+      selectedMessage.status !== "failed" &&
+      selectedMessage.status !== "reconciling" &&
+      selectedMessage.status !== "draft" &&
+      (!selectedMessage.isDeleted || selectedMessageSavedByMe),
+  );
+
   // ── Forward sheet state ──
   const [forwardSheetVisible, setForwardSheetVisible] = useState(false);
   const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
 
-  const forwardMessageToConversation = useCallback(
-    async (targetConversationId: string, text: string, mediaUri?: string, mediaType?: string) => {
-      try {
-        const options: { type?: 'text' | 'image' | 'video'; mediaUri?: string } = {};
-        if (mediaUri && mediaType) {
-          options.type = mediaType === 'video' ? 'video' : 'image';
-          options.mediaUri = mediaUri;
-        }
-        await sendConversationMessageOnApi(
-          targetConversationId,
-          text,
-          undefined,
-          undefined,
-          options,
-          currentUserId,
-        );
-      } catch (err) {
-        show("Failed to forward message", "error");
-      }
-    },
-    [currentUserId, show],
-  );
+  // Forward is only honest for payloads we can re-send faithfully —
+  // offers, polls, documents and commerce cards have no cross-thread
+  // send path, so the context menu must not offer it.
+  const canForwardSelectedMessage = isForwardableMessage(selectedMessage);
 
   return (
     <>
@@ -150,9 +182,10 @@ export function ChatSheets({
         // No document-send path exists anywhere yet (GroupChatScreen's
         // handler is a stub that discards the file) — hide the File row
         // rather than offer a picker that silently drops the document.
-        // Listing-share has no send API either; "Make an offer" does.
+        // Listing-share sends the linked listing as a product card via
+        // `metadata.listingShare`; documents still have no send path.
         hideDocument
-        hideShareListing
+        hideShareListing={!onShareListing}
         hasLinkedListing={hasLinkedListing}
         isSeller={isSeller}
         onSelect={(action: ChatAction) => {
@@ -162,6 +195,8 @@ export function ChatSheets({
             onOpenAgentPicker();
           } else if (action === "offer") {
             onMakeOffer?.();
+          } else if (action === "share_listing") {
+            onShareListing?.();
           }
         }}
       />
@@ -207,6 +242,9 @@ export function ChatSheets({
             case "reply":
               onReplyMessage(selectedMessage);
               break;
+            case "edit":
+              onEditMessage(selectedMessage);
+              break;
             case "forward":
               setForwardingMessage(selectedMessage);
               setForwardSheetVisible(true);
@@ -216,6 +254,12 @@ export function ChatSheets({
               break;
             case "delete":
               onDeleteMessage(selectedMessage);
+              break;
+            case "save":
+              onSaveMessage(selectedMessage);
+              break;
+            case "pin":
+              onPinMessage?.(selectedMessage);
               break;
             case "retry":
               if (selectedMessage.uploadStatus === "failed") {
@@ -260,6 +304,15 @@ export function ChatSheets({
           selectedMessage?.status === "failed" ||
           selectedMessage?.uploadStatus === "failed"
         }
+        canEdit={canEditSelectedMessage}
+        canSave={canSaveSelectedMessage}
+        isSaved={selectedMessageSavedByMe}
+        isDeleted={selectedMessage?.isDeleted === true}
+        canForward={canForwardSelectedMessage}
+        canPin={canPinMessage}
+        isPinned={Boolean(
+          selectedMessage && pinnedMessageId === selectedMessage.id,
+        )}
       />
 
       <ForwardSheet
@@ -267,20 +320,20 @@ export function ChatSheets({
         conversations={conversations.filter((c) => c.id !== conversationId)}
         currentConversationId={conversationId}
         onForward={(targetConversationId) => {
-          if (forwardingMessage) {
-            const text = forwardingMessage.text ?? "";
-            if (text) {
-              forwardMessageToConversation(
-                targetConversationId,
-                text,
-                forwardingMessage.mediaUri,
-                forwardingMessage.mediaType,
-              );
-            }
-          }
+          const msg = forwardingMessage;
           setForwardSheetVisible(false);
           setForwardingMessage(null);
-          show("Message forwarded", "success");
+          if (!msg) return;
+          // Defence in depth: the context menu gates Forward on
+          // forwardability, but never claim success for a payload we
+          // can't deliver.
+          if (!isForwardableMessage(msg)) {
+            show("This message can't be forwarded", "error");
+            return;
+          }
+          forwardMessageToConversation(targetConversationId, msg, currentUserId)
+            .then(() => show("Message forwarded", "success"))
+            .catch(() => show("Failed to forward message", "error"));
         }}
         onClose={() => {
           setForwardSheetVisible(false);

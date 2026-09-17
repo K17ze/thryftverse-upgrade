@@ -20,15 +20,14 @@ export function PortfolioPositionsHeader({
   const { colors } = useAppTheme();
   return (
     <View style={styles.sectionRow}>
-      <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Your positions</Text>
       <View style={styles.sectionActions}>
         <AnimatedPressable
           onPress={onViewDistributions}
           accessibilityRole="button"
           accessibilityLabel="View distribution history"
-          scaleValue={0.96}
+          scaleValue={0.985}
           hapticFeedback="light"
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={{ minHeight: 44, justifyContent: 'center', paddingRight: 8 }}
         >
           <Text style={[styles.sectionLink, { color: colors.textSecondary }]}>Distributions</Text>
         </AnimatedPressable>
@@ -36,9 +35,9 @@ export function PortfolioPositionsHeader({
           onPress={onOpenMarketOverview}
           accessibilityRole="button"
           accessibilityLabel="Open market overview"
-          scaleValue={0.96}
+          scaleValue={0.985}
           hapticFeedback="light"
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={{ minHeight: 44, justifyContent: 'center', paddingRight: 8 }}
         >
           <Text style={[styles.sectionLink, { color: colors.textSecondary }]}>Market overview</Text>
         </AnimatedPressable>

@@ -71,6 +71,8 @@ export default function WalletConvertScreen() {
     availableIze,
     setAvailableIze,
     isHydratingBalance,
+    balanceError,
+    reloadBalance,
   } = useConvertData({
     userId: currentUser?.id,
     currencyCode });
@@ -143,6 +145,28 @@ export default function WalletConvertScreen() {
         contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
       >
         <ConvertSkeleton />
+      </FlagshipScreen>
+    );
+  }
+
+  // -- Balance load failure — never fall through to a fabricated £0 form --
+  if (balanceError) {
+    return (
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Convert 1ZE"
+            onBack={handleBack}
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
+        <ConvertErrorStep
+          errorMessage={balanceError}
+          onTryAgain={reloadBalance}
+          onCancel={handleBack}
+        />
       </FlagshipScreen>
     );
   }

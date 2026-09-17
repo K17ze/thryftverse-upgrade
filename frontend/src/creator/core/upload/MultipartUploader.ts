@@ -49,7 +49,8 @@
  */
 
 import * as FileSystem from 'expo-file-system/legacy';
-import { fetchJson } from '../../../lib/apiClient';
+import * as MediaLibrary from 'expo-media-library/legacy';
+import { ApiRequestError, fetchJson } from '../../../lib/apiClient';
 import type { UploadSession, UploadPart } from './UploadTypes';
 import { DEFAULT_PART_SIZE } from './UploadTypes';
 
@@ -57,6 +58,25 @@ import { DEFAULT_PART_SIZE } from './UploadTypes';
  *  well within 2 minutes on any reasonable connection; if they don't, the
  *  request is stale and the retry loop takes over. */
 const CHUNK_TIMEOUT_MS = 120_000;
+
+/**
+ * The backend returned HTTP success but the receipt violated the contract
+ * (missing finalizationId/objectKey/publicUrl). Retrying the same complete
+ * request cannot repair a malformed receipt — this is a permanent
+ * client-visible failure, not a transient transport error.
+ */
+export class UploadContractError extends Error {}
+
+/**
+ * A part PUT (or control-plane call) that failed with an HTTP status —
+ * lets the retry loop distinguish a permanent rejection that would burn
+ * all part retries pointlessly from a transient transport failure.
+ */
+export class PartUploadError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
 
 /** Response shape from `POST /uploads/multipart/initiate`. */
 interface InitiateResponse {
@@ -77,6 +97,7 @@ interface InitiateResponse {
 interface PartsResponse {
   ok: boolean;
   error?: string;
+  expiresAt?: string;
   presignedParts: Array<{ url: string; partNumber: number; expiresInSeconds: number }>;
 }
 
@@ -140,14 +161,18 @@ export class MultipartUploader {
   private partSize: number;
   private maxPartRetries: number;
   private partConcurrency: number;
-  /** Cached full-file Blob — used only as a fallback for URI schemes that
-   *  `expo-file-system` cannot read with `position`/`length` (e.g. `ph://`,
-   *  `content://`). For `file://` URIs the chunk-read path is used instead,
-   *  which reads only the chunk's byte range into memory. Cleared on
-   *  `complete()` / `abort()` so memory is released as soon as the upload
-   *  finishes. */
-  private cachedBlob: Blob | null = null;
-  private cachedBlobPath: string | null = null;
+  /** Cached full-file Blobs keyed by file path — used only as a fallback
+   *  for URI schemes that `expo-file-system` cannot read with
+   *  `position`/`length` (non-library SAF document URIs). For `file://`
+   *  URIs the chunk-read path is used instead, which reads only the
+   *  chunk's byte range into memory. Keyed per path because one shared
+   *  `MultipartUploader` serves concurrent jobs — an unkeyed cache lets
+   *  one job's `complete()`/`abort()` evict a sibling's fallback blob
+   *  mid-upload. Entries are cleared on `complete()`/`abort()` so memory
+   *  is released as soon as the upload finishes. */
+  private cachedBlobs = new Map<string, Blob>();
+  /** ph:// / content:// → resolved file:// path, resolved once per session. */
+  private resolvedPaths = new Map<string, string>();
 
   constructor(options?: MultipartUploaderOptions) {
     this.partSize = options?.partSize ?? DEFAULT_PART_SIZE;
@@ -168,6 +193,7 @@ export class MultipartUploader {
     sizeBytes: number,
     assetId: string,
     folder: string,
+    signal?: AbortSignal,
   ): Promise<UploadSession> {
     const parts = this.computeParts(sizeBytes);
     const fileName = filePath.split('/').pop() ?? assetId;
@@ -185,6 +211,7 @@ export class MultipartUploader {
           folder,
         }),
       },
+      { signal },
     );
 
     if (!response.ok) throw new Error(response.error ?? 'Upload initiate request failed');
@@ -248,7 +275,7 @@ export class MultipartUploader {
     // If the underlying S3 session is truly gone, the /parts call itself
     // will fail and surface a clear error.
     if (session.expiresAt && Date.now() > session.expiresAt) {
-      await this.refreshSessionUrls(session);
+      await this.refreshSessionUrls(session, signal);
     }
 
     // Use the cached presigned URL if available; otherwise fetch it.
@@ -268,6 +295,7 @@ export class MultipartUploader {
             partNumbers: [part.partNumber],
           }),
         },
+        { signal },
       );
       const fetched = partUrlRes.presignedParts[0];
       presignedUrl = fetched?.url;
@@ -311,7 +339,11 @@ export class MultipartUploader {
    * before treating the upload as complete — identical to the single-PUT
    * path's `finalizePresignedMedia` contract.
    */
-  async complete(session: UploadSession): Promise<MultipartCompleteResult> {
+  async complete(
+    session: UploadSession,
+    filePath?: string,
+    signal?: AbortSignal,
+  ): Promise<MultipartCompleteResult> {
     const completedParts: CompletedPart[] = session.parts
       .filter((p) => p.status === 'completed' && p.etag)
       .map((p) => ({ partNumber: p.partNumber, etag: p.etag! }));
@@ -334,15 +366,19 @@ export class MultipartUploader {
           parts: completedParts,
         }),
       },
+      { signal },
     );
 
     if (!response.ok) throw new Error(response.error ?? 'Upload complete request failed');
+    if (!response.finalizationId || !response.objectKey || !response.publicUrl) {
+      throw new UploadContractError('Upload completion response is missing the finalized media reference');
+    }
 
     // Store the finalizationId on the session so the caller can use it.
     session.finalizationId = response.finalizationId;
 
     // Release the cached full-file Blob now that all parts are uploaded.
-    this.clearBlobCache();
+    this.clearBlobCache(filePath);
 
     return {
       publicUrl: response.publicUrl,
@@ -352,11 +388,14 @@ export class MultipartUploader {
   }
 
   /** Abort an in-progress multipart upload, freeing S3 part storage. */
-  async abort(session: UploadSession): Promise<void> {
+  async abort(session: UploadSession, filePath?: string): Promise<void> {
     // Release the cached full-file Blob — no more parts will be uploaded.
-    this.clearBlobCache();
+    this.clearBlobCache(filePath);
     if (!session.sessionId) return;
     try {
+      // Deliberately NOT wired to the job's AbortSignal: abort() is
+      // invoked *because* that signal fired — passing it would cancel
+      // the cleanup request and leak the S3 multipart upload.
       await fetchJson<{ ok: boolean }>(
         `/uploads/multipart/${encodeURIComponent(session.sessionId)}/abort`,
         {
@@ -365,8 +404,8 @@ export class MultipartUploader {
         },
       );
     } catch {
-      // Best-effort: if the abort call fails (e.g. network), the S3
-      // lifecycle policy will eventually clean up orphaned parts.
+      // Best-effort: if the abort call fails (e.g. network), the
+      // server-side session sweep reclaims the parts.
     }
   }
 
@@ -426,7 +465,7 @@ export class MultipartUploader {
     if (signal.aborted) throw new Error('Aborted');
     if (firstError) throw firstError;
 
-    return this.complete(session);
+    return this.complete(session, filePath, signal);
   }
 
   // ── Internals ───────────────────────────────────────────────────
@@ -465,6 +504,11 @@ export class MultipartUploader {
         }
         lastError = err instanceof Error ? err : new Error(String(err));
         part.status = 'failed';
+        // A permanent rejection cannot be repaired by replaying the same
+        // bytes — fail immediately so the job-level retry/re-initiate
+        // policy handles it (dead sessions get a fresh session, not N
+        // wasted part attempts).
+        if (this.isPermanentPartError(err)) throw lastError;
         if (attempt < this.maxPartRetries) {
           const delay = Math.min(10_000, 1000 * Math.pow(2, attempt));
           await this.sleep(delay, signal);
@@ -472,6 +516,24 @@ export class MultipartUploader {
       }
     }
     throw lastError ?? new Error(`Part ${part.partNumber} failed after retries`);
+  }
+
+  /**
+   * Permanent part-level failures: 4xx other than 408/429, plus the
+   * dead-session statuses (404/409/410) from the control plane — those
+   * must propagate fast so UploadManager can re-initiate. A 403 on a
+   * part PUT is *not* permanent: uploadPart evicts the stale presigned
+   * URL on 403 so the retry re-fetches a fresh one — that self-heal
+   * only works if the retry loop runs.
+   */
+  private isPermanentPartError(err: unknown): boolean {
+    const status =
+      err instanceof ApiRequestError ? err.status
+      : err instanceof PartUploadError ? err.status
+      : undefined;
+    if (status === undefined) return false;
+    if (status === 403 || status === 408 || status === 429) return false;
+    return status >= 400 && status < 500;
   }
 
   /** Compute the parts array for a given total size. */
@@ -527,8 +589,12 @@ export class MultipartUploader {
     _mimeType: string,
   ): Promise<Blob> {
     const length = endByte - startByte + 1;
+    // Library URIs (ph:// / content://) resolve to a real file path via
+    // metadata alone — ranged reads then work and the full-file Blob
+    // fallback below is never needed for library assets.
+    const readablePath = await this.resolveReadablePath(filePath);
     try {
-      const base64 = await FileSystem.readAsStringAsync(filePath, {
+      const base64 = await FileSystem.readAsStringAsync(readablePath, {
         position: startByte,
         length,
         encoding: FileSystem.EncodingType.Base64,
@@ -542,26 +608,54 @@ export class MultipartUploader {
       return blob;
     } catch {
       // Fallback for URIs that don't support position/length reads
-      // (e.g. ph://, content://). This loads the full file into memory
-      // but only for these exotic URI schemes.
+      // (non-library SAF document URIs). This loads the full file into
+      // memory but only for these exotic URI schemes.
     }
 
-    if (this.cachedBlobPath !== filePath || !this.cachedBlob) {
-      this.cachedBlob = await fetch(filePath).then((r) => r.blob());
-      this.cachedBlobPath = filePath;
+    let blob = this.cachedBlobs.get(filePath);
+    if (!blob) {
+      const fetched = await fetch(filePath).then((r) => r.blob());
+      this.cachedBlobs.set(filePath, fetched);
+      blob = fetched;
     }
-    if (!this.cachedBlob) {
-      throw new Error('Blob cache was not populated');
-    }
-    return this.cachedBlob.slice(startByte, endByte + 1);
+    return blob.slice(startByte, endByte + 1);
   }
 
-  /** Release the cached full-file Blob. Called after `complete()` or
-   *  `abort()` so the file's bytes are not held in memory once the upload
-   *  is done. */
-  clearBlobCache(): void {
-    this.cachedBlob = null;
-    this.cachedBlobPath = null;
+  /** Release a path's cached full-file Blob and resolved-path entry.
+   *  Called after `complete()`/`abort()` so the file's bytes are not
+   *  held in memory once the upload is done. With no argument it clears
+   *  the whole map — only safe at teardown. */
+  clearBlobCache(filePath?: string): void {
+    if (filePath !== undefined) {
+      this.cachedBlobs.delete(filePath);
+      this.resolvedPaths.delete(filePath);
+      return;
+    }
+    this.cachedBlobs.clear();
+    this.resolvedPaths.clear();
+  }
+
+  /**
+   * Resolve a media-library URI (ph://, content://) to a ranged-readable
+   * file:// path via `MediaLibrary.getAssetInfoAsync` — metadata only, no
+   * byte read. Non-library URIs (and library misses, e.g. a SAF document
+   * URI) return the original path unchanged.
+   */
+  private async resolveReadablePath(filePath: string): Promise<string> {
+    const cached = this.resolvedPaths.get(filePath);
+    if (cached) return cached;
+    if (filePath.startsWith('ph://') || filePath.startsWith('content://')) {
+      try {
+        const info = await MediaLibrary.getAssetInfoAsync(filePath);
+        if (info.localUri) {
+          this.resolvedPaths.set(filePath, info.localUri);
+          return info.localUri;
+        }
+      } catch {
+        // Not a media-library asset — keep the original path.
+      }
+    }
+    return filePath;
   }
 
   /**
@@ -572,7 +666,10 @@ export class MultipartUploader {
    * truly gone, the `/parts` call itself will fail and surface a clear
    * error.
    */
-  private async refreshSessionUrls(session: UploadSession): Promise<void> {
+  private async refreshSessionUrls(
+    session: UploadSession,
+    signal?: AbortSignal,
+  ): Promise<void> {
     if (!session.sessionId) throw new Error('Upload session has no session ID');
     const remainingPartNumbers = session.parts
       .filter((p) => p.status !== 'completed')
@@ -586,6 +683,7 @@ export class MultipartUploader {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ partNumbers: remainingPartNumbers }),
       },
+      { signal },
     );
     if (!response.ok) throw new Error(response.error ?? 'Failed to refresh upload session URLs');
 
@@ -600,7 +698,8 @@ export class MultipartUploader {
     // Optimistically extend the session expiry so we don't re-refresh on
     // every subsequent part. The presigned URLs carry their own per-URL
     // expiry; the session expiry is a coarse guard.
-    session.expiresAt = Date.now() + 60 * 60 * 1000;
+    const expiresAt = response.expiresAt ? Date.parse(response.expiresAt) : NaN;
+    if (Number.isFinite(expiresAt)) session.expiresAt = expiresAt;
   }
 
   /**
@@ -639,7 +738,25 @@ export class MultipartUploader {
         }
       };
 
+      const onAbort = () => {
+        xhr.abort();
+        cleanup();
+        reject(new Error('Aborted'));
+      };
+      // Every settle path must detach the abort listener and null the
+      // XHR handlers — the signal is shared across all of a job's parts,
+      // so a resolved part that keeps its listener leaks N listeners per
+      // job (and `onprogress` keeps the closure graph alive).
+      const cleanup = () => {
+        signal.removeEventListener('abort', onAbort);
+        xhr.upload.onprogress = null;
+        xhr.onload = null;
+        xhr.onerror = null;
+        xhr.ontimeout = null;
+      };
+
       xhr.onload = () => {
+        cleanup();
         if (xhr.status >= 200 && xhr.status < 300) {
           const etag = xhr.getResponseHeader('ETag');
           if (etag) {
@@ -653,17 +770,19 @@ export class MultipartUploader {
             delete session.presignedUrls?.[part.partNumber];
             part.presignedUrlExpiresAt = undefined;
           }
-          reject(new Error(`Part upload failed: HTTP ${xhr.status}`));
+          reject(new PartUploadError(`Part upload failed: HTTP ${xhr.status}`, xhr.status));
         }
       };
 
-      xhr.onerror = () => reject(new Error('Network error during part upload'));
-      xhr.ontimeout = () => reject(new Error('Part upload timed out'));
-
-      const onAbort = () => {
-        xhr.abort();
-        reject(new Error('Aborted'));
+      xhr.onerror = () => {
+        cleanup();
+        reject(new Error('Network error during part upload'));
       };
+      xhr.ontimeout = () => {
+        cleanup();
+        reject(new Error('Part upload timed out'));
+      };
+
       if (signal.aborted) {
         onAbort();
         return;

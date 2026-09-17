@@ -48,7 +48,7 @@ export async function processPushReceiptReconciliation(): Promise<{
   tokensRevoked: number;
 }> {
   // Find ticketed events whose receipts haven't been checked yet.
-  // We check receipts that are at least 15 seconds old (give Expo time to
+  // We check receipts that are at least 15 minutes old (give Expo time to
   // deliver to APNs/FCM) and not older than 24 hours (receipts expire).
   const eventsResult = await db.query<{
     id: string;
@@ -102,6 +102,15 @@ export async function processPushReceiptReconciliation(): Promise<{
   let failed = 0;
   let tokensRevoked = 0;
   const tokensToRevoke: string[] = [];
+  // Per-event receipt aggregation — an event fans out to N device tickets;
+  // the event is 'sent' when ≥1 provider accepted, 'failed' only when all
+  // errored. Iterating and writing per-ticket made the last receipt win.
+  const eventOutcomes = new Map<string, {
+    ok: number;
+    err: number;
+    lastError?: string;
+    message?: string | null;
+  }>();
 
   // Fetch receipts in batches of 1000
   for (let i = 0; i < allTicketIds.length; i += MAX_RECEIPTS_PER_REQUEST) {
@@ -130,48 +139,27 @@ export async function processPushReceiptReconciliation(): Promise<{
         if (!info) continue;
 
         if (receipt.status === 'ok') {
-          // Provider (APNs/FCM) accepted the notification
-          await db.query(
-            `UPDATE notification_events
-             SET status = 'sent', receipt_status = 'ok', receipt_checked_at = NOW()
-             WHERE id = $1`,
-            [info.eventId]
-          );
-          confirmed += 1;
+          eventOutcomes.set(info.eventId, {
+            ok: (eventOutcomes.get(info.eventId)?.ok ?? 0) + 1,
+            err: eventOutcomes.get(info.eventId)?.err ?? 0,
+          });
         } else {
-          // Receipt error — delivery failed at the provider level
           const errorCode = receipt.details?.error ?? 'unknown';
-          await db.query(
-            `UPDATE notification_events
-             SET status = 'failed', receipt_status = 'error',
-                 receipt_checked_at = NOW(),
-                 provider_error = $2,
-                 metadata = metadata || $3::jsonb
-             WHERE id = $1`,
-            [
-              info.eventId,
-              errorCode,
-              toJsonString({ receiptMessage: receipt.message ?? null }),
-            ]
-          );
-          failed += 1;
+          const prior = eventOutcomes.get(info.eventId) ?? { ok: 0, err: 0 };
+          eventOutcomes.set(info.eventId, {
+            ok: prior.ok,
+            err: prior.err + 1,
+            lastError: errorCode,
+            message: receipt.message ?? null,
+          });
 
           if (errorCode === 'DeviceNotRegistered') {
-            // P0 FIX: Revoke the EXACT token that failed, not just "most recent".
-            // The token is stored alongside the ticketId in provider_ticket_ids.
+            // Revoke the EXACT token that failed. Tickets written before
+            // the {ticketId, token} format carry no token — we cannot
+            // safely guess which device failed, so we leave devices alone
+            // rather than revoking an uninvolved healthy token.
             if (info.token) {
               tokensToRevoke.push(info.token);
-            } else {
-              // Legacy fallback: no token stored with ticket — query by user
-              const deviceResult = await db.query<{ token: string }>(
-                `SELECT token FROM notification_devices
-                 WHERE user_id = $1 AND is_active = TRUE
-                 ORDER BY last_seen_at DESC LIMIT 1`,
-                [info.userId]
-              );
-              if (deviceResult.rows[0]) {
-                tokensToRevoke.push(deviceResult.rows[0].token);
-              }
             }
           }
         }
@@ -179,6 +167,36 @@ export async function processPushReceiptReconciliation(): Promise<{
     } catch {
       // Network error — skip this batch, will retry next cycle
       continue;
+    }
+  }
+
+  // Apply one status per event — aggregated across all of its device
+  // tickets. 'sent' when at least one provider accepted; 'failed' only
+  // when every ticket errored (or none were returned).
+  for (const [eventId, outcome] of eventOutcomes) {
+    if (outcome.ok > 0) {
+      await db.query(
+        `UPDATE notification_events
+         SET status = 'sent', sent_at = NOW(), receipt_status = 'ok', receipt_checked_at = NOW()
+         WHERE id = $1`,
+        [eventId]
+      );
+      confirmed += 1;
+    } else {
+      await db.query(
+        `UPDATE notification_events
+         SET status = 'failed', receipt_status = 'error',
+             receipt_checked_at = NOW(),
+             provider_error = $2,
+             metadata = metadata || $3::jsonb
+         WHERE id = $1`,
+        [
+          eventId,
+          outcome.lastError ?? 'unknown',
+          toJsonString({ receiptMessage: outcome.message ?? null }),
+        ]
+      );
+      failed += 1;
     }
   }
 

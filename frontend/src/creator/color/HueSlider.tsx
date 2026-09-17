@@ -27,7 +27,6 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Radius, Stroke } from '../../theme/designTokens';
 import { Motion } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
-import type { HSV } from './ColorTypes';
 
 // ── Timing ───────────────────────────────────────────────────────────
 const SNAP_TIMING = { duration: Motion.duration.snapToGuide, easing: Motion.easing.entrance };
@@ -77,7 +76,9 @@ export function HueSlider({
     layoutWidth.value = e.nativeEvent.layout.width;
   }, [layoutWidth]);
 
-  // Pan gesture
+  // Pan gesture — onChange emits at most once per integer degree so the
+  // JS bridge isn't crossed with sub-perceptual updates every frame.
+  const lastHueBucketSV = useSharedValue(-1);
   const panGesture = React.useMemo(() => {
     return Gesture.Pan()
       .activateAfterLongPress(0)
@@ -87,6 +88,7 @@ export function HueSlider({
         const ratio = Math.max(0, Math.min(1, e.x / w));
         const h = ratio * 360;
         thumbX.value = ratio * w;
+        lastHueBucketSV.value = Math.round(h);
         runOnJS(onChange)(h);
       })
       .onChange((e) => {
@@ -95,16 +97,23 @@ export function HueSlider({
         const ratio = Math.max(0, Math.min(1, e.x / w));
         const h = ratio * 360;
         thumbX.value = ratio * w;
-        runOnJS(onChange)(h);
+        const bucket = Math.round(h);
+        if (bucket !== lastHueBucketSV.value) {
+          lastHueBucketSV.value = bucket;
+          runOnJS(onChange)(h);
+        }
       })
-      .onEnd(() => {
+      .onFinalize(() => {
         'worklet';
+        // Commit on finalize (not onEnd) so a gesture cancelled by a
+        // system interrupt or sheet dismiss still lands the dragged hue —
+        // otherwise the thumb visibly moved but the value never committed.
         const w = layoutWidth.value;
         const ratio = Math.max(0, Math.min(1, thumbX.value / w));
         const h = ratio * 360;
         runOnJS(onCommit)(h);
       });
-  }, [thumbX, onChange, onCommit, layoutWidth]);
+  }, [thumbX, onChange, onCommit, layoutWidth, lastHueBucketSV]);
 
   // Animated thumb style
   const thumbStyle = useAnimatedStyle(() => {
@@ -133,6 +142,7 @@ export function HueSlider({
         ]}
         accessibilityRole="adjustable"
         accessibilityLabel={accessibilityLabel}
+        accessibilityHint="Drag to change the hue"
         accessibilityValue={{
           min: 0,
           max: 360,

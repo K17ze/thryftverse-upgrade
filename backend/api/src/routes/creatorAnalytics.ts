@@ -1,6 +1,18 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
+import { moneyFromMinor } from '../lib/money.js';
+import {
+  createRuntimeId,
+  ledgerTablesAvailable,
+  toJsonString,
+} from '../lib/workerHelpers.js';
+import { applyWalletLedgerDelta } from '../lib/walletMoneyPath.js';
+import {
+  appendLedgerEntry,
+  ensureLedgerAccount,
+  ensureWallet,
+} from '../lib/workerRuntime.js';
 import {
   METRIC_VERSION,
   DEFAULT_TIMEZONE,
@@ -216,7 +228,9 @@ async function queryTimelineFromRaw(
     profile_visits: string;
   }>(
     `SELECT
-       date_trunc('day', occurred_at AT TIME ZONE 'UTC')::date AS date,
+       -- ::text forces node-pg to return 'YYYY-MM-DD' rather than parsing
+       -- the DATE into a JS Date — the timeline merge keys on the string.
+       date_trunc('day', occurred_at AT TIME ZONE 'UTC')::date::text AS date,
        COUNT(*) FILTER (WHERE event_type = 'view')           AS views,
        COUNT(*) FILTER (WHERE event_type = 'qualified_view') AS qualified_views,
        COUNT(*) FILTER (WHERE event_type = 'like')           AS likes,
@@ -579,6 +593,23 @@ export const registerCreatorAnalyticsRoutes = ({
       );
       if (aggResult.rows.length > 0) {
         timelineRows = aggResult.rows;
+        // Union the raw tail: the aggregate worker folds events in with a
+        // lag, so days after the last aggregated row (typically today)
+        // would render as flat zeros. Raw rows are strictly after the
+        // aggregate watermark — no double counting.
+        const lastAggDate = aggResult.rows[aggResult.rows.length - 1].date;
+        const tailStart = new Date(`${lastAggDate}T00:00:00.000Z`);
+        tailStart.setUTCDate(tailStart.getUTCDate() + 1);
+        if (tailStart.getTime() < current.endExclusive.getTime()) {
+          const rawTail = await queryTimelineFromRaw(
+            db,
+            actorUserId,
+            { start: tailStart, endExclusive: current.endExclusive },
+            contentType,
+            contentId,
+          );
+          timelineRows = [...aggResult.rows, ...rawTail];
+        }
       } else {
         // Fall back to raw events
         timelineRows = await queryTimelineFromRaw(db, actorUserId, current, contentType, contentId);
@@ -705,7 +736,7 @@ export const registerCreatorAnalyticsRoutes = ({
     for (const [ct, ids] of byType) {
       if (ct === 'look') {
         const r = await db.query<{ id: string; title: string; media_url: string; created_at: Date }>(
-          `SELECT id, title, media_url, created_at FROM looks WHERE id = ANY($1::text[])`,
+          `SELECT id, title, COALESCE(poster_url, media_url) AS media_url, created_at FROM looks WHERE id = ANY($1::text[])`,
           [ids],
         );
         for (const row of r.rows) {
@@ -713,7 +744,7 @@ export const registerCreatorAnalyticsRoutes = ({
         }
       } else if (ct === 'poster') {
         const r = await db.query<{ id: string; caption: string; media_url: string; created_at: Date }>(
-          `SELECT id, caption, media_url, created_at FROM posters WHERE id = ANY($1::text[])`,
+          `SELECT id, caption, COALESCE(poster_url, media_url) AS media_url, created_at FROM posters WHERE id = ANY($1::text[])`,
           [ids],
         );
         for (const row of r.rows) {
@@ -787,9 +818,15 @@ export const registerCreatorAnalyticsRoutes = ({
         total_minor: string;
         entry_count: string;
       }>(
+        // Gross positive sums: the negative 'payout' entry offsets its held/
+        // paid sources in the same status bucket, so an unfiltered SUM nets
+        // every payout to zero — 'paid' would display £0 forever and 'held'
+        // would stay invisible while a bank payout is in flight. Buckets are
+        // display projections of earned money; payout entries are the
+        // offsetting record, not the earnings themselves.
         `SELECT status,
-                COALESCE(SUM(amount_minor), 0)::text AS total_minor,
-                COUNT(*)::text AS entry_count
+                COALESCE(SUM(amount_minor) FILTER (WHERE amount_minor > 0), 0)::text AS total_minor,
+                COUNT(*) FILTER (WHERE amount_minor > 0)::text AS entry_count
          FROM creator_earning_entries
          WHERE creator_id = $1
          GROUP BY status`,
@@ -913,46 +950,226 @@ export const registerCreatorAnalyticsRoutes = ({
       const payoutKey = idempotency_key ?? `${Math.floor(Date.now() / (60 * 1000))}`;
       const payoutId = `pay_${actorUserId}_${payoutKey}`;
       const now = new Date();
+      const totalGbp = totalMinor / 100;
+      const entryIds = availableResult.rows.map((r) => r.id);
 
-      // Create the payout entry. ON CONFLICT DO NOTHING ensures idempotency.
+      // Fast-path replay: the payout entry already exists — the money moved
+      // with it in the original transaction, so return that outcome without
+      // touching balances again.
+      const existingPayout = await client.query(
+        `SELECT id FROM creator_earning_entries WHERE id = $1 LIMIT 1`,
+        [payoutId],
+      );
+      if (existingPayout.rowCount && existingPayout.rowCount > 0) {
+        await client.query('COMMIT');
+        reply.code(200);
+        return {
+          ok: true as const,
+          payoutId,
+          amountMinor: totalMinor,
+          currency: 'GBP',
+          entryCount: availableResult.rows.length,
+          destination,
+          idempotent: true,
+        };
+      }
+
+      // ── Move the money first ─────────────────────────────────────────
+      // 'wallet' credits the creator's fiat wallet via the canonical wallet
+      // ledger; 'bank_account' creates a real payout_requests row (status
+      // 'requested' — never 'paid'; settlement happens through the payout
+      // rail) and reserves the funds seller_payable → withdrawal_pending.
+      let walletId: string | null = null;
+      let payoutRequestId: string | null = null;
+
+      if (destination === 'wallet') {
+        const wallet = await ensureWallet(client, actorUserId, 'GBP');
+        walletId = wallet.id;
+        await applyWalletLedgerDelta(client, {
+          walletId: wallet.id,
+          txId: createRuntimeId('wtx'),
+          asset: 'FIAT',
+          amount: totalMinor,
+          kind: 'CREATOR_EARNING_PAYOUT',
+          refType: 'creator_earning_payout',
+          refId: payoutId,
+          metadata: {
+            payoutId,
+            entryIds,
+            entryCount: entryIds.length,
+            destination: 'wallet',
+          },
+        });
+      } else {
+        // destination === 'bank_account' — an active payout account is
+        // required before the request can be created.
+        const payoutAccountResult = await client.query<{
+          id: number;
+          currency: string;
+        }>(
+          `SELECT id, currency
+           FROM payout_accounts
+           WHERE user_id = $1 AND status = 'active'
+           ORDER BY id ASC
+           LIMIT 1
+           FOR UPDATE`,
+          [actorUserId],
+        );
+        const payoutAccount = payoutAccountResult.rows[0];
+        if (!payoutAccount) {
+          await client.query('ROLLBACK');
+          reply.code(409);
+          return {
+            ok: false as const,
+            error: 'No active payout account. Add and verify a payout account before requesting a bank payout.',
+            code: 'PAYOUT_ACCOUNT_REQUIRED',
+          };
+        }
+
+        payoutRequestId = `po_${actorUserId}_${payoutKey}`;
+        const payoutMoney = moneyFromMinor('GBP', String(totalMinor));
+        await client.query(
+          `INSERT INTO payout_requests (
+             id, user_id, payout_account_id, amount_gbp, amount_currency,
+             amount_minor, currency_exponent, money_registry_version,
+             money_conversion_trace, status, idempotency_key, request_hash,
+             metadata, created_at, updated_at
+           )
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, 'requested',
+                   $10, $11, $12::jsonb, NOW(), NOW())`,
+          [
+            payoutRequestId,
+            actorUserId,
+            payoutAccount.id,
+            totalGbp,
+            payoutMoney.currency,
+            payoutMoney.minorAmount,
+            payoutMoney.exponent,
+            payoutMoney.registryVersion,
+            toJsonString({
+              direction: 'request_to_canonical',
+              canonicalMoney: payoutMoney,
+              legacyGbpValuation: totalGbp,
+              fxRate: null,
+            }),
+            `creator_${payoutId}`,
+            `creator_${payoutId}`,
+            toJsonString({
+              source: 'creator_earnings',
+              payoutId,
+              entryIds,
+            }),
+          ],
+        );
+
+        // Reserve the funds so a second payout cannot spend the same balance:
+        // recognize the payable, then seller_payable → withdrawal_pending —
+        // the same reservation the manual payout-request route posts.
+        if (await ledgerTablesAvailable(client)) {
+          const sellerPayableAccountId = await ensureLedgerAccount(
+            client, 'user', actorUserId, 'seller_payable',
+          );
+          const withdrawalPendingAccountId = await ensureLedgerAccount(
+            client, 'user', actorUserId, 'withdrawal_pending',
+          );
+          await appendLedgerEntry(client, {
+            accountId: sellerPayableAccountId,
+            counterpartyAccountId: withdrawalPendingAccountId,
+            direction: 'credit',
+            amountGbp: totalGbp,
+            sourceType: 'payout',
+            sourceId: payoutRequestId,
+            lineType: 'creator_earning_recognized',
+            metadata: { payoutId },
+          });
+          await appendLedgerEntry(client, {
+            accountId: sellerPayableAccountId,
+            counterpartyAccountId: withdrawalPendingAccountId,
+            direction: 'debit',
+            amountGbp: totalGbp,
+            sourceType: 'payout',
+            sourceId: payoutRequestId,
+            lineType: 'payout_requested',
+            metadata: { payoutAccountId: payoutAccount.id, payoutId },
+          });
+          await appendLedgerEntry(client, {
+            accountId: withdrawalPendingAccountId,
+            counterpartyAccountId: sellerPayableAccountId,
+            direction: 'credit',
+            amountGbp: totalGbp,
+            sourceType: 'payout',
+            sourceId: payoutRequestId,
+            lineType: 'payout_requested',
+            metadata: { payoutAccountId: payoutAccount.id, payoutId },
+          });
+        }
+      }
+
+      // Create the payout entry. The negative amount reverses the available
+      // entries (via reversed_entry_id). 'paid' only when the money actually
+      // moved (wallet credit); a bank payout stays 'held' until the payout
+      // rail settles it.
+      const payoutEntryStatus = destination === 'wallet' ? 'paid' : 'held';
       const payoutInsert = await client.query(
         `INSERT INTO creator_earning_entries (
            id, creator_id, agreement_version, entry_type, amount_minor,
-           currency, status, description, created_at
+           currency, status, description, created_at,
+           related_payout_request_id
          )
-         VALUES ($1, $2, 'payout-v1', 'payout', $3, 'GBP', 'paid',
-                 $4, $5)
+         VALUES ($1, $2, 'payout-v1', 'payout', $3, 'GBP', $4,
+                 $5, $6, $7)
          ON CONFLICT (id) DO NOTHING
          RETURNING id`,
         [
           payoutId,
           actorUserId,
           -totalMinor,  // negative — payout reduces the balance
-          `Payout to ${destination}`,
+          payoutEntryStatus,
+          destination === 'wallet'
+            ? `Payout to wallet ${walletId}`
+            : `Bank payout request ${payoutRequestId}`,
           now.toISOString(),
+          // First-class link so settlement can flip held→paid (or release
+          // on failure) without parsing the description text.
+          destination === 'wallet' ? null : payoutRequestId,
         ],
       );
 
-      // If the payout already existed (idempotent replay), don't re-mark entries
-      if (payoutInsert.rowCount && payoutInsert.rowCount > 0) {
-        // Batch UPDATE all available entries as paid in a single query
-        const entryIds = availableResult.rows.map(r => r.id);
-        await client.query(
-          `UPDATE creator_earning_entries
-           SET status = 'paid', reversed_entry_id = $1
-           WHERE id = ANY($2::text[])`,
-          [payoutId, entryIds],
-        );
+      if (!payoutInsert.rowCount || payoutInsert.rowCount === 0) {
+        // A concurrent request won the insert race — roll back our money
+        // movement and report the committed payout as the replayed result.
+        await client.query('ROLLBACK');
+        reply.code(200);
+        return {
+          ok: true as const,
+          payoutId,
+          amountMinor: totalMinor,
+          currency: 'GBP',
+          entryCount: availableResult.rows.length,
+          destination,
+          idempotent: true,
+        };
       }
+
+      // Wallet payouts settled instantly → sources are 'paid'. Bank payouts
+      // are only 'requested' → sources move to 'held' until settlement.
+      const sourceStatus = destination === 'wallet' ? 'paid' : 'held';
+      await client.query(
+        `UPDATE creator_earning_entries
+         SET status = $3, reversed_entry_id = $1
+         WHERE id = ANY($2::text[])`,
+        [payoutId, entryIds, sourceStatus],
+      );
 
       await client.query('COMMIT');
       reply.code(200);
       return {
         ok: true as const,
         payoutId,
+        payoutRequestId,
         amountMinor: totalMinor,
         currency: 'GBP',
-        entryCount: availableResult.rows.length,
+        entryCount: entryIds.length,
         destination,
       };
     } catch (error) {

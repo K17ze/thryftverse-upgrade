@@ -29,6 +29,8 @@ export interface VideoProps {
   resizeMode?: ResizeMode | 'contain' | 'cover' | 'stretch';
   shouldPlay?: boolean;
   isMuted?: boolean;
+  /** Playback gain 0..1 — maps to the expo-video player's `volume`. */
+  volume?: number;
   isLooping?: boolean;
   /** When true, the `posterSource` image is shown until the video is ready. */
   usePoster?: boolean;
@@ -92,6 +94,7 @@ export const Video: React.FC<VideoProps> = ({
   resizeMode,
   shouldPlay = false,
   isMuted = true,
+  volume,
   isLooping = false,
   usePoster = false,
   posterSource,
@@ -212,6 +215,18 @@ export const Video: React.FC<VideoProps> = ({
       onError?.(error);
     }
   }, [isLooping, onError, player]);
+
+  useEffect(() => {
+    if (!player || volume === undefined) {
+      return;
+    }
+
+    try {
+      player.volume = Math.max(0, Math.min(1, volume));
+    } catch (error) {
+      onError?.(error);
+    }
+  }, [volume, onError, player]);
 
   useEffect(() => {
     if (!player) {

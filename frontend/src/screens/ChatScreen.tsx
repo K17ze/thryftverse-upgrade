@@ -26,7 +26,9 @@ import { useBackendData } from "../context/BackendDataContext";
 import { useStore } from "../store/useStore";
 
 import {
-  clearComposerStateOnApi } from "../services/chatApi";
+  clearComposerStateOnApi,
+  pinMessageOnApi,
+  unpinMessageOnApi } from "../services/chatApi";
 
 import { useToast } from "../context/ToastContext";
 
@@ -70,7 +72,8 @@ import {
   useChatHeaderData,
   useChatContextualStack,
   useChatSearchScroll,
-  useNewMessageTracker } from "../hooks/chat";
+  useNewMessageTracker,
+  type Message } from "../hooks/chat";
 import { useTypingIndicator, useChatGroupIdentityEvent } from "../services/realtimeClient";
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
@@ -129,7 +132,48 @@ export default function ChatScreen({ navigation, route }: Props) {
   // ── Pinned message ──────────────────────────────────────────────────
   // Fetch the conversation's pinned message on mount and when realtime
   // pin/unpin events arrive. Only group chats support pinning.
-  const pinnedMessage = usePinnedMessage(conversationId, isGroup, conversations);
+  const { pinnedMessage, refresh: refreshPinnedMessage } = usePinnedMessage(
+    conversationId,
+    isGroup,
+    conversations,
+  );
+
+  // Pin — real endpoint, group admins/owners only (enforced server-side).
+  const currentMemberRole = currentUser?.id
+    ? conversation?.memberRoles?.[currentUser.id]
+    : undefined;
+  const canPinMessage =
+    isGroup && (currentMemberRole === "owner" || currentMemberRole === "admin");
+
+  const handlePinMessage = useCallback(
+    (msg: Message) => {
+      if (!conversationId || !canPinMessage) return;
+      const isPinned = pinnedMessage?.messageId === msg.id;
+      const request = isPinned
+        ? unpinMessageOnApi(conversationId, msg.id)
+        : pinMessageOnApi(conversationId, msg.id);
+      request
+        .then(() => {
+          refreshPinnedMessage();
+          show(isPinned ? "Message unpinned" : "Message pinned", "success");
+        })
+        .catch(() =>
+          show(
+            isPinned
+              ? "Failed to unpin message. Please try again."
+              : "Failed to pin message. Please try again.",
+            "error",
+          ),
+        );
+    },
+    [
+      conversationId,
+      canPinMessage,
+      pinnedMessage?.messageId,
+      refreshPinnedMessage,
+      show,
+    ],
+  );
 
   // ─── Controller hook: hydrated messages + sender-label lookups ───
   // useHydratedChatMessages owns the bot/user lookup maps, the store→Message
@@ -152,6 +196,8 @@ export default function ChatScreen({ navigation, route }: Props) {
     notifyStoppedTyping,
     replyTo,
     setReplyTo,
+    editingMessage,
+    setEditingMessage,
     attachmentPickerVisible,
     setAttachmentPickerVisible,
     isVoiceRecording,
@@ -244,6 +290,9 @@ export default function ChatScreen({ navigation, route }: Props) {
     confirmAgentDraft,
     retryAgentDraft,
     sendMessage: hookSendMessage,
+    editMessage: hookEditMessage,
+    toggleSaveInChat,
+    sendListingShare,
     handleSendVoice,
     handleRetryUpload,
     handleRetrySendMessage,
@@ -330,11 +379,37 @@ export default function ChatScreen({ navigation, route }: Props) {
     toggleMessageSelection,
     exitSelectionMode } = useMessageSelection({ selectionMode: false });
 
-  // Adapter: bind composer state to hookSendMessage's (input, replyTo, setInput, setReplyTo) signature
+  // Adapter: bind composer state to hookSendMessage's (input, replyTo, setInput, setReplyTo) signature.
+  // When a message edit is armed the composer commits via the edit API
+  // instead of a new send (P2-03).
   const handleSend = useCallback(() => {
+    if (isPartnerBlockedRef.current) return;
     notifyStoppedTyping();
+    if (editingMessage) {
+      hookEditMessage(editingMessage.id, input);
+      setInput("");
+      setEditingMessage(null);
+      return;
+    }
     hookSendMessage(input, replyTo, setInput, setReplyTo);
-  }, [hookSendMessage, input, replyTo, setInput, setReplyTo, notifyStoppedTyping]);
+  }, [hookSendMessage, hookEditMessage, input, replyTo, setInput, setReplyTo, editingMessage, setEditingMessage, notifyStoppedTyping]);
+
+  // Context-menu Edit action — prefill the composer with the existing text
+  // and arm edit mode. Reply context is cleared; a send commits an edit.
+  const handleEditMessage = useCallback(
+    (msg: typeof selectedMessage) => {
+      if (!msg) return;
+      setReplyTo(null);
+      setEditingMessage(msg);
+      setInput(msg.text ?? "");
+    },
+    [setReplyTo, setEditingMessage, setInput],
+  );
+
+  const handleCloseEdit = useCallback(() => {
+    setEditingMessage(null);
+    setInput("");
+  }, [setEditingMessage, setInput]);
 
   // Adapter: wrap hookHandleMessageListScroll for FlashList's NativeSyntheticEvent type
   const handleMessageListScroll = useCallback(
@@ -360,6 +435,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     topBarTitle,
     topBarSubtitle,
     topBarInitials,
+    isPartnerOnline,
     isPartnerBlocked,
     handleUnblockPartner } = useChatHeaderData({
     conversation,
@@ -368,6 +444,14 @@ export default function ChatScreen({ navigation, route }: Props) {
     currentUser,
     userLookup,
     isTyping });
+
+  // Blocked-partner send guard — the composer renders an explanatory
+  // notice instead of an input when blocked, but gate the send path too
+  // so a stale callback can never dispatch into a blocked thread. A ref
+  // keeps the earlier-defined handleSend callback honest without
+  // reordering the hook block.
+  const isPartnerBlockedRef = useRef(false);
+  isPartnerBlockedRef.current = isPartnerBlocked;
 
   // Per spec 16: "Do not stack quick replies + agent suggestions." When agent
   // suggestions are active (agent deployed, suggestions available, no input),
@@ -421,6 +505,27 @@ export default function ChatScreen({ navigation, route }: Props) {
       conversationId,
     });
   }, [linkedListing, conversationId, navigation]);
+
+  // "Share listing" attachment-rail action — sends the linked listing as a
+  // product-share card (`metadata.listingShare`). Any participant may share
+  // it — the card is a reference, not an offer.
+  const handleShareListingFromSheet = useCallback(() => {
+    if (!linkedListing) return;
+    sendListingShare({
+      id: linkedListing.id,
+      title: linkedListing.title ?? 'Listing',
+      price: linkedListing.price ?? 0,
+      originalPrice: linkedListing.originalPrice ?? null,
+      images: linkedListing.images,
+      brand: linkedListing.brand ?? null,
+      size: linkedListing.size ?? null,
+      condition: linkedListing.condition ?? null,
+      sellerId: linkedListing.sellerId ?? null,
+      sellerUsername: linkedListing.seller?.username ?? null,
+      sellerRating: linkedListing.seller?.rating ?? null,
+      isSold: linkedListing.isSold === true,
+    });
+  }, [linkedListing, sendListingShare]);
 
   // Conversation-level safety warning (triggered by conversation state,
   // e.g. off-platform payment requests in messages). This is distinct
@@ -497,6 +602,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           groupId={isGroup ? conversation?.id : undefined}
           variant={isGroup ? "group" : "dm"}
           isVerified={!isGroup && (partnerProfile?.identityVerified === true || partnerSummary?.identityVerified === true)}
+          isOnline={isPartnerOnline}
           onBack={() => navigation.goBack()}
           onSearch={() => {
             if (isSearchActive) {
@@ -640,6 +746,14 @@ export default function ChatScreen({ navigation, route }: Props) {
           isVoiceRecording={isVoiceRecording}
           onVoiceRecordingChange={setIsVoiceRecording}
           isSending={composerSending}
+          blockedNotice={
+            isPartnerBlocked
+              ? {
+                  message: "You blocked this user.",
+                  actionLabel: "Unblock to message.",
+                  onAction: handleUnblockPartner }
+              : undefined
+          }
           dangerWarning={composerDangerWarning?.message}
           cautionWarning={composerCautionWarning?.message}
           onDismissDangerWarning={() => setDangerWarningDismissed(true)}
@@ -652,8 +766,10 @@ export default function ChatScreen({ navigation, route }: Props) {
           onSelectReply={setInput}
           onManageReplies={(role) =>
             navigation.navigate("ManageQuickReplies", { role })}
-          replyTo={replyTo}
+          replyTo={editingMessage ? null : replyTo}
           onCloseReply={() => setReplyTo(null)}
+          editingMessage={editingMessage}
+          onCloseEdit={handleCloseEdit}
           reactingToMessage={reactingToMessage}
           onReact={(emoji) => {
             if (reactingToMessage && conversationId) {
@@ -696,6 +812,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           hasLinkedListing={!!linkedListing}
           isSeller={quickReplyRole === 'seller'}
           onMakeOffer={handleMakeOfferFromSheet}
+          onShareListing={handleShareListingFromSheet}
           pendingAttachment={pendingAttachment}
           onClosePendingAttachment={() => setPendingAttachment(null)}
           onSendPendingAttachment={handleSendPendingAttachment}
@@ -711,8 +828,13 @@ export default function ChatScreen({ navigation, route }: Props) {
           onCloseContextMenu={() => setContextMenuVisible(false)}
           selectedMessage={selectedMessage}
           onReplyMessage={setReplyTo}
+          onEditMessage={handleEditMessage}
           onReactToMessage={setReactingToMessage}
           onDeleteMessage={handleDeleteMessage}
+          onSaveMessage={toggleSaveInChat}
+          canPinMessage={canPinMessage}
+          pinnedMessageId={pinnedMessage?.messageId}
+          onPinMessage={handlePinMessage}
           onRetryUpload={handleRetryUpload}
           onRetrySendMessage={handleRetrySendMessage}
           onPrefillComposer={setInput}

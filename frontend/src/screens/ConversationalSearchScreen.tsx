@@ -46,7 +46,7 @@ import {
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { useStore } from '../store/useStore';
+import { useStore, DEFAULT_BROWSE_FILTERS, type BrowseFilterState } from '../store/useStore';
 import { RootStackParamList } from '../navigation/types';
 import {
   ChatMessage,
@@ -74,8 +74,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
   const { t } = useAppTranslation('conversationalSearch');
 
   // ── Store (for Browse filter hand-off) ──
-  const resetBrowseFilters = useStore((state) => state.resetBrowseFilters);
-  const updateBrowseFilters = useStore((state) => state.updateBrowseFilters);
+  const updateBrowseFiltersForContext = useStore((state) => state.updateBrowseFiltersForContext);
 
   // ── Local state ──
   const [input, setInput] = useState('');
@@ -189,8 +188,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
   // ── Navigate to Browse with extracted filters applied ──
   const handleViewResults = useCallback(
     (filters: SearchFilters) => {
-      resetBrowseFilters();
-      const updates: Parameters<typeof updateBrowseFilters>[0] = {};
+      const updates: Partial<BrowseFilterState> = {};
       if (filters.brands?.length) updates.brands = filters.brands;
       if (filters.sizes?.length) updates.sizes = filters.sizes;
       if (filters.conditions?.length) updates.condition = filters.conditions[0] as any;
@@ -203,14 +201,17 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
         filters.styles?.join(' ') ??
         '';
       if (queryText) updates.query = queryText;
-      updateBrowseFilters(updates);
+      // Target the destination's context bucket directly — the pushed
+      // Browse(search) screen activates `browse:search` on mount and loads
+      // exactly this filter set.
+      updateBrowseFiltersForContext('browse:search', { ...DEFAULT_BROWSE_FILTERS, ...updates });
 
       navigation.navigate('Browse', {
         categoryId: 'search',
         title: t('browseTitle'),
         searchQuery: queryText || undefined });
     },
-    [navigation, resetBrowseFilters, updateBrowseFilters, t],
+    [navigation, updateBrowseFiltersForContext, t],
   );
 
   // ── Render a filter chip inside an assistant message ──

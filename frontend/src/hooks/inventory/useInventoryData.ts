@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { useStore } from '../../store/useStore';
 import { useConnectivity } from '../useConnectivity';
@@ -26,6 +26,9 @@ export function useInventoryData() {
   const [hasMore, setHasMore] = useState(false);
   const [totals, setTotals] = useState<SellerInventoryTotals | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Tracks whether rows exist so focus revalidates silently instead of
+  // unmounting the list behind a full-screen loading state.
+  const hasRowsRef = useRef(false);
 
   const load = useCallback(async (silent = false) => {
     if (!currentUser?.id) {
@@ -42,8 +45,12 @@ export function useInventoryData() {
         fetchSellerInventoryTotals().catch(() => null),
       ]);
       setListings(res.items);
+      hasRowsRef.current = res.items.length > 0;
       setCursor(res.nextCursor ?? null);
       setHasMore(Boolean(res.nextCursor));
+      // `null` means the totals endpoint failed — keep the previous totals
+      // if any, and let the summary mark itself partial otherwise. Each
+      // load retries the fetch, so a transient failure self-heals.
       if (invTotals) setTotals(invTotals);
     } catch (err) {
       const isNetworkError = isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
@@ -72,8 +79,9 @@ export function useInventoryData() {
 
   useFocusEffect(
     useCallback(() => {
-      setIsLoading(true);
-      void load();
+      // Silent revalidate: once rows exist, a focus refresh updates them in
+      // place without toggling the full-screen loading state.
+      void load(hasRowsRef.current);
     }, [load])
   );
 
@@ -92,8 +100,12 @@ export function useInventoryData() {
         paused: totals.paused,
         draft: totals.drafts,
         totalValue: totals.listedValueGbp,
+        isPartial: false,
       };
     }
+    // Totals endpoint unreachable — the figures below count the loaded page
+    // window (≤ PAGE_SIZE rows), not the store. isPartial tells the row to
+    // label them as such instead of presenting them as store-wide totals.
     const active = listings.filter((l) => l.status === 'active');
     const sold = listings.filter((l) => l.status === 'sold');
     const paused = listings.filter((l) => l.status === 'paused');
@@ -105,7 +117,8 @@ export function useInventoryData() {
       sold: sold.length,
       paused: paused.length,
       draft: draft.length,
-      totalValue };
+      totalValue,
+      isPartial: true };
   }, [listings, totals]);
 
   return {

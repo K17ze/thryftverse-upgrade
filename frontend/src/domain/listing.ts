@@ -36,6 +36,21 @@ export interface Listing {
   likes: number;
   views?: number;
   isBumped?: boolean;
+  /**
+   * Paid-placement marker — true only when the backend stamped this listing
+   * as a promoted ("Sponsored") slot. The client never infers sponsorship.
+   */
+  promoted?: boolean;
+  /**
+   * Server-generated disclosure label (e.g. "Sponsored"). Rendered verbatim
+   * only when present — never synthesised from `promoted` or `isBumped`.
+   */
+  disclosure?: string | null;
+  /**
+   * Promotion id on promoted units only — posted to /promotions/:id/click on
+   * tap-through so seller stats count real taps. Never present organically.
+   */
+  promotionId?: string | null;
   isSold?: boolean;
   status?: 'draft' | 'active' | 'paused' | 'reserved' | 'sold' | 'deleted' | 'removed' | 'unknown';
   sellerId: string;
@@ -44,6 +59,9 @@ export interface Listing {
   subcategory?: string | null;
   description: string;
   createdAt?: string;
+  /** Live-auction end timestamp when the listing has one — server-sourced,
+   *  drives truthful 'Ending soon' ordering. Null/absent otherwise. */
+  auctionEndsAt?: string | null;
   shippingMethod?: string | null;
   shippingPayer?: string | null;
   /** Pinned/featured listing — shown first in the Shop grid when true. */

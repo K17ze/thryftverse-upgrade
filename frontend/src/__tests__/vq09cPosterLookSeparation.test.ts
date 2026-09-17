@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
-import { serialiseToPosterPayload } from '../creator/compositionContract';
-import type { CreatorDocument } from '../creator/composition';
+import { serialiseToPosterPayload } from '../creator/core/projectStore/compositionContract';
+import type { CreatorDocument } from '../creator/core/projectStore/composition';
 import type { PosterStoryCreateBody } from '../services/postersApi';
 
 function makePosterDoc(): CreatorDocument {

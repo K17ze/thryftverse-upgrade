@@ -40,6 +40,8 @@ interface ClaimedSchedule {
   attempts: number;
   max_attempts: number;
   publish_command: string;
+  due_at: string;
+  created_at: string;
 }
 
 /**
@@ -84,7 +86,9 @@ export async function sweepScheduledPublications(
         creator_schedules.version,
         creator_schedules.attempts,
         creator_schedules.max_attempts,
-        creator_schedules.publish_command::text
+        creator_schedules.publish_command::text,
+        creator_schedules.due_at::text,
+        creator_schedules.created_at::text
       `,
       [BATCH_SIZE],
     );
@@ -114,7 +118,9 @@ export async function sweepScheduledPublications(
         creator_schedules.version,
         creator_schedules.attempts,
         creator_schedules.max_attempts,
-        creator_schedules.publish_command::text
+        creator_schedules.publish_command::text,
+        creator_schedules.due_at::text,
+        creator_schedules.created_at::text
       `,
       [BATCH_SIZE],
     );
@@ -136,27 +142,78 @@ export async function sweepScheduledPublications(
         processed++;
 
         if (result.ok) {
-          // Success — mark as published and link the publication.
-          await db.query(
+          // Success — mark as published and link the publication. The
+          // transition is gated on state='claimed': a cancel that landed
+          // while the publish transaction was in flight must not be
+          // overwritten back to 'published'.
+          const publishedUpdate = await db.query<{ id: string }>(
             `UPDATE creator_schedules
              SET state = 'published',
                  publication_id = $2,
                  claimed_at = NULL,
                  updated_at = NOW()
-             WHERE id = $1`,
+             WHERE id = $1 AND state = 'claimed'
+             RETURNING id`,
             [schedule.id, result.publicationId],
           );
+          if (!publishedUpdate.rowCount) {
+            // The schedule was cancelled (or rescheduled) mid-flight and
+            // the publication still committed — the post is live. Record
+            // the publication id on the row for traceability, restore the
+            // document to 'published' (cancel reset it to 'draft'), and
+            // notify the creator honestly rather than pretending the
+            // cancel fully rolled back.
+            await db.query(
+              `UPDATE creator_schedules
+               SET publication_id = $2, updated_at = NOW()
+               WHERE id = $1`,
+              [schedule.id, result.publicationId],
+            );
+            await db.query(
+              `UPDATE creator_documents
+               SET status = 'published', updated_at = NOW()
+               WHERE id = $1 AND status IN ('scheduled', 'draft', 'publishing')`,
+              [schedule.document_id],
+            );
+            logger.warn(
+              { scheduleId: schedule.id, documentId: schedule.document_id, publicationId: result.publicationId },
+              'scheduled_publication_committed_after_cancel',
+            );
+            await queueUserNotification({
+              userId: schedule.creator_id,
+              title: 'Post published',
+              body: 'Your post was published just before the cancellation completed.',
+              eventType: 'scheduled_publication_success',
+              payload: {
+                documentId: schedule.document_id,
+                scheduleId: schedule.id,
+                publicationId: result.publicationId,
+                targetId: result.targetId,
+              },
+              route: { screen: 'CreatorDraftList', params: {} },
+              idempotencyKey: `sched_pub_success_${schedule.id}`,
+            });
+            continue;
+          }
           recordBackgroundJob({
             queue: 'infra_ops',
             job: 'scheduled_publication',
             result: 'completed',
           });
 
-          // Notify the creator.
+          // Notify the creator. Immediate publishes (the async
+          // "publish now" path) get copy that reflects what the user
+          // actually did — they didn't schedule anything.
+          const isImmediate =
+            Math.abs(
+              new Date(schedule.due_at).getTime() - new Date(schedule.created_at).getTime(),
+            ) < 60_000;
           await queueUserNotification({
             userId: schedule.creator_id,
-            title: 'Scheduled content published',
-            body: 'Your scheduled content is now live.',
+            title: isImmediate ? 'Post published' : 'Scheduled content published',
+            body: isImmediate
+              ? 'Your post is now live.'
+              : 'Your scheduled content is now live.',
             eventType: 'scheduled_publication_success',
             payload: {
               documentId: schedule.document_id,
@@ -164,10 +221,15 @@ export async function sweepScheduledPublications(
               publicationId: result.publicationId,
               targetId: result.targetId,
             },
+            // The drafts library is where the published document lives.
+            route: { screen: 'CreatorDraftList', params: {} },
             idempotencyKey: `sched_pub_success_${schedule.id}`,
           });
         } else if (result.blocked) {
-          // Policy block — mark as failed with reason.
+          // Policy block — mark as failed with reason, and move the
+          // document out of 'scheduled'/'publishing' so its lifecycle
+          // state stays honest ('failed' is a terminal publish state in
+          // the creator_documents state machine).
           await db.query(
             `UPDATE creator_schedules
              SET state = 'failed',
@@ -177,15 +239,27 @@ export async function sweepScheduledPublications(
              WHERE id = $1`,
             [schedule.id, result.error ?? 'blocked'],
           );
+          await db.query(
+            `UPDATE creator_documents
+             SET status = 'failed', updated_at = NOW()
+             WHERE id = $1 AND status IN ('scheduled', 'publishing')`,
+            [schedule.document_id],
+          );
           recordBackgroundJob({
             queue: 'infra_ops',
             job: 'scheduled_publication',
             result: 'failed',
           });
 
+          const isImmediateBlock =
+            Math.abs(
+              new Date(schedule.due_at).getTime() - new Date(schedule.created_at).getTime(),
+            ) < 60_000;
           await queueUserNotification({
             userId: schedule.creator_id,
-            title: 'Scheduled content could not be published',
+            title: isImmediateBlock
+              ? 'Post could not be published'
+              : 'Scheduled content could not be published',
             body: result.error ?? 'The content was blocked by policy.',
             eventType: 'scheduled_publication_blocked',
             payload: {
@@ -193,6 +267,7 @@ export async function sweepScheduledPublications(
               scheduleId: schedule.id,
               reason: result.error,
             },
+            route: { screen: 'CreatorDraftList', params: {} },
             idempotencyKey: `sched_pub_blocked_${schedule.id}`,
           });
         } else if (schedule.attempts >= schedule.max_attempts) {
@@ -206,22 +281,35 @@ export async function sweepScheduledPublications(
              WHERE id = $1`,
             [schedule.id, result.error ?? 'max attempts exceeded'],
           );
+          await db.query(
+            `UPDATE creator_documents
+             SET status = 'failed', updated_at = NOW()
+             WHERE id = $1 AND status IN ('scheduled', 'publishing')`,
+            [schedule.document_id],
+          );
           recordBackgroundJob({
             queue: 'infra_ops',
             job: 'scheduled_publication',
             result: 'failed',
           });
 
+          const isImmediateFail =
+            Math.abs(
+              new Date(schedule.due_at).getTime() - new Date(schedule.created_at).getTime(),
+            ) < 60_000;
           await queueUserNotification({
             userId: schedule.creator_id,
-            title: 'Scheduled publication failed',
-            body: 'After multiple attempts, the scheduled content could not be published. Please try publishing manually.',
+            title: isImmediateFail ? 'Post failed to publish' : 'Scheduled publication failed',
+            body: isImmediateFail
+              ? 'The post could not be published. Please try again.'
+              : 'After multiple attempts, the scheduled content could not be published. Please try publishing manually.',
             eventType: 'scheduled_publication_failed',
             payload: {
               documentId: schedule.document_id,
               scheduleId: schedule.id,
               reason: result.error,
             },
+            route: { screen: 'CreatorDraftList', params: {} },
             idempotencyKey: `sched_pub_failed_${schedule.id}`,
           });
         } else {
@@ -251,6 +339,12 @@ export async function sweepScheduledPublications(
                  updated_at = NOW()
              WHERE id = $1`,
             [schedule.id, error instanceof Error ? error.message : 'unexpected error'],
+          );
+          await db.query(
+            `UPDATE creator_documents
+             SET status = 'failed', updated_at = NOW()
+             WHERE id = $1 AND status IN ('scheduled', 'publishing')`,
+            [schedule.document_id],
           );
         } else {
           await db.query(
@@ -353,6 +447,27 @@ async function executeScheduledPublication(
         ok: true,
         publicationId: result.publicationId,
         targetId: result.targetId,
+      };
+    }
+
+    // Reclaim guard: before converting any non-OK result into a failure,
+    // check whether a publication already exists under this schedule's
+    // idempotency key. A previous attempt may have committed the
+    // publication and then crashed before the schedule row updated —
+    // marking it failed would convert a live post into a false failure
+    // (and flip the document to 'failed' beneath a live publication).
+    const committed = await db.query<{ id: string; target_id: string }>(
+      `SELECT id, target_id FROM creator_publications
+       WHERE document_id = $1 AND idempotency_key = $2
+         AND state IN ('publishing', 'published')
+       LIMIT 1`,
+      [schedule.document_id, idempotencyKey],
+    );
+    if (committed.rowCount) {
+      return {
+        ok: true,
+        publicationId: committed.rows[0].id,
+        targetId: committed.rows[0].target_id,
       };
     }
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Text } from 'react-native';
+import { View, StyleSheet, Text, useWindowDimensions } from 'react-native';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { Space } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
@@ -32,6 +32,11 @@ import type { CommerceDetailFamily } from './types';
 export interface CommerceDetailTransactionSurfaceProps {
   /** Optional dominant value (current bid / last trade / price). */
   primaryValue?: string;
+  /** Optional subordinate conversion line rendered beneath the primary
+   *  value (e.g. the local-currency equivalent of a 1ZE amount). Kept
+   *  small and muted so the conversion never renders at headline size
+   *  or wraps the headline row. */
+  primaryEquivalent?: string;
   /** Optional label for the dominant value (e.g. "Current bid"). */
   primaryLabel?: string;
   /** Optional secondary value line (e.g. "Minimum next bid £45"). */
@@ -62,6 +67,7 @@ export interface CommerceDetailTransactionSurfaceProps {
 
 export function CommerceDetailTransactionSurface({
   primaryValue,
+  primaryEquivalent,
   primaryLabel,
   secondaryValue,
   secondaryLabel,
@@ -74,6 +80,8 @@ export function CommerceDetailTransactionSurface({
   flush = false,
   surfaceColor }: CommerceDetailTransactionSurfaceProps) {
   const { colors } = useAppTheme();
+  const { width, fontScale } = useWindowDimensions();
+  const stackAuctionHeadline = family === 'auction' && (width < 390 || fontScale > 1.2 || (primaryValue?.length ?? 0) > 14);
 
   // Per spec 05 §1: family-aware composition.
   //   - direct: quiet price rhythm.
@@ -102,11 +110,25 @@ export function CommerceDetailTransactionSurface({
             { color: colors.textPrimary },
           ]}
           accessibilityRole="text"
+          // Single line + shrink-to-fit for every family — the auction
+          // headline is the same size class as a hero price, and a
+          // wrapped multi-line price consumes the first viewport and
+          // crowds out the transaction state beside it.
           adjustsFontSizeToFit
-          minimumFontScale={0.78}
+          minimumFontScale={family === 'auction' ? 0.6 : 0.78}
           numberOfLines={1}
+          maxFontSizeMultiplier={2}
         >
           {primaryValue}
+        </Text>
+      ) : null}
+      {primaryEquivalent ? (
+        <Text
+          style={[styles.primaryEquivalent, { color: colors.textMuted }]}
+          numberOfLines={1}
+          maxFontSizeMultiplier={2}
+        >
+          {primaryEquivalent}
         </Text>
       ) : null}
     </View>
@@ -140,9 +162,9 @@ export function CommerceDetailTransactionSurface({
       accessibilityRole="summary"
     >
       {family === 'auction' && (headlineAside || secondaryContent) ? (
-        <View style={styles.auctionHeadline}>
+        <View style={[styles.auctionHeadline, stackAuctionHeadline && styles.auctionHeadlineStacked]}>
           {primaryContent}
-          {headlineAside ? <View style={styles.auctionHeadlineAside}>{headlineAside}</View> : secondaryContent}
+          {headlineAside ? <View style={[styles.auctionHeadlineAside, stackAuctionHeadline && styles.auctionAsideStacked]}>{headlineAside}</View> : secondaryContent}
         </View>
       ) : family === 'co_own' && headlineAside ? (
         <>
@@ -205,7 +227,12 @@ const styles = StyleSheet.create({
   // label for horizontal space. The gap creates clear hierarchy.
   primaryRow: {
     flexDirection: 'column',
-    gap: Space.xs + 2 },
+    gap: Space.xs + 2,
+    // Bound the column inside the auction headline row so the value's
+    // shrink-to-fit has a width to fit into and the state aside is
+    // never pushed off-screen.
+    flexShrink: 1,
+    minWidth: 0 },
   primaryRowCoOwn: {
     gap: Space.xs + 2 },
   label: {
@@ -231,13 +258,25 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.priceList.size,
     lineHeight: TypographyV2.priceList.lineHeight,
     letterSpacing: -0.3 },
+  // Subordinate conversion line — the local-currency equivalent under
+  // the dominant value. Same demotion grammar as the auction value
+  // lockup (featured 28pt → local 14pt) and the Buy Now sheet's
+  // equivalent line.
+  primaryEquivalent: {
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    fontVariant: ['tabular-nums'] },
   auctionHeadline: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     gap: Space.md },
+  auctionHeadlineStacked: { flexDirection: 'column', alignItems: 'stretch', gap: Space.sm },
+  auctionAsideStacked: { alignItems: 'flex-start', paddingBottom: 0 },
   auctionHeadlineAside: {
     flexShrink: 1,
+    minWidth: 0,
     alignItems: 'flex-end',
     justifyContent: 'flex-end',
     paddingBottom: Space.xs },

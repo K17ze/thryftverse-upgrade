@@ -3,8 +3,8 @@ import { View, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space } from '../../theme/designTokens';
-import { CreatorCanvas } from '../../creator/CreatorCanvas';
-import type { CreatorDocument, CreatorPage } from '../../creator/composition';
+import { CreatorCanvas } from '../../creator/studio/CreatorCanvas';
+import type { CreatorDocument, CreatorPage } from '../../creator/core/projectStore/composition';
 import { LookMediaCarousel, type LookMediaCarouselPage } from '../look/LookMediaCarousel';
 import { LookHotspots, type HydratedLookTag } from '../look/LookHotspots';
 

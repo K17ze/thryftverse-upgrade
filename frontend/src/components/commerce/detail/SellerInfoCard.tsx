@@ -76,8 +76,10 @@ export function SellerInfoCard({
         : `${seller.completedSales} sold` });
   }
   if (seller.responseRate != null) {
+    // The backend emits responseRate on a 0–100 scale
+    // (sellerPerformance.ts) — render it directly, never rescale.
     stats.push({
-      value: `${Math.round(seller.responseRate * 100)}% responds` });
+      value: `${Math.round(seller.responseRate)}% responds` });
   }
   if (seller.dispatchTimeLabel) {
     stats.push({

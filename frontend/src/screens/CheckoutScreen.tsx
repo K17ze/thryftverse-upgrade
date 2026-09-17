@@ -1,4 +1,4 @@
-﻿import React, { useState, useCallback, useRef, useMemo } from 'react';
+﻿import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   StatusBar,
   Platform,
   RefreshControl,
+  AccessibilityInfo,
+  findNodeHandle,
 } from 'react-native';
 import { useA11yAudit } from '../hooks/useA11yAudit';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -34,10 +36,12 @@ import { CheckoutProgressDots } from '../components/checkout/CheckoutProgressDot
 import { CheckoutPartialDataBanner } from '../components/checkout/CheckoutPartialDataBanner';
 import { CheckoutSelectionSection } from '../components/checkout/CheckoutSelectionSection';
 import { CheckoutBalanceSection } from '../components/checkout/CheckoutBalanceSection';
+import { CheckoutVerificationSection } from '../components/checkout/CheckoutVerificationSection';
 import { CheckoutOrderError } from '../components/checkout/CheckoutOrderError';
 import { CheckoutCapabilityError } from '../components/checkout/CheckoutCapabilityError';
 import { CheckoutFooter } from '../components/checkout/CheckoutFooter';
 import { CheckoutSheets } from '../components/checkout/CheckoutSheets';
+import { isPlatformPaySupported } from '@stripe/stripe-react-native';
 import { STAGE_LABELS } from '../utils/checkoutFlow';
 import { CommerceDetailOfflineBanner } from '../components/commerce/detail';
 import { BuyerProtectionStrip } from '../components/product';
@@ -46,9 +50,12 @@ import { getListingCoverUri } from '../utils/media';
 import { Space, FontFamily } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { useCheckoutData } from '../hooks/checkout/useCheckoutData';
+import { toIze } from '../utils/currency';
 import { useCheckoutHydration } from '../hooks/checkout/useCheckoutHydration';
 import { useCheckoutPaymentFlow } from '../hooks/checkout/useCheckoutPaymentFlow';
 import { useCheckoutSelectionActions } from '../hooks/checkout/useCheckoutSelectionActions';
+import { useSellerTrust } from '../platform/product/useListingQueries';
+import { formatShortDate } from '../utils/dateFormat';
 import {
   buildPartialDataPrompt,
   computeCheckoutRowErrors,
@@ -59,6 +66,12 @@ import {
 import { useScreenCaptureProtection } from '../platform/screenCapture';
 
 type RouteT = RouteProp<RootStackParamList, 'Checkout'>;
+
+// POST /orders rejects walletDebitGbp > 0 (WALLET_SPLIT_TENDER_UNSUPPORTED)
+// — keep the balance-at-checkout section off until the order contract
+// supports split tender. Full-order 1ZE payment stays available via the
+// payment-method option.
+const CHECKOUT_SPLIT_TENDER_ENABLED = false;
 
 export default function CheckoutScreen() {
   const a11yRef = useRef<any>(null);
@@ -91,9 +104,14 @@ export default function CheckoutScreen() {
 
   const [addCardSheetVisible, setAddCardSheetVisible] = useState(false);
   const [paymentSelectorVisible, setPaymentSelectorVisible] = useState(false);
+  const [deliverySelectorVisible, setDeliverySelectorVisible] = useState(false);
   const [breakdownSheetVisible, setBreakdownSheetVisible] = useState(false);
+  // Item verification add-on — a request flag on the order (no fee; the
+  // backend exposes no verification price). For order-bound checkout the
+  // stored order flag is the source of truth (hydrated below).
+  const [verificationRequested, setVerificationRequested] = useState(false);
   const { showError } = useNotifications();
-  const { formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat, fxRates } = useFormattedPrice();
 
   const item = listings.find((l) => l.id === itemId);
 
@@ -113,6 +131,8 @@ export default function CheckoutScreen() {
     capabilityError,
     checkoutCapabilities,
     postageOption,
+    setPostageOption,
+    shippingQuotes,
     hydrateCheckout,
     handleRefreshCheckout,
   } = useCheckoutHydration({
@@ -150,6 +170,17 @@ export default function CheckoutScreen() {
   // Errors clear automatically as fields become valid (computed from state).
   const [hasAttemptedPay, setHasAttemptedPay] = useState(false);
 
+  // 1ZE requirement estimate — the same GBP→1ZE conversion the wallet
+  // debit applies (at-par via the FX bridge). The server-provided
+  // `onezeRequiredIze` overrides this once an intent response carries it.
+  const estimatedGrossGbp = (boundOrder?.subtotalGbp ?? item?.price ?? 0)
+    + (boundOrder?.platformChargeGbp ?? calculatePlatformChargeGbp(boundOrder?.subtotalGbp ?? item?.price ?? 0))
+    + postageOption.priceFromGbp;
+  const onezeRequiredEstimate = useMemo(
+    () => toIze(estimatedGrossGbp, 'GBP', fxRates),
+    [estimatedGrossGbp, fxRates]
+  );
+
   const {
     stage,
     isSubmitting,
@@ -158,6 +189,8 @@ export default function CheckoutScreen() {
     isCheckingPaymentStatus,
     orderError,
     boundOrderIssue,
+    paymentIssue,
+    onezeRequiredIze,
     handlePay,
     cancelStaleOrder,
     handleCheckPaymentStatus,
@@ -175,12 +208,39 @@ export default function CheckoutScreen() {
     savedPaymentMethod,
     checkoutCapabilities,
     postageOption,
+    verificationRequested,
     useBalance,
     walletBalance,
     useOnezePayment,
     onezeBalance,
+    onezeRequiredEstimateIze: onezeRequiredEstimate,
     setHasAttemptedPay,
   });
+
+  // Order-bound checkout: hydrate the stored verification flag once the
+  // bound order arrives. Local toggles win afterwards — boundOrder only
+  // changes on refetch.
+  const boundOrderVerification = boundOrder?.verificationRequested;
+  useEffect(() => {
+    if (boundOrderVerification != null) {
+      setVerificationRequested(boundOrderVerification);
+    }
+  }, [boundOrderVerification]);
+
+  // --- Item verification add-on toggle ---
+  // Same selection-change contract as address/payment/delivery: clear
+  // inline validation and cancel a stale in-flight order before the flag
+  // is committed (the flag is part of the order signature).
+  const handleVerificationToggle = useCallback(async () => {
+    if (isInteractionLocked) return;
+    haptics.tap();
+    setHasAttemptedPay(false);
+    if (createdOrderIdRef.current) {
+      const cancelled = await cancelStaleOrder();
+      if (!cancelled) return;
+    }
+    setVerificationRequested((v) => !v);
+  }, [isInteractionLocked, createdOrderIdRef, cancelStaleOrder]);
 
   const [confirmSheet, setConfirmSheet] = useState<{
     visible: boolean;
@@ -193,7 +253,10 @@ export default function CheckoutScreen() {
   }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
 
   // --- Delivery selection change ---
-  const canChangePostage = (checkoutCapabilities?.postage.carriers.length ?? 0) > 1;
+  // The selector opens when more than one persisted server quote exists —
+  // capability carriers alone aren't selectable (they carry no quoteId the
+  // order route requires).
+  const canChangePostage = shippingQuotes.length > 1;
   const allowCardPayments = isPaymentMethodAllowed(checkoutCapabilities, 'card');
 
   // Selection-change actions: each clears inline validation, cancels any
@@ -205,6 +268,7 @@ export default function CheckoutScreen() {
     handleAddCardSuccess,
     handlePaymentPress,
     handleDeliveryPress,
+    handleSelectDeliveryOption,
   } = useCheckoutSelectionActions({
     userId: currentUser?.id,
     savedAddress,
@@ -221,6 +285,9 @@ export default function CheckoutScreen() {
     setHasAttemptedPay,
     setPaymentSelectorVisible,
     setAddCardSheetVisible,
+    setDeliverySelectorVisible,
+    setPostageOption,
+    selectedQuoteId: postageOption.quoteId,
   });
 
   // Order-bound checkout (accepted offer / resumed order): the order is the
@@ -291,6 +358,21 @@ export default function CheckoutScreen() {
     return sellerId === currentUser.id;
   }, [displayItem, currentUser?.id]);
 
+  // --- Seller holiday mode ---
+  // POST /orders hard-rejects checkout for an effectively-away seller
+  // (409 SELLER_AWAY) — the trust query mirrors that state so the buyer
+  // is told up front instead of discovering it after pressing Pay.
+  // Order-bound checkout (paying for an accepted offer created before
+  // the seller went away) is NOT blocked: the order already exists and
+  // its dispatch deadline shifts to after the seller's return — the
+  // delivery row carries that expectation instead of a hard guard.
+  const checkoutSellerId = displayItem?.sellerId || displayItem?.seller?.id || undefined;
+  const { data: checkoutSellerTrust } = useSellerTrust(checkoutSellerId);
+  const sellerAway = checkoutSellerTrust?.holidayMode === true;
+  const sellerBackLabel = sellerAway && checkoutSellerTrust?.holidayModeUntil
+    ? formatShortDate(checkoutSellerTrust.holidayModeUntil)
+    : null;
+
   // --- Partial data state (§14) ---
   // Computed before early returns so the useMemo hook order is stable
   // regardless of which guard branch fires (Rules of Hooks).
@@ -332,6 +414,46 @@ export default function CheckoutScreen() {
     navigation,
     backendPaymentMethods.length,
   ]);
+
+  // Accessibility: payment/order errors must take screen-reader focus — the
+  // error card sits mid-scroll and a screen reader would otherwise miss the
+  // failure entirely. Focus moves to the error text (the announcement is the
+  // fallback for platforms where focus fails). Sheets announce their own
+  // title+message on open — and BottomSheet moves focus to sheet content via
+  // useModalFocusManagement — so the modal context switch is explicit
+  // (audit P3-15).
+  const orderErrorRef = useRef<Text>(null);
+  useEffect(() => {
+    if (orderError) {
+      AccessibilityInfo.announceForAccessibility(orderError);
+      const node = findNodeHandle(orderErrorRef.current);
+      if (node) {
+        AccessibilityInfo.setAccessibilityFocus(node);
+      }
+    }
+  }, [orderError]);
+
+  useEffect(() => {
+    if (confirmSheet.visible && confirmSheet.title) {
+      AccessibilityInfo.announceForAccessibility(`${confirmSheet.title}. ${confirmSheet.message}`);
+    }
+  }, [confirmSheet.visible, confirmSheet.title, confirmSheet.message]);
+
+  // Device-level platform-pay support — queried once on mount. Lives above
+  // every early return: hooks must run unconditionally.
+  const [platformPaySupported, setPlatformPaySupported] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    // Web/SSR-safe: the shim resolves false where the native module is absent.
+    void isPlatformPaySupported()
+      .then((supported) => {
+        if (!cancelled) setPlatformPaySupported(supported === true);
+      })
+      .catch(() => {
+        if (!cancelled) setPlatformPaySupported(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   // --- Render ---
 
@@ -444,6 +566,29 @@ export default function CheckoutScreen() {
     );
   }
 
+  // Seller away — a new order cannot be created (409 SELLER_AWAY), so
+  // the whole checkout surface is a factual pause state rather than a
+  // Pay button that can only fail. The return date is shown only when
+  // the seller published one. Order-bound checkout skips this guard:
+  // the order already exists and remains payable.
+  if (sellerAway && !orderId) {
+    return (
+      <CheckoutGuardScaffold onClose={() => navigation.goBack()} closeAccessibilityLabel="Close">
+        <CheckoutGuardState
+          icon="sunny-outline"
+          title="Seller away"
+          body={
+            sellerBackLabel
+              ? `This seller's shop is paused until ${sellerBackLabel}. Check back then.`
+              : "This seller's shop is paused while they are away. Check back later."
+          }
+          ctaLabel="Go back"
+          onCtaPress={() => navigation.goBack()}
+        />
+      </CheckoutGuardScaffold>
+    );
+  }
+
   // ── Loading skeleton ──
   // Show a skeleton that matches the final layout geometry when hydrating
   // with no cached data (first load). Per AGENTS.md §14: "Skeletons should
@@ -470,7 +615,11 @@ export default function CheckoutScreen() {
   // path derives it from the item price as before.
   const PLATFORM_CHARGE = boundOrder?.platformChargeGbp ?? calculatePlatformChargeGbp(displayItem.price);
   const POSTAGE_FEE = postageOption.priceFromGbp;
-  const GROSS_TOTAL = displayItem.price + PLATFORM_CHARGE + POSTAGE_FEE;
+  // Money source of truth: a bound order's subtotal is the server-locked
+  // price (e.g. an accepted offer), not the listing's current price —
+  // displaying displayItem.price here would misquote the order total.
+  const orderSubtotal = boundOrder?.subtotalGbp ?? displayItem.price;
+  const GROSS_TOTAL = orderSubtotal + PLATFORM_CHARGE + POSTAGE_FEE;
   // Wallet split-tender has no order-bound endpoint — hide the toggle and
   // never subtract balance from an order-bound total.
   const balanceApplied = useBalance && !orderId ? Math.min(walletBalance, GROSS_TOTAL) : 0;
@@ -485,7 +634,12 @@ export default function CheckoutScreen() {
   // wallet is available it becomes the primary CTA and the card button
   // becomes secondary ("Pay with card"), creating a clear hierarchy that
   // surfaces biometric one-tap payment before manual card entry.
-  const walletAvailable = !isSubmitting && (
+  //
+  // The capability flag says the merchant/gateway allows the tender — the
+  // device check says this device can actually present it (a card in
+  // Wallet, Google Pay provisioned). A capability-only "Pay with Apple Pay"
+  // CTA on an unprovisioned device is a false promise — gate on both.
+  const walletAvailable = !isSubmitting && platformPaySupported && (
     (Platform.OS === 'ios' && isPaymentMethodAllowed(checkoutCapabilities, 'apple_pay'))
     || (Platform.OS === 'android' && isPaymentMethodAllowed(checkoutCapabilities, 'google_pay'))
   );
@@ -494,7 +648,8 @@ export default function CheckoutScreen() {
     stage,
     isSubmitting,
     useOnezePayment,
-    grossTotal: GROSS_TOTAL,
+    onezeRequiredIze: onezeRequiredIze ?? onezeRequiredEstimate,
+    orderReleased: paymentIssue === 'released',
     walletAvailable,
     formattedTotal: formatFromFiat(TOTAL, 'GBP'),
   });
@@ -505,6 +660,7 @@ export default function CheckoutScreen() {
       hasCarrier: !!postageOption.carrierId,
       useOnezePayment,
       onezeBalance,
+      onezeRequiredIze: onezeRequiredIze ?? onezeRequiredEstimate,
       grossTotal: GROSS_TOTAL,
       savedPaymentMethod,
       checkoutCapabilities,
@@ -536,7 +692,7 @@ export default function CheckoutScreen() {
   // so TalkBack cannot reach Pay while a sheet covers it (audit M2). The
   // sheets stay OUTSIDE this container: BottomSheet renders in-tree, so
   // hiding an ancestor would hide the sheet itself.
-  const anySheetVisible = addCardSheetVisible || paymentSelectorVisible || breakdownSheetVisible || confirmSheet.visible;
+  const anySheetVisible = addCardSheetVisible || paymentSelectorVisible || deliverySelectorVisible || breakdownSheetVisible || confirmSheet.visible;
 
   return (
     <SafeAreaView ref={a11yRef} style={[styles.container, t.container]} edges={['top']}>
@@ -625,6 +781,15 @@ export default function CheckoutScreen() {
             onPress: canChangePostage ? handleDeliveryPress : undefined,
             icon: 'car-outline',
             isFilled: !!postageOption.carrierId,
+            // Order-bound checkout for an away seller: the order stays
+            // payable but dispatch waits for the seller's return — the
+            // ETA label still describes transit time, so the away shift
+            // is stated here rather than baked into a fabricated date.
+            warningText: sellerAway
+              ? sellerBackLabel
+                ? `Seller away until ${sellerBackLabel} — ships after they return`
+                : 'Seller away — ships after they return'
+              : undefined,
             errorText: !postageOption.carrierId
               ? 'Shipping not available for your region'
               : suppressShippingError
@@ -664,10 +829,22 @@ export default function CheckoutScreen() {
           onezeOption={onezeBalance > 0 && !balanceLoading && !useOnezePayment
             ? {
                 onezeBalance,
-                neededAmount: GROSS_TOTAL,
+                // 1ZE-denominated requirement — the option renders this as
+                // "N 1ZE needed", so it must be a 1ZE amount, not GBP.
+                neededAmount: onezeRequiredIze ?? onezeRequiredEstimate,
                 onPress: () => { haptics.tap(); setUseOnezePayment(true); setHasAttemptedPay(false); if (useBalance) setUseBalance(false); },
               }
             : undefined}
+        />
+
+        {/* 5aa. Item verification add-on — a request flag on the order, no
+            charge (the backend exposes no verification price). Rendered
+            with the selection-adjacent toggles so it reads as part of the
+            checkout configuration, not a marketing upsell. */}
+        <CheckoutVerificationSection
+          visible
+          enabled={verificationRequested}
+          onToggle={() => void handleVerificationToggle()}
         />
 
         {/* 5b. Buyer protection strip — the single authored trust moment,
@@ -683,18 +860,24 @@ export default function CheckoutScreen() {
         {/* 6a. Balance-at-checkout toggle — kept inline so the user can
             apply wallet credit before reviewing the compact total in the
             sticky footer. Hidden when 1ZE payment is selected (1ZE is the
-            full payment source, no split-tender needed). */}
-        <CheckoutBalanceSection
-          visible={walletBalance > 0 && !balanceLoading && !useOnezePayment && !orderId}
-          useBalance={useBalance}
-          balanceLabel={formatFromFiat(walletBalance, 'GBP')}
-          savingsAmount={useBalance && balanceApplied > 0 ? formatFromFiat(balanceApplied, 'GBP') : undefined}
-          onToggle={() => {
-            haptics.tap();
-            setUseBalance((v) => !v);
-            setHasAttemptedPay(false);
-          }}
-        />
+            full payment source, no split-tender needed). Gated off
+            entirely until the order contract supports split tender —
+            POST /orders rejects walletDebitGbp > 0 with
+            WALLET_SPLIT_TENDER_UNSUPPORTED, so an offered toggle would be
+            a guaranteed-failure dead path. */}
+        {CHECKOUT_SPLIT_TENDER_ENABLED ? (
+          <CheckoutBalanceSection
+            visible={walletBalance > 0 && !balanceLoading && !useOnezePayment && !orderId}
+            useBalance={useBalance}
+            balanceLabel={formatFromFiat(walletBalance, 'GBP')}
+            savingsAmount={useBalance && balanceApplied > 0 ? formatFromFiat(balanceApplied, 'GBP') : undefined}
+            onToggle={() => {
+              haptics.tap();
+              setUseBalance((v) => !v);
+              setHasAttemptedPay(false);
+            }}
+          />
+        ) : null}
 
         {/* 7. Transaction feedback — canonical PaymentStateBanner (audit P0) */}
         {stage !== 'idle' ? (
@@ -717,9 +900,30 @@ export default function CheckoutScreen() {
 
         {orderError ? (
           <CheckoutOrderError
+            ref={orderErrorRef}
             message={orderError}
-            showRetry={stage === 'payment_failed'}
-            onRetry={handlePay}
+            // Terminal issues never offer a retry that cannot succeed —
+            // 'sold'/'seller_unavailable' get no action; 'released' gets a
+            // "Buy again" that mints a fresh order; an insufficient 1ZE
+            // balance gets the card switch, not a doomed wallet retry.
+            showRetry={
+              stage === 'payment_failed'
+              && paymentIssue !== 'sold'
+              && paymentIssue !== 'seller_unavailable'
+              && !(paymentIssue === 'insufficient_oneze' && !useOnezePayment)
+            }
+            onRetry={
+              paymentIssue === 'insufficient_oneze'
+                ? () => { haptics.tap(); setUseOnezePayment(false); setHasAttemptedPay(false); }
+                : handlePay
+            }
+            retryLabel={
+              paymentIssue === 'released'
+                ? 'Buy again'
+                : paymentIssue === 'insufficient_oneze'
+                  ? 'Pay by card'
+                  : 'Retry payment'
+            }
           />
         ) : null}
 
@@ -740,6 +944,7 @@ export default function CheckoutScreen() {
         itemLabel={formatFromFiat(displayItem.price, 'GBP')}
         deliveryLabel={formatFromFiat(POSTAGE_FEE, 'GBP')}
         protectionLabel={formatFromFiat(PLATFORM_CHARGE, 'GBP')}
+        verificationLabel={verificationRequested ? 'Free' : undefined}
         walletAppliedLabel={useBalance && balanceApplied > 0 ? formatFromFiat(balanceApplied, 'GBP') : undefined}
         totalLabel={formatFromFiat(TOTAL, 'GBP')}
         onPressSummary={() => setBreakdownSheetVisible(true)}
@@ -777,6 +982,11 @@ export default function CheckoutScreen() {
           setPaymentSelectorVisible(false);
           setAddCardSheetVisible(true);
         }}
+        deliverySelectorVisible={deliverySelectorVisible}
+        onDismissDeliverySelector={() => setDeliverySelectorVisible(false)}
+        shippingQuotes={shippingQuotes}
+        selectedQuoteId={postageOption.quoteId}
+        onSelectDeliveryOption={(quote) => void handleSelectDeliveryOption(quote)}
         breakdownSheetVisible={breakdownSheetVisible}
         onDismissBreakdown={() => setBreakdownSheetVisible(false)}
         breakdown={{
@@ -784,6 +994,7 @@ export default function CheckoutScreen() {
           protectionLabel: formatFromFiat(PLATFORM_CHARGE, 'GBP'),
           deliveryRowLabel: `Delivery${postageOption.liveQuote ? '' : ' (Estimated)'}`,
           deliveryLabel: formatFromFiat(POSTAGE_FEE, 'GBP'),
+          verificationLabel: verificationRequested ? 'Free' : undefined,
           walletAppliedLabel: useBalance && balanceApplied > 0 ? formatFromFiat(balanceApplied, 'GBP') : undefined,
           useBalance,
           totalLabel: formatFromFiat(TOTAL, 'GBP'),

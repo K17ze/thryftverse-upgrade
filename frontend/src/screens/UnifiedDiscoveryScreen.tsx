@@ -22,7 +22,7 @@
  * are owned by PinterestMasonryGrid and are not touched here.
  */
 
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef } from 'react';
 import { View } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -30,7 +30,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useConnectivity } from '../hooks/useConnectivity';
-import { useSignupWall } from '../hooks/useSignupWall';
+import { useSaveToCollectionPicker } from '../hooks/useSaveToCollectionPicker';
 import { useStore } from '../store/useStore';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import {
@@ -57,15 +57,39 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
   const scrollRef = useRef<any>(null);
 
   // ── Two-tier save — tap = quick-save to Saved, long-press = file to a
-  //  collection (same contract as SearchScreen/DiscoverScene). ──
-  const toggleSavedProduct = useStore((state) => state.toggleSavedProduct);
+  //  collection (same contract as SearchScreen/DiscoverScene). The hook
+  //  also owns the one-shot "Add to a list" teaching toast. ──
   const isSavedProduct = useStore((state) => state.isSavedProduct);
-  const { requireAuth } = useSignupWall();
-  const [savePickerItemId, setSavePickerItemId] = useState<string | null>(null);
+  const { savePickerItemId, handleQuickSave, handleSaveLongPress, closeSavePicker } = useSaveToCollectionPicker();
 
   const content = useDiscoveryContent();
   const categories = useDiscoveryCategories();
   const search = useDiscoverySearch(route.params?.initialQuery);
+
+  // ── Save-search: persist the live query + applied filters with match
+  //  alerts enabled. Dedup mirrors addSavedSearch's normalized-query key. ──
+  const savedSearches = useStore((s) => s.savedSearches);
+  const addSavedSearch = useStore((s) => s.addSavedSearch);
+  const isSearchSaved = savedSearches.some(
+    (s) => s.query.trim().toLowerCase() === search.query.trim().toLowerCase(),
+  );
+  const handleSaveSearch = useCallback(() => {
+    if (search.query.trim().length < 2 || isSearchSaved) return;
+    haptic.light();
+    // The discovery context is active while this screen is focused — its
+    // bucket holds the filters the user applied via the Filter sheet.
+    const filters = useStore.getState().browseFilters;
+    addSavedSearch({
+      query: search.query.trim(),
+      filters: {
+        brands: filters.brands,
+        sizes: filters.sizes,
+        condition: filters.condition,
+        sort: filters.sort,
+        minPrice: filters.priceMin ?? undefined,
+        maxPrice: filters.priceMax ?? undefined },
+      alertsEnabled: true });
+  }, [search.query, isSearchSaved, addSavedSearch, haptic]);
   const feed = useDiscoveryFeed({
     activeCategory: categories.activeCategory,
     activeSignalChip: categories.activeSignalChip,
@@ -120,16 +144,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
     navigation.navigate('UserProfile', { userId });
   }, [navigation]);
 
-  const handleSaveToggle = useCallback((item: DiscoveryListingSummary) => {
-    haptic.light();
-    toggleSavedProduct(item.id);
-  }, [haptic, toggleSavedProduct]);
 
-  const handleSaveLongPress = useCallback((item: DiscoveryListingSummary) => {
-    if (!requireAuth('save_item')) return;
-    haptic.selection();
-    setSavePickerItemId(item.id);
-  }, [haptic, requireAuth]);
 
   // ── Search bar header — back button + search bar + camera, all in the
   //  header so the search bar sits right below the status bar with no
@@ -155,6 +170,8 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
             isSearching={search.isSearching}
             isSearchingPeople={search.isSearchingPeople}
             peopleResults={search.peopleResults}
+            peopleError={search.peopleError}
+            onRetryPeople={search.retryPeopleSearch}
             searchScope={search.searchScope}
             searchError={search.searchError}
             onRetry={search.retrySearch}
@@ -162,12 +179,20 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
             activeFilterCount={search.activeSearchFilterCount}
             onOpenFilters={() => navigation.navigate('Filter', { categoryId: 'search', title: 'Search' })}
             onClearFilters={search.clearSearchFilters}
+            usedFallback={search.searchUsedFallback}
+            resultCount={search.searchResults.length}
+            hasMore={search.searchHasMore}
+            isLoadingMore={search.isSearchingMore}
+            onEndReached={search.loadMoreSearch}
+            onClearSearch={() => search.setQuery('')}
+            onSaveSearch={handleSaveSearch}
+            isSearchSaved={isSearchSaved}
             onListingPress={handleListingPress}
             onLookPress={handleLookPress}
             onPosterPress={handlePosterPress}
             onMoodboardPress={handleMoodboardPress}
             onUserPress={handleUserPress}
-            onItemSaveToggle={handleSaveToggle}
+            onItemSaveToggle={handleQuickSave}
             onItemSaveLongPress={handleSaveLongPress}
             isItemSaved={isSavedProduct}
           />
@@ -192,7 +217,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
             onCollectionPress={handleCollectionPress}
             onRefresh={handleRefresh}
             scrollRef={scrollRef}
-            onItemSaveToggle={handleSaveToggle}
+            onItemSaveToggle={handleQuickSave}
             onItemSaveLongPress={handleSaveLongPress}
             isItemSaved={isSavedProduct}
           />
@@ -201,7 +226,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
       <SaveToCollectionModal
         visible={savePickerItemId != null}
         itemId={savePickerItemId ?? ''}
-        onClose={() => setSavePickerItemId(null)}
+        onClose={closeSavePicker}
       />
     </FlagshipScreen>
   );

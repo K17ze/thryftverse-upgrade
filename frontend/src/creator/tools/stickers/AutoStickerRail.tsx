@@ -19,7 +19,6 @@ import {
   View,
   Text,
   ScrollView,
-  Pressable,
   StyleSheet,
   type ViewStyle,
   type TextStyle } from 'react-native';
@@ -30,7 +29,7 @@ import {
   Control, Stroke} from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
-import { PressScale } from '../../CreatorAnimations';
+import { PressScale } from '../../shared/CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
 import {
   suggestAutoStickers,
@@ -94,6 +93,7 @@ export function AutoStickerRail({ input, onStickerSelect }: AutoStickerRailProps
           <PressScale
             key={s.sticker.id}
             accessibilityLabel={`Suggested ${s.sticker.name}. ${s.reason}`}
+            accessibilityHint="Adds this sticker to the canvas"
             accessibilityRole="button"
             onPress={() => handleSelect(s.sticker)}
             style={styles.cell}

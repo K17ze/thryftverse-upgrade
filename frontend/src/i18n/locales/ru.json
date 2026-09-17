@@ -313,6 +313,8 @@
       "biometricLoginDisabled": "Отключено — приложение открывается прямо в аккаунт",
       "notificationCategories": "Категории уведомлений",
       "notificationPreferencesSubtitle": "Тихие часы, предпросмотр",
+      "pushThisDevice": "Push-уведомления на этом устройстве",
+      "pushThisDeviceSubtitle": "Доставка и регистрация",
       "featureFlags": "Флаги функций",
       "featureFlagsSubtitle": "Текущие значения флагов для QA",
       "autoTranslate": "Автоматически переводить сообщения",

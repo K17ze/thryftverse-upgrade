@@ -22,5 +22,24 @@ export function createSellerHubScreenStyles(colors: ThemeColors) {
     },
     importErrorText: { fontSize: TypographyV2.caption.size, fontFamily: FontFamily.regular, flex: 1 },
     resourceErrorBanner: { marginHorizontal: Space.md, marginTop: Space.lg },
+    // Away-state row — flat hairline row above the orders module; rendered
+    // only while the seller's holiday-mode pause is effective.
+    awayRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      marginHorizontal: Space.md,
+      marginTop: Space.md,
+      paddingBottom: Space.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle,
+    },
+    awayText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.medium,
+      fontVariant: ['tabular-nums'],
+      color: colors.textSecondary,
+      flex: 1,
+    },
   });
 }

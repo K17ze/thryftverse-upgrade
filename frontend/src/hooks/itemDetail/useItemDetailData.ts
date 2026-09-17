@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import type {
   Listing,
   ListingCommerceServerContext,
@@ -16,7 +16,6 @@ import {
   useListingQaSummary,
   useListingSoldComparables,
   useRecommendations,
-  useContinueExploring,
   useSellerTrust,
   useSellerFollow,
   buildSellerTrustSummary,
@@ -60,17 +59,13 @@ export interface ItemDetailDataResult {
   priceHistory: ListingPriceEvent[];
   /** Q&A summary (question count). */
   qaSummary: ListingQaSummary | null;
-  /** Continue-exploring pagination handles (prefetched for the next surface). */
-  explore: {
-    items: Listing[];
-    fetchNextPage: ReturnType<typeof useContinueExploring>['fetchNextPage'];
-    hasNextPage: ReturnType<typeof useContinueExploring>['hasNextPage'];
-    isFetchingNextPage: ReturnType<typeof useContinueExploring>['isFetchingNextPage'];
-  };
   /** True on the first load with no cached listing. */
   isLoading: boolean;
   /** True when the listing query errored with no cached listing. */
   isError: boolean;
+  /** The listing query error — carries an HTTP `status` (e.g. 403 for
+   *  LISTING_NOT_PUBLIC) so the screen can pick the right canvas. */
+  error: unknown;
   /** Refetch the listing query. */
   refetch: ReturnType<typeof useListingDetail>['refetch'];
 }
@@ -78,9 +73,9 @@ export interface ItemDetailDataResult {
 /**
  * Owns the product-query domain for the item detail screen: the listing,
  * its server commerce context, seller trust, recommendations, sold
- * comparables, price history, Q&A summary, and the continue-exploring
- * prefetch. Also owns the product analytics session + item-view telemetry
- * effects so the screen does not have to wire them inline.
+ * comparables, price history, and Q&A summary. Also owns the product
+ * analytics session + item-view telemetry effects so the screen does not
+ * have to wire them inline.
  */
 export function useItemDetailData(
   ctx: ItemDetailDataRouteContext,
@@ -91,6 +86,7 @@ export function useItemDetailData(
     data: queryData,
     isLoading: queryLoading,
     isError: queryError,
+    error: queryFailure,
     refetch: refetchListing,
   } = useListingDetail(itemId);
 
@@ -98,12 +94,6 @@ export function useItemDetailData(
     data: recommendationsData,
     isError: recsError,
   } = useRecommendations(itemId);
-  const {
-    data: exploreData,
-    fetchNextPage: exploreNextPage,
-    hasNextPage: exploreHasNextPage,
-    isFetchingNextPage: exploreFetching,
-  } = useContinueExploring(itemId);
   const { data: soldComps } = useListingSoldComparables(itemId);
   const { data: priceHistory = [] } = useListingPriceHistory(itemId);
   const { data: qaSummary } = useListingQaSummary(itemId);
@@ -158,22 +148,6 @@ export function useItemDetailData(
       ? buildSellerTrustSummary(item.seller)
       : null;
 
-  // Continue-exploring items — prefetched so the next discovery surface
-  // stays warm. Filtered to non-look recommendations.
-  const exploreItems: Listing[] = useMemo(() => {
-    const items: Listing[] = [];
-    for (const page of exploreData?.pages ?? []) {
-      const section = page.sections.find((candidate) => candidate.key === 'continue_exploring');
-      if (!section) continue;
-      for (const recommendation of section.items) {
-        if (!(recommendation as { type?: string }).type) {
-          items.push(recommendation as Listing);
-        }
-      }
-    }
-    return items;
-  }, [exploreData]);
-
   const recommendationSections: RecommendationSection[] = recommendationsData?.sections ?? [];
 
   return {
@@ -186,14 +160,9 @@ export function useItemDetailData(
     soldComparables: soldComps ?? null,
     priceHistory,
     qaSummary: qaSummary ?? null,
-    explore: {
-      items: exploreItems,
-      fetchNextPage: exploreNextPage,
-      hasNextPage: exploreHasNextPage,
-      isFetchingNextPage: exploreFetching,
-    },
     isLoading: queryLoading,
     isError: queryError,
+    error: queryFailure,
     refetch: refetchListing,
   };
 }

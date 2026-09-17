@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { Listing } from '../../domain';
 import { isSustainableGrade } from '../../utils/sustainabilityScore';
+import { getSubcategoryToken } from '../../utils/subcategoryToken';
 import type { ConditionOption } from '../../components/filters/filterTypes';
 
 interface Params {
@@ -19,32 +20,6 @@ interface Params {
 }
 
 const toKey = (value: string) => value.trim().toLowerCase();
-
-function getSubcategoryToken(categoryId: string, subcategoryId?: string, title?: string) {
-  if (subcategoryId) {
-    return subcategoryId
-      .toLowerCase()
-      .replace(/^[^-]+-/, '')
-      .replace(/-/g, ' ')
-      .trim();
-  }
-
-  if (!title) {
-    return '';
-  }
-
-  const loweredTitle = title.toLowerCase().replace(/["']/g, '').trim();
-  if (loweredTitle.startsWith('all ')) {
-    return '';
-  }
-
-  const cleanedCategoryId = categoryId.toLowerCase();
-  if (loweredTitle.startsWith(cleanedCategoryId)) {
-    return loweredTitle.slice(cleanedCategoryId.length).trim();
-  }
-
-  return loweredTitle;
-}
 
 // Client-side count of listings matching the current draft selection —
 // mirrors the predicate applied on Apply. In search context this is only an

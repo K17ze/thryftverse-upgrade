@@ -6,8 +6,6 @@ import { VERIFICATION_TIERS } from '../../platform/product';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Typography, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
-import { AppIcon } from '../common/AppIcon';
-import { IconSize } from '../../theme/iconTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { formatCompactCount, formatFullCount } from '../../utils/numberFormat';
@@ -99,8 +97,6 @@ interface MyProfileIdentityHeroProps {
   listingCount?: number;
   lookCount?: number;
   sellerTrust?: SellerTrustSummary | null;
-  ratingAverage?: number | null;
-  reviewCount?: number | null;
   soldCount?: number;
   followerCount?: number;
   followingCount?: number;
@@ -110,7 +106,6 @@ interface MyProfileIdentityHeroProps {
   responseTimeLabel?: string | null;
   /** Distinguishes loading/error from a real zero count (M2 — truthful UI). */
   followCountsStatus?: 'loading' | 'error' | 'loaded';
-  onEditAvatar: () => void;
   onEditProfile: () => void;
   onShare: () => void;
   onPressSold?: () => void;
@@ -127,14 +122,11 @@ export function MyProfileIdentityHero({
   website,
   memberSince,
   sellerTrust,
-  ratingAverage,
-  reviewCount,
   soldCount,
   followerCount = 0,
   followingCount = 0,
   responseTimeLabel,
   followCountsStatus = 'loaded',
-  onEditAvatar,
   onEditProfile,
   onShare,
   onPressSold,
@@ -148,8 +140,6 @@ export function MyProfileIdentityHero({
   const verificationTier: VerificationTier | null =
     sellerTrust?.verificationTier ?? (sellerTrust?.verified === true ? 'seller' : null);
   const completedSales = sellerTrust?.completedSales ?? soldCount ?? 0;
-
-  const hasRating = ratingAverage !== null && ratingAverage !== undefined && (reviewCount ?? 0) > 0;
 
   // Follow-count display: show a muted dash while loading or on error so a
   // real zero is distinguishable from an unknown count (M2 — truthful UI).
@@ -179,16 +169,6 @@ export function MyProfileIdentityHero({
             <Ionicons name="person-outline" size={32} color={colors.textMuted} />
           </View>
         )}
-        <Pressable
-          style={({ pressed }) => [styles.editAvatarHit, pressed && { opacity: 0.6 }]}
-          onPress={onEditAvatar}
-          accessibilityLabel="Edit profile photo"
-          accessibilityRole="button"
-        >
-          <View style={styles.editAvatarVisible}>
-            <Ionicons name="camera-outline" size={13} color={colors.textInverse} />
-          </View>
-        </Pressable>
       </View>
 
       {/* Identity canvas — paddingTop reserves avatar space */}
@@ -253,36 +233,24 @@ export function MyProfileIdentityHero({
 
         {bio ? <BioText bio={bio} style={styles.bio} linkStyle={styles.bioLink} seeMoreStyle={styles.bioSeeMore} /> : null}
 
-        {/* Trust header — rating row + joined caption on separate lines.
-            The rating is part of the identity block, not a lonely chip: star +
-            score + review count give the 5.0 context. Joined date is a less
-            prominent caption below, not equal weight to the rating.
-            Response time is surfaced here (not buried in About) because Depop/Grailed
-            2026 research shows it is a top-3 conversion signal for marketplace profiles. */}
-        {(hasRating || completedSales > 0 || memberSince || responseTimeLabel) ? (
+        {/* Trust header — marketplace meta row (sold, response time) + joined
+            caption on a separate, less prominent line. Response time is
+            surfaced here (not buried in About) because Depop/Grailed 2026
+            research shows it is a top-3 conversion signal for marketplace
+            profiles. */}
+        {(completedSales > 0 || memberSince || responseTimeLabel) ? (
           <View style={styles.trustBlock}>
-            {/* Rating row — star + score + review count (or "No reviews yet").
-                Secondary trust signals (sold, response time) stay on this row
-                separated by dots; they are marketplace proof, not identity. */}
-            <View style={styles.trustRatingRow}>
-              {hasRating && ratingAverage !== null && ratingAverage !== undefined ? (
-                <>
-                  <AppIcon name="star" focused size={IconSize.sm} color="ratingStar" opticalCenter accessible={false} />
-                  <Text style={styles.trustRating}>{ratingAverage.toFixed(1)}</Text>
-                  <Text style={styles.trustReviewCount}>({reviewCount} {(reviewCount ?? 0) === 1 ? 'review' : 'reviews'})</Text>
-                </>
-              ) : (
-                <Text style={styles.trustNoReviews}>No reviews yet</Text>
-              )}
-              {completedSales > 0 ? <Text style={styles.trustDot}> · </Text> : null}
-              {completedSales > 0 ? (
-                <Text style={styles.trustSold}>{completedSales} sold</Text>
-              ) : null}
-              {responseTimeLabel ? <Text style={styles.trustDot}> · </Text> : null}
-              {responseTimeLabel ? (
-                <Text style={styles.trustResponse}>Replies {responseTimeLabel}</Text>
-              ) : null}
-            </View>
+            {completedSales > 0 || responseTimeLabel ? (
+              <View style={styles.trustMetaRow}>
+                {completedSales > 0 ? (
+                  <Text style={styles.trustSold}>{completedSales} sold</Text>
+                ) : null}
+                {completedSales > 0 && responseTimeLabel ? <Text style={styles.trustDot}> · </Text> : null}
+                {responseTimeLabel ? (
+                  <Text style={styles.trustResponse}>Replies {responseTimeLabel}</Text>
+                ) : null}
+              </View>
+            ) : null}
             {/* Joined — less prominent caption on its own line, no dot separator */}
             {memberSince ? <Text style={styles.trustJoined}>Joined {memberSince}</Text> : null}
           </View>
@@ -391,24 +359,6 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceAlt },
-  editAvatarHit: {
-    position: 'absolute',
-    right: -10,
-    bottom: -10,
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  editAvatarVisible: {
-    width: 24,
-    height: 24,
-    borderRadius: Radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.textPrimary,
-    borderWidth: 2,
-    borderColor: colors.background },
-
   // Identity canvas — no top padding; seamRow reserves avatar overlap space
   identityCanvas: {
     paddingHorizontal: Space.md,
@@ -493,28 +443,15 @@ function createStyles(colors: ThemeColors) {
     fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary },
 
-  // Trust header — rating row + joined caption on separate lines
+  // Trust header — marketplace meta row + joined caption on separate lines
   trustBlock: {
     paddingVertical: 2,
     marginBottom: Space.xs },
-  trustRatingRow: {
+  trustMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: 3 },
-  trustRating: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
-    color: colors.textPrimary,
-    letterSpacing: -0.1 },
-  trustReviewCount: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textMuted },
-  trustNoReviews: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textMuted },
   trustSold: {
     fontSize: TypographyV2.numericMeta.size,
     fontFamily: TypographyV2.numericMeta.fontFamily,

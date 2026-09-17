@@ -31,6 +31,7 @@ interface ListingPublishPipelineParams {
   price: string;
   originalPrice: string;
   category: string;
+  subcategory: string;
   brand: string;
   size: string;
   condition: string;
@@ -69,6 +70,7 @@ export function useListingPublishPipeline(params: ListingPublishPipelineParams) 
     price,
     originalPrice,
     category,
+    subcategory,
     brand,
     size,
     condition,
@@ -151,6 +153,10 @@ export function useListingPublishPipeline(params: ListingPublishPipelineParams) 
     // Performance mark: listing creation flow start (validation passed).
     safeMark('listing:create:start');
 
+    // Double-tap guard must cover the co_own redirect too — replace() on the
+    // same route still churns the navigation stack on a rapid second tap.
+    if (isPublishing || isPublishingRef.current) return;
+
     if (listingMode === 'co_own') {
       const prefillResult = buildCreateCoOwnPrefillFromSell({
         shareCountInput,
@@ -167,7 +173,9 @@ export function useListingPublishPipeline(params: ListingPublishPipelineParams) 
 
       setErrorMsg(null);
       haptics.success();
+      isPublishingRef.current = true;
       navigation.replace('CreateCoOwn', prefillResult.params);
+      isPublishingRef.current = false;
       return;
     }
 
@@ -183,7 +191,6 @@ export function useListingPublishPipeline(params: ListingPublishPipelineParams) 
       return;
     }
 
-    if (isPublishing || isPublishingRef.current) return;
     isPublishingRef.current = true;
     setIsPublishing(true);
     setErrorMsg(null);
@@ -197,6 +204,7 @@ export function useListingPublishPipeline(params: ListingPublishPipelineParams) 
         description: trimmedDescription,
         priceGbp: numericPrice,
         category,
+        subcategory: subcategory || undefined,
         brand: brand || undefined,
         size,
         condition,
@@ -255,7 +263,7 @@ export function useListingPublishPipeline(params: ListingPublishPipelineParams) 
 
     isPublishingRef.current = false;
     setIsPublishing(false);
-  }, [isPublishing, listingMode, mediaDraftItems, title, desc, price, startingBid, category, size, condition, shareCountInput, sharePriceInput, offeringWindowHours, authPhotos, clearSellDraft, navigation, currentUser, brand, originalPrice, shippingMethod, shippingPayer, isOffline, completeness, uploadQueueRef, setMediaDraftItems, setPhotos, setErrors, setErrorMsg, syncMediaFromQueue]);
+  }, [isPublishing, listingMode, mediaDraftItems, title, desc, price, startingBid, category, subcategory, size, condition, shareCountInput, sharePriceInput, offeringWindowHours, authPhotos, clearSellDraft, navigation, currentUser, brand, originalPrice, shippingMethod, shippingPayer, isOffline, completeness, uploadQueueRef, setMediaDraftItems, setPhotos, setErrors, setErrorMsg, syncMediaFromQueue]);
 
   return {
     isPublishing,

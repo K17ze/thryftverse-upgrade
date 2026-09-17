@@ -100,7 +100,26 @@ export async function processPushQueueJob(job: PushJobData): Promise<void> {
     }
   }
 
+  // Per-device send idempotency — BullMQ retries (attempts: 4) re-execute
+  // the whole send loop after transient failures. Skip devices that
+  // already hold a ticket for this event so a retry cannot double-push.
+  const priorTickets = await db.query<{ provider_ticket_ids: unknown }>(
+    `SELECT provider_ticket_ids FROM notification_events WHERE id = $1`,
+    [job.eventId]
+  );
+  const alreadyTicketedTokens = new Set<string>();
+  const priorPairs = priorTickets.rows[0]?.provider_ticket_ids;
+  if (Array.isArray(priorPairs)) {
+    for (const pair of priorPairs) {
+      const token = pair && typeof pair === 'object'
+        ? (pair as { token?: string }).token
+        : undefined;
+      if (token) alreadyTicketedTokens.add(token);
+    }
+  }
+
   for (const device of devicesResult.rows) {
+    if (alreadyTicketedTokens.has(device.token)) continue;
     try {
       const response = await fetch(config.expoPushApiUrl, {
         method: 'POST',
@@ -214,8 +233,15 @@ export async function processPushQueueJob(job: PushJobData): Promise<void> {
   // accepted the payload, NOT that the device received it. The actual delivery
   // status is only known after checking the push receipt. The event transitions
   // to 'sent' only after the receipt reconciler confirms receipt status=ok.
-  const status = ticketedCount > 0 ? 'ticketed' : 'failed';
-  const firstTicketId = ticketIdTokenPairs[0]?.ticketId ?? null;
+  // Merge prior tickets so a retry's empty send-loop can't overwrite them
+  // or downgrade the status to 'failed'.
+  const priorTicketPairs = (Array.isArray(priorPairs) ? priorPairs : [])
+    .filter((pair) => pair && typeof pair === 'object' && (pair as { ticketId?: string }).ticketId)
+    .map((pair) => pair as { ticketId: string; token: string });
+  const mergedTicketPairs = [...priorTicketPairs, ...ticketIdTokenPairs];
+  const totalTicketed = ticketedCount + priorTicketPairs.length;
+  const status = totalTicketed > 0 ? 'ticketed' : 'failed';
+  const firstTicketId = mergedTicketPairs[0]?.ticketId ?? null;
 
   await db.query(
     `
@@ -233,8 +259,8 @@ export async function processPushQueueJob(job: PushJobData): Promise<void> {
       job.eventId,
       status,
       firstTicketId,
-      toJsonString(ticketIdTokenPairs),
-      ticketedCount > 0 ? null : 'delivery_failed',
+      toJsonString(mergedTicketPairs),
+      totalTicketed > 0 ? null : 'delivery_failed',
       toJsonString({
         providerResponses: expoResponses,
         ticketedCount,

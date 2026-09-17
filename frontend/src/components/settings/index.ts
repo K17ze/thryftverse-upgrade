@@ -13,7 +13,6 @@ export * from './RadioButton';
 // ── Settings screen sections (extracted from screens/SettingsScreen) ──
 export * from './SettingsIdentityRow';
 export * from './SettingsBalanceCard';
-export * from './SettingsVerificationPrompt';
 export * from './SettingsHealthPills';
 export * from './SettingsSearchResults';
 export * from './SettingsAccountSection';

@@ -26,7 +26,6 @@ import {
   StrokeCap,
   StrokeJoin,
   TileMode,
-  ClipOp,
   ImageFormat,
   type SkPath,
   type SkImage,

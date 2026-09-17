@@ -104,6 +104,7 @@ export interface SellScreenDataResult {
   /** Taxonomy picker vocabulary. */
   pickerTaxonomy: {
     category: string[];
+    subcategory: string[];
     brand: string[];
     size: string[];
     condition: string[];
@@ -286,11 +287,16 @@ export function useSellScreenData(
   const pickerTaxonomy = useMemo(
     () => ({
       category: categories.filter((n) => n.parentId === null).map((n) => n.name),
+      // Children of the currently-selected root category — the sell flow's
+      // "Type" row. Empty when no category is picked or it has no children.
+      subcategory: categories
+        .filter((n) => n.parentId === categories.find((p) => p.name === category)?.id)
+        .map((n) => n.name),
       brand: brands.map((n) => n.name),
       size: sizes.map((n) => n.name),
       condition: conditions.map((n) => n.name),
     }),
-    [categories, conditions, sizes, brands],
+    [categories, conditions, sizes, brands, category],
   );
 
   /* -- co-own bidirectional math -- */

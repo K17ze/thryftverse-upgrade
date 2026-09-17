@@ -77,7 +77,8 @@ export function PermissionState({
   if (status === 'unavailable') {
     return (
       <View style={styles.overlay}>
-        <Reanimated.View style={[styles.content, entranceStyle]} accessibilityRole="text" accessibilityLabel="Camera not available on this device">
+        <Reanimated.View style={[styles.content, entranceStyle]} accessibilityRole="text" accessibilityLabel="Camera not available on this device"
+        accessibilityHint="Shown when the device has no camera">
           <Ionicons name="camera-outline" size={IconGrammar.hero} color={colors.textSecondary} style={styles.unavailableIcon} />
           <Text style={styles.title}>Camera not available</Text>
           <Text style={styles.text}>
@@ -128,6 +129,7 @@ export function PermissionState({
           onPress={onGallery}
           accessibilityRole="button"
           accessibilityLabel="Use gallery instead"
+          accessibilityHint="Opens the gallery to pick media"
         >
           <Text style={styles.galleryFallbackText}>Use gallery instead</Text>
         </Pressable>

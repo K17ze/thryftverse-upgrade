@@ -10,7 +10,8 @@
  * Reanimated `chromeFadeStyle` (animated opacity) and an `isManipulating`
  * flag that switches pointer events off while the chrome is dimmed.
  *
- * Two modes:
+ * Three modes:
+ *   - Multi-select mode (multiSelectCount != null): Done · "N selected" · Select all
  *   - Selection mode (hasSelection): Done · More
  *   - Default mode: Close · Audio · Save · Undo · Redo · Next
  */
@@ -22,7 +23,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { Scrim, IconGrammar } from '../../theme/designTokens';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { PressScale } from '../CreatorAnimations';
+import { PressScale } from '../shared/CreatorAnimations';
 import type { useHaptic } from '../../hooks/useHaptic';
 import type { ActiveSheet } from './useActiveSheet';
 
@@ -51,6 +52,8 @@ export interface PosterTopBarStyles {
   topRightGroup: ViewStyle;
   publishBtn: ViewStyle;
   publishBtnText: TextStyle;
+  selectionCountBadge: ViewStyle;
+  selectionCountText: TextStyle;
 }
 
 export interface PosterTopBarProps {
@@ -104,6 +107,12 @@ export interface PosterTopBarProps {
   canRedo: boolean;
   /** Label describing the next redo step (null if none). */
   redoLabel: string | null;
+  /** Number of layers in multi-select — non-null switches to multi-select chrome. */
+  multiSelectCount?: number;
+  /** Exits multi-select mode (Done button in multi-select chrome). */
+  onExitMultiSelect?: () => void;
+  /** Selects all visible layers (Select all in multi-select chrome). */
+  onSelectAll?: () => void;
 }
 
 // ── Component ────────────────────────────────────────────────────────
@@ -134,6 +143,9 @@ export function PosterTopBar({
   handleRedo,
   canRedo,
   redoLabel,
+  multiSelectCount,
+  onExitMultiSelect,
+  onSelectAll,
 }: PosterTopBarProps) {
   return (
     <Reanimated.View
@@ -148,7 +160,41 @@ export function PosterTopBar({
       />
       <View style={styles.topBar}>
         <View style={styles.topBarRow}>
-          {hasSelection ? (
+          {multiSelectCount != null ? (
+            /* During multi-select: Done · "N selected" · Select all —
+               same grammar as the Look composer. */
+            <>
+              <PressScale
+                onPress={onExitMultiSelect}
+                style={styles.topBtn}
+                accessibilityLabel="Done"
+                accessibilityHint="Exits multi-select mode"
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Text style={styles.doneText}>Done</Text>
+              </PressScale>
+
+              <View style={styles.topCenter}>
+                <View style={[styles.selectionCountBadge, { backgroundColor: colors.brand }]}>
+                  <Text style={[styles.selectionCountText, { color: colors.textInverse }]}>
+                    {multiSelectCount} selected
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.topRight}>
+                <PressScale
+                  onPress={() => { haptic.light(); onSelectAll?.(); }}
+                  style={styles.topBtn}
+                  accessibilityLabel="Select all"
+                  accessibilityHint="Selects all objects on this frame"
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                >
+                  <Ionicons name="checkbox-outline" size={IconGrammar.standard} color={colors.textPrimary} />
+                </PressScale>
+              </View>
+            </>
+          ) : hasSelection ? (
             /* During selection: Done · More */
             <>
               <PressScale
@@ -232,6 +278,7 @@ export function PosterTopBar({
                       size={12}
                       color={colors.textSecondary}
                       accessibilityLabel="Draft autosaved"
+                      accessibilityHint="Indicates the draft was just saved"
                     />
                   )
                 )}

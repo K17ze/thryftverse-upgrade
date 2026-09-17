@@ -1,11 +1,12 @@
 import React, { useMemo, useRef } from 'react';
-import { View, Text, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable } from 'react-native';
 
 import { useAppTheme } from '../../theme/ThemeContext';
 import { FlagshipState } from '../flagship';
 import { AppIcon } from '../common/AppIcon';
 import { IconSize } from '../../theme/iconTokens';
 import { PinterestMasonryGrid } from '../discover/PinterestMasonryGrid';
+import { MasonrySkeleton } from '../skeletons/MasonrySkeleton';
 import { DiscoveryPeopleResultRow } from './DiscoveryPeopleResultRow';
 import { createUnifiedDiscoveryStyles } from './unifiedDiscoveryStyles';
 import type { DiscoveryFeedUnit } from '../../contracts/discoveryFeedUnit';
@@ -21,6 +22,8 @@ export function DiscoverySearchResultsView({
   isSearching,
   isSearchingPeople,
   peopleResults,
+  peopleError,
+  onRetryPeople,
   searchScope,
   searchError,
   onRetry,
@@ -28,6 +31,14 @@ export function DiscoverySearchResultsView({
   activeFilterCount,
   onOpenFilters,
   onClearFilters,
+  usedFallback,
+  resultCount,
+  hasMore,
+  isLoadingMore,
+  onEndReached,
+  onClearSearch,
+  onSaveSearch,
+  isSearchSaved,
   onListingPress,
   onLookPress,
   onPosterPress,
@@ -40,6 +51,10 @@ export function DiscoverySearchResultsView({
   isSearching: boolean;
   isSearchingPeople: boolean;
   peopleResults: UserSearchResult[];
+  /** People-scope request failure — rendered as an error+retry state, never
+   *  disguised as "No people found". */
+  peopleError?: string | null;
+  onRetryPeople?: () => void;
   searchScope: 'items' | 'people';
   searchError: string | null;
   onRetry: () => void;
@@ -47,6 +62,20 @@ export function DiscoverySearchResultsView({
   activeFilterCount: number;
   onOpenFilters: () => void;
   onClearFilters: () => void;
+  /** True when the backend reported a retrieval fallback (typo-tolerant /
+   *  substring path) — surfaces the honest "similar items" note. */
+  usedFallback?: boolean;
+  /** Loaded result count — displayed with a trailing "+" while more pages
+   *  may exist (the search API is page-based and reports no total). */
+  resultCount?: number;
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
+  onEndReached?: () => void;
+  /** Recovery action for a bare no-results state — returns to discovery. */
+  onClearSearch?: () => void;
+  /** Save the current query + filters as a saved search (match alerts). */
+  onSaveSearch?: () => void;
+  isSearchSaved?: boolean;
   onListingPress: (listing: DiscoveryListingSummary) => void;
   onLookPress: (id: string) => void;
   onPosterPress: (id: string) => void;
@@ -59,6 +88,25 @@ export function DiscoverySearchResultsView({
   const { colors } = useAppTheme();
   const styles = useMemo(() => createUnifiedDiscoveryStyles(colors), [colors]);
   const scrollRef = useRef<any>(null);
+
+  // Quiet results meta — count (partial-labelled while more pages may exist)
+  // plus the retrieval-fallback note when the backend widened the match.
+  const resultsHeader =
+    (resultCount ?? 0) > 0 || usedFallback ? (
+      <View style={styles.resultsMetaWrap}>
+        {usedFallback ? (
+          <Text style={styles.resultsMetaText} numberOfLines={2}>
+            No exact matches — showing similar items
+          </Text>
+        ) : null}
+        {(resultCount ?? 0) > 0 ? (
+          <Text style={styles.resultsMetaText} numberOfLines={1}>
+            {resultCount}
+            {hasMore ? '+' : ''} {resultCount === 1 ? 'result' : 'results'}
+          </Text>
+        ) : null}
+      </View>
+    ) : undefined;
 
   return (
     <View style={styles.searchResultsWrap}>
@@ -86,6 +134,27 @@ export function DiscoverySearchResultsView({
           </Text>
           {searchScope === 'people' && <View style={styles.scopeIndicator} />}
         </Pressable>
+
+        {/* Save-search — persist the current query + filters with match
+            alerts. Quiet glyph button; filled when already saved. */}
+        {searchScope === 'items' && onSaveSearch ? (
+          <Pressable
+            onPress={onSaveSearch}
+            style={styles.scopeAction}
+            accessibilityRole="button"
+            accessibilityLabel={isSearchSaved ? 'Search saved' : 'Save this search'}
+            accessibilityHint="Saves the current search and notifies you of new matches"
+            accessibilityState={{ selected: isSearchSaved === true }}
+            hitSlop={8}
+          >
+            <AppIcon
+              name={isSearchSaved ? 'bookmark' : 'bookmark-outline'}
+              size={IconSize.sm}
+              color={isSearchSaved ? 'brand' : 'textSecondary'}
+              accessible={false}
+            />
+          </Pressable>
+        ) : null}
 
         {/* Filter entry point — only meaningful for item results. */}
         {searchScope === 'items' && (
@@ -125,9 +194,9 @@ export function DiscoverySearchResultsView({
 
       {searchScope === 'items' ? (
         isSearching && units.length === 0 ? (
-          <View style={styles.searchingWrap}>
-            <ActivityIndicator size="large" color={colors.brand} />
-          </View>
+          // Skeleton, not a spinner — the loading frame matches the final
+          // masonry geometry so results land without a layout shift.
+          <MasonrySkeleton numColumns={2} itemCount={8} />
         ) : searchError && units.length === 0 ? (
           <View style={styles.stateWrap}>
             <FlagshipState
@@ -156,6 +225,8 @@ export function DiscoverySearchResultsView({
                 icon="search-outline"
                 title="No items found"
                 subtitle="Try a different search term or browse discovery instead."
+                actionLabel={onClearSearch ? 'Back to discovery' : undefined}
+                onAction={onClearSearch}
               />
             )}
           </View>
@@ -168,16 +239,28 @@ export function DiscoverySearchResultsView({
             onMoodboardPress={onMoodboardPress}
             numColumns={2}
             scrollRef={scrollRef}
-            showSaveButton
             onItemSaveToggle={onItemSaveToggle}
             onItemSaveLongPress={onItemSaveLongPress}
             isItemSaved={isItemSaved}
+            onEndReached={onEndReached}
+            isLoadingMore={isLoadingMore}
+            hasMore={hasMore ?? false}
+            listHeaderComponent={resultsHeader}
           />
         )
       ) : (
         isSearchingPeople && peopleResults.length === 0 ? (
-          <View style={styles.searchingWrap}>
-            <ActivityIndicator size="large" color={colors.brand} />
+          <MasonrySkeleton numColumns={2} itemCount={6} />
+        ) : peopleError && peopleResults.length === 0 ? (
+          <View style={styles.stateWrap}>
+            <FlagshipState
+              variant="error"
+              icon="cloud-offline-outline"
+              title="People search unavailable"
+              subtitle={peopleError}
+              actionLabel="Retry"
+              onAction={onRetryPeople}
+            />
           </View>
         ) : peopleResults.length === 0 ? (
           <View style={styles.stateWrap}>

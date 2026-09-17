@@ -29,7 +29,7 @@ export interface OutfitBuilderPreviewProps {
 /**
  * Outfit preview canvas — slot circles, compatibility score row, and the
  * background swatch picker. Layout preserved verbatim from the original
- * screen (including the swatch's direct state write, no history push).
+ * screen; swatch changes record undo history (snapshots capture `bg`).
  */
 function OutfitBuilderPreviewImpl({
   outfitItems,

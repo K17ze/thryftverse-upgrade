@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import type { MutableRefObject } from 'react';
 import { normaliseOrderStatus, computeReviewEligibleAtMs } from '../../utils/orderDetailLogic';
 import type { CommerceOrder } from '../../services/commerceApi';
+import { appStorage } from '../../storage/mmkv';
 
 // Per research: the prompt should fire no earlier than 72h after delivery
 // (or a server-derived reviewEligibleAt), not immediately on delivery.
@@ -14,6 +15,12 @@ export interface UseReviewPromptParams {
   backendOrder: CommerceOrder | null;
   currentUserId: string | undefined;
   isMountedRef: MutableRefObject<boolean>;
+  /**
+   * Whether a review row already exists for the order — buyer-authored or
+   * platform-generated auto feedback. Either suppresses the prompt: asking
+   * for a review after automatic feedback was recorded is untruthful.
+   */
+  hasReview?: boolean;
 }
 
 export interface UseReviewPromptResult {
@@ -32,10 +39,21 @@ export interface UseReviewPromptResult {
 export function useReviewPrompt({
   backendOrder,
   currentUserId,
-  isMountedRef }: UseReviewPromptParams): UseReviewPromptResult {
+  isMountedRef,
+  hasReview }: UseReviewPromptParams): UseReviewPromptResult {
   const [reviewPromptVisible, setReviewPromptVisible] = useState(false);
   const [reviewPromptShown, setReviewPromptShown] = useState(false);
-  const [reviewDeferredUntil, setReviewDeferredUntil] = useState<number | null>(null);
+  // "Maybe later" is persisted per order — a relaunch previously reset the
+  // deferral and re-prompted immediately, defeating the 48h intent.
+  const deferredKey = backendOrder ? `review_deferred_${backendOrder.id}` : null;
+  const [reviewDeferredUntil, setReviewDeferredUntil] = useState<number | null>(
+    () => (deferredKey ? (appStorage.getNumber(deferredKey) ?? null) : null),
+  );
+
+  // Re-read the persisted deferral when a different order mounts.
+  useEffect(() => {
+    setReviewDeferredUntil(deferredKey ? (appStorage.getNumber(deferredKey) ?? null) : null);
+  }, [deferredKey]);
 
   const reviewEligibleAtMs = useMemo(() => {
     return computeReviewEligibleAtMs(backendOrder, REVIEW_ELIGIBLE_HOURS);
@@ -47,6 +65,9 @@ export function useReviewPrompt({
     const isDelivered = normalised === 'delivered' || normalised === 'completed';
     const buyerId = backendOrder.buyerId;
     if (!isDelivered || currentUserId !== buyerId) return;
+    // A review row already exists — buyer-authored or platform-generated
+    // auto feedback. Either way there is nothing left to prompt for.
+    if (hasReview) return;
 
     const now = Date.now();
     const eligibleMs = reviewEligibleAtMs ?? now;
@@ -72,7 +93,7 @@ export function useReviewPrompt({
       }
     }, 1200);
     return () => clearTimeout(timer);
-  }, [backendOrder, reviewPromptShown, currentUserId, reviewEligibleAtMs, reviewDeferredUntil]);
+  }, [backendOrder, reviewPromptShown, currentUserId, reviewEligibleAtMs, reviewDeferredUntil, hasReview]);
 
   const openReviewPrompt = useCallback(() => {
     setReviewPromptVisible(true);
@@ -85,8 +106,10 @@ export function useReviewPrompt({
   const deferReviewPrompt = useCallback(() => {
     setReviewPromptVisible(false);
     setReviewPromptShown(false);
-    setReviewDeferredUntil(Date.now() + REVIEW_DEFER_HOURS * 60 * 60 * 1000);
-  }, []);
+    const until = Date.now() + REVIEW_DEFER_HOURS * 60 * 60 * 1000;
+    setReviewDeferredUntil(until);
+    if (deferredKey) appStorage.set(deferredKey, until);
+  }, [deferredKey]);
 
   return {
     reviewPromptVisible,

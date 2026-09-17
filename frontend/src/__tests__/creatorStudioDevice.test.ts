@@ -3,22 +3,22 @@ import {
   validateForPublish,
   serialiseToLookPayload,
   serialiseToPosterPayload,
-} from '../creator/compositionContract';
+} from '../creator/core/projectStore/compositionContract';
 import {
   uploadAllLocalMedia,
   hasLocalUris,
-} from '../creator/mediaUploadPipeline';
+} from '../creator/core/upload/mediaUploadPipeline';
 import {
   createEmptyDocument,
   addLayerToPage,
   type CreatorDocument,
   type CreatorLayer,
-} from '../creator/composition';
+} from '../creator/core/projectStore/composition';
 import {
   ALL_TEMPLATES,
   getTemplateById,
   getTemplatesByType,
-} from '../creator/templates';
+} from '../creator/studio/templates';
 
 // ── Helpers ────────────────────────────────────────────────────────
 

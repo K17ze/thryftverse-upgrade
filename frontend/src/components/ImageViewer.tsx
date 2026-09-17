@@ -23,17 +23,7 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 const MAX_ZOOM = 4;
 const MIN_ZOOM = 1;
 
-const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
-
-const applyRubberBand = (value: number, min: number, max: number, friction = 0.24) => {
-  if (value < min) {
-    return min + (value - min) * friction;
-  }
-  if (value > max) {
-    return max + (value - max) * friction;
-  }
-  return value;
-};
+import { clamp, rubberBand as applyRubberBand } from '../utils/posterPhysics';
 
 interface ImagePageProps {
   uri: string;

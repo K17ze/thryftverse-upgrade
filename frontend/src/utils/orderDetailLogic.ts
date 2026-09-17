@@ -24,6 +24,7 @@ export const KNOWN_STATUSES = new Set([
   'completed',
   'cancelled',
   'refunded',
+  'refunding',
   'delivery failed',
   'returned',
 ]);
@@ -49,6 +50,7 @@ export function humaniseStatus(normalised: string): string {
     'completed': 'Completed',
     'cancelled': 'Cancelled',
     'refunded': 'Refunded',
+    'refunding': 'Refund in progress',
     'delivery failed': 'Delivery failed',
     'returned': 'Returned',
   };
@@ -80,6 +82,7 @@ export function getStatusExplanation(normalised: string): string {
     'completed': 'This order is complete.',
     'cancelled': 'This order was cancelled.',
     'refunded': 'This order was refunded.',
+    'refunding': 'A refund is in progress for this order. The outcome will update automatically.',
     'delivery failed': 'The carrier could not complete delivery.',
     'returned': 'The parcel was returned to the sender.',
   };
@@ -98,6 +101,7 @@ export function getStatusTone(normalised: string): StatusTone {
   if (normalised === 'paid' || normalised === 'processing' || normalised === 'preparing') return 'active';
   if (normalised === 'shipped' || normalised === 'in transit' || normalised === 'out for delivery') return 'active';
   if (normalised === 'delivered' || normalised === 'completed') return 'success';
+  if (normalised === 'refunding') return 'pending';
   if (normalised === 'cancelled' || normalised === 'refunded' || normalised === 'delivery failed' || normalised === 'returned') return 'danger';
   return 'muted';
 }
@@ -177,6 +181,10 @@ export function getParcelEventDisplay(
       return { label: 'Delivery failed', subtitle: 'Carrier attempted delivery but could not complete it.' };
     case 'returned':
       return { label: 'Returned', subtitle: 'Parcel is being returned to the sender.' };
+    case 'handoff_asserted':
+      // A seller assertion, not carrier evidence — honest attribution so
+      // the buyer doesn't read it as a verified carrier scan.
+      return { label: 'Dropped off (seller reported)', subtitle: 'The seller marked the parcel as handed to the carrier — awaiting the first carrier scan.' };
     default:
       return { label: 'Carrier update', subtitle: 'Carrier event received.' };
   }
@@ -202,6 +210,8 @@ export type TimelineSemanticKey =
   | 'preparing'
   | 'issue_reported'
   | 'review_submitted'
+  | 'dispatch_sla_breach'
+  | 'handoff_asserted'
   | 'unknown';
 
 export const PARCEL_EVENT_SEMANTIC_KEY: Record<OrderParcelEvent['eventType'], TimelineSemanticKey> = {
@@ -212,6 +222,9 @@ export const PARCEL_EVENT_SEMANTIC_KEY: Record<OrderParcelEvent['eventType'], Ti
   collection_confirmed: 'collection_confirmed',
   delivery_failed: 'delivery_failed',
   returned: 'returned',
+  // Own key — a seller assertion must never collapse into the
+  // carrier-confirmed 'shipped' semantic.
+  handoff_asserted: 'handoff_asserted',
 };
 
 export function getStatusSemanticKey(normalisedStatus: string): TimelineSemanticKey {
@@ -250,6 +263,16 @@ export function parcelEventTimestamp(event: OrderParcelEvent): number {
 export interface TimelineExtras {
   hasOpenResolution?: boolean;
   hasReview?: boolean;
+  /** TRUE when the order's review row is platform-generated feedback — the
+   * buyer never submitted a review before the feedback window elapsed.
+   * The timeline renders truthful copy ("Left automatically — no review
+   * submitted") instead of "You reviewed this order." */
+  reviewIsAuto?: boolean;
+  /** Review row timestamp — the auto-feedback write time, or the buyer's
+   * submission time for a manual review. */
+  reviewCreatedAt?: string | null;
+  /** Recorded seller dispatch-SLA breach flag (order_sla_breaches). */
+  slaBreach?: { breachType: string; shipBy: string; detectedAt: string } | null;
   deliveredAt?: string | null;
 }
 
@@ -363,12 +386,25 @@ export function buildTimelineEntries(
   if (extras?.hasReview && !represented.has('review_submitted')) {
     entries.push({
       id: 'review_submitted',
-      label: 'Review submitted',
-      subtitle: 'You reviewed this order.',
-      date: formatTimelineDate(extras?.deliveredAt),
+      label: extras.reviewIsAuto ? 'Automatic feedback' : 'Review submitted',
+      subtitle: extras.reviewIsAuto
+        ? 'Left automatically — no review was submitted within the feedback window.'
+        : 'You reviewed this order.',
+      date: formatTimelineDate(extras?.reviewCreatedAt ?? extras?.deliveredAt),
       state: 'completed',
     });
     represented.add('review_submitted');
+  }
+
+  if (extras?.slaBreach && !represented.has('dispatch_sla_breach')) {
+    entries.push({
+      id: 'dispatch_sla_breach',
+      label: 'Dispatch deadline missed',
+      subtitle: 'The seller did not dispatch by the ship-by date. A service-level flag was recorded.',
+      date: formatTimelineDate(extras.slaBreach.detectedAt),
+      state: 'failure',
+    });
+    represented.add('dispatch_sla_breach');
   }
 
   return entries;

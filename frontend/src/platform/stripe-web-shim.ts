@@ -23,6 +23,9 @@ export const AuBECSDebitForm = () => null;
 export const CardForm = () => null;
 export const PaymentMethodCreateParams = {};
 export const createPaymentMethod = async () => ({ error: { message: 'Stripe not available on web' } });
+export const isPlatformPaySupported = async () => false;
+export const initPaymentSheet = async () => ({ error: { message: 'Stripe not available on web' } });
+export const presentPaymentSheet = async () => ({ error: { message: 'Stripe not available on web' } });
 
 export type Card = {
   brand: string;

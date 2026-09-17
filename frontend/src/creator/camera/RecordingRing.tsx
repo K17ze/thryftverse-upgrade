@@ -54,8 +54,9 @@ export function RecordingRing({
     return { transform: [{ scale: scale.value }] };
   });
 
-  // Offset so the ring centres on the 80pt shutter button
-  const shutterSize = 80;
+  // Offset so the ring centres on the 78pt shutter button
+  // (ShutterButton.SHUTTER_SIZE).
+  const shutterSize = 78;
   const offset = -(size - shutterSize) / 2;
 
   return (

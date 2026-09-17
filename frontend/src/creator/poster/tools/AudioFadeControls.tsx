@@ -62,7 +62,6 @@ export function AudioFadeControls({
   onChange,
   maxMs = DEFAULT_MAX_MS,
 }: AudioFadeControlsProps) {
-  const { colors } = useAppTheme();
   const haptic = useHaptic();
 
   // Local live values so the slider thumb tracks the finger before commit.
@@ -156,6 +155,7 @@ function FadeSlider({
         onValueChange={onValueChange}
         onCommit={onRelease}
         accessibilityLabel={label}
+        accessibilityHint="Adjusts the fade amount"
       />
     </View>
   );

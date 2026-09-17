@@ -12,7 +12,8 @@
  * callers surface honest error states.
  */
 
-import { fetchJson } from '../../lib/apiClient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { fetchJson, ApiRequestError } from '../../lib/apiClient';
 
 export interface BroadcastSession {
   roomId: string;
@@ -23,6 +24,8 @@ export interface BroadcastSession {
   recordingUrl?: string;
   viewerCount: number;
   createdAt: string;
+  /** Present when the session was created as a scheduled show (future ISO). */
+  scheduledStartAt?: string | null;
   startedAt?: string;
   endedAt?: string;
 }
@@ -39,11 +42,15 @@ interface SessionResponse {
   session: BroadcastSession | null;
 }
 
-/** Create a stream session (host only — seller/admin role required). */
+/** Create a stream session (host only — seller/admin role required).
+ *  Pass `scheduledStartAt` (future ISO string) to create a scheduled show —
+ *  the session stays in 'created' status and appears in Coming up until the
+ *  host starts it. */
 export async function createBroadcastSession(params: {
   title: string;
   recordingEnabled?: boolean;
   maxViewers?: number;
+  scheduledStartAt?: string;
 }): Promise<BroadcastSession> {
   const response = await fetchJson<SessionResponse>('/streaming/sessions', {
     method: 'POST',
@@ -52,6 +59,7 @@ export async function createBroadcastSession(params: {
       title: params.title,
       recordingEnabled: params.recordingEnabled ?? false,
       maxViewers: params.maxViewers ?? 0,
+      ...(params.scheduledStartAt ? { scheduledStartAt: params.scheduledStartAt } : {}),
     }),
   });
   if (!response.ok || !response.session) {
@@ -106,4 +114,89 @@ export async function fetchBroadcastHostToken(roomId: string): Promise<Broadcast
     throw new Error('Host token was not issued');
   }
   return response.token;
+}
+
+// ── Session reminders ("Remind me" on scheduled shows) ──────────────────────
+
+/**
+ * Thrown when the remind endpoints are not deployed on the backend (404).
+ * Callers should hide the affordance rather than fake reminder state.
+ */
+export class LiveRemindersUnavailableError extends Error {
+  constructor(message = 'Session reminders are not available on this backend') {
+    super(message);
+    this.name = 'LiveRemindersUnavailableError';
+  }
+}
+
+function rethrowRemindError(error: unknown): never {
+  if (error instanceof ApiRequestError && error.status === 404) {
+    throw new LiveRemindersUnavailableError();
+  }
+  throw error;
+}
+
+/** Opt the viewer in to a reminder for a scheduled session (auth required). */
+export async function remindBroadcastSession(roomId: string): Promise<void> {
+  try {
+    await fetchJson<{ ok: boolean }>(
+      `/streaming/sessions/${encodeURIComponent(roomId)}/remind`,
+      { method: 'POST' },
+    );
+  } catch (error) {
+    rethrowRemindError(error);
+  }
+}
+
+/** Remove the viewer's reminder for a scheduled session (auth required). */
+export async function unremindBroadcastSession(roomId: string): Promise<void> {
+  try {
+    await fetchJson<{ ok: boolean }>(
+      `/streaming/sessions/${encodeURIComponent(roomId)}/remind`,
+      { method: 'DELETE' },
+    );
+  } catch (error) {
+    rethrowRemindError(error);
+  }
+}
+
+// ── Local reminder persistence ──────────────────────────────────────────────
+// When the backend does not echo a per-viewer `reminded` flag on
+// GET /streaming/sessions, the reminder state is persisted on-device so the
+// toggle survives reloads. Device-local only — never presented as server
+// state (the `reminded` flag wins when the backend provides one).
+
+const LOCAL_REMINDERS_KEY = 'thryftverse.live.reminders.v1';
+
+/** Load the locally-persisted set of session ids the viewer asked to be
+ *  reminded about. Returns an empty set on any storage/parse failure. */
+export async function loadLocalReminderIds(): Promise<Set<string>> {
+  try {
+    const raw = await AsyncStorage.getItem(LOCAL_REMINDERS_KEY);
+    if (!raw) return new Set();
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((id): id is string => typeof id === 'string'));
+  } catch {
+    return new Set();
+  }
+}
+
+/** Persist (or clear) a reminder flag for a session id. Best-effort — the
+ *  authoritative write already happened (or failed) on the backend. */
+export async function persistLocalReminder(
+  sessionId: string,
+  reminded: boolean,
+): Promise<void> {
+  try {
+    const ids = await loadLocalReminderIds();
+    if (reminded) {
+      ids.add(sessionId);
+    } else {
+      ids.delete(sessionId);
+    }
+    await AsyncStorage.setItem(LOCAL_REMINDERS_KEY, JSON.stringify([...ids]));
+  } catch {
+    // Local persistence is best-effort; the in-memory toggle still applies.
+  }
 }

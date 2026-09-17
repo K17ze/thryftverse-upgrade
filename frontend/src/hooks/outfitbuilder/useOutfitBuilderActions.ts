@@ -50,8 +50,8 @@ export function useOutfitBuilderActions({
   clearSelection,
 }: UseOutfitBuilderActionsOptions): UseOutfitBuilderActionsResult {
   const navigation = useNavigation<NavT>();
-  const createCollectionFn = useStore((s) => s.createCollection);
-  const addToCollection = useStore((s) => s.addToCollection);
+  const createCollectionFn = useStore((s) => s.createCollectionOnApi);
+  const addToCollection = useStore((s) => s.addToCollectionOnApi);
   const addOutfitToStore = useStore((s) => s.addOutfit);
 
   const [confirmSheet, setConfirmSheet] = useState<BuilderConfirmSheetState>({
@@ -70,12 +70,16 @@ export function useOutfitBuilderActions({
 
     const outfit = createOutfit(outfitItems);
     const collectionName = outfit.name;
-    const collectionId = createCollectionFn(collectionName, `Outfit with ${filledCount} items — score ${outfit.score}`);
-
-    OUTFIT_SLOTS.forEach((slot) => {
-      const item = outfitItems[slot];
-      if (item) addToCollection(collectionId, item.id);
-    });
+    // Server-backed collection — a local-id collection would be wiped by the
+    // next loadCollectionsFromApi sync and 403 on item adds.
+    void createCollectionFn(collectionName, `Outfit with ${filledCount} items — score ${outfit.score}`)
+      .then((collectionId) => {
+        OUTFIT_SLOTS.forEach((slot) => {
+          const item = outfitItems[slot];
+          if (item) void addToCollection(collectionId, item.id).catch(() => undefined);
+        });
+      })
+      .catch(() => undefined);
 
     const itemIds = OUTFIT_SLOTS.map((slot) => outfitItems[slot]?.id).filter(Boolean) as string[];
     addOutfitToStore({

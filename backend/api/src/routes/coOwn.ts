@@ -2028,10 +2028,31 @@ app.get('/co-own/assets', async (request) => {
     openOnly: z.union([z.string(), z.boolean()]).optional(),
     issuerId: z.string().min(2).max(128).optional(),
     limit: z.coerce.number().int().min(1).max(200).default(80),
+    // Opaque offset cursor (base64-encoded integer). Absent = first page.
+    // Keyset pagination would couple the cursor to the volume-weighted
+    // ordering, which drifts as markets trade; a bounded offset keeps page
+    // boundaries simple and the client dedupes boundary rows by id.
+    cursor: z.string().max(64).optional(),
+    // Free-text filter over title + issuer jurisdiction — the hub's market
+    // search. Without it the client can only filter already-loaded pages.
+    search: z.string().max(200).optional(),
   });
   const parsedQuery = querySchema.parse(request.query);
   const openOnly = parseQueryBoolean(parsedQuery.openOnly, false);
-  const { limit, issuerId } = parsedQuery;
+  const { limit, issuerId, search } = parsedQuery;
+
+  let offset = 0;
+  if (parsedQuery.cursor) {
+    try {
+      const decoded = Number(Buffer.from(parsedQuery.cursor, 'base64').toString('utf-8'));
+      // Bound the offset so a malformed cursor cannot force a deep scan.
+      if (Number.isInteger(decoded) && decoded >= 0 && decoded <= 100_000) {
+        offset = decoded;
+      }
+    } catch {
+      // Invalid cursor — treat as first page.
+    }
+  }
 
   const whereConditions: string[] = [];
   const whereParams: Array<string | number> = [];
@@ -2045,9 +2066,22 @@ app.get('/co-own/assets', async (request) => {
     whereConditions.push(`sa.issuer_id = $${whereParams.length}`);
   }
 
-  whereParams.push(limit);
+  const searchTerm = search?.trim();
+  if (searchTerm) {
+    // Escape ILIKE metacharacters so user input can't act as a pattern.
+    const escaped = searchTerm.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+    whereParams.push(`%${escaped}%`);
+    whereConditions.push(
+      `(sa.title ILIKE $${whereParams.length} OR sa.issuer_jurisdiction ILIKE $${whereParams.length})`,
+    );
+  }
+
+  // Fetch one extra row so "exactly limit rows remain" is distinguishable
+  // from "limit rows and more remain" — no empty final page.
+  whereParams.push(limit + 1, offset);
   const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
-  const limitPlaceholder = `$${whereParams.length}`;
+  const limitPlaceholder = `$${whereParams.length - 1}`;
+  const offsetPlaceholder = `$${whereParams.length}`;
 
   const result = await db.query<{
     id: string;
@@ -2123,8 +2157,9 @@ app.get('/co-own/assets', async (request) => {
           AND (o.expires_at IS NULL OR o.expires_at > NOW())
       ) book ON TRUE
       ${whereClause}
-      ORDER BY sa.volume_24h_gbp DESC, sa.created_at DESC
+      ORDER BY sa.volume_24h_gbp DESC, sa.created_at DESC, sa.id DESC
       LIMIT ${limitPlaceholder}
+      OFFSET ${offsetPlaceholder}
     `,
     whereParams
   );
@@ -2134,9 +2169,15 @@ app.get('/co-own/assets', async (request) => {
   const haltState = await getOnezeMintBurnHaltState();
   const isReconciliationHalted = haltState.halted;
 
+  const hasMore = result.rows.length > limit;
+  const pageRows = hasMore ? result.rows.slice(0, limit) : result.rows;
+
   return {
     ok: true,
-    items: result.rows.map((row) => {
+    nextCursor: hasMore
+      ? Buffer.from(String(offset + limit)).toString('base64')
+      : null,
+    items: pageRows.map((row) => {
       const offeringStatus = computeOfferingStatus(row.is_open, row.available_units);
       const marketStatus = computeMarketStatus(offeringStatus, row.has_exit, isReconciliationHalted);
       return {
@@ -2443,7 +2484,7 @@ app.post('/co-own/assets', async (request, reply) => {
 
     await client.query(
       `UPDATE listings
-       SET status = 'paused', updated_at = NOW()
+       SET status = 'paused', pause_source = 'coown_asset', updated_at = NOW()
        WHERE id = $1 AND status = 'active'`,
       [payload.listingId]
     );
@@ -5502,6 +5543,7 @@ app.post('/co-own/buyout-offers/:offerId/accept', async (request, reply) => {
         userId: offer.bidder_user_id,
         title: 'Buyout accepted',
         body: `${payload.holderUserId} accepted ${acceptedUnits} units from your buyout offer.`,
+        eventType: 'coown_buyout_accepted',
         payload: {
           offerId,
           assetId: offer.asset_id,
@@ -5509,6 +5551,7 @@ app.post('/co-own/buyout-offers/:offerId/accept', async (request, reply) => {
           units: acceptedUnits,
           event: 'buyout_acceptance',
         },
+        route: { screen: 'AssetDetail', params: { assetId: offer.asset_id } },
         metadata: {
           source: 'buyout_accept_route',
         },
@@ -6172,6 +6215,393 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
       rights,
       riskDisclosures,
     },
+  };
+});
+
+// ── Recourse & verification demands (migration 101) ──
+// Consignment-with-recourse: the seller retains physical custody of a
+// fractionalised asset and signs a recourse agreement making them personally
+// liable for proving authenticity/possession/condition on demand. The liable
+// seller is always resolved through coown_recourse_agreements.seller_id —
+// the same join the seller-hub verification_demand task uses.
+
+type CoOwnVerificationDemandRow = {
+  id: number | string;
+  requested_by: string;
+  demand_type: string;
+  deadline: Date | string;
+  status: string;
+  responded_at: Date | string | null;
+  evidence_url: string | null;
+  evidence_notes: string | null;
+  inspector_verdict: string | null;
+  created_at: Date | string;
+};
+
+const serializeVerificationDemand = (row: CoOwnVerificationDemandRow) => ({
+  id: Number(row.id),
+  requestedBy: row.requested_by,
+  demandType: row.demand_type,
+  deadline: new Date(row.deadline).toISOString(),
+  status: row.status,
+  respondedAt: row.responded_at ? new Date(row.responded_at).toISOString() : null,
+  evidenceUrl: row.evidence_url,
+  evidenceNotes: row.evidence_notes,
+  inspectorVerdict: row.inspector_verdict,
+  createdAt: new Date(row.created_at).toISOString(),
+});
+
+// GET /co-own/assets/:assetId/recourse — recourse posture for an asset.
+// Read by the seller's verification-response flow and by buyer due
+// diligence (the seller liability profile exists for display to buyers).
+app.get('/co-own/assets/:assetId/recourse', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Authentication required' };
+  }
+  const paramsSchema = z.object({ assetId: z.string().min(2) });
+  const { assetId } = paramsSchema.parse(request.params);
+
+  const assetExists = await db.query('SELECT id FROM coOwn_assets WHERE id = $1 LIMIT 1', [assetId]);
+  if (!assetExists.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Co-Own asset not found' };
+  }
+
+  const agreementResult = await db.query<{
+    id: string;
+    seller_id: string;
+    agreement_version: number;
+    agreement_url: string | null;
+    signed_at: Date | string;
+    max_liability_gbp: number | string;
+    personal_guarantee: boolean;
+    status: string;
+    triggered_at: Date | string | null;
+    triggered_reason: string | null;
+    settled_at: Date | string | null;
+    settled_amount_gbp: number | string | null;
+  }>(
+    `
+      SELECT
+        id, seller_id, agreement_version, agreement_url, signed_at,
+        max_liability_gbp, personal_guarantee, status,
+        triggered_at, triggered_reason, settled_at, settled_amount_gbp
+      FROM coown_recourse_agreements
+      WHERE asset_id = $1
+      LIMIT 1
+    `,
+    [assetId]
+  );
+  const agreementRow = agreementResult.rows[0] ?? null;
+
+  let sellerLiability: {
+    totalActiveLiabilityGbp: number;
+    activeAgreementCount: number;
+    totalAgreementsSigned: number;
+    totalRecourseTriggered: number;
+    totalDebtRecoveredGbp: number;
+    riskTier: string;
+    backgroundCheckStatus: string;
+  } | null = null;
+  if (agreementRow) {
+    const liabilityResult = await db.query<{
+      total_active_liability_gbp: number | string;
+      active_agreement_count: number;
+      total_agreements_signed: number;
+      total_recourse_triggered: number;
+      total_debt_recovered_gbp: number | string;
+      risk_tier: string;
+      background_check_status: string;
+    }>(
+      `
+        SELECT
+          total_active_liability_gbp, active_agreement_count,
+          total_agreements_signed, total_recourse_triggered,
+          total_debt_recovered_gbp, risk_tier, background_check_status
+        FROM coown_seller_liability_profile
+        WHERE user_id = $1
+        LIMIT 1
+      `,
+      [agreementRow.seller_id]
+    );
+    const liabilityRow = liabilityResult.rows[0];
+    if (liabilityRow) {
+      sellerLiability = {
+        totalActiveLiabilityGbp: Number(liabilityRow.total_active_liability_gbp),
+        activeAgreementCount: liabilityRow.active_agreement_count,
+        totalAgreementsSigned: liabilityRow.total_agreements_signed,
+        totalRecourseTriggered: liabilityRow.total_recourse_triggered,
+        totalDebtRecoveredGbp: Number(liabilityRow.total_debt_recovered_gbp),
+        riskTier: liabilityRow.risk_tier,
+        backgroundCheckStatus: liabilityRow.background_check_status,
+      };
+    }
+  }
+
+  const demandsResult = await db.query<CoOwnVerificationDemandRow>(
+    `
+      SELECT
+        id, requested_by, demand_type, deadline, status,
+        responded_at, evidence_url, evidence_notes,
+        inspector_verdict, created_at
+      FROM coown_verification_demands
+      WHERE asset_id = $1
+      ORDER BY created_at DESC, id DESC
+    `,
+    [assetId]
+  );
+
+  // Internal events are ops-only; everything else feeds the due-diligence
+  // timeline and the seller's own audit trail.
+  const eventsResult = await db.query<{
+    id: number | string;
+    event_type: string;
+    event_payload: unknown;
+    amount_gbp: number | string | null;
+    triggered_by: string | null;
+    created_at: Date | string;
+  }>(
+    `
+      SELECT id, event_type, event_payload, amount_gbp, triggered_by, created_at
+      FROM coown_recourse_events
+      WHERE asset_id = $1 AND visibility <> 'internal'
+      ORDER BY created_at DESC, id DESC
+      LIMIT 100
+    `,
+    [assetId]
+  );
+
+  return {
+    ok: true,
+    agreement: agreementRow
+      ? {
+          id: agreementRow.id,
+          sellerId: agreementRow.seller_id,
+          version: agreementRow.agreement_version,
+          agreementUrl: agreementRow.agreement_url,
+          signedAt: new Date(agreementRow.signed_at).toISOString(),
+          maxLiabilityGbp: Number(agreementRow.max_liability_gbp),
+          personalGuarantee: agreementRow.personal_guarantee,
+          status: agreementRow.status,
+          triggeredAt: agreementRow.triggered_at
+            ? new Date(agreementRow.triggered_at).toISOString()
+            : null,
+          triggeredReason: agreementRow.triggered_reason,
+          settledAt: agreementRow.settled_at
+            ? new Date(agreementRow.settled_at).toISOString()
+            : null,
+          settledAmountGbp: agreementRow.settled_amount_gbp == null
+            ? null
+            : Number(agreementRow.settled_amount_gbp),
+        }
+      : null,
+    sellerLiability,
+    verificationDemands: demandsResult.rows.map(serializeVerificationDemand),
+    events: eventsResult.rows.map((row) => ({
+      id: Number(row.id),
+      eventType: row.event_type,
+      payload: row.event_payload,
+      amountGbp: row.amount_gbp == null ? null : Number(row.amount_gbp),
+      triggeredBy: row.triggered_by,
+      createdAt: new Date(row.created_at).toISOString(),
+    })),
+  };
+});
+
+// POST /co-own/assets/:assetId/verification-demand/:demandId/respond —
+// the liable custodian submits evidence against a pending demand. Silence
+// past the deadline is what triggers recourse, so only a status='pending'
+// row may transition (optimistically guarded in the UPDATE itself).
+app.post('/co-own/assets/:assetId/verification-demand/:demandId/respond', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Authentication required' };
+  }
+  const paramsSchema = z.object({
+    assetId: z.string().min(2),
+    demandId: z.coerce.number().int().positive(),
+  });
+  const bodySchema = z.object({
+    evidenceUrl: z.string().min(1).max(2048),
+    evidenceNotes: z.string().max(4000).optional(),
+  });
+  const { assetId, demandId } = paramsSchema.parse(request.params);
+  const body = bodySchema.parse(request.body);
+
+  const demandResult = await db.query<{
+    id: number | string;
+    status: string;
+    requested_by: string;
+    seller_id: string | null;
+  }>(
+    `
+      SELECT d.id, d.status, d.requested_by, ra.seller_id
+      FROM coown_verification_demands d
+      LEFT JOIN coown_recourse_agreements ra ON ra.asset_id = d.asset_id
+      WHERE d.id = $1 AND d.asset_id = $2
+      LIMIT 1
+    `,
+    [demandId, assetId]
+  );
+  const demand = demandResult.rows[0];
+  if (!demand) {
+    reply.code(404);
+    return { ok: false, error: 'Verification demand not found' };
+  }
+  if (demand.seller_id !== request.authUser.userId && request.authUser.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Only the liable seller can respond to this demand' };
+  }
+  if (demand.status !== 'pending') {
+    reply.code(409);
+    return { ok: false, error: 'Verification demand is no longer pending' };
+  }
+
+  const client = await db.connect();
+  let updatedRow: CoOwnVerificationDemandRow;
+  try {
+    await client.query('BEGIN');
+    const updated = await client.query<CoOwnVerificationDemandRow>(
+      `
+        UPDATE coown_verification_demands
+        SET status = 'responded',
+            responded_at = NOW(),
+            evidence_url = $3,
+            evidence_notes = $4,
+            updated_at = NOW()
+        WHERE id = $1 AND asset_id = $2 AND status = 'pending'
+        RETURNING
+          id, requested_by, demand_type, deadline, status,
+          responded_at, evidence_url, evidence_notes,
+          inspector_verdict, created_at
+      `,
+      [demandId, assetId, body.evidenceUrl, body.evidenceNotes ?? null]
+    );
+    const row = updated.rows[0];
+    if (!row) {
+      // Lost the race with an expiry/verdict transition.
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'Verification demand is no longer pending' };
+    }
+    updatedRow = row;
+
+    // Append-only audit trail (SEC 17Ad-7 pattern — migration 101).
+    await client.query(
+      `
+        INSERT INTO coown_recourse_events (
+          asset_id, agreement_id, event_type, event_payload, triggered_by, visibility
+        )
+        VALUES (
+          $1,
+          (SELECT id FROM coown_recourse_agreements WHERE asset_id = $1 LIMIT 1),
+          'verification_demand_responded',
+          $2::jsonb,
+          $3,
+          'issuer'
+        )
+      `,
+      [
+        assetId,
+        toJsonString({ demandId, demandType: row.demand_type, evidenceUrl: body.evidenceUrl }),
+        request.authUser.userId,
+      ]
+    );
+
+    // Keep the denormalised counter on coOwn_assets consistent.
+    await client.query(
+      `
+        UPDATE coOwn_assets
+        SET active_verification_demands = GREATEST(0, active_verification_demands - 1),
+            updated_at = NOW()
+        WHERE id = $1
+      `,
+      [assetId]
+    );
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    app.log.error({ err, assetId, demandId }, 'POST /co-own verification-demand respond failed');
+    reply.code(500);
+    return { ok: false, error: 'Failed to submit verification response' };
+  } finally {
+    client.release();
+  }
+
+  // Notify the requester — the response screen tells the seller "the buyer
+  // has been notified", so the notification is part of the contract.
+  if (demand.requested_by !== 'platform') {
+    try {
+      await queueUserNotification({
+        userId: demand.requested_by,
+        title: 'Verification evidence submitted',
+        body: 'The seller has responded to your verification request.',
+        eventType: 'coown_verification_responded',
+        payload: { assetId, demandId },
+        route: { screen: 'AssetDetail', params: { assetId } },
+        metadata: { source: 'verification_demand_respond_route' },
+      });
+    } catch (error) {
+      request.log.error({ err: error, demandId }, 'Failed to queue verification response notification');
+    }
+  }
+
+  return { ok: true, demand: serializeVerificationDemand(updatedRow) };
+});
+
+// GET /co-own/seller/:userId/verification-demands — every demand against the
+// assets a seller custodies, pending first by nearest deadline, then history
+// newest-first. The screen splits sections itself; ordering only needs to be
+// stable and urgency-correct.
+app.get('/co-own/seller/:userId/verification-demands', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Authentication required' };
+  }
+  const paramsSchema = z.object({ userId: z.string().min(1).max(128) });
+  const { userId } = paramsSchema.parse(request.params);
+
+  // A seller reads only their own demands; admins may inspect any seller.
+  if (request.authUser.userId !== userId && request.authUser.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden' };
+  }
+
+  const result = await db.query<CoOwnVerificationDemandRow & {
+    asset_id: string;
+    asset_title: string | null;
+    asset_image_url: string | null;
+  }>(
+    `
+      SELECT
+        d.id, d.asset_id, d.requested_by, d.demand_type, d.deadline,
+        d.status, d.responded_at, d.evidence_url, d.evidence_notes,
+        d.inspector_verdict, d.created_at,
+        a.title AS asset_title,
+        a.image_url AS asset_image_url
+      FROM coown_verification_demands d
+      JOIN coown_recourse_agreements ra ON ra.asset_id = d.asset_id
+      LEFT JOIN coOwn_assets a ON a.id = d.asset_id
+      WHERE ra.seller_id = $1
+      ORDER BY
+        CASE WHEN d.status = 'pending' THEN 0 ELSE 1 END,
+        CASE WHEN d.status = 'pending' THEN d.deadline END ASC,
+        d.created_at DESC,
+        d.id DESC
+    `,
+    [userId]
+  );
+
+  return {
+    ok: true,
+    demands: result.rows.map((row) => ({
+      ...serializeVerificationDemand(row),
+      assetId: row.asset_id,
+      assetTitle: row.asset_title ?? 'Co-Own asset',
+      assetImageUrl: row.asset_image_url,
+    })),
   };
 });
 

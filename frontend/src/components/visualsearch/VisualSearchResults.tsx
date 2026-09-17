@@ -10,6 +10,7 @@ import { DiscoverySectionHeader } from '../discover/DiscoverySectionHeader';
 import { PremiumSkeletonTile } from '../discover/PremiumSkeletonTile';
 import type { Listing } from '../../domain';
 import type { ResultStatus } from './visualSearchTypes';
+import type { DiscoveryListingSummary } from '../../contracts/DiscoveryListingSummary';
 import { createVisualSearchStyles } from './visualSearchStyles';
 
 interface Props {
@@ -26,6 +27,9 @@ interface Props {
   availableCategories: Array<{ category: string; count: number }>;
   onBrowseCategory: (categoryId: string, categoryTitle: string) => void;
   onRetry: () => void;
+  onItemSaveToggle?: (listing: DiscoveryListingSummary) => void;
+  onItemSaveLongPress?: (listing: DiscoveryListingSummary) => void;
+  isItemSaved?: (listingId: string) => boolean;
 }
 
 // ── Results section ───────────────────────────────────────────────────────
@@ -47,6 +51,9 @@ function VisualSearchResultsBase({
   availableCategories,
   onBrowseCategory,
   onRetry,
+  onItemSaveToggle,
+  onItemSaveLongPress,
+  isItemSaved,
 }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createVisualSearchStyles(colors), [colors]);
@@ -131,7 +138,9 @@ function VisualSearchResultsBase({
       items={results}
       onPressItem={onPressItem}
       numColumns={2}
-      showSaveButton
+      onItemSaveToggle={onItemSaveToggle}
+      onItemSaveLongPress={onItemSaveLongPress}
+      isItemSaved={isItemSaved}
       horizontalPadding={Space.md}
       refreshControl={
         <RefreshControl

@@ -12,7 +12,6 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { openProductDetail } from '../platform/product/openProductDetail';
 import { useAppTheme } from '../theme/ThemeContext';
-import type { Listing } from '../services/listingsApi';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -94,7 +93,7 @@ export default function ItemDetailScreen() {
   const { itemId, sectionKey, position, reasonCode, personalised } = route.params || {};
 
   // ── Product-query domain (listing, seller, recommendations, comparables,
-  // price history, Q&A, continue-exploring prefetch, analytics session) ──
+  // price history, Q&A, analytics session) ──
   const data = useItemDetailData({
     itemId,
     sectionKey,
@@ -156,6 +155,9 @@ export default function ItemDetailScreen() {
   const isItemSavedAnywhere = useStore((state) => state.isItemSavedAnywhere);
   const isSavedProduct = useStore((state) => state.isSavedProduct);
   const toggleSavedProduct = useStore((state) => state.toggleSavedProduct);
+  const getItemCollections = useStore((state) => state.getItemCollections);
+  const removeFromCollection = useStore((state) => state.removeFromCollection);
+  const removeFromCollectionOnApi = useStore((state) => state.removeFromCollectionOnApi);
 
   // ── Media stage (active image index + full-screen viewer) ──
   const media = useItemDetailMedia({ listing: item });
@@ -192,14 +194,14 @@ export default function ItemDetailScreen() {
     }
   }, [data, refreshListings]);
 
-  // These values are consumed by the planned continuation surface. Retaining
-  // them here ensures pagination state remains available when that route lands.
-  void data.explore.items;
-  void data.explore.fetchNextPage;
-  void data.explore.hasNextPage;
-  void data.explore.isFetchingNextPage;
-
   const listingEngagement = item?.engagement ?? null;
+
+  // 403 LISTING_NOT_PUBLIC — the listing exists but is not public for this
+  // viewer (private, draft, or moderated). That is a terminal state, not a
+  // transient failure: render the unavailable canvas, never the retry
+  // error canvas (the query itself already refuses to retry 403s).
+  const listingErrorStatus = (data.error as { status?: number } | null)?.status;
+  const listingNotPublic = listingErrorStatus === 403;
 
   if (data.isLoading && !item) {
     return (
@@ -212,6 +214,17 @@ export default function ItemDetailScreen() {
   }
 
   if (data.isError && !item) {
+    if (listingNotPublic) {
+      return (
+        <ItemDetailStateCanvas
+          state="unavailable"
+          title="Listing unavailable"
+          message="This listing isn't public right now — it may be private or still in draft."
+          onRetry={() => navigation.navigate('MainTabs', { screen: 'Explore' })}
+          retryLabel={t('product.browseSimilar')}
+        />
+      );
+    }
     return (
       <ItemDetailStateCanvas
         state="error"
@@ -243,7 +256,7 @@ export default function ItemDetailScreen() {
     displayTitle, hasPrice, hasDiscount, formattedPrice, formattedOriginal,
     discountPercent, formattedProtectionTotal, priceIzeText, capabilities,
     commerce, bundleItems, seenInLooksItems, interestSignal, socialProofLine,
-    attributeLine, conditionMeta, secondaryLine, familyStateAccent,
+    attributeLine, conditionMeta, secondaryLine, mediaItems,
     scrollBottomPadding, priceInsightRows, priceInsightSummary,
     purchaseSummary, sellerStatsLine, sellerVerified,
   } = buildItemDetailDerived({
@@ -261,9 +274,25 @@ export default function ItemDetailScreen() {
   const handleQuickSave = () => {
     if (!requireAuth('save_item')) return;
     haptic.patterns.save();
-    const wasSaved = isSavedProduct(item.id);
-    toggleSavedProduct(item.id);
-    show(wasSaved ? 'Removed from Saved' : 'Saved', 'success');
+    // The bookmark icon reflects saved-anywhere (Saved list ∪ collections),
+    // so the toggle must operate on that same predicate — previously an
+    // item filed to a collection showed filled while the tap only touched
+    // savedProducts, and the toast lied about the direction.
+    const savedAnywhere = isItemSavedAnywhere(item.id);
+    if (savedAnywhere) {
+      if (isSavedProduct(item.id)) toggleSavedProduct(item.id);
+      for (const c of getItemCollections(item.id)) {
+        // Local-id collections have no server row — route the removal.
+        if (c.id.startsWith('collection_')) {
+          removeFromCollection(c.id, item.id);
+        } else {
+          void removeFromCollectionOnApi(c.id, item.id).catch(() => undefined);
+        }
+      }
+    } else {
+      toggleSavedProduct(item.id);
+    }
+    show(savedAnywhere ? 'Removed from Saved' : 'Saved', 'success');
   };
 
   const handleSaveToCollection = () => {
@@ -273,7 +302,7 @@ export default function ItemDetailScreen() {
   };
 
   const handlePressRecommendation = (
-    recItem: Listing,
+    recItem: { id: string },
     recSectionKey?: string,
     recPosition?: number,
     recReasonCode?: string,
@@ -341,7 +370,7 @@ export default function ItemDetailScreen() {
             CommerceDetailMediaRail overlays the max-3-visible-controls
             (Back, Share, Save) + overflow (Fav, Watch, Report). */}
         <CommerceMediaHero
-          images={item.images}
+          media={mediaItems}
           category={item.category ?? undefined}
           objectId={item.id}
           isFav={isFav}
@@ -367,8 +396,7 @@ export default function ItemDetailScreen() {
           }}
           bigHeartOpacity={bigHeartOpacity}
           bigHeartScale={bigHeartScale}
-          showThumbnailStrip={item.images ? item.images.length > 1 : false}
-          familyStateAccent={familyStateAccent}
+          showThumbnailStrip={mediaItems.length > 1}
           onRailSave={handleQuickSave}
           onOverflow={() => overlay.open.overflow()}
         />
@@ -458,12 +486,13 @@ export default function ItemDetailScreen() {
         <ItemDetailSellerSection
           item={item}
           seller={seller}
+          railItems={bundleItems}
           isOwner={capabilities.isOwner}
           isFollowing={seller?.isFollowing ?? false}
           isFollowPending={sellerFollowMutation.isPending}
           onFollow={() => {
             if (!requireAuth('follow_seller')) return;
-            sellerFollowMutation.mutate(undefined, {
+            sellerFollowMutation.mutate(!(seller?.isFollowing ?? false), {
               onSuccess: (data) => {
                 show(data.isFollowing ? 'Followed seller' : 'Unfollowed seller', 'success');
               },
@@ -474,7 +503,8 @@ export default function ItemDetailScreen() {
           }}
           onMessage={handleMessageSeller}
           onViewShop={handleViewSeller}
-          onPressRailItem={(railItem) => handlePressRecommendation(railItem, 'more_from_seller')}
+          onPressRailItem={(railItem, index) =>
+            handlePressRecommendation(railItem, 'more_from_seller', index)}
         />
 
         {/* ── Zone F — Shipping & returns (collapsed by default) ──
@@ -500,7 +530,15 @@ export default function ItemDetailScreen() {
           summary={priceInsightSummary}
           expanded={priceHistoryExpanded}
           onToggleExpanded={() => setPriceHistoryExpanded((prev) => !prev)}
-          showPriceAlert={!!(hasDiscount && discountPercent && discountPercent > 0)}
+          showPriceAlert={
+            // Price alerts apply to anything a buyer could still purchase —
+            // not only discounted listings. Excluded for owners (no point
+            // alerting on your own listing) and suspended sellers (the
+            // listing cannot transact).
+            capabilities.isAvailable
+            && !capabilities.isOwner
+            && seller?.reachState !== 'suspended'
+          }
           priceAlertEnabled={priceAlertEnabled}
           priceAlertLoading={priceAlertLoading}
           onTogglePriceAlert={handleTogglePriceAlert}
@@ -569,6 +607,7 @@ export default function ItemDetailScreen() {
         item={item}
         capabilities={capabilities}
         commerce={commerce}
+        seller={seller}
         formattedPrice={formattedPrice}
         formattedOriginal={formattedOriginal}
         hasDiscount={hasDiscount}
@@ -607,9 +646,10 @@ export default function ItemDetailScreen() {
         formattedProtectionTotal={formattedProtectionTotal}
         conditionMeta={conditionMeta}
         isFav={isFav}
-        isSeller={item.seller?.id === currentUser?.id}
+        isSeller={(item.sellerId ?? item.seller?.id) === currentUser?.id}
         currentUserName={currentUser?.username ?? 'You'}
         formatFromFiat={formatFromFiat}
+        mediaItems={mediaItems}
         media={media}
         visibility={overlay.visibility}
         dismiss={overlay.dismiss}

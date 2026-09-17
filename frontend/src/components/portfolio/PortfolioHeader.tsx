@@ -23,7 +23,8 @@ export function PortfolioHeader({ onBack, onOpenActivity }: PortfolioHeaderProps
       rightAction={
         <AnimatedPressable
           onPress={onOpenActivity}
-          scaleValue={0.9}
+          scaleValue={0.985}
+          style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
           hapticFeedback="light"
           accessibilityRole="button"
           accessibilityLabel="Activity"

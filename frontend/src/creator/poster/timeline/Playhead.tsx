@@ -1,36 +1,38 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, Text } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import React, { useEffect } from 'react';
+import { StyleSheet, TextInput, type TextInputProps } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  runOnJS,
+  useAnimatedProps,
   withSpring,
+  type SharedValue,
 } from 'react-native-reanimated';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { FontFamily } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { Motion } from '../../../theme/motionTokens';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
-import { useHaptic } from '../../../hooks/useHaptic';
 
 // ───────────────────────────────────────────────────────────────────────────
 // Playhead — vertical scrub line overlaid on the timeline track.
 //
-// A 2pt brand-colored vertical line spans the track height. A 24pt visible
-// dot sits at the top inside a 44pt transparent hit target. Dragging the
-// handle (or the line) updates the shared value directly on the UI thread
-// for 1:1 tracking. onSeek fires on gesture end (or throttled to ~10Hz)
-// so the JS-side playback clock is not poked every frame.
+// A 2pt brand-colored vertical line spans the track height with a 24pt
+// visible handle dot at the top. This component is PURELY VISUAL —
+// pointerEvents="none" — so it never occludes clip taps, trim handles,
+// slip drags, or reorder gestures on the clip row beneath it.
 //
-// The playhead position is driven by a Reanimated shared value so the line
-// and handle move on the UI thread — no React re-render per frame during
-// playback. The shared value is synced from the `positionMs` prop only
-// when the user is NOT actively scrubbing (so the clock doesn't fight the
-// finger). Under reduced motion we skip animated transitions.
+// The seek pan lives on the TimelineRuler strip above the track (the
+// CapCut/Edits scrub grammar). During a ruler scrub the ruler writes the
+// finger position to `scrubMsSV` on the UI thread — the line and timecode
+// bubble track it 1:1 with no JS hop.
+//
+// Outside a scrub, the position is driven by the `positionMs` prop (the
+// PlaybackClock) via shared values — no React re-render per frame during
+// playback.
 // ───────────────────────────────────────────────────────────────────────────
 
 function formatTimecode(ms: number): string {
+  'worklet';
   const clamped = Math.max(0, ms);
   const totalSeconds = clamped / 1000;
   const m = Math.floor(totalSeconds / 60);
@@ -39,6 +41,10 @@ function formatTimecode(ms: number): string {
   return `${m}:${s.toString().padStart(2, '0')}.${tenths}`;
 }
 
+// Animated TextInput — the scrub timecode renders on the UI thread via
+// animated props, so no runOnJS/setState per frame while dragging.
+const AnimatedTimecode = Reanimated.createAnimatedComponent(TextInput);
+
 export interface PlayheadProps {
   /** Current playhead position in ms (from the PlaybackClock). */
   positionMs: number;
@@ -46,8 +52,11 @@ export interface PlayheadProps {
   totalDurationMs: number;
   /** Measured track width in pixels. */
   trackWidth: number;
-  /** Called when the user drags the playhead. Wired to playbackClock.seek(ms). */
-  onSeek: (ms: number) => void;
+  /**
+   * Ruler-scrub position in ms (>= 0 while the ruler is being dragged,
+   * -1 when idle). Overrides `positionMs` for 1:1 finger tracking.
+   */
+  scrubMsSV?: SharedValue<number>;
 }
 
 const HIT_SIZE = 44;
@@ -59,37 +68,21 @@ export const Playhead = React.memo(function Playhead({
   positionMs,
   totalDurationMs,
   trackWidth,
-  onSeek,
+  scrubMsSV,
 }: PlayheadProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
-  const haptic = useHaptic();
   const widthSV = useSharedValue(trackWidth);
-  const [isDragging, setIsDragging] = useState(false);
-  const [bubbleMs, setBubbleMs] = useState(0);
-  const lastTickSV = useSharedValue(-1);
-  // Tracks whether the user is actively scrubbing — when true, the
-  // positionMs prop sync is suppressed so the clock doesn't fight the
-  // finger.
-  const isScrubbingSV = useSharedValue(false);
-  // Throttle: last time (ms) onSeek was called during a scrub.
-  const lastSeekTimeSV = useSharedValue(0);
 
   // ── UI-thread playhead position (pixels) ───────────────────────────
-  // The shared value stores the pixel position of the playhead. It is
-  // updated from the positionMs prop (driven by the PlaybackClock) and
-  // rendered via animated styles on the UI thread — no React re-render
-  // per frame during playback.
   const lineLeftSV = useSharedValue(0);
   const handleLeftSV = useSharedValue(0);
 
-  // Sync the shared values whenever positionMs, totalDurationMs, or
-  // trackWidth changes — but ONLY when the user is not actively
-  // scrubbing. During a scrub the shared value is driven directly from
-  // the gesture (e.absoluteX), so we must not overwrite it with the
-  // stale clock position.
+  // Sync from the positionMs prop — but ONLY when the user is not
+  // actively scrubbing (the ruler's pan drives scrubMsSV on the UI
+  // thread; the clock must not fight the finger).
   useEffect(() => {
-    if (isScrubbingSV.value) return;
+    if (scrubMsSV && scrubMsSV.value >= 0) return;
     if (totalDurationMs <= 0 || trackWidth <= 0) {
       lineLeftSV.value = 0;
       handleLeftSV.value = -HIT_SIZE / 2;
@@ -110,144 +103,105 @@ export const Playhead = React.memo(function Playhead({
       lineLeftSV.value = withSpring(lineLeft, Motion.spring.snapTo);
       handleLeftSV.value = withSpring(handleLeft, Motion.spring.snapTo);
     }
-  }, [positionMs, totalDurationMs, trackWidth, reducedMotion, lineLeftSV, handleLeftSV, isScrubbingSV]);
-
-  const handleLayout = useCallback((e: { nativeEvent: { layout: { width: number } } }) => {
-    widthSV.value = e.nativeEvent.layout.width;
-  }, [widthSV]);
-
-  // Helper: compute ms from absolute X, clamped to the timeline range.
-  // Lives on the UI thread (worklet) so the playhead tracks 1:1.
-  const seekGesture = React.useMemo(() =>
-    Gesture.Pan()
-      .onBegin((e) => {
-        'worklet';
-        const w = widthSV.value || trackWidth;
-        if (w <= 0 || totalDurationMs <= 0) return;
-        isScrubbingSV.value = true;
-        const ratio = Math.max(0, Math.min(1, e.absoluteX / w));
-        const ms = ratio * totalDurationMs;
-        const lineLeft = ratio * w - LINE_WIDTH / 2;
-        const handleLeft = ratio * w - HIT_SIZE / 2;
-        // Drive the visual position directly — 1:1 with the finger.
-        lineLeftSV.value = lineLeft;
-        handleLeftSV.value = handleLeft;
-        lastTickSV.value = Math.round(ms / 100) * 100;
-        runOnJS(setBubbleMs)(ms);
-        runOnJS(setIsDragging)(true);
-        runOnJS(haptic.selection)();
-        runOnJS(onSeek)(ms);
-        lastSeekTimeSV.value = Date.now();
-      })
-      .onChange((e) => {
-        'worklet';
-        const w = widthSV.value || trackWidth;
-        if (w <= 0 || totalDurationMs <= 0) return;
-        const ratio = Math.max(0, Math.min(1, e.absoluteX / w));
-        const ms = ratio * totalDurationMs;
-        const lineLeft = ratio * w - LINE_WIDTH / 2;
-        const handleLeft = ratio * w - HIT_SIZE / 2;
-        // 1:1 visual on the UI thread.
-        lineLeftSV.value = lineLeft;
-        handleLeftSV.value = handleLeft;
-        const tick = Math.round(ms / 100) * 100;
-        if (tick !== lastTickSV.value) {
-          lastTickSV.value = tick;
-          runOnJS(haptic.selection)();
-        }
-        runOnJS(setBubbleMs)(ms);
-        // Throttle onSeek to ~10Hz during scrub to avoid flooding the
-        // playback clock. The final seek fires on onEnd.
-        const now = Date.now();
-        if (now - lastSeekTimeSV.value > 100) {
-          lastSeekTimeSV.value = now;
-          runOnJS(onSeek)(ms);
-        }
-      })
-      .onEnd((e) => {
-        'worklet';
-        const w = widthSV.value || trackWidth;
-        if (w > 0 && totalDurationMs > 0) {
-          const ratio = Math.max(0, Math.min(1, e.absoluteX / w));
-          const ms = ratio * totalDurationMs;
-          // Final committed seek.
-          runOnJS(onSeek)(ms);
-        }
-        isScrubbingSV.value = false;
-        runOnJS(setIsDragging)(false);
-        runOnJS(haptic.light)();
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [totalDurationMs, trackWidth, onSeek, haptic]
-  );
+  }, [positionMs, totalDurationMs, trackWidth, reducedMotion, lineLeftSV, handleLeftSV, scrubMsSV]);
 
   // ── Animated styles (UI thread) ────────────────────────────────────
-  const lineAnimStyle = useAnimatedStyle(() => ({
-    left: lineLeftSV.value,
+  // During a scrub, position derives from scrubMsSV (ms → px); otherwise
+  // from the prop-synced shared values.
+  const lineAnimStyle = useAnimatedStyle(() => {
+    const scrub = scrubMsSV ? scrubMsSV.value : -1;
+    if (scrub >= 0 && totalDurationMs > 0) {
+      const w = widthSV.value || trackWidth;
+      const ratio = Math.max(0, Math.min(1, scrub / totalDurationMs));
+      return { left: ratio * w - LINE_WIDTH / 2 };
+    }
+    return { left: lineLeftSV.value };
+  });
+
+  const handleAnimStyle = useAnimatedStyle(() => {
+    const scrub = scrubMsSV ? scrubMsSV.value : -1;
+    if (scrub >= 0 && totalDurationMs > 0) {
+      const w = widthSV.value || trackWidth;
+      const ratio = Math.max(0, Math.min(1, scrub / totalDurationMs));
+      return { left: ratio * w - HIT_SIZE / 2 };
+    }
+    return { left: handleLeftSV.value };
+  });
+
+  const bubbleAnimStyle = useAnimatedStyle(() => {
+    const scrub = scrubMsSV ? scrubMsSV.value : -1;
+    if (scrub < 0) return { opacity: 0, left: 0 };
+    const w = widthSV.value || trackWidth;
+    const ratio = Math.max(0, Math.min(1, scrub / Math.max(1, totalDurationMs)));
+    return {
+      opacity: 1,
+      left: ratio * w - BUBBLE_WIDTH / 2,
+    };
+  });
+
+  // Timecode text — formatted and rendered entirely on the UI thread.
+  // `text` is a native-only TextInput prop (not in the public type).
+  const bubbleTextProps = useAnimatedProps<TextInputProps & { text?: string }>(() => ({
+    text: formatTimecode(scrubMsSV ? Math.max(0, scrubMsSV.value) : 0),
   }));
 
-  const handleAnimStyle = useAnimatedStyle(() => ({
-    left: handleLeftSV.value,
-  }));
-
-  const bubbleAnimStyle = useAnimatedStyle(() => ({
-    left: lineLeftSV.value + LINE_WIDTH / 2 - BUBBLE_WIDTH / 2,
-  }));
+  useEffect(() => {
+    widthSV.value = trackWidth;
+  }, [trackWidth, widthSV]);
 
   if (totalDurationMs <= 0 || trackWidth <= 0) return null;
 
   return (
-    <GestureDetector gesture={seekGesture}>
+    <Reanimated.View
+      style={playheadStyles.container}
+      pointerEvents="none"
+    >
       <Reanimated.View
-        style={playheadStyles.gestureZone}
-        onLayout={handleLayout}
-        pointerEvents="auto"
+        style={[
+          playheadStyles.line,
+          lineAnimStyle,
+          { backgroundColor: colors.brand },
+        ]}
+      />
+      <Reanimated.View
+        style={[
+          playheadStyles.handleHit,
+          handleAnimStyle,
+        ]}
+        accessibilityLabel="Playhead"
+        accessibilityHint="Drag to scrub the timeline"
+        accessibilityRole="adjustable"
+        accessibilityValue={{ text: formatTimecode(positionMs) }}
+        accessibilityLiveRegion="polite"
       >
         <Reanimated.View
           style={[
-            playheadStyles.line,
-            lineAnimStyle,
-            { backgroundColor: colors.brand },
+            playheadStyles.handleDot,
+            { backgroundColor: colors.brand, borderColor: colors.surface },
           ]}
         />
-        <Reanimated.View
-          style={[
-            playheadStyles.handleHit,
-            handleAnimStyle,
-          ]}
-          accessibilityLabel="Playhead"
-          accessibilityRole="adjustable"
-          accessibilityValue={{ text: formatTimecode(positionMs) }}
-          accessibilityLiveRegion="polite"
-        >
-          <Reanimated.View
-            style={[
-              playheadStyles.handleDot,
-              { backgroundColor: colors.brand, borderColor: colors.surface },
-            ]}
-          />
-        </Reanimated.View>
-        {isDragging && (
-          <Reanimated.View
-            style={[
-              playheadStyles.bubble,
-              bubbleAnimStyle,
-              { backgroundColor: colors.surface },
-            ]}
-            pointerEvents="none"
-          >
-            <Text style={[playheadStyles.bubbleText, { color: colors.textPrimary }]}>
-              {formatTimecode(bubbleMs)}
-            </Text>
-          </Reanimated.View>
-        )}
       </Reanimated.View>
-    </GestureDetector>
+      <Reanimated.View
+        style={[
+          playheadStyles.bubble,
+          bubbleAnimStyle,
+          { backgroundColor: colors.surface },
+        ]}
+      >
+        <AnimatedTimecode
+          style={[playheadStyles.bubbleText, { color: colors.textPrimary }]}
+          animatedProps={bubbleTextProps}
+          defaultValue="0:00.0"
+          editable={false}
+          pointerEvents="none"
+        />
+      </Reanimated.View>
+    </Reanimated.View>
   );
 });
 
 const playheadStyles = StyleSheet.create({
-  gestureZone: {
+  container: {
     position: 'absolute',
     top: 0,
     left: 0,

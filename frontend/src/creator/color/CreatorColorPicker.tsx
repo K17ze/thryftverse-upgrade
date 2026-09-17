@@ -37,23 +37,20 @@
  * - One undo entry per committed color choice.
  */
 
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   StyleSheet,
   View,
-  Text,
-  Pressable,
   ScrollView,
   useWindowDimensions,
   ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { Space, Radius, Typography, Stroke, Control } from '../../theme/designTokens';
-import { TypographyV2 } from '../../theme/typography.v2';
+import { Space, Radius, Stroke, Control } from '../../theme/designTokens';
 import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
-import { PressScale } from '../CreatorAnimations';
+import { PressScale } from '../shared/CreatorAnimations';
 
 import { SVPlane } from './SVPlane';
 import { HueSlider } from './HueSlider';
@@ -101,6 +98,8 @@ export interface CreatorColorPickerProps {
   style?: ViewStyle | ViewStyle[];
   /** Accessibility label for the picker */
   accessibilityLabel?: string;
+  /** Accessibility hint for the picker */
+  accessibilityHint?: string;
 }
 
 // ── Component ────────────────────────────────────────────────────────
@@ -114,7 +113,8 @@ export function CreatorColorPicker({
   mediaUris = [],
   onCommitRecent,
   style,
-  accessibilityLabel = 'Color picker' }: CreatorColorPickerProps) {
+  accessibilityLabel = 'Color picker',
+  accessibilityHint }: CreatorColorPickerProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -228,6 +228,7 @@ export function CreatorColorPicker({
               { backgroundColor: currentColorRgba },
             ]}
             accessibilityLabel={`Current color ${currentHex}. Tap to expand color picker.`}
+            accessibilityHint="Shows the expanded color picker"
             accessibilityRole="button"
           >
             <View />
@@ -252,6 +253,7 @@ export function CreatorColorPicker({
             }}
             style={styles.expandBtn}
             accessibilityLabel="Expand color picker"
+            accessibilityHint="Shows the expanded color picker"
             accessibilityRole="button"
           >
             <Ionicons name="chevron-down-outline" size={IconGrammar.standard} color={colors.textSecondary} />
@@ -287,6 +289,7 @@ export function CreatorColorPicker({
         keyboardDismissMode="on-drag"
         contentContainerStyle={styles.expandedContent}
         accessibilityLabel={accessibilityLabel}
+        accessibilityHint={accessibilityHint}
       >
         {/* SV plane */}
         <SVPlane
@@ -357,6 +360,7 @@ export function CreatorColorPicker({
           }}
           style={styles.collapseBtn}
           accessibilityLabel="Collapse color picker"
+          accessibilityHint="Hides the expanded color picker"
           accessibilityRole="button"
         >
           <Ionicons name="chevron-up-outline" size={IconGrammar.standard} color={colors.textSecondary} />

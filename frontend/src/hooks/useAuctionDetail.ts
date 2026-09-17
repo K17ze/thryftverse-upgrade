@@ -1,5 +1,6 @@
 import React from 'react';
 import { useToast } from '../context/ToastContext';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { useSignupWall } from '../hooks/useSignupWall';
 import { parseApiError } from '../lib/apiClient';
 import { requestPushPermissionWithSoftAsk } from '../lib/pushPermission';
@@ -113,6 +114,7 @@ export function useAuctionDetail(
   options: UseAuctionDetailOptions = {},
 ): UseAuctionDetailResult {
   const { show } = useToast();
+  const { isOffline } = useConnectivity();
   const { requireAuth } = useSignupWall();
 
   const [auction, setAuction] = React.useState<AuctionDetail | null>(null);
@@ -371,6 +373,10 @@ export function useAuctionDetail(
   const openBidSheet = () => {
     if (!auction) return;
     if (!requireAuth('place_bid')) return;
+    if (isOffline) {
+      show('You are offline — reconnect to place a bid.', 'info');
+      return;
+    }
     setBidSheetVisible(true);
   };
 
@@ -382,6 +388,11 @@ export function useAuctionDetail(
   // No duplicate toast — sheet handles inline error/success presentation.
   const handleSubmitBid = async (gbpAmount: number, idempotencyKey: string, maxBidGbp?: number): Promise<void> => {
     if (!auction || isSubmittingBid) return;
+    if (isOffline) {
+      // Connectivity dropped between sheet-open and submit — fail before
+      // the network call so the error state is unambiguous.
+      throw new Error('You are offline. Reconnect and try again.');
+    }
     setIsSubmittingBid(true);
 
     try {
@@ -399,6 +410,10 @@ export function useAuctionDetail(
   const openBuyNowSheet = () => {
     if (!auction?.buyNowPriceGbp || isBuyNowLoading) return;
     if (!requireAuth('purchase')) return;
+    if (isOffline) {
+      show('You are offline — reconnect to buy this item.', 'info');
+      return;
+    }
     setBuyNowSheetVisible(true);
   };
 
@@ -410,6 +425,7 @@ export function useAuctionDetail(
   // PASS 6: Sheet owns feedback — no duplicate toast from parent
   const handleSubmitBuyNow = async (gbpAmount: number, idempotencyKey: string): Promise<BuyNowResult> => {
     if (!auction?.buyNowPriceGbp || isBuyNowLoading) throw new Error('Buy Now not available');
+    if (isOffline) throw new Error('You are offline. Reconnect and try again.');
     setIsBuyNowLoading(true);
 
     try {

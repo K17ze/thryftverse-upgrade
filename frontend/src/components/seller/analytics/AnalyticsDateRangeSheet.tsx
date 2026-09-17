@@ -47,12 +47,14 @@ export function AnalyticsDateRangeSheet({
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const today = useMemo(() => new Date(), []);
+  // Recomputed on each sheet open — a session spanning midnight must not
+  // pin "today" (maxDate) to yesterday. `visible` is the correct dep.
+  const today = useMemo(() => new Date(), [visible]);
   const oneYearAgo = useMemo(() => {
     const d = new Date();
     d.setUTCFullYear(d.getUTCFullYear() - 1);
     return d;
-  }, []);
+  }, [visible]);
 
   const [startDate, setStartDate] = useState<string>(initialStartDate ?? ISO_TODAY);
   const [endDate, setEndDate] = useState<string>(initialEndDate ?? ISO_TODAY);

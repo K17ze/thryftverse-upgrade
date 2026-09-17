@@ -179,7 +179,10 @@ export function ItemDetailItemDetails({
           condition: item.condition,
           description: item.description,
           // Watch / jewellery / electronics / art extras
-          material: pickStr('material'),
+          // `material` resolves from the real listings.material_composition
+          // column (mapped to materialComposition); dynamic keys cover any
+          // future payload fields.
+          material: item.materialComposition ?? pickStr('material'),
           measurements: pickStr('measurements'),
           flaws: pickStr('flaws'),
           reference: pickStr('reference'),

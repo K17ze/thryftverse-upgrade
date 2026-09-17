@@ -2,7 +2,7 @@ import React from 'react';
 import type { Listing } from '../domain';
 import { MOCK_LISTINGS, MOCK_USERS } from '../data/mockData';
 import { getApiBaseUrl } from '../lib/apiClient';
-import { fetchListingsFromApi } from '../services/listingsApi';
+import { fetchHomeFeed } from '../services/feedApi';
 import {
   ENABLE_RUNTIME_MOCKS,
   IS_INTEGRATION_TRUTH_MODE,
@@ -55,10 +55,15 @@ export function BackendDataProvider({ children }: { children: React.ReactNode })
 
   const refreshListings = React.useCallback(async () => {
     setIsSyncing(true);
-    const result = await fetchListingsFromApi();
+    // Home feed — GET /feed/home is the canonical blended feed endpoint:
+    // it serves ranked listing units (including promoted "Sponsored" slots
+    // with disclosure + promotionId) plus poster/look units. Only listing
+    // units land in `listings`; creator units are carried by their own
+    // surfaces. Cursor semantics are identical to /listings.
+    const result = await fetchHomeFeed();
     if (result.listings.length > 0) {
       setListings(result.listings);
-      setCursor(result.nextCursor);
+      setCursor(result.nextCursor ?? undefined);
       setHasMore(Boolean(result.nextCursor));
       setLastError(result.error ?? null);
       setSource('api');
@@ -93,14 +98,14 @@ export function BackendDataProvider({ children }: { children: React.ReactNode })
   const loadMoreListings = React.useCallback(async () => {
     if (!cursor || isLoadingMore || isSyncing) return;
     setIsLoadingMore(true);
-    const result = await fetchListingsFromApi(cursor);
+    const result = await fetchHomeFeed(cursor);
     if (result.listings.length > 0) {
       setListings((prev) => {
         const existingIds = new Set(prev.map((l) => l.id));
         const newOnes = result.listings.filter((l) => !existingIds.has(l.id));
         return [...prev, ...newOnes];
       });
-      setCursor(result.nextCursor);
+      setCursor(result.nextCursor ?? undefined);
       setHasMore(Boolean(result.nextCursor));
     } else {
       setHasMore(false);

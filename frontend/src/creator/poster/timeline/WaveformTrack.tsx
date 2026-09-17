@@ -104,7 +104,11 @@ export const WaveformTrack = React.memo(function WaveformTrack({
     extractWaveform(audioUri, barCount)
       .then((data) => {
         if (!cancelled) {
-          setExtractedSamples(data.samples);
+          // Synthetic stand-ins (non-WAV sources can't be decoded in pure
+          // JS) must never be drawn as real bars — a fake waveform shape
+          // reads as real amplitude data (AGENTS.md §11). Dropping them
+          // renders the honest flat-line state instead.
+          setExtractedSamples(data.isSynthetic ? undefined : data.samples);
           setIsExtracting(false);
         }
       })
@@ -153,6 +157,7 @@ export const WaveformTrack = React.memo(function WaveformTrack({
               ? 'Audio waveform track'
               : 'Audio waveform track, no audio waveform'
       }
+      accessibilityHint="Displays the audio waveform for the clip"
     >
       {isExtracting ? (
         // ── Loading state: small spinner while extracting ──
@@ -169,6 +174,7 @@ export const WaveformTrack = React.memo(function WaveformTrack({
             style={waveStyles.errorRetry}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityLabel="Retry waveform extraction"
+            accessibilityHint="Retries loading the waveform"
             accessibilityRole="button"
           >
             <Text style={[waveStyles.errorRetryText, { color: colors.brand }]}>Retry</Text>

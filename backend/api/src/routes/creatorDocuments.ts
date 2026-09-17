@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import { appendDomainEvent } from '../lib/domainOutbox.js';
+import { canonicalizeJson } from '../lib/canonicalJson.js';
 
 type CreatorDocumentsRouteDependencies = {
   app: FastifyInstance;
@@ -10,39 +11,20 @@ type CreatorDocumentsRouteDependencies = {
   resolveAuthenticatedUserId: (request: FastifyRequest) => string;
 };
 
-// ── Canonical JSON serialisation ─────────────────────────────────────
-// Produces a stable string with object keys sorted recursively so the
-// SHA-256 digest is independent of property enumeration order. Both the
-// save and publish endpoints use this so the document hash is consistent
-// across the lifecycle.
-
-function canonicalizeValue(value: unknown): unknown {
-  if (value === null || typeof value !== 'object') return value;
-  if (Array.isArray(value)) return value.map(canonicalizeValue);
-  const sortedKeys = Object.keys(value as Record<string, unknown>).sort();
-  const result: Record<string, unknown> = {};
-  for (const key of sortedKeys) {
-    const v = (value as Record<string, unknown>)[key];
-    if (v !== undefined) {
-      result[key] = canonicalizeValue(v);
-    }
-  }
-  return result;
-}
-
-function canonicalizeJson(value: unknown): string {
-  return JSON.stringify(canonicalizeValue(value));
-}
-
 // ── Layer payload schemas (parity with frontend composition.ts) ──────
 
-// Effect node — a single adjustment/filter step in a media layer's effect stack.
+// Effect node — a single adjustment/filter step in a media layer's effect
+// stack. `.passthrough()` on every member so newer node fields (e.g. the
+// filter node's `recipe` render-graph) round-trip through save instead of
+// being stripped — the document is stored as opaque JSONB per
+// lib/compositionValidation.ts, so validation must never silently drop
+// fields the editor writes.
 const EffectNodeSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('filter'),
     id: z.string(),
     amount: z.number(),
-  }),
+  }).passthrough(),
   z.object({
     type: z.literal('adjust'),
     exposure: z.number().optional(),
@@ -59,11 +41,11 @@ const EffectNodeSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('blur'),
     radius: z.number(),
-  }),
+  }).passthrough(),
   z.object({
     type: z.literal('vignette'),
     amount: z.number(),
-  }),
+  }).passthrough(),
 ]);
 
 // Structured RGBA color (CreatorColor)
@@ -121,7 +103,7 @@ const TextLayerPayloadSchema = z.object({
     durationMs: z.number().min(0),
     delayMs: z.number().min(0).optional(),
   }).optional(),
-});
+}).passthrough();
 
 const MediaLayerPayloadSchema = z.object({
   mediaUri: z.string(),
@@ -157,7 +139,7 @@ const MediaLayerPayloadSchema = z.object({
   freezeDurationMs: z.number().min(0).max(10000).optional(),
   // Effect stack
   effects: z.array(EffectNodeSchema).optional(),
-});
+}).passthrough();
 
 const ProductLayerPayloadSchema = z.object({
   listingId: z.string().min(1),
@@ -168,12 +150,12 @@ const ProductLayerPayloadSchema = z.object({
   snapshotPriceGbp: z.number().optional(),
   availability: z.enum(['active', 'sold', 'deleted']).default('active'),
   hotspotLabel: z.string().optional(),
-});
+}).passthrough();
 
 const MentionLayerPayloadSchema = z.object({
   userId: z.string().min(1),
   username: z.string().min(1),
-});
+}).passthrough();
 
 const LookLayerPayloadSchema = z.object({
   lookId: z.string().min(1),
@@ -181,34 +163,35 @@ const LookLayerPayloadSchema = z.object({
   snapshotImageUrl: z.string().optional(),
   snapshotMediaFinalizationId: z.string().optional(),
   snapshotMediaAssetId: z.string().optional(),
-});
+}).passthrough();
 
 const VoteLayerPayloadSchema = z.object({
   question: z.string().min(1).max(100),
-  options: z.array(z.object({ id: z.string(), label: z.string().min(1).max(50) })).length(2),
-});
+  // Frontend allows 2–4 options (Instagram poll parity).
+  options: z.array(z.object({ id: z.string(), label: z.string().min(1).max(50) })).min(2).max(4),
+}).passthrough();
 
 const QuizLayerPayloadSchema = z.object({
   question: z.string().min(1).max(100),
   options: z.array(z.object({ id: z.string(), label: z.string().min(1).max(50) })).min(2).max(4),
   correctOptionId: z.string(),
-});
+}).passthrough();
 
 const QuestionLayerPayloadSchema = z.object({
   prompt: z.string().min(1).max(200),
   placeholder: z.string().max(100).optional(),
-});
+}).passthrough();
 
 const EmojiSliderLayerPayloadSchema = z.object({
   question: z.string().min(1).max(100),
   emoji: z.string().default('😍'),
-});
+}).passthrough();
 
 const CountdownLayerPayloadSchema = z.object({
   label: z.string().max(50).optional(),
   endDateTime: z.string(),
   endLabel: z.string().max(50).optional(),
-});
+}).passthrough();
 
 const DrawLayerPayloadSchema = z.object({
   strokes: z.array(z.object({
@@ -216,18 +199,21 @@ const DrawLayerPayloadSchema = z.object({
     color: z.string().default('#ffffff'),
     width: z.number().min(1).max(50).default(4),
     opacity: z.number().min(0).max(1).default(1),
-  })),
+  }).passthrough()),
   width: z.number().min(1).default(1080),
   height: z.number().min(1).default(1920),
-});
+}).passthrough();
 
 const GifLayerPayloadSchema = z.object({
-  gifUri: z.string(),
+  // Frontend writes `gifUrl`; `gifUri` is the legacy field. Accept either.
+  gifUri: z.string().optional(),
+  gifUrl: z.string().optional(),
   stickerId: z.string().optional(),
-});
+}).passthrough();
 
 const MusicLayerPayloadSchema = z.object({
-  trackId: z.string().min(1),
+  // Frontend sends trackId optionally (picker results may lack it).
+  trackId: z.string().min(1).optional(),
   trackName: z.string().max(120).optional(),
   artistName: z.string().max(120).optional(),
   artworkUrl: z.string().optional(),
@@ -235,31 +221,58 @@ const MusicLayerPayloadSchema = z.object({
   startTimeMs: z.number().min(0).optional(),
   durationMs: z.number().min(0).optional(),
   volume: z.number().min(0).max(1).default(1),
-});
+}).passthrough();
 
 const LinkLayerPayloadSchema = z.object({
   url: z.string().url(),
   title: z.string().max(200).optional(),
   description: z.string().max(300).optional(),
   imageUrl: z.string().optional(),
-});
+}).passthrough();
 
 const LocationLayerPayloadSchema = z.object({
-  name: z.string().min(1).max(120),
+  // Frontend writes `placeName`; `name`/`lat`/`lng` are the legacy shape.
+  name: z.string().min(1).max(120).optional(),
+  placeName: z.string().min(1).max(120).optional(),
   lat: z.number().optional(),
   lng: z.number().optional(),
   placeId: z.string().optional(),
-});
+}).passthrough();
 
 const HashtagLayerPayloadSchema = z.object({
   tag: z.string().min(1).max(100),
-});
+}).passthrough();
 
 const DecorativeLayerPayloadSchema = z.object({
-  shape: z.enum(['circle', 'square', 'line', 'arrow', 'star', 'heart']),
+  shape: z.enum(['circle', 'square', 'line', 'arrow', 'star', 'heart', 'triangle', 'hexagon']),
   color: z.string().default('#ffffff'),
   opacity: z.number().min(0).max(1).default(1),
-});
+}).passthrough();
+
+// Time sticker — live timestamp overlay (frontend TimeLayerPayloadSchema).
+const TimeLayerPayloadSchema = z.object({
+  displayTime: z.string().optional(),
+  format: z.enum(['time', 'date', 'datetime']).optional(),
+}).passthrough();
+
+// Weather sticker — current conditions overlay (frontend WeatherLayerPayloadSchema).
+const WeatherLayerPayloadSchema = z.object({
+  temperature: z.number().optional(),
+  condition: z.string().min(1).max(40).optional(),
+  locationName: z.string().max(80).optional(),
+}).passthrough();
+
+// Adjustment layer — timeline-wide effect stack (Meta Edits parity).
+// Not rendered directly; its effects merge into each targeted clip.
+const AdjustmentLayerPayloadSchema = z.object({
+  effects: z.array(EffectNodeSchema).default([]),
+  scope: z.union([
+    z.literal('all'),
+    z.object({ clipIds: z.array(z.string()) }),
+  ]).default('all'),
+  enabled: z.boolean().default(true),
+  opacity: z.number().min(0).max(1).default(1),
+}).passthrough();
 
 const BaseLayerSchema = z.object({
   id: z.string().min(1),
@@ -273,7 +286,17 @@ const BaseLayerSchema = z.object({
   locked: z.boolean().default(false),
   hidden: z.boolean().default(false),
   opacity: z.number().min(0).max(1).default(1),
-});
+  // Timeline/overlay citizenship — passthrough preserves keyframes, pin,
+  // clipId, maskRef and future layer fields instead of silently stripping
+  // them on every save.
+  timeRange: z.object({
+    startMs: z.number(),
+    endMs: z.number(),
+  }).optional(),
+  maskRef: z.string().optional(),
+  maskFinalizationId: z.string().optional(),
+  maskMediaAssetId: z.string().optional(),
+}).passthrough();
 
 const CreatorLayerSchema = z.discriminatedUnion('type', [
   BaseLayerSchema.extend({ type: z.literal('media'), payload: MediaLayerPayloadSchema }),
@@ -293,13 +316,16 @@ const CreatorLayerSchema = z.discriminatedUnion('type', [
   BaseLayerSchema.extend({ type: z.literal('link'), payload: LinkLayerPayloadSchema }),
   BaseLayerSchema.extend({ type: z.literal('location'), payload: LocationLayerPayloadSchema }),
   BaseLayerSchema.extend({ type: z.literal('hashtag'), payload: HashtagLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('time'), payload: TimeLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('weather'), payload: WeatherLayerPayloadSchema }),
+  BaseLayerSchema.extend({ type: z.literal('adjustment'), payload: AdjustmentLayerPayloadSchema }),
 ]);
 
 const CreatorPageSchema = z.object({
   id: z.string().min(1).max(120),
   durationMs: z.number().int().min(500).max(60_000).optional(),
   layers: z.array(CreatorLayerSchema).default([]),
-});
+}).passthrough();
 
 const creatorDocumentBodySchema = z.object({
   id: z.string().min(2).max(120),
@@ -308,10 +334,15 @@ const creatorDocumentBodySchema = z.object({
   canvas: z.object({
     aspectRatio: z.number().min(0.3).max(3),
     background: z.object({
-      type: z.enum(['color', 'gradient', 'image']),
+      // 'blur' and the gradient/image fields are the frontend's
+      // CreatorBackgroundSchema — passthrough preserves gradientStops,
+      // gradientAngle, blurAssetId, imageBlur, and upload receipts.
+      type: z.enum(['color', 'gradient', 'image', 'blur']),
       value: z.string().max(500),
-    }),
-  }),
+    }).passthrough(),
+    // Project frame rate — timeline quantization/export grid.
+    fps: z.number().min(1).max(120).optional(),
+  }).passthrough(),
   pages: z.array(CreatorPageSchema).min(1).max(10),
   metadata: z.object({
     title: z.string().max(120).default(''),
@@ -324,13 +355,15 @@ const creatorDocumentBodySchema = z.object({
     allowRemix: z.boolean().default(false),
     sourceDocumentId: z.string().max(120).optional(),
     sourceCreatorId: z.string().max(120).optional(),
-  }),
+  }).passthrough(),
   // Server-owned timestamps — optional in the request body so the client
   // never reconstructs authoritative metadata from new Date(). The server
   // injects createdAt (preserved across updates) and updatedAt (this commit).
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
-});
+  // renderVersion, assetRegistry and future top-level fields ride through
+  // passthrough — the stored document is opaque JSONB.
+}).passthrough();
 
 const documentIdParamsSchema = z.object({
   documentId: z.string().min(2).max(120),
@@ -505,6 +538,7 @@ export const registerCreatorDocumentRoutes = ({
            SET type = $3,
                version = $4,
                document_json = $5,
+               document_hash = $7,
                lock_version = lock_version + 1,
                updated_at = NOW()
            WHERE id = $1 AND creator_id = $2 AND status = 'draft' AND lock_version = $6
@@ -516,6 +550,7 @@ export const registerCreatorDocumentRoutes = ({
             payload.version,
             documentJson,
             expectedVersion,
+            documentHash,
           ],
         );
         if (!updated.rowCount) {
@@ -532,11 +567,11 @@ export const registerCreatorDocumentRoutes = ({
       } else {
         const inserted = await client.query<{ lock_version: number; head_revision: number }>(
           `INSERT INTO creator_documents (
-             id, creator_id, type, version, document_json, lock_version, updated_at
+             id, creator_id, type, version, document_json, document_hash, lock_version, updated_at
            )
-           VALUES ($1, $2, $3, $4, $5, 1, NOW())
+           VALUES ($1, $2, $3, $4, $5, $6, 1, NOW())
            RETURNING lock_version, head_revision`,
-          [payload.id, actorUserId, payload.type, payload.version, documentJson],
+          [payload.id, actorUserId, payload.type, payload.version, documentJson, documentHash],
         );
         serverVersion = inserted.rows[0].lock_version;
         headRevision = inserted.rows[0].head_revision;
@@ -573,7 +608,7 @@ export const registerCreatorDocumentRoutes = ({
       lock_version: number;
       updated_at: string;
     }>(
-      `SELECT id, type, document_json, status, lock_version, updated_at
+      `SELECT id, type, document_json::text AS document_json, status, lock_version, updated_at
        FROM creator_documents
        WHERE creator_id = $1
        ORDER BY updated_at DESC
@@ -604,7 +639,7 @@ export const registerCreatorDocumentRoutes = ({
       head_revision: number;
       updated_at: string;
     }>(
-      `SELECT id, creator_id, document_json, status, lock_version, head_revision, updated_at
+      `SELECT id, creator_id, document_json::text AS document_json, status, lock_version, head_revision, updated_at
        FROM creator_documents
        WHERE id = $1 LIMIT 1`,
       [documentId]
@@ -711,7 +746,7 @@ export const registerCreatorDocumentRoutes = ({
         lock_version: number;
         head_revision: number;
       }>(
-        `SELECT creator_id, document_json, lock_version, head_revision
+        `SELECT creator_id, document_json::text AS document_json, lock_version, head_revision
          FROM creator_documents
          WHERE id = $1
          LIMIT 1
@@ -892,7 +927,7 @@ export const registerCreatorDocumentRoutes = ({
       creator_id: string;
       document_json: string;
     }>(
-      `SELECT creator_id, document_json FROM creator_documents WHERE id = $1 LIMIT 1`,
+      `SELECT creator_id, document_json::text AS document_json FROM creator_documents WHERE id = $1 LIMIT 1`,
       [documentId]
     );
 
@@ -925,14 +960,15 @@ export const registerCreatorDocumentRoutes = ({
     try {
       await client.query('BEGIN');
       await client.query(
-        `INSERT INTO creator_documents (id, creator_id, type, version, document_json, updated_at)
-         VALUES ($1, $2, $3, $4, $5, NOW())`,
+        `INSERT INTO creator_documents (id, creator_id, type, version, document_json, document_hash, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
         [
           newDocumentId,
           actorUserId,
           remixedDoc.type,
           remixedDoc.version,
           JSON.stringify(remixedDoc),
+          crypto.createHash('sha256').update(canonicalizeJson(remixedDoc)).digest('hex'),
         ]
       );
       await client.query('COMMIT');

@@ -10,8 +10,15 @@ import { makeStableId } from '../utils/createStableId';
 import { setSentryUser } from '../platform/monitoring/sentry';
 import { identifyUser, resetIdentity, track } from '../analytics';
 import { appStorage } from '../storage/mmkv';
-import { updateUserAccountPreferences, updateUserPostagePreferences, fetchPostagePreferences, updateUserPersonalisation, updateChatPrivacy } from '../services/accountApi';
+import { updateUserAccountPreferences, fetchAccountPreferences, updateUserPostagePreferences, fetchPostagePreferences, updateUserPersonalisation, updateChatPrivacy } from '../services/accountApi';
 import { addToCoOwnWatchlist, removeFromCoOwnWatchlist, fetchCoOwnWatchlist } from '../services/marketApi';
+import {
+  listSavedSearches as listSavedSearchesFromApi,
+  upsertSavedSearch as upsertSavedSearchOnApi,
+  setSavedSearchAlertsEnabled as setSavedSearchAlertsEnabledOnApi,
+  deleteSavedSearch as deleteSavedSearchOnApi,
+  type RemoteSavedSearchFilters,
+} from '../services/savedSearchesApi';
 import type { ChatGroupMembershipEvent } from '../services/realtimeClient';
 import {
   fetchSystemBotsFromApi,
@@ -56,6 +63,12 @@ import {
   removeMessageReactionOnApi,
 } from '../services/chatApi';
 import { fetchJson } from '../lib/apiClient';
+import {
+  DEFAULT_BROWSE_FILTERS as BROWSE_FILTER_DEFAULTS,
+  activateBrowseContextPatch,
+  updateContextPatch,
+  resetContextPatch,
+} from './browseFilterContexts';
 import { queryClient } from '../platform/server/queryClient';
 import { queryKeys } from '../platform/server/queryKeys';
 import { fetchMyProfile as fetchMyProfileFromApi, getBlockedUsers, getMutedUsers, getRestrictedUsers } from '../services/profileApi';
@@ -68,12 +81,13 @@ import {
 import {
   createCollection as createCollectionOnApi,
   listCollections as listCollectionsFromApi,
-  getCollection as getCollectionFromApi,
   addListingToCollection as addListingToCollectionOnApi,
   removeListingFromCollection as removeListingFromCollectionOnApi,
   updateCollection as updateCollectionOnApi,
   deleteCollectionOnApi,
 } from '../services/collectionsApi';
+import { fetchSavedList, setSavedListItem } from '../services/savedListsApi';
+import { trackListingInteraction } from '../services/listingsApi';
 
 export interface User {
   id: string;
@@ -183,6 +197,8 @@ export interface BrowseFilterState {
   priceMax: number | null;
 }
 
+export const DEFAULT_BROWSE_FILTERS: BrowseFilterState = BROWSE_FILTER_DEFAULTS;
+
 interface SavedSearch {
   id: string;
   query: string;
@@ -262,6 +278,10 @@ type TradeActionResult = {
 
 interface AccountPreferences {
   holidayMode: boolean;
+  /** Seller-declared return date (ISO-8601) while holiday mode is on. */
+  holidayModeUntil?: string | null;
+  /** Seller-authored note shown to buyers while away. */
+  awayMessage?: string | null;
   privateProfile: boolean;
 }
 
@@ -406,8 +426,16 @@ interface StoreState {
   // Auth
   currentUser: User | null;
   isAuthenticated: boolean;
+  /**
+   * One-shot flag set when logout was triggered by an expired/invalid session
+   * (refresh-token failure), not by the user. AuthLanding renders an explicit
+   * "session expired" notice once and clears it — a forced sign-out must never
+   * be a silent redirect.
+   */
+  sessionExpiredNotice: boolean;
+  clearSessionExpiredNotice: () => void;
   login: (user: User) => void;
-  logout: () => void;
+  logout: (opts?: { sessionExpired?: boolean }) => void;
   updateUserProfile: (updates: Partial<User>) => void;
   fetchMyProfile: () => Promise<void>;
   /**
@@ -420,9 +448,10 @@ interface StoreState {
   setBiometricLoginPending: (value: boolean) => void;
 
   // General app onboarding — first-launch gate.
-  // The authoritative check lives in AsyncStorage (@thryftverse_onboarding_complete)
-  // via OnboardingScreen.isOnboardingComplete; this flag mirrors it for in-app
-  // access (e.g. Settings reset) and is persisted so returning users skip it.
+  // Single source of truth for onboarding completion, persisted via the
+  // store's synchronous MMKV storage. OnboardingScreen.isOnboardingComplete
+  // reads this flag and migrates the legacy AsyncStorage key
+  // (@thryftverse_onboarding_complete) into it for older installs.
   hasCompletedOnboarding: boolean;
   setHasCompletedOnboarding: (value: boolean) => void;
 
@@ -433,6 +462,10 @@ interface StoreState {
   savedProducts: string[];
   toggleSavedProduct: (id: string) => void;
   isSavedProduct: (id: string) => boolean;
+  /** Pull the server-canonical wishlist + saved id lists (post-login and
+   *  Closet mount). Local-only entries for this device are preserved via a
+   *  merge so an offline save never vanishes on hydrate. */
+  hydrateSavedLists: () => Promise<void>;
   // Collections (replaces simple saved)
   collections: Collection[];
   createCollection: (name: string, description?: string, isPrivate?: boolean) => string;
@@ -441,7 +474,6 @@ interface StoreState {
   deleteCollection: (id: string) => void;
   deleteCollectionOnApi: (id: string) => Promise<void>;
   renameCollection: (id: string, name: string) => void;
-  reorderCollections: (fromIndex: number, toIndex: number) => void;
   updateCollectionOnApi: (id: string, fields: { name?: string; description?: string | null; isPrivate?: boolean }) => Promise<void>;
   addToCollection: (collectionId: string, itemId: string) => void;
   addToCollectionOnApi: (collectionId: string, itemId: string) => Promise<void>;
@@ -450,6 +482,14 @@ interface StoreState {
   isInCollection: (collectionId: string, itemId: string) => boolean;
   isItemSavedAnywhere: (itemId: string) => boolean;
   getItemCollections: (itemId: string) => Collection[];
+  /**
+   * One-shot teaching flag for the second save gesture ("Add to a list").
+   * Set once the user has opened the collection picker — from any entry
+   * point — or explicitly dismissed the hint. Persisted so the teaching
+   * toast never nags across sessions.
+   */
+  hasSeenSaveToListHint: boolean;
+  markSaveToListHintSeen: () => void;
   seenPosterIds: string[];
   markPosterSeen: (posterId: string) => void;
   hasSeenPoster: (posterId: string) => boolean;
@@ -495,18 +535,38 @@ interface StoreState {
    * changes are reflected. Account-isolated: clears on logout. */
   hydrateCoOwnWatchlist: () => Promise<void>;
 
-  // Browse filters/search
+  // Browse filters/search — context-scoped. Each surface (category browse,
+  // search, discovery) owns a bucket keyed by context so filters applied on
+  // one surface never leak into another. `browseFilters` always mirrors the
+  // ACTIVE context's bucket; `activateBrowseContext` swaps it on focus.
+  browseContextKey: string;
+  browseFiltersByContext: Record<string, BrowseFilterState>;
   browseFilters: BrowseFilterState;
+  activateBrowseContext: (key: string) => void;
   updateBrowseFilters: (updates: Partial<BrowseFilterState>) => void;
+  /** Writes a specific context's bucket — for surfaces that push a
+   *  destination (saved searches, conversational search) rather than own
+   *  the active context. Mirrors into `browseFilters` when the target is
+   *  the active context. */
+  updateBrowseFiltersForContext: (key: string, updates: Partial<BrowseFilterState>) => void;
   resetBrowseFilters: () => void;
 
   // Saved searches with alerts
   savedSearches: SavedSearch[];
   addSavedSearch: (search: Omit<SavedSearch, 'id' | 'createdAt'>) => void;
-  removeSavedSearch: (id: string) => void;
-  toggleSavedSearchAlerts: (id: string) => void;
+  /** Optimistic remove — rolls back and rejects when the server delete
+   *  fails so local state can never diverge from the persisted row. */
+  removeSavedSearch: (id: string) => Promise<void>;
+  /** Optimistic toggle — rolls back and rejects on server failure. */
+  toggleSavedSearchAlerts: (id: string) => Promise<void>;
   updateSavedSearchMeta: (id: string, updates: Partial<Pick<SavedSearch, 'lastCheckedAt' | 'lastMatchCount'>>) => void;
   markAllSavedSearchesSeen: () => void;
+  /** Reconcile local saved searches with the server table — server rows
+   * become canonical (local `lastCheckedAt`/`lastMatchCount` meta is
+   * preserved per id), and local-only entries are backfilled to the API so
+   * the server-side matcher can alert on them. Account-isolated: cleared
+   * on logout. */
+  hydrateSavedSearches: () => Promise<void>;
 
   // Checkout state
   savedAddress: SavedAddress | null;
@@ -523,6 +583,10 @@ interface StoreState {
   // Settings preferences
   accountPreferences: AccountPreferences;
   updateAccountPreferences: (updates: Partial<AccountPreferences>) => void;
+  /** Rehydrate server-canonical account preferences (holidayMode etc.) —
+   *  called at login so a stale locally-persisted flag can't diverge from
+   *  the server truth that commerce gates on. */
+  hydrateAccountPreferences: () => Promise<void>;
   paymentPreferences: PaymentPreferences;
   updatePaymentPreferences: (updates: Partial<PaymentPreferences>) => void;
   postagePreferences: PostagePreferences;
@@ -569,6 +633,11 @@ interface StoreState {
     match: { id?: string; clientMessageId?: string },
     patch: Partial<ConversationMessage>,
   ) => void;
+  /**
+   * Remove a stored message — used for delete-for-me so a store-driven
+   * hydration reset cannot resurrect a row the viewer already deleted.
+   */
+  removeConversationMessage: (conversationId: string, messageId: string) => void;
   setConversationDraft: (conversationId: string, draft: string) => void;
   addMessageReaction: (conversationId: string, messageId: string, reaction: string) => void;
   removeMessageReaction: (conversationId: string, messageId: string, reaction: string) => void;
@@ -734,6 +803,8 @@ export const useStore = create<StoreState>()(
     (set, get) => ({
   currentUser: null, // Note: For a real app, load this from secure storage initially
   isAuthenticated: false,
+  sessionExpiredNotice: false,
+  clearSessionExpiredNotice: () => set({ sessionExpiredNotice: false }),
   biometricLoginPending: false,
   setBiometricLoginPending: (value) => set({ biometricLoginPending: value }),
   hasCompletedOnboarding: false,
@@ -759,9 +830,19 @@ export const useStore = create<StoreState>()(
     // U05: Reconcile watchlist with server on login so cross-device
     // changes and account-isolated state are reflected.
     get().hydrateCoOwnWatchlist().catch(() => undefined);
+    // Saved searches: pull the server-canonical list and backfill any
+    // local-only entries so the server-side matcher covers this account.
+    get().hydrateSavedSearches().catch(() => undefined);
+    // Saved lists: same adoption pattern — local-only saves (made while
+    // logged out or offline) are pushed up so the account owns them.
+    get().hydrateSavedLists().catch(() => undefined);
+    // Account preferences: holidayMode is persisted locally but the
+    // server is authoritative — rehydrate so a stale cached flag can't
+    // keep the shop visually paused (or unpaused) after relogin.
+    get().hydrateAccountPreferences().catch(() => undefined);
   },
-  logout: () => {
-    set({ currentUser: null, isAuthenticated: false, twoFactorEnabled: false, biometricLoginPending: false, blockedUsers: [], mutedUsers: [], restrictedUsers: [], coOwnWatchlist: [], coOwnWatchStatus: {} });
+  logout: (opts) => {
+    set({ currentUser: null, isAuthenticated: false, twoFactorEnabled: false, biometricLoginPending: false, blockedUsers: [], mutedUsers: [], restrictedUsers: [], coOwnWatchlist: [], coOwnWatchStatus: {}, savedSearches: [], wishlist: [], savedProducts: [], collections: [], sessionExpiredNotice: opts?.sessionExpired === true });
     persistLocalAuthSnapshot(null, false);
     // Scrub Sentry user context on logout so subsequent crashes are anonymous.
     setSentryUser(null);
@@ -826,15 +907,17 @@ export const useStore = create<StoreState>()(
     set({ wishlist: next });
     queryClient.setQueryData<string[]>(queryKeys.wishlist.items, next);
     if (!get().isAuthenticated) return;
-    void fetchJson<{ ok: boolean; itemIds?: string[] }>('/users/me/wishlist', {
-      method: 'POST',
-      body: JSON.stringify({ listingId: id, action: isFav ? 'remove' : 'add' }),
-    })
-      .then((res) => {
-        if (res.ok && Array.isArray(res.itemIds)) {
-          set({ wishlist: res.itemIds });
-          queryClient.setQueryData<string[]>(queryKeys.wishlist.items, res.itemIds);
-        }
+    // Engagement signal: the heart is the 'like' vocabulary (stored as
+    // 'wishlist' — what seller analytics count). The deterministic key means
+    // a save/unsave/save cycle still records exactly once.
+    if (!isFav) {
+      void trackListingInteraction(id, 'like', { idempotencyKey: `like_${id}` })
+        .catch(() => undefined);
+    }
+    void setSavedListItem('wishlist', id, isFav ? 'remove' : 'add')
+      .then((itemIds) => {
+        set({ wishlist: itemIds });
+        queryClient.setQueryData<string[]>(queryKeys.wishlist.items, itemIds);
       })
       .catch(() => {
         // Sync failure keeps the local toggle (offline / guest semantics).
@@ -842,16 +925,48 @@ export const useStore = create<StoreState>()(
   },
   isWishlisted: (id) => get().wishlist.includes(id),
   savedProducts: [],
-  toggleSavedProduct: (id) =>
-    set((state) => {
-      const isSaved = state.savedProducts.includes(id);
-      return {
-        savedProducts: isSaved
-          ? state.savedProducts.filter((savedId) => savedId !== id)
-          : [...state.savedProducts, id],
-      };
-    }),
+  // Same contract as toggleWishlist: instant local toggle, server sync when
+  // authenticated. A failed sync keeps the local toggle (offline / guest
+  // semantics) — hydrateSavedLists adopts it on next login.
+  toggleSavedProduct: (id) => {
+    const previous = get().savedProducts;
+    const isSaved = previous.includes(id);
+    const next = isSaved
+      ? previous.filter((savedId) => savedId !== id)
+      : [...previous, id];
+    set({ savedProducts: next });
+    if (!get().isAuthenticated) return;
+    void setSavedListItem('saved', id, isSaved ? 'remove' : 'add')
+      .then((itemIds) => set({ savedProducts: itemIds }))
+      .catch(() => {
+        // Sync failure keeps the local toggle (offline / guest semantics).
+      });
+  },
   isSavedProduct: (id) => get().savedProducts.includes(id),
+  hydrateSavedLists: async () => {
+    if (!get().isAuthenticated) return;
+    const [wishlistRes, savedRes] = await Promise.all([
+      fetchSavedList('wishlist'),
+      fetchSavedList('saved'),
+    ]);
+    // Adopt local-only entries: saves made while logged out/offline are
+    // pushed up so the account owns them, then the union becomes state.
+    const adopt = async (list: 'wishlist' | 'saved', serverIds: string[], localIds: string[]) => {
+      const serverSet = new Set(serverIds);
+      const orphans = localIds.filter((id) => !serverSet.has(id));
+      await Promise.all(orphans.map((id) =>
+        setSavedListItem(list, id, 'add').catch(() => undefined)));
+      return orphans.length > 0
+        ? [...serverIds, ...orphans]
+        : serverIds;
+    };
+    const [wishlist, savedProducts] = await Promise.all([
+      adopt('wishlist', wishlistRes.itemIds, get().wishlist),
+      adopt('saved', savedRes.itemIds, get().savedProducts),
+    ]);
+    set({ wishlist, savedProducts });
+    queryClient.setQueryData<string[]>(queryKeys.wishlist.items, wishlist);
+  },
   collections: [],
   createCollection: (name, description, isPrivate) => {
     const id = makeStableId('collection', 9);
@@ -884,16 +999,21 @@ export const useStore = create<StoreState>()(
   },
   loadCollectionsFromApi: async () => {
     const apiCollections = await listCollectionsFromApi();
-    set(() => ({
-      collections: apiCollections.map((c) => ({
-        id: c.id,
-        name: c.name,
-        description: c.description ?? undefined,
-        isPrivate: c.isPrivate,
-        itemIds: c.itemIds,
-        createdAt: new Date(c.createdAt).getTime(),
-        updatedAt: new Date(c.updatedAt).getTime(),
-      })),
+    set((state) => ({
+      collections: [
+        ...apiCollections.map((c) => ({
+          id: c.id,
+          name: c.name,
+          description: c.description ?? undefined,
+          isPrivate: c.isPrivate,
+          itemIds: c.itemIds,
+          createdAt: new Date(c.createdAt).getTime(),
+          updatedAt: new Date(c.updatedAt).getTime(),
+        })),
+        // Local-id collections (legacy local path / pre-auth creates) aren't
+        // server rows — dropping them would silently wipe user-made boards.
+        ...state.collections.filter((c) => c.id.startsWith('collection_')),
+      ],
     }));
   },
   deleteCollection: (id) =>
@@ -906,13 +1026,6 @@ export const useStore = create<StoreState>()(
         c.id === id ? { ...c, name, updatedAt: Date.now() } : c
       ),
     })),
-  reorderCollections: (fromIndex, toIndex) =>
-    set((state) => {
-      const next = [...state.collections];
-      const [moved] = next.splice(fromIndex, 1);
-      if (moved) next.splice(toIndex, 0, moved);
-      return { collections: next };
-    }),
   updateCollectionOnApi: async (id, fields) => {
     await updateCollectionOnApi(id, fields);
     set((state) => ({
@@ -971,6 +1084,8 @@ export const useStore = create<StoreState>()(
     get().savedProducts.includes(itemId) || get().collections.some((c) => c.itemIds?.includes(itemId) ?? false),
   getItemCollections: (itemId) =>
     get().collections.filter((c) => c.itemIds?.includes(itemId) ?? false),
+  hasSeenSaveToListHint: false,
+  markSaveToListHintSeen: () => set({ hasSeenSaveToListHint: true }),
   seenPosterIds: [],
   markPosterSeen: (posterId) =>
     set((state) => {
@@ -1443,46 +1558,30 @@ export const useStore = create<StoreState>()(
     }
   },
 
-  browseFilters: {
-    query: '',
-    sort: 'Recommended',
-    brands: [],
-    sizes: [],
-    condition: 'Any',
-    sustainableOnly: false,
-    priceMin: null,
-    priceMax: null,
-  },
+  browseContextKey: 'default',
+  browseFiltersByContext: {},
+  browseFilters: { ...DEFAULT_BROWSE_FILTERS },
+  activateBrowseContext: (key) =>
+    set((state) => activateBrowseContextPatch(state, key) ?? {}),
   updateBrowseFilters: (updates) =>
-    set((state) => ({
-      browseFilters: {
-        ...state.browseFilters,
-        ...updates,
-      },
-    })),
+    set((state) => updateContextPatch(state, state.browseContextKey, updates)),
+  updateBrowseFiltersForContext: (key, updates) =>
+    set((state) => updateContextPatch(state, key, updates)),
   resetBrowseFilters: () =>
-    set({
-      browseFilters: {
-        query: '',
-        sort: 'Recommended',
-        brands: [],
-        sizes: [],
-        condition: 'Any',
-        sustainableOnly: false,
-        priceMin: null,
-        priceMax: null,
-      },
-    }),
+    set((state) => resetContextPatch(state, state.browseContextKey)),
 
-  // Saved searches
+  // Saved searches — local cache is the render source; every mutation is
+  // mirrored to the server (fire-and-forget) so the backend matcher can
+  // push `saved_search_match` notifications for `alertsEnabled` searches.
   savedSearches: [],
-  addSavedSearch: (search) =>
+  addSavedSearch: (search) => {
+    // Deduplicate by query string — if same query exists, update it instead
+    const normalized = search.query.trim().toLowerCase();
+    const existing = get().savedSearches.find(
+      (s) => s.query.trim().toLowerCase() === normalized
+    );
+    const searchId = existing?.id ?? makeStableId('saved_search');
     set((state) => {
-      // Deduplicate by query string — if same query exists, update it instead
-      const normalized = search.query.trim().toLowerCase();
-      const existing = state.savedSearches.find(
-        (s) => s.query.trim().toLowerCase() === normalized
-      );
       if (existing) {
         return {
           savedSearches: state.savedSearches.map((s) =>
@@ -1494,21 +1593,130 @@ export const useStore = create<StoreState>()(
       }
       const newSearch: SavedSearch = {
         ...search,
-        id: makeStableId('saved_search'),
+        id: searchId,
         createdAt: new Date().toISOString(),
       };
       return { savedSearches: [newSearch, ...state.savedSearches] };
-    }),
-  removeSavedSearch: (id) =>
+    });
+    upsertSavedSearchOnApi({
+      id: searchId,
+      query: search.query,
+      filters: search.filters as RemoteSavedSearchFilters,
+      alertsEnabled: search.alertsEnabled,
+    })
+      .then((remote) => {
+        // Server dedupe may resolve to a different canonical row (e.g. the
+        // same query+filters saved on another device) — adopt its id.
+        if (remote.id !== searchId) {
+          set((state) => ({
+            savedSearches: state.savedSearches.map((s) =>
+              s.id === searchId ? { ...s, id: remote.id } : s
+            ),
+          }));
+        }
+      })
+      .catch(() => {
+        // Offline or API failure — the write is captured by the offline
+        // queue and the next hydrateSavedSearches reconciles.
+      });
+  },
+  removeSavedSearch: (id) => {
+    const index = get().savedSearches.findIndex((s) => s.id === id);
+    if (index < 0) return Promise.resolve();
+    const removed = get().savedSearches[index];
     set((state) => ({
       savedSearches: state.savedSearches.filter((s) => s.id !== id),
-    })),
-  toggleSavedSearchAlerts: (id) =>
+    }));
+    return deleteSavedSearchOnApi(id).catch((error) => {
+      // Rollback on failure so the UI tells the truth (§11): the server
+      // row still exists, so the search must still render. Reinserted at
+      // its original position.
+      set((state) => {
+        const next = [...state.savedSearches];
+        next.splice(Math.min(index, next.length), 0, removed);
+        return { savedSearches: next };
+      });
+      throw error;
+    });
+  },
+  toggleSavedSearchAlerts: (id) => {
+    const current = get().savedSearches.find((s) => s.id === id);
+    if (!current) return Promise.resolve();
+    const next = !current.alertsEnabled;
     set((state) => ({
       savedSearches: state.savedSearches.map((s) =>
-        s.id === id ? { ...s, alertsEnabled: !s.alertsEnabled } : s
+        s.id === id ? { ...s, alertsEnabled: next } : s
       ),
-    })),
+    }));
+    return setSavedSearchAlertsEnabledOnApi(id, next).then(() => undefined).catch((error) => {
+      // Rollback on failure — the server still holds the previous value.
+      set((state) => ({
+        savedSearches: state.savedSearches.map((s) =>
+          s.id === id ? { ...s, alertsEnabled: current.alertsEnabled } : s
+        ),
+      }));
+      throw error;
+    });
+  },
+  hydrateSavedSearches: async () => {
+    try {
+      const remote = await listSavedSearchesFromApi();
+      const remoteMapped: SavedSearch[] = remote.map((r) => ({
+        id: r.id,
+        query: r.query,
+        filters: {
+          brands: Array.isArray(r.filters?.brands) ? r.filters.brands : [],
+          sizes: Array.isArray(r.filters?.sizes) ? r.filters.sizes : [],
+          condition:
+            typeof r.filters?.condition === 'string'
+              ? (r.filters.condition as BrowseConditionOption)
+              : 'Any',
+          sort:
+            typeof r.filters?.sort === 'string'
+              ? (r.filters.sort as BrowseSortOption)
+              : 'Recommended',
+          minPrice: typeof r.filters?.minPrice === 'number' ? r.filters.minPrice : undefined,
+          maxPrice: typeof r.filters?.maxPrice === 'number' ? r.filters.maxPrice : undefined,
+          category: typeof r.filters?.category === 'string' ? r.filters.category : undefined,
+        },
+        alertsEnabled: r.alertsEnabled,
+        createdAt: r.createdAt,
+      }));
+      const remoteQueries = new Set(
+        remoteMapped.map((r) => r.query.trim().toLowerCase())
+      );
+      // Local-only searches (created offline or before server persistence
+      // existed) are kept and backfilled to the server below.
+      const unsynced = get().savedSearches.filter(
+        (s) => !remoteQueries.has(s.query.trim().toLowerCase())
+      );
+      set((state) => {
+        const localById = new Map(state.savedSearches.map((s) => [s.id, s]));
+        return {
+          savedSearches: [
+            ...remoteMapped.map((r) => {
+              const local = localById.get(r.id);
+              return local
+                ? { ...r, lastCheckedAt: local.lastCheckedAt, lastMatchCount: local.lastMatchCount }
+                : r;
+            }),
+            ...unsynced,
+          ],
+        };
+      });
+      // Backfill local-only entries so the matcher can alert on them too.
+      for (const local of unsynced) {
+        upsertSavedSearchOnApi({
+          id: local.id,
+          query: local.query,
+          filters: local.filters as RemoteSavedSearchFilters,
+          alertsEnabled: local.alertsEnabled,
+        }).catch(() => undefined);
+      }
+    } catch {
+      // Keep the local cache — saved searches still render offline.
+    }
+  },
   updateSavedSearchMeta: (id, updates) =>
     set((state) => ({
       savedSearches: state.savedSearches.map((s) =>
@@ -1542,10 +1750,31 @@ export const useStore = create<StoreState>()(
 
   accountPreferences: { holidayMode: false, privateProfile: false },
   updateAccountPreferences: (updates) => {
+    const prev = get().accountPreferences;
     set((state) => ({
       accountPreferences: { ...state.accountPreferences, ...updates },
     }));
-    void updateUserAccountPreferences(updates);
+    void updateUserAccountPreferences(updates).catch(() => {
+      // Rollback on failure — restore previous state so the UI stays
+      // truthful (same convention as updatePostagePreferences).
+      set({ accountPreferences: prev });
+    });
+  },
+  hydrateAccountPreferences: async () => {
+    try {
+      const preferences = await fetchAccountPreferences();
+      set({
+        accountPreferences: {
+          holidayMode: preferences.holidayMode,
+          holidayModeUntil: preferences.holidayModeUntil,
+          awayMessage: preferences.awayMessage,
+          privateProfile: preferences.privateProfile,
+        },
+      });
+    } catch {
+      // Keep the locally persisted preferences — the settings surfaces
+      // still render and the next login rehydrates.
+    }
   },
 
   paymentPreferences: { useBalance: true },
@@ -1606,9 +1835,14 @@ export const useStore = create<StoreState>()(
       if (!existing) {
         nextConversations = [conversation, ...state.conversations];
       } else {
+        // Partial realtime events must not clobber existing fields with
+        // explicit `undefined` — strip undefined values before merging.
+        const defined = Object.fromEntries(
+          Object.entries(conversation).filter(([, v]) => v !== undefined),
+        ) as Partial<Conversation>;
         const mergedConversation: Conversation = {
           ...existing,
-          ...conversation,
+          ...defined,
           participantIds: conversation.participantIds ?? existing.participantIds,
           botIds: conversation.botIds ?? existing.botIds,
           messages: conversation.messages.length ? conversation.messages : existing.messages,
@@ -1909,6 +2143,18 @@ export const useStore = create<StoreState>()(
           return { ...msg, ...patch };
         });
         return touched ? { ...conversation, messages: nextMessages } : conversation;
+      }),
+    })),
+  removeConversationMessage: (conversationId, messageId) =>
+    set((state) => ({
+      conversations: state.conversations.map((conversation) => {
+        if (conversation.id !== conversationId) {
+          return conversation;
+        }
+        const nextMessages = conversation.messages.filter((msg) => msg.id !== messageId);
+        return nextMessages.length === conversation.messages.length
+          ? conversation
+          : { ...conversation, messages: nextMessages };
       }),
     })),
   blockedUsers: [],
@@ -2744,6 +2990,7 @@ export const useStore = create<StoreState>()(
         wishlist: state.wishlist,
         savedProducts: state.savedProducts,
         collections: state.collections,
+        hasSeenSaveToListHint: state.hasSeenSaveToListHint,
         seenPosterIds: state.seenPosterIds,
         savedPosterStoryIds: state.savedPosterStoryIds,
         customPosters: state.customPosters,

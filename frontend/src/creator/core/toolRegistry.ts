@@ -49,6 +49,7 @@ export type ToolContext =
   | 'poster-mention-selected'
   | 'poster-decorative-selected'
   | 'poster-look-selected'
+  | 'poster-multi-select'
   | 'look-default'
   | 'look-media-selected'
   | 'look-text-selected'

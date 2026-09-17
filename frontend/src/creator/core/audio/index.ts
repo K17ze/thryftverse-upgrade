@@ -6,7 +6,7 @@
  *  P1: real waveform extraction, voiceover, ducking
  *
  * Usage:
- *   import { extractWaveform, computeVolumeAtTime, VoiceoverRecorder } from '../core/audio';
+ *   import { extractWaveform, computeVolumeAtTime } from '../core/audio';
  */
 
 // ── Waveform extraction ──────────────────────────────────────────────
@@ -17,20 +17,10 @@ export {
 } from './WaveformExtractor';
 
 // ── Audio mixing ─────────────────────────────────────────────────────
+// Only the volume-at-time fade computation is exported — it is consumed
+// by CreatorCanvas for fade-in/out preview parity with export's afade
+// filters. The wider mix API (ducking, mix curves) lives in AudioMixer
+// for the future multi-track audio surface.
 export {
   computeVolumeAtTime,
-  applyDucking,
-  computeMixedVolume,
-  generateVolumeCurve,
-  createDefaultMixState,
-  createDefaultDuckingConfig,
-  type AudioMixState,
-  type DuckingConfig,
 } from './AudioMixer';
-
-// ── Voiceover recording ──────────────────────────────────────────────
-export {
-  VoiceoverRecorder,
-  VoiceoverDependencyError,
-  type VoiceoverClip,
-} from './VoiceoverRecorder';

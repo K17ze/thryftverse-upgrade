@@ -114,6 +114,7 @@ export function GroupChatInfoSheets({
         title={confirmSheet.title}
         message={confirmSheet.message}
         confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        cancelLabel={confirmSheet.cancelLabel ?? 'Cancel'}
         variant={confirmSheet.variant ?? 'danger'}
         onConfirm={confirmSheet.onConfirm}
       />

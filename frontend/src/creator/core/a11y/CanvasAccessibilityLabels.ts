@@ -19,7 +19,7 @@
  * post-hoc addition.
  */
 
-import type { CreatorLayer } from '../../composition';
+import type { CreatorLayer } from '../projectStore/composition';
 import { getLayerCategoryLabel } from '../../../components/poster/shared/layerAccents';
 import type { CreatorColor } from '../../color/ColorTypes';
 import { rgbToHsl, toHexString } from '../../color/ColorMath';

@@ -132,6 +132,12 @@ module.exports = function ({ config }) {
     // react-native-haptic-feedback — Core Haptics (no native changes, but
     // registered for Expo CNG compatibility).
     ['react-native-haptic-feedback', {}],
+    // LiveKit — @livekit/react-native ships no bundled Expo plugin (the
+    // official one is a separate package we don't depend on), so the local
+    // plugin performs the manifest/Info.plist wiring the SDK needs:
+    // Android audio-routing/bluetooth permissions, iOS audio background
+    // modes.
+    require('./plugins/withLiveKit'),
   ];
 
   if (hasSentryConfig) {
@@ -279,6 +285,13 @@ module.exports = function ({ config }) {
   return {
     ...config,
     plugins,
+    experiments: {
+      ...config.experiments,
+      // React Compiler (stable since 1.0, Oct 2025) — automatic memoisation;
+      // material JS-thread-time reduction on the list-heavy discovery/seller
+      // surfaces. Opt-in flag for existing apps on Expo SDK 54+.
+      reactCompiler: true,
+    },
     android: {
       ...config.android,
       // Network security config — enforces HTTPS, pins production certs,

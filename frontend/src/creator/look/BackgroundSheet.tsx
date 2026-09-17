@@ -24,68 +24,36 @@ import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   View,
   Text,
-  StyleSheet,
-  Pressable,
   ScrollView } from 'react-native';
-import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Typography, FontFamily, Stroke, Control } from '../../theme/designTokens';
-import { TypographyV2 } from '../../theme/typography.v2';
 import { IconGrammar } from '../../theme/designTokens';
-import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { SheetContainer, PressScale } from '../CreatorAnimations';
+import { useAppTheme } from '../../theme/ThemeContext';
+import { SheetContainer, PressScale } from '../shared/CreatorAnimations';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-import { CreatorSlider } from '../controls/CreatorSlider';
 import {
-  CreatorColorPicker,
-  GradientEditor,
   useCreatorColorHistory,
   toHexString,
   fromHexString,
   normalize } from '../color/';
-import type { CreatorColor, GradientDefinition, GradientStop } from '../color/';
+import type { CreatorColor, GradientDefinition } from '../color/';
 import { makeStableId } from '../../utils/createStableId';
 import { ConfirmationSheet } from '../../components/ConfirmationSheet';
-import Reanimated, {
+import {
   useSharedValue,
   useAnimatedStyle,
   withSpring } from 'react-native-reanimated';
 import { Motion } from '../../theme/motionTokens';
-import type { CreatorBackground, CreatorLayer } from '../composition';
-
-// ── Presets ───────────────────────────────────────────────────────────
-// These are user-facing canvas background values — intentionally hardcoded
-// literals (not theme tokens) because they persist as canvas background
-// values and must remain stable across light/dark mode.
-
-const SOLID_SWATCHES: { label: string; value: string }[] = [
-  { label: 'White', value: '#ffffff' },
-  { label: 'Black', value: '#000000' },
-  { label: 'Dark', value: '#1a1a1a' },
-  { label: 'Light', value: '#f5f5f5' },
-  { label: 'Silver', value: '#e8e8e8' },
-];
-
-const GRADIENT_PRESETS: { label: string; value: string; secondaryValue: string }[] = [
-  { label: 'Dark to Light', value: '#1a1a1a', secondaryValue: '#f5f5f5' },
-  { label: 'Warm', value: '#2d1b0e', secondaryValue: '#C9A46A' },
-  { label: 'Cool', value: '#0a1929', secondaryValue: '#4A90D9' },
-  { label: 'Neutral', value: '#e8e8e8', secondaryValue: '#f5f5f5' },
-  { label: 'Sunset', value: '#9b0202', secondaryValue: '#F5D547' },
-  { label: 'Ocean', value: '#06489A', secondaryValue: '#215634' },
-];
-
-type BgType = CreatorBackground['type'];
-
-const TYPE_CHIPS: { id: BgType; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
-  { id: 'color', label: 'Solid', icon: 'square-outline' },
-  { id: 'gradient', label: 'Gradient', icon: 'color-filter-outline' },
-  { id: 'image', label: 'Image', icon: 'image-outline' },
-  { id: 'blur', label: 'Blurred', icon: 'aperture-outline' },
-];
+import type { CreatorBackground, CreatorLayer } from '../core/projectStore/composition';
+import { backgroundToGradient, type BgType } from './backgroundSheet/backgroundSheetShared';
+import { createStyles } from './backgroundSheet/backgroundSheetStyles';
+import { BackgroundTypeTabs } from './backgroundSheet/BackgroundTypeTabs';
+import {
+  SolidSection,
+  GradientSection,
+  BlurSection,
+  ImageSection } from './backgroundSheet/BackgroundSections';
 
 // ── Props ─────────────────────────────────────────────────────────────
 
@@ -96,30 +64,6 @@ export interface BackgroundSheetProps {
   mediaLayers: CreatorLayer[];
   onConfirm: (bg: CreatorBackground) => void;
   onClose: () => void;
-}
-
-// ── Helper: convert a CreatorBackground to a GradientDefinition ───────
-// Used to seed the GradientEditor when the sheet opens.
-function backgroundToGradient(bg: CreatorBackground): GradientDefinition {
-  if (bg.type === 'gradient' && bg.gradientStops && bg.gradientStops.length >= 2) {
-    return {
-      type: 'linear',
-      angle: bg.gradientAngle ?? 180,
-      stops: bg.gradientStops.map((s) => ({
-        id: makeStableId('stop'),
-        position: s.position,
-        color: fromHexString(s.color) ?? { space: 'srgb', r: 0, g: 0, b: 0, a: 1 } })) };
-  }
-  // Default: two stops from value/secondaryValue.
-  const startColor = fromHexString(bg.value) ?? { space: 'srgb' as const, r: 0.1, g: 0.1, b: 0.1, a: 1 };
-  const endColor = fromHexString(bg.secondaryValue ?? '#f5f5f5') ?? { space: 'srgb' as const, r: 0.96, g: 0.96, b: 0.96, a: 1 };
-  return {
-    type: 'linear',
-    angle: bg.gradientAngle ?? 180,
-    stops: [
-      { id: makeStableId('stop'), position: 0, color: startColor },
-      { id: makeStableId('stop'), position: 1, color: endColor },
-    ] };
 }
 
 // ── Component ─────────────────────────────────────────────────────────
@@ -383,45 +327,16 @@ export function BackgroundSheet({
         </PressScale>
       </View>
 
-      {/* Type tabs — text-only with spring-animated underline */}
-      <View style={styles.typeTabRow}>
-        {TYPE_CHIPS.map((chip) => {
-          const isActive = draft.type === chip.id;
-          return (
-            <PressScale
-              key={chip.id}
-              onPress={() => handleTypeSelect(chip.id)}
-              onLayout={(e) => {
-                typeTabLayouts.current.set(chip.id, {
-                  x: e.nativeEvent.layout.x,
-                  width: e.nativeEvent.layout.width });
-                if (draft.type === chip.id) {
-                  typeUnderlineXSV.value = e.nativeEvent.layout.x;
-                  typeUnderlineWSV.value = e.nativeEvent.layout.width;
-                }
-              }}
-              style={styles.typeTab}
-              accessibilityLabel={`${chip.label} background type${isActive ? ', selected' : ''}`}
-              accessibilityRole="button"
-              accessibilityState={{ selected: isActive }}
-            >
-              <Text
-                style={[
-                  styles.typeTabLabel,
-                  { color: isActive ? colors.brand : colors.textSecondary },
-                ]}
-              >
-                {chip.label}
-              </Text>
-            </PressScale>
-          );
-        })}
-        {/* Spring-animated underline indicator (brand color, 2pt) */}
-        <Reanimated.View
-          style={[styles.typeUnderline, typeUnderlineStyle, { backgroundColor: colors.brand }]}
-          pointerEvents="none"
-        />
-      </View>
+      <BackgroundTypeTabs
+        styles={styles}
+        colors={colors}
+        activeType={draft.type}
+        typeTabLayouts={typeTabLayouts}
+        typeUnderlineXSV={typeUnderlineXSV}
+        typeUnderlineWSV={typeUnderlineWSV}
+        typeUnderlineStyle={typeUnderlineStyle}
+        onTypeSelect={handleTypeSelect}
+      />
 
       {/* Section body */}
       <ScrollView
@@ -431,198 +346,52 @@ export function BackgroundSheet({
       >
         {/* ── Solid ── */}
         {draft.type === 'color' && (
-          <View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.swatchRow}
-            >
-              {SOLID_SWATCHES.map((sw) => {
-                const isActive = activeSolidValue === sw.value;
-                return (
-                  <Pressable
-                    key={sw.value}
-                    onPress={() => handleSolidSelect(sw.value)}
-                    style={styles.swatchWrap}
-                    accessibilityLabel={`${sw.label} background${isActive ? ', selected' : ''}`}
-                    accessibilityRole="button"
-                  >
-                    <View
-                      style={[
-                        styles.swatch,
-                        isActive && styles.swatchActive,
-                      ]}
-                    >
-                      <View style={[styles.swatchFill, { backgroundColor: sw.value }]} />
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-
-            {/* Shared CreatorColorPicker — compact row with HEX, eyedropper, recents, alpha */}
-            <View style={styles.colorPickerSection}>
-              <CreatorColorPicker
-                color={solidColor}
-                onChange={handleSolidColorChange}
-                onCommit={handleSolidColorCommit}
-                mode="compact"
-                recents={recents}
-                onCommitRecent={commitRecentColor}
-                accessibilityLabel="Background solid color"
-              />
-            </View>
-          </View>
+          <SolidSection
+            styles={styles}
+            activeSolidValue={activeSolidValue}
+            solidColor={solidColor}
+            recents={recents}
+            onSolidSelect={handleSolidSelect}
+            onSolidColorChange={handleSolidColorChange}
+            onSolidColorCommit={handleSolidColorCommit}
+            onCommitRecent={commitRecentColor}
+          />
         )}
 
         {/* ── Gradient ── */}
         {draft.type === 'gradient' && (
-          <View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.swatchRow}
-            >
-              {GRADIENT_PRESETS.map((g) => {
-                // A preset is "active" if the draft matches and no custom stops.
-                const isActive = draft.value === g.value &&
-                  draft.secondaryValue === g.secondaryValue &&
-                  !draft.gradientStops;
-                return (
-                  <Pressable
-                    key={g.label}
-                    onPress={() => handleGradientPresetSelect(g.value, g.secondaryValue)}
-                    style={styles.swatchWrap}
-                    accessibilityLabel={`${g.label} gradient${isActive ? ', selected' : ''}`}
-                    accessibilityRole="button"
-                  >
-                    <View
-                      style={[
-                        styles.swatch,
-                        isActive && styles.swatchActive,
-                      ]}
-                    >
-                      <LinearGradient
-                        colors={[g.value, g.secondaryValue]}
-                        style={styles.swatchFill}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 0, y: 1 }}
-                      />
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-
-            <GradientEditor
-              gradient={gradientDef}
-              onChange={handleGradientChange}
-              onCommit={handleGradientCommit}
-            />
-          </View>
+          <GradientSection
+            styles={styles}
+            draft={draft}
+            gradientDef={gradientDef}
+            onGradientPresetSelect={handleGradientPresetSelect}
+            onGradientChange={handleGradientChange}
+            onGradientCommit={handleGradientCommit}
+          />
         )}
 
         {/* ── Blurred ── */}
         {draft.type === 'blur' && (
-          <View>
-            <Text style={styles.sectionLabel}>Blurred photo</Text>
-            {blurPreviewUri ? (
-              <View style={styles.blurPreviewWrap}>
-                <Image
-                  source={{ uri: blurPreviewUri }}
-                  style={styles.blurPreview}
-                  contentFit="cover"
-                  blurRadius={blurRadius}
-                  cachePolicy="memory-disk"
-                />
-                <Text style={[styles.blurHint, { color: colors.textMuted }]}>
-                  Blurred version of your first photo
-                </Text>
-              </View>
-            ) : (
-              <View style={[styles.blurEmpty, { borderColor: colors.border }]}>
-                <Text style={[styles.blurEmptyText, { color: colors.textMuted }]}>
-                  Add a photo to the canvas first
-                </Text>
-              </View>
-            )}
-            <View style={styles.sliderRow}>
-              <View style={styles.sliderHeader}>
-                <Text style={[styles.sliderLabel, { color: colors.textPrimary }]}>
-                  Blur intensity
-                </Text>
-                <Text style={[styles.sliderValue, { color: colors.textMuted }]}>
-                  {blurRadius}
-                </Text>
-              </View>
-              <CreatorSlider
-                value={blurRadius}
-                min={0}
-                max={50}
-                step={1}
-                onValueChange={handleBlurRadiusChange}
-                onCommit={handleBlurRadiusChange}
-                accessibilityLabel="Background blur intensity"
-              />
-            </View>
-          </View>
+          <BlurSection
+            styles={styles}
+            colors={colors}
+            blurPreviewUri={blurPreviewUri}
+            blurRadius={blurRadius}
+            onBlurRadiusChange={handleBlurRadiusChange}
+          />
         )}
 
         {/* ── Image ── */}
         {draft.type === 'image' && (
-          <View>
-            <Text style={styles.sectionLabel}>Background photo</Text>
-            {imageUri ? (
-              <View style={styles.imagePreviewWrap}>
-                <Image
-                  source={{ uri: imageUri }}
-                  style={styles.imagePreview}
-                  contentFit="cover"
-                  blurRadius={imageBlur}
-                  cachePolicy="memory-disk"
-                />
-                <PressScale
-                  onPress={handlePickImage}
-                  style={[styles.imageChangeBtn, { borderColor: colors.border }]}
-                  accessibilityLabel="Change image"
-                  accessibilityHint="Opens the photo library to pick a different background image"
-                >
-                  <Ionicons name="swap-horizontal-outline" size={IconGrammar.metadata} color={colors.textPrimary} />
-                  <Text style={[styles.imageChangeBtnText, { color: colors.textPrimary }]}>
-                    {isPickingImage ? 'Opening…' : 'Change Image'}
-                  </Text>
-                </PressScale>
-              </View>
-            ) : (
-              <PressScale
-                onPress={handlePickImage}
-                style={[styles.imagePickerEmpty, { borderColor: colors.border }]}
-                accessibilityLabel="Pick a background photo"
-                accessibilityHint="Opens the photo library to select a background image"
-              >
-                <Text style={[styles.imagePickerEmptyTitle, { color: colors.textPrimary }]}>
-                  {isPickingImage ? 'Opening photo library…' : 'Choose from library'}
-                </Text>
-                <Text style={[styles.imagePickerEmptyHint, { color: colors.textMuted }]}>
-                  Tap to browse your photos
-                </Text>
-              </PressScale>
-            )}
-            {imageUri && (
-              <View style={styles.sliderRow}>
-                <CreatorSlider
-                  value={imageBlur}
-                  min={0}
-                  max={20}
-                  step={1}
-                  onValueChange={handleImageBlurChange}
-                  onCommit={handleImageBlurChange}
-                  label="Blur"
-                  accessibilityLabel="Background image blur intensity"
-                />
-              </View>
-            )}
-          </View>
+          <ImageSection
+            styles={styles}
+            colors={colors}
+            imageUri={imageUri}
+            imageBlur={imageBlur}
+            isPickingImage={isPickingImage}
+            onPickImage={handlePickImage}
+            onImageBlurChange={handleImageBlurChange}
+          />
         )}
 
       </ScrollView>
@@ -661,172 +430,4 @@ export function BackgroundSheet({
       />
     </SheetContainer>
   );
-}
-
-// ── Styles ────────────────────────────────────────────────────────────
-
-function createStyles(colors: ThemeColors) {
-  return StyleSheet.create({
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      height: 44,
-      paddingHorizontal: Space.md },
-    title: {
-      fontFamily: Typography.family.semibold,
-      fontSize: TypographyV2.bodyStrong.size },
-    closeBtn: {
-      width: Control.hit,
-      height: Control.hit,
-      justifyContent: 'center',
-      alignItems: 'center',
-      borderRadius: Radius.sm },
-    // ── Type tabs — text-only with spring underline ──
-    typeTabRow: {
-      flexDirection: 'row',
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.xs,
-      position: 'relative' },
-    typeTab: {
-      flex: 1,
-      alignItems: 'center',
-      paddingVertical: Space.sm },
-    typeTabLabel: {
-      fontFamily: Typography.family.semibold,
-      fontSize: TypographyV2.meta.size },
-    typeUnderline: {
-      position: 'absolute',
-      bottom: 0,
-      height: Stroke.emphasis,
-      borderRadius: Radius.full },
-    // ── Body ──
-    body: {
-      paddingHorizontal: Space.md },
-    bodyContent: {
-      paddingBottom: Space.lg,
-      gap: Space.sm },
-    sectionLabel: {
-      fontFamily: Typography.family.semibold,
-      fontSize: TypographyV2.meta.size,
-      color: colors.textSecondary,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-      marginTop: Space.sm,
-      marginBottom: Space.xs },
-    // ── Swatches — larger, no labels, brand ring on selected ──
-    swatchRow: {
-      gap: Space.sm,
-      paddingVertical: Space.sm },
-    swatchWrap: {
-      alignItems: 'center' },
-    swatch: {
-      width: 56,
-      height: 56,
-      borderRadius: Radius.md,
-      overflow: 'hidden' },
-    swatchActive: {
-      borderWidth: Stroke.emphasis,
-      borderColor: colors.brand },
-    swatchFill: {
-      width: '100%',
-      height: '100%' },
-    // ── Custom color picker section ──
-    colorPickerSection: {
-      marginTop: Space.md },
-    // ── Blurred ──
-    blurPreviewWrap: {
-      gap: Space.xs },
-    blurPreview: {
-      width: '100%',
-      height: 160,
-      borderRadius: Radius.lg },
-    blurHint: {
-      fontFamily: Typography.family.regular,
-      fontSize: TypographyV2.meta.size,
-      textAlign: 'center' },
-    blurEmpty: {
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingVertical: Space.xl,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderRadius: Radius.lg,
-      borderStyle: 'dashed' },
-    blurEmptyText: {
-      fontFamily: Typography.family.regular,
-      fontSize: TypographyV2.meta.size },
-    // ── Image ──
-    imagePreviewWrap: {
-      gap: Space.sm },
-    imagePreview: {
-      width: '100%',
-      height: 180,
-      borderRadius: Radius.lg },
-    imageChangeBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: Space.xs,
-      minHeight: 44,
-      paddingVertical: Space.sm,
-      borderRadius: Radius.md,
-      borderWidth: Stroke.standard },
-    imageChangeBtnText: {
-      fontFamily: Typography.family.medium,
-      fontSize: TypographyV2.body.size },
-    imagePickerEmpty: {
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: Space.xs,
-      paddingVertical: Space.xl + Space.sm,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderRadius: Radius.lg,
-      borderStyle: 'dashed',
-      minHeight: 44 },
-    imagePickerEmptyTitle: {
-      fontFamily: Typography.family.semibold,
-      fontSize: TypographyV2.body.size,
-      marginTop: Space.xs },
-    imagePickerEmptyHint: {
-      fontFamily: Typography.family.regular,
-      fontSize: TypographyV2.meta.size },
-    // ── Slider ──
-    sliderRow: {
-      marginTop: Space.md },
-    sliderHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: Space.xs },
-    sliderLabel: {
-      fontFamily: FontFamily.regular,
-      fontSize: TypographyV2.meta.size },
-    sliderValue: {
-      fontFamily: FontFamily.medium,
-      fontSize: TypographyV2.meta.size,
-      fontVariant: ['tabular-nums'] },
-    // ── Footer ──
-    footer: {
-      flexDirection: 'row',
-      gap: Space.sm,
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      borderTopWidth: StyleSheet.hairlineWidth },
-    footerBtn: {
-      flex: 1,
-      height: 50,
-      borderRadius: Radius.lg,
-      alignItems: 'center',
-      justifyContent: 'center' },
-    footerCancel: {
-      backgroundColor: 'transparent' },
-    footerCancelText: {
-      fontFamily: FontFamily.semibold,
-      fontSize: TypographyV2.bodyStrong.size },
-    footerConfirm: {
-      // backgroundColor set inline
-    },
-    footerConfirmText: {
-      fontFamily: FontFamily.semibold,
-      fontSize: TypographyV2.bodyStrong.size } });
 }

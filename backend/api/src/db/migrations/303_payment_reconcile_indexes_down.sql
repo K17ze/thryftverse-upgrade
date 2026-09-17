@@ -1,0 +1,2 @@
+DROP INDEX IF EXISTS payment_intents_stale_submission_idx;
+DROP INDEX IF EXISTS listing_checkout_reservation_order_idx;

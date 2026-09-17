@@ -313,6 +313,8 @@
       "biometricLoginDisabled": "사용 안 함 — 앱이 바로 계정으로 열립니다",
       "notificationCategories": "알림 카테고리",
       "notificationPreferencesSubtitle": "방해 금지 시간, 미리보기",
+      "pushThisDevice": "이 기기의 푸시 알림",
+      "pushThisDeviceSubtitle": "전송 및 등록",
       "featureFlags": "기능 플래그",
       "featureFlagsSubtitle": "QA용 현재 플래그 값",
       "autoTranslate": "메시지 자동 번역",

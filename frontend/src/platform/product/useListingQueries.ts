@@ -1,4 +1,4 @@
-import { useQuery, useInfiniteQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { queryKeys } from '../server/queryKeys';
 import { fetchRecommendations } from './recommendationService';
 import type { RecommendationSectionKey } from './recommendationTypes';
@@ -73,7 +73,10 @@ export function useListingDetail(listingId: string | undefined) {
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     retry: (failureCount, error: any) => {
-      if (error?.status === 404) return false;
+      // 404 = gone; 403 = LISTING_NOT_PUBLIC (private/draft for this
+      // viewer). Neither is transient — surface the unavailable canvas
+      // immediately instead of retrying.
+      if (error?.status === 404 || error?.status === 403) return false;
       return failureCount < 2;
     },
     placeholderData: keepPreviousData,
@@ -131,35 +134,6 @@ export function useRecommendations(
   });
 }
 
-export function useContinueExploring(
-  listingId: string | undefined,
-  sessionId?: string
-) {
-  return useInfiniteQuery({
-    queryKey: listingId
-      ? ['listing', 'continue_exploring', listingId]
-      : ['listing', 'continue_exploring', 'none'],
-    queryFn: async ({ pageParam }) => {
-      if (!listingId) return { listingId: '', sections: [] };
-      return fetchRecommendations({
-        listingId,
-        sections: ['continue_exploring'],
-        cursor: pageParam as string | undefined,
-        sessionId,
-      });
-    },
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage) => {
-      const continueSection = lastPage.sections.find((s) => s.key === 'continue_exploring');
-      return continueSection?.nextCursor ?? undefined;
-    },
-    enabled: !!listingId,
-    staleTime: 2 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-    retry: 1,
-  });
-}
-
 export function useSellerTrust(sellerId: string | undefined) {
   return useQuery({
     queryKey: sellerId ? ['seller', 'trust', sellerId] : ['seller', 'trust', 'none'],
@@ -186,11 +160,14 @@ export function useSellerFollow(sellerId: string | undefined) {
     // Same mutationKey namespace as useFollowMutation — non-RQ surfaces
     // (the composed Following feed on Home) subscribe to it to reload.
     mutationKey: ['social', 'follow', sellerId],
-    mutationFn: async () => {
+    // Directional mutation — POST creates, DELETE removes. The previous
+    // always-POST shape made the "Following" button a dead end: unfollow
+    // was unreachable even though the DELETE route exists.
+    mutationFn: async (shouldFollow: boolean) => {
       if (!sellerId) throw new Error('No sellerId');
       const res = await fetchJson<{ ok: boolean; isFollowing: boolean }>(
         `/sellers/${sellerId}/follow`,
-        { method: 'POST' }
+        { method: shouldFollow ? 'POST' : 'DELETE' }
       );
       return res;
     },

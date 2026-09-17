@@ -23,13 +23,15 @@ import {
   useAnimatedStyle,
   withTiming,
 } from 'react-native-reanimated';
-import type { CreatorLayer, CreatorPage, EffectNode } from '../composition';
-import type { AdjustNode } from '../tools/effects';
+import type { CreatorLayer, CreatorPage, EffectNode } from '../core/projectStore/composition';
+import type { AdjustNode, AdjustParameterId } from '../tools/effects';
 import {
+  ADJUST_PARAM_MAP,
   FILTER_PRESETS,
   computeAutoAdjust,
   isAutoAdjustNode,
 } from '../tools/effects';
+import { buildFilterEffectNode } from '../tools/effects/filterNode';
 import type { useHaptic } from '../../hooks/useHaptic';
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -83,7 +85,10 @@ export function usePosterEffects(
   const selectedMediaLayer: MediaLayer | null =
     selectedLayer?.type === 'media' ? selectedLayer : null;
   const effectsSourceUri = selectedMediaLayer?.payload.mediaUri ?? '';
-  const currentEffects: EffectNode[] = selectedMediaLayer?.payload.effects ?? [];
+  const currentEffects = useMemo<EffectNode[]>(
+    () => selectedMediaLayer?.payload.effects ?? [],
+    [selectedMediaLayer],
+  );
 
   // ── Selected filter ID (from the effect stack) ────────────────────
   const selectedFilterId = useMemo(() => {
@@ -91,41 +96,62 @@ export function usePosterEffects(
     return filterNode?.type === 'filter' ? filterNode.id : null;
   }, [currentEffects]);
 
+  // AI/style effects are stored as filter nodes with a namespaced id
+  // (`ai:<effectId>`) resolved via AIEffectRegistry at draw time.
+  const activeAIEffectId = useMemo(() => {
+    const aiNode = currentEffects.find(
+      (n) => n.type === 'filter' && n.id.startsWith('ai:'),
+    );
+    return aiNode?.type === 'filter' ? aiNode.id.slice(3) : null;
+  }, [currentEffects]);
+
+  // ── Current filter intensity (from the effect stack) ──────────────
+  // A local `liveFilterAmount` overrides the committed amount during
+  // slider drag for immediate UI response; it resets to null on commit.
+  const currentFilterAmount = useMemo(() => {
+    const filterNode = currentEffects.find((n) => n.type === 'filter');
+    return filterNode?.type === 'filter' ? filterNode.amount : 1;
+  }, [currentEffects]);
+
+  const [liveFilterAmount, setLiveFilterAmount] = useState<number | null>(null);
+  const filterAmount = liveFilterAmount ?? currentFilterAmount;
+
   // ── Live filter preview (Snapchat/Instagram pattern) ─────────────────
   // While the user scrolls the effect rail, the centred filter is applied to
   // the full canvas as a TRANSIENT preview (no history entry) via
   // updateLayerLive. Tapping a thumbnail commits via handleEffectFilterSelect
   // (history entry) and clears the preview. When the effects sheet closes
   // without a commit, the preview is reverted to the last committed filter.
-  // `committedFilterIdRef` captures the filter id that lives in the history
-  // stack the moment the sheet opens — before any preview mutation — so we
-  // can restore it on close.
-  const committedFilterIdRef = useRef<string | null>(null);
+  // `committedFilterNodeRef` captures the whole committed filter node —
+  // including its baked `recipe` — the moment the sheet opens, so a
+  // revert restores the exact authored node instead of rebuilding a
+  // recipe-less stub that would silently drop registry effects.
+  const committedFilterNodeRef = useRef<EffectNode | null>(null);
 
-  // Capture the committed filter id when the effects sheet opens; revert any
-  // uncommitted preview when it closes.
+  // Capture the committed filter node when the effects sheet opens;
+  // revert any uncommitted preview when it closes.
   useEffect(() => {
     if (bottomSurface === 'effects') {
-      // No preview has mutated the layer yet, so selectedFilterId is the
-      // committed (history) value.
-      committedFilterIdRef.current = selectedFilterId;
+      // No preview has mutated the layer yet, so the stack's filter node
+      // is the committed (history) value.
+      const committed = currentEffects.find((n) => n.type === 'filter');
+      committedFilterNodeRef.current = committed ?? null;
     } else {
       // Sheet closed — restore the committed filter on the layer (no history
       // entry) if a different filter was applied during the session.
-      const committedId = committedFilterIdRef.current;
-      if (committedId !== null && committedId !== selectedFilterId && selectedMediaLayer) {
+      const committedNode = committedFilterNodeRef.current;
+      const committedId = committedNode?.type === 'filter' ? committedNode.id : null;
+      if (committedId !== selectedFilterId && selectedMediaLayer) {
         const revertedEffects: EffectNode[] = [
           ...currentEffects.filter((n) => n.type !== 'filter'),
-          ...(committedId
-            ? [{ type: 'filter' as const, id: committedId, amount: 1 }]
-            : []),
+          ...(committedNode ? [committedNode] : []),
         ];
         updateLayerLive(selectedMediaLayer.id, {
           type: 'media',
           payload: { ...selectedMediaLayer.payload, effects: revertedEffects },
         });
       }
-      committedFilterIdRef.current = null;
+      committedFilterNodeRef.current = null;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bottomSurface]);
@@ -141,9 +167,10 @@ export function usePosterEffects(
   // ── Filter select handler ─────────────────────────────────────────
   const handleEffectFilterSelect = useCallback((presetId: string) => {
     if (!selectedMediaLayer) return;
+    const filterNode = buildFilterEffectNode(presetId);
     const newEffects: EffectNode[] = [
       ...currentEffects.filter((n) => n.type !== 'filter'),
-      { type: 'filter', id: presetId, amount: 1 },
+      filterNode,
     ];
     updateLayer(selectedMediaLayer.id, {
       type: 'media',
@@ -151,18 +178,125 @@ export function usePosterEffects(
     }, 'Apply filter');
     // Record the new committed filter so a subsequent panel close does not
     // revert it.
-    committedFilterIdRef.current = presetId;
+    committedFilterNodeRef.current = filterNode;
   }, [selectedMediaLayer, currentEffects, updateLayer]);
 
-  // ── Adjust change handler ────────────────────────────────────────
+  // ── Filter intensity handlers ─────────────────────────────────────
+  // Live: updates the filter node's `amount` without pushing to history
+  // so the slider drag doesn't spam the undo stack. Commit: pushes one
+  // history entry on finger-up. (Parity with useLookEffects.)
+  const handleEffectIntensityChange = useCallback(
+    (value: number) => {
+      if (!selectedMediaLayer) return;
+      setLiveFilterAmount(value);
+      const newEffects: EffectNode[] = currentEffects.map((n) =>
+        n.type === 'filter' ? { ...n, amount: value } : n,
+      );
+      updateLayerLive(selectedMediaLayer.id, {
+        type: 'media',
+        payload: { ...selectedMediaLayer.payload, effects: newEffects },
+      });
+    },
+    [selectedMediaLayer, currentEffects, updateLayerLive],
+  );
+
+  const handleEffectIntensityCommit = useCallback(
+    (value: number) => {
+      if (!selectedMediaLayer) return;
+      setLiveFilterAmount(null);
+      const newEffects: EffectNode[] = currentEffects.map((n) =>
+        n.type === 'filter' ? { ...n, amount: value } : n,
+      );
+      updateLayer(
+        selectedMediaLayer.id,
+        {
+          type: 'media',
+          payload: { ...selectedMediaLayer.payload, effects: newEffects },
+        },
+        'Adjust filter intensity',
+      );
+    },
+    [selectedMediaLayer, currentEffects, updateLayer],
+  );
+
+  // ── AI/style effect apply / remove ────────────────────────────────
+  const handleAIEffectApply = useCallback(
+    (effectId: string, intensity: number) => {
+      if (!selectedMediaLayer) return;
+      setLiveFilterAmount(null);
+      const newEffects: EffectNode[] = [
+        ...currentEffects.filter(
+          (n) => n.type !== 'filter' || !n.id.startsWith('ai:'),
+        ),
+        buildFilterEffectNode(`ai:${effectId}`, intensity),
+      ];
+      updateLayer(
+        selectedMediaLayer.id,
+        {
+          type: 'media',
+          payload: { ...selectedMediaLayer.payload, effects: newEffects },
+        },
+        'Apply AI effect',
+      );
+    },
+    [selectedMediaLayer, currentEffects, updateLayer],
+  );
+
+  const handleAIEffectRemove = useCallback(
+    (effectId: string) => {
+      if (!selectedMediaLayer) return;
+      const newEffects = currentEffects.filter(
+        (n) => !(n.type === 'filter' && n.id === `ai:${effectId}`),
+      );
+      updateLayer(
+        selectedMediaLayer.id,
+        {
+          type: 'media',
+          payload: { ...selectedMediaLayer.payload, effects: newEffects },
+        },
+        'Remove AI effect',
+      );
+    },
+    [selectedMediaLayer, currentEffects, updateLayer],
+  );
+
+  // ── Adjust change handler (live, no history) ──────────────────────
+  // Slider drags must not push a history entry per bucket — they go
+  // through updateLayerLive; the single undo step is pushed on finger-up
+  // by handleEffectAdjustCommit. (Parity with useLookEffects.)
   const handleEffectAdjustChange = useCallback((parameter: string, value: number) => {
     if (!selectedMediaLayer) return;
+    if (!(parameter in ADJUST_PARAM_MAP)) return;
     const existingAdjust = currentEffects.find((n) => n.type === 'adjust');
-    const base = existingAdjust?.type === 'adjust'
+    const base: AdjustNode = existingAdjust?.type === 'adjust'
       ? { ...existingAdjust }
-      : { type: 'adjust' as const };
-    (base as Record<string, unknown>)[parameter] = value;
-    const newAdjust = base as Extract<EffectNode, { type: 'adjust' }>;
+      : { type: 'adjust' };
+    const newAdjust: AdjustNode = {
+      ...base,
+      [parameter as AdjustParameterId]: value,
+    };
+    const newEffects: EffectNode[] = [
+      ...currentEffects.filter((n) => n.type !== 'adjust'),
+      newAdjust,
+    ];
+    updateLayerLive(selectedMediaLayer.id, {
+      type: 'media',
+      payload: { ...selectedMediaLayer.payload, effects: newEffects },
+    });
+  }, [selectedMediaLayer, currentEffects, updateLayerLive]);
+
+  // ── Adjust commit handler (one history entry on finger-up) ────────
+  const handleEffectAdjustCommit = useCallback((parameter: string, value: number) => {
+    if (!selectedMediaLayer) return;
+    if (!(parameter in ADJUST_PARAM_MAP)) return;
+    const existingAdjust = currentEffects.find((n) => n.type === 'adjust');
+    const base: AdjustNode = existingAdjust?.type === 'adjust'
+      ? { ...existingAdjust }
+      : { type: 'adjust' };
+    const newAdjust: AdjustNode = {
+      ...base,
+      [parameter as AdjustParameterId]: value,
+    };
     const newEffects: EffectNode[] = [
       ...currentEffects.filter((n) => n.type !== 'adjust'),
       newAdjust,
@@ -170,7 +304,7 @@ export function usePosterEffects(
     updateLayer(selectedMediaLayer.id, {
       type: 'media',
       payload: { ...selectedMediaLayer.payload, effects: newEffects },
-    });
+    }, 'Adjust photo');
   }, [selectedMediaLayer, currentEffects, updateLayer]);
 
   // ── Reset adjustments handler ─────────────────────────────────────
@@ -245,7 +379,7 @@ export function usePosterEffects(
     const nextPreset = FILTER_PRESETS[nextIdx];
     const newEffects: EffectNode[] = [
       ...layerEffects.filter((n) => n.type !== 'filter'),
-      ...(nextPreset.id !== 'original' ? [{ type: 'filter' as const, id: nextPreset.id, amount: 1 }] : []),
+      ...(nextPreset.id !== 'original' ? [buildFilterEffectNode(nextPreset.id)] : []),
     ];
     updateLayer(targetMedia.id, {
       type: 'media',
@@ -269,9 +403,16 @@ export function usePosterEffects(
     selectedFilterId,
     currentAdjustments,
     autoAdjustActive,
+    activeAIEffectId,
+    filterAmount,
     handleEffectFilterSelect,
+    handleEffectIntensityChange,
+    handleEffectIntensityCommit,
     handleEffectAdjustChange,
+    handleEffectAdjustCommit,
     handleEffectReset,
+    handleAIEffectApply,
+    handleAIEffectRemove,
     handleAutoAdjust,
     filterHudName,
     filterHudAnimatedStyle,

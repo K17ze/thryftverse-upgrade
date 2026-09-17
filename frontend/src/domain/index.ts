@@ -25,9 +25,11 @@ export type { User } from './user';
 export type {
   MessageReaction,
   Message,
+  CommerceStateType,
   ConversationType,
   Conversation,
 } from './conversation';
+export { parseMessageCommerceState } from './conversation';
 
 export type { ConversationContext } from './conversationContext';
 

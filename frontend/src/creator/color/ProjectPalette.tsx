@@ -10,8 +10,8 @@
  */
 
 import React from 'react';
-import { StyleSheet, ScrollView, Pressable, View, ViewStyle } from 'react-native';
-import { Space, Radius, Stroke, Typography } from '../../theme/designTokens';
+import { StyleSheet, ScrollView, Pressable, ViewStyle } from 'react-native';
+import { Space, Radius, Stroke } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { toHexString } from './ColorMath';
@@ -43,6 +43,7 @@ export function ProjectPalette({
       contentContainerStyle={[styles.row, style]}
       accessibilityRole="list"
       accessibilityLabel="Colors used in this project"
+      accessibilityHint="Swipe horizontally to browse project colors"
     >
       {palette.map((entry, index) => {
         const hex = toHexString(entry.color).toUpperCase();
@@ -58,6 +59,7 @@ export function ProjectPalette({
               { backgroundColor: toHexString(entry.color) },
             ]}
             accessibilityLabel={`${entry.source} color ${hex}`}
+            accessibilityHint="Selects this color"
             accessibilityRole="button"
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           />

@@ -244,7 +244,7 @@ export function useAnalyticsInsights({ listings, selectedListingId, analytics, p
   const funnelPipeline = useMemo(() => {
     if (!analytics?.funnel) return null;
     const f = analytics.funnel;
-    const stages = [
+    const stages: { id: string; label: string; value: number | null }[] = [
       { id: 'impressions', label: 'Discovery Impressions', value: f.impressions },
       { id: 'views', label: 'Qualified Detail Views', value: f.views },
       { id: 'saves', label: 'Vault Saves', value: f.saves },
@@ -304,7 +304,9 @@ export function useAnalyticsInsights({ listings, selectedListingId, analytics, p
     for (let i = 1; i < funnelPipeline.stages.length; i++) {
       const prev = funnelPipeline.stages[i - 1].value;
       const curr = funnelPipeline.stages[i].value;
-      if (prev > 0) {
+      // A null stage is "unavailable", not zero — never compute a drop-off
+      // against a stage the backend could not measure.
+      if (prev != null && curr != null && prev > 0) {
         const dropPct = Math.round(((prev - curr) / prev) * 100);
         if (dropPct > maxDrop && dropPct > 30) {
           maxDrop = dropPct;
@@ -326,9 +328,8 @@ export function useAnalyticsInsights({ listings, selectedListingId, analytics, p
     return result;
   }, [funnelPipeline]);
 
-  const peerConversionBenchmark = 3.2; // Top 20% second-hand archival peer benchmark
   const aovValue = analytics?.aovGbpMinor != null ? analytics.aovGbpMinor / 100 : avgOrderValue;
   const repeatBuyerRate = analytics?.repeatBuyerPct ?? null;
 
- return { currentListingItem, heroLabel, heroValue, itemsSold, totalViews, activeListings, avgRating, reviewCount, avgOrderValue, aovValue, repeatBuyerRate, conversionRate, peerConversionBenchmark, funnelBottleneck, deltaPct, revenueDelta, itemsSoldDelta, viewsDelta, prevRevenueGbp, periodDays, periodLabel, dimensionChartData, chartSeries, salesSparklineValues, categoryMix, funnelPipeline, topPerformers, needsAttention };
+ return { currentListingItem, heroLabel, heroValue, itemsSold, totalViews, activeListings, avgRating, reviewCount, avgOrderValue, aovValue, repeatBuyerRate, conversionRate, funnelBottleneck, deltaPct, revenueDelta, itemsSoldDelta, viewsDelta, prevRevenueGbp, periodDays, periodLabel, dimensionChartData, chartSeries, salesSparklineValues, categoryMix, funnelPipeline, topPerformers, needsAttention };
 }

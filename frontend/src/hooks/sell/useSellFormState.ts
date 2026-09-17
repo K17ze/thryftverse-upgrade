@@ -15,6 +15,7 @@ export function useSellFormState() {
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [category, setCategory] = useState<string>('');
+  const [subcategory, setSubcategory] = useState<string>('');
   const [brand, setBrand] = useState('');
   const [size, setSize] = useState('');
   const [condition, setCondition] = useState('');
@@ -42,6 +43,7 @@ export function useSellFormState() {
     setTags([]);
     setTagInput('');
     setCategory('');
+    setSubcategory('');
     setBrand('');
     setSize('');
     setCondition('');
@@ -68,6 +70,7 @@ export function useSellFormState() {
       tags,
       tagInput,
       category,
+      subcategory,
       brand,
       size,
       condition,
@@ -92,6 +95,7 @@ export function useSellFormState() {
       setTags,
       setTagInput,
       setCategory,
+      setSubcategory,
       setBrand,
       setSize,
       setCondition,

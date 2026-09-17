@@ -21,7 +21,7 @@
  *   - AGENTS.md §27.3 (Flagship spring configs — tap)
  */
 import React, { useCallback, useRef, useState } from 'react';
-import { StyleSheet, Pressable, ActivityIndicator, View } from 'react-native';
+import { StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,

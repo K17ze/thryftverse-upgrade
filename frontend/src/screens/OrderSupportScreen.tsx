@@ -21,34 +21,39 @@ import { AppInput } from '../components/ui/AppInput';
 import { useHaptic } from '../hooks/useHaptic';
 import { Caption, Meta } from '../components/ui/Text';
 import { CommerceOrder, getOrder } from '../services/commerceApi';
+import { requestReturn } from '../services/returnsApi';
+import { validateRequestedRefundAmount } from '../utils/returnCase';
+import { filterSupportTopics, SUPPORT_TOPIC_RULES, type SupportTopicRule } from '../utils/supportTopics';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { normaliseOrderStatus } from '../components/orders/orderCapabilities';
 import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadMedia } from '../services/mediaUpload';
-import { parseApiError } from '../lib/apiClient';
+import { parseApiError, ApiRequestError } from '../lib/apiClient';
 import { t } from '../i18n';
 
 
 type Props = NativeStackScreenProps<RootStackParamList, 'OrderSupport'>;
 
-interface SupportTopic {
-  id: string;
+interface SupportTopic extends SupportTopicRule {
   icon: React.ComponentProps<typeof Ionicons>['name'];
-  label: string;
-  description: string;
-  requiresStatus: string[] | null;
 }
 
-const ALL_SUPPORT_TOPICS: SupportTopic[] = [
-  { id: 'not_received', icon: 'car-outline', label: 'Item not received', description: 'My order has not arrived within the expected timeframe.', requiresStatus: ['shipped', 'in transit', 'out for delivery', 'delivered'] },
-  { id: 'not_as_described', icon: 'alert-circle-outline', label: 'Not as described', description: 'The item condition, size, or authenticity does not match the listing.', requiresStatus: ['delivered'] },
-  { id: 'damaged', icon: 'bandage-outline', label: 'Item arrived damaged', description: 'The item was damaged during shipping or arrived broken.', requiresStatus: ['delivered'] },
-  { id: 'wrong_item', icon: 'shuffle-outline', label: 'Wrong item sent', description: 'I received a different item than what I ordered.', requiresStatus: ['delivered'] },
-  { id: 'return', icon: 'return-down-back-outline', label: 'Request a return', description: 'I want to return the item for a refund.', requiresStatus: ['delivered'] },
-  { id: 'payment_issue', icon: 'card-outline', label: 'Payment issue', description: 'There was a problem with payment or billing.', requiresStatus: ['created', 'paid'] },
-  { id: 'other', icon: 'chatbubble-outline', label: 'Other issue', description: 'Something else is wrong with my order.', requiresStatus: null },
-];
+const TOPIC_ICONS: Record<string, SupportTopic['icon']> = {
+  not_received: 'car-outline',
+  not_as_described: 'alert-circle-outline',
+  damaged: 'bandage-outline',
+  wrong_item: 'shuffle-outline',
+  return: 'return-down-back-outline',
+  payment_issue: 'card-outline',
+  other: 'chatbubble-outline',
+};
+
+const ALL_SUPPORT_TOPICS: SupportTopic[] = SUPPORT_TOPIC_RULES.map((rule) => ({
+  ...rule,
+  icon: TOPIC_ICONS[rule.id] ?? 'chatbubble-outline',
+}));
 
 /**
  * Reason-specific evidence guidance.
@@ -83,8 +88,16 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
+  const { formatFromFiat } = useFormattedPrice();
+  const viewerId = useStore((state) => state.currentUser?.id ?? null);
 
-  const [selectedTopic, setSelectedTopic] = useState<string | null>(categoryId ?? null);
+  // Whitelist the deep-linked category — an arbitrary param value must not
+  // preselect a topic that isn't in the picker.
+  const [selectedTopic, setSelectedTopic] = useState<string | null>(
+    categoryId && ALL_SUPPORT_TOPICS.some((topic) => topic.id === categoryId)
+      ? categoryId
+      : null
+  );
   const [details, setDetails] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -92,6 +105,11 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
   const [order, setOrder] = React.useState<CommerceOrder | null>(null);
   const [evidenceUris, setEvidenceUris] = useState<string[]>([]);
   const [isUploadingEvidence, setIsUploadingEvidence] = useState(false);
+  // Partial refund request — only shown for the 'return' topic. Prefilled
+  // with the order total; the buyer can lower it for a partial refund.
+  const [refundAmountText, setRefundAmountText] = useState('');
+  const [refundAmountError, setRefundAmountError] = useState<string | null>(null);
+  const refundPrefillKey = React.useRef<string | null>(null);
 
   const createSupportTicketOnApi = useStore((state) => state.createSupportTicketOnApi);
   const getSupportTicketsForOrder = useStore((state) => state.getSupportTicketsForOrder);
@@ -112,14 +130,40 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
     return () => { cancelled = true; };
   }, [orderId, loadSupportTicketsForOrderFromApi]);
 
+  // Prefill the refund amount with the paid total when the buyer picks the
+  // return topic. Keyed so it fires once per topic+order selection and never
+  // clobbers an amount the buyer already typed.
+  React.useEffect(() => {
+    if (selectedTopic !== 'return' || !order) return;
+    const key = `${selectedTopic}:${order.id}`;
+    if (refundPrefillKey.current === key) return;
+    refundPrefillKey.current = key;
+    setRefundAmountText(order.totalGbp.toFixed(2));
+    setRefundAmountError(null);
+  }, [selectedTopic, order]);
+
   const existingTickets = getSupportTicketsForOrder(orderId);
   const openTicket = existingTickets.find((t) => t.status === 'open');
 
   const orderStatus = normaliseOrderStatus(order?.status ?? 'unknown');
-  const availableTopics = ALL_SUPPORT_TOPICS.filter((t) => {
-    if (t.requiresStatus === null) return true;
-    return t.requiresStatus.includes(orderStatus);
+  // Role gating: buyer-claim topics are meaningless (and dishonest) when
+  // filed by the seller on the same order.
+  const viewerIsBuyer = order ? order.buyerId === viewerId : false;
+  const availableTopics = filterSupportTopics(ALL_SUPPORT_TOPICS, {
+    orderStatus,
+    viewerIsBuyer,
+    orderLoaded: order != null,
+    deliveredAt: order?.deliveredAt ?? null,
   });
+
+  // A preselected topic that turns out ineligible (wrong role, wrong status,
+  // expired window) must not survive the order load — reset it.
+  React.useEffect(() => {
+    if (!order || !selectedTopic) return;
+    if (!availableTopics.some((topic) => topic.id === selectedTopic)) {
+      setSelectedTopic(null);
+    }
+  }, [order, selectedTopic, availableTopics]);
 
   const canSubmit = selectedTopic && details.trim().length > 10 && !isSubmitting && !isSubmitted && !isUploadingEvidence;
 
@@ -169,15 +213,73 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
   const handleSubmit = useCallback(async () => {
     if (!canSubmit) return;
     haptic.medium();
+
+    // Refund amount validation for the return topic — checked against the
+    // paid order total before anything is submitted. When the order hasn't
+    // loaded, fall back to parse-only validation; the server enforces the
+    // bound regardless.
+    let requestedAmountGbp: number | undefined;
+    if (selectedTopic === 'return') {
+      if (order) {
+        const result = validateRequestedRefundAmount(refundAmountText, order.totalGbp);
+        if (result.error) {
+          setRefundAmountError(
+            result.error === 'exceeds_total'
+              ? `Enter an amount up to ${formatFromFiat(order.totalGbp, 'GBP', { displayMode: 'fiat' })}.`
+              : result.error === 'required'
+                ? 'Enter a refund amount.'
+                : 'Enter a valid amount.'
+          );
+          haptic.light();
+          return;
+        }
+        requestedAmountGbp = result.amountGbp ?? undefined;
+      } else {
+        const parsed = validateRequestedRefundAmount(refundAmountText, Number.MAX_SAFE_INTEGER);
+        if (parsed.error && parsed.error !== 'exceeds_total') {
+          setRefundAmountError(
+            parsed.error === 'required' ? 'Enter a refund amount.' : 'Enter a valid amount.'
+          );
+          haptic.light();
+          return;
+        }
+        requestedAmountGbp = parsed.amountGbp ?? undefined;
+      }
+    }
+
     setIsSubmitting(true);
 
     try {
       const topic = ALL_SUPPORT_TOPICS.find((t) => t.id === selectedTopic)!;
+
+      // A return request opens a real return case — the authoritative record
+      // the seller and platform act on — before the support ticket that
+      // tracks the conversation. A 409 means a case already exists for this
+      // order; that is a valid state, so the ticket still proceeds.
+      if (selectedTopic === 'return') {
+        try {
+          await requestReturn(orderId, {
+            reason: 'return',
+            description: details.trim(),
+            evidenceMediaUrls: evidenceUris.length > 0 ? evidenceUris : undefined,
+            requestedAmountGbp });
+        } catch (returnError) {
+          const alreadyOpen =
+            returnError instanceof ApiRequestError && returnError.status === 409;
+          if (!alreadyOpen) throw returnError;
+        }
+      }
+
+      const ticketDetails =
+        selectedTopic === 'return' && requestedAmountGbp !== undefined
+          ? `${details.trim()}\n\nRequested refund: £${requestedAmountGbp.toFixed(2)}`
+          : details.trim();
+
       const ticketId = await createSupportTicketOnApi({
         orderId,
         topicId: topic.id,
         topicLabel: topic.label,
-        details: details.trim(),
+        details: ticketDetails,
         evidenceMediaUrls: evidenceUris.length > 0 ? evidenceUris : undefined });
 
       setIsSubmitting(false);
@@ -189,7 +291,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
       const parsed = parseApiError(err);
       show(parsed.message, 'error');
     }
-  }, [canSubmit, haptic, createSupportTicketOnApi, orderId, selectedTopic, details, evidenceUris, show]);
+  }, [canSubmit, haptic, createSupportTicketOnApi, orderId, selectedTopic, details, evidenceUris, show, order, refundAmountText, formatFromFiat]);
 
   return (
     <FlagshipScreen
@@ -331,6 +433,35 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
               <Text style={styles.charCount}>{details.length}/800</Text>
             </View>
           </View>
+
+          {/* Refund amount — partial refund request, return topic only.
+              Prefilled with the paid total; validated against it. */}
+          {!isSubmitted && selectedTopic === 'return' && (
+            <View>
+              <Meta color={colors.textMuted} style={styles.sectionLabel}>
+                Refund amount
+              </Meta>
+              <View style={styles.detailsCard}>
+                <AppInput
+                  value={refundAmountText}
+                  onChangeText={(text) => {
+                    setRefundAmountText(text);
+                    setRefundAmountError(null);
+                  }}
+                  placeholder="0.00"
+                  keyboardType="decimal-pad"
+                  prefix={<Text style={styles.currencyPrefix}>£</Text>}
+                  errorText={refundAmountError ?? undefined}
+                  helperText={
+                    order
+                      ? `You paid ${formatFromFiat(order.totalGbp, 'GBP', { displayMode: 'fiat' })}. Keep the full amount or enter a partial refund.`
+                      : 'Enter the refund amount in GBP.'
+                  }
+                  accessibilityLabel="Refund amount in GBP"
+                />
+              </View>
+            </View>
+          )}
 
           {/* Evidence upload — reason-specific. Hidden entirely for reasons
               that don't need photos (no accusatory photo theatre). */}
@@ -526,6 +657,11 @@ function createStyles(colors: ThemeColors) {
     color: colors.brand },
   detailsCard: {
     padding: Space.md },
+  currencyPrefix: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textSecondary,
+    marginRight: Space.xs },
   textArea: {
     minHeight: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + 4,
     textAlignVertical: 'top' },

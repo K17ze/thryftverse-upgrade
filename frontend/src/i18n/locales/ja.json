@@ -313,6 +313,8 @@
       "biometricLoginDisabled": "無効 — アプリが直接アカウントを開きます",
       "notificationCategories": "通知カテゴリー",
       "notificationPreferencesSubtitle": "おやすみ時間、プレビュー",
+      "pushThisDevice": "このデバイスのプッシュ通知",
+      "pushThisDeviceSubtitle": "配信と登録",
       "featureFlags": "機能フラグ",
       "featureFlagsSubtitle": "QA用の現在のフラグ値",
       "autoTranslate": "メッセージを自動翻訳",

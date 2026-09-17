@@ -163,6 +163,15 @@ function normalizeConfiguredBaseUrlForPlatform(url: string) {
   // the standard host bridge without making every developer maintain a second
   // environment file. Production HTTPS hosts pass through unchanged.
   if (Platform.OS === 'android' && /^http:\/\/(localhost|127\.0\.0\.1)(?=[:/]|$)/i.test(normalized)) {
+    // `adb reverse` exposes the host machine's loopback as the device's own
+    // loopback. When the dev client itself is reached over loopback, the
+    // transport is a reverse tunnel — keep localhost so API traffic uses the
+    // same tunnel. Physical devices have no 10.0.2.2 bridge, so rewriting
+    // would make the configured URL unreachable.
+    const devHostName = extractRawHost(getExpoDevelopmentHostUri());
+    if (devHostName === 'localhost' || devHostName === '127.0.0.1' || devHostName === '::1' || devHostName === '[::1]') {
+      return normalized;
+    }
     return normalized.replace(/^http:\/\/(localhost|127\.0\.0\.1)/i, 'http://10.0.2.2');
   }
 
@@ -176,7 +185,7 @@ function normalizeConfiguredBaseUrlForPlatform(url: string) {
   return normalized;
 }
 
-function extractHost(input: unknown) {
+function extractRawHost(input: unknown) {
   if (typeof input !== 'string' || input.trim().length === 0) {
     return null;
   }
@@ -187,21 +196,31 @@ function extractHost(input: unknown) {
   const withoutPath = withoutScheme.split('/')[0];
   const withoutPort = withoutPath.split(':')[0];
 
-  if (!withoutPort || withoutPort === 'localhost' || withoutPort === '127.0.0.1') {
+  return withoutPort || null;
+}
+
+function extractHost(input: unknown) {
+  const host = extractRawHost(input);
+
+  if (!host || host === 'localhost' || host === '127.0.0.1') {
     return null;
   }
 
-  return withoutPort;
+  return host;
 }
 
-function getExpoDevelopmentHost() {
+function getExpoDevelopmentHostUri() {
   const fromExpoConfig = (Constants.expoConfig as { hostUri?: string } | null)?.hostUri;
   const fromManifest2 = (Constants as unknown as { manifest2?: { extra?: { expoClient?: { hostUri?: string } } } })
     .manifest2?.extra?.expoClient?.hostUri;
   const fromLegacyManifest = (Constants as unknown as { manifest?: { debuggerHost?: string } })
     .manifest?.debuggerHost;
 
-  return extractHost(fromExpoConfig) ?? extractHost(fromManifest2) ?? extractHost(fromLegacyManifest);
+  return fromExpoConfig ?? fromManifest2 ?? fromLegacyManifest ?? null;
+}
+
+function getExpoDevelopmentHost() {
+  return extractHost(getExpoDevelopmentHostUri());
 }
 
 export function getApiBaseUrl() {
@@ -916,9 +935,24 @@ export async function fetchJson<T>(
     mergedInit.method !== undefined &&
     ['POST', 'PUT', 'DELETE', 'PATCH'].includes(mergedInit.method.toUpperCase());
 
+  // Orchestrated publish/schedule commands carry their own idempotency-key
+  // and persisted attempt-store recovery. They must NOT enter the generic
+  // FIFO offline queue — a blind replay would double-publish or resurrect a
+  // superseded schedule after the UI already resolved the attempt.
+  const isOrchestratedMutation = /\/creator\/documents\/[^/]+\/(publications|schedule)\/?$/.test(path);
+
   if (isWriteMethod) {
     const networkState = await Network.getNetworkStateAsync();
     if (networkState.isInternetReachable === false) {
+      if (isOrchestratedMutation) {
+        // Offline before send — the outcome is unknown (the request may
+        // reconcile via its idempotency key), NOT queued-for-replay.
+        throw new ApiRequestError(
+          'You are offline. The publication was not sent — check the result when you reconnect.',
+          undefined,
+          { code: 'OFFLINE_UNREACHABLE', status: 'unknown' }
+        );
+      }
       // Offline before the request even leaves the device: enqueue the write
       // mutation for later replay via the offline queue (WS33) so the user's
       // intent is preserved across connectivity gaps. The thrown error carries
@@ -980,6 +1014,16 @@ export async function fetchJson<T>(
         throw error;
       }
       if (isWriteMethod) {
+        if (isOrchestratedMutation) {
+          // Mid-flight drop — the request may have committed. The
+          // orchestrator's keyed reconciliation resolves the outcome; a
+          // blind FIFO replay must never fire a second publish/schedule.
+          throw new ApiRequestError(
+            'The connection dropped before the server confirmed the result — the outcome will be reconciled on reconnect.',
+            undefined,
+            { code: 'OFFLINE_UNREACHABLE', status: 'unknown' }
+          );
+        }
         // The connection dropped mid-flight before the server confirmed the
         // result. Enqueue the mutation for replay so the user does not lose
         // the action — the offline queue (WS33) will retry with its own
@@ -1020,10 +1064,11 @@ export async function fetchJson<T>(
       } else {
         // Token refresh failed — session is no longer valid. Trigger a
         // lazy logout so the navigator remounts to AuthLanding instead of
-        // leaving the user on a screen with stale auth state.
+        // leaving the user on a screen with stale auth state. Flag the
+        // expiry so the landing screen can say WHY, not just redirect.
         try {
           const { useStore } = await import('../store/useStore');
-          useStore.getState().logout();
+          useStore.getState().logout({ sessionExpired: true });
         } catch {
           // Store not available (e.g. during app bootstrap) — safe to ignore.
         }
@@ -1181,7 +1226,7 @@ export async function fetchWithAuth(
     } else {
       try {
         const { useStore } = await import('../store/useStore');
-        useStore.getState().logout();
+        useStore.getState().logout({ sessionExpired: true });
       } catch {
         // Store not available (e.g. during app bootstrap) — safe to ignore.
       }

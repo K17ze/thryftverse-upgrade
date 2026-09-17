@@ -16,6 +16,7 @@ import { logger } from '../../lib/logger.js';
 import { runRetentionSweep } from '../../lib/retentionEngine.js';
 import { runMediaGarbageCollection } from '../../lib/mediaGc.js';
 import { cleanupExpiredDsarExports } from './dsarExportHandler.js';
+import { purgeAllDLQs } from '../../lib/dlqMonitor.js';
 
 export interface RetentionSweepJobData {
   reason: 'scheduled' | 'manual';
@@ -67,6 +68,19 @@ export async function processRetentionSweep(
         { reason, cleaned: dsarCleanup.cleaned },
         'retentionSweep.dsarCleanupComplete',
       );
+    }
+
+    // Purge dead-letter queue entries older than 7 days — DLQ jobs are
+    // parked in 'wait' with no consumer, so without this janitor they
+    // accumulate forever (the admin replay/purge surface is parked).
+    const dlqPurged = await purgeAllDLQs(7).catch((err) => {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error({ reason, err: message }, 'retentionSweep.dlqPurgeFailed');
+      return 0;
+    });
+
+    if (dlqPurged > 0) {
+      logger.info({ reason, dlqPurged }, 'retentionSweep.dlqPurgeComplete');
     }
 
     logger.info({ reason }, 'retentionSweep.complete');

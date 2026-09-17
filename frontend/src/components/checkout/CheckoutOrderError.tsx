@@ -12,28 +12,34 @@ interface Props {
    *  payment_failed so the user can resubmit without editing details. */
   showRetry: boolean;
   onRetry: () => void;
+  /** Action label — 'Buy again' when the previous terminal failure
+   *  released the order and retrying it cannot succeed. */
+  retryLabel?: string;
 }
 
-function CheckoutOrderErrorBase({ message, showRetry, onRetry }: Props) {
+const CheckoutOrderErrorBase = React.forwardRef<Text, Props>(function CheckoutOrderErrorBase({ message, showRetry, onRetry, retryLabel = 'Retry payment' }, ref) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   return (
     <View style={styles.orderErrorContainer}>
-      <Text style={styles.orderErrorText} accessibilityLiveRegion="polite" maxFontSizeMultiplier={2}>{message}</Text>
+      {/* The ref lands on the message leaf — focusing the container with
+          `accessible` would group the retry button into the error text and
+          hide it from screen readers. */}
+      <Text ref={ref} style={styles.orderErrorText} accessibilityLiveRegion="polite" maxFontSizeMultiplier={2}>{message}</Text>
       {showRetry && (
         <Pressable
           style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.7 }]}
           onPress={() => { haptics.tap(); onRetry(); }}
           accessibilityRole="button"
-          accessibilityLabel="Retry payment"
+          accessibilityLabel={retryLabel}
         >
-          <Text style={styles.retryBtnText} maxFontSizeMultiplier={2}>Retry payment</Text>
+          <Text style={styles.retryBtnText} maxFontSizeMultiplier={2}>{retryLabel}</Text>
         </Pressable>
       )}
     </View>
   );
-}
+});
 
 const CheckoutOrderError = React.memo(CheckoutOrderErrorBase);
 CheckoutOrderError.displayName = 'CheckoutOrderError';

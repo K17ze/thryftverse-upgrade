@@ -95,10 +95,12 @@ export async function purgeDLQ(queueName: string, olderThanDays: number): Promis
   }
 
   const cutoffMs = Date.now() - olderThanDays * 24 * 60 * 60 * 1000;
-  const failedJobs = await dlq.getFailed(0, -1);
+  // DLQ entries are added via queue.add() with no consuming worker, so
+  // they sit in 'wait' — getFailed() would never see them.
+  const parkedJobs = await dlq.getJobs(['wait', 'delayed', 'failed'], 0, -1);
   let purged = 0;
 
-  for (const job of failedJobs) {
+  for (const job of parkedJobs) {
     const jobTimestamp = job.timestamp ?? 0;
     if (jobTimestamp < cutoffMs) {
       try {
@@ -119,4 +121,26 @@ export async function purgeDLQ(queueName: string, olderThanDays: number): Promis
   );
 
   return purged;
+}
+
+/**
+ * Purges DLQ entries older than `olderThanDays` across every mapped
+ * queue. Called by the daily retention sweep — DLQ entries otherwise
+ * accumulate forever: they're added to `wait` state where BullMQ's
+ * removeOnFail/removeOnComplete never apply and no worker drains them.
+ * Best-effort per queue — one failure never aborts the sweep.
+ */
+export async function purgeAllDLQs(olderThanDays: number): Promise<number> {
+  let total = 0;
+  for (const queueName of Object.keys(QUEUE_DLQ_MAP)) {
+    try {
+      total += await purgeDLQ(queueName, olderThanDays);
+    } catch (error) {
+      logger.warn(
+        { err: error instanceof Error ? error.message : String(error), queueName },
+        '[dlqMonitor] per-queue DLQ purge failed',
+      );
+    }
+  }
+  return total;
 }

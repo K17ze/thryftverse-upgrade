@@ -22,7 +22,197 @@ type ReturnCaseStatus =
   | 'appealed'
   | 'closed';
 
-type ReturnRemedy = 'full_refund' | 'partial_refund' | 'replacement' | 'repair' | 'reject';
+export type ReturnRemedy = 'full_refund' | 'partial_refund' | 'replacement' | 'repair' | 'reject';
+
+/**
+ * Seller response window for a return case. If the seller has not responded
+ * (i.e. the case is still in `requested`/`evidence_review`) within this many
+ * hours of the request, the buyer may ask the platform to step in. Surfaced to
+ * the client via `stepInEligibleAt` so timer copy always states the real
+ * window — never hard-code a different figure in UI copy.
+ */
+export const SELLER_RESPONSE_WINDOW_HOURS = 72;
+const SELLER_RESPONSE_WINDOW_MS = SELLER_RESPONSE_WINDOW_HOURS * 60 * 60 * 1000;
+
+/**
+ * Return window length in days, measured from delivery (CRA 2015 short-term
+ * rejection right). The deadline is stored on the case as
+ * `return_window_deadline` and enforced at request time — a case cannot be
+ * opened once it has passed.
+ */
+export const RETURN_WINDOW_DAYS = 14;
+
+/**
+ * Order statuses on which a return can be opened. A return is a post-receipt
+ * remedy, so only delivered/completed orders qualify — returns on unpaid,
+ * in-flight, cancelled or already-refunded orders are rejected with
+ * RETURN_NOT_AVAILABLE.
+ */
+const RETURN_ELIGIBLE_ORDER_STATUSES: ReadonlySet<string> = new Set([
+  'delivered',
+  'completed',
+]);
+
+export type ReturnRequestEligibility =
+  | { ok: true }
+  | {
+      ok: false;
+      code: 'RETURN_NOT_AVAILABLE' | 'RETURN_WINDOW_EXPIRED';
+      error: string;
+    };
+
+/**
+ * Gates return-request creation: the order must be in a post-receipt status
+ * AND the return window must not have elapsed. Status is checked first — an
+ * ineligible order is never rescued by a still-open window.
+ */
+export function evaluateReturnRequestEligibility(input: {
+  orderStatus: string;
+  returnWindowDeadline: Date;
+  now?: Date;
+}): ReturnRequestEligibility {
+  const status = input.orderStatus.trim().toLowerCase().replace(/[_-]+/g, ' ');
+  if (!RETURN_ELIGIBLE_ORDER_STATUSES.has(status)) {
+    return {
+      ok: false,
+      code: 'RETURN_NOT_AVAILABLE',
+      error: `A return cannot be opened for an order in status '${input.orderStatus}'`,
+    };
+  }
+  const now = input.now ?? new Date();
+  if (now.getTime() > input.returnWindowDeadline.getTime()) {
+    return {
+      ok: false,
+      code: 'RETURN_WINDOW_EXPIRED',
+      error: 'The return window for this order has expired',
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * Statuses in which the case is waiting on the seller (or, post-approval,
+ * on the seller/operator to keep moving). A case that stalls in any of
+ * these states for the response window can be escalated by the buyer —
+ * approval is not a response, it is the start of the seller's work.
+ */
+const STEP_IN_WAITING_STATUSES: ReadonlySet<ReturnCaseStatus> = new Set([
+  'requested',
+  'evidence_review',
+  'approved',
+  'reverse_shipped',
+  'received',
+  'inspected',
+  'remedy_accepted',
+]);
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+/**
+ * A refund amount (requested or proposed) must be positive and must not
+ * exceed the paid order total. Used for buyer partial-refund requests and
+ * seller/operator partial-refund remedies.
+ */
+export function isRefundAmountWithinPaidTotal(amountGbp: number, totalGbp: number): boolean {
+  return (
+    Number.isFinite(amountGbp) &&
+    amountGbp > 0 &&
+    amountGbp <= round2(totalGbp) + 1e-9
+  );
+}
+
+export type RemedyAmountResolution =
+  | { ok: true; remedyAmountGbp: number | null }
+  | {
+      ok: false;
+      code:
+        | 'REMEDY_AMOUNT_REQUIRED'
+        | 'REMEDY_AMOUNT_EXCEEDS_TOTAL'
+        | 'REMEDY_AMOUNT_NOT_APPLICABLE';
+      error: string;
+    };
+
+/**
+ * Resolves the stored remedy amount for a proposed remedy.
+ *
+ * Only `partial_refund` carries a buyer/seller-chosen amount — required,
+ * positive, and bounded by the paid order total. `full_refund` always stores
+ * the paid total (so the confirmed refund carries an explicit figure) and
+ * every other remedy stores no amount at all: an explicit `amountGbp` on a
+ * non-partial remedy is rejected rather than silently stored, so the API
+ * contract never records a "full refund" for £5 on a £56 order.
+ */
+export function resolveRemedyAmountGbp(input: {
+  remedy: ReturnRemedy;
+  amountGbp: number | undefined;
+  orderTotalGbp: number;
+}): RemedyAmountResolution {
+  const { remedy, amountGbp, orderTotalGbp } = input;
+
+  if (remedy !== 'partial_refund') {
+    if (amountGbp !== undefined) {
+      return {
+        ok: false,
+        code: 'REMEDY_AMOUNT_NOT_APPLICABLE',
+        error: `An explicit amount only applies to a partial refund remedy, not '${remedy}'`,
+      };
+    }
+    return {
+      ok: true,
+      remedyAmountGbp: remedy === 'full_refund' ? round2(orderTotalGbp) : null,
+    };
+  }
+
+  if (amountGbp === undefined) {
+    return {
+      ok: false,
+      code: 'REMEDY_AMOUNT_REQUIRED',
+      error: 'A partial refund remedy requires an amount',
+    };
+  }
+  if (!isRefundAmountWithinPaidTotal(amountGbp, orderTotalGbp)) {
+    return {
+      ok: false,
+      code: 'REMEDY_AMOUNT_EXCEEDS_TOTAL',
+      error: `Remedy amount must be positive and no greater than the paid order total of ${round2(orderTotalGbp).toFixed(2)} GBP`,
+    };
+  }
+  return { ok: true, remedyAmountGbp: round2(amountGbp) };
+}
+
+/**
+ * When the response window closes for a case that entered `status` at
+ * `referenceAt` (the row's updated_at — the window runs from when the case
+ * became stalled, not from creation, so post-approval stalls are covered).
+ * Returns null for statuses where step-in is not applicable.
+ */
+export function computeStepInEligibleAt(
+  status: ReturnCaseStatus,
+  referenceAt: string,
+): string | null {
+  if (!STEP_IN_WAITING_STATUSES.has(status)) return null;
+  const entered = new Date(referenceAt).getTime();
+  if (!Number.isFinite(entered)) return null;
+  return new Date(entered + SELLER_RESPONSE_WINDOW_MS).toISOString();
+}
+
+/**
+ * Step-in eligibility: the case must still be waiting on the seller AND the
+ * response window must have elapsed. `referenceAt` is the time the case
+ * entered the stalled status (updated_at for loaded rows).
+ */
+export function computeStepInEligibility(input: {
+  status: ReturnCaseStatus;
+  referenceAt: string;
+  now?: Date;
+}): { eligible: boolean; eligibleAt: string | null } {
+  const eligibleAt = computeStepInEligibleAt(input.status, input.referenceAt);
+  if (eligibleAt === null) return { eligible: false, eligibleAt: null };
+  const now = (input.now ?? new Date()).getTime();
+  return { eligible: now >= new Date(eligibleAt).getTime(), eligibleAt };
+}
 
 interface ReturnCaseRow {
   id: string;
@@ -42,6 +232,7 @@ interface ReturnCaseRow {
   inspection_condition: string | null;
   proposed_remedy: ReturnRemedy | null;
   remedy_amount_gbp: number | string | null;
+  requested_amount_gbp: number | string | null;
   resolution_notes: string | null;
   resolved_at: string | null;
   appeal_reason: string | null;
@@ -67,15 +258,22 @@ interface ReturnCaseEventRow {
 // ── State machine ──
 
 const VALID_TRANSITIONS: Record<ReturnCaseStatus, ReturnCaseStatus[]> = {
-  requested: ['evidence_review', 'approved', 'rejected'],
-  evidence_review: ['approved', 'rejected'],
-  approved: ['reverse_shipped'],
+  // 'appealed' is the platform step-in path: reachable only via
+  // POST /return-cases/:id/step-in after the response window has elapsed
+  // (the endpoint enforces the timing). It is reachable from every state
+  // that is still waiting on the seller — an approved case whose seller
+  // goes silent must not dead-end the buyer.
+  requested: ['evidence_review', 'approved', 'rejected', 'appealed'],
+  evidence_review: ['approved', 'rejected', 'appealed'],
+  approved: ['reverse_shipped', 'appealed'],
   rejected: ['appealed'],
-  reverse_shipped: ['received'],
-  received: ['inspected'],
-  inspected: ['remedy_proposed'],
-  remedy_proposed: ['remedy_accepted', 'appealed'],
-  remedy_accepted: ['refund_confirmed', 'closed'],
+  reverse_shipped: ['received', 'appealed'],
+  received: ['inspected', 'appealed'],
+  inspected: ['remedy_proposed', 'appealed'],
+  // 'closed' from remedy_proposed is the buyer-accepts-'reject' path:
+  // accepting a rejection settles the case — nothing is left to do.
+  remedy_proposed: ['remedy_accepted', 'appealed', 'closed'],
+  remedy_accepted: ['refund_confirmed', 'closed', 'appealed'],
   appealed: ['remedy_proposed', 'closed'],
   refund_confirmed: ['closed'],
   closed: [],
@@ -124,6 +322,15 @@ function serializeReturnCase(row: ReturnCaseRow) {
     inspectionCondition: row.inspection_condition,
     proposedRemedy: row.proposed_remedy,
     remedyAmountGbp: row.remedy_amount_gbp === null ? null : Number(row.remedy_amount_gbp),
+    requestedAmountGbp: row.requested_amount_gbp === null ? null : Number(row.requested_amount_gbp),
+    /**
+     * ISO timestamp when the buyer may ask the platform to step in — the
+     * seller response window (SELLER_RESPONSE_WINDOW_HOURS) measured from the
+     * request. Null once the seller has responded or the case has moved past
+     * the waiting states. Clients must render step-in copy from this value,
+     * not a locally assumed window.
+     */
+    stepInEligibleAt: computeStepInEligibleAt(row.status, row.updated_at),
     resolutionNotes: row.resolution_notes,
     resolvedAt: row.resolved_at,
     appealReason: row.appeal_reason,
@@ -176,6 +383,50 @@ async function recordTransition(
   );
 }
 
+/**
+ * Marks a return case `refund_confirmed` once a linked refund execution has
+ * genuinely succeeded (`refund_executions.status = 'succeeded'`). This is the
+ * only legitimate way the status is reached — the case must currently be
+ * `remedy_accepted`, the state the buyer's acceptance leaves it in while the
+ * refund is executed. Any other current state is left untouched so a stale,
+ * duplicate or out-of-order execution can never resurrect a resolved case.
+ *
+ * Call inside the refund-execution transaction. Returns true when the case
+ * was advanced.
+ */
+export async function confirmReturnCaseRefund(
+  client: PoolClient,
+  returnCaseId: string,
+  actorId: string,
+  metadata?: Record<string, unknown>,
+): Promise<boolean> {
+  const result = await client.query<{ status: ReturnCaseStatus }>(
+    `SELECT status FROM return_cases WHERE id = $1 LIMIT 1 FOR UPDATE`,
+    [returnCaseId],
+  );
+  const current = result.rows[0]?.status;
+  if (current !== 'remedy_accepted') {
+    return false;
+  }
+  await client.query(
+    `UPDATE return_cases
+     SET status = 'refund_confirmed', resolved_at = NOW(), updated_at = NOW()
+     WHERE id = $1`,
+    [returnCaseId],
+  );
+  await recordTransition(
+    client,
+    returnCaseId,
+    'remedy_accepted',
+    'refund_confirmed',
+    actorId,
+    'operator',
+    'Refund executed',
+    metadata,
+  );
+  return true;
+}
+
 async function fetchEvents(client: PoolClient, returnCaseId: string): Promise<ReturnCaseEventRow[]> {
   const eventsResult = await client.query<ReturnCaseEventRow>(
     `SELECT id, return_case_id, from_status, to_status, actor_id, actor_role,
@@ -210,6 +461,13 @@ export function registerReturnRoutes({
       reason: z.string().min(1).max(200),
       description: z.string().max(2000).optional(),
       evidenceMediaUrls: z.array(z.string().url()).max(20).default([]),
+      /**
+       * Optional partial-refund request in GBP major units. Must be positive
+       * and no greater than the order's paid total (validated against
+       * orders.total_gbp below). Omitted means the buyer requests a full
+       * refund.
+       */
+      requestedAmountGbp: z.number().positive().max(100000).optional(),
     });
 
     const { orderId } = paramsSchema.parse(request.params);
@@ -226,11 +484,12 @@ export function registerReturnRoutes({
         buyer_id: string;
         seller_id: string;
         buyer_protection_fee_gbp: number | string;
+        total_gbp: number | string;
         status: string;
         delivered_at: string | null;
         created_at: string;
       }>(
-        `SELECT buyer_id, seller_id, buyer_protection_fee_gbp, status,
+        `SELECT buyer_id, seller_id, buyer_protection_fee_gbp, total_gbp, status,
                 delivered_at::text, created_at::text
          FROM orders
          WHERE id = $1
@@ -251,6 +510,32 @@ export function registerReturnRoutes({
         await client.query('ROLLBACK');
         reply.code(403);
         return { ok: false, error: 'Only the buyer can initiate a return' };
+      }
+
+      // Eligibility gate: a return is a post-receipt remedy. The order must
+      // be delivered/completed and the request must land inside the return
+      // window — otherwise a case carrying a refund amount could be opened on
+      // an unpaid, cancelled or already-refunded order, or months after
+      // delivery. The window is statutory 14 days from delivery (CRA 2015
+      // short-term rejection right); when the order has no delivered_at the
+      // window opens from now.
+      const deliveredAt = order.delivered_at ? new Date(order.delivered_at) : new Date();
+      const returnWindowDeadline = new Date(
+        deliveredAt.getTime() + RETURN_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+      );
+      const eligibility = evaluateReturnRequestEligibility({
+        orderStatus: order.status,
+        returnWindowDeadline,
+      });
+      if (!eligibility.ok) {
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return {
+          ok: false,
+          error: eligibility.error,
+          code: eligibility.code,
+          returnWindowDeadline: returnWindowDeadline.toISOString(),
+        };
       }
 
       // Prevent duplicate active return cases for the same order.
@@ -285,20 +570,34 @@ export function registerReturnRoutes({
         basis = 'protection';
       }
 
-      // Derive the return window deadline. Statutory default is 14 days from
-      // delivery (CRA 2015 short-term rejection right). If the order has not
-      // been delivered yet, the window opens from now.
-      const deliveredAt = order.delivered_at ? new Date(order.delivered_at) : new Date();
-      const returnWindowDeadline = new Date(deliveredAt.getTime() + 14 * 24 * 60 * 60 * 1000);
+      // Partial-refund requests must not exceed the paid order total.
+      const requestedAmountGbp =
+        payload.requestedAmountGbp === undefined
+          ? null
+          : round2(payload.requestedAmountGbp);
+      if (
+        requestedAmountGbp !== null &&
+        !isRefundAmountWithinPaidTotal(requestedAmountGbp, Number(order.total_gbp))
+      ) {
+        await client.query('ROLLBACK');
+        reply.code(422);
+        return {
+          ok: false,
+          error: `Requested refund amount exceeds the paid order total of ${Number(order.total_gbp).toFixed(2)} GBP`,
+          code: 'REFUND_AMOUNT_EXCEEDS_TOTAL',
+          orderTotalGbp: Number(order.total_gbp),
+        };
+      }
 
       const returnCaseId = `rc_${crypto.randomUUID()}`;
 
       await client.query(
         `INSERT INTO return_cases
            (id, order_id, buyer_id, seller_id, basis, status,
-            reason, description, evidence_media_urls, return_window_deadline)
+            reason, description, evidence_media_urls, return_window_deadline,
+            requested_amount_gbp)
          VALUES ($1, $2, $3, $4, $5, 'requested',
-                 $6, $7, $8, $9)`,
+                 $6, $7, $8, $9, $10)`,
         [
           returnCaseId,
           orderId,
@@ -309,6 +608,7 @@ export function registerReturnRoutes({
           payload.description ?? null,
           payload.evidenceMediaUrls,
           returnWindowDeadline,
+          requestedAmountGbp,
         ],
       );
 
@@ -320,7 +620,11 @@ export function registerReturnRoutes({
         authUserId,
         'buyer',
         'Return request submitted',
-        { reason: payload.reason, basis },
+        {
+          reason: payload.reason,
+          basis,
+          requestedAmountGbp,
+        },
       );
 
       await client.query('COMMIT');
@@ -331,6 +635,8 @@ export function registerReturnRoutes({
         status: 'requested' as ReturnCaseStatus,
         basis,
         returnWindowDeadline: returnWindowDeadline.toISOString(),
+        requestedAmountGbp,
+        stepInEligibleAt: computeStepInEligibleAt('requested', new Date().toISOString()),
       };
     } catch (error) {
       await client.query('ROLLBACK');
@@ -359,7 +665,7 @@ export function registerReturnRoutes({
                 reason, description, evidence_media_urls,
                 return_window_deadline::text, return_carrier, return_tracking_number,
                 return_label_url, inspection_notes, inspection_condition,
-                proposed_remedy, remedy_amount_gbp,
+                proposed_remedy, remedy_amount_gbp, requested_amount_gbp,
                 resolution_notes, resolved_at::text,
                 appeal_reason, appealed_at::text,
                 operator_id, operator_reason,
@@ -426,7 +732,7 @@ export function registerReturnRoutes({
                   reason, description, evidence_media_urls,
                   return_window_deadline::text, return_carrier, return_tracking_number,
                   return_label_url, inspection_notes, inspection_condition,
-                  proposed_remedy, remedy_amount_gbp,
+                  proposed_remedy, remedy_amount_gbp, requested_amount_gbp,
                   resolution_notes, resolved_at::text,
                   appeal_reason, appealed_at::text,
                   operator_id, operator_reason,
@@ -510,6 +816,142 @@ export function registerReturnRoutes({
     }
   });
 
+  // POST /return-cases/:returnCaseId/step-in
+  // Buyer asks the platform to step in when the seller has not responded
+  // within SELLER_RESPONSE_WINDOW_HOURS of the request. Transitions the case
+  // to 'appealed' (the platform-review state) and stamps appealed_at.
+  app.post('/return-cases/:returnCaseId/step-in', async (request, reply) => {
+    const authUserId = resolveAuthenticatedUserId(request);
+    if (!authUserId) {
+      reply.code(401);
+      return { ok: false, error: 'Unauthorized' };
+    }
+
+    const paramsSchema = z.object({ returnCaseId: z.string().min(4).max(64) });
+    const bodySchema = z.object({
+      reason: z.string().min(1).max(1000).optional(),
+    });
+
+    const { returnCaseId } = paramsSchema.parse(request.params);
+    const payload = bodySchema.parse(request.body ?? {});
+
+    const client = await db.connect();
+    try {
+      await client.query('BEGIN');
+
+      const result = await client.query<ReturnCaseRow>(
+        `SELECT id, order_id, buyer_id, seller_id, basis, status,
+                  reason, description, evidence_media_urls,
+                  return_window_deadline::text, return_carrier, return_tracking_number,
+                  return_label_url, inspection_notes, inspection_condition,
+                  proposed_remedy, remedy_amount_gbp, requested_amount_gbp,
+                  resolution_notes, resolved_at::text,
+                  appeal_reason, appealed_at::text,
+                  operator_id, operator_reason,
+                  created_at::text, updated_at::text
+         FROM return_cases
+         WHERE id = $1
+         LIMIT 1
+         FOR UPDATE`,
+        [returnCaseId],
+      );
+
+      if (!result.rowCount) {
+        await client.query('ROLLBACK');
+        reply.code(404);
+        return { ok: false, error: 'Return case not found' };
+      }
+
+      const returnCase = result.rows[0];
+
+      if (returnCase.buyer_id !== authUserId) {
+        await client.query('ROLLBACK');
+        reply.code(403);
+        return { ok: false, error: 'Only the buyer can ask the platform to step in' };
+      }
+
+      const eligibility = computeStepInEligibility({
+        status: returnCase.status,
+        referenceAt: returnCase.updated_at,
+      });
+
+      if (eligibility.eligibleAt === null) {
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return {
+          ok: false,
+          error: `Step-in is not available from status '${returnCase.status}'`,
+          code: 'STEP_IN_NOT_AVAILABLE',
+        };
+      }
+
+      if (!eligibility.eligible) {
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return {
+          ok: false,
+          error: `The seller response window has not elapsed yet. Step-in is available from ${eligibility.eligibleAt}`,
+          code: 'STEP_IN_NOT_YET_ELIGIBLE',
+          stepInEligibleAt: eligibility.eligibleAt,
+        };
+      }
+
+      const previousStatus = returnCase.status;
+      const targetStatus: ReturnCaseStatus = 'appealed';
+
+      if (!validateTransition(previousStatus, targetStatus)) {
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return {
+          ok: false,
+          error: `Cannot transition from '${previousStatus}' to '${targetStatus}'`,
+        };
+      }
+
+      const appealReason =
+        payload.reason ??
+        `Seller did not respond within the ${SELLER_RESPONSE_WINDOW_HOURS}-hour response window`;
+
+      await client.query(
+        `UPDATE return_cases
+         SET status = $2,
+             appeal_reason = $3,
+             appealed_at = NOW(),
+             updated_at = NOW()
+         WHERE id = $1`,
+        [returnCaseId, targetStatus, appealReason],
+      );
+
+      await recordTransition(
+        client,
+        returnCaseId,
+        previousStatus,
+        targetStatus,
+        authUserId,
+        'buyer',
+        appealReason,
+        {
+          trigger: 'seller_no_response',
+          responseWindowHours: SELLER_RESPONSE_WINDOW_HOURS,
+        },
+      );
+
+      await client.query('COMMIT');
+
+      return {
+        ok: true,
+        returnCaseId,
+        status: targetStatus,
+        appealedAt: new Date().toISOString(),
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
+
   // POST /return-cases/:returnCaseId/decision
   // Seller or operator approves/rejects the return.
   app.post('/return-cases/:returnCaseId/decision', async (request, reply) => {
@@ -540,7 +982,7 @@ export function registerReturnRoutes({
                   reason, description, evidence_media_urls,
                   return_window_deadline::text, return_carrier, return_tracking_number,
                   return_label_url, inspection_notes, inspection_condition,
-                  proposed_remedy, remedy_amount_gbp,
+                  proposed_remedy, remedy_amount_gbp, requested_amount_gbp,
                   resolution_notes, resolved_at::text,
                   appeal_reason, appealed_at::text,
                   operator_id, operator_reason,
@@ -619,7 +1061,9 @@ export function registerReturnRoutes({
   });
 
   // POST /return-cases/:returnCaseId/reverse-shipment
-  // Seller or platform provides return tracking details.
+  // Seller or platform provides return tracking details; the buyer may also
+  // record their own dispatch — they are the party physically shipping, and
+  // a seller who approves then goes silent must not dead-end the case.
   app.post('/return-cases/:returnCaseId/reverse-shipment', async (request, reply) => {
     const authUserId = resolveAuthenticatedUserId(request);
     if (!authUserId) {
@@ -649,7 +1093,7 @@ export function registerReturnRoutes({
                   reason, description, evidence_media_urls,
                   return_window_deadline::text, return_carrier, return_tracking_number,
                   return_label_url, inspection_notes, inspection_condition,
-                  proposed_remedy, remedy_amount_gbp,
+                  proposed_remedy, remedy_amount_gbp, requested_amount_gbp,
                   resolution_notes, resolved_at::text,
                   appeal_reason, appealed_at::text,
                   operator_id, operator_reason,
@@ -669,10 +1113,14 @@ export function registerReturnRoutes({
 
       const returnCase = result.rows[0];
 
-      if (returnCase.seller_id !== authUserId && !isOperator) {
+      if (
+        returnCase.seller_id !== authUserId &&
+        returnCase.buyer_id !== authUserId &&
+        !isOperator
+      ) {
         await client.query('ROLLBACK');
         reply.code(403);
-        return { ok: false, error: 'Only the seller or an operator can provide reverse shipment details' };
+        return { ok: false, error: 'Only a case participant or an operator can provide reverse shipment details' };
       }
 
       const previousStatus = returnCase.status;
@@ -687,7 +1135,11 @@ export function registerReturnRoutes({
         };
       }
 
-      const actorRole = isOperator ? 'operator' : 'seller';
+      const actorRole = isOperator
+        ? 'operator'
+        : returnCase.buyer_id === authUserId
+          ? 'buyer'
+          : 'seller';
 
       await client.query(
         `UPDATE return_cases
@@ -758,7 +1210,7 @@ export function registerReturnRoutes({
                   reason, description, evidence_media_urls,
                   return_window_deadline::text, return_carrier, return_tracking_number,
                   return_label_url, inspection_notes, inspection_condition,
-                  proposed_remedy, remedy_amount_gbp,
+                  proposed_remedy, remedy_amount_gbp, requested_amount_gbp,
                   resolution_notes, resolved_at::text,
                   appeal_reason, appealed_at::text,
                   operator_id, operator_reason,
@@ -856,7 +1308,7 @@ export function registerReturnRoutes({
                   reason, description, evidence_media_urls,
                   return_window_deadline::text, return_carrier, return_tracking_number,
                   return_label_url, inspection_notes, inspection_condition,
-                  proposed_remedy, remedy_amount_gbp,
+                  proposed_remedy, remedy_amount_gbp, requested_amount_gbp,
                   resolution_notes, resolved_at::text,
                   appeal_reason, appealed_at::text,
                   operator_id, operator_reason,
@@ -965,7 +1417,7 @@ export function registerReturnRoutes({
                   reason, description, evidence_media_urls,
                   return_window_deadline::text, return_carrier, return_tracking_number,
                   return_label_url, inspection_notes, inspection_condition,
-                  proposed_remedy, remedy_amount_gbp,
+                  proposed_remedy, remedy_amount_gbp, requested_amount_gbp,
                   resolution_notes, resolved_at::text,
                   appeal_reason, appealed_at::text,
                   operator_id, operator_reason,
@@ -1003,6 +1455,33 @@ export function registerReturnRoutes({
         };
       }
 
+      // Remedy amounts are bounded by the paid order total, and only a
+      // partial refund carries an explicit amount at all — see
+      // resolveRemedyAmountGbp for the contract.
+      const orderResult = await client.query<{ total_gbp: number | string }>(
+        `SELECT total_gbp FROM orders WHERE id = $1 LIMIT 1`,
+        [returnCase.order_id],
+      );
+      const orderTotalGbp = Number(orderResult.rows[0]?.total_gbp ?? 0);
+
+      const amountResolution = resolveRemedyAmountGbp({
+        remedy: payload.remedy,
+        amountGbp: payload.amountGbp,
+        orderTotalGbp,
+      });
+      if (!amountResolution.ok) {
+        await client.query('ROLLBACK');
+        reply.code(422);
+        return {
+          ok: false,
+          error: amountResolution.error,
+          code: amountResolution.code,
+          orderTotalGbp,
+        };
+      }
+
+      const remedyAmountGbp = amountResolution.remedyAmountGbp;
+
       const actorRole = isOperator ? 'operator' : 'seller';
 
       await client.query(
@@ -1017,7 +1496,7 @@ export function registerReturnRoutes({
           returnCaseId,
           targetStatus,
           payload.remedy,
-          payload.amountGbp ?? null,
+          remedyAmountGbp,
           payload.notes ?? null,
         ],
       );
@@ -1030,7 +1509,7 @@ export function registerReturnRoutes({
         authUserId,
         actorRole,
         payload.notes ?? 'Remedy proposed',
-        { remedy: payload.remedy, amountGbp: payload.amountGbp ?? null },
+        { remedy: payload.remedy, amountGbp: remedyAmountGbp },
       );
 
       await client.query('COMMIT');
@@ -1040,7 +1519,7 @@ export function registerReturnRoutes({
         returnCaseId,
         status: targetStatus,
         proposedRemedy: payload.remedy,
-        remedyAmountGbp: payload.amountGbp ?? null,
+        remedyAmountGbp,
       };
     } catch (error) {
       await client.query('ROLLBACK');
@@ -1071,7 +1550,7 @@ export function registerReturnRoutes({
                   reason, description, evidence_media_urls,
                   return_window_deadline::text, return_carrier, return_tracking_number,
                   return_label_url, inspection_notes, inspection_condition,
-                  proposed_remedy, remedy_amount_gbp,
+                  proposed_remedy, remedy_amount_gbp, requested_amount_gbp,
                   resolution_notes, resolved_at::text,
                   appeal_reason, appealed_at::text,
                   operator_id, operator_reason,
@@ -1098,7 +1577,14 @@ export function registerReturnRoutes({
       }
 
       const previousStatus = returnCase.status;
-      const targetStatus: ReturnCaseStatus = 'remedy_accepted';
+      // Accepting a 'reject' remedy settles the case outright — there is no
+      // fulfilment left to track, so holding it open at remedy_accepted
+      // would park it until an operator notices.
+      const isRefundRemedy =
+        returnCase.proposed_remedy === 'full_refund' ||
+        returnCase.proposed_remedy === 'partial_refund';
+      const targetStatus: ReturnCaseStatus =
+        returnCase.proposed_remedy === 'reject' ? 'closed' : 'remedy_accepted';
 
       if (!validateTransition(previousStatus, targetStatus)) {
         await client.query('ROLLBACK');
@@ -1111,7 +1597,9 @@ export function registerReturnRoutes({
 
       await client.query(
         `UPDATE return_cases
-         SET status = $2, updated_at = NOW()
+         SET status = $2,
+             resolved_at = CASE WHEN $2 = 'closed' THEN NOW() ELSE resolved_at END,
+             updated_at = NOW()
          WHERE id = $1`,
         [returnCaseId, targetStatus],
       );
@@ -1123,43 +1611,57 @@ export function registerReturnRoutes({
         targetStatus,
         authUserId,
         'buyer',
-        'Remedy accepted',
+        targetStatus === 'closed' ? 'Remedy accepted — case closed' : 'Remedy accepted',
         { remedy: returnCase.proposed_remedy },
       );
 
-      // If the remedy is a refund, advance to refund_confirmed immediately.
-      // In a full implementation this would trigger the refund execution
-      // pipeline (ledger reversal / payment gateway). Here we transition
-      // directly since the refund execution service is not wired in this gate.
-      let finalStatus: ReturnCaseStatus = targetStatus;
-      if (
-        returnCase.proposed_remedy === 'full_refund' ||
-        returnCase.proposed_remedy === 'partial_refund'
-      ) {
-        finalStatus = 'refund_confirmed';
-        if (validateTransition(targetStatus, finalStatus)) {
+      // A refund remedy does NOT advance the case to refund_confirmed here:
+      // no money has moved yet. The case stays at remedy_accepted — the
+      // truthful "refund approved, processing" state — until a refund
+      // execution linked to this case (refund_executions.return_case_id)
+      // succeeds, at which point confirmReturnCaseRefund advances it to
+      // refund_confirmed. See routes/refunds.ts.
+      //
+      // Acceptance now creates that linked execution itself: previously
+      // nothing did — "Refund approved — processing" could sit forever with
+      // no refund process existing. The execution is created with
+      // maker_check_status='pending_check' regardless of amount, so a human
+      // checker always confirms remedy-linked refunds.
+      if (isRefundRemedy && targetStatus === 'remedy_accepted') {
+        const orderRow = await client.query<{ total_gbp: number | string }>(
+          `SELECT total_gbp FROM orders WHERE id = $1 LIMIT 1`,
+          [returnCase.order_id],
+        );
+        const agreedAmount = Number(
+          returnCase.remedy_amount_gbp ?? orderRow.rows[0]?.total_gbp ?? 0,
+        );
+        if (Number.isFinite(agreedAmount) && agreedAmount > 0) {
+          const requestHash = crypto
+            .createHash('sha256')
+            .update(`return_case_remedy:${returnCaseId}:${agreedAmount}`)
+            .digest('hex');
           await client.query(
-            `UPDATE return_cases
-             SET status = $2, resolved_at = NOW(), updated_at = NOW()
-             WHERE id = $1`,
-            [returnCaseId, finalStatus],
-          );
-          await recordTransition(
-            client,
-            returnCaseId,
-            targetStatus,
-            finalStatus,
-            authUserId,
-            'buyer',
-            'Refund executed after remedy acceptance',
-            { remedy: returnCase.proposed_remedy },
+            `INSERT INTO refund_executions (
+               id, order_id, return_case_id, request_hash, amount_gbp,
+               initiator_id, initiator_role, status,
+               maker_check_status, maker_check_threshold_gbp
+             )
+             VALUES ($1, $2, $3, $4, $5, 'system', 'system', 'pending', 'pending_check', 0)
+             ON CONFLICT (request_hash) DO NOTHING`,
+            [
+              `rex_${crypto.randomUUID().replace(/-/g, '')}`,
+              returnCase.order_id,
+              returnCaseId,
+              requestHash,
+              agreedAmount,
+            ],
           );
         }
       }
 
       await client.query('COMMIT');
 
-      return { ok: true, returnCaseId, status: finalStatus };
+      return { ok: true, returnCaseId, status: targetStatus };
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
@@ -1194,7 +1696,7 @@ export function registerReturnRoutes({
                   reason, description, evidence_media_urls,
                   return_window_deadline::text, return_carrier, return_tracking_number,
                   return_label_url, inspection_notes, inspection_condition,
-                  proposed_remedy, remedy_amount_gbp,
+                  proposed_remedy, remedy_amount_gbp, requested_amount_gbp,
                   resolution_notes, resolved_at::text,
                   appeal_reason, appealed_at::text,
                   operator_id, operator_reason,
@@ -1290,7 +1792,7 @@ export function registerReturnRoutes({
                   reason, description, evidence_media_urls,
                   return_window_deadline::text, return_carrier, return_tracking_number,
                   return_label_url, inspection_notes, inspection_condition,
-                  proposed_remedy, remedy_amount_gbp,
+                  proposed_remedy, remedy_amount_gbp, requested_amount_gbp,
                   resolution_notes, resolved_at::text,
                   appeal_reason, appealed_at::text,
                   operator_id, operator_reason,
@@ -1394,7 +1896,7 @@ export function registerReturnRoutes({
                   reason, description, evidence_media_urls,
                   return_window_deadline::text, return_carrier, return_tracking_number,
                   return_label_url, inspection_notes, inspection_condition,
-                  proposed_remedy, remedy_amount_gbp,
+                  proposed_remedy, remedy_amount_gbp, requested_amount_gbp,
                   resolution_notes, resolved_at::text,
                   appeal_reason, appealed_at::text,
                   operator_id, operator_reason,
@@ -1485,7 +1987,7 @@ export function registerReturnRoutes({
                 reason, description, evidence_media_urls,
                 return_window_deadline::text, return_carrier, return_tracking_number,
                 return_label_url, inspection_notes, inspection_condition,
-                proposed_remedy, remedy_amount_gbp,
+                proposed_remedy, remedy_amount_gbp, requested_amount_gbp,
                 resolution_notes, resolved_at::text,
                 appeal_reason, appealed_at::text,
                 operator_id, operator_reason,
@@ -1594,7 +2096,7 @@ export function registerReturnRoutes({
                 reason, description, evidence_media_urls,
                 return_window_deadline::text, return_carrier, return_tracking_number,
                 return_label_url, inspection_notes, inspection_condition,
-                proposed_remedy, remedy_amount_gbp,
+                proposed_remedy, remedy_amount_gbp, requested_amount_gbp,
                 resolution_notes, resolved_at::text,
                 appeal_reason, appealed_at::text,
                 operator_id, operator_reason,

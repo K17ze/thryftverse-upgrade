@@ -50,7 +50,12 @@ export async function runMigrations() {
     ]);
 
     const migrationFiles = (await readdir(migrationsDir))
-      .filter((file) => file.endsWith('.sql'))
+      // `*_down.sql` files are rollback-only artefacts (see
+      // rollbackMigration below) — they must NOT run in the forward pass.
+      // They sort immediately after their up file, so without this
+      // exclusion a down file would be applied right after its up file and
+      // silently revert it on fresh databases.
+      .filter((file) => file.endsWith('.sql') && !file.endsWith('_down.sql'))
       .sort();
 
     for (const fileName of migrationFiles) {

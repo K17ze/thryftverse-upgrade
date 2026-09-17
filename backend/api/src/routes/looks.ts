@@ -93,6 +93,10 @@ type VerifiedLookMedia = {
   finalizationId: string;
   mediaAssetId: string | null;
   resolvedUrl: string;
+  /** Still-image rendition — set when the asset pipeline produced a poster. */
+  posterUrl: string | null;
+  /** Progressive MP4 for downloads — the original upload object. */
+  progressiveUrl: string | null;
 };
 
 type LookMediaVerification =
@@ -137,6 +141,7 @@ async function verifyLookMedia(
     media_asset_id: string | null;
     media_asset_status: string | null;
     canonical_url: string | null;
+    media_asset_poster_url: string | null;
   }>(
     `SELECT finalization.id, finalization.owner_id,
             finalization.public_url, finalization.folder,
@@ -144,7 +149,8 @@ async function verifyLookMedia(
             finalization.scope, finalization.scope_ref_id,
             finalization.media_asset_id,
             asset.status AS media_asset_status,
-            asset.canonical_url
+            asset.canonical_url,
+            asset.metadata->>'posterUrl' AS media_asset_poster_url
      FROM upload_finalizations finalization
      LEFT JOIN media_assets asset ON asset.id = finalization.media_asset_id
      WHERE finalization.id = $1
@@ -202,6 +208,8 @@ async function verifyLookMedia(
       resolvedUrl: config.mediaPublicationGateEnabled
         ? receipt.canonical_url!
         : (receipt.canonical_url ?? receipt.public_url),
+      posterUrl: receipt.media_asset_poster_url ?? null,
+      progressiveUrl: receipt.public_url,
     },
   };
 }
@@ -253,6 +261,8 @@ type LookRow = {
   caption: string;
   media_url: string;
   media_type: 'image' | 'video';
+  poster_url: string | null;
+  download_media_url: string | null;
   composition_document: unknown | null;
   status: string;
   visibility: string;
@@ -266,6 +276,7 @@ type LookRow = {
 
 const LOOK_SELECT_COLUMNS = `
   l.id, l.creator_id, l.title, l.caption, l.media_url, l.media_type,
+  l.poster_url, l.download_media_url,
   l.composition_document, l.status, l.visibility,
   l.created_at, l.updated_at, l.source_look_id,
   u.username AS creator_username,
@@ -371,18 +382,20 @@ async function enrichLooks(
         look_id: string;
         media_url: string;
         media_type: 'image' | 'video';
+        poster_url: string | null;
+        download_media_url: string | null;
       }>(
-        `SELECT look_id, media_url, media_type
+        `SELECT look_id, media_url, media_type, poster_url, download_media_url
          FROM look_media
          WHERE look_id = ANY($1)
          ORDER BY look_id, position ASC`,
         [lookIds]
       )
     : { rows: [] };
-  const carouselMediaByLook = new Map<string, Array<{ url: string; mediaType: 'image' | 'video' }>>();
+  const carouselMediaByLook = new Map<string, Array<{ url: string; mediaType: 'image' | 'video'; posterUrl: string | null; downloadUrl: string | null }>>();
   for (const m of carouselMediaResult.rows) {
     const arr = carouselMediaByLook.get(m.look_id) ?? [];
-    arr.push({ url: m.media_url, mediaType: m.media_type });
+    arr.push({ url: m.media_url, mediaType: m.media_type, posterUrl: m.poster_url, downloadUrl: m.download_media_url });
     carouselMediaByLook.set(m.look_id, arr);
   }
 
@@ -428,6 +441,8 @@ async function enrichLooks(
     caption: row.caption,
     mediaUrl: row.media_url,
     mediaType: row.media_type,
+    posterUrl: row.poster_url,
+    downloadUrl: row.download_media_url,
     mediaUrls: carouselMediaByLook.get(row.id) ?? [],
     compositionDocument: row.composition_document,
     visibility: row.visibility,
@@ -586,10 +601,11 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
       await client.query(
         `INSERT INTO looks (
            id, creator_id, title, caption, media_url, media_type,
+           poster_url, download_media_url,
            composition_document, status, visibility,
            upload_finalization_id, media_asset_id, publication_payload_hash
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
         [
           payload.id,
           actorUserId,
@@ -597,6 +613,8 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
           payload.caption,
           mediaVerification.media.resolvedUrl,
           payload.mediaType,
+          payload.mediaType === 'video' ? mediaVerification.media.posterUrl : null,
+          payload.mediaType === 'video' ? mediaVerification.media.progressiveUrl : null,
           payload.compositionDocument ?? null,
           payload.status,
           payload.visibility,
@@ -645,6 +663,8 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
           const position = i + 1;
           let resolvedUrl = slide.url;
           let mediaAssetId = slide.mediaAssetId ?? null;
+          let slidePosterUrl: string | null = null;
+          let slideDownloadUrl: string | null = null;
 
           if (slide.mediaFinalizationId) {
             const slideVerification = await verifyLookMedia(client, {
@@ -669,14 +689,17 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
             }
             resolvedUrl = slideVerification.media.resolvedUrl;
             mediaAssetId = slideVerification.media.mediaAssetId;
+            slidePosterUrl = slideVerification.media.posterUrl;
+            slideDownloadUrl = slideVerification.media.progressiveUrl;
           }
 
           await client.query(
             `INSERT INTO look_media (
                id, look_id, media_url, media_type, position,
-               media_finalization_id, media_asset_id
+               media_finalization_id, media_asset_id,
+               poster_url, download_media_url
              )
-             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
             [
               `lmedia_${crypto.randomUUID()}`,
               payload.id,
@@ -685,6 +708,8 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
               position,
               slide.mediaFinalizationId ?? null,
               mediaAssetId,
+              slide.mediaType === 'video' ? slidePosterUrl : null,
+              slide.mediaType === 'video' ? slideDownloadUrl : null,
             ]
           );
         }
@@ -867,7 +892,10 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
       if (payload.title !== undefined) { updates.push(`title = $${paramIdx++}`); values.push(payload.title); }
       if (payload.caption !== undefined) { updates.push(`caption = $${paramIdx++}`); values.push(payload.caption); }
       if (verifiedMedia) {
+        const isVideoMedia = (payload.mediaType ?? existing.rows[0].media_type) === 'video';
         updates.push(`media_url = $${paramIdx++}`); values.push(verifiedMedia.resolvedUrl);
+        updates.push(`poster_url = $${paramIdx++}`); values.push(isVideoMedia ? verifiedMedia.posterUrl : null);
+        updates.push(`download_media_url = $${paramIdx++}`); values.push(isVideoMedia ? verifiedMedia.progressiveUrl : null);
         updates.push(`upload_finalization_id = $${paramIdx++}`); values.push(verifiedMedia.finalizationId);
         updates.push(`media_asset_id = $${paramIdx++}`); values.push(verifiedMedia.mediaAssetId);
       }
@@ -937,6 +965,8 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
           const position = i + 1;
           let resolvedUrl = slide.url;
           let mediaAssetId = slide.mediaAssetId ?? null;
+          let slidePosterUrl: string | null = null;
+          let slideDownloadUrl: string | null = null;
 
           if (slide.mediaFinalizationId) {
             const slideVerification = await verifyLookMedia(client, {
@@ -959,14 +989,17 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
             }
             resolvedUrl = slideVerification.media.resolvedUrl;
             mediaAssetId = slideVerification.media.mediaAssetId;
+            slidePosterUrl = slideVerification.media.posterUrl;
+            slideDownloadUrl = slideVerification.media.progressiveUrl;
           }
 
           await client.query(
             `INSERT INTO look_media (
                id, look_id, media_url, media_type, position,
-               media_finalization_id, media_asset_id
+               media_finalization_id, media_asset_id,
+               poster_url, download_media_url
              )
-             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
             [
               `lmedia_${crypto.randomUUID()}`,
               lookId,
@@ -975,6 +1008,8 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
               position,
               slide.mediaFinalizationId ?? null,
               mediaAssetId,
+              slide.mediaType === 'video' ? slidePosterUrl : null,
+              slide.mediaType === 'video' ? slideDownloadUrl : null,
             ]
           );
         }
@@ -1077,10 +1112,11 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
       await client.query(
         `INSERT INTO looks (
           id, creator_id, title, caption, media_url, media_type,
+          poster_url, download_media_url,
           composition_document, status, visibility,
           source_look_id, reposted_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, 'published', 'public', $8, NOW())`,
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'published', 'public', $10, NOW())`,
         [
           newLookId,
           actorUserId,
@@ -1088,9 +1124,28 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
           source.caption,
           source.media_url,
           source.media_type,
+          source.poster_url,
+          source.download_media_url,
           source.composition_document,
           lookId,
         ]
+      );
+
+      // Copy carousel slides — reposting a multi-slide look must not
+      // silently drop slides 2..N.
+      await client.query(
+        `INSERT INTO look_media (
+           id, look_id, media_url, media_type, position,
+           media_finalization_id, media_asset_id,
+           poster_url, download_media_url
+         )
+         SELECT 'lmedia_' || gen_random_uuid()::text,
+                $2, media_url, media_type, position,
+                media_finalization_id, media_asset_id,
+                poster_url, download_media_url
+         FROM look_media
+         WHERE look_id = $1`,
+        [lookId, newLookId]
       );
 
       // Copy tags from the source look

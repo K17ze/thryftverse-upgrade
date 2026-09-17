@@ -1,4 +1,5 @@
 import type { ChatAgentConfig, ChatBot, Conversation, Message } from '../domain';
+import { parseMessageCommerceState } from '../domain';
 import { fetchJson } from '../lib/apiClient';
 
 type ApiConversationType = 'dm' | 'group';
@@ -60,6 +61,11 @@ export interface ApiMessagePayload {
   reactions?: ApiMessageReaction[];
   readBy?: string[];
   isReadByMe?: boolean;
+  /** Save-in-chat shared state — user IDs that currently have the
+   *  message saved; present only when non-empty. */
+  savedBy?: string[];
+  /** ISO timestamp of the first save. */
+  savedAt?: string | null;
 }
 
 // Voice message receipt — the canonical voice metadata returned by the
@@ -194,6 +200,17 @@ export function mapApiMessageToConversationMessage(
     (payload as ApiMessagePayload & { offer?: unknown }).offer || meta.offerPayload,
   );
 
+  // Listing-share messages ride in metadata — `listingShare` carries the
+  // display snapshot so the card renders without a second fetch.
+  const listingShare = meta.listingShare as Record<string, unknown> | undefined;
+  const isListingShare = Boolean(listingShare && typeof listingShare.listingId === 'string');
+
+  // In-thread commerce cards (marketplace audit P1): system-authored order
+  // lifecycle messages carry the order snapshot in `metadata.commerceState`.
+  // The parsed snapshot drives `type: 'commerce_state'` below so
+  // ChatCommerceCard renders the rich order card instead of a system row.
+  const commerceState = parseMessageCommerceState(meta);
+
   // Determine which side of the chat this message renders on. When the
   // current user's id is known and matches the message's senderId, the
   // message is "me"; otherwise it is "other" (or "system" for system msgs).
@@ -207,13 +224,17 @@ export function mapApiMessageToConversationMessage(
     date: payload.createdAt,
     isSystem: payload.senderType === 'system',
     systemTitle: payload.senderType === 'system' ? 'System' : undefined,
-    type: payload.senderType === 'system'
+    type: commerceState
+      ? 'commerce_state'
+      : payload.senderType === 'system'
       ? 'system'
       : isOffer
         ? 'offer'
-        : isVoice
-          ? 'voice'
-          : 'text',
+        : isListingShare
+          ? 'listing_share'
+          : isVoice
+            ? 'voice'
+            : 'text',
     sender: payload.senderType === 'system'
       ? 'system'
       : isMine
@@ -232,12 +253,18 @@ export function mapApiMessageToConversationMessage(
     // "delivered" receipt, so we claim sent until proven read.
     readBy: payload.readBy ?? undefined,
     isReadByMe: payload.isReadByMe ?? undefined,
+    // Save-in-chat shared state — "Saved" marker is identical for both
+    // participants; savedBy preserves attribution for either-party save.
+    isSavedInChat: (payload.savedBy?.length ?? 0) > 0,
+    savedBy: payload.savedBy?.length ? payload.savedBy : undefined,
+    savedAt: payload.savedAt ?? undefined,
     readStatus:
       isMine && (payload.readBy ?? []).some((uid) => uid !== currentUserId)
         ? 'read'
         : 'sent',
     mediaUri: typeof meta.mediaUri === 'string' ? meta.mediaUri : undefined,
     mediaType: meta.mediaType === 'image' || meta.mediaType === 'video' ? meta.mediaType : undefined,
+    posterUri: typeof meta.posterUri === 'string' ? meta.posterUri : undefined,
     voiceUri: typeof meta.mediaUri === 'string' && isVoice ? meta.mediaUri : undefined,
     voiceDurationMs: voice?.durationMs ?? (typeof meta.durationMs === 'number' ? meta.durationMs : undefined),
     voiceWaveform: voice?.waveform?.samples,
@@ -260,8 +287,25 @@ export function mapApiMessageToConversationMessage(
           counterRound: typeof offerSource.counterRound === 'number' ? offerSource.counterRound : undefined,
         }
       : undefined,
+    listing: isListingShare && listingShare
+      ? {
+          id: listingShare.listingId as string,
+          title: typeof listingShare.title === 'string' ? listingShare.title : '',
+          price: typeof listingShare.price === 'number' ? listingShare.price : 0,
+          originalPrice: typeof listingShare.originalPrice === 'number' ? listingShare.originalPrice : undefined,
+          image: typeof listingShare.image === 'string' ? listingShare.image : undefined,
+          brand: typeof listingShare.brand === 'string' ? listingShare.brand : null,
+          size: typeof listingShare.size === 'string' ? listingShare.size : undefined,
+          condition: typeof listingShare.condition === 'string' ? listingShare.condition : undefined,
+          sellerId: typeof listingShare.sellerId === 'string' ? listingShare.sellerId : null,
+          sellerUsername: typeof listingShare.sellerUsername === 'string' ? listingShare.sellerUsername : undefined,
+          sellerRating: typeof listingShare.sellerRating === 'number' ? listingShare.sellerRating : undefined,
+          isSold: listingShare.isSold === true,
+        }
+      : undefined,
     replyToMessageId: payload.replyToMessageId,
     reactions: payload.reactions?.map((r) => ({ emoji: r.emoji, userIds: r.userIds })),
+    commerceState,
   };
 }
 
@@ -389,6 +433,26 @@ export async function fetchConversationsFromApi(): Promise<Conversation[]> {
   return payload.items.map((item) => mapApiConversationToApp(item, []));
 }
 
+/** Dyad presence snapshot for the DM counterparty. `null` means presence
+ *  is unavailable or the peer has hidden their activity status — callers
+ *  must render no presence UI in that case. */
+export interface PeerPresenceSnapshot {
+  userId: string;
+  isOnline: boolean;
+  lastSeenAt: string | null;
+}
+
+export async function fetchConversationPresenceFromApi(
+  conversationId: string,
+): Promise<PeerPresenceSnapshot | null> {
+  const payload = await fetchJson<{
+    ok: true;
+    presence: PeerPresenceSnapshot | null;
+  }>(`/chat/conversations/${encodeURIComponent(conversationId)}/presence`);
+
+  return payload.presence ?? null;
+}
+
 export async function fetchConversationMessagesFromApi(
   conversationId: string,
   options?: {
@@ -480,6 +544,77 @@ export async function sendConversationMessageOnApi(
   return mapApiMessageToConversationMessage(payload.message, currentUserId);
 }
 
+/**
+ * Send a listing-share card into a conversation. The display snapshot rides
+ * in `metadata.listingShare` (round-trips verbatim — no backend schema
+ * change); `text` carries the title so push previews and legacy clients
+ * still show something meaningful.
+ */
+export async function sendListingShareMessage(
+  conversationId: string,
+  listing: {
+    id: string;
+    title: string;
+    price: number;
+    originalPrice?: number | null;
+    image?: string | null;
+    brand?: string | null;
+    size?: string | null;
+    condition?: string | null;
+    sellerId?: string | null;
+    sellerUsername?: string | null;
+    sellerRating?: number | null;
+    isSold?: boolean;
+  },
+  currentUserId?: string,
+): Promise<Message> {
+  return sendConversationMessageOnApi(
+    conversationId,
+    `Shared a listing: ${listing.title}`,
+    {
+      listingShare: {
+        listingId: listing.id,
+        title: listing.title,
+        price: listing.price,
+        originalPrice: listing.originalPrice ?? undefined,
+        image: listing.image ?? undefined,
+        brand: listing.brand ?? undefined,
+        size: listing.size ?? undefined,
+        condition: listing.condition ?? undefined,
+        sellerId: listing.sellerId ?? undefined,
+        sellerUsername: listing.sellerUsername ?? undefined,
+        sellerRating: listing.sellerRating ?? undefined,
+        isSold: listing.isSold === true,
+      },
+    },
+    undefined,
+    undefined,
+    currentUserId,
+  );
+}
+
+/**
+ * Edit a message the caller authored (P2-03). Sender-only, enforced
+ * server-side within a 15-minute window of creation; deleted messages are
+ * rejected with 403. Returns the updated, re-serialized message.
+ */
+export async function editConversationMessageOnApi(
+  conversationId: string,
+  messageId: string,
+  text: string,
+  currentUserId?: string,
+): Promise<Message> {
+  const payload = await fetchJson<{ ok: true; message: ApiMessagePayload }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    },
+  );
+  return mapApiMessageToConversationMessage(payload.message, currentUserId);
+}
+
 export async function deleteConversationMessageOnApi(
   conversationId: string,
   messageId: string,
@@ -563,6 +698,40 @@ export async function fetchPinnedMessageFromApi(
 ): Promise<PinnedMessageResponse> {
   return fetchJson<PinnedMessageResponse>(
     `/chat/conversations/${encodeURIComponent(conversationId)}/pinned-message`,
+  );
+}
+
+// ── Save in chat (Snapchat-style negotiated persistence) ──────────────
+// Either participant may save or unsave; the response carries the full
+// post-change `savedBy` set so the client renders shared state identically
+// on both sides.
+
+export interface SaveInChatResponse {
+  ok: true;
+  /** True while at least one participant's save remains. */
+  saved: boolean;
+  messageId: string;
+  savedBy: string[];
+  savedAt?: string | null;
+}
+
+export async function saveMessageInChatOnApi(
+  conversationId: string,
+  messageId: string,
+): Promise<SaveInChatResponse> {
+  return fetchJson<SaveInChatResponse>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/save`,
+    { method: 'POST' },
+  );
+}
+
+export async function unsaveMessageInChatOnApi(
+  conversationId: string,
+  messageId: string,
+): Promise<SaveInChatResponse> {
+  return fetchJson<SaveInChatResponse>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/save`,
+    { method: 'DELETE' },
   );
 }
 
@@ -954,6 +1123,7 @@ export async function fetchConversationMediaFromApi(
   id: string;
   mediaUri: string;
   mediaType: 'image' | 'video' | 'document';
+  posterUri?: string;
   senderUserId: string | null;
   createdAt: string;
   documentName?: string;
@@ -967,6 +1137,7 @@ export async function fetchConversationMediaFromApi(
         id: string;
         mediaUri: string;
         mediaType: 'image' | 'video' | 'document';
+        posterUri?: string;
         senderUserId: string | null;
         createdAt: string;
         documentName?: string;

@@ -17,18 +17,15 @@
  *   - AGENTS.md §27.9 (toggle: spring animation + selection haptic)
  */
 import React, { useCallback } from 'react';
-import { StyleSheet, Pressable, View } from 'react-native';
+import { StyleSheet, Pressable } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  withTiming,
-  Easing,
   interpolateColor,
 } from 'react-native-reanimated';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
-import { Radius, Space } from '../../theme/designTokens';
 import { Motion, REDUCED_SPRING } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -114,6 +111,7 @@ export function CreatorToggle({
       disabled={disabled}
       accessibilityRole="switch"
       accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityHint="Toggles this setting"
       accessibilityValue={{ text: value ? 'On' : 'Off' }}
       accessibilityState={{
         disabled: disabled || undefined,

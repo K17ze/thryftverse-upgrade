@@ -27,11 +27,10 @@ import type {
   CreatorLayer,
   CreatorPage,
   EffectNode,
-} from '../composition';
+} from '../core/projectStore/composition';
 import { evaluateAllKeyframes } from '../core/playback/KeyframeEvaluator';
 import {
   evaluateCompositionEffectStack,
-  type EvaluatedEffect,
 } from '../core/playback/EffectEvaluator';
 import {
   getActiveAdjustmentLayers,
@@ -366,8 +365,20 @@ export interface EvaluateSceneOptions {
   document: CreatorDocument;
   /** The page to render. When omitted, the first page is used. */
   page?: CreatorPage;
-  /** Current playback time in ms. Omit for static (non-temporal) contexts. */
+  /**
+   * Current playback time in ABSOLUTE timeline ms. Used for temporal
+   * visibility (`layer.timeRange` is stored in absolute coordinates —
+   * see TimelineProjector) and adjustment-layer activation. Omit for
+   * static (non-temporal) contexts.
+   */
   timeMs?: number;
+  /**
+   * Clip-relative playback time in ms (timeMs minus the active clip's
+   * timelineStartMs). Keyframes are authored against clip-local time
+   * (`page.durationMs`), so keyframe interpolation uses this base, not
+   * the absolute clock.
+   */
+  clipTimeMs?: number;
   /** The pixel viewport the renderer will draw into. */
   viewport: Viewport;
   /** The render profile gating which features are live. */
@@ -387,7 +398,7 @@ export interface EvaluateSceneOptions {
  * always produce the same output. Safe to call inside useMemo.
  */
 export function evaluateScene(options: EvaluateSceneOptions): ResolvedScene {
-  const { document, timeMs, viewport, profile, compareOriginal = false } = options;
+  const { document, timeMs, clipTimeMs, viewport, profile, compareOriginal = false } = options;
   const page = options.page ?? document.pages[0];
   if (!page) {
     return { layers: [], pageId: '', aspectRatio: document.canvas.aspectRatio, skipBackground: false, profile };
@@ -399,7 +410,7 @@ export function evaluateScene(options: EvaluateSceneOptions): ResolvedScene {
     .sort((a, b) => a.zIndex - b.zIndex);
 
   const resolved: ResolvedLayer[] = visibleLayers.map((layer) => {
-    const transform = resolveTransform(layer, timeMs, viewport);
+    const transform = resolveTransform(layer, clipTimeMs ?? timeMs, viewport);
     const interaction = resolveInteraction(layer, profile);
 
     // Effect graph is only meaningful for media layers.

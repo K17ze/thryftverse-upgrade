@@ -11,12 +11,11 @@
 
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Typography, IconGrammar, Elevation } from '../../theme/designTokens';
+import { Space, Radius, Typography, Elevation } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
-import { PressScale } from '../CreatorAnimations';
+import { PressScale } from '../shared/CreatorAnimations';
 import { CreatorGlyph, type CreatorGlyphName } from '../controls/CreatorGlyph';
 
 import { AppIcon } from '../../components/common/AppIcon';
@@ -69,6 +68,7 @@ export const OverflowItem = React.memo(function OverflowItem({
       disabled={disabled}
       style={[styles.overflowItem, disabled ? { opacity: 0.4 } : {}]}
       accessibilityLabel={label}
+      accessibilityHint="Runs this action"
       accessibilityRole="menuitem"
       accessibilityState={selected ? { selected: true } : disabled ? { disabled: true } : undefined}
       hitSlop={12}

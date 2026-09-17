@@ -11,51 +11,41 @@
  * This component owns no state and uses no hooks — it renders purely from
  * props. Each sheet is a conditional block `{flag && (...)}` that renders
  * `null` when its flag is false, exactly as it did inline in the screen.
+ *
+ * Per-sheet render branches live in `./sheetStack/` sub-components; this
+ * file keeps the props contract, the shared `sheetPaddingBottom` value,
+ * and the flat one-line sheets.
  */
 import React from 'react';
-import { View, Text, ScrollView, type ViewStyle, type TextStyle } from 'react-native';
+import type { ViewStyle, TextStyle } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
 import { Space } from '../../theme/designTokens';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { layerTypeLabel } from '../shared/layerUtils';
-import { CreatorLayersSheet } from '../CreatorLayersSheet';
-import { CreatorPublishSheet } from '../CreatorPublishSheet';
-import { CreatorSettingsSheet } from '../CreatorSettingsSheet';
-import { CreatorAssetPicker, type AssetPickerMode } from '../CreatorAssetPicker';
-import { CreatorCropSheet } from '../CreatorCropSheet';
-import { CutoutPreviewSheet } from '../surfaces/CutoutPreviewSheet';
-import { AccessibilityMoveSheet } from '../surfaces/AccessibilityMoveSheet';
-import { AccessibilityZOrderSheet, type ZOrderLayer } from '../surfaces/AccessibilityZOrderSheet';
-import type { CutoutResult } from '../core/cutout/CutoutService';
-import { CreatorTemplateBrowser } from '../CreatorTemplateBrowser';
-import { CreatorPreviewOverlay } from '../CreatorPreviewOverlay';
+import { CreatorLayersSheet } from '../surfaces/CreatorLayersSheet';
+import { CreatorPublishSheet } from '../publish/CreatorPublishSheet';
+import { CreatorSettingsSheet } from '../surfaces/CreatorSettingsSheet';
+import { CreatorPreviewOverlay } from '../surfaces/CreatorPreviewOverlay';
 import { ConfirmationSheet } from '../../components/ConfirmationSheet';
-import type { CreatorTemplate } from '../templates';
-import { PageMenu } from '../studio/PageMenu';
-import { GlassSheet } from '../surfaces/GlassSheet';
 import { HelpShortcutsSheet } from '../surfaces/HelpShortcutsSheet';
-import { EffectPreviewRail, AdjustPanel, FILTER_PRESETS, AutoAdjustButton } from '../tools/effects';
 import type { AdjustNode } from '../tools/effects';
-import { TransitionPreviewRail } from './transitions/TransitionPreviewRail';
-import { TRANSITION_PRESETS } from './transitions/TransitionPresets';
-import { KeyframeEditor } from './keyframes/KeyframeEditor';
 import type { Keyframe } from './keyframes/KeyframeTypes';
-import { SpeedCurveEditor } from './speedcurves/SpeedCurveEditor';
 import {
-  CreatorColorPicker,
-  toHexString,
-  fromHexString,
   type CreatorColor,
   type RecentColor,
 } from '../color';
 import type { ActiveSheet } from './useActiveSheet';
 import type { SpeedCurve } from './speedcurves/SpeedCurveTypes';
-import { DEFAULT_SPEED_CURVE } from './speedcurves/SpeedCurveTypes';
-import { ReverseToggle, FreezeFramePicker, AudioFadeControls } from './tools';
-import type { CreatorLayer, CreatorPage, CreatorDocument } from '../composition';
+import type { AssetPickerMode } from '../surfaces/CreatorAssetPicker';
+import type { CreatorLayer, CreatorPage, CreatorDocument } from '../core/projectStore/composition';
 import type { useHaptic } from '../../hooks/useHaptic';
 import type { ConfirmSheetState, UsePosterTopBarActionsResult } from './usePosterTopBarActions';
+import { AccessibilitySheets } from './sheetStack/AccessibilitySheets';
+import { MediaToolSheets } from './sheetStack/MediaToolSheets';
+import { CropCutoutSheets } from './sheetStack/CropCutoutSheets';
+import { TemplatePickerSheets } from './sheetStack/TemplatePickerSheets';
+import { PageMenuSheet } from './sheetStack/PageMenuSheet';
+import { EffectsSheets } from './sheetStack/EffectsSheets';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -70,6 +60,8 @@ export interface PosterSheetStackStyles {
   previewNotReflectedNote: TextStyle;
   effectsAdjustWrap: ViewStyle;
   effectsAutoRow: ViewStyle;
+  aiEffectsBtn: ViewStyle;
+  aiEffectsBtnText: TextStyle;
 }
 
 export interface PosterSheetStackProps {
@@ -102,6 +94,7 @@ export interface PosterSheetStackProps {
   showHelp: boolean;
   showA11yMove: boolean;
   showA11yZOrder: boolean;
+  showA11yTransform: boolean;
   showTransitions: boolean;
   showKeyframes: boolean;
   showSpeedCurve: boolean;
@@ -172,7 +165,16 @@ export interface PosterSheetStackProps {
   handleAutoAdjust: () => void;
   currentAdjustments: Partial<Omit<AdjustNode, 'type'>>;
   handleEffectAdjustChange: (parameter: string, value: number) => void;
+  handleEffectAdjustCommit: (parameter: string, value: number) => void;
   handleEffectReset: () => void;
+  /** Current filter intensity 0..1 (null = preset default). */
+  filterAmount: number;
+  handleEffectIntensityChange: (value: number) => void;
+  handleEffectIntensityCommit: (value: number) => void;
+  /** Namespaced AI/style effect currently applied (sans `ai:` prefix). */
+  activeAIEffectId: string | null;
+  handleAIEffectApply: (effectId: string, intensity: number) => void;
+  handleAIEffectRemove: (effectId: string) => void;
   setBottomSurface: (surface: 'tools' | 'timeline' | 'effects' | null) => void;
 
   // ── Confirmation sheet ──
@@ -204,6 +206,7 @@ export function PosterSheetStack(props: PosterSheetStackProps) {
     showHelp,
     showA11yMove,
     showA11yZOrder,
+    showA11yTransform,
     showTransitions,
     showKeyframes,
     showSpeedCurve,
@@ -252,7 +255,14 @@ export function PosterSheetStack(props: PosterSheetStackProps) {
     handleAutoAdjust,
     currentAdjustments,
     handleEffectAdjustChange,
+    handleEffectAdjustCommit,
     handleEffectReset,
+    filterAmount,
+    handleEffectIntensityChange,
+    handleEffectIntensityCommit,
+    activeAIEffectId,
+    handleAIEffectApply,
+    handleAIEffectRemove,
     setBottomSurface,
     confirmSheet,
     setConfirmSheet,
@@ -275,372 +285,100 @@ export function PosterSheetStack(props: PosterSheetStackProps) {
       <CreatorSettingsSheet visible={showSettings} onClose={closeSheet} />
       <HelpShortcutsSheet visible={showHelp} onClose={closeSheet} />
 
-      {/* ── Accessibility sheets (drag alternatives) ─────────────────── */}
-      {/* Per spec 09: keyboard/button-based alternatives for users who
-          cannot perform drag gestures. onMove wires to updateLayer;
-          onReorder wires to reorderLayer. */}
-      <AccessibilityMoveSheet
-        visible={showA11yMove}
-        layerId={selectedLayerId}
-        position={selectedLayer ? { x: selectedLayer.x, y: selectedLayer.y } : null}
-        onClose={closeSheet}
-        onMove={(x, y) => {
-          if (selectedLayerId) updateLayer(selectedLayerId, { x, y }, 'Move layer');
-        }}
-      />
-      <AccessibilityZOrderSheet
-        visible={showA11yZOrder}
-        layers={(page?.layers ?? []).map((l) => ({
-          id: l.id,
-          label: layerTypeLabel(l.type),
-          zIndex: l.zIndex,
-        })) as ZOrderLayer[]}
+      <AccessibilitySheets
+        showA11yMove={showA11yMove}
+        showA11yZOrder={showA11yZOrder}
+        showA11yTransform={showA11yTransform}
         selectedLayerId={selectedLayerId}
-        onClose={closeSheet}
-        onReorder={(layerId, direction) => reorderLayer(layerId, direction)}
+        selectedLayer={selectedLayer}
+        page={page}
+        closeSheet={closeSheet}
+        updateLayer={updateLayer}
+        reorderLayer={reorderLayer}
       />
-
-      {/* ── Transitions sheet (Phase 9) ─────────────────────────────── */}
-      {/* Shows the TransitionPreviewRail for the current page. Selecting
-          a preset stores the transitionId on the page, which the renderer
-          uses to animate the transition to the next page. */}
-      {showTransitions && (
-        <GlassSheet
-          title="Transitions"
-          onClose={closeSheet}
-          doneHint="Closes the transitions panel"
-          paddingBottom={sheetPaddingBottom}
-        >
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            style={styles.effectsSheetScroll}
-          >
-            <TransitionPreviewRail
-              presets={TRANSITION_PRESETS}
-              selectedId={currentTransitionId}
-              onSelect={handleTransitionSelect}
-            />
-            <View style={{ height: Space.md }} />
-          </ScrollView>
-        </GlassSheet>
-      )}
-
-      {/* ── Keyframe editor sheet (Phase 9) ─────────────────────────── */}
-      {/* Shows the KeyframeEditor for the selected layer. Keyframes are
-          stored on the layer's `keyframes` array and interpolated by the
-          renderer over the layer's timeline. */}
-      {showKeyframes && selectedLayer && (
-        <GlassSheet
-          title="Animation"
-          onClose={closeSheet}
-          doneHint="Closes the keyframe editor"
-          paddingBottom={sheetPaddingBottom}
-        >
-          <KeyframeEditor
-            layerId={selectedLayer.id}
-            totalDurationMs={page?.durationMs ?? 5000}
-            keyframes={selectedLayerKeyframes}
-            layerDefaults={{ x: selectedLayer.x, rotation: selectedLayer.rotation }}
-            onAddKeyframe={handleAddKeyframe}
-            onUpdateKeyframe={handleUpdateKeyframe}
-            onRemoveKeyframe={handleRemoveKeyframe}
-          />
-        </GlassSheet>
-      )}
-
-      {/* ── Speed curve editor sheet ─────────────────────────────────── */}
-      {/* Shows the SpeedCurveEditor for the selected media layer. The
-          curve maps timeline position (0-1) to speed multiplier (0.25x-4x),
-          enabling precise, dynamic speed ramping along a customizable curve
-          (Instagram Edits parity, August 2026). */}
-      {showSpeedCurve && selectedLayer && selectedLayer.type === 'media' && (
-        <GlassSheet
-          title="Speed Curve"
-          onClose={closeSheet}
-          doneHint="Closes the speed curve editor"
-          paddingBottom={sheetPaddingBottom}
-        >
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            style={styles.effectsSheetScroll}
-          >
-            <SpeedCurveEditor
-              curve={selectedMediaSpeedCurve ?? DEFAULT_SPEED_CURVE}
-              onChange={handleSpeedCurveChange}
-            />
-            <View style={{ height: Space.md }} />
-          </ScrollView>
-        </GlassSheet>
-      )}
-      {/* ── Reverse toggle sheet ────────────────────────────────────── */}
-      {showReverse && selectedLayer && selectedLayer.type === 'media' && (
-        <GlassSheet
-          title="Reverse Clip"
-          onClose={closeSheet}
-          doneHint="Closes the reverse panel"
-          paddingBottom={sheetPaddingBottom}
-        >
-          <View style={{ padding: Space.md, alignItems: 'center' }}>
-            <ReverseToggle
-              reversed={selectedLayer.payload.reversed ?? false}
-              onToggle={(reversed) => {
-                updateLayer(selectedLayer.id, {
-                  type: 'media',
-                  payload: { ...selectedLayer.payload, reversed },
-                }, reversed ? 'Reverse clip' : 'Unreverse clip');
-                haptic.medium();
-              }}
-            />
-            <Text
-              style={[
-                styles.previewNotReflectedNote,
-                { color: colors.textSecondary },
-              ]}
-            >
-              Preview plays forward. Reverse is applied when the video is exported.
-            </Text>
-          </View>
-        </GlassSheet>
-      )}
-      {/* ── Freeze frame picker sheet ───────────────────────────────── */}
-      {showFreezeFrame && selectedLayer && selectedLayer.type === 'media' && (
-        <GlassSheet
-          title="Freeze Frame"
-          onClose={closeSheet}
-          doneHint="Closes the freeze frame panel"
-          paddingBottom={sheetPaddingBottom}
-        >
-          <FreezeFramePicker
-            clipDurationMs={selectedLayer.payload.videoDurationMs ?? 5000}
-            freezeFrameMs={selectedLayer.payload.freezeFrameMs}
-            freezeDurationMs={selectedLayer.payload.freezeDurationMs}
-            onSetFreezeFrame={(freezeMs, freezeDurMs) => {
-              updateLayer(selectedLayer.id, {
-                type: 'media',
-                payload: {
-                  ...selectedLayer.payload,
-                  freezeFrameMs: freezeMs,
-                  freezeDurationMs: freezeDurMs,
-                },
-              }, freezeMs ? 'Set freeze frame' : 'Clear freeze frame');
-              haptic.medium();
-            }}
-          />
-          <Text
-            style={[
-              styles.previewNotReflectedNote,
-              { color: colors.textSecondary },
-            ]}
-          >
-            Preview does not hold the frame. The freeze is applied when the video is exported.
-          </Text>
-        </GlassSheet>
-      )}
-      {/* ── Audio fade controls sheet ───────────────────────────────── */}
-      {showAudioFade && selectedLayer && selectedLayer.type === 'media' && (
-        <GlassSheet
-          title="Audio Fade"
-          onClose={closeSheet}
-          doneHint="Closes the audio fade panel"
-          paddingBottom={sheetPaddingBottom}
-        >
-          <AudioFadeControls
-            fadeInMs={selectedLayer.payload.fadeInMs ?? 0}
-            fadeOutMs={selectedLayer.payload.fadeOutMs ?? 0}
-            onChange={(fadeInMs, fadeOutMs) => {
-              updateLayer(selectedLayer.id, {
-                type: 'media',
-                payload: {
-                  ...selectedLayer.payload,
-                  volume: selectedLayer.payload.volume ?? 1,
-                  fadeInMs,
-                  fadeOutMs,
-                },
-              }, 'Set audio fade');
-              haptic.medium();
-            }}
-          />
-        </GlassSheet>
-      )}
-      {/* ── Text color picker sheet ──────────────────────────────────── */}
-      {showTextColorPicker && selectedLayer && selectedLayer.type === 'text' && (
-        <GlassSheet
-          title="Text Color"
-          onClose={() => setShowTextColorPicker(false)}
-          doneHint="Closes the color picker"
-          paddingBottom={sheetPaddingBottom}
-        >
-          <CreatorColorPicker
-            color={selectedLayer.payload.fill ?? fromHexString(selectedLayer.payload.textColor ?? '#ffffff') ?? { space: 'srgb', r: 1, g: 1, b: 1, a: 1 }}
-            onChange={(c: CreatorColor) => {
-              updateLayer(selectedLayer.id, {
-                type: 'text',
-                payload: {
-                  ...selectedLayer.payload,
-                  fill: c,
-                  textColor: toHexString(c),
-                },
-              }, 'Change text color');
-            }}
-            onCommit={(c: CreatorColor) => {
-              updateLayer(selectedLayer.id, {
-                type: 'text',
-                payload: {
-                  ...selectedLayer.payload,
-                  fill: c,
-                  textColor: toHexString(c),
-                },
-              }, 'Change text color');
-              commitRecentColor(c);
-              haptic.light();
-            }}
-            mode="expanded"
-            recents={colorRecents}
-            onCommitRecent={commitRecentColor}
-            accessibilityLabel="Text color picker"
-          />
-        </GlassSheet>
-      )}
-      {/* Pixel crop. The resulting local asset deliberately clears prior
-          upload evidence so publish must upload/finalize the edited bytes. */}
-      {cropMode && selectedLayer && selectedLayer.type === 'media' && (
-        <CreatorCropSheet
-          visible={cropMode}
-          imageUri={selectedLayer.payload.mediaUri}
-          focalPoint={selectedLayer.payload.focalPoint}
-          onFocalPointChange={(point) => {
-            if (selectedLayer && selectedLayer.type === 'media') {
-              updateLayer(selectedLayer.id, {
-                type: 'media',
-                payload: {
-                  ...selectedLayer.payload,
-                  focalPoint: point,
-                },
-              }, 'Set focal point');
-            }
-          }}
-          onClose={() => setCropMode(false)}
-          onCropComplete={(newUri) => {
-            if (selectedLayer && selectedLayer.type === 'media') {
-              updateLayer(selectedLayer.id, {
-                type: 'media',
-                payload: {
-                  ...selectedLayer.payload,
-                  mediaUri: newUri,
-                  mediaFinalizationId: undefined,
-                  mediaAssetId: undefined,
-                },
-              }, 'Crop media');
-            }
-            setCropMode(false);
-          }}
-        />
-      )}
-      {/* True cutout preview sheet — native subject segmentation.
-          Opens when the user taps "Cutout" in the media-selected
-          overflow and the native backend is available. Shows a
-          before/after preview over a checkerboard. On confirm,
-          replaces the media URI with the transparent PNG and stores
-          the alpha mask reference on the layer (spec 07 §7). */}
-      {cutoutPreviewTarget && cutoutPreviewTarget.type === 'media' && (
-        <CutoutPreviewSheet
-          visible={!!cutoutPreviewTarget}
-          imageUri={cutoutPreviewTarget.payload.mediaUri}
-          onClose={() => setCutoutPreviewTarget(null)}
-          onConfirm={(result: CutoutResult) => {
-            if (cutoutPreviewTarget && cutoutPreviewTarget.type === 'media') {
-              updateLayer(cutoutPreviewTarget.id, {
-                type: 'media',
-                payload: {
-                  ...cutoutPreviewTarget.payload,
-                  mediaUri: result.uri,
-                  contentFit: 'contain',
-                },
-                maskRef: result.maskRef?.uri,
-              } as Partial<CreatorLayer>, 'Apply cutout');
-            }
-            setCutoutPreviewTarget(null);
-          }}
-        />
-      )}
-      <CreatorTemplateBrowser
-        visible={showTemplates}
-        documentType="poster"
-        hasExistingWork={document.pages.some((p) => p.layers.length > 0)}
-        onClose={() => setShowTemplates(false)}
-        onApply={(template: CreatorTemplate) => {
-          const doc = template.build();
-          setDocument(doc);
-        }}
+      <MediaToolSheets
+        styles={styles}
+        colors={colors}
+        sheetPaddingBottom={sheetPaddingBottom}
+        haptic={haptic}
+        closeSheet={closeSheet}
+        selectedLayer={selectedLayer}
+        page={page}
+        updateLayer={updateLayer}
+        showTransitions={showTransitions}
+        currentTransitionId={currentTransitionId}
+        handleTransitionSelect={handleTransitionSelect}
+        showKeyframes={showKeyframes}
+        selectedLayerKeyframes={selectedLayerKeyframes}
+        handleAddKeyframe={handleAddKeyframe}
+        handleUpdateKeyframe={handleUpdateKeyframe}
+        handleRemoveKeyframe={handleRemoveKeyframe}
+        showSpeedCurve={showSpeedCurve}
+        selectedMediaSpeedCurve={selectedMediaSpeedCurve}
+        handleSpeedCurveChange={handleSpeedCurveChange}
+        showReverse={showReverse}
+        showFreezeFrame={showFreezeFrame}
+        showAudioFade={showAudioFade}
+        showTextColorPicker={showTextColorPicker}
+        setShowTextColorPicker={setShowTextColorPicker}
+        colorRecents={colorRecents}
+        commitRecentColor={commitRecentColor}
       />
-      <CreatorAssetPicker
-        visible={pickerMode !== null}
-        mode={pickerMode ?? 'media'}
+      <CropCutoutSheets
+        cropMode={cropMode}
+        setCropMode={setCropMode}
+        selectedLayer={selectedLayer}
+        updateLayer={updateLayer}
+        cutoutPreviewTarget={cutoutPreviewTarget}
+        setCutoutPreviewTarget={setCutoutPreviewTarget}
+      />
+      <TemplatePickerSheets
+        showTemplates={showTemplates}
+        document={document}
+        setShowTemplates={setShowTemplates}
+        setDocument={setDocument}
+        pickerMode={pickerMode}
         editingLayer={editingLayer}
-        backgroundUri={backgroundMediaUri}
-        onClose={handlePickerClose}
-        onAddLayer={handlePickerAddLayer}
+        backgroundMediaUri={backgroundMediaUri}
+        handlePickerClose={handlePickerClose}
+        handlePickerAddLayer={handlePickerAddLayer}
       />
-      {/* Frame options sheet (duration + duplicate + reorder + delete) */}
-      {pageMenuIndex !== null && (
-        <PageMenu
-          pageIndex={pageMenuIndex}
-          pageCount={pageCount}
-          currentDuration={document.pages[pageMenuIndex]?.durationMs ?? 5000}
-          onClose={() => setPageMenuIndex(null)}
-          onSetDuration={(ms) => { updatePageDuration(pageMenuIndex, ms); }}
-          onDuplicate={() => { duplicatePage(pageMenuIndex); setPageMenuIndex(null); }}
-          onDelete={() => { removePage(pageMenuIndex); setPageMenuIndex(null); }}
-          onMoveLeft={() => { if (pageMenuIndex > 0) { reorderPages(pageMenuIndex, pageMenuIndex - 1); setActivePageIndex(pageMenuIndex - 1); } setPageMenuIndex(null); }}
-          onMoveRight={() => { if (pageMenuIndex < pageCount - 1) { reorderPages(pageMenuIndex, pageMenuIndex + 1); setActivePageIndex(pageMenuIndex + 1); } setPageMenuIndex(null); }}
-        />
-      )}
-      {/* ── Effects sheet ─────────────────────────────────────────────── */}
-      {/* Bottom sheet showing the EffectPreviewRail (filter thumbnails
-          rendered from the selected media layer's own source URI) and
-          the AdjustPanel (fine-tuning sliders). Filter selection and
-          adjustment changes commit to the layer's non-destructive
-          `effects` array (EffectNode[]) via updateLayer. */}
-      {showEffectsSheet && selectedMediaLayer && (
-        <GlassSheet
-          title="Effects"
-          onClose={() => { haptic.light(); setBottomSurface('tools'); }}
-          doneHint="Closes the effects panel"
-          paddingBottom={sheetPaddingBottom}
-        >
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            style={styles.effectsSheetScroll}
-          >
-            <EffectPreviewRail
-              sourceUri={effectsSourceUri}
-              presets={FILTER_PRESETS}
-              selectedId={selectedFilterId}
-              onSelect={handleEffectFilterSelect}
-            />
-            <View style={styles.effectsAdjustWrap}>
-              <View style={styles.effectsAutoRow}>
-                <AutoAdjustButton
-                  isActive={autoAdjustActive}
-                  onApply={handleAutoAdjust}
-                />
-              </View>
-              <AdjustPanel
-                values={currentAdjustments}
-                onChange={handleEffectAdjustChange}
-                onReset={handleEffectReset}
-                onDragStateChange={(dragging) => {
-                  // Lightroom flagship pattern: fade top-bar chrome while
-                  // dragging an adjust slider so the user focuses on the
-                  // image, not the controls. The effects sheet itself
-                  // stays visible — only the top bar recedes.
-                  manipulationActiveSV.value = dragging ? 1 : 0;
-                }}
-              />
-            </View>
-          </ScrollView>
-        </GlassSheet>
-      )}
+      <PageMenuSheet
+        pageMenuIndex={pageMenuIndex}
+        pageCount={pageCount}
+        document={document}
+        setPageMenuIndex={setPageMenuIndex}
+        updatePageDuration={updatePageDuration}
+        duplicatePage={duplicatePage}
+        removePage={removePage}
+        reorderPages={reorderPages}
+        setActivePageIndex={setActivePageIndex}
+      />
+      <EffectsSheets
+        styles={styles}
+        colors={colors}
+        sheetPaddingBottom={sheetPaddingBottom}
+        haptic={haptic}
+        manipulationActiveSV={manipulationActiveSV}
+        showEffectsSheet={showEffectsSheet}
+        selectedMediaLayer={selectedMediaLayer}
+        effectsSourceUri={effectsSourceUri}
+        selectedFilterId={selectedFilterId}
+        handleEffectFilterSelect={handleEffectFilterSelect}
+        filterAmount={filterAmount}
+        handleEffectIntensityChange={handleEffectIntensityChange}
+        handleEffectIntensityCommit={handleEffectIntensityCommit}
+        autoAdjustActive={autoAdjustActive}
+        handleAutoAdjust={handleAutoAdjust}
+        currentAdjustments={currentAdjustments}
+        handleEffectAdjustChange={handleEffectAdjustChange}
+        handleEffectAdjustCommit={handleEffectAdjustCommit}
+        handleEffectReset={handleEffectReset}
+        setBottomSurface={setBottomSurface}
+        activeAIEffectId={activeAIEffectId}
+        handleAIEffectApply={handleAIEffectApply}
+        handleAIEffectRemove={handleAIEffectRemove}
+      />
       <ConfirmationSheet
         visible={confirmSheet.visible}
         onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}

@@ -18,6 +18,14 @@ interface ConfirmationSheetProps {
   onConfirm: () => void;
   onCancel?: () => void;
   variant?: ConfirmationSheetVariant;
+  /**
+   * In-flight state for the confirmed action. When true the confirm button
+   * shows its loading state, both buttons disable, and the sheet cannot be
+   * dismissed — a destructive/money action must not be re-tappable while
+   * its request is in flight. Callers drive this from their mutation
+   * pending state and keep `visible` true until the request settles.
+   */
+  busy?: boolean;
 }
 
 /**
@@ -38,15 +46,18 @@ export function ConfirmationSheet({
   cancelLabel = 'Cancel',
   onConfirm,
   onCancel,
-  variant = 'default' }: ConfirmationSheetProps) {
+  variant = 'default',
+  busy = false }: ConfirmationSheetProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   const handleConfirm = () => {
+    if (busy) return;
     onConfirm();
   };
 
   const handleCancel = () => {
+    if (busy) return;
     if (onCancel) {
       onCancel();
     } else {
@@ -57,7 +68,7 @@ export function ConfirmationSheet({
   return (
     <BottomSheet
       visible={visible}
-      onDismiss={onDismiss}
+      onDismiss={busy ? () => {} : onDismiss}
       variant="transaction"
       snapPoint={0.42}
     >
@@ -80,6 +91,7 @@ export function ConfirmationSheet({
             variant={variant === 'danger' ? 'danger' : 'primary'}
             size="lg"
             style={styles.confirmButton}
+            loading={busy}
             accessibilityLabel={confirmLabel}
             accessibilityHint={
               variant === 'danger'
@@ -92,6 +104,7 @@ export function ConfirmationSheet({
             onPress={handleCancel}
             variant="ghost"
             size="md"
+            disabled={busy}
             accessibilityLabel={cancelLabel}
             accessibilityHint="Cancels this action and dismisses the dialog"
           />

@@ -54,6 +54,9 @@ export type BadgeType = 'AI_VERIFIED' | 'EXPERT_VERIFIED' | 'LAB_CERTIFIED';
 export interface AuthenticationRequest {
   id: string;
   listingId: string;
+  /** The commerce order this verification was requested against, when the
+   *  request originated at checkout (orders.verification_requested). */
+  orderId?: string;
   itemValue: number; // in GBP
   category: string;
   brand?: string;
@@ -125,6 +128,8 @@ export interface AuditEntry {
 
 export interface CreateAuthenticationRequestInput {
   listingId: string;
+  /** Optional commerce order linkage for checkout-origin requests. */
+  orderId?: string;
   itemValue: number;
   category: string;
   brand?: string;
@@ -252,7 +257,23 @@ export function performAiTriage(
 // ---------------------------------------------------------------------------
 
 /**
+ * Deterministic request id for order-bound verification. One authentication
+ * request exists per order — the order id IS the dedupe key. A failed first
+ * create (e.g. a Redis error swallowed post-commit at checkout) leaves no
+ * partial state, so the next POST replay / PATCH retry re-attempts creation
+ * under the same key instead of being skipped by the durable flag.
+ */
+function orderRequestId(orderId: string): string {
+  return `auth_order_${orderId}`;
+}
+
+/**
  * Creates a new authentication request.
+ *
+ * Idempotent per order: when `input.orderId` is set the request id is
+ * deterministic (`auth_order_{orderId}`), so a retry returns the existing
+ * request rather than creating a duplicate — and a previously failed create
+ * heals on the next attempt.
  */
 export async function createAuthenticationRequest(
   redis: Redis,
@@ -260,11 +281,17 @@ export async function createAuthenticationRequest(
 ): Promise<AuthenticationRequest> {
   const tier = determineTier(input.itemValue);
   const now = new Date().toISOString();
-  const id = generateId('auth');
+  const id = input.orderId ? orderRequestId(input.orderId) : generateId('auth');
+
+  if (input.orderId) {
+    const existing = await getRequest(redis, id);
+    if (existing) return existing;
+  }
 
   const request: AuthenticationRequest = {
     id,
     listingId: input.listingId,
+    orderId: input.orderId,
     itemValue: input.itemValue,
     category: input.category,
     brand: input.brand,
@@ -317,6 +344,10 @@ export async function runAiTriage(
     notes: `Confidence: ${triageResult.confidenceScore}, Anomalies: ${triageResult.flaggedAnomalies.length}`,
   });
 
+  // Track whether a badge was issued so the public certificate is written
+  // only after the request record lands (see below).
+  let certificateIssued = false;
+
   // Advance status based on tier and triage result
   if (triageResult.recommendation === 'fail') {
     // AI triage failed — mark as counterfeit (still needs human confirmation for high tiers)
@@ -331,12 +362,20 @@ export async function runAiTriage(
     request.status = 'authenticated';
     request.completedAt = now;
     request.badge = issueBadge(request, 'AI_VERIFIED', 'AI Photo Triage');
+    certificateIssued = true;
   } else {
     // Tier 2+: needs expert review
     request.status = 'ai_triage_complete';
   }
 
   await storeRequest(redis, request);
+  // The public certificate lands only after the request record does — a
+  // cert persisted first would be publicly verifiable for a request that
+  // may never exist if storeRequest fails. A stored request missing its
+  // cert is recoverable (generateCertificate re-persists on demand).
+  if (certificateIssued) {
+    await persistCertificate(redis, request);
+  }
   return request;
 }
 
@@ -440,10 +479,12 @@ export async function submitExpertVerdict(
   });
 
   // Advance status based on verdict
+  let certificateIssued = false;
   if (verdict === 'authenticated') {
     request.status = 'authenticated';
     request.completedAt = now;
     request.badge = issueBadge(request, 'EXPERT_VERIFIED', request.expertReview.expertName);
+    certificateIssued = true;
   } else if (verdict === 'counterfeit') {
     request.status = 'counterfeit';
     request.completedAt = now;
@@ -455,6 +496,11 @@ export async function submitExpertVerdict(
   }
 
   await storeRequest(redis, request);
+  // Certificate after the request record — a cert that outlives a failed
+  // storeRequest would verify publicly for a request that doesn't exist.
+  if (certificateIssued) {
+    await persistCertificate(redis, request);
+  }
   return request;
 }
 
@@ -535,10 +581,12 @@ export async function submitLabReport(
     notes: `Methods: ${methodsUsed.join(', ')}, Confidence: ${confidence}`,
   });
 
+  let certificateIssued = false;
   if (result === 'authentic') {
     request.status = 'authenticated';
     request.completedAt = now;
     request.badge = issueBadge(request, 'LAB_CERTIFIED', request.labReport.labName);
+    certificateIssued = true;
   } else if (result === 'counterfeit') {
     request.status = 'counterfeit';
     request.completedAt = now;
@@ -548,6 +596,11 @@ export async function submitLabReport(
   }
 
   await storeRequest(redis, request);
+  // Certificate after the request record — a cert that outlives a failed
+  // storeRequest would verify publicly for a request that doesn't exist.
+  if (certificateIssued) {
+    await persistCertificate(redis, request);
+  }
   return request;
 }
 
@@ -583,16 +636,16 @@ function issueBadge(
 }
 
 /**
- * Generates a digital certificate for an authenticated item.
+ * Persists the public certificate record for a badged request so the
+ * certificate id is verifiable via `verifyAuthenticationBadge` from the
+ * moment the badge is issued — the badge alone carries a certificateId
+ * that would otherwise resolve to nothing until generateCertificate ran.
  */
-export async function generateCertificate(
+async function persistCertificate(
   redis: Redis,
-  authRequestId: string
-): Promise<AuthenticationBadge & { itemDetails: { listingId: string; category: string; brand?: string; itemValue: number }; certificateUrl: string }> {
-  const request = await getRequest(redis, authRequestId);
-  if (!request) throw new Error(`Authentication request ${authRequestId} not found`);
-  if (!request.badge) throw new Error(`Request ${authRequestId} has no badge — authentication not complete`);
-
+  request: AuthenticationRequest
+): Promise<void> {
+  if (!request.badge) return;
   const certificate = {
     ...request.badge,
     itemDetails: {
@@ -603,15 +656,27 @@ export async function generateCertificate(
     },
     certificateUrl: `https://thryftverse.com/verify/${request.badge.certificateId}`,
   };
-
-  // Store certificate for public verification
   await redis.setex(
     redisKey('certificate', request.badge.certificateId),
     86400 * 365, // 1 year TTL
     JSON.stringify(certificate)
   );
+}
 
-  return certificate;
+/**
+ * Generates a digital certificate for an authenticated item.
+ */
+export async function generateCertificate(
+  redis: Redis,
+  authRequestId: string
+): Promise<AuthenticationBadge & { itemDetails: { listingId: string; category: string; brand?: string; itemValue: number }; certificateUrl: string }> {
+  const request = await getRequest(redis, authRequestId);
+  if (!request) throw new Error(`Authentication request ${authRequestId} not found`);
+  if (!request.badge) throw new Error(`Request ${authRequestId} has no badge — authentication not complete`);
+
+  await persistCertificate(redis, request);
+  const certJson = await redis.get(redisKey('certificate', request.badge.certificateId));
+  return JSON.parse(certJson as string);
 }
 
 /**
@@ -640,6 +705,49 @@ export async function verifyAuthenticationBadge(
   }
   const certificate = JSON.parse(certJson);
   return { valid: true, certificate };
+}
+
+/**
+ * Reads the authentication request bound to an order. Checkout creates
+ * exactly one request per order under the deterministic id
+ * `auth_order_{orderId}` — this is the read side of that binding.
+ *
+ * Storage reality: pipeline state lives in Redis with a 90-day TTL
+ * refreshed on every write. A null return means either the order never
+ * requested verification, the post-commit create failed, or the record
+ * expired — callers must not treat null as proof of "not requested"
+ * (the durable signal is `orders.verification_requested`).
+ */
+export async function getAuthenticationRequestForOrder(
+  redis: Redis,
+  orderId: string
+): Promise<AuthenticationRequest | null> {
+  return getRequest(redis, orderRequestId(orderId));
+}
+
+/**
+ * Reads the most recent authentication request for a listing — the same
+ * `auth:listing:{id}:latest` projection `storeRequest` maintains.
+ */
+export async function getLatestAuthenticationRequest(
+  redis: Redis,
+  listingId: string
+): Promise<AuthenticationRequest | null> {
+  const json = await redis.get(redisKey('listing', listingId, 'latest'));
+  if (!json) return null;
+  return JSON.parse(json) as AuthenticationRequest;
+}
+
+/**
+ * Milliseconds until the stored request record expires (Redis TTL), or
+ * null when the record is missing / has no expiry / the read fails.
+ */
+export async function getRequestTtlMs(
+  redis: Redis,
+  authRequestId: string
+): Promise<number | null> {
+  const ms = await redis.pttl(redisKey('request', authRequestId));
+  return ms > 0 ? ms : null;
 }
 
 /**
@@ -682,8 +790,12 @@ async function storeRequest(redis: Redis, request: AuthenticationRequest): Promi
   const key = redisKey('request', request.id);
   await redis.setex(key, 86400 * 90, JSON.stringify(request)); // 90-day TTL
 
-  // Index by listing
-  await redis.lpush(redisKey('listing', request.listingId, 'history'), request.id);
+  // Index by listing. The history push is idempotent (dedupe via LREM) so a
+  // replayed createAuthenticationRequest against the deterministic order id
+  // never leaves duplicate entries behind.
+  const historyKey = redisKey('listing', request.listingId, 'history');
+  await redis.lrem(historyKey, 0, request.id);
+  await redis.lpush(historyKey, request.id);
   await redis.setex(redisKey('listing', request.listingId, 'latest'), 86400 * 90, JSON.stringify(request));
 }
 
@@ -699,6 +811,7 @@ async function getRequest(redis: Redis, id: string): Promise<AuthenticationReque
 
 export function createMockRedis(): Redis {
   const store = new Map<string, string>();
+  const ttls = new Map<string, number>();
   const sortedSets = new Map<string, Array<{ member: string; score: number }>>();
   const lists = new Map<string, string[]>();
 
@@ -706,9 +819,15 @@ export function createMockRedis(): Redis {
     async get(key: string): Promise<string | null> {
       return store.get(key) ?? null;
     },
-    async setex(key: string, _seconds: number, value: string): Promise<string> {
+    async setex(key: string, seconds: number, value: string): Promise<string> {
       store.set(key, value);
+      ttls.set(key, Date.now() + seconds * 1000);
       return 'OK';
+    },
+    async pttl(key: string): Promise<number> {
+      if (!store.has(key)) return -2;
+      const expiry = ttls.get(key);
+      return expiry === undefined ? -1 : Math.max(0, expiry - Date.now());
     },
     async zadd(key: string, score: number, member: string): Promise<number> {
       let set = sortedSets.get(key);
@@ -743,6 +862,22 @@ export function createMockRedis(): Redis {
       }
       list.unshift(...values);
       return list.length;
+    },
+    async lrem(key: string, count: number, value: string): Promise<number> {
+      const list = lists.get(key);
+      if (!list) return 0;
+      let removed = 0;
+      const remaining: string[] = [];
+      // count = 0 removes all occurrences; positive removes head-to-tail.
+      for (const item of list) {
+        if (item === value && (count === 0 || removed < Math.abs(count))) {
+          removed += 1;
+          continue;
+        }
+        remaining.push(item);
+      }
+      lists.set(key, remaining);
+      return removed;
     },
     async lrange(key: string, start: number, stop: number): Promise<string[]> {
       const list = lists.get(key) ?? [];

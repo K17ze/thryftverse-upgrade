@@ -10,6 +10,7 @@ import type { Listing } from '../../../services/listingsApi';
 import type {
   ListingCapabilities,
   ListingCommerceContext,
+  SellerTrustSummary,
 } from '../../../platform/product/listingDetailContract';
 
 /**
@@ -30,6 +31,11 @@ export interface CommerceActionDockProps {
   item: Listing;
   capabilities: ListingCapabilities;
   commerce: ListingCommerceContext;
+  /** Seller trust summary — when `holidayMode` is on, the dock replaces
+   *  purchase/offer affordances with an away notice (the backend rejects
+   *  checkout and new offers with 409 SELLER_AWAY anyway). May be null
+   *  while the trust query loads; absence never implies "not away". */
+  seller?: SellerTrustSummary | null;
   formattedPrice: string;
   formattedOriginal: string | null;
   hasDiscount: boolean;
@@ -45,6 +51,7 @@ export function CommerceActionDock({
   item,
   capabilities,
   commerce,
+  seller,
   formattedPrice,
   formattedOriginal,
   hasDiscount,
@@ -58,31 +65,18 @@ export function CommerceActionDock({
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
-  // ── Delivery estimate ──
-  // The server commerce context carries an estimated delivery window.
-  // Per Chapter 12 ("keep shipping, returns and protection adjacent to
-  // the buying decision") the estimate rides inside the dock's shipping
-  // hint so it stays visible next to the commitment action — the buyer
-  // sees *when* it arrives beside *how much* it costs.
-  const deliveryWindow = (() => {
-    const start = commerce.estimatedDeliveryStart
-      ? formatShortDate(commerce.estimatedDeliveryStart)
-      : '';
-    const end = commerce.estimatedDeliveryEnd
-      ? formatShortDate(commerce.estimatedDeliveryEnd)
-      : '';
-    if (start && end) return `${start}–${end}`;
-    return start || end || null;
-  })();
-
-  const shippingHint = [
+  // ── Shipping hint ──
+  // Only facts the PDP endpoint actually emits: who pays shipping. The
+  // dead estimatedDeliveryStart/End contract fields were removed — no
+  // dispatch/courier signal is persisted, so no delivery window is ever
+  // fabricated next to the commitment action.
+  const shippingHint = (
     commerce.shippingPayer === 'seller'
       ? 'Free shipping'
       : commerce.shippingMethod
         ? 'Shipping calculated at checkout'
-        : null,
-    deliveryWindow ? `Est. ${deliveryWindow}` : null,
-  ].filter(Boolean).join(' · ') || undefined;
+        : null
+  ) || undefined;
 
   // ── Zone I — Sticky action dock ──
   //   Buyer: price + Buy now + Make offer.
@@ -147,6 +141,61 @@ export function CommerceActionDock({
           </Text>
         }
         subtitle={unavailableCopy.subtitle}
+        primaryAction={{
+          label: t('product.browseSimilar'),
+          onPress: onBrowseSimilar,
+        }}
+      />
+    );
+  }
+
+  // ── Seller suspended — no purchase affordance ──
+  // users.reach_state === 'suspended' means the account is restricted:
+  // the backend reports 0 active listings for the seller and any buy or
+  // offer can only fail. Render a factual state dock instead of the
+  // purchase actions.
+  if (seller?.reachState === 'suspended') {
+    return (
+      <CommerceDetailStateDock
+        stateBadge={
+          <Text style={[styles.dockStateBadge, { color: colors.textSecondary }]} maxFontSizeMultiplier={2}>
+            Unavailable
+          </Text>
+        }
+        subtitle="This seller's account is currently restricted"
+        primaryAction={{
+          label: t('product.browseSimilar'),
+          onPress: onBrowseSimilar,
+        }}
+      />
+    );
+  }
+
+  // ── Seller away — shop paused ──
+  // Holiday mode pauses the seller's account: checkout and new offers are
+  // rejected server-side (409 SELLER_AWAY), so the dock mirrors that state
+  // rather than offering actions that can only fail. The return date is
+  // rendered only when the seller actually published one — it is never
+  // fabricated from handling-time estimates.
+  if (seller?.holidayMode) {
+    const backOn = seller.holidayModeUntil
+      ? formatShortDate(seller.holidayModeUntil)
+      : null;
+    return (
+      <CommerceDetailStateDock
+        value={formattedPrice}
+        originalValue={hasDiscount && formattedOriginal ? formattedOriginal : undefined}
+        thumbnailUri={item.images?.[0]}
+        stateBadge={
+          <Text style={[styles.dockStateBadge, { color: colors.textSecondary }]} maxFontSizeMultiplier={2}>
+            Seller away
+          </Text>
+        }
+        subtitle={
+          backOn
+            ? `Listings are paused — back ${backOn}`
+            : seller.awayMessage || 'Listings are paused until the seller returns'
+        }
         primaryAction={{
           label: t('product.browseSimilar'),
           onPress: onBrowseSimilar,

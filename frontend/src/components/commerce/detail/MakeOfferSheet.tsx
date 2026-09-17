@@ -7,9 +7,11 @@
  * `MakeOfferScreen`).
  *
  * Truthful UI (AGENTS.md):
- *   - Smart Sell auto-accept messaging is only shown when the seller's
- *     policy reports `enabled: true`. When the capability is in preview,
- *     the indicator is honestly labelled "Preview".
+ *   - No Smart Sell banner: the only policy endpoint (GET
+ *     /smart-sell/policies) is seller-scoped — it returns the caller's
+ *     own policies, so a buyer-facing sheet can never truthfully claim
+ *     this listing's seller has auto-accept enabled. The legacy
+ *     device-local in-memory Map source was removed entirely.
  *   - No fabricated success: the sheet calls the real offer API and only
  *     reports success when the server returns an offer entity.
  */
@@ -49,7 +51,6 @@ import {
   createListingOfferOnApi,
   lookupOfferByIdempotencyKey,
   type ListingOffer } from '../../../services/listingOffersApi';
-import { fetchSmartSellConfig, SMART_SELL_PREVIEW_MODE } from '../../../services/smartSellApi';
 import { createStableId } from '../../../utils/createStableId';
 import { useUnknownOutcomeReconciliation } from '../../../hooks/useUnknownOutcomeReconciliation';
 import { haptics } from '../../../utils/haptics';
@@ -118,8 +119,6 @@ export function MakeOfferSheet({
   const [offerDisplay, setOfferDisplay] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [smartSellEnabled, setSmartSellEnabled] = useState(false);
-  const [smartSellThreshold, setSmartSellThreshold] = useState<number | null>(null);
   const idempotencyKeyRef = useRef<string | null>(null);
   const isMountedRef = useRef(true);
   // Unknown-outcome reconciliation: a lost create-offer response is resolved
@@ -146,29 +145,6 @@ export function MakeOfferSheet({
     const display = convertGbpToDisplayAmount(defaultGbp, currencyCode, fxRates);
     setOfferDisplay((Number.isFinite(display) ? display : defaultGbp).toFixed(2));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, listing?.id]);
-
-  // Fetch Smart Sell config for the listing to surface the auto-accept
-  // indicator truthfully. In demo mode the config is mock data — the UI
-  // labels it honestly.
-  useEffect(() => {
-    if (!visible || !listing) return;
-    let cancelled = false;
-    try {
-      const config = fetchSmartSellConfig(listing.id);
-      if (cancelled) return;
-      setSmartSellEnabled(config.enabled);
-      setSmartSellThreshold(config.enabled ? config.autoAcceptThreshold : null);
-      // config.isPreview is available for honest labelling when needed
-    } catch {
-      if (!cancelled) {
-        setSmartSellEnabled(false);
-        setSmartSellThreshold(null);
-      }
-    }
-    return () => {
-      cancelled = true;
-    };
   }, [visible, listing?.id]);
 
   const numericOfferDisplay = parseFloat(offerDisplay) || 0;
@@ -542,27 +518,14 @@ export function MakeOfferSheet({
         />
       </View>
 
-      {/* Smart Sell demo-mode indicator */}
-      {smartSellEnabled && smartSellThreshold != null && smartSellThreshold > 0 ? (
-        <View
-          style={[
-            styles.smartSellBanner,
-            { backgroundColor: colors.successSubtle, borderColor: colors.successBorder },
-          ]}
-        >
-          <Ionicons name="trending-up-outline" size={14} color={colors.success} />
-          <Text style={[styles.smartSellText, { color: colors.textSecondary }]}>
-            {SMART_SELL_PREVIEW_MODE ? 'Preview — ' : ''}
-            Seller has Smart Sell enabled — offers above{' '}
-            {formatFromFiat(smartSellThreshold, 'GBP', { displayMode: 'fiat' })} auto-accept
-          </Text>
-        </View>
-      ) : null}
-
       {/* Error message */}
       {errorMsg ? (
-        <View style={styles.errorRow}>
-          <Ionicons name="alert-circle-outline" size={15} color={colors.danger} />
+        <View
+          style={styles.errorRow}
+          accessibilityRole="alert"
+          accessibilityLiveRegion="polite"
+        >
+          <Ionicons name="alert-circle-outline" size={15} color={colors.danger} accessible={false} />
           <Text style={[styles.errorText, { color: colors.danger }]}>{errorMsg}</Text>
         </View>
       ) : null}
@@ -593,7 +556,7 @@ export function MakeOfferSheet({
         title={isSubmitting ? 'Sending…' : 'Send Offer'}
         onPress={handleSendOffer}
         loading={isSubmitting}
-        disabled={isSubmitting}
+        disabled={isSubmitting || isOffline}
         variant="primary"
         size="lg"
         style={styles.sendButton}
@@ -769,21 +732,6 @@ const styles = StyleSheet.create({
     fontFamily: TypographyV2.bodyStrong.fontFamily,
     paddingVertical: Space.sm,
     fontVariant: ['tabular-nums'] },
-  smartSellBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    marginHorizontal: Space.md,
-    marginTop: Space.md,
-    paddingHorizontal: Space.sm + 2,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.md,
-    borderWidth: Stroke.hairline },
-  smartSellText: {
-    flex: 1,
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily },
   errorRow: {
     flexDirection: 'row',
     alignItems: 'center',

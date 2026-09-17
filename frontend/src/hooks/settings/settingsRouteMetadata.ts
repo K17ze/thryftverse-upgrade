@@ -14,11 +14,12 @@ export interface DestinationMeta {
 // consistent with the browsable hierarchy.
 export const ROUTE_METADATA: DestinationMeta[] = [
   // ── Your account (profile, security, privacy) ──
-  { key: 'EditProfile', label: 'Edit profile & account', searchTerms: 'avatar name bio username email phone password 2fa two factor', section: 'Your account', showSection: true },
-  { key: 'Verification', label: 'Verify your identity', searchTerms: 'identity dac7 tax badge seller trust kyc', section: 'Your account' },
+  // Verification has a single entry point — the Verification row inside
+  // Edit Profile — so its search synonyms live on the EditProfile result.
+  { key: 'EditProfile', label: 'Edit profile & account', searchTerms: 'avatar name bio username email phone password 2fa two factor verification verify identity dac7 tax badge seller trust kyc', section: 'Your account', showSection: true },
   { key: 'ChangePassword', label: 'Change password', searchTerms: '2fa two factor security', section: 'Your account' },
   { key: 'ConnectedAccounts', label: 'Connected accounts', searchTerms: 'google apple oauth social login', section: 'Your account' },
-  { key: 'ActiveSessions', label: 'Devices & sessions', searchTerms: 'login device security', section: 'Your account' },
+  { key: 'AccountSecurity', label: 'Devices & sessions', searchTerms: 'login device security passkey sign out revoke', section: 'Your account' },
   { key: 'AccountControl', label: 'Account control', searchTerms: 'delete deactivate download export security', section: 'Your account' },
   { key: 'DataExport', label: 'Download my data', searchTerms: 'export gdpr', section: 'Your account' },
   { key: 'DeleteAccount', label: 'Delete account', searchTerms: 'permanently erase gdpr remove', section: 'Your account' },
@@ -36,9 +37,9 @@ export const ROUTE_METADATA: DestinationMeta[] = [
   { key: 'CoOwnPriceAlerts', label: 'Price alerts', searchTerms: 'notifications co-own', section: 'Buying & selling' },
   { key: 'ResolutionCentre', label: 'Resolution Centre', searchTerms: 'dispute resolution', section: 'Buying & selling' },
   // ── Notifications ──
-  { key: 'PushNotifications', label: 'Notification categories', searchTerms: 'push alerts', section: 'Notifications', showSection: true },
+  { key: 'NotificationPreferences', label: 'Notification preferences', searchTerms: 'push categories offers price drop marketing quiet hours alerts', section: 'Notifications', showSection: true },
+  { key: 'PushNotifications', label: 'Push on this device', searchTerms: 'push delivery registration device', section: 'Notifications' },
   { key: 'EmailNotifications', label: 'Email preferences', searchTerms: '', section: 'Notifications' },
-  { key: 'NotificationPreferences', label: 'Notification preferences', searchTerms: 'push offers price drop marketing quiet hours', section: 'Notifications' },
   // ── Experience (appearance, language, currency, accessibility, recommendations) ──
   { key: 'Personalisation', label: 'Content preferences', searchTerms: 'feed personalisation appearance content preferences', section: 'Experience', showSection: true },
   { key: 'AIPreferences', label: 'Recommendations', searchTerms: 'listing suggestions photo enhancement title price autocomplete sell recommendations', section: 'Experience' },

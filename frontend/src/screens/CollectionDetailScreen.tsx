@@ -118,9 +118,13 @@ export default function CollectionDetailScreen() {
 
   const coverImage = coverImages[0] ?? null;
 
+  const loadCollectionsFromApi = useStore((state) => state.loadCollectionsFromApi);
+
   const handleRefresh = async () => {
     setRefreshing(true);
-    await refreshListings();
+    // itemIds live on the collections list — refreshing only the feed left
+    // the board's membership stale for the whole session.
+    await Promise.all([refreshListings(), loadCollectionsFromApi()]);
     setTimeout(() => setRefreshing(false), 350);
   };
 
@@ -156,8 +160,14 @@ export default function CollectionDetailScreen() {
 
   const handleShare = useCallback(() => {
     haptic.light();
+    // Private collections have no public read route — sharing would emit a
+    // link that 403s for the recipient. Say so instead of leaking a dead URL.
+    if (collection?.isPrivate) {
+      show('Private collections can\u2019t be shared yet.', 'info');
+      return;
+    }
     setShareVisible(true);
-  }, [haptic]);
+  }, [haptic, collection?.isPrivate, show]);
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
@@ -186,7 +196,9 @@ export default function CollectionDetailScreen() {
     );
   }
 
-  const count = collectionItems.length;
+  // Server membership count — resolved items under-count when a member
+  // listing isn't in the resident feed pages.
+  const count = collection.itemIds?.length ?? collectionItems.length;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -289,6 +301,7 @@ export default function CollectionDetailScreen() {
             <View style={styles.coverActions} pointerEvents="box-none">
               <View style={{ width: 40 }} />
               <View style={styles.actionRow}>
+                {!collection.isPrivate && (
                 <AnimatedPressable
                   style={styles.actionBtnOverlay}
                   onPress={handleShare}
@@ -299,6 +312,7 @@ export default function CollectionDetailScreen() {
                 >
                   <Ionicons name="share-outline" size={18} color={colors.scrimTextPrimary} accessible={false} />
                 </AnimatedPressable>
+                )}
                 <AnimatedPressable
                   style={styles.actionBtnOverlay}
                   onPress={() => { haptic.light(); navigation.navigate('EditCollection', { collectionId }); }}
@@ -341,6 +355,7 @@ export default function CollectionDetailScreen() {
               </View>
             </View>
             <View style={styles.actionRow}>
+              {!collection.isPrivate && (
               <AnimatedPressable
                 style={styles.actionBtnTransparent}
                 onPress={handleShare}
@@ -351,6 +366,7 @@ export default function CollectionDetailScreen() {
               >
                 <Ionicons name="share-outline" size={20} color={colors.textPrimary} accessible={false} />
               </AnimatedPressable>
+              )}
               <AnimatedPressable
                 style={styles.actionBtnTransparent}
                 onPress={() => { haptic.light(); navigation.navigate('EditCollection', { collectionId }); }}
@@ -393,7 +409,6 @@ export default function CollectionDetailScreen() {
             <ClosetMediaMosaic
               items={collectionItems}
               onPressItem={(item: any) => openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'CollectionDetail' })}
-              showSaveButton
             />
           </View>
         )}

@@ -24,7 +24,7 @@
 
 import { useCallback } from 'react';
 
-import type { CreatorDocument } from '../composition';
+import type { CreatorDocument } from '../core/projectStore/composition';
 import type { useHaptic } from '../../hooks/useHaptic';
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -49,6 +49,12 @@ export interface UsePosterFrameNavigationInput {
   setSelectedOverlayId: (id: string | null) => void;
   /** Haptic engine. */
   haptic: Haptic;
+  /**
+   * Fired after a successful page change. The orchestrator uses it to
+   * move the playhead to the target page's clip start so the timeline
+   * and the canvas never disagree (CapCut/Edits: preview = playhead).
+   */
+  onNavigate?: (index: number) => void;
 }
 
 export interface UsePosterFrameNavigationResult {
@@ -78,6 +84,7 @@ export function usePosterFrameNavigation({
   setSelectedClipId,
   setSelectedOverlayId,
   haptic,
+  onNavigate,
 }: UsePosterFrameNavigationInput): UsePosterFrameNavigationResult {
   const pageCount = document.pages.length;
   const hasMultipleFrames = pageCount > 1;
@@ -96,7 +103,8 @@ export function usePosterFrameNavigation({
     setSelectedOverlayId(null);
     setActivePageIndex(index);
     haptic.light();
-  }, [pageCount, activePageIndex, selectLayer, setSelectedClipId, setSelectedOverlayId, setActivePageIndex, haptic]);
+    onNavigate?.(index);
+  }, [pageCount, activePageIndex, selectLayer, setSelectedClipId, setSelectedOverlayId, setActivePageIndex, haptic, onNavigate]);
 
   return {
     activePageIndex,

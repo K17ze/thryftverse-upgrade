@@ -1,7 +1,8 @@
 /**
  * LiveSellerLivePhase — the on-air surface for the seller: header with
- * end-stream control, local camera preview chrome (LiveKit-connected
- * honest caption), the lot command slot, and the read-only viewer chat.
+ * end-stream control, the camera stage (published feed once LiveKit
+ * publishing is live, honest captions otherwise), the lot command slot,
+ * and the read-only viewer chat.
  */
 
 import React, { useCallback, useRef } from 'react';
@@ -19,7 +20,8 @@ import { FlagshipScreen, FlagshipHeader } from '../flagship';
 import { BroadcastPreview } from '../live/BroadcastPreview';
 import { LiveBadge } from '../live/LiveBadge';
 import type { BroadcastSession } from '../live/liveBroadcastApi';
-import type { LiveKitConnectionState } from '../../platform/streaming/useLiveKitRoom';
+import type { LiveKitConnectionState, LiveKitVideoTrack } from '../../platform/streaming/useLiveKitRoom';
+import type { BroadcastPublishState } from '../../hooks/livestream/useSellerBroadcast';
 import type { LiveStreamChatMessage } from '../../services/liveShoppingApi';
 import { formatClock } from './liveSellerUtils';
 import { useSellerStyles } from './liveSellerStyles';
@@ -30,6 +32,12 @@ interface LiveSellerLivePhaseProps {
   endError: string | null;
   onEndStream: () => void;
   liveKitState: LiveKitConnectionState;
+  /** Camera/mic publish lifecycle — drives the honest stage caption. */
+  publishState: BroadcastPublishState;
+  publishError: string | null;
+  /** The published local camera track — rendered when publishing so the
+   *  seller sees the real broadcast feed. */
+  liveVideoTrack: LiveKitVideoTrack | null;
   viewerCount: number;
   liveSeconds: number;
   messages: LiveStreamChatMessage[];
@@ -43,6 +51,9 @@ export function LiveSellerLivePhase({
   endError,
   onEndStream,
   liveKitState,
+  publishState,
+  publishError,
+  liveVideoTrack,
   viewerCount,
   liveSeconds,
   messages,
@@ -51,6 +62,19 @@ export function LiveSellerLivePhase({
   const { height: SCREEN_HEIGHT } = useWindowDimensions();
   const styles = useSellerStyles();
   const chatListRef = useRef<FlatList<LiveStreamChatMessage>>(null);
+
+  // Stage caption — every publish state is stated truthfully; nothing
+  // claims the camera is broadcasting when it is not.
+  const previewCaption = (() => {
+    if (publishState === 'published') {
+      return liveVideoTrack ? 'On air — this is what viewers see' : 'On air';
+    }
+    if (publishState === 'publishing') return 'Starting camera…';
+    if (publishState === 'unavailable') {
+      return 'Video unavailable — viewers still get lots and chat';
+    }
+    return liveKitState === 'connected' ? 'Preparing camera…' : 'Local camera preview';
+  })();
 
   const renderChatMessage = useCallback(({ item }: { item: LiveStreamChatMessage }) => {
     const isSystem = item.type === 'system' || item.type === 'bid' || item.type === 'purchase';
@@ -102,14 +126,20 @@ export function LiveSellerLivePhase({
       contentStyle={styles.flushContent}
     >
       <View style={styles.liveWrap}>
-        {/* Camera — dominant object. Local preview only; publishing is a
-            shared-layer gap, so the label stays honest. */}
+        {/* Camera — dominant object. Once publishing is live this renders
+            the actual broadcast feed; until then it is a local framing
+            preview, and the caption says which. VisionCamera is deactivated
+            while publishing so the two capturers never contend for the
+            camera device. */}
         <View style={styles.previewWrap}>
           <BroadcastPreview
-            active
+            active={publishState !== 'publishing' && publishState !== 'published'}
             facing="back"
             height={Math.round(SCREEN_HEIGHT * 0.3)}
-            accessibilityLabel="Local camera preview"
+            accessibilityLabel={
+              publishState === 'published' ? 'Broadcast camera feed' : 'Local camera preview'
+            }
+            liveTrack={liveVideoTrack}
           />
           <View style={styles.liveChromeRow}>
             <LiveBadge compact label="Live" />
@@ -129,10 +159,13 @@ export function LiveSellerLivePhase({
             </View>
           </View>
           <Text style={[styles.previewCaption, { color: colors.textMuted }]}>
-            {liveKitState === 'connected'
-              ? 'Local preview — camera publishing is not wired in this build'
-              : 'Local camera preview'}
+            {previewCaption}
           </Text>
+          {publishError ? (
+            <Text style={[styles.footerError, { color: colors.danger, paddingHorizontal: 0 }]}>
+              {publishError}
+            </Text>
+          ) : null}
           {endError ? (
             <Text style={[styles.footerError, { color: colors.danger, paddingHorizontal: 0 }]}>
               {endError}

@@ -5,10 +5,12 @@ import { useToast } from '../../context/ToastContext';
 import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 /**
- * Profile-media lifecycle for the owner profile: avatar/cover picker upload
- * wiring, the confirmed-remote vs pending-local display priority chain, and
- * upload-status toasts. Extracted from MyProfileScreen — the upload state
- * machine itself lives in useProfileMediaUpload and is untouched.
+ * Profile-media lifecycle for the owner profile: the confirmed-remote vs
+ * pending-local display priority chain and upload-status toasts. Picking and
+ * editing media lives in Edit Profile (useProfileMediaUpload is consumed
+ * directly there) — the owner profile surface is display-only.
+ * Extracted from MyProfileScreen — the upload state machine itself lives in
+ * useProfileMediaUpload and is untouched.
  */
 export function useMyProfileMedia(user: User | null) {
   const { show } = useToast();
@@ -27,11 +29,7 @@ export function useMyProfileMedia(user: User | null) {
 
   const {
     avatar: avatarState,
-    cover: coverState,
-    pickAvatar,
-    pickCover,
-    retryCover,
-    revertCover } = useProfileMediaUpload(
+    cover: coverState } = useProfileMediaUpload(
     user?.id,
     confirmedAvatarRemote,
     confirmedCoverRemote,
@@ -88,10 +86,6 @@ export function useMyProfileMedia(user: User | null) {
   return {
     avatarState,
     coverState,
-    pickAvatar,
-    pickCover,
-    retryCover,
-    revertCover,
     displayAvatar,
     displayCover,
   };

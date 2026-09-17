@@ -27,7 +27,7 @@ import { IconGrammar } from '../../theme/designTokens';
 import { Motion } from '../../theme/motionTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
-import { PressScale } from '../CreatorAnimations';
+import { PressScale } from '../shared/CreatorAnimations';
 import { toHexString, normalize } from './ColorMath';
 import { CreatorColorPicker } from './CreatorColorPicker';
 import { makeStableId } from '../../utils/createStableId';
@@ -58,7 +58,6 @@ interface StopThumbProps {
   stop: GradientStop;
   barWidth: number;
   isSelected: boolean;
-  onSelect: () => void;
   onDragChange: (position: number) => void;
   onDragCommit: (position: number) => void;
 }
@@ -67,7 +66,6 @@ function StopThumb({
   stop,
   barWidth,
   isSelected,
-  onSelect,
   onDragChange,
   onDragCommit }: StopThumbProps) {
   const { colors } = useAppTheme();
@@ -84,6 +82,8 @@ function StopThumb({
     thumbX.value = withTiming(stop.position * barWidth, SNAP_TIMING);
   }, [stop.position, barWidth, thumbX]);
 
+  // onDragChange emits at most once per 0.5% position bucket.
+  const lastPosBucketSV = useSharedValue(-1);
   const panGesture = React.useMemo(() => {
     return Gesture.Pan()
       .activateAfterLongPress(0)
@@ -92,6 +92,7 @@ function StopThumb({
         const w = layoutWidth.value;
         const pos = Math.max(0, Math.min(1, e.x / w));
         thumbX.value = pos * w;
+        lastPosBucketSV.value = Math.round(pos * 200);
         runOnJS(onDragChange)(pos);
       })
       .onChange((e) => {
@@ -99,15 +100,21 @@ function StopThumb({
         const w = layoutWidth.value;
         const pos = Math.max(0, Math.min(1, e.x / w));
         thumbX.value = pos * w;
-        runOnJS(onDragChange)(pos);
+        const bucket = Math.round(pos * 200);
+        if (bucket !== lastPosBucketSV.value) {
+          lastPosBucketSV.value = bucket;
+          runOnJS(onDragChange)(pos);
+        }
       })
-      .onEnd(() => {
+      .onFinalize(() => {
         'worklet';
+        // Commit on finalize (not onEnd) so an interrupted drag still
+        // lands the stop at its dragged position.
         const w = layoutWidth.value;
         const pos = Math.max(0, Math.min(1, thumbX.value / w));
         runOnJS(onDragCommit)(pos);
       });
-  }, [thumbX, onDragChange, onDragCommit, layoutWidth]);
+  }, [thumbX, onDragChange, onDragCommit, layoutWidth, lastPosBucketSV]);
 
   const thumbStyle = useAnimatedStyle(() => {
     if (reduceMotion) {
@@ -133,6 +140,7 @@ function StopThumb({
         ]}
         accessibilityRole="adjustable"
         accessibilityLabel={`Gradient stop at ${Math.round(stop.position * 100)} percent`}
+        accessibilityHint="Drag to move this color stop"
         accessibilityValue={{
           min: 0,
           max: 100,
@@ -152,7 +160,6 @@ export function GradientEditor({
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = useGradientEditorStyles(colors);
-  const reduceMotion = useReducedMotion();
 
   const [barWidth, setBarWidth] = useState(0);
   const [selectedStopId, setSelectedStopId] = useState<string | null>(
@@ -323,7 +330,6 @@ export function GradientEditor({
                   stop={stop}
                   barWidth={barWidth}
                   isSelected={stop.id === selectedStopId}
-                  onSelect={() => setSelectedStopId(stop.id)}
                   onDragChange={handleStopDragChange}
                   onDragCommit={handleStopDragCommit}
                 />
@@ -340,6 +346,7 @@ export function GradientEditor({
           style={StyleSheet.flatten([styles.controlBtn, !canAddStop && styles.controlBtnDisabled])}
           disabled={!canAddStop}
           accessibilityLabel="Add gradient stop"
+          accessibilityHint="Adds a color stop at the midpoint"
           accessibilityRole="button"
           accessibilityState={{ disabled: !canAddStop }}
         >
@@ -351,6 +358,7 @@ export function GradientEditor({
           style={StyleSheet.flatten([styles.controlBtn, !canRemoveStop && styles.controlBtnDisabled])}
           disabled={!canRemoveStop}
           accessibilityLabel="Remove selected gradient stop"
+          accessibilityHint="Removes the selected color stop"
           accessibilityRole="button"
           accessibilityState={{ disabled: !canRemoveStop }}
         >
@@ -361,6 +369,7 @@ export function GradientEditor({
           onPress={handleReverse}
           style={styles.controlBtn}
           accessibilityLabel="Reverse gradient stops"
+          accessibilityHint="Reverses the color stop order"
           accessibilityRole="button"
         >
           <Ionicons name="swap-horizontal-outline" size={IconGrammar.standard} color={colors.textPrimary} />
@@ -376,6 +385,7 @@ export function GradientEditor({
             showColorPicker && styles.controlBtnActive,
           ])}
           accessibilityLabel="Edit selected stop color"
+          accessibilityHint="Shows the color picker for this stop"
           accessibilityRole="button"
           accessibilityState={{ expanded: showColorPicker }}
         >
@@ -445,6 +455,8 @@ function AngleSlider({ angle, width, onChange, onCommit }: AngleSliderProps) {
     thumbX.value = withTiming((angle / 360) * width, SNAP_TIMING);
   }, [angle, width, thumbX]);
 
+  // onChange emits at most once per integer degree.
+  const lastAngleBucketSV = useSharedValue(-1);
   const panGesture = React.useMemo(() => {
     return Gesture.Pan()
       .activateAfterLongPress(0)
@@ -453,6 +465,7 @@ function AngleSlider({ angle, width, onChange, onCommit }: AngleSliderProps) {
         const w = layoutWidth.value;
         const a = Math.max(0, Math.min(1, e.x / w)) * 360;
         thumbX.value = (a / 360) * w;
+        lastAngleBucketSV.value = Math.round(a);
         runOnJS(onChange)(a);
       })
       .onChange((e) => {
@@ -460,15 +473,19 @@ function AngleSlider({ angle, width, onChange, onCommit }: AngleSliderProps) {
         const w = layoutWidth.value;
         const a = Math.max(0, Math.min(1, e.x / w)) * 360;
         thumbX.value = (a / 360) * w;
-        runOnJS(onChange)(a);
+        const bucket = Math.round(a);
+        if (bucket !== lastAngleBucketSV.value) {
+          lastAngleBucketSV.value = bucket;
+          runOnJS(onChange)(a);
+        }
       })
-      .onEnd(() => {
+      .onFinalize(() => {
         'worklet';
         const w = layoutWidth.value;
         const a = Math.max(0, Math.min(1, thumbX.value / w)) * 360;
         runOnJS(onCommit)(a);
       });
-  }, [thumbX, onChange, onCommit, layoutWidth]);
+  }, [thumbX, onChange, onCommit, layoutWidth, lastAngleBucketSV]);
 
   const thumbStyle = useAnimatedStyle(() => {
     if (reduceMotion) {
@@ -488,6 +505,7 @@ function AngleSlider({ angle, width, onChange, onCommit }: AngleSliderProps) {
         style={[styles.angleSlider, { width, height: HEIGHT }]}
         accessibilityRole="adjustable"
         accessibilityLabel="Gradient angle"
+        accessibilityHint="Drag to set the gradient angle"
         accessibilityValue={{
           min: 0,
           max: 360,

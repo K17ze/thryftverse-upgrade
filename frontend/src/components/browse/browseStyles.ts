@@ -93,6 +93,13 @@ export function createBrowseStyles(colors: ThemeColors, itemWidth: number) {
       borderColor: colors.textPrimary },
     sortTriggerText: { color: colors.textSecondary, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily },
     sortTriggerTextActive: { color: colors.textPrimary, fontFamily: TypographyV2.meta.fontFamily },
+    sortMenuOverlay: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      zIndex: 20,
+      elevation: 20 },
     sortMenu: {
       marginHorizontal: Space.md,
       marginBottom: Space.sm,

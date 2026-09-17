@@ -16,7 +16,7 @@
 import React, { useCallback } from 'react';
 import { Text, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { PressScale } from '../../CreatorAnimations';
+import { PressScale } from '../../shared/CreatorAnimations';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 import {

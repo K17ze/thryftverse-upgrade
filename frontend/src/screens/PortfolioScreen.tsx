@@ -207,7 +207,7 @@ export default function PortfolioScreen() {
         imageUri={actionSheetAsset?.imageUrl ?? null}
         title={actionSheetAsset?.title ?? ''}
         unitsOwned={actionSheetAsset?.unitsOwned ?? 0}
-        ownershipPct={actionSheetAsset?.ownershipPct ?? 0}
+        ownershipPct={actionSheetAsset && actionSheetAsset.totalUnits > 0 ? actionSheetAsset.ownershipPct : null}
         currentValueLabel={actionSheetAsset ? formatFromFiat(actionSheetAsset.currentValueGbp, 'GBP') : ''}
         statusLabel={actionSheetAsset ? (actionSheetAsset.isOpen ? 'Active' : 'Closed') : ''}
         actions={actionSheetActions}

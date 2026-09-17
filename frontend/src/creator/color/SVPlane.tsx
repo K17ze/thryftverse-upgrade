@@ -81,7 +81,10 @@ export function SVPlane({
     layoutHeight.value = e.nativeEvent.layout.height;
   }, [layoutWidth, layoutHeight]);
 
-  // Pan gesture — updates S and V from drag position
+  // Pan gesture — updates S and V from drag position. onChange emits at
+  // most once per 1% S/V bucket so the bridge isn't crossed per frame
+  // with sub-perceptual updates.
+  const lastSVBucketSV = useSharedValue(-1);
   const panGesture = React.useMemo(() => {
     return Gesture.Pan()
       .activateAfterLongPress(0)
@@ -93,6 +96,7 @@ export function SVPlane({
         const v = Math.max(0, Math.min(1, 1 - e.y / h));
         indicatorX.value = s * w;
         indicatorY.value = (1 - v) * h;
+        lastSVBucketSV.value = Math.round(s * 100) * 1000 + Math.round(v * 100);
         const newHsv: HSV = { h: hsv.h, s, v };
         runOnJS(onChange)(newHsv);
       })
@@ -104,11 +108,17 @@ export function SVPlane({
         const v = Math.max(0, Math.min(1, 1 - e.y / h));
         indicatorX.value = s * w;
         indicatorY.value = (1 - v) * h;
-        const newHsv: HSV = { h: hsv.h, s, v };
-        runOnJS(onChange)(newHsv);
+        const bucket = Math.round(s * 100) * 1000 + Math.round(v * 100);
+        if (bucket !== lastSVBucketSV.value) {
+          lastSVBucketSV.value = bucket;
+          const newHsv: HSV = { h: hsv.h, s, v };
+          runOnJS(onChange)(newHsv);
+        }
       })
-      .onEnd(() => {
+      .onFinalize(() => {
         'worklet';
+        // Commit on finalize (not onEnd) so an interrupted drag still
+        // lands the dragged position — the indicator visibly moved.
         const w = layoutWidth.value;
         const h = layoutHeight.value;
         const s = Math.max(0, Math.min(1, indicatorX.value / w));
@@ -116,7 +126,7 @@ export function SVPlane({
         const finalHsv: HSV = { h: hsv.h, s, v };
         runOnJS(onCommit)(finalHsv);
       });
-  }, [hsv.h, indicatorX, indicatorY, onChange, onCommit, layoutWidth, layoutHeight]);
+  }, [hsv.h, indicatorX, indicatorY, onChange, onCommit, layoutWidth, layoutHeight, lastSVBucketSV]);
 
   // Animated indicator style
   const indicatorStyle = useAnimatedStyle(() => {
@@ -156,6 +166,7 @@ export function SVPlane({
         ]}
         accessibilityRole="adjustable"
         accessibilityLabel={accessibilityLabel}
+        accessibilityHint="Drag to adjust saturation and brightness"
         accessibilityValue={{
           text: `Saturation ${Math.round(hsv.s * 100)} percent, Value ${Math.round(hsv.v * 100)} percent`,
         }}

@@ -1,5 +1,7 @@
 import { fetchJson } from '../lib/apiClient';
 
+export type OrderReviewAutoReason = 'buyer_silence';
+
 export interface OrderReview {
   id: string;
   orderId: string;
@@ -12,6 +14,13 @@ export interface OrderReview {
     text: string;
     createdAt: string;
   } | null;
+  /**
+   * Provenance: TRUE when the row is platform-generated feedback (the buyer
+   * never submitted a review before the feedback window elapsed). Surfaces
+   * must render this as automatic — never as a buyer-authored review.
+   */
+  isAuto?: boolean;
+  autoReason?: OrderReviewAutoReason | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -44,12 +53,18 @@ export async function createOrderReview(
   orderId: string,
   rating: number,
   comment?: string,
-  photoUrls?: string[]
+  photoUrls?: string[],
+  idempotencyKey?: string
 ): Promise<OrderReview> {
+  const headers: Record<string, string> = {};
+  // The backend dedupes on this key — a network drop followed by a retry
+  // returns the already-created review instead of REVIEW_ALREADY_EXISTS.
+  if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
   const res = await fetchJson<CreateReviewResponse>(
     `/orders/${encodeURIComponent(orderId)}/review`,
     {
       method: 'POST',
+      headers,
       body: JSON.stringify({ rating, comment, photoUrls }),
     }
   );

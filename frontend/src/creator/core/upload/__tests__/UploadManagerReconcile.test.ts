@@ -2,6 +2,12 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { UploadManager } from '../UploadManager';
 import type { UploadEvent, UploadJob, UploadJobStatus } from '../UploadTypes';
 
+// UploadManager imports expo-media-library for library-URI size resolution;
+// keep the expo winter runtime out of the test environment.
+vi.mock('expo-media-library/legacy', () => ({
+  getAssetInfoAsync: vi.fn(async () => { throw new Error('not a library asset'); }),
+}));
+
 /**
  * A minimal, in-memory mock of `UploadJobStore`. Unlike the real store,
  * `loadJobs` here returns jobs verbatim (no `uploading`/`initiating` →

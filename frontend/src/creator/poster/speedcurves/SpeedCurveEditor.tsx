@@ -49,7 +49,6 @@ import {
   sampleSpeedAtPosition } from './SpeedCurveTypes';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
-import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { makeStableId } from '../../../utils/createStableId';
 import {
   Space,
@@ -57,7 +56,6 @@ import {
   Stroke,
   Control,
   FontFamily,
-  FontSize,
   LetterSpacing } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { IconGrammar } from '../../../theme/designTokens';
@@ -99,13 +97,10 @@ function yToSpeed(y: number, height: number): number {
 export function SpeedCurveEditor({ curve, onChange }: SpeedCurveEditorProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const reducedMotion = useReducedMotion();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [canvasWidth, setCanvasWidth] = useState(0);
   const widthSV = useSharedValue(0);
-  const startXSV = useSharedValue(0);
-  const startYSV = useSharedValue(0);
 
   const sortedPoints = useMemo(
     () => [...curve.points].sort((a, b) => a.position - b.position),
@@ -157,15 +152,6 @@ export function SpeedCurveEditor({ curve, onChange }: SpeedCurveEditorProps) {
       onChange({ ...curve, easing });
     },
     [curve, haptic, onChange],
-  );
-
-  // ── Point selection ─────────────────────────────────────────────────
-  const selectPoint = useCallback(
-    (id: string) => {
-      haptic.selection();
-      setSelectedId(id);
-    },
-    [haptic],
   );
 
   // ── Add a point by tapping an empty area of the canvas ──────────────
@@ -297,6 +283,7 @@ export function SpeedCurveEditor({ curve, onChange }: SpeedCurveEditorProps) {
         contentContainerStyle={styles.presetRow}
         accessibilityRole="list"
         accessibilityLabel="Speed curve presets"
+        accessibilityHint="Swipe horizontally to browse presets"
       >
         {SPEED_CURVE_PRESETS.map((preset) => {
           const active = preset.id === activePresetId;
@@ -415,6 +402,7 @@ export function SpeedCurveEditor({ curve, onChange }: SpeedCurveEditorProps) {
                 accessibilityRole="radio"
                 accessibilityState={{ checked: active }}
                 accessibilityLabel={EASING_LABELS[ease]}
+                accessibilityHint="Sets this easing for the curve"
                 style={({ pressed }) => [
                   styles.easingButton,
                   { backgroundColor: active ? colors.surfaceElevated : colors.surfaceAlt },
@@ -449,6 +437,7 @@ export function SpeedCurveEditor({ curve, onChange }: SpeedCurveEditorProps) {
                 style={styles.stepButton}
                 accessibilityRole="button"
                 accessibilityLabel="Decrease speed"
+                accessibilityHint="Lowers the point speed"
                 hitSlop={Control.hit / 2}
               >
                 <Ionicons name="remove" size={IconGrammar.metadata} color={colors.textPrimary} />
@@ -461,6 +450,7 @@ export function SpeedCurveEditor({ curve, onChange }: SpeedCurveEditorProps) {
                 style={styles.stepButton}
                 accessibilityRole="button"
                 accessibilityLabel="Increase speed"
+                accessibilityHint="Raises the point speed"
                 hitSlop={Control.hit / 2}
               >
                 <Ionicons name="add" size={IconGrammar.metadata} color={colors.textPrimary} />
@@ -479,6 +469,7 @@ export function SpeedCurveEditor({ curve, onChange }: SpeedCurveEditorProps) {
             onPress={handleDeletePoint}
             accessibilityRole="button"
             accessibilityLabel="Delete control point"
+            accessibilityHint="Removes this control point"
             style={({ pressed }) => [styles.deleteButton, pressed && { opacity: 0.6 }]}
           >
             <Ionicons name="trash-outline" size={16} color={colors.danger} />
@@ -583,6 +574,7 @@ const DraggablePoint = React.memo(function DraggablePoint({
         onResponderGrant={onSelect}
         accessibilityRole="adjustable"
         accessibilityLabel={`Speed ${point.speed}x at position ${Math.round(point.position * 100)}%`}
+        accessibilityHint="Drag to reshape the curve"
       >
         <Reanimated.View
           style={[

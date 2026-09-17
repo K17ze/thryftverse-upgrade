@@ -30,6 +30,13 @@ export interface InventorySummary {
   paused: number;
   draft: number;
   totalValue: number;
+  /**
+   * True when the server totals endpoint was unreachable and the figures
+   * below are derived from the loaded page window only. The summary strip
+   * must label these counts as loaded-scope rather than presenting them as
+   * store-wide totals.
+   */
+  isPartial: boolean;
 }
 
 export interface InventoryConfirmSheetState {

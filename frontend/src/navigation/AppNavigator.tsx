@@ -22,6 +22,7 @@ import {
   clearNavigationState,
 } from './navigationPersistence';
 import { withScreenErrorBoundary } from '../components/ScreenErrorBoundary';
+import { GlobalUploadIndicator } from '../creator/surfaces/GlobalUploadIndicator';
 
 // Eager — initial routes needed immediately at startup.
 // AuthLandingScreen is the initial route when unauthenticated;
@@ -58,14 +59,23 @@ const formSheetScreenOptions = {
   gestureEnabled: true,
 };
 
+// Screens that render their own sheet chrome (custom overlay, snap points,
+// pan-to-dismiss). Hosting them in a native formSheet produced double
+// chrome and two competing drag gestures — transparentModal hands the
+// whole presentation to the screen's own sheet.
+const customSheetScreenOptions = {
+  presentation: 'transparentModal' as const,
+  gestureEnabled: false,
+};
+
 export default function AppNavigator() {
   const isAuthenticated = useStore((state) => state.isAuthenticated);
   const biometricLoginPending = useStore((state) => state.biometricLoginPending);
   const storeOnboardingComplete = useStore((state) => state.hasCompletedOnboarding);
   // Onboarding is a first-run gate that sits ahead of auth. The persisted
-  // store flag lets returning users skip the AsyncStorage round-trip; for
-  // first-launch users we still confirm against AsyncStorage (the
-  // authoritative source) before showing the onboarding screen.
+  // store flag is the source of truth; isOnboardingComplete additionally
+  // migrates the legacy AsyncStorage key into the store for installs that
+  // completed onboarding before the store owned this state.
   const [onboardingChecked, setOnboardingChecked] = React.useState(storeOnboardingComplete);
   const [needsOnboarding, setNeedsOnboarding] = React.useState(!storeOnboardingComplete);
   // Age verification gate — checked ahead of onboarding. Persisted in
@@ -241,7 +251,7 @@ export default function AppNavigator() {
       <Stack.Screen name="Closet" getComponent={withScreenErrorBoundary(() => require('../screens/ClosetScreen').default, 'Closet')} />
       <Stack.Screen name="CollectionDetail" getComponent={() => require('../screens/CollectionDetailScreen').default} />
       <Stack.Screen name="CategoryTree" getComponent={() => require('../screens/CategoryTreeScreen').default} />
-      <Stack.Screen name="Filter" getComponent={() => require('../screens/FilterScreen').default} options={formSheetScreenOptions} />
+      <Stack.Screen name="Filter" getComponent={() => require('../screens/FilterScreen').default} options={customSheetScreenOptions} />
       <Stack.Screen name="NotificationsList" getComponent={() => require('../screens/NotificationsScreen').default} />
 
       {/* ── Creator Studio ── */}
@@ -399,7 +409,7 @@ export default function AppNavigator() {
 
       {/* Explore / Creator screens */}
       <Stack.Screen name="CreatorStudio" getComponent={() => require('../creator').CreatorStudioScreen} options={modalScreenOptions} />
-      <Stack.Screen name="CreatorDraftList" getComponent={() => require('../creator/CreatorDraftListScreen').CreatorDraftListScreen} options={modalScreenOptions} />
+      <Stack.Screen name="CreatorDraftList" getComponent={() => require('../creator/studio/CreatorDraftListScreen').CreatorDraftListScreen} options={modalScreenOptions} />
       <Stack.Screen name="OutfitBuilder" getComponent={() => require('../screens/OutfitBuilderScreen').default} options={modalScreenOptions} />
       <Stack.Screen name="CoOwnIssue" getComponent={() => require('../screens/CoOwnIssueScreen').default} options={modalScreenOptions} />
 
@@ -478,6 +488,11 @@ export default function AppNavigator() {
         <Stack.Screen name="RuntimeSmokeTest" getComponent={() => require('../screens/RuntimeSmokeTestScreen').default} />
       )}
     </Stack.Navigator>
+    {/* Ambient upload progress — a thin top-edge bar (IG pattern) visible on
+        every screen while creator uploads are in flight, including after the
+        publish sheet is dismissed. Mounting it at the root also runs upload
+        reconciliation on cold start. */}
+    <GlobalUploadIndicator />
     {/* Global in-app notification overlay — renders above all screens but
         below native modals (modals are presented by the OS above this view). */}
     <InAppNotificationCenter />

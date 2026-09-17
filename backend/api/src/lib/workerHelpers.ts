@@ -128,15 +128,40 @@ export function mapEventToPushCategory(eventType: string): NotificationPushCateg
   // Price drops
   if (eventType === 'price_drop') return 'priceDrops';
 
-  // Auction alerts
-  if (eventType === 'auction_outbid' || eventType === 'auction_won' || eventType === 'auction_ending_soon') return 'auctionAlerts';
+  // Saved-search matches ride the `wishlist` preference — a user who opted
+  // into alerts on a saved search is asking for item-interest pushes.
+  if (eventType === 'saved_search_match') return 'wishlist';
 
-  // Social — followers and new listings from followed sellers
+  // Auction alerts — the full auction_* family (outbid, won, ending soon,
+  // bid received, cancelled, reserve not met, sold, payment expired).
+  // Prefix match mirrors order_/offer_ so new auction_* types cannot
+  // silently fail closed into in-app-only delivery.
+  if (eventType.startsWith('auction_')) return 'auctionAlerts';
+
+  // Social — followers, new listings from followed sellers, go-live alerts
   if (eventType === 'new_follower') return 'followers';
   if (eventType === 'new_listing_from_followed_seller') return 'followers';
+  if (eventType === 'live_started') return 'followers';
 
-  // Reviews — social/wishlist activity (someone liked/reviewed your item)
-  if (eventType === 'review_received') return 'wishlist';
+  // Reviews — social/wishlist activity (someone liked/reviewed your item,
+  // responded to your review, or a review was moderated)
+  if (eventType.startsWith('review_')) return 'wishlist';
+
+  // Checkout/payment failures and dispatch-extension lifecycle ride the
+  // orderUpdates preference — they are transactional order events.
+  if (eventType === 'payment_failed') return 'orderUpdates';
+  if (eventType.startsWith('dispatch_extension_')) return 'orderUpdates';
+  if (eventType.startsWith('coown_')) return 'orderUpdates';
+
+  // Support-case lifecycle — the notification IS a message in the support
+  // thread (operator reply / information request / resolution), so it is
+  // gated by the messages preference.
+  if (eventType.startsWith('support.')) return 'messages';
+
+  // Creator scheduled-publication outcomes and internal ops alerts are
+  // controllable system traffic — gated by news.
+  if (eventType.startsWith('scheduled_publication_')) return 'news';
+  if (eventType === 'ops_alert') return 'news';
 
   // Generic and safety map to news (controllable, non-critical)
   if (eventType === 'generic') return 'news';
@@ -155,6 +180,86 @@ export function isPushEligibleEventType(eventType: string): boolean {
   return mapEventToPushCategory(eventType) !== null;
 }
 
+// ─── Quiet hours ────────────────────────────────────────────────────────────
+
+export interface QuietHoursConfig {
+  enabled?: boolean;
+  startHour?: number;
+  endHour?: number;
+  /** IANA timezone name written by the preferences PUT ('Europe/London'). */
+  timezone?: string;
+}
+
+export interface QuietWindowDecision {
+  inWindow: boolean;
+  /** Milliseconds until the window's endHour in the user's timezone. */
+  msUntilEnd: number;
+}
+
+/** Current hour-of-day (0-23) in the given IANA timezone, UTC on bad input. */
+function hourInTimezone(tz: string, at: Date): number {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric',
+      hour12: false,
+      timeZone: tz,
+    }).formatToParts(at);
+    const hour = Number(parts.find((p) => p.type === 'hour')?.value);
+    return Number.isFinite(hour) ? hour % 24 : at.getUTCHours();
+  } catch {
+    return at.getUTCHours();
+  }
+}
+
+/** Milliseconds from `at` until the next `hour`:00 in the given timezone. */
+function msUntilHourInTimezone(hour: number, tz: string, at: Date): number {
+  try {
+    // Wall-clock arithmetic in the zone, mapped back through its current
+    // UTC offset. Offsets are stable within a single quiet window.
+    const wall = new Date(at.toLocaleString('en-US', { timeZone: tz }));
+    const offsetMs = wall.getTime() - at.getTime();
+    const target = new Date(wall);
+    target.setHours(hour, 0, 0, 0);
+    if (target.getTime() <= wall.getTime()) {
+      target.setDate(target.getDate() + 1);
+    }
+    return Math.max(0, target.getTime() - offsetMs - at.getTime());
+  } catch {
+    const target = new Date(at);
+    target.setUTCHours(hour, 0, 0, 0);
+    if (target.getTime() <= at.getTime()) {
+      target.setUTCDate(target.getUTCDate() + 1);
+    }
+    return Math.max(0, target.getTime() - at.getTime());
+  }
+}
+
+/**
+ * Evaluate a stored quiet_hours config against `now` in the user's
+ * timezone. Returns inWindow=false for malformed/absent config.
+ */
+export function quietWindowDecision(
+  quietHours: unknown,
+  now: Date = new Date(),
+): QuietWindowDecision {
+  const none: QuietWindowDecision = { inWindow: false, msUntilEnd: 0 };
+  if (!quietHours || typeof quietHours !== 'object') return none;
+  const qh = quietHours as QuietHoursConfig;
+  if (!qh.enabled || typeof qh.startHour !== 'number' || typeof qh.endHour !== 'number') {
+    return none;
+  }
+  const tz = typeof qh.timezone === 'string' && qh.timezone.length > 0 ? qh.timezone : 'UTC';
+  const currentHour = hourInTimezone(tz, now);
+  const { startHour, endHour } = qh;
+  const inWindow = startHour <= endHour
+    ? currentHour >= startHour && currentHour < endHour
+    : currentHour >= startHour || currentHour < endHour;
+  return {
+    inWindow,
+    msUntilEnd: inWindow ? msUntilHourInTimezone(endHour, tz, now) : 0,
+  };
+}
+
 /**
  * Map a notification event type to an Android notification channel ID.
  * The channel IDs match the client-side channel definitions in pushPermission.ts:
@@ -166,10 +271,11 @@ export function isPushEligibleEventType(eventType: string): boolean {
  */
 export function mapEventTypeToChannelId(eventType: string): string {
   if (eventType.startsWith('order_') || eventType === 'payout_processed' || eventType === 'refund_completed') return 'orders';
+  if (eventType === 'payment_failed' || eventType.startsWith('dispatch_extension_') || eventType.startsWith('coown_')) return 'orders';
   if (eventType.startsWith('auction_')) return 'auctions';
-  if (eventType === 'chat_message') return 'messages';
-  if (eventType === 'new_follower' || eventType === 'new_listing_from_followed_seller' || eventType === 'review_received') return 'social';
-  if (eventType === 'price_drop' || eventType.startsWith('offer_') || eventType === 'generic' || eventType === 'safety_outcome') return 'news';
+  if (eventType === 'chat_message' || eventType.startsWith('support.')) return 'messages';
+  if (eventType === 'new_follower' || eventType === 'new_listing_from_followed_seller' || eventType.startsWith('review_') || eventType === 'live_started') return 'social';
+  if (eventType === 'price_drop' || eventType === 'saved_search_match' || eventType.startsWith('offer_') || eventType === 'generic' || eventType === 'safety_outcome' || eventType === 'ops_alert' || eventType.startsWith('scheduled_publication_')) return 'news';
   if (eventType === 'resolution_opened' || eventType === 'resolution_status_changed') return 'orders';
   return 'default';
 }
@@ -190,12 +296,13 @@ export function mapEventTypeToIosCategory(eventType: string): string | null {
   // Order category: Track + Mark as read
   if (eventType.startsWith('order_') || eventType === 'payout_processed' || eventType === 'refund_completed') return 'order';
   if (eventType === 'resolution_opened' || eventType === 'resolution_status_changed') return 'order';
+  if (eventType === 'payment_failed' || eventType.startsWith('dispatch_extension_')) return 'order';
 
   // Auction category: View bid + Dismiss
   if (eventType.startsWith('auction_')) return 'auction';
 
   // Social category: View + Mark as read
-  if (eventType === 'new_follower' || eventType === 'new_listing_from_followed_seller' || eventType === 'review_received') return 'social';
+  if (eventType === 'new_follower' || eventType === 'new_listing_from_followed_seller' || eventType.startsWith('review_') || eventType === 'live_started') return 'social';
 
   // No interactive actions for price drops, offers, or generic news
   return null;
@@ -216,10 +323,18 @@ export function mapEventTypeToInterruptionLevel(eventType: string): 'passive' | 
   if (eventType === 'order_dispatched' || eventType === 'order_out_for_delivery') return 'timeSensitive';
   if (eventType === 'resolution_opened' || eventType === 'safety_outcome') return 'timeSensitive';
 
-  // Passive: low-urgency, no sound, no screen wake
+  // Passive: low-urgency, no sound, no screen wake.
+  // live_started deliberately stays 'active' (the default below): a live show
+  // is ephemeral, so a silent/wake-less push would usually arrive too late to
+  // be useful.
   if (eventType === 'new_follower' || eventType === 'new_listing_from_followed_seller') return 'passive';
   if (eventType === 'price_drop') return 'passive';
-  if (eventType === 'generic' || eventType === 'review_received') return 'passive';
+  if (eventType === 'generic' || eventType.startsWith('review_')) return 'passive';
+  // A seller ping per bid can be frequent — keep it wake-less.
+  if (eventType === 'auction_bid') return 'passive';
+  // Successful scheduled publishes are FYI; blocked/failed stay 'active'
+  // because the creator needs to intervene.
+  if (eventType === 'scheduled_publication_success') return 'passive';
 
   // Active: default for most commerce events
   return 'active';
@@ -232,12 +347,20 @@ export function mapEventTypeToInterruptionLevel(eventType: string): 'passive' | 
 export function mapEventTypeToRelevanceScore(eventType: string): number {
   if (eventType === 'auction_won') return 1.0;
   if (eventType === 'auction_ending_soon' || eventType === 'auction_outbid') return 0.9;
+  if (eventType === 'ops_alert') return 0.9;
   if (eventType.startsWith('order_') || eventType === 'payout_processed' || eventType === 'refund_completed') return 0.8;
   if (eventType === 'resolution_opened' || eventType === 'safety_outcome') return 0.8;
+  if (eventType === 'payment_failed' || eventType.startsWith('dispatch_extension_') || eventType.startsWith('coown_')) return 0.8;
   if (eventType.startsWith('offer_')) return 0.7;
+  // Seller-facing auction outcomes (sold, reserve not met, cancelled,
+  // payment expired) rank with offers — important but not time-critical.
+  if (eventType.startsWith('auction_')) return 0.7;
+  if (eventType.startsWith('support.')) return 0.7;
   if (eventType === 'chat_message') return 0.6;
+  // Go-live alerts are ephemeral — rank with chat so summary surfaces them.
+  if (eventType === 'live_started') return 0.6;
   if (eventType === 'price_drop') return 0.4;
-  if (eventType === 'review_received') return 0.3;
+  if (eventType.startsWith('review_') || eventType.startsWith('scheduled_publication_')) return 0.3;
   if (eventType === 'new_follower' || eventType === 'new_listing_from_followed_seller') return 0.2;
   return 0.1; // generic / unknown
 }
@@ -254,6 +377,9 @@ const CRITICAL_EVENT_TYPES = new Set([
   'order_cancelled',
   'resolution_opened',
   'safety_outcome',
+  // A dispatch-extension request has a buyer response deadline — suppressing
+  // it during quiet hours would silently expire the window.
+  'dispatch_extension_proposed',
 ]);
 
 export function isCriticalEventType(eventType: string): boolean {

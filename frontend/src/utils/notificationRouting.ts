@@ -12,6 +12,8 @@ export type ResolvedRoute =
   | { screen: 'ItemDetail'; params: { itemId: string } }
   | { screen: 'SupportTicketDetail'; params: { ticketId: string } }
   | { screen: 'AuctionDetail'; params: { auctionId: string; openBidSheet?: boolean; initialBidAmount?: number } }
+  | { screen: 'SellerFulfilment'; params: { orderId: string } }
+  | { screen: 'SupportCaseDetail'; params: { caseId: string } }
   | { screen: 'Wallet' }
   | { screen: 'BalanceHistory' }
   | { screen: 'NotificationsList' }
@@ -21,6 +23,7 @@ export type ResolvedRoute =
   | { screen: 'AssetDetail'; params: { assetId: string } }
   | { screen: 'VerificationResponse'; params: { assetId: string; demandId: number } }
   | { screen: 'CollectionDetail'; params: { collectionId: string } }
+  | { screen: 'Browse'; params: { categoryId: string; title: string; searchQuery?: string } }
   | { screen: ScreenName; params?: Record<string, unknown> }
   | null;
 
@@ -45,6 +48,49 @@ const VALID_SCREENS: ReadonlySet<string> = new Set<ScreenName>([
   'SellerEarnings',
   'WalletHistory',
   'LiveShopping',
+  'SellerFulfilment',
+  'SupportCaseDetail',
+  'SupportTicketDetail',
+  'OrderDetail',
+  'ItemDetail',
+  'Chat',
+  'AuctionDetail',
+  'UserProfile',
+  'LiveStreamViewer',
+  'AssetDetail',
+  'CollectionDetail',
+  'Browse',
+  'Offers',
+  'ResolutionCentre',
+  'OrderSupport',
+  'SavedSearches',
+  // Scheduled-publication events (success/blocked/failed) route creators to
+  // the drafts library where the published/failed document lives.
+  'CreatorDraftList',
+]);
+
+/**
+ * Screens whose params are validated by dedicated branches above. The
+ * generic VALID_SCREENS passthrough must NOT admit these — a malformed
+ * route (e.g. OrderDetail without orderId) would otherwise navigate to a
+ * screen that renders a broken state. Reaching the allowlist with one of
+ * these names means required params were absent; the event falls through
+ * to the payload fallback, then null.
+ */
+const PARAM_VALIDATED_SCREENS: ReadonlySet<string> = new Set([
+  'OrderDetail',
+  'ItemDetail',
+  'SupportTicketDetail',
+  'AuctionDetail',
+  'SellerFulfilment',
+  'SupportCaseDetail',
+  'UserProfile',
+  'Chat',
+  'LiveStreamViewer',
+  'AssetDetail',
+  'VerificationResponse',
+  'CollectionDetail',
+  'Browse',
 ]);
 
 export function resolveNotificationRoute(
@@ -104,6 +150,34 @@ export function resolveNotificationRoute(
     if (screen === 'CollectionDetail' && typeof params.collectionId === 'string') {
       return { screen: 'CollectionDetail', params: { collectionId: params.collectionId } };
     }
+    // Dispatch-deadline breaches route sellers to the fulfilment surface.
+    if (screen === 'SellerFulfilment' && typeof params.orderId === 'string') {
+      return { screen: 'SellerFulfilment', params: { orderId: params.orderId } };
+    }
+    // Support-case events — the backend emits both the registered
+    // 'SupportCaseDetail' name and the legacy 'support_case' alias.
+    if (
+      (screen === 'SupportCaseDetail' || screen === 'support_case') &&
+      typeof params.caseId === 'string'
+    ) {
+      return { screen: 'SupportCaseDetail', params: { caseId: params.caseId } };
+    }
+    // Saved-search match notifications land on the search results for the
+    // saved query — same destination as tapping the row in SavedSearches.
+    if (
+      screen === 'Browse' &&
+      typeof params.categoryId === 'string' &&
+      typeof params.title === 'string'
+    ) {
+      return {
+        screen: 'Browse',
+        params: {
+          categoryId: params.categoryId,
+          title: params.title,
+          searchQuery: typeof params.searchQuery === 'string' ? params.searchQuery : undefined,
+        },
+      };
+    }
     if (screen === 'AuctionDetail' && typeof params.auctionId === 'string') {
       return {
         screen: 'AuctionDetail',
@@ -133,7 +207,7 @@ export function resolveNotificationRoute(
     if (screen === 'Portfolio') {
       return { screen: 'Portfolio' };
     }
-    if (VALID_SCREENS.has(screen)) {
+    if (VALID_SCREENS.has(screen) && !PARAM_VALIDATED_SCREENS.has(screen)) {
       return { screen: screen as ScreenName, params };
     }
   }
@@ -188,6 +262,23 @@ export function resolveNotificationRoute(
     const collectionId = typeof payload.collectionId === 'string' ? payload.collectionId : null;
     if (collectionId) {
       return { screen: 'CollectionDetail', params: { collectionId } };
+    }
+
+    // Chat events persist without a route — the conversation id is the
+    // destination.
+    const conversationId = typeof payload.conversationId === 'string' ? payload.conversationId : null;
+    if (conversationId) {
+      const partnerUserId =
+        typeof payload.partnerUserId === 'string' ? payload.partnerUserId
+        : typeof payload.senderId === 'string' ? payload.senderId
+        : typeof payload.actorUserId === 'string' ? payload.actorUserId
+        : undefined;
+      return { screen: 'Chat', params: { conversationId, partnerUserId } };
+    }
+
+    const caseId = typeof payload.caseId === 'string' ? payload.caseId : null;
+    if (caseId) {
+      return { screen: 'SupportCaseDetail', params: { caseId } };
     }
   }
 

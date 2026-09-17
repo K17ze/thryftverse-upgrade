@@ -18,7 +18,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { parseApiError } from '../lib/apiClient';
+import { ApiRequestError, parseApiError } from '../lib/apiClient';
 import { requestAccountDeletion } from '../services/accountApi';
 import { logoutFromSession } from '../services/authApi';
 import { clearUserScopedQueryCache } from '../platform/server';
@@ -127,7 +127,27 @@ export default function DeleteAccountScreen({ navigation }: Props) {
         navigation.reset({ index: 0, routes: [{ name: 'AuthLanding' }] });
       } catch (error) {
         const parsed = parseApiError(error, 'Unable to delete account right now.');
-        setDeleteError(parsed.message);
+        // 409 carries a `blockers` list — translate it into specific copy so
+        // the user knows exactly what must resolve before deletion.
+        const blockers =
+          error instanceof ApiRequestError &&
+          Array.isArray((error.details as { blockers?: unknown } | null)?.blockers)
+            ? ((error.details as { blockers: string[] }).blockers)
+            : null;
+        if (blockers && blockers.length > 0) {
+          const labels: Record<string, string> = {
+            open_orders: 'open orders in progress',
+            open_return_cases: 'open return cases',
+            pending_payouts: 'payouts still processing',
+            inflight_withdrawals: 'withdrawals in flight',
+          };
+          const listed = blockers.map((b) => labels[b] ?? b.replace(/_/g, ' '));
+          setDeleteError(
+            `Your account can't be deleted yet — you have ${listed.join(', ')}. Resolve these first, then try again.`
+          );
+        } else {
+          setDeleteError(parsed.message);
+        }
         haptic.light();
       } finally {
         setIsDeleting(false);

@@ -10,8 +10,13 @@ import {
   type ImageFeatures,
 } from '../lib/visualSimilarity.js';
 import { safeFetchMediaBuffer } from '../lib/safeRemoteMediaFetch.js';
-import { loadListingMedia } from '../lib/media/listingMediaProjection.js';
+import { loadListingMedia, listingMediaImageUrl } from '../lib/media/listingMediaProjection.js';
 import type { RetrievalMeta, RetrievalFallbackReason } from '../lib/retrievalMeta.js';
+import {
+  REACH_LIMITED_MULTIPLIER,
+  reachExcludedSql,
+  reachJoinSql,
+} from '../lib/sellerReach.js';
 import logger from '../lib/logger.js';
 
 type VisualSearchRouteDependencies = {
@@ -118,7 +123,9 @@ async function countFacetValues(
     `
       SELECT ${selectFragments.join(', ')}
       FROM listings l
+      ${reachJoinSql('reach_u', 'l.seller_id')}
       WHERE ${scopeConditions.join(' AND ')}
+        ${reachExcludedSql('reach_u')}
     `,
     [...scopeArgs, ...values.map((v) => `%${v}%`)],
   );
@@ -362,15 +369,18 @@ async function handleVisualSearch(
       original_price_gbp: number | string | null;
       created_at: string;
       seller_username: string | null;
+      seller_reach_state: string;
     }>(
       `
         SELECT
           l.id, l.seller_id, l.title, l.description, l.price_gbp, l.image_url,
           l.status, l.category, l.brand, l.size, l.condition, l.original_price_gbp, l.created_at,
-          u.username AS seller_username
+          u.username AS seller_username,
+          COALESCE(u.reach_state, 'normal') AS seller_reach_state
         FROM listings l
         LEFT JOIN users u ON u.id = l.seller_id
         WHERE ${conditions.join(' AND ')}
+          ${reachExcludedSql('u')}
         ORDER BY l.created_at DESC, l.id DESC
         LIMIT $${args.length + 1}
       `,
@@ -406,7 +416,11 @@ async function handleVisualSearch(
           countFacetValues(readDb, COLOR_FACET_VALUES, colorScopeConditions, colorScopeArgs),
           countFacetValues(readDb, STYLE_FACET_VALUES, styleScopeConditions, styleScopeArgs),
           readDb.query<{ total: number | string }>(
-            `SELECT COUNT(*)::int AS total FROM listings l WHERE ${conditions.join(' AND ')}`,
+            `SELECT COUNT(*)::int AS total
+             FROM listings l
+             ${reachJoinSql('reach_u', 'l.seller_id')}
+             WHERE ${conditions.join(' AND ')}
+               ${reachExcludedSql('reach_u')}`,
             args,
           ),
         ]);
@@ -439,7 +453,9 @@ async function handleVisualSearch(
     for (const [listingRowId, mediaItems] of candidateMediaByListing) {
       const primary = mediaItems[0];
       if (primary) {
-        primaryImageByListing.set(listingRowId, primary.uri);
+        // Feature extraction fetches and decodes this URL — a video's uri is
+        // an HLS playlist (undecodable text), so project the poster still.
+        primaryImageByListing.set(listingRowId, listingMediaImageUrl(primary));
       }
     }
     for (const row of candidateRows) {
@@ -500,7 +516,14 @@ async function handleVisualSearch(
       scoredRows = candidateRows.map((row) => ({ ...row, similarityScore: null as number | null }));
       for (const entry of candidateFeatures) {
         if (entry.features) {
-          scoredRows[entry.idx].similarityScore = computeSimilarity(features, entry.features);
+          const rawSimilarity = computeSimilarity(features, entry.features);
+          // Reach demotion: 'limited' sellers keep 30% of scored
+          // distribution (lib/sellerReach.ts); 'suspended' rows are already
+          // excluded from the candidate set via reachExcludedSql.
+          scoredRows[entry.idx].similarityScore =
+            candidateRows[entry.idx].seller_reach_state === 'limited'
+              ? rawSimilarity * REACH_LIMITED_MULTIPLIER
+              : rawSimilarity;
         }
       }
 
@@ -528,10 +551,12 @@ async function handleVisualSearch(
           SELECT
             l.id, l.seller_id, l.title, l.description, l.price_gbp, l.image_url,
             l.status, l.category, l.brand, l.size, l.condition, l.original_price_gbp, l.created_at,
-            u.username AS seller_username
+            u.username AS seller_username,
+            COALESCE(u.reach_state, 'normal') AS seller_reach_state
           FROM listings l
           LEFT JOIN users u ON u.id = l.seller_id
           WHERE ${conditions.join(' AND ')}
+            ${reachExcludedSql('u')}
           ORDER BY ${orderBy}
           LIMIT $${args.length + 1}
         `,
@@ -546,7 +571,7 @@ async function handleVisualSearch(
 
     const imagesByListing = new Map<string, string[]>();
     for (const [listingRowId, mediaItems] of candidateMediaByListing) {
-      imagesByListing.set(listingRowId, mediaItems.map((m) => m.uri));
+      imagesByListing.set(listingRowId, mediaItems.map(listingMediaImageUrl));
     }
 
     const similarityMethod = hasImageScoring ? 'heuristic_color_features' : 'filter_only';

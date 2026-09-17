@@ -7,8 +7,10 @@
  *   - `isVideoExportAvailable()` → false
  *   - `getVideoExportModule()` → null
  *   - `exportVideoViaNative()` → rejects with `{ type: 'unsupported' }`
+ *   - `exportVideo()` → rejects with `{ type: 'unsupported' }`, cancel is
+ *     a safe no-op
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 // Mock react-native-nitro-modules BEFORE importing the module under test so
 // the cached availability probe sees the unlinked state. `NitroModules` is
@@ -30,14 +32,15 @@ import {
   isVideoExportAvailable,
   getVideoExportModule,
   exportVideoViaNative,
+  exportVideo,
+  cancelVideoExport,
 } from '../index';
 
 describe('VideoExportModule (native module not linked)', () => {
-  beforeEach(() => {
-    // The module caches the availability probe; reset modules between tests
-    // so each starts from a clean state.
-    vi.resetModules();
-  });
+  // No vi.resetModules() here: the bindings above were imported at file
+  // scope, so a reset would not re-initialize them — it only provided false
+  // confidence about test isolation. All cases assert the same unlinked
+  // state, so a shared module instance is correct.
 
   it('isVideoExportAvailable() returns false', () => {
     expect(isVideoExportAvailable()).toBe(false);
@@ -54,5 +57,18 @@ describe('VideoExportModule (native module not linked)', () => {
         sessionId: 'test-session',
       }),
     ).rejects.toEqual({ type: 'unsupported' });
+  });
+
+  it('exportVideo() rejects with { type: "unsupported" } and cancel is a no-op', async () => {
+    const handle = exportVideo(
+      { sourceUri: 'file:///tmp/source.mp4', sessionId: 'test-session' },
+      vi.fn(),
+    );
+    expect(() => handle.cancel()).not.toThrow();
+    await expect(handle.promise).rejects.toEqual({ type: 'unsupported' });
+  });
+
+  it('cancelVideoExport() is a safe no-op when unlinked', () => {
+    expect(() => cancelVideoExport('test-session')).not.toThrow();
   });
 });

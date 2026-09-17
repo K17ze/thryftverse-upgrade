@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Text, StyleSheet } from 'react-native';
+import { Text, StyleSheet, AccessibilityActionEvent, AccessibilityActionInfo } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
@@ -32,6 +32,8 @@ export interface AuctionNotificationRowProps {
   inAttentionSection?: boolean;
   onPress: () => void;
   onAction?: () => void;
+  accessibilityActions?: AccessibilityActionInfo[];
+  onAccessibilityAction?: (event: AccessibilityActionEvent) => void;
 }
 
 interface AuctionVisual {
@@ -60,7 +62,9 @@ export function AuctionNotificationRow({
   aggregatedCount,
   inAttentionSection = false,
   onPress,
-  onAction }: AuctionNotificationRowProps) {
+  onAction,
+  accessibilityActions,
+  onAccessibilityAction }: AuctionNotificationRowProps) {
   const { colors } = useAppTheme();
   const { currencySymbol } = useFormattedPrice();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -126,6 +130,8 @@ export function AuctionNotificationRow({
       aggregatedCount={aggregatedCount}
       inAttentionSection={inAttentionSection}
       onPress={onPress}
+      accessibilityActions={accessibilityActions}
+      onAccessibilityAction={onAccessibilityAction}
       leading={leading}
       trailing={trailing}
       accessibilityLabel={accessibilityLabel}

@@ -144,6 +144,7 @@ function buildNetworkSecurityConfig() {
          debug-overrides to cleartext checks for all hostnames. -->
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
         <domain includeSubdomains="false">10.0.2.2</domain>
         <trust-anchors>
             <certificates src="system"/>

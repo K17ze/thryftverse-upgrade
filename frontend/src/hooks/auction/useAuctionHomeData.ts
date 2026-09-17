@@ -118,7 +118,7 @@ export function useAuctionHomeData({
       const result = await getAuctionFacets({
         scope: draft.scope,
         query: draft.query,
-        category: draft.categories.length > 0 ? draft.categories[0] : undefined,
+        categories: draft.categories.length > 0 ? draft.categories.join(',') : undefined,
         priceMin: draft.priceMin,
         priceMax: draft.priceMax,
       });
@@ -136,11 +136,19 @@ export function useAuctionHomeData({
     }
   }, []);
 
+  // Facets only depend on scope/query/categories/price — sort is not a
+  // facets param, so sort taps no longer issue requests at all. A ref keeps
+  // the latest draft readable inside the debounce without making the whole
+  // object a dependency.
+  const draftRef = useRef(draftBrowse);
+  draftRef.current = draftBrowse;
+  const facetsKey = `${draftBrowse.scope}|${draftBrowse.query ?? ''}|${draftBrowse.categories.join(',')}|${draftBrowse.priceMin ?? ''}|${draftBrowse.priceMax ?? ''}`;
   useEffect(() => {
-    if (filterSheetVisible) {
-      void fetchFacets(draftBrowse);
-    }
-  }, [filterSheetVisible, draftBrowse, fetchFacets]);
+    if (!filterSheetVisible) return;
+    // Debounce — 300ms collapses a tap burst into one request.
+    const handle = setTimeout(() => void fetchFacets(draftRef.current), 300);
+    return () => clearTimeout(handle);
+  }, [filterSheetVisible, facetsKey, fetchFacets]);
 
   return {
     homeData,

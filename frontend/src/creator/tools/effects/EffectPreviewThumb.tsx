@@ -27,7 +27,6 @@
 import React, { useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Canvas, Image as SkiaImage, ColorMatrix, Lerp, useImage } from '@shopify/react-native-skia';
-import { Ionicons } from '@expo/vector-icons';
 import { Space, FontSize, FontFamily, Radius, Stroke, Control } from '../../../theme/designTokens';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';

@@ -16,7 +16,7 @@ import { TypographyV2 } from '../../theme/typography.v2';
 import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
-import { PressScale, SheetContainer } from '../CreatorAnimations';
+import { PressScale, SheetContainer } from '../shared/CreatorAnimations';
 
 // ── Props ──────────────────────────────────────────────────────────
 export interface PageMenuProps {
@@ -61,7 +61,8 @@ export function PageMenu({
     <SheetContainer visible={true} onClose={onClose} maxHeight={0.6}>
       <View style={styles.pageSheetHeader}>
         <Text style={[styles.pageSheetTitle, { color: colors.textPrimary }]}>Frame {pageIndex + 1}</Text>
-        <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close frame options">
+        <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close frame options"
+        accessibilityHint="Closes the frame menu">
           <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
         </PressScale>
       </View>
@@ -78,6 +79,7 @@ export function PageMenu({
                 style={({ pressed }) => [styles.pageSheetDurationBtn, { backgroundColor: colors.surfaceAlt }, isActive && { backgroundColor: colors.brand }, pressed && { opacity: 0.7 }]}
                 hitSlop={4}
                 accessibilityLabel={`Set duration to ${d.label}`}
+                accessibilityHint="Sets the frame duration"
                 accessibilityRole="button"
                 accessibilityState={{ selected: isActive }}
               >
@@ -98,6 +100,7 @@ export function PageMenu({
             style={({ pressed }) => [styles.pageSheetActionBtn, { backgroundColor: colors.surfaceAlt }, !canMoveLeft && { opacity: 0.35 }, pressed && canMoveLeft && { opacity: 0.6 }]}
             hitSlop={8}
             accessibilityLabel="Move frame left"
+            accessibilityHint="Moves this frame earlier"
             accessibilityRole="button"
             accessibilityState={{ disabled: !canMoveLeft }}
           >
@@ -110,6 +113,7 @@ export function PageMenu({
             style={({ pressed }) => [styles.pageSheetActionBtn, { backgroundColor: colors.surfaceAlt }, !canMoveRight && { opacity: 0.35 }, pressed && canMoveRight && { opacity: 0.6 }]}
             hitSlop={8}
             accessibilityLabel="Move frame right"
+            accessibilityHint="Moves this frame later"
             accessibilityRole="button"
             accessibilityState={{ disabled: !canMoveRight }}
           >
@@ -125,6 +129,7 @@ export function PageMenu({
             style={({ pressed }) => [styles.pageSheetActionBtn, { backgroundColor: colors.surfaceAlt }, pressed && { opacity: 0.6 }]}
             hitSlop={8}
             accessibilityLabel="Duplicate frame"
+            accessibilityHint="Creates a copy of this frame"
             accessibilityRole="button"
           >
             <Ionicons name="copy-outline" size={IconGrammar.standard} color={colors.textPrimary} />
@@ -136,6 +141,7 @@ export function PageMenu({
             style={({ pressed }) => [styles.pageSheetActionBtn, { backgroundColor: colors.surfaceAlt }, !canDelete && { opacity: 0.35 }, pressed && canDelete && { opacity: 0.6 }]}
             hitSlop={8}
             accessibilityLabel="Delete frame"
+            accessibilityHint="Removes this frame"
             accessibilityRole="button"
             accessibilityState={{ disabled: !canDelete }}
           >

@@ -30,6 +30,9 @@ interface OrderDetailSheetsProps {
   onCloseIssueSelector: () => void;
   // Shared confirmation sheet
   confirmSheet: OrderDetailConfirmSheetState;
+  /** True while the confirmed mutation is in flight — locks the sheet so
+   *  a destructive/money action can't be re-tapped or dismissed mid-call. */
+  confirmSheetBusy?: boolean;
   onDismissConfirmSheet: () => void;
 }
 
@@ -58,6 +61,7 @@ export function OrderDetailSheets({
   onSelectIssue,
   onCloseIssueSelector,
   confirmSheet,
+  confirmSheetBusy = false,
   onDismissConfirmSheet }: OrderDetailSheetsProps) {
   return (
     <>
@@ -101,6 +105,7 @@ export function OrderDetailSheets({
         cancelLabel={confirmSheet.cancelLabel}
         onConfirm={confirmSheet.onConfirm}
         variant={confirmSheet.variant}
+        busy={confirmSheetBusy}
       />
     </>
   );

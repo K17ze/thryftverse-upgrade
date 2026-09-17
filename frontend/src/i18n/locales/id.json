@@ -313,6 +313,8 @@
       "biometricLoginDisabled": "Nonaktif — aplikasi langsung membuka akun Anda",
       "notificationCategories": "Kategori notifikasi",
       "notificationPreferencesSubtitle": "Jam tenang, pratinjau",
+      "pushThisDevice": "Push di perangkat ini",
+      "pushThisDeviceSubtitle": "Pengiriman dan pendaftaran",
       "featureFlags": "Fitur flag",
       "featureFlagsSubtitle": "Nilai flag saat ini untuk QA",
       "autoTranslate": "Terjemahkan pesan otomatis",

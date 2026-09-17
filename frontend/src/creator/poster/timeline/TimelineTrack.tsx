@@ -1,13 +1,13 @@
 import React, { useCallback } from 'react';
 import { View, StyleSheet, Pressable, LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSharedValue } from 'react-native-reanimated';
+import { useSharedValue, type SharedValue } from 'react-native-reanimated';
 import { Space, Control } from '../../../theme/designTokens';
 import { IconGrammar } from '../../../theme/designTokens';
 import { RadiusRoleValue } from '../../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
-import { ClipThumb } from './ClipThumb';
+import { ClipThumb, type ClipThumbProps } from './ClipThumb';
 import { Playhead } from './Playhead';
 import type { PosterClip } from './TimelineTypes';
 
@@ -33,8 +33,9 @@ export interface TimelineTrackProps {
   playheadMs: number;
   totalDurationMs: number;
   onSelectClip: (id: string) => void;
-  onSeek: (ms: number) => void;
   onTrimClip: (clipId: string, edge: 'start' | 'end', deltaMs: number) => void;
+  /** Slip commit — shift the clip's source window by deltaMs (source time). */
+  onSlipClip?: (clipId: string, deltaMs: number) => void;
   /**
    * Transition preset IDs for each clip boundary (length = clips.length - 1).
    * Index i is the transition between clip[i] and clip[i+1]. null/undefined
@@ -50,6 +51,13 @@ export interface TimelineTrackProps {
    * clip widths and the drag translation.
    */
   onReorderClip?: (clipId: string, translationX: number) => void;
+  /** Edge auto-scroll plumbing forwarded to each ClipThumb. */
+  edgeScroll?: ClipThumbProps['edgeScroll'];
+  /**
+   * Ruler-scrub position in ms (>= 0 while scrubbing, -1 idle) — the
+   * playhead tracks it 1:1 on the UI thread.
+   */
+  scrubMsSV?: SharedValue<number>;
 }
 
 export const TimelineTrack = React.memo(function TimelineTrack({
@@ -58,11 +66,13 @@ export const TimelineTrack = React.memo(function TimelineTrack({
   playheadMs,
   totalDurationMs,
   onSelectClip,
-  onSeek,
   onTrimClip,
+  onSlipClip,
   transitionIds,
   onSelectTransition,
   onReorderClip,
+  edgeScroll,
+  scrubMsSV,
 }: TimelineTrackProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
@@ -118,6 +128,7 @@ export const TimelineTrack = React.memo(function TimelineTrack({
         },
       ]}
       accessibilityLabel="Timeline clip track"
+      accessibilityHint="Contains the video clips"
     >
       <View style={trackStyles.clipsRow}>
         {clips.map((clip, i) => {
@@ -130,8 +141,10 @@ export const TimelineTrack = React.memo(function TimelineTrack({
               isSelected={clip.id === selectedClipId}
               onPress={() => onSelectClip(clip.id)}
               onTrimCommit={(edge, deltaMs) => onTrimClip(clip.id, edge, deltaMs)}
+              onSlipCommit={onSlipClip ? (deltaMs) => onSlipClip(clip.id, deltaMs) : undefined}
               clipIndex={i}
               onDragReorder={onReorderClip}
+              edgeScroll={edgeScroll}
             />
           );
         })}
@@ -188,7 +201,7 @@ export const TimelineTrack = React.memo(function TimelineTrack({
           positionMs={playheadMs}
           totalDurationMs={totalDurationMs}
           trackWidth={trackWidth}
-          onSeek={onSeek}
+          scrubMsSV={scrubMsSV}
         />
       )}
     </View>

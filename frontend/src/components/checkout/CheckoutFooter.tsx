@@ -14,6 +14,9 @@ interface Props {
   itemLabel: string;
   deliveryLabel: string;
   protectionLabel: string;
+  /** Item verification add-on label (e.g. "Free") — when set, a row
+   *  renders between Buyer protection and Wallet applied. */
+  verificationLabel?: string;
   /** Formatted wallet credit — when set, the "Wallet applied" row renders. */
   walletAppliedLabel?: string;
   totalLabel: string;
@@ -45,6 +48,7 @@ function CheckoutFooterBase({
   itemLabel,
   deliveryLabel,
   protectionLabel,
+  verificationLabel,
   walletAppliedLabel,
   totalLabel,
   onPressSummary,
@@ -68,7 +72,7 @@ function CheckoutFooterBase({
         style={styles.compactSummary}
         onPress={() => { haptics.tap(); onPressSummary(); }}
         accessibilityRole="button"
-        accessibilityLabel={`Order summary. Item ${itemLabel}, Delivery ${deliveryLabel}, Buyer protection ${protectionLabel}. Total ${totalLabel}. View full breakdown.`}
+        accessibilityLabel={`Order summary. Item ${itemLabel}, Delivery ${deliveryLabel}, Buyer protection ${protectionLabel}.${verificationLabel ? ` Verification ${verificationLabel}.` : ''} Total ${totalLabel}. View full breakdown.`}
         accessibilityHint="Open the full cost breakdown and returns policy"
       >
         <View style={styles.compactSummaryRow}>
@@ -83,6 +87,12 @@ function CheckoutFooterBase({
           <Text style={styles.compactSummaryLabel} maxFontSizeMultiplier={2}>Buyer protection</Text>
           <Text style={styles.compactSummaryVal} maxFontSizeMultiplier={2}>{protectionLabel}</Text>
         </View>
+        {verificationLabel ? (
+          <View style={styles.compactSummaryRow}>
+            <Text style={styles.compactSummaryLabel} maxFontSizeMultiplier={2}>Verification</Text>
+            <Text style={styles.compactSummaryVal} maxFontSizeMultiplier={2}>{verificationLabel}</Text>
+          </View>
+        ) : null}
         {walletAppliedLabel ? (
           <View style={styles.compactSummaryRow}>
             <Text style={styles.compactSummaryLabel} maxFontSizeMultiplier={2}>Wallet applied</Text>

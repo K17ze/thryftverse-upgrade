@@ -35,7 +35,7 @@ import {
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { IconGrammar } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
-import { SheetContainer, PressScale } from '../../CreatorAnimations';
+import { SheetContainer, PressScale } from '../../shared/CreatorAnimations';
 import { CreatorSlider } from '../../controls/CreatorSlider';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
@@ -247,6 +247,7 @@ export function AudioBrowserSheet({
                 onPress={() => handleTabSwitch(tab.key)}
                 disabled={tabDisabled}
                 accessibilityLabel={tab.label}
+                accessibilityHint="Shows this audio tab"
                 accessibilityRole="tab"
                 accessibilityState={{ selected: isActive, disabled: tabDisabled }}
                 style={styles.tab}
@@ -275,8 +276,6 @@ export function AudioBrowserSheet({
         {activeTab === 'library' ? (
           <LibraryTabBody
             colors={colors}
-            selectedTrack={selectedTrack}
-            onSelectTrack={(track) => setSelectedTrack(track)}
           />
         ) : (
           <OriginalAudioTabBody
@@ -439,11 +438,9 @@ export function AudioBrowserSheet({
 
 interface LibraryTabBodyProps {
   colors: ThemeColors;
-  selectedTrack: AudioTrack | null;
-  onSelectTrack: (track: AudioTrack) => void;
 }
 
-function LibraryTabBody({ colors, selectedTrack, onSelectTrack }: LibraryTabBodyProps) {
+function LibraryTabBody({ colors }: LibraryTabBodyProps) {
   const styles = useSheetStyles(colors);
   const [query, setQuery] = useState('');
 
@@ -461,6 +458,7 @@ function LibraryTabBody({ colors, selectedTrack, onSelectTrack }: LibraryTabBody
           autoCorrect={false}
           underlineColorAndroid="transparent"
           accessibilityLabel="Search songs"
+          accessibilityHint="Type to search songs"
         />
       </View>
       <View style={styles.emptyBody}>
@@ -507,6 +505,7 @@ function OriginalAudioTabBody({
         onPress={onToggleOriginal}
         style={styles.toggleRow}
         accessibilityLabel="Keep original audio"
+        accessibilityHint="Uses the video's original audio"
         accessibilityRole="switch"
         accessibilityState={{ checked: keepOriginal }}
         hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }}
@@ -588,6 +587,7 @@ function PreviewButton({ colors, disabled, haptic, reducedMotion }: PreviewButto
         { borderColor: disabled ? colors.border : colors.brand },
       ]}
       accessibilityLabel={playing ? 'Stop preview' : 'Play preview'}
+      accessibilityHint="Plays or stops the track preview"
       accessibilityRole="button"
       accessibilityState={{ disabled }}
     >
@@ -658,6 +658,7 @@ function SliderRow({
         onCommit={onChange}
         disabled={disabled}
         accessibilityLabel={label}
+        accessibilityHint="Adjusts the value"
       />
     </View>
   );

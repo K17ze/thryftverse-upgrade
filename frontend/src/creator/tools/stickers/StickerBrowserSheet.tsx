@@ -33,23 +33,19 @@ import {
   StyleSheet,
   TextInput,
   ScrollView,
-  Pressable,
   FlatList,
   useWindowDimensions,
   type TextStyle,
   type ViewStyle } from 'react-native';
 import { FlashList, type ListRenderItem } from '@shopify/flash-list';
-import { Ionicons } from '@expo/vector-icons';
 import {
   Space,
   Radius,
   FontFamily,
-  Control,
-  Stroke,
-  IconGrammar } from '../../../theme/designTokens';
+  Control } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
-import { SheetContainer, PressScale } from '../../CreatorAnimations';
+import { SheetContainer, PressScale } from '../../shared/CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { AppIcon } from '../../../components/common/AppIcon';
@@ -60,8 +56,6 @@ import {
   type StickerDef,
   type StickerCategory } from './StickerCategories';
 import { AutoStickerRail, type AutoStickerInput } from './AutoStickerRail';
-import { StickerPinOverlay } from './StickerPinOverlay';
-import type { StickerPin } from './StickerPinTracker';
 
 // ── Props ────────────────────────────────────────────────────────────
 
@@ -73,25 +67,6 @@ export interface StickerBrowserSheetProps {
   categories?: StickerCategory[];
   /** Input for auto-suggested stickers (media palette + document). */
   autoStickerInput?: AutoStickerInput;
-  // ── Pin mode integration (Meta Edits August 2026) ──────────────────
-  // When provided, a "Pin Sticker" toggle appears in the header. Activating
-  // pin mode changes selection behaviour: tapping a sticker calls
-  // `onPinSticker` instead of `onStickerSelect` + close, so the parent can
-  // bind the sticker to a media-layer anchor via StickerPinTracker. The
-  // StickerPinOverlay is rendered over the canvas while pin mode is active
-  // so the user can drag the anchor point.
-  /** Called when the user selects a sticker while pin mode is active. */
-  onPinSticker?: (sticker: StickerDef) => void;
-  /** The current pin (anchor on a media layer). Required to render the overlay. */
-  pin?: StickerPin | null;
-  /** Sticker center in pixels relative to the overlay container. */
-  pinStickerCenterPx?: { x: number; y: number };
-  /** Media layer box in pixels relative to the overlay container. */
-  pinMediaLayerBoxPx?: { x: number; y: number; width: number; height: number };
-  /** Called as the user drags the anchor (normalized 0..1). */
-  onPinAnchorChange?: (anchor: { x: number; y: number }) => void;
-  /** Called when the anchor drag ends and should be committed. */
-  onPinAnchorCommit?: (anchor: { x: number; y: number }) => void;
 }
 
 // ── Geometry ─────────────────────────────────────────────────────────
@@ -107,22 +82,12 @@ export function StickerBrowserSheet({
   onClose,
   onStickerSelect,
   categories = STICKER_CATEGORIES,
-  autoStickerInput,
-  onPinSticker,
-  pin,
-  pinStickerCenterPx,
-  pinMediaLayerBoxPx,
-  onPinAnchorChange,
-  onPinAnchorCommit }: StickerBrowserSheetProps) {
+  autoStickerInput }: StickerBrowserSheetProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reduceMotion = useReducedMotion();
   const { width: screenWidth } = useWindowDimensions();
   const styles = useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
-
-  // Pin mode is only available when the parent provides onPinSticker.
-  const pinModeSupported = !!onPinSticker;
-  const [pinMode, setPinMode] = useState(false);
 
   const [activeCategoryId, setActiveCategoryId] = useState<string>(
     categories[0]?.id ?? 'auto',
@@ -160,23 +125,11 @@ export function StickerBrowserSheet({
   const handleSelect = useCallback(
     (sticker: StickerDef) => {
       haptic.light();
-      if (pinMode && onPinSticker) {
-        // Pin mode: hand the sticker to the parent so it can bind the
-        // sticker to a media-layer anchor via StickerPinTracker. The sheet
-        // stays open so the user can drag the anchor (StickerPinOverlay).
-        onPinSticker(sticker);
-        return;
-      }
       onStickerSelect(sticker);
       onClose();
     },
-    [haptic, pinMode, onPinSticker, onStickerSelect, onClose],
+    [haptic, onStickerSelect, onClose],
   );
-
-  const handleTogglePinMode = useCallback(() => {
-    haptic.selection();
-    setPinMode((v) => !v);
-  }, [haptic]);
 
   const handleCategoryTap = useCallback(
     (id: string) => {
@@ -202,12 +155,11 @@ export function StickerBrowserSheet({
       <StickerCell
         sticker={item}
         onPress={handleSelect}
-        colors={colors}
         styles={styles}
         reduceMotion={reduceMotion}
       />
     ),
-    [handleSelect, colors, styles, reduceMotion],
+    [handleSelect, styles, reduceMotion],
   );
 
   const keyExtractor = useCallback((item: StickerDef) => item.id, []);
@@ -220,6 +172,7 @@ export function StickerBrowserSheet({
         <View style={styles.header}>
           <PressScale
             accessibilityLabel="Close stickers"
+            accessibilityHint="Closes the sticker browser"
             accessibilityRole="button"
             onPress={handleClose}
             style={styles.closeButton}
@@ -230,38 +183,9 @@ export function StickerBrowserSheet({
             Stickers
           </Text>
           <View style={styles.headerActions}>
-            {pinModeSupported && (
-              <PressScale
-                accessibilityLabel={pinMode ? 'Cancel pin mode' : 'Pin sticker to media'}
-                accessibilityHint="Toggles pin mode so the next sticker you tap binds to a point on the media layer"
-                accessibilityRole="button"
-                accessibilityState={{ selected: pinMode }}
-                onPress={handleTogglePinMode}
-                style={[
-                  styles.pinBtn,
-                  pinMode ? styles.pinBtnActive : styles.pinBtnInactive,
-                ]}
-              >
-                <AppIcon
-                  name="pin-outline"
-                  size={IconSize.sm}
-                  color={pinMode ? 'textInverse' : 'textSecondary'}
-                  opticalCenter={true}
-                  accessible={false}
-                />
-                <Text
-                  style={[
-                    styles.pinBtnLabel,
-                    pinMode ? styles.pinBtnLabelActive : styles.pinBtnLabelInactive,
-                  ]}
-                  numberOfLines={1}
-                >
-                  Pin
-                </Text>
-              </PressScale>
-            )}
             <PressScale
               accessibilityLabel="Done"
+              accessibilityHint="Closes the sticker browser"
               accessibilityRole="button"
               onPress={handleClose}
               style={styles.doneBtn}
@@ -292,10 +216,12 @@ export function StickerBrowserSheet({
             autoCapitalize="none"
             underlineColorAndroid="transparent"
             accessibilityLabel="Search stickers"
+            accessibilityHint="Type to search stickers"
           />
           {query.trim().length > 0 ? (
             <PressScale
               accessibilityLabel="Clear search"
+              accessibilityHint="Clears the search text"
               accessibilityRole="button"
               onPress={() => setQuery('')}
               style={styles.clearButton}
@@ -325,6 +251,7 @@ export function StickerBrowserSheet({
                 <PressScale
                   key={cat.id}
                   accessibilityLabel={`${cat.name} category`}
+                  accessibilityHint="Shows stickers in this category"
                   accessibilityRole="button"
                   onPress={() => handleCategoryTap(cat.id)}
                   style={[
@@ -375,21 +302,6 @@ export function StickerBrowserSheet({
         </View>
       </View>
     </SheetContainer>
-
-      {/* StickerPinOverlay — rendered as a sibling OUTSIDE the sheet so it
-          can cover the full canvas, not just the sheet's bounds. The overlay
-          uses pointerEvents="box-none" so it doesn't block sheet interactions. */}
-      {/* TODO: StickerPinOverlay must render at screen root, not inside sheet */}
-      {pinMode && pin && pinStickerCenterPx && pinMediaLayerBoxPx && onPinAnchorChange && onPinAnchorCommit && (
-        <StickerPinOverlay
-          visible={pinMode}
-          pin={pin}
-          stickerCenterPx={pinStickerCenterPx}
-          mediaLayerBoxPx={pinMediaLayerBoxPx}
-          onAnchorChange={onPinAnchorChange}
-          onAnchorCommit={onPinAnchorCommit}
-        />
-      )}
     </>
   );
 }
@@ -399,7 +311,6 @@ export function StickerBrowserSheet({
 interface StickerCellProps {
   sticker: StickerDef;
   onPress: (sticker: StickerDef) => void;
-  colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
   reduceMotion: boolean;
 }
@@ -407,7 +318,6 @@ interface StickerCellProps {
 const StickerCell = React.memo(function StickerCell({
   sticker,
   onPress,
-  colors,
   styles }: StickerCellProps) {
   const isInteractive = sticker.interactive === true;
   const label = sticker.description ?? sticker.name;
@@ -415,6 +325,7 @@ const StickerCell = React.memo(function StickerCell({
   return (
     <PressScale
       accessibilityLabel={`${sticker.name}${sticker.description ? `, ${sticker.description}` : ''}`}
+      accessibilityHint="Adds this sticker to the canvas"
       accessibilityRole="button"
       onPress={() => onPress(sticker)}
       style={styles.cell}
@@ -461,29 +372,6 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs } as ViewStyle,
-    pinBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      height: Control.hit,
-      paddingHorizontal: Space.smMd,
-      borderRadius: Radius.full,
-      borderWidth: Stroke.hairline,
-      gap: Space.xs } as ViewStyle,
-    pinBtnActive: {
-      backgroundColor: colors.brand,
-      borderColor: colors.brand } as ViewStyle,
-    pinBtnInactive: {
-      backgroundColor: colors.surfaceAlt,
-      borderColor: colors.borderSubtle } as ViewStyle,
-    pinBtnLabel: {
-      fontFamily: FontFamily.medium,
-      fontSize: TypographyV2.meta.size,
-      lineHeight: TypographyV2.meta.lineHeight,
-      letterSpacing: TypographyV2.meta.letterSpacing } as TextStyle,
-    pinBtnLabelActive: {
-      color: colors.textInverse } as TextStyle,
-    pinBtnLabelInactive: {
-      color: colors.textSecondary } as TextStyle,
     title: {
       flex: 1,
       textAlign: 'center',

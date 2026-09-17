@@ -111,11 +111,17 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
   onReport }: ProfileReviewRowProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
-  const reviewerName = item.reviewer.displayName || item.reviewer.username || 'Anonymous';
+  // Truthful provenance: auto rows are platform-generated feedback — the
+  // buyer never authored a review. Render the row as platform feedback,
+  // not under the buyer's name, and never show a "Verified buyer" badge.
+  const isAuto = item.isAuto === true;
+  const reviewerName = isAuto
+    ? 'Automatic feedback'
+    : item.reviewer.displayName || item.reviewer.username || 'Anonymous';
   const dateText = item.createdAt
     ? formatFullDate(item.createdAt)
     : '';
-  const canOpenReviewer = Boolean(item.reviewer.id && onOpenReviewer);
+  const canOpenReviewer = !isAuto && Boolean(item.reviewer.id && onOpenReviewer);
   const canOpenListing = Boolean(item.listing?.id && onOpenListing);
   const reviewerInitials = getInitials(reviewerName);
   const photos = item.photoUrls ?? [];
@@ -134,7 +140,11 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
         accessibilityRole={canOpenReviewer ? 'button' : undefined}
         accessibilityLabel={canOpenReviewer ? `Open ${reviewerName}'s profile` : undefined}
       >
-        {item.reviewer.avatar ? (
+        {isAuto ? (
+          <View style={[styles.reviewAvatar, styles.reviewAvatarFallback]}>
+            <AppIcon name="shieldCheck" focused size={IconSize.md} color="textMuted" opticalCenter accessible={false} />
+          </View>
+        ) : item.reviewer.avatar ? (
           <CachedImage
             uri={item.reviewer.avatar}
             style={styles.reviewAvatar}
@@ -149,10 +159,16 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
         <View style={styles.reviewIdentityCol}>
           <View style={styles.reviewNameRow}>
             <Text style={styles.reviewName} numberOfLines={1}>{reviewerName}</Text>
-            <View style={styles.verifiedBadge}>
-              <AppIcon name="shieldCheck" focused size={IconSize.micro} color="success" opticalCenter accessible={false} />
-              <Text style={styles.verifiedBadgeText}>Verified buyer</Text>
-            </View>
+            {isAuto ? (
+              <View style={styles.verifiedBadge}>
+                <Text style={[styles.verifiedBadgeText, { color: colors.textMuted }]}>Auto</Text>
+              </View>
+            ) : (
+              <View style={styles.verifiedBadge}>
+                <AppIcon name="shieldCheck" focused size={IconSize.micro} color="success" opticalCenter accessible={false} />
+                <Text style={styles.verifiedBadgeText}>Verified buyer</Text>
+              </View>
+            )}
           </View>
           <View style={styles.reviewMetaRow}>
             {[1, 2, 3, 4, 5].map((s) => (
@@ -171,8 +187,15 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
         </View>
       </Pressable>
 
-      {/* Comment */}
-      {item.comment ? <Text style={styles.reviewComment}>{item.comment}</Text> : null}
+      {/* Comment — auto rows carry none; render the truthful explanation
+          so the row never reads as a silent buyer review. */}
+      {item.comment ? (
+        <Text style={styles.reviewComment}>{item.comment}</Text>
+      ) : isAuto ? (
+        <Text style={[styles.reviewComment, { color: colors.textMuted }]}>
+          Left automatically — no review was submitted.
+        </Text>
+      ) : null}
 
       {/* Photo thumbnails */}
       {photos.length > 0 && (
@@ -214,8 +237,10 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
         </View>
       )}
 
-      {/* Respond button — only for own profile and when no response exists */}
-      {onRespond && !sellerResponse && (
+      {/* Respond button — only for own profile, when no response exists,
+          and only on buyer-authored reviews (auto feedback is not a
+          message from the buyer). */}
+      {onRespond && !sellerResponse && !isAuto && (
         <Pressable
           style={({ pressed }) => [styles.respondBtn, pressed && { opacity: 0.6 }]}
           onPress={() => onRespond(item.id, reviewerName, item.rating)}
@@ -249,8 +274,10 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
         </Pressable>
       ) : null}
 
-      {/* Report link — muted text, subordinate to content. Only for non-seller viewers. */}
-      {onReport ? (
+      {/* Report link — muted text, subordinate to content. Only for
+          non-seller viewers and buyer-authored reviews — platform feedback
+          cannot be reported as abuse. */}
+      {onReport && !isAuto ? (
         <View style={styles.reportRow}>
           <Pressable
             style={({ pressed }) => [styles.reportLink, pressed && { opacity: 0.6 }]}

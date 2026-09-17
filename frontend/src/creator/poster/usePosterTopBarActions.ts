@@ -174,7 +174,7 @@ export function usePosterTopBarActions({
       show(next ? 'Audio muted' : 'Audio unmuted', 'info');
       return next;
     });
-  }, [haptic, show]);
+  }, [haptic, show, videoPlayerRef]);
 
   const [isQuickSaving, setIsQuickSaving] = useState(false);
   const handleQuickSaveDraft = useCallback(async () => {

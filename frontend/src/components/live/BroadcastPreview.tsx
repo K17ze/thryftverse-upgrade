@@ -1,11 +1,20 @@
 /**
- * BroadcastPreview — the seller's real camera preview.
+ * BroadcastPreview — the seller's camera stage.
  *
- * Uses react-native-vision-camera (already a dependency, used by
- * VisualSearchCamera / CreatorCamera) to render the actual device camera.
- * Nothing here pretends to broadcast — this is a local framing preview.
- * Publishing video to the LiveKit room requires the shared streaming layer
- * to expose publish controls (see useLiveKitRoom) — a known gap.
+ * Two honest modes:
+ *  - `liveTrack` set → renders the actual published LiveKit camera track via
+ *    VideoView, i.e. the real broadcast feed viewers receive. This also
+ *    unmounts the VisionCamera session so the two capturers never fight
+ *    over the camera device.
+ *  - `liveTrack` null → local framing preview via react-native-vision-camera
+ *    (already a dependency, used by VisualSearchCamera / CreatorCamera).
+ *
+ * Also exports `LiveKitVideoSurface`, the shared renderer for any LiveKit
+ * video track (used by the viewer screen for the host's remote track).
+ * VideoView is resolved lazily: the package's module init registers a
+ * native view, so a missing native module (Expo Go) must fail soft rather
+ * than crash module evaluation — and a track can only exist when the room
+ * connected, which already requires the native module.
  *
  * States (AGENTS §14):
  *  - permission not yet granted → quiet panel with an "Allow camera" action
@@ -15,7 +24,7 @@
  */
 
 import React from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import {
   Camera,
   useCameraDevice,
@@ -28,6 +37,67 @@ import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppIcon } from '../common/AppIcon';
 import { IconSize } from '../../theme/iconTokens';
+import type { LiveKitVideoTrack } from '../../platform/streaming/useLiveKitRoom';
+
+type VideoViewComponent = React.ComponentType<{
+  videoTrack?: LiveKitVideoTrack;
+  style?: StyleProp<ViewStyle>;
+  objectFit?: 'cover' | 'contain';
+  mirror?: boolean;
+  zOrder?: number;
+}>;
+
+let cachedVideoView: VideoViewComponent | null | undefined;
+
+/** Lazy resolve — see file header. Returns null when the native view cannot
+ *  be registered (Expo Go / web), never throws. */
+function getLiveKitVideoView(): VideoViewComponent | null {
+  if (cachedVideoView === undefined) {
+    try {
+      const mod = require('@livekit/react-native') as {
+        VideoView?: VideoViewComponent;
+      };
+      cachedVideoView = mod.VideoView ?? null;
+    } catch {
+      cachedVideoView = null;
+    }
+  }
+  return cachedVideoView;
+}
+
+interface LiveKitVideoSurfaceProps {
+  /** The LiveKit video track to render — local published or remote
+   *  subscribed. Renders nothing when absent. */
+  track: LiveKitVideoTrack | null | undefined;
+  style?: StyleProp<ViewStyle>;
+  objectFit?: 'cover' | 'contain';
+  /** Mirror horizontally — front-facing local cameras only. */
+  mirror?: boolean;
+  accessibilityLabel: string;
+}
+
+/** Shared LiveKit video renderer — wraps the SDK's VideoView (which handles
+ *  adaptiveStream element observation and mediaStream extraction). */
+export function LiveKitVideoSurface({
+  track,
+  style,
+  objectFit = 'cover',
+  mirror = false,
+  accessibilityLabel,
+}: LiveKitVideoSurfaceProps) {
+  const VideoView = getLiveKitVideoView();
+  if (!track || !VideoView) return null;
+  return (
+    <View style={style} accessibilityRole="image" accessibilityLabel={accessibilityLabel}>
+      <VideoView
+        videoTrack={track}
+        style={StyleSheet.absoluteFill}
+        objectFit={objectFit}
+        mirror={mirror}
+      />
+    </View>
+  );
+}
 
 interface BroadcastPreviewProps {
   /** Whether the camera session should be active (mount/unmount screens). */
@@ -38,6 +108,9 @@ interface BroadcastPreviewProps {
   height?: number;
   /** Accessibility label for the preview surface. */
   accessibilityLabel?: string;
+  /** When set, render the published LiveKit camera track — the real
+   *  broadcast feed — instead of the local VisionCamera preview. */
+  liveTrack?: LiveKitVideoTrack | null;
 }
 
 export function BroadcastPreview({
@@ -45,6 +118,7 @@ export function BroadcastPreview({
   facing = 'back',
   height,
   accessibilityLabel = 'Camera preview',
+  liveTrack,
 }: BroadcastPreviewProps) {
   const { colors } = useAppTheme();
   const device = useCameraDevice(facing);
@@ -59,13 +133,28 @@ export function BroadcastPreview({
       .finally(() => setRequesting(false));
   }, [requestPermission]);
 
+  const stageStyle = [
+    styles.stage,
+    { backgroundColor: colors.surfaceAlt },
+    height != null && { height },
+  ];
+
+  // Published feed — the real broadcast plane.
+  if (liveTrack) {
+    return (
+      <LiveKitVideoSurface
+        track={liveTrack}
+        style={stageStyle}
+        objectFit="cover"
+        mirror={facing === 'front'}
+        accessibilityLabel={accessibilityLabel}
+      />
+    );
+  }
+
   const stage = (
     <View
-      style={[
-        styles.stage,
-        { backgroundColor: colors.surfaceAlt },
-        height != null && { height },
-      ]}
+      style={stageStyle}
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="image"
     >
@@ -100,11 +189,7 @@ export function BroadcastPreview({
 
   return (
     <View
-      style={[
-        styles.stage,
-        { backgroundColor: colors.surfaceAlt },
-        height != null && { height },
-      ]}
+      style={stageStyle}
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="image"
     >

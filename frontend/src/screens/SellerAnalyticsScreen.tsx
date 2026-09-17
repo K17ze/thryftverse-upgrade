@@ -19,7 +19,7 @@ export type { MetricDimension, ChartViewMode } from '../components/seller/analyt
  * Seller Analytics Domain Architecture Specifications & Section Contracts
  */
 export const SELLER_ANALYTICS_DIMENSIONS = [
-  'Net Sales Trajectory',
+  'Sales Trajectory',
   'Order Volume',
   'Store Traffic',
   'Conversion Trajectory',
@@ -61,7 +61,7 @@ function formatCustomRangeLabel(period: { startDate: string; endDate: string }):
 
 export default function SellerAnalyticsScreen() {
  const model = useSellerAnalytics();
- const { a11yRef, styles, colors, navigation, selectedListingId, isLoading, isError, hasZeroListings, load, isOffline, onRefresh, partialError, isRefreshing, period, setPeriod, handleListingSelect, listings } = model;
+ const { a11yRef, styles, colors, navigation, selectedListingId, isLoading, isError, hasZeroListings, load, isOffline, onRefresh, partialError, isStalePeriodData, isRefreshing, period, setPeriod, handleListingSelect, listings } = model;
  const [isRangeSheetVisible, setRangeSheetVisible] = useState(false);
  const customTriggerRef = useRef<View>(null);
 
@@ -167,6 +167,12 @@ export default function SellerAnalyticsScreen() {
         <View style={[styles.partialBanner, { borderBottomColor: colors.border }]}>
           <Text style={[styles.partialBannerText, { color: colors.textMuted }]}>
             Some analytics could not be loaded · pull down to retry
+          </Text>
+        </View>
+      ) : isStalePeriodData ? (
+        <View style={[styles.partialBanner, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.partialBannerText, { color: colors.textMuted }]}>
+            Showing previous period · updating…
           </Text>
         </View>
       ) : null}

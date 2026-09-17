@@ -112,18 +112,6 @@ function temperature(t: number): number[] {
 }
 
 /**
- * Tint matrix — shifts green (positive) or magenta (negative).
- */
-function tint(t: number): number[] {
-  return [
-    1 + t * 0.5, 0, 0,          0, 0,
-    0,           1 + t,         0, 0, 0,
-    0,           0,      1 + t * 0.5, 0, 0,
-    0,           0,      0,           1, 0,
-  ];
-}
-
-/**
  * Sepia matrix — classic sepia tone transform.
  * Source: Microsoft / W3C sepia reference values.
  */
@@ -304,17 +292,21 @@ export const FILTER_PRESETS: EffectPreset[] = [
 
 // ── Adjustment parameter metadata ───────────────────────────────────────
 
+// Every parameter in this list must render end-to-end: preview evaluator
+// (buildAdjustmentMatrix / vignette overlay) AND the export path. The
+// schema still accepts `highlights`, `shadows`, and `sharpness` on
+// persisted documents, but they are not exposed as controls — a color
+// matrix cannot express luminance-conditional or convolution adjustments,
+// so the sliders persisted values nothing rendered. They return when a
+// SkSL adjustment shader lands in the evaluator.
 export const ADJUST_PARAMETERS = [
   { id: 'exposure', name: 'Exposure', min: -1, max: 1, default: 0 },
   { id: 'contrast', name: 'Contrast', min: -1, max: 1, default: 0 },
-  { id: 'highlights', name: 'Highlights', min: -1, max: 1, default: 0 },
-  { id: 'shadows', name: 'Shadows', min: -1, max: 1, default: 0 },
   { id: 'saturation', name: 'Saturation', min: -1, max: 1, default: 0 },
   { id: 'temperature', name: 'Temperature', min: -1, max: 1, default: 0 },
   { id: 'tint', name: 'Tint', min: -1, max: 1, default: 0 },
   { id: 'fade', name: 'Fade', min: 0, max: 1, default: 0 },
   { id: 'vignette', name: 'Vignette', min: 0, max: 1, default: 0 },
-  { id: 'sharpness', name: 'Sharpness', min: 0, max: 1, default: 0 },
 ] as const;
 
 export type AdjustParameterId = (typeof ADJUST_PARAMETERS)[number]['id'];

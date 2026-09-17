@@ -6,6 +6,22 @@ type ThemeColorsType = ReturnType<typeof useAppTheme>['colors'];
 
 export function createPublishStyles(colors: ThemeColorsType) {
   return StyleSheet.create({
+    ...createHeaderStyles(colors),
+    ...createCaptionStyles(colors),
+    ...createAudienceStyles(colors),
+    ...createCoverPublishStyles(colors),
+    ...createFeedbackStyles(colors),
+    ...createErrorStateStyles(colors),
+    ...createSuccessStateStyles(colors),
+    ...createScheduleFailedStyles(colors),
+    ...createReviewStyles(colors),
+  });
+}
+
+// ── Section builders (pure extraction from createPublishStyles) ──────
+
+function createHeaderStyles(colors: ThemeColorsType) {
+  return StyleSheet.create({
     header: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -34,6 +50,11 @@ export function createPublishStyles(colors: ThemeColorsType) {
       letterSpacing: 0.2,
       marginTop: Space.xs,
       textTransform: 'uppercase' },
+  });
+}
+
+function createCaptionStyles(colors: ThemeColorsType) {
+  return StyleSheet.create({
     captionInput: {
       fontSize: TypographyV2.body.size,
       fontFamily: TypographyV2.body.fontFamily,
@@ -62,6 +83,11 @@ export function createPublishStyles(colors: ThemeColorsType) {
       fontFamily: Typography.family.medium,
       fontSize: TypographyV2.meta.size,
       color: colors.danger },
+  });
+}
+
+function createAudienceStyles(colors: ThemeColorsType) {
+  return StyleSheet.create({
     audienceSegment: {
       flexDirection: 'row',
       alignSelf: 'center',
@@ -107,6 +133,11 @@ export function createPublishStyles(colors: ThemeColorsType) {
       color: colors.textSecondary },
     interactionPillTextActive: {
       color: colors.textInverse },
+  });
+}
+
+function createCoverPublishStyles(colors: ThemeColorsType) {
+  return StyleSheet.create({
     // ── Cover selection ──
     coverScroll: {
       marginHorizontal: -Space.md },
@@ -156,6 +187,11 @@ export function createPublishStyles(colors: ThemeColorsType) {
       fontFamily: Typography.family.semibold,
       fontSize: TypographyV2.bodyStrong.size,
       letterSpacing: TypographyV2.bodyStrong.letterSpacing },
+  });
+}
+
+function createFeedbackStyles(colors: ThemeColorsType) {
+  return StyleSheet.create({
     // Offline banner — shown when device has no connectivity.
     // Uses warning color (amber) to signal caution without alarm.
     offlineBanner: {
@@ -198,6 +234,12 @@ export function createPublishStyles(colors: ThemeColorsType) {
       lineHeight: TypographyV2.bodyStrong.lineHeight,
       letterSpacing: TypographyV2.bodyStrong.letterSpacing,
       color: colors.textPrimary },
+    progressSubLabel: {
+      fontFamily: TypographyV2.caption.fontFamily,
+      fontSize: TypographyV2.caption.size,
+      lineHeight: TypographyV2.caption.lineHeight,
+      letterSpacing: TypographyV2.caption.letterSpacing,
+      color: colors.textSecondary },
     progressBarTrack: {
       width: '100%',
       height: 4,
@@ -220,6 +262,11 @@ export function createPublishStyles(colors: ThemeColorsType) {
       fontFamily: Typography.family.medium,
       fontSize: TypographyV2.meta.size,
       color: colors.textSecondary },
+  });
+}
+
+function createErrorStateStyles(colors: ThemeColorsType) {
+  return StyleSheet.create({
     // ── Error state ──
     errorCircle: {
       width: 72,
@@ -276,6 +323,11 @@ export function createPublishStyles(colors: ThemeColorsType) {
       fontFamily: Typography.family.medium,
       fontSize: TypographyV2.body.size,
       color: colors.textSecondary },
+  });
+}
+
+function createSuccessStateStyles(colors: ThemeColorsType) {
+  return StyleSheet.create({
     // ── Success state ──
     successCircle: {
       width: 72,
@@ -302,6 +354,12 @@ export function createPublishStyles(colors: ThemeColorsType) {
       fontFamily: Typography.family.semibold,
       fontSize: TypographyV2.bodyStrong.size,
       letterSpacing: TypographyV2.bodyStrong.letterSpacing },
+    successLinks: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      gap: Space.lg,
+      marginTop: Space.sm,
+    },
     viewLink: {
       marginTop: Space.sm,
       paddingVertical: Space.xs,
@@ -342,6 +400,11 @@ export function createPublishStyles(colors: ThemeColorsType) {
       color: colors.brand,
       fontFamily: Typography.family.medium,
       fontSize: TypographyV2.body.size },
+  });
+}
+
+function createScheduleFailedStyles(colors: ThemeColorsType) {
+  return StyleSheet.create({
     // ── Schedule failed state ──
     scheduleFailedDetail: {
       fontFamily: Typography.family.regular,
@@ -359,6 +422,11 @@ export function createPublishStyles(colors: ThemeColorsType) {
       color: colors.textSecondary,
       fontFamily: Typography.family.medium,
       fontSize: TypographyV2.body.size },
+  });
+}
+
+function createReviewStyles(colors: ThemeColorsType) {
+  return StyleSheet.create({
     reviewBody: {
       flex: 1 },
     previewSection: {
@@ -420,5 +488,6 @@ export function createPublishStyles(colors: ThemeColorsType) {
       paddingBottom: Space.md,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.border,
-      gap: Space.xs } });
+      gap: Space.xs }
+  });
 }

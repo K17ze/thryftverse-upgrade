@@ -46,17 +46,8 @@ export const FilterSheet = memo(function FilterSheet({
   facetsLoading?: boolean;
 }) {
   const { colors } = useAppTheme();
-  const { currencySymbol, formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const styles = useMemo(() => createStyles(colors), [colors]);
-
-  const activeCount = useMemo(() => {
-    let n = 0;
-    if (draftBrowse.sort !== 'recommended') n++;
-    n += draftBrowse.categories.length;
-    if (draftBrowse.priceMin != null) n++;
-    if (draftBrowse.priceMax != null) n++;
-    return n;
-  }, [draftBrowse]);
 
   const toggleCategory = useCallback((cat: string) => {
     haptics.tap();
@@ -100,10 +91,15 @@ export const FilterSheet = memo(function FilterSheet({
         <Text style={styles.filterSheetTitle}>Filter & Sort</Text>
 
         {/* ── Sort: checkmarked rows ── */}
+        {/* 'Recommended' is omitted from the rows — on the browse path it
+            resolves to the same endingSoon order server-side, so showing both
+            rows would offer two labels for one ordering. The 'endingSoon'
+            row displays selected for either state. */}
         <Text style={styles.filterSectionLabel}>Sort</Text>
         <View style={styles.filterSortRows}>
-          {SORT_OPTIONS.map((opt) => {
-            const selected = draftBrowse.sort === opt.key;
+          {SORT_OPTIONS.filter((opt) => opt.key !== 'recommended').map((opt) => {
+            const selected = draftBrowse.sort === opt.key
+              || (opt.key === 'endingSoon' && draftBrowse.sort === 'recommended');
             return (
               <Pressable
                 key={opt.key}
@@ -113,7 +109,7 @@ export const FilterSheet = memo(function FilterSheet({
                   pressed && styles.filterOptionPressed,
                 ]}
                 onPress={() => setSort(opt.key)}
-                accessibilityRole="button"
+                accessibilityRole="radio"
                 accessibilityLabel={`Sort by ${opt.label}`}
                 accessibilityState={{ selected }}
               >
@@ -132,6 +128,7 @@ export const FilterSheet = memo(function FilterSheet({
         <Text style={styles.filterSectionLabel}>Price</Text>
         <View style={styles.filterPricePresets}>
           <Pressable
+            hitSlop={{ top: 6, bottom: 6 }}
             style={({ pressed }) => [
               styles.filterPriceChip,
               draftBrowse.priceMin == null && draftBrowse.priceMax == null && styles.filterPriceChipActive,
@@ -148,14 +145,17 @@ export const FilterSheet = memo(function FilterSheet({
           </Pressable>
           {PRICE_PRESETS.map((preset) => {
             const selected = draftBrowse.priceMin === preset.min && draftBrowse.priceMax === preset.max;
+            // Presets are GBP values — format through the fiat formatter so a
+            // non-GBP user sees converted amounts, not a bare symbol swap.
             const presetLabel = preset.min != null && preset.max != null
-              ? `${currencySymbol}${preset.min} – ${currencySymbol}${preset.max}`
+              ? `${formatFromFiat(preset.min)} – ${formatFromFiat(preset.max)}`
               : preset.max != null
-                ? `Under ${currencySymbol}${preset.max}`
-                : `Over ${currencySymbol}${preset.min}`;
+                ? `Under ${formatFromFiat(preset.max)}`
+                : `Over ${formatFromFiat(preset.min ?? 0)}`;
             return (
               <Pressable
                 key={presetLabel}
+                hitSlop={{ top: 6, bottom: 6 }}
                 style={({ pressed }) => [
                   styles.filterPriceChip,
                   selected && styles.filterPriceChipActive,
@@ -192,9 +192,10 @@ export const FilterSheet = memo(function FilterSheet({
                       pressed && styles.filterOptionPressed,
                     ]}
                     onPress={() => toggleCategory(cat)}
-                    accessibilityRole="button"
+                    hitSlop={{ top: 4, bottom: 4 }}
+                    accessibilityRole="checkbox"
                     accessibilityLabel={`Category ${displayLabel}${count != null ? `, ${count} auctions` : ''}`}
-                    accessibilityState={{ selected }}
+                    accessibilityState={{ selected, checked: selected }}
                   >
                     <View style={styles.filterCategoryRowLabel}>
                       <Text style={[styles.filterCategoryRowText, selected && styles.filterCategoryRowTextActive]}>
@@ -231,18 +232,18 @@ export const FilterSheet = memo(function FilterSheet({
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel={
-              resultCount != null
-                ? `Show ${resultCount} results`
-                : activeCount > 0
-                  ? `Show ${activeCount} ${activeCount === 1 ? 'filter' : 'filters'}`
+              facetsLoading
+                ? 'Updating results count'
+                : resultCount != null
+                  ? `Show ${resultCount} results`
                   : 'Show results'
             }
           >
             <Text style={styles.filterApplyText}>
-              {resultCount != null
-                ? `Show ${resultCount} ${resultCount === 1 ? 'result' : 'results'}`
-                : activeCount > 0
-                  ? `Show ${activeCount} ${activeCount === 1 ? 'filter' : 'filters'}`
+              {facetsLoading
+                ? 'Updating…'
+                : resultCount != null
+                  ? `Show ${resultCount} ${resultCount === 1 ? 'result' : 'results'}`
                   : 'Show results'
               }
             </Text>
@@ -302,7 +303,7 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       borderRadius: Radius.full,
       backgroundColor: colors.surface,
-      borderWidth: Stroke.standard,
+      borderWidth: Stroke.hairline,
       borderColor: colors.border },
     filterPriceChipActive: {
       backgroundColor: colors.brand,
@@ -349,7 +350,7 @@ function createStyles(colors: ThemeColors) {
       width: 22,
       height: 22,
       borderRadius: Radius.sm,
-      borderWidth: Stroke.standard,
+      borderWidth: Stroke.hairline,
       borderColor: colors.border,
       alignItems: 'center',
       justifyContent: 'center' },
@@ -360,10 +361,12 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'space-between',
       marginTop: Space.xl },
     filterResetBtn: {
+      minHeight: 44,
+      justifyContent: 'center',
       paddingVertical: Space.sm + 2,
       paddingHorizontal: Space.lg,
-      borderRadius: Radius.md,
-      borderWidth: Stroke.standard,
+      borderRadius: Radius.xl,
+      borderWidth: Stroke.hairline,
       borderColor: colors.border },
     filterResetText: {
       fontSize: TypographyV2.body.size,
@@ -371,8 +374,10 @@ function createStyles(colors: ThemeColors) {
       fontFamily: TypographyV2.body.fontFamily },
     filterApplyBtn: {
       flex: 1,
+      minHeight: 44,
+      justifyContent: 'center',
       paddingVertical: Space.sm,
-      borderRadius: Radius.md,
+      borderRadius: Radius.xl,
       backgroundColor: colors.brand,
       alignItems: 'center',
       marginLeft: Space.md },

@@ -1,21 +1,21 @@
-export { CreatorStudioScreen } from './CreatorStudioShell';
+export { CreatorStudioScreen } from './studio/CreatorStudioShell';
 export { LookComposerScreen } from './look/LookComposerScreen';
 export { PosterComposerScreen } from './poster/PosterComposerScreen';
-export { CreatorDraftListScreen } from './CreatorDraftListScreen';
-export { CreatorProvider, useCreator } from './CreatorContext';
-export { CreatorCanvas } from './CreatorCanvas';
-export { default as CreatorCamera } from './CreatorCamera';
-export { CreatorAssetPicker } from './CreatorAssetPicker';
-export type { AssetPickerMode } from './CreatorAssetPicker';
-export { CreatorSettingsSheet } from './CreatorSettingsSheet';
-export { CreatorTemplateBrowser } from './CreatorTemplateBrowser';
-export { lookToDocument, posterStoryToDocument } from './viewerAdapters';
-export type { LookViewData, PosterStoryViewData, PosterFrameViewData } from './viewerAdapters';
-export { CreatorAnalytics, setCreatorAnalyticsHandler, trackCreatorEvent } from './creatorAnalytics';
-export { LOOK_TEMPLATES, POSTER_TEMPLATES, ALL_TEMPLATES, getTemplateById, getTemplatesByType } from './templates';
-export type { CreatorTemplate } from './templates';
-export { uploadAllLocalMedia, hasLocalUris } from './mediaUploadPipeline';
-export type { CreatorDocument, CreatorLayer, CreatorPage, CreatorBackground, CreatorMetadata, LayerType } from './composition';
+export { CreatorDraftListScreen } from './studio/CreatorDraftListScreen';
+export { CreatorProvider, useCreator } from './studio/CreatorContext';
+export { CreatorCanvas } from './studio/CreatorCanvas';
+export { default as CreatorCamera } from './capture/CreatorCamera';
+export { CreatorAssetPicker } from './surfaces/CreatorAssetPicker';
+export type { AssetPickerMode } from './surfaces/CreatorAssetPicker';
+export { CreatorSettingsSheet } from './surfaces/CreatorSettingsSheet';
+export { CreatorTemplateBrowser } from './surfaces/CreatorTemplateBrowser';
+export { lookToDocument, posterStoryToDocument } from './export/viewerAdapters';
+export type { LookViewData, PosterStoryViewData, PosterFrameViewData } from './export/viewerAdapters';
+export { CreatorAnalytics, setCreatorAnalyticsHandler, trackCreatorEvent } from './shared/creatorAnalytics';
+export { LOOK_TEMPLATES, POSTER_TEMPLATES, ALL_TEMPLATES, getTemplateById, getTemplatesByType } from './studio/templates';
+export type { CreatorTemplate } from './studio/templates';
+export { uploadAllLocalMedia, hasLocalUris } from './core/upload/mediaUploadPipeline';
+export type { CreatorDocument, CreatorLayer, CreatorPage, CreatorBackground, CreatorMetadata, LayerType } from './core/projectStore/composition';
 export {
   createEmptyDocument,
   validateDocument,
@@ -29,6 +29,6 @@ export {
   duplicateLayerInPage,
   getVisibleLayersSorted,
   getAllLayersSorted,
-} from './composition';
-export { HistoryStack } from './history';
-export { CreatorDraftService } from './drafts';
+} from './core/projectStore/composition';
+export { HistoryStack } from './core/projectStore/history';
+export { CreatorDraftService } from './core/projectStore/drafts';

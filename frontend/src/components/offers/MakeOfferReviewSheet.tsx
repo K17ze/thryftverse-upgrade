@@ -6,6 +6,7 @@ import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { CachedImage } from '../CachedImage';
 import { AppButton } from '../ui/AppButton';
 import { MakeOfferErrorBlock } from './MakeOfferErrorBlock';
+import { t } from '../../i18n';
 import { makeOfferScreenStyles as styles } from './makeOfferScreenStyles';
 
 export interface MakeOfferReviewSheetProps {
@@ -142,6 +143,16 @@ export function MakeOfferReviewSheet({
         {!!errorMsg && (
           <MakeOfferErrorBlock message={errorMsg} onRetry={onRetry} />
         )}
+
+        {/* Commitment disclosure — the real contract: sending an offer is
+            non-binding and takes no payment. If the seller accepts, the
+            backend creates an order with a 30-minute checkout reservation
+            (OFFER_CHECKOUT_RESERVATION_MINUTES in
+            backend/api/src/routes/listingOffers.ts). Single muted meta
+            line, matching the field-helper convention. */}
+        <Text style={[styles.reviewCommitment, { color: colors.textMuted }]}>
+          {t('makeOffer.review.commitment')}
+        </Text>
 
         {/* Actions */}
         <View style={styles.reviewActions}>

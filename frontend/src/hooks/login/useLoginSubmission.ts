@@ -108,7 +108,14 @@ export function useLoginSubmission({ form, triggerErrorFeedback, onAuthSuccess }
         setRequiresTwoFactor(true);
         setInfoMsg('Enter your authenticator code (or a recovery code) to continue.');
       }
-      setErrorMsg(authError.message || 'Unable to log in right now.');
+      // Surface the server's remaining-attempts count on credential failures
+      // (same suffix the OTP path uses) — a user approaching lockout must see
+      // the countdown, not just a generic failure.
+      const attemptsSuffix =
+        typeof authError.attemptsRemaining === 'number'
+          ? ` Attempts left: ${authError.attemptsRemaining}.`
+          : '';
+      setErrorMsg((authError.message || 'Unable to log in right now.') + attemptsSuffix);
       triggerErrorFeedback();
     } finally {
       setIsSubmitting(false);

@@ -1,21 +1,26 @@
 import { useEffect, useRef, useCallback } from 'react';
 import * as Notifications from 'expo-notifications';
-import { createNavigationContainerRef } from '@react-navigation/native';
-import type { RootStackParamList } from '../navigation/types';
 import { extractRouteFromPushData, resolveNotificationRoute, type ResolvedRoute } from '../utils/notificationRouting';
+import { getAppNavigationRef } from '../platform/monitoring/appNavigation';
+import { markNotificationRead } from '../services/notificationsApi';
 import { useStore } from '../store/useStore';
 import { track } from '../analytics';
 
-const navigationRef = createNavigationContainerRef<RootStackParamList>();
-
-export { navigationRef as pushNavigationRef };
-
+/**
+ * Push-tap navigation goes through the app's single navigation ref —
+ * registered by App.tsx via `registerAppNavigationRef` when the
+ * NavigationContainer mounts. A previous implementation held a second,
+ * never-attached container ref here; `isReady()` on it was permanently
+ * false, so every push tap enqueued forever and cold-start taps were lost.
+ */
 let pendingRoute: ResolvedRoute = null;
 let navigationReady = false;
 
 function flushPendingRoute() {
   if (pendingRoute === null) return;
-  if (!navigationRef.isReady()) return;
+
+  const navigationRef = getAppNavigationRef();
+  if (!navigationRef || !navigationRef.isReady()) return;
 
   const route = pendingRoute;
   pendingRoute = null;
@@ -47,7 +52,8 @@ export function getNavigationReady(): boolean {
 
 function queueRoute(route: ResolvedRoute) {
   pendingRoute = route;
-  if (navigationRef.isReady()) {
+  const navigationRef = getAppNavigationRef();
+  if (navigationRef?.isReady()) {
     flushPendingRoute();
   }
 }
@@ -71,13 +77,37 @@ function readNotificationType(data: Record<string, unknown> | undefined): string
   return 'unknown';
 }
 
+/**
+ * Mark the persisted notification event read when the push payload carries
+ * its event id (`data.eventId` is set by the push dispatcher). Best-effort —
+ * the tap has already been handled; a failure only leaves the unread badge
+ * stale until the next count poll.
+ */
+function markTappedEventRead(data: Record<string, unknown> | undefined) {
+  const eventId =
+    typeof data?.eventId === 'string' ? data.eventId
+    : typeof data?.notificationId === 'string' ? data.notificationId
+    : null;
+  if (!eventId) return;
+  markNotificationRead(eventId)
+    .then(() => {
+      const store = useStore.getState();
+      store.setNotificationCount(Math.max(0, store.notificationCount - 1));
+    })
+    .catch(() => {});
+}
+
 function handleNotificationResponse(response: Notifications.NotificationResponse) {
   const data = response.notification.request.content.data as Record<string, unknown> | undefined;
   const actionId = response.actionIdentifier;
   const route = extractRouteFromPushData(data);
 
   // G5: Handle inline action button taps from per-type notification categories.
-  // "mark_as_read" is a no-op (just dismiss). Other actions navigate normally.
+  // "mark_as_read" is a no-op for navigation (just dismiss). Other actions
+  // navigate normally. Either way, the event is marked read server-side when
+  // the payload carries its event id.
+  markTappedEventRead(data);
+
   if (actionId && actionId !== 'mark_as_read') {
     queueRoute(route);
   } else if (!actionId) {
@@ -102,13 +132,12 @@ export function usePushNotificationTap() {
   const responseListenerRef = useRef<Notifications.EventSubscription | null>(null);
   const receivedListenerRef = useRef<Notifications.EventSubscription | null>(null);
   const setNotificationCount = useStore((state) => state.setNotificationCount);
-  const notificationCount = useStore((state) => state.notificationCount);
   const isAuthenticated = useStore((state) => state.isAuthenticated);
 
   const handleForegroundNotification = useCallback(
     (notification: Notifications.Notification) => {
       if (isAuthenticated) {
-        setNotificationCount(notificationCount + 1);
+        setNotificationCount(useStore.getState().notificationCount + 1);
       }
 
       // Track foreground delivery — separate from the tap event. Fire-and-
@@ -120,7 +149,7 @@ export function usePushNotificationTap() {
         });
       }
     },
-    [isAuthenticated, notificationCount, setNotificationCount],
+    [isAuthenticated, setNotificationCount],
   );
 
   useEffect(() => {

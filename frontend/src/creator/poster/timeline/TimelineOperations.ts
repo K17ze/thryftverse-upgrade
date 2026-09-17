@@ -146,10 +146,11 @@ export function trimClipStart(
  * Adjust a clip's end trim by `deltaMs`.
  *
  * A positive delta extends the trim end (more source media); a negative delta
- * trims more from the end. The trim end is clamped to [trimStartMs + MIN_TRIM_MS, ∞)
- * so the clip can never become shorter than MIN_TRIM_MS. There is no upper
- * bound here because the source media length is not known to the operation;
- * the renderer clamps to the real media duration at playback time.
+ * trims more from the end. The trim end is clamped to
+ * [trimStartMs + MIN_TRIM_MS, sourceDurationMs] — the projector trusts
+ * trimEndMs verbatim, so an unbounded end would inflate the timeline with
+ * a dead tail the player cannot fill. When `sourceDurationMs` is unknown
+ * the upper bound is left open (we can't prove media exists past it).
  *
  * Returns a new clips array; the input is unchanged.
  */
@@ -162,9 +163,49 @@ export function trimClipEnd(
   if (idx < 0) return clips;
   const clip = clips[idx];
   const minEnd = clip.trimStartMs + MIN_TRIM_MS;
-  const newEnd = Math.max(minEnd, clip.trimEndMs + deltaMs);
+  const maxEnd = clip.sourceDurationMs ?? Number.MAX_SAFE_INTEGER;
+  const newEnd = Math.min(maxEnd, Math.max(minEnd, clip.trimEndMs + deltaMs));
   if (newEnd === clip.trimEndMs) return clips;
   const updated = withUpdates(clip, { trimEndMs: newEnd });
+  const next = clips.slice();
+  next[idx] = updated;
+  return next;
+}
+
+/**
+ * Slip a clip's source window by `deltaMs` — shift trimStartMs and
+ * trimEndMs together so the clip's timeline duration is unchanged while a
+ * different section of the source media plays (Premiere slip / KineMaster
+ * semantics).
+ *
+ * The window is clamped inside the source asset: [0, sourceDurationMs].
+ * When `sourceDurationMs` is unknown the upper bound falls back to the
+ * current trim end's lower bound (no forward slip possible — we can't
+ * prove media exists beyond it).
+ *
+ * Wall-clock duration is invariant by construction — `withUpdates`
+ * recomputes it from the unchanged window width and speed.
+ *
+ * Returns a new clips array; the input is unchanged. If the clip is not
+ * found or the window cannot move, the input array is returned as-is.
+ */
+export function slipClip(
+  clips: PosterClip[],
+  clipId: string,
+  deltaMs: number,
+): PosterClip[] {
+  const idx = findClipIndex(clips, clipId);
+  if (idx < 0) return clips;
+  const clip = clips[idx];
+  const windowMs = clip.trimEndMs - clip.trimStartMs;
+  if (windowMs <= 0) return clips;
+  const upperBound = (clip.sourceDurationMs ?? clip.trimEndMs) - windowMs;
+  const newStart = clamp(clip.trimStartMs + deltaMs, 0, Math.max(0, upperBound));
+  if (newStart === clip.trimStartMs) return clips;
+  const updated = withUpdates(clip, {
+    trimStartMs: newStart,
+    trimEndMs: newStart + windowMs,
+  });
   const next = clips.slice();
   next[idx] = updated;
   return next;

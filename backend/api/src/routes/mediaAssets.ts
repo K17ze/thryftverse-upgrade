@@ -47,6 +47,7 @@ type MediaAssetRow = {
   blurhash: string | null;
   focal_x: string | null;
   focal_y: string | null;
+  metadata: Record<string, unknown> | null;
   failure_reason: string | null;
   quarantine_reason: string | null;
   revocation_reason: string | null;
@@ -65,7 +66,7 @@ const assetSelect = `
          detected_size_bytes::text, checksum_sha256, original_object_url,
          canonical_url, status, scan_status, moderation_status,
          processing_status, width, height, duration_ms, blurhash,
-         focal_x::text, focal_y::text, failure_reason, quarantine_reason,
+         focal_x::text, focal_y::text, metadata, failure_reason, quarantine_reason,
          revocation_reason, publishable_at::text, published_at::text,
          quarantined_at::text, revoked_at::text, created_at::text,
          updated_at::text
@@ -129,6 +130,15 @@ function serializeAsset(row: MediaAssetRow) {
     processingStatus: row.processing_status,
     canonicalUrl: row.status === 'publishable' || row.status === 'published'
       ? row.canonical_url
+      : null,
+    // For video, canonicalUrl is the HLS master playlist — surfaces that
+    // need a still (posterUrl) or a progressive file (downloadUrl) must
+    // not reuse it.
+    posterUrl: typeof row.metadata?.posterUrl === 'string'
+      ? row.metadata.posterUrl
+      : null,
+    downloadUrl: row.status === 'publishable' || row.status === 'published'
+      ? row.original_object_url
       : null,
     width: row.width,
     height: row.height,
@@ -903,6 +913,26 @@ export const registerMediaAssetRoutes = ({
       limit: z.number().int().min(1).max(50).default(10),
     }).parse(request.body);
 
+    return cleanupOrphanedUploadIntents(db, payload.workerId, payload.limit, deleteStoredObject);
+  });
+};
+
+/**
+ * Claim expired, unfinalized `upload_intents` rows and delete their S3
+ * objects. Exported for the scheduled orphan-sweep job — the HTTP route
+ * is only the external-cron path; nothing in-process should depend on it.
+ */
+export async function cleanupOrphanedUploadIntents(
+  db: Pool,
+  workerId: string,
+  limit: number,
+  deleteStoredObject: (key: string) => Promise<void> = deleteObject,
+): Promise<{
+  ok: boolean;
+  claimedCount: number;
+  cleanedIds: string[];
+  failures: Array<{ id: string; error: string }>;
+}> {
     const client = await db.connect();
     let claimed: Array<{ id: string; object_key: string }> = [];
     try {
@@ -927,7 +957,7 @@ export const registerMediaAssetRoutes = ({
          FROM candidates
          WHERE intent.id = candidates.id
          RETURNING intent.id, intent.object_key`,
-        [payload.workerId, payload.limit],
+        [workerId, limit],
       );
       claimed = result.rows;
       await client.query('COMMIT');
@@ -971,5 +1001,4 @@ export const registerMediaAssetRoutes = ({
       cleanedIds: cleaned,
       failures: failed,
     };
-  });
-};
+  }

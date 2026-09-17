@@ -3,8 +3,24 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import {
   loadListingMedia,
+  listingImageUrls,
+  listingMediaImageUrl,
   type ListingMediaItem,
 } from '../lib/media/listingMediaProjection.js';
+import {
+  blendPromotedIntoResults,
+  fetchPromotedListingsForQuery,
+  recordPromotionImpressions,
+  PROMOTED_DISCLOSURE,
+  PROMOTED_REASON_CODE,
+  type PromotedListingPlacement,
+} from '../lib/promotionServing.js';
+import {
+  REACH_LIMITED_MULTIPLIER,
+  reachExcludedSql,
+  reachJoinSql,
+  reachRankMultiplierExpr,
+} from '../lib/sellerReach.js';
 
 type FeedRouteDependencies = {
   app: FastifyInstance;
@@ -41,6 +57,15 @@ export type ListingSummary = {
   condition: string | null;
   originalPriceGbp: number | null;
   createdAt: string;
+  /**
+   * Paid-placement disclosure — present only on units blended from an
+   * active, billed promotion. Server-stamped; clients render the
+   * `disclosure` label verbatim and never infer sponsorship themselves.
+   */
+  promoted?: boolean;
+  disclosure?: typeof PROMOTED_DISCLOSURE;
+  /** Present on promoted units only — the client posts it to /promotions/:id/click on tap-through. */
+  promotionId?: string;
 };
 
 export type LookSummary = {
@@ -116,6 +141,75 @@ const discoverQuerySchema = z.object({
   cursor: z.string().optional(),
 });
 
+// ── Promoted ("Sponsored") slots ────────────────────────────────────────────
+// Flat-fee paid placements (migration 301). `blendPromotedIntoResults`
+// interleaves them at a fixed rate without touching organic order, stamping
+// promoted+disclosure on each paid unit. Eligibility, lazy daily-fee
+// settlement and the fail-closed "no charge → no impressions" rule live in
+// lib/promotionServing.ts. Promotions are strictly additive: any failure in
+// the promoted path is logged and the organic feed is returned unchanged.
+
+/** Builds the ListingSummary payload for a promoted placement. */
+function toPromotedListingSummary(
+  placement: PromotedListingPlacement,
+  mediaItems: ListingMediaItem[]
+): ListingSummary {
+  const row = placement.listing;
+  return {
+    id: row.id,
+    sellerId: row.seller_id,
+    title: row.title,
+    description: row.description ?? '',
+    priceGbp: Number(row.price_gbp),
+    imageUrl: listingImageUrls(mediaItems, row.image_url)[0] ?? row.image_url,
+    images: listingImageUrls(mediaItems, row.image_url),
+    media: mediaItems,
+    status: row.status,
+    category: row.category,
+    brand: row.brand,
+    size: row.size,
+    condition: row.condition,
+    originalPriceGbp:
+      row.original_price_gbp === null ? null : Number(row.original_price_gbp),
+    createdAt: row.created_at,
+    promoted: true,
+    disclosure: PROMOTED_DISCLOSURE,
+    promotionId: placement.promotionId,
+  };
+}
+
+/**
+ * Fetches billed promoted placements, excluding listings already present in
+ * the organic page (a listing never occupies two slots at once), loads their
+ * media, and returns placements ready to wrap as feed units.
+ */
+async function fetchPromotedPlacements(
+  db: Pool,
+  readDb: Pool,
+  viewerId: string | null,
+  organicListingIds: Set<string>,
+  limit: number
+): Promise<{ placement: PromotedListingPlacement; data: ListingSummary }[]> {
+  const placements = (await fetchPromotedListingsForQuery(db, {
+    viewerId,
+    limit,
+  })).filter((p) => !organicListingIds.has(p.listing.id));
+
+  if (placements.length === 0) return [];
+
+  const mediaByListing = await loadListingMedia(
+    readDb,
+    placements.map((p) => p.listing.id)
+  );
+  return placements.map((placement) => ({
+    placement,
+    data: toPromotedListingSummary(
+      placement,
+      mediaByListing.get(placement.listing.id) ?? []
+    ),
+  }));
+}
+
 /**
  * Register feed routes on the Fastify instance:
  *   GET /feed/looks      — published looks feed (public)
@@ -137,7 +231,9 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
       created_at: string;
     }>(
       `
-        SELECT id, creator_id, title, media_url, created_at
+        SELECT id, creator_id, title,
+               COALESCE(poster_url, media_url) AS media_url,
+               created_at
         FROM looks
         WHERE status = 'published'
         ORDER BY created_at DESC
@@ -215,7 +311,9 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
         SELECT id, seller_id, title, description, price_gbp, image_url,
           status, category, brand, size, condition, original_price_gbp, created_at
         FROM listings
+        ${reachJoinSql('reach_u', 'listings.seller_id')}
         WHERE status = 'active'
+          ${reachExcludedSql('reach_u')}
           ${cursorCondition}
         ORDER BY created_at DESC
         LIMIT ${limitSlot}
@@ -234,7 +332,7 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
 
     const imagesByListing = new Map<string, string[]>();
     for (const [listingRowId, mediaItems] of mediaByListing) {
-      imagesByListing.set(listingRowId, mediaItems.map((m) => m.uri));
+      imagesByListing.set(listingRowId, mediaItems.map(listingMediaImageUrl));
     }
 
     const postersResult = await readDb.query<{
@@ -245,7 +343,9 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
       created_at: string;
     }>(
       `
-        SELECT id, creator_id, media_url, caption, created_at
+        SELECT id, creator_id,
+               COALESCE(poster_url, media_url) AS media_url,
+               caption, created_at
         FROM posters
         WHERE status = 'published'
           ${cursorCondition}
@@ -263,7 +363,9 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
       created_at: string;
     }>(
       `
-        SELECT id, creator_id, title, media_url, created_at
+        SELECT id, creator_id, title,
+               COALESCE(poster_url, media_url) AS media_url,
+               created_at
         FROM looks
         WHERE status = 'published'
           ${cursorCondition}
@@ -290,7 +392,7 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
           title: row.title,
           description: row.description,
           priceGbp: Number(row.price_gbp),
-          imageUrl: row.image_url,
+          imageUrl: listingImageUrls(mediaByListing.get(row.id), row.image_url)[0] ?? row.image_url,
           images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
           media: mediaByListing.get(row.id) ?? [],
           status: row.status,
@@ -338,7 +440,54 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
       data: entry.data,
     }));
 
-    return { items, nextCursor };
+    // ── Promoted ("Sponsored") slots ──────────────────────────────────
+    // Paid placements are blended at a fixed slot rate AFTER the organic
+    // page is composed — organic order and the cursor (derived from
+    // organic createdAt) are unaffected. Daily-fee settlement happens
+    // lazily inside fetchPromotedListingsForQuery.
+    let responseItems = items;
+    try {
+      const organicListingIds = new Set(
+        sliced
+          .filter((entry) => entry.type === 'listing')
+          .map((entry) => String(entry.data.id))
+      );
+      const promoted = await fetchPromotedPlacements(
+        db,
+        readDb,
+        viewerUserId,
+        organicListingIds,
+        4
+      );
+      if (promoted.length > 0) {
+        const promotedUnits = promoted.map(({ data }) => ({
+          id: `listing:${data.id}`,
+          type: 'listing' as const,
+          rank: 0,
+          data,
+        }));
+        const blended = blendPromotedIntoResults(items, promotedUnits);
+        responseItems = blended.map((unit, idx) => ({ ...unit, rank: idx + 1 }));
+        // Served-impression facts — fire-and-forget; a logging failure must
+        // never fail the feed.
+        void recordPromotionImpressions(
+          db,
+          promoted.map(({ placement }) => ({
+            promotionId: placement.promotionId,
+            listingId: placement.listing.id,
+          })),
+          viewerUserId,
+          'feed_home'
+        ).catch((impressionErr) =>
+          request.log.warn({ err: impressionErr }, 'promotion impression logging failed')
+        );
+      }
+    } catch (promotionErr) {
+      // Paid placements are additive — never break the organic feed.
+      request.log.warn({ err: promotionErr }, 'promoted slot blending failed for /feed/home');
+    }
+
+    return { items: responseItems, nextCursor };
     } catch (err) {
       request.log.error({ err }, 'GET /feed/home failed');
       reply.code(500);
@@ -389,8 +538,10 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
                l.original_price_gbp, l.created_at,
                COALESCE(e.recent_events, 0) AS recent_events,
                COALESCE(e.recent_events, 0)::float /
-                 GREATEST(EXTRACT(EPOCH FROM (NOW() - l.created_at)) / 3600, 1) AS velocity
+                 GREATEST(EXTRACT(EPOCH FROM (NOW() - l.created_at)) / 3600, 1)
+                 * ${reachRankMultiplierExpr('reach_u')} AS velocity
         FROM listings l
+        ${reachJoinSql('reach_u', 'l.seller_id')}
         LEFT JOIN (
           SELECT listing_id, COUNT(*) AS recent_events
           FROM listing_events
@@ -398,7 +549,7 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
           GROUP BY listing_id
         ) e ON e.listing_id = l.id
         WHERE l.status = 'active'
-          AND l.sold_at IS NULL
+          ${reachExcludedSql('reach_u')}
           ${categoryClause}
           AND l.created_at > NOW() - INTERVAL '30 days'
         ORDER BY velocity DESC, l.created_at DESC
@@ -412,7 +563,7 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
 
     const imagesByListing = new Map<string, string[]>();
     for (const [listingRowId, mediaItems] of mediaByListing) {
-      imagesByListing.set(listingRowId, mediaItems.map((m) => m.uri));
+      imagesByListing.set(listingRowId, mediaItems.map(listingMediaImageUrl));
     }
 
     return {
@@ -424,7 +575,7 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
         title: row.title,
         description: row.description,
         priceGbp: Number(row.price_gbp),
-        imageUrl: row.image_url,
+        imageUrl: listingImageUrls(mediaByListing.get(row.id), row.image_url)[0] ?? row.image_url,
         images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
         media: mediaByListing.get(row.id) ?? [],
         status: row.status,
@@ -466,9 +617,11 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
       `
         SELECT l.id, l.seller_id, l.title, l.price_gbp, l.image_url, l.created_at
         FROM listings l
-        JOIN user_follows uf ON uf.followee_id = l.seller_id
+        JOIN user_follows uf ON uf.following_id = l.seller_id
+        ${reachJoinSql('reach_u', 'l.seller_id')}
         WHERE uf.follower_id = $1
           AND l.status = 'active'
+          ${reachExcludedSql('reach_u')}
           ${cursorCondition}
         ORDER BY l.created_at DESC
         LIMIT $${cursorParams.length}
@@ -484,9 +637,11 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
       created_at: string;
     }>(
       `
-        SELECT lk.id, lk.creator_id, lk.title, lk.media_url, lk.created_at
+        SELECT lk.id, lk.creator_id, lk.title,
+               COALESCE(lk.poster_url, lk.media_url) AS media_url,
+               lk.created_at
         FROM looks lk
-        JOIN user_follows uf ON uf.followee_id = lk.creator_id
+        JOIN user_follows uf ON uf.following_id = lk.creator_id
         WHERE uf.follower_id = $1
           AND lk.status = 'published'
           ${cursorCondition}
@@ -593,13 +748,17 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
       condition: string | null;
       original_price_gbp: number | string | null;
       created_at: string;
+      seller_reach_state: string;
     }>(
       `
         SELECT l.id, l.seller_id, l.title, l.description, l.price_gbp,
                l.image_url, l.status, l.category, l.brand, l.size,
-               l.condition, l.original_price_gbp, l.created_at
+               l.condition, l.original_price_gbp, l.created_at,
+               COALESCE(reach_u.reach_state, 'normal') AS seller_reach_state
         FROM listings l
+        ${reachJoinSql('reach_u', 'l.seller_id')}
         WHERE l.status = 'active'
+          ${reachExcludedSql('reach_u')}
           ${listingCursorCondition}
         ORDER BY l.created_at DESC
         LIMIT ${listingLimitSlot}
@@ -618,7 +777,7 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
     for (const [listingRowId, mediaItems] of mediaByListing) {
       const primary = mediaItems[0];
       imagesByListing.set(listingRowId, {
-        urls: mediaItems.map((m) => m.uri),
+        urls: mediaItems.map(listingMediaImageUrl),
         firstWidth: primary?.width ?? null,
         firstHeight: primary?.height ?? null,
       });
@@ -639,7 +798,9 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
       created_at: string;
     }>(
       `
-        SELECT id, creator_id, title, media_url, created_at
+        SELECT id, creator_id, title,
+               COALESCE(poster_url, media_url) AS media_url,
+               created_at
         FROM looks
         WHERE status = 'published'
           ${genericCursorCondition}
@@ -657,7 +818,9 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
       created_at: string;
     }>(
       `
-        SELECT id, creator_id, media_url, caption, created_at
+        SELECT id, creator_id,
+               COALESCE(poster_url, media_url) AS media_url,
+               caption, created_at
         FROM posters
         WHERE status = 'published'
           ${genericCursorCondition}
@@ -727,7 +890,11 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
       const hasImages = images.length > 0 ? 0.15 : 0;
       const hasBrand = row.brand ? 0.05 : 0;
       const hasCategory = row.category ? 0.05 : 0;
-      const score = Math.min(1, 0.6 * freshness + hasImages + hasBrand + hasCategory);
+      const baseScore = Math.min(1, 0.6 * freshness + hasImages + hasBrand + hasCategory);
+      // Reach demotion: 'limited' sellers keep 30% of scored distribution.
+      const score = row.seller_reach_state === 'limited'
+        ? baseScore * REACH_LIMITED_MULTIPLIER
+        : baseScore;
 
       candidates.push({
         type: 'listing',
@@ -743,7 +910,7 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
           title: row.title,
           description: row.description,
           priceGbp: Number(row.price_gbp),
-          imageUrl: row.image_url,
+          imageUrl: images[0] ?? row.image_url,
           images,
           media: mediaByListing.get(row.id) ?? [],
           status: row.status,
@@ -974,7 +1141,9 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
       data: candidate.data,
     }));
 
-    // Cursor: encode the last item's (createdAt, type, id)
+    // Cursor: encode the last organic item's (createdAt, type, id). Paid
+    // placements never participate in cursor state — pagination stays
+    // anchored to organic candidates.
     const lastPlaced = placed[placed.length - 1];
     const nextCursor =
       placed.length >= limit && lastPlaced
@@ -984,6 +1153,58 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
           ).toString('base64')
         : null;
 
-    return { items, nextCursor };
+    // ── Promoted ("Sponsored") slots ──────────────────────────────────
+    // Same fixed-rate contract as /feed/home. The paid unit's decision
+    // block is honest about its origin: source 'promotion_slot' and
+    // reasonCode 'paid_placement' — it is not scored by the organic
+    // freshness/quality curve.
+    let responseItems: DiscoveryUnit[] = items;
+    const discoverViewerId = request.authUser?.userId ?? null;
+    try {
+      const organicListingIds = new Set(
+        placed.filter((c) => c.type === 'listing').map((c) => c.id)
+      );
+      const promoted = await fetchPromotedPlacements(
+        db,
+        readDb,
+        discoverViewerId,
+        organicListingIds,
+        4
+      );
+      if (promoted.length > 0) {
+        const promotedUnits: DiscoveryUnit[] = promoted.map(({ data }) => ({
+          type: 'listing',
+          id: data.id,
+          rank: 0,
+          mediaAspectRatio:
+            data.media[0]?.width && data.media[0]?.height
+              ? data.media[0].width / data.media[0].height
+              : 1.0,
+          decision: {
+            source: 'promotion_slot',
+            score: 0,
+            reasonCodes: [PROMOTED_REASON_CODE],
+          },
+          data,
+        }));
+        const blended = blendPromotedIntoResults(items, promotedUnits);
+        responseItems = blended.map((unit, idx) => ({ ...unit, rank: idx + 1 }));
+        void recordPromotionImpressions(
+          db,
+          promoted.map(({ placement }) => ({
+            promotionId: placement.promotionId,
+            listingId: placement.listing.id,
+          })),
+          discoverViewerId,
+          'feed_discover'
+        ).catch((impressionErr) =>
+          request.log.warn({ err: impressionErr }, 'promotion impression logging failed')
+        );
+      }
+    } catch (promotionErr) {
+      request.log.warn({ err: promotionErr }, 'promoted slot blending failed for /feed/discover');
+    }
+
+    return { items: responseItems, nextCursor };
   });
 };

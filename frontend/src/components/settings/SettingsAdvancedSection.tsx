@@ -34,12 +34,6 @@ export function SettingsAdvancedSection({ visible }: SettingsAdvancedSectionProp
           subtitle={ts('rows.runtimeSmokeTestSubtitle')}
           onPress={() => navigation.navigate('RuntimeSmokeTest')}
           isFirst
-        />
-        <SettingsRow
-          icon="flag-outline"
-          title={ts('rows.featureFlags')}
-          subtitle={ts('rows.featureFlagsSubtitle')}
-          onPress={() => navigation.navigate('RuntimeSmokeTest')}
           isLast
         />
       </SettingsSection>

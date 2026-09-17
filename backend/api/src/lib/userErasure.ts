@@ -219,6 +219,7 @@ export async function performUserErasure(
       UPDATE listings
       SET
         status = 'deleted',
+        pause_source = NULL,
         title = '[erased]',
         description = '[erased]',
         image_url = NULL,

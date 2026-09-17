@@ -19,6 +19,10 @@ export interface AuctionSweepJobData {
   reason: 'interval' | 'manual';
 }
 
+export interface LiveLotSweepJobData {
+  reason: 'interval' | 'manual';
+}
+
 export interface CoOwnOrderExpirySweepJobData {
   reason: 'interval' | 'manual';
 }
@@ -68,11 +72,27 @@ export interface ScheduledPublicationSweepJobData {
   reason: 'scheduled' | 'manual';
 }
 
+export interface MediaIngestReconcileJobData {
+  reason: 'scheduled' | 'manual';
+}
+
+export interface MultipartSessionSweepJobData {
+  reason: 'scheduled' | 'manual';
+}
+
+export interface OrphanUploadIntentSweepJobData {
+  reason: 'scheduled' | 'manual';
+}
+
 export interface BackupExpiryJobData {
   reason: 'scheduled' | 'manual';
 }
 
 export interface SellerTrustRecomputeJobData {
+  reason: 'scheduled' | 'manual';
+}
+
+export interface FeedbackEvaluationJobData {
   reason: 'scheduled' | 'manual';
 }
 
@@ -194,6 +214,7 @@ type CatalogImportJobData =
 
 type InfraJobData =
   | AuctionSweepJobData
+  | LiveLotSweepJobData
   | CoOwnOrderExpirySweepJobData
   | CoOwnAlertEvaluatorJobData
   | CoOwnDripExecutionJobData
@@ -207,11 +228,16 @@ type InfraJobData =
   | ScheduledPublicationSweepJobData
   | BackupExpiryJobData
   | DsarExportJobData
-  | SellerTrustRecomputeJobData;
+  | SellerTrustRecomputeJobData
+  | FeedbackEvaluationJobData
+  | MediaIngestReconcileJobData
+  | MultipartSessionSweepJobData
+  | OrphanUploadIntentSweepJobData;
 
 interface QueueHandlers {
   handlePushJob: (job: PushJobData) => Promise<void>;
   handleAuctionSweepJob: (job: AuctionSweepJobData) => Promise<void>;
+  handleLiveLotSweepJob: (job: LiveLotSweepJobData) => Promise<void>;
   handleCoOwnOrderExpirySweepJob: (job: CoOwnOrderExpirySweepJobData) => Promise<void>;
   handleCoOwnAlertEvaluatorJob: (job: CoOwnAlertEvaluatorJobData) => Promise<void>;
   handleCoOwnDripExecutionJob: (job: CoOwnDripExecutionJobData) => Promise<void>;
@@ -226,6 +252,10 @@ interface QueueHandlers {
   handleBackupExpiryJob: (job: BackupExpiryJobData) => Promise<void>;
   handleDsarExportJob: (job: DsarExportJobData) => Promise<void>;
   handleSellerTrustRecomputeJob: (job: SellerTrustRecomputeJobData) => Promise<void>;
+  handleFeedbackEvaluationJob: (job: FeedbackEvaluationJobData) => Promise<void>;
+  handleMediaIngestReconcileJob: (job: MediaIngestReconcileJobData) => Promise<void>;
+  handleMultipartSessionSweepJob: (job: MultipartSessionSweepJobData) => Promise<void>;
+  handleOrphanUploadIntentSweepJob: (job: OrphanUploadIntentSweepJobData) => Promise<void>;
   handleMediaIngestJob: (job: MediaIngestJobData) => Promise<void>;
   handleMediaEmbeddingJob: (job: MediaEmbeddingJobData) => Promise<void>;
   handleModerationTriageJob: (job: ModerationTriageJobData) => Promise<void>;
@@ -516,6 +546,8 @@ export function startBackgroundWorkers(
         try {
           if (job.name === 'auction_sweep') {
             await handlers.handleAuctionSweepJob(job.data as AuctionSweepJobData);
+          } else if (job.name === 'live_lot_sweep') {
+            await handlers.handleLiveLotSweepJob(job.data as LiveLotSweepJobData);
           } else if (job.name === 'coown_order_expiry_sweep') {
             await handlers.handleCoOwnOrderExpirySweepJob(job.data as CoOwnOrderExpirySweepJobData);
           } else if (job.name === 'coown_alert_evaluator') {
@@ -544,6 +576,14 @@ export function startBackgroundWorkers(
             await handlers.handleDsarExportJob(job.data as DsarExportJobData);
           } else if (job.name === 'seller_trust_recompute') {
             await handlers.handleSellerTrustRecomputeJob(job.data as SellerTrustRecomputeJobData);
+          } else if (job.name === 'feedback_evaluation') {
+            await handlers.handleFeedbackEvaluationJob(job.data as FeedbackEvaluationJobData);
+          } else if (job.name === 'media_ingest_reconcile') {
+            await handlers.handleMediaIngestReconcileJob(job.data as MediaIngestReconcileJobData);
+          } else if (job.name === 'multipart_session_sweep') {
+            await handlers.handleMultipartSessionSweepJob(job.data as MultipartSessionSweepJobData);
+          } else if (job.name === 'orphan_upload_intent_sweep') {
+            await handlers.handleOrphanUploadIntentSweepJob(job.data as OrphanUploadIntentSweepJobData);
           }
 
           const durationMs = Date.now() - jobStart;
@@ -911,7 +951,10 @@ export function startBackgroundWorkers(
   }
 }
 
-export async function enqueuePushNotificationJob(input: PushJobData): Promise<void> {
+export async function enqueuePushNotificationJob(
+  input: PushJobData,
+  options?: { delayMs?: number },
+): Promise<void> {
   await pushQueue.add('push_send', input, {
     jobId: `push_${input.eventId}`,
     attempts: 4,
@@ -919,6 +962,10 @@ export async function enqueuePushNotificationJob(input: PushJobData): Promise<vo
       type: 'exponential',
       delay: 2_000,
     },
+    // Quiet-hours deferral — delivery is delayed to the window's end
+    // rather than dropped. Capped at 24h so a malformed window cannot
+    // park a notification forever.
+    delay: Math.max(0, Math.min(options?.delayMs ?? 0, 86_400_000)),
     removeOnComplete: true,
     removeOnFail: 500,
   });
@@ -932,6 +979,22 @@ export async function enqueueAuctionSweepJob(reason: 'interval' | 'manual' = 'in
     { reason },
     {
       jobId: `auction_sweep_${timeBucket}`,
+      removeOnComplete: true,
+      removeOnFail: 100,
+    }
+  );
+}
+
+export async function enqueueLiveLotSweepJob(reason: 'interval' | 'manual' = 'interval'): Promise<void> {
+  // The scheduler ticks at ~5s; bucket the jobId so overlapping schedulers
+  // (API + standalone worker during deploy overlap) collapse into one run.
+  const timeBucket = Math.floor(Date.now() / 5_000);
+
+  await infraQueue.add(
+    'live_lot_sweep',
+    { reason },
+    {
+      jobId: `live_lot_sweep_${timeBucket}`,
       removeOnComplete: true,
       removeOnFail: 100,
     }
@@ -994,7 +1057,11 @@ export async function enqueueOnezeWithdrawalExecuteJob(input: OnezeWithdrawalExe
         delay: 2_000,
       },
       removeOnComplete: true,
-      removeOnFail: 200,
+      // Entity-keyed jobId — a retained failed record would swallow a
+      // manual_queue retry of the same withdrawal until ~200 newer
+      // failures evicted it. 30-min bound keeps the record for debugging
+      // while letting an operator retry land.
+      removeOnFail: { age: 30 * 60, count: 200 },
     }
   );
 }
@@ -1011,7 +1078,9 @@ export async function enqueueOnezeMintReserveJob(input: OnezeMintReserveJobData)
         delay: 2_000,
       },
       removeOnComplete: true,
-      removeOnFail: 200,
+      // Same entity-keyed suppression guard — a failed mint allocation
+      // must not permanently swallow re-enqueues for that operation.
+      removeOnFail: { age: 30 * 60, count: 200 },
     }
   );
 }
@@ -1028,7 +1097,10 @@ export async function enqueueReconciliationJob(input: ReconciliationJobData): Pr
     {
       jobId: `reconciliation_run_${input.reason}_${normalizedRunDate}`,
       removeOnComplete: true,
-      removeOnFail: 100,
+      // Daily-bucketed jobId — a retained failed record would suppress
+      // every same-day re-enqueue. Bound to 5 min so a failed run can be
+      // retried within the day (same fix as the other sweep enqueues).
+      removeOnFail: { age: 5 * 60, count: 100 },
     }
   );
 }
@@ -1068,7 +1140,10 @@ export async function enqueueRetentionSweepJob(
         delay: 30_000,
       },
       removeOnComplete: true,
-      removeOnFail: 100,
+      // Retained failed jobs suppress in-bucket re-enqueues — bound the
+      // record to 5 min so a failure early in the hour doesn't blackhole
+      // the whole bucket (see enqueueFeedbackEvaluationJob).
+      removeOnFail: { age: 5 * 60, count: 100 },
     },
   );
 }
@@ -1087,7 +1162,9 @@ export async function enqueueAnalyticsAggregationJob(  reason: AnalyticsAggregat
         delay: 10_000,
       },
       removeOnComplete: true,
-      removeOnFail: 100,
+      // Same bucketed-jobId suppression guard — 5-min bound on failed
+      // records so a failed sweep doesn't suppress the 15-min bucket.
+      removeOnFail: { age: 5 * 60, count: 100 },
     },
   );
 }
@@ -1109,7 +1186,39 @@ export async function enqueueSellerTrustRecomputeJob(
         delay: 30_000,
       },
       removeOnComplete: true,
-      removeOnFail: 200,
+      // A failed job kept for `count: 200` would suppress every re-enqueue
+      // for the REST OF THE DAILY BUCKET — 24h of silently skipped trust
+      // recomputes. Bound to 5 min: enough for debugging, frees the jobId.
+      removeOnFail: { age: 5 * 60, count: 200 },
+    },
+  );
+}
+
+export async function enqueueFeedbackEvaluationJob(
+  reason: FeedbackEvaluationJobData['reason'] = 'scheduled',
+): Promise<void> {
+  // Hourly bucket: the feedback window is measured in days, so one sweep
+  // per hour is ample — overlapping schedulers collapse into a single run.
+  const timeBucket = Math.floor(Date.now() / (60 * 60 * 1000));
+  await infraQueue.add(
+    'feedback_evaluation',
+    { reason },
+    {
+      jobId: `feedback_evaluation_${reason}_${timeBucket}`,
+      attempts: 2,
+      backoff: {
+        type: 'exponential',
+        delay: 30_000,
+      },
+      removeOnComplete: true,
+      // BullMQ dedupes on jobId while the job record exists, so a retained
+      // failed job would suppress every in-bucket re-enqueue until the next
+      // hour — an early-bucket failure silently skipped a whole sweep cycle.
+      // Bound retention to ~5 minutes: long enough to inspect the failure
+      // (the DLQ copy from moveToDlq persists regardless), short enough that
+      // a later in-bucket enqueue still lands. `removeOnFail: false` would
+      // pin the jobId permanently — strictly worse than the old count cap.
+      removeOnFail: { age: 5 * 60, count: 100 },
     },
   );
 }
@@ -1155,12 +1264,21 @@ export async function enqueueScheduledPublicationSweepJob(
   );
 }
 
-export async function enqueueMediaIngestJob(input: MediaIngestJobData): Promise<void> {
+export async function enqueueMediaIngestJob(
+  input: MediaIngestJobData,
+  opts?: { jobId?: string },
+): Promise<void> {
   await mediaIngestQueue.add(
     'media_ingest',
     input,
     {
-      jobId: `media_ingest_${input.assetId}`,
+      // `media_ingest_${assetId}` is the natural dedupe key. Callers that
+      // must resurrect an asset whose retained failed job would suppress
+      // the default id (removeOnFail keeps the record — and its jobId —
+      // for 200 entries) pass a distinct jobId; the DB claim inside the
+      // pipeline remains the real arbiter, so a duplicate drive is a
+      // harmless no-op.
+      jobId: opts?.jobId ?? `media_ingest_${input.assetId}`,
       attempts: 5,
       backoff: {
         type: 'exponential',
@@ -1168,6 +1286,75 @@ export async function enqueueMediaIngestJob(input: MediaIngestJobData): Promise<
       },
       removeOnComplete: true,
       removeOnFail: 200,
+    },
+  );
+}
+
+export async function enqueueMediaIngestReconcileJob(
+  reason: MediaIngestReconcileJobData['reason'] = 'scheduled',
+): Promise<void> {
+  // One-minute bucket: overlapping schedulers (API + deploy overlap)
+  // collapse into a single sweep run.
+  const timeBucket = Math.floor(Date.now() / 60_000);
+  await infraQueue.add(
+    'media_ingest_reconcile',
+    { reason },
+    {
+      jobId: `media_ingest_reconcile_${reason}_${timeBucket}`,
+      attempts: 2,
+      backoff: {
+        type: 'exponential',
+        delay: 15_000,
+      },
+      removeOnComplete: true,
+      // Bound failed-record retention — a retained failure must not
+      // suppress the rest of the bucket's sweep (same hazard as
+      // seller_trust_recompute / feedback_evaluation).
+      removeOnFail: { age: 5 * 60, count: 100 },
+    },
+  );
+}
+
+export async function enqueueMultipartSessionSweepJob(
+  reason: MultipartSessionSweepJobData['reason'] = 'scheduled',
+): Promise<void> {
+  // Five-minute bucket — expired-session cleanup is hygiene, not latency-
+  // sensitive, and overlapping schedulers collapse into one run.
+  const timeBucket = Math.floor(Date.now() / (5 * 60 * 1000));
+  await infraQueue.add(
+    'multipart_session_sweep',
+    { reason },
+    {
+      jobId: `multipart_session_sweep_${reason}_${timeBucket}`,
+      attempts: 2,
+      backoff: {
+        type: 'exponential',
+        delay: 30_000,
+      },
+      removeOnComplete: true,
+      removeOnFail: { age: 5 * 60, count: 100 },
+    },
+  );
+}
+
+export async function enqueueOrphanUploadIntentSweepJob(
+  reason: OrphanUploadIntentSweepJobData['reason'] = 'scheduled',
+): Promise<void> {
+  // Five-minute bucket — orphan collection is hygiene, not
+  // latency-sensitive, and overlapping schedulers collapse into one run.
+  const timeBucket = Math.floor(Date.now() / (5 * 60 * 1000));
+  await infraQueue.add(
+    'orphan_upload_intent_sweep',
+    { reason },
+    {
+      jobId: `orphan_upload_intent_sweep_${reason}_${timeBucket}`,
+      attempts: 2,
+      backoff: {
+        type: 'exponential',
+        delay: 30_000,
+      },
+      removeOnComplete: true,
+      removeOnFail: { age: 5 * 60, count: 100 },
     },
   );
 }

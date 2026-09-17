@@ -130,12 +130,12 @@ export default function ChangePasswordScreen() {
           accessibilityHint={twoFactorEnabled ? 'View two-factor settings' : 'Set up two-factor authentication'}
         />
         <SettingsRow
-          title="Active sessions"
-          subtitle="Review and sign out of other devices"
+          title="Security & sessions"
+          subtitle="Review signed-in devices, passkeys and sign out of others"
           icon="phone-portrait-outline"
-          onPress={() => navigation.navigate('ActiveSessions')}
-          accessibilityLabel="Review active sessions"
-          accessibilityHint="Opens the active sessions screen"
+          onPress={() => navigation.navigate('AccountSecurity')}
+          accessibilityLabel="Security and sessions"
+          accessibilityHint="Opens the account security screen"
         />
       </SettingsSection>
 

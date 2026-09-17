@@ -3,10 +3,10 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { fetchJson } from '../lib/apiClient';
 import { MediaUploadAsset } from '../utils/mediaUploadAsset';
 import {
-  xhrPutFile,
+  putFile,
   isAbortError,
   createAbortError,
-} from '../platform/media/xhrUploadTransport';
+} from '../platform/media/nativeUploadTransport';
 
 /** Optional cancellation + real byte progress for the PUT transport. */
 export interface MediaUploadOptions {
@@ -91,8 +91,8 @@ export type MediaAssetReceipt = {
   mediaKind: 'image' | 'video' | 'audio' | 'document';
   canonicalUrl: string | null;
   publishable: boolean;
-  /** Processor-measured post-orientation geometry — authoritative over
-   *  client-declared dims, which flip portrait↔landscape once EXIF
+  /** Processor-measured post-orientation geometry Ã¢â‚¬â€ authoritative over
+   *  client-declared dims, which flip portraitÃ¢â€ â€landscape once EXIF
    *  orientation is baked in. */
   width?: number | null;
   height?: number | null;
@@ -178,14 +178,14 @@ export async function uploadToPresignedUrl(
     }
 
     try {
-      await xhrPutFile(presignedUrl, fileUri, contentType, {
+      await putFile(presignedUrl, fileUri, contentType, {
         signal: opts?.signal,
         onProgress: opts?.onProgress,
         blob: preparedBlob,
       });
       return;
     } catch (err) {
-      // Cancellation is never retried — rethrow immediately.
+      // Cancellation is never retried Ã¢â‚¬â€ rethrow immediately.
       if (isAbortError(err)) throw err;
       const status = (err as { status?: number }).status;
       // 4xx are deterministic failures; only 5xx and network errors retry.
@@ -214,7 +214,7 @@ export async function uploadToPresignedUrl(
  *
  * Throws if the finalization fails or the server cannot verify the object.
  * Callers should treat a thrown finalize as "the upload did not land" and
- * surface an honest error — do not silently proceed with the publicUrl.
+ * surface an honest error Ã¢â‚¬â€ do not silently proceed with the publicUrl.
  */
 export async function finalizeUpload(
   input: UploadFinalizationInput
@@ -321,6 +321,13 @@ function terminalStatusMessage(status: MediaAssetReceipt['status']): string {
   }
 }
 
+export class MediaProcessingError extends Error {
+  constructor(public readonly status: MediaAssetReceipt['status'], message: string) {
+    super(message);
+    this.name = 'MediaProcessingError';
+  }
+}
+
 export async function waitForPublishableMedia(
   assetId: string,
   signal?: AbortSignal,
@@ -346,7 +353,8 @@ export async function waitForPublishableMedia(
       return publishMediaAsset(assetId, signal);
     }
     if (terminalFailureStatuses.has(asset.status)) {
-      throw new Error(
+      throw new MediaProcessingError(
+        asset.status,
         asset.failureReason
         ?? asset.quarantineReason
         ?? terminalStatusMessage(asset.status),
@@ -437,7 +445,7 @@ export async function finalizePresignedMedia(
   };
 }
 
-/** Performance marks are unavailable on some Hermes runtimes — never throw. */
+/** Performance marks are unavailable on some Hermes runtimes Ã¢â‚¬â€ never throw. */
 const safeMark = (name: string) => {
   if (typeof performance !== 'undefined' && typeof performance.mark === 'function') {
     performance.mark(name);
@@ -468,7 +476,7 @@ async function resolveUploadSize(
   } catch {
     // getInfoAsync may not support ph:// or content:// URIs.
   }
-  // An upload of unknown-size garbage is worse than a clean failure — the
+  // An upload of unknown-size garbage is worse than a clean failure Ã¢â‚¬â€ the
   // caller's retry/error path surfaces this instead of preloading a Blob.
   throw new Error('Could not determine file size. The file may be inaccessible.');
 }
@@ -544,7 +552,7 @@ export async function uploadMedia(
   await uploadToPresignedUrl(presign.url, fileUri, contentType, preparedBlob, opts);
 
   // Finalize with the backend so the object is verified in S3 and recorded
-  // durably. If this throws, the caller must surface an honest error — the
+  // durably. If this throws, the caller must surface an honest error Ã¢â‚¬â€ the
   // upload may have landed but the backend cannot vouch for it.
   const uploaded = await finalizePresignedMedia({ presign, fileName, folder, signal: opts?.signal });
 

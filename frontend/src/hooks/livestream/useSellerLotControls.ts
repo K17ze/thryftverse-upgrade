@@ -21,6 +21,7 @@ import {
   cancelLot,
   settleLot,
   setCurrentLot,
+  DEFAULT_LOT_DURATION_SECONDS,
   type LiveLotAggregate,
   type LotSettlementStatus } from '../../services/liveShoppingApi';
 
@@ -59,7 +60,11 @@ export function useSellerLotControls({
     setLotActionPending(true);
     haptic.medium();
     try {
-      const updated = await openLot(sessionId, currentLot.id);
+      // Send the default duration so the server sets closes_at and the
+      // auto-close sweep can pick the lot up if the host walks away.
+      const updated = await openLot(sessionId, currentLot.id, {
+        durationSeconds: DEFAULT_LOT_DURATION_SECONDS,
+      });
       setLots((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
       setSettlementStatus(null);
     } catch {

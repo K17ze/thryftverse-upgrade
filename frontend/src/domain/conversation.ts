@@ -61,6 +61,9 @@ export interface Message {
   replyToMessageId?: string;
   mediaUri?: string;
   mediaType?: 'image' | 'video';
+  /** Poster still for video media — the mediaUri may be an HLS playlist no
+   *  image loader can decode; bubbles and media grids render this instead. */
+  posterUri?: string;
   uploadStatus?: 'uploading' | 'failed' | 'sent';
   // Voice messages — report 19.
   voiceUri?: string;
@@ -94,13 +97,18 @@ export interface Message {
   /** Whether the current user has read this message (their own perspective). */
   isReadByMe?: boolean;
   commerceState?: {
-    stateType: 'order_placed' | 'payment_confirmed' | 'order_shipped' | 'order_in_transit' | 'order_delivered' | 'order_cancelled' | 'order_refunded';
+    stateType: CommerceStateType;
     orderId: string;
     orderShortId?: string;
     itemTitle?: string;
     itemImage?: string | null;
     trackingNumber?: string | null;
     carrier?: string | null;
+    /** Dispatch-extension proposal snapshot (extension_requested cards). */
+    extensionDays?: number;
+    proposedShipBy?: string;
+    /** Refund amount (GBP) on order_refunded / order_partially_refunded cards. */
+    refundedAmountGbp?: number;
   };
   /** Display label for the sender (username / bot name / "System"). */
   senderLabel?: string;
@@ -129,6 +137,15 @@ export interface Message {
   isPinned?: boolean;
   /** ISO timestamp when the message was pinned. */
   pinnedAt?: string;
+  /** Snapchat-style "Saved in chat" — shared, negotiated persistence.
+   *  True while at least one participant's save remains; both parties
+   *  see the marker regardless of who saved. */
+  isSavedInChat?: boolean;
+  /** User IDs that currently have this message saved in chat (shared
+   *  attribution — the set is identical for both participants). */
+  savedBy?: string[];
+  /** ISO timestamp of the first save. */
+  savedAt?: string;
   /** Poll data attached to a poll-type message. */
   poll?: ChatPollData;
 }
@@ -202,4 +219,68 @@ export interface Conversation {
   /** Authoritative transaction context — listing, offer, order, protection.
    *  Derived server-side from the database; null for non-marketplace chats. */
   context?: ConversationContext;
+}
+
+/** Order lifecycle states the in-thread commerce card can render — mirrors
+ *  the backend emitter (backend/api/src/lib/orderChatCards.ts) which places
+ *  the snapshot under `metadata.commerceState`. */
+export type CommerceStateType =
+  | 'order_placed'
+  | 'payment_confirmed'
+  | 'label_created'
+  | 'order_shipped'
+  | 'order_in_transit'
+  | 'order_delivered'
+  | 'delivery_confirm_prompt'
+  | 'feedback_prompt'
+  | 'extension_requested'
+  | 'order_cancelled'
+  | 'order_refunded'
+  | 'order_partially_refunded';
+
+const COMMERCE_STATE_TYPES: ReadonlySet<string> = new Set<CommerceStateType>([
+  'order_placed',
+  'payment_confirmed',
+  'label_created',
+  'order_shipped',
+  'order_in_transit',
+  'order_delivered',
+  'delivery_confirm_prompt',
+  'feedback_prompt',
+  'extension_requested',
+  'order_cancelled',
+  'order_refunded',
+  'order_partially_refunded',
+]);
+
+/**
+ * Parse the `metadata.commerceState` snapshot carried by system-authored
+ * order lifecycle messages into the domain `commerceState` field consumed by
+ * ChatCommerceCard → MarketplaceChatCard. Returns undefined when the metadata
+ * is absent or malformed — the message then falls back to a plain system row.
+ */
+export function parseMessageCommerceState(
+  metadata: Record<string, unknown> | null | undefined,
+): Message['commerceState'] | undefined {
+  const raw = metadata?.commerceState;
+  if (!raw || typeof raw !== 'object') return undefined;
+  const state = raw as Record<string, unknown>;
+  if (typeof state.stateType !== 'string' || typeof state.orderId !== 'string') {
+    return undefined;
+  }
+  if (!COMMERCE_STATE_TYPES.has(state.stateType)) {
+    return undefined;
+  }
+  return {
+    stateType: state.stateType as CommerceStateType,
+    orderId: state.orderId,
+    orderShortId: typeof state.orderShortId === 'string' ? state.orderShortId : undefined,
+    itemTitle: typeof state.itemTitle === 'string' ? state.itemTitle : undefined,
+    itemImage: typeof state.itemImage === 'string' ? state.itemImage : state.itemImage === null ? null : undefined,
+    trackingNumber: typeof state.trackingNumber === 'string' ? state.trackingNumber : state.trackingNumber === null ? null : undefined,
+    carrier: typeof state.carrier === 'string' ? state.carrier : state.carrier === null ? null : undefined,
+    extensionDays: typeof state.extensionDays === 'number' ? state.extensionDays : undefined,
+    proposedShipBy: typeof state.proposedShipBy === 'string' ? state.proposedShipBy : undefined,
+    refundedAmountGbp: typeof state.refundedAmountGbp === 'number' ? state.refundedAmountGbp : undefined,
+  };
 }

@@ -366,7 +366,10 @@ export function registerMoodboardRoutes({
               l.id, l.title, l.price_gbp, l.created_at,
               COALESCE(
                 l.image_url,
-                (SELECT li.image_url FROM listing_images li
+                (SELECT COALESCE(
+                          CASE WHEN li.media_type = 'video' THEN li.poster_url END,
+                          li.image_url)
+                 FROM listing_images li
                  WHERE li.listing_id = l.id ORDER BY li.sort_order LIMIT 1),
                 ''
               ) AS image_url
@@ -389,7 +392,10 @@ export function registerMoodboardRoutes({
                 l.id, l.title, l.price_gbp, l.created_at,
                 COALESCE(
                   l.image_url,
-                  (SELECT li.image_url FROM listing_images li
+                  (SELECT COALESCE(
+                            CASE WHEN li.media_type = 'video' THEN li.poster_url END,
+                            li.image_url)
+                   FROM listing_images li
                    WHERE li.listing_id = l.id ORDER BY li.sort_order LIMIT 1),
                   ''
                 ) AS image_url

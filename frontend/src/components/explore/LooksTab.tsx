@@ -88,7 +88,7 @@ function LookTile({
     >
       <View style={[styles.tileMedia, { aspectRatio: template.aspect }]}>
         <ExpoImage
-          source={{ uri: look.mediaUrl }}
+          source={{ uri: isVideo ? (look.posterUrl ?? look.mediaUrl) : look.mediaUrl }}
           style={styles.tileImage}
           contentFit="cover"
           cachePolicy="memory-disk"

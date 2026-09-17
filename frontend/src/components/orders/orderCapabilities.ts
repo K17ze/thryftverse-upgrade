@@ -26,7 +26,10 @@ const ACTIVE_STATUSES = new Set([
   'shipped', 'in transit', 'out for delivery',
 ]);
 const COMPLETED_STATUSES = new Set(['delivered', 'completed']);
-const CANCELLED_STATUSES = new Set(['cancelled', 'refunded']);
+// 'refunding' groups with the cancelled bucket — the backend history filter
+// does the same — but it is NOT terminal: the provider outcome is still
+// resolving, so the UI shows it as pending money, not a settled loss.
+const CANCELLED_STATUSES = new Set(['cancelled', 'refunded', 'refunding']);
 const TERMINAL_STATUSES = new Set([
   'delivered', 'completed', 'cancelled', 'refunded', 'returned',
 ]);
@@ -52,7 +55,7 @@ export function isTerminalStatus(status: string): boolean {
 
 export function isCancelledStatus(status: string): boolean {
   const key = normaliseOrderStatus(status);
-  return key === 'cancelled' || key === 'refunded';
+  return key === 'cancelled' || key === 'refunded' || key === 'refunding';
 }
 
 export function needsBuyerAction(status: string): boolean {
@@ -84,6 +87,7 @@ const STATUS_LABELS: Record<string, string> = {
   completed: 'Completed',
   cancelled: 'Cancelled',
   refunded: 'Refunded',
+  refunding: 'Refund in progress',
   'delivery failed': 'Delivery failed',
   returned: 'Returned',
 };
@@ -152,6 +156,7 @@ export function getStatusColor(
 
 export function getStatusTone(status: string): StatusTone {
   const key = normaliseOrderStatus(status);
+  if (key === 'refunding') return 'pending';
   if (CANCELLED_STATUSES.has(key)) return 'danger';
   if (COMPLETED_STATUSES.has(key)) return 'success';
   if (NEEDS_ACTION_BUYER_STATUSES.has(key) || NEEDS_ACTION_SELLER_STATUSES.has(key)) return 'pending';
@@ -208,6 +213,12 @@ export interface OrderCapabilityContext {
   role: OrderRole;
   hasOpenResolution: boolean;
   hasReview: boolean;
+  /**
+   * TRUE when the order's review row is platform-generated auto feedback
+   * (is_auto). Hints copy labels it "Automatic feedback recorded", never
+   * "Review submitted" — the buyer did not author it.
+   */
+  reviewIsAuto?: boolean;
   hasTracking: boolean;
   /**
    * Immutable purchased-service snapshot. When present, the seller's guided
@@ -323,7 +334,7 @@ export function resolveCapabilities(ctx: OrderCapabilityContext): OrderCapabilit
     ? ctx.dispatchExtension
     : null;
   const canProposeExtension = ctx.role === 'seller' && isPaid && !pendingExtension && !submitting;
-  const canRespondExtension = ctx.role === 'buyer' && pendingExtension != null && !submitting;
+  const canRespondExtension = ctx.role === 'buyer' && isPaid && pendingExtension != null && !submitting;
   const canTrack = isInTransit && ctx.hasTracking;
   const canInspect = ctx.role === 'buyer' && isDelivered && !ctx.hasReview && !submitting;
   // Receipt confirmation releases escrowed funds — a high-consequence money
@@ -333,7 +344,11 @@ export function resolveCapabilities(ctx: OrderCapabilityContext): OrderCapabilit
   // an explicit policy version/reason, but the client must never infer it
   // from a transit status string.
   const canConfirmDelivery = ctx.role === 'buyer' && isDelivered && !submitting;
-  const canCancel = ctx.role === 'buyer' && (isCreated || isPaid) && !ctx.hasOpenResolution && !submitting;
+  // Cancellation is only legal while the order is unpaid ('created') —
+  // POST /orders/:id/cancel rejects paid orders with 409 and directs the
+  // buyer to the return/refund flow, which `report_issue` below already
+  // surfaces for every non-created, non-cancelled order.
+  const canCancel = ctx.role === 'buyer' && isCreated && !ctx.hasOpenResolution && !submitting;
   const canReportIssue = !isCancelled && !isCreated && !ctx.hasOpenResolution && !submitting;
   const shouldViewResolution = ctx.hasOpenResolution;
   const canReview = ctx.role === 'buyer' && isDelivered && !ctx.hasReview && !submitting;
@@ -348,9 +363,10 @@ export function resolveCapabilities(ctx: OrderCapabilityContext): OrderCapabilit
     if (isCreated) {
       primaryAction = 'pay';
     } else if (isInTransit) {
-      // Track parcel is the calm in-transit primary.
-      // Confirm receipt is a demoted secondary (releases funds).
-      primaryAction = canTrack ? 'track_order' : 'confirm_delivery';
+      // Track parcel is the calm in-transit primary. With no carrier
+      // tracking there is NO primary — never 'confirm_delivery': it
+      // releases escrowed funds and must wait for authoritative delivery.
+      primaryAction = canTrack ? 'track_order' : null;
     } else if (isDelivered) {
       // After delivery, the buyer should inspect before confirming/reviewing.
       primaryAction = canInspect ? 'inspect' : (ctx.hasReview ? 'view_review' : 'leave_review');
@@ -369,8 +385,9 @@ export function resolveCapabilities(ctx: OrderCapabilityContext): OrderCapabilit
     secondaryActions.push('track_order');
   }
   // Receipt confirmation — only after authoritative delivery.
-  // It releases funds and is never available during transit.
-  if (canConfirmDelivery && primaryAction !== 'confirm_delivery') {
+  // It releases funds and is never available during transit. Primary
+  // actions never include confirm_delivery, so no dedup check is needed.
+  if (canConfirmDelivery) {
     secondaryActions.push('confirm_delivery');
   }
   if (canReportIssue && !shouldViewResolution) {
@@ -398,7 +415,8 @@ export function resolveCapabilities(ctx: OrderCapabilityContext): OrderCapabilit
   }
 
   const nextActionHint = getNextActionHintInternal(
-    key, ctx.role, ctx.hasOpenResolution, ctx.hasReview, isInTransit, isDelivered,
+    key, ctx.role, ctx.hasOpenResolution, ctx.hasReview,
+    ctx.reviewIsAuto === true, isInTransit, isDelivered,
   );
 
   return {
@@ -442,6 +460,7 @@ function getNextActionHintInternal(
   role: OrderRole,
   hasOpenResolution: boolean,
   hasReview: boolean,
+  reviewIsAuto: boolean,
   isInTransit: boolean,
   isDelivered: boolean,
 ): string | null {
@@ -451,8 +470,10 @@ function getNextActionHintInternal(
     if (key === 'created') return 'Complete payment';
     if (isInTransit) return 'Track your parcel';
     if (isDelivered) {
-      // Inspection window first, then review.
-      return hasReview ? 'Review submitted' : 'Check your item';
+      // Inspection window first, then review. Auto feedback is labelled
+      // truthfully — the buyer did not submit a review.
+      if (hasReview) return reviewIsAuto ? 'Automatic feedback recorded' : 'Review submitted';
+      return 'Check your item';
     }
   }
 
@@ -472,7 +493,7 @@ export function getNextActionHint(
 ): string | null {
   const key = normaliseOrderStatus(status);
   return getNextActionHintInternal(
-    key, role, false, false,
+    key, role, false, false, false,
     IN_TRANSIT_STATUSES.has(key),
     key === 'delivered' || key === 'completed',
   );

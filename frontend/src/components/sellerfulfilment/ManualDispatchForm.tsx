@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, Pressable, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { haptics } from '../../utils/haptics';
 import { MANUAL_CARRIERS } from './fulfilmentViewModels';
@@ -74,16 +75,35 @@ export function ManualDispatchForm({
       )}
 
       <Text style={styles.inputLabel}>Tracking number</Text>
-      <TextInput
-        style={styles.textInput}
-        placeholder="Enter tracking number"
-        placeholderTextColor={colors.textMuted}
-        value={trackingNumber}
-        onChangeText={onChangeTrackingNumber}
-        autoCapitalize="none"
-        autoCorrect={false}
-        accessibilityLabel="Tracking number"
-      />
+      <View style={styles.trackingInputRow}>
+        <TextInput
+          style={[styles.textInput, styles.trackingInputField]}
+          placeholder="Enter tracking number"
+          placeholderTextColor={colors.textMuted}
+          value={trackingNumber}
+          onChangeText={onChangeTrackingNumber}
+          autoCapitalize="none"
+          autoCorrect={false}
+          accessibilityLabel="Tracking number"
+        />
+        {/* Tracking numbers are almost always copied from the carrier site —
+            a paste affordance avoids the long-press dance. */}
+        <Pressable
+          onPress={async () => {
+            const text = await Clipboard.getStringAsync();
+            const trimmed = text.trim();
+            if (trimmed) {
+              haptics.selection();
+              onChangeTrackingNumber(trimmed);
+            }
+          }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel="Paste tracking number from clipboard"
+        >
+          <Ionicons name="clipboard-outline" size={18} color={colors.brand} accessible={false} />
+        </Pressable>
+      </View>
 
       <Text style={styles.hintText}>
         A valid tracking number is required to confirm dispatch. The buyer will receive it automatically.

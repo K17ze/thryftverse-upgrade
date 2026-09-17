@@ -28,6 +28,7 @@ import type { DiscoveryListingSummary } from '../contracts/DiscoveryListingSumma
 import { Space, Radius, Control, AvatarSize } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { synthesizeListingIdentity } from '../services/listingMapper';
+import { recordPromotionClick } from '../services/promotionsApi';
 
 /** Shared text-shadow offset for glyph legibility on media surfaces.
  *  Extracted so all on-media glyphs use the same offset geometry. */
@@ -147,6 +148,13 @@ function ProductCardBase({
     show(isSaved ? 'Removed from saved' : 'Added to saved', 'info');
   };
 
+  // Paid-placement tap-through: record the click for the seller's stats
+  // before navigating. Fire-and-forget — analytics never blocks navigation.
+  const handleCardPress = useCallback(() => {
+    if (item.promotionId) recordPromotionClick(item.promotionId);
+    onPress();
+  }, [item.promotionId, onPress]);
+
   const hasPriceDrop = typeof item.originalPrice === 'number' && item.originalPrice > item.price;
   const priceDropPercent = hasPriceDrop
     ? Math.round(((item.originalPrice! - item.price) / item.originalPrice!) * 100)
@@ -174,7 +182,7 @@ function ProductCardBase({
     <View style={[styles.container, item.isSold && styles.soldContainer]}>
       {/* Image - Full bleed, subtle radius for modern feel */}
       <AnimatedPressable
-        onPress={onPress}
+        onPress={handleCardPress}
         style={styles.imageWrap}
         hapticFeedback="light"
         accessibilityRole="none"
@@ -308,6 +316,12 @@ function ProductCardBase({
             or category-based fallback. Never shows "Unknown brand/size". */}
       {!visualOnly && (
         <View style={styles.info}>
+          {/* Paid-placement disclosure — server-stamped only. The label is
+              rendered verbatim from `item.disclosure` and never inferred
+              from isBumped or any local state; absent → nothing renders. */}
+          {item.disclosure ? (
+            <Text style={styles.disclosureLabel}>{item.disclosure}</Text>
+          ) : null}
           {/* Brand eyebrow — only when brand is present. Brandless listings
               (valid per category policy) show the clean title without a
               misleading "Unknown brand" label. */}
@@ -476,6 +490,14 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     paddingTop: Space.sm,
     paddingHorizontal: Space.xs,
     gap: Space.xs },
+  // Paid-placement disclosure — quiet text-only label above the title.
+  // Server-stamped verbatim; subtle muted ink, no pill, no icon chrome.
+  disclosureLabel: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   // Brand eyebrow — a restrained single-line brand label above the title.
   // Only rendered when brand is present (Phase 5 WP7 identity synthesis).
   // Brandless listings show the clean title without a misleading label.
@@ -679,9 +701,16 @@ function ProductDiscoveryTileBase({
     [haptic, onSaveLongPress],
   );
 
+  // Paid-placement tap-through — record the click for seller stats, then
+  // navigate. Fire-and-forget; analytics never blocks the press.
+  const handleTilePress = useCallback(() => {
+    if (item.promotionId) recordPromotionClick(item.promotionId);
+    onPress();
+  }, [item.promotionId, onPress]);
+
   return (
     <AnimatedPressable
-      onPress={onPress}
+      onPress={handleTilePress}
       onLongPress={onLongPress}
       hapticFeedback="light"
       style={tileStyles.container}
@@ -736,6 +765,12 @@ function ProductDiscoveryTileBase({
         ) : null}
       </View>
       <View style={tileStyles.info}>
+        {/* Paid-placement disclosure — server-stamped only. Rendered
+            verbatim from `item.disclosure`; the tile never infers
+            sponsorship from isBumped or any local state. */}
+        {item.disclosure ? (
+          <Text style={tileStyles.disclosureLabel}>{item.disclosure}</Text>
+        ) : null}
         <Text style={tileStyles.title} numberOfLines={1}>{item.title}</Text>
         {priceLabel ? (
           <Text style={tileStyles.price}>{priceLabel}</Text>
@@ -794,6 +829,14 @@ const createTileStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => S
     paddingTop: Space.xs,
     paddingHorizontal: Space.xxs,
     gap: 0 },
+  // Paid-placement disclosure — quiet text-only label above the title.
+  // Server-stamped verbatim; subtle muted ink, no pill, no icon chrome.
+  disclosureLabel: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   // Title — 1 line, caption size, muted. The image is the dominant object;
   // the title is a quiet label, not a competing headline. Editorial pattern:
   // media dominates, text recedes.

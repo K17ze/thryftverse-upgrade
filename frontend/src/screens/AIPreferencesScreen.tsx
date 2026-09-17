@@ -248,7 +248,7 @@ export default function AIPreferencesScreen({ navigation }: Props) {
           <SettingsRow
             icon="trending-up-outline"
             title="Offer auto-accept rules"
-            subtitle="Preview — save a floor price for incoming offers; rules are not applied to live offers yet"
+            subtitle="Preview — saved on this device only; offer rules are not applied to live offers"
             toggleValue={smartSell}
             onToggle={toggleWithHaptic(setSmartSell)}
             disabled={!masterEnabled}

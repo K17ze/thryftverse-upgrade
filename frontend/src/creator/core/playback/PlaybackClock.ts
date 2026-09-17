@@ -153,6 +153,10 @@ export class PlaybackClock {
     if (!this._isPlaying) return;
     this._isPlaying = false;
     this.stopLoop();
+    // Flush any coalesced seek that never made it to the native adapter —
+    // tick() never runs while paused, so without this the player's final
+    // frame can lag the playhead by the trailing coalesce window.
+    this.flushPendingSeek(true);
     this._pauseCallback?.();
     this.emit();
   }
@@ -193,11 +197,11 @@ export class PlaybackClock {
   }
 
   setTotalDurationMs(durationMs: number): void {
-    this._totalDurationMs = durationMs;
     // Clamp current time if the timeline shrank
-    if (this._currentTimeMs > durationMs) {
-      this._currentTimeMs = durationMs;
-    }
+    const clampedTime = Math.min(this._currentTimeMs, durationMs);
+    if (this._totalDurationMs === durationMs && this._currentTimeMs === clampedTime) return;
+    this._totalDurationMs = durationMs;
+    this._currentTimeMs = clampedTime;
     this.emit();
   }
 
@@ -225,7 +229,7 @@ export class PlaybackClock {
   /**
    * Flush any pending coalesced seek. Called from the RAF/interval loop.
    */
-  private flushPendingSeek(): void {
+  private flushPendingSeek(force = false): void {
     if (this._pendingSeekMs === null) return;
     if (!this._seekCallback) {
       this._pendingSeekMs = null;
@@ -233,7 +237,7 @@ export class PlaybackClock {
     }
     const now = performanceNow();
     const elapsed = now - this._lastSeekDispatchMs;
-    if (elapsed >= SEEK_COALESCE_MS) {
+    if (force || elapsed >= SEEK_COALESCE_MS) {
       this._lastSeekDispatchMs = now;
       this._seekCallback(this._pendingSeekMs);
       this._pendingSeekMs = null;

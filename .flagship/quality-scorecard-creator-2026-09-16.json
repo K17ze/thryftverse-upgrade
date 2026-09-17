@@ -1,0 +1,74 @@
+{
+  "scope": "frontend/src/creator — full creator department benchmark vs Snapchat / Instagram Reels / Instagram Edits / CapCut",
+  "date": "2026-09-16",
+  "scale": 100,
+  "overall": 68,
+  "interpretation": "Feature-rich mid-to-high tier editor with genuine flagship-grade pockets (upload honesty, gesture architecture, publish failure handling) but held back by verified P0 interaction/rendering defects, a page-based timeline storage model that makes several clip operations incorrect, dead/gated feature mass, and unverified native-device behavior.",
+  "domains": {
+    "captureCamera": {
+      "score": 74,
+      "evidence": "5 parallel read-only audits + direct spot-verification. Capture grammar mostly present; slide-to-lock defeated by trailing onPress (CreatorCamera.tsx:1020-1054, verified); tap-to-abort-countdown unreachable (shutter disabled while countdown, :1682); green screen + speed runtime-dead via capability registry; gallery tray renders video URIs as <Image>; missing exposure/AE-lock, zoom pills, swipe-to-cycle-effects, dual/boomerang; 2313-line monolith.",
+      "confidence": "high for static defects; slide-to-lock fix needs on-device confirmation (no ADB device)"
+    },
+    "canvasLayers": {
+      "score": 72,
+      "evidence": "UI-thread gesture core genuinely flagship (worklet pan/pinch/rotate, epoch-guarded multi-drag channel, throttled smart-guide computation). Verified P0: AlignmentGuides rendered inside layer-local transformed space (CreatorCanvas.tsx:1381 vs 1259-1305). Layout long-press 'preview' commits via updateLayer + pushes mislabeled history (LookComposerScreen.tsx:1290-1319). Group snap collapses members to canvas center; locked not honored by group moves; no a11y scale/rotate path; Look/Poster grammar divergence."
+    },
+    "timelineAudioKeyframes": {
+      "score": 45,
+      "evidence": "UI-thread scrub/trim/pinch/edge-scroll present. Duplicate creates invisible ghost layer (usePosterTimeline.ts:753-761 + TimelineProjector.ts:144-151). Reorder maps clip-index→page-index (breaks with media-less pages). Delete leaves empty page gap. Split at MAX_PAGES silently degrades to trim. Transition misattribution after split. Audio stack is facade: AudioMixer/VoiceoverRecorder/CaptionService all dead code; WAV-only real waveforms; music preview fake. Reverse/freeze/speed-curves do not preview. CORRECTED CLAIM: publish does NOT lose edits — server-side renderComposition at publication (creatorPublicationService.ts:665+) applies them; the deferred native module only blocks on-device export/camera-roll."
+    },
+    "toolsEffectsColor": {
+      "score": 68,
+      "evidence": "Controls exemplary (CreatorSlider/SVPlane/HueSlider commit-on-finalize, bucketed runOnJS, a11y adjustable). Verified P0: draw strokes stored as raw pixels, rendered as normalized 0-1 (DrawingWorkspace.tsx:559-585 vs CreatorCanvas.tsx:2652-2661) — drawing broken on canvas; emoji-brush stamps never render. 'Cutout' label promises segmentation, delivers manual mask (truthfulness violation). Poster AdjustPanel history-spams per drag bucket; no intensity slider; AI effects Look-only. GIPHY unreachable + embedded demo key. ~1500 lines dead picker code. No auto-captions, eyedropper, pressure, detents."
+    },
+    "publishDraftsShare": {
+      "score": 74,
+      "evidence": "Upload honesty best-in-class (real bytes, measured-only ETA, persisted attempts, unknown-outcome reconciliation — exceeds observable IG behavior). Autosave + crash journal + drafts list complete. Scheduling pipeline fully built but unreachable (no scheduledFor writer). No cross-posting/share-out. Binary audience (closeFriends fails closed). No ambient upload surface after sheet dismissal. Dead code tail post-refactor."
+    },
+    "uploadReliability": {
+      "score": 85,
+      "evidence": "This campaign's strongest area: durable AsyncStorage jobs, multipart checkpointing + concurrency, per-part retry classification, dead-session re-initiate, re-presign on 404/410, abort-correct lifecycle, orphan S3 reconciliation (session sweep + object reclaim + ingest dead-letter), native background transport for single-PUT, reachability-vs-connectivity gating, throughput/ETA, bounded waits. Residuals: no ListObjects-vs-DB scan for sessionless orphans; native parts transport parked (whole-file only)."
+    },
+    "backendContracts": {
+      "score": 78,
+      "evidence": "Was much lower pre-campaign: publish was dead server-side (missing creator_documents.document_hash column — migration 309 added; JSONB readers called JSON.parse on driver-parsed objects — all readers now cast ::text). Schema drift stripped ~15 editor fields on every save — fixed via passthrough + union alignment, verified zero-loss driver. Remaining: drift risk is structural (opaque JSONB now, good); rate limits applied to multipart endpoints; orphan-scan residual."
+    },
+    "accessibility": {
+      "score": 65,
+      "evidence": "Broad labels/haptics/reduced-motion (95 a11y-label files, 184 haptic call sites). Verified gaps: layer a11y next/prev selects wrong layer; 'adjustable' role with no increment handlers; no a11y path for scale/rotation; countdown not announced; GestureBadge live-region spam risk. Needs TalkBack/VoiceOver device pass."
+    },
+    "performance": {
+      "score": 60,
+      "evidence": "Worklet discipline is good on canvas/timeline; but shutter grammar and slide-to-zoom are JS-thread (unthrottled setPinchZoomDelta per touch frame while recording); drawing/cutout cross runOnJS per point; no profiling data; no device validation."
+    },
+    "architecture": {
+      "score": 60,
+      "evidence": "Strong primitives (capability registry, history stack, projectStore, upload manager) but: CreatorAssetPicker 4735 lines, CreatorCanvas 3370, CreatorCamera 2313, LookComposer 2474, PosterComposer 2746 (24 files >800 lines vs 400-line charter cap); page-based timeline storage is the structural liability behind duplicate/reorder/delete defects; Look/Poster divergent grammar; ~1 real TODO + significant dead-code mass (~2.5k lines)."
+    },
+    "testingObservability": {
+      "score": 60,
+      "evidence": "79/79 creator suite, 127/127 backend media suite green; but mocks masked two publish-killing P0s (JSONB parse, missing column) — test doubles diverged from real driver; no e2e journeys; no ADB device validation; limited telemetry/observability audit."
+    }
+  },
+  "weights": {
+    "captureCamera": 0.12, "canvasLayers": 0.15, "timelineAudioKeyframes": 0.15,
+    "toolsEffectsColor": 0.10, "publishDraftsShare": 0.10, "uploadReliability": 0.08,
+    "backendContracts": 0.10, "accessibility": 0.05, "performance": 0.05,
+    "architecture": 0.05, "testingObservability": 0.05
+  },
+  "verifiedP0s": [
+    "CAM-P0: slide-to-lock killed by trailing onPress (CreatorCamera.tsx:1020-1054)",
+    "CANVAS-P0: alignment guides render in layer-local space (CreatorCanvas.tsx:1381)",
+    "CANVAS-P0: layout preview silently commits + mislabeled history (LookComposerScreen.tsx:1290-1319)",
+    "TOOLS-P0: draw strokes raw pixels vs normalized render — drawing broken (DrawingWorkspace.tsx:559-585 vs CreatorCanvas.tsx:2652-2661)",
+    "TOOLS-P0: emoji-brush strokes never render (CreatorCanvas.tsx:2670-2685)",
+    "TL-P1: duplicate clip = invisible ghost layer; reorder index confusion; delete gap"
+  ],
+  "limitations": [
+    "No ADB device — all gesture findings are static-inference; slide-to-lock P0 needs on-device confirmation",
+    "No live Postgres/S3 — backend correctness verified via unit suites + drivers, not e2e",
+    "Competitor benchmarks from primary docs (Snap help, IG creators, Meta dev docs) + secondary analysis, not side-by-side device comparison",
+    "Pre-campaign audits (.flagship wave-C etc.) re-verified where cited; some older 'closed' items not individually re-opened"
+  ]
+}

@@ -38,6 +38,9 @@ export interface UseWithdrawSubmissionOptions {
     capabilities: UserCountryCapabilities | null;
   }>;
   loadWithdrawals: (userId: string) => Promise<void>;
+  /** Re-read the ledger-backed balance so in-session state never drifts
+   *  from server truth after a mutation (or an acknowledged unknown outcome). */
+  reloadBalance?: () => void;
 }
 
 /**
@@ -61,6 +64,7 @@ export function useWithdrawSubmission({
   setAmount,
   ensurePayoutAccount,
   loadWithdrawals,
+  reloadBalance,
 }: UseWithdrawSubmissionOptions) {
   const navigation = useNavigation<any>();
   const { show } = useToast();
@@ -173,21 +177,29 @@ export function useWithdrawSubmission({
 
       const payoutResponse = await createPayoutRequest(withdrawUserId, payoutRequestInput);
 
-      const nextBalance = Number(Math.max(0, availableBalance - amountGbp).toFixed(2));
+      // Ledger truth, not the client's optimistic guess: for non-GBP payouts
+      // the backend re-derives amountGbp with its own FX rate, so the success
+      // screen must show the value actually debited. Same for the remaining
+      // balance — use the server-computed post-request balance when present.
+      const debitedAmountGbp = payoutResponse.payoutRequest.amountGbp;
+      const nextBalance = payoutResponse.balance?.sellerPayableAfterRequestGbp
+        ?? Number(Math.max(0, availableBalance - debitedAmountGbp).toFixed(2));
       setAvailableBalance(nextBalance);
       setAmount(getDefaultWithdrawDisplayAmount(nextBalance, currencyCode, fxRates).toFixed(2));
 
       setSuccessData({
         reference: payoutResponse.payoutRequest.providerPayoutRef ?? payoutResponse.payoutRequest.id,
-        amountGbp,
+        amountGbp: debitedAmountGbp,
         payoutCurrency,
         createdAt: payoutResponse.payoutRequest.createdAt });
       haptic.success();
       idempotencyKeyRef.current = null;
       setStep('success');
       // Refresh recent withdrawals so the new request appears with its
-      // honest status (processing/pending) immediately.
+      // honest status (processing/pending) immediately, and re-read the
+      // ledger-backed balance so in-session state matches server truth.
       void loadWithdrawals(withdrawUserId);
+      void reloadBalance?.();
     } catch (error) {
       const isNetworkError = isOffline || (error instanceof Error && /network|fetch|timeout/i.test(error.message));
 
@@ -211,6 +223,7 @@ export function useWithdrawSubmission({
             idempotencyKeyRef.current = null;
             setStep('success');
             void loadWithdrawals(withdrawUserId);
+            void reloadBalance?.();
           },
           onSafeToRetry: () => {
             idempotencyKeyRef.current = null;

@@ -7,12 +7,16 @@ import {
   processPushQueueJob,
   processPushReceiptReconciliation,
   sweepExpiredAuctions,
+  sweepExpiredLiveLots,
   sweepExpiredCoOwnOrders,
   runPlatformReconciliation,
   processDomainOutboxBatch,
   processQueuedOnezeMintReserveAllocation,
   processQueuedOnezeWithdrawalExecution,
   processMediaIngestJob,
+  reconcileMediaIngestJobs,
+  expireStaleMultipartSessions,
+  sweepOrphanedUploadIntents,
   processMediaEmbeddingJob,
   processModerationTriageJob,
   processImporterExtraction,
@@ -32,6 +36,7 @@ import {
   processDsarExport,
   evaluateCoOwnPriceAlerts,
   processCoOwnDripReinvestment,
+  processAutoFeedbackSweep,
 } from './handlers/index.js';
 
 /**
@@ -58,6 +63,9 @@ async function main(): Promise<void> {
       handlePushJob: processPushQueueJob,
       handleAuctionSweepJob: async ({ reason }) => {
         await sweepExpiredAuctions(reason);
+      },
+      handleLiveLotSweepJob: async ({ reason }) => {
+        await sweepExpiredLiveLots(reason);
       },
       handleCoOwnOrderExpirySweepJob: async ({ reason }) => {
         await sweepExpiredCoOwnOrders(reason);
@@ -90,6 +98,15 @@ async function main(): Promise<void> {
       },
       handleMediaIngestJob: async ({ assetId, reason }) => {
         await processMediaIngestJob({ assetId, reason });
+      },
+      handleMediaIngestReconcileJob: async ({ reason }) => {
+        await reconcileMediaIngestJobs(reason);
+      },
+      handleMultipartSessionSweepJob: async ({ reason }) => {
+        await expireStaleMultipartSessions(reason);
+      },
+      handleOrphanUploadIntentSweepJob: async ({ reason }) => {
+        await sweepOrphanedUploadIntents(reason);
       },
       handleMediaEmbeddingJob: async (job) => {
         await processMediaEmbeddingJob(job);
@@ -144,6 +161,9 @@ async function main(): Promise<void> {
       },
       handleDsarExportJob: async ({ requestId, userId, reason }) => {
         await processDsarExport({ requestId, userId, reason });
+      },
+      handleFeedbackEvaluationJob: async ({ reason }) => {
+        await processAutoFeedbackSweep({ reason });
       },
       handleAgentRunJob: async ({ runId }) => {
         const { processAgentRun } = await import('../botRuntime/index.js');

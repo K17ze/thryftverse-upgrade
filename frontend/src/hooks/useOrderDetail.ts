@@ -10,13 +10,15 @@ import {
 } from '../utils/orderDetailLogic';
 import {
   type CommerceOrder,
+  type OrderAuthentication,
   type OrderParcelEvent,
   getOrder,
+  getOrderAuthentication,
   getOrderParcelEvents,
   cancelOrder,
   deliverOrder,
 } from '../services/commerceApi';
-import { getOrderReview } from '../services/reviewApi';
+import { getOrderReview, type OrderReview } from '../services/reviewApi';
 import { parseApiError } from '../lib/apiClient';
 import { t } from '../i18n';
 import { useToast } from '../context/ToastContext';
@@ -28,6 +30,19 @@ export interface UseOrderDetailResult {
   backendOrder: CommerceOrder | null;
   parcelEvents: OrderParcelEvent[];
   hasReview: boolean;
+  /**
+   * The full review row when one exists. `isAuto`/`autoReason` mark
+   * platform-generated feedback — surfaces must render it truthfully
+   * ("Left automatically — no review submitted"), never as a
+   * buyer-authored review.
+   */
+  orderReview: OrderReview | null;
+  /**
+   * Live authentication-pipeline state for orders where the buyer requested
+   * verification. Null when not requested or the read is unavailable — the
+   * durable `verificationRequested` flag on the order still applies.
+   */
+  orderAuthentication: OrderAuthentication | null;
   isInitialLoading: boolean;
   isRefreshing: boolean;
   loadError: string | null;
@@ -48,6 +63,8 @@ export function useOrderDetail(orderId: string): UseOrderDetailResult {
   const [backendOrder, setBackendOrder] = useState<CommerceOrder | null>(null);
   const [parcelEvents, setParcelEvents] = useState<OrderParcelEvent[]>([]);
   const [hasReview, setHasReview] = useState(false);
+  const [orderReview, setOrderReview] = useState<OrderReview | null>(null);
+  const [orderAuthentication, setOrderAuthentication] = useState<OrderAuthentication | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -110,11 +127,35 @@ export function useOrderDetail(orderId: string): UseOrderDetailResult {
     try {
       const review = await getOrderReview(orderId);
       if (!isMountedRef.current) return;
-      setHasReview(review !== null);
+      // Only a buyer-authored review counts — platform auto-feedback is a
+      // supersedable placeholder, matching the list payload's NOT is_auto
+      // semantics. The full row is still exposed so surfaces can label it.
+      setHasReview(review !== null && review.isAuto !== true);
+      setOrderReview(review);
     } catch {
       // Review endpoint may not exist for all orders yet; default to false.
       if (!isMountedRef.current) return;
       setHasReview(false);
+      setOrderReview(null);
+    }
+  }, [orderId]);
+
+  // --- Fetch verification pipeline state (only when the order asked for it) ---
+  const fetchAuthentication = useCallback(async (order: CommerceOrder | null | undefined) => {
+    if (!isMountedRef.current) return;
+    if (!order?.verificationRequested) {
+      setOrderAuthentication(null);
+      return;
+    }
+    try {
+      const authentication = await getOrderAuthentication(orderId);
+      if (!isMountedRef.current) return;
+      setOrderAuthentication(authentication);
+    } catch {
+      // A failed status read must not degrade the order surface — the
+      // section renders the durable flag's honest "requested" state.
+      if (!isMountedRef.current) return;
+      setOrderAuthentication(null);
     }
   }, [orderId]);
 
@@ -124,10 +165,12 @@ export function useOrderDetail(orderId: string): UseOrderDetailResult {
       setIsRefreshing(true);
     }
 
+    const orderPromise = fetchOrder();
     const [orderResult] = await Promise.all([
-      fetchOrder(),
+      orderPromise,
       fetchParcelEvents(),
       fetchReview(),
+      orderPromise.then((order) => fetchAuthentication(order)),
     ]);
 
     if (!isMountedRef.current) return;
@@ -139,7 +182,7 @@ export function useOrderDetail(orderId: string): UseOrderDetailResult {
     }
 
     return orderResult;
-  }, [fetchOrder, fetchParcelEvents, fetchReview]);
+  }, [fetchOrder, fetchParcelEvents, fetchReview, fetchAuthentication]);
 
   // --- Focus-aware refresh ---
   useFocusEffect(
@@ -227,6 +270,8 @@ export function useOrderDetail(orderId: string): UseOrderDetailResult {
     backendOrder,
     parcelEvents,
     hasReview,
+    orderReview,
+    orderAuthentication,
     isInitialLoading,
     isRefreshing,
     loadError,

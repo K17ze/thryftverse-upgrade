@@ -9,6 +9,7 @@ import {
   formatPackageSummary } from '../../utils/orderDetailLogic';
 import { t } from '../../i18n';
 import type { CommerceOrder, OrderParcelEvent } from '../../services/commerceApi';
+import type { OrderReview } from '../../services/reviewApi';
 import type { FulfilmentSnapshot } from '../../components/orders/orderCapabilities';
 import type { IssueCategory } from '../../components/orders/IssueCategorySelector';
 import type { TimelineEntry } from '../../components/orders/OrderTrackingTimeline';
@@ -18,6 +19,13 @@ export interface UseOrderDetailTrackingParams {
   backendOrder: CommerceOrder | null;
   parcelEvents: OrderParcelEvent[];
   hasReview: boolean;
+  /**
+   * The order's review row when one exists — supplies provenance
+   * (`isAuto`/`autoReason`) and the truthful timestamp for the timeline
+   * entry. Platform-generated feedback is labelled "Automatic feedback",
+   * never "Review submitted".
+   */
+  orderReview?: OrderReview | null;
   normalisedStatus: string;
   isBuyer: boolean;
   openTicket: SupportTicket | undefined;
@@ -50,6 +58,7 @@ export function useOrderDetailTracking({
   backendOrder,
   parcelEvents,
   hasReview,
+  orderReview,
   normalisedStatus,
   isBuyer,
   openTicket }: UseOrderDetailTrackingParams): UseOrderDetailTrackingResult {
@@ -57,10 +66,13 @@ export function useOrderDetailTracking({
   const timelineEntries = useMemo(() => {
     if (!backendOrder) return [];
     return buildTimelineEntries(normalisedStatus, backendOrder, parcelEvents, {
-      hasOpenResolution: Boolean(openTicket),
+      hasOpenResolution: backendOrder.hasOpenResolution === true || Boolean(openTicket),
       hasReview,
+      reviewIsAuto: orderReview?.isAuto === true,
+      reviewCreatedAt: orderReview?.createdAt ?? null,
+      slaBreach: backendOrder.slaBreach ?? null,
       deliveredAt: backendOrder.deliveredAt });
-  }, [backendOrder, normalisedStatus, parcelEvents, openTicket, hasReview]);
+  }, [backendOrder, normalisedStatus, parcelEvents, openTicket, hasReview, orderReview]);
 
   // --- Shipment details ---
   const latestParcelEvent = parcelEvents.length > 0

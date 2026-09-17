@@ -45,7 +45,15 @@ export type RetrievalFallbackReason =
   | 'hybrid_search_failed'
   | 'no_image_supplied'
   | 'image_decode_failed'
-  | 'fts_no_matches_ilike_fallback';
+  | 'fts_no_matches_ilike_fallback'
+  /**
+   * FTS produced zero rows and the fallback query included pg_trgm
+   * trigram-similarity matching on title/brand (migration 298) alongside
+   * the literal substring clauses. Only set for queries long enough for
+   * trigrams to be meaningful (>= 3 chars); shorter queries still report
+   * 'fts_no_matches_ilike_fallback'.
+   */
+  | 'fts_no_matches_trgm';
 
 /**
  * Capability metadata attached to every search response. Present on all

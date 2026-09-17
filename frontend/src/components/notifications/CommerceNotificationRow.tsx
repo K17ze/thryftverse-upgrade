@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, AccessibilityActionEvent, AccessibilityActionInfo } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import {
@@ -11,7 +11,8 @@ import {
   Radius,
   FontFamily } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
-import type { NotificationEventV2 } from '../../services/notificationsApi';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
+import { readPayloadNumber, type NotificationEventV2 } from '../../services/notificationsApi';
 
 // ---------------------------------------------------------------------------
 // CommerceNotificationRow — order lifecycle events
@@ -33,6 +34,12 @@ export interface CommerceNotificationRowProps {
   aggregatedCount?: number;
   inAttentionSection?: boolean;
   onPress: () => void;
+  /** Quiet action affordance — rendered under the body when the event
+   *  requires action and a route resolved (e.g. "Dispatch now"). */
+  actionLabel?: string;
+  onActionPress?: () => void;
+  accessibilityActions?: AccessibilityActionInfo[];
+  onAccessibilityAction?: (event: AccessibilityActionEvent) => void;
 }
 
 interface CommerceVisual {
@@ -59,6 +66,28 @@ function resolveCommerceVisual(eventType: NotificationEventV2['eventType']): Com
       return { icon: 'close-circle-outline', accentKey: 'danger', statusLabel: 'Cancelled' };
     case 'order_refunded':
       return { icon: 'cash-outline', accentKey: 'warning', statusLabel: 'Refunded' };
+    case 'order_dispatch_sla_breach':
+      return { icon: 'alert-circle-outline', accentKey: 'danger', statusLabel: 'Dispatch overdue' };
+    case 'price_drop':
+      return { icon: 'trending-down-outline', accentKey: 'success', statusLabel: 'Price drop' };
+    case 'saved_search_match':
+      return { icon: 'search-outline', accentKey: 'brand', statusLabel: 'Saved search match' };
+    case 'offer_created':
+      return { icon: 'pricetag-outline', accentKey: 'brand', statusLabel: 'New offer' };
+    case 'offer_countered':
+      return { icon: 'swap-horizontal-outline', accentKey: 'warning', statusLabel: 'Counter-offer' };
+    case 'offer_accepted':
+      return { icon: 'checkmark-circle-outline', accentKey: 'success', statusLabel: 'Offer accepted' };
+    case 'offer_declined':
+      return { icon: 'close-circle-outline', accentKey: 'danger', statusLabel: 'Offer declined' };
+    case 'offer_expired':
+      return { icon: 'time-outline', accentKey: 'warning', statusLabel: 'Offer expired' };
+    case 'offer_cancelled':
+      return { icon: 'close-circle-outline', accentKey: 'warning', statusLabel: 'Offer cancelled' };
+    case 'dispatch_extension_proposed':
+      return { icon: 'time-outline', accentKey: 'warning', statusLabel: 'Extension requested' };
+    case 'dispatch_extension_responded':
+      return { icon: 'time-outline', accentKey: 'brand', statusLabel: 'Extension update' };
     default:
       return { icon: 'bag-outline', accentKey: 'brand', statusLabel: 'Order update' };
   }
@@ -142,8 +171,13 @@ export function CommerceNotificationRow({
   time,
   aggregatedCount,
   inAttentionSection = false,
-  onPress }: CommerceNotificationRowProps) {
+  onPress,
+  actionLabel,
+  onActionPress,
+  accessibilityActions,
+  onAccessibilityAction }: CommerceNotificationRowProps) {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const visual = useMemo(() => resolveCommerceVisual(event.eventType), [event.eventType]);
@@ -156,7 +190,21 @@ export function CommerceNotificationRow({
   const lifecycleStep = useMemo(() => resolveLifecycleStep(event.eventType), [event.eventType]);
   const showProgress = lifecycleStep !== null;
 
-  const description = `${visual.statusLabel} · ${objectLabel}`;
+  // Price-drop events carry the price movement as structured payload —
+  // render "£old → £new" instead of a generic status line.
+  const previousPrice = event.eventType === 'price_drop'
+    ? readPayloadNumber(event.payload, 'previousPriceGbp')
+    : undefined;
+  const newPrice = event.eventType === 'price_drop'
+    ? readPayloadNumber(event.payload, 'newPriceGbp')
+    : undefined;
+  const priceMovement = previousPrice != null && newPrice != null
+    ? `${currencySymbol}${previousPrice.toFixed(2)} → ${currencySymbol}${newPrice.toFixed(2)}`
+    : null;
+
+  const description = priceMovement
+    ? `${priceMovement} · ${objectLabel}`
+    : `${visual.statusLabel} · ${objectLabel}`;
   const accessibilityLabel = `${isUnread ? 'Unread. ' : ''}${visual.statusLabel}. ${objectLabel}. ${time}${showProgress ? `. Progress: ${LIFECYCLE_LABELS[lifecycleStep!]}` : ''}`;
 
   const leading = (
@@ -183,6 +231,10 @@ export function CommerceNotificationRow({
       aggregatedCount={aggregatedCount}
       inAttentionSection={inAttentionSection}
       onPress={onPress}
+      actionLabel={actionLabel}
+      onActionPress={onActionPress}
+      accessibilityActions={accessibilityActions}
+      onAccessibilityAction={onAccessibilityAction}
       leading={leading}
       trailing={trailing}
       accessibilityLabel={accessibilityLabel}

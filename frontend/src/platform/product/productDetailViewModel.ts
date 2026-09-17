@@ -256,7 +256,7 @@ export function isCoOwnViewModel(
 // ── Media helpers ────────────────────────────────────────────────────────────
 
 function isVideo(uri: string): boolean {
-  return /\.(mp4|mov|webm|m4v)$/i.test(uri) || uri.includes('video');
+  return /\.(mp4|mov|webm|m4v|m3u8)(\?.*)?$/i.test(uri) || uri.includes('video');
 }
 
 export function mediaFromUris(uris: string[]): ProductMediaItem[] {

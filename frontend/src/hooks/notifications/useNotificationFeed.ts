@@ -1,17 +1,21 @@
 import React from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { Swipeable } from 'react-native-gesture-handler';
-import { listNotificationEvents } from '../../services/notificationsApi';
+import { useRealtimeSafe } from '../../platform/realtime';
+import { useStore } from '../../store/useStore';
+import {
+  listNotificationEvents,
+  type ListNotificationEventsOptions } from '../../services/notificationsApi';
 import { haptics } from '../../utils/haptics';
 import {
   NotificationCard,
   NotificationFilter,
   NotificationListItem,
+  FILTER_EVENT_TYPES,
   mapEventToCard,
   aggregateNotifications,
   groupNotifications,
-  flattenNotificationSections,
-  computeNotificationFilterCounts } from '../../components/notifications/notificationViewModels';
+  flattenNotificationSections } from '../../components/notifications/notificationViewModels';
 
 /**
  * Owns the notifications feed lifecycle: the initial/focus refetch, pull-to-
@@ -19,6 +23,16 @@ import {
  * the active filter, the overflow filter sheet visibility, and the derived
  * view-models (filtered → aggregated → grouped → flattened) that FlashList
  * renders.
+ *
+ * The active filter is sent to the server (`eventType`/`unread` params) so
+ * pagination works within the filter — loadMore carries it through. The
+ * local `filteredNotifications` pass stays as an idempotent safety net: a
+ * server that ignores the params returns an unfiltered page and the local
+ * filter still applies; a filtered page passes through unchanged.
+ *
+ * Per-filter counts come from the server when the response provides them;
+ * otherwise they are null and the filter UI renders no count badges rather
+ * than counting only the loaded window.
  *
  * Also owns the Swipeable ref registry — refs are registered by row id as
  * FlashList recycles cells, and all open swipe actions are closed on unmount
@@ -28,11 +42,13 @@ export function useNotificationFeed() {
   const [notifications, setNotifications] = React.useState<NotificationCard[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [isLoadingMore, setIsLoadingMore] = React.useState(false);
+  const [loadMoreFailed, setLoadMoreFailed] = React.useState(false);
   const [cursor, setCursor] = React.useState<string | null>(null);
   const [hasMore, setHasMore] = React.useState(false);
   const [hasSyncError, setHasSyncError] = React.useState(false);
   const [activeFilter, setActiveFilter] = React.useState<NotificationFilter>('all');
   const [overflowVisible, setOverflowVisible] = React.useState(false);
+  const [serverFilterCounts, setServerFilterCounts] = React.useState<Record<NotificationFilter, number> | null>(null);
   const swipeableRefs = React.useRef<Record<string, Swipeable | null>>({});
 
   // Clean up stale Swipeable refs on unmount. When FlashList recycles items,
@@ -51,6 +67,16 @@ export function useNotificationFeed() {
 
   const unreadCount = React.useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
 
+  /** Translate the UI filter into list query params. */
+  const filterOptionsFor = React.useCallback(
+    (filter: NotificationFilter): Pick<ListNotificationEventsOptions, 'eventTypes' | 'unread'> => {
+      if (filter === 'all') return {};
+      if (filter === 'unread') return { unread: true };
+      return { eventTypes: FILTER_EVENT_TYPES[filter] };
+    },
+    []
+  );
+
   const syncNotifications = React.useCallback(
     async (options?: { silent?: boolean }) => {
       if (!options?.silent) {
@@ -58,11 +84,18 @@ export function useNotificationFeed() {
       }
 
       try {
-        const { items, nextCursor } = await listNotificationEvents({ limit: 30 });
+        const { items, nextCursor, filterCounts } = await listNotificationEvents({
+          limit: 30,
+          ...filterOptionsFor(activeFilter),
+        });
         setNotifications(items.map(mapEventToCard));
         setCursor(nextCursor);
         setHasMore(!!nextCursor);
         setHasSyncError(false);
+        setLoadMoreFailed(false);
+        if (filterCounts) {
+          setServerFilterCounts(filterCounts as Record<NotificationFilter, number>);
+        }
       } catch {
         setHasSyncError(true);
       } finally {
@@ -71,15 +104,20 @@ export function useNotificationFeed() {
         }
       }
     },
-    []
+    [activeFilter, filterOptionsFor]
   );
 
   const loadMore = React.useCallback(
     async () => {
       if (!hasMore || isLoadingMore || !cursor) return;
       setIsLoadingMore(true);
+      setLoadMoreFailed(false);
       try {
-        const { items, nextCursor } = await listNotificationEvents({ limit: 30, cursor });
+        const { items, nextCursor } = await listNotificationEvents({
+          limit: 30,
+          cursor,
+          ...filterOptionsFor(activeFilter),
+        });
         setNotifications((prev) => {
           const existingIds = new Set(prev.map((n) => n.id));
           const newItems = items.map(mapEventToCard).filter((n) => !existingIds.has(n.id));
@@ -88,19 +126,63 @@ export function useNotificationFeed() {
         setCursor(nextCursor);
         setHasMore(!!nextCursor);
       } catch {
-        // silently fail
+        // Surface a retryable footer instead of silently failing — otherwise
+        // the user has no signal that more items exist but failed to load.
+        setLoadMoreFailed(true);
       } finally {
         setIsLoadingMore(false);
       }
     },
-    [cursor, hasMore, isLoadingMore]
+    [cursor, hasMore, isLoadingMore, activeFilter, filterOptionsFor]
   );
+
+  // Stable ref so the focus effect doesn't re-subscribe (and double-fetch)
+  // every time the filter changes the sync callback's identity.
+  const syncRef = React.useRef(syncNotifications);
+  syncRef.current = syncNotifications;
 
   useFocusEffect(
     React.useCallback(() => {
-      void syncNotifications();
-    }, [syncNotifications])
+      void syncRef.current();
+    }, [])
   );
+
+  // Realtime: a `notification.queued` event on the user's topic means the
+  // feed is stale — silently resync so the new row and its filter-count
+  // deltas appear without a pull-to-refresh. Debounced: a burst of queued
+  // events (batch sends) collapses into one fetch.
+  const rtCtx = useRealtimeSafe();
+  const rtClient = rtCtx?.client;
+  const rtUserId = useStore((s) => s.currentUser?.id);
+  React.useEffect(() => {
+    if (!rtClient || !rtUserId) return;
+    const topic = `notifications.user:${rtUserId}`;
+    rtClient.subscribe([topic]);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const unsubscribe = rtClient.on(topic, (envelope) => {
+      if (envelope.type !== 'notification.queued') return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => void syncRef.current({ silent: true }), 400);
+    });
+    return () => {
+      if (timer) clearTimeout(timer);
+      unsubscribe();
+      rtClient.unsubscribe([topic]);
+    };
+  }, [rtClient, rtUserId]);
+
+  // Refetch when the filter changes — the server (or the local fallback
+  // filter pass) narrows the result set, and pagination must restart from
+  // a fresh cursor within that filter. Silent so the current list stays
+  // on screen while the filtered page loads.
+  const didMountRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      return;
+    }
+    void syncNotifications({ silent: true });
+  }, [activeFilter, syncNotifications]);
 
   const [isRefreshing, setIsRefreshing] = React.useState(false);
 
@@ -108,18 +190,27 @@ export function useNotificationFeed() {
     haptics.press();
     setIsRefreshing(true);
     try {
-      const { items, nextCursor } = await listNotificationEvents({ limit: 30 });
+      const { items, nextCursor, filterCounts } = await listNotificationEvents({
+        limit: 30,
+        ...filterOptionsFor(activeFilter),
+      });
       setNotifications(items.map(mapEventToCard));
       setCursor(nextCursor);
       setHasMore(!!nextCursor);
       setHasSyncError(false);
+      setLoadMoreFailed(false);
+      if (filterCounts) {
+        setServerFilterCounts(filterCounts as Record<NotificationFilter, number>);
+      }
     } catch {
       setHasSyncError(true);
     } finally {
       setIsRefreshing(false);
     }
-  }, []);
+  }, [activeFilter, filterOptionsFor]);
 
+  // Idempotent fallback: when the server already applied the filter this
+  // pass is a no-op; when it ignored the params it still narrows the window.
   const filteredNotifications = React.useMemo(() => {
     if (activeFilter === 'all') return notifications;
     if (activeFilter === 'unread') return notifications.filter((n) => !n.read);
@@ -140,11 +231,6 @@ export function useNotificationFeed() {
 
   const hasUnread = React.useMemo(() => notifications.some((item) => !item.read), [notifications]);
 
-  const filterCounts = React.useMemo(
-    () => computeNotificationFilterCounts(notifications),
-    [notifications]
-  );
-
   const registerSwipeableRef = React.useCallback(
     (id: string, ref: Swipeable | null) => {
       swipeableRefs.current[id] = ref;
@@ -157,6 +243,7 @@ export function useNotificationFeed() {
     setNotifications,
     isLoading,
     isLoadingMore,
+    loadMoreFailed,
     hasSyncError,
     isRefreshing,
     activeFilter,
@@ -167,7 +254,9 @@ export function useNotificationFeed() {
     registerSwipeableRef,
     unreadCount,
     hasUnread,
-    filterCounts,
+    // null when the server didn't supply counts — the filter UI shows no
+    // badges rather than counting only the loaded window.
+    filterCounts: serverFilterCounts,
     flattenedData,
     syncNotifications,
     loadMore,

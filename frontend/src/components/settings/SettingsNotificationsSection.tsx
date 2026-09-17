@@ -43,16 +43,16 @@ export function SettingsNotificationsSection({
         isFirst
       />
       <SettingsRow
-        icon="notifications"
-        title={ts('rows.notificationCategories')}
-        subtitle={notificationSummary}
-        onPress={() => navigation.navigate('PushNotifications')}
-      />
-      <SettingsRow
         icon="options"
         title={ts('rows.notificationPreferences')}
-        subtitle={ts('rows.notificationPreferencesSubtitle')}
+        subtitle={notificationSummary}
         onPress={() => navigation.navigate('NotificationPreferences')}
+      />
+      <SettingsRow
+        icon="notifications"
+        title={ts('rows.pushThisDevice')}
+        subtitle={ts('rows.pushThisDeviceSubtitle')}
+        onPress={() => navigation.navigate('PushNotifications')}
       />
       <SettingsRow
         icon="mail"

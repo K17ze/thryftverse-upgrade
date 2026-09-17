@@ -48,9 +48,20 @@ import type { SpeedCurve } from '../../../src/creator/poster/speedcurves/SpeedCu
  * Geometry is normalised 0..1 relative to the output frame, matching the
  * backend's `layerTopLeft` convention.
  */
+/**
+ * Overlay discriminator. A string union (not a single literal) so Nitrogen
+ * can lower it to a C++ enum — bare single literals are ambiguous between
+ * `std::string` and a discriminating enum at the JSI boundary.
+ */
+export type VideoOverlayKind = 'text' | 'sticker';
+
+/** Horizontal text alignment within a text overlay's box. Named (not
+ *  inline) because Nitrogen requires unions to be extracted types. */
+export type VideoTextAlignment = 'left' | 'center' | 'right';
+
 export interface VideoTextOverlay {
   id: string;
-  kind: 'text';
+  kind: VideoOverlayKind;
   /** Top-left X in normalised 0..1 output-frame space. */
   x: number;
   /** Top-left Y in normalised 0..1 output-frame space. */
@@ -72,12 +83,12 @@ export interface VideoTextOverlay {
   /** Optional background colour behind the text (CSS hex). */
   backgroundColor?: string;
   /** Horizontal text alignment within the overlay box. */
-  alignment?: 'left' | 'center' | 'right';
+  alignment?: VideoTextAlignment;
 }
 
 export interface VideoStickerOverlay {
   id: string;
-  kind: 'sticker';
+  kind: VideoOverlayKind;
   /** Top-left X in normalised 0..1 output-frame space. */
   x: number;
   /** Top-left Y in normalised 0..1 output-frame space. */
@@ -92,10 +103,16 @@ export interface VideoStickerOverlay {
   opacity: number;
   /**
    * The sticker SVG markup. Matches the backend's sticker overlay path in
-   * `compositionRenderer.ts` (`buildStickerLayerSvg`), which rasterises an
-   * SVG string to PNG and composites it onto the frame.
+   * `compositionRenderer.ts` (`buildStickerLayerSvg`). Kept for provenance —
+   * neither AVFoundation nor Media3 can rasterise SVG natively, so the JS
+   * adapter rasterises it via Skia (`Skia.SVG.MakeFromString`) to a temp PNG
+   * and passes `stickerImageUri`. Exactly one of `stickerSvg` /
+   * `stickerImageUri` must be set; the native side prefers the image.
    */
-  stickerSvg: string;
+  stickerSvg?: string;
+  /** file:// URI of the pre-rasterised sticker bitmap (PNG). Preferred by
+   *  the native implementations — avoids shipping an SVG rasteriser. */
+  stickerImageUri?: string;
 }
 
 /**
@@ -132,8 +149,9 @@ export interface VideoExportRequest {
   muteAudio?: boolean;
   /** Text/sticker overlays to burn into the output. */
   overlays?: VideoOverlay[];
-  /** Output container. Only 'mp4' is supported today. */
-  outputFormat?: 'mp4';
+  /** Output container. Only 'mp4' is supported today; typed as string for
+   *  the same Nitro literal-ambiguity reason as `mimeType`. */
+  outputFormat?: string;
   /** Target output width in pixels. Omit for source-native. */
   outputWidth?: number;
   /** Target output height in pixels. Omit for source-native. */
@@ -161,8 +179,9 @@ export interface VideoExportResult {
   durationMs: number;
   /** Output file size in bytes. */
   sizeBytes: number;
-  /** Output MIME type. Only 'video/mp4' today. */
-  mimeType: 'video/mp4';
+  /** Output MIME type. Only 'video/mp4' today; typed as string because a
+   *  bare string literal cannot cross the Nitro boundary unambiguously. */
+  mimeType: string;
 }
 
 // ── Errors ──────────────────────────────────────────────────────────

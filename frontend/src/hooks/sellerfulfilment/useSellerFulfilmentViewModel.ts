@@ -43,6 +43,11 @@ export interface UseSellerFulfilmentViewModelResult {
   shipByOverdue: boolean;
   /** Precomposed ship-by line text (urgency copy included). */
   shipByText: string;
+  /**
+   * Recorded dispatch-SLA defect flag line, or null. Server truth only —
+   * rendered only when the backend persisted an order_sla_breaches row.
+   */
+  slaBreachText: string | null;
   serviceName: string | null;
   etaWindow: string | null;
   escrowFootnote: string | null;
@@ -105,6 +110,12 @@ export function useSellerFulfilmentViewModel({
   const shipByOverdue = shipByDaysLeft != null && shipByDaysLeft < 0;
   const shipByText = formatShipByLine(shipByLabel, shipByDaysLeft, shipByOverdue);
 
+  // Recorded SLA defect flag — server-persisted (order_sla_breaches). The
+  // client never infers a breach locally; it only renders the stored flag.
+  const slaBreachText = order?.slaBreach
+    ? 'Dispatch deadline missed · A service-level flag was recorded'
+    : null;
+
   const serviceName = snapshot?.serviceName ?? snapshot?.carrierId ?? order?.shippingProvider ?? null;
   const etaWindow = formatEtaWindow(snapshot);
 
@@ -128,6 +139,7 @@ export function useSellerFulfilmentViewModel({
     shipByUrgent,
     shipByOverdue,
     shipByText,
+    slaBreachText,
     serviceName,
     etaWindow,
     escrowFootnote,

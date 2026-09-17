@@ -7,12 +7,26 @@ import {
   recomputeSellerMetrics,
   type SellerMetrics,
 } from '../lib/sellerPerformance.js';
+import { isEffectivelyAway } from '../lib/sellerAway.js';
+import { createApiError } from '../lib/workerHelpers.js';
 
 type SellerRouteDependencies = {
   app: FastifyInstance;
   db: Pool;
   /** Read-replica pool (falls back to primary when no replica is configured). */
   readDb: Pool;
+  queueUserNotification: (input: {
+    userId: string;
+    title: string;
+    body: string;
+    payload?: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
+    eventType?: string;
+    actorUserId?: string;
+    imageUrl?: string;
+    route?: Record<string, unknown>;
+    idempotencyKey?: string;
+  }) => Promise<string | null>;
 };
 
 const sellerIdParamsSchema = z.object({ sellerId: z.string().min(2) });
@@ -43,7 +57,7 @@ const appealBodySchema = z.object({
  *   GET  /sellers/:sellerId/standards                  — inspect operational metrics & tier defects (gate 12)
  *   POST /sellers/:sellerId/standards/appeal           — appeal an operational defect (gate 12)
  */
-export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencies): void => {
+export const registerSellerRoutes = ({ app, db, readDb, queueUserNotification }: SellerRouteDependencies): void => {
   app.get('/sellers/:sellerId', async (request, reply) => {
     const { sellerId } = sellerIdParamsSchema.parse(request.params);
     const viewerUserId = request.authUser?.userId ?? null;
@@ -57,10 +71,12 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
       location: string | null;
       created_at: string;
       holiday_mode: boolean;
+      holiday_mode_until: string | null;
       away_message: string | null;
+      reach_state: string | null;
     }>(
       `SELECT id, username, display_name, avatar, location, created_at,
-              holiday_mode, away_message
+              holiday_mode, holiday_mode_until::text, away_message, reach_state
        FROM users WHERE id = $1 LIMIT 1`,
       [sellerId]
     );
@@ -75,7 +91,18 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
       avg_rating: string | null;
       review_count: string;
     }>(
-      `SELECT AVG(rating)::numeric(3,2) AS avg_rating, COUNT(*)::text AS review_count FROM order_reviews WHERE seller_id = $1`,
+      // Public rating: published/restored reviews only (moderation leak
+      // fixed — a removed review previously kept counting). The average
+      // excludes is_auto rows: an automated 5★ must never move a seller's
+      // score. The count includes them — they render in the list labeled
+      // 'Auto', so the count matches what the reader sees.
+      `SELECT
+         AVG(r.rating) FILTER (WHERE NOT r.is_auto)::numeric(3,2) AS avg_rating,
+         COUNT(*)::text AS review_count
+       FROM order_reviews r
+       LEFT JOIN review_publication_state ps ON ps.review_id = r.id
+       WHERE r.seller_id = $1
+         AND COALESCE(ps.state, 'published') IN ('published', 'restored')`,
       [sellerId]
     );
 
@@ -203,7 +230,15 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     const avgRating = reviewStats.rows[0]?.avg_rating ? Number(reviewStats.rows[0].avg_rating) : null;
     const reviewCount = reviewStats.rows[0]?.review_count ? Number(reviewStats.rows[0].review_count) : 0;
     const completedSales = salesResult.rows[0]?.completed_sales ? Number(salesResult.rows[0].completed_sales) : 0;
-    const activeListingCount = activeListingsResult.rows[0]?.active_count ? Number(activeListingsResult.rows[0].active_count) : 0;
+    // A suspended seller's status='active' rows are not distributed or
+    // sellable — reporting the raw count would claim items buyers cannot
+    // see or buy, so the buyer-facing count is 0 while suspended.
+    const rawActiveListingCount = activeListingsResult.rows[0]?.active_count
+      ? Number(activeListingsResult.rows[0].active_count)
+      : 0;
+    const activeListingCount = (user.reach_state ?? 'normal') === 'suspended'
+      ? 0
+      : rawActiveListingCount;
 
     return {
       ok: true,
@@ -230,9 +265,26 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
         dispatchTimeLabel,
         // Evidence-backed badges — no client-side derivation.
         badges,
-        // Authoritative away state.
-        holidayMode: user.holiday_mode === true,
-        awayMessage: user.away_message ?? null,
+        // Authoritative away state — effective-away (lib/sellerAway.ts):
+        // a declared return date that has passed already ended the pause,
+        // so buyers never see a stale "away" that still blocks commerce.
+        // awayMessage/awayUntil are gated on the same predicate — a seller
+        // who is back must not leak the note they wrote while away.
+        holidayMode: isEffectivelyAway(user.holiday_mode, user.holiday_mode_until),
+        awayMessage: isEffectivelyAway(user.holiday_mode, user.holiday_mode_until)
+          ? user.away_message ?? null
+          : null,
+        holidayModeUntil: isEffectivelyAway(user.holiday_mode, user.holiday_mode_until)
+          && user.holiday_mode_until
+          ? new Date(user.holiday_mode_until).toISOString()
+          : null,
+        // Seller reach (lib/sellerReach.ts, migration 300) — the honest
+        // distribution state so the storefront can render a held surface
+        // instead of silently empty rails: 'suspended' sellers serve no
+        // sellable items anywhere (browse/feed/search exclude them and
+        // checkout rejects with SELLER_RESTRICTED); 'limited' sellers are
+        // still purchasable, only down-ranked.
+        reachState: user.reach_state ?? 'normal',
       },
     };
   });
@@ -265,12 +317,40 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     }
 
     const followId = `follow_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    await db.query(
+    const inserted = await db.query<{ id: string }>(
       `INSERT INTO user_follows (id, follower_id, following_id, created_at)
        VALUES ($1, $2, $3, NOW())
-       ON CONFLICT (follower_id, following_id) DO NOTHING`,
+       ON CONFLICT (follower_id, following_id) DO NOTHING
+       RETURNING id`,
       [followId, userId, sellerId]
     );
+
+    // Mirror POST /users/:userId/follow — a product-surface follow notifies
+    // the seller too (this route was previously silent).
+    if ((inserted.rowCount ?? 0) > 0) {
+      try {
+        const followerRow = await readDb.query<{ username: string; display_name: string | null; avatar: string | null }>(
+          `SELECT username, display_name, avatar FROM users WHERE id = $1 LIMIT 1`,
+          [userId]
+        );
+        const follower = followerRow.rows[0];
+        const followerName = follower?.display_name || follower?.username || 'Someone';
+        await queueUserNotification({
+          userId: sellerId,
+          title: 'New follower',
+          body: `${followerName} started following you`,
+          eventType: 'new_follower',
+          actorUserId: userId,
+          imageUrl: follower?.avatar ?? undefined,
+          payload: { followerId: userId },
+          route: { screen: 'UserProfile', params: { userId } },
+          idempotencyKey: `follow_received_${userId}_${sellerId}`,
+          metadata: { source: 'seller_follow' },
+        });
+      } catch (notifErr) {
+        app.log.error({ err: notifErr }, 'Failed to queue new_follower notification');
+      }
+    }
 
     return { ok: true, isFollowing: true };
   });
@@ -327,21 +407,26 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
       d4: string;
       d5: string;
     }>(
+      // Average + distribution count published/restored, non-auto reviews —
+      // a moderated-out or auto-generated row must never move the score.
+      // review_count covers all eligible rows (incl. auto — they render as
+      // labeled 'Auto' rows in the list).
       `SELECT
-         AVG(r.rating)::numeric(3,2) AS avg_rating,
+         AVG(r.rating) FILTER (WHERE NOT r.is_auto)::numeric(3,2) AS avg_rating,
          COUNT(*)::text AS review_count,
          COUNT(*) FILTER (
            WHERE COALESCE(ps.state, 'published') IN ('published', 'restored')
          )::text AS eligible_count,
          MAX(r.created_at) AS as_of,
-         COUNT(*) FILTER (WHERE r.rating = 1)::text AS d1,
-         COUNT(*) FILTER (WHERE r.rating = 2)::text AS d2,
-         COUNT(*) FILTER (WHERE r.rating = 3)::text AS d3,
-         COUNT(*) FILTER (WHERE r.rating = 4)::text AS d4,
-         COUNT(*) FILTER (WHERE r.rating = 5)::text AS d5
+         COUNT(*) FILTER (WHERE r.rating = 1 AND NOT r.is_auto)::text AS d1,
+         COUNT(*) FILTER (WHERE r.rating = 2 AND NOT r.is_auto)::text AS d2,
+         COUNT(*) FILTER (WHERE r.rating = 3 AND NOT r.is_auto)::text AS d3,
+         COUNT(*) FILTER (WHERE r.rating = 4 AND NOT r.is_auto)::text AS d4,
+         COUNT(*) FILTER (WHERE r.rating = 5 AND NOT r.is_auto)::text AS d5
        FROM order_reviews r
        LEFT JOIN review_publication_state ps ON ps.review_id = r.id
-       WHERE r.seller_id = $1`,
+       WHERE r.seller_id = $1
+         AND COALESCE(ps.state, 'published') IN ('published', 'restored')`,
       [sellerId]
     );
 
@@ -361,7 +446,12 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     // Paginated review list with reviewer identity + associated listing context.
     // Returns reviewer_id (for authorized public navigation), media URLs, and
     // seller response — all backed by real persistence (migration 165).
-    const conditions: string[] = ['r.seller_id = $1'];
+    // Same publication gate as the summary — a moderated-out review must
+    // not render in the public list.
+    const conditions: string[] = [
+      'r.seller_id = $1',
+      `COALESCE(ps.state, 'published') IN ('published', 'restored')`,
+    ];
     const args: unknown[] = [sellerId];
     if (cursor) {
       conditions.push(`r.created_at < $${args.length + 1}`);
@@ -373,6 +463,8 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
       id: string;
       rating: number;
       comment: string | null;
+      is_auto: boolean;
+      auto_reason: string | null;
       created_at: string;
       reviewer_id: string;
       reviewer_username: string | null;
@@ -386,7 +478,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     }>(
       `
         SELECT
-          r.id, r.rating, r.comment, r.created_at,
+          r.id, r.rating, r.comment, r.is_auto, r.auto_reason, r.created_at,
           r.reviewer_id,
           u.username AS reviewer_username,
           u.display_name AS reviewer_display_name,
@@ -401,6 +493,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
         LEFT JOIN orders o ON o.id = r.order_id
         LEFT JOIN listings l ON l.id = o.listing_id
         LEFT JOIN review_responses resp ON resp.review_id = r.id
+        LEFT JOIN review_publication_state ps ON ps.review_id = r.id
         WHERE ${conditions.join(' AND ')}
         ORDER BY r.created_at DESC
         LIMIT $${args.length + 1}
@@ -444,6 +537,10 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
         id: row.id,
         rating: row.rating,
         comment: row.comment,
+        // Truthful provenance: auto rows are platform-generated feedback,
+        // not buyer-authored reviews — surfaces render this explicitly.
+        isAuto: row.is_auto === true,
+        autoReason: row.auto_reason,
         createdAt: row.created_at,
         photoUrls: mediaMap.get(row.id) ?? [],
         sellerResponse: row.response_body
@@ -491,17 +588,38 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     if ('startDate' in input) {
       const start = new Date(input.startDate + 'T00:00:00.000Z');
       const endExclusive = new Date(input.endDate + 'T00:00:00.000Z');
+      // Server-side parity with the client's validateCustomRange — the UI
+      // is not the trust boundary. Rejects inverted, future, malformed and
+      // unbounded ranges (each extra day generates a daily series row).
+      if (isNaN(start.getTime()) || isNaN(endExclusive.getTime())) {
+        throw createApiError('ANALYTICS_RANGE_INVALID', 'Dates must be valid YYYY-MM-DD');
+      }
+      const todayEnd = new Date();
+      todayEnd.setUTCHours(23, 59, 59, 999);
+      if (start.getTime() > todayEnd.getTime() || endExclusive.getTime() > todayEnd.getTime()) {
+        throw createApiError('ANALYTICS_RANGE_INVALID', 'Dates cannot be in the future');
+      }
+      if (start.getTime() > endExclusive.getTime()) {
+        throw createApiError('ANALYTICS_RANGE_INVALID', 'Start must be before end');
+      }
       endExclusive.setUTCDate(endExclusive.getUTCDate() + 1); // make exclusive
       const days = Math.max(1, Math.round((endExclusive.getTime() - start.getTime()) / 86400000));
+      if (days > 366) {
+        throw createApiError('ANALYTICS_RANGE_INVALID', 'Range cannot exceed one year');
+      }
       const prevEnd = new Date(start); // exclusive = start of current range
       const prevStart = new Date(start);
       prevStart.setUTCDate(prevStart.getUTCDate() - days);
       return { start, end: endExclusive, prevStart, prevEnd, days };
     }
-    // Preset path
+    // Preset path — day-boundary snapped, matching the daily-bucketed
+    // charts: '7d' = the last 7 UTC calendar days (today included as a
+    // partial final day), not a rolling 7×24h window ending mid-day.
     const periodDays = input.period === '7d' ? 7 : input.period === '90d' ? 90 : 30;
-    const end = new Date(); // now
-    const start = new Date();
+    const end = new Date();
+    end.setUTCHours(0, 0, 0, 0);
+    end.setUTCDate(end.getUTCDate() + 1); // exclusive = tomorrow 00:00 UTC
+    const start = new Date(end);
     start.setUTCDate(start.getUTCDate() - periodDays);
     const prevEnd = new Date(start);
     const prevStart = new Date(start);
@@ -551,6 +669,13 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     // period queries (engagement + orders) for the comparison field, daily
     // trend series (current + previous) for the trend chart, and a funnel
     // query (impressions → views → saves → offers → purchases).
+    // recommendation_impressions is optional (migration 077) — when absent
+    // the funnel reports impressions: null rather than failing the request.
+    const impressionsTableCheck = await readDb.query<{ exists: boolean }>(
+      `SELECT to_regclass('public.recommendation_impressions') IS NOT NULL AS exists`
+    );
+    const hasImpressionsTable = impressionsTableCheck.rows[0]?.exists === true;
+
     const [
       engagementResult,
       ordersResult,
@@ -718,9 +843,17 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
         `,
         [sellerId, prevStart, prevEnd]
       ),
-      // 9. Conversion funnel — impressions, views, saves, offers, purchases
+      // 9. Conversion funnel — impressions, views, saves, offers, purchases.
+      //    Each stage is an independent scalar subquery: joining interactions,
+      //    orders and impressions in one FROM cross-multiplies rows and
+      //    inflates every stage by the sibling join's cardinality.
+      //
+      //    Impressions come from recommendation_impressions (the only table
+      //    that records surfaced listings) — interactions has no 'impression'
+      //    action. Offers are 'offer_submitted' (offer_started fires on
+      //    sheet open and would count abandoned negotiations).
       readDb.query<{
-        impressions: string | number;
+        impressions: string | number | null;
         views: string | number;
         saves: string | number;
         offers: string | number;
@@ -728,20 +861,37 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
       }>(
         `
           SELECT
-            COUNT(i.id) FILTER (WHERE i.action = 'impression') AS impressions,
-            COUNT(i.id) FILTER (WHERE i.action IN ('view', 'qualified_detail_view')) AS views,
-            COUNT(i.id) FILTER (WHERE i.action = 'save') AS saves,
-            COUNT(i.id) FILTER (WHERE i.action = 'offer_start') AS offers,
-            COUNT(DISTINCT o.id) AS purchases
-          FROM listings l
-          LEFT JOIN interactions i ON i.listing_id = l.id
-            AND i.created_at >= $2 AND i.created_at < $3
-          LEFT JOIN orders o ON o.listing_id = l.id
-            AND o.seller_id = $1
-            AND o.status IN ('paid', 'shipped', 'delivered', 'completed')
-            AND o.paid_at IS NOT NULL
-            AND o.paid_at >= $2 AND o.paid_at < $3
-          WHERE l.seller_id = $1
+            ${hasImpressionsTable
+              ? `(SELECT COUNT(*)
+                   FROM recommendation_impressions ri
+                   JOIN listings li ON li.id = ri.listing_id
+                  WHERE li.seller_id = $1
+                    AND ri.created_at >= $2 AND ri.created_at < $3)`
+              : 'NULL'} AS impressions,
+            (SELECT COUNT(*)
+               FROM interactions i
+               JOIN listings li ON li.id = i.listing_id
+              WHERE li.seller_id = $1 AND li.status != 'deleted'
+                AND i.action IN ('view', 'qualified_detail_view')
+                AND i.created_at >= $2 AND i.created_at < $3) AS views,
+            (SELECT COUNT(*)
+               FROM interactions i
+               JOIN listings li ON li.id = i.listing_id
+              WHERE li.seller_id = $1 AND li.status != 'deleted'
+                AND i.action = 'save'
+                AND i.created_at >= $2 AND i.created_at < $3) AS saves,
+            (SELECT COUNT(*)
+               FROM interactions i
+               JOIN listings li ON li.id = i.listing_id
+              WHERE li.seller_id = $1 AND li.status != 'deleted'
+                AND i.action = 'offer_submitted'
+                AND i.created_at >= $2 AND i.created_at < $3) AS offers,
+            (SELECT COUNT(*)
+               FROM orders o
+              WHERE o.seller_id = $1
+                AND o.status IN ('paid', 'shipped', 'delivered', 'completed')
+                AND o.paid_at IS NOT NULL
+                AND o.paid_at >= $2 AND o.paid_at < $3) AS purchases
         `,
         [sellerId, start, end]
       ),
@@ -882,7 +1032,9 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
 
     // ── Conversion funnel ─────────────────────────────────────────────
     const funnelData = {
-      impressions: Number(funnel.impressions ?? 0),
+      // null when recommendation_impressions is absent — the client renders
+      // the stage as unavailable rather than a fabricated zero.
+      impressions: funnel.impressions === null ? null : Number(funnel.impressions ?? 0),
       views: Number(funnel.views ?? 0),
       saves: Number(funnel.saves ?? 0),
       offers: Number(funnel.offers ?? 0),
@@ -1133,7 +1285,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
                 AND i.created_at >= $2 AND i.created_at < $3) AS views,
               COUNT(i.id) FILTER (WHERE i.action = 'wishlist'
                 AND i.created_at >= $2 AND i.created_at < $3) AS likes,
-              COUNT(i.id) FILTER (WHERE i.action = 'offer_start'
+              COUNT(i.id) FILTER (WHERE i.action = 'offer_submitted'
                 AND i.created_at >= $2 AND i.created_at < $3) AS offers
        FROM listings l
        LEFT JOIN interactions i ON i.listing_id = l.id
@@ -1241,7 +1393,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
             SELECT
               COUNT(i.id) FILTER (WHERE i.action IN ('view', 'qualified_detail_view')) AS views,
               COUNT(i.id) FILTER (WHERE i.action = 'save') AS saves,
-              COUNT(i.id) FILTER (WHERE i.action = 'offer_start') AS offers,
+              COUNT(i.id) FILTER (WHERE i.action = 'offer_submitted') AS offers,
               COUNT(i.id) FILTER (WHERE i.action = 'wishlist') AS likes
             FROM interactions i
             WHERE i.listing_id = $1 AND i.created_at >= $2 AND i.created_at < $3

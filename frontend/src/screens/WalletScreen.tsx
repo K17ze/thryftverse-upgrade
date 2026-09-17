@@ -170,7 +170,15 @@ export default function WalletScreen({ navigation }: Props) {
   }
 
   // ── Empty state ──
-  if (balance.available === 0 && balance.reservedForOrders === 0) {
+  // "Empty" must mean *no money anywhere*: a seller whose 1ZE is zero but who
+  // has fiat earnings available/pending/reserved must still see the wallet —
+  // the seller-earnings row and activity sections live below this gate.
+  const hasSellerFunds =
+    sellerBalances !== null &&
+    (sellerBalances.availableGbp > 0 ||
+      sellerBalances.pendingGbp > 0 ||
+      sellerBalances.heldInReserveGbp > 0);
+  if (balance.available === 0 && balance.reservedForOrders === 0 && !hasSellerFunds) {
     return (
       <WalletEmptyScreen onBack={handleBack} onAddMoney={handleAddMoney}>
         {addMoneySheet}

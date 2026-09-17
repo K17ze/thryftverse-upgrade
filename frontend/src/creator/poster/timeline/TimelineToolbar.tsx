@@ -1,15 +1,14 @@
 import React, { useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, LayoutChangeEvent } from 'react-native';
+import { View, Text, StyleSheet, LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSharedValue, runOnJS } from 'react-native-reanimated';
 import { Space, FontFamily, Radius } from '../../../theme/designTokens';
-import { IconGrammar } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { RadiusRoleValue } from '../../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
-import { PressScale } from '../../CreatorAnimations';
+import { PressScale } from '../../shared/CreatorAnimations';
 import { formatTimecode, type PosterClip } from './TimelineTypes';
 import { getToolLabel, getSliderLabel } from '../../core/a11y/CanvasAccessibilityLabels';
 
@@ -51,6 +50,13 @@ export interface TimelineToolbarProps {
   // Opens the variable speed curve editor sheet for the selected clip.
   // When provided, the speed slider row shows a "Curve" button beside it.
   onOpenSpeedCurve?: () => void;
+  /**
+   * Clip lock (Instagram Edits parity). When `isLocked` is true the
+   * toolbar renders only the Unlock action — all mutating tools and
+   * sliders are disabled because the timeline op router rejects them.
+   */
+  isLocked?: boolean;
+  onToggleLock?: () => void;
 }
 
 export const TimelineToolbar = React.memo(function TimelineToolbar({
@@ -66,6 +72,8 @@ export const TimelineToolbar = React.memo(function TimelineToolbar({
   onSpeedChange,
   onVolumeChange,
   onOpenSpeedCurve,
+  isLocked,
+  onToggleLock,
 }: TimelineToolbarProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
@@ -119,9 +127,17 @@ export const TimelineToolbar = React.memo(function TimelineToolbar({
       </View>
 
       <View style={toolbarStyles.toolsRow}>
-        <ToolButton icon="cut-outline" label="Split" a11yLabel={getToolLabel('split')} onPress={onSplit} haptic={haptic} />
-        <ToolButton icon="copy-outline" label="Duplicate" a11yLabel={getToolLabel('duplicate')} onPress={onDuplicate} haptic={haptic} />
-        <ToolButton icon="swap-horizontal-outline" label="Replace" a11yLabel={getToolLabel('replace')} onPress={onReplace} haptic={haptic} />
+        <ToolButton icon="cut-outline" label="Split" a11yLabel={getToolLabel('split')} onPress={onSplit} haptic={haptic} disabled={isLocked} />
+        <ToolButton icon="copy-outline" label="Duplicate" a11yLabel={getToolLabel('duplicate')} onPress={onDuplicate} haptic={haptic} disabled={isLocked} />
+        <ToolButton icon="swap-horizontal-outline" label="Replace" a11yLabel={getToolLabel('replace')} onPress={onReplace} haptic={haptic} disabled={isLocked} />
+        {onToggleLock && (
+          <ToolButton
+            icon={isLocked ? 'lock-closed' : 'lock-open-outline'}
+            label={isLocked ? 'Unlock' : 'Lock'}
+            onPress={onToggleLock}
+            haptic={haptic}
+          />
+        )}
       </View>
 
       <View style={toolbarStyles.slidersColumn}>
@@ -139,15 +155,17 @@ export const TimelineToolbar = React.memo(function TimelineToolbar({
               color={colors.brand}
               onChange={onSpeedChange}
               haptic={haptic}
+              disabled={isLocked}
             />
           </View>
           {onOpenSpeedCurve && (
             <PressScale
-              onPress={() => { haptic.light(); onOpenSpeedCurve(); }}
-              style={toolbarStyles.curveButton}
+              onPress={() => { if (!isLocked) { haptic.light(); onOpenSpeedCurve(); } }}
+              style={{ ...toolbarStyles.curveButton, opacity: isLocked ? 0.35 : 1 }}
               accessibilityRole="button"
               accessibilityLabel="Variable speed curve"
               accessibilityHint="Opens the speed ramp editor for this clip"
+              accessibilityState={{ disabled: !!isLocked }}
             >
               <Ionicons name="analytics-outline" size={18} color={colors.brand} />
             </PressScale>
@@ -164,6 +182,7 @@ export const TimelineToolbar = React.memo(function TimelineToolbar({
           color={colors.brand}
           onChange={onVolumeChange}
           haptic={haptic}
+          disabled={isLocked}
         />
       </View>
 
@@ -177,6 +196,7 @@ export const TimelineToolbar = React.memo(function TimelineToolbar({
           onPress={onDelete}
           danger
           haptic={haptic}
+          disabled={isLocked}
         />
       </View>
     </View>
@@ -190,6 +210,7 @@ interface ToolButtonProps {
   a11yLabel?: string;
   onPress: () => void;
   danger?: boolean;
+  disabled?: boolean;
   haptic: ReturnType<typeof useHaptic>;
 }
 
@@ -199,6 +220,7 @@ const ToolButton = React.memo(function ToolButton({
   a11yLabel,
   onPress,
   danger,
+  disabled,
   haptic,
 }: ToolButtonProps) {
   const { colors } = useAppTheme();
@@ -206,13 +228,16 @@ const ToolButton = React.memo(function ToolButton({
   return (
     <PressScale
       onPress={() => {
+        if (disabled) return;
         if (danger) haptic.heavy();
         else haptic.light();
         onPress();
       }}
-      style={toolbarStyles.tool}
+      style={{ ...toolbarStyles.tool, opacity: disabled ? 0.35 : 1 }}
       accessibilityLabel={a11yLabel ?? label}
+      accessibilityHint="Activates this timeline tool"
       accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled }}
       hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
     >
       <AppIcon name={icon} size={IconSize.lg} color={danger ? 'danger' : 'textPrimary'} opticalCenter={true} accessible={false} />
@@ -235,6 +260,7 @@ interface SliderRowProps {
   formatValue: (value: number) => string;
   color: string;
   onChange: (value: number) => void;
+  disabled?: boolean;
   haptic: ReturnType<typeof useHaptic>;
 }
 
@@ -245,10 +271,10 @@ const SliderRow = React.memo(function SliderRow({
   min,
   max,
   step,
-  neutralValue,
   formatValue,
   color,
   onChange,
+  disabled,
   haptic,
 }: SliderRowProps) {
   const { colors } = useAppTheme();
@@ -263,6 +289,9 @@ const SliderRow = React.memo(function SliderRow({
   const pct = Math.round(ratio * 100);
   const fillLeft = min < 0 ? Math.min(50, pct) : 0;
   const fillWidth = min < 0 ? Math.abs(pct - 50) : pct;
+  // Last emitted value — the step-quantized value repeats for many gesture
+  // events within a step, so dedupe before crossing the bridge.
+  const lastEmittedSV = useSharedValue(Number.NaN);
   const panGesture = React.useMemo(
     () =>
       Gesture.Pan()
@@ -271,32 +300,38 @@ const SliderRow = React.memo(function SliderRow({
           const w = widthSV.value;
           if (w <= 0) return;
           const r = Math.max(0, Math.min(1, e.x / w));
-          const v = min + Math.round((r * range) / step) * step;
+          const v = Math.max(min, Math.min(max, min + Math.round((r * range) / step) * step));
+          lastEmittedSV.value = v;
           runOnJS(haptic.selection)();
-          runOnJS(onChange)(Math.max(min, Math.min(max, v)));
+          runOnJS(onChange)(v);
         })
         .onChange((e) => {
           'worklet';
           const w = widthSV.value;
           if (w <= 0) return;
           const r = Math.max(0, Math.min(1, e.x / w));
-          const v = min + Math.round((r * range) / step) * step;
-          runOnJS(onChange)(Math.max(min, Math.min(max, v)));
+          const v = Math.max(min, Math.min(max, min + Math.round((r * range) / step) * step));
+          if (v !== lastEmittedSV.value) {
+            lastEmittedSV.value = v;
+            runOnJS(onChange)(v);
+          }
         }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [min, max, range, step, onChange, haptic]
+    [min, max, range, step, onChange, haptic, lastEmittedSV]
   );
 
   return (
-    <View style={toolbarStyles.sliderRow}>
+    <View style={[toolbarStyles.sliderRow, disabled && toolbarStyles.disabledOpacity]}>
       <AppIcon name={icon} size={IconSize.sm} color="textSecondary" opticalCenter={true} accessible={false} />
       <Text style={[toolbarStyles.sliderLabel, { color: colors.textSecondary }]}>{label}</Text>
-      <GestureDetector gesture={panGesture}>
+      <GestureDetector gesture={disabled ? Gesture.Pan().enabled(false) : panGesture}>
         <View
           style={toolbarStyles.sliderTrack}
           onLayout={handleLayout}
           accessibilityLabel={getSliderLabel(label, value, min, max, formatValue)}
+          accessibilityHint="Drag to adjust the value"
           accessibilityRole="adjustable"
+          accessibilityState={{ disabled: !!disabled }}
         >
           <View style={[toolbarStyles.sliderTrackBg, { backgroundColor: colors.border }]} />
           <View
@@ -442,5 +477,8 @@ const toolbarStyles = StyleSheet.create({
   divider: {
     height: StyleSheet.hairlineWidth,
     marginVertical: Space.xxs,
+  },
+  disabledOpacity: {
+    opacity: 0.35,
   },
 });

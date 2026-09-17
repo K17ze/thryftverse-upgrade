@@ -10,7 +10,7 @@ import {
 import { FlashList } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, useRoute, type RouteProp } from '@react-navigation/native';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
@@ -38,6 +38,7 @@ import {
   normaliseOrderStatus,
   resolveCapabilities,
   type OrderRole } from '../components/orders/orderCapabilities';
+import type { RootStackParamList } from '../navigation/types';
 import { t } from '../i18n';
 
 interface DateGroup {
@@ -80,6 +81,9 @@ function groupOrdersByDate(orders: OrderViewModel[]): DateGroup[] {
 
 export default function MyOrdersScreen() {
   const navigation = useNavigation<any>();
+  // Deep-link scope (e.g. Seller Hub "Ship orders" → selling + needs_action).
+  // Absent params keep the historical default: the 'all' tab.
+  const route = useRoute<RouteProp<RootStackParamList, 'MyOrders'>>();
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -88,19 +92,36 @@ export default function MyOrdersScreen() {
   const viewerId = currentUser?.id;
   const { isOffline } = useConnectivity();
 
-  const [activeTab, setActiveTab] = useState<OrdersTab>('all');
+  const [activeTab, setActiveTab] = useState<OrdersTab>(route.params?.tab ?? 'all');
   const [orders, setOrders] = useState<CommerceUserOrder[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  // Pagination state also lives in refs: fetchOrders must not take
+  // nextCursor/isLoadingMore as useCallback deps — the reset effect keys
+  // on fetchOrders, so a page-2 request would wipe the list back to
+  // page 1 mid-flight (audit P0: load-more collapsed the list).
+  const nextCursorRef = useRef<string | null>(null);
+  const isLoadingMoreRef = useRef(false);
+  const setNextCursorSynced = useCallback((cursor: string | null) => {
+    nextCursorRef.current = cursor;
+    setNextCursor(cursor);
+  }, []);
+  const setIsLoadingMoreSynced = useCallback((loading: boolean) => {
+    isLoadingMoreRef.current = loading;
+    setIsLoadingMore(loading);
+  }, []);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [paginationError, setPaginationError] = useState<string | null>(null);
+  // Server-truthful needs-action count — the page-scoped filter count
+  // under-reports once the user has more orders than PAGE_SIZE.
+  const [serverNeedsActionCount, setServerNeedsActionCount] = useState<number | null>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [filter, setFilter] = useState<OrdersFilterState>({
-    classification: 'all',
+    classification: route.params?.classification ?? 'all',
     year: null });
   const [filterSheetVisible, setFilterSheetVisible] = useState(false);
 
@@ -167,7 +188,8 @@ export default function MyOrdersScreen() {
       }
 
       if (cursor) {
-        if (isLoadingMore || !nextCursor) return;
+        if (isLoadingMoreRef.current || !nextCursorRef.current) return;
+        isLoadingMoreRef.current = true;
         setIsLoadingMore(true);
         setPaginationError(null);
       } else {
@@ -178,10 +200,19 @@ export default function MyOrdersScreen() {
       try {
         const result = await listUserOrders(viewerId, buildParams(cursor));
         if (cursor) {
-          setOrders((prev) => [...prev, ...result.items]);
+          // Dedup by id — a focus-refetch that replaced the list between
+          // pages, or a status mutation that re-orders rows, must not render
+          // the same order twice.
+          setOrders((prev) => {
+            const seen = new Set(prev.map((o) => o.id));
+            const fresh = result.items.filter((o) => !seen.has(o.id));
+            return [...prev, ...fresh];
+          });
         } else {
           setOrders(result.items);
+          setServerNeedsActionCount(result.needsActionCount);
         }
+        nextCursorRef.current = result.nextCursor;
         setNextCursor(result.nextCursor);
         setLoadError(null);
       } catch (err: unknown) {
@@ -191,9 +222,11 @@ export default function MyOrdersScreen() {
         } else {
           setLoadError(message);
           setOrders([]);
+          setServerNeedsActionCount(null);
         }
       } finally {
         if (cursor) {
+          isLoadingMoreRef.current = false;
           setIsLoadingMore(false);
         } else {
           setIsInitialLoading(false);
@@ -201,13 +234,16 @@ export default function MyOrdersScreen() {
         }
       }
     },
-    [viewerId, buildParams, isLoadingMore, nextCursor]
+    [viewerId, buildParams]
   );
 
   useEffect(() => {
     setIsInitialLoading(true);
     setOrders([]);
+    nextCursorRef.current = null;
+    isLoadingMoreRef.current = false;
     setNextCursor(null);
+    setIsLoadingMore(false);
     setLoadError(null);
     setPaginationError(null);
     void fetchOrders();
@@ -234,11 +270,14 @@ export default function MyOrdersScreen() {
   const handleRefresh = useCallback(async () => {
     if (!viewerId) return;
     setIsRefreshing(true);
+    nextCursorRef.current = null;
     setNextCursor(null);
     setPaginationError(null);
     try {
       const result = await listUserOrders(viewerId, buildParams());
       setOrders(result.items);
+      setServerNeedsActionCount(result.needsActionCount);
+      nextCursorRef.current = result.nextCursor;
       setNextCursor(result.nextCursor);
       setLoadError(null);
     } catch (err: unknown) {
@@ -250,10 +289,10 @@ export default function MyOrdersScreen() {
   }, [viewerId, buildParams]);
 
   const handleLoadMore = useCallback(() => {
-    if (nextCursor && !isLoadingMore) {
-      void fetchOrders(nextCursor);
+    if (nextCursorRef.current && !isLoadingMoreRef.current) {
+      void fetchOrders(nextCursorRef.current);
     }
-  }, [nextCursor, isLoadingMore, fetchOrders]);
+  }, [fetchOrders]);
 
   const handleClearSearch = useCallback(() => {
     setSearchQuery('');
@@ -268,13 +307,12 @@ export default function MyOrdersScreen() {
 
       // Canonical capability projection (P0-3): the list consumes the same
       // resolver as Order Detail rather than reinterpreting status strings.
-      // The list payload carries no resolution/review flags, so those are
-      // resolved as false — the detail screen is the authority for them.
+      // hasReview and hasOpenResolution now both arrive on the list payload.
       const capabilities = resolveCapabilities({
         status: order.status,
         role,
-        hasOpenResolution: false,
-        hasReview: false,
+        hasOpenResolution: order.hasOpenResolution === true,
+        hasReview: order.hasReview === true,
         hasTracking: order.trackingNumber != null,
         fulfilmentSnapshot: order.fulfilmentSnapshot ?? null });
 
@@ -305,13 +343,17 @@ export default function MyOrdersScreen() {
         serviceName: order.fulfilmentSnapshot?.serviceName ?? order.fulfilmentSnapshot?.carrierId ?? null,
         deliveredAt: order.deliveredAt,
         etaWindow: capabilities.etaWindow,
+        hasOpenResolution: order.hasOpenResolution === true,
         nextActionLabel };
     });
   }, [orders, viewerId]);
 
+  // Prefer the server count (all orders, not just the loaded page); fall
+  // back to the page-scoped count for older backends that omit the field.
   const needsActionCount = useMemo(
-    () => orderViewModels.filter((o) => needsAction(o.status, o.role)).length,
-    [orderViewModels]
+    () => serverNeedsActionCount
+      ?? orderViewModels.filter((o) => needsAction(o.status, o.role)).length,
+    [serverNeedsActionCount, orderViewModels]
   );
 
   const availableYears = useMemo(() => {
@@ -579,10 +621,6 @@ export default function MyOrdersScreen() {
 
       <OrdersTabRail
         activeTab={activeTab}
-        allCount={0}
-        buyingCount={0}
-        sellingCount={0}
-        completedCount={0}
         onChange={(tab) => { haptics.selection(); setActiveTab(tab); }}
       />
 

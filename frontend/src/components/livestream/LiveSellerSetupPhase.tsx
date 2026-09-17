@@ -4,7 +4,7 @@
  * the seller's real active listings, with the go-live footer.
  */
 
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -32,6 +32,56 @@ import { BroadcastPreview } from '../live/BroadcastPreview';
 import type { ListingApiItem } from '../../services/listingsApi';
 import { useSellerStyles } from './liveSellerStyles';
 
+// ── Schedule presets ────────────────────────────────────────────────────────
+// No datetime-picker dependency exists in the app, so scheduling offers a
+// restrained preset list instead of a hand-rolled calendar. Each preset
+// carries a resolved future ISO timestamp and a label + absolute time meta.
+
+interface SchedulePreset {
+  key: string;
+  label: string;
+  meta: string;
+  iso: string;
+}
+
+function formatPresetMeta(at: Date): string {
+  const now = new Date();
+  const time = at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const sameDay = at.toDateString() === now.toDateString();
+  if (sameDay) return time;
+  const day = at.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+  return `${day} · ${time}`;
+}
+
+function buildSchedulePresets(): SchedulePreset[] {
+  const now = Date.now();
+  const presets: { key: string; label: string; at: Date }[] = [
+    { key: 'in1h', label: 'In 1 hour', at: new Date(now + 60 * 60_000) },
+    { key: 'in3h', label: 'In 3 hours', at: new Date(now + 3 * 60 * 60_000) },
+  ];
+  // "Tonight" = today 20:00 local — once that's less than ~30 min away it
+  // stops being a useful preset and rolls to tomorrow evening.
+  const tonight = new Date();
+  tonight.setHours(20, 0, 0, 0);
+  const tomorrowEve = new Date();
+  tomorrowEve.setDate(tomorrowEve.getDate() + 1);
+  tomorrowEve.setHours(19, 0, 0, 0);
+  if (tonight.getTime() - now > 30 * 60_000) {
+    presets.push({ key: 'tonight', label: 'Tonight', at: tonight });
+    presets.push({ key: 'tomorrow', label: 'Tomorrow evening', at: tomorrowEve });
+  } else {
+    presets.push({ key: 'tomorrow', label: 'Tomorrow evening', at: tomorrowEve });
+  }
+  return presets.map((p) => ({ key: p.key, label: p.label, meta: formatPresetMeta(p.at), iso: p.at.toISOString() }));
+}
+
+function formatConfirmedLabel(iso: string): string {
+  const at = new Date(iso);
+  const day = at.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
+  const time = at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return `${day} at ${time}`;
+}
+
 interface LiveSellerSetupPhaseProps {
   title: string;
   onTitleChange: (text: string) => void;
@@ -44,8 +94,55 @@ interface LiveSellerSetupPhaseProps {
   onCreateListing: () => void;
   onGoLive: () => void;
   goingLive: boolean;
+  /**
+   * Schedule path — creates the session with scheduledStartAt and returns
+   * true on success. Optional: when the host screen does not provide it the
+   * start-time picker is hidden and only "Go live" is offered.
+   */
+  onScheduleShow?: (scheduledStartAt: string) => Promise<boolean>;
+  scheduling?: boolean;
   setupError: string | null;
   onBack: () => void;
+}
+
+function ScheduleChoiceRow({
+  label,
+  meta,
+  selected,
+  onPress,
+}: {
+  label: string;
+  meta?: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  const { colors } = useAppTheme();
+  const styles = useSellerStyles();
+  return (
+    <AnimatedPressable
+      onPress={onPress}
+      style={[styles.lotSelectRow, { borderBottomColor: colors.border }]}
+      hapticFeedback="selection"
+      scaleValue={0.99}
+      accessibilityRole="radio"
+      accessibilityState={{ selected }}
+      accessibilityLabel={`${label}${meta ? `, ${meta}` : ''}`}
+    >
+      <View style={styles.lotSelectInfo}>
+        <Text style={[styles.lotSelectTitle, { color: colors.textPrimary }]}>{label}</Text>
+        {meta ? (
+          <Text style={[styles.lotSelectPrice, { color: colors.textSecondary }]}>{meta}</Text>
+        ) : null}
+      </View>
+      {selected ? (
+        <View style={[styles.lotOrderMark, { borderColor: colors.brand }]}>
+          <AppIcon name="checkmark" size={IconSize.xs} color="brand" accessible={false} />
+        </View>
+      ) : (
+        <View style={[styles.lotOrderMark, { borderColor: colors.border }]} />
+      )}
+    </AnimatedPressable>
+  );
 }
 
 export function LiveSellerSetupPhase({
@@ -60,6 +157,8 @@ export function LiveSellerSetupPhase({
   onCreateListing,
   onGoLive,
   goingLive,
+  onScheduleShow,
+  scheduling = false,
   setupError,
   onBack }: LiveSellerSetupPhaseProps) {
   const { colors } = useAppTheme();
@@ -69,9 +168,55 @@ export function LiveSellerSetupPhase({
   const { height: SCREEN_HEIGHT } = useWindowDimensions();
   const styles = useSellerStyles();
 
+  // null = "Now" (go live immediately); an ISO string = a scheduled show.
+  const [scheduledIso, setScheduledIso] = useState<string | null>(null);
+  // Set once the schedule request succeeded — swaps the surface to the
+  // confirmation state until the seller dismisses it.
+  const [confirmedIso, setConfirmedIso] = useState<string | null>(null);
+  const schedulePresets = useMemo(buildSchedulePresets, []);
+
   const showListingsLoading = listingsLoading && listings == null;
   const showListingsError = !listingsLoading && listingsError != null;
   const showListingsEmpty = !listingsLoading && !listingsError && listings != null && listings.length === 0;
+
+  const isScheduleMode = scheduledIso != null && onScheduleShow != null;
+  const actionPending = goingLive || scheduling;
+  const actionDisabled = selectedIds.length === 0 || actionPending || isOffline;
+
+  const handlePrimaryAction = () => {
+    if (isScheduleMode && scheduledIso) {
+      void onScheduleShow(scheduledIso)
+        .then((ok) => {
+          if (ok) setConfirmedIso(scheduledIso);
+        })
+        .catch(() => {
+          // Errors are surfaced via setupError in the footer.
+        });
+      return;
+    }
+    onGoLive();
+  };
+
+  // ── Scheduled confirmation ──
+  if (confirmedIso) {
+    return (
+      <FlagshipScreen
+        testID="live-seller-scheduled"
+        header={<FlagshipHeader title="Go live" onBack={onBack} />}
+        scrollEnabled={false}
+        contentStyle={styles.flushContent}
+      >
+        <FlagshipState
+          variant="empty"
+          icon="checkmark-circle-outline"
+          title="Show scheduled"
+          subtitle={`${formatConfirmedLabel(confirmedIso)} — your show will appear in Coming up.`}
+          actionLabel="Done"
+          onAction={onBack}
+        />
+      </FlagshipScreen>
+    );
+  }
 
   return (
     <FlagshipScreen
@@ -90,22 +235,24 @@ export function LiveSellerSetupPhase({
             <Text style={[styles.footerError, { color: colors.danger }]}>{setupError}</Text>
           ) : null}
           <AnimatedPressable
-            onPress={onGoLive}
-            disabled={selectedIds.length === 0 || goingLive || isOffline}
+            onPress={handlePrimaryAction}
+            disabled={actionDisabled}
             style={[
               styles.goLiveBtn,
-              { backgroundColor: colors.danger },
-              (selectedIds.length === 0 || goingLive || isOffline) && { opacity: 0.45 },
+              { backgroundColor: isScheduleMode ? colors.brand : colors.danger },
+              actionDisabled && { opacity: 0.45 },
             ]}
             hapticFeedback="medium"
             accessibilityRole="button"
-            accessibilityLabel="Go live"
-            accessibilityState={{ disabled: selectedIds.length === 0 || goingLive || isOffline, busy: goingLive }}
+            accessibilityLabel={isScheduleMode ? 'Schedule show' : 'Go live'}
+            accessibilityState={{ disabled: actionDisabled, busy: actionPending }}
           >
-            {goingLive ? (
+            {actionPending ? (
               <ActivityIndicator size="small" color={colors.textInverse} />
             ) : (
-              <Text style={[styles.goLiveBtnText, { color: colors.textInverse }]}>Go live</Text>
+              <Text style={[styles.goLiveBtnText, { color: colors.textInverse }]}>
+                {isScheduleMode ? 'Schedule show' : 'Go live'}
+              </Text>
             )}
           </AnimatedPressable>
         </View>
@@ -140,6 +287,35 @@ export function LiveSellerSetupPhase({
             accessibilityLabel="Stream title"
           />
         </View>
+
+        {/* Start time — only when the host screen wires the schedule path */}
+        {onScheduleShow ? (
+          <View style={styles.fieldGroup}>
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Start time</Text>
+            <View>
+              <ScheduleChoiceRow
+                label="Now"
+                meta="Go live immediately"
+                selected={scheduledIso == null}
+                onPress={() => setScheduledIso(null)}
+              />
+              {schedulePresets.map((preset) => (
+                <ScheduleChoiceRow
+                  key={preset.key}
+                  label={preset.label}
+                  meta={preset.meta}
+                  selected={scheduledIso === preset.iso}
+                  onPress={() => setScheduledIso(preset.iso)}
+                />
+              ))}
+            </View>
+            {scheduledIso ? (
+              <Text style={[styles.previewCaption, { color: colors.textMuted, textAlign: 'left' }]}>
+                Scheduled shows appear in Coming up and followers get notified when you go live.
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
 
         {/* Lot selection — real active listings */}
         <View style={styles.fieldGroup}>

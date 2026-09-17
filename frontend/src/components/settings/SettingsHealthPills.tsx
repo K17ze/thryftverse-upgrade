@@ -11,8 +11,9 @@ const styles = createSettingsScreenStyles();
 
 /** Account health indicator — compact status pills showing completed
  *  security steps at a glance. Each pill is a checkmark + label. Incomplete
- *  steps are omitted (not shown as red warnings — the verification prompt
- *  above handles that). Renders only when a user is signed in. */
+ *  steps are omitted (not shown as red warnings — the Verification row in
+ *  Edit Profile is the single verification entry point). Renders only when
+ *  a user is signed in. */
 export function SettingsHealthPills() {
   const { colors } = useAppTheme();
   const { t: ts } = useAppTranslation('settings');

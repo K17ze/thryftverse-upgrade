@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -7,7 +7,7 @@ import {
   Pressable } from 'react-native';
 // Note: ScrollView is retained for the horizontal subcategory rail only.
 // The vertical scroll surface is owned by the FlashList inside PinterestMasonryGrid.
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useTaxonomy } from '../context/TaxonomyContext';
@@ -24,6 +24,8 @@ import { Space, Typography, Control, Stroke, Radius } from '../theme/designToken
 import { TypographyV2 } from '../theme/typography.v2';
 import { useStore, type BrowseSortOption } from '../store/useStore';
 import { useHaptic } from '../hooks/useHaptic';
+import { useSaveToCollectionPicker } from '../hooks/useSaveToCollectionPicker';
+import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 
 const normalize = (value?: string) =>
   (value ?? '').trim().toLocaleLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -42,9 +44,21 @@ export default function CategoryDetailScreen() {
   const { colors } = useAppTheme();
   const reducedMotionEnabled = useReducedMotion();
   const categoryId = route.params?.categoryId as string | undefined;
+  // Context-scoped filters: this surface owns the `category:<id>` bucket so
+  // its filter state never leaks into Browse/Search surfaces (or vice versa).
+  const isFocused = useIsFocused();
+  useEffect(() => {
+    if (isFocused && categoryId) {
+      useStore.getState().activateBrowseContext(`category:${categoryId}`);
+    }
+  }, [isFocused, categoryId]);
   const browseFilters = useStore((state) => state.browseFilters);
   const updateBrowseFilters = useStore((state) => state.updateBrowseFilters);
   const haptic = useHaptic();
+  const isSavedProduct = useStore((state) => state.isSavedProduct);
+  // Two-tier save: tap = quick-save, long-press = file to a collection.
+  // The hook also owns the one-shot "Add to a list" teaching toast.
+  const { savePickerItemId, handleQuickSave, handleSaveLongPress, closeSavePicker } = useSaveToCollectionPicker();
   const { categories } = useTaxonomy();
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
 
@@ -418,7 +432,9 @@ export default function CategoryDetailScreen() {
                 openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'CategoryDetail' })
               }
               numColumns={2}
-              showSaveButton
+              onItemSaveToggle={handleQuickSave}
+              onItemSaveLongPress={handleSaveLongPress}
+              isItemSaved={isSavedProduct}
               enableEntranceAnimation
             />
           </Reanimated.View>
@@ -464,6 +480,13 @@ export default function CategoryDetailScreen() {
           </View>
         )}
       </View>
+
+      {/* ── Save-to-collection picker — long-press a tile bookmark ── */}
+      <SaveToCollectionModal
+        visible={savePickerItemId !== null}
+        itemId={savePickerItemId ?? ''}
+        onClose={closeSavePicker}
+      />
     </FlagshipScreen>
   );
 }

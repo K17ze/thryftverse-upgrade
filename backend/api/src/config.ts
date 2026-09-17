@@ -511,6 +511,21 @@ export const config = {
   ),
   platformRevenueSweepIntervalMs: asNumber(process.env.PLATFORM_REVENUE_SWEEP_INTERVAL_MS, 6 * 60 * 60 * 1000),
   retentionSweepIntervalMs: asNumber(process.env.RETENTION_SWEEP_INTERVAL_MS, 24 * 60 * 60 * 1000),
+  // ── Auto-feedback defaults ──────────────────────────────────────────
+  // Platform convention: buyer silence resolves to automatic positive
+  // feedback after 14 days; seller dispatch SLA defaults to 3 days when an
+  // order predates the purchase-time rights snapshot. The sweep runs
+  // hourly — the window is day-granularity, so one pass per hour is ample.
+  autoFeedbackWindowDays: asNumber(process.env.AUTO_FEEDBACK_WINDOW_DAYS, 14),
+  // Fail fast on out-of-range values — an AUTO_FEEDBACK_RATING outside 1-5
+  // would violate the order_reviews CHECK constraint and roll back every
+  // hourly sweep transaction silently.
+  autoFeedbackRating: asIntegerInRange('AUTO_FEEDBACK_RATING', process.env.AUTO_FEEDBACK_RATING, 5, 1, 5),
+  dispatchSlaDefaultDays: asNumber(process.env.DISPATCH_SLA_DEFAULT_DAYS, 3),
+  autoFeedbackSweepIntervalMs: asNumber(
+    process.env.AUTO_FEEDBACK_SWEEP_INTERVAL_MS,
+    60 * 60 * 1000
+  ),
   analyticsAggregationIntervalMs: asNumber(process.env.ANALYTICS_AGGREGATION_INTERVAL_MS, 15 * 60 * 1000),
   opsAlertIntervalMs: asNumber(process.env.OPS_ALERT_INTERVAL_MS, 60_000),
   alertingWebhookUrls: asCsvList(process.env.ALERTING_WEBHOOK_URLS ?? process.env.ALERTING_WEBHOOK_URL),
@@ -529,6 +544,9 @@ export const config = {
   otelExporterOtlpHttpUrl:
     process.env.OTEL_EXPORTER_OTLP_HTTP_URL ?? 'http://localhost:4318/v1/traces',
   auctionSweepIntervalMs: asNumber(process.env.AUCTION_SWEEP_INTERVAL_MS, 30_000),
+  // Live-lot auto-close is second-granularity: lots run 30s–30min windows and
+  // viewers see a live countdown, so the sweep must tick well under a minute.
+  liveLotSweepIntervalMs: asNumber(process.env.LIVE_LOT_SWEEP_INTERVAL_MS, 5_000),
   coOwnOrderExpirySweepIntervalMs: asNumber(process.env.COOWN_ORDER_EXPIRY_SWEEP_INTERVAL_MS, 30_000),
   coOwnAlertEvaluatorIntervalMs: asNumber(process.env.COOWN_ALERT_EVALUATOR_INTERVAL_MS, 60_000),
   coOwnDripExecutionIntervalMs: asNumber(process.env.COOWN_DRIP_EXECUTION_INTERVAL_MS, 300_000),

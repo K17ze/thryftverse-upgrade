@@ -9,13 +9,13 @@ import {
   LEGACY_POSTER_LANDSCAPE_RATIO,
   safeValidateDocument,
   type CreatorDocument,
-} from '../creator/composition';
+} from '../creator/core/projectStore/composition';
 import {
   serialiseToLookPayload,
   serialiseToPosterPayload,
   validateForPublish,
-} from '../creator/compositionContract';
-import { posterStoryToDocument, lookToDocument } from '../creator/viewerAdapters';
+} from '../creator/core/projectStore/compositionContract';
+import { posterStoryToDocument, lookToDocument } from '../creator/export/viewerAdapters';
 import { evaluateCompositionEffectStack } from '../creator/core/playback/EffectEvaluator';
 
 // ── P0.1: Aspect-ratio semantics ───────────────────────────────────

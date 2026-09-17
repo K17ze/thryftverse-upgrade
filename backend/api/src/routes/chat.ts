@@ -13,10 +13,13 @@ import {
   agentRuntimeReadinessReason,
 } from '../botRuntime/openaiAgent.js';
 import { publishRealtimeEvent } from '../lib/realtime.js';
+import { isUserOnline } from '../lib/presenceRegistry.js';
+import { config } from '../config.js';
 import { logger } from '../lib/logger.js';
 import { checkFraudNonBlocking } from '../lib/fraudDetection.js';
 import { evaluateRisk, recordExecution } from '../lib/riskDecision.js';
 import { scanMessageForScamPatterns } from '../lib/messageScamScanner.js';
+import { recordConsumerReport } from '../lib/safetyCaseService.js';
 
 // ── Local types ──
 
@@ -698,6 +701,26 @@ async function serializeChatMessageRows(
     userIds.push(r.user_id);
   }
 
+  // ── Save-in-chat state — batch-load saves so the "Saved" marker is
+  // shared state both participants render (Snapchat-style negotiated
+  // persistence). savedBy preserves attribution; savedAt is the first save.
+  const savesResult = await db.query<{ message_id: string; user_id: string; created_at: string }>(
+    `SELECT message_id, user_id, created_at::text
+     FROM chat_message_saves
+     WHERE message_id = ANY($1::text[])
+     ORDER BY created_at ASC`,
+    [messageIds]
+  );
+  const savesByMessage = new Map<string, { savedBy: string[]; savedAt: string }>();
+  for (const r of savesResult.rows) {
+    let entry = savesByMessage.get(r.message_id);
+    if (!entry) {
+      entry = { savedBy: [], savedAt: r.created_at };
+      savesByMessage.set(r.message_id, entry);
+    }
+    entry.savedBy.push(r.user_id);
+  }
+
   // ── Poll data: batch-load polls and votes for these messages ─────────
   const pollsResult = await db.query<{
     id: string;
@@ -735,15 +758,48 @@ async function serializeChatMessageRows(
     }
   }
 
+  // Video poster stills — resolve for video media messages whose metadata
+  // lacks posterUri (pre-field messages and the non-canonical attach path).
+  // The poster is what the bubble's image loader can actually decode; the
+  // mediaUri may be an HLS playlist.
+  const videoMessageIds = rows
+    .filter((r) => {
+      const meta = (r.metadata ?? {}) as Record<string, unknown>;
+      return meta.mediaType === 'video' && typeof meta.mediaUri === 'string' && typeof meta.posterUri !== 'string';
+    })
+    .map((r) => r.id);
+  const posterByMessage = new Map<string, string>();
+  if (videoMessageIds.length > 0) {
+    try {
+      const posterResult = await db.query<{ message_id: string; poster_url: string | null }>(
+        `SELECT att.message_id, ma.metadata->>'posterUrl' AS poster_url
+         FROM chat_message_attachments att
+         JOIN media_assets ma ON ma.id = att.media_asset_id
+         WHERE att.message_id = ANY($1::text[])`,
+        [videoMessageIds],
+      );
+      for (const r of posterResult.rows) {
+        if (r.poster_url) posterByMessage.set(r.message_id, r.poster_url);
+      }
+    } catch {
+      // chat_message_attachments may be absent on older schemas.
+    }
+  }
+
   return rows.map((row) => {
     const readBy = readByMessage.get(row.id) ?? [];
+    const metadata = { ...(row.metadata ?? {}) } as Record<string, unknown>;
+    const resolvedPoster = posterByMessage.get(row.id);
+    if (resolvedPoster && typeof metadata.posterUri !== 'string') {
+      metadata.posterUri = resolvedPoster;
+    }
     const baseReturn: Record<string, unknown> = {
       id: row.id,
       senderType: row.sender_type,
       senderUserId: row.sender_user_id,
       senderBotId: row.sender_bot_id,
       body: row.body,
-      metadata: row.metadata ?? {},
+      metadata,
       createdAt: row.created_at,
       clientMessageId: row.client_message_id ?? undefined,
       replyToMessageId: row.reply_to_message_id ?? undefined,
@@ -753,8 +809,13 @@ async function serializeChatMessageRows(
       reactions: formatReactionsMap(reactionsByMessage, row.id),
       readBy,
       isReadByMe: readBy.includes(actorUserId),
-      scamWarning: (row.metadata as Record<string, unknown> | null)?.scamWarning === true || undefined,
+      scamWarning: metadata.scamWarning === true || undefined,
     };
+    const saves = savesByMessage.get(row.id);
+    if (saves && saves.savedBy.length > 0) {
+      baseReturn.savedBy = saves.savedBy;
+      baseReturn.savedAt = saves.savedAt;
+    }
     const voice = voiceByMessage.get(row.id);
     if (voice) {
       baseReturn.voice = voice;
@@ -1226,10 +1287,12 @@ app.post('/chat/dm', async (request, reply) => {
           userId: payload.recipientUserId,
           title: 'New conversation',
           body: 'Someone started a conversation with you.',
+          eventType: 'chat_message',
           payload: {
             conversationId,
             event: 'chat_dm_created',
           },
+          route: { screen: 'Chat', params: { conversationId } },
           metadata: {
             source: 'chat.dm.create',
           },
@@ -1486,10 +1549,12 @@ app.post('/chat/groups', async (request, reply) => {
           userId: memberId,
           title: 'You were added to a group chat',
           body: `${title} is now active in Thryftverse chat.`,
+          eventType: 'chat_message',
           payload: {
             conversationId,
             event: 'chat_group_added',
           },
+          route: { screen: 'Chat', params: { conversationId } },
           metadata: {
             source: 'chat.groups.create',
           },
@@ -1882,10 +1947,12 @@ app.get('/chat/conversations/:conversationId/media', async (request) => {
       if (!mediaUri) return null;
       const rawType = typeof meta.mediaType === 'string' ? meta.mediaType : '';
       const mediaType = rawType === 'video' ? 'video' : rawType === 'document' ? 'document' : 'image';
+      const posterUri = typeof meta.posterUri === 'string' ? meta.posterUri : null;
       return {
         id: row.id,
         mediaUri,
         mediaType,
+        ...(posterUri ? { posterUri } : {}),
         senderUserId: row.sender_user_id ?? row.sender_bot_id ?? null,
         createdAt: row.created_at,
         ...(rawType === 'document' ? {
@@ -1895,6 +1962,33 @@ app.get('/chat/conversations/:conversationId/media', async (request) => {
       };
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);
+
+  // Backfill poster stills for video items whose metadata predates the
+  // posterUri field — the attachment row links message → media_asset.
+  const videoIdsNeedingPoster = items
+    .filter((i) => i.mediaType === 'video' && !('posterUri' in i))
+    .map((i) => i.id);
+  if (videoIdsNeedingPoster.length > 0) {
+    try {
+      const posterResult = await db.query<{ message_id: string; poster_url: string | null }>(
+        `SELECT att.message_id, ma.metadata->>'posterUrl' AS poster_url
+         FROM chat_message_attachments att
+         JOIN media_assets ma ON ma.id = att.media_asset_id
+         WHERE att.message_id = ANY($1::text[])`,
+        [videoIdsNeedingPoster],
+      );
+      const posterByMessage = new Map(
+        posterResult.rows.filter((r) => r.poster_url).map((r) => [r.message_id, r.poster_url as string]),
+      );
+      for (const item of items) {
+        const poster = posterByMessage.get(item.id);
+        if (poster) (item as Record<string, unknown>).posterUri = poster;
+      }
+    } catch {
+      // Attachments table may be absent on older schemas — items still
+      // return without a poster; the tile shows its honest video badge.
+    }
+  }
 
   return { ok: true, items };
 });
@@ -2249,6 +2343,56 @@ app.post('/chat/conversations/:conversationId/messages', {
   const isMediaMessage = payload.type === 'image' || payload.type === 'video';
   const isVoiceMessage = payload.type === 'voice';
   const isDocumentMessage = payload.type === 'document';
+
+  // Resolve the backing media asset BEFORE the message insert — a failed
+  // check must not leave an orphan chat_messages row whose metadata still
+  // carries a mediaUri the sender never owned (no transaction wraps this
+  // handler). The resolved asset also supplies the poster still that video
+  // bubbles need for their thumbnail.
+  let mediaAsset: {
+    id: string;
+    owner_id: string;
+    canonical_url: string | null;
+    status: string;
+    media_kind: string;
+    poster_url: string | null;
+  } | null = null;
+  if ((isMediaMessage || isVoiceMessage || isDocumentMessage) && payload.mediaUri && payload.mediaUri.includes('/media/')) {
+    const assetResult = await db.query<{
+      id: string;
+      owner_id: string;
+      canonical_url: string | null;
+      status: string;
+      media_kind: string;
+      poster_url: string | null;
+    }>(
+      `SELECT id, owner_id, canonical_url, status, media_kind,
+              metadata->>'posterUrl' AS poster_url
+       FROM media_assets WHERE canonical_url = $1 LIMIT 1`,
+      [payload.mediaUri],
+    );
+    if (!assetResult.rowCount) {
+      reply.code(403);
+      return { ok: false, error: 'Media asset not found' };
+    }
+    mediaAsset = assetResult.rows[0];
+    if (mediaAsset.owner_id !== actorUserId) {
+      reply.code(403);
+      return { ok: false, error: 'Media asset does not belong to the sender' };
+    }
+    // Voice messages require an audio-kind asset. Reject if the sender
+    // claims type:'voice' but the asset is not audio — this catches a
+    // misclassified upload (e.g. .m4a filed as image/jpeg) before it
+    // becomes a voice bubble with no playable audio.
+    if (isVoiceMessage && mediaAsset.media_kind !== 'audio') {
+      reply.code(422);
+      return {
+        ok: false,
+        error: 'Voice message media asset is not audio-kind. Re-upload with the correct content type.',
+      };
+    }
+  }
+
   // `body` is NOT NULL in chat_messages; media-only and voice messages use
   // an empty string so the column constraint is satisfied while the media
   // URI lives in metadata for the read path.
@@ -2257,6 +2401,11 @@ app.post('/chat/conversations/:conversationId/messages', {
     ...(payload.metadata ?? {}),
     ...(isMediaMessage
       ? { mediaUri: payload.mediaUri, mediaType: payload.type }
+      : {}),
+    // Video bubbles render the poster still — the mediaUri itself may be an
+    // HLS playlist no image loader can decode.
+    ...(mediaAsset?.media_kind === 'video' && mediaAsset.poster_url
+      ? { posterUri: mediaAsset.poster_url }
       : {}),
     ...(isVoiceMessage
       ? { mediaUri: payload.mediaUri, mediaType: 'voice', voiceMessage: true }
@@ -2504,48 +2653,18 @@ app.post('/chat/conversations/:conversationId/messages', {
 
   if ((isMediaMessage || isVoiceMessage || isDocumentMessage) && payload.mediaUri) {
     const mediaUri = payload.mediaUri;
-    if (mediaUri.includes('/media/')) {
-      const assetResult = await db.query<{
-        id: string;
-        owner_id: string;
-        canonical_url: string | null;
-        status: string;
-        media_kind: string;
-      }>(
-        `SELECT id, owner_id, canonical_url, status, media_kind FROM media_assets WHERE canonical_url = $1 LIMIT 1`,
-        [mediaUri],
-      );
-      if (!assetResult.rowCount) {
-        reply.code(403);
-        return { ok: false, error: 'Media asset not found' };
-      }
-      const asset = assetResult.rows[0];
-      if (asset.owner_id !== actorUserId) {
-        reply.code(403);
-        return { ok: false, error: 'Media asset does not belong to the sender' };
-      }
-      // Voice messages require an audio-kind asset. Reject if the sender
-      // claims type:'voice' but the asset is not audio â€” this catches a
-      // misclassified upload (e.g. .m4a filed as image/jpeg) before it
-      // becomes a voice bubble with no playable audio.
-      if (isVoiceMessage && asset.media_kind !== 'audio') {
-        reply.code(422);
-        return {
-          ok: false,
-          error: 'Voice message media asset is not audio-kind. Re-upload with the correct content type.',
-        };
-      }
+    if (mediaAsset) {
       const attachmentKind = isVoiceMessage
         ? 'audio'
         : isDocumentMessage
           ? 'document'
-          : asset.media_kind === 'video'
+          : mediaAsset.media_kind === 'video'
             ? 'video'
             : 'image';
       await db.query(
         `INSERT INTO chat_message_attachments (id, message_id, media_asset_id, kind, canonical_url, created_at)
          VALUES ($1, $2, $3, $4, $5, NOW())`,
-        [createRuntimeId('chatatt'), result.rows[0].id, asset.id, attachmentKind, mediaUri],
+        [createRuntimeId('chatatt'), result.rows[0].id, mediaAsset.id, attachmentKind, mediaUri],
       );
 
       // Voice messages get a canonical voice_messages row binding the asset
@@ -2568,7 +2687,7 @@ app.post('/chat/conversations/:conversationId/messages', {
             createRuntimeId('voice'),
             result.rows[0].id,
             conversationId,
-            asset.id,
+            mediaAsset.id,
             actorUserId,
             durationMs,
             bytes,
@@ -2598,21 +2717,47 @@ app.post('/chat/conversations/:conversationId/messages', {
   }
 
   // ── Poll message: create the chat_polls row ──────────────────────────
+  // `createdPoll` is the serialized poll snapshot — it rides in the
+  // `chat.message.created` realtime payload and the HTTP response so every
+  // device renders the interactive poll immediately, without a refetch.
+  let createdPoll: {
+    id: string;
+    question: string;
+    options: string[];
+    allowMultiple: boolean;
+    isAnonymous: boolean;
+    closesAt?: string;
+    voteCounts: number[];
+    myVotes: number[];
+  } | null = null;
   if (payload.type === 'poll' && result.rows[0]) {
     const pollMeta = payload.metadata ?? {};
     const pollId = createRuntimeId('poll');
+    const pollOptions = (pollMeta.options as string[]) ?? [];
+    const closesAt = typeof pollMeta.closesAt === 'string' ? pollMeta.closesAt : null;
     await db.query(
-      `INSERT INTO chat_polls (id, message_id, question, options, allow_multiple, is_anonymous)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
+      `INSERT INTO chat_polls (id, message_id, question, options, allow_multiple, is_anonymous, closes_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [
         pollId,
         result.rows[0].id,
         String(pollMeta.question ?? ''),
-        (pollMeta.options as string[]) ?? [],
+        pollOptions,
         Boolean(pollMeta.allowMultiple),
         pollMeta.isAnonymous !== false, // default anonymous
+        closesAt,
       ],
     );
+    createdPoll = {
+      id: pollId,
+      question: String(pollMeta.question ?? ''),
+      options: pollOptions,
+      allowMultiple: Boolean(pollMeta.allowMultiple),
+      isAnonymous: pollMeta.isAnonymous !== false,
+      closesAt: closesAt ?? undefined,
+      voteCounts: pollOptions.map(() => 0),
+      myVotes: [],
+    };
   }
 
   await db.query(
@@ -2750,12 +2895,14 @@ app.post('/chat/conversations/:conversationId/messages', {
             body: conversation.type === 'group'
               ? `New message in ${conversation.title ?? 'your group chat'}`
               : 'You have a new message in Thryftverse.',
+            eventType: 'chat_message',
             payload: {
               conversationId,
               messageId: result.rows[0].id,
               senderId: actorUserId,
               event: 'chat_message',
             },
+            route: { screen: 'Chat', params: { conversationId } },
             metadata: {
               source: 'chat.conversations.message.create',
             },
@@ -2792,6 +2939,9 @@ app.post('/chat/conversations/:conversationId/messages', {
         createdAt: result.rows[0].created_at,
         clientMessageId: payload.clientMessageId ?? null,
         replyToMessageId: payload.replyToMessageId ?? null,
+        // Poll snapshot — lets every member's PollMessageBubble render the
+        // poll on arrival instead of waiting for the next message refetch.
+        poll: createdPoll ?? undefined,
       },
     });
   }
@@ -2894,6 +3044,7 @@ app.post('/chat/conversations/:conversationId/messages', {
       clientMessageId: payload.clientMessageId ?? undefined,
       replyToMessageId: payload.replyToMessageId ?? undefined,
       scamWarning: scamScan.severity === 'medium' || undefined,
+      poll: createdPoll ?? undefined,
     },
   };
 });
@@ -3171,6 +3322,114 @@ app.delete('/chat/conversations/:conversationId/messages/:messageId/reactions', 
   return { ok: true, removed: true, emoji };
 });
 
+// ── Save in chat — Snapchat-style negotiated persistence ──────────────
+// Either participant may save a message; the "Saved" marker is shared
+// state both parties render. Per-user rows in chat_message_saves preserve
+// attribution (savedBy) — unsaving removes only the actor's save, so the
+// message stays saved while any participant's save remains. Save events
+// publish `chat.message.saved` / `chat.message.unsaved` with the full
+// post-change savedBy set so other devices reconcile without a refetch.
+
+app.post('/chat/conversations/:conversationId/messages/:messageId/save', async (request, reply) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+    messageId: z.string().min(2).max(120),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId, messageId } = paramsSchema.parse(request.params);
+
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  // The message must exist and not be deleted-for-everyone — a tombstone
+  // cannot be saved (consistent with edit/reaction rejection on deleted).
+  const msgResult = await db.query<{ deleted_for_everyone_at: string | null }>(
+    `SELECT deleted_for_everyone_at
+     FROM chat_messages
+     WHERE id = $1 AND conversation_id = $2 LIMIT 1`,
+    [messageId, conversationId]
+  );
+
+  if (!msgResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Message not found' };
+  }
+
+  if (msgResult.rows[0].deleted_for_everyone_at) {
+    reply.code(403);
+    return { ok: false, error: 'Cannot save a deleted message' };
+  }
+
+  await db.query(
+    `INSERT INTO chat_message_saves (message_id, conversation_id, user_id)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (message_id, user_id) DO NOTHING`,
+    [messageId, conversationId, actorUserId]
+  );
+
+  const savedRows = await db.query<{ user_id: string; created_at: string }>(
+    `SELECT user_id, created_at::text FROM chat_message_saves
+     WHERE message_id = $1 ORDER BY created_at ASC`,
+    [messageId]
+  );
+  const savedBy = savedRows.rows.map((r) => r.user_id);
+  const savedAt = savedRows.rows[0]?.created_at ?? null;
+
+  publishRealtimeEvent({
+    topic: `chat.conversation:${conversationId}`,
+    type: 'chat.message.saved',
+    payload: { conversationId, messageId, actorUserId, savedBy, savedAt },
+  });
+
+  return { ok: true, saved: true, messageId, savedBy, savedAt };
+});
+
+app.delete('/chat/conversations/:conversationId/messages/:messageId/save', async (request, reply) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+    messageId: z.string().min(2).max(120),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId, messageId } = paramsSchema.parse(request.params);
+
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  // Unsave is allowed on any existing message — including tombstones — so
+  // a save placed before a delete-for-everyone can still be retracted.
+  const msgResult = await db.query<{ id: string }>(
+    `SELECT id FROM chat_messages
+     WHERE id = $1 AND conversation_id = $2 LIMIT 1`,
+    [messageId, conversationId]
+  );
+
+  if (!msgResult.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Message not found' };
+  }
+
+  await db.query(
+    `DELETE FROM chat_message_saves WHERE message_id = $1 AND user_id = $2`,
+    [messageId, actorUserId]
+  );
+
+  const savedRows = await db.query<{ user_id: string; created_at: string }>(
+    `SELECT user_id, created_at::text FROM chat_message_saves
+     WHERE message_id = $1 ORDER BY created_at ASC`,
+    [messageId]
+  );
+  const savedBy = savedRows.rows.map((r) => r.user_id);
+  const savedAt = savedRows.rows[0]?.created_at ?? null;
+
+  publishRealtimeEvent({
+    topic: `chat.conversation:${conversationId}`,
+    type: 'chat.message.unsaved',
+    payload: { conversationId, messageId, actorUserId, savedBy, savedAt },
+  });
+
+  return { ok: true, saved: savedBy.length > 0, messageId, savedBy, savedAt };
+});
+
 // ── Pinned messages ───────────────────────────────────────────────────
 // One pinned message per conversation. Group admins/owners can pin.
 // Pinning a new message replaces the previous pin (upsert on conversation_id).
@@ -3358,10 +3617,22 @@ app.post('/chat/conversations/:conversationId/messages/:messageId/poll/vote', as
   );
   const myVotes = myVotesResult.rows.map((r) => r.option_index);
 
+  // Live propagation: every member's PollMessageBubble applies voteCounts;
+  // the voter's other devices apply voterVotes verbatim so "your vote"
+  // stays consistent across devices (single-vote polls replace the set).
   publishRealtimeEvent({
     topic: `chat.conversation:${conversationId}`,
     type: 'chat.poll.voted',
-    payload: { conversationId, messageId, pollId: poll.id, voteCounts, userId: actorUserId },
+    payload: {
+      conversationId,
+      messageId,
+      pollId: poll.id,
+      voteCounts,
+      userId: actorUserId,
+      optionIndex,
+      action: 'added',
+      voterVotes: myVotes,
+    },
   });
 
   return { ok: true, voteCounts, myVotes };
@@ -3401,13 +3672,42 @@ app.post('/chat/conversations/:conversationId/messages/:messageId/poll/unvote', 
     [poll.id, actorUserId, optionIndex],
   );
 
+  // Recompute counts so every member's poll UI converges without a refetch.
+  const unvotePollOptions = await db.query<{ options: string[] }>(
+    `SELECT options FROM chat_polls WHERE id = $1 LIMIT 1`,
+    [poll.id],
+  );
+  const optionCount = unvotePollOptions.rows[0]?.options.length ?? 0;
+  const remainingVotes = await db.query<{ option_index: number; count: string }>(
+    `SELECT option_index, COUNT(*)::text as count FROM chat_poll_votes WHERE poll_id = $1 GROUP BY option_index`,
+    [poll.id],
+  );
+  const voteCounts = Array.from({ length: optionCount }, (_, i) => {
+    const row = remainingVotes.rows.find((r) => r.option_index === i);
+    return row ? Number(row.count) : 0;
+  });
+  const voterVotesResult = await db.query<{ option_index: number }>(
+    `SELECT option_index FROM chat_poll_votes WHERE poll_id = $1 AND user_id = $2`,
+    [poll.id, actorUserId],
+  );
+  const voterVotes = voterVotesResult.rows.map((r) => r.option_index);
+
   publishRealtimeEvent({
     topic: `chat.conversation:${conversationId}`,
     type: 'chat.poll.voted',
-    payload: { conversationId, messageId, pollId: poll.id, userId: actorUserId },
+    payload: {
+      conversationId,
+      messageId,
+      pollId: poll.id,
+      voteCounts,
+      userId: actorUserId,
+      optionIndex,
+      action: 'removed',
+      voterVotes,
+    },
   });
 
-  return { ok: true };
+  return { ok: true, voteCounts, myVotes: voterVotes };
 });
 
 // ── In-chat message search ────────────────────────────────────────────
@@ -3469,29 +3769,46 @@ app.post('/chat/conversations/:conversationId/report', async (request, reply) =>
   const { conversationId } = paramsSchema.parse(request.params);
   const payload = bodySchema.parse(request.body ?? {});
 
-  await ensureChatConversationAccess(db, conversationId, actorUserId);
+  const conversation = await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  // The evidence message ref must resolve inside this conversation —
+  // reporter membership alone doesn't prove the cited message belongs
+  // here (cross-conversation or fabricated refs would write a dangling
+  // conversation_reports.message_id). Same convention as the pin/read
+  // checks: 400 on a bad body reference.
+  if (payload.messageId) {
+    const evidence = await db.query<{ id: string }>(
+      `SELECT id FROM chat_messages WHERE id = $1 AND conversation_id = $2 LIMIT 1`,
+      [payload.messageId, conversationId],
+    );
+    if (!evidence.rowCount) {
+      reply.code(400);
+      return { ok: false, error: 'Reported message not found in this conversation' };
+    }
+  }
 
   const reportId = createRuntimeId('chatrpt');
 
-  const insertResult = await db.query<{ id: string }>(
-    `INSERT INTO conversation_reports (id, conversation_id, reporter_user_id, reason, details, message_id, status, created_at, idempotency_key)
-     VALUES ($1, $2, $3, $4, $5, $6, 'submitted', NOW(), $7)
-     ON CONFLICT (idempotency_key) DO NOTHING
-     RETURNING id`,
-    [
-      reportId,
-      conversationId,
-      actorUserId,
-      payload.reason,
-      payload.details ?? null,
-      payload.messageId ?? null,
-      payload.idempotencyKey ?? null,
-    ]
-  );
-
-  const effectiveReportId = insertResult.rowCount && insertResult.rowCount > 0
-    ? insertResult.rows[0].id
-    : reportId;
+  // Persist the report row and its safety notice in one transaction. On an
+  // idempotent retry the helper resolves the original report id so the
+  // notice dedupes on `conversation_report:<reportId>` instead of
+  // double-filing.
+  const { reportId: effectiveReportId, noticeId } = await recordConsumerReport(db, {
+    kind: 'conversation',
+    reportId,
+    reporterId: actorUserId,
+    subjectId: conversationId,
+    reason: payload.reason,
+    details: payload.details ?? null,
+    evidenceMessageId: payload.messageId ?? null,
+    idempotencyKey: payload.idempotencyKey ?? null,
+    subjectSnapshot: {
+      conversationType: conversation.type,
+      title: conversation.title,
+      ownerId: conversation.owner_id,
+      itemId: conversation.item_id,
+    },
+  });
 
   publishRealtimeEvent({
     topic: `chat.conversation:${conversationId}`,
@@ -3500,7 +3817,7 @@ app.post('/chat/conversations/:conversationId/report', async (request, reply) =>
   });
 
   reply.code(201);
-  return { ok: true, reportId: effectiveReportId, status: 'submitted' };
+  return { ok: true, reportId: effectiveReportId, noticeId, status: 'submitted' };
 });
 
 // P0 #1 / P2 #56: Typing indicator endpoint.
@@ -3562,7 +3879,9 @@ app.post('/chat/conversations/:conversationId/typing', {
       userId: actorUserId,
       isTyping,
     },
-    excludeUserIds: restrictedParticipantIds,
+    // Exclude the typer too — a sender's own devices must never render their
+    // own "typing…" indicator (the client also belt-filters by userId).
+    excludeUserIds: [...new Set([...restrictedParticipantIds, actorUserId])],
   });
 
   return { ok: true };
@@ -3882,10 +4201,12 @@ app.post('/chat/conversations/:conversationId/members', async (request) => {
             userId: memberId,
             title: 'Added to a group chat',
             body: `You were added to ${conversation.title ?? 'a group chat'}.`,
+            eventType: 'chat_message',
             payload: {
               conversationId,
               event: 'chat_group_member_added',
             },
+            route: { screen: 'Chat', params: { conversationId } },
             metadata: {
               source: 'chat.conversations.members.add',
             },
@@ -5559,6 +5880,74 @@ app.get('/chat/conversations/:conversationId', async (request) => {
         status: r.install_status,
       })),
       context: contextMap.get(conversationId) ?? null,
+    },
+  };
+});
+
+// ── Dyad presence ──
+// Returns the DM counterparty's presence for the chat header. Group
+// conversations return null — presence is a dyad-only surface. The peer's
+// `activity_status_visible` privacy setting gates exposure entirely: when
+// disabled (or when no presence has ever been recorded), `presence` is null
+// and clients must render nothing rather than fabricate a status.
+app.get('/chat/conversations/:conversationId/presence', async (request) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+  const conversation = await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  if (conversation.type !== 'dm') {
+    return { ok: true, presence: null };
+  }
+
+  const peerResult = await db.query<{ user_id: string; activity_status_visible: boolean }>(
+    `
+      SELECT cm.user_id, u.activity_status_visible
+      FROM chat_members cm
+      INNER JOIN users u ON u.id = cm.user_id
+      WHERE cm.conversation_id = $1
+        AND cm.user_id <> $2
+      ORDER BY cm.joined_at ASC
+      LIMIT 1
+    `,
+    [conversationId, actorUserId]
+  );
+
+  const peer = peerResult.rows[0];
+  if (!peer || !peer.activity_status_visible) {
+    return { ok: true, presence: null };
+  }
+
+  const presenceResult = await db.query<{ last_seen_at: string | null; is_online: boolean | null }>(
+    `
+      SELECT MAX(last_seen_at)::text AS last_seen_at, BOOL_OR(is_online) AS is_online
+      FROM user_presence
+      WHERE user_id = $1
+    `,
+    [peer.user_id]
+  );
+
+  const presenceRow = presenceResult.rows[0];
+  const lastSeenAt = presenceRow?.last_seen_at ?? null;
+  const lastSeenMs = lastSeenAt ? new Date(lastSeenAt).getTime() : Number.NaN;
+
+  // Redis is the source of truth for "online now". The user_presence table
+  // is the designed fallback when Redis is unreachable — a stale `is_online`
+  // row only counts while its last_seen_at is still inside the TTL window.
+  const redisOnline = await isUserOnline(peer.user_id);
+  const dbOnlineFresh = Boolean(presenceRow?.is_online)
+    && Number.isFinite(lastSeenMs)
+    && Date.now() - lastSeenMs <= config.presenceTtlSeconds * 2 * 1000;
+
+  return {
+    ok: true,
+    presence: {
+      userId: peer.user_id,
+      isOnline: redisOnline || dbOnlineFresh,
+      lastSeenAt,
     },
   };
 });

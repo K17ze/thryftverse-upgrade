@@ -15,7 +15,7 @@ import { CommerceNotificationRow } from './CommerceNotificationRow';
 import { AuctionNotificationRow } from './AuctionNotificationRow';
 import { FinancialNotificationRow } from './FinancialNotificationRow';
 import { SystemNotificationRow } from './SystemNotificationRow';
-import type { NotificationCard } from './notificationViewModels';
+import { resolveCardActionLabel, type NotificationCard } from './notificationViewModels';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -29,10 +29,11 @@ export interface SwipeableNotificationRowProps {
 }
 
 /**
- * One notification row wrapped in a Swipeable. Swipe right reveals the
- * mark-as-read action; swipe left dismisses the notification. The inner
- * presenter is dispatched on the V2 event's semanticRole (social, commerce,
- * auction, financial, system).
+ * One notification row wrapped in a Swipeable. Swipe RIGHT (leading/left
+ * actions) reveals mark-as-read; swipe LEFT (trailing/right actions)
+ * deletes — matching the platform convention where the destructive action
+ * lives on the trailing side. The inner presenter is dispatched on the
+ * V2 event's semanticRole (social, commerce, auction, financial, system).
  */
 function SwipeableNotificationRowBase({
   card,
@@ -48,7 +49,7 @@ function SwipeableNotificationRowBase({
   const reducedMotion = useReducedMotion();
   const swipeableRef = React.useRef<Swipeable | null>(null);
 
-  const renderSwipeRightAction = useCallback(
+  const renderMarkReadAction = useCallback(
     (progress: Animated.AnimatedInterpolation<number>) => {
       if (card.read) return <View style={{ width: 0, height: Space.xxl + Space.xl }} />;
       // Subtle scale-up of the action icon as the swipe reveals it (0.8 → 1.0).
@@ -73,7 +74,7 @@ function SwipeableNotificationRowBase({
     [card.read, colors.success, reducedMotion, styles]
   );
 
-  const renderSwipeLeftAction = useCallback(
+  const renderDeleteAction = useCallback(
     (progress: Animated.AnimatedInterpolation<number>) => {
       // Subtle scale-up of the action icon as the swipe reveals it (0.8 → 1.0).
       // Collapsed to no scale when reduced motion is enabled.
@@ -97,22 +98,54 @@ function SwipeableNotificationRowBase({
     [colors.danger, reducedMotion, styles]
   );
 
+  // Non-gesture equivalents of the swipe actions for assistive tech —
+  // forwarded to the row presenter so mark-read/delete are reachable
+  // without the swipe gesture.
+  const a11yActions = useMemo(
+    () => [
+      ...(card.read ? [] : [{ name: 'markRead', label: 'Mark as read' }]),
+      { name: 'dismiss', label: 'Delete' },
+    ],
+    [card.read]
+  );
+  const handleA11yAction = useCallback(
+    (event: { nativeEvent: { actionName: string } }) => {
+      if (event.nativeEvent.actionName === 'markRead') {
+        void onSwipeMarkRead(card);
+      } else if (event.nativeEvent.actionName === 'dismiss') {
+        onSwipeDismiss(card);
+      }
+    },
+    [card, onSwipeMarkRead, onSwipeDismiss]
+  );
+
   const renderNotificationRow = useCallback(
     (item: NotificationCard) => {
       const v2Event = item.v2Event;
       const inAttention = item.requiresAction;
       const onPress = () => onOpen(item);
+      // Quiet action affordance ("Dispatch now", "Review offer", "Respond") —
+      // only present when the event requires action and resolves a route.
+      // The press delegates to open: mark read, then follow the route.
+      const actionLabel = resolveCardActionLabel(item);
+      const shared = {
+        accessibilityActions: a11yActions,
+        onAccessibilityAction: handleA11yAction,
+      };
 
       switch (v2Event.semanticRole) {
         case 'social':
           return (
             <SocialNotificationRow
+              {...shared}
               event={v2Event}
               time={item.time}
               aggregatedCount={item.aggregatedCount}
               aggregatedActors={item.aggregatedActors}
               inAttentionSection={inAttention}
               onPress={onPress}
+              actionLabel={actionLabel}
+              onActionPress={actionLabel ? onPress : undefined}
               onActorPress={
                 item.actorUserId
                   ? () => openProfile(navigation, item.actorUserId!, currentUserId)
@@ -123,16 +156,20 @@ function SwipeableNotificationRowBase({
         case 'commerce':
           return (
             <CommerceNotificationRow
+              {...shared}
               event={v2Event}
               time={item.time}
               aggregatedCount={item.aggregatedCount}
               inAttentionSection={inAttention}
               onPress={onPress}
+              actionLabel={actionLabel}
+              onActionPress={actionLabel ? onPress : undefined}
             />
           );
         case 'auction':
           return (
             <AuctionNotificationRow
+              {...shared}
               event={v2Event}
               time={item.time}
               aggregatedCount={item.aggregatedCount}
@@ -144,28 +181,34 @@ function SwipeableNotificationRowBase({
         case 'financial':
           return (
             <FinancialNotificationRow
+              {...shared}
               event={v2Event}
               time={item.time}
               aggregatedCount={item.aggregatedCount}
               inAttentionSection={inAttention}
               onPress={onPress}
+              actionLabel={actionLabel}
+              onActionPress={actionLabel ? onPress : undefined}
             />
           );
         case 'system':
         default:
           return (
             <SystemNotificationRow
+              {...shared}
               event={v2Event}
               time={item.time}
               aggregatedCount={item.aggregatedCount}
               inAttentionSection={inAttention}
               onPress={onPress}
               onAction={onPress}
+              actionLabel={actionLabel}
+              onActionPress={actionLabel ? onPress : undefined}
             />
           );
       }
     },
-    [onOpen, navigation, currentUserId]
+    [onOpen, navigation, currentUserId, a11yActions, handleA11yAction]
   );
 
   return (
@@ -174,13 +217,16 @@ function SwipeableNotificationRowBase({
         swipeableRef.current = ref;
         registerSwipeableRef(card.id, ref);
       }}
-      renderRightActions={renderSwipeRightAction}
-      renderLeftActions={renderSwipeLeftAction}
-      onSwipeableRightOpen={() => {
+      // Leading (reveal on rightward swipe) = mark-read; trailing
+      // (reveal on leftward swipe) = delete. RNGH names these by where
+      // the actions render, not the swipe direction.
+      renderLeftActions={renderMarkReadAction}
+      renderRightActions={renderDeleteAction}
+      onSwipeableLeftOpen={() => {
         void onSwipeMarkRead(card);
         swipeableRef.current?.close();
       }}
-      onSwipeableLeftOpen={() => {
+      onSwipeableRightOpen={() => {
         onSwipeDismiss(card);
         swipeableRef.current?.close();
       }}

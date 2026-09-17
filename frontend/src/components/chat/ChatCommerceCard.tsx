@@ -129,9 +129,20 @@ export function ChatCommerceCard({
             itemTitle: msg.commerceState.itemTitle,
             itemImage: msg.commerceState.itemImage,
             trackingNumber: msg.commerceState.trackingNumber,
-            carrier: msg.commerceState.carrier }}
+            carrier: msg.commerceState.carrier,
+            extensionDays: msg.commerceState.extensionDays,
+            proposedShipBy: msg.commerceState.proposedShipBy,
+            refundedAmountGbp: msg.commerceState.refundedAmountGbp }}
           onViewOrder={() => {
-            navigation.navigate("OrderDetail", { orderId: msg.commerceState!.orderId });
+            const state = msg.commerceState!;
+            // Review prompt cards deep-link straight into the review flow;
+            // everything else (confirm receipt, extension response, label)
+            // lands on the order detail where those actions live.
+            if (state.stateType === 'feedback_prompt') {
+              navigation.navigate("WriteReview", { orderId: state.orderId });
+              return;
+            }
+            navigation.navigate("OrderDetail", { orderId: state.orderId });
           }}
         />
       </View>

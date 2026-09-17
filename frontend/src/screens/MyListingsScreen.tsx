@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, RefreshControl, Pressable, ActivityIndicator } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { useNavigation, RouteProp, useRoute, useFocusEffect } from '@react-navigation/native';
@@ -22,7 +22,9 @@ import { OfflineBanner } from '../components/OfflineBanner';
 import { t } from '../i18n';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { AppIcon } from '../components/common/AppIcon';
-import { IconSize, type SemanticIconName, type IoniconsGlyphName } from '../theme/iconTokens';
+import { IconSize, IconHitTarget, type SemanticIconName, type IoniconsGlyphName } from '../theme/iconTokens';
+import { SellerPromotionsPanel } from '../components/promotions';
+import { useSellerPromotions } from '../hooks/inventory';
 
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -156,6 +158,11 @@ export default function MyListingsScreen() {
   const [hasMore, setHasMore] = useState(false);
   const [totals, setTotals] = useState<SellerInventoryTotals | null>(null);
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
+  // Promotions management surface — lazy: the panel fetches on open.
+  const [promotionsOpen, setPromotionsOpen] = useState(false);
+  const promotions = useSellerPromotions();
+  // Lets the focus effect revalidate silently once rows exist.
+  const listingsRef = useRef<ListingApiItem[]>([]);
 
   const headerTitle =
     filterType === 'coown' ? t('myListings.titleCoOwn') : t('myListings.title');
@@ -176,6 +183,7 @@ export default function MyListingsScreen() {
         fetchSellerInventoryTotals().catch(() => null),
       ]);
       setListings(res.items);
+      listingsRef.current = res.items;
       setCursor(res.nextCursor ?? null);
       setHasMore(Boolean(res.nextCursor));
       if (invTotals) setTotals(invTotals);
@@ -189,7 +197,11 @@ export default function MyListingsScreen() {
     setIsLoadingMore(true);
     try {
       const res = await fetchUserListingsFromApi(currentUser.id, { limit: PAGE_SIZE, cursor });
-      setListings((prev) => [...prev, ...res.items]);
+      setListings((prev) => {
+        const next = [...prev, ...res.items];
+        listingsRef.current = next;
+        return next;
+      });
       setCursor(res.nextCursor ?? null);
       setHasMore(Boolean(res.nextCursor));
     } catch {
@@ -201,11 +213,14 @@ export default function MyListingsScreen() {
 
   // useFocusEffect ensures listings re-fetch when the user navigates back
   // (e.g., after editing or managing a listing from this screen).
+  // Silent revalidate: once rows exist the list stays mounted and updates
+  // in place — no full-screen loading flash on every return.
   useFocusEffect(
     useCallback(() => {
       let mounted = true;
-      setIsLoading(true);
-      load().finally(() => { if (mounted) setIsLoading(false); });
+      const showLoading = listingsRef.current.length === 0;
+      if (showLoading) setIsLoading(true);
+      load().finally(() => { if (mounted && showLoading) setIsLoading(false); });
       return () => { mounted = false; };
     }, [load])
   );
@@ -312,6 +327,12 @@ export default function MyListingsScreen() {
             value={formatFromFiat(analytics.totalActiveValue, 'GBP')}
           />
         </View>
+
+        {/* Truthful partial label — server totals endpoint unreachable, so
+            the counts above cover the loaded page window only. */}
+        {!totals ? (
+          <Text style={styles.partialNote}>{t('myListings.partialCounts')}</Text>
+        ) : null}
 
         {/* Seller standards badges */}
         {sellerTrust ? (
@@ -437,7 +458,23 @@ export default function MyListingsScreen() {
 
   return (
     <FlagshipScreen
-      header={<FlagshipHeader title={headerTitle} onBack={() => navigation.goBack()} />}
+      header={
+        <FlagshipHeader
+          title={headerTitle}
+          onBack={() => navigation.goBack()}
+          rightAction={
+            <AnimatedPressable
+              onPress={() => { haptics.tap(); setPromotionsOpen(true); }}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={t('myListings.promotions')}
+              style={styles.headerAction}
+            >
+              <AppIcon name="megaphone-outline" size={IconSize.lg} color="textPrimary" opticalCenter accessible={false} />
+            </AnimatedPressable>
+          }
+        />
+      }
       scrollEnabled={false}
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
@@ -486,6 +523,13 @@ export default function MyListingsScreen() {
           // automatically.
         />
       )}
+
+      {/* Promotions management — full-screen modal surface */}
+      <SellerPromotionsPanel
+        visible={promotionsOpen}
+        controller={promotions}
+        onClose={() => setPromotionsOpen(false)}
+      />
     </FlagshipScreen>
   );
 }
@@ -499,6 +543,16 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center' },
+  headerAction: {
+    minWidth: IconHitTarget.min,
+    minHeight: IconHitTarget.min,
+    alignItems: 'flex-end',
+    justifyContent: 'center' },
+  partialNote: {
+    paddingTop: Space.xs,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   list: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,

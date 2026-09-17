@@ -15,8 +15,8 @@ import {
   type CreatorDocument,
   type CreatorLayer,
   type ComposerFrame,
-} from '../creator/composition';
-import { HistoryStack } from '../creator/history';
+} from '../creator/core/projectStore/composition';
+import { HistoryStack } from '../creator/core/projectStore/history';
 import type { OutfitTag } from '../components/look/LookMediaComposer';
 
 describe('CreatorDocument schema', () => {

@@ -27,6 +27,11 @@ const rendererMock = vi.hoisted(() => ({
 
 const s3Mock = vi.hoisted(() => ({
   putBinaryObject: vi.fn(),
+  getObject: vi.fn(),
+}));
+
+const pipelineMock = vi.hoisted(() => ({
+  generateRenderedVideoHls: vi.fn(),
 }));
 
 const validationMock = vi.hoisted(() => ({
@@ -41,6 +46,11 @@ vi.mock('../lib/media/compositionRenderer.js', () => ({
 
 vi.mock('../lib/s3.js', () => ({
   putBinaryObject: s3Mock.putBinaryObject,
+  getObject: s3Mock.getObject,
+}));
+
+vi.mock('../lib/media/pipeline.js', () => ({
+  generateRenderedVideoHls: pipelineMock.generateRenderedVideoHls,
 }));
 
 vi.mock('../lib/compositionValidation.js', () => ({
@@ -140,12 +150,16 @@ beforeEach(() => {
   rendererMock.isCompositionNonTrivial.mockReset();
   rendererMock.getVideoRenderPath.mockReset();
   s3Mock.putBinaryObject.mockReset();
+  s3Mock.getObject.mockReset();
+  pipelineMock.generateRenderedVideoHls.mockReset();
   validationMock.validateCompositionDocument.mockReset();
 
-  // Default: uploads echo the object key back as a CDN URL.
+  // Default: uploads echo the object key back as a CDN URL; HLS packaging
+  // reports no renditions (progressive URL kept) unless a test opts in.
   s3Mock.putBinaryObject.mockImplementation((key: string) =>
     Promise.resolve(`https://cdn.example.com/media/${key}`),
   );
+  pipelineMock.generateRenderedVideoHls.mockResolvedValue({ masterPlaylistUrl: null });
   validationMock.validateCompositionDocument.mockReturnValue({ ok: true });
 });
 
@@ -204,6 +218,77 @@ describe('renderCompositionMedia', () => {
     const [key, , contentType] = s3Mock.putBinaryObject.mock.calls[0]!;
     expect(key).toMatch(/^renders\/doc-1\/composition_[0-9a-f-]+\.mp4$/);
     expect(contentType).toBe('video/mp4');
+    expect(result.renderedUrl).toBe(`https://cdn.example.com/media/${key}`);
+  });
+
+  it('serves the HLS master playlist when the render packages to a ladder', async () => {
+    rendererMock.isCompositionNonTrivial.mockReturnValue(true);
+    rendererMock.renderComposition.mockResolvedValue(MP4_RENDER);
+    pipelineMock.generateRenderedVideoHls.mockResolvedValue({
+      masterPlaylistUrl: 'https://cdn.example.com/media/renders/doc-1/composition_x/hls/master.m3u8',
+    });
+
+    const result = await renderCompositionMedia(
+      'doc-1',
+      lookDoc(mediaLayer('media_1', 'video', { speed: 2, videoDurationMs: 8000 })),
+      'https://cdn.example.com/src.mp4',
+      'video',
+    );
+
+    // The ladder is generated from the rendered bytes under the render's
+    // own key prefix, and the playback URL becomes the adaptive playlist.
+    expect(pipelineMock.generateRenderedVideoHls).toHaveBeenCalledWith(
+      FAKE_MP4,
+      expect.stringMatching(/^renders\/doc-1\/composition_[0-9a-f-]+$/),
+      0,
+    );
+    expect(result.renderedUrl).toBe(
+      'https://cdn.example.com/media/renders/doc-1/composition_x/hls/master.m3u8',
+    );
+  });
+
+  it('returns the progressive MP4 as downloadUrl and the ladder poster as posterUrl', async () => {
+    rendererMock.isCompositionNonTrivial.mockReturnValue(true);
+    rendererMock.renderComposition.mockResolvedValue(MP4_RENDER);
+    pipelineMock.generateRenderedVideoHls.mockResolvedValue({
+      masterPlaylistUrl: 'https://cdn.example.com/media/renders/doc-1/composition_x/hls/master.m3u8',
+      posterUrl: 'https://cdn.example.com/media/renders/doc-1/composition_x/hls/poster.jpg',
+    });
+
+    const result = await renderCompositionMedia(
+      'doc-1',
+      lookDoc(mediaLayer('media_1', 'video', { speed: 2, videoDurationMs: 8000 })),
+      'https://cdn.example.com/src.mp4',
+      'video',
+    );
+
+    // Three-URL contract: playback is the m3u8, download is the flat MP4,
+    // poster is the rendered still. None may alias another.
+    const [key] = s3Mock.putBinaryObject.mock.calls[0]!;
+    const progressive = `https://cdn.example.com/media/${key}`;
+    expect(result.renderedUrl).toBe(
+      'https://cdn.example.com/media/renders/doc-1/composition_x/hls/master.m3u8',
+    );
+    expect(result.progressiveUrl).toBe(progressive);
+    expect(result.posterUrl).toBe(
+      'https://cdn.example.com/media/renders/doc-1/composition_x/hls/poster.jpg',
+    );
+    expect(result.progressiveUrl).not.toBe(result.renderedUrl);
+  });
+
+  it('keeps the progressive MP4 URL when HLS packaging fails', async () => {
+    rendererMock.isCompositionNonTrivial.mockReturnValue(true);
+    rendererMock.renderComposition.mockResolvedValue(MP4_RENDER);
+    pipelineMock.generateRenderedVideoHls.mockRejectedValue(new Error('hls package failed'));
+
+    const result = await renderCompositionMedia(
+      'doc-1',
+      lookDoc(mediaLayer('media_1', 'video', { speed: 2, videoDurationMs: 8000 })),
+      'https://cdn.example.com/src.mp4',
+      'video',
+    );
+
+    const [key] = s3Mock.putBinaryObject.mock.calls[0]!;
     expect(result.renderedUrl).toBe(`https://cdn.example.com/media/${key}`);
   });
 
@@ -327,6 +412,43 @@ describe('renderPosterFrameCompositions', () => {
     expect(outcome.renders.get(1)).toBeNull();
     expect(outcome.renders.get(2)).toMatch(/\.jpg$/);
     expect(s3Mock.putBinaryObject).toHaveBeenCalledTimes(2);
+  });
+
+  it('populates posters + downloads maps only for rendered video pages', async () => {
+    const doc = posterDoc([
+      page('page-edited-video', [
+        mediaLayer('layer-edited-video', 'video', { speed: 2, videoDurationMs: 8000 }),
+      ]),
+      page('page-plain-video', [
+        mediaLayer('layer-plain-video', 'video', { videoDurationMs: 8000 }),
+      ]),
+    ]);
+
+    const expectedMedia = [
+      expectedMediaEntry('layer-edited-video', 'video', 'https://cdn.example.com/edited.mp4'),
+      expectedMediaEntry('layer-plain-video', 'video', 'https://cdn.example.com/plain.mp4'),
+    ];
+
+    rendererMock.getVideoRenderPath.mockImplementation((d: unknown) => {
+      const only = (d as { pages: Array<{ id: string }> }).pages[0]!;
+      return only.id === 'page-plain-video' ? 'trivial' : 'transcode';
+    });
+    rendererMock.isCompositionNonTrivial.mockReturnValue(true);
+    rendererMock.renderComposition.mockResolvedValue(MP4_RENDER);
+    pipelineMock.generateRenderedVideoHls.mockResolvedValue({
+      masterPlaylistUrl: 'https://cdn.example.com/media/renders/doc-9/composition_x/hls/master.m3u8',
+      posterUrl: 'https://cdn.example.com/media/renders/doc-9/composition_x/hls/poster.jpg',
+    });
+
+    const outcome = await renderPosterFrameCompositions('doc-9', doc, expectedMedia);
+
+    // Rendered video page carries all three URLs; the trivial page keeps
+    // the source and contributes nothing to the poster/download maps.
+    expect(outcome.renders.get(0)).toMatch(/\.m3u8$/);
+    expect(outcome.posters.get(0)).toMatch(/poster\.jpg$/);
+    expect(outcome.downloads.get(0)).toMatch(/\.mp4$/);
+    expect(outcome.posters.has(1)).toBe(false);
+    expect(outcome.downloads.has(1)).toBe(false);
   });
 
   it('propagates renderFailed + nonTrivial when a non-trivial frame render fails', async () => {

@@ -313,8 +313,12 @@ export function BuyNowSheet({
             </Text>
 
             {error && (
-              <View style={styles.errorRow}>
-                <Ionicons name="alert-circle-outline" size={14} color={colors.danger} />
+              <View
+                style={styles.errorRow}
+                accessibilityRole="alert"
+                accessibilityLiveRegion="polite"
+              >
+                <Ionicons name="alert-circle-outline" size={14} color={colors.danger} accessible={false} />
                 <Text style={styles.errorText}>{error.message}</Text>
               </View>
             )}
@@ -401,7 +405,11 @@ export function BuyNowSheet({
 
         {/* ── Error stage ── */}
         {stage === 'error' && error && (
-          <View style={styles.stageContent}>
+          <View
+            style={styles.stageContent}
+            accessibilityRole="alert"
+            accessibilityLiveRegion="polite"
+          >
             <View style={styles.errorIconSmall}>
               <Ionicons
                 name={error.isAmbiguous ? 'cloud-offline-outline' : 'alert-circle-outline'}

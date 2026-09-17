@@ -26,8 +26,17 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
 import { logger } from '../logger.js';
-import { runFfmpeg } from './ffmpeg.js';
+import { runFfmpeg, runFfmpegStreaming } from './ffmpeg.js';
+import { StreamingMultipartUpload } from './streamingUpload.js';
 import { probeMedia } from './ffprobe.js';
+import {
+  evaluateKeyframes,
+  layerHasKeyframes,
+  parseKeyframes,
+  samplePropertyTrack,
+  samplesToStaircaseExpr,
+  type ParsedKeyframe,
+} from './keyframeEvaluator.js';
 
 /** The sharp pipeline instance type (avoids relying on the sharp namespace). */
 type SharpPipeline = ReturnType<typeof sharp>;
@@ -35,10 +44,20 @@ type SharpPipeline = ReturnType<typeof sharp>;
 type SharpMetadata = Awaited<ReturnType<SharpPipeline['metadata']>>;
 
 export interface RenderedComposition {
-  buffer: Buffer;
+  /**
+   * Rendered bytes. Absent when the render streamed straight to S3
+   * (`streamOutput`) — in that case `url`/`sizeBytes` are set instead.
+   */
+  buffer?: Buffer;
   contentType: string;
   width: number;
   height: number;
+  /** Canonical object URL when the render was streamed to storage. */
+  url?: string;
+  /** Delivered byte size when the render was streamed to storage. */
+  sizeBytes?: number;
+  /** Output duration of a rendered video, in ms (video paths only). */
+  durationMs?: number;
 }
 
 export interface RenderCompositionOptions {
@@ -50,6 +69,19 @@ export interface RenderCompositionOptions {
    * progress.
    */
   onProgress?: (fraction: number) => void;
+  /**
+   * Stream the video transcode's output into S3 multipart parts while
+   * FFmpeg is still encoding (transcode-upload overlap). The output uses
+   * fragmented MP4 (`frag_keyframe+empty_moov`) because a pipe output is
+   * append-only — classic `+faststart` moov relocation can't stream.
+   * Only applies to the video transcode path; remux/trivial and image
+   * renders keep the buffered path.
+   */
+  streamOutput?: {
+    objectKey: string;
+    contentType: string;
+    cacheControl?: string;
+  };
 }
 
 // ── Defensive document types ───────────────────────────────────────────
@@ -73,6 +105,12 @@ interface EffectNode {
   amount?: number;
   radius?: number;
   id?: string;
+  /** Baked render recipe for registry (`ai:`) effects — matrix/adjust/
+   *  blur/grain/vignette nodes authored at intensity 1. Present when the
+   *  filter id is not one of the named preset matrices. */
+  recipe?: unknown[];
+  /** Raw 4×5 matrix for recipe `matrix` nodes. */
+  matrix?: number[];
 }
 
 interface CompositionLayer {
@@ -94,6 +132,15 @@ interface CompositionLayer {
    * `enable='between(t,…)'` gating on drawtext/overlay filters.
    */
   timeRange?: { startMs: number; endMs: number };
+  /**
+   * Authored animation keyframes (position/scale/rotation/opacity) from
+   * BaseLayerSchema. Burned into video renders via per-frame `between(t,…)`
+   * staircase expressions sampled at the output frame rate — frame-exact
+   * parity with the preview evaluator.
+   */
+  keyframes?: ParsedKeyframe[];
+  /** URI of the alpha-mask PNG for true cutout (BaseLayerSchema.maskRef). */
+  maskRef?: string;
   payload: Record<string, unknown>;
 }
 
@@ -108,6 +155,7 @@ interface CompositionBackground {
   secondaryValue?: string;
   gradientStops?: Array<{ position: number; color: string }>;
   gradientAngle?: number;
+  imageBlur?: number;
 }
 
 interface CompositionDocument {
@@ -327,7 +375,9 @@ function parseDocument(doc: unknown): CompositionDocument | null {
     const layers = Array.isArray(page['layers']) ? page['layers'] : [];
     return {
       id: str(page['id'], 'page'),
-      layers: layers.map(parseLayer).filter((l): l is CompositionLayer => l !== null),
+      layers: foldAdjustmentLayers(
+        layers.map(parseLayer).filter((l): l is CompositionLayer => l !== null),
+      ),
     };
   });
 
@@ -366,6 +416,8 @@ function parseLayer(raw: unknown): CompositionLayer | null {
     hidden: bool(l['hidden'], false),
     opacity: num(l['opacity'], 1),
     timeRange,
+    keyframes: parseKeyframes(l['keyframes']),
+    maskRef: typeof l['maskRef'] === 'string' ? l['maskRef'] : undefined,
     payload: payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {},
   };
 }
@@ -377,6 +429,59 @@ function parseEffects(payload: Record<string, unknown>): EffectNode[] {
 }
 
 /**
+ * Fold 'adjustment' layers into the media layers they target. Adjustment
+ * layers are not rendered directly — their effect stack merges into each
+ * targeted clip's own `payload.effects` (matching the preview's playback
+ * semantics). The adjustment's `opacity` scales every numeric effect
+ * parameter toward identity; `enabled:false` adjustments are dropped.
+ * Runs inside parseDocument so classification AND both render paths see
+ * the same merged effect stack from a single source of truth.
+ */
+function foldAdjustmentLayers(layers: CompositionLayer[]): CompositionLayer[] {
+  const adjustments = layers.filter((l) => l.type === 'adjustment' && !l.hidden);
+  if (adjustments.length === 0) return layers;
+
+  const merged = layers.map((layer) => {
+    if (layer.type !== 'media' || layer.hidden) return layer;
+    let effects = parseEffects(layer.payload);
+    for (const adj of adjustments) {
+      const p = adj.payload;
+      if (p['enabled'] === false) continue;
+      // Temporal scope: the preview evaluator gates on timeRange at the
+      // playback clock. A render bakes at t=0, so a time-ranged
+      // adjustment only folds when its window covers the clip start —
+      // matching the static-preview frame the author sees.
+      if (adj.timeRange && (adj.timeRange.startMs > 0 || adj.timeRange.endMs <= 0)) continue;
+      const scope = p['scope'];
+      const targetsAll = scope === undefined || scope === 'all';
+      const targetsClip =
+        !targetsAll
+        && scope !== null
+        && typeof scope === 'object'
+        && Array.isArray((scope as { clipIds?: unknown[] }).clipIds)
+        && (scope as { clipIds: unknown[] }).clipIds.includes(layer.id);
+      if (!targetsAll && !targetsClip) continue;
+      const opacity = num(p['opacity'], 1);
+      if (opacity <= 0) continue;
+      const adjEffects = parseEffects(p).map((e) =>
+        opacity >= 1
+          ? e
+          : Object.fromEntries(
+              Object.entries(e).map(([k, v]) => [k, typeof v === 'number' ? v * opacity : v]),
+            ) as EffectNode,
+      );
+      effects = [...effects, ...adjEffects];
+    }
+    if (effects.length === 0) return layer;
+    return { ...layer, payload: { ...layer.payload, effects } };
+  });
+
+  // Adjustment layers are consumed by the fold — remove them so no
+  // downstream path tries (and fails) to rasterize them.
+  return merged.filter((l) => l.type !== 'adjustment');
+}
+
+/**
  * A composition is "non-trivial" when it carries authored edits that would
  * be lost if the source URL were served directly: overlay layers (text,
  * stickers, draw, gif), media adjustments (effects, non-center focal point,
@@ -384,12 +489,23 @@ function parseEffects(payload: Record<string, unknown>): EffectNode[] {
  * background. The publication flow uses this to skip rendering for plain
  * single-image posts where burning would be a wasteful re-encode.
  */
+/**
+ * The client serializer (`withMediaAsCanvasBackground`) rewrites the
+ * factory-default canvas background to the 'transparent' sentinel so the
+ * viewer lets full-bleed media show through. For classification and
+ * rendering it means "no authored background" — mp4 output has no alpha,
+ * so compositing onto it is equivalent to the default dark base.
+ */
+function isDefaultCanvasColor(value: string): boolean {
+  return value === '#1a1a1a' || value === '#000000' || value === 'transparent';
+}
+
 export function isCompositionNonTrivial(doc: unknown): boolean {
   const parsed = parseDocument(doc);
   if (!parsed) return false;
 
   const bg = parsed.canvas.background;
-  if (bg.type !== 'color' || (bg.value && bg.value !== '#1a1a1a' && bg.value !== '#000000')) {
+  if (bg.type !== 'color' || (bg.value && !isDefaultCanvasColor(bg.value))) {
     return true;
   }
 
@@ -405,12 +521,23 @@ export function isCompositionNonTrivial(doc: unknown): boolean {
     for (const layer of page.layers) {
       if (layer.hidden) continue;
       if (overlayTypes.has(layer.type)) return true;
+      // Authored keyframe animation must be burned into the render —
+      // publishing the source would silently drop the animation.
+      if (layerHasKeyframes(layer.keyframes)) return true;
     }
   }
 
   const media = mediaLayers[0];
   if (!media) return false;
   if (media.opacity < 1) return true;
+  // A cutout mask is a visible authored edit — serving the raw source
+  // would silently drop the cutout.
+  if (media.maskRef) return true;
+  // Static transforms on the media layer render in the preview and must be
+  // burned into export — serving the source would silently drop them.
+  if (media.rotation % 360 !== 0) return true;
+  if (media.scale !== 1) return true;
+  if (media.x !== 0.5 || media.y !== 0.5 || media.width !== 1 || media.height !== 1) return true;
 
   const focal = media.payload['focalPoint'];
   if (focal && typeof focal === 'object') {
@@ -472,7 +599,7 @@ export function getVideoRenderPath(doc: unknown): 'trivial' | 'remux' | 'transco
   // A non-solid background is a visual edit (it can show around a contained
   // video) and is not remuxable.
   const bg = parsed.canvas.background;
-  if (bg.type !== 'color' || (bg.value && bg.value !== '#1a1a1a' && bg.value !== '#000000')) {
+  if (bg.type !== 'color' || (bg.value && !isDefaultCanvasColor(bg.value))) {
     return 'transcode';
   }
 
@@ -481,23 +608,38 @@ export function getVideoRenderPath(doc: unknown): 'trivial' | 'remux' | 'transco
   if (mediaLayers.length !== 1) return 'transcode';
 
   // Any visible overlay layer (text, stickers, draw, gif, …) needs a
-  // burn-in → transcode.
+  // burn-in → transcode. Keyframe animation on ANY layer (including the
+  // media layer itself) likewise requires the animated-overlay pipeline.
   for (const page of parsed.pages) {
     for (const layer of page.layers) {
       if (layer.hidden) continue;
       if (OVERLAY_LAYER_TYPES.has(layer.type)) return 'transcode';
+      if (layerHasKeyframes(layer.keyframes)) return 'transcode';
     }
   }
 
   const media = mediaLayers[0];
   if (!media) return 'transcode';
 
+  // A cutout mask must never take the raw-source path. The video
+  // filtergraph does not yet burn alpha masks, but 'transcode' keeps the
+  // composition on the render path rather than serving the uncut source.
+  if (media.maskRef) return 'transcode';
+
   // Only video compositions are classified here; an image-only document has
   // no remux path (it is handled by the sharp image renderer).
   if (str(media.payload['mediaType'], 'image') !== 'video') return 'transcode';
 
-  // Visual adjustments to the media layer itself require a re-encode.
+  // Visual adjustments to the media layer itself require a re-encode:
+  // opacity, and any static transform (rotation, scale, off-centre
+  // position, non-full-bleed size) that the preview applies but a plain
+  // stream copy would drop.
   if (media.opacity < 1) return 'transcode';
+  if (media.rotation % 360 !== 0) return 'transcode';
+  if (media.scale !== 1) return 'transcode';
+  if (media.x !== 0.5 || media.y !== 0.5 || media.width !== 1 || media.height !== 1) {
+    return 'transcode';
+  }
   const focal = media.payload['focalPoint'];
   if (focal && typeof focal === 'object') {
     const f = focal as Record<string, unknown>;
@@ -636,6 +778,43 @@ async function applyPixelEffects(
       const radius = clamp(num(effect.radius, 1), 0.3, 100);
       result = result.blur(radius);
     } else if (effect.type === 'filter') {
+      const intensity = clamp(num(effect.amount, 0), 0, 1);
+      if (Array.isArray(effect.recipe) && effect.recipe.length > 0) {
+        // Registry effects (`ai:` ids) persist their baked render(1)
+        // recipe — fold it so unknown filter ids render their authored
+        // result instead of failing closed to identity. `grain` nodes
+        // have no Sharp equivalent and are skipped; `vignette`/`adjust`
+        // recipe nodes are handled by the overlay pass below.
+        for (const rawNode of effect.recipe) {
+          const rn = rawNode as EffectNode;
+          if (!rn || typeof rn !== 'object') continue;
+          if (rn.type === 'matrix' && Array.isArray(rn.matrix) && rn.matrix.length === 20) {
+            const m = interpolateMatrix(rn.matrix, intensity);
+            filterMatrix = filterMatrix ? multiplyMatrix(filterMatrix, m) : m;
+          } else if (rn.type === 'adjust') {
+            const brightness = rn.exposure !== undefined
+              ? clamp(1 + rn.exposure * 0.5, 0.1, 3)
+              : undefined;
+            const saturation = rn.saturation !== undefined
+              ? clamp(1 + rn.saturation, 0, 3)
+              : undefined;
+            if (brightness !== undefined || saturation !== undefined) {
+              result = result.modulate({ brightness, saturation });
+            }
+            if (rn.contrast !== undefined) {
+              const c = clamp(rn.contrast, -1, 1);
+              result = result.linear(1 + c, -128 * c);
+            }
+            if (rn.sharpness !== undefined && rn.sharpness > 0) {
+              result = result.sharpen({ sigma: clamp(rn.sharpness * 2, 0.1, 5) });
+            }
+          } else if (rn.type === 'blur') {
+            const radius = clamp(num(rn.radius, 1) * intensity, 0.3, 100);
+            result = result.blur(radius);
+          }
+        }
+        continue;
+      }
       // Look up the inlined filter preset matrix by the effect's id (the
       // filter preset name). Interpolate by the effect's amount (clamped
       // 0..1) and multiply into the running color matrix. Unknown or
@@ -643,7 +822,6 @@ async function applyPixelEffects(
       const filterId = str(effect.id, '');
       const target = FILTER_PRESET_MATRICES[filterId];
       if (target) {
-        const intensity = clamp(num(effect.amount, 0), 0, 1);
         const m = interpolateMatrix(target, intensity);
         filterMatrix = filterMatrix ? multiplyMatrix(filterMatrix, m) : m;
       }
@@ -684,7 +862,38 @@ function buildEffectOverlay(
   effects: EffectNode[],
 ): Buffer | null {
   const overlays: string[] = [];
+
+  // Registry filter recipes carry their own vignette/adjust nodes —
+  // flatten them into the same overlay pass, scaled by the parent
+  // filter's amount (matching the preview evaluator).
+  const flattened: EffectNode[] = [];
   for (const effect of effects) {
+    if (effect.type === 'filter' && Array.isArray(effect.recipe)) {
+      const intensity = clamp(num(effect.amount, 0), 0, 1);
+      for (const rawNode of effect.recipe) {
+        const rn = rawNode as EffectNode;
+        if (!rn || typeof rn !== 'object') continue;
+        if (rn.type === 'vignette') {
+          flattened.push({ type: 'vignette', amount: num(rn.amount, 0) * intensity });
+        } else if (rn.type === 'adjust') {
+          if (rn.temperature !== undefined || rn.fade !== undefined) {
+            flattened.push({
+              type: 'adjust',
+              temperature: rn.temperature,
+              fade: rn.fade,
+            });
+          }
+          if (rn.vignette !== undefined && rn.vignette > 0) {
+            flattened.push({ type: 'vignette', amount: rn.vignette * intensity });
+          }
+        }
+      }
+      continue;
+    }
+    flattened.push(effect);
+  }
+
+  for (const effect of flattened) {
     if (effect.type === 'vignette' && effect.amount !== undefined) {
       const amount = clamp(effect.amount, 0, 1);
       const cx = width / 2;
@@ -717,6 +926,163 @@ function buildEffectOverlay(
   if (overlays.length === 0) return null;
   const svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">${overlays.join('')}</svg>`;
   return Buffer.from(svg);
+}
+
+/**
+ * Escape a filesystem path for embedding in an FFmpeg filter option
+ * (`lut3d=file=…`). Colons, backslashes and quotes are filtergraph
+ * metacharacters and must be escaped — Windows temp paths contain all
+ * three.
+ */
+function escapeFilterPath(p: string): string {
+  return p.replace(/\\/g, '\\\\').replace(/:/g, '\\:').replace(/'/g, "\\'");
+}
+
+/**
+ * Write a `.cube` 3D LUT that applies a 4×5 color matrix exactly.
+ * `colorchannelmixer` can only express the 4×4 mixing part — the offset
+ * column (m[4], m[9], m[14]) used by presets like `fade`, `vivid` and
+ * `noir` would be dropped. A LUT encodes the full affine transform and
+ * FFmpeg applies it via `lut3d` with hardware-grade speed.
+ */
+async function writeMatrixLutFile(matrix: number[]): Promise<string> {
+  const size = 17;
+  const max = size - 1;
+  const lines: string[] = ['LUT_3D_SIZE 17'];
+  // .cube ordering: red varies fastest, then green, then blue.
+  for (let b = 0; b < size; b++) {
+    for (let g = 0; g < size; g++) {
+      for (let r = 0; r < size; r++) {
+        const rf = r / max;
+        const gf = g / max;
+        const bf = b / max;
+        const or = clamp(matrix[0]! * rf + matrix[1]! * gf + matrix[2]! * bf + matrix[3]! + matrix[4]!, 0, 1);
+        const og = clamp(matrix[5]! * rf + matrix[6]! * gf + matrix[7]! * bf + matrix[8]! + matrix[9]!, 0, 1);
+        const ob = clamp(matrix[10]! * rf + matrix[11]! * gf + matrix[12]! * bf + matrix[13]! + matrix[14]!, 0, 1);
+        lines.push(`${or.toFixed(6)} ${og.toFixed(6)} ${ob.toFixed(6)}`);
+      }
+    }
+  }
+  const lutPath = path.join(tmpdir(), `comp-lut-${randomUUID()}.cube`);
+  await writeFile(lutPath, lines.join('\n'));
+  return lutPath;
+}
+
+/**
+ * Translate authored pixel effects into an FFmpeg video filter chain.
+ * The image path grades via Sharp ops + SVG overlays; for video the same
+ * effect model maps to real FFmpeg filters:
+ *
+ * - `filter` (named preset or baked recipe) → accumulated 4×5 matrix,
+ *   applied exactly via a generated `.cube` LUT (`lut3d`).
+ * - `adjust` → `eq` (exposure/contrast/saturation), `colortemperature`,
+ *   `unsharp` (sharpness), `colorlevels` (fade lift — mirrors the image
+ *   path's white overlay).
+ * - `blur` → `gblur`; `vignette` → `vignette`; `grain` → `noise`.
+ *
+ * Recipe nodes inside a `filter` effect fold the same way as the image
+ * path and the preview evaluator. LUT file paths are pushed into
+ * `tempPaths` so the caller's cleanup removes them.
+ */
+async function buildVideoEffectFilters(
+  effects: EffectNode[],
+  tempPaths: string[],
+): Promise<string[]> {
+  const chain: string[] = [];
+  let colorMatrix: number[] | undefined;
+  let vignetteAmount = 0;
+  let grainAmount = 0;
+
+  // `scale` applies only to the vignette fold — matching the preview
+  // evaluator, where an adjust node's matrix contribution is unscaled
+  // but its vignette scales by the owning filter's amount.
+  const emitAdjust = (e: EffectNode, vignetteScale: number): void => {
+    const brightness = e.exposure !== undefined
+      ? clamp(e.exposure * 0.25, -1, 1)
+      : 0;
+    const contrast = e.contrast !== undefined
+      ? clamp(1 + e.contrast, 0, 3)
+      : 1;
+    const saturation = e.saturation !== undefined
+      ? clamp(1 + e.saturation, 0, 3)
+      : 1;
+    if (brightness !== 0 || contrast !== 1 || saturation !== 1) {
+      chain.push(
+        `eq=brightness=${brightness.toFixed(4)}` +
+        `:contrast=${contrast.toFixed(4)}:saturation=${saturation.toFixed(4)}`,
+      );
+    }
+    if (e.temperature !== undefined && e.temperature !== 0) {
+      // Warmer = lower Kelvin. Map [-1,1] onto [10500K, 2500K].
+      const k = Math.round(clamp(6500 - e.temperature * 4000, 1000, 40000));
+      chain.push(`colortemperature=temperature=${k}`);
+    }
+    if (e.sharpness !== undefined && e.sharpness > 0) {
+      chain.push(`unsharp=5:5:${clamp(e.sharpness, 0, 1).toFixed(3)}`);
+    }
+    if (e.fade !== undefined && e.fade > 0) {
+      // White-overlay lift approximated by raising each channel's black
+      // point (matches the image path's fade overlay semantics).
+      const lift = clamp(e.fade, 0, 1) * 0.4;
+      chain.push(
+        `colorlevels=rimin=${lift.toFixed(3)}:gimin=${lift.toFixed(3)}:bimin=${lift.toFixed(3)}`,
+      );
+    }
+    if (e.vignette !== undefined && e.vignette > 0) {
+      vignetteAmount += e.vignette * vignetteScale;
+    }
+  };
+
+  for (const effect of effects) {
+    if (effect.type === 'filter') {
+      const intensity = clamp(num(effect.amount, 0), 0, 1);
+      if (Array.isArray(effect.recipe) && effect.recipe.length > 0) {
+        for (const rawNode of effect.recipe) {
+          const rn = rawNode as EffectNode;
+          if (!rn || typeof rn !== 'object') continue;
+          if (rn.type === 'matrix' && Array.isArray(rn.matrix) && rn.matrix.length === 20) {
+            const m = interpolateMatrix(rn.matrix, intensity);
+            colorMatrix = colorMatrix ? multiplyMatrix(colorMatrix, m) : m;
+          } else if (rn.type === 'adjust') {
+            emitAdjust(rn, intensity);
+          } else if (rn.type === 'blur') {
+            chain.push(`gblur=sigma=${clamp(num(rn.radius, 1) * intensity, 0.3, 100).toFixed(2)}`);
+          } else if (rn.type === 'vignette') {
+            vignetteAmount += num(rn.amount, 0) * intensity;
+          } else if (rn.type === 'grain') {
+            grainAmount += num(rn.amount, 0) * intensity;
+          }
+        }
+      } else {
+        const target = FILTER_PRESET_MATRICES[str(effect.id, '')];
+        if (target) {
+          const m = interpolateMatrix(target, intensity);
+          colorMatrix = colorMatrix ? multiplyMatrix(colorMatrix, m) : m;
+        }
+      }
+    } else if (effect.type === 'adjust') {
+      emitAdjust(effect, 1);
+    } else if (effect.type === 'blur') {
+      chain.push(`gblur=sigma=${clamp(num(effect.radius, 1), 0.3, 100).toFixed(2)}`);
+    } else if (effect.type === 'vignette') {
+      vignetteAmount += num(effect.amount, 0);
+    }
+  }
+
+  // The accumulated matrix applies first so later tonal ops grade the
+  // already-filtered pixels (matches the image path ordering).
+  if (colorMatrix && !isIdentityMatrix(colorMatrix)) {
+    const lutPath = await writeMatrixLutFile(colorMatrix);
+    tempPaths.push(lutPath);
+    chain.unshift(`lut3d=file='${escapeFilterPath(lutPath)}'`);
+  }
+  if (vignetteAmount > 0) {
+    chain.push(`vignette=a=${(Math.min(1, vignetteAmount) * Math.PI / 4).toFixed(4)}`);
+  }
+  if (grainAmount > 0) {
+    chain.push(`noise=alls=${Math.round(Math.min(1, grainAmount) * 40)}:allf=t`);
+  }
+  return chain;
 }
 
 // ── Colour helpers ─────────────────────────────────────────────────────
@@ -851,6 +1217,31 @@ async function renderMediaLayer(
       .composite([{ input: effectOverlay, blend: 'over' }])
       .png()
       .toBuffer();
+  }
+
+  // Alpha mask (cutout) — the mask PNG's alpha channel defines which
+  // layer pixels survive (feather/invert are baked into the PNG by the
+  // device's mask builder). dest-in multiplies destination alpha by the
+  // mask's alpha — same op as the Skia DstIn used by the preview.
+  if (layer.maskRef) {
+    try {
+      const maskBuffer = await fetchSourceBuffer(layer.maskRef);
+      const mask = await sharp(maskBuffer, { failOn: 'none' })
+        .resize(layerW, layerH, { fit: 'fill' })
+        .ensureAlpha()
+        .png()
+        .toBuffer();
+      finalBuffer = await sharp(finalBuffer)
+        .composite([{ input: mask, blend: 'dest-in' }])
+        .png()
+        .toBuffer();
+    } catch (error) {
+      // A mask that fails to fetch/decode must not silently render the
+      // uncut image — but it also must not abort the whole render. Log
+      // loudly and continue unmasked; coverage validation already
+      // guarantees the asset exists, so this path is exceptional.
+      logger.warn({ maskRef: layer.maskRef, error: String(error) }, '[compositionRenderer] mask apply failed');
+    }
   }
 
   // Apply layer opacity by scaling alpha.
@@ -1074,13 +1465,37 @@ interface CompositeLayer {
   top: number;
 }
 
-function layerTopLeft(layer: CompositionLayer, canvasWidth: number, canvasHeight: number): { left: number; top: number } {
-  const layerW = layer.width * canvasWidth * layer.scale;
-  const layerH = layer.height * canvasHeight * layer.scale;
-  // x,y are layer-centre coordinates in normalized 0-1 space.
-  const left = Math.round(layer.x * canvasWidth - layerW / 2);
-  const top = Math.round(layer.y * canvasHeight - layerH / 2);
-  return { left, top };
+/**
+ * Build a composite entry for a rasterised layer PNG, honouring the
+ * layer's static rotation. Rotation grows the layer's bounding box, so
+ * the centre-anchor top-left is recomputed from the rotated dimensions —
+ * the same correction the video overlay path applies. Without this, an
+ * authored rotation is classified non-trivial (forcing a render) and
+ * then silently dropped by the compositor.
+ */
+async function compositeEntryForLayer(
+  png: Buffer,
+  layer: CompositionLayer,
+  canvasWidth: number,
+  canvasHeight: number,
+): Promise<CompositeLayer> {
+  let input = png;
+  let boundsW = layer.width * canvasWidth * layer.scale;
+  let boundsH = layer.height * canvasHeight * layer.scale;
+  if (layer.rotation % 360 !== 0) {
+    input = await sharp(png)
+      .rotate(layer.rotation, { background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .png()
+      .toBuffer();
+    const meta = await sharp(input).metadata();
+    boundsW = meta.width ?? boundsW;
+    boundsH = meta.height ?? boundsH;
+  }
+  return {
+    input,
+    left: Math.round(layer.x * canvasWidth - boundsW / 2),
+    top: Math.round(layer.y * canvasHeight - boundsH / 2),
+  };
 }
 
 // ── Video composition rendering ────────────────────────────────────────
@@ -1354,6 +1769,8 @@ function buildDrawtextFilter(
   videoWidth: number,
   videoHeight: number,
   canvasWidth: number,
+  fps = 30,
+  outputDurationMs = 0,
 ): string | null {
   const p = layer.payload;
   const text = str(p['text'], '');
@@ -1372,8 +1789,16 @@ function buildDrawtextFilter(
 
   const fontColor = drawtextFontColor(layer);
   const alignment = str(p['alignment'], 'center');
+  // Position keyframes drive the layer's X-centre (normalized 0–1) — the
+  // preview maps the keyframed value straight to translateX, so an animated
+  // drawtext follows center semantics regardless of authored alignment.
+  const posSamples = layer.keyframes
+    ? samplePropertyTrack(layer.keyframes, 'position', fps, outputDurationMs)
+    : null;
   let xExpr: string;
-  if (alignment === 'left') {
+  if (posSamples) {
+    xExpr = `(${samplesToStaircaseExpr(posSamples, fps)})*W-text_w/2`;
+  } else if (alignment === 'left') {
     xExpr = String(Math.round(left));
   } else if (alignment === 'right') {
     xExpr = `${Math.round(left + layerW)}-text_w`;
@@ -1381,6 +1806,15 @@ function buildDrawtextFilter(
     xExpr = `${Math.round(left + layerW / 2)}-text_w/2`;
   }
   const yExpr = String(Math.round(top));
+
+  // Opacity keyframes → drawtext `alpha` expression (evaluated per frame,
+  // 0–1 range), folded with the layer's static opacity.
+  const opaSamples = layer.keyframes
+    ? samplePropertyTrack(layer.keyframes, 'opacity', fps, outputDurationMs)
+    : null;
+  const alphaOpt = opaSamples
+    ? `:alpha='(${samplesToStaircaseExpr(opaSamples.map((v) => clamp(v, 0, 1)), fps)})*${layer.opacity.toFixed(3)}'`
+    : '';
 
   // Timed overlay window: gate the drawtext on output time so the text is
   // only burned in during its authored [startMs, endMs) window. `t` is the
@@ -1392,7 +1826,8 @@ function buildDrawtextFilter(
   return (
     `drawtext=fontfile='${DRAWTEXT_FONT_PATH}'` +
     `:text=${escapeDrawtextText(text)}` +
-    `:fontcolor=${fontColor}:fontsize=${fontPx}:x=${xExpr}:y=${yExpr}` +
+    `:fontcolor=${fontColor}:fontsize=${fontPx}:x='${xExpr}':y='${yExpr}'` +
+    alphaOpt +
     enable
   );
 }
@@ -1418,8 +1853,25 @@ async function buildStickerOverlayPng(
     try {
       const svg = buildStickerLayerSvg(layer, videoWidth, videoHeight);
       if (!svg) continue;
-      const png = await sharp(svg).png().toBuffer();
-      const { left, top } = layerTopLeft(layer, videoWidth, videoHeight);
+      let png = await sharp(svg).png().toBuffer();
+      let boundsW = layer.width * videoWidth * layer.scale;
+      let boundsH = layer.height * videoHeight * layer.scale;
+      if (layer.rotation % 360 !== 0) {
+        // Static rotation: rotate the tight PNG on a transparent field so
+        // the authored angle survives export (previously dropped — the
+        // composite path had no rotation step).
+        const rotated = await sharp(png)
+          .rotate(layer.rotation, { background: { r: 0, g: 0, b: 0, alpha: 0 } })
+          .png()
+          .toBuffer();
+        const meta = await sharp(rotated).metadata();
+        png = rotated;
+        boundsW = meta.width ?? boundsW;
+        boundsH = meta.height ?? boundsH;
+      }
+      // Centre-anchor: top-left = centre minus (possibly rotated) half-bounds.
+      const left = Math.round(layer.x * videoWidth - boundsW / 2);
+      const top = Math.round(layer.y * videoHeight - boundsH / 2);
       composites.push({ input: png, left, top });
     } catch (error) {
       logger.warn(
@@ -1447,6 +1899,105 @@ async function buildStickerOverlayPng(
     .toBuffer();
 }
 
+// ── Keyframed overlay animation ────────────────────────────────────────
+//
+// Layers with authored keyframes cannot ride the static full-frame PNG
+// composite (their transform changes per frame). Each animated layer gets
+// its own tight PNG rasterised at identity scale/opacity, looped into a
+// video-rate input, then transformed per frame:
+//
+//   scale=eval=frame  — keyframed scale (absolute; replaces layer.scale,
+//                        matching the preview's shared-value overwrite)
+//   rotate            — keyframed rotation (and previously-dropped static
+//                        rotation), ow/oh=rotw/roth keeps the centre fixed
+//   geq               — keyframed opacity folded with static layer.opacity
+//   overlay x/y       — keyframed position (X-centre, normalized) or the
+//                        static centre; -overlay_w/2 keeps centre-anchor
+//                        under the per-frame size changes above
+//
+// Sampling the frontend-ported evaluator at the output frame rate makes
+// the staircase expression frame-exact with the preview — the preview only
+// ever renders whole frames.
+
+/** Keyframe property tracks resolved to per-frame expressions. */
+interface AnimatedOverlayPlan {
+  /** Per-frame scale expression (absolute), or null when unkeyframed. */
+  scaleExpr: string | null;
+  /** Per-frame rotation expression in degrees, or null when unkeyframed. */
+  rotationExpr: string | null;
+  /** Per-frame opacity expression (0–1, folded with static opacity), or null. */
+  opacityExpr: string | null;
+  /** Per-frame normalized X-centre expression, or null when unkeyframed. */
+  positionExpr: string | null;
+}
+
+function planAnimatedOverlay(
+  layer: CompositionLayer,
+  fps: number,
+  outputDurationMs: number,
+): AnimatedOverlayPlan {
+  const kfs = layer.keyframes;
+  const track = (prop: ParsedKeyframe['property']) =>
+    kfs ? samplePropertyTrack(kfs, prop, fps, outputDurationMs) : null;
+  const pos = track('position');
+  const scale = track('scale');
+  const rot = track('rotation');
+  const opa = track('opacity');
+  return {
+    positionExpr: pos
+      ? samplesToStaircaseExpr(pos.map((v) => clamp(v, 0, 1)), fps)
+      : null,
+    scaleExpr: scale
+      ? samplesToStaircaseExpr(scale.map((v) => clamp(v, 0, 8)), fps)
+      : null,
+    rotationExpr: rot ? samplesToStaircaseExpr(rot, fps) : null,
+    opacityExpr: opa
+      ? samplesToStaircaseExpr(opa.map((v) => clamp(v, 0, 1)), fps)
+      : null,
+  };
+}
+
+/**
+ * The per-input filter chain that turns a looped still PNG (or the media
+ * stream) into an animated overlay: constant frame rate, duration bound,
+ * then per-frame scale → rotate → opacity.
+ */
+function buildAnimatedInputChain(plan: AnimatedOverlayPlan, staticRotation: number, staticOpacity: number): string {
+  const chain: string[] = ['format=rgba'];
+  // Rotate BEFORE scale: rotate's ow/oh are evaluated once at init, so its
+  // input dims must stay constant — rotw(iw)/roth(ih) give the full-rotation
+  // bounding box. scale=eval=frame then varies dims per frame on top.
+  // Uniform scale and rotation commute, so ordering is visually exact.
+  const angleExpr = plan.rotationExpr
+    ?? (staticRotation % 360 !== 0 ? staticRotation.toFixed(4) : null);
+  if (angleExpr) {
+    chain.push(`rotate=a='(${angleExpr})*PI/180':ow='rotw(iw)':oh='roth(ih)':c=none`);
+  }
+  if (plan.scaleExpr) {
+    chain.push(`scale=eval=frame:w='iw*(${plan.scaleExpr})':h='ih*(${plan.scaleExpr})'`);
+  }
+  const opacityMul = plan.opacityExpr
+    ? `(${plan.opacityExpr})*${staticOpacity.toFixed(3)}`
+    : staticOpacity < 1
+      ? staticOpacity.toFixed(3)
+      : null;
+  if (opacityMul) {
+    chain.push(
+      `geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*${opacityMul}'`,
+    );
+  }
+  return chain.join(',');
+}
+
+/** Centre-anchored overlay x/y expressions for an animated layer. */
+function animatedOverlayXY(layer: CompositionLayer, plan: AnimatedOverlayPlan): { x: string; y: string } {
+  const xCenter = plan.positionExpr ? `(${plan.positionExpr})` : layer.x.toFixed(4);
+  return {
+    x: `(${xCenter})*main_w-overlay_w/2`,
+    y: `${layer.y.toFixed(4)}*main_h-overlay_h/2`,
+  };
+}
+
 /**
  * Burn authored trim and speed edits from a video media layer into a single
  * MP4 using FFmpeg. Downloads the source to a temp file, applies input-seek
@@ -1472,6 +2023,8 @@ async function renderVideoComposition(
   canvasWidth: number,
   sourceUrl: string,
   onProgress?: (fraction: number) => void,
+  canvasBackgroundColor = '#1a1a1a',
+  streamOutput?: RenderCompositionOptions['streamOutput'],
 ): Promise<RenderedComposition | null> {
   const trimStartMs = num(layer.payload['trimStartMs'], 0);
   const trimEndMs = num(layer.payload['trimEndMs'], 0);
@@ -1603,23 +2156,57 @@ async function renderVideoComposition(
         contentType: 'video/mp4',
         width,
         height,
+        durationMs: outputDurationMs,
       };
     }
 
     // ── Transcode path (re-encode) ────────────────────────────────────
+    // ── Segment model ────────────────────────────────────────────────
+    // Advanced edits (speed curve, freeze frame, reverse) decompose the
+    // trimmed window into output-ordered segments concatenated by FFmpeg.
+    // Advanced graphs and sticker overlays both require -filter_complex;
+    // plain speed/text still uses the cheaper -vf/-af path. Computed before
+    // the overlay build because keyframe sampling needs outputDurationMs.
+    const frameMs = 1000 / probeFrameRate;
+    const windowMs = trimmedDurationMs > 0 ? trimmedDurationMs : durationMs;
+    const hasFreeze = Number.isFinite(freezeFrameMs) && freezeDurationMs > 0
+      && freezeFrameMs >= 0 && freezeFrameMs < windowMs;
+    const advancedVideo = speedCurve !== null || hasFreeze || reversed;
+    const segs: VideoSegment[] = advancedVideo
+      ? buildVideoSegments(windowMs, speed, speedCurve, freezeFrameMs, freezeDurationMs)
+      : [];
+    const outputDurationMs = advancedVideo
+      ? segmentsOutputDurationMs(segs)
+      : speed !== 1 && windowMs > 0
+        ? windowMs / speed
+        : windowMs;
+
     // Build overlay burn-in: text layers → drawtext filters, sticker layers
     // → composited PNGs overlaid via the `overlay` filter. Sticker layers
     // are grouped by their authored timeRange so each PNG input can be
     // gated independently via `enable='between(t,…)'` — a single composite
     // PNG could not express per-layer timing.
+    //
+    // Keyframed layers split off into per-layer animated inputs: drawtext
+    // can only express position (x) and opacity per frame, so a text layer
+    // carrying scale/rotation keyframes is rasterised into the animated-PNG
+    // path where all four properties are realizable.
     const textLayers = overlayLayers.filter((l) => l.type === 'text');
     const stickerLayers = overlayLayers.filter((l) => l.type !== 'text');
+    const drawtextLayers = textLayers.filter(
+      (l) => !(l.keyframes ?? []).some((k) => k.property === 'scale' || k.property === 'rotation'),
+    );
+    const animatedOverlayLayers = [
+      ...stickerLayers.filter((l) => layerHasKeyframes(l.keyframes)),
+      ...textLayers.filter((l) => !drawtextLayers.includes(l)),
+    ];
+    const staticStickerLayers = stickerLayers.filter((l) => !layerHasKeyframes(l.keyframes));
 
     const drawtextFilters: string[] = [];
-    for (const tl of textLayers) {
+    for (const tl of drawtextLayers) {
       try {
         const filter = width > 0 && height > 0
-          ? buildDrawtextFilter(tl, width, height, canvasWidth)
+          ? buildDrawtextFilter(tl, width, height, canvasWidth, probeFrameRate, outputDurationMs)
           : null;
         if (filter) drawtextFilters.push(filter);
       } catch (error) {
@@ -1630,11 +2217,46 @@ async function renderVideoComposition(
       }
     }
 
+    // Rasterise each keyframed overlay into its own tight PNG. Scale and
+    // opacity are neutralised in the raster when the corresponding track is
+    // keyframed — the FFmpeg chain applies them per frame instead.
+    const animatedOverlays: Array<{
+      pngPath: string;
+      layer: CompositionLayer;
+      plan: AnimatedOverlayPlan;
+    }> = [];
+    for (const al of animatedOverlayLayers) {
+      try {
+        if (width <= 0 || height <= 0) break;
+        const plan = planAnimatedOverlay(al, probeFrameRate, outputDurationMs);
+        const rasterLayer: CompositionLayer = {
+          ...al,
+          scale: plan.scaleExpr ? 1 : al.scale,
+          opacity: plan.opacityExpr ? 1 : al.opacity,
+          payload: plan.opacityExpr ? { ...al.payload, opacity: 1 } : al.payload,
+        };
+        const svg = al.type === 'text'
+          ? buildTextLayerSvg(rasterLayer, width, height)
+          : buildStickerLayerSvg(rasterLayer, width, height);
+        if (!svg) continue;
+        const png = await sharp(svg).png().toBuffer();
+        const pngPath = path.join(tmpdir(), `comp-anov-${randomUUID()}.png`);
+        await writeFile(pngPath, png);
+        overlayPngPaths.push(pngPath);
+        animatedOverlays.push({ pngPath, layer: al, plan });
+      } catch (error) {
+        logger.warn(
+          { layerId: al.id, error: String(error) },
+          '[compositionRenderer] animated overlay rasterise failed — skipping layer',
+        );
+      }
+    }
+
     // Group sticker layers by identical timeRange (empty key = always on).
     const stickerGroups: Array<{ pngPath: string; timeRange: { startMs: number; endMs: number } | null }> = [];
-    if (stickerLayers.length > 0 && width > 0 && height > 0) {
+    if (staticStickerLayers.length > 0 && width > 0 && height > 0) {
       const buckets = new Map<string, { layers: CompositionLayer[]; timeRange: { startMs: number; endMs: number } | null }>();
-      for (const sl of stickerLayers) {
+      for (const sl of staticStickerLayers) {
         const tr = sl.timeRange && sl.timeRange.endMs > sl.timeRange.startMs ? sl.timeRange : null;
         const key = tr ? `${tr.startMs}:${tr.endMs}` : '';
         const bucket = buckets.get(key) ?? { layers: [], timeRange: tr };
@@ -1657,26 +2279,18 @@ async function renderVideoComposition(
         }
       }
     }
-    const hasOverlays = drawtextFilters.length > 0 || stickerGroups.length > 0;
+    const hasOverlays = drawtextFilters.length > 0 || stickerGroups.length > 0
+      || animatedOverlays.length > 0;
 
-    // ── Segment model ────────────────────────────────────────────────
-    // Advanced edits (speed curve, freeze frame, reverse) decompose the
-    // trimmed window into output-ordered segments concatenated by FFmpeg.
-    // Advanced graphs and sticker overlays both require -filter_complex;
-    // plain speed/text still uses the cheaper -vf/-af path.
-    const frameMs = 1000 / probeFrameRate;
-    const windowMs = trimmedDurationMs > 0 ? trimmedDurationMs : durationMs;
-    const hasFreeze = Number.isFinite(freezeFrameMs) && freezeDurationMs > 0
-      && freezeFrameMs >= 0 && freezeFrameMs < windowMs;
-    const advancedVideo = speedCurve !== null || hasFreeze || reversed;
-    const segs: VideoSegment[] = advancedVideo
-      ? buildVideoSegments(windowMs, speed, speedCurve, freezeFrameMs, freezeDurationMs)
+    // Authored pixel effects on the media layer — filters, recipes,
+    // adjusts, blur, vignette, grain — translate into an FFmpeg chain
+    // applied to the media stream BEFORE overlay compositing (matching
+    // the image path, where effects grade the media and overlays draw
+    // on top ungraded). LUT temp files join the overlay cleanup list.
+    const mediaEffects = parseEffects(layer.payload);
+    const effectChain = mediaEffects.length > 0
+      ? await buildVideoEffectFilters(mediaEffects, overlayPngPaths)
       : [];
-    const outputDurationMs = advancedVideo
-      ? segmentsOutputDurationMs(segs)
-      : speed !== 1 && windowMs > 0
-        ? windowMs / speed
-        : windowMs;
 
     // Post-segment audio processing shared by both graph shapes: partial
     // volume and authored fades apply in output time after the segment
@@ -1695,8 +2309,9 @@ async function renderVideoComposition(
 
     // Build the FFmpeg argument vector. `withOverlays` toggles the
     // drawtext/overlay burn-in so the same builder powers the initial
-    // render and the defensive retry (media edits only).
-    const buildArgs = (withOverlays: boolean): string[] => {
+    // render and the defensive retry (media edits only). `streaming`
+    // swaps the file output for a pipe so upload can overlap encode.
+    const buildArgs = (withOverlays: boolean, streaming: boolean): string[] => {
       const a: string[] = ['-y'];
       // Input-seek trim. -ss before -i is a fast input seek; -t before -i
       // limits the input read duration so the trim window is exact
@@ -1712,10 +2327,28 @@ async function renderVideoComposition(
 
       const activeDrawtexts = withOverlays ? drawtextFilters : [];
       const activeStickerGroups = withOverlays ? stickerGroups : [];
-      // Sticker PNGs are inputs 1..K (one per timeRange group).
+      const activeAnimated = withOverlays ? animatedOverlays : [];
+      // Sticker PNGs are inputs 1..K (one per timeRange group); each
+      // animated layer follows as a `-loop 1` input at the output frame
+      // rate so its `t` tracks output time for the sampled expressions.
       for (const g of activeStickerGroups) a.push('-i', g.pngPath);
+      const animBase = 1 + activeStickerGroups.length;
+      for (const ap of activeAnimated) {
+        a.push('-loop', '1', '-framerate', String(probeFrameRate), '-i', ap.pngPath);
+      }
 
-      const useComplex = advancedVideo || activeStickerGroups.length > 0;
+      // The media stream needs the canvas-wrap path whenever it carries
+      // authored transforms — keyframed animation OR static transforms
+      // (rotation, scale, off-centre position, non-full-bleed size) that
+      // the preview applies but a bare stream copy would drop.
+      const mediaAnimated = layerHasKeyframes(layer.keyframes)
+        || layer.rotation % 360 !== 0
+        || layer.scale !== 1
+        || layer.opacity < 1
+        || layer.x !== 0.5 || layer.y !== 0.5
+        || layer.width !== 1 || layer.height !== 1;
+      const useComplex = advancedVideo || activeStickerGroups.length > 0
+        || activeAnimated.length > 0 || mediaAnimated;
 
       if (useComplex) {
         const parts: string[] = [];
@@ -1767,6 +2400,41 @@ async function renderVideoComposition(
           parts.push(`[0:v]setpts=PTS/${speed}[${vNext()}]`);
           vCur = `v${vSeq - 1}`;
         }
+        if (effectChain.length > 0) {
+          // Grade the media stream before any transform/overlay stage so
+          // the canvas background and stickers stay ungraded.
+          parts.push(`[${vCur}]${effectChain.join(',')}[${vNext()}]`);
+          vCur = `v${vSeq - 1}`;
+        }
+        if (mediaAnimated) {
+          // Transformed media layer: resize to the authored layer bounds,
+          // run the (possibly keyframed) transform chain, then composite
+          // onto a canvas-colour background so position/scale can move it
+          // off full-bleed.
+          const mediaPlan = planAnimatedOverlay(layer, probeFrameRate, outputDurationMs);
+          const layerW = Math.max(1, Math.round(layer.width * width));
+          const layerH = Math.max(1, Math.round(layer.height * height));
+          const preScale = layerW !== width || layerH !== height
+            ? `scale=${layerW}:${layerH},`
+            : '';
+          const chain = buildAnimatedInputChain(
+            {
+              ...mediaPlan,
+              scaleExpr: mediaPlan.scaleExpr
+                ?? (layer.scale !== 1 ? layer.scale.toFixed(4) : null),
+            },
+            layer.rotation,
+            layer.opacity,
+          );
+          parts.push(`[${vCur}]${preScale}${chain}[vmed]`);
+          parts.push(
+            `color=c='${canvasBackgroundColor}':s=${width}x${height}` +
+            `:r=${probeFrameRate}:d=${msToSec(Math.max(outputDurationMs, frameMs))}[bgv]`,
+          );
+          const { x, y } = animatedOverlayXY(layer, mediaPlan);
+          parts.push(`[bgv][vmed]overlay=x='${x}':y='${y}'[${vNext()}]`);
+          vCur = `v${vSeq - 1}`;
+        }
         if (activeDrawtexts.length > 0) {
           parts.push(`[${vCur}]${activeDrawtexts.join(',')}[${vNext()}]`);
           vCur = `v${vSeq - 1}`;
@@ -1776,6 +2444,30 @@ async function renderVideoComposition(
             ? `:enable='between(t,${msToSec(g.timeRange.startMs)},${msToSec(g.timeRange.endMs)})'`
             : '';
           parts.push(`[${vCur}][${i + 1}:v]overlay=0:0${enable}[${vNext()}]`);
+          vCur = `v${vSeq - 1}`;
+        });
+        activeAnimated.forEach((ap, j) => {
+          const idx = animBase + j;
+          const prep =
+            `fps=${probeFrameRate}` +
+            `,trim=end=${msToSec(Math.max(outputDurationMs, frameMs))}` +
+            `,setpts=PTS-STARTPTS,` +
+            // Static opacity is baked into the raster unless an opacity
+            // track exists — in that case it folds into the geq instead.
+            buildAnimatedInputChain(
+              ap.plan,
+              ap.layer.rotation,
+              ap.plan.opacityExpr ? ap.layer.opacity : 1,
+            );
+          parts.push(`[${idx}:v]${prep}[anov${j}]`);
+          const { x, y } = animatedOverlayXY(ap.layer, ap.plan);
+          const tr = ap.layer.timeRange && ap.layer.timeRange.endMs > ap.layer.timeRange.startMs
+            ? ap.layer.timeRange
+            : null;
+          const enable = tr
+            ? `:enable='between(t,${msToSec(tr.startMs)},${msToSec(tr.endMs)})'`
+            : '';
+          parts.push(`[${vCur}][anov${j}]overlay=x='${x}':y='${y}'${enable}[${vNext()}]`);
           vCur = `v${vSeq - 1}`;
         });
 
@@ -1830,12 +2522,17 @@ async function renderVideoComposition(
 
         a.push('-filter_complex', parts.join(';'));
         a.push('-map', `[${vCur}]`);
-        if (aCur) a.push('-map', `[${aCur}]`);
+        // Passthrough audio uses the bare input spec `0:a` — `[0:a]` would
+        // name a filter-graph pad that doesn't exist when the audio chain
+        // is empty (previously this surfaced as "label does not exist" and
+        // silently fell back to the no-overlay retry).
+        if (aCur) a.push('-map', aCur === '0:a' ? '0:a' : `[${aCur}]`);
       } else {
         // Simple path: single-input -vf/-af chains (trim + speed + text +
         // volume + fades). No sticker inputs and no advanced segments.
         const vChain: string[] = [];
         if (speed !== 1) vChain.push(`setpts=PTS/${speed}`);
+        vChain.push(...effectChain);
         vChain.push(...activeDrawtexts);
         if (vChain.length > 0) a.push('-vf', vChain.join(','));
 
@@ -1859,12 +2556,67 @@ async function renderVideoComposition(
       } else {
         a.push('-an');
       }
-      a.push('-movflags', '+faststart', outputPath!);
+      if (streaming) {
+        // Fragmented MP4 to stdout: a pipe isn't seekable, so faststart's
+        // moov rewrite is impossible — frag_keyframe+empty_moov makes the
+        // stream append-only so parts can upload while encoding runs.
+        a.push('-movflags', 'frag_keyframe+empty_moov+default_base_moof', '-f', 'mp4', 'pipe:1');
+      } else {
+        a.push('-movflags', '+faststart', outputPath!);
+      }
       return a;
     };
 
+    if (streamOutput) {
+      // Transcode-upload overlap: each encoded byte range becomes an S3
+      // part as soon as it fills — upload throughput runs concurrently
+      // with the encode instead of after it. The overlay retry opens a
+      // fresh session (the failed attempt's parts are aborted).
+      const runStreamed = async (withOverlays: boolean): Promise<RenderedComposition> => {
+        const uploader = new StreamingMultipartUpload(
+          streamOutput.objectKey,
+          streamOutput.contentType,
+          streamOutput.cacheControl,
+        );
+        try {
+          await runFfmpegStreaming(
+            buildArgs(withOverlays, true),
+            (chunk) => uploader.push(chunk),
+            onProgress,
+            { totalDurationMs: outputDurationMs, timeoutMs: VIDEO_RENDER_TIMEOUT_MS },
+          );
+        } catch (error) {
+          await uploader.abort().catch(() => {});
+          throw error;
+        }
+        const uploaded = await uploader.finish();
+        logger.info(
+          { sourceUrl, width, height, objectKey: streamOutput.objectKey, sizeBytes: uploaded.sizeBytes },
+          '[compositionRenderer] video composition streamed to storage',
+        );
+        return {
+          contentType: 'video/mp4',
+          width,
+          height,
+          url: uploaded.url,
+          sizeBytes: uploaded.sizeBytes,
+          durationMs: outputDurationMs,
+        };
+      };
+      try {
+        return await runStreamed(true);
+      } catch (error) {
+        if (!hasOverlays) throw error;
+        logger.warn(
+          { sourceUrl, error: String(error) },
+          '[compositionRenderer] streamed render with overlays failed — retrying without overlays',
+        );
+        return await runStreamed(false);
+      }
+    }
+
     try {
-      await runFfmpeg(buildArgs(true), onProgress, {
+      await runFfmpeg(buildArgs(true, false), onProgress, {
         totalDurationMs: outputDurationMs,
         timeoutMs: VIDEO_RENDER_TIMEOUT_MS,
       });
@@ -1877,7 +2629,7 @@ async function renderVideoComposition(
         { sourceUrl, error: String(error) },
         '[compositionRenderer] video render with overlays failed — retrying without overlays',
       );
-      await runFfmpeg(buildArgs(false), onProgress, {
+      await runFfmpeg(buildArgs(false, false), onProgress, {
         totalDurationMs: outputDurationMs,
         timeoutMs: VIDEO_RENDER_TIMEOUT_MS,
       });
@@ -1896,7 +2648,7 @@ async function renderVideoComposition(
         reversed,
         hasFreeze,
         speedCurve: speedCurve !== null,
-        overlayCount: drawtextFilters.length + stickerGroups.length,
+        overlayCount: drawtextFilters.length + stickerGroups.length + animatedOverlays.length,
         size: buffer.length,
       },
       '[compositionRenderer] video composition rendered',
@@ -1907,6 +2659,7 @@ async function renderVideoComposition(
       contentType: 'video/mp4',
       width,
       height,
+      durationMs: outputDurationMs,
     };
   } catch (error) {
     logger.warn(
@@ -1974,20 +2727,55 @@ export async function renderComposition(
     const overlayLayers = page.layers.filter(
       (l) => l !== primaryMedia && !l.hidden && l.type !== 'media',
     );
+    const bg = doc.canvas.background;
+    // FFmpeg's lavfi color source does not know 'transparent' — the
+    // serializer's full-bleed sentinel. mp4 has no alpha; composite on
+    // the opaque default instead of erroring the whole render.
+    const bgColor = bg.type === 'color' && bg.value !== 'transparent'
+      ? bg.value
+      : '#1a1a1a';
     return renderVideoComposition(
       primaryMedia,
       overlayLayers,
       canvasWidth,
       sourceMediaUrl,
       options?.onProgress,
+      bgColor,
+      options?.streamOutput,
     );
   }
 
   try {
     // Build the background base as a PNG so layers with alpha composite
-    // correctly over it before the final JPEG flatten.
-    const backgroundSvg = buildBackgroundSvg(canvasWidth, canvasHeight, doc.canvas.background);
-    const basePng = await sharp(backgroundSvg).png().toBuffer();
+    // correctly over it before the final JPEG flatten. An 'image' background
+    // fetches its (already-uploaded, coverage-verified) remote URL and
+    // cover-fills the canvas — the SVG rect path only handles color/gradient.
+    let basePng: Buffer;
+    const canvasBg = doc.canvas.background;
+    if (canvasBg.type === 'image' && /^https?:\/\//.test(canvasBg.value ?? '')) {
+      try {
+        const bgBuffer = await fetchSourceBuffer(canvasBg.value);
+        let bgImage = sharp(bgBuffer, { failOn: 'none' })
+          .resize(canvasWidth, canvasHeight, { fit: 'cover' });
+        const blurSigma = Number(canvasBg.imageBlur ?? 0);
+        if (blurSigma > 0) {
+          bgImage = bgImage.blur(Math.min(50, blurSigma / 2));
+        }
+        basePng = await bgImage.png().toBuffer();
+      } catch (error) {
+        logger.warn(
+          { error: String(error) },
+          '[compositionRenderer] background image fetch failed — falling back to color base',
+        );
+        basePng = await sharp(
+          buildBackgroundSvg(canvasWidth, canvasHeight, { ...canvasBg, type: 'color' }),
+        ).png().toBuffer();
+      }
+    } else {
+      basePng = await sharp(
+        buildBackgroundSvg(canvasWidth, canvasHeight, canvasBg),
+      ).png().toBuffer();
+    }
 
     // Sort visible layers by zIndex (painter's order).
     const visibleLayers = page.layers
@@ -2010,31 +2798,27 @@ export async function renderComposition(
           if (!url) continue;
           const rendered = await renderMediaLayer(layer, canvasWidth, canvasHeight, url);
           if (rendered) {
-            const { left, top } = layerTopLeft(layer, canvasWidth, canvasHeight);
-            composites.push({ input: rendered.buffer, left, top });
+            composites.push(await compositeEntryForLayer(rendered.buffer, layer, canvasWidth, canvasHeight));
           }
         } else if (layer.type === 'text') {
           const svg = buildTextLayerSvg(layer, canvasWidth, canvasHeight);
           if (svg) {
-            const { left, top } = layerTopLeft(layer, canvasWidth, canvasHeight);
             const png = await sharp(svg).png().toBuffer();
-            composites.push({ input: png, left, top });
+            composites.push(await compositeEntryForLayer(png, layer, canvasWidth, canvasHeight));
           }
         } else if (layer.type === 'gif') {
           const stillUrl = str(layer.payload['stillUrl'], '');
           if (stillUrl) {
             const rendered = await renderMediaLayer(layer, canvasWidth, canvasHeight, stillUrl);
             if (rendered) {
-              const { left, top } = layerTopLeft(layer, canvasWidth, canvasHeight);
-              composites.push({ input: rendered.buffer, left, top });
+              composites.push(await compositeEntryForLayer(rendered.buffer, layer, canvasWidth, canvasHeight));
             }
           }
         } else {
           const svg = buildStickerLayerSvg(layer, canvasWidth, canvasHeight);
           if (svg) {
-            const { left, top } = layerTopLeft(layer, canvasWidth, canvasHeight);
             const png = await sharp(svg).png().toBuffer();
-            composites.push({ input: png, left, top });
+            composites.push(await compositeEntryForLayer(png, layer, canvasWidth, canvasHeight));
           }
         }
       } catch (error) {

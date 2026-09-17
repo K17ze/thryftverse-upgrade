@@ -1,12 +1,10 @@
-import { View, StyleSheet } from 'react-native';
 import { type SharedValue } from 'react-native-reanimated';
 import { CommerceMediaStage } from '../../commerce';
 import { CommerceDetailMediaRail } from './CommerceDetailMediaRail';
-import { ProductFamilyBadge } from '../../product';
+import type { ProductMediaItem } from '../../../platform/product';
 
 /**
- * Media hero — the media stage + thumbnail rail + family-badge
- * overlay.
+ * Media hero — the media stage + thumbnail rail.
  *
  * Zone A of the product detail: CommerceMediaStage handles
  * paging/zoom/fullscreen only. CommerceDetailMediaRail overlays the
@@ -15,7 +13,13 @@ import { ProductFamilyBadge } from '../../product';
  * passed as props; this component forwards them to the media stage.
  */
 export interface CommerceMediaHeroProps {
-  images: string[] | undefined;
+  /**
+   * Canonical typed media — `ProductMediaItem[]` built once in the
+   * derived layer from `listing.media` records (kind, focal point,
+   * blurhash/LQIP, poster, derivatives) or, when absent, the flat
+   * `images` array. Kind is never re-sniffed from URLs down here.
+   */
+  media: ProductMediaItem[];
   category: string | null | undefined;
   objectId: string;
   isFav: boolean;
@@ -39,13 +43,12 @@ export interface CommerceMediaHeroProps {
   bigHeartOpacity: SharedValue<number>;
   bigHeartScale: SharedValue<number>;
   showThumbnailStrip: boolean;
-  familyStateAccent: string | null;
   onRailSave: () => void;
   onOverflow: () => void;
 }
 
 export function CommerceMediaHero({
-  images,
+  media,
   category,
   objectId,
   isFav,
@@ -67,7 +70,6 @@ export function CommerceMediaHero({
   bigHeartOpacity,
   bigHeartScale,
   showThumbnailStrip,
-  familyStateAccent,
   onRailSave,
   onOverflow,
 }: CommerceMediaHeroProps) {
@@ -78,7 +80,7 @@ export function CommerceMediaHero({
           CommerceDetailMediaRail overlays the max-3-visible-controls
           (Back, Share, Save) + overflow (Fav, Watch, Report). */}
       <CommerceMediaStage
-        images={images}
+        media={media}
         category={category ?? undefined}
         objectId={objectId}
         isFav={isFav}
@@ -102,17 +104,6 @@ export function CommerceMediaHero({
         showDefaultControls={false}
         showPageIndicator={false}
         showThumbnailStrip={showThumbnailStrip}
-        overlayTopContent={
-          familyStateAccent ? (
-            <View style={styles.familyBadgeOverlay}>
-              <ProductFamilyBadge
-                family="direct"
-                stateAccent={familyStateAccent}
-                compact
-              />
-            </View>
-          ) : null
-        }
       />
       <CommerceDetailMediaRail
         onBack={onBack}
@@ -141,9 +132,3 @@ export function CommerceMediaHero({
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  familyBadgeOverlay: {
-    alignSelf: 'flex-start',
-  },
-});

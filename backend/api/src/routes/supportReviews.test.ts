@@ -35,6 +35,12 @@ function createMockDb(matcher: QueryMatcher): Pool {
       }
       return result;
     },
+    // The review write path runs BEGIN…COMMIT on a dedicated PoolClient —
+    // delegate to db.query lazily so test-specific query wrappers still apply.
+    connect: async () => ({
+      query: (text: string, params?: unknown[]) => db.query(text, params),
+      release: () => {},
+    }),
   } as unknown as Pool;
   return db;
 }
@@ -151,12 +157,14 @@ test("POST /orders/:orderId/review accepts photoUrls and persists them in review
     if (text.includes("SELECT buyer_id, seller_id, status FROM orders")) {
       return rows([orderRow()]);
     }
-    if (text.includes("SELECT id FROM order_reviews WHERE order_id")) {
+    if (text.includes("SELECT id, is_auto FROM order_reviews WHERE order_id")) {
       return empty();
     }
     if (text.includes("INSERT INTO order_reviews")) {
       reviewInserted = true;
-      return empty();
+      // INSERT ... RETURNING id — a row must come back or the handler
+      // treats it as an ON CONFLICT no-op and 409s.
+      return rows([{ id: "review_123" }]);
     }
     if (text.includes("INSERT INTO review_media")) {
       // params: [mediaId, reviewId, mediaUrl, position]
@@ -223,7 +231,7 @@ test("POST /orders/:orderId/review with Idempotency-Key returns existing review 
     if (text.includes("SELECT buyer_id, seller_id, status FROM orders")) {
       return rows([orderRow()]);
     }
-    if (text.includes("SELECT id FROM order_reviews WHERE order_id")) {
+    if (text.includes("SELECT id, is_auto FROM order_reviews WHERE order_id")) {
       return rows([{ id: existing.id }]);
     }
     if (text.includes("FROM order_reviews") && text.includes("WHERE order_id")) {
@@ -259,7 +267,7 @@ test("POST /orders/:orderId/review without Idempotency-Key returns 409 on duplic
     if (text.includes("SELECT buyer_id, seller_id, status FROM orders")) {
       return rows([orderRow()]);
     }
-    if (text.includes("SELECT id FROM order_reviews WHERE order_id")) {
+    if (text.includes("SELECT id, is_auto FROM order_reviews WHERE order_id")) {
       return rows([{ id: "review_existing" }]);
     }
     return empty();
@@ -721,7 +729,7 @@ test("Idempotency: same idempotency key + same body = same result (no duplicate 
     if (text.includes("SELECT buyer_id, seller_id, status FROM orders")) {
       return rows([orderRow()]);
     }
-    if (text.includes("SELECT id FROM order_reviews WHERE order_id")) {
+    if (text.includes("SELECT id, is_auto FROM order_reviews WHERE order_id")) {
       existingCheckCalls++;
       // First call (initial request) sees no review; subsequent calls
       // (replays) find the review inserted by the first request.
@@ -738,7 +746,7 @@ test("Idempotency: same idempotency key + same body = same result (no duplicate 
     }
     if (text.includes("INSERT INTO order_reviews")) {
       insertCallCount++;
-      return empty();
+      return rows([{ id: existingReview.id }]);
     }
     if (text === "BEGIN" || text === "COMMIT" || text === "ROLLBACK") {
       return empty();
@@ -791,7 +799,7 @@ test("Idempotency: concurrent reviews for one order publish once (UNIQUE constra
     if (text.includes("SELECT buyer_id, seller_id, status FROM orders")) {
       return rows([orderRow()]);
     }
-    if (text.includes("SELECT id FROM order_reviews WHERE order_id")) {
+    if (text.includes("SELECT id, is_auto FROM order_reviews WHERE order_id")) {
       checkCalls++;
       // Both concurrent calls see no existing review.
       return empty();
@@ -804,7 +812,7 @@ test("Idempotency: concurrent reviews for one order publish once (UNIQUE constra
         err.code = "23505";
         throw err;
       }
-      return empty();
+      return rows([{ id: "review_winner_1" }]);
     }
     if (text === "BEGIN" || text === "COMMIT" || text === "ROLLBACK") {
       return empty();
@@ -855,7 +863,7 @@ test("Idempotency: concurrent reviews with idempotency key — loser replays to 
     if (text.includes("SELECT buyer_id, seller_id, status FROM orders")) {
       return rows([orderRow()]);
     }
-    if (text.includes("SELECT id FROM order_reviews WHERE order_id")) {
+    if (text.includes("SELECT id, is_auto FROM order_reviews WHERE order_id")) {
       // After the first insert, subsequent checks find the review.
       if (insertAttempts >= 1) {
         return rows([{ id: "review_winner" }]);
@@ -875,7 +883,7 @@ test("Idempotency: concurrent reviews with idempotency key — loser replays to 
         err.code = "23505";
         throw err;
       }
-      return empty();
+      return rows([{ id: "review_winner_2" }]);
     }
     if (text === "BEGIN" || text === "COMMIT" || text === "ROLLBACK") {
       return empty();
@@ -950,8 +958,11 @@ test("Eligibility: review on delivered order = 201", async () => {
     if (text.includes("SELECT buyer_id, seller_id, status FROM orders")) {
       return rows([orderRow({ status: "delivered" })]);
     }
-    if (text.includes("SELECT id FROM order_reviews WHERE order_id")) {
+    if (text.includes("SELECT id, is_auto FROM order_reviews WHERE order_id")) {
       return empty();
+    }
+    if (text.includes("INSERT INTO order_reviews")) {
+      return rows([{ id: "review_123" }]);
     }
     if (text === "BEGIN" || text === "COMMIT" || text === "ROLLBACK") {
       return empty();
@@ -978,8 +989,11 @@ test("Eligibility: review on completed order = 201", async () => {
     if (text.includes("SELECT buyer_id, seller_id, status FROM orders")) {
       return rows([orderRow({ status: "completed" })]);
     }
-    if (text.includes("SELECT id FROM order_reviews WHERE order_id")) {
+    if (text.includes("SELECT id, is_auto FROM order_reviews WHERE order_id")) {
       return empty();
+    }
+    if (text.includes("INSERT INTO order_reviews")) {
+      return rows([{ id: "review_123" }]);
     }
     if (text === "BEGIN" || text === "COMMIT" || text === "ROLLBACK") {
       return empty();
@@ -1223,8 +1237,11 @@ test("POST /orders/:orderId/review queues a notification to the seller", async (
     if (text.includes("SELECT buyer_id, seller_id, status FROM orders")) {
       return rows([orderRow({ buyer_id: "buyer_1", seller_id: "seller_1" })]);
     }
-    if (text.includes("SELECT id FROM order_reviews WHERE order_id")) {
+    if (text.includes("SELECT id, is_auto FROM order_reviews WHERE order_id")) {
       return empty();
+    }
+    if (text.includes("INSERT INTO order_reviews")) {
+      return rows([{ id: "review_123" }]);
     }
     if (text === "BEGIN" || text === "COMMIT" || text === "ROLLBACK") {
       return empty();
@@ -1358,5 +1375,206 @@ test("POST /reviews/:reviewId/moderate dismiss_report sends no notifications", a
   });
 
   assert.equal(notifications.length, 0);
+  await app.close();
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+//  AUTO-REVIEW SUPERSESSION — buyer POST replaces an is_auto placeholder row
+//  in place (200 + isAuto:false), never 200-echoes platform content, and a
+//  raced non-auto insert still 409s.
+// ════════════════════════════════════════════════════════════════════════════
+
+test("POST /orders/:orderId/review supersedes an existing is_auto row in place (200)", async () => {
+  let updateRan = false;
+  let mediaDeleted = false;
+
+  const db = createMockDb((text, params) => {
+    if (text.includes("SELECT buyer_id, seller_id, status FROM orders")) {
+      return rows([orderRow()]);
+    }
+    if (text.includes("SELECT id, is_auto FROM order_reviews WHERE order_id")) {
+      return rows([{ id: "review_auto_1", is_auto: true }]);
+    }
+    if (text.includes("UPDATE order_reviews") && text.includes("is_auto = TRUE")) {
+      updateRan = true;
+      assert.equal(params[0], "review_auto_1");
+      return rows([{ id: "review_auto_1", created_at: "2024-01-01T00:00:00.000Z" }]);
+    }
+    if (text.includes("DELETE FROM review_media WHERE review_id")) {
+      mediaDeleted = true;
+      return empty();
+    }
+    if (text === "BEGIN" || text === "COMMIT" || text === "ROLLBACK") {
+      return empty();
+    }
+    return empty();
+  });
+
+  const app = await createTestApp(db);
+  const response = await app.inject({
+    method: "POST",
+    url: "/orders/order_123/review",
+    headers: authHeaders("buyer_1"),
+    payload: { rating: 4, comment: "Good but late" },
+  });
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body);
+  assert.equal(body.ok, true);
+  assert.equal(body.supersededAutoReview, true);
+  // The buyer's review reuses the auto row's id — UNIQUE(order_id) intact.
+  assert.equal(body.review.id, "review_auto_1");
+  assert.equal(body.review.isAuto, false);
+  assert.equal(body.review.autoReason, null);
+  assert.equal(body.review.rating, 4);
+  // The original auto row's created_at is preserved.
+  assert.equal(body.review.createdAt, "2024-01-01T00:00:00.000Z");
+  assert.equal(updateRan, true);
+  assert.equal(mediaDeleted, true);
+  await app.close();
+});
+
+test("POST /orders/:orderId/review supersession writes buyer photos onto the auto row", async () => {
+  const insertedMedia: string[] = [];
+
+  const db = createMockDb((text, params) => {
+    if (text.includes("SELECT buyer_id, seller_id, status FROM orders")) {
+      return rows([orderRow()]);
+    }
+    if (text.includes("SELECT id, is_auto FROM order_reviews WHERE order_id")) {
+      return rows([{ id: "review_auto_1", is_auto: true }]);
+    }
+    if (text.includes("UPDATE order_reviews") && text.includes("is_auto = TRUE")) {
+      return rows([{ id: "review_auto_1", created_at: "2024-01-01T00:00:00.000Z" }]);
+    }
+    if (text.includes("INSERT INTO review_media") && params) {
+      insertedMedia.push(params[2] as string);
+      return empty();
+    }
+    if (text === "BEGIN" || text === "COMMIT" || text === "ROLLBACK") {
+      return empty();
+    }
+    return empty();
+  });
+
+  const app = await createTestApp(db);
+  const response = await app.inject({
+    method: "POST",
+    url: "/orders/order_123/review",
+    headers: authHeaders("buyer_1"),
+    payload: { rating: 5, photoUrls: ["https://cdn.example.com/a.jpg"] },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(insertedMedia, ["https://cdn.example.com/a.jpg"]);
+  await app.close();
+});
+
+test("POST /orders/:orderId/review raced insert — auto row superseded in place (200)", async () => {
+  // The pre-check finds no review, but the INSERT hits ON CONFLICT — a
+  // concurrent auto-sweep landed first. The raced re-select sees is_auto
+  // and supersedes it in place rather than 409ing.
+  let selectCount = 0;
+
+  const db = createMockDb((text) => {
+    if (text.includes("SELECT buyer_id, seller_id, status FROM orders")) {
+      return rows([orderRow()]);
+    }
+    if (text.includes("SELECT id, is_auto FROM order_reviews WHERE order_id")) {
+      selectCount += 1;
+      // First call = pre-check (no row); second = post-conflict re-select
+      // (auto row raced in).
+      return selectCount === 1 ? empty() : rows([{ id: "review_auto_raced", is_auto: true }]);
+    }
+    if (text.includes("INSERT INTO order_reviews")) {
+      return empty(); // rowCount 0 — ON CONFLICT DO NOTHING
+    }
+    if (text.includes("UPDATE order_reviews") && text.includes("is_auto = TRUE")) {
+      return rows([{ id: "review_auto_raced", created_at: "2024-01-02T00:00:00.000Z" }]);
+    }
+    if (text === "BEGIN" || text === "COMMIT" || text === "ROLLBACK") {
+      return empty();
+    }
+    return empty();
+  });
+
+  const app = await createTestApp(db);
+  const response = await app.inject({
+    method: "POST",
+    url: "/orders/order_123/review",
+    headers: authHeaders("buyer_1"),
+    payload: { rating: 3 },
+  });
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body);
+  assert.equal(body.supersededAutoReview, true);
+  assert.equal(body.review.id, "review_auto_raced");
+  assert.equal(body.review.createdAt, "2024-01-02T00:00:00.000Z");
+  await app.close();
+});
+
+test("POST /orders/:orderId/review raced insert — real buyer review still 409s", async () => {
+  let selectCount = 0;
+
+  const db = createMockDb((text) => {
+    if (text.includes("SELECT buyer_id, seller_id, status FROM orders")) {
+      return rows([orderRow()]);
+    }
+    if (text.includes("SELECT id, is_auto FROM order_reviews WHERE order_id")) {
+      selectCount += 1;
+      return selectCount === 1 ? empty() : rows([{ id: "review_real", is_auto: false }]);
+    }
+    if (text.includes("INSERT INTO order_reviews")) {
+      return empty();
+    }
+    if (text === "BEGIN" || text === "COMMIT" || text === "ROLLBACK") {
+      return empty();
+    }
+    return empty();
+  });
+
+  const app = await createTestApp(db);
+  const response = await app.inject({
+    method: "POST",
+    url: "/orders/order_123/review",
+    headers: authHeaders("buyer_1"),
+    payload: { rating: 5 },
+  });
+
+  assert.equal(response.statusCode, 409);
+  const body = JSON.parse(response.body);
+  assert.equal(body.code, "REVIEW_ALREADY_EXISTS");
+  await app.close();
+});
+
+test("POST /orders/:orderId/review supersession 409s if buyer review raced in after check", async () => {
+  // Pre-check found an auto row, but between check and UPDATE a real
+  // buyer review landed — the `is_auto = TRUE` guard matches zero rows.
+  const db = createMockDb((text) => {
+    if (text.includes("SELECT buyer_id, seller_id, status FROM orders")) {
+      return rows([orderRow()]);
+    }
+    if (text.includes("SELECT id, is_auto FROM order_reviews WHERE order_id")) {
+      return rows([{ id: "review_auto_1", is_auto: true }]);
+    }
+    if (text.includes("UPDATE order_reviews") && text.includes("is_auto = TRUE")) {
+      return empty(); // rowCount 0 — guard failed, real review won the race
+    }
+    if (text === "BEGIN" || text === "COMMIT" || text === "ROLLBACK") {
+      return empty();
+    }
+    return empty();
+  });
+
+  const app = await createTestApp(db);
+  const response = await app.inject({
+    method: "POST",
+    url: "/orders/order_123/review",
+    headers: authHeaders("buyer_1"),
+    payload: { rating: 5 },
+  });
+
+  assert.equal(response.statusCode, 409);
   await app.close();
 });

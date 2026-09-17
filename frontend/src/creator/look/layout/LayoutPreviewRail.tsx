@@ -75,6 +75,7 @@ export function LayoutPreviewRail({
             accessibilityRole="button"
             accessibilityState={{ selected: isSelected }}
             accessibilityLabel={`${layout.name} layout`}
+            accessibilityHint="Applies this layout; long-press to preview"
           >
             <LayoutPreviewRenderer
               assetUris={assetUris}

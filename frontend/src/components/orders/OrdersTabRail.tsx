@@ -14,10 +14,6 @@ export type OrdersTab = 'all' | 'buying' | 'selling' | 'completed';
 
 interface OrdersTabRailProps {
   activeTab: OrdersTab;
-  allCount?: number;
-  buyingCount: number;
-  sellingCount: number;
-  completedCount?: number;
   onChange: (tab: OrdersTab) => void;
 }
 
@@ -25,20 +21,20 @@ type TabLayout = { x: number; width: number };
 
 export function OrdersTabRail({
   activeTab,
-  allCount = 0,
-  buyingCount,
-  sellingCount,
-  completedCount = 0,
   onChange }: OrdersTabRailProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
-  const tabs: { key: OrdersTab; label: string; count: number }[] = [
-    { key: 'all', label: 'All', count: allCount },
-    { key: 'buying', label: 'Buying', count: buyingCount },
-    { key: 'selling', label: 'Selling', count: sellingCount },
-    { key: 'completed', label: 'Completed', count: completedCount },
+  // No count badges: each tab is a server-side filtered query (role /
+  // classification params) and the API returns no per-tab totals, so the
+  // loaded page only ever describes the active tab. Showing counts would
+  // require fabricating numbers for tabs whose data is not loaded.
+  const tabs: { key: OrdersTab; label: string }[] = [
+    { key: 'all', label: 'All' },
+    { key: 'buying', label: 'Buying' },
+    { key: 'selling', label: 'Selling' },
+    { key: 'completed', label: 'Completed' },
   ];
 
   // Per-tab measured layout (x offset + width) so the shared indicator can
@@ -96,7 +92,7 @@ export function OrdersTabRail({
             hitSlop={{ top: 8, bottom: 8 }}
             accessibilityRole="tab"
             accessibilityState={{ selected: isActive }}
-            accessibilityLabel={`${tab.label} tab${tab.count > 0 ? `, ${tab.count} orders` : ''}`}
+            accessibilityLabel={`${tab.label} tab`}
           >
             <Text
               style={[
@@ -104,7 +100,7 @@ export function OrdersTabRail({
                 isActive && styles.tabTextActive,
               ]}
             >
-              {tab.label} {tab.count > 0 ? tab.count : ''}
+              {tab.label}
             </Text>
           </Pressable>
         );

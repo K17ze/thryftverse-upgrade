@@ -42,6 +42,8 @@ export interface OrderViewModel {
    * the row never reinterprets status strings. Null → no action row.
    */
   nextActionLabel?: string | null;
+  /** Server-derived: an open protection claim / return / dispute is attached. */
+  hasOpenResolution?: boolean;
 }
 
 
@@ -110,7 +112,7 @@ function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowPr
   // Short order number for scannable reference — first 8 chars uppercased
   const shortOrderNumber = order.id.slice(0, 8).toUpperCase();
 
-  const accessibilityLabel = `Order ${shortOrderNumber}, ${order.title}, ${statusLabel}, ${formattedTotal}, ${contextLine}${evidenceLine ? `, ${evidenceLine}` : ''}${nextAction ? `, Next: ${nextAction}` : ''}${showDeadlineBadge ? `, Ship by ${formatShortDate(order.shipByDate!)}` : ''}`;
+  const accessibilityLabel = `Order ${shortOrderNumber}, ${order.title}, ${statusLabel}, ${formattedTotal}, ${contextLine}${evidenceLine ? `, ${evidenceLine}` : ''}${nextAction ? `, Next: ${nextAction}` : ''}${showDeadlineBadge ? `, Ship by ${formatShortDate(order.shipByDate!)}` : ''}${order.hasOpenResolution ? ', Resolution in progress' : ''}`;
 
   return (
     <Pressable
@@ -184,6 +186,15 @@ function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowPr
                     : `Ship by ${formatShortDate(order.shipByDate!)}`}
             </Text>
           </View>
+        )}
+
+        {/* Open resolution — a protection claim, return, or dispute is in
+            flight on this order. A single muted line, not a badge: it's a
+            state signal, not an action. */}
+        {order.hasOpenResolution && (
+          <Text style={[styles.tracking, { color: colors.warning }]} numberOfLines={1}>
+            <Ionicons name="shield-half-outline" size={11} color={colors.warning} /> Resolution in progress
+          </Text>
         )}
 
         {/* Next action — capability-resolved hint (e.g. "Track your parcel",

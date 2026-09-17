@@ -27,7 +27,7 @@ import type {
   PosterFrame,
   PosterReactionType,
 } from '../services/postersApi';
-import type { CreatorDocument } from '../creator/composition';
+import type { CreatorDocument } from '../creator/core/projectStore/composition';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 

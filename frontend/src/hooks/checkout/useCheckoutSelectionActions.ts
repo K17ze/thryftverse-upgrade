@@ -4,8 +4,13 @@ import { useNotifications } from '../useNotifications';
 import {
   listUserPaymentMethods,
   type CommercePaymentMethod,
+  type ShippingQuoteItem,
 } from '../../services/commerceApi';
 import { haptics } from '../../utils/haptics';
+import {
+  toPostageOptionFromQuote,
+  type CheckoutPostageOption,
+} from '../../utils/checkoutFlow';
 
 // The store's SavedAddress/SavedPaymentMethod shapes are not exported —
 // structural mirrors of the fields these actions read or write.
@@ -41,6 +46,12 @@ export interface UseCheckoutSelectionActionsOptions {
   setHasAttemptedPay: (value: boolean) => void;
   setPaymentSelectorVisible: (value: boolean) => void;
   setAddCardSheetVisible: (value: boolean) => void;
+  /** Opens the per-option delivery selector sheet (checkout-owned). */
+  setDeliverySelectorVisible: (value: boolean) => void;
+  /** Applies a picked shipping quote as the active postage option. */
+  setPostageOption: (option: CheckoutPostageOption) => void;
+  /** The currently applied quote — re-selecting it is a no-op. */
+  selectedQuoteId: string | null;
 }
 
 /**
@@ -66,6 +77,9 @@ export function useCheckoutSelectionActions({
   setHasAttemptedPay,
   setPaymentSelectorVisible,
   setAddCardSheetVisible,
+  setDeliverySelectorVisible,
+  setPostageOption,
+  selectedQuoteId,
 }: UseCheckoutSelectionActionsOptions) {
   const navigation = useNavigation<any>();
   const { showError, showInfo } = useNotifications();
@@ -169,11 +183,37 @@ export function useCheckoutSelectionActions({
     }
   }, [allowCardPayments, hasCapabilities, paymentMethodsCount, showError, navigation, setHasAttemptedPay, setPaymentSelectorVisible, setAddCardSheetVisible]);
 
-  const handleDeliveryPress = useCallback(async () => {
+  // --- Delivery selection change ---
+  // Opens the per-option shipping sheet (speeds/carriers with real prices
+  // from the persisted server quotes). The previous behaviour navigated to
+  // the Postage screen, which is the seller's preferences surface — not a
+  // buyer-facing checkout picker.
+  const handleDeliveryPress = useCallback(() => {
     if (!canChangePostage) return;
 
     haptics.tap();
     setHasAttemptedPay(false);
+    // Opening the sheet alone changes nothing about the order signature —
+    // a created order is only cancelled when the selection actually
+    // changes (see handleSelectDeliveryOption).
+    setDeliverySelectorVisible(true);
+  }, [canChangePostage, setHasAttemptedPay, setDeliverySelectorVisible]);
+
+  // --- Shipping option select ---
+  // Each quote is already persisted server-side with its own quoteId, so
+  // applying the selection is a pure state change — the order payload picks
+  // it up at pay time (the signature changes and any stale order is
+  // re-created by the payment flow).
+  const handleSelectDeliveryOption = useCallback(async (quote: ShippingQuoteItem) => {
+    haptics.tap();
+    setHasAttemptedPay(false);
+
+    // Re-selecting the active quote leaves the order signature unchanged —
+    // a created order stays valid, so just close the sheet.
+    if (quote.quoteId === selectedQuoteId) {
+      setDeliverySelectorVisible(false);
+      return;
+    }
 
     if (createdOrderIdRef.current) {
       const cancelled = await cancelStaleOrder();
@@ -182,8 +222,9 @@ export function useCheckoutSelectionActions({
       }
     }
 
-    navigation.navigate('Postage');
-  }, [canChangePostage, cancelStaleOrder, navigation, setHasAttemptedPay]);
+    setPostageOption(toPostageOptionFromQuote(quote));
+    setDeliverySelectorVisible(false);
+  }, [selectedQuoteId, cancelStaleOrder, setHasAttemptedPay, setPostageOption, setDeliverySelectorVisible]);
 
   return {
     isSelectingPayment,
@@ -192,5 +233,6 @@ export function useCheckoutSelectionActions({
     handleAddCardSuccess,
     handlePaymentPress,
     handleDeliveryPress,
+    handleSelectDeliveryOption,
   };
 }

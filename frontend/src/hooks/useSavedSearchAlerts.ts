@@ -17,7 +17,10 @@ interface SavedSearchAlertResult {
  *
  * This runs client-side as a polling mechanism — when the listings refresh
  * (via the BackendDataContext polling or pull-to-refresh), this hook
- * evaluates whether any new listings match saved search criteria.
+ * evaluates whether any new listings match saved search criteria. It drives
+ * the in-app "N new" badges only; durable push alerts are delivered by the
+ * server-side matcher (POST /listings activation → saved_search_match
+ * notifications), which works while the app is closed.
  *
  * Matching logic:
  * - Query: case-insensitive substring match on title, brand, category, subcategory

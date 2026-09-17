@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { pageWithRenderedMedia } from '../renderedViewDocument';
-import type { CreatorLayer, CreatorPage } from '../composition';
+import { pageWithRenderedMedia } from '../export/renderedViewDocument';
+import type { CreatorLayer, CreatorPage } from '../core/projectStore/composition';
 
 function mediaLayer(overrides: Record<string, unknown> = {}): CreatorLayer {
   return {

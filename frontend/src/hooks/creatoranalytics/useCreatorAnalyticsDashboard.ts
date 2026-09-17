@@ -31,6 +31,13 @@ export function useCreatorAnalyticsDashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [partialError, setPartialError] = useState<string | null>(null);
   const [fatalError, setFatalError] = useState<string | null>(null);
+  // The period the rendered data belongs to — lags `period` while a
+  // refetch is in flight, so the UI can label stale-period data honestly.
+  const [dataPeriod, setDataPeriod] = useState<PeriodKey | null>(null);
+  const dataPeriodRef = useRef<PeriodKey | null>(null);
+  // Request sequencing: rapid period switches race — the last response to
+  // resolve wins even when it belongs to an older selection.
+  const requestSeq = useRef(0);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -39,6 +46,9 @@ export function useCreatorAnalyticsDashboard() {
   }, []);
 
   const load = useCallback(async (selectedPeriod: PeriodKey) => {
+    const seq = ++requestSeq.current;
+    const isCurrent = () => seq === requestSeq.current;
+    if (!isCurrent()) return;
     setFatalError(null);
     setPartialError(null);
 
@@ -52,12 +62,14 @@ export function useCreatorAnalyticsDashboard() {
     try {
       summaryResult = await fetchAnalyticsSummary({ period: selectedPeriod });
     } catch (err) {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || !isCurrent()) return;
       setFatalError(err instanceof Error ? err.message : 'Unable to load analytics');
       setSummary(null);
       setTimeline(null);
       setRanking(null);
       setEarnings(null);
+      dataPeriodRef.current = null;
+      setDataPeriod(null);
       return;
     }
 
@@ -78,12 +90,18 @@ export function useCreatorAnalyticsDashboard() {
       hadPartialError = true;
     }
 
-    if (!mountedRef.current) return;
+    if (!mountedRef.current || !isCurrent()) return;
     setSummary(summaryResult);
-    setTimeline(timelineResult);
-    setRanking(rankingResult);
-    setEarnings(earningsResult);
+    // Partial failures replace only the failed section — keep prior data
+    // for that section rather than blanking it, but only when the data was
+    // loaded for this period (cross-period carryover would mislabel).
+    const samePeriod = dataPeriodRef.current === selectedPeriod;
+    setTimeline((prev) => timelineResult ?? (samePeriod ? prev : null));
+    setRanking((prev) => rankingResult ?? (samePeriod ? prev : null));
+    setEarnings((prev) => earningsResult ?? prev); // earnings is period-independent
     setPartialError(hadPartialError ? 'Some details could not be loaded.' : null);
+    dataPeriodRef.current = selectedPeriod;
+    setDataPeriod(selectedPeriod);
   }, []);
 
   useEffect(() => {
@@ -131,8 +149,11 @@ export function useCreatorAnalyticsDashboard() {
   }, [ranking]);
 
   // ── Empty detection ─────────────────────────────────────────────────
+  // 'unavailable' completeness means the pipeline couldn't compute the
+  // metrics — those zeros are not truthful "no activity", so they must not
+  // render the empty state (the freshness strip explains the outage instead).
   const isEmpty = useMemo(() => {
-    if (!summary) return false;
+    if (!summary || summary.completeness === 'unavailable') return false;
     return summary.summary.views.value === 0 &&
       summary.summary.likes.value === 0 &&
       summary.summary.saves.value === 0 &&
@@ -140,6 +161,9 @@ export function useCreatorAnalyticsDashboard() {
       summary.summary.shares.value === 0 &&
       summary.summary.productClicks.value === 0;
   }, [summary]);
+
+  // True while rendered data belongs to a different period than selected.
+  const isStalePeriodData = dataPeriod !== null && dataPeriod !== period;
 
   return {
     period,
@@ -151,6 +175,7 @@ export function useCreatorAnalyticsDashboard() {
     isRefreshing,
     partialError,
     fatalError,
+    isStalePeriodData,
     isEmpty,
     chartData,
     chartA11ySummary,

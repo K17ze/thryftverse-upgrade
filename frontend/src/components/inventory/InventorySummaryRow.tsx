@@ -15,12 +15,24 @@ export interface InventorySummaryRowProps {
 /** Summary header — flat canvas, hairline separators. */
 export function InventorySummaryRow({ summary, valueLabel, colors, styles }: InventorySummaryRowProps) {
   return (
-    <View style={styles.summaryRow}>
-      <SummaryCell label="Items" value={String(summary.total)} colors={colors} styles={styles} />
-      <SummaryCell label="Active" value={String(summary.active)} colors={colors} styles={styles} accent={colors.success} />
-      <SummaryCell label="Sold" value={String(summary.sold)} colors={colors} styles={styles} accent={colors.textMuted} />
-      <SummaryCell label="Paused" value={String(summary.paused)} colors={colors} styles={styles} accent={colors.warning} />
-      <SummaryCell label="Value" value={valueLabel} colors={colors} styles={styles} accent={colors.brand} last />
+    <View>
+      <View style={styles.summaryRow}>
+        <SummaryCell label="Items" value={String(summary.total)} colors={colors} styles={styles} />
+        <SummaryCell label="Active" value={String(summary.active)} colors={colors} styles={styles} accent={colors.success} />
+        <SummaryCell label="Sold" value={String(summary.sold)} colors={colors} styles={styles} accent={colors.textMuted} />
+        <SummaryCell label="Paused" value={String(summary.paused)} colors={colors} styles={styles} accent={colors.warning} />
+        <SummaryCell label="Value" value={valueLabel} colors={colors} styles={styles} accent={colors.brand} last />
+      </View>
+      {/* Truthful partial label: when server totals are unreachable the
+          counts above reflect the loaded page window only. */}
+      {summary.isPartial ? (
+        <Text
+          style={[styles.summaryPartialNote, { color: colors.textMuted }]}
+          accessibilityLabel="Counts reflect loaded listings only"
+        >
+          Counts reflect loaded listings
+        </Text>
+      ) : null}
     </View>
   );
 }

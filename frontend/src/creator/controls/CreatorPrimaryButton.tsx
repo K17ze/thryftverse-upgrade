@@ -122,6 +122,7 @@ export function CreatorPrimaryButton({
       disabled={isDisabled}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityHint="Performs the primary action"
       accessibilityState={{ disabled: isDisabled || undefined, busy: loading || undefined }}
       testID={testID}
       style={{ opacity: disabled ? DISABLED_OPACITY : 1 }}

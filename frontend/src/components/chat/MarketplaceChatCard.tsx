@@ -73,6 +73,9 @@ export interface MarketplaceChatCardProps {
     itemImage?: string | null;
     trackingNumber?: string | null;
     carrier?: string | null;
+    extensionDays?: number;
+    proposedShipBy?: string;
+    refundedAmountGbp?: number;
   };
   onAccept?: () => void;
   onDecline?: () => void;
@@ -341,7 +344,7 @@ export function MarketplaceChatCard({
                 {t('offers.expired')}
               </Text>
               <Text style={styles.offerStatusSubtitle}>
-                No response within 24h
+                Expired without a response
               </Text>
             </View>
             {onCounter && (
@@ -561,6 +564,9 @@ export function MarketplaceChatCard({
         itemImage={commerceState.itemImage}
         trackingNumber={commerceState.trackingNumber}
         carrier={commerceState.carrier}
+        extensionDays={commerceState.extensionDays}
+        proposedShipBy={commerceState.proposedShipBy}
+        refundedAmountGbp={commerceState.refundedAmountGbp}
         onPress={onViewOrder}
       />
     );

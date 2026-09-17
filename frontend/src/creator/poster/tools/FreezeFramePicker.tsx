@@ -30,7 +30,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { PressScale } from '../../CreatorAnimations';
+import { PressScale } from '../../shared/CreatorAnimations';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { CreatorSlider } from '../../controls/CreatorSlider';
@@ -260,6 +260,7 @@ function LabeledSlider({
         onCommit={onRelease}
         disabled={disabled}
         accessibilityLabel={label}
+        accessibilityHint="Adjusts the value"
       />
     </View>
   );

@@ -23,7 +23,9 @@ export function clamp(value: number, min: number, max: number): number {
 }
 
 export function isVideoUrl(url: string): boolean {
-  return /\.(mp4|mov|m4v|webm|quicktime)(\?|$)/i.test(url);
+  // m3u8 included — adaptive playlists are video for playback purposes and
+  // must not be fed to image loaders (prefetch, covers, save).
+  return /\.(mp4|mov|m4v|webm|quicktime|m3u8)(\?|$)/i.test(url);
 }
 
 // Lighten/darken a hex color by a percentage (-100..100). Used to derive a

@@ -1,13 +1,36 @@
 import { useCallback, useState, type Dispatch, type SetStateAction } from 'react';
 import type { NativeStackScreenProps, RootStackParamList } from '../../navigation/types';
 import { patchListingOnApi, deleteListingOnApi, type ListingApiItem } from '../../services/listingsApi';
-import { submitSellerHubBatchCommand } from '../../services/sellerHubApi';
+import {
+  submitSellerHubBatchCommand,
+  type SellerHubBatchItem,
+  type SellerHubBatchResponse,
+} from '../../services/sellerHubApi';
 import { parseApiError } from '../../lib/apiClient';
+import { createStableId } from '../../utils/createStableId';
 import { useToast } from '../../context/ToastContext';
 import { useHaptic } from '../useHaptic';
 import type { InventoryConfirmSheetState } from './types';
 
 type InventoryNavigation = NativeStackScreenProps<RootStackParamList, 'InventoryManagement'>['navigation'];
+
+/**
+ * Deterministic content hash for batch idempotency keys. Pause/resume/
+ * delete key on the sorted selection alone — those commands converge to an
+ * idempotent end-state, so replaying the stored receipt for a deliberate
+ * re-submit is safe. `edit` is different: it composes the hash with a
+ * per-submit nonce (see handleBulkEdit) so two intentional submissions of
+ * the same patch are two durable jobs, while transport-level retries of
+ * one submission still dedupe.
+ */
+function hashBatchItems(items: SellerHubBatchItem[]): string {
+  const serialized = JSON.stringify(items);
+  let hash = 5381;
+  for (let i = 0; i < serialized.length; i += 1) {
+    hash = ((hash << 5) + hash + serialized.charCodeAt(i)) | 0;
+  }
+  return (hash >>> 0).toString(36);
+}
 
 interface UseInventoryActionsParams {
   navigation: InventoryNavigation;
@@ -39,6 +62,10 @@ export function useInventoryActions({
 
   const [confirmSheet, setConfirmSheet] = useState<InventoryConfirmSheetState>(
     () => ({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' as const }));
+
+  // Bulk edit sheet state — the screen renders <BulkEditSheet> off these.
+  const [bulkEditVisible, setBulkEditVisible] = useState(false);
+  const [bulkEditSubmitting, setBulkEditSubmitting] = useState(false);
 
   // ── Row actions ──
   const handleEdit = useCallback((item: ListingApiItem) => {
@@ -269,6 +296,114 @@ export function useInventoryActions({
       } });
   }, [selectedIds, listings, setListings, haptic, show, exitSelectionMode, load]);
 
+  const openBulkEdit = useCallback(() => {
+    if (selectedIds.size === 0) return;
+    haptic.light();
+    setBulkEditVisible(true);
+  }, [selectedIds, haptic]);
+
+  const closeBulkEdit = useCallback(() => {
+    setBulkEditVisible(false);
+  }, []);
+
+  /**
+   * Submit a batch 'edit' command. Each item carries its own validated
+   * patch (the BulkEditSheet computes per-item prices for percent
+   * adjustments). Applies patches optimistically, then reconciles against
+   * the per-item receipts — rejected/conflict items are reverted to their
+   * snapshot, matching the pause/delete convention.
+   *
+   * Returns the batch response so the sheet can render per-item failure
+   * detail, or null on a transport error (toast already shown).
+   */
+  const handleBulkEdit = useCallback(async (
+    items: SellerHubBatchItem[],
+  ): Promise<SellerHubBatchResponse | null> => {
+    const ids = items.map((i) => i.listingId);
+    if (ids.length === 0) return null;
+    haptic.medium();
+    setBulkEditSubmitting(true);
+    setPendingActionIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => next.add(id));
+      return next;
+    });
+    const patchById = new Map(items.map((i) => [i.listingId, i.patch ?? {}]));
+    // Snapshot the rows being patched so failed items restore truthfully.
+    const snapshot = new Map(
+      listings.filter((l) => patchById.has(l.id)).map((l) => [l.id, { ...l }]),
+    );
+    // Optimistic: apply each item's patch locally.
+    setListings((prev) =>
+      prev.map((l) => {
+        const patch = patchById.get(l.id);
+        return patch ? { ...l, ...patch } : l;
+      })
+    );
+    try {
+      // hash + per-submit nonce: the hash keeps the key descriptive and the
+      // nonce makes each deliberate Apply a NEW durable job. Without it, an
+      // identical items+patch resubmission replays the stored receipt
+      // server-side (no re-apply) while the optimistic update above already
+      // showed the values — a silently diverged UI. fetchJson retries reuse
+      // this same key, so transport retries still dedupe.
+      const idempotencyKey = `bulk-edit-${hashBatchItems(items)}-${createStableId('submit')}`;
+      const response = await submitSellerHubBatchCommand('edit', items, idempotencyKey);
+      const applied: string[] = [];
+      const rejected: string[] = [];
+      const unknown: string[] = [];
+      for (const result of response.results) {
+        if (result.state === 'applied') applied.push(result.listingId);
+        else if (result.state === 'rejected') rejected.push(result.listingId);
+        else unknown.push(result.listingId);
+      }
+      // Revert only rejected and unknown items — a committed sibling is
+      // never rolled back because another item failed.
+      if (rejected.length > 0 || unknown.length > 0) {
+        setListings((prev) =>
+          prev.map((l) => {
+            if (rejected.includes(l.id) || unknown.includes(l.id)) {
+              return snapshot.get(l.id) ?? l;
+            }
+            return l;
+          })
+        );
+        if (unknown.length > 0) {
+          void load(true);
+        }
+      }
+      if (response.state === 'complete') {
+        show(`${ids.length} listing${ids.length === 1 ? '' : 's'} updated`, 'success');
+        // The sheet owns dismissal — a complete batch can still carry
+        // client-side skips it needs to report in the result view.
+        exitSelectionMode();
+      } else {
+        const parts: string[] = [];
+        if (applied.length > 0) parts.push(`${applied.length} updated`);
+        if (rejected.length > 0) parts.push(`${rejected.length} failed`);
+        if (unknown.length > 0) parts.push(`${unknown.length} checking`);
+        show(parts.join(' · '), applied.length > 0 ? 'success' : 'error');
+        if (applied.length === ids.length) {
+          exitSelectionMode();
+        }
+      }
+      return response;
+    } catch (err) {
+      // Transport error — no item can be confirmed, restore everything.
+      setListings((prev) => prev.map((l) => snapshot.get(l.id) ?? l));
+      const parsed = parseApiError(err);
+      show(parsed.message, 'error');
+      return null;
+    } finally {
+      setBulkEditSubmitting(false);
+      setPendingActionIds((prev) => {
+        const next = new Set(prev);
+        ids.forEach((id) => next.delete(id));
+        return next;
+      });
+    }
+  }, [listings, setListings, haptic, show, exitSelectionMode, load]);
+
   const dismissConfirmSheet = useCallback(() => {
     setConfirmSheet((s) => ({ ...s, visible: false }));
   }, []);
@@ -277,6 +412,11 @@ export function useInventoryActions({
     pendingActionIds,
     confirmSheet,
     dismissConfirmSheet,
+    bulkEditVisible,
+    bulkEditSubmitting,
+    openBulkEdit,
+    closeBulkEdit,
+    handleBulkEdit,
     handleEdit,
     handleTogglePause,
     handleRelist,

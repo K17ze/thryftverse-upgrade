@@ -3,6 +3,7 @@ import { Text, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { useConnectivity } from '../../hooks/useConnectivity';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { FontFamily, LetterSpacing } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
@@ -56,6 +57,9 @@ export function AuctionDetailDock({
   const { colors } = useAppTheme();
   const { formatFromFiat } = useFormattedPrice();
   const navigation = useNavigation<NavT>();
+  // Money mutations must not attempt while offline — the offline banner
+  // communicates state; the dock blocks the action (matches TradeScreen).
+  const { isOffline } = useConnectivity();
 
   const {
     isTerminal,
@@ -74,9 +78,12 @@ export function AuctionDetailDock({
     stateAction,
     buyNowAvailable,
     auctionFulfilment,
-    terminalAmountText,
+    terminalPrimaryText,
+    terminalEquivalentText,
+    minimumNextBidLockup,
     paymentDeadlineCountdown,
     priceText,
+    priceEquivalentText,
     priceLabel,
     liveMsToEnd,
     liveMsToStart,
@@ -180,7 +187,8 @@ export function AuctionDetailDock({
         return (
           <CommerceDetailStateDock
             stateBadge={postEndBadge}
-            value={terminalAmountText}
+            value={terminalPrimaryText}
+            valueEquivalent={terminalEquivalentText ?? undefined}
             valueLabel="Highest bid"
             primaryAction={{
               label: isAcceptHighestBidLoading ? 'Accepting…' : 'Accept highest bid',
@@ -201,7 +209,8 @@ export function AuctionDetailDock({
       return (
         <CommerceDetailStateDock
           stateBadge={postEndBadge}
-          value={terminalAmountText}
+          value={terminalPrimaryText}
+          valueEquivalent={terminalEquivalentText ?? undefined}
           valueLabel="Highest bid"
           primaryAction={{
             label: 'Discover similar',
@@ -218,7 +227,8 @@ export function AuctionDetailDock({
         return (
           <CommerceDetailStateDock
             stateBadge={postEndBadge}
-            value={terminalAmountText}
+            value={terminalPrimaryText}
+            valueEquivalent={terminalEquivalentText ?? undefined}
             valueLabel="Amount due"
             subtitle={paymentDeadlineCountdown && !paymentDeadlineCountdown.isExpired
               ? `Pay within ${paymentDeadlineCountdown.text}`
@@ -227,7 +237,7 @@ export function AuctionDetailDock({
               label: isPayLoading ? 'Processing…' : 'Pay now',
               onPress: () => { haptics.press(); void handlePayNow(); },
               loading: isPayLoading,
-              disabled: isPayLoading,
+              disabled: isPayLoading || isOffline,
               accessibilityLabel: 'Pay for this auction now',
             }}
             secondaryAction={auctionFulfilment?.orderId
@@ -245,7 +255,8 @@ export function AuctionDetailDock({
         return (
           <CommerceDetailStateDock
             stateBadge={postEndBadge}
-            value={terminalAmountText}
+            value={terminalPrimaryText}
+            valueEquivalent={terminalEquivalentText ?? undefined}
             valueLabel="Highest bid"
             subtitle="Awaiting buyer payment"
             primaryAction={{
@@ -259,7 +270,8 @@ export function AuctionDetailDock({
       return (
         <CommerceDetailStateDock
           stateBadge={postEndBadge}
-          value={terminalAmountText}
+          value={terminalPrimaryText}
+          valueEquivalent={terminalEquivalentText ?? undefined}
           valueLabel="Final bid"
           primaryAction={{
             label: 'Discover similar',
@@ -277,7 +289,8 @@ export function AuctionDetailDock({
         return (
           <CommerceDetailStateDock
             stateBadge={postEndBadge}
-            value={terminalAmountText}
+            value={terminalPrimaryText}
+            valueEquivalent={terminalEquivalentText ?? undefined}
             valueLabel="Second chance"
             subtitle={paymentDeadlineCountdown && !paymentDeadlineCountdown.isExpired
               ? `${paymentDeadlineCountdown.text} to decide`
@@ -303,7 +316,8 @@ export function AuctionDetailDock({
       return (
         <CommerceDetailStateDock
           stateBadge={postEndBadge}
-          value={terminalAmountText}
+          value={terminalPrimaryText}
+          valueEquivalent={terminalEquivalentText ?? undefined}
           valueLabel="Final bid"
           primaryAction={{
             label: 'Discover similar',
@@ -340,9 +354,15 @@ export function AuctionDetailDock({
 
   // Live bidder — current/min next bid + Place bid (+ optional Buy now).
   if (showBidControls && stateAction && stateAction.primary.type !== 'none') {
-    const dockValue = isLive && auction.minimumNextBidGbp > 0
-      ? formatFromFiat(auction.minimumNextBidGbp, 'GBP')
-      : priceText;
+    // Split the dual-currency value: the primary unit keeps the
+    // headline slot while the local-currency equivalent demotes to a
+    // subordinate line — one oversized "X 1ze · £Y" string would widen
+    // the value cluster and push the CTA off the dock row.
+    const dockLockup = isLive && minimumNextBidLockup
+      ? minimumNextBidLockup
+      : { izeText: priceText, localText: priceEquivalentText };
+    const dockValue = dockLockup.izeText;
+    const dockValueEquivalent = dockLockup.localText;
     const dockValueLabel = isLive && auction.minimumNextBidGbp > 0
       ? 'Min next bid'
       : priceLabel;
@@ -364,6 +384,7 @@ export function AuctionDetailDock({
     return (
       <CommerceDetailStateDock
         value={dockValue}
+        valueEquivalent={dockValueEquivalent ?? undefined}
         valueLabel={dockValueLabel}
         subtitle={dockSubtitle}
         thumbnailUri={auctionMediaItems[0]?.uri}
@@ -398,7 +419,7 @@ export function AuctionDetailDock({
             }
           },
           loading: isSubmittingBid || watchToggling,
-          disabled: isSubmittingBid || watchToggling,
+          disabled: isSubmittingBid || watchToggling || isOffline,
           accessibilityLabel: primaryLabel,
         }}
         secondaryAction={
@@ -410,7 +431,7 @@ export function AuctionDetailDock({
                 // transaction surface, not in the button label.
                 label: isBuyNowLoading ? 'Processing…' : 'Buy now',
                 onPress: () => { haptics.press(); openBuyNowSheet(); },
-                disabled: isBuyNowLoading,
+                disabled: isBuyNowLoading || isOffline,
                 loading: isBuyNowLoading,
                 accessibilityLabel: `Buy now for ${formatFromFiat(auction.buyNowPriceGbp ?? 0, 'GBP')}`,
               }

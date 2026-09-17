@@ -52,6 +52,14 @@ export interface ChatComposerProps {
   isVoiceRecording: boolean;
   onVoiceRecordingChange: (recording: boolean) => void;
   isSending: boolean;
+  /** Blocked/restricted composer — when set, the input bar is replaced by
+   *  an explanatory notice rather than silently disabled. Carries an
+   *  optional recovery action (e.g. "Unblock to message."). */
+  blockedNotice?: {
+    message: string;
+    actionLabel?: string;
+    onAction?: () => void;
+  };
   dangerWarning?: string;
   cautionWarning?: string;
   onDismissDangerWarning: () => void;
@@ -68,9 +76,12 @@ export interface ChatComposerProps {
   onSelectReply: (text: string) => void;
   onManageReplies: (role: "seller" | "buyer") => void;
 
-  // ── Composer banner stack (reply / reaction / offline / undo) ──
+  // ── Composer banner stack (reply / edit / reaction / offline / undo) ──
   replyTo: Message | null;
   onCloseReply: () => void;
+  /** P2-03: message currently being edited — renders an edit banner. */
+  editingMessage: Message | null;
+  onCloseEdit: () => void;
   reactingToMessage: Message | null;
   onReact: (emoji: string) => void;
   isOffline: boolean;
@@ -102,6 +113,7 @@ export function ChatComposer({
   isVoiceRecording,
   onVoiceRecordingChange,
   isSending,
+  blockedNotice,
   dangerWarning,
   cautionWarning,
   onDismissDangerWarning,
@@ -115,6 +127,8 @@ export function ChatComposer({
   onManageReplies,
   replyTo,
   onCloseReply,
+  editingMessage,
+  onCloseEdit,
   reactingToMessage,
   onReact,
   isOffline,
@@ -182,6 +196,24 @@ export function ChatComposer({
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.brandBorder },
 
+    blockedNoticeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs + 1,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm + 2 },
+
+    blockedNoticeText: {
+      flex: 1,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary },
+
+    blockedNoticeAction: {
+      fontFamily: TypographyV2.meta.fontFamily,
+      fontWeight: '600' },
+
     agentChipPressed: {
       backgroundColor: colors.brandSubtle },
 
@@ -213,6 +245,31 @@ export function ChatComposer({
         { paddingBottom: Math.max(bottomInset, Space.sm) + Space.sm },
       ]}
     >
+      {blockedNotice ? (
+        /* Blocked/restricted conversation — the composer is unavailable
+           and says why, with a recovery action when one exists. Never a
+           silently-disabled input. */
+        <View
+          style={styles.blockedNoticeRow}
+          accessibilityRole="alert"
+          accessibilityLiveRegion="polite"
+        >
+          <Ionicons name="lock-closed-outline" size={14} color={colors.textMuted} />
+          <Text style={styles.blockedNoticeText} maxFontSizeMultiplier={2}>
+            {blockedNotice.message}
+            {blockedNotice.actionLabel && blockedNotice.onAction ? (
+              <Text
+                style={[styles.blockedNoticeAction, { color: colors.textPrimary }]}
+                onPress={blockedNotice.onAction}
+                maxFontSizeMultiplier={2}
+              >
+                {" "}{blockedNotice.actionLabel}
+              </Text>
+            ) : null}
+          </Text>
+        </View>
+      ) : (
+      <>
       {/* P0-8: Composer-stack height enforcement. Multiple contextual
           banners can stack above the input bar (reply, reactions,
           offline, undo). On small devices the stack can push the input
@@ -220,7 +277,8 @@ export function ChatComposer({
           that fit the budget so the input bar always remains usable. */}
       {(() => {
         const stackSlots: ComposerStackSlotState[] = [
-          { slot: 'replyQuote', visible: !!replyTo, estimatedHeight: 56 },
+          { slot: 'editBanner', visible: !!editingMessage, estimatedHeight: 56 },
+          { slot: 'replyQuote', visible: !!replyTo && !editingMessage, estimatedHeight: 56 },
           { slot: 'undoBanner', visible: recentlyDeletedCount > 0, estimatedHeight: 44 },
           { slot: 'offlineBanner', visible: isOffline, estimatedHeight: 36 },
           { slot: 'reactionPicker', visible: !!reactingToMessage, estimatedHeight: 48 },
@@ -228,6 +286,14 @@ export function ChatComposer({
         const resolution = resolveComposerStack(stackSlots);
         return (
           <>
+            {isSlotVisible(resolution, 'editBanner') && editingMessage ? (
+              <ReplyQuote
+                senderName={t('messaging.conversation.editMessage')}
+                text={editingMessage.text ?? ""}
+                onClose={onCloseEdit}
+              />
+            ) : null}
+
             {isSlotVisible(resolution, 'replyQuote') && replyTo ? (
               <ReplyQuote
                 senderName={replyTo.senderLabel ?? t('chat.fallbackUserName')}
@@ -387,6 +453,8 @@ export function ChatComposer({
         onDismissDangerWarning={onDismissDangerWarning}
         onDismissCautionWarning={onDismissCautionWarning}
       />
+      </>
+      )}
     </View>
     </KeyboardStickyView>
   );

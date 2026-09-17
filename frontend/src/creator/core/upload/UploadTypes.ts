@@ -144,6 +144,13 @@ export interface UploadProgress {
   totalBytes: number;
   /** Completion fraction in the range 0–1 based on real bytes. */
   progress: number;
+  /** Rolling-average throughput in bytes/second over the last ~4s of
+   *  progress ticks. Undefined until enough samples exist — never a
+   *  fabricated instantaneous rate. */
+  bytesPerSecond?: number;
+  /** Estimated seconds remaining at the current rolling rate. Undefined
+   *  when the rate is unknown or zero. */
+  etaSeconds?: number;
 }
 
 /** Listener invoked when an upload event occurs. */
@@ -157,6 +164,7 @@ export type UploadEvent =
   | { type: 'jobConfirming'; job: UploadJob }
   | { type: 'jobComplete'; job: UploadJob }
   | { type: 'jobFailed'; job: UploadJob; error: string }
+  | { type: 'jobStalled'; job: UploadJob; error: string }
   | { type: 'allComplete'; projectId: string }
   | { type: 'connectivityChanged'; online: boolean };
 

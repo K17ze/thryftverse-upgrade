@@ -13,6 +13,7 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import type { ListingApiItem } from '../../services/listingsApi';
+import type { SellerPromotion } from '../../services/promotionsApi';
 import { inventorySharedStyles, type InventoryScreenStyles } from './inventoryScreenStyles';
 
 // ── Status config ──
@@ -35,6 +36,16 @@ export interface InventoryRowProps {
   onLongPress: () => void;
   onPress: () => void;
   onEdit: () => void;
+  /** Opens the flat-fee promote sheet — only rendered for active listings. */
+  onPromote?: () => void;
+  /**
+   * The listing's live (non-ended) promotion, when one exists. Renders a
+   * quiet Sponsored state chip in place of the create affordance so a
+   * promoted listing never dead-ends into a 409.
+   */
+  promotion?: SellerPromotion | null;
+  /** Opens the promotions management surface (chip tap target). */
+  onManagePromotions?: () => void;
   onTogglePause: () => void;
   onRelist: () => void;
   onDelete: () => void;
@@ -53,6 +64,9 @@ export function InventoryRow({
   onLongPress,
   onPress,
   onEdit,
+  onPromote,
+  promotion,
+  onManagePromotions,
   onTogglePause,
   onRelist,
   onDelete,
@@ -122,6 +136,37 @@ export function InventoryRow({
               <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
               <Text style={[styles.statusText, { color: statusColor }]}>{statusConfig.label}</Text>
             </View>
+            {/* Live promotion — quiet text chip, opens management. */}
+            {promotion ? (
+              <Pressable
+                onPress={onManagePromotions}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel={`Promotion ${promotion.status}, ${promotion.dailyBudgetGbp} pounds per day — manage promotions`}
+              >
+                <Text
+                  style={[
+                    styles.statusText,
+                    {
+                      color:
+                        promotion.status === 'active'
+                          ? colors.brand
+                          : promotion.status === 'exhausted'
+                            ? colors.danger
+                            : colors.warning }]}
+                  numberOfLines={1}
+                >
+                  {promotion.status === 'active'
+                    ? 'Sponsored'
+                    : promotion.status === 'exhausted'
+                      ? 'Promo stopped'
+                      : promotion.status === 'ended'
+                        ? 'Promo ended'
+                        : 'Promo paused'}
+                  {` · ${formatFromFiat(promotion.dailyBudgetGbp, 'GBP')}/day`}
+                </Text>
+              </Pressable>
+            ) : null}
             {/* Engagement metrics */}
             <View style={styles.metricsRow}>
               <Metric icon="eye-outline" value={views} colors={colors} styles={styles} />
@@ -137,6 +182,14 @@ export function InventoryRow({
         ) : (
           <View style={styles.quickActions}>
             <IconButton icon="create-outline" onPress={onEdit} color={colors.textSecondary} label="Edit listing" />
+            {item.status === 'active' && onPromote && !promotion ? (
+              <IconButton
+                icon="megaphone-outline"
+                onPress={onPromote}
+                color={colors.textSecondary}
+                label="Promote listing"
+              />
+            ) : null}
             <IconButton
               icon={isPaused ? 'play-outline' : 'pause-outline'}
               onPress={onTogglePause}

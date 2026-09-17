@@ -3,6 +3,15 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import { getOrCreateComplianceProfile } from '../lib/compliance.js';
 import { resolveCountryCapabilities } from '../lib/countryCapabilities.js';
+import { isEffectivelyAway } from '../lib/sellerAway.js';
+import { isUserOnline, markPresenceHidden, unmarkPresenceHidden } from '../lib/presenceRegistry.js';
+import { publishPresenceTransition } from './realtime.js';
+import { logger } from '../lib/logger.js';
+import { recordConsumerReport } from '../lib/safetyCaseService.js';
+import {
+  loadListingMedia,
+  listingImageUrls,
+} from '../lib/media/listingMediaProjection.js';
 
 // ── ProfileUserRow (mirrors the type in index.ts) ────────────────────
 type ProfileUserRow = {
@@ -116,6 +125,30 @@ app.get('/users/me', async (request, reply) => {
   };
 });
 
+/**
+ * GET /users/me/username-availability?username=X
+ * Real-time handle availability for the edit-profile field. Case-insensitive
+ * via the LOWER(username) index. No uniqueness constraint exists at the DB
+ * level, so this check is also enforced at PATCH time (409).
+ */
+app.get('/users/me/username-availability', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  const querySchema = z.object({ username: z.string().trim().min(3).max(32) });
+  const parsed = querySchema.safeParse(request.query);
+  if (!parsed.success) {
+    reply.code(400);
+    return { ok: false, error: 'username must be 3-32 characters' };
+  }
+  const taken = await db.query<{ id: string }>(
+    `SELECT id FROM users WHERE LOWER(username) = LOWER($1) AND id <> $2 LIMIT 1`,
+    [parsed.data.username, request.authUser.userId],
+  );
+  return { ok: true, username: parsed.data.username, available: (taken.rowCount ?? 0) === 0 };
+});
+
 app.patch('/users/me', async (request, reply) => {
   if (!request.authUser) {
     reply.code(401);
@@ -190,8 +223,9 @@ app.patch('/users/me', async (request, reply) => {
       resolvedAvatarUrl = null;
     } else {
       const urlCheck = await db.query<{ id: string }>(
-        `SELECT id FROM upload_finalizations
-         WHERE owner_id = $1 AND (public_url = $2 OR canonical_url = $2)
+        `SELECT uf.id FROM upload_finalizations uf
+         LEFT JOIN media_assets ma ON ma.id = uf.media_asset_id
+         WHERE uf.owner_id = $1 AND (uf.public_url = $2 OR ma.canonical_url = $2)
          LIMIT 1`,
         [request.authUser.userId, payload.avatar]
       );
@@ -239,8 +273,9 @@ app.patch('/users/me', async (request, reply) => {
       resolvedCoverUrl = null;
     } else {
       const urlCheck = await db.query<{ id: string }>(
-        `SELECT id FROM upload_finalizations
-         WHERE owner_id = $1 AND (public_url = $2 OR canonical_url = $2)
+        `SELECT uf.id FROM upload_finalizations uf
+         LEFT JOIN media_assets ma ON ma.id = uf.media_asset_id
+         WHERE uf.owner_id = $1 AND (uf.public_url = $2 OR ma.canonical_url = $2)
          LIMIT 1`,
         [request.authUser.userId, payload.coverPhoto]
       );
@@ -273,6 +308,20 @@ app.patch('/users/me', async (request, reply) => {
   if (Object.keys(allowed).length === 0) {
     reply.code(400);
     return { ok: false, error: 'No fields provided to update' };
+  }
+
+  // Username collision — the DB has a LOWER(username) lookup index but no
+  // uniqueness constraint, so enforce it at the API boundary. Without this
+  // the UPDATE silently allows duplicate handles.
+  if (payload.username !== undefined) {
+    const collision = await db.query<{ id: string }>(
+      `SELECT id FROM users WHERE LOWER(username) = LOWER($1) AND id <> $2 LIMIT 1`,
+      [payload.username, request.authUser.userId],
+    );
+    if (collision.rowCount && collision.rowCount > 0) {
+      reply.code(409);
+      return { ok: false, error: 'Username is taken', code: 'USERNAME_TAKEN' };
+    }
   }
 
   const setClauses = Object.keys(allowed).map((key, idx) => `${key} = $${idx + 2}`);
@@ -359,6 +408,13 @@ app.patch('/users/me/preferences', async (request, reply) => {
 
   const bodySchema = z.object({
     holidayMode: z.boolean().optional(),
+    // Seller-declared return date. ISO-8601; null clears it. When holiday
+    // mode is on and this date passes, the away state expires at read time
+    // (see lib/sellerAway.ts) — a stale pause can never outlive the date
+    // the seller published.
+    holidayModeUntil: z.string().datetime({ offset: true }).nullable().optional(),
+    // Seller-authored note shown to buyers while away.
+    awayMessage: z.string().max(500).nullable().optional(),
     privateProfile: z.boolean().optional(),
   });
 
@@ -367,6 +423,32 @@ app.patch('/users/me/preferences', async (request, reply) => {
   const allowed: Record<string, unknown> = {};
   if (payload.holidayMode !== undefined) allowed.holiday_mode = payload.holidayMode;
   if (payload.privateProfile !== undefined) allowed.private_profile = payload.privateProfile;
+  if (payload.awayMessage !== undefined) {
+    const trimmed = payload.awayMessage === null ? null : payload.awayMessage.trim();
+    allowed.away_message = trimmed === '' ? null : trimmed;
+  }
+
+  // A return date is only stored while holiday mode stays on (or is being
+  // enabled in the same write). Turning holiday mode off always clears the
+  // date so a past "until" can never resurrect an away state later.
+  const staysAway = payload.holidayMode ?? true;
+  if (payload.holidayModeUntil !== undefined) {
+    if (!staysAway || payload.holidayModeUntil === null) {
+      allowed.holiday_mode_until = null;
+    } else {
+      const untilMs = Date.parse(payload.holidayModeUntil);
+      if (untilMs <= Date.now()) {
+        reply.code(400);
+        return {
+          ok: false,
+          error: 'holidayModeUntil must be a future date — a past return date can never hold the shop paused',
+        };
+      }
+      allowed.holiday_mode_until = new Date(untilMs).toISOString();
+    }
+  } else if (payload.holidayMode === false) {
+    allowed.holiday_mode_until = null;
+  }
 
   if (Object.keys(allowed).length === 0) {
     reply.code(400);
@@ -376,12 +458,31 @@ app.patch('/users/me/preferences', async (request, reply) => {
   const setClauses = Object.keys(allowed).map((key, idx) => `${key} = $${idx + 2}`);
   const values = Object.values(allowed);
 
-  const result = await db.query<{ holiday_mode: boolean; private_profile: boolean }>(
+  // Away-window anchor (migration 293): the dispatch-deadline shift only
+  // applies to orders paid while the seller was actually away, so the
+  // pause needs a recorded start. Turning the flag on stamps it — a
+  // re-save while already away keeps the original start (the CASE reads
+  // the pre-update row); turning it off clears it so the next away period
+  // starts fresh.
+  if (payload.holidayMode === true) {
+    setClauses.push(
+      'holiday_mode_since = CASE WHEN holiday_mode THEN COALESCE(holiday_mode_since, NOW()) ELSE NOW() END',
+    );
+  } else if (payload.holidayMode === false) {
+    setClauses.push('holiday_mode_since = NULL');
+  }
+
+  const result = await db.query<{
+    holiday_mode: boolean;
+    private_profile: boolean;
+    holiday_mode_until: string | null;
+    away_message: string | null;
+  }>(
     `
       UPDATE users
       SET ${setClauses.join(', ')}, updated_at = NOW()
       WHERE id = $1
-      RETURNING holiday_mode, private_profile
+      RETURNING holiday_mode, private_profile, holiday_mode_until::text, away_message
     `,
     [request.authUser.userId, ...values]
   );
@@ -397,6 +498,52 @@ app.patch('/users/me/preferences', async (request, reply) => {
     preferences: {
       holidayMode: row.holiday_mode,
       privateProfile: row.private_profile,
+      holidayModeUntil: row.holiday_mode_until
+        ? new Date(row.holiday_mode_until).toISOString()
+        : null,
+      awayMessage: row.away_message ?? null,
+    },
+  };
+});
+
+// GET /users/me/preferences — read side of the PATCH above. The client
+// persists account preferences locally; this endpoint is how a fresh
+// login rehydrates them so a stale cached holidayMode can never keep a
+// shop visually paused (or unpaused) against the server truth.
+app.get('/users/me/preferences', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const result = await db.query<{
+    holiday_mode: boolean;
+    private_profile: boolean;
+    holiday_mode_until: string | null;
+    away_message: string | null;
+  }>(
+    `SELECT holiday_mode, private_profile, holiday_mode_until::text, away_message
+     FROM users
+     WHERE id = $1
+     LIMIT 1`,
+    [request.authUser.userId]
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    reply.code(404);
+    return { ok: false, error: 'User not found' };
+  }
+
+  return {
+    ok: true,
+    preferences: {
+      holidayMode: row.holiday_mode,
+      privateProfile: row.private_profile,
+      holidayModeUntil: row.holiday_mode_until
+        ? new Date(row.holiday_mode_until).toISOString()
+        : null,
+      awayMessage: row.away_message ?? null,
     },
   };
 });
@@ -884,13 +1031,77 @@ app.patch('/users/me/activity-status', async (request, reply) => {
 
   const bodySchema = z.object({ visible: z.boolean() });
   const { visible } = bodySchema.parse(request.body ?? {});
+  const userId = request.authUser.userId;
+
+  const previous = await db.query<{ activity_status_visible: boolean }>(
+    `SELECT activity_status_visible FROM users WHERE id = $1 LIMIT 1`,
+    [userId]
+  );
+  const wasVisible = previous.rows[0]?.activity_status_visible ?? true;
 
   await db.query(
     `UPDATE users SET activity_status_visible = $2, updated_at = NOW() WHERE id = $1`,
-    [request.authUser.userId, visible]
+    [userId, visible]
   );
 
+  // Mid-session true→false: live sockets keep heartbeating, so without an
+  // explicit teardown the user ghosts online until the Redis TTL expires.
+  // Drop every presence record + topic membership and mark the user
+  // presence-hidden so heartbeats can't resurrect the record while the
+  // flag is off, mark the fallback table offline, and push an offline
+  // transition so subscribed peers update immediately.
+  if (wasVisible && !visible) {
+    await markPresenceHidden(userId);
+    try {
+      await db.query(
+        `UPDATE user_presence SET is_online = FALSE, last_seen_at = NOW(), updated_at = NOW() WHERE user_id = $1`,
+        [userId]
+      );
+    } catch (error) {
+      logger.warn(
+        { err: error instanceof Error ? error.message : String(error), userId },
+        '[presence] failed to mark user_presence offline on activity-status toggle'
+      );
+    }
+    publishPresenceTransition(userId, false);
+  } else if (!wasVisible && visible) {
+    // false→true: clear the hidden mark so heartbeats can rebuild the
+    // records. If live sockets already hold records, announce the online
+    // transition now so peers do not wait for a reconnect.
+    await unmarkPresenceHidden(userId);
+    if (await isUserOnline(userId)) {
+      publishPresenceTransition(userId, true);
+    }
+  }
+
   return { ok: true, activityStatusVisible: visible };
+});
+
+// GET /users/me/privacy-preferences — hydrate the privacy settings screen.
+// The PATCH routes below have written these columns for a while, but the
+// screen's mount fetch had no route — every visit rendered the error canvas.
+app.get('/users/me/privacy-preferences', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const result = await db.query<{
+    activity_status_visible: boolean;
+    search_visibility: string;
+  }>(
+    `SELECT activity_status_visible, search_visibility FROM users WHERE id = $1 LIMIT 1`,
+    [request.authUser.userId]
+  );
+  const row = result.rows[0];
+
+  return {
+    ok: true,
+    privacyPreferences: {
+      activityStatusVisible: row?.activity_status_visible ?? true,
+      searchVisibility: row?.search_visibility === 'hidden' ? 'hidden' : 'visible',
+    },
+  };
 });
 
 /* â”€â”€ Search Visibility â”€â”€ */
@@ -1073,6 +1284,7 @@ app.get('/users/me/email-preferences', async (request, reply) => {
         messageNotifications: true,
         priceDropAlerts: true,
         newListingsFromFollowing: true,
+        auctionAlerts: true,
         marketing: false,
         securityAlerts: true,
         distributionNotices: true,
@@ -1089,6 +1301,7 @@ app.get('/users/me/email-preferences', async (request, reply) => {
       messageNotifications: row.message_notifications,
       priceDropAlerts: row.price_drop_alerts,
       newListingsFromFollowing: row.new_listings_from_following,
+      auctionAlerts: row.auction_alerts ?? true,
       marketing: row.marketing,
       securityAlerts: row.security_alerts,
       distributionNotices: row.distribution_notices,
@@ -1109,6 +1322,7 @@ app.put('/users/me/email-preferences', async (request, reply) => {
     messageNotifications: z.boolean().optional(),
     priceDropAlerts: z.boolean().optional(),
     newListingsFromFollowing: z.boolean().optional(),
+    auctionAlerts: z.boolean().optional(),
     marketing: z.boolean().optional(),
     securityAlerts: z.boolean().optional(),
     distributionNotices: z.boolean().optional(),
@@ -1122,6 +1336,7 @@ app.put('/users/me/email-preferences', async (request, reply) => {
   if (payload.messageNotifications !== undefined) columns.message_notifications = payload.messageNotifications;
   if (payload.priceDropAlerts !== undefined) columns.price_drop_alerts = payload.priceDropAlerts;
   if (payload.newListingsFromFollowing !== undefined) columns.new_listings_from_following = payload.newListingsFromFollowing;
+  if (payload.auctionAlerts !== undefined) columns.auction_alerts = payload.auctionAlerts;
   if (payload.marketing !== undefined) columns.marketing = payload.marketing;
   if (payload.securityAlerts !== undefined) columns.security_alerts = payload.securityAlerts;
   if (payload.distributionNotices !== undefined) columns.distribution_notices = payload.distributionNotices;
@@ -1310,7 +1525,7 @@ app.post('/users/:userId/follow', async (request, reply) => {
         userId,
         title: 'New follower',
         body: `${followerName} started following you`,
-        eventType: 'follow_received',
+        eventType: 'new_follower',
         actorUserId: followerId,
         imageUrl: follower?.avatar ?? undefined,
         payload: { followerId },
@@ -1319,7 +1534,7 @@ app.post('/users/:userId/follow', async (request, reply) => {
         metadata: { source: 'user_follow' },
       });
     } catch (notifErr) {
-      app.log.error({ err: notifErr }, 'Failed to queue follow_received notification');
+      app.log.error({ err: notifErr }, 'Failed to queue new_follower notification');
     }
   }
 
@@ -1354,6 +1569,7 @@ app.get('/users/:userId/profile', async (request, reply) => {
   const result = await db.query<ProfileUserRow & {
     private_profile: boolean;
     holiday_mode: boolean;
+    holiday_mode_until: string | null;
     away_message: string | null;
   }>(
     `
@@ -1361,7 +1577,7 @@ app.get('/users/:userId/profile', async (request, reply) => {
         u.id, u.username, u.email, u.display_name, u.bio, u.location, u.website, u.phone,
         u.avatar, u.cover_photo, u.cover_video, u.role, u.email_verified_at,
         u.two_factor_enabled, u.pronouns, u.is_ai_creator, u.created_at, u.updated_at,
-        u.private_profile, u.holiday_mode, u.away_message
+        u.private_profile, u.holiday_mode, u.holiday_mode_until::text, u.away_message
       FROM users u
       WHERE u.id = $1
       LIMIT 1
@@ -1610,11 +1826,20 @@ app.get('/users/:userId/profile', async (request, reply) => {
         }
       : undefined,
     // Authoritative away state â€” only present when holiday mode is on.
-    // The frontend uses this to show the away banner with the seller's message.
-    away: user.holiday_mode
+    // The frontend uses this to show the away banner with the seller's
+    // message and, when set, the real return date. Present only while the
+    // seller is effectively away — a published return date that has passed
+    // already expired the state (lib/sellerAway.ts).
+    away: isEffectivelyAway(user.holiday_mode, user.holiday_mode_until)
       ? {
           holidayMode: true,
           awayMessage: user.away_message ?? null,
+          // Seller-declared return instant — surfaced so buyers see a real
+          // "back on" date, never a fabricated one. A past date already
+          // expired the away state above, so this is always future.
+          holidayModeUntil: user.holiday_mode_until
+            ? new Date(user.holiday_mode_until).toISOString()
+            : null,
         }
       : undefined,
     // â”€â”€ Storefront summary (published only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -2177,6 +2402,9 @@ app.post('/users/:userId/report', async (request, reply) => {
       'privacy', 'impersonation', 'minor_safety', 'other',
     ]),
     details: z.string().min(1).max(2000).optional(),
+    // Client-supplied dedupe key (migration 294): a retried submission
+    // resolves the original report row instead of double-filing.
+    idempotencyKey: z.string().min(2).max(200).optional(),
   });
   const { userId } = paramsSchema.parse(request.params);
   const body = bodySchema.parse(request.body ?? {});
@@ -2187,15 +2415,122 @@ app.post('/users/:userId/report', async (request, reply) => {
     return { ok: false, error: 'Cannot report yourself' };
   }
 
-  const reportId = `report_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  await db.query(
-    `INSERT INTO user_reports (id, reporter_id, reported_id, reason, details, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, NOW(), NOW())`,
-    [reportId, reporterId, userId, body.reason, body.details ?? null]
+  // Fetch the reported subject for the notice snapshot. The report insert
+  // would FK-fail on a missing user anyway; an explicit lookup returns a
+  // clean 404 and gives the notice a real subject snapshot.
+  const subjectResult = await db.query<{ username: string; display_name: string | null }>(
+    `SELECT username, display_name FROM users WHERE id = $1 LIMIT 1`,
+    [userId]
   );
+  const subject = subjectResult.rows[0];
+  if (!subject) {
+    reply.code(404);
+    return { ok: false, error: 'User not found' };
+  }
+
+  const reportId = `report_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const { reportId: effectiveReportId, noticeId } = await recordConsumerReport(db, {
+    kind: 'user',
+    reportId,
+    reporterId,
+    subjectId: userId,
+    reason: body.reason,
+    details: body.details ?? null,
+    idempotencyKey: body.idempotencyKey ?? null,
+    subjectSnapshot: { username: subject.username, displayName: subject.display_name },
+  });
 
   reply.code(201);
-  return { ok: true, reportId };
+  return { ok: true, reportId: effectiveReportId, noticeId };
+});
+
+// ── Reporter-visible report status ────────────────────────────────────
+// recordConsumerReport keys each safety notice as `<kind>_report:<reportId>`
+// so this union can join the three consumer report tables onto the notice
+// and its latest case/decision state without a schema change.
+
+app.get('/users/me/reports', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+  const reporterId = request.authUser.userId;
+
+  const result = await readDb.query<{
+    report_id: string;
+    kind: 'user' | 'listing' | 'conversation';
+    reason: string;
+    report_status: string;
+    subject_id: string;
+    created_at: string;
+    notice_id: string | null;
+    notice_acknowledgement: string | null;
+    case_id: string | null;
+    case_status: string | null;
+    outcome: string | null;
+  }>(
+    `
+      SELECT
+        reports.report_id,
+        reports.kind,
+        reports.reason,
+        reports.report_status,
+        reports.subject_id,
+        reports.created_at,
+        sn.id AS notice_id,
+        sn.acknowledgement_state AS notice_acknowledgement,
+        caseinfo.case_id,
+        caseinfo.case_status,
+        caseinfo.outcome
+      FROM (
+        SELECT ur.id AS report_id, 'user'::text AS kind, ur.reason,
+               ur.status AS report_status, ur.reported_id AS subject_id,
+               ur.created_at::text AS created_at
+        FROM user_reports ur WHERE ur.reporter_id = $1
+        UNION ALL
+        SELECT lr.id, 'listing', lr.reason, lr.status, lr.listing_id,
+               lr.created_at::text
+        FROM listing_reports lr WHERE lr.reporter_id = $1
+        UNION ALL
+        SELECT cr.id, 'conversation', cr.reason, cr.status, cr.conversation_id,
+               cr.created_at::text
+        FROM conversation_reports cr WHERE cr.reporter_user_id = $1
+      ) reports
+      LEFT JOIN safety_notices sn
+        ON sn.reporter_id = $1
+       AND sn.idempotency_key = reports.kind || '_report:' || reports.report_id
+      LEFT JOIN LATERAL (
+        SELECT sc.id AS case_id, sc.status AS case_status,
+               (SELECT sd.decision FROM safety_decisions sd
+                 WHERE sd.case_id = sc.id
+                 ORDER BY sd.decided_at DESC LIMIT 1) AS outcome
+        FROM safety_cases sc
+        WHERE sc.notice_id = sn.id
+        ORDER BY sc.created_at DESC
+        LIMIT 1
+      ) caseinfo ON TRUE
+      ORDER BY reports.created_at DESC
+      LIMIT 200
+    `,
+    [reporterId]
+  );
+
+  return {
+    ok: true,
+    reports: result.rows.map((row) => ({
+      reportId: row.report_id,
+      kind: row.kind,
+      reason: row.reason,
+      subjectId: row.subject_id,
+      status: row.report_status,
+      noticeId: row.notice_id,
+      noticeAcknowledgement: row.notice_acknowledgement,
+      caseId: row.case_id,
+      caseStatus: row.case_status,
+      outcome: row.outcome,
+      createdAt: row.created_at,
+    })),
+  };
 });
 
 app.get('/users/search', async (request, reply) => {
@@ -2363,4 +2698,128 @@ app.patch('/users/me/consent', async (request, reply) => {
     },
   };
 });
+
+/* ─── Saved listings (wishlist heart + saved bookmark) ───
+ * The client has called /users/me/wishlist since the save UI shipped, but no
+ * route ever backed it — toggles were MMKV-local while the UI announced
+ * persistence. user_saved_listings (migration 306) is the source of truth;
+ * `list` discriminates the heart ('wishlist') from the bookmark ('saved').
+ */
+
+type SavedList = 'wishlist' | 'saved';
+
+const fetchSavedListingIds = async (userId: string, list: SavedList): Promise<string[]> => {
+  const result = await db.query<{ listing_id: string }>(
+    `SELECT listing_id FROM user_saved_listings WHERE user_id = $1 AND list = $2 ORDER BY created_at DESC`,
+    [userId, list],
+  );
+  return result.rows.map((row) => row.listing_id);
+};
+
+// Hydrated listing summaries in the feed's ListingSummary shape — saved
+// surfaces (Closet tabs) render these directly instead of intersecting ids
+// with whatever feed pages happen to be resident. Sold/paused listings are
+// included so a saved item never silently disappears; `status` lets the
+// client label them honestly.
+const fetchSavedListingItems = async (userId: string, list: SavedList) => {
+  const rows = (
+    await db.query<{
+      id: string;
+      seller_id: string;
+      title: string;
+      description: string | null;
+      price_gbp: number | string;
+      image_url: string | null;
+      status: string;
+      category: string | null;
+      brand: string | null;
+      size: string | null;
+      condition: string | null;
+      original_price_gbp: number | string | null;
+      created_at: string;
+    }>(
+      `SELECT l.id, l.seller_id, l.title, l.description, l.price_gbp, l.image_url,
+              l.status, l.category, l.brand, l.size, l.condition,
+              l.original_price_gbp, l.created_at
+       FROM user_saved_listings usl
+       JOIN listings l ON l.id = usl.listing_id
+       WHERE usl.user_id = $1 AND usl.list = $2
+       ORDER BY usl.created_at DESC`,
+      [userId, list],
+    )
+  ).rows;
+  const mediaByListing = await loadListingMedia(readDb, rows.map((row) => row.id));
+  return rows.map((row) => ({
+    id: row.id,
+    sellerId: row.seller_id,
+    title: row.title,
+    description: row.description ?? '',
+    priceGbp: Number(row.price_gbp),
+    imageUrl: listingImageUrls(mediaByListing.get(row.id), row.image_url)[0] ?? row.image_url,
+    images: listingImageUrls(mediaByListing.get(row.id), row.image_url),
+    media: mediaByListing.get(row.id) ?? [],
+    status: row.status,
+    category: row.category,
+    brand: row.brand,
+    size: row.size,
+    condition: row.condition,
+    originalPriceGbp: row.original_price_gbp === null ? null : Number(row.original_price_gbp),
+    createdAt: row.created_at,
+  }));
+};
+
+const savedListBodySchema = z.object({
+  listingId: z.string().min(1),
+  action: z.enum(['add', 'remove']),
+});
+
+const registerSavedListRoutes = (path: string, list: SavedList) => {
+  app.get(path, async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.authUser) {
+      reply.code(401);
+      return { ok: false, error: 'Unauthorized' };
+    }
+    const userId = request.authUser.userId;
+    const itemIds = await fetchSavedListingIds(userId, list);
+    return { ok: true, itemIds, items: await fetchSavedListingItems(userId, list) };
+  });
+
+  app.post(path, async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.authUser) {
+      reply.code(401);
+      return { ok: false, error: 'Unauthorized' };
+    }
+    const parsed = savedListBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      reply.code(400);
+      return { ok: false, error: 'listingId and action (add|remove) are required' };
+    }
+    const { listingId, action } = parsed.data;
+    if (action === 'add') {
+      // The FK would surface as 23503 anyway; an explicit check returns the
+      // honest 404 the client maps to "listing unavailable" states.
+      const listing = await db.query<{ id: string }>(
+        `SELECT id FROM listings WHERE id = $1 LIMIT 1`,
+        [listingId],
+      );
+      if ((listing.rowCount ?? 0) === 0) {
+        reply.code(404);
+        return { ok: false, error: 'Listing not found' };
+      }
+      await db.query(
+        `INSERT INTO user_saved_listings (user_id, listing_id, list) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+        [request.authUser.userId, listingId, list],
+      );
+    } else {
+      await db.query(
+        `DELETE FROM user_saved_listings WHERE user_id = $1 AND listing_id = $2 AND list = $3`,
+        [request.authUser.userId, listingId, list],
+      );
+    }
+    return { ok: true, itemIds: await fetchSavedListingIds(request.authUser.userId, list) };
+  });
+};
+
+registerSavedListRoutes('/users/me/wishlist', 'wishlist');
+registerSavedListRoutes('/users/me/saved', 'saved');
 };

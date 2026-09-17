@@ -221,9 +221,11 @@ export function useOrderDetailActions({
             variant: 'primary',
             accessibilityLabel: t('orderDetail.action.leaveReviewA11y') };
         case 'view_review':
+          // The review itself is rendered by WriteReviewScreen's published
+          // state — OrderReceipt shows the order summary, not the review.
           return {
             label: t('orderDetail.action.viewReview'),
-            onPress: () => { haptics.tap(); navigation.navigate('OrderReceipt', { orderId }); },
+            onPress: () => { haptics.tap(); navigation.navigate('WriteReview', { orderId }); },
             variant: 'secondary',
             accessibilityLabel: t('orderDetail.action.viewReviewA11y') };
         case 'confirm_delivery':
@@ -238,7 +240,14 @@ export function useOrderDetailActions({
                 message: t('orderDetail.action.confirmReceiptBody'),
                 confirmLabel: t('orderDetail.action.confirmReceipt'),
                 cancelLabel: t('orderDetail.action.notYet'),
-                onConfirm: handleDeliver,
+                // The sheet stays mounted with busy=true for the mutation's
+                // duration, then dismisses on settle — the toast reports
+                // the outcome either way.
+                onConfirm: () => {
+                  void handleDeliver().finally(() => {
+                    setConfirmSheet((prev) => ({ ...prev, visible: false }));
+                  });
+                },
                 variant: 'default' });
             },
             variant: 'secondary',
@@ -258,7 +267,11 @@ export function useOrderDetailActions({
                   : t('orderDetail.action.cancelOrderBodySeller'),
                 confirmLabel: t('orderDetail.action.cancelOrder'),
                 cancelLabel: t('orderDetail.action.keepOrder'),
-                onConfirm: handleCancel,
+                onConfirm: () => {
+                  void handleCancel().finally(() => {
+                    setConfirmSheet((prev) => ({ ...prev, visible: false }));
+                  });
+                },
                 variant: 'danger' });
             },
             variant: 'destructive',

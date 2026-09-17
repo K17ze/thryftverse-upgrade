@@ -46,6 +46,7 @@ import {
   unitsToOnezeAmount,
   mapEventToPushCategory,
   isCriticalEventType,
+  quietWindowDecision,
   normalizeOnezeCountryTag,
   roundTo,
   toJsonString,
@@ -91,6 +92,12 @@ export async function queueUserNotification(input: {
   imageUrl?: string;
   route?: Record<string, unknown>;
   idempotencyKey?: string;
+  /**
+   * Bypass the per-category enabled toggle — only honored for event types
+   * in the critical set (safety outcomes the reporter is owed, auction
+   * wins). Never bypasses quiet-hours deferral or feed visibility.
+   */
+  forcePush?: boolean;
 }): Promise<string | null> {
   const eventType = input.eventType ?? 'generic';
   const idempotencyKey = input.idempotencyKey ?? null;
@@ -198,9 +205,12 @@ export async function queueUserNotification(input: {
   const pushCategory = mapEventToPushCategory(eventType);
   let shouldPush = false;
   let suppressionReason: string | null = null;
+  const forced = input.forcePush === true && isCriticalEventType(eventType);
   if (!pushCategory) {
     shouldPush = false;
     suppressionReason = 'unmapped_event_type';
+  } else if (forced) {
+    shouldPush = true;
   } else {
     const prefResult = await db.query<{ enabled: boolean }>(
       `SELECT enabled FROM notification_preferences WHERE user_id = $1 AND category = $2 LIMIT 1`,
@@ -214,53 +224,54 @@ export async function queueUserNotification(input: {
     }
   }
 
-  // Server-side quiet hours enforcement.
-  // If the user has quiet hours configured and the current time falls within
-  // the quiet window, suppress non-critical push notifications. Critical
+  // Server-side quiet hours enforcement — timezone-aware deferral.
+  // A notification inside the user's quiet window is not destroyed; the
+  // push job is delayed until the window ends (DND semantics). Critical
   // event types (auction won, safety, resolution) bypass quiet hours.
+  let pushDelayMs = 0;
   if (shouldPush && pushCategory && !isCriticalEventType(eventType)) {
     const qhResult = await db.query<{ quiet_hours: unknown }>(
       `SELECT quiet_hours FROM notification_preferences WHERE user_id = $1 AND category = $2 LIMIT 1`,
       [input.userId, pushCategory]
     );
-    const qhRaw = qhResult.rows[0]?.quiet_hours;
-    if (qhRaw && typeof qhRaw === 'object') {
-      const qh = qhRaw as { enabled?: boolean; startHour?: number; endHour?: number };
-      if (qh.enabled && typeof qh.startHour === 'number' && typeof qh.endHour === 'number') {
-        const nowUtc = new Date();
-        // Use UTC hour as a simple approximation. A full implementation would
-        // store the user's IANA timezone and convert. The quiet_hours JSONB
-        // can include a `timezone` field for future enhancement.
-        const currentHour = nowUtc.getUTCHours();
-        const start = qh.startHour;
-        const end = qh.endHour;
-        // Handle wrap-around (e.g., 22 → 7)
-        const inQuietWindow = start <= end
-          ? (currentHour >= start && currentHour < end)
-          : (currentHour >= start || currentHour < end);
-        if (inQuietWindow) {
-          shouldPush = false;
-          suppressionReason = 'quiet_hours';
-        }
-      }
+    const decision = quietWindowDecision(qhResult.rows[0]?.quiet_hours);
+    if (decision.inWindow) {
+      pushDelayMs = decision.msUntilEnd;
     }
   }
 
   if (shouldPush) {
-    await enqueuePushNotificationJob({
-      eventId: insertedEventId,
-      userId: input.userId,
-      title: input.title,
-      body: input.body,
-      payload: input.payload,
-      eventType,
-      actorUserId: input.actorUserId ?? null,
-      route: input.route ?? null,
-    });
+    await enqueuePushNotificationJob(
+      {
+        eventId: insertedEventId,
+        userId: input.userId,
+        title: input.title,
+        body: input.body,
+        payload: input.payload,
+        eventType,
+        actorUserId: input.actorUserId ?? null,
+        route: input.route ?? null,
+      },
+      pushDelayMs > 0 ? { delayMs: pushDelayMs } : undefined,
+    );
+    if (pushDelayMs > 0) {
+      await db.query(
+        `UPDATE notification_events SET metadata = metadata || $2::jsonb WHERE id = $1`,
+        [insertedEventId, toJsonString({ deferredUntil: new Date(Date.now() + pushDelayMs).toISOString(), deferralReason: 'quiet_hours' })]
+      );
+    }
     recordPushDelivery({
       provider: 'expo',
       status: 'queued',
     });
+  } else if (suppressionReason === 'unmapped_event_type') {
+    // In-app-only event: never pushed, but still a real feed notification.
+    // 'suppressed' would hide it from the feed, filter counts and unread
+    // count — 'in_app_only' keeps it visible (migration 312).
+    await db.query(
+      `UPDATE notification_events SET status = 'in_app_only', suppression_reason = $2 WHERE id = $1`,
+      [insertedEventId, suppressionReason]
+    );
   } else {
     await db.query(
       `UPDATE notification_events SET status = 'suppressed', suppression_reason = $2 WHERE id = $1`,
@@ -269,21 +280,33 @@ export async function queueUserNotification(input: {
     recordPushDelivery({ provider: 'expo', status: 'suppressed' });
   }
 
-  publishRealtimeEvent({
-    topic: `notifications.user:${input.userId}`,
-    type: 'notification.queued',
-    userId: input.userId,
-    payload: {
-      id: insertedEventId,
-      title: input.title,
-      body: input.body,
-      eventType,
-      actorUserId: input.actorUserId ?? null,
-      imageUrl: input.imageUrl ?? null,
-      route: input.route ?? null,
-      ...input.payload,
-    },
-  });
+  // Realtime fan-out mirrors feed visibility: only events the feed can show
+  // publish `notification.queued`. Preference-suppressed events publish
+  // nothing — a banner for a notification that can never appear in the feed
+  // is a ghost the badge and feed can never reconcile.
+  if (shouldPush || suppressionReason === 'unmapped_event_type') {
+    publishRealtimeEvent({
+      topic: `notifications.user:${input.userId}`,
+      type: 'notification.queued',
+      userId: input.userId,
+      payload: {
+        // Emitter payload first so it cannot clobber the canonical fields.
+        ...input.payload,
+        id: insertedEventId,
+        title: input.title,
+        body: input.body,
+        eventType,
+        actorUserId: input.actorUserId ?? null,
+        imageUrl: input.imageUrl ?? null,
+        route: input.route ?? null,
+        // Quiet-hours-deferred events are feed-visible now but must not
+        // banner — the client suppresses the toast and only refreshes.
+        deferredUntil: pushDelayMs > 0
+          ? new Date(Date.now() + pushDelayMs).toISOString()
+          : null,
+      },
+    });
+  }
 
   return insertedEventId;
 }
@@ -1391,6 +1414,7 @@ export async function dispatchOpsAlert(alert: {
           userId,
           title: alert.severity === 'critical' ? 'Critical Ops Alert' : 'Ops Alert',
           body: alert.message,
+          eventType: 'ops_alert',
           payload: {
             event: 'ops_alert',
             code: alert.code,

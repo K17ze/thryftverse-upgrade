@@ -7,6 +7,7 @@ import { Space, Radius, Stroke} from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 export interface CoOwnPositionAction {
   label: string;
@@ -22,7 +23,7 @@ export interface CoOwnPositionActionSheetProps {
   imageUri?: string | null;
   title: string;
   unitsOwned: number;
-  ownershipPct: number;
+  ownershipPct: number | null;
   currentValueLabel: string;
   statusLabel: string;
   actions: CoOwnPositionAction[];
@@ -41,13 +42,20 @@ export function CoOwnPositionActionSheet({
 }: CoOwnPositionActionSheetProps) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
+  const reducedMotion = useReducedMotion();
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={[styles.backdrop, { backgroundColor: colors.overlay }]} onPress={onClose} />
-      <View style={[styles.sheet, { backgroundColor: colors.background, paddingBottom: insets.bottom + Space.md }]}>
+    <Modal visible={visible} transparent animationType={reducedMotion ? 'none' : 'slide'} onRequestClose={onClose}>
+      <Pressable style={[styles.backdrop, { backgroundColor: colors.overlay }]} onPress={onClose} accessible={false} importantForAccessibility="no" />
+      <View accessibilityViewIsModal onAccessibilityEscape={onClose} style={[styles.sheet, { backgroundColor: colors.background, paddingBottom: insets.bottom + Space.md }]}>
         <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
+        <View style={{ alignItems: 'flex-end' }}>
+          <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close position actions"
+            style={({ pressed }) => ({ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.65 : 1 })}>
+            <Ionicons name="close" size={24} color={colors.textPrimary} />
+          </Pressable>
+        </View>
         <View style={styles.header}>
           <View style={styles.identityRow}>
             <View style={[styles.imageWrap, { backgroundColor: colors.surfaceAlt }]}>
@@ -62,7 +70,7 @@ export function CoOwnPositionActionSheet({
             <View style={styles.identity}>
               <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={2}>{title}</Text>
               <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                {unitsOwned} units · {ownershipPct}% ownership · {statusLabel}
+                {unitsOwned} units{ownershipPct != null ? ` · ${ownershipPct}% ownership` : ''} · {statusLabel}
               </Text>
               <Text style={[styles.value, { color: colors.textPrimary }]}>{currentValueLabel}</Text>
             </View>
@@ -74,7 +82,7 @@ export function CoOwnPositionActionSheet({
             {actions.map((action, i) => {
               const isPrimary = action.variant === 'primary';
               const isDanger = action.variant === 'danger';
-              const bgColor = isPrimary ? colors.brand : isDanger ? colors.danger : colors.surfaceAlt;
+              const bgColor = isPrimary ? colors.brand : isDanger ? colors.danger : colors.background;
               const textColor = isPrimary || isDanger ? colors.background : colors.textPrimary;
               const borderColor = isPrimary || isDanger ? bgColor : colors.border;
 
@@ -91,6 +99,7 @@ export function CoOwnPositionActionSheet({
                   ]}
                   accessibilityRole="button"
                   accessibilityLabel={action.label}
+                  accessibilityState={{ disabled: action.disabled ?? false }}
                 >
                   {action.icon ? (
                     <Ionicons name={action.icon} size={18} color={textColor} />
@@ -174,6 +183,7 @@ const styles = StyleSheet.create({
     paddingBottom: Space.sm,
   },
   actionBtn: {
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,

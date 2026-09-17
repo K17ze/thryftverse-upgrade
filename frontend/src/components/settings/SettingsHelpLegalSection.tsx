@@ -3,6 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useAppTranslation } from '../../i18n/useAppTranslation';
+import Constants from 'expo-constants';
 import { SettingsSection } from './SettingsSection';
 import { SettingsRow } from './SettingsRow';
 
@@ -39,7 +40,7 @@ export function SettingsHelpLegalSection({ onOpenExternal }: SettingsHelpLegalSe
       <SettingsRow
         icon="info"
         title={ts('rows.aboutThryftverse')}
-        value="v1.0.0"
+        value={`v${Constants.expoConfig?.version ?? '1.0.0'}`}
         onPress={() => navigation.navigate('About')}
         isLast
       />

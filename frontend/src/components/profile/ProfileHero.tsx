@@ -15,8 +15,6 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Typography, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
-import { AppIcon } from '../common/AppIcon';
-import { IconSize } from '../../theme/iconTokens';
 import { FlagshipProfileMedia } from '../flagship';
 import { isVideoUri } from '../../utils/media';
 import type { PublicProfileStats, PublicProfileViewer, PublicProfileTrader } from '../../services/profileApi';
@@ -41,7 +39,6 @@ interface ProfileHeroProps {
   stats: PublicProfileStats | null;
   activeCount: number;
   soldCount: number;
-  reviewCount: number;
   memberSince?: string;
   /** Seller trust summary from /sellers/:id — provides verified badge, response time, dispatch time. */
   sellerTrust?: SellerTrustSummary | null;
@@ -102,7 +99,7 @@ function BioText({ bio, style, linkStyle, seeMoreStyle }: { bio: string; style: 
  *   cover (edge-to-edge, gradient fades only)
  *   seam row: avatar (left, overlapping cover) + 3 primary stats (right, vertically centred)
  *   identity: full-width, left-aligned — name, @handle, bio, context, website
- *   trust line: 4.9 star · 47 sold · Joined June 2026
+ *   trust line: 47 sold · Replies within 2h · Joined June 2026
  *   actions: flat 11pt radius, restrained
  */
 export function ProfileHero({
@@ -115,7 +112,6 @@ export function ProfileHero({
   stats,
   activeCount,
   soldCount,
-  reviewCount,
   memberSince,
   sellerTrust,
   traderClassification,
@@ -143,26 +139,10 @@ export function ProfileHero({
   const initials = getInitials(targetProfile?.displayName || displayUsername || 'Thryft');
   const followerCount = stats?.followerCount ?? 0;
   const followingCount = stats?.followingCount ?? 0;
-  const ratingValue = stats?.ratingAverage;
-  const hasRating = ratingValue !== null && ratingValue !== undefined && reviewCount > 0;
   // Verification tier — only from seller trust (authoritative backend source).
   // Email verification is never used as a proxy for seller/identity verification.
   const verificationTier: VerificationTier | null =
     sellerTrust?.verificationTier ?? (sellerTrust?.verified === true ? 'seller' : null);
-
-  // Trust line: "4.9 · 47 sold · Joined June 2026 · Replies within 2h"
-  const trustParts: string[] = [];
-  if (hasRating && ratingValue !== null && ratingValue !== undefined) {
-    trustParts.push(`${ratingValue.toFixed(1)}`);
-  }
-  if (soldCount > 0) trustParts.push(`${soldCount} sold`);
-  if (memberSince) trustParts.push(`Joined ${memberSince}`);
-  if (sellerTrust?.responseTimeLabel) trustParts.push(`Replies ${sellerTrust.responseTimeLabel}`);
-  // DSA Article 30 trader classification — factual, not decorative.
-  if (traderClassification) {
-    trustParts.push(traderClassification.classification === 'trader' ? 'Business' : 'Private');
-  }
-  const trustLine = trustParts.join(' · ');
 
   return (
     <View>
@@ -284,46 +264,29 @@ export function ProfileHero({
             <BioText bio={targetProfile.bio} style={styles.bio} linkStyle={styles.bioLink} seeMoreStyle={styles.bioSeeMore} />
           ) : null}
 
-          {/* Seller trust header — rating row + joined caption on separate lines.
-              The rating is part of the identity block, not a lonely chip: star +
-              score + review count give the 5.0 context. Joined date is a less
-              prominent caption below, not equal weight to the rating. */}
-          {trustLine ? (
+          {/* Seller trust header — marketplace meta row (sold, response time)
+              + joined caption on a separate, less prominent line. Ratings live
+              in the Reviews tab, not beside the bio. */}
+          {soldCount > 0 || memberSince || sellerTrust?.responseTimeLabel ? (
             <View style={styles.trustBlock}>
-              {/* Rating row — star + score + review count (or "No reviews yet").
-                  Secondary trust signals (sold, response time) stay on this row
-                  separated by dots; they are marketplace proof, not identity. */}
-              <View style={styles.trustRatingRow}>
-                {hasRating ? (
-                  <Pressable
-                    onPress={() => onTabSelect('Reviews')}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Rating ${ratingValue!.toFixed(1)} out of 5, ${reviewCount} reviews. View reviews.`}
-                    style={({ pressed }) => [styles.trustRatingWrap, pressed && { opacity: 0.6 }]}
-                  >
-                    <AppIcon name="star" focused size={IconSize.sm} color="ratingStar" opticalCenter accessible={false} />
-                    <Text style={styles.trustRatingValue}>{ratingValue!.toFixed(1)}</Text>
-                    <Text style={styles.trustReviewCount}>({reviewCount} {reviewCount === 1 ? 'review' : 'reviews'})</Text>
-                  </Pressable>
-                ) : (
-                  <Text style={styles.trustNoReviews}>No reviews yet</Text>
-                )}
-                {soldCount > 0 ? <Text style={styles.trustDot}> · </Text> : null}
-                {soldCount > 0 ? (
-                  <Pressable
-                    onPress={() => { onTabSelect('Listings'); onShopSegmentSelect('sold'); }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${soldCount} sold — view sold items`}
-                    style={({ pressed }) => pressed && { opacity: 0.6 }}
-                  >
-                    <Text style={styles.trustLink}>{soldCount} sold</Text>
-                  </Pressable>
-                ) : null}
-                {sellerTrust?.responseTimeLabel ? <Text style={styles.trustDot}> · </Text> : null}
-                {sellerTrust?.responseTimeLabel ? (
-                  <Text style={styles.trustResponse}>Replies {sellerTrust.responseTimeLabel}</Text>
-                ) : null}
-              </View>
+              {soldCount > 0 || sellerTrust?.responseTimeLabel ? (
+                <View style={styles.trustMetaRow}>
+                  {soldCount > 0 ? (
+                    <Pressable
+                      onPress={() => { onTabSelect('Listings'); onShopSegmentSelect('sold'); }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${soldCount} sold — view sold items`}
+                      style={({ pressed }) => pressed && { opacity: 0.6 }}
+                    >
+                      <Text style={styles.trustLink}>{soldCount} sold</Text>
+                    </Pressable>
+                  ) : null}
+                  {soldCount > 0 && sellerTrust?.responseTimeLabel ? <Text style={styles.trustDot}> · </Text> : null}
+                  {sellerTrust?.responseTimeLabel ? (
+                    <Text style={styles.trustResponse}>Replies {sellerTrust.responseTimeLabel}</Text>
+                  ) : null}
+                </View>
+              ) : null}
               {/* Joined — less prominent caption on its own line, no dot separator */}
               {memberSince ? <Text style={styles.trustJoined}>Joined {memberSince}</Text> : null}
             </View>
@@ -347,8 +310,8 @@ export function ProfileHero({
           ) : null}
 
           {/* Trust line is the sole trust surface above the tab rail.
-              Rating, sold count, and join date are shown here.
-              Detailed metrics live in the Reviews tab. */}
+              Sold count and join date are shown here.
+              Ratings and detailed metrics live in the Reviews tab. */}
         </View>
 
         {/* Actions — flat 11pt radius, restrained, content-first */}
@@ -575,31 +538,14 @@ function createStyles(colors: ThemeColors) {
     color: colors.textSecondary,
     textDecorationLine: 'underline' },
 
-  // Seller trust header — rating row + joined caption on separate lines
+  // Seller trust header — marketplace meta row + joined caption on separate lines
   trustBlock: {
     paddingVertical: 2,
     marginBottom: Space.xs },
-  trustRatingRow: {
+  trustMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap' },
-  trustRatingWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3 },
-  trustRatingValue: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
-    color: colors.textPrimary,
-    letterSpacing: -0.1 },
-  trustReviewCount: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textMuted },
-  trustNoReviews: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textMuted },
   trustLink: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,

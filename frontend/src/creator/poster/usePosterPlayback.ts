@@ -16,8 +16,6 @@
  *     timeline (clips + overlays + total duration).
  *   - `playbackState` — the UI-facing snapshot (isPlaying, currentTimeMs,
  *     totalDurationMs, playbackRate) derived from clock subscriptions.
- *   - `visibleOverlayIds` — the set of overlay layer ids visible at the
- *     current playhead (for timeline overlay track highlighting).
  *   - `applyTimelineToPlayer` — the per-tick source-time mapping adapter
  *     (Wave 7 video preview adapter). Maps absolute timeline time →
  *     source-media time (trim + speed aware, with forward-only fallback
@@ -36,11 +34,10 @@ import type { RefObject } from 'react';
 
 import type { VideoPlayer } from 'expo-video';
 
-import type { CreatorDocument } from '../composition';
+import type { CreatorDocument } from '../core/projectStore/composition';
 import {
   PlaybackClock,
   projectTimeline,
-  findVisibleOverlays,
   findActiveClip,
   computeSourceTime,
 } from '../core/playback';
@@ -63,6 +60,13 @@ export interface UsePosterPlaybackInput {
   activePageIndex: number;
   /** Haptic engine (for transport control feedback). */
   haptic: Haptic;
+  /**
+   * Persist the playhead position (ms) into document metadata without a
+   * history entry — reopening a draft restores the scrub position
+   * (CapCut/Edits grammar). Called on pause, seek, and unmount only —
+   * never per playback frame.
+   */
+  onPlayheadChange?: (ms: number) => void;
 }
 
 export interface UsePosterPlaybackResult {
@@ -84,8 +88,6 @@ export interface UsePosterPlaybackResult {
   handlePlayPause: () => void;
   /** Seeks to an absolute timeline position (ms). */
   handleSeek: (ms: number) => void;
-  /** Set of overlay layer ids visible at the current playhead. */
-  visibleOverlayIds: Set<string>;
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────
@@ -94,6 +96,7 @@ export function usePosterPlayback({
   document,
   videoPlayerRef,
   haptic,
+  onPlayheadChange,
 }: UsePosterPlaybackInput): UsePosterPlaybackResult {
   // ── Playback clock — the single source of truth for timeline time ──
   // Per AGENTS.md §11 and the Zero-Gap audit, one playback clock drives:
@@ -109,9 +112,61 @@ export function usePosterPlayback({
   const projectedTimeline = useMemo(() => projectTimeline(document), [document]);
 
   // Set the clock's total duration whenever the projected timeline changes.
+  // On first projection, restore the persisted playhead (draft reopening
+  // resumes where editing left off — CapCut/Edits grammar). Clamped to
+  // the timeline so a draft edited shorter elsewhere never seeks past end.
+  // Document identity guard — if the composition is swapped mid-session
+  // (setDocument / crash recovery / draft retry), the restored-playhead
+  // flag must reset so the new document's own saved position is restored,
+  // and the previous document's position is never written into it.
+  const activeDocIdRef = useRef(document.id);
+  const restoredPlayheadRef = useRef(false);
   useEffect(() => {
+    if (activeDocIdRef.current !== document.id) {
+      activeDocIdRef.current = document.id;
+      restoredPlayheadRef.current = false;
+    }
     playbackClock.setTotalDurationMs(projectedTimeline.totalDurationMs);
-  }, [projectedTimeline.totalDurationMs, playbackClock]);
+    if (!restoredPlayheadRef.current && projectedTimeline.totalDurationMs > 0) {
+      restoredPlayheadRef.current = true;
+      const saved = document.metadata.playheadMs;
+      if (saved != null && saved > 0) {
+        playbackClock.seek(Math.min(saved, projectedTimeline.totalDurationMs));
+      }
+    }
+  }, [projectedTimeline.totalDurationMs, playbackClock, document.id, document.metadata.playheadMs]);
+
+  // Persist the playhead on pause/seek — never per playback frame (the
+  // write marks the draft dirty; per-frame writes would churn autosave).
+  // Scrubbing emits a burst of seek events while paused, so the write is
+  // throttled to ~2/s; the unmount flush below captures the final value.
+  // Writes are skipped when the position is already what metadata holds —
+  // otherwise the restore seek would immediately write the same value back
+  // and mark a freshly opened draft dirty.
+  const onPlayheadChangeRef = useRef(onPlayheadChange);
+  onPlayheadChangeRef.current = onPlayheadChange;
+  const savedPlayheadRef = useRef(document.metadata.playheadMs);
+  savedPlayheadRef.current = document.metadata.playheadMs;
+  const lastWrittenMsRef = useRef<number | null>(null);
+  const lastPlayheadWriteRef = useRef(0);
+  useEffect(() => {
+    const unsubscribe = playbackClock.subscribe((state) => {
+      if (state.isPlaying) return;
+      const rounded = Math.round(state.currentTimeMs);
+      if (rounded === savedPlayheadRef.current || rounded === lastWrittenMsRef.current) return;
+      const now = Date.now();
+      if (now - lastPlayheadWriteRef.current < 500) return;
+      lastPlayheadWriteRef.current = now;
+      lastWrittenMsRef.current = rounded;
+      onPlayheadChangeRef.current?.(rounded);
+    });
+    return unsubscribe;
+  }, [playbackClock]);
+  useEffect(() => () => {
+    const rounded = Math.round(playbackClock.currentTimeMs);
+    if (rounded === savedPlayheadRef.current || rounded === lastWrittenMsRef.current) return;
+    onPlayheadChangeRef.current?.(rounded);
+  }, [playbackClock]);
 
   // Subscribe to clock updates to drive UI state (playhead position, play/pause).
   // The clock emits on every frame during playback (RAF/interval) and on every
@@ -128,16 +183,6 @@ export function usePosterPlayback({
     });
     return unsubscribe;
   }, [playbackClock]);
-
-  // Determine which overlays are visible at the current playback position.
-  // The CreatorCanvas also handles temporal visibility internally via the
-  // currentTimeMs prop (checking layer.timeRange), but this computed set
-  // is available for timeline overlay track highlighting and future
-  // features that need to know which overlays are active.
-  const visibleOverlayIds = useMemo(
-    () => new Set(findVisibleOverlays(projectedTimeline, playbackState.currentTimeMs).map((o) => o.layerId)),
-    [projectedTimeline, playbackState.currentTimeMs],
-  );
 
   // ── Per-tick video source-time mapping ──────────────────────────────
   // The PlaybackClock advances timeline time on every tick but only calls
@@ -220,7 +265,7 @@ export function usePosterPlayback({
         // Player may be released or not yet ready — ignore.
       }
     },
-    [projectedTimeline],
+    [projectedTimeline, videoPlayerRef],
   );
 
   // Register a video adapter so the clock can control video playback.
@@ -271,7 +316,7 @@ export function usePosterPlayback({
     return () => {
       playbackClock.unregisterVideoAdapter();
     };
-  }, [playbackClock, projectedTimeline, applyTimelineToPlayer]);
+  }, [playbackClock, projectedTimeline, applyTimelineToPlayer, videoPlayerRef]);
 
   // Per-tick subscriber: drive the native player to the mapped source
   // time on every clock state change. The clock emits on every frame
@@ -289,7 +334,7 @@ export function usePosterPlayback({
       applyTimelineToPlayer(state.currentTimeMs, state.isPlaying, state.playbackRate);
     });
     return unsubscribe;
-  }, [playbackClock, applyTimelineToPlayer]);
+  }, [playbackClock, applyTimelineToPlayer, videoPlayerRef]);
 
   // Dispose the clock on unmount to stop any running RAF/interval loops.
   useEffect(() => {
@@ -326,6 +371,5 @@ export function usePosterPlayback({
     setClockRate,
     handlePlayPause,
     handleSeek,
-    visibleOverlayIds,
   };
 }

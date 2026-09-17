@@ -111,7 +111,7 @@ export function AuctionDetailSellerSection({
                   label: sellerFollowMutation.isPending ? 'Following…' : (sellerTrustData?.isFollowing ? 'Following' : 'Follow'),
                   onPress: () => {
                     if (!requireAuth('follow_seller')) return;
-                    sellerFollowMutation.mutate(undefined, {
+                    sellerFollowMutation.mutate(!(sellerTrustData?.isFollowing ?? false), {
                       onSuccess: (data) => {
                         show(data.isFollowing ? 'Followed seller' : 'Unfollowed seller', 'success');
                       },

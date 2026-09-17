@@ -91,6 +91,7 @@ export function GestureBadge({
       style={[styles.anchor, containerStyle]}
       pointerEvents="none"
       accessibilityLabel={badgeText ? `Transform ${badgeText}` : undefined}
+      accessibilityHint="Shows the current gesture feedback"
       accessibilityRole="text"
       accessibilityLiveRegion="polite"
     >

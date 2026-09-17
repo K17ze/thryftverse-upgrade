@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Text, StyleSheet } from 'react-native';
+import { Text, StyleSheet, AccessibilityActionEvent, AccessibilityActionInfo } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
@@ -28,6 +28,10 @@ export interface FinancialNotificationRowProps {
   aggregatedCount?: number;
   inAttentionSection?: boolean;
   onPress: () => void;
+  actionLabel?: string;
+  onActionPress?: () => void;
+  accessibilityActions?: AccessibilityActionInfo[];
+  onAccessibilityAction?: (event: AccessibilityActionEvent) => void;
 }
 
 interface FinancialVisual {
@@ -54,7 +58,11 @@ export function FinancialNotificationRow({
   time,
   aggregatedCount,
   inAttentionSection = false,
-  onPress }: FinancialNotificationRowProps) {
+  onPress,
+  actionLabel,
+  onActionPress,
+  accessibilityActions,
+  onAccessibilityAction }: FinancialNotificationRowProps) {
   const { colors } = useAppTheme();
   const { currencySymbol } = useFormattedPrice();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -90,6 +98,10 @@ export function FinancialNotificationRow({
       aggregatedCount={aggregatedCount}
       inAttentionSection={inAttentionSection}
       onPress={onPress}
+      actionLabel={actionLabel}
+      onActionPress={onActionPress}
+      accessibilityActions={accessibilityActions}
+      onAccessibilityAction={onAccessibilityAction}
       leading={leading}
       accessibilityLabel={accessibilityLabel}
     >

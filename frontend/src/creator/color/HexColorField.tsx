@@ -16,7 +16,6 @@ import {
   TextInput,
   View,
   Text,
-  TextStyle,
   ViewStyle } from 'react-native';
 import { Space, Radius, Typography, Stroke } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';

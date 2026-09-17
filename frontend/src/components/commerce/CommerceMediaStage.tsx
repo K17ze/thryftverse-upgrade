@@ -35,16 +35,10 @@ import { ImageEmptyGraphic } from '../ImageEmptyGraphic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Motion } from '../../theme/motionTokens';
 import type { ProductMediaItem } from '../../platform/product/productDetailViewModel';
+import { clamp, rubberBand as applyRubberBand } from '../../utils/posterPhysics';
 
 const MAX_ZOOM = 4;
 const MIN_ZOOM = 1;
-
-const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
-const applyRubberBand = (v: number, min: number, max: number, friction = 0.24) => {
-  if (v < min) return min + (v - min) * friction;
-  if (v > max) return max + (v - max) * friction;
-  return v;
-};
 
 const createSubComponentStyles = (colors: ThemeColors) => StyleSheet.create({
   page: {

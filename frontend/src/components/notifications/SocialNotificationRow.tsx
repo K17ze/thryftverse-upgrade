@@ -1,8 +1,9 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, AccessibilityActionEvent, AccessibilityActionInfo } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { CachedImage } from '../CachedImage';
+import { AnimatedPressable } from '../AnimatedPressable';
 import {
   NotificationRowBase,
   NotificationThumbnail } from './NotificationRowBase';
@@ -28,6 +29,10 @@ export interface SocialNotificationRowProps {
   inAttentionSection?: boolean;
   onPress: () => void;
   onActorPress?: () => void;
+  actionLabel?: string;
+  onActionPress?: () => void;
+  accessibilityActions?: AccessibilityActionInfo[];
+  onAccessibilityAction?: (event: AccessibilityActionEvent) => void;
 }
 
 export function SocialNotificationRow({
@@ -37,7 +42,11 @@ export function SocialNotificationRow({
   aggregatedActors,
   inAttentionSection = false,
   onPress,
-  onActorPress }: SocialNotificationRowProps) {
+  onActorPress,
+  actionLabel,
+  onActionPress,
+  accessibilityActions,
+  onAccessibilityAction }: SocialNotificationRowProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -51,27 +60,40 @@ export function SocialNotificationRow({
     ? `${aggregatedActors?.[0] ?? actor?.displayName ?? 'Someone'} and ${aggregatedCount - 1} other${aggregatedCount - 1 === 1 ? '' : 's'}`
     : actor?.displayName ?? 'Someone';
 
-  const verb = useMemo(() => deriveSocialVerb(event), [event]);
-  const objectNoun = objectLabel ?? 'your item';
-  const description = `${actorName} ${verb} ${objectNoun}`;
+  const description = useMemo(
+    () => describeSocialEvent(event, actorName, objectLabel),
+    [event, actorName, objectLabel]
+  );
 
   const accessibilityLabel = `${isUnread ? 'Unread. ' : ''}${description}, ${time}${onActorPress ? '. Tap to open' : ''}`;
 
-  // Leading: actor avatar (unread state shown via dot in the base)
-  const leading = (
-    <View style={styles.avatarWrap}>
-      {actor?.avatarUrl ? (
-        <CachedImage
-          uri={actor.avatarUrl}
-          style={styles.avatar}
-          contentFit="cover"
-        />
-      ) : (
-        <View style={[styles.avatar, styles.avatarFallback]}>
-          <Ionicons name="person" size={18} color={colors.textSecondary} />
-        </View>
-      )}
+  // Leading: actor avatar (unread state shown via dot in the base).
+  // The avatar is its own press target — tapping it opens the actor's
+  // profile rather than following the notification's object route.
+  const avatar = actor?.avatarUrl ? (
+    <CachedImage
+      uri={actor.avatarUrl}
+      style={styles.avatar}
+      contentFit="cover"
+    />
+  ) : (
+    <View style={[styles.avatar, styles.avatarFallback]}>
+      <Ionicons name="person" size={18} color={colors.textSecondary} />
     </View>
+  );
+  const leading = onActorPress ? (
+    <AnimatedPressable
+      onPress={onActorPress}
+      style={styles.avatarWrap}
+      accessibilityRole="button"
+      accessibilityLabel={`View ${actorName}'s profile`}
+      hitSlop={8}
+      hapticFeedback="light"
+    >
+      {avatar}
+    </AnimatedPressable>
+  ) : (
+    <View style={styles.avatarWrap}>{avatar}</View>
   );
 
   // Trailing: object thumbnail (smaller, secondary)
@@ -91,6 +113,10 @@ export function SocialNotificationRow({
       aggregatedCount={aggregatedCount}
       inAttentionSection={inAttentionSection}
       onPress={onPress}
+      actionLabel={actionLabel}
+      onActionPress={onActionPress}
+      accessibilityActions={accessibilityActions}
+      onAccessibilityAction={onAccessibilityAction}
       leading={leading}
       trailing={trailing}
       accessibilityLabel={accessibilityLabel}
@@ -105,15 +131,39 @@ export function SocialNotificationRow({
   );
 }
 
-/** Derive the social verb from the event type — never from body text. */
-function deriveSocialVerb(event: NotificationEventV2): string {
+/**
+ * Build the social sentence from the event type — never from body text.
+ * Each event type owns its sentence shape so actor-less events (follows)
+ * never fabricate an object, and object-less events (chat, live) never
+ * fabricate an "about your item" clause.
+ */
+function describeSocialEvent(
+  event: NotificationEventV2,
+  actorName: string,
+  objectLabel: string | undefined
+): string {
   switch (event.eventType) {
     case 'review_received':
-      return 'reviewed';
+      return `${actorName} reviewed ${objectLabel ?? 'your item'}`;
+    case 'review_response_received':
+      return `${actorName} responded to your review`;
     case 'chat_message':
-      return 'messaged you about';
+      return objectLabel
+        ? `${actorName} messaged you about ${objectLabel}`
+        : `${actorName} sent you a message`;
+    case 'new_follower':
+    case 'follow_received':
+      return `${actorName} started following you`;
+    case 'new_listing_from_followed_seller':
+      return `${actorName} listed ${objectLabel ?? 'a new item'}`;
+    case 'live_started':
+      return objectLabel
+        ? `${actorName} is live — ${objectLabel}`
+        : `${actorName} is live`;
     default:
-      return 'interacted with';
+      return objectLabel
+        ? `${actorName} interacted with ${objectLabel}`
+        : `${actorName} interacted with you`;
   }
 }
 

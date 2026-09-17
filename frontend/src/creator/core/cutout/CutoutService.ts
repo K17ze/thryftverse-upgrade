@@ -30,7 +30,7 @@
  *
  * No new native dependencies are added.
  */
-import type { MaskRef } from '../../composition';
+import type { MaskRef } from '../projectStore/composition';
 import {
   createMaskSurface,
   rasterizeStroke,

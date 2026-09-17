@@ -48,6 +48,9 @@ export interface BackendListingRow {
   condition?: string | null;
   originalPriceGbp?: number | string | null;
   createdAt?: string | null;
+  /** Live-auction end timestamp served by /listings — present only when the
+   *  listing has a live auction. */
+  auctionEndsAt?: string | null;
   shippingMethod?: string | null;
   shippingPayer?: string | null;
   seller?: ListingSeller | null;
@@ -56,6 +59,13 @@ export interface BackendListingRow {
   engagement?: ListingEngagementSummaryApi | null;
   /** Pinned/featured listing — shown first in the Shop grid when true. */
   featured?: boolean | null;
+  /** Server-stamped paid-placement flag on promoted feed units. */
+  promoted?: boolean | null;
+  /** Server-generated disclosure label ("Sponsored") — verbatim only. */
+  disclosure?: string | null;
+  /** Promotion id on promoted units — posted to /promotions/:id/click on
+   *  tap-through so seller stats count real taps. Never present organically. */
+  promotionId?: string | null;
   sustainabilityGrade?: 'A' | 'B' | 'C' | 'D' | null;
   materialComposition?: string | null;
   weightKg?: number | null;
@@ -237,11 +247,17 @@ export function mapBackendListingToListing(row: BackendListingRow): Listing {
     subcategory: nonBlank(row.subcategory),
     description: nonBlank(row.description),
     createdAt: nonBlank(row.createdAt),
+    auctionEndsAt: nonBlank(row.auctionEndsAt),
     status,
     shippingMethod: row.shippingMethod ?? null,
     shippingPayer: row.shippingPayer ?? null,
     engagement: row.engagement ?? null,
     featured: row.featured === true ? true : null,
+    promoted: row.promoted === true ? true : undefined,
+    disclosure: row.promoted === true ? nonBlank(row.disclosure) : undefined,
+    // Fail-closed: the promotion id is only carried on units the server
+    // stamped as promoted — an organic row can never leak a tracking id.
+    promotionId: row.promoted === true ? nonBlank(row.promotionId) : undefined,
     sustainabilityGrade: row.sustainabilityGrade ?? null,
     materialComposition: row.materialComposition ?? null,
     weightKg: row.weightKg ?? null,

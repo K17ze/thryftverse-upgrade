@@ -231,7 +231,6 @@ export function DiscoveryFeedView({
       hasMore={false}
       scrollRef={scrollRef}
       listHeaderComponent={listHeader}
-      showSaveButton
       onItemSaveToggle={onItemSaveToggle}
       onItemSaveLongPress={onItemSaveLongPress}
       isItemSaved={isItemSaved}

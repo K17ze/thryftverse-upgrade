@@ -16,12 +16,16 @@ import {
   buildDirectViewModel,
   isDirectViewModel,
   isRecommendationLook,
+  mediaFromRecords,
+  mediaFromUris,
   type SellerTrustSummary,
   type ListingCapabilities,
   type ListingCommerceContext,
+  type ProductMediaItem,
   type RecommendationSection,
   type RecommendationLook,
 } from '../../platform/product';
+import { getCategoryFocalPoint } from '../../utils/media';
 
 type FormatFromFiat = ReturnType<typeof useFormattedPrice>['formatFromFiat'];
 type FxRates = ReturnType<typeof useFormattedPrice>['fxRates'];
@@ -87,7 +91,14 @@ export interface ItemDetailDerived {
   attributeLine: string;
   conditionMeta: ItemDetailConditionMeta | null;
   secondaryLine: string | undefined;
-  familyStateAccent: null;
+  /**
+   * Canonical PDP media — the single ProductMediaItem mapping shared by
+   * the hero stage and the fullscreen viewer. Prefers typed
+   * `listing.media` records (kind, focal point, blurhash/LQIP, poster,
+   * derivatives) and falls back to the flat `images` array with the
+   * same category focal-point default the stage applied internally.
+   */
+  mediaItems: ProductMediaItem[];
   isDualActionDock: boolean;
   dockHeight: number;
   scrollBottomPadding: number;
@@ -236,10 +247,28 @@ export function buildItemDetailDerived(
     formattedProtectionTotal ? `${formattedProtectionTotal} with Buyer Protection` : null,
   ].filter(Boolean).join(' · ') || undefined;
 
-  // The sold state is already shown via the media overlay "SOLD" badge
-  // and the dock "Sold" badge — don't repeat it on the ProductFamilyBadge.
-  // The family badge should communicate provenance, not transaction state.
-  const familyStateAccent = null;
+  // ── Canonical PDP media ──
+  // One ProductMediaItem mapping for both the hero stage and the
+  // fullscreen viewer. Canonical `listing.media` records carry kind,
+  // focal point, blurhash/LQIP, poster and derivatives verbatim — no
+  // URL sniffing. When only flat `images` exist, apply the same
+  // category focal-point default CommerceMediaStage applied internally
+  // so art-directed crops are preserved.
+  const mediaItems: ProductMediaItem[] = (() => {
+    const categoryFocalPoint = getCategoryFocalPoint(item.category);
+    if (item.media?.length) {
+      return mediaFromRecords(item.media).map((mediaItem): ProductMediaItem =>
+        mediaItem.kind === 'image' && !mediaItem.focalPoint
+          ? { ...mediaItem, fit: 'cover', focalPoint: categoryFocalPoint }
+          : mediaItem
+      );
+    }
+    return mediaFromUris(item.images ?? []).map((mediaItem): ProductMediaItem =>
+      mediaItem.kind === 'video'
+        ? { ...mediaItem, fit: 'contain' }
+        : { ...mediaItem, fit: 'cover', focalPoint: categoryFocalPoint }
+    );
+  })();
 
   // ── Dock geometry ──
   const isDualActionDock = !capabilities.isOwner && !capabilities.isSold && capabilities.canBuy && capabilities.canOffer;
@@ -307,14 +336,24 @@ export function buildItemDetailDerived(
     commerce.shippingMethod,
     commerce.protectionPolicy?.available ? commerce.protectionPolicy.label : null,
     commerce.returnPolicy
-      ? commerce.returnPolicy.accepted
+      ? commerce.returnPolicy.accepted === true
         ? commerce.returnPolicy.windowDays
           ? `Returns within ${commerce.returnPolicy.windowDays} days`
           : 'Returns accepted'
-        : 'No returns'
+        : commerce.returnPolicy.accepted === false
+          ? 'No returns'
+          // accepted === null — undetermined; the server emits a
+          // human-readable summary ("Return policy confirmed at
+          // checkout…"). Null is not "no returns".
+          : commerce.returnPolicy.summary ?? null
       : null,
     commerce.authenticity && commerce.authenticity.status !== 'not_offered'
-      ? commerce.authenticity.label ?? (commerce.authenticity.status === 'verified' ? 'Verified' : 'Eligible')
+      ? commerce.authenticity.label
+        ?? (commerce.authenticity.status === 'verified'
+          ? 'Verified'
+          : commerce.authenticity.status === 'in_progress'
+            ? 'Verification in progress'
+            : 'Eligible')
       : null,
   ].filter(Boolean).join(' · ');
 
@@ -359,7 +398,7 @@ export function buildItemDetailDerived(
     attributeLine,
     conditionMeta,
     secondaryLine,
-    familyStateAccent,
+    mediaItems,
     isDualActionDock,
     dockHeight,
     scrollBottomPadding,

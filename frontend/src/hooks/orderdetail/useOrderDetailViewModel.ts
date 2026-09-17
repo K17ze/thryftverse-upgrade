@@ -15,6 +15,7 @@ import { getListingCoverUri } from '../../utils/media';
 import { buildTrackingUrl } from '../../services/shippingProviderRegistry';
 import { t } from '../../i18n';
 import type { CommerceOrder, OrderParcelEvent } from '../../services/commerceApi';
+import type { OrderReview } from '../../services/reviewApi';
 import type { OrderMutation } from '../useOrderDetail';
 import {
   resolveCapabilities,
@@ -28,6 +29,9 @@ export interface UseOrderDetailViewModelParams {
   backendOrder: CommerceOrder | null;
   parcelEvents: OrderParcelEvent[];
   hasReview: boolean;
+  /** The order's review row when one exists — supplies provenance
+   *  (`isAuto`) so capability hints label auto feedback truthfully. */
+  orderReview?: OrderReview | null;
   orderMutation: OrderMutation;
 }
 
@@ -78,6 +82,7 @@ export function useOrderDetailViewModel({
   backendOrder,
   parcelEvents,
   hasReview,
+  orderReview,
   orderMutation }: UseOrderDetailViewModelParams): UseOrderDetailViewModelResult {
   const { colors } = useAppTheme();
   const { listings } = useBackendData();
@@ -186,14 +191,17 @@ export function useOrderDetailViewModel({
     return resolveCapabilities({
       status: backendOrder.status,
       role: isBuyer ? 'buyer' : 'seller',
-      hasOpenResolution: Boolean(openTicket),
+      // Server flag is authoritative; the local ticket store is OR'd in so a
+      // just-filed ticket suppresses report_issue before the refetch lands.
+      hasOpenResolution: backendOrder.hasOpenResolution === true || Boolean(openTicket),
       hasReview,
+      reviewIsAuto: orderReview?.isAuto === true,
       hasTracking: Boolean(backendOrder.trackingNumber || parcelEvents.length > 0),
       fulfilmentSnapshot: backendOrder.fulfilmentSnapshot ?? null,
       shipByDate: backendOrder.shipByDate ?? null,
       dispatchExtension: backendOrder.dispatchExtension ?? null,
       isSubmitting: orderMutation !== null });
-  }, [backendOrder, isKnown, isBuyer, openTicket, parcelEvents.length, orderMutation, hasReview]);
+  }, [backendOrder, isKnown, isBuyer, openTicket, parcelEvents.length, orderMutation, hasReview, orderReview]);
 
   const mutationLocked = orderMutation !== null;
 

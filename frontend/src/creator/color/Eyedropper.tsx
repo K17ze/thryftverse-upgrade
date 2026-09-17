@@ -74,7 +74,7 @@ import { TypographyV2 } from '../../theme/typography.v2';
 import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
-import { PressScale } from '../CreatorAnimations';
+import { PressScale } from '../shared/CreatorAnimations';
 import { extractMediaPalette, fallbackPalette } from './MediaPalette';
 import { toHexString } from './ColorMath';
 import type { CreatorColor, MediaPaletteEntry } from './ColorTypes';
@@ -157,6 +157,7 @@ export function Eyedropper({
           onPress={handleCancel}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityLabel="Close eyedropper"
+          accessibilityHint="Closes without picking a color"
           accessibilityRole="button"
         >
           <Ionicons name="close" size={IconGrammar.metadata} color={colors.textSecondary} />
@@ -183,6 +184,7 @@ export function Eyedropper({
                 { backgroundColor: toHexString(entry.color) },
               ]}
               accessibilityLabel={`Pick color ${toHexString(entry.color).toUpperCase()}`}
+              accessibilityHint="Picks this color"
               accessibilityRole="button"
               hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }}
             />

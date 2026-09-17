@@ -14,7 +14,6 @@
 // (AGENTS.md §6.3 — Renderer(scene, renderProfile) → edit / preview / viewer
 // / thumbnail / export)
 
-import { Platform } from 'react-native';
 import {
   CAPABILITY_REGISTRY,
   getCapability,

@@ -22,7 +22,7 @@ import Reanimated, {
   withTiming,
   runOnJS,
 } from 'react-native-reanimated';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
+
 import { Radius, Stroke } from '../../theme/designTokens';
 import { Motion } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -109,12 +109,14 @@ export function AlphaSlider({
   accessibilityLabel = 'Alpha opacity slider',
 }: AlphaSliderProps) {
   const { colors } = useAppTheme();
-  const reduceMotion = useReducedMotion();
   // Shared value (not useRef) so the worklet can read the measured width
   // without triggering Reanimated's "Tried to modify key `current`" freeze
   // warning, which logs synchronously on the Android UI thread and causes
   // ANRs (input dispatch timeout).
   const layoutWidth = useSharedValue(width);
+  // Tracks an in-flight drag so the external-sync effect can't fight the
+  // finger (same guard CreatorSlider uses).
+  const isDraggingSV = useSharedValue(false);
 
   const SLIDER_HEIGHT = 28;
   const THUMB_SIZE = 24;
@@ -122,24 +124,38 @@ export function AlphaSlider({
   // Animated thumb position
   const thumbX = useSharedValue(alpha * width);
 
-  // Update thumb when alpha changes externally
+  // Update thumb when alpha changes externally — skipped while the finger
+  // owns the thumb, otherwise the echoed onChange prop write re-arms a
+  // competing animation mid-drag.
   React.useEffect(() => {
-    thumbX.value = withTiming(alpha * width, SNAP_TIMING);
-  }, [alpha, width, thumbX]);
+    if (!isDraggingSV.value) {
+      thumbX.value = withTiming(alpha * width, SNAP_TIMING);
+    }
+  }, [alpha, width, thumbX, isDraggingSV]);
 
   const handleLayout = useCallback((e: LayoutChangeEvent) => {
     layoutWidth.value = e.nativeEvent.layout.width;
   }, [layoutWidth]);
 
-  // Pan gesture
+  const commitPosition = useCallback(() => {
+    'worklet';
+    const w = layoutWidth.value;
+    const a = Math.max(0, Math.min(1, thumbX.value / w));
+    runOnJS(onCommit)(a);
+  }, [layoutWidth, thumbX, onCommit]);
+
+  // Pan gesture — onChange emits at most once per 0.5% alpha bucket.
+  const lastAlphaBucketSV = useSharedValue(-1);
   const panGesture = React.useMemo(() => {
     return Gesture.Pan()
       .activateAfterLongPress(0)
       .onBegin((e) => {
         'worklet';
+        isDraggingSV.value = true;
         const w = layoutWidth.value;
         const a = Math.max(0, Math.min(1, e.x / w));
         thumbX.value = a * w;
+        lastAlphaBucketSV.value = Math.round(a * 200);
         runOnJS(onChange)(a);
       })
       .onChange((e) => {
@@ -147,29 +163,32 @@ export function AlphaSlider({
         const w = layoutWidth.value;
         const a = Math.max(0, Math.min(1, e.x / w));
         thumbX.value = a * w;
-        runOnJS(onChange)(a);
+        const bucket = Math.round(a * 200);
+        if (bucket !== lastAlphaBucketSV.value) {
+          lastAlphaBucketSV.value = bucket;
+          runOnJS(onChange)(a);
+        }
       })
       .onEnd(() => {
         'worklet';
-        const w = layoutWidth.value;
-        const a = Math.max(0, Math.min(1, thumbX.value / w));
-        runOnJS(onCommit)(a);
+        commitPosition();
+      })
+      .onFinalize((_e, success) => {
+        'worklet';
+        // A cancelled gesture (scroll takeover, system interruption) still
+        // changed the value — commit it so history matches the visible
+        // thumb instead of drifting out of the undo stack.
+        if (!success) commitPosition();
+        isDraggingSV.value = false;
       });
-  }, [thumbX, onChange, onCommit, layoutWidth]);
+  }, [thumbX, onChange, commitPosition, layoutWidth, isDraggingSV, lastAlphaBucketSV]);
 
-  // Animated thumb style
-  const thumbStyle = useAnimatedStyle(() => {
-    if (reduceMotion) {
-      return {
-        transform: [{ translateX: thumbX.value - THUMB_SIZE / 2 }],
-      };
-    }
-    return {
-      transform: [
-        { translateX: withTiming(thumbX.value - THUMB_SIZE / 2, SNAP_TIMING) },
-      ],
-    };
-  });
+  // Thumb tracks the finger 1:1 — a withTiming inside the animated style
+  // re-arms a 120ms animation on every gesture frame and low-pass-filters
+  // the drag. Settle animation lives in the external-sync effect instead.
+  const thumbStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: thumbX.value - THUMB_SIZE / 2 }],
+  }));
 
   // Color gradient from transparent to full opacity
   const transparentColor = toRgbaString({ ...color, a: 0 });
@@ -177,12 +196,11 @@ export function AlphaSlider({
 
   return (
     <GestureDetector gesture={panGesture}>
+      {/* 44pt hit area wraps the 28pt visual track — visible shape and
+          touch target stay separate per the charter. */}
       <View
         onLayout={handleLayout}
-        style={[
-          styles.container,
-          { width, height: SLIDER_HEIGHT },
-        ]}
+        style={[styles.hitArea, { width }]}
         accessibilityRole="adjustable"
         accessibilityLabel={accessibilityLabel}
         accessibilityHint="Drag left for transparent, right for fully opaque"
@@ -192,41 +210,53 @@ export function AlphaSlider({
           now: Math.round(alpha * 100),
           text: `Opacity ${Math.round(alpha * 100)} percent`,
         }}
+        accessibilityActions={[
+          { name: 'increment', label: 'Increase opacity' },
+          { name: 'decrement', label: 'Decrease opacity' },
+        ]}
+        onAccessibilityAction={(e) => {
+          const delta = e.nativeEvent.actionName === 'increment' ? 0.05 : -0.05;
+          const next = Math.max(0, Math.min(1, alpha + delta));
+          onChange(next);
+          onCommit(next);
+        }}
       >
-        {/* Checkerboard background */}
-        <CheckerboardPattern size={width} />
+        <View style={[styles.container, { width, height: SLIDER_HEIGHT }]}>
+          {/* Checkerboard background */}
+          <CheckerboardPattern size={width} />
 
-        {/* Color opacity gradient overlay */}
-        <Reanimated.View
-          style={[
-            StyleSheet.absoluteFill,
-            {
-              borderRadius: Radius.sm,
-              overflow: 'hidden',
-            },
-          ]}
-        >
-          {/* Linear gradient from transparent to opaque */}
-          <AlphaGradient
-            transparentColor={transparentColor}
-            opaqueColor={opaqueColor}
+          {/* Color opacity gradient overlay */}
+          <Reanimated.View
+            style={[
+              StyleSheet.absoluteFill,
+              {
+                borderRadius: Radius.sm,
+                overflow: 'hidden',
+              },
+            ]}
+          >
+            {/* Linear gradient from transparent to opaque */}
+            <AlphaGradient
+              transparentColor={transparentColor}
+              opaqueColor={opaqueColor}
+            />
+          </Reanimated.View>
+
+          {/* Thumb */}
+          <Reanimated.View
+            style={[
+              styles.thumb,
+              thumbStyle,
+              {
+                width: THUMB_SIZE,
+                height: THUMB_SIZE,
+                borderRadius: THUMB_SIZE / 2,
+                backgroundColor: opaqueColor,
+                borderColor: colors.textInverse,
+              },
+            ]}
           />
-        </Reanimated.View>
-
-        {/* Thumb */}
-        <Reanimated.View
-          style={[
-            styles.thumb,
-            thumbStyle,
-            {
-              width: THUMB_SIZE,
-              height: THUMB_SIZE,
-              borderRadius: THUMB_SIZE / 2,
-              backgroundColor: opaqueColor,
-              borderColor: colors.textInverse,
-            },
-          ]}
-        />
+        </View>
       </View>
     </GestureDetector>
   );
@@ -252,6 +282,11 @@ function AlphaGradient({
 
 // ── Styles ───────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
+  // 44pt touch target; the 28pt visual track is centred inside it.
+  hitArea: {
+    height: 44,
+    justifyContent: 'center',
+  },
   container: {
     justifyContent: 'center',
     overflow: 'visible',

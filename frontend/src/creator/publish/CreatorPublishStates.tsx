@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, type SharedValue } from 'react-native-reanimated';
 import { IconGrammar } from '../../theme/designTokens';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { PressScale } from '../CreatorAnimations';
+import { PressScale } from '../shared/CreatorAnimations';
 import type { useHaptic } from '../../hooks/useHaptic';
 import { Motion } from '../../theme/motionTokens';
 import { createPublishStyles as createStyles } from './CreatorPublishStyles';
@@ -25,6 +25,10 @@ interface SharingStateViewProps {
   isConfirming?: boolean;
   /** True when an upload has stalled (no progress for an extended period). */
   isStalled?: boolean;
+  /** True when the queue is parked because there is no usable connection. */
+  isOffline?: boolean;
+  /** Rolling ETA in seconds — shown only while a real rate is known. */
+  etaSeconds?: number;
 }
 
 export function SharingStateView({
@@ -34,7 +38,9 @@ export function SharingStateView({
   progressWidth,
   onCancel,
   isConfirming,
-  isStalled }: SharingStateViewProps) {
+  isStalled,
+  isOffline,
+  etaSeconds }: SharingStateViewProps) {
   const localStyles = useMemo(() => createStyles(colors), [colors]);
   const showCancel = stage === 'uploading' && !!onCancel;
   const percentLabel = useMemo(() => {
@@ -47,10 +53,23 @@ export function SharingStateView({
   // server has confirmed the DB row + moderation (AGENTS.md §11).
   const phaseLabel = useMemo(() => {
     if (stage !== 'uploading') return 'Sharing…';
+    // Parked queue (no route or captive portal) takes precedence over a
+    // stall — the bytes aren't moving because nothing can leave the device.
+    if (isOffline) return 'Waiting for connection…';
     if (isStalled) return 'Taking longer than usual…';
     if (isConfirming) return 'Confirming…';
     return `Uploading… ${percentLabel}`;
-  }, [stage, isStalled, isConfirming, percentLabel]);
+  }, [stage, isOffline, isStalled, isConfirming, percentLabel]);
+
+  // Time-remaining sublabel — only while a measured rate exists, so it
+  // never appears fabricated during confirmation or stalls.
+  const etaLabel = useMemo(() => {
+    if (stage !== 'uploading' || isOffline || isStalled || isConfirming || etaSeconds === undefined) return null;
+    if (etaSeconds < 5) return 'A few seconds left';
+    if (etaSeconds < 60) return `About ${etaSeconds}s left`;
+    const minutes = Math.ceil(etaSeconds / 60);
+    return `About ${minutes} min left`;
+  }, [stage, isOffline, isStalled, isConfirming, etaSeconds]);
 
   return (
     <View style={localStyles.progressState}>
@@ -60,6 +79,11 @@ export function SharingStateView({
       <Text style={localStyles.progressLabel}>
         {phaseLabel}
       </Text>
+      {etaLabel && (
+        <Text style={localStyles.progressSubLabel}>
+          {etaLabel}
+        </Text>
+      )}
       {showCancel && (
         <Pressable
           onPress={onCancel}
@@ -143,13 +167,16 @@ interface SuccessViewProps {
   reduceMotion: boolean;
   onDone: () => void;
   onView?: () => void;
+  /** Opens the system share sheet for the published post (share-out). */
+  onShare?: () => void;
 }
 
 export function SuccessView({
   colors,
   reduceMotion,
   onDone,
-  onView }: SuccessViewProps) {
+  onView,
+  onShare }: SuccessViewProps) {
   const localStyles = useMemo(() => createStyles(colors), [colors]);
   const contentOpacity = useSharedValue(reduceMotion ? 1 : 0);
   const iconScale = useSharedValue(reduceMotion ? 1 : 0.7);
@@ -182,18 +209,32 @@ export function SuccessView({
       >
         <Text style={localStyles.doneBtnText}>Done</Text>
       </PressScale>
-      {onView && (
-        <Pressable
-          onPress={onView}
-          style={localStyles.viewLink}
-          accessibilityRole="button"
-          accessibilityLabel="View post"
-          accessibilityHint="Opens the published content"
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        >
-          <Text style={localStyles.viewLinkText}>View</Text>
-        </Pressable>
-      )}
+      <View style={localStyles.successLinks}>
+        {onView && (
+          <Pressable
+            onPress={onView}
+            style={localStyles.viewLink}
+            accessibilityRole="button"
+            accessibilityLabel="View post"
+            accessibilityHint="Opens the published content"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Text style={localStyles.viewLinkText}>View</Text>
+          </Pressable>
+        )}
+        {onShare && (
+          <Pressable
+            onPress={onShare}
+            style={localStyles.viewLink}
+            accessibilityRole="button"
+            accessibilityLabel="Share post"
+            accessibilityHint="Opens the system share sheet for this post"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Text style={localStyles.viewLinkText}>Share</Text>
+          </Pressable>
+        )}
+      </View>
     </Reanimated.View>
   );
 }
@@ -320,18 +361,17 @@ export function ConflictStateView({
   );
 }
 
-// ── Schedule failed — honest state after immediate publish ─────────
-// Scheduling failed AFTER the content was already published immediately.
-// We must NOT show a success state that implies it will appear later.
-// Instead, surface an honest explanation and offer corrective actions:
-// retry the schedule, or accept the immediate publication.
+// ── Schedule failed — honest state ─────────────────────────────────
+// Under the orchestrated flow a failed schedule POST means NOTHING was
+// published — the schedule row only creates a pending publication the
+// worker executes later. This view must not claim the content is live.
 interface ScheduleFailedViewProps {
   colors: ThemeColors;
   reduceMotion: boolean;
   scheduleError: string;
   onRetrySchedule: () => void;
-  onAcceptImmediate: () => void;
-  onView: () => void;
+  onPublishNow: () => void;
+  onBack: () => void;
 }
 
 export function ScheduleFailedView({
@@ -339,8 +379,8 @@ export function ScheduleFailedView({
   reduceMotion,
   scheduleError,
   onRetrySchedule,
-  onAcceptImmediate,
-  onView }: ScheduleFailedViewProps) {
+  onPublishNow,
+  onBack }: ScheduleFailedViewProps) {
   const localStyles = useMemo(() => createStyles(colors), [colors]);
   const opacity = useSharedValue(0);
 
@@ -360,9 +400,9 @@ export function ScheduleFailedView({
       <View style={localStyles.errorCircle}>
         <Ionicons name="time-outline" size={IconGrammar.hero} color={colors.danger} aria-hidden={true} />
       </View>
-      <Text style={localStyles.centerStateTitle}>Scheduling failed</Text>
+      <Text style={localStyles.centerStateTitle}>Couldn't schedule</Text>
       <Text style={localStyles.centerStateText}>
-        Your content was published immediately.
+        Nothing was published. Retry the schedule or publish it now.
       </Text>
       {scheduleError ? (
         <Text style={localStyles.scheduleFailedDetail}>{scheduleError}</Text>
@@ -372,31 +412,31 @@ export function ScheduleFailedView({
           onPress={onRetrySchedule}
           style={localStyles.viewBtn}
           accessibilityLabel="Retry scheduling"
-          accessibilityHint="Attempts to schedule the already-published content for the selected date"
+          accessibilityHint="Attempts to schedule the content for the selected date"
           scale={0.97}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <Text style={localStyles.viewBtnText}>Retry schedule</Text>
         </PressScale>
         <PressScale
-          onPress={onAcceptImmediate}
+          onPress={onPublishNow}
           style={localStyles.createBtn}
-          accessibilityLabel="Keep immediate publication"
-          accessibilityHint="Accepts that the content is already public and continues"
+          accessibilityLabel="Publish now instead"
+          accessibilityHint="Publishes the content immediately instead of scheduling"
           scale={0.97}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
-          <Text style={localStyles.createBtnText}>Keep it live now</Text>
+          <Text style={localStyles.createBtnText}>Publish now</Text>
         </PressScale>
         <PressScale
-          onPress={onView}
+          onPress={onBack}
           style={localStyles.scheduleFailedViewBtn}
-          accessibilityLabel="View published content"
-          accessibilityHint="Opens the published look or poster"
+          accessibilityLabel="Back to publish options"
+          accessibilityHint="Returns to the publish sheet"
           scale={0.97}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
-          <Text style={localStyles.scheduleFailedViewText}>View</Text>
+          <Text style={localStyles.scheduleFailedViewText}>Back</Text>
         </PressScale>
       </View>
     </Reanimated.View>

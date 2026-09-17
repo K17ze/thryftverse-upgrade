@@ -3,7 +3,7 @@ import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 
 import { useDraftAutosave } from '../useDraftAutosave';
-import type { CreatorDocument } from '../../composition';
+import type { CreatorDocument } from '../../core/projectStore/composition';
 
 // ── Minimal renderHook (mirrors src/hooks/useInfiniteList.test.ts) ──
 function renderHook<TResult, TProps>(

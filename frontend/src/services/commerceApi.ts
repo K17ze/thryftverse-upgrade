@@ -118,6 +118,12 @@ export interface CommerceOrder {
   trackingNumber: string | null;
   shippingLabelUrl: string | null;
   shippingQuoteGbp: number | null;
+  /**
+   * Buyer-requested item verification add-on captured at checkout.
+   * Optional for backward compatibility with orders that predate the
+   * orders.verification_requested column.
+   */
+  verificationRequested?: boolean;
   shippedAt: string | null;
   deliveredAt: string | null;
   /** ISO timestamp the buyer paid; anchors the dispatch SLA clock. */
@@ -158,6 +164,25 @@ export interface CommerceOrder {
    * Accepted/declined extensions are folded into `shipByDate` server-side.
    */
   dispatchExtension?: DispatchExtension | null;
+  /**
+   * Recorded seller SLA defect flag (migration 284). Present when the
+   * platform's auto-feedback sweep detected the order past its effective
+   * ship-by while still awaiting dispatch. This is a platform flag, not a
+   * review — surfaces render it as a breach notice, never as feedback
+   * authored by the buyer.
+   */
+  slaBreach?: {
+    breachType: 'dispatch_sla';
+    shipBy: string;
+    detectedAt: string;
+  } | null;
+  /**
+   * Server-derived open-resolution flag (open protection/return/support
+   * ticket or open return case). Same predicate as the list endpoint —
+   * the detail screen should prefer this over a separately-fetched ticket
+   * store that may lag the order payload.
+   */
+  hasOpenResolution?: boolean;
 }
 
 export interface ShippingQuoteItem {
@@ -216,11 +241,6 @@ interface ListPaymentMethodsResponse {
   items: CommercePaymentMethod[];
 }
 
-interface CreatePaymentMethodResponse {
-  ok: true;
-  item: CommercePaymentMethod;
-}
-
 interface CreateOrderResponse {
   ok: true;
   order: CommerceOrder;
@@ -231,28 +251,43 @@ interface GetOrderResponse {
   order: CommerceOrder;
 }
 
-interface ShippingQuoteResponse {
+export interface ShippingQuoteResponse {
   ok: true;
-  source: 'live' | 'fallback';
+  source: 'live' | 'fallback' | 'unavailable';
   originPostcode: string;
   destinationPostcode: string;
   recommendedQuote: ShippingQuoteItem | null;
   quotes: ShippingQuoteItem[];
 }
 
-interface PayOrderResponse {
-  ok: true;
-  id: string;
-  status: string;
-  updatedAt: string;
-}
-
 export interface PaymentIntentStatusResponse {
-  intentId: string;
+  /** Server intent id — the backend serializer emits `id` (payment_intents.id). */
+  id: string;
   gatewayId: string;
+  channel?: string;
+  orderId?: string | null;
   status: string;
   clientSecret: string | null;
   nextActionUrl: string | null;
+  providerStatus?: string | null;
+  failureCode?: string | null;
+  failureMessage?: string | null;
+}
+
+/**
+ * Result of POST /payments/intents.
+ *
+ * `idempotent: true` means the server returned an EXISTING intent — either
+ * an idempotency-key replay or the intent already bound to the order
+ * (order-payment-binding rule: one intent per order). Callers must read
+ * `intent.status`/`intent.gatewayId` rather than assuming a usable
+ * `clientSecret`: a bound intent can be in-flight, terminal, or on a
+ * different gateway (e.g. a failed oneze_internal intent replayed to a
+ * card-payment request).
+ */
+export interface CreatePaymentIntentResult {
+  intent: PaymentIntentStatusResponse;
+  idempotent: boolean;
 }
 
 export interface CommerceUserOrder {
@@ -277,6 +312,11 @@ export interface CommerceUserOrder {
   shipByDate?: string | null;
   /** Immutable purchased-service snapshot (optional for older orders). */
   fulfilmentSnapshot?: FulfilmentSnapshot | null;
+  /** Whether a buyer-authored review exists for this order (server-derived). */
+  hasReview?: boolean;
+  /** Server-derived: an open protection claim / return / support ticket
+   *  is attached to this order. Drives the dispute badge in list rows. */
+  hasOpenResolution?: boolean;
 }
 
 export interface OrderParcelEvent {
@@ -289,7 +329,10 @@ export interface OrderParcelEvent {
     | 'delivered'
     | 'collection_confirmed'
     | 'delivery_failed'
-    | 'returned';
+    | 'returned'
+    // Seller-asserted drop-off for integrated-label orders — NOT carrier
+    // evidence. Written by POST /orders/:id/fulfilment/handoff-assertion.
+    | 'handoff_asserted';
   providerEventId: string | null;
   trackingId: string | null;
   occurredAt: string | null;
@@ -301,6 +344,9 @@ interface ListOrdersResponse {
   ok: true;
   items: CommerceUserOrder[];
   nextCursor: string | null;
+  /** Server-truthful count of orders needing this user's action —
+   *  a page-scoped count would under-report past page 1. */
+  needsActionCount?: number;
 }
 
 export interface ListUserOrdersParams {
@@ -316,6 +362,7 @@ export interface ListUserOrdersParams {
 export interface ListUserOrdersResult {
   items: CommerceUserOrder[];
   nextCursor: string | null;
+  needsActionCount: number | null;
 }
 
 interface ListOrderParcelEventsResponse {
@@ -344,13 +391,6 @@ export interface CreateAddressInput {
   isDefault?: boolean;
 }
 
-export interface CreatePaymentMethodInput {
-  type: 'card' | 'bank_account' | 'apple_pay' | 'google_pay';
-  label: string;
-  details?: string;
-  isDefault?: boolean;
-}
-
 export interface CreateOrderInput {
   buyerId: string;
   listingId: string;
@@ -366,6 +406,12 @@ export interface CreateOrderInput {
   shippingCarrierId?: string;
   /** Wallet balance to debit (GBP) — when > 0, the order uses split-tender */
   walletDebitGbp?: number;
+  /**
+   * Item verification add-on — the buyer asks Thryft to run the listing
+   * through the authentication pipeline. No fee is charged; persisted as
+   * orders.verification_requested.
+   */
+  verificationRequested?: boolean;
 }
 
 export interface ShippingQuoteInput {
@@ -456,21 +502,10 @@ export async function createStripeOrderSheet(
   );
 }
 
-export async function createUserPaymentMethod(
-  userId: string,
-  input: CreatePaymentMethodInput
-): Promise<CommercePaymentMethod> {
-  const payload = await fetchJson<CreatePaymentMethodResponse>(
-    `/users/${encodeURIComponent(userId)}/payment-methods`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
-    }
-  );
-
-  return payload.item;
-}
+// NOTE: POST /users/:userId/payment-methods was removed — the backend
+// permanently returns 410 TOKENISED_PAYMENT_METHOD_REQUIRED. New payment
+// methods are tokenised via createStripeSetupSheet (POST
+// /v2/payments/setup-intents) + provider-hosted collection.
 
 export async function setDefaultUserPaymentMethod(providerPaymentMethodId: string): Promise<CommercePaymentMethod[]> {
   const payload = await fetchJson<ListPaymentMethodsResponse>(
@@ -511,6 +546,8 @@ export async function completeOrderCheckout(
     paymentMethodId?: number;
     shippingQuoteId: string;
     shippingCarrierId: string;
+    /** Item verification add-on flag; omitted preserves the stored value. */
+    verificationRequested?: boolean;
   }
 ): Promise<{
   orderId: string;
@@ -521,6 +558,7 @@ export async function completeOrderCheckout(
     totalGbp: number;
     quoteVersion: string;
     quoteHash: string;
+    verificationRequested?: boolean;
   };
 }> {
   const payload = await fetchJson<{
@@ -533,6 +571,7 @@ export async function completeOrderCheckout(
       totalGbp: number;
       quoteVersion: string;
       quoteHash: string;
+      verificationRequested?: boolean;
     };
   }>(`/orders/${encodeURIComponent(orderId)}/checkout`, {
     method: 'PATCH',
@@ -557,6 +596,76 @@ export async function getOrderParcelEvents(orderId: string): Promise<OrderParcel
   return payload.items;
 }
 
+// ── Order authentication (verification pipeline) ──────────────────────────
+
+/**
+ * Pipeline statuses emitted by the backend authentication pipeline
+ * (backend/api/src/lib/authenticationPipeline.ts), plus two endpoint-level
+ * states: 'not_requested' (order never asked for verification) and
+ * 'request_pending' (the durable orders.verification_requested flag is set
+ * but the Redis pipeline record is absent — post-commit create failure or
+ * 90-day TTL expiry).
+ */
+export type OrderAuthenticationStatus =
+  | 'not_requested'
+  | 'request_pending'
+  | 'pending_ai_triage'
+  | 'ai_triage_complete'
+  | 'pending_expert_review'
+  | 'expert_review_complete'
+  | 'pending_lab_analysis'
+  | 'lab_analysis_complete'
+  | 'authenticated'
+  | 'counterfeit'
+  | 'inconclusive'
+  | 'cancelled';
+
+export interface OrderAuthentication {
+  requested: boolean;
+  status: OrderAuthenticationStatus;
+  request: {
+    id: string;
+    listingId: string;
+    tier: 1 | 2 | 3 | 4;
+    status: OrderAuthenticationStatus;
+    createdAt: string;
+    updatedAt: string;
+    completedAt: string | null;
+    aiTriage: {
+      confidenceScore: number;
+      recommendation: 'pass' | 'review' | 'fail';
+      /** Always true — AI triage is a preliminary assessment, not a guarantee. */
+      isPreliminary: true;
+      triagedAt: string;
+    } | null;
+    expertReview: { verdict: string; completedAt: string | null } | null;
+    labReport: { result: string; submittedAt: string } | null;
+    badge: {
+      type: 'AI_VERIFIED' | 'EXPERT_VERIFIED' | 'LAB_CERTIFIED';
+      certificateId: string;
+      authenticator: string;
+      method: string;
+      confidenceLevel: number;
+      issuedAt: string;
+      expiresAt: string | null;
+    } | null;
+  } | null;
+  storage?: {
+    /** Pipeline state is Redis-backed with a 90-day TTL — not archival. */
+    persistence: 'ephemeral';
+    recordExpiresAt: string | null;
+  };
+}
+
+export async function getOrderAuthentication(
+  orderId: string
+): Promise<OrderAuthentication> {
+  const payload = await fetchJson<{ ok: true; authentication: OrderAuthentication }>(
+    `/orders/${encodeURIComponent(orderId)}/authentication`
+  );
+  return payload.authentication;
+}
+
 export async function getShippingQuote(input: ShippingQuoteInput): Promise<ShippingQuoteResponse> {
   return fetchJson<ShippingQuoteResponse>('/shipping/quote', {
     method: 'POST',
@@ -577,8 +686,12 @@ export async function checkShippingServiceability(
 
 export async function createCommercePaymentIntent(
   input: { orderId: string; idempotencyKey: string }
-): Promise<PaymentIntentStatusResponse> {
-  const payload = await fetchJson<{ ok: true; intent: PaymentIntentStatusResponse }>(
+): Promise<CreatePaymentIntentResult> {
+  const payload = await fetchJson<{
+    ok: true;
+    idempotent?: boolean;
+    intent: PaymentIntentStatusResponse;
+  }>(
     '/payments/intents',
     {
       method: 'POST',
@@ -591,7 +704,14 @@ export async function createCommercePaymentIntent(
     }
   );
 
-  return payload.intent;
+  return { intent: payload.intent, idempotent: payload.idempotent === true };
+}
+
+export interface OnezeCheckoutIntentResult extends CreatePaymentIntentResult {
+  /** Server-computed required debit in 1ZE wallet units (1 1ZE = 1000 units). */
+  requiredOnezeUnits?: number | null;
+  /** Buyer's 1ZE wallet balance echoed back by the server. */
+  onezeBalance?: number | null;
 }
 
 /**
@@ -601,11 +721,23 @@ export async function createCommercePaymentIntent(
  * triggers the internal 1ZE payment flow — the buyer's 1ZE wallet is debited
  * atomically at the at-par rate (1 1ZE ≈ 1 GBP) and the GBP amount is credited
  * to escrow. No Stripe PaymentSheet is needed.
+ *
+ * Contract: the POST settles synchronously — `intent.status` is 'succeeded'
+ * on success; an insufficient wallet rejects with WALLET_INSUFFICIENT_BALANCE
+ * carrying requiredOnezeUnits/onezeBalance. Older builds may still return a
+ * non-terminal status — callers must treat the response status as the truth
+ * and poll GET /payments/intents/:id only as a recovery fallback.
  */
 export async function createOnezeCheckoutIntent(
   orderId: string
-): Promise<PaymentIntentStatusResponse> {
-  const payload = await fetchJson<{ ok: true; intent: PaymentIntentStatusResponse }>(
+): Promise<OnezeCheckoutIntentResult> {
+  const payload = await fetchJson<{
+    ok: true;
+    idempotent?: boolean;
+    intent: PaymentIntentStatusResponse;
+    requiredOnezeUnits?: number | null;
+    onezeBalance?: number | null;
+  }>(
     '/payments/intents',
     {
       method: 'POST',
@@ -619,7 +751,12 @@ export async function createOnezeCheckoutIntent(
     }
   );
 
-  return payload.intent;
+  return {
+    intent: payload.intent,
+    idempotent: payload.idempotent === true,
+    requiredOnezeUnits: payload.requiredOnezeUnits ?? null,
+    onezeBalance: payload.onezeBalance ?? null,
+  };
 }
 
 export async function getPaymentIntentStatus(intentId: string): Promise<PaymentIntentStatusResponse> {
@@ -630,12 +767,41 @@ export async function getPaymentIntentStatus(intentId: string): Promise<PaymentI
   return payload.intent;
 }
 
-export async function payOrder(orderId: string): Promise<PayOrderResponse> {
-  return fetchJson<PayOrderResponse>(`/orders/${encodeURIComponent(orderId)}/pay`, {
+export interface ShippingLabelResult {
+  /** Server-generated label URL — null when the carrier produced tracking
+   *  without a hosted label artifact. */
+  shippingLabelUrl: string | null;
+  trackingNumber: string | null;
+}
+
+/**
+ * POST /orders/:id/shipping-label — seller-authenticated, idempotent.
+ * The backend contract returns `shipping_label_url` (snake_case); the
+ * mapping tolerates camelCase variants so a serializer change cannot
+ * silently drop the label.
+ */
+export async function generateShippingLabel(
+  orderId: string,
+  carrier?: string
+): Promise<ShippingLabelResult> {
+  const payload = await fetchJson<{
+    ok?: boolean;
+    shipping_label_url?: string | null;
+    shippingLabelUrl?: string | null;
+    labelUrl?: string | null;
+    tracking_number?: string | null;
+    trackingNumber?: string | null;
+  }>(`/orders/${encodeURIComponent(orderId)}/shipping-label`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({}),
+    body: JSON.stringify(carrier ? { carrier } : {}),
   });
+
+  return {
+    shippingLabelUrl:
+      payload.shipping_label_url ?? payload.shippingLabelUrl ?? payload.labelUrl ?? null,
+    trackingNumber: payload.tracking_number ?? payload.trackingNumber ?? null,
+  };
 }
 
 export async function listUserOrders(
@@ -657,6 +823,7 @@ export async function listUserOrders(
   return {
     items: payload.items,
     nextCursor: payload.nextCursor ?? null,
+    needsActionCount: payload.needsActionCount ?? null,
   };
 }
 
@@ -775,17 +942,6 @@ export async function respondDispatchExtension(
   return { extension: payload.extension, shipByDate: payload.shipByDate };
 }
 
-export async function refundOrder(orderId: string, reason?: string) {
-  return fetchJson<{ ok: true; orderId: string; status: string; refunded: boolean; reason: string | null }>(
-    `/orders/${encodeURIComponent(orderId)}/refund`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reason }),
-    }
-  );
-}
-
 export interface UserTransaction {
   id: string;
   type: string;
@@ -809,7 +965,9 @@ export async function listUserTransactions(userId: string, limit = 50, offset = 
 
 export interface BuyerProtectionClaim {
   ticketId: string;
-  topic: string;
+  topicId: string;
+  /** Server-rendered human label — display it directly. */
+  topicLabel: string;
   status: string;
   createdAt: string;
 }
@@ -893,7 +1051,8 @@ export interface SellerAnalyticsTrend {
 }
 
 export interface SellerAnalyticsFunnel {
-  impressions: number;
+  /** null when the impressions source is unavailable — never fabricate 0. */
+  impressions: number | null;
   views: number;
   saves: number;
   offers: number;

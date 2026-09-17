@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
+import { Alert } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
@@ -104,10 +105,30 @@ export function useUserProfileActions({
     haptic.light();
     if (!requireAuth('follow_seller')) return;
     if (targetUserId && viewer) {
-      followMutation.mutate(!viewer.isFollowing);
-      track('follow_toggled', { user_id: targetUserId, action: !viewer.isFollowing ? 'follow' : 'unfollow' });
+      if (viewer.isFollowing) {
+        // Unfollow is destructive — a stray tap shouldn't silently drop a
+        // follow the viewer may have had for months.
+        Alert.alert(
+          `Unfollow @${displayUsername}?`,
+          undefined,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Unfollow',
+              style: 'destructive',
+              onPress: () => {
+                followMutation.mutate(false);
+                track('follow_toggled', { user_id: targetUserId, action: 'unfollow' });
+              },
+            },
+          ],
+        );
+        return;
+      }
+      followMutation.mutate(true);
+      track('follow_toggled', { user_id: targetUserId, action: 'follow' });
     }
-  }, [requireAuth, targetUserId, viewer, followMutation, haptic]);
+  }, [requireAuth, targetUserId, viewer, displayUsername, followMutation, haptic]);
   const handleMore = useCallback(() => setMoreSheetVisible(true), []);
   const handleReport = useCallback(() => { setMoreSheetVisible(false); setReportSheetVisible(true); }, []);
   const handleBlock = useCallback(() => { setMoreSheetVisible(false); setBlockConfirmVisible(true); }, []);

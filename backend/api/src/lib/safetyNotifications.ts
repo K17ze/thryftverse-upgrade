@@ -1,6 +1,6 @@
-import crypto from 'node:crypto';
 import type { Pool } from 'pg';
 import { logger } from './logger.js';
+import { queueUserNotification } from './workerRuntime.js';
 import type { SafetyDecision } from './safetyCaseService.js';
 
 // ── Safety outcome notifications ─────────────────────────────────────────
@@ -32,31 +32,24 @@ export async function sendOutcomeNotification(
   if (!input.reporterId) return; // anonymous report — no one to notify
 
   try {
-    const eventId = `notif_${crypto.randomUUID()}`;
-    const idempotencyKey = `safety_outcome:${input.caseId}`;
-
-    await db.query(
-      `INSERT INTO notification_events (
-         id, user_id, channel, title, body, payload, status, metadata,
-         event_type, idempotency_key
-       ) VALUES ($1, $2, 'in_app', $3, $4, $5::jsonb, 'sent', $6::jsonb, 'safety_outcome', $7)
-       ON CONFLICT (user_id, idempotency_key)
-       WHERE idempotency_key IS NOT NULL
-       DO NOTHING`,
-      [
-        eventId,
-        input.reporterId,
-        notificationTitle(input.decision),
-        notificationBody(input.decision, input.reasonCode),
-        JSON.stringify({
-          caseId: input.caseId,
-          decision: input.decision,
-          reasonCode: input.reasonCode,
-        }),
-        JSON.stringify({ source: 'safety', automated: input.automatedMeans }),
-        idempotencyKey,
-      ],
-    );
+    // Route through the canonical pipeline — push job, realtime publish,
+    // preference bookkeeping — instead of a bare in_app insert that could
+    // never deliver. safety_outcome is a critical event type: the reporter
+    // is owed the outcome, so it pushes even if the news toggle is off.
+    await queueUserNotification({
+      userId: input.reporterId,
+      title: notificationTitle(input.decision),
+      body: notificationBody(input.decision, input.reasonCode),
+      eventType: 'safety_outcome',
+      payload: {
+        caseId: input.caseId,
+        decision: input.decision,
+        reasonCode: input.reasonCode,
+      },
+      metadata: { source: 'safety', automated: input.automatedMeans },
+      idempotencyKey: `safety_outcome:${input.caseId}`,
+      forcePush: true,
+    });
   } catch (error) {
     // Best-effort: log and continue. The decision is already committed.
     logger.warn(

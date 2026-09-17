@@ -14,6 +14,8 @@ export { processPushReceiptReconciliation } from './pushReceiptHandler.js';
 export { sweepExpiredAuctions } from './auctionSweepHandler.js';
 export type { AuctionSweepHandlerDeps } from './auctionSweepHandler.js';
 
+export { sweepExpiredLiveLots } from './liveLotSweepHandler.js';
+
 export { sweepExpiredCoOwnOrders } from './coOwnOrderExpiryHandler.js';
 export type { CoOwnOrderExpiryHandlerDeps } from './coOwnOrderExpiryHandler.js';
 
@@ -31,6 +33,10 @@ export type { OnezeWithdrawalHandlerDeps } from './onezeWithdrawalHandler.js';
 
 export { processMediaIngestJob } from './mediaIngestHandler.js';
 export type { MediaIngestHandlerDeps } from './mediaIngestHandler.js';
+
+export { reconcileMediaIngestJobs } from './mediaIngestReconcileHandler.js';
+
+export { expireStaleMultipartSessions } from './multipartSessionSweepHandler.js';
 
 export { processMediaEmbeddingJob } from './mediaEmbeddingHandler.js';
 
@@ -80,6 +86,8 @@ export type { AnalyticsAggregationHandlerDeps } from './analyticsAggregationHand
 
 export { sweepScheduledPublications } from './scheduledPublicationHandler.js';
 
+export { sweepOrphanedUploadIntents } from './orphanUploadIntentSweepHandler.js';
+
 export { processBackupExpiryCheck } from './backupExpiryHandler.js';
 export type { BackupExpiryJobData } from './backupExpiryHandler.js';
 
@@ -91,6 +99,9 @@ export type { DsarExportJobData } from './dsarExportHandler.js';
 
 export { processSellerTrustRecompute } from './sellerTrustRecomputeHandler.js';
 export type { SellerTrustRecomputeJobData } from './sellerTrustRecomputeHandler.js';
+
+export { processAutoFeedbackSweep } from './autoFeedbackHandler.js';
+export type { FeedbackEvaluationJobData } from './autoFeedbackHandler.js';
 
 export { evaluateCoOwnPriceAlerts } from './coOwnAlertEvaluatorHandler.js';
 export type { CoOwnAlertEvaluatorHandlerDeps } from './coOwnAlertEvaluatorHandler.js';

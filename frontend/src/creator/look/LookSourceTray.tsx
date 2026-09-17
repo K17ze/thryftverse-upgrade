@@ -4,25 +4,13 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  ScrollView,
-  TextInput,
-  ActivityIndicator,
   Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  withTiming,
-  runOnJS,
-  type SharedValue } from 'react-native-reanimated';
-import { Space, Radius, Typography, Elevation, Stroke} from '../../theme/designTokens';
-import { TypographyV2 } from '../../theme/typography.v2';
-import { IconGrammar } from '../../theme/designTokens';
-import { Motion } from '../../theme/motionTokens';
-import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
-import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+  withTiming } from 'react-native-reanimated';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
@@ -30,6 +18,16 @@ import { useStore } from '../../store/useStore';
 import { useBackendData } from '../../context/BackendDataContext';
 import { searchListingsFromApi, type Listing, type ListingSearchResult } from '../../services/listingsApi';
 import { ConfirmationSheet } from '../../components/ConfirmationSheet';
+import { useAppTheme } from '../../theme/ThemeContext';
+import {
+  PEEK_HEIGHT,
+  EXPANDED_HEIGHT,
+  PREVIEW_SIZE,
+  type TabKey,
+  type TrayItem } from './lookSourceTray/lookSourceTrayShared';
+import { styles } from './lookSourceTray/lookSourceTrayStyles';
+import { TrayExpandedContent } from './lookSourceTray/TrayExpandedContent';
+import { DragPreview } from './lookSourceTray/DragPreview';
 
 // ───────────────────────────────────────────────────────────────────────────
 // Look Source Tray — commerce peek drawer for the Look Composer.
@@ -65,11 +63,6 @@ import { ConfirmationSheet } from '../../components/ConfirmationSheet';
 // collapses to instant timing (useMotionConfig).
 // ───────────────────────────────────────────────────────────────────────────
 
-const PEEK_HEIGHT = 48;
-const CONTENT_HEIGHT = 240;
-const EXPANDED_HEIGHT = PEEK_HEIGHT + CONTENT_HEIGHT;
-const PREVIEW_SIZE = 80;
-
 export interface LookSourceTrayProps {
   /** Called when the user taps an item to add it to the canvas (center). */
   onAddItem: (item: {
@@ -98,125 +91,6 @@ export interface LookSourceTrayProps {
    *  offers "use another photo" instead of silent duplication). */
   onCanvasListingIds?: Set<string>;
 }
-
-type TabKey = 'foryou' | 'closet' | 'listings' | 'search';
-
-interface TrayItem {
-  id: string;
-  title: string;
-  imageUrl: string | null;
-  priceGbp?: number;
-  brand?: string | null;
-}
-
-// ───────────────────────────────────────────────────────────────────────────
-// DraggableProductCard — a flat product thumbnail supporting both tap
-// (add to center) and pan (drag to canvas). Uses Gesture.Race so a tap
-// doesn't trigger the pan and vice versa.
-// ───────────────────────────────────────────────────────────────────────────
-
-interface DraggableProductCardProps {
-  item: TrayItem;
-  onPress: (item: TrayItem) => void;
-  onDragStart: (item: TrayItem) => void;
-  onDragEnd: (item: TrayItem, x: number, y: number, isOverCanvas: boolean) => void;
-  previewX: SharedValue<number>;
-  previewY: SharedValue<number>;
-  previewVisible: SharedValue<number>;
-  trayYSV: SharedValue<number>;
-  colors: ThemeColors;
-  /** Whether this item is already on the canvas (dedup indicator). */
-  onCanvas: boolean;
-}
-
-const DraggableProductCard = React.memo(function DraggableProductCard({
-  item,
-  onPress,
-  onDragStart,
-  onDragEnd,
-  previewX,
-  previewY,
-  previewVisible,
-  trayYSV,
-  colors,
-  onCanvas }: DraggableProductCardProps) {
-  const { currencySymbol } = useFormattedPrice();
-  const tapGesture = useMemo(
-    () =>
-      Gesture.Tap().onEnd(() => {
-        runOnJS(onPress)(item);
-      }),
-    [item, onPress]
-  );
-
-  const panGesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .minDistance(8)
-        .onStart((e) => {
-          'worklet';
-          previewX.value = e.absoluteX;
-          previewY.value = e.absoluteY;
-          previewVisible.value = withTiming(1, { duration: Motion.duration.fast });
-          runOnJS(onDragStart)(item);
-        })
-        .onUpdate((e) => {
-          'worklet';
-          previewX.value = e.absoluteX;
-          previewY.value = e.absoluteY;
-        })
-        .onEnd((e) => {
-          'worklet';
-          previewVisible.value = withTiming(0, { duration: Motion.duration.fast });
-          const isOverCanvas = e.absoluteY < trayYSV.value;
-          runOnJS(onDragEnd)(item, e.absoluteX, e.absoluteY, isOverCanvas);
-        }),
-    [item, onDragStart, onDragEnd, previewX, previewY, previewVisible, trayYSV]
-  );
-
-  const composedGesture = useMemo(
-    () => Gesture.Race(panGesture, tapGesture),
-    [panGesture, tapGesture]
-  );
-
-  return (
-    <GestureDetector gesture={composedGesture}>
-      <View
-        style={styles.itemCard}
-        accessibilityLabel={`Add ${item.title} to look${onCanvas ? ' — already on canvas' : ''}`}
-        accessibilityHint="Tap to add or drag onto the canvas"
-        accessibilityRole="button"
-      >
-        {item.imageUrl ? (
-          <Image
-            source={{ uri: item.imageUrl }}
-            style={styles.itemImage}
-            resizeMode="cover"
-          />
-        ) : (
-          <View style={[styles.itemImagePlaceholder, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name="image-outline" size={IconGrammar.standard} color={colors.textMuted} />
-          </View>
-        )}
-        {/* Dedup indicator — subtle dot on items already on canvas */}
-        {onCanvas && (
-          <View style={[styles.onCanvasDot, { backgroundColor: colors.brand }]} />
-        )}
-        <Text
-          style={[styles.itemTitle, { color: onCanvas ? colors.textMuted : colors.textSecondary }]}
-          numberOfLines={1}
-        >
-          {item.title}
-        </Text>
-        {item.priceGbp !== undefined && (
-          <Text style={[styles.itemPrice, { color: onCanvas ? colors.textMuted : colors.textPrimary }]}>
-            {currencySymbol}{item.priceGbp.toFixed(0)}
-          </Text>
-        )}
-      </View>
-    </GestureDetector>
-  );
-});
 
 // ───────────────────────────────────────────────────────────────────────────
 // LookSourceTray — main component
@@ -530,162 +404,37 @@ export function LookSourceTray({
           </Reanimated.View>
         </Pressable>
 
-        {/* ── Expanded content ── */}
-        <Reanimated.View
-          style={[styles.content, contentAnimStyle]}
-          pointerEvents={expanded ? 'auto' : 'none'}
-        >
-          {/* Tab bar */}
-          <View style={[styles.tabBar, { borderBottomColor: colors.border }]}>
-            {tabs.map((tab) => {
-              const isActive = activeTab === tab.key;
-              return (
-                <Pressable
-                  key={tab.key}
-                  onPress={() => handleTabChange(tab.key)}
-                  style={({ pressed }) => [
-                    styles.tabBtn,
-                    pressed && styles.tabBtnPressed,
-                  ]}
-                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                  accessibilityLabel={`${tab.label} tab`}
-                  accessibilityHint={`Shows items from your ${tab.label.toLowerCase()}`}
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected: isActive }}
-                >
-                  <Ionicons
-                    name={tab.icon}
-                    size={24}
-                    color={isActive ? colors.brand : colors.textSecondary}
-                  />
-                  <Text
-                    style={[
-                      styles.tabLabel,
-                      { color: isActive ? colors.brand : colors.textSecondary },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {tab.label}
-                  </Text>
-                  {isActive && (
-                    <View style={[styles.tabIndicator, { backgroundColor: colors.brand }]} />
-                  )}
-                </Pressable>
-              );
-            })}
-          </View>
-
-          {/* Search input (only on search tab) */}
-          {activeTab === 'search' && (
-            <View style={[styles.searchRow, { borderBottomColor: colors.border }]}>
-              <Ionicons name="search-outline" size={IconGrammar.metadata} color={colors.textMuted} />
-              <TextInput
-                style={[styles.searchInput, { color: colors.textPrimary }]}
-                placeholder="Search products..."
-                placeholderTextColor={colors.textMuted}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                returnKeyType="search"
-                accessibilityLabel="Search products"
-                accessibilityHint="Search for products to add to your look"
-              />
-              {searchQuery.length > 0 && (
-                <Pressable
-                  onPress={() => { haptic.light(); setSearchQuery(''); }}
-                  hitSlop={8}
-                  accessibilityLabel="Clear search"
-                  accessibilityRole="button"
-                >
-                  <Ionicons name="close-circle" size={IconGrammar.metadata} color={colors.textMuted} />
-                </Pressable>
-              )}
-            </View>
-          )}
-
-          {/* Loading state — search or initial backend sync */}
-          {(isSearching || (isSyncing && activeTab !== 'search' && currentItems.length === 0)) && (
-            <View style={styles.stateContainer}>
-              <ActivityIndicator size="small" color={colors.brand} />
-              <Text style={[styles.stateText, { color: colors.textSecondary }]}>
-                {isSearching ? 'Searching…' : 'Loading items…'}
-              </Text>
-            </View>
-          )}
-
-          {/* Error state — backend sync failure for non-search tabs */}
-          {!isSearching && !isSyncing && lastError && activeTab !== 'search' && isEmpty && (
-            <View style={styles.stateContainer}>
-              <Text style={[styles.stateText, { color: colors.textSecondary }]}>
-                Couldn't load items. Pull to retry.
-              </Text>
-            </View>
-          )}
-
-          {/* Empty state — text-only, no decorative icon */}
-          {!isSearching && !isSyncing && !(lastError && activeTab !== 'search') && isEmpty && (
-            <View style={styles.stateContainer}>
-              <Text style={[styles.stateText, { color: colors.textSecondary }]}>
-                {activeTab === 'foryou' && 'No recommendations available'}
-                {activeTab === 'closet' && 'No saved items yet'}
-                {activeTab === 'listings' && 'No active listings'}
-                {activeTab === 'search' && searchQuery.trim().length < 2 && 'Type to search products'}
-                {activeTab === 'search' && searchQuery.trim().length >= 2 && 'No products found'}
-              </Text>
-            </View>
-          )}
-
-          {/* Item thumbnails — horizontal scroll with draggable cards */}
-          {!isSearching && !isSyncing && !isEmpty && !(lastError && activeTab !== 'search' && currentItems.length === 0) && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.itemScroll}
-            >
-              {currentItems.map((item) => (
-                <DraggableProductCard
-                  key={item.id}
-                  item={item}
-                  onPress={handleItemPress}
-                  onDragStart={handleDragStart}
-                  onDragEnd={handleDragEnd}
-                  previewX={previewX}
-                  previewY={previewY}
-                  previewVisible={previewVisible}
-                  trayYSV={trayYSV}
-                  colors={colors}
-                  onCanvas={onCanvasListingIds?.has(item.id) ?? false}
-                />
-              ))}
-            </ScrollView>
-          )}
-        </Reanimated.View>
+        <TrayExpandedContent
+          colors={colors}
+          expanded={expanded}
+          contentAnimStyle={contentAnimStyle}
+          tabs={tabs}
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          searchQuery={searchQuery}
+          onSearchQueryChange={setSearchQuery}
+          isSearching={isSearching}
+          isSyncing={isSyncing}
+          lastError={lastError}
+          isEmpty={isEmpty}
+          currentItems={currentItems}
+          onItemPress={handleItemPress}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          previewX={previewX}
+          previewY={previewY}
+          previewVisible={previewVisible}
+          trayYSV={trayYSV}
+          onCanvasListingIds={onCanvasListingIds}
+        />
       </Reanimated.View>
 
-      {/* ── Floating drag preview — follows the finger during pan ── */}
-      <Reanimated.View
-        style={[styles.dragPreview, previewAnimStyle]}
-        pointerEvents="none"
-      >
-        {draggingItem?.imageUrl ? (
-          <Image
-            source={{ uri: draggingItem.imageUrl }}
-            style={styles.previewImage}
-            resizeMode="cover"
-          />
-        ) : (
-          <View style={[styles.previewImage, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name="image-outline" size={IconGrammar.hero} color={colors.textMuted} />
-          </View>
-        )}
-        <Text style={[styles.previewTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-          {draggingItem?.title ?? ''}
-        </Text>
-        {draggingItem?.priceGbp !== undefined && (
-          <Text style={[styles.previewPrice, { color: colors.brand }]}>
-            {currencySymbol}{draggingItem.priceGbp.toFixed(0)}
-          </Text>
-        )}
-      </Reanimated.View>
+      <DragPreview
+        draggingItem={draggingItem}
+        previewAnimStyle={previewAnimStyle}
+        colors={colors}
+        currencySymbol={currencySymbol}
+      />
       <ConfirmationSheet
         visible={confirmSheet.visible}
         onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
@@ -698,175 +447,6 @@ export function LookSourceTray({
     </View>
   );
 }
-
-// ───────────────────────────────────────────────────────────────────────────
-// Styles
-// ───────────────────────────────────────────────────────────────────────────
-
-const styles = StyleSheet.create({
-  // ── Wrapper — holds the animated container + floating drag preview ──
-  wrapper: {
-    // The tray sits at the bottom, above the action bar.
-    // Positioned by the parent (sourceTrayContainer in LookComposerScreen).
-  },
-  // ── Container — clips content, rounded top corners ──
-  container: {
-    overflow: 'hidden',
-    borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl },
-  // ── Scrim — always visible, subtle so peek bar is readable ──
-  scrim: {
-    opacity: 0.5 },
-  // ── Sheet background — fades in when expanded ──
-  sheetBg: {
-    borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl },
-  // ── Peek bar (48pt — always visible) ──
-  peekBar: {
-    height: PEEK_HEIGHT,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.sm },
-  peekBarPressed: {
-    opacity: 0.6 },
-  peekLabel: {
-    fontFamily: Typography.family.medium,
-    fontSize: TypographyV2.meta.size },
-  // ── Expanded content ──
-  content: {
-    height: CONTENT_HEIGHT },
-  // ── Tab bar ──
-  tabBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Space.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    height: 44 },
-  tabBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: Space.sm,
-    height: 44,
-    position: 'relative' },
-  tabBtnPressed: {
-    opacity: 0.6 },
-  tabLabel: {
-    fontFamily: Typography.family.medium,
-    fontSize: TypographyV2.meta.size },
-  tabIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    left: Space.sm,
-    right: Space.sm,
-    height: 2,
-    borderRadius: RadiusRoleValue.pillAvatar },
-  // ── Search row ──
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth },
-  searchInput: {
-    flex: 1,
-    fontFamily: Typography.family.regular,
-    fontSize: TypographyV2.body.size,
-    paddingVertical: 4 },
-  // ── State container (loading/empty) ──
-  stateContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.lg,
-    paddingHorizontal: Space.md },
-  stateText: {
-    fontFamily: Typography.family.medium,
-    fontSize: TypographyV2.meta.size },
-  // ── Item scroll ──
-  itemScroll: {
-    paddingHorizontal: Space.md,
-    gap: Space.sm,
-    alignItems: 'center',
-    paddingVertical: Space.sm },
-  // ── Item card — media-first gallery, no card background or border ──
-  // Image is the dominant element; name + price sit below as flat text.
-  itemCard: {
-    width: 88,
-    alignItems: 'center',
-    gap: Space.xs },
-  itemImage: {
-    width: 88,
-    height: 88,
-    borderRadius: Radius.md },
-  // ── Dedup indicator — subtle dot on items already on canvas ──
-  onCanvasDot: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    width: 8,
-    height: 8,
-    borderRadius: Radius.full,
-    borderWidth: Stroke.standard,
-    borderColor: '#fff' },
-  itemImagePlaceholder: {
-    width: 88,
-    height: 88,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  itemTitle: {
-    fontFamily: TypographyV2.meta.fontFamily,
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontWeight: TypographyV2.meta.weight as any,
-    marginTop: 2,
-    textAlign: 'center' },
-  itemPrice: {
-    fontFamily: TypographyV2.numericMeta.fontFamily,
-    fontSize: TypographyV2.numericMeta.size,
-    lineHeight: TypographyV2.numericMeta.lineHeight,
-    fontWeight: TypographyV2.numericMeta.weight as any,
-    fontVariant: ['tabular-nums'] },
-  // ── Floating drag preview ──
-  dragPreview: {
-    position: 'absolute',
-    width: PREVIEW_SIZE,
-    alignItems: 'center',
-    gap: 2,
-    zIndex: 1000 },
-  previewImage: {
-    width: PREVIEW_SIZE,
-    height: PREVIEW_SIZE,
-    borderRadius: Radius.md,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    ...Elevation.floating },
-  previewTitle: {
-    fontFamily: Typography.family.medium,
-    fontSize: TypographyV2.meta.size,
-    marginTop: 2,
-    textAlign: 'center' },
-  previewPrice: {
-    fontFamily: Typography.family.semibold,
-    fontSize: TypographyV2.meta.size },
-  // ── Source tray peek strip ──
-  peekStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.xs },
-  peekThumb: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.sm,
-    backgroundColor: 'rgba(0,0,0,0.05)' },
-  peekMore: {
-    fontFamily: Typography.family.medium,
-    fontSize: TypographyV2.meta.size } });
 
 // ───────────────────────────────────────────────────────────────────────────
 // SourceTrayPeek — a thin strip of item thumbnails that sits above the

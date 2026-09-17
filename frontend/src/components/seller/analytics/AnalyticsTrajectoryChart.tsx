@@ -131,7 +131,7 @@ export function AnalyticsTrajectoryChart({
 
   const dimensionName =
     activeDimension === 'sales'
-      ? 'Net Sales'
+      ? 'Sales'
       : activeDimension === 'orders'
       ? 'Orders'
       : activeDimension === 'views'

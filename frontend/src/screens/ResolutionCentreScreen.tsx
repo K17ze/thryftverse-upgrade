@@ -9,7 +9,6 @@ import {
 import { FlashList } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Typography, Radius, Stroke } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
@@ -19,39 +18,45 @@ import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/fla
 import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
 import { AppIcon } from '../components/common/AppIcon';
 import { IconSize } from '../theme/iconTokens';
+import { useAppTranslation } from '../i18n/useAppTranslation';
 import type { SupportTicket } from '../store/useStore';
+
+// The `t` returned by useAppTranslation is branded to the app's namespaces —
+// typing helpers against this keeps key checking intact.
+type AppTFunction = ReturnType<typeof useAppTranslation>['t'];
 
 type TicketFilter = 'all' | 'open' | 'resolved' | 'closed';
 
-const FILTERS: Array<{ value: TicketFilter; label: string; accessibilityLabel: string }> = [
-  { value: 'all', label: 'All', accessibilityLabel: 'Show all requests' },
-  { value: 'open', label: 'Open', accessibilityLabel: 'Show open requests' },
-  { value: 'resolved', label: 'Resolved', accessibilityLabel: 'Show resolved requests' },
-  { value: 'closed', label: 'Closed', accessibilityLabel: 'Show closed requests' },
+const FILTERS: Array<{ value: TicketFilter; labelKey: string; accessibilityKey: string }> = [
+  { value: 'all', labelKey: 'resolutionCentre.filterAll', accessibilityKey: 'resolutionCentre.a11yShowAll' },
+  { value: 'open', labelKey: 'resolutionCentre.filterOpen', accessibilityKey: 'resolutionCentre.a11yShowOpen' },
+  { value: 'resolved', labelKey: 'resolutionCentre.filterResolved', accessibilityKey: 'resolutionCentre.a11yShowResolved' },
+  { value: 'closed', labelKey: 'resolutionCentre.filterClosed', accessibilityKey: 'resolutionCentre.a11yShowClosed' },
 ];
 
-function getStatusConfig(colors: ThemeColors): Record<string, { label: string; color: string; icon: string }> {
+function getStatusConfig(colors: ThemeColors): Record<string, { labelKey: string; color: string; icon: string }> {
   return {
-    open: { label: 'Open', color: colors.brand, icon: 'folder' },
-    resolved: { label: 'Resolved', color: colors.success, icon: 'checkmark-circle-outline' },
-    closed: { label: 'Closed', color: colors.textMuted, icon: 'close' },
+    open: { labelKey: 'resolutionCentre.statusOpen', color: colors.brand, icon: 'folder' },
+    resolved: { labelKey: 'resolutionCentre.statusResolved', color: colors.success, icon: 'checkmark-circle-outline' },
+    closed: { labelKey: 'resolutionCentre.statusClosed', color: colors.textMuted, icon: 'close' },
   };
 }
 
-function formatRelativeDate(timestamp: number): string {
+function formatRelativeDate(timestamp: number, t: AppTFunction): string {
   const now = Date.now();
   const diff = now - timestamp;
   const days = Math.floor(diff / (24 * 60 * 60 * 1000));
-  if (days === 0) return 'Today';
-  if (days === 1) return 'Yesterday';
-  if (days < 7) return `${days} days ago`;
-  if (days < 30) return `${Math.floor(days / 7)}w ago`;
-  return `${Math.floor(days / 30)}mo ago`;
+  if (days === 0) return t('resolutionCentre.dateToday');
+  if (days === 1) return t('resolutionCentre.dateYesterday');
+  if (days < 7) return t('resolutionCentre.dateDaysAgo', { days });
+  if (days < 30) return t('resolutionCentre.dateWeeksAgo', { weeks: Math.floor(days / 7) });
+  return t('resolutionCentre.dateMonthsAgo', { months: Math.floor(days / 30) });
 }
 
 export default function ResolutionCentreScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
+  const { t } = useAppTranslation('settings');
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const statusConfig = useMemo(() => getStatusConfig(colors), [colors]);
@@ -94,13 +99,14 @@ export default function ResolutionCentreScreen() {
   // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
   const renderTicketItem = useCallback(({ item }: { item: SupportTicket; index: number }) => {
     const statusCfg = statusConfig[item.status] ?? statusConfig.open;
+    const statusLabel = t(statusCfg.labelKey);
     return (
       <View>
         <Pressable
           style={styles.ticketRow}
           onPress={() => navigation.navigate('SupportTicketDetail', { ticketId: item.id })}
           accessibilityRole="button"
-          accessibilityLabel={`Support request: ${item.topicLabel}, ${statusCfg.label}`}
+          accessibilityLabel={t('resolutionCentre.a11yTicket', { topic: item.topicLabel, status: statusLabel })}
         >
           <AppIcon name={statusCfg.icon} size={IconSize.lg} color={statusCfg.color} opticalCenter accessible={false} />
           <View style={styles.ticketInfo}>
@@ -109,22 +115,24 @@ export default function ResolutionCentreScreen() {
             <View style={styles.ticketMetaRow}>
               {/* TODO: replace `${statusCfg.color}12` with statusColorSubtle token when available */}
               <View style={[styles.statusPill, { backgroundColor: `${statusCfg.color}12` }]}>
-                <Text style={[styles.ticketStatus, { color: statusCfg.color }]}>{statusCfg.label}</Text>
+                <Text style={[styles.ticketStatus, { color: statusCfg.color }]}>{statusLabel}</Text>
               </View>
-              <Text style={styles.ticketDate}>Updated {formatRelativeDate(item.updatedAt)}</Text>
+              <Text style={styles.ticketDate}>
+                {t('resolutionCentre.updated', { when: formatRelativeDate(item.updatedAt, t) })}
+              </Text>
             </View>
           </View>
           <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
         </Pressable>
       </View>
     );
-  }, [statusConfig, navigation, styles]);
+  }, [statusConfig, navigation, styles, t]);
 
   return (
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title="Resolution Centre"
+          title={t('rows.resolutionCentre')}
           onBack={() => navigation.goBack()}
         />
       }
@@ -133,8 +141,8 @@ export default function ResolutionCentreScreen() {
       <SettingsInfoBanner
         tone="info"
         icon="headset"
-        title={openCount > 0 ? `${openCount} open request${openCount !== 1 ? 's' : ''}` : 'No open requests'}
-        description={`${supportTickets.length} total ticket${supportTickets.length !== 1 ? 's' : ''}`}
+        title={openCount > 0 ? t('resolutionCentre.openCount', { count: openCount }) : t('resolutionCentre.noneOpen')}
+        description={t('resolutionCentre.totalCount', { count: supportTickets.length })}
       />
 
       {/* Filter rail */}
@@ -155,10 +163,10 @@ export default function ResolutionCentreScreen() {
               style={({ pressed }) => [styles.filterChip, isActive && styles.filterChipActive, pressed && { opacity: 0.7 }]}
               onPress={() => { haptics.selection(); setFilter(opt.value); }}
               accessibilityRole="button"
-              accessibilityLabel={opt.accessibilityLabel}
+              accessibilityLabel={t(opt.accessibilityKey)}
             >
               <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
-                {opt.label}
+                {t(opt.labelKey)}
                 {count > 0 && (
                   <Text style={styles.filterChipCount}> {count}</Text>
                 )}
@@ -174,10 +182,10 @@ export default function ResolutionCentreScreen() {
         <FlagshipState
           variant="empty"
           icon="folder-open-outline"
-          title={filter === 'open' ? 'No open requests' : 'No support requests'}
+          title={filter === 'open' ? t('resolutionCentre.emptyOpenTitle') : t('resolutionCentre.emptyTitle')}
           subtitle={filter === 'open'
-            ? 'You have no open support requests right now.'
-            : 'If you have an issue with an order, open the order and tap "Report an issue".'}
+            ? t('resolutionCentre.emptyOpenSubtitle')
+            : t('resolutionCentre.emptySubtitle')}
         />
       ) : (
         <FlashList

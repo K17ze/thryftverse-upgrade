@@ -13,6 +13,11 @@ import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { getWalletLedger, type WalletLedgerItem } from '../../services/walletApi';
 import { formatRelativeTime, formatDayLabel } from '../../utils/dateFormat';
+import { CURRENCIES, type SupportedCurrencyCode } from '../../constants/currencies';
+
+function isSupportedCurrencyCode(code: string | undefined): code is SupportedCurrencyCode {
+  return code != null && code in CURRENCIES;
+}
 import { useStore } from '../../store/useStore';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { EmptyState } from '../EmptyState';
@@ -32,6 +37,11 @@ interface WalletTransactionHistoryProps {
 const KIND_LABELS: Record<string, { label: string; icon: keyof typeof Ionicons.glyphMap; direction: 'in' | 'out' | 'neutral' }> = {
   MINT: { label: 'Top-up', icon: 'arrow-down-circle', direction: 'in' },
   BURN: { label: 'Redemption', icon: 'arrow-up-circle-outline', direction: 'out' },
+  BUY_1ZE: { label: 'Bought 1ZE', icon: 'arrow-down-circle', direction: 'in' },
+  CONVERT_TO_FIAT: { label: 'Converted to cash', icon: 'swap-horizontal', direction: 'out' },
+  CONVERT_FROM_1ZE: { label: 'Converted from 1ZE', icon: 'swap-horizontal', direction: 'in' },
+  FEE: { label: 'Fee', icon: 'remove-circle-outline', direction: 'out' },
+  PURCHASE: { label: 'Purchase', icon: 'bag-outline', direction: 'out' },
   CO_OWN_TRADE: { label: 'Co-Own trade', icon: 'swap-horizontal', direction: 'neutral' },
   COMMERCE_ORDER: { label: 'Purchase', icon: 'bag-outline', direction: 'out' },
   COMMERCE_REFUND: { label: 'Refund', icon: 'return-up-back', direction: 'in' },
@@ -114,9 +124,13 @@ export function WalletTransactionHistory({
   const renderTransactionRow = useCallback(({ item }: { item: WalletLedgerItem }) => {
     const kindInfo = KIND_LABELS[item.kind] ?? { label: item.kind, icon: 'ellipse-outline' as const, direction: 'neutral' as const };
     const isPositive = item.amount > 0;
+    // amountDisplay is already major-unit for FIAT — `amount` is minor units
+    // and must never reach a major-unit formatter. Sign is explicit: debits
+    // render "−£x" — the previous Math.abs() made debits look like credits.
+    const sign = isPositive ? '+' : '\u2212';
     const amountText = item.asset === '1ZE'
-      ? `${isPositive ? '+' : ''}${item.amountDisplay.toFixed(3)} 1ZE`
-      : `${isPositive ? '+' : ''}${formatFromFiat(Math.abs(item.amount), 'GBP', { displayMode: 'fiat' })}`;
+      ? `${sign}${Math.abs(item.amountDisplay).toFixed(3)} 1ZE`
+      : `${sign}${formatFromFiat(Math.abs(item.amountDisplay), isSupportedCurrencyCode(item.currency) ? item.currency : 'GBP', { displayMode: 'fiat' })}`;
 
     // Direction-aware icon color: inflows use success, outflows use textPrimary,
     // neutral trades use brand. This pairs glyph + colour per AGENTS.md §13.

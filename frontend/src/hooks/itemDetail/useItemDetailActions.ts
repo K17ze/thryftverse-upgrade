@@ -34,8 +34,14 @@ export interface ItemDetailActionsResult {
   isSavedToCollection: boolean;
   /** Toggle the wishlist (fav) state with auth wall + analytics. */
   handleToggleFav: () => void;
-  /** Double-tap gesture: heavy haptic + optimistic fav. */
-  handleDoubleTap: () => void;
+  /**
+   * Double-tap gesture: heavy haptic + optimistic fav.
+   * Returns true when the save state is genuinely on afterwards (save
+   * applied or already saved) — the caller runs the heart animation only
+   * then. Returns false when the auth wall intercepted the action (or no
+   * item is loaded) so no celebration fires for a blocked save.
+   */
+  handleDoubleTap: () => boolean;
   /** Open the share sheet + fire share analytics. */
   handleShare: () => void;
   /** Whether the share sheet is visible (owned by the hook). */
@@ -103,18 +109,21 @@ export function useItemDetailActions(
     ProductAnalytics.itemSave(item.id);
     track('item_favorited', { listing_id: item.id, action: isFav ? 'unsave' : 'save' });
     if (!isFav) {
-      trackListingInteraction(item.id, 'save').catch(() => {});
+      // The engagement 'like' is recorded inside toggleWishlist with a
+      // deterministic key — no duplicate call here.
       show('Added to wishlist', 'success');
     }
   }, [item, requireAuth, toggleFav, isFav, show]);
 
-  const handleDoubleTap = useCallback(() => {
+  const handleDoubleTap = useCallback((): boolean => {
     haptic.heavy();
-    if (item && !isFav) {
-      if (!requireAuth('save_item')) return;
-      toggleFav(item.id);
-      show('Added to wishlist', 'success');
-    }
+    if (!item) return false;
+    // Already saved — the heart state is truthful, allow the animation.
+    if (isFav) return true;
+    if (!requireAuth('save_item')) return false;
+    toggleFav(item.id);
+    show('Added to wishlist', 'success');
+    return true;
   }, [haptic, item, isFav, requireAuth, toggleFav, show]);
 
   const handleShare = useCallback(() => {
@@ -200,6 +209,9 @@ export function useItemDetailActions(
 
   const handleTogglePriceAlert = useCallback(async () => {
     if (!item?.id || priceAlertLoading) return;
+    // Price alerts are a per-user subscription — the auth wall must gate
+    // the toggle before any local state or backend call, same as saving.
+    if (!requireAuth('save_item')) return;
     const next = !priceAlertEnabled;
     setPriceAlertLoading(true);
     setPriceAlertEnabled(next);
@@ -217,7 +229,7 @@ export function useItemDetailActions(
     } finally {
       setPriceAlertLoading(false);
     }
-  }, [item?.id, priceAlertEnabled, priceAlertLoading, show]);
+  }, [item?.id, priceAlertEnabled, priceAlertLoading, requireAuth, show]);
 
   return {
     isFav,

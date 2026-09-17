@@ -9,9 +9,11 @@
  * Truthful UI (AGENTS §11):
  * - Lots are the seller's real active listings, scheduled onto the session
  *   through the backend lot engine — no demo lots, no simulated go-live.
- * - The camera surface is a local framing preview (BroadcastPreview). Video
- *   publishing to the LiveKit room is not wired in the shared streaming
- *   layer yet, so the surface is labelled as a preview, not a broadcast.
+ * - The camera surface shows the real broadcast feed once the LiveKit room
+ *   publishes (BroadcastPreview renders the published track); before that
+ *   it is a local framing preview and the caption says so. Publish failure
+ *   degrades to an honest 'Video unavailable' state — the session stays
+ *   live for lots and chat.
  * - Session lifecycle goes through the real backend routes
  *   (components/live/liveBroadcastApi). When session creation fails, the
  *   screen reports the error — it never pretends to be live.
@@ -84,6 +86,8 @@ export function LiveStreamSellerScreen() {
         onCreateListing={handleCreateListing}
         onGoLive={broadcast.handleGoLive}
         goingLive={broadcast.goingLive}
+        onScheduleShow={broadcast.handleScheduleShow}
+        scheduling={broadcast.scheduling}
         setupError={broadcast.setupError}
         onBack={handleBack}
       />
@@ -111,6 +115,9 @@ export function LiveStreamSellerScreen() {
       endError={broadcast.endError}
       onEndStream={broadcast.handleEndStream}
       liveKitState={broadcast.liveKit.state}
+      publishState={broadcast.publishState}
+      publishError={broadcast.publishError}
+      liveVideoTrack={broadcast.liveKit.localVideoTrack}
       viewerCount={broadcast.viewerCount}
       liveSeconds={broadcast.liveSeconds}
       messages={broadcast.messages}

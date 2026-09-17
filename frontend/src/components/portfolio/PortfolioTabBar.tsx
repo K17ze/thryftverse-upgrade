@@ -24,7 +24,6 @@ export function PortfolioTabBar({ activeTab, onSelect }: PortfolioTabBarProps) {
       <AnimatedPressable
         onPress={() => { haptics.selection(); onSelect('positions'); }}
         style={[styles.portfolioTab, activeTab === 'positions' && { borderBottomColor: colors.textPrimary }]}
-        hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }}
         accessibilityRole="tab"
         accessibilityLabel="Positions tab"
         accessibilityState={{ selected: activeTab === 'positions' }}
@@ -42,7 +41,6 @@ export function PortfolioTabBar({ activeTab, onSelect }: PortfolioTabBarProps) {
       <AnimatedPressable
         onPress={() => { haptics.selection(); onSelect('insights'); }}
         style={[styles.portfolioTab, activeTab === 'insights' && { borderBottomColor: colors.textPrimary }]}
-        hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }}
         accessibilityRole="tab"
         accessibilityLabel="Insights tab"
         accessibilityState={{ selected: activeTab === 'insights' }}

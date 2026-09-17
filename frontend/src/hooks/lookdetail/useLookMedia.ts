@@ -2,8 +2,8 @@ import { useState, useMemo, useCallback } from 'react';
 import { AspectRatio } from '../../theme/designTokens';
 import type { LookApiItem } from '../../services/looksApi';
 import type { LookMediaCarouselPage } from '../../components/look/LookMediaCarousel';
-import { safeValidateDocument, type CreatorDocument, type CreatorPage } from '../../creator/composition';
-import { pageWithRenderedMedia } from '../../creator/renderedViewDocument';
+import { safeValidateDocument, type CreatorDocument, type CreatorPage } from '../../creator/core/projectStore/composition';
+import { pageWithRenderedMedia } from '../../creator/export/renderedViewDocument';
 
 export interface UseLookMediaResult {
   /** Pager pages: primary mediaUrl is slide 0, carousel slides follow. */
@@ -48,18 +48,25 @@ export function useLookMedia(look: LookApiItem | null, screenWidth: number): Use
           url.endsWith('.mp4') ||
           url.endsWith('.mov') ||
           url.endsWith('.webm') ||
+          url.endsWith('.m3u8') ||
           url.includes('/video/')
         );
       })();
     const pages: LookMediaCarouselPage[] = [
-      { id: 'media-0', uri: look.mediaUrl, isVideo: primaryIsVideo },
+      {
+        id: 'media-0',
+        uri: look.mediaUrl,
+        isVideo: primaryIsVideo,
+        posterUri: primaryIsVideo ? (look.posterUrl ?? null) : null,
+      },
     ];
     if (look.mediaUrls && look.mediaUrls.length > 0) {
       look.mediaUrls.forEach((slide, i) => {
         pages.push({
           id: `media-${i + 1}`,
           uri: slide.url,
-          isVideo: slide.mediaType === 'video' });
+          isVideo: slide.mediaType === 'video',
+          posterUri: slide.mediaType === 'video' ? (slide.posterUrl ?? null) : null });
       });
     }
     return pages;

@@ -42,8 +42,9 @@ const violations = [];
 for (const file of files) {
   const src = readFileSync(file, 'utf-8');
 
-  // Skip files that don't use useAnimatedScrollHandler
-  if (!src.includes('useAnimatedScrollHandler')) continue;
+  // Skip files that don't CALL useAnimatedScrollHandler — a doc comment that
+  // names the hook (e.g. ClipThumb's scrollRef contract) is not usage.
+  if (!/useAnimatedScrollHandler\s*[<(]/.test(src)) continue;
 
   // Check for Reanimated animated scroll container usage
   const hasReanimatedScrollView =
@@ -64,7 +65,11 @@ for (const file of files) {
   // when the file does NOT directly render a scroll container that would
   // receive the handler (a direct scroll container must be the animated one).
   const forwardsHandlerToChild =
-    /onScroll=\{?\s*[A-Za-z_$][\w$]*\s*\}?/.test(src) &&
+    (/onScroll=\{?\s*[A-Za-z_$][\w$]*\s*\}?/.test(src) ||
+      // Named-prop forwarding: the handler reaches a child component via a
+      // *ScrollHandler={…} prop (PosterComposerScreen → PosterTimelineDock),
+      // which owns the animated scroll container itself.
+      /\w*ScrollHandler\s*=\s*\{/.test(src)) &&
     !/<\s*(ScrollView|FlatList|FlashList)\b[^>]*onScroll/.test(src);
   // Hook-returns-handler pattern: a custom hook creates the scroll handler
   // and returns it for the consumer to wire onto its own animated scroll
@@ -73,7 +78,7 @@ for (const file of files) {
   // file is covered by the checks above.
   const returnsHandlerFromHook =
     /\bexport\s+function\s+use[A-Z]/.test(src) &&
-    /return\s*\{[\s\S]*?\b(scrollHandler|scrollHandlerRef)\b/.test(src);
+    /return\s*\{[\s\S]*?\b\w*[Ss]crollHandler\w*\b/.test(src);
 
   if (
     !hasReanimatedScrollView &&

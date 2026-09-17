@@ -4,6 +4,11 @@ import type { Redis } from 'ioredis';
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import { recordRecommendationServe } from '../lib/metrics.js';
+import {
+  REACH_LIMITED_MULTIPLIER,
+  reachExcludedSql,
+  reachJoinSql,
+} from '../lib/sellerReach.js';
 
 const POLICY_VERSION = 'recommendation-heuristic-v2.0';
 const FALLBACK_POLICY_VERSION = 'recommendation-fallback-v2.0';
@@ -42,6 +47,7 @@ type ListingRow = {
   interaction_count: string;
   seller_rating: string | null;
   seller_response_hours: string | null;
+  seller_reach_state: string;
 };
 
 type DecisionRecommendation = {
@@ -262,7 +268,13 @@ function fallbackDecision(
       const sellerTrust = row.seller_rating == null
         ? 0.5
         : Math.min(1, Math.max(0, Number(row.seller_rating) / 5));
-      const score = 0.36 * quality + 0.29 * popularity + 0.22 * freshness + 0.13 * sellerTrust;
+      const baseScore = 0.36 * quality + 0.29 * popularity + 0.22 * freshness + 0.13 * sellerTrust;
+      // Reach demotion: 'limited' sellers keep 30% of scored distribution
+      // (lib/sellerReach.ts); 'suspended' rows never reach this scorer —
+      // the candidate query excludes them via reachExcludedSql.
+      const score = row.seller_reach_state === 'limited'
+        ? baseScore * REACH_LIMITED_MULTIPLIER
+        : baseScore;
       return {
         listing_id: row.id,
         score: Number(Math.min(1, Math.max(0, score)).toFixed(6)),
@@ -758,12 +770,15 @@ export function registerRecommendationRoutes({
          l.created_at::text,
          COALESCE(ic.interaction_count, '0') AS interaction_count,
          sr.seller_rating,
-         srt.seller_response_hours
+         srt.seller_response_hours,
+         COALESCE(reach_u.reach_state, 'normal') AS seller_reach_state
        FROM listings l
+       ${reachJoinSql('reach_u', 'l.seller_id')}
        LEFT JOIN interaction_counts ic ON ic.listing_id = l.id
        LEFT JOIN seller_ratings sr ON sr.seller_id = l.seller_id
        LEFT JOIN seller_response_times srt ON srt.seller_id = l.seller_id
        WHERE l.status = 'active' AND l.seller_id <> $1
+         ${reachExcludedSql('reach_u')}
        ORDER BY l.created_at DESC, l.id
        LIMIT 500`,
       [userId],
@@ -1018,15 +1033,48 @@ export function registerRecommendationRoutes({
         ) {
           throw new Error('Decision service returned an invalid candidate or position set');
         }
+        // Reach demotion (lib/sellerReach.ts): the decision service ranks
+        // without reach awareness, so the served order is adjusted here —
+        // 'limited' sellers keep 30% of their score, then positions are
+        // re-derived so the response order matches the served scores.
+        // 'suspended' sellers never reach the service — the candidate
+        // query excludes them via reachExcludedSql.
+        const reachStateById = new Map(
+          eligibleListingRows.map((row) => [row.id, row.seller_reach_state]),
+        );
+        const demotedCount = parsed.recommendations.filter(
+          (item) => reachStateById.get(item.listing_id) === 'limited',
+        ).length;
+        const servedRecommendations = demotedCount === 0
+          ? parsed.recommendations
+          : parsed.recommendations
+              .map((item) =>
+                reachStateById.get(item.listing_id) === 'limited'
+                  ? { ...item, score: Number((item.score * REACH_LIMITED_MULTIPLIER).toFixed(6)) }
+                  : item,
+              )
+              .sort((a, b) => b.score - a.score || a.listing_id.localeCompare(b.listing_id))
+              .map((item, index) => ({ ...item, position: index + 1 }));
         result = {
           source: 'decision_service',
-          decision: parsed.decision,
-          recommendations: parsed.recommendations,
+          decision: {
+            ...parsed.decision,
+            diagnostics: {
+              ...parsed.decision.diagnostics,
+              seller_reach_demoted: demotedCount,
+            },
+          },
+          recommendations: servedRecommendations,
         };
         try {
           await redis
             .multi()
-            .set(cacheKey, JSON.stringify(parsed), 'EX', CACHE_TTL_SECONDS)
+            .set(
+              cacheKey,
+              JSON.stringify({ ...parsed, recommendations: servedRecommendations }),
+              'EX',
+              CACHE_TTL_SECONDS,
+            )
             .del('decision:failures:recommendations:v2')
             .del('decision:circuit:recommendations:v2')
             .exec();

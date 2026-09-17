@@ -3,7 +3,6 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useStore } from '../../store/useStore';
-import { useAppTheme } from '../../theme/ThemeContext';
 import { useAppTranslation } from '../../i18n/useAppTranslation';
 import { useSettingsPreferences } from '../../context/SettingsPreferencesContext';
 import { SettingsSection } from './SettingsSection';
@@ -20,9 +19,7 @@ export interface SettingsAccountSectionProps {
 /** YOUR ACCOUNT — profile, security, privacy rows. */
 export function SettingsAccountSection({ isBiometricAvailable }: SettingsAccountSectionProps) {
   const navigation = useNavigation<NavT>();
-  const { colors } = useAppTheme();
   const { t: ts } = useAppTranslation('settings');
-  const currentUser = useStore((state) => state.currentUser);
   const twoFactorEnabled = useStore((state) => state.twoFactorEnabled);
   const blockedCount = useStore((s) => s.blockedUsers.length);
   const {
@@ -35,20 +32,14 @@ export function SettingsAccountSection({ isBiometricAvailable }: SettingsAccount
 
   return (
     <SettingsSection title={ts('sections.yourAccount')}>
-      <SettingsRow
-        glyph="verified-check"
-        iconColor={currentUser?.identityVerified || currentUser?.sellerVerified ? colors.success : colors.textMuted}
-        titleStyle={currentUser?.identityVerified || currentUser?.sellerVerified ? { color: colors.success } : undefined}
-        title={ts('rows.verification')}
-        subtitle={currentUser?.sellerVerified ? ts('verification.trustedSeller') : currentUser?.identityVerified ? ts('verification.idVerified') : ts('verification.getBadge')}
-        onPress={() => navigation.navigate('Verification')}
-        isFirst
-      />
+      {/* Verification lives in Edit Profile — the single entry point for
+          identity/seller verification, alongside the other profile fields. */}
       <SettingsRow
         glyph="security-lock"
         title={ts('rows.changePassword')}
         subtitle={twoFactorEnabled ? ts('rows.twoFAEnabled') : ts('rows.passwordOnly')}
         onPress={() => navigation.navigate('ChangePassword')}
+        isFirst
       />
       <SettingsRow
         glyph="security-lock"
@@ -87,7 +78,7 @@ export function SettingsAccountSection({ isBiometricAvailable }: SettingsAccount
       <SettingsRow
         glyph="history-clock"
         title={ts('rows.devicesSessions')}
-        onPress={() => navigation.navigate('ActiveSessions')}
+        onPress={() => navigation.navigate('AccountSecurity')}
       />
       <SettingsRow
         glyph="security-lock"

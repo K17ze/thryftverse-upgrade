@@ -84,6 +84,7 @@
     "@hookform/resolvers": "^5.4.0",
     "@intercom/intercom-react-native": "^10.6.0",
     "@livekit/react-native": "^2.12.0",
+    "@livekit/react-native-webrtc": "144.1.2",
     "@op-engineering/op-sqlite": "^18.1.4",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/netinfo": "12.0.1",
@@ -127,6 +128,7 @@
     "expo-secure-store": "~57.0.1",
     "expo-splash-screen": "~57.0.7",
     "expo-status-bar": "~57.0.1",
+    "expo-store-review": "~57.0.3",
     "expo-updates": "~57.0.16",
     "expo-video": "~57.0.2",
     "expo-web-browser": "~57.0.2",
@@ -146,6 +148,7 @@
     "react-native-keyboard-controller": "^1.21.9",
     "react-native-mmkv": "^4.3.2",
     "react-native-nitro-modules": "0.37.0",
+    "thryft-video-export": "file:./modules/thryft-video-export",
     "react-native-reanimated": "^4.5.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
@@ -201,6 +204,7 @@
         "exclude": [
           "react-native-nitro-image",
           "thryft-native",
+          "thryft-video-export",
           "react-native-shared-hero",
           "react-native-vision-camera-mlkit"
         ]

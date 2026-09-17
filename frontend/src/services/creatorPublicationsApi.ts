@@ -161,6 +161,14 @@ export interface ScheduleCreatorDocumentParams {
   publishCommand: PublishCommand;
   /** Idempotency key for unknown-outcome reconciliation. */
   idempotencyKey?: string;
+  /**
+   * When true, the server treats the schedule as due immediately and
+   * triggers the publication sweep right away — the async "publish now"
+   * path. The request returns instantly instead of blocking on the
+   * server-side media render; the caller polls `fetchScheduleInfo` for
+   * the terminal state.
+   */
+  immediate?: boolean;
 }
 
 export interface ScheduleResult {
@@ -169,6 +177,7 @@ export interface ScheduleResult {
   documentId: string;
   dueAt: string;
   timezone: string;
+  immediate?: boolean;
   idempotencyKey?: string;
   error?: string;
 }
@@ -203,6 +212,7 @@ export async function schedulePublication(
         dueAt: params.dueAt,
         timezone: params.timezone ?? 'UTC',
         publishCommand: params.publishCommand,
+        ...(params.immediate ? { immediate: true } : {}),
       }),
     },
   );
@@ -233,6 +243,9 @@ export interface ScheduleInfo {
   state: 'pending' | 'claimed' | 'published' | 'failed' | 'cancelled';
   attempts: number;
   publicationId: string | null;
+  /** Published entity id (look id / story id), resolved via the joined
+   *  creator_publications row once the schedule reaches 'published'. */
+  targetId: string | null;
   failureReason: string | null;
 }
 
@@ -242,6 +255,136 @@ export async function fetchScheduleInfo(
   return fetchJson<{ ok: boolean; schedule: ScheduleInfo | null }>(
     `/creator/documents/${documentId}/schedule`,
   );
+}
+
+// ── Async publish ("publish now, process on server") ────────────────────
+
+export class PublishAsyncTimeoutError extends Error {
+  readonly scheduleId: string;
+  constructor(scheduleId: string) {
+    super('Publication is still processing on the server');
+    this.name = 'PublishAsyncTimeoutError';
+    this.scheduleId = scheduleId;
+  }
+}
+
+export class PublishAsyncFailedError extends Error {
+  readonly scheduleId: string;
+  readonly failureReason: string | null;
+  constructor(scheduleId: string, failureReason: string | null) {
+    super(failureReason ?? 'Publication failed on the server');
+    this.name = 'PublishAsyncFailedError';
+    this.scheduleId = scheduleId;
+    this.failureReason = failureReason;
+  }
+}
+
+export interface PublishAsyncOptions {
+  /** Poll interval in ms (default 1500). */
+  pollIntervalMs?: number;
+  /** Total wait budget in ms before giving up with a timeout error
+   *  (default 150_000 — server renders of multi-frame video compositions
+   *  can legitimately take tens of seconds). */
+  timeoutMs?: number;
+  /** Optional callback fired on each poll with the latest schedule state. */
+  onState?: (state: ScheduleInfo['state']) => void;
+  /** AbortSignal to cancel the poll loop (does NOT cancel the server-side
+   *  publication — the schedule row keeps executing). */
+  signal?: AbortSignal;
+}
+
+/**
+ * Publish a document without blocking on the server-side render.
+ *
+ * Creates a server-owned schedule row due immediately (`immediate: true`),
+ * which the publication sweep worker claims within ~1s and executes via the
+ * same canonical `publishCreatorDocumentTransaction` used by the sync
+ * publish route. The client then polls `fetchScheduleInfo` until the
+ * schedule reaches a terminal state.
+ *
+ * Returns a PublicationResult-shaped object so callers can treat sync and
+ * async publishes identically. Throws `PublishAsyncFailedError` when the
+ * worker reports a terminal failure, or `PublishAsyncTimeoutError` when the
+ * wait budget is exhausted — in the timeout case the schedule may still
+ * complete later (the persisted attempt + push notification cover that).
+ */
+export async function publishCreatorDocumentAsync(
+  documentId: string,
+  command: PublishCommand,
+  idempotencyKey: string,
+  options: PublishAsyncOptions = {},
+): Promise<PublicationResult> {
+  const { pollIntervalMs = 1500, timeoutMs = 150_000, onState, signal } = options;
+
+  const schedule = await schedulePublication(documentId, {
+    dueAt: new Date().toISOString(),
+    publishCommand: command,
+    idempotencyKey,
+    immediate: true,
+  });
+
+  if (!schedule.ok || !schedule.scheduleId) {
+    throw new Error(schedule.error ?? 'Failed to enqueue publication');
+  }
+
+  const deadline = Date.now() + timeoutMs;
+  let lastState: ScheduleInfo['state'] | null = null;
+
+  // First poll after a short delay — the sweep needs a moment to claim and
+  // execute. The interval is the same for every poll; no fake progress.
+  await new Promise((r) => setTimeout(r, 1000));
+
+  while (Date.now() < deadline) {
+    if (signal?.aborted) {
+      throw new DOMException('Publish polling aborted', 'AbortError');
+    }
+
+    const { schedule: info } = await fetchScheduleInfo(documentId);
+
+    // fetchScheduleInfo returns the latest non-cancelled schedule. If it's
+    // a different row (a newer schedule superseded ours), keep polling —
+    // our row's outcome is resolvable via lookupScheduleByKey.
+    if (info && info.id === schedule.scheduleId) {
+      if (info.state !== lastState) {
+        lastState = info.state;
+        onState?.(info.state);
+      }
+
+      if (info.state === 'published') {
+        let publicationId = info.publicationId;
+        let targetId = info.targetId;
+        if (!publicationId || !targetId) {
+          // The schedule says published but the join came back empty —
+          // resolve through the publication row directly. The worker's
+          // publication idempotency key is deterministic.
+          const pub = await lookupPublicationByKey(
+            documentId,
+            `sched_${schedule.scheduleId}_${info.version}`,
+          );
+          if (pub?.publicationId) publicationId = pub.publicationId;
+          if (pub?.targetId) targetId = pub.targetId;
+        }
+        return {
+          ok: true,
+          documentId,
+          publicationId: publicationId ?? '',
+          targetId: targetId ?? '',
+          destination: command.destination,
+          revisionNumber: command.revision,
+          state: 'published',
+          idempotentReplay: false,
+        };
+      }
+      if (info.state === 'failed') {
+        throw new PublishAsyncFailedError(schedule.scheduleId, info.failureReason);
+      }
+      // 'pending' | 'claimed' → still processing, keep polling.
+    }
+
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
+  }
+
+  throw new PublishAsyncTimeoutError(schedule.scheduleId);
 }
 
 // ── Schedule reconciliation ────────────────────────────────────────────
@@ -256,6 +399,7 @@ export interface ScheduleLookupResult {
   state: 'pending' | 'claimed' | 'published' | 'failed' | 'cancelled';
   attempts: number;
   publicationId: string | null;
+  targetId: string | null;
   failureReason: string | null;
   error?: string;
   code?: string;

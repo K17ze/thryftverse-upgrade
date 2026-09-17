@@ -6,7 +6,6 @@ import { useCurrencyContext } from '../../context/CurrencyContext';
 import { parseApiError } from '../../lib/apiClient';
 import {
   getIzePosition,
-  getWalletSnapshot,
   getSellerWalletBalances,
   type SellerWalletBalanceItem } from '../../services/walletApi';
 import type { CoOwn1ZeBalance } from '../../components/coown';
@@ -70,10 +69,9 @@ export function useWalletData() {
 
     Promise.all([
       getIzePosition(currentUser.id, currencyCode),
-      getWalletSnapshot(currentUser.id).catch(() => null),
       getSellerWalletBalances(currentUser.id).catch(() => null),
     ])
-      .then(([position, fiatWallet, sellerWallet]) => {
+      .then(([position, sellerWallet]) => {
         if (cancelled) return;
         setBalance({
           available: position.balances.availableIze,
@@ -91,7 +89,9 @@ export function useWalletData() {
           snapshotSequence: position.balances.snapshotSequence,
           serverTimestamp: position.balances.serverTimestamp,
           reconciliationState: position.balances.reconciliationState });
-        setAvailableFiatBalance(fiatWallet?.snapshot.availableGbp ?? 0);
+        // availableFiatBalance now reads the ledger-backed seller balances —
+        // the snapshot endpoint's client-asserted blob is not a money source.
+        setAvailableFiatBalance(sellerWallet?.balances.availableGbp ?? 0);
         if (sellerWallet) {
           setSellerBalances({
             availableGbp: sellerWallet.balances.availableGbp,

@@ -18,6 +18,7 @@ import {
 import { evaluatePriceAlertsForListing } from '../../routes/priceAlerts.js';
 import { formatGbpAmount } from '../../lib/workerHelpers.js';
 import { queueUserNotification } from '../../lib/workerRuntime.js';
+import { emitOfferChatCard, syncOfferChatCardStatus } from '../../lib/offerChatCards.js';
 
 export type OutboxDrainHandlerDeps = {
   /** Uses shared db singleton + worker runtime helpers. */
@@ -130,6 +131,8 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
         reservationExpiresAt: payload.reservationExpiresAt,
       },
     });
+    // Flip the in-thread offer card to 'accepted' on both devices.
+    await syncOfferChatCardStatus({ offerId: payload.offerId, log: logger });
     return;
   }
 
@@ -174,6 +177,10 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
       type: 'offer.countered',
       payload,
     });
+    // In-thread offer card for the new counter, authored by the countering
+    // party; the parent offer's card flips to 'countered' on both devices.
+    await emitOfferChatCard({ offerId: payload.offerId, log: logger });
+    await syncOfferChatCardStatus({ offerId: payload.parentOfferId, log: logger });
     return;
   }
 
@@ -221,6 +228,10 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
         expiresAt: payload.expiresAt,
       },
     });
+    // In-thread offer card: the offer is a durable entity — persist it as a
+    // real chat message (not a sender-local echo) so the recipient's card
+    // renders with live Accept/Pass/Counter actions.
+    await emitOfferChatCard({ offerId: payload.offerId, log: logger });
     return;
   }
 
@@ -250,6 +261,8 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
       type: 'offer.declined',
       payload,
     });
+    // Flip the in-thread offer card to 'declined' on both devices.
+    await syncOfferChatCardStatus({ offerId: payload.offerId, log: logger });
     return;
   }
 
@@ -284,6 +297,8 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
       type: 'offer.sibling_declined',
       payload,
     });
+    // Flip the losing offer's in-thread card to 'declined' on both devices.
+    await syncOfferChatCardStatus({ offerId: payload.offerId, log: logger });
     return;
   }
 
@@ -315,6 +330,8 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
       type: 'offer.expired',
       payload,
     });
+    // Flip the in-thread offer card to 'expired' on both devices.
+    await syncOfferChatCardStatus({ offerId: payload.offerId, log: logger });
     return;
   }
 
@@ -343,6 +360,8 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
       type: 'offer.cancelled',
       payload,
     });
+    // Flip the in-thread offer card to 'cancelled' on both devices.
+    await syncOfferChatCardStatus({ offerId: payload.offerId, log: logger });
     return;
   }
 

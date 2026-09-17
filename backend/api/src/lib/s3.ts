@@ -6,6 +6,7 @@ import {
   GetObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
+  ListMultipartUploadsCommand,
   PutObjectCommand,
   S3Client,
   UploadPartCommand,
@@ -136,6 +137,8 @@ export async function putJsonObject(
   };
 }
 
+export class UploadedObjectPolicyError extends Error {}
+
 export async function assertObjectMatchesUploadPolicy(
   key: string,
   expectedContentType: string,
@@ -150,20 +153,44 @@ export async function assertObjectMatchesUploadPolicy(
 
   const actualContentType = normalizedContentType(result.ContentType ?? '');
   if (actualContentType !== normalizedContentType(expectedContentType)) {
-    throw new Error('UPLOADED_OBJECT_CONTENT_TYPE_MISMATCH');
+    throw new UploadedObjectPolicyError('UPLOADED_OBJECT_CONTENT_TYPE_MISMATCH');
   }
   if (result.ContentLength !== expectedSizeBytes) {
-    throw new Error('UPLOADED_OBJECT_SIZE_MISMATCH');
+    throw new UploadedObjectPolicyError('UPLOADED_OBJECT_SIZE_MISMATCH');
   }
 }
 
-export async function deleteObject(key: string): Promise<void> {
+export async function deleteObject(key: string, bucket?: string): Promise<void> {
   await internalS3.send(
     new DeleteObjectCommand({
-      Bucket: config.s3Bucket,
+      Bucket: bucket ?? config.s3Bucket,
       Key: key,
     })
   );
+}
+
+/**
+ * True when the object exists. Used by the session sweep to detect an
+ * object that S3 assembled via CompleteMultipartUpload but whose
+ * finalization transaction never committed — it would otherwise bill
+ * forever with no row referencing it.
+ */
+export async function objectExists(key: string, bucket?: string): Promise<boolean> {
+  try {
+    await internalS3.send(
+      new HeadObjectCommand({
+        Bucket: bucket ?? config.s3Bucket,
+        Key: key,
+      }),
+    );
+    return true;
+  } catch (error) {
+    const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
+    if (status === 404 || (error instanceof Error && error.name === 'NotFound')) {
+      return false;
+    }
+    throw error;
+  }
 }
 
 /**
@@ -231,12 +258,17 @@ export async function putBinaryObject(
 export async function createMultipartUpload(
   key: string,
   contentType: string,
+  options?: { cacheControl?: string; sizeBytes?: number },
 ): Promise<{ uploadId: string; key: string; bucket: string }> {
-  const policy = assertUploadPolicy(contentType, config.s3MaxVideoUploadBytes);
+  const policy = assertUploadPolicy(
+    contentType,
+    options?.sizeBytes ?? maxUploadBytesForContentType(contentType),
+  );
   const command = new CreateMultipartUploadCommand({
     Bucket: config.s3Bucket,
     Key: key,
     ContentType: policy.contentType,
+    CacheControl: options?.cacheControl,
   });
   const response = await internalS3.send(command);
   if (!response.UploadId) {
@@ -276,6 +308,33 @@ export async function presignPartUpload(
 }
 
 /**
+ * Server-side part upload: unlike {@link presignPartUpload} (which hands a
+ * URL to the client), this sends the part bytes straight from the API —
+ * used when the server itself produces the bytes (e.g. streaming an FFmpeg
+ * transcode into S3 while it is still encoding).
+ */
+export async function uploadPartObject(
+  key: string,
+  uploadId: string,
+  partNumber: number,
+  body: Buffer,
+): Promise<{ etag: string }> {
+  const response = await internalS3.send(
+    new UploadPartCommand({
+      Bucket: config.s3Bucket,
+      Key: key,
+      UploadId: uploadId,
+      PartNumber: partNumber,
+      Body: body,
+    }),
+  );
+  if (!response.ETag) {
+    throw new Error('S3_UPLOAD_PART_FAILED');
+  }
+  return { etag: response.ETag };
+}
+
+/**
  * Complete a multipart upload by submitting the list of (partNumber, ETag)
  * pairs. S3 assembles the final object and returns its location.
  */
@@ -304,16 +363,55 @@ export async function completeMultipartUpload(
 }
 
 /**
+ * List in-progress multipart uploads (at most `maxResults`). Used by the
+ * session sweep to find S3 uploads that have no `upload_multipart_sessions`
+ * row — the initiate route creates the S3 upload before inserting the row,
+ * so a crash between the two leaves an orphaned session the DB-driven
+ * sweep can never see.
+ */
+export async function listMultipartUploads(
+  maxResults = 500,
+): Promise<Array<{ key: string; uploadId: string; initiated: Date | undefined }>> {
+  const out: Array<{ key: string; uploadId: string; initiated: Date | undefined }> = [];
+  let keyMarker: string | undefined;
+  let uploadIdMarker: string | undefined;
+  do {
+    const page = await internalS3.send(
+      new ListMultipartUploadsCommand({
+        Bucket: config.s3Bucket,
+        MaxUploads: Math.min(1000, maxResults - out.length),
+        KeyMarker: keyMarker,
+        UploadIdMarker: uploadIdMarker,
+      }),
+    );
+    for (const u of page.Uploads ?? []) {
+      if (u.Key && u.UploadId) {
+        out.push({ key: u.Key, uploadId: u.UploadId, initiated: u.Initiated });
+      }
+    }
+    if (out.length >= maxResults || !page.IsTruncated) break;
+    keyMarker = page.NextKeyMarker;
+    uploadIdMarker = page.NextUploadIdMarker;
+  } while (keyMarker);
+  return out;
+}
+
+/**
  * Abort a multipart upload. Frees storage consumed by uploaded parts on S3.
  * Called when the client cancels or when the session expires.
+ *
+ * `bucket` must come from the session row when one exists — after a bucket
+ * rotation, aborting against the current `config.s3Bucket` would hit the
+ * wrong bucket, return NoSuchUpload, and leak parts in the old one.
  */
 export async function abortMultipartUpload(
   key: string,
   uploadId: string,
+  bucket?: string,
 ): Promise<void> {
   await internalS3.send(
     new AbortMultipartUploadCommand({
-      Bucket: config.s3Bucket,
+      Bucket: bucket ?? config.s3Bucket,
       Key: key,
       UploadId: uploadId,
     }),

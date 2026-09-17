@@ -1,0 +1,578 @@
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  ScrollView,
+  TextInput,
+  Switch } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Space, Radius, Typography, Control, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
+import { IconGrammar } from '../../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { useCreator } from '../studio/CreatorContext';
+import { SheetContainer, PressScale } from '../shared/CreatorAnimations';
+import { useHaptic } from '../../hooks/useHaptic';
+import { withAlpha } from '../../components/poster/shared/colorUtils';
+
+// Decorative palette — intentionally hardcoded.
+// These are user-facing canvas background swatches (solid colors and
+// gradients) that the creator picks from. They are persisted as canvas
+// background values and rendered over media, so they must remain stable
+// literal colors rather than theme tokens that shift with light/dark mode.
+const BG_PRESETS = [
+  { label: 'Black', type: 'color' as const, value: '#000000' },
+  { label: 'Dark', type: 'color' as const, value: '#1a1a1a' },
+  { label: 'White', type: 'color' as const, value: '#ffffff' },
+  { label: 'Gold', type: 'color' as const, value: '#C9A46A' },
+  { label: 'Gold Fade', type: 'gradient' as const, value: '#1a1a1a', secondaryValue: '#C9A46A' },
+  { label: 'Sunset', type: 'gradient' as const, value: '#9b0202', secondaryValue: '#F5D547' },
+  { label: 'Ocean', type: 'gradient' as const, value: '#06489A', secondaryValue: '#215634' },
+  { label: 'Plum', type: 'gradient' as const, value: '#2d1b3d', secondaryValue: '#7B68EE' },
+];
+
+export interface CreatorSettingsSheetProps {
+  visible: boolean;
+  onClose: () => void;
+}
+
+export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetProps) {
+  const { document, updateMetadata, updateCanvas, saveDraft, isDirty, autosaveStatus, retryAutosave } = useCreator();
+  const { colors } = useAppTheme();
+  const haptic = useHaptic();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const [title, setTitle] = useState(document.metadata.title || '');
+  const [caption, setCaption] = useState(document.metadata.caption || '');
+  const [accessibilityDesc, setAccessibilityDesc] = useState(document.metadata.accessibilityDescription || '');
+  const [focusedField, setFocusedField] = useState<string | null>(null);
+
+  // Blur-commit alone loses edits: dismissing the sheet (backdrop tap,
+  // swipe-down) while a field is still focused never fires onBlur, so
+  // the typed value silently drops. Track per-field dirtiness and flush
+  // on close — dirty flags ensure a stale local state can't overwrite
+  // metadata that changed through another path.
+  const dirtyRef = useRef({ title: false, caption: false, a11y: false });
+  const draftsRef = useRef({ title, caption, accessibilityDesc });
+  draftsRef.current = { title, caption, accessibilityDesc };
+
+  const isLook = document.type === 'look';
+
+  const handleSaveTitle = useCallback(() => {
+    dirtyRef.current.title = false;
+    updateMetadata({ title });
+  }, [title, updateMetadata]);
+
+  const handleSaveCaption = useCallback(() => {
+    dirtyRef.current.caption = false;
+    updateMetadata({ caption });
+  }, [caption, updateMetadata]);
+
+  const handleSaveAccessibility = useCallback(() => {
+    dirtyRef.current.a11y = false;
+    updateMetadata({ accessibilityDescription: accessibilityDesc });
+  }, [accessibilityDesc, updateMetadata]);
+
+  // Flush any un-blurred edits when the sheet closes (gesture dismiss or
+  // close button — SheetContainer may keep this component mounted while
+  // hidden, so key on `visible`, not unmount).
+  useEffect(() => {
+    if (visible) return;
+    const d = dirtyRef.current;
+    const drafts = draftsRef.current;
+    if (d.title) updateMetadata({ title: drafts.title });
+    if (d.caption) updateMetadata({ caption: drafts.caption });
+    if (d.a11y) updateMetadata({ accessibilityDescription: drafts.accessibilityDesc });
+    dirtyRef.current = { title: false, caption: false, a11y: false };
+  }, [visible, updateMetadata]);
+
+  const handleClose = useCallback(() => {
+    const d = dirtyRef.current;
+    const drafts = draftsRef.current;
+    if (d.title) updateMetadata({ title: drafts.title });
+    if (d.caption) updateMetadata({ caption: drafts.caption });
+    if (d.a11y) updateMetadata({ accessibilityDescription: drafts.accessibilityDesc });
+    dirtyRef.current = { title: false, caption: false, a11y: false };
+    onClose();
+  }, [onClose, updateMetadata]);
+
+  const inputStyle = (field: string) => [
+    styles.input,
+    focusedField === field && styles.inputFocused,
+  ];
+
+  return (
+    <SheetContainer visible={visible} onClose={handleClose} maxHeight={0.8}>
+        <View style={styles.header}>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>Settings</Text>
+          <PressScale onPress={handleClose} style={styles.closeBtn} accessibilityLabel="Close settings"
+          accessibilityHint="Closes the settings sheet">
+            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+          </PressScale>
+        </View>
+
+        <ScrollView style={styles.scrollBody} contentContainerStyle={styles.scrollContent}>
+          {/* Shared: Title */}
+          <Text style={styles.sectionLabel}>Title</Text>
+          <TextInput
+            style={inputStyle('title')}
+            value={title}
+            onChangeText={(v) => { dirtyRef.current.title = true; setTitle(v); }}
+            onFocus={() => setFocusedField('title')}
+            onBlur={() => { setFocusedField(null); handleSaveTitle(); }}
+            placeholder="Untitled"
+            placeholderTextColor={colors.textMuted}
+            accessibilityLabel="Document title"
+            accessibilityHint="Type the document title"
+          />
+
+          {/* Shared: Caption */}
+          <View style={styles.labelRow}>
+            <Text style={styles.sectionLabel}>Caption</Text>
+            <Text style={[styles.charCount, { color: caption.length > 2000 ? colors.danger : colors.textMuted }]}>
+              {caption.length}/2200
+            </Text>
+          </View>
+          <TextInput
+            style={[inputStyle('caption'), styles.textArea]}
+            value={caption}
+            onChangeText={(v) => { dirtyRef.current.caption = true; setCaption(v); }}
+            onFocus={() => setFocusedField('caption')}
+            onBlur={() => { setFocusedField(null); handleSaveCaption(); }}
+            placeholder="Add a caption..."
+            placeholderTextColor={colors.textMuted}
+            multiline
+            maxLength={2200}
+            accessibilityLabel="Caption"
+            accessibilityHint="Type the caption"
+          />
+
+          {/* Shared: Accessibility description */}
+          <Text style={styles.sectionLabel}>Alt Text</Text>
+          <TextInput
+            style={[inputStyle('accessibility'), styles.textArea]}
+            value={accessibilityDesc}
+            onChangeText={(v) => { dirtyRef.current.a11y = true; setAccessibilityDesc(v); }}
+            onFocus={() => setFocusedField('accessibility')}
+            onBlur={() => { setFocusedField(null); handleSaveAccessibility(); }}
+            placeholder="Describe for screen readers…"
+            placeholderTextColor={colors.textMuted}
+            multiline
+            accessibilityLabel="Accessibility description"
+            accessibilityHint="Type alt text for screen readers"
+          />
+
+          {/* Shared: Recreate attribution — shows the source composition this
+              look was recreated from. Internal metadata key remains
+              sourceDocumentId; the user-facing label is "Recreate Source". */}
+          {document.metadata.sourceDocumentId && (
+            <>
+              <Text style={styles.sectionLabel}>Recreate Source</Text>
+              <View style={styles.attributionBox}>
+                <Ionicons name="git-branch-outline" size={IconGrammar.metadata} color={colors.textSecondary} />
+                <View style={styles.attributionContent}>
+                  <Text style={styles.attributionText}>
+                    Recreated from a {document.type}
+                  </Text>
+                  <Text style={styles.attributionDetail}>
+                    Source: {document.metadata.sourceDocumentId}
+                  </Text>
+                </View>
+              </View>
+            </>
+          )}
+
+          {/* Look-specific settings */}
+          {isLook && (
+            <>
+              <Text style={styles.sectionLabel}>Visibility</Text>
+              <View style={styles.row}>
+                <Text style={styles.rowLabel}>Public</Text>
+                <Switch
+                  value={document.metadata.visibility === 'public'}
+                  onValueChange={(v) => updateMetadata({ visibility: v ? 'public' : 'private' })}
+                  trackColor={{ false: colors.border, true: colors.brand }}
+                  accessibilityLabel="Public visibility"
+                  accessibilityHint="Makes the look visible to everyone"
+                />
+              </View>
+
+              <Text style={styles.sectionLabel}>Recreate Permission</Text>
+              <View style={styles.row}>
+                <Text style={styles.rowLabel}>Allow recreate</Text>
+                <Switch
+                  value={document.metadata.allowRemix ?? false}
+                  onValueChange={(v) => updateMetadata({ allowRemix: v })}
+                  trackColor={{ false: colors.border, true: colors.brand }}
+                  accessibilityLabel="Allow recreate"
+                  accessibilityHint="Lets others recreate from this look"
+                />
+              </View>
+            </>
+          )}
+
+          {/* Poster-specific settings */}
+          {!isLook && (
+            <>
+              <Text style={styles.sectionLabel}>Audience</Text>
+              <View style={styles.row}>
+                <Text style={styles.rowLabel}>Public</Text>
+                <Switch
+                  value={document.metadata.visibility === 'public'}
+                  onValueChange={(v) => updateMetadata({ visibility: v ? 'public' : 'private' })}
+                  trackColor={{ false: colors.border, true: colors.brand }}
+                  accessibilityLabel="Public audience"
+                  accessibilityHint="Makes the post visible to everyone"
+                />
+              </View>
+
+              <Text style={styles.sectionLabel}>Allow Replies</Text>
+              <View style={styles.row}>
+                <Text style={styles.rowLabel}>Replies</Text>
+                <Switch
+                  value={document.metadata.allowReplies ?? true}
+                  onValueChange={(v) => updateMetadata({ allowReplies: v })}
+                  trackColor={{ false: colors.border, true: colors.brand }}
+                  accessibilityLabel="Allow replies"
+                  accessibilityHint="Lets viewers reply to this post"
+                />
+              </View>
+
+              <Text style={styles.sectionLabel}>Allow Reactions</Text>
+              <View style={styles.row}>
+                <Text style={styles.rowLabel}>Reactions</Text>
+                <Switch
+                  value={document.metadata.allowReactions ?? true}
+                  onValueChange={(v) => updateMetadata({ allowReactions: v })}
+                  trackColor={{ false: colors.border, true: colors.brand }}
+                  accessibilityLabel="Allow reactions"
+                  accessibilityHint="Lets viewers react to this post"
+                />
+              </View>
+
+              <Text style={styles.sectionLabel}>Expiry (hours)</Text>
+              <TextInput
+                style={inputStyle('expiry')}
+                value={String(document.metadata.expiresInHours ?? 24)}
+                onChangeText={(v) => {
+                  const num = parseInt(v, 10);
+                  if (!isNaN(num) && num > 0) updateMetadata({ expiresInHours: num });
+                }}
+                onFocus={() => setFocusedField('expiry')}
+                onBlur={() => setFocusedField(null)}
+                keyboardType="numeric"
+                accessibilityLabel="Expiry in hours"
+                accessibilityHint="Type the number of hours before expiry"
+              />
+            </>
+          )}
+
+          {/* Shared: Canvas background */}
+          <Text style={styles.sectionLabel}>Background</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.bgScroll}
+            contentContainerStyle={styles.bgScrollContent}
+          >
+            {BG_PRESETS.map((bg) => {
+              const isActive = document.canvas.background.type === bg.type &&
+                document.canvas.background.value === bg.value &&
+                (bg.secondaryValue ? document.canvas.background.secondaryValue === bg.secondaryValue : true);
+              return (
+                <Pressable
+                  key={bg.label}
+                  onPress={() => {
+                    haptic.selection();
+                    updateCanvas({ background: { type: bg.type, value: bg.value, secondaryValue: bg.secondaryValue } });
+                  }}
+                  style={styles.bgTileWrap}
+                  accessibilityLabel={`Background ${bg.label}${isActive ? ', selected' : ''}`}
+                  accessibilityHint="Applies this canvas background"
+                  accessibilityRole="button"
+                >
+                  <View
+                    style={[
+                      styles.bgTile,
+                      { borderColor: isActive ? colors.brand : 'transparent' },
+                    ]}
+                  >
+                    {bg.type === 'color' ? (
+                      <View style={[styles.bgTileFill, { backgroundColor: bg.value }]} />
+                    ) : (
+                      <LinearGradient
+                        colors={[bg.value, bg.secondaryValue!]}
+                        style={styles.bgTileFill}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 0, y: 1 }}
+                      />
+                    )}
+                    {isActive && (
+                      <View style={styles.bgCheckOverlay}>
+                        <Ionicons name="checkmark-circle" size={IconGrammar.standard} color={colors.surface} />
+                      </View>
+                    )}
+                  </View>
+                  <Text
+                    style={[
+                      styles.bgTileLabel,
+                      { color: isActive ? colors.brand : colors.textSecondary },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {bg.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
+          {/* Shared: Canvas ratio */}
+          <Text style={styles.sectionLabel}>Canvas Ratio</Text>
+          <View style={styles.ratioRow}>
+            {isLook ? (
+              <>
+                <RatioButton label="3:4" ratio={0.75} current={document.canvas.aspectRatio} onSelect={(r) => updateCanvas({ aspectRatio: r })} />
+                <RatioButton label="1:1" ratio={1} current={document.canvas.aspectRatio} onSelect={(r) => updateCanvas({ aspectRatio: r })} />
+                <RatioButton label="4:5" ratio={0.8} current={document.canvas.aspectRatio} onSelect={(r) => updateCanvas({ aspectRatio: r })} />
+                <RatioButton label="9:16" ratio={0.5625} current={document.canvas.aspectRatio} onSelect={(r) => updateCanvas({ aspectRatio: r })} />
+              </>
+            ) : (
+              <>
+                <RatioButton label="9:16" ratio={0.5625} current={document.canvas.aspectRatio} onSelect={(r) => updateCanvas({ aspectRatio: r })} />
+                <RatioButton label="1:1" ratio={1} current={document.canvas.aspectRatio} onSelect={(r) => updateCanvas({ aspectRatio: r })} />
+                <RatioButton label="4:5" ratio={0.8} current={document.canvas.aspectRatio} onSelect={(r) => updateCanvas({ aspectRatio: r })} />
+              </>
+            )}
+          </View>
+
+          {/* Draft save */}
+          <View style={styles.draftSection}>
+            <Text style={styles.sectionLabel}>Draft</Text>
+            <View style={styles.autosaveRow}>
+              <Text style={styles.autosaveLabel}>
+                {autosaveStatus === 'saving' ? 'Saving…' :
+                 autosaveStatus === 'saved' ? 'Saved' :
+                 autosaveStatus === 'failed' ? 'Save failed' : 'Idle'}
+              </Text>
+              {autosaveStatus === 'failed' && (
+                <Pressable onPress={retryAutosave} style={styles.retryBtn} accessibilityLabel="Retry save"
+                accessibilityHint="Retries the failed autosave" accessibilityRole="button">
+                  <Text style={styles.retryText}>Retry</Text>
+                </Pressable>
+              )}
+            </View>
+            <Pressable
+              onPress={() => saveDraft()}
+              style={[styles.saveBtn, !isDirty && styles.saveBtnDisabled]}
+              disabled={!isDirty}
+              accessibilityLabel="Save draft manually"
+              accessibilityHint="Saves the draft now"
+              accessibilityRole="button"
+            >
+              <Ionicons name="save-outline" size={IconGrammar.metadata} color={colors.surface} />
+              <Text style={styles.saveBtnText}>Save</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+    </SheetContainer>
+  );
+}
+
+function RatioButton({ label, ratio, current, onSelect }: { label: string; ratio: number; current: number; onSelect: (r: number) => void }) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const isActive = Math.abs(current - ratio) < 0.01;
+  // Visual preview: a rectangle showing the aspect ratio shape
+  // Max dimensions: 32x40 box
+  const previewW = ratio <= 1 ? Math.floor(28 * ratio) : 28;
+  const previewH = ratio <= 1 ? 28 : Math.floor(28 / ratio);
+  return (
+    <Pressable
+      onPress={() => onSelect(ratio)}
+      style={[
+        styles.ratioBtn,
+        { borderColor: isActive ? colors.brand : colors.border, borderWidth: isActive ? Stroke.emphasis : Stroke.standard, backgroundColor: isActive ? withAlpha(colors.brand, 0.06) : 'transparent' },
+      ]}
+      accessibilityLabel={`Canvas ratio ${label}${isActive ? ', current' : ''}`}
+      accessibilityHint="Sets the canvas aspect ratio"
+      accessibilityRole="button"
+    >
+      <View style={[
+        styles.ratioPreview,
+        { width: previewW, height: previewH, backgroundColor: isActive ? colors.brand : colors.textMuted },
+      ]} />
+      <Text style={[styles.ratioBtnText, { color: isActive ? colors.brand : colors.textSecondary }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm },
+  title: {
+    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size },
+  closeBtn: {
+    width: Control.hit,
+    height: Control.hit,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: Radius.sm },
+  scrollBody: {
+    paddingHorizontal: Space.md },
+  scrollContent: {
+    paddingBottom: Space.xl,
+    gap: Space.xs },
+  sectionLabel: {
+    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    color: colors.textSecondary,
+    marginTop: Space.sm,
+    marginBottom: Space.xs },
+  input: {
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+    borderRadius: Radius.md,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
+  inputFocused: {
+    borderColor: colors.brand,
+    borderWidth: Stroke.emphasis },
+  textArea: {
+    minHeight: 80,
+    textAlignVertical: 'top' },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.xs },
+  rowLabel: {
+    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    color: colors.textPrimary },
+  ratioRow: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    flexWrap: 'wrap' },
+  ratioBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.md,
+    borderWidth: Stroke.standard,
+    gap: Space.xs,
+    minWidth: 72,
+    minHeight: 72 },
+  ratioPreview: {
+    borderRadius: Radius.sm },
+  ratioBtnText: {
+    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center' },
+  charCount: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
+  draftSection: {
+    marginTop: Space.md,
+    gap: Space.xs },
+  autosaveRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm },
+  autosaveLabel: {
+    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    color: colors.textMuted },
+  retryBtn: {
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
+    borderRadius: Radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border },
+  retryText: {
+    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    color: colors.brand },
+  saveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.sm,
+    minHeight: 50,
+    paddingVertical: Space.md,
+    borderRadius: Radius.lg,
+    backgroundColor: colors.brand },
+  saveBtnDisabled: {
+    opacity: 0.4 },
+  saveBtnText: {
+    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    color: colors.surface },
+  attributionBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.sm,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border },
+  attributionContent: {
+    flex: 1,
+    gap: Space.xxs },
+  attributionText: {
+    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    color: colors.textSecondary },
+  attributionDetail: {
+    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    color: colors.textMuted },
+  // ── Background picker ──
+  bgScroll: {
+    marginHorizontal: -Space.md },
+  bgScrollContent: {
+    paddingHorizontal: Space.md,
+    gap: Space.sm },
+  bgTileWrap: {
+    alignItems: 'center',
+    gap: Space.xs },
+  bgTile: {
+    width: 64,
+    height: 80,
+    borderRadius: Radius.lg,
+    borderWidth: Stroke.emphasis,
+    overflow: 'hidden' },
+  bgTileFill: {
+    width: '100%',
+    height: '100%' },
+  bgCheckOverlay: {
+    position: 'absolute',
+    top: Space.xs,
+    right: Space.xs,
+    width: 20,
+    height: 20,
+    borderRadius: Radius.full,
+    backgroundColor: colors.brand,
+    justifyContent: 'center',
+    alignItems: 'center' },
+  bgTileLabel: {
+    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    letterSpacing: 0.1 } });
+}

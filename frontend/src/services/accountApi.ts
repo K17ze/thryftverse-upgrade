@@ -181,6 +181,12 @@ export async function updateUserProfile(input: UpdateProfileInput): Promise<void
 
 export interface UpdateAccountPreferencesInput {
   holidayMode?: boolean;
+  /** Seller-declared holiday-mode return date (ISO-8601) or null to clear.
+   *  Must be a future instant — the backend rejects past dates. Turning
+   *  holidayMode off server-side clears the stored date automatically. */
+  holidayModeUntil?: string | null;
+  /** Seller-authored note shown to buyers while away; null clears it. */
+  awayMessage?: string | null;
   privateProfile?: boolean;
 }
 
@@ -190,6 +196,22 @@ export async function updateUserAccountPreferences(input: UpdateAccountPreferenc
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   });
+}
+
+export interface AccountPreferencesResponse {
+  holidayMode: boolean;
+  holidayModeUntil: string | null;
+  awayMessage: string | null;
+  privateProfile: boolean;
+}
+
+/** Server-canonical account preferences — the login-time rehydrate source
+ *  for the locally persisted `accountPreferences` cache. */
+export async function fetchAccountPreferences(): Promise<AccountPreferencesResponse> {
+  const payload = await fetchJson<{ ok: true; preferences: AccountPreferencesResponse }>(
+    '/users/me/preferences',
+  );
+  return payload.preferences;
 }
 
 export interface PostagePreferences {
@@ -236,35 +258,6 @@ export async function updateUserPersonalisation(input: UpdatePersonalisationInpu
 export async function fetchUserPersonalisation(): Promise<UpdatePersonalisationInput> {
   const payload = await fetchJson<{ ok: true; personalisation: UpdatePersonalisationInput }>('/users/me/personalisation');
   return payload.personalisation;
-}
-
-export interface SessionInfo {
-  id: string;
-  userAgent: string | null;
-  ipAddress: string | null;
-  createdAt: string;
-  lastSeenAt: string | null;
-  isCurrent: boolean;
-  deviceName: string;
-  platform: string;
-}
-
-export async function fetchActiveSessions(): Promise<SessionInfo[]> {
-  const payload = await fetchJson<{ ok: true; sessions: SessionInfo[] }>('/users/me/sessions');
-  return payload.sessions;
-}
-
-export async function revokeSession(sessionId: string): Promise<void> {
-  await fetchJson<{ ok: true }>(`/users/me/sessions/${encodeURIComponent(sessionId)}`, {
-    method: 'DELETE',
-  });
-}
-
-export async function revokeOtherSessions(): Promise<number> {
-  const payload = await fetchJson<{ ok: true; revokedCount: number }>('/users/me/sessions/others', {
-    method: 'DELETE',
-  });
-  return payload.revokedCount;
 }
 
 /* ─── Chat Privacy Sync ─── */

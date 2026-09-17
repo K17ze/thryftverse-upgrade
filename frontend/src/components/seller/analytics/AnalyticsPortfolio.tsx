@@ -10,7 +10,6 @@ export function AnalyticsPortfolio({ model }: { model: SellerAnalyticsModel }) {
     funnelPipeline,
     funnelBottleneck,
     conversionRate,
-    peerConversionBenchmark,
     periodLabel,
     categoryMix,
     listings,
@@ -26,7 +25,7 @@ export function AnalyticsPortfolio({ model }: { model: SellerAnalyticsModel }) {
   return (
     <>
       {/* ── Conversion Funnel — flat metric rows ── */}
-      {funnelPipeline && funnelPipeline.stages.some((s) => s.value > 0) ? (
+      {funnelPipeline && funnelPipeline.stages.some((s) => (s.value ?? 0) > 0) ? (
         <View style={styles.funnelSection}>
           <View style={styles.sectionHeaderRow}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Conversion journey</Text>
@@ -38,19 +37,28 @@ export function AnalyticsPortfolio({ model }: { model: SellerAnalyticsModel }) {
           <View style={styles.funnelList}>
             {funnelPipeline.stages.map((stage, idx) => {
               const prevValue = idx > 0 ? funnelPipeline.stages[idx - 1].value : stage.value;
-              const stepConversion = idx > 0 && prevValue > 0 ? Math.round((stage.value / prevValue) * 100) : null;
+              const stepConversion =
+                idx > 0 && prevValue != null && prevValue > 0 && stage.value != null
+                  ? Math.round((stage.value / prevValue) * 100)
+                  : null;
               return (
                 <FlagshipMetricLine
                   key={stage.id}
                   label={stage.label}
-                  value={stepConversion != null ? `${stage.value.toLocaleString()} · ${stepConversion}%` : stage.value.toLocaleString()}
+                  value={
+                    stage.value == null
+                      ? 'Unavailable'
+                      : stepConversion != null
+                        ? `${stage.value.toLocaleString()} · ${stepConversion}%`
+                        : stage.value.toLocaleString()
+                  }
                   separated={idx > 0}
                 />
               );
             })}
           </View>
 
-          {/* ── Funnel Bottleneck Lever & Peer Benchmark (Shopify 2026 Mobile) ── */}
+          {/* ── Funnel Bottleneck Lever ── */}
           {funnelBottleneck ? (
             <View style={[styles.bottleneckCard, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
               <View style={styles.bottleneckHeaderRow}>
@@ -70,7 +78,7 @@ export function AnalyticsPortfolio({ model }: { model: SellerAnalyticsModel }) {
           {conversionRate != null ? (
             <View style={styles.benchmarkRow}>
               <Text style={[styles.benchmarkLabel, { color: colors.textMuted }]}>
-                Store conversion: <Text style={{ color: colors.textPrimary }}>{conversionRate.toFixed(1)}%</Text> · Top 20% peer benchmark: {peerConversionBenchmark}%
+                Store conversion: <Text style={{ color: colors.textPrimary }}>{conversionRate.toFixed(1)}%</Text>
               </Text>
             </View>
           ) : null}

@@ -520,6 +520,15 @@ export async function changePassword(input: {
 }
 
 export async function logoutFromSession() {
+  // Deactivate this device's push registration before the session ends —
+  // otherwise order/payment/message pushes keep arriving on a logged-out
+  // (possibly shared or sold) device. Best-effort: never block sign-out.
+  try {
+    const { deactivateCurrentPushDevice } = await import('../lib/pushDevice');
+    await deactivateCurrentPushDevice();
+  } catch {
+    // best-effort
+  }
   try {
     const session = await getAuthSession();
     await fetchJson('/auth/logout', {

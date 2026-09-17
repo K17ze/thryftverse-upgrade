@@ -82,13 +82,15 @@ interface MessageBubbleProps {
   isMe: boolean;
   senderLabel?: string;
   timestamp?: string;
-  status?: 'sending' | 'sent' | 'failed' | 'draft';
+  status?: 'sending' | 'sent' | 'failed' | 'draft' | 'reconciling';
   readStatus?: 'sending' | 'sent' | 'delivered' | 'read';
   readBy?: string[];
   isGroup?: boolean;
   currentUserId?: string;
   reactions?: Reaction[];
   mediaUri?: string;
+  /** Still frame for video bubbles — mediaUri may be an HLS playlist. */
+  posterUri?: string;
   mediaType?: 'image' | 'video';
   uploadStatus?: 'uploading' | 'failed' | 'sent';
   voiceDurationMs?: number;
@@ -111,6 +113,11 @@ interface MessageBubbleProps {
   /** When true, renders the message as an unconfirmed agent draft with a
    *  muted bubble, a "Draft" label, and a "Send" confirmation action. */
   isDraft?: boolean;
+  /** P2-03: message body was edited — renders a small "Edited" marker. */
+  isEdited?: boolean;
+  /** Save in chat — negotiated persistence. Renders a small bookmark +
+   *  "Saved" marker in the meta row; shared state both parties see. */
+  isSaved?: boolean;
   onLongPress?: () => void;
   onReactionPress?: () => void;
   onRetry?: () => void;
@@ -142,6 +149,7 @@ function MessageBubbleBase({
   currentUserId,
   reactions,
   mediaUri,
+  posterUri,
   mediaType,
   uploadStatus,
   documentUri,
@@ -160,6 +168,8 @@ function MessageBubbleBase({
   isAgent = false,
   agentAvatar,
   isDraft = false,
+  isEdited = false,
+  isSaved = false,
   onConfirmDraft,
   onRetryDraft,
   onLongPress,
@@ -248,7 +258,13 @@ function MessageBubbleBase({
   const a11yLabel = [
     isMe ? 'Your message' : senderLabel ? `${senderLabel}'s message` : 'Message',
     text ? text.slice(0, 100) : mediaUri ? (mediaType === 'video' ? 'video' : 'photo') : undefined,
-    status === 'failed' ? 'failed to send' : status === 'sending' ? 'sending' : undefined,
+    status === 'failed'
+      ? 'failed to send'
+      : status === 'sending'
+        ? 'sending'
+        : status === 'reconciling'
+          ? 'confirming delivery'
+          : undefined,
   ].filter(Boolean).join(', ');
 
   // WhatsApp 2026 style: fully-rounded 20px bubbles with asymmetric tail radius
@@ -337,7 +353,7 @@ function MessageBubbleBase({
           {mediaUri ? (
             <Pressable onPress={onMediaPress} style={styles.mediaWrap} accessibilityRole="button" accessibilityLabel={mediaType === 'video' ? 'Open video' : 'Open photo'}>
               <CachedImage
-                uri={mediaUri}
+                uri={mediaType === 'video' ? (posterUri ?? mediaUri) : mediaUri}
                 style={[styles.mediaImage, mediaRadius]}
                 contentFit="cover"
               />
@@ -451,6 +467,22 @@ function MessageBubbleBase({
           ) : null}
 
           <View style={[styles.metaRow, isMe && styles.metaRowMe]}>
+            {isSaved ? (
+              <View
+                style={styles.savedMark}
+                accessibilityLabel={t('conversation.savedInChat')}
+              >
+                <Ionicons name="bookmark" size={10} color={metaColor} />
+                <Text style={[styles.timestamp, { color: metaColor }]}>
+                  {t('conversation.savedInChat')}
+                </Text>
+              </View>
+            ) : null}
+            {isEdited ? (
+              <Text style={[styles.timestamp, { color: metaColor, fontStyle: 'italic' }]}>
+                {t('conversation.edited')}
+              </Text>
+            ) : null}
             {timestamp ? <Text style={[styles.timestamp, { color: metaColor }]}>{timestamp}</Text> : null}
             {isMe && (readStatus || status) ? (
               <View style={styles.statusWrap}>
@@ -458,6 +490,16 @@ function MessageBubbleBase({
                   <Ionicons name="time-outline" size={12} color={metaColor} />
                 ) : hasFailed ? (
                   <Ionicons name="alert-circle" size={12} color={isMe ? colors.textInverse : colors.danger} />
+                ) : status === 'reconciling' ? (
+                  // The HTTP send failed but the server may have created
+                  // the message — a muted sync glyph is the honest state:
+                  // not "sent" (checkmark) and not a hard failure.
+                  <Ionicons
+                    name="sync-outline"
+                    size={12}
+                    color={metaColor}
+                    accessibilityLabel="Confirming delivery"
+                  />
                 ) : readStatus ? (
                   <>
                     <Ionicons
@@ -674,6 +716,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 4,
     marginTop: 2,
     minHeight: 14 },
+  savedMark: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2 },
   metaRowMe: {
     opacity: 0.7 },
   timestamp: {

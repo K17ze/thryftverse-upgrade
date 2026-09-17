@@ -21,7 +21,7 @@
  *   - SpeedCurveTypes.ts: SpeedCurve, averageSpeed
  *   - TimelineTypes.ts: PosterClip, OverlayLayer
  */
-import type { CreatorDocument, CreatorPage, CreatorLayer } from '../../composition';
+import type { CreatorDocument, CreatorPage, CreatorLayer } from '../projectStore/composition';
 import type { SpeedCurve } from '../../poster/speedcurves/SpeedCurveTypes';
 import { averageSpeed } from '../../poster/speedcurves/SpeedCurveTypes';
 
@@ -37,6 +37,8 @@ export type ProjectedClip = {
   sourceStartMs: number;
   /** Trim end in the source asset (ms). */
   sourceEndMs: number;
+  /** Full source asset duration (ms) — bounds slip editing. */
+  sourceDurationMs: number;
   /** Where in the timeline this clip plays (ms, absolute). */
   timelineStartMs: number;
   /** Speed-adjusted duration (ms). */
@@ -171,6 +173,7 @@ function projectClip(
       mediaType,
       sourceStartMs: 0,
       sourceEndMs: durationMs,
+      sourceDurationMs: durationMs,
       timelineStartMs,
       durationMs,
       speed: 1,
@@ -207,6 +210,7 @@ function projectClip(
     mediaType,
     sourceStartMs,
     sourceEndMs,
+    sourceDurationMs: payload.videoDurationMs ?? sourceEndMs,
     timelineStartMs,
     durationMs,
     speed,

@@ -313,6 +313,8 @@
       "biometricLoginDisabled": "Désactivé — l'app s'ouvre directement sur votre compte",
       "notificationCategories": "Catégories de notifications",
       "notificationPreferencesSubtitle": "Heures tranquilles, aperçu",
+      "pushThisDevice": "Notifications push sur cet appareil",
+      "pushThisDeviceSubtitle": "Distribution et enregistrement",
       "featureFlags": "Feature flags",
       "featureFlagsSubtitle": "Valeurs actuelles des flags pour QA",
       "autoTranslate": "Traduire automatiquement les messages",

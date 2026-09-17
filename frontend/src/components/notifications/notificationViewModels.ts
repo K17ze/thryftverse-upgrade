@@ -40,13 +40,17 @@ export type NotificationCard = {
   /** Member event ids for aggregated cards — mutations fan out to these;
    *  the synthetic `agg:` id is a render key, not a server-resolvable id. */
   aggregatedIds?: string[];
+  /**
+   * Member event ids that were UNREAD when the card was built. Mark-read
+   * fans out to these only — already-read members 404 server-side
+   * (NOTIFICATION_NOT_FOUND) and would reject the whole Promise.all.
+   */
+  aggregatedUnreadIds?: string[];
   /** Number of member events that were unread when the card was built —
    *  drives correct badge-count decrement on mark-read. */
   aggregatedUnreadCount?: number;
   /** V2 structured event — passed to role-specific row presenters. */
   v2Event: NotificationEventV2;
-  /** Delivery status from the push pipeline — drives the status indicator. */
-  deliveryStatus: 'queued' | 'ticketed' | 'sent' | 'failed' | 'suppressed';
 };
 
 /**
@@ -60,9 +64,10 @@ export type NotificationListItem =
 
 export type NotificationFilter = 'all' | 'unread' | 'order' | 'new_item' | 'review' | 'price' | 'auction';
 
-// All filters live behind a single overflow funnel icon — no primary tab row.
-// This keeps the screen's information hierarchy attention-first (Needs attention,
-// Today, Yesterday, Earlier) rather than split across pseudo-tabs.
+// The complete filter set, rendered as a selection list inside the overflow
+// bottom sheet (label + count + checkmark). The screen's information
+// hierarchy stays attention-first (Needs attention, Today, Yesterday,
+// Earlier) rather than split across pseudo-tabs.
 export const OVERFLOW_FILTERS: { key: NotificationFilter; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'unread', label: 'Unread' },
@@ -76,7 +81,7 @@ export const OVERFLOW_FILTERS: { key: NotificationFilter; label: string }[] = [
 // No per-filter icons — the label is the object (AGENTS.md §4 anti
 // label-everything). The filter sheet is a selection list, not a settings
 // catalogue: label + count + checkmark is the complete grammar.
-
+//
 // Primary pill-style filter tabs — always visible at the top of the list.
 // The most useful commerce/social filters get direct one-tap access; the
 // remaining filters stay behind the overflow funnel icon.
@@ -104,18 +109,48 @@ const EVENT_TYPE_CARD_MAP: Record<NotificationEventType, NotificationCardType> =
   order_out_for_delivery: 'order',
   order_delivered: 'order',
   order_refunded: 'order',
+  order_dispatch_sla_breach: 'order',
   resolution_opened: 'resolution',
   resolution_status_changed: 'resolution',
   review_received: 'review',
+  review_response_received: 'review',
+  review_moderated: 'review',
   chat_message: 'generic',
   payout_processed: 'order',
   refund_completed: 'order',
+  payment_failed: 'order',
   auction_outbid: 'auction',
   auction_won: 'auction',
   auction_ending_soon: 'auction',
+  auction_bid: 'auction',
+  auction_cancelled: 'auction',
+  auction_reserve_not_met: 'auction',
+  auction_sold_awaiting_payment: 'auction',
+  auction_payment_expired: 'auction',
+  auction_sold: 'auction',
+  offer_created: 'order',
+  offer_countered: 'order',
+  offer_accepted: 'order',
+  offer_declined: 'order',
+  offer_expired: 'order',
+  offer_cancelled: 'order',
   new_follower: 'generic',
+  follow_received: 'generic',
   price_drop: 'price',
   new_listing_from_followed_seller: 'new_item',
+  saved_search_match: 'new_item',
+  live_started: 'new_item',
+  dispatch_extension_proposed: 'order',
+  dispatch_extension_responded: 'order',
+  scheduled_publication_success: 'generic',
+  scheduled_publication_blocked: 'generic',
+  scheduled_publication_failed: 'generic',
+  'support.operator_reply': 'resolution',
+  'support.information_requested': 'resolution',
+  'support.case_resolved': 'resolution',
+  coown_buyout_accepted: 'order',
+  coown_verification_responded: 'order',
+  ops_alert: 'generic',
   safety_outcome: 'generic',
   generic: 'generic', // resolved further by objectRef below
 };
@@ -141,6 +176,8 @@ function cardTypeFromObjectRef(objectRef: NotificationObjectRef | undefined): No
       return 'generic';
     case 'wallet':
       return 'order';
+    case 'live_session':
+      return 'new_item';
     default:
       return 'generic';
   }
@@ -216,8 +253,7 @@ export function mapEventToCard(event: NotificationEvent): NotificationCard {
     aggregationKey: v2.aggregationKey,
     attention: v2.attention,
     objectRef: v2.objectRef,
-    v2Event: v2,
-    deliveryStatus: event.status };
+    v2Event: v2 };
 }
 
 /**
@@ -294,6 +330,7 @@ export function aggregateNotifications(notifications: NotificationCard[]): Notif
       aggregatedCount: count,
       aggregatedActors: uniqueActorNames.slice(0, 5),
       aggregatedIds: group.map((n) => n.id),
+      aggregatedUnreadIds: group.filter((n) => !n.read).map((n) => n.id),
       aggregatedUnreadCount: group.filter((n) => !n.read).length,
       read: group.every((n) => n.read),
       v2Event: {
@@ -389,18 +426,80 @@ export function flattenNotificationSections(sections: NotificationSection[]): No
   return items;
 }
 
-export function computeNotificationFilterCounts(
-  notifications: NotificationCard[]
-): Record<NotificationFilter, number> {
-  const counts: Record<NotificationFilter, number> = { all: 0, unread: 0, order: 0, new_item: 0, review: 0, price: 0, auction: 0 };
-  for (const n of notifications) {
-    counts.all++;
-    if (!n.read) counts.unread++;
-    if (n.type === 'order') counts.order++;
-    else if (n.type === 'new_item') counts.new_item++;
-    else if (n.type === 'review') counts.review++;
-    else if (n.type === 'price') counts.price++;
-    else if (n.type === 'auction') counts.auction++;
+/**
+ * Filter key → the event types it covers. Sent to `listNotificationEvents`
+ * so the server filters the page itself instead of the client filtering a
+ * ≤30-row window. 'all' and 'unread' are not listed — 'all' sends no
+ * filter; 'unread' uses the `unread` flag.
+ */
+export const FILTER_EVENT_TYPES: Record<Exclude<NotificationFilter, 'all' | 'unread'>, NotificationEventType[]> = {
+  order: [
+    'order_created',
+    'order_paid',
+    'order_cancelled',
+    'order_dispatched',
+    'order_in_transit',
+    'order_out_for_delivery',
+    'order_delivered',
+    'order_refunded',
+    'order_dispatch_sla_breach',
+    'payout_processed',
+    'refund_completed',
+    'payment_failed',
+    'dispatch_extension_proposed',
+    'dispatch_extension_responded',
+    'offer_created',
+    'offer_countered',
+    'offer_accepted',
+    'offer_declined',
+    'offer_expired',
+    'offer_cancelled',
+  ],
+  new_item: ['new_listing_from_followed_seller', 'saved_search_match', 'live_started'],
+  review: ['review_received', 'review_response_received', 'review_moderated'],
+  price: ['price_drop'],
+  auction: [
+    'auction_outbid',
+    'auction_won',
+    'auction_ending_soon',
+    'auction_bid',
+    'auction_cancelled',
+    'auction_reserve_not_met',
+    'auction_sold_awaiting_payment',
+    'auction_payment_expired',
+    'auction_sold',
+  ],
+};
+
+/**
+ * Resolve the quiet action label for an action-required card. Returns
+ * undefined when the event needs no action or has no route — the row then
+ * renders no affordance. Route-aware so the seller-side dispatch breach
+ * reads "Dispatch now" while the same event type routed to OrderDetail
+ * reads as a review action.
+ */
+export function resolveCardActionLabel(card: NotificationCard): string | undefined {
+  if (!card.requiresAction) return undefined;
+  const screen = card.route?.screen;
+  if (!screen) return undefined;
+
+  if (screen === 'SellerFulfilment') return 'Dispatch now';
+  switch (card.eventType) {
+    case 'dispatch_extension_proposed':
+      return 'Respond';
+    case 'offer_created':
+    case 'offer_countered':
+      return 'Review offer';
+    case 'offer_accepted':
+      return 'Complete checkout';
+    case 'support.information_requested':
+      return 'Reply';
+    case 'scheduled_publication_blocked':
+    case 'scheduled_publication_failed':
+      return 'Review';
+    case 'resolution_opened':
+      return 'Respond';
+    default:
+      return 'View';
   }
-  return counts;
 }

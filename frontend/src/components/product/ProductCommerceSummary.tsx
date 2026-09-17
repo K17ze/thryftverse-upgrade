@@ -101,12 +101,19 @@ export function ProductCommerceSummary({
     rows.push({
       icon: 'checkmark-circle-outline',
       label: 'Authenticity',
-      value: commerce.authenticity.label ?? commerce.authenticity.status === 'verified' ? 'Verified' : 'Eligible',
+      value: commerce.authenticity.label ?? (
+        commerce.authenticity.status === 'verified'
+          ? 'Verified'
+          : commerce.authenticity.status === 'in_progress'
+            ? 'Verification in progress'
+            : 'Eligible'),
       sheetContent: {
         title: 'Authenticity',
         body: commerce.authenticity.status === 'verified'
           ? 'This item has been verified for authenticity by Thryftverse.'
-          : 'This item may be eligible for authenticity verification. Learn more at checkout.' } });
+          : commerce.authenticity.status === 'in_progress'
+            ? 'Verification of this item is currently in progress.'
+            : 'This item may be eligible for authenticity verification. Learn more at checkout.' } });
   }
 
   if (rows.length === 0) return null;

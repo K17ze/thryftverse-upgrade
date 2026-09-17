@@ -12,8 +12,8 @@
  */
 
 import React from 'react';
-import { StyleSheet, ScrollView, Pressable, Text, ViewStyle } from 'react-native';
-import { Space, Radius, Stroke, Typography } from '../../theme/designTokens';
+import { StyleSheet, ScrollView, Pressable, ViewStyle } from 'react-native';
+import { Space, Radius, Stroke } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { toHexString } from './ColorMath';
@@ -45,6 +45,7 @@ export function RecentColors({
       contentContainerStyle={[styles.row, style]}
       accessibilityRole="list"
       accessibilityLabel="Recent colors"
+      accessibilityHint="Swipe horizontally to browse recent colors"
     >
       {recents.map((entry, index) => {
         const hex = toHexString(entry.color).toUpperCase();
@@ -60,6 +61,7 @@ export function RecentColors({
               { backgroundColor: toHexString(entry.color) },
             ]}
             accessibilityLabel={`Recent color ${hex}`}
+            accessibilityHint="Selects this color"
             accessibilityRole="button"
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           />

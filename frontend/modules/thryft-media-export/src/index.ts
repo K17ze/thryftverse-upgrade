@@ -23,6 +23,7 @@
  * OR the JS Skia path is available, so the publish workflow can gate on
  * a single function regardless of which path will service the request.
  */
+import { Image as RNImage } from 'react-native';
 import { getHybridObjectConstructor } from 'react-native-nitro-modules';
 import type { HybridObject } from 'react-native-nitro-modules';
 import type { ThryftMediaExport } from './ThryftMediaExport.nitro';
@@ -46,12 +47,14 @@ import {
   ImageFormat,
   PaintStyle,
   StrokeCap,
+  StrokeJoin,
   type SkImage,
   type SkCanvas,
   type SkPaint,
   type SkSurface,
   type SkFont,
   type SkPath,
+  type SkTypeface,
 } from '@shopify/react-native-skia';
 
 const MODULE_NAME = 'ThryftMediaExport';
@@ -195,10 +198,28 @@ export const ThryftMediaExportModule = new Proxy(
 // import from the app's creator domain, preserving the dependency
 // direction (app → module, never module → app).
 
+interface JsRecipeNode {
+  type: 'matrix' | 'adjust' | 'blur' | 'grain' | 'vignette';
+  matrix?: number[];
+  amount?: number;
+  radius?: number;
+  exposure?: number;
+  contrast?: number;
+  highlights?: number;
+  shadows?: number;
+  saturation?: number;
+  temperature?: number;
+  tint?: number;
+  fade?: number;
+  vignette?: number;
+  sharpness?: number;
+}
+
 interface JsEffectNode {
   type: 'filter' | 'adjust' | 'blur' | 'vignette';
   id?: string;
   amount?: number;
+  recipe?: JsRecipeNode[];
   exposure?: number;
   contrast?: number;
   highlights?: number;
@@ -226,6 +247,7 @@ interface JsLayerPayload {
   fill?: { r: number; g: number; b: number; a: number };
   textColor?: string;
   fontSize?: number;
+  textStyle?: string;
   bold?: boolean;
   italic?: boolean;
   background?: { color: { r: number; g: number; b: number; a: number }; radius: number; paddingX: number; paddingY: number };
@@ -235,6 +257,9 @@ interface JsLayerPayload {
   alignment?: 'left' | 'center' | 'right' | 'justify';
   // decorative
   shape?: 'circle' | 'square' | 'line' | 'arrow' | 'star' | 'heart' | 'triangle' | 'hexagon';
+  /** Picked Ionicons glyph for icon stickers — drives arrow direction in
+   *  the JS fallback (full icon-glyph rendering requires the native path). */
+  icon?: string;
   color?: string;
   fillColor?: string;
   // draw
@@ -243,6 +268,12 @@ interface JsLayerPayload {
     color: string;
     width: number;
     tool: string;
+    emoji?: string;
+    emojiSize?: number;
+    emojiSpacing?: number;
+    emojiJitter?: number;
+    sourceWidth?: number;
+    sourceHeight?: number;
   }>;
   // product / look snapshots
   snapshotImageUrl?: string;
@@ -365,7 +396,7 @@ function makeFadeMatrix(fade: number): number[] {
  * Mirrors `buildAdjustmentMatrix` in EffectEvaluator.ts so the JS export
  * produces the same color grading as the live preview.
  */
-function buildAdjustmentMatrix(adjust: JsEffectNode): number[] {
+function buildAdjustmentMatrix(adjust: Omit<JsRecipeNode, 'type'>): number[] {
   let matrix = [..._IDENTITY];
   if (adjust.exposure) {
     const gain = Math.pow(2, adjust.exposure);
@@ -389,36 +420,109 @@ function buildAdjustmentMatrix(adjust: JsEffectNode): number[] {
   return matrix;
 }
 
+interface JsEvaluatedEffects {
+  colorMatrix?: number[];
+  blurRadius?: number;
+  vignetteAmount?: number;
+  grainAmount?: number;
+}
+
 /**
- * Evaluate a composition effect stack into a single color matrix.
- * Both `adjust` nodes and `filter` preset nodes contribute color matrices.
- * Filter preset matrices are inlined from filterConfig.ts (see
- * FILTER_PRESET_MATRICES above) to keep this module self-contained.
- * `blur` and `vignette` are handled separately (image filter / overlay).
+ * Evaluate a composition effect stack into renderable parameters.
+ * Mirrors `evaluateCompositionEffectStack` in
+ * src/creator/core/playback/EffectEvaluator.ts — the two must agree so a
+ * published export matches the authored preview (WYSIWYG).
+ *
+ * `filter` nodes: named presets resolve by `id` against the inlined
+ * FILTER_PRESET_MATRICES; registry effects (e.g. `ai:<id>`) persist their
+ * baked `recipe` (render(1) nodes) which is folded here — previously the
+ * recipe was ignored and registry effects exported as identity.
+ * `blur` produces an image-filter radius; `vignette`/`grain` produce
+ * overlay amounts drawn over the layer rect.
  */
-function evaluateEffectColorMatrix(effects: JsEffectNode[] | undefined): number[] | undefined {
-  if (!effects || effects.length === 0) return undefined;
+function evaluateEffects(effects: JsEffectNode[] | undefined): JsEvaluatedEffects {
+  if (!effects || effects.length === 0) return {};
   let colorMatrix: number[] | undefined;
+  let blurRadius = 0;
+  let vignetteAmount = 0;
+  let grainAmount = 0;
+  let hasBlur = false;
+  let hasVignette = false;
+  let hasGrain = false;
+
+  const foldRecipe = (recipe: JsRecipeNode[], amount: number): void => {
+    for (const rn of recipe) {
+      switch (rn.type) {
+        case 'matrix': {
+          if (!rn.matrix) break;
+          const m = _interpolate(rn.matrix, amount);
+          colorMatrix = colorMatrix ? _multiply(colorMatrix, m) : m;
+          break;
+        }
+        case 'adjust': {
+          const m = buildAdjustmentMatrix(rn);
+          colorMatrix = colorMatrix ? _multiply(colorMatrix, m) : m;
+          if (rn.vignette !== undefined && rn.vignette > 0) {
+            vignetteAmount += rn.vignette * amount;
+            hasVignette = true;
+          }
+          break;
+        }
+        case 'blur': {
+          blurRadius = Math.max(blurRadius, (rn.radius ?? 0) * amount);
+          hasBlur = true;
+          break;
+        }
+        case 'grain': {
+          grainAmount += (rn.amount ?? 0) * amount;
+          hasGrain = true;
+          break;
+        }
+        case 'vignette': {
+          vignetteAmount += (rn.amount ?? 0) * amount;
+          hasVignette = true;
+          break;
+        }
+      }
+    }
+  };
+
   for (const node of effects) {
     if (node.type === 'adjust') {
       const m = buildAdjustmentMatrix(node);
       colorMatrix = colorMatrix ? _multiply(colorMatrix, m) : m;
-    } else if (node.type === 'filter') {
-      // Look up the inlined filter preset matrix by the node's id (the
-      // filter preset name). Interpolate by the node's amount (clamped
-      // 0..1) and multiply into the running color matrix. Unknown or
-      // retired filter IDs fail closed to identity (no effect).
-      const target = node.id ? _FILTERS[node.id] : undefined;
-      if (target) {
-        const intensity = clamp(node.amount ?? 0, 0, 1);
-        const m = _interpolate(target, intensity);
-        colorMatrix = colorMatrix ? _multiply(colorMatrix, m) : m;
+      if (node.vignette !== undefined && node.vignette > 0) {
+        vignetteAmount += node.vignette;
+        hasVignette = true;
       }
+    } else if (node.type === 'filter') {
+      const amount = clamp(node.amount ?? 0, 0, 1);
+      if (node.recipe && node.recipe.length > 0) {
+        foldRecipe(node.recipe, amount);
+      } else {
+        // Named preset: resolve by id. Unknown/retired IDs fail closed
+        // to identity (no effect).
+        const target = node.id ? _FILTERS[node.id] : undefined;
+        if (target) {
+          const m = _interpolate(target, amount);
+          colorMatrix = colorMatrix ? _multiply(colorMatrix, m) : m;
+        }
+      }
+    } else if (node.type === 'blur') {
+      blurRadius = Math.max(blurRadius, node.radius ?? 0);
+      hasBlur = true;
+    } else if (node.type === 'vignette') {
+      vignetteAmount += node.amount ?? 0;
+      hasVignette = true;
     }
-    // 'blur' and 'vignette' are handled separately (image filter / overlay).
   }
-  if (colorMatrix && !_isIdentity(colorMatrix)) return colorMatrix;
-  return undefined;
+
+  const result: JsEvaluatedEffects = {};
+  if (colorMatrix && !_isIdentity(colorMatrix)) result.colorMatrix = colorMatrix;
+  if (hasBlur && blurRadius > 0) result.blurRadius = blurRadius;
+  if (hasVignette && vignetteAmount > 0) result.vignetteAmount = Math.min(1, vignetteAmount);
+  if (hasGrain && grainAmount > 0) result.grainAmount = Math.min(1, grainAmount);
+  return result;
 }
 
 // ── Helpers ──
@@ -624,17 +728,16 @@ function drawMediaLayer(
   paint.setBlendMode(BlendMode.SrcOver);
   paint.setAlphaf(layerOpacity);
 
-  // Color matrix from effect stack (adjustments only).
-  const colorMatrix = evaluateEffectColorMatrix(p.effects);
-  if (colorMatrix) {
-    const cf = Skia.ColorFilter.MakeMatrix(colorMatrix);
+  // Full effect-stack evaluation — color matrix + blur + vignette + grain,
+  // including baked recipes for registry (ai:) effects.
+  const evaluated = evaluateEffects(p.effects);
+  if (evaluated.colorMatrix) {
+    const cf = Skia.ColorFilter.MakeMatrix(evaluated.colorMatrix);
     if (cf) paint.setColorFilter(cf);
   }
-
-  // Blur image filter.
-  const blurNode = p.effects?.find((e) => e.type === 'blur');
-  if (blurNode && blurNode.radius && blurNode.radius > 0) {
-    const blur = Skia.ImageFilter.MakeBlur(blurNode.radius, blurNode.radius, TileMode.Clamp, null);
+  if (evaluated.blurRadius && evaluated.blurRadius > 0) {
+    const blur = Skia.ImageFilter.MakeBlur(
+      evaluated.blurRadius, evaluated.blurRadius, TileMode.Clamp, null);
     if (blur) paint.setImageFilter(blur);
   }
 
@@ -673,7 +776,98 @@ function drawMediaLayer(
       paint,
     );
   }
+
+  // Vignette + grain overlays — same parameters as the preview renderer
+  // (MediaLayerContent): radial gradient darkening toward the edges, and
+  // turbulence noise at overlay blend capped at 40% alpha.
+  if (evaluated.vignetteAmount && evaluated.vignetteAmount > 0) {
+    const vp = Skia.Paint();
+    const shader = Skia.Shader.MakeRadialGradient(
+      { x: dx + dw / 2, y: dy + dh / 2 },
+      Math.max(dw, dh) * 0.75,
+      [Skia.Color('rgba(0,0,0,0)'), Skia.Color('rgba(0,0,0,1)')],
+      null,
+      TileMode.Clamp,
+    );
+    vp.setShader(shader);
+    vp.setAlphaf(Math.min(1, evaluated.vignetteAmount) * layerOpacity);
+    canvas.drawRect({ x: dx, y: dy, width: dw, height: dh }, vp);
+  }
+  if (evaluated.grainAmount && evaluated.grainAmount > 0) {
+    const gp = Skia.Paint();
+    const shader = Skia.Shader.MakeTurbulence(0.9, 0.9, 2, 0, 0, 0);
+    gp.setShader(shader);
+    gp.setBlendMode(BlendMode.Overlay);
+    gp.setAlphaf(Math.min(1, evaluated.grainAmount) * 0.4 * layerOpacity);
+    canvas.drawRect({ x: dx, y: dy, width: dw, height: dh }, gp);
+  }
   canvas.restore();
+}
+
+// ── Creator text-style fonts ──────────────────────────────────────────
+// The preview (TextLayerContent) maps `textStyle` to a bundled font +
+// token-derived size, and the layer container applies `layer.scale` as a
+// transform — so the effective size is baseSize × layer.scale. These maps
+// replicate that contract; they must stay in sync with the styleMap in
+// src/creator/studio/layers/TextLayerContent.tsx.
+const TEXT_STYLE_FONT_MODULES: Record<string, number> = {
+  headline: require('@expo-google-fonts/anton/400Regular/Anton_400Regular.ttf'),
+  deco: require('@expo-google-fonts/anton/400Regular/Anton_400Regular.ttf'),
+  editorial: require('@expo-google-fonts/playfair-display/700Bold/PlayfairDisplay_700Bold.ttf'),
+  clean: require('@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf'),
+  compact: require('@expo-google-fonts/inter/600SemiBold/Inter_600SemiBold.ttf'),
+  handwritten: require('@expo-google-fonts/caveat/400Regular/Caveat_400Regular.ttf'),
+  bubble: require('@expo-google-fonts/playfair-display/400Regular/PlayfairDisplay_400Regular.ttf'),
+  poster: require('@expo-google-fonts/bebas-neue/400Regular/BebasNeue_400Regular.ttf'),
+  squeeze: require('@expo-google-fonts/bebas-neue/400Regular/BebasNeue_400Regular.ttf'),
+  signature: require('@expo-google-fonts/playfair-display/400Regular_Italic/PlayfairDisplay_400Regular_Italic.ttf'),
+};
+
+const TEXT_STYLE_BASE_SIZES: Record<string, number> = {
+  headline: 28,
+  editorial: 25,
+  clean: 15,
+  compact: 11,
+  handwritten: 16,
+  bubble: 21,
+  deco: 17,
+  poster: 22,
+  squeeze: 14,
+  signature: 17,
+};
+
+/**
+ * Preload Skia typefaces for the text styles used by the given layers.
+ * Fonts resolve from the bundled @expo-google-fonts assets via the Metro
+ * asset pipeline (Image.resolveAssetSource → Skia.Data.fromURI). Any
+ * failure falls back to the default typeface so export never hard-fails
+ * on a font.
+ */
+async function loadTextStyleTypefaces(
+  layers: JsLayer[],
+): Promise<Map<string, SkTypeface>> {
+  const typefaces = new Map<string, SkTypeface>();
+  const stylesNeeded = new Set(
+    layers
+      .filter((l) => l.type === 'text' && !l.hidden)
+      .map((l) => l.payload.textStyle ?? 'clean'),
+  );
+  await Promise.all(
+    [...stylesNeeded].map(async (style) => {
+      const mod = TEXT_STYLE_FONT_MODULES[style];
+      if (!mod) return;
+      try {
+        const uri = RNImage.resolveAssetSource(mod)?.uri;
+        if (!uri) return;
+        const data = await Skia.Data.fromURI(uri);
+        const typeface = Skia.Typeface.MakeFreeTypeFaceFromData(data);
+        if (typeface) typefaces.set(style, typeface);
+      } catch {
+        // Fall back to the default typeface — export must not fail on fonts.
+      }
+    }),
+  );
+  return typefaces;
 }
 
 function drawTextLayer(
@@ -681,9 +875,13 @@ function drawTextLayer(
   layer: JsLayer,
   canvasW: number,
   canvasH: number,
+  typefaces: Map<string, SkTypeface>,
 ): void {
   const p = layer.payload;
-  const text = p.text;
+  const textStyle = p.textStyle ?? 'clean';
+  // The compact style is uppercase by contract (TextLayerContent applies
+  // textTransform) — mirror it so export matches the authored preview.
+  const text = textStyle === 'compact' ? p.text?.toUpperCase() : p.text;
   if (!text) return;
   const layerOpacity = clamp(layer.opacity, 0, 1);
   if (layerOpacity <= 0) return;
@@ -696,9 +894,10 @@ function drawTextLayer(
     fillColor = p.textColor;
   }
 
-  const fontSize = p.fontSize ?? 32;
-  const font = Skia.Font(undefined, fontSize);
-  if (p.bold) font.setSize(fontSize); // Skia default font has no weight API; size is the only knob here.
+  // Effective size = style base size × layer scale (the preview applies
+  // scale as a container transform). p.fontSize is an explicit override.
+  const fontSize = (p.fontSize ?? TEXT_STYLE_BASE_SIZES[textStyle] ?? 32) * layer.scale;
+  const font = Skia.Font(typefaces.get(textStyle), fontSize);
 
   const paint = Skia.Paint();
   paint.setAntiAlias(true);
@@ -862,16 +1061,123 @@ function drawDecorativeLayer(
     paint.setStrokeWidth(Math.max(2, dh));
     canvas.drawLine(cx - dw / 2, cy, cx + dw / 2, cy, paint);
   } else {
-    // Other shapes (star, heart, triangle, hexagon, arrow) — draw a
-    // filled circle as a simple placeholder. Full path geometry for every
-    // decorative shape is beyond the scope of this fallback.
-    const r = Math.min(dw, dh) / 2;
-    paint.setColor(Skia.Color(p.fillColor ?? color));
+    // Shape primitives drawn as real paths — star, triangle, hexagon,
+    // heart, and arrow. Icon stickers persist their direction via
+    // `icon` (e.g. 'arrow-down'), so arrows honor the picked direction.
+    const fill = p.fillColor ?? color;
+    paint.setColor(Skia.Color(fill));
     paint.setStyle(PaintStyle.Fill);
-    canvas.drawCircle(cx, cy, r, paint);
+    const path = Skia.Path.Make();
+    const x0 = cx - dw / 2;
+    const y0 = cy - dh / 2;
+
+    if (shape === 'star') {
+      const rOut = Math.min(dw, dh) / 2;
+      const rIn = rOut * 0.4;
+      for (let i = 0; i < 10; i++) {
+        const r = i % 2 === 0 ? rOut : rIn;
+        const a = -Math.PI / 2 + (i * Math.PI) / 5;
+        const px = cx + r * Math.cos(a);
+        const py = cy + r * Math.sin(a);
+        if (i === 0) path.moveTo(px, py); else path.lineTo(px, py);
+      }
+      path.close();
+    } else if (shape === 'triangle') {
+      path.moveTo(cx, y0);
+      path.lineTo(x0 + dw, y0 + dh);
+      path.lineTo(x0, y0 + dh);
+      path.close();
+    } else if (shape === 'hexagon') {
+      for (let i = 0; i < 6; i++) {
+        const a = (i * Math.PI) / 3;
+        const px = cx + (dw / 2) * Math.cos(a);
+        const py = cy + (dh / 2) * Math.sin(a);
+        if (i === 0) path.moveTo(px, py); else path.lineTo(px, py);
+      }
+      path.close();
+    } else if (shape === 'heart') {
+      // Two lobes + tapered bottom — standard heart silhouette.
+      const w = dw;
+      const h = dh;
+      path.moveTo(cx, y0 + h * 0.3);
+      path.cubicTo(cx - w * 0.55, y0 - h * 0.15, x0 - w * 0.05, y0 + h * 0.45, cx, y0 + h);
+      path.cubicTo(x0 + w * 1.05, y0 + h * 0.45, cx + w * 0.55, y0 - h * 0.15, cx, y0 + h * 0.3);
+      path.close();
+    } else {
+      // arrow — shaft + head pointing up; the persisted icon name
+      // determines the direction (arrow stickers pick a direction).
+      const ARROW_ROTATION: Record<string, number> = {
+        'arrow-up': 0,
+        'arrow-up-right-box': 45,
+        'arrow-forward': 90,
+        'arrow-down-right-box': 135,
+        'arrow-down': 180,
+        'arrow-back': 270,
+      };
+      const shaftW = dw * 0.18;
+      const headH = dh * 0.4;
+      path.moveTo(cx - shaftW / 2, y0 + dh);
+      path.lineTo(cx - shaftW / 2, y0 + headH);
+      path.lineTo(cx - dw * 0.32, y0 + headH);
+      path.lineTo(cx, y0);
+      path.lineTo(cx + dw * 0.32, y0 + headH);
+      path.lineTo(cx + shaftW / 2, y0 + headH);
+      path.lineTo(cx + shaftW / 2, y0 + dh);
+      path.close();
+      const dir = ARROW_ROTATION[p.icon ?? ''] ?? 0;
+      if (dir !== 0) canvas.rotate(dir, cx, cy);
+    }
+    canvas.drawPath(path, paint);
   }
 
   canvas.restore();
+}
+
+// ── Emoji stamp layout — replicated from
+// src/creator/tools/drawing/emojiStampLayout.ts (this module cannot import
+// app code). Must stay in lockstep: the deterministic seeded walk is what
+// keeps export identical to authoring preview and canvas replay.
+function seededJitter(seed: number): number {
+  const x = Math.sin(seed * 12.9898) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+function layoutEmojiStamps(
+  points: { x: number; y: number }[],
+  spacing: number,
+  jitter: number,
+  stampSize: number,
+  seedBase = 0,
+): { x: number; y: number; rotation: number }[] {
+  if (points.length === 0) return [];
+  const stamps: { x: number; y: number; rotation: number }[] = [];
+  const jitterRange = jitter * stampSize * 0.5;
+  const makeStamp = (x: number, y: number, j: number) => ({
+    x: x + (seededJitter(seedBase * 997 + j * 13) - 0.5) * jitterRange,
+    y: y + (seededJitter(seedBase * 997 + j * 29) - 0.5) * jitterRange,
+    rotation: (seededJitter(seedBase * 997 + j * 41) - 0.5) * 30,
+  });
+  stamps.push(makeStamp(points[0]!.x, points[0]!.y, 0));
+  if (points.length === 1) return stamps;
+  let accumulated = 0;
+  let stampIndex = 0;
+  for (let i = 1; i < points.length; i++) {
+    const prev = points[i - 1]!;
+    const curr = points[i]!;
+    const dx = curr.x - prev.x;
+    const dy = curr.y - prev.y;
+    const segLen = Math.sqrt(dx * dx + dy * dy);
+    if (segLen === 0) continue;
+    accumulated += segLen;
+    while (accumulated >= spacing) {
+      const overshoot = accumulated - spacing;
+      const t = 1 - overshoot / segLen;
+      stampIndex += 1;
+      stamps.push(makeStamp(prev.x + dx * t, prev.y + dy * t, stampIndex));
+      accumulated -= spacing;
+    }
+  }
+  return stamps;
 }
 
 function drawDrawLayer(
@@ -897,28 +1203,82 @@ function drawDrawLayer(
     canvas.rotate(layer.rotation, layer.x * canvasW, layer.y * canvasH);
   }
 
-  for (const stroke of strokes) {
+  // saveLayer: eraser strokes clear within the draw layer's own buffer —
+  // they must subtract earlier strokes, not punch through the media below.
+  canvas.saveLayer();
+
+  for (let i = 0; i < strokes.length; i++) {
+    const stroke = strokes[i]!;
     if (stroke.points.length < 1) continue;
-    const paint = Skia.Paint();
-    paint.setAntiAlias(true);
-    paint.setBlendMode(BlendMode.SrcOver);
-    paint.setAlphaf(layerOpacity);
-    paint.setColor(Skia.Color(stroke.color));
-    paint.setStyle(PaintStyle.Stroke);
-    paint.setStrokeWidth(stroke.width);
-    paint.setStrokeCap(StrokeCap.Round);
+    const tool = stroke.tool ?? 'pen';
+
+    if (tool === 'emoji') {
+      // Emoji-brush stroke: stamp the glyph along the polyline using the
+      // shared deterministic layout. Spacing/size are authored in
+      // source-canvas pixels; scale to the rendered layer bounds.
+      if (!stroke.emoji) continue;
+      const scale = stroke.sourceWidth ? lw / stroke.sourceWidth : 1;
+      const size = (stroke.emojiSize ?? 32) * scale;
+      const spacing = Math.max(4, (stroke.emojiSpacing ?? 48) * scale);
+      const jitter = stroke.emojiJitter ?? 0;
+      const pxPoints = stroke.points.map((pt) => ({
+        x: lx + pt.x * lw,
+        y: ly + pt.y * lh,
+      }));
+      const font = Skia.Font(undefined, size);
+      const paint = Skia.Paint();
+      paint.setAntiAlias(true);
+      paint.setAlphaf(layerOpacity);
+      paint.setColor(Skia.Color(stroke.color || '#ffffff'));
+      for (const stamp of layoutEmojiStamps(pxPoints, spacing, jitter, size, i)) {
+        canvas.save();
+        canvas.translate(stamp.x, stamp.y);
+        canvas.rotate(stamp.rotation, 0, 0);
+        canvas.drawText(stroke.emoji, -size * 0.4, size * 0.8, paint, font);
+        canvas.restore();
+      }
+      continue;
+    }
+
+    const makePaint = (alpha: number, widthScale: number, blend: BlendMode): SkPaint => {
+      const paint = Skia.Paint();
+      paint.setAntiAlias(true);
+      paint.setBlendMode(blend);
+      paint.setAlphaf(alpha * layerOpacity);
+      paint.setColor(Skia.Color(stroke.color));
+      paint.setStyle(PaintStyle.Stroke);
+      paint.setStrokeWidth(stroke.width * widthScale);
+      paint.setStrokeCap(tool === 'highlighter' ? StrokeCap.Butt : StrokeCap.Round);
+      paint.setStrokeJoin(StrokeJoin.Round);
+      return paint;
+    };
 
     const path = Skia.Path.Make();
     const pts = stroke.points;
     const first = pts[0]!;
     path.moveTo(lx + first.x * lw, ly + first.y * lh);
-    for (let i = 1; i < pts.length; i++) {
-      const pt = pts[i]!;
+    for (let j = 1; j < pts.length; j++) {
+      const pt = pts[j]!;
       path.lineTo(lx + pt.x * lw, ly + pt.y * lh);
     }
-    canvas.drawPath(path, paint);
+
+    if (tool === 'eraser') {
+      const paint = makePaint(1, 2, BlendMode.Clear);
+      canvas.drawPath(path, paint);
+    } else if (tool === 'neon') {
+      canvas.drawPath(path, makePaint(0.15, 3, BlendMode.Plus));
+      canvas.drawPath(path, makePaint(0.3, 2, BlendMode.Plus));
+      canvas.drawPath(path, makePaint(1, 1, BlendMode.SrcOver));
+    } else if (tool === 'highlighter') {
+      canvas.drawPath(path, makePaint(0.3, 1.8, BlendMode.Multiply));
+    } else if (tool === 'marker') {
+      canvas.drawPath(path, makePaint(0.6, 1.25, BlendMode.SrcOver));
+    } else {
+      canvas.drawPath(path, makePaint(1, 1, BlendMode.SrcOver));
+    }
   }
 
+  canvas.restore(); // saveLayer → composite buffer
   canvas.restore();
 }
 
@@ -1019,6 +1379,10 @@ export async function jsExportImage(
     }
   }
 
+  // Preload the bundled text-style typefaces so exported text uses the
+  // authored font (previously every style rendered in the default face).
+  const typefaces = await loadTextStyleTypefaces(visibleLayers);
+
   onProgress?.(0.3);
 
   const totalLayers = visibleLayers.length;
@@ -1033,7 +1397,7 @@ export async function jsExportImage(
         break;
       }
       case 'text':
-        drawTextLayer(canvas, layer, canvasW, canvasH);
+        drawTextLayer(canvas, layer, canvasW, canvasH, typefaces);
         break;
       case 'decorative':
         drawDecorativeLayer(canvas, layer, canvasW, canvasH);

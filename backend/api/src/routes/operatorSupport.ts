@@ -397,7 +397,7 @@ export const registerOperatorSupportRoutes = ({
       eventType: 'support.operator_reply',
       actorUserId: operatorId,
       payload: { caseId: id, conversationId: caseRow.conversationId, messageId: message.id },
-      route: { screen: 'support_case', params: { caseId: id } },
+      route: { screen: 'SupportCaseDetail', params: { caseId: id } },
     });
 
     logger.info(
@@ -513,7 +513,7 @@ export const registerOperatorSupportRoutes = ({
       eventType: 'support.information_requested',
       actorUserId: operatorId,
       payload: { caseId: id },
-      route: { screen: 'support_case', params: { caseId: id } },
+      route: { screen: 'SupportCaseDetail', params: { caseId: id } },
     });
 
     const updated = await getCase(db, id);
@@ -588,7 +588,7 @@ export const registerOperatorSupportRoutes = ({
       eventType: 'support.case_resolved',
       actorUserId: operatorId,
       payload: { caseId: id, disposition: body.disposition },
-      route: { screen: 'support_case', params: { caseId: id } },
+      route: { screen: 'SupportCaseDetail', params: { caseId: id } },
     });
 
     const updated = await getCase(db, id);

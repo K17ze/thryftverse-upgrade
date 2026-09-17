@@ -7,12 +7,41 @@ import {
   type StreamRoom,
 } from "../lib/streaming/index.js";
 import { publishRealtimeEvent } from "../lib/realtime.js";
+import { config } from "../config.js";
+import { logger } from "../lib/logger.js";
+import {
+  LIVE_LOT_ANTI_SNIPE_EXTENSION_SECONDS,
+  LIVE_LOT_ANTI_SNIPE_MAX_EXTENSIONS,
+  LIVE_LOT_ANTI_SNIPE_WINDOW_MS,
+  sweepDueLiveLots,
+} from "./liveLotEngine.js";
+
+/**
+ * Signature of the notification queueing seam — mirrors `queueUserNotification`
+ * in src/index.ts / lib/workerRuntime.ts. Injected by the caller when available;
+ * otherwise the go-live fan-out lazily falls back to the worker-runtime copy
+ * (which binds the same db/redis singletons the API process uses).
+ */
+type QueueUserNotification = (input: {
+  userId: string;
+  title: string;
+  body: string;
+  payload?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+  eventType?: string;
+  actorUserId?: string;
+  imageUrl?: string;
+  route?: Record<string, unknown>;
+  idempotencyKey?: string;
+}) => Promise<string | null>;
 
 type StreamingRouteDependencies = {
   app: FastifyInstance;
   db: Pool;
   createApiError: (code: string, message: string, details?: Record<string, unknown>) => Error;
   resolveAuthenticatedUserId: (request: FastifyRequest) => string;
+  /** Optional injected notification producer (the index.ts copy). */
+  queueUserNotification?: QueueUserNotification;
 };
 
 type LiveShoppingSessionRow = {
@@ -29,6 +58,8 @@ type LiveShoppingSessionRow = {
   created_at: string;
   started_at: string | null;
   ended_at: string | null;
+  /** Migration 297 — host-declared go-live time for scheduled shows. */
+  scheduled_start_at?: string | null;
 };
 
 type LiveShoppingChatMessageRow = {
@@ -59,6 +90,12 @@ type LiveShoppingCurrentLotRow = {
   current_price: string;
   bid_count: number;
   updated_at: string;
+  /** From migration 186 — the current high bidder on the projection row. */
+  high_bidder_id?: string | null;
+  /** Joined from the authoritative live_lots row (NULL when the linked lot
+   *  is not open or carries no server deadline). */
+  lot_closes_at?: string | null;
+  lot_extension_count?: number | null;
 };
 
 type LiveLotRow = {
@@ -80,12 +117,39 @@ type LiveLotRow = {
   winner_id: string | null;
   order_id: string | null;
   extension_count: number;
+  /** Joined from live_lot_snapshots (seller captured at schedule time). */
+  seller_id?: string | null;
+  /** Joined from listings — the live status re-checked before a bid lands. */
+  listing_status?: string | null;
+};
+
+/** Row shape returned by the clientBidId replay lookup. */
+type LiveShoppingBidReplayRow = {
+  id: string;
+  session_id: string;
+  listing_id: string;
+  lot_number: number;
+  lot_id: string | null;
+  bidder_id: string;
+  amount: string;
+  created_at: string;
 };
 
 const createSessionSchema = z.object({
   title: z.string().trim().min(1).max(200),
   recordingEnabled: z.boolean().optional().default(false),
   maxViewers: z.number().int().min(0).max(100_000).optional().default(0),
+  // Optional scheduled go-live time (ISO 8601). When present and in the
+  // future, the provider room is deferred until /start — a LiveKit room
+  // created now would sit empty and be reaped by emptyTimeout (300s) long
+  // before the scheduled start.
+  scheduledStartAt: z
+    .string()
+    .datetime({ offset: true })
+    .refine((value) => Date.parse(value) > Date.now(), {
+      message: "scheduledStartAt must be in the future",
+    })
+    .optional(),
 });
 
 const roomIdParamsSchema = z.object({
@@ -131,10 +195,12 @@ const mapRowToStreamRoom = (row: LiveShoppingSessionRow): StreamRoom => ({
   status: row.status as StreamRoom["status"],
   roomUrl: row.room_url,
   recordingUrl: row.recording_url ?? undefined,
+  recordingEnabled: row.recording_enabled,
   viewerCount: row.viewer_count,
   createdAt: row.created_at,
   startedAt: row.started_at ?? undefined,
   endedAt: row.ended_at ?? undefined,
+  scheduledStartAt: row.scheduled_start_at ?? undefined,
 });
 
 const persistSession = async (
@@ -142,11 +208,12 @@ const persistSession = async (
   room: StreamRoom,
   recordingEnabled: boolean,
   maxViewers: number,
+  scheduledStartAt?: string | null,
 ): Promise<LiveShoppingSessionRow> => {
   const result = await db.query<LiveShoppingSessionRow>(
     `INSERT INTO live_shopping_sessions
-       (id, title, host_user_id, status, room_url, recording_enabled, max_viewers, viewer_count, created_at, started_at, ended_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       (id, title, host_user_id, status, room_url, recording_enabled, max_viewers, viewer_count, created_at, started_at, ended_at, scheduled_start_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
      ON CONFLICT (id) DO UPDATE SET
        title = EXCLUDED.title,
        status = EXCLUDED.status,
@@ -155,7 +222,8 @@ const persistSession = async (
        max_viewers = EXCLUDED.max_viewers,
        viewer_count = EXCLUDED.viewer_count,
        started_at = EXCLUDED.started_at,
-       ended_at = EXCLUDED.ended_at
+       ended_at = EXCLUDED.ended_at,
+       scheduled_start_at = EXCLUDED.scheduled_start_at
      RETURNING *`,
     [
       room.roomId,
@@ -169,6 +237,7 @@ const persistSession = async (
       room.createdAt,
       room.startedAt ?? null,
       room.endedAt ?? null,
+      scheduledStartAt ?? null,
     ],
   );
   return result.rows[0];
@@ -194,7 +263,14 @@ const fetchCurrentLotRow = async (
   sessionId: string,
 ): Promise<LiveShoppingCurrentLotRow | null> => {
   const result = await db.query<LiveShoppingCurrentLotRow>(
-    `SELECT * FROM live_shopping_current_lots WHERE session_id = $1 LIMIT 1`,
+    `SELECT c.*, l.closes_at AS lot_closes_at, l.extension_count AS lot_extension_count
+       FROM live_shopping_current_lots c
+       LEFT JOIN live_lots l
+         ON l.session_id = c.session_id
+        AND l.listing_id = c.listing_id
+        AND l.status IN ('open', 'closing')
+      WHERE c.session_id = $1
+      LIMIT 1`,
     [sessionId],
   );
   return result.rows[0] ?? null;
@@ -218,7 +294,319 @@ const mapCurrentLotRow = (row: LiveShoppingCurrentLotRow) => ({
   currentPrice: Number(row.current_price),
   bidCount: row.bid_count,
   updatedAt: row.updated_at,
+  closesAt: row.lot_closes_at ?? null,
+  extensionCount: row.lot_extension_count ?? 0,
 });
+
+// ── Discovery enrichment ─────────────────────────────────────────────
+
+/** Fields joined onto each session card for the discovery surfaces. */
+type SessionDiscoveryEnrichment = {
+  hostUsername: string | null;
+  hostAvatarUrl: string | null;
+  hostVerified: boolean;
+  currentLotTitle: string | null;
+  /** Current high bid / start price in integer minor units (e.g. pence). */
+  currentLotPriceMinor: number | null;
+  currentLotCurrency: string | null;
+  thumbnailUrl: string | null;
+};
+
+const EMPTY_ENRICHMENT: SessionDiscoveryEnrichment = {
+  hostUsername: null,
+  hostAvatarUrl: null,
+  hostVerified: false,
+  currentLotTitle: null,
+  currentLotPriceMinor: null,
+  currentLotCurrency: null,
+  thumbnailUrl: null,
+};
+
+/**
+ * One batched query for every session card field the list endpoint can't get
+ * from the provider: host identity (users), the verified badge (active,
+ * non-expired seller_trust_evidence — same evidence-backed rule the public
+ * profile projection uses), and the current lot's listing title/price/
+ * thumbnail (listing_images primary image, falling back to the legacy
+ * listings.image_url column — the same precedence as the feed projection).
+ */
+const loadSessionDiscoveryEnrichment = async (
+  db: Pool,
+  sessionIds: readonly string[],
+): Promise<Map<string, SessionDiscoveryEnrichment>> => {
+  const bySession = new Map<string, SessionDiscoveryEnrichment>();
+  if (sessionIds.length === 0) return bySession;
+
+  try {
+    const result = await db.query<{
+      session_id: string;
+      host_username: string | null;
+      host_avatar_url: string | null;
+      host_verified: boolean;
+      current_lot_title: string | null;
+      current_lot_price_major: string | null;
+      current_lot_currency: string | null;
+      thumbnail_url: string | null;
+    }>(
+      `SELECT
+         s.id AS session_id,
+         u.username AS host_username,
+         u.avatar AS host_avatar_url,
+         EXISTS (
+           SELECT 1
+           FROM seller_trust_evidence ste
+           WHERE ste.seller_id = s.host_user_id
+             AND ste.state = 'active'
+             AND ste.code IN ('identity_checked', 'trader_verified', 'top_rated')
+             AND (ste.expires_at IS NULL OR ste.expires_at > NOW())
+         ) AS host_verified,
+         li.title AS current_lot_title,
+         cl.current_price AS current_lot_price_major,
+         COALESCE(lot.currency, 'GBP') AS current_lot_currency,
+         COALESCE(img.image_url, li.image_url) AS thumbnail_url
+       FROM live_shopping_sessions s
+       LEFT JOIN users u ON u.id = s.host_user_id
+       LEFT JOIN live_shopping_current_lots cl ON cl.session_id = s.id
+       LEFT JOIN listings li ON li.id = cl.listing_id
+       LEFT JOIN live_lots lot
+         ON lot.session_id = s.id
+        AND lot.listing_id = cl.listing_id
+        AND lot.status IN ('open', 'closing')
+       LEFT JOIN LATERAL (
+         SELECT COALESCE(
+                  CASE WHEN i.media_type = 'video' THEN i.poster_url END,
+                  i.image_url
+                ) AS image_url
+         FROM listing_images i
+         WHERE i.listing_id = li.id
+         ORDER BY i.sort_order, i.created_at, i.id
+         LIMIT 1
+       ) img ON true
+       WHERE s.id = ANY($1)`,
+      [[...sessionIds]],
+    );
+
+    for (const row of result.rows) {
+      bySession.set(row.session_id, {
+        hostUsername: row.host_username,
+        hostAvatarUrl: row.host_avatar_url,
+        hostVerified: Boolean(row.host_verified),
+        currentLotTitle: row.current_lot_title,
+        currentLotPriceMinor:
+          row.current_lot_price_major === null
+            ? null
+            : Math.round(Number(row.current_lot_price_major) * 100),
+        currentLotCurrency:
+          row.current_lot_price_major === null ? null : row.current_lot_currency,
+        thumbnailUrl: row.thumbnail_url,
+      });
+    }
+  } catch (error) {
+    // Enrichment must never break the session list — older schemas may lack
+    // seller_trust_evidence / listing_images / live_lots. Degrade to the
+    // host-identity join (users predates every live-shopping migration).
+    logger.warn(
+      { err: error },
+      "[streaming] session discovery enrichment degraded to host-only",
+    );
+    try {
+      const fallback = await db.query<{
+        session_id: string;
+        host_username: string | null;
+        host_avatar_url: string | null;
+      }>(
+        `SELECT s.id AS session_id, u.username AS host_username, u.avatar AS host_avatar_url
+           FROM live_shopping_sessions s
+           LEFT JOIN users u ON u.id = s.host_user_id
+          WHERE s.id = ANY($1)`,
+        [[...sessionIds]],
+      );
+      for (const row of fallback.rows) {
+        bySession.set(row.session_id, {
+          ...EMPTY_ENRICHMENT,
+          hostUsername: row.host_username,
+          hostAvatarUrl: row.host_avatar_url,
+        });
+      }
+    } catch (fallbackError) {
+      logger.warn(
+        { err: fallbackError },
+        "[streaming] session discovery enrichment unavailable",
+      );
+    }
+  }
+
+  return bySession;
+};
+
+// ── Go-live fan-out ──────────────────────────────────────────────────
+
+/** Hard cap on live_started fan-out recipients per go-live. */
+const LIVE_STARTED_FANOUT_CAP = 5_000;
+
+let cachedRuntimeNotify: QueueUserNotification | null = null;
+
+/**
+ * Resolve the notification producer: the injected copy (index.ts) when the
+ * caller wires it, else the verbatim worker-runtime copy bound to the shared
+ * db/redis singletons. Returns null when neither is available so the fan-out
+ * degrades to a logged no-op instead of breaking /start.
+ */
+const resolveNotify = async (
+  injected: QueueUserNotification | undefined,
+): Promise<QueueUserNotification | null> => {
+  if (injected) return injected;
+  if (cachedRuntimeNotify) return cachedRuntimeNotify;
+  try {
+    const mod = await import("../lib/workerRuntime.js");
+    cachedRuntimeNotify = mod.queueUserNotification;
+    return cachedRuntimeNotify;
+  } catch (error) {
+    logger.warn(
+      { err: error },
+      "[streaming] queueUserNotification unavailable — skipping live_started fan-out",
+    );
+    return null;
+  }
+};
+
+/**
+ * Fan out `live_started` to the host's followers ∪ reminder-holders after a
+ * session goes live. Runs fire-and-forget after the /start commit — failures
+ * are logged, never propagated. Idempotency keys make restarts and double
+ * taps collapse instead of duplicating pushes.
+ */
+const fanOutLiveStarted = async (
+  db: Pool,
+  injected: QueueUserNotification | undefined,
+  session: {
+    roomId: string;
+    title: string;
+    hostUserId: string;
+    scheduledStartAt?: string;
+    /** Fresh timestamp on every /start — discriminates restarts so an
+     *  end→re-live cycle re-notifies instead of colliding with the prior
+     *  run's idempotency keys. */
+    startedAt?: string | null;
+  },
+): Promise<void> => {
+  const recipients = new Set<string>();
+
+  try {
+    const followerResult = await db.query<{ follower_id: string }>(
+      `SELECT follower_id FROM user_follows WHERE following_id = $1 LIMIT $2`,
+      [session.hostUserId, LIVE_STARTED_FANOUT_CAP],
+    );
+    for (const row of followerResult.rows) {
+      recipients.add(row.follower_id);
+    }
+  } catch (error) {
+    logger.warn(
+      { err: error, sessionId: session.roomId },
+      "[streaming] follower lookup failed — fanning out to reminders only",
+    );
+  }
+
+  try {
+    const reminderResult = await db.query<{ user_id: string }>(
+      `SELECT user_id FROM live_session_reminders WHERE session_id = $1`,
+      [session.roomId],
+    );
+    for (const row of reminderResult.rows) {
+      recipients.add(row.user_id);
+    }
+  } catch (error) {
+    // live_session_reminders is a 297 table — an unmigrated schema must not
+    // block go-live pushes to followers.
+    logger.warn(
+      { err: error, sessionId: session.roomId },
+      "[streaming] live_session_reminders lookup failed — fanning out to followers only",
+    );
+  }
+
+  // The host never needs a "you are live" push.
+  recipients.delete(session.hostUserId);
+  if (recipients.size === 0) return;
+
+  // Hard cap the total recipient set — reminders sit on top of the follower
+  // LIMIT and could push recipients past the bound.
+  if (recipients.size > LIVE_STARTED_FANOUT_CAP) {
+    const capped = [...recipients].slice(0, LIVE_STARTED_FANOUT_CAP);
+    recipients.clear();
+    for (const id of capped) recipients.add(id);
+  }
+
+  if (recipients.size >= LIVE_STARTED_FANOUT_CAP) {
+    logger.warn(
+      { sessionId: session.roomId, hostUserId: session.hostUserId, recipients: recipients.size },
+      "[streaming] live_started fan-out hit the recipient cap",
+    );
+  }
+
+  const notify = await resolveNotify(injected);
+  if (!notify) return;
+
+  const hostResult = await db.query<{ username: string | null; avatar: string | null }>(
+    `SELECT username, avatar FROM users WHERE id = $1 LIMIT 1`,
+    [session.hostUserId],
+  );
+  const host = hostResult.rows[0];
+  const hostLabel = host?.username?.trim() || "A seller you follow";
+
+  // Bounded-concurrency send: batches keep latency sane without hammering the
+  // pool with thousands of concurrent inserts.
+  const recipientIds = [...recipients];
+  const BATCH = 50;
+  let delivered = 0;
+  let failed = 0;
+  for (let i = 0; i < recipientIds.length; i += BATCH) {
+    const batch = recipientIds.slice(i, i + BATCH);
+    await Promise.all(
+      batch.map(async (recipientId) => {
+        try {
+          await notify({
+            userId: recipientId,
+            title: `${hostLabel} is live`,
+            body: session.title
+              ? `${session.title} — tap to watch and bid`
+              : "Tap to watch and bid",
+            eventType: "live_started",
+            actorUserId: session.hostUserId,
+            imageUrl: host?.avatar ?? undefined,
+            payload: {
+              event: "live_started",
+              sessionId: session.roomId,
+              roomId: session.roomId,
+              sessionTitle: session.title,
+              hostUserId: session.hostUserId,
+              hostUsername: host?.username ?? null,
+              scheduledStartAt: session.scheduledStartAt ?? null,
+            },
+            route: {
+              screen: "LiveStreamViewer",
+              params: { sessionId: session.roomId },
+            },
+            idempotencyKey: `live_started:${session.roomId}:${session.startedAt ?? "initial"}:${recipientId}`,
+          });
+          delivered += 1;
+        } catch (error) {
+          failed += 1;
+          logger.warn(
+            { err: error, sessionId: session.roomId, recipientId },
+            "[streaming] live_started notification failed for recipient",
+          );
+        }
+      }),
+    );
+  }
+
+  if (failed > 0) {
+    logger.warn(
+      { sessionId: session.roomId, delivered, failed },
+      "[streaming] live_started fan-out completed with failures",
+    );
+  }
+};
 
 /**
  * Register LiveKit streaming routes for live shopping session lifecycle
@@ -229,6 +617,7 @@ export const registerStreamingRoutes = ({
   db,
   createApiError,
   resolveAuthenticatedUserId,
+  queueUserNotification,
 }: StreamingRouteDependencies) => {
   app.post("/streaming/sessions", async (request, reply) => {
     const userId = resolveAuthenticatedUserId(request);
@@ -238,15 +627,43 @@ export const registerStreamingRoutes = ({
     }
 
     const payload = createSessionSchema.parse(request.body);
+    const scheduledStartAt = payload.scheduledStartAt ?? null;
     const provider = getStreamProvider();
-    const room = await provider.createStream({
-      title: payload.title,
-      hostUserId: userId,
-      recordingEnabled: payload.recordingEnabled,
-      maxViewers: payload.maxViewers,
-    });
 
-    const row = await persistSession(db, room, payload.recordingEnabled, payload.maxViewers);
+    let room: StreamRoom;
+    if (scheduledStartAt) {
+      // Scheduled show: persist the row now, but do NOT create the provider
+      // room — it would sit empty and be reaped by emptyTimeout (300s) long
+      // before the scheduled start. POST /sessions/:roomId/start re-creates
+      // the room on demand via StartStreamOptions (verified for both the
+      // LiveKit and mock providers), so a scheduled session with no provider
+      // room starts cleanly. The roomId follows the provider's format.
+      room = {
+        roomId: `stream_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
+        title: payload.title,
+        hostUserId: userId,
+        status: "created",
+        roomUrl: "",
+        viewerCount: 0,
+        createdAt: new Date().toISOString(),
+        scheduledStartAt,
+      };
+    } else {
+      room = await provider.createStream({
+        title: payload.title,
+        hostUserId: userId,
+        recordingEnabled: payload.recordingEnabled,
+        maxViewers: payload.maxViewers,
+      });
+    }
+
+    const row = await persistSession(
+      db,
+      room,
+      payload.recordingEnabled,
+      payload.maxViewers,
+      scheduledStartAt,
+    );
     reply.code(201);
     return { ok: true, session: mapRowToStreamRoom(row) };
   });
@@ -265,13 +682,40 @@ export const registerStreamingRoutes = ({
     }
 
     const provider = getStreamProvider();
-    const updated = await provider.startStream(roomId);
+    // Pass the persisted session fields so the provider can re-create a room
+    // that was reaped while idle (emptyTimeout) instead of leaving this row
+    // stuck in a pre-live status forever.
+    const updated = await provider.startStream(roomId, {
+      title: row.title,
+      hostUserId: row.host_user_id,
+      recordingEnabled: row.recording_enabled,
+      maxViewers: row.max_viewers,
+    });
     const persisted = await persistSession(
       db,
       updated,
       row.recording_enabled,
       row.max_viewers,
+      row.scheduled_start_at ?? null,
     );
+
+    // Go-live fan-out: notify the host's followers ∪ reminder-holders with a
+    // live_started notification. Fire-and-forget post-commit — a notification
+    // failure must never fail or delay the start response. Idempotency keys
+    // (`live_started:{roomId}:{userId}`) collapse retried starts.
+    void fanOutLiveStarted(db, queueUserNotification, {
+      roomId: persisted.id,
+      title: persisted.title,
+      hostUserId: persisted.host_user_id,
+      scheduledStartAt: persisted.scheduled_start_at ?? undefined,
+      startedAt: persisted.started_at ?? null,
+    }).catch((error) => {
+      logger.warn(
+        { err: error, sessionId: roomId },
+        "[streaming] live_started fan-out failed",
+      );
+    });
+
     return { ok: true, session: mapRowToStreamRoom(persisted) };
   });
 
@@ -295,6 +739,7 @@ export const registerStreamingRoutes = ({
       updated,
       row.recording_enabled,
       row.max_viewers,
+      row.scheduled_start_at ?? null,
     );
     return { ok: true, session: mapRowToStreamRoom(persisted) };
   });
@@ -308,9 +753,23 @@ export const registerStreamingRoutes = ({
     const provider = getStreamProvider();
     const streams = await provider.listActiveStreams(limit);
 
+    // One batched lookup for the provider streams' persisted rows — the
+    // previous per-stream fetchSessionRow loop was an N+1 on every list call.
+    const rowsById = new Map<string, LiveShoppingSessionRow>();
+    if (streams.length > 0) {
+      const rowsResult = await db.query<LiveShoppingSessionRow>(
+        `SELECT * FROM live_shopping_sessions WHERE id = ANY($1)`,
+        [streams.map((stream) => stream.roomId)],
+      );
+      for (const row of rowsResult.rows) {
+        rowsById.set(row.id, row);
+      }
+    }
+
     const sessions: StreamRoom[] = [];
+    const seen = new Set<string>();
     for (const stream of streams) {
-      const row = await fetchSessionRow(db, stream.roomId);
+      const row = rowsById.get(stream.roomId);
       if (row) {
         sessions.push({
           ...mapRowToStreamRoom(row),
@@ -320,8 +779,67 @@ export const registerStreamingRoutes = ({
       } else {
         sessions.push(stream);
       }
+      seen.add(stream.roomId);
     }
-    return { ok: true, sessions };
+
+    // Scheduled shows ("Coming up" rail): pre-live sessions with a
+    // scheduled_start_at in the near future (next 7 days), soonest first.
+    // A modest lookback keeps late-starting shows discoverable instead of
+    // vanishing the moment their scheduled time passes.
+    try {
+      const scheduled = await db.query<LiveShoppingSessionRow>(
+        `SELECT * FROM live_shopping_sessions
+          WHERE scheduled_start_at IS NOT NULL
+            AND status IN ('created', 'draft', 'backstage')
+            AND scheduled_start_at BETWEEN NOW() - interval '6 hours'
+                                       AND NOW() + interval '7 days'
+          ORDER BY scheduled_start_at ASC
+          LIMIT $1`,
+        [limit],
+      );
+      for (const row of scheduled.rows) {
+        if (seen.has(row.id)) continue;
+        seen.add(row.id);
+        sessions.push(mapRowToStreamRoom(row));
+      }
+    } catch (error) {
+      // scheduled_start_at is a 297 column — an unmigrated schema must not
+      // break the session list.
+      logger.warn(
+        { err: error },
+        "[streaming] scheduled-session merge skipped (scheduled_start_at unavailable)",
+      );
+    }
+
+    // Ended sessions never appear in provider.listActiveStreams — the room is
+    // deleted on end. Merge recent ended rows from the DB so replays
+    // (recording_url / recording_enabled) and post-stream state stay
+    // discoverable through this list.
+    const ended = await db.query<LiveShoppingSessionRow>(
+      `SELECT * FROM live_shopping_sessions
+        WHERE status = 'ended'
+        ORDER BY ended_at DESC NULLS LAST, created_at DESC
+        LIMIT $1`,
+      [limit],
+    );
+    for (const row of ended.rows) {
+      if (seen.has(row.id)) continue;
+      sessions.push(mapRowToStreamRoom(row));
+    }
+
+    // Discovery-card enrichment: host identity/verified badge plus current-lot
+    // title/price/thumbnail — one batched query, no N+1. Fields are additive;
+    // sessions without a DB row or a current lot get nulls.
+    const enrichment = await loadSessionDiscoveryEnrichment(
+      db,
+      sessions.map((session) => session.roomId),
+    );
+    const enriched = sessions.map((session) => ({
+      ...session,
+      ...(enrichment.get(session.roomId) ?? EMPTY_ENRICHMENT),
+    }));
+
+    return { ok: true, sessions: enriched };
   });
 
   app.get("/streaming/sessions/:roomId", async (request) => {
@@ -339,6 +857,57 @@ export const registerStreamingRoutes = ({
     return { ok: true, session: mapRowToStreamRoom(row) };
   });
 
+  // ── "Remind me" for scheduled shows ──
+  // Opts the authenticated user into the live_started fan-out for a pre-live
+  // session (the live_session_reminders table, migration 297). Idempotent —
+  // re-posting is a no-op via the (session_id, user_id) primary key.
+  app.post("/streaming/sessions/:sessionId/remind", async (request, reply) => {
+    const userId = resolveAuthenticatedUserId(request);
+    const { sessionId } = sessionIdParamsSchema.parse(request.params);
+
+    const row = await fetchSessionRow(db, sessionId);
+    if (!row) {
+      throw createApiError("STREAM_NOT_FOUND", `Stream session ${sessionId} not found`);
+    }
+    if (row.status !== "created" && row.status !== "draft" && row.status !== "backstage") {
+      reply.code(409);
+      return {
+        ok: false,
+        error: "Reminders are only available for upcoming sessions",
+        code: "REMINDER_NOT_AVAILABLE",
+      };
+    }
+    if (row.host_user_id === userId) {
+      reply.code(409);
+      return {
+        ok: false,
+        error: "The host does not need a reminder for their own session",
+        code: "REMINDER_NOT_AVAILABLE",
+      };
+    }
+
+    await db.query(
+      `INSERT INTO live_session_reminders (session_id, user_id)
+       VALUES ($1, $2)
+       ON CONFLICT (session_id, user_id) DO NOTHING`,
+      [sessionId, userId],
+    );
+
+    return { ok: true, reminding: true };
+  });
+
+  app.delete("/streaming/sessions/:sessionId/remind", async (request) => {
+    const userId = resolveAuthenticatedUserId(request);
+    const { sessionId } = sessionIdParamsSchema.parse(request.params);
+
+    await db.query(
+      `DELETE FROM live_session_reminders WHERE session_id = $1 AND user_id = $2`,
+      [sessionId, userId],
+    );
+
+    return { ok: true, reminding: false };
+  });
+
   app.post("/streaming/sessions/:roomId/token", async (request, reply) => {
     const userId = resolveAuthenticatedUserId(request);
     const { roomId } = roomIdParamsSchema.parse(request.params);
@@ -349,9 +918,25 @@ export const registerStreamingRoutes = ({
       throw createApiError("STREAM_NOT_FOUND", `Stream session ${roomId} not found`);
     }
 
-    if (role === "host" && row.host_user_id !== userId && request.authUser?.role !== "admin") {
+    const isHost = row.host_user_id === userId || request.authUser?.role === "admin";
+
+    if (role === "host" && !isHost) {
       reply.code(403);
       return { ok: false, error: "Forbidden: only the host can request a host token", code: "FORBIDDEN" };
+    }
+
+    // Viewer tokens are only issued once the session is actually live —
+    // mirrors the realtime topic policy (pre-live = host-only). Without this
+    // gate a viewer token would also materialize a scheduled session's
+    // LiveKit room early (LiveKit auto-creates rooms on first join),
+    // defeating deferred room creation, and could expose backstage media.
+    if (role === "viewer" && !isHost && row.status !== "live" && row.status !== "ending") {
+      reply.code(409);
+      return {
+        ok: false,
+        error: "Session is not live yet",
+        code: "STREAM_NOT_LIVE",
+      };
     }
 
     const displayName = request.authUser?.userId ?? userId;
@@ -378,10 +963,14 @@ export const registerStreamingRoutes = ({
       }
       viewers.add(userId);
 
+      // The viewer_count column is deliberately never incremented on token
+      // issuance (pinned by bidTransaction.test.ts), so it is always stale.
+      // The in-memory membership set is the authoritative live count — emit
+      // its post-insert size so the broadcast reflects reality and can go up.
       void publishRealtimeEvent({
         topic: liveSessionTopic(roomId),
         type: "live.viewer.token_issued",
-        payload: { userId, viewerCount: row.viewer_count },
+        payload: { userId, viewerCount: viewers.size },
         seq: true,
         version: 1,
       });
@@ -401,12 +990,15 @@ export const registerStreamingRoutes = ({
     }
 
     if (row.host_user_id === userId) {
-      return { ok: true, viewerCount: row.viewer_count };
+      return {
+        ok: true,
+        viewerCount: activeViewersBySession.get(sessionId)?.size ?? row.viewer_count,
+      };
     }
 
     const viewers = activeViewersBySession.get(sessionId);
     if (!viewers || !viewers.has(userId)) {
-      return { ok: true, viewerCount: row.viewer_count };
+      return { ok: true, viewerCount: viewers?.size ?? row.viewer_count };
     }
 
     viewers.delete(userId);
@@ -414,23 +1006,25 @@ export const registerStreamingRoutes = ({
       activeViewersBySession.delete(sessionId);
     }
 
-    const updated = await db.query<LiveShoppingSessionRow>(
+    // Keep the floor-guarded decrement for the persisted column (pinned by
+    // bidTransaction.test.ts), but the in-memory set is the authoritative
+    // live count — emit and return its post-delete size.
+    await db.query<LiveShoppingSessionRow>(
       `UPDATE live_shopping_sessions
          SET viewer_count = GREATEST(0, viewer_count - 1)
        WHERE id = $1
        RETURNING *`,
       [sessionId],
     );
-    const session = updated.rows[0] ?? row;
     void publishRealtimeEvent({
       topic: liveSessionTopic(sessionId),
       type: "live.viewer_count.update",
-      payload: { count: session.viewer_count },
+      payload: { count: viewers.size },
       seq: true,
       version: 1,
     });
 
-    return { ok: true, viewerCount: session.viewer_count };
+    return { ok: true, viewerCount: viewers.size };
   });
 
   // ── Live chat: send a message ──
@@ -542,7 +1136,12 @@ export const registerStreamingRoutes = ({
       ],
     );
 
-    const currentLot = mapCurrentLotRow(result.rows[0]);
+    // Re-read through the live_lots join so the emitted current-lot state
+    // carries the authoritative closes_at/extension_count countdown fields.
+    const refreshed = await fetchCurrentLotRow(db, sessionId);
+    const currentLot = refreshed
+      ? mapCurrentLotRow(refreshed)
+      : mapCurrentLotRow(result.rows[0]);
     const previousLotNumber = existing?.lot_number ?? -1;
 
     void publishRealtimeEvent({
@@ -577,6 +1176,68 @@ export const registerStreamingRoutes = ({
     const { sessionId } = sessionIdParamsSchema.parse(request.params);
     const { amount, clientBidId } = placeBidSchema.parse(request.body);
 
+    // Idempotent replay, resolved for the authenticated bidder BEFORE any
+    // session/lot-state gate: a retried bid whose original insert committed
+    // must replay its accepted row even when the lot has since closed or the
+    // stream has ended — otherwise a legitimate retry would see
+    // NO_CURRENT_LOT / STREAM_NOT_LIVE instead of its own success.
+    //
+    // The dedupe key is `client_bid_id` scoped to `bidder_id` (the partial
+    // unique index from migration 186), never the bid `id` — one bidder's
+    // clientBidId can neither replay nor collide with another bidder's bid.
+    const findPriorBid = async (): Promise<LiveShoppingBidReplayRow | null> => {
+      if (!clientBidId) return null;
+      const prior = await db.query<LiveShoppingBidReplayRow>(
+        `SELECT id, session_id, listing_id, lot_number, lot_id, bidder_id,
+                amount, created_at::text
+           FROM live_shopping_bids
+          WHERE bidder_id = $1 AND client_bid_id = $2
+          LIMIT 1`,
+        [userId, clientBidId],
+      );
+      return prior.rows[0] ?? null;
+    };
+    const replayResponse = async (priorBid: LiveShoppingBidReplayRow) => {
+      const lotRow = await fetchCurrentLotRow(db, sessionId);
+      const lotState = lotRow ? mapCurrentLotRow(lotRow) : null;
+      return {
+        ok: true,
+        success: true,
+        idempotent: true,
+        bid: {
+          id: priorBid.id,
+          sessionId: priorBid.session_id,
+          listingId: priorBid.listing_id,
+          lotNumber: priorBid.lot_number,
+          bidderId: priorBid.bidder_id,
+          amount: Number(priorBid.amount),
+          createdAt: priorBid.created_at,
+        },
+        ...(lotState && lotRow
+          ? {
+              currentBid: lotState.currentPrice,
+              bidCount: lotState.bidCount,
+              isHighBidder: lotRow.high_bidder_id === userId,
+            }
+          : {}),
+      };
+    };
+
+    if (clientBidId) {
+      const priorBid = await findPriorBid();
+      if (priorBid) {
+        if (priorBid.session_id !== sessionId) {
+          reply.code(409);
+          return {
+            ok: false,
+            error: "clientBidId was already used for a bid in another session",
+            code: "CLIENT_BID_ID_REUSED",
+          };
+        }
+        return replayResponse(priorBid);
+      }
+    }
+
     const sessionRow = await fetchSessionRow(db, sessionId);
     if (!sessionRow) {
       throw createApiError("STREAM_NOT_FOUND", `Stream session ${sessionId} not found`);
@@ -587,7 +1248,8 @@ export const registerStreamingRoutes = ({
     }
 
     const bidderName = request.authUser?.userId ?? userId;
-    const bidId = clientBidId ?? randomUUID();
+    // Server-generated bid id — `clientBidId` is a dedupe key, not the row id.
+    const bidId = randomUUID();
     const amountMinor = Math.round(amount * 100);
 
     const client = await db.connect();
@@ -595,7 +1257,13 @@ export const registerStreamingRoutes = ({
       await client.query("BEGIN");
 
       const lotResult = await client.query<LiveLotRow>(
-        `SELECT * FROM live_lots WHERE session_id = $1 AND status = 'open' FOR UPDATE`,
+        `SELECT l.*, COALESCE(s.seller_id, li.seller_id) AS seller_id,
+                li.status AS listing_status
+           FROM live_lots l
+           LEFT JOIN live_lot_snapshots s ON s.lot_id = l.id
+           LEFT JOIN listings li ON li.id = l.listing_id
+          WHERE l.session_id = $1 AND l.status = 'open'
+          FOR UPDATE OF l`,
         [sessionId],
       );
       const lockedLot = lotResult.rows[0];
@@ -605,6 +1273,37 @@ export const registerStreamingRoutes = ({
         return { ok: false, error: "No current lot set for this session", code: "NO_CURRENT_LOT" };
       }
 
+      // The lot's listing must still be biddable — the same eligibility set
+      // lot scheduling and settlement enforce ('active' | 'paused'). A
+      // listing held at 'risk_pending' mid-stream (risk decision or
+      // visibility enforcement), sold, deleted or missing must not keep
+      // collecting bids on a lot that can never settle.
+      if (
+        lockedLot.listing_status !== 'active'
+        && lockedLot.listing_status !== 'paused'
+      ) {
+        await client.query("ROLLBACK");
+        reply.code(409);
+        return {
+          ok: false,
+          error: "This lot's listing is no longer available for bidding",
+          code: "LISTING_NOT_BIDDABLE",
+        };
+      }
+
+      // The lot's seller (immutable snapshot taken at schedule time) can
+      // never bid on their own lot — same SELLER_RESTRICTED rule the
+      // auctions engine enforces.
+      if (lockedLot.seller_id === userId) {
+        await client.query("ROLLBACK");
+        reply.code(403);
+        return {
+          ok: false,
+          error: "Seller cannot bid on their own lot",
+          code: "SELLER_RESTRICTED",
+        };
+      }
+
       const projectionResult = await client.query<LiveShoppingCurrentLotRow>(
         `SELECT * FROM live_shopping_current_lots WHERE session_id = $1 LIMIT 1`,
         [sessionId],
@@ -612,49 +1311,50 @@ export const registerStreamingRoutes = ({
       const projection = projectionResult.rows[0];
       const lotNumber = projection?.lot_number ?? lockedLot.position;
 
+      // The server deadline is authoritative: a *new* bid landing at/after
+      // closes_at is rejected even though the sweep has not flipped the lot
+      // to closed yet — otherwise the deadline would be cosmetic. Idempotent
+      // replays are resolved above so a retried accepted bid still reports
+      // success rather than lying about a rejection.
+      if (lockedLot.closes_at && Date.parse(lockedLot.closes_at) <= Date.now()) {
+        await client.query("ROLLBACK");
+        reply.code(409);
+        return {
+          ok: false,
+          error: "Bidding window for this lot has closed",
+          code: "LOT_BIDDING_CLOSED",
+        };
+      }
+
       const highBidMinor = Number(lockedLot.high_bid_minor ?? 0);
       const minIncrement = Number(lockedLot.min_increment_minor ?? 0);
-      const requiredMinor = highBidMinor + minIncrement;
+      const startPriceMinor = Number(lockedLot.start_price_minor ?? 0);
+      // Floor: the first bid must clear the lot's start price; every bid
+      // must clear high bid + min increment. A zero host increment still
+      // requires a strictly higher bid — a same-price bid must not be able
+      // to steal the high-bidder position.
+      const requiredMinor = Math.max(startPriceMinor, highBidMinor + Math.max(minIncrement, 1));
       if (amountMinor < requiredMinor) {
         await client.query("ROLLBACK");
         reply.code(422);
         return {
           ok: false,
-          error: `Bid must be at least ${(requiredMinor / 100).toFixed(2)} (current high bid ${(highBidMinor / 100).toFixed(2)} plus increment ${(minIncrement / 100).toFixed(2)})`,
+          error: `Bid must be at least ${(requiredMinor / 100).toFixed(2)} (start price ${(startPriceMinor / 100).toFixed(2)}, current high bid ${(highBidMinor / 100).toFixed(2)} plus increment ${(minIncrement / 100).toFixed(2)})`,
           code: "BID_TOO_LOW",
           currentPrice: highBidMinor / 100,
           bidCount: projection?.bid_count ?? 0,
         };
       }
 
-      if (clientBidId) {
-        const existing = await client.query(
-          `SELECT id FROM live_shopping_bids WHERE id = $1 LIMIT 1`,
-          [bidId],
-        );
-        if (existing.rows.length > 0) {
-          await client.query("ROLLBACK");
-          const existingLot = await fetchCurrentLotRow(db, sessionId);
-          if (existingLot) {
-            const lotState = mapCurrentLotRow(existingLot);
-            return {
-              ok: true,
-              success: true,
-              currentBid: lotState.currentPrice,
-              bidCount: lotState.bidCount,
-              isHighBidder: true,
-              idempotent: true,
-            };
-          }
-          return { ok: true, success: true, idempotent: true };
-        }
-      }
-
+      // `client_bid_id` carries the client's dedupe key (partial unique
+      // index on (bidder_id, client_bid_id), migration 186); `status` is
+      // 'accepted' — this row only ever exists once the bid cleared every
+      // gate above.
       await client.query(
         `INSERT INTO live_shopping_bids
-           (id, session_id, listing_id, lot_number, bidder_id, amount, lot_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [bidId, sessionId, lockedLot.listing_id, lotNumber, userId, amount, lockedLot.id],
+           (id, session_id, listing_id, lot_number, bidder_id, amount, lot_id, client_bid_id, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'accepted')`,
+        [bidId, sessionId, lockedLot.listing_id, lotNumber, userId, amount, lockedLot.id, clientBidId ?? null],
       );
 
       await client.query(
@@ -667,15 +1367,57 @@ export const registerStreamingRoutes = ({
         [lockedLot.id, amountMinor, userId, bidId],
       );
 
+      // Anti-snipe: a bid landing inside the closing window pushes closes_at
+      // out, capped at MAX_EXTENSIONS so the lot cannot be extended forever.
+      // The extension is written to live_lot_events and broadcast after commit
+      // so every viewer's countdown re-syncs to the server deadline.
+      let extension: { closes_at: string; extension_count: number; version: number } | null = null;
       if (lockedLot.closes_at) {
         const closeTime = Date.parse(lockedLot.closes_at);
         const now = Date.now();
-        const thirtySeconds = 30_000;
-        if (closeTime - now < thirtySeconds) {
-          await client.query(
-            `UPDATE live_lots SET closes_at = NOW() + INTERVAL '30 seconds', extension_count = extension_count + 1 WHERE id = $1`,
-            [lockedLot.id],
+        // Extend only for bids strictly before the deadline that land inside
+        // the window; each extension adds a fixed amount to the prior
+        // deadline, capped so the lot cannot be extended forever.
+        if (
+          now < closeTime
+          && closeTime - now <= LIVE_LOT_ANTI_SNIPE_WINDOW_MS
+          && lockedLot.extension_count < LIVE_LOT_ANTI_SNIPE_MAX_EXTENSIONS
+        ) {
+          const extensionResult = await client.query<{
+            closes_at: string;
+            extension_count: number;
+            version: number;
+          }>(
+            `UPDATE live_lots
+                SET closes_at = closes_at + make_interval(secs => $2),
+                    extension_count = extension_count + 1,
+                    version = version + 1,
+                    updated_at = NOW()
+              WHERE id = $1
+              RETURNING closes_at::text, extension_count, version`,
+            [lockedLot.id, LIVE_LOT_ANTI_SNIPE_EXTENSION_SECONDS],
           );
+          extension = extensionResult.rows[0] ?? null;
+          if (extension) {
+            await client.query(
+              `INSERT INTO live_lot_events
+                 (id, lot_id, session_id, event_type, event_version, actor_id, payload)
+               VALUES ($1, $2, $3, 'lot.extension', $4, $5, $6::jsonb)`,
+              [
+                randomUUID(),
+                lockedLot.id,
+                sessionId,
+                extension.version,
+                userId,
+                JSON.stringify({
+                  lotId: lockedLot.id,
+                  closesAt: extension.closes_at,
+                  extensionCount: extension.extension_count,
+                  trigger: 'anti_snipe_bid',
+                }),
+              ],
+            );
+          }
         }
       }
 
@@ -700,7 +1442,15 @@ export const registerStreamingRoutes = ({
         currentPrice: amount,
         bidCount: (projection?.bid_count ?? 0) + 1,
         updatedAt: new Date().toISOString(),
+        closesAt: null as string | null,
+        extensionCount: 0,
       };
+      // Surface the authoritative deadline — the projection row itself does
+      // not carry closes_at, so stamp the live_lots value (post-extension
+      // when a snipe bid just extended the window).
+      lotState.closesAt = extension?.closes_at ?? lockedLot.closes_at ?? null;
+      lotState.extensionCount =
+        extension?.extension_count ?? lockedLot.extension_count ?? 0;
       const createdAt = new Date().toISOString();
 
       void publishRealtimeEvent({
@@ -726,6 +1476,24 @@ export const registerStreamingRoutes = ({
         version: 1,
       });
 
+      // Anti-snipe extension — separate event so viewers' countdowns re-sync
+      // even if they missed which bid triggered it.
+      if (extension) {
+        void publishRealtimeEvent({
+          topic: liveSessionTopic(sessionId),
+          type: "lot.extension",
+          payload: {
+            lotId: lockedLot.id,
+            listingId: lockedLot.listing_id,
+            closesAt: extension.closes_at,
+            extensionCount: extension.extension_count,
+            maxExtensions: LIVE_LOT_ANTI_SNIPE_MAX_EXTENSIONS,
+          },
+          seq: true,
+          version: 1,
+        });
+      }
+
       reply.code(201);
       return {
         ok: true,
@@ -742,7 +1510,27 @@ export const registerStreamingRoutes = ({
         lot: lotState,
       };
     } catch (err) {
+      // Never release a client mid-transaction back into the pool.
+      await client.query("ROLLBACK").catch(() => {});
       const code = (err as { code?: string })?.code;
+      if (code === "23505" && clientBidId) {
+        // Unique-violation on idx_live_bids_client_bid_id: a concurrent
+        // request already committed this bidder's bid under the same
+        // clientBidId between our pre-check and the INSERT. Resolve the
+        // durable row and replay it.
+        const priorBid = await findPriorBid();
+        if (priorBid) {
+          if (priorBid.session_id !== sessionId) {
+            reply.code(409);
+            return {
+              ok: false,
+              error: "clientBidId was already used for a bid in another session",
+              code: "CLIENT_BID_ID_REUSED",
+            };
+          }
+          return replayResponse(priorBid);
+        }
+      }
       if (code === "40001" || code === "40P01") {
         reply.code(409);
         return {
@@ -758,7 +1546,13 @@ export const registerStreamingRoutes = ({
     }
   });
 
+  // Auto-close pass for one session — the sweep worker runs the same path
+  // globally; this endpoint exists for manual/integration invocations. Each
+  // due lot closes through the shared engine close path (same lifecycle
+  // transition, live_lot_events entries and realtime fan-out as a host
+  // close), so no divergent close semantics live here.
   app.post("/streaming/sessions/:sessionId/lots/auto-close", async (request, reply) => {
+    const userId = resolveAuthenticatedUserId(request);
     const { sessionId } = sessionIdParamsSchema.parse(request.params);
 
     const sessionRow = await fetchSessionRow(db, sessionId);
@@ -766,89 +1560,57 @@ export const registerStreamingRoutes = ({
       throw createApiError("STREAM_NOT_FOUND", `Stream session ${sessionId} not found`);
     }
 
-    const client = await db.connect();
+    // Host/admin only — the sweep is also driven by the 5s worker tick, so
+    // this endpoint is a manual trigger, not a public surface.
+    if (sessionRow.host_user_id !== userId && request.authUser?.role !== "admin") {
+      reply.code(403);
+      return { ok: false, error: "Forbidden: only the host can trigger a lot sweep", code: "FORBIDDEN" };
+    }
+
+    const { closedLots, failedLots } = await sweepDueLiveLots(db, { sessionId });
+    return { ok: true, closedLots, failedLots };
+  });
+
+  // ── LiveKit webhook receiver ──
+  // Mount point for LiveKit server events. The /webhooks/* prefix is already
+  // public in the consumer-auth allowlist and is covered by the
+  // fastify-raw-body registration in index.ts, so request.rawBody carries the
+  // exact bytes the signature was computed over. Verified events no-op 200
+  // for now — future egress/recording handling (e.g. 'egress_ended' →
+  // persist recording_url) hooks in below the receiver.
+  app.post("/webhooks/livekit", async (request, reply) => {
+    const apiKey = config.livekitApiKey;
+    const apiSecret = config.livekitApiSecret;
+    if (!apiKey || !apiSecret) {
+      reply.code(503);
+      return {
+        ok: false,
+        error: "LiveKit webhook receiver is not configured",
+        code: "LIVEKIT_NOT_CONFIGURED",
+      };
+    }
+
+    const rawBody =
+      typeof request.rawBody === "string"
+        ? request.rawBody
+        : request.rawBody
+          ? request.rawBody.toString("utf8")
+          : JSON.stringify(request.body ?? {});
+    const authHeader = request.headers.authorization;
+    const authorization = Array.isArray(authHeader) ? authHeader[0] : authHeader;
+
     try {
-      await client.query("BEGIN");
-
-      const dueResult = await client.query<LiveLotRow>(
-        `SELECT * FROM live_lots
-           WHERE session_id = $1
-             AND status = 'open'
-             AND closes_at IS NOT NULL
-             AND closes_at <= NOW()
-         FOR UPDATE`,
-        [sessionId],
-      );
-
-      const closedLots: Array<{
-        lotId: string;
-        listingId: string;
-        status: string;
-        winnerId: string | null;
-        highBidMinor: number;
-        reservePriceMinor: number | null;
-      }> = [];
-
-      for (const lot of dueResult.rows) {
-        const highBidMinor = Number(lot.high_bid_minor ?? 0);
-        const reserveMinor = lot.reserve_price_minor != null ? Number(lot.reserve_price_minor) : null;
-        const meetsReserve = reserveMinor == null || highBidMinor >= reserveMinor;
-        const newStatus = meetsReserve && highBidMinor > 0 && lot.high_bidder_id
-          ? "sold"
-          : "passed";
-        const winnerId = newStatus === "sold" ? lot.high_bidder_id : null;
-
-        await client.query(
-          `UPDATE live_lots
-             SET status = $2,
-                 winner_id = $3,
-                 version = version + 1
-           WHERE id = $1`,
-          [lot.id, newStatus, winnerId],
-        );
-
-        await client.query(
-          `UPDATE live_shopping_current_lots
-             SET status = $2,
-                 winner_id = $3,
-                 updated_at = NOW()
-           WHERE session_id = $1`,
-          [sessionId, newStatus, winnerId],
-        );
-
-        closedLots.push({
-          lotId: lot.id,
-          listingId: lot.listing_id,
-          status: newStatus,
-          winnerId,
-          highBidMinor,
-          reservePriceMinor: reserveMinor,
-        });
-
-        void publishRealtimeEvent({
-          topic: liveSessionTopic(sessionId),
-          type: "live.lot.closed",
-          payload: {
-            lotId: lot.id,
-            listingId: lot.listing_id,
-            status: newStatus,
-            winnerId,
-            highBidMinor,
-            reservePriceMinor: reserveMinor,
-          },
-          seq: true,
-          version: 1,
-        });
-      }
-
-      await client.query("COMMIT");
-
-      return { ok: true, closedLots };
-    } catch (err) {
-      await client.query("ROLLBACK");
-      throw err;
-    } finally {
-      client.release();
+      const { WebhookReceiver } = await import("livekit-server-sdk");
+      const receiver = new WebhookReceiver(apiKey, apiSecret);
+      const event = await receiver.receive(rawBody, authorization);
+      return { ok: true, event: event.event || "unknown" };
+    } catch {
+      reply.code(401);
+      return {
+        ok: false,
+        error: "Invalid LiveKit webhook signature",
+        code: "WEBHOOK_SIGNATURE_INVALID",
+      };
     }
   });
 };
