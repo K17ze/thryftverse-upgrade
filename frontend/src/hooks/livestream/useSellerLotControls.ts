@@ -33,8 +33,9 @@ interface UseSellerLotControlsOptions {
   setCurrentLotIndex: React.Dispatch<React.SetStateAction<number>>;
   setSettlementStatus: React.Dispatch<React.SetStateAction<LotSettlementStatus | null>>;
   /** Record a confirmed sale (sold status + positive high bid) into the
-   *  broadcast stats owned by useSellerBroadcast. */
-  recordSale: (highBidMinor: number) => void;
+   *  broadcast stats owned by useSellerBroadcast. lotId dedupes against
+   *  the realtime lot.sold event. */
+  recordSale: (highBidMinor: number, lotId?: string | null) => void;
 }
 
 export function useSellerLotControls({
@@ -84,7 +85,7 @@ export function useSellerLotControls({
       setLots((prev) => prev.map((l) => (l.id === result.id ? { ...l, ...result } : l)));
       setSettlementStatus(result.settlementStatus ?? null);
       if (result.status === 'sold' && result.highBidMinor > 0) {
-        recordSale(result.highBidMinor);
+        recordSale(result.highBidMinor, result.id);
       }
       haptic.success();
     } catch {

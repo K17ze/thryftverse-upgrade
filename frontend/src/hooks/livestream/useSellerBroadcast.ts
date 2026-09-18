@@ -123,6 +123,20 @@ export function useSellerBroadcast({ resumeSessionId, selectedListings, title }:
     return () => clearInterval(interval);
   }, [phase]);
 
+  // Sale stats are shared between the realtime 'lot_update' (lot.sold)
+  // event below and the seller-driven close-lot transition in
+  // useSellerLotControls — the lotId set dedupes a sale counted twice
+  // (host close fires both paths).
+  const countedSaleLotIds = useRef(new Set<string>());
+  const recordSale = useCallback((highBidMinor: number, lotId?: string | null) => {
+    if (lotId) {
+      if (countedSaleLotIds.current.has(lotId)) return;
+      countedSaleLotIds.current.add(lotId);
+    }
+    setLotsSold((prev) => prev + 1);
+    setTotalSalesMinor((prev) => prev + highBidMinor);
+  }, []);
+
   // ── Realtime subscriptions while live ──
   useEffect(() => {
     if (phase !== 'live' || !sessionId) return;
@@ -139,12 +153,17 @@ export function useSellerBroadcast({ resumeSessionId, selectedListings, title }:
       setViewerCount(payload.count);
     });
     const unsubEvents = subscribeToStreamEvents(sessionId, (event) => {
-      if (event.type === 'lot_sold') {
-        const payload = event.payload as { finalPrice?: number };
-        const finalPrice = payload.finalPrice;
-        if (typeof finalPrice === 'number') {
-          setTotalSalesMinor((prev) => prev + Math.round(finalPrice * 100));
-          setLotsSold((prev) => prev + 1);
+      // lot.sold arrives as 'lot_update' — payload { lot, winnerId,
+      // highBidMinor }. Sweep-closed sales only land here; host closes are
+      // deduped against handleCloseLot's recordSale via the lot id.
+      if (event.type === 'lot_update') {
+        const payload = event.payload as { lot?: { id?: string; status?: string }; highBidMinor?: number };
+        if (
+          payload.lot?.status === 'sold'
+          && typeof payload.highBidMinor === 'number'
+          && payload.highBidMinor > 0
+        ) {
+          recordSale(payload.highBidMinor, payload.lot.id ?? null);
         }
       }
     });
@@ -155,7 +174,7 @@ export function useSellerBroadcast({ resumeSessionId, selectedListings, title }:
       unsubViewers();
       unsubEvents();
     };
-  }, [phase, sessionId]);
+  }, [phase, sessionId, recordSale]);
 
   // ── Publish camera + mic once the room is connected and the phase is
   //    live. Failure degrades honestly: the session stays live for lots and
@@ -323,13 +342,6 @@ export function useSellerBroadcast({ resumeSessionId, selectedListings, title }:
       setEndingStream(false);
     }
   }, [sessionId, endingStream, haptic, liveKit.disconnect]);
-
-  // Sale stats are shared between the realtime 'lot_sold' event above and
-  // the seller-driven close-lot transition in useSellerLotControls.
-  const recordSale = useCallback((highBidMinor: number) => {
-    setLotsSold((prev) => prev + 1);
-    setTotalSalesMinor((prev) => prev + highBidMinor);
-  }, []);
 
   return {
     phase,

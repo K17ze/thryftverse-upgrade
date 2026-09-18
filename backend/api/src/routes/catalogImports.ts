@@ -37,6 +37,7 @@ import {
   publishBatch,
   getPublicationReceipt,
 } from '../domain/catalogImports/catalogImportPublication.js';
+import { enqueueCatalogImportPublicationJob } from '../lib/queues.js';
 import {
   validateAttestation,
   validatePackageUpload,
@@ -129,7 +130,10 @@ const bulkCorrectionsBodySchema = z.object({
 });
 
 const approveBatchBodySchema = z.object({
-  itemIds: z.array(z.string().min(1).max(120)).min(1).max(500),
+  itemIds: z.array(z.string().min(1).max(120)).max(500).optional(),
+  // When true the server selects every ready item the seller has not
+  // individually excluded — the honest semantic behind an "approve all" CTA.
+  selectAll: z.boolean().optional(),
   attestation: z.object({
     ownsRights: z.boolean(),
     accurateFacts: z.boolean(),
@@ -751,6 +755,7 @@ export const registerCatalogImportRoutes = ({
         const query = listItemsQuerySchema.parse(request.query);
 
         const { items: itemRows, nextCursor } = await service.getBatchItems(
+          userId,
           batchId,
           {
             cursor: query.cursor,
@@ -760,7 +765,7 @@ export const registerCatalogImportRoutes = ({
           },
         );
 
-        const summary = await service.getBatchItemSummary(batchId);
+        const summary = await service.getBatchItemSummary(userId, batchId);
 
         const items = itemRows.map((row) => mapItemToDTO(row));
 
@@ -870,6 +875,7 @@ export const registerCatalogImportRoutes = ({
         const payload = bulkCorrectionsBodySchema.parse(request.body);
 
         const updated = await service.bulkUpdateItems(
+          userId,
           batchId,
           payload.itemIds,
           payload.fields,
@@ -914,12 +920,35 @@ export const registerCatalogImportRoutes = ({
           };
         }
 
+        const itemIds = payload.itemIds ?? [];
+        if (!payload.selectAll && itemIds.length === 0) {
+          reply.code(422);
+          return {
+            ok: false,
+            error: 'itemIds or selectAll is required',
+          };
+        }
+
         const { approvalRevision } = await service.approveBatch(
           userId,
           batchId,
-          payload.itemIds,
+          itemIds,
           payload.attestation,
+          { selectAll: payload.selectAll === true },
         );
+
+        // Approval commits first, then the publication saga runs async —
+        // the batch reads 'publishing' on the next poll while drafts are
+        // created in the background.
+        try {
+          await enqueueCatalogImportPublicationJob({ batchId });
+        } catch (error) {
+          request.log.error(
+            { err: error, batchId },
+            'catalog import publish enqueue failed — batch stays approved and can be republished',
+          );
+        }
+
         const batchRow = await service.getBatch(userId, batchId);
         return { batch: mapBatchToDTO(batchRow), approvalRevision };
       } catch (error) {

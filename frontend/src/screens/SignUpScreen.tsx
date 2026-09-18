@@ -42,6 +42,7 @@ export default function SignUpScreen() {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [referralCode, setReferralCode] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [socialLoading, setSocialLoading] = useState<'google' | 'apple' | null>(null);
@@ -277,10 +278,12 @@ export default function SignUpScreen() {
     trackFunnelStep('signup', 'signup_started', { method: 'email' });
 
     try {
+      const normalizedReferralCode = referralCode.trim().toUpperCase();
       const result = await signupWithPassword({
         username: normalizedUsername,
         email: normalizedEmail,
-        password });
+        password,
+        ...(normalizedReferralCode ? { referralCode: normalizedReferralCode } : {}) });
 
       login(result.storeUser);
       setTwoFactorEnabled(result.user.twoFactorEnabled);
@@ -509,6 +512,24 @@ export default function SignUpScreen() {
                     if (errorMsg) setErrorMsg('');
                     if (usernameError) setUsernameError('');
                   }}
+                  onSubmitEditing={() => {
+                    Keyboard.dismiss();
+                    if (canSubmit) void handleSignUp();
+                  }}
+                  containerStyle={styles.inputGroup}
+                />
+
+                {/* Optional referral code — attributes this signup to the
+                    friend who invited them. Skippable; an empty field is a
+                    normal signup. */}
+                <AppInput
+                  label="Referral code (optional)"
+                  placeholder="TV-XXXXXX"
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  value={referralCode}
+                  onChangeText={setReferralCode}
                   onSubmitEditing={() => {
                     Keyboard.dismiss();
                     if (canSubmit) void handleSignUp();

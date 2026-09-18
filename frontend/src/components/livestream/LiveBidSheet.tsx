@@ -29,7 +29,10 @@ export function LiveBidSheet({ lot, bidPending, onBid, onClose }: LiveBidSheetPr
   const { t } = useAppTranslation('liveStreamViewer');
   const { formatFromFiat, currencySymbol } = useFormattedPrice();
 
-  const suggestedBids = useMemo(() => suggestedBidAmounts(lot.currentPrice), [lot.currentPrice]);
+  const suggestedBids = useMemo(
+    () => suggestedBidAmounts(lot.currentPrice, lot.minIncrementMinor),
+    [lot.currentPrice, lot.minIncrementMinor],
+  );
 
   return (
     <LiveSheetScaffold onClose={onClose} overlayAccessibilityLabel="Close bid sheet">

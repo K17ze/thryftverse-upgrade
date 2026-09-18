@@ -40,6 +40,7 @@ import { resolveClientIp } from '../lib/compliance.js';
 import { checkFraudNonBlocking } from '../lib/fraudDetection.js';
 import { isProtectedChangeHoldActive } from '../lib/accountTakeoverService.js';
 import { recordUserSignup } from '../lib/metrics.js';
+import { attributeSignupToReferralCode } from '../lib/referrals.js';
 import {
   evaluateRisk,
   recordExecution,
@@ -593,6 +594,7 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService, ipReput
             email: { type: 'string', maxLength: 320 },
             username: { type: 'string', minLength: 3, maxLength: 32 },
             password: { type: 'string', minLength: 8, maxLength: 128 },
+            referralCode: { type: 'string', maxLength: 32 },
           },
           additionalProperties: false,
         },
@@ -609,6 +611,7 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService, ipReput
         email: z.string().trim().email().max(320),
         username: z.string().trim().min(3).max(32),
         password: z.string().min(8).max(128),
+        referralCode: z.string().trim().min(4).max(32).optional(),
       });
 
       const payload = bodySchema.parse(request.body ?? {});
@@ -711,6 +714,19 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService, ipReput
 
       const user = createResult.rows[0];
       recordUserSignup('email');
+
+      // Referral attribution — best-effort; an unknown/self code never
+      // blocks signup.
+      if (payload.referralCode) {
+        try {
+          await attributeSignupToReferralCode(db, {
+            referredUserId: user.id,
+            referralCode: payload.referralCode,
+          });
+        } catch (err) {
+          request.log.warn({ err, userId: user.id }, 'Referral attribution failed');
+        }
+      }
 
       // Shadow fraud check (backward-compat during migration). The
       // authoritative decision above (evaluateRisk) is the primary and

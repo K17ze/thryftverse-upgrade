@@ -115,11 +115,10 @@ export default function CatalogImportReviewScreen() {
     setApproving(true);
     setApproveError(null);
     try {
-      // Approve every currently-loaded item. The backend treats this as the
-      // seller's selection of all ready drafts.
-      const itemIds = items.map((i) => i.id);
+      // selectAll: the server selects every ready item the seller has not
+      // individually excluded — loaded-page ids would silently drop drafts.
       await approveImportBatch(batchId, {
-        itemIds,
+        selectAll: true,
         attestation: {
           ownsRights: true,
           accurateFacts: true,

@@ -328,6 +328,20 @@ async function processToolCalls(
   const deniedCalls: string[] = [];
   const pendingApprovals: string[] = [];
 
+  // Prior human approvals for this run — an approved request lets the
+  // same tool proceed when the run resumes after the user's decision.
+  const approvedToolNames = new Set<string>();
+  if (db && runId) {
+    const priorApprovals = await db.query<{ tool_name: string }>(
+      `SELECT tool_name FROM agent_approval_requests
+       WHERE run_id = $1 AND status = 'approved' AND expires_at > NOW()`,
+      [runId],
+    );
+    for (const row of priorApprovals.rows) {
+      approvedToolNames.add(row.tool_name);
+    }
+  }
+
   for (const call of toolCalls) {
     const tool = toolMap.get(call.name);
     if (!tool) {
@@ -340,7 +354,7 @@ async function processToolCalls(
       tool,
       binding,
       ctx.permissionsSnapshot,
-      false, // No prior approval in this phase
+      approvedToolNames.has(call.name),
     );
 
     if (decision.decision === 'allow') {

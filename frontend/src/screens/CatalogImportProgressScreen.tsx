@@ -34,10 +34,6 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
 import { ImportReadinessBar } from '../components/catalogImport/ImportReadinessBar';
 import { useCatalogImport } from '../hooks/useCatalogImport';
-import {
-  fetchPublicationReceipt,
-  CatalogImportError,
-  type PublicationReceiptDTO } from '../services/catalogImportApi';
 import type { RootStackParamList } from '../navigation/types';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 
@@ -72,10 +68,8 @@ export default function CatalogImportProgressScreen() {
   const reducedMotion = useReducedMotion();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const { batch, phase, loading, error, retry, cancel } = useCatalogImport(batchId);
+  const { batch, phase, loading, error, retry, cancel, start } = useCatalogImport(batchId);
 
-  const [receipt, setReceipt] = useState<PublicationReceiptDTO | null>(null);
-  const [receiptError, setReceiptError] = useState<string | null>(null);
   const [actionInFlight, setActionInFlight] = useState(false);
   const [confirmSheet, setConfirmSheet] = useState<{
     visible: boolean;
@@ -92,31 +86,28 @@ export default function CatalogImportProgressScreen() {
     return () => { isMountedRef.current = false; };
   }, []);
 
-  // Fetch the publication receipt once the batch reaches 'completed'.
+  // A 'created' batch was consented to but never kicked off — start it once
+  // on landing. The hook surfaces a failure as `error` for retry.
+  const startAttemptedRef = useRef(false);
   React.useEffect(() => {
-    if (phase !== 'completed' || !batch) return;
-    let cancelled = false;
-    fetchPublicationReceipt(batchId)
-      .then((r) => {
-        if (!cancelled && isMountedRef.current) {
-          setReceipt(r);
-          setReceiptError(null);
-        }
-      })
-      .catch((cause) => {
-        if (!cancelled && isMountedRef.current) {
-          const message =
-            cause instanceof CatalogImportError ? cause.message : 'Couldn’t load the receipt.';
-          setReceiptError(message);
-        }
-      });
-    return () => { cancelled = true; };
-  }, [phase, batch, batchId]);
+    if (!batch || batch.status !== 'created' || startAttemptedRef.current) return;
+    startAttemptedRef.current = true;
+    void start().catch(() => {});
+  }, [batch, start]);
+
+  // Completion lands on the dedicated receipt screen — this surface owns
+  // progress only, never the summary.
+  React.useEffect(() => {
+    if (phase === 'completed') {
+      navigation.replace('CatalogImportSummary', { batchId });
+    }
+  }, [phase, batchId, navigation]);
 
   const phaseLabel = PHASE_COPY[phase] ?? phase;
   const sourceLabel = batch ? SOURCE_LABEL[batch.source] ?? batch.source : '';
   const isFailed = phase === 'failed';
   const isPaused = phase === 'paused';
+  const startFailed = batch?.status === 'created' && !!error;
   const isReadyToReview = phase === 'ready_to_review';
   const isCompleted = phase === 'completed';
   const isCancelled = phase === 'cancelled';
@@ -127,21 +118,21 @@ export default function CatalogImportProgressScreen() {
     if (actionInFlight) return;
     setActionInFlight(true);
     try {
-      await retry();
+      if (startFailed) {
+        await start();
+      } else {
+        await retry();
+      }
     } catch {
       // error surfaced by hook
     } finally {
       if (isMountedRef.current) setActionInFlight(false);
     }
-  }, [actionInFlight, retry]);
+  }, [actionInFlight, retry, start, startFailed]);
 
   const handleReview = useCallback(() => {
     navigation.navigate('CatalogImportReview', { batchId });
   }, [navigation, batchId]);
-
-  const handleViewCloset = useCallback(() => {
-    navigation.navigate('Closet');
-  }, [navigation]);
 
   const handleCancel = useCallback(() => {
     setConfirmSheet({
@@ -222,6 +213,9 @@ export default function CatalogImportProgressScreen() {
           {(isFailed || isPaused) && statusReason ? (
             <Text style={styles.phaseReason}>{statusReason}</Text>
           ) : null}
+          {startFailed && error ? (
+            <Text style={styles.phaseReason}>{error}</Text>
+          ) : null}
         </Reanimated.View>
 
         {/* ── Readiness bar — the only quantitative signal ── */}
@@ -235,48 +229,6 @@ export default function CatalogImportProgressScreen() {
           </View>
         ) : null}
 
-        {/* ── Completed receipt summary ── */}
-        {isCompleted ? (
-          <Reanimated.View entering={enter} style={styles.receiptSummary}>
-            {receipt ? (
-              <>
-                <ReceiptRow
-                  count={receipt.liveCount}
-                  label="live"
-                  colors={colors}
-                  tone="success"
-                />
-                {receipt.draftCount > 0 ? (
-                  <ReceiptRow
-                    count={receipt.draftCount}
-                    label="kept as drafts"
-                    colors={colors}
-                  />
-                ) : null}
-                {receipt.failedCount > 0 ? (
-                  <ReceiptRow
-                    count={receipt.failedCount}
-                    label="needs a new photo"
-                    colors={colors}
-                    tone="danger"
-                  />
-                ) : null}
-                {receipt.excludedCount > 0 ? (
-                  <ReceiptRow
-                    count={receipt.excludedCount}
-                    label="excluded"
-                    colors={colors}
-                    tone="muted"
-                  />
-                ) : null}
-              </>
-            ) : receiptError ? (
-              <Text style={styles.receiptErrorText}>{receiptError}</Text>
-            ) : (
-              <ActivityIndicator size="small" color={colors.brand} />
-            )}
-          </Reanimated.View>
-        ) : null}
       </ScrollView>
 
       {/* ── Bottom dock ── */}
@@ -289,7 +241,7 @@ export default function CatalogImportProgressScreen() {
             borderTopColor: colors.borderSubtle },
         ]}
       >
-        {isFailed || isPaused ? (
+        {isFailed || isPaused || startFailed ? (
           <AnimatedPressable
             style={[styles.dockButton, actionInFlight && styles.dockButtonDisabled]}
             onPress={handleRetry}
@@ -319,17 +271,7 @@ export default function CatalogImportProgressScreen() {
           </AnimatedPressable>
         ) : null}
 
-        {isCompleted ? (
-          <AnimatedPressable
-            style={styles.dockButton}
-            onPress={handleViewCloset}
-            hapticFeedback="medium"
-            accessibilityRole="button"
-            accessibilityLabel="View your closet"
-          >
-            <Text style={styles.dockButtonText}>View your closet</Text>
-          </AnimatedPressable>
-        ) : null}
+        {/* ── Cancel — text-only, destructive, never equal weight ── */}
 
         {/* ── Cancel — text-only, destructive, never equal weight ── */}
         {canCancel ? (
@@ -357,56 +299,6 @@ export default function CatalogImportProgressScreen() {
     </View>
   );
 }
-
-// ── Receipt summary row ──────────────────────────────────────────────────────
-function ReceiptRow({
-  count,
-  label,
-  colors,
-  tone = 'default' }: {
-  count: number;
-  label: string;
-  colors: ThemeColors;
-  tone?: 'default' | 'success' | 'danger' | 'muted';
-}) {
-  const styles = useMemo(() => createReceiptRowStyles(colors), [colors]);
-  const labelColor =
-    tone === 'success'
-      ? colors.textPrimary
-      : tone === 'danger'
-        ? colors.danger
-        : tone === 'muted'
-          ? colors.textMuted
-          : colors.textSecondary;
-
-  return (
-    <View style={styles.row}>
-      <Text style={styles.count}>{count}</Text>
-      <Text style={[styles.label, { color: labelColor }]}>{label}</Text>
-    </View>
-  );
-}
-
-const createReceiptRowStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
-    row: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-      paddingVertical: Space.sm,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.borderSubtle },
-    count: {
-      fontFamily: FontFamily.semibold,
-      fontSize: TypographyV2.numericMeta.size,
-      lineHeight: TypographyV2.numericMeta.lineHeight,
-      color: colors.textPrimary,
-      fontVariant: ['tabular-nums'],
-      minWidth: 32 },
-    label: {
-      fontFamily: FontFamily.regular,
-      fontSize: TypographyV2.body.size,
-      lineHeight: TypographyV2.body.lineHeight } });
 
 // ── Back button — transparent 44pt hit, 22pt glyph, no chrome ────────────────
 function BackButton({
@@ -491,13 +383,6 @@ const createStyles = (colors: ThemeColors) =>
       textAlign: 'center' },
     barWrap: {
       paddingTop: Space.md },
-    receiptSummary: {
-      paddingTop: Space.lg },
-    receiptErrorText: {
-      fontFamily: FontFamily.regular,
-      fontSize: TypographyV2.body.size,
-      lineHeight: TypographyV2.body.lineHeight,
-      color: colors.danger },
     dock: {
       position: 'absolute',
       left: 0,

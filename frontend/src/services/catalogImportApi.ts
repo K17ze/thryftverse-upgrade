@@ -617,7 +617,8 @@ export async function applyBulkCorrections(
 export async function approveImportBatch(
   batchId: string,
   params: {
-    itemIds: string[];
+    itemIds?: string[];
+    selectAll?: boolean;
     attestation: {
       ownsRights: boolean;
       accurateFacts: boolean;
@@ -633,6 +634,7 @@ export async function approveImportBatch(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           itemIds: params.itemIds,
+          selectAll: params.selectAll,
           attestation: params.attestation,
         }),
       }

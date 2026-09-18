@@ -23,6 +23,7 @@ import crypto from 'node:crypto';
 
 import { db } from '../../db/pool.js';
 import { logger } from '../../lib/logger.js';
+import { enqueueCatalogImportHydrationJob } from '../../lib/queues.js';
 import { connectorRegistry } from '../../integrations/catalogSources/connectorRegistry.js';
 import type {
   BatchState,
@@ -435,8 +436,17 @@ export async function processCatalogImportDiscovery(
       'catalogImportDiscovery.complete',
     );
 
-    // Transition batch to 'hydrating'.
+    // Transition batch to 'hydrating' and enqueue a hydration job per
+    // discovered item — deterministic jobIds dedupe any replay overlap.
     await transitionBatch(batchId, batch.status, 'hydrating', null);
+
+    const itemRows = await db.query<{ id: string }>(
+      `SELECT id FROM catalog_import_items WHERE batch_id = $1`,
+      [batchId],
+    );
+    for (const row of itemRows.rows) {
+      await enqueueCatalogImportHydrationJob({ batchId, itemId: row.id });
+    }
   } catch (err) {
     const classified = classifyError(err);
     logger.error(

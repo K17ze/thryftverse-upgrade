@@ -306,3 +306,13 @@ The server-owned scheduling path (schedule row → worker publishes at `dueAt`, 
 - **The last three giants**: LookComposerInner 1,094→3-line shell (controller + 16 domain hooks + Workspace); PosterComposerInner 1,117→orchestrator (11 hooks + PosterEditorSurface 533); CreatorCamera 1,002→~396 (7 hooks + CameraFeed/CameraBottomBar; slide-lock ±12pt, dy/80 zoom, 250ms arbitration verbatim).
 - **Checker extended again**: hook-returned handlers now matched as `\w*ScrollHandler\w*` in return objects (usePosterTimelineZoom pattern).
 - Verified: tsc clean; 109 files / 2,028 tests green; eslint src/creator/ = 0 problems.
+
+## 2026-09-17 — Live shopping benchmark research (Wave AJ kickoff)
+
+Sources (live web):
+- getstream.io/blog/tiktok-live-shopping — TikTok Live Shopping UX teardown: product card → in-stream listing → 2-tap checkout overlay → auto-return to stream; social proof via verified badges + real viewer counts + purchase notifications
+- getstream.io/blog/live-selling — host pinning, lightweight reactions, pre-live surfacing, post-live VOD availability
+- forasoft.com/blog/article/live-commerce-platform-development-2026 — 2026 architecture: sub-1s WebRTC hot path + HLS-LL fallback, pinned-SKU swap reaching viewers in 2–3s, checkout <30s in-stream
+- mdpi.com/2076-328X/15/5/673 — eye-tracking study: dense overlays increase cognitive load and reduce purchase intent; restraint wins
+
+Benchmark contract for the audit: pinned-product swap <3s propagation, in-stream checkout <30s, honest viewer/sold counts, ABR/fallback, real chat+reactions, NO fabricated scarcity.

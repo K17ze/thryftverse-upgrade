@@ -154,10 +154,23 @@ export function useLiveBidActions({
     setSettlePending(true);
     haptic.medium();
     try {
-      const result = await settleLot(sessionId, currentLot.id);
-      if (result.orderId) {
+      // The settle endpoint needs the live_lots aggregate id — `id` is the
+      // listing id for real sessions (lotId falls back to it when the
+      // projection carries no linkage, e.g. demo).
+      const result = await settleLot(sessionId, currentLot.lotId ?? currentLot.id);
+      const orderId = result.orderId ?? currentLot.orderId ?? null;
+      if (orderId) {
         haptic.success();
-        navigation.navigate('Checkout', { itemId: currentLot.listingId });
+        // The order is reservation-bound (listing paused for this
+        // checkout) — navigating by listingId would hit the wrong flow.
+        navigation.navigate('Checkout', {
+          orderId,
+          ...(result.reservationId ? { reservationId: result.reservationId } : {}),
+        });
+        setCurrentLot((prev) => (prev ? { ...prev, orderId } : prev));
+      } else {
+        show(t('toast.checkoutError'), 'error');
+        haptic.error();
       }
     } catch {
       show(t('toast.checkoutError'), 'error');
@@ -165,7 +178,7 @@ export function useLiveBidActions({
     } finally {
       setSettlePending(false);
     }
-  }, [currentLot, haptic, navigation, requireAuth, sessionId, show, t]);
+  }, [currentLot, haptic, navigation, requireAuth, sessionId, show, t, setCurrentLot]);
 
   // Dismissing the unknown-outcome banner — clears the banner and the
   // remembered bid so a stale re-check can never fire for a later lot.

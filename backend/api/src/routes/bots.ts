@@ -1278,8 +1278,14 @@ export const registerBotsRoutes = ({
     const payload = bodySchema.parse(request.body ?? {});
     const userId = request.authUser.userId;
 
-    const existing = await db.query<{ actor_user_id: string; status: string; run_id: string }>(
-      `SELECT actor_user_id, status, run_id FROM agent_approval_requests WHERE id = $1 LIMIT 1`,
+    const existing = await db.query<{
+      actor_user_id: string;
+      status: string;
+      run_id: string;
+      bot_id: string;
+      conversation_id: string;
+    }>(
+      `SELECT actor_user_id, status, run_id, bot_id, conversation_id FROM agent_approval_requests WHERE id = $1 LIMIT 1`,
       [id]
     );
     if (!existing.rowCount) throw createApiError('NOT_FOUND', 'Approval request not found', { id });
@@ -1301,10 +1307,29 @@ export const registerBotsRoutes = ({
       [createRuntimeId('baev'), userId, toJsonString({ approvalId: id, edited: Boolean(payload.editedArguments) }), id]
     );
 
-    // TODO: Resume the run from the continuation token (Phase 6)
-    // For now, the run will need to be manually retried or the worker will pick it up
+    // Resume the run: reset it to 'queued' so the worker re-executes —
+    // processToolCalls honors this approval for the same tool. Only a run
+    // that finished waiting (succeeded) is resumed; a failed/cancelled run
+    // stays terminal.
+    const resumed = await db.query<{ id: string }>(
+      `UPDATE agent_runs SET status = 'queued', completed_at = NULL
+       WHERE id = $1 AND status = 'succeeded'
+       RETURNING id`,
+      [existing.rows[0].run_id],
+    );
+    if (resumed.rowCount) {
+      const { agentRunQueue } = await import('../lib/queues.js');
+      await agentRunQueue.add('agent-run', {
+        runId: existing.rows[0].run_id,
+        botId: existing.rows[0].bot_id,
+        conversationId: existing.rows[0].conversation_id,
+        actorUserId: existing.rows[0].actor_user_id,
+        triggerMessageId: null,
+        messageText: '',
+      });
+    }
 
-    return { ok: true, approvalId: id, status: 'approved' };
+    return { ok: true, approvalId: id, status: 'approved', resumed: (resumed.rowCount ?? 0) > 0 };
   });
 
   app.post('/agent-approvals/:id/reject', async (request: FastifyRequest) => {
@@ -1350,7 +1375,7 @@ export const registerBotsRoutes = ({
   // never posted to a conversation. A temporary agent_runs row with
   // trigger_type='test' is created so the run is observable in the trace UI.
 
-  app.post('/bots/:botId/playground', async (request: FastifyRequest) => {
+  app.post('/bots/:botId/playground', async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.authUser) throw createApiError('UNAUTHORIZED', 'Unauthorized');
     const paramsSchema = z.object({ botId: z.string().min(2).max(120) });
     const bodySchema = z.object({
@@ -1392,6 +1417,30 @@ export const registerBotsRoutes = ({
       [runId, botId, 'playground', userId, `playground:${runId}`]
     );
 
+    // Playground calls the real provider — it must consume the same hourly
+    // quota as a conversation run, or it is an unmetered spend path.
+    const { reserveAiUsageQuota, recordAiUsageEvent } = await import('../lib/aiUsage.js');
+    const { redis } = await import('../lib/redis.js');
+    const aiQuota = await reserveAiUsageQuota(
+      { userId, conversationId: 'playground' },
+      redis,
+    );
+
+    if (!aiQuota.allowed) {
+      await db.query(
+        `UPDATE agent_runs SET status = 'failed', completed_at = NOW(), error_message = 'AI_HOURLY_QUOTA_EXCEEDED' WHERE id = $1`,
+        [runId],
+      );
+      reply.code(429);
+      return {
+        ok: false,
+        playground: true,
+        error: 'Hourly AI usage limit reached for this account. Try again at the start of the next hour.',
+        code: 'AI_HOURLY_QUOTA_EXCEEDED',
+        usage: null,
+      };
+    }
+
     try {
       // Execute directly (synchronous for playground)
       const normalizedConfig = normalizeAgentConfig(bot.agent_config);
@@ -1428,6 +1477,29 @@ export const registerBotsRoutes = ({
         [runId, result.text, result.metadata?.providerUsage ? (result.metadata.providerUsage as { inputTokens: number }).inputTokens : 0, result.metadata?.providerUsage ? (result.metadata.providerUsage as { outputTokens: number }).outputTokens : 0, result.metadata?.providerUsage ? (result.metadata.providerUsage as { totalTokens: number }).totalTokens : 0]
       );
 
+      const providerUsage = result.metadata?.providerUsage as Record<string, unknown> | undefined;
+      await recordAiUsageEvent(db, {
+        id: createRuntimeId('aiuse'),
+        userId,
+        conversationId: 'playground',
+        botId,
+        model: typeof result.metadata?.model === 'string'
+          ? result.metadata.model
+          : normalizedConfig?.model ?? 'unconfigured',
+        providerRequestId: typeof result.metadata?.providerRequestId === 'string'
+          ? result.metadata.providerRequestId
+          : null,
+        status: 'succeeded',
+        usage: providerUsage
+          ? {
+            inputTokens: Number(providerUsage.inputTokens) || 0,
+            outputTokens: Number(providerUsage.outputTokens) || 0,
+            totalTokens: Number(providerUsage.totalTokens) || 0,
+          }
+          : undefined,
+        metadata: { playground: true, confidence: result.confidence ?? null },
+      });
+
       return {
         ok: true,
         playground: true,
@@ -1442,6 +1514,16 @@ export const registerBotsRoutes = ({
         `UPDATE agent_runs SET status = 'failed', completed_at = NOW(), error_message = $2 WHERE id = $1`,
         [runId, errorMessage.slice(0, 500)]
       );
+      await recordAiUsageEvent(db, {
+        id: createRuntimeId('aiuse'),
+        userId,
+        conversationId: 'playground',
+        botId,
+        model: 'unconfigured',
+        status: 'failed',
+        errorCode: 'AI_EXECUTION_FAILED',
+        metadata: { playground: true },
+      }).catch(() => {});
       throw createApiError('AGENT_EXECUTION_FAILED', errorMessage);
     }
   });

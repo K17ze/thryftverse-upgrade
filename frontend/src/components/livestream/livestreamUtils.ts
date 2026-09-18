@@ -62,16 +62,30 @@ export function deriveLotStatus(currentLot: LiveLot | null): LotStatus | null {
   return null;
 }
 
-/** Quick-bid ladder shown in the bid sheet — fixed increments over the
- *  current price. */
-export function suggestedBidAmounts(base: number): number[] {
-  return [base + 1, base + 5, base + 10, base + 20];
+/** Quick-bid ladder shown in the bid sheet. Suggestions must satisfy the
+ *  lot's min_increment — a rung below it would be rejected server-side.
+ *  Falls back to the fixed ladder when the lot carries no increment. */
+export function suggestedBidAmounts(base: number, minIncrementMinor?: number | null): number[] {
+  const inc = minIncrementMinor != null && minIncrementMinor > 0
+    ? minIncrementMinor / 100
+    : null;
+  if (inc == null) {
+    return [base + 1, base + 5, base + 10, base + 20];
+  }
+  const ladder = [inc, inc * 2, inc * 5, inc * 10].map((delta) => base + delta);
+  // Round to 2dp to avoid float noise in minor-unit arithmetic.
+  return [...new Set(ladder.map((v) => Math.round(v * 100) / 100))];
 }
 
-/** True only for the winning viewer of a sold lot — the contract exposes no
- *  winner flag, so 'You' is the marker the realtime payload uses. */
-export function isWinningViewer(currentLot: LiveLot | null): boolean {
-  return currentLot?.status === 'sold' && currentLot?.currentHighBidder === 'You';
+/** True only for the winning viewer of a sold lot. The real contract
+ *  carries `winnerId` (the winner's user id) on `lot.sold`; 'You' is the
+ *  demo-path marker kept for mock sessions. */
+export function isWinningViewer(currentLot: LiveLot | null, viewerUserId?: string | null): boolean {
+  if (currentLot?.status !== 'sold') return false;
+  if (currentLot.winnerId) {
+    return currentLot.winnerId === viewerUserId || currentLot.winnerId === 'me';
+  }
+  return currentLot.currentHighBidder === 'You';
 }
 
 /** Stage caption — honest about what the LiveKit room is doing. Null when

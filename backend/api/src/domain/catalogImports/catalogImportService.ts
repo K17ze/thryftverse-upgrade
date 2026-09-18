@@ -40,6 +40,12 @@ import {
   isConnectionState,
   isItemReadiness,
 } from './catalogImportStateMachine.js';
+import {
+  enqueueCatalogImportDiscoveryJob,
+  enqueueCatalogImportHydrationJob,
+  enqueueCatalogImportMediaJob,
+  enqueueCatalogImportNormalisationJob,
+} from '../../lib/queues.js';
 import { validateAttestation } from './catalogImportValidation.js';
 
 // ---------------------------------------------------------------------------
@@ -86,6 +92,35 @@ function assertOwnsItem(
   }
 }
 
+/**
+ * Item fields are only mutable while the batch is still seller-editable.
+ * Once approved, publishing, or terminal, corrections must not land — the
+ * published listing content is fixed at approval time.
+ */
+const BATCH_FIELD_EDITABLE_STATES: readonly BatchState[] = [
+  'created',
+  'discovering',
+  'hydrating',
+  'ingesting_media',
+  'normalising',
+  'awaiting_operator',
+  'awaiting_seller',
+  'paused_rate_limit',
+  'paused_reauth',
+  'failed_recoverable',
+];
+
+function assertBatchFieldEditable(
+  batch: CatalogImportBatchRow,
+): void {
+  if (!BATCH_FIELD_EDITABLE_STATES.includes(batch.status)) {
+    throw new CatalogImportError(
+      'invalid_state_transition',
+      'This import can no longer be edited — it has already been approved or published.',
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Row mappers (snake_case DB row -> typed interface)
 // ---------------------------------------------------------------------------
@@ -129,6 +164,7 @@ function mapBatchRow(row: Record<string, unknown>): CatalogImportBatchRow {
     approval_revision: (row.approval_revision as string | null) ?? null,
     approved_at: (row.approved_at as Date | null) ?? null,
     approved_by: (row.approved_by as string | null) ?? null,
+    consent_version: (row.consent_version as string | null) ?? '',
     raw_delete_after: (row.raw_delete_after as Date | null) ?? null,
     created_at: row.created_at as Date,
     updated_at: row.updated_at as Date,
@@ -376,14 +412,14 @@ export class CatalogImportService {
          id, user_id, connection_id, source, mode, status,
          status_reason, checkpoint_json, source_snapshot_at,
          discovered_count, ready_count, issue_count, published_count,
-         approval_revision, approved_at, approved_by,
+         approval_revision, approved_at, approved_by, consent_version,
          raw_delete_after, created_at, updated_at, completed_at
        )
        VALUES (
          $1, $2, $3, $4, 'one_time', 'created',
          NULL, $5::jsonb, NULL,
          0, 0, 0, 0,
-         NULL, NULL, NULL,
+         NULL, NULL, NULL, $6,
          NOW() + INTERVAL '30 days', NOW(), NOW(), NULL
        )
        RETURNING *`,
@@ -393,6 +429,7 @@ export class CatalogImportService {
         input.connectionId ?? null,
         input.source,
         checkpointJson,
+        input.consentVersion,
       ],
     );
 
@@ -478,6 +515,64 @@ export class CatalogImportService {
 
   async startBatch(userId: string, batchId: string): Promise<void> {
     await this.updateBatchStatus(userId, batchId, 'discovering', 'seller_initiated');
+    try {
+      await enqueueCatalogImportDiscoveryJob({ batchId });
+    } catch (error) {
+      // The state committed but the work never queued — mark the batch
+      // recoverable so the seller sees a retry, not a silent stall.
+      await this.updateBatchStatus(userId, batchId, 'failed_recoverable', 'enqueue_failed');
+      throw error;
+    }
+  }
+
+  /**
+   * Enqueues the worker jobs matching a batch's resume state. Called after a
+   * state transition commits — every enqueued job carries a deterministic
+   * jobId, so repeats dedupe at the queue.
+   */
+  private async enqueueStageJobs(batchId: string, state: BatchState): Promise<void> {
+    switch (state) {
+      case 'discovering':
+        await enqueueCatalogImportDiscoveryJob({ batchId });
+        return;
+      case 'hydrating': {
+        const items = await db.query<{ id: string }>(
+          `SELECT id FROM catalog_import_items
+           WHERE batch_id = $1 AND readiness IN ('discovered', 'hydrated')`,
+          [batchId],
+        );
+        for (const row of items.rows) {
+          await enqueueCatalogImportHydrationJob({ batchId, itemId: row.id });
+        }
+        return;
+      }
+      case 'ingesting_media': {
+        const media = await db.query<{ id: string }>(
+          `SELECT m.id FROM catalog_import_media m
+           JOIN catalog_import_items i ON i.id = m.import_item_id
+           WHERE i.batch_id = $1 AND m.fetch_status IN ('pending', 'failed')`,
+          [batchId],
+        );
+        for (const row of media.rows) {
+          await enqueueCatalogImportMediaJob({ mediaId: row.id });
+        }
+        return;
+      }
+      case 'normalising': {
+        const items = await db.query<{ id: string }>(
+          `SELECT id FROM catalog_import_items
+           WHERE batch_id = $1 AND readiness IN ('media_pending', 'mapping_pending')`,
+          [batchId],
+        );
+        for (const row of items.rows) {
+          await enqueueCatalogImportNormalisationJob({ batchId, itemId: row.id });
+        }
+        return;
+      }
+      default:
+        // awaiting_operator / awaiting_seller wait for a human — no jobs.
+        return;
+    }
   }
 
   async cancelBatch(userId: string, batchId: string): Promise<void> {
@@ -525,6 +620,13 @@ export class CatalogImportService {
 
     // updateBatchStatus validates the transition under FOR UPDATE lock.
     await this.updateBatchStatus(userId, batchId, targetState, 'retry', checkpoint ?? undefined);
+
+    try {
+      await this.enqueueStageJobs(batchId, targetState);
+    } catch (error) {
+      await this.updateBatchStatus(userId, batchId, 'failed_recoverable', 'enqueue_failed');
+      throw error;
+    }
   }
 
   async deleteBatchRawData(userId: string, batchId: string): Promise<void> {
@@ -650,6 +752,7 @@ export class CatalogImportService {
   }
 
   async getBatchItems(
+    userId: string,
     batchId: string,
     options: {
       cursor?: string | null;
@@ -658,6 +761,8 @@ export class CatalogImportService {
       limit?: number;
     },
   ): Promise<{ items: CatalogImportItemRow[]; nextCursor: string | null }> {
+    await this.getBatch(userId, batchId);
+
     const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
     const conditions: string[] = ['batch_id = $1'];
     const params: unknown[] = [batchId];
@@ -773,6 +878,16 @@ export class CatalogImportService {
       const row = existing.rows.length > 0 ? mapItemRow(existing.rows[0] as Record<string, unknown>) : null;
       assertOwnsItem(row, userId);
 
+      const batchResult = await client.query(
+        `SELECT * FROM catalog_import_batches WHERE id = $1 LIMIT 1`,
+        [row.batch_id],
+      );
+      const batch = batchResult.rows.length > 0
+        ? mapBatchRow(batchResult.rows[0] as Record<string, unknown>)
+        : null;
+      assertOwnsBatch(batch, userId);
+      assertBatchFieldEditable(batch);
+
       // Optimistic concurrency check on field_revision.
       if (row.field_revision !== fieldRevision) {
         throw new CatalogImportError(
@@ -819,6 +934,7 @@ export class CatalogImportService {
   }
 
   async bulkUpdateItems(
+    userId: string,
     batchId: string,
     itemIds: string[],
     fields: Record<string, unknown>,
@@ -826,6 +942,9 @@ export class CatalogImportService {
     if (itemIds.length === 0) {
       return 0;
     }
+
+    const batch = await this.getBatch(userId, batchId);
+    assertBatchFieldEditable(batch);
 
     const result = await db.query(
       `UPDATE catalog_import_items
@@ -894,6 +1013,7 @@ export class CatalogImportService {
     batchId: string,
     itemIds: string[],
     attestation: { ownsRights: boolean; accurateFacts: boolean; noBuyerData: boolean },
+    options?: { selectAll?: boolean },
   ): Promise<{ approvalRevision: string }> {
     const attestationResult = validateAttestation(attestation);
     if (!attestationResult.valid) {
@@ -921,13 +1041,28 @@ export class CatalogImportService {
         );
       }
 
+      // selectAll resolves every ready item the seller has not individually
+      // excluded — page-loaded ids alone were silently dropping ready items.
+      let resolvedItemIds = itemIds;
+      if (options?.selectAll) {
+        const readyRows = await client.query<{ id: string }>(
+          `SELECT id FROM catalog_import_items
+           WHERE batch_id = $1
+             AND readiness = 'ready'
+             AND seller_decision IS DISTINCT FROM 'excluded'
+           FOR UPDATE`,
+          [batchId],
+        );
+        resolvedItemIds = [...new Set([...itemIds, ...readyRows.rows.map((r) => r.id)])];
+      }
+
       // Validate that all selected items are in a ready state and have no
       // blocking issues.
       const itemsResult = await client.query(
         `SELECT * FROM catalog_import_items
          WHERE batch_id = $1 AND id = ANY($2::text[])
          FOR UPDATE`,
-        [batchId, itemIds],
+        [batchId, resolvedItemIds],
       );
 
       for (const itemRow of itemsResult.rows) {
@@ -968,21 +1103,21 @@ export class CatalogImportService {
              publication_status = 'approved',
              updated_at = NOW()
          WHERE batch_id = $1 AND id = ANY($2::text[])`,
-        [batchId, itemIds],
+        [batchId, resolvedItemIds],
       );
 
       // Record attestation event.
       await this.appendEventInternal(client, batchId, null, 'batch_approved', {
         approvalRevision,
         attestation,
-        itemIds,
+        itemIds: resolvedItemIds,
         approvedBy: userId,
       });
 
       await client.query('COMMIT');
 
       logger.info(
-        { batchId, userId, approvalRevision, itemCount: itemIds.length },
+        { batchId, userId, approvalRevision, itemCount: resolvedItemIds.length },
         'catalogImport.approveBatch',
       );
 
@@ -1039,6 +1174,7 @@ export class CatalogImportService {
   // -------------------------------------------------------------------------
 
   async getBatchItemSummary(
+    userId: string,
     batchId: string,
   ): Promise<{
     ready: number;
@@ -1047,6 +1183,8 @@ export class CatalogImportService {
     excluded: number;
     total: number;
   }> {
+    await this.getBatch(userId, batchId);
+
     const result = await db.query<{
       ready: number;
       needs_input: number;

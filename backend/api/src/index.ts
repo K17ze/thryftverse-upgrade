@@ -200,6 +200,7 @@ import {
   recordPushTicketError,
   renderMetrics,
 } from './lib/metrics.js';
+import { ensureReferralCode } from './lib/referrals.js';
 import {
   appendComplianceAuditEvent,
   createAmlAlert,
@@ -24154,6 +24155,73 @@ app.delete('/users/:userId/addresses/:addressId', async (request, reply) => {
   }
 
   return { ok: true };
+});
+
+// ── Referral endpoints ────────────────────────────────────────────────
+// Server-owned codes + real attribution: the invite screen previously
+// generated a client-side code and called endpoints that did not exist.
+
+app.get('/users/:userId/referral-code', async (request) => {
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
+  await ensureUserExists(userId);
+
+  const code = await ensureReferralCode(db, userId);
+  return { ok: true, code };
+});
+
+app.get('/users/:userId/referral-stats', async (request) => {
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
+
+  const stats = await db.query<{ joined: string }>(
+    `SELECT COUNT(*)::text AS joined
+     FROM user_referral_attributions
+     WHERE referrer_user_id = $1`,
+    [userId]
+  );
+  const joined = Number(stats.rows[0]?.joined ?? '0');
+  return {
+    ok: true,
+    // 'invited' == attributed joins — shares are not server-observable,
+    // so there is no honest separate "invited" count to emit.
+    invited: joined,
+    joined,
+    rewarded: joined,
+    creditsBalance: 0,
+  };
+});
+
+app.get('/users/:userId/referrals', async (request) => {
+  const paramsSchema = z.object({ userId: z.string().min(2) });
+  const { userId } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
+
+  const result = await db.query<{
+    id: string;
+    referred_username: string;
+    created_at: string;
+  }>(
+    `SELECT a.id, u.username AS referred_username, a.created_at::text
+     FROM user_referral_attributions a
+     JOIN users u ON u.id = a.referred_user_id
+     WHERE a.referrer_user_id = $1
+     ORDER BY a.created_at DESC
+     LIMIT 50`,
+    [userId]
+  );
+
+  return {
+    ok: true,
+    items: result.rows.map((row) => ({
+      id: row.id,
+      username: row.referred_username,
+      status: 'joined',
+      joinedAt: row.created_at,
+    })),
+  };
 });
 
 function requireStripeMobilePaymentConfiguration(reply: FastifyReply): {

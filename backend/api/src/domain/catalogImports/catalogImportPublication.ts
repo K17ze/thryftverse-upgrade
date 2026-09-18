@@ -176,7 +176,7 @@ export async function publishBatch(
   const itemsToPublish: CatalogImportItemRow[] = [];
   let cursor: string | null = null;
   do {
-    const page = await service.getBatchItems(batchId, {
+    const page = await service.getBatchItems(userId, batchId, {
       cursor,
       readiness: 'ready',
       decision: 'selected',
@@ -265,7 +265,7 @@ export async function publishBatch(
   // Count items that were not selected for publication as excluded. This
   // includes items the seller explicitly excluded and items that were not
   // ready (needs_input, probable_duplicate, etc.).
-  const allItemsSummary = await service.getBatchItemSummary(batchId);
+  const allItemsSummary = await service.getBatchItemSummary(userId, batchId);
   excludedCount = allItemsSummary.total - itemsToPublish.length;
 
   // Create the batch receipt.
@@ -327,12 +327,26 @@ async function createDraftListing(
   try {
     await client.query('BEGIN');
 
+    // Cancellation check under the batch row lock — a mid-saga cancel
+    // serializes here so no draft is created after the batch is cancelled.
+    const batchCheck = await client.query<{ status: string }>(
+      `SELECT status FROM catalog_import_batches WHERE id = $1 FOR UPDATE`,
+      [batchId],
+    );
+    const batchStatus = batchCheck.rows[0]?.status;
+    if (batchStatus !== 'approved' && batchStatus !== 'publishing') {
+      throw new CatalogImportError(
+        'invalid_state_transition',
+        `Batch is in "${batchStatus}" — publication can no longer create drafts`,
+      );
+    }
+
     // Insert the publication record with idempotency. The idempotency_key
     // has a unique constraint so a replayed publish hits the same row.
     const pubRecordId = createId('pubrec');
     const listingId = createId('listing');
 
-    const pubResult = await client.query<{ id: string }>(
+    const pubResult = await client.query<{ id: string; listing_id: string; inserted: boolean }>(
       `INSERT INTO catalog_import_publication_records (
          id, batch_id, item_id, idempotency_key, request_hash,
          status, listing_id, created_at, updated_at
@@ -340,9 +354,17 @@ async function createDraftListing(
        VALUES ($1, $2, $3, $4, $5, 'draft_created', $6, NOW(), NOW())
        ON CONFLICT (idempotency_key) DO UPDATE
          SET updated_at = catalog_import_publication_records.updated_at
-       RETURNING id`,
+       RETURNING id, listing_id, (xmax = 0) AS inserted`,
       [pubRecordId, batchId, item.id, idempotencyKey, requestHash, listingId],
     );
+
+    // Replay: the record already existed — return the committed listing id
+    // instead of inserting a duplicate draft under a fresh id.
+    const pubRow = pubResult.rows[0];
+    if (pubRow && !pubRow.inserted && pubRow.listing_id) {
+      await client.query('COMMIT');
+      return pubRow.listing_id;
+    }
 
     // Create the draft listing in the listings table.
     await client.query(

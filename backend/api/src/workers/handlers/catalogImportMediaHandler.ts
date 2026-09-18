@@ -28,7 +28,10 @@ import { logger } from '../../lib/logger.js';
 import { config } from '../../config.js';
 import { putBinaryObject } from '../../lib/s3.js';
 import { mediaKindForContentType } from '../../lib/mediaLifecycle.js';
-import { enqueueMediaIngestJob } from '../../lib/queues.js';
+import {
+  enqueueMediaIngestJob,
+  enqueueCatalogImportNormalisationJob,
+} from '../../lib/queues.js';
 import {
   ingestRemoteMedia,
   type IngestRemoteMediaResult,
@@ -249,6 +252,31 @@ async function createAuthoritativeMedia(
   });
 }
 
+/**
+ * When every media row for an item has reached a terminal state, the item
+ * is ready for normalisation — enqueue it. Called at every terminal exit
+ * path so a failed sibling can never strand the item in 'media_pending'.
+ */
+async function maybeEnqueueNormalise(importItemId: string): Promise<void> {
+  const ctx = await db.query<{ batch_id: string }>(
+    `SELECT batch_id FROM catalog_import_items WHERE id = $1 LIMIT 1`,
+    [importItemId],
+  );
+  const batchId = ctx.rows[0]?.batch_id;
+  if (!batchId) {
+    return;
+  }
+  const remaining = await db.query<{ n: string }>(
+    `SELECT COUNT(*)::text AS n FROM catalog_import_media
+     WHERE import_item_id = $1
+       AND fetch_status IN ('pending', 'fetching', 'fetched', 'verifying')`,
+    [importItemId],
+  );
+  if (Number(remaining.rows[0]?.n ?? 0) === 0) {
+    await enqueueCatalogImportNormalisationJob({ batchId, itemId: importItemId });
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Main handler
 // ---------------------------------------------------------------------------
@@ -302,6 +330,7 @@ export async function processCatalogImportMedia(
       'catalogImportMedia.no_source_url',
     );
     await recordFetchFailure(mediaId, media.attempt_count, 'no_source_url');
+    await maybeEnqueueNormalise(media.import_item_id);
     return;
   }
 
@@ -360,6 +389,7 @@ export async function processCatalogImportMedia(
         { mediaId, importItemId: media.import_item_id },
         'catalogImportMedia.ssrf_blocked',
       );
+      await maybeEnqueueNormalise(media.import_item_id);
       return;
     }
 
@@ -376,4 +406,6 @@ export async function processCatalogImportMedia(
       'catalogImportMedia.fetch_failed',
     );
   }
+
+  await maybeEnqueueNormalise(media.import_item_id);
 }

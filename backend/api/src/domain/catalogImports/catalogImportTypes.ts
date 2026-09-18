@@ -421,6 +421,7 @@ export interface CatalogImportBatchRow {
   approval_revision: string | null;
   approved_at: Date | null;
   approved_by: string | null;
+  consent_version: string;
   raw_delete_after: Date | null;
   created_at: Date;
   updated_at: Date;

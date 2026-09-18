@@ -1246,6 +1246,11 @@
       "totalSales": "Total Sales",
       "done": "Done"
     },
+    "scheduled": {
+      "title": "Not live yet",
+      "subtitle": "This show hasn't started — check back later",
+      "subtitleAt": "Starts {{time}}"
+    },
     "demo": {
       "label": "DEMO",
       "stream": "Demo stream"

@@ -21,6 +21,10 @@ import crypto from 'node:crypto';
 
 import { db } from '../../db/pool.js';
 import { logger } from '../../lib/logger.js';
+import {
+  enqueueCatalogImportMediaJob,
+  enqueueCatalogImportNormalisationJob,
+} from '../../lib/queues.js';
 import { connectorRegistry } from '../../integrations/catalogSources/connectorRegistry.js';
 import type {
   CatalogImportItemRow,
@@ -290,6 +294,28 @@ export async function processCatalogImportHydration(
         'catalogImportHydration.item_failed',
       );
       throw err;
+    }
+  }
+
+  // Chain the next stage: a media job per pending media row for this item.
+  // An item with no pending media has nothing to fetch — it is already at
+  // the terminal-media condition, so normalisation enqueues directly.
+  const pendingMedia = await db.query<{ id: string }>(
+    `SELECT id FROM catalog_import_media
+     WHERE import_item_id = $1 AND fetch_status = 'pending'`,
+    [itemId],
+  );
+  if (pendingMedia.rows.length === 0) {
+    const itemCheck = await db.query<{ readiness: string }>(
+      `SELECT readiness FROM catalog_import_items WHERE id = $1 LIMIT 1`,
+      [itemId],
+    );
+    if (itemCheck.rows[0]?.readiness === 'media_pending') {
+      await enqueueCatalogImportNormalisationJob({ batchId, itemId });
+    }
+  } else {
+    for (const media of pendingMedia.rows) {
+      await enqueueCatalogImportMediaJob({ mediaId: media.id });
     }
   }
 

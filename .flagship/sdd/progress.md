@@ -836,3 +836,33 @@ Post-implementation audit (subagent verification) found six P1s in the offers wa
 - **Pending offers lapsing silently**: `expireOverdueOffers` + `appendOfferExpiredEvents` exported and run inside the 60s in-process sweep — `/offers/sweep-expired` external-cron dependency removed for the notify path.
 
 **Regression**: `offerLifecycleTransitions.test.ts` extended to 11/11 (converted-replay whitelist, sweep second pass + pending expiry, sellerReach gate, ISO expiresAt). Backend + frontend tsc clean; eslint 0 errors.
+
+## Wave AJ — referral, live commerce, catalogue import, AI-agent gates (2026-09-17)
+
+Audited three departments in parallel (live shopping, AI agents, catalogue import + auth-entry) plus a fabricated referral surface. Research benchmarks: pinned-lot swap <3s, in-stream checkout <30s, honest viewer counts, no fabricated urgency.
+
+**Referral system (was fully fabricated):**
+- `InviteFriendsScreen` called non-existent `/users/:id/referral-stats|referrals` and derived a dead `TV-XXXXXX` code client-side. Built the real thing: migration 316 (`referral_codes`, `referral_attributions`, unique referred_user_id dedupe), `lib/referrals.ts`, three authed endpoints (`GET/POST /users/me/referral-code`, `/referral-stats`, `/referrals`), `referralCode` on signup schema + `signupWithPassword`, optional code field on SignUpScreen, and the screen now reads server-owned codes via `referralApi` with honest unavailable states.
+
+**Live shopping:**
+- **P0 winner checkout**: viewer ignored `lot.sold`/`lot.opened` payloads — hook now merges winnerId/snapshot from `lot_update`; `isWinningViewer` compares real `winnerId`; checkout nav uses lot id + orderId. `settleLot` maps the real `{orderId,status}` response; `lot.settlement_started`/`lot.order_created` events mapped.
+- **Viewer-count honesty**: token issuance now emits canonical `live.viewer_count.update` (post-insert set size) — clients previously got only `token_issued` which the mapper didn't count.
+- **Stream lifecycle**: `/end` publishes `live.session.ended` with real totals (lotsSold/totalSales queried server-side) and purges the viewer set; chat gate rejects non-live/ending sessions; viewer lands on ended/scheduled screens via real `connectionState`s; new `LiveStreamScheduledScreen`.
+- **Pinned lot**: current-lot projection enriched (title/image/lotId/min_increment_minor); quick-bid ladder honors min increment; bid lock pinned to current lot; discovery fetch errors propagate instead of swallowing.
+- **Seller settle loop**: sale tally dedup by lot id (host closes + settlement events double-counted); listens on `lot_update` not dead `lot_sold`.
+
+**Catalogue import (P0 IDOR + dead pipeline):**
+- **IDOR**: `getBatchItems`/`getBatchItemSummary`/`bulkUpdateItems` were globally addressable — now user-scoped with `assertOwnsBatch`/`assertOwnsItem` at the service layer; `assertBatchFieldEditable` freezes item mutations after approval on both single and bulk paths; internal callers (publication) pass userId.
+- **Dead pipeline**: every hop was defined but never enqueued — `startBatch`→discovery, discovery→hydration/item, hydration→media (or normalise for zero-media items), media→normalise on terminal set, approve→publication. Enqueue failure on start marks `failed_recoverable` so retry works; `retryBatch` resumes via stage-job enqueue.
+- **Consent**: `consent_version` was accepted but silently dropped — migration 317 adds the column; persisted + mapped.
+- **Approve contract**: review screen sent only page-loaded item ids — `selectAll` semantic resolves every ready non-excluded item server-side in the same tx.
+- **Publish saga**: `createDraftListing` replay returned a second insert — now `RETURNING (xmax=0) AS inserted` replays the committed listing_id; batch row re-locked per item so a mid-saga cancel stops further drafts.
+- **Progress screen**: auto-starts `created` batches on landing (was infinite poll); retry affordance on start failure; duplicate inline receipt removed (Summary screen is the receipt surface).
+
+**AI agents:**
+- **Playground unmetered spend**: direct `executeOpenAiAgent` call bypassed quota — now `reserveAiUsageQuota` first, 429 + `quota_blocked` usage event when exhausted, success/failure events recorded with tokens/cost/model/provider id.
+- **Approval dead gate**: approve wrote the row then TODO'd — now audits `tool_approved`, resets the run `succeeded→queued` (guard), requeues via `agentRunQueue` with real run context, returns `resumed`. `processToolCalls` loads prior approved request ids into `evaluateToolPolicy` so the resumed run isn't re-blocked.
+
+**Verification**: backend tsc clean, frontend tsc clean, `catalogImportHardening` 16/16 (new), streamingHardening updated for canonical viewer-count event 47/47 suite, referralAttribution 8/8, eslint 0 errors on touched files.
+
+**Deferred**: playground FK-dead rows, fallback-encryption detail, remaining 11 AI-agent P1s pending next audit-integration pass; live viewer_count still in-memory (multi-instance Redis sync unbuilt); "withdraw key rotation" still needs original audit detail.

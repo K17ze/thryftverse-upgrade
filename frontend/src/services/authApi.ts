@@ -264,7 +264,7 @@ export async function loginWithPassword(input: {
   }
 }
 
-export async function signupWithPassword(input: { username: string; email: string; password: string }) {
+export async function signupWithPassword(input: { username: string; email: string; password: string; referralCode?: string }) {
   try {
     const payload = await fetchJson<AuthSuccessResponse | AuthFailureResponse>('/auth/signup', {
       method: 'POST',
