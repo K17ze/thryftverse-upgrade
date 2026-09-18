@@ -10415,6 +10415,47 @@ function stopCheckoutReservationSweepScheduler(): void {
   checkoutReservationSweepTimer = null;
 }
 
+// ─── Stale agent-run recovery ─────────────────────────────────────────
+// A crash between the queued → running claim and the terminal write (or a
+// lost BullMQ job) leaves agent_runs rows in a non-terminal state forever —
+// retries early-return on status!=='queued' so they never self-heal. The
+// sweep moves rows older than the stale threshold to 'timed_out' /
+// 'unknown_outcome' — one UPDATE on a 60s interval, guarded like the other
+// in-process reconcilers.
+let agentRunSweepTimer: NodeJS.Timeout | null = null;
+let agentRunSweepStartupTimer: NodeJS.Timeout | null = null;
+
+function startAgentRunSweepScheduler(): void {
+  if (agentRunSweepTimer) {
+    return;
+  }
+
+  const run = (reason: string) => {
+    void withScheduledJobGuard('agent_run_stale_sweep', reason, async () => {
+      const { sweepStaleAgentRuns } = await import('./botRuntime/index.js');
+      return sweepStaleAgentRuns(db);
+    });
+  };
+
+  agentRunSweepTimer = setInterval(() => run('interval'), 60 * 1000);
+  agentRunSweepTimer.unref?.();
+
+  agentRunSweepStartupTimer = setTimeout(() => run('startup'), 30_000);
+  agentRunSweepStartupTimer.unref?.();
+}
+
+function stopAgentRunSweepScheduler(): void {
+  if (agentRunSweepStartupTimer) {
+    clearTimeout(agentRunSweepStartupTimer);
+    agentRunSweepStartupTimer = null;
+  }
+  if (!agentRunSweepTimer) {
+    return;
+  }
+  clearInterval(agentRunSweepTimer);
+  agentRunSweepTimer = null;
+}
+
 function startAuctionSweepScheduler(): void {
   if (auctionSweepTimer) {
     return;
@@ -11887,6 +11928,7 @@ async function runOnezeDailyAttestation(reason: 'startup' | 'interval' | 'manual
         ...payload,
         signature: {
           algorithm: 'hmac-sha256',
+          kid: config.onezeAttestationSigningKeyId,
           value: signature,
         },
       },
@@ -19397,7 +19439,17 @@ app.post('/agent-runs/:runId/cancel', async (request) => {
     throw createApiError('AGENT_RUN_TERMINAL', 'Run has already reached a terminal state');
   }
 
-  await db.query(`UPDATE agent_runs SET status = 'cancelled', completed_at = NOW() WHERE id = $1`, [runId]);
+  // Guarded on non-terminal status so a run that completed between the
+  // SELECT above and this write cannot be flipped to 'cancelled'.
+  const cancelled = await db.query<{ id: string }>(
+    `UPDATE agent_runs SET status = 'cancelled', completed_at = NOW()
+     WHERE id = $1 AND status IN ('queued', 'running', 'waiting_for_approval', 'waiting_for_input')
+     RETURNING id`,
+    [runId]
+  );
+  if (!cancelled.rowCount) {
+    throw createApiError('AGENT_RUN_TERMINAL', 'Run has already reached a terminal state');
+  }
 
   return { ok: true, runId, status: 'cancelled' };
 });
@@ -38276,6 +38328,7 @@ const start = async () => {
     startOnezeAutoAdjustScheduler();
     startProviderSubmissionReconcileScheduler();
     startCheckoutReservationSweepScheduler();
+    startAgentRunSweepScheduler();
 
     // Configure the search index settings on startup (fire-and-forget).
     // Errors are swallowed inside configureSearchIndex so a misconfigured
@@ -40199,6 +40252,7 @@ const shutdown = async () => {
   stopOnezeAutoAdjustScheduler();
   stopProviderSubmissionReconcileScheduler();
   stopCheckoutReservationSweepScheduler();
+  stopAgentRunSweepScheduler();
 
   try {
     await app.close();

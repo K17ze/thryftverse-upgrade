@@ -113,7 +113,7 @@ export const BATCH_STATES: readonly BatchState[] = [
 export const BATCH_TRANSITIONS: Record<BatchState, readonly BatchState[]> = {
   created: ['discovering', 'cancelling', 'cancelled'],
   discovering: ['hydrating', 'paused_rate_limit', 'paused_reauth', 'failed_recoverable', 'cancelling', 'cancelled'],
-  hydrating: ['ingesting_media', 'paused_rate_limit', 'paused_reauth', 'failed_recoverable', 'cancelling', 'cancelled'],
+  hydrating: ['ingesting_media', 'normalising', 'paused_rate_limit', 'paused_reauth', 'failed_recoverable', 'cancelling', 'cancelled'],
   ingesting_media: ['normalising', 'paused_rate_limit', 'failed_recoverable', 'cancelling', 'cancelled'],
   normalising: ['awaiting_operator', 'awaiting_seller', 'failed_recoverable', 'cancelling', 'cancelled'],
   awaiting_operator: ['awaiting_seller', 'failed_recoverable', 'cancelling', 'cancelled'],
@@ -123,7 +123,7 @@ export const BATCH_TRANSITIONS: Record<BatchState, readonly BatchState[]> = {
   completed: [],
   paused_rate_limit: ['discovering', 'hydrating', 'ingesting_media', 'normalising', 'cancelling', 'cancelled'],
   paused_reauth: ['discovering', 'hydrating', 'ingesting_media', 'normalising', 'cancelling', 'cancelled'],
-  failed_recoverable: ['discovering', 'hydrating', 'ingesting_media', 'normalising', 'awaiting_operator', 'awaiting_seller', 'cancelling', 'cancelled'],
+  failed_recoverable: ['discovering', 'hydrating', 'ingesting_media', 'normalising', 'awaiting_operator', 'awaiting_seller', 'publishing', 'cancelling', 'cancelled'],
   cancelling: ['cancelled'],
   cancelled: [],
 } as const;

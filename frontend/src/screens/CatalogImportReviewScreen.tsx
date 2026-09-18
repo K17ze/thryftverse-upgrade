@@ -30,6 +30,7 @@ import {
   DockConstants } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { BottomSheet } from '../components/BottomSheet';
 import { EmptyState } from '../components/EmptyState';
 import { ImportListingTile } from '../components/catalogImport/ImportListingTile';
 import { useCatalogImportItems } from '../hooks/useCatalogImportItems';
@@ -61,6 +62,15 @@ const FILTER_TABS: FilterTab[] = [
 
 const TILE_SKELETON_COUNT = 6;
 
+// Seller assertions recorded on the approve call — the same three
+// attestations collected on the consent screen. Approval cannot synthesize
+// them; the seller must check each one explicitly.
+const APPROVE_ATTESTATIONS = [
+  'I own or have permission to reuse the listing text and media',
+  'The imported facts, condition, price, and quantity are accurate',
+  'The files contain no buyer or customer personal data',
+] as const;
+
 export default function CatalogImportReviewScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
@@ -74,6 +84,8 @@ export default function CatalogImportReviewScreen() {
 
   const [approving, setApproving] = useState(false);
   const [approveError, setApproveError] = useState<string | null>(null);
+  const [attestSheetVisible, setAttestSheetVisible] = useState(false);
+  const [attestations, setAttestations] = useState<boolean[]>([false, false, false]);
   const isMountedRef = useRef(true);
 
   React.useEffect(() => {
@@ -109,9 +121,17 @@ export default function CatalogImportReviewScreen() {
   const needsInputCount = summary?.needsInput ?? 0;
   const issueCount = needsInputCount;
 
+  const allAttested = attestations.every(Boolean);
+
+  const openAttestSheet = useCallback(() => {
+    if (issueCount > 0 || approving) return;
+    setApproveError(null);
+    setAttestations([false, false, false]);
+    setAttestSheetVisible(true);
+  }, [issueCount, approving]);
+
   const handleApprove = useCallback(async () => {
-    if (approving) return;
-    if (issueCount > 0) return;
+    if (approving || !allAttested) return;
     setApproving(true);
     setApproveError(null);
     try {
@@ -120,10 +140,11 @@ export default function CatalogImportReviewScreen() {
       await approveImportBatch(batchId, {
         selectAll: true,
         attestation: {
-          ownsRights: true,
-          accurateFacts: true,
-          noBuyerData: true } });
+          ownsRights: attestations[0],
+          accurateFacts: attestations[1],
+          noBuyerData: attestations[2] } });
       if (!isMountedRef.current) return;
+      setAttestSheetVisible(false);
       navigation.navigate('CatalogImportProgress', { batchId });
     } catch (cause) {
       if (!isMountedRef.current) return;
@@ -133,7 +154,7 @@ export default function CatalogImportReviewScreen() {
     } finally {
       if (isMountedRef.current) setApproving(false);
     }
-  }, [approving, issueCount, items, batchId, navigation]);
+  }, [approving, allAttested, attestations, batchId, navigation]);
 
   const renderItem = useCallback<ListRenderItem<ImportItemDTO>>(
     ({ item }) => (
@@ -288,7 +309,7 @@ export default function CatalogImportReviewScreen() {
             styles.dockButton,
             (issueCount > 0 || approving) && styles.dockButtonDisabled,
           ]}
-          onPress={handleApprove}
+          onPress={openAttestSheet}
           disabled={issueCount > 0 || approving}
           hapticFeedback="medium"
           accessibilityRole="button"
@@ -304,6 +325,67 @@ export default function CatalogImportReviewScreen() {
           )}
         </AnimatedPressable>
       </View>
+
+      {/* ── Attestation sheet — approval records the seller's explicit
+             assertions, never synthesized consent ── */}
+      <BottomSheet
+        visible={attestSheetVisible}
+        onDismiss={() => setAttestSheetVisible(false)}
+        snapPoint={0.55}
+        variant="transaction"
+      >
+        <View style={styles.sheetBody}>
+          <Text style={styles.sheetTitle}>Confirm what you're approving</Text>
+          <Text style={styles.sheetSub}>
+            {`${readyCount} draft${readyCount === 1 ? '' : 's'} will be created in your shop.`}
+          </Text>
+
+          {APPROVE_ATTESTATIONS.map((label, i) => (
+            <AnimatedPressable
+              key={label}
+              style={styles.attestRow}
+              onPress={() =>
+                setAttestations((prev) => prev.map((v, idx) => (idx === i ? !v : v)))
+              }
+              hapticFeedback="selection"
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: attestations[i] }}
+              accessibilityLabel={label}
+            >
+              <View style={[styles.checkbox, attestations[i] && styles.checkboxChecked]}>
+                {attestations[i] ? (
+                  <Ionicons name="checkmark" size={Control.icon} color={colors.textInverse} />
+                ) : null}
+              </View>
+              <Text style={styles.attestLabel}>{label}</Text>
+            </AnimatedPressable>
+          ))}
+
+          {approveError ? (
+            <Text style={styles.approveErrorText} accessibilityRole="alert">
+              {approveError}
+            </Text>
+          ) : null}
+
+          <AnimatedPressable
+            style={[styles.dockButton, (!allAttested || approving) && styles.dockButtonDisabled]}
+            onPress={handleApprove}
+            disabled={!allAttested || approving}
+            hapticFeedback="medium"
+            accessibilityRole="button"
+            accessibilityLabel={`Approve ${readyCount} drafts`}
+            accessibilityState={{ disabled: !allAttested || approving }}
+          >
+            {approving ? (
+              <ActivityIndicator size="small" color={colors.textInverse} />
+            ) : (
+              <Text style={styles.dockButtonText}>
+                {`Approve ${readyCount} draft${readyCount === 1 ? '' : 's'}`}
+              </Text>
+            )}
+          </AnimatedPressable>
+        </View>
+      </BottomSheet>
     </View>
   );
 }
@@ -473,6 +555,44 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.danger,
       textAlign: 'center',
       marginBottom: Space.xs },
+    sheetBody: {
+      paddingHorizontal: Space.md,
+      paddingTop: Space.xs },
+    sheetTitle: {
+      fontFamily: FontFamily.semibold,
+      fontSize: TypographyV2.itemTitle.size,
+      lineHeight: TypographyV2.itemTitle.lineHeight,
+      color: colors.textPrimary,
+      marginBottom: Space.xxs },
+    sheetSub: {
+      fontFamily: FontFamily.regular,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      color: colors.textSecondary,
+      marginBottom: Space.sm },
+    attestRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.smMd,
+      minHeight: Control.hit,
+      paddingVertical: Space.sm },
+    checkbox: {
+      width: 22,
+      height: 22,
+      borderRadius: Radius.sm,
+      borderWidth: Stroke.standard,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center' },
+    checkboxChecked: {
+      backgroundColor: colors.brand,
+      borderColor: colors.brand },
+    attestLabel: {
+      flex: 1,
+      fontFamily: FontFamily.regular,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      color: colors.textPrimary },
     dockButton: {
       height: DockConstants.primaryButtonHeight,
       borderRadius: Radius.sm,

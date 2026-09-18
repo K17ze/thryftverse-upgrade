@@ -22,6 +22,7 @@ import {
   CONNECTION_STATES,
   CONNECTION_TRANSITIONS,
   ITEM_READINESS_STATES,
+  CatalogImportError,
 } from './catalogImportTypes.js';
 
 // ---------------------------------------------------------------------------
@@ -41,7 +42,8 @@ export function assertConnectionTransition(
   to: ConnectionState,
 ): void {
   if (!isValidConnectionTransition(from, to)) {
-    throw new Error(
+    throw new CatalogImportError(
+      'invalid_state_transition',
       `Invalid connection state transition: ${from} → ${to}`,
     );
   }
@@ -68,7 +70,8 @@ export function assertBatchTransition(
   to: BatchState,
 ): void {
   if (!isValidBatchTransition(from, to)) {
-    throw new Error(
+    throw new CatalogImportError(
+      'invalid_state_transition',
       `Invalid batch state transition: ${from} → ${to}`,
     );
   }
@@ -93,9 +96,9 @@ export function isBatchState(value: unknown): value is BatchState {
  * an explicit recovery reason.
  */
 const ITEM_READINESS_TRANSITIONS: Record<ItemReadiness, readonly ItemReadiness[]> = {
-  discovered: ['hydrated', 'excluded', 'source_changed'],
+  discovered: ['hydrated', 'media_pending', 'excluded', 'source_changed'],
   hydrated: ['media_pending', 'excluded', 'source_changed'],
-  media_pending: ['mapping_pending', 'excluded', 'source_changed'],
+  media_pending: ['mapping_pending', 'ready', 'needs_input', 'probable_duplicate', 'excluded', 'source_changed'],
   mapping_pending: ['ready', 'needs_input', 'probable_duplicate', 'excluded', 'source_changed'],
   ready: ['needs_input', 'probable_duplicate', 'excluded', 'source_changed'],
   needs_input: ['ready', 'probable_duplicate', 'excluded'],
@@ -117,7 +120,8 @@ export function assertItemReadinessTransition(
   to: ItemReadiness,
 ): void {
   if (!isValidItemReadinessTransition(from, to)) {
-    throw new Error(
+    throw new CatalogImportError(
+      'invalid_state_transition',
       `Invalid item readiness transition: ${from} → ${to}`,
     );
   }

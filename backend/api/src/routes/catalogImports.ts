@@ -181,7 +181,9 @@ function mapBatchToDTO(row: CatalogImportBatchRow): BatchSummaryDTO {
   };
 }
 
-function mapMediaToDTO(row: CatalogImportMediaRow): ImportMediaDTO {
+function mapMediaToDTO(
+  row: CatalogImportMediaRow & { canonical_url?: string | null },
+): ImportMediaDTO {
   return {
     id: row.id,
     position: row.position,
@@ -195,7 +197,7 @@ function mapMediaToDTO(row: CatalogImportMediaRow): ImportMediaDTO {
     finalizationId: row.finalization_id,
     moderationStatus: row.moderation_status,
     publishability: row.publishability,
-    previewUrl: null,
+    previewUrl: row.canonical_url ?? null,
   };
 }
 
@@ -767,7 +769,36 @@ export const registerCatalogImportRoutes = ({
 
         const summary = await service.getBatchItemSummary(userId, batchId);
 
-        const items = itemRows.map((row) => mapItemToDTO(row));
+        // Resolve preview media for the page — review tiles read
+        // media[0].previewUrl, which needs canonical_url from media_assets.
+        const mediaByItem = new Map<
+          string,
+          (CatalogImportMediaRow & { canonical_url: string | null })[]
+        >();
+        if (itemRows.length > 0) {
+          const mediaResult = await db.query<
+            CatalogImportMediaRow & { canonical_url: string | null }
+          >(
+            `SELECT m.*, a.canonical_url
+             FROM catalog_import_media m
+             LEFT JOIN media_assets a ON a.id = m.media_asset_id
+             WHERE m.import_item_id = ANY($1::text[])
+             ORDER BY m.import_item_id, m.position`,
+            [itemRows.map((r) => r.id)],
+          );
+          for (const m of mediaResult.rows) {
+            const list = mediaByItem.get(m.import_item_id);
+            if (list) {
+              list.push(m);
+            } else {
+              mediaByItem.set(m.import_item_id, [m]);
+            }
+          }
+        }
+
+        const items = itemRows.map((row) =>
+          mapItemToDTO(row, mediaByItem.get(row.id)),
+        );
 
         return { items, nextCursor: nextCursor ?? null, summary };
       } catch (error) {
@@ -796,7 +827,19 @@ export const registerCatalogImportRoutes = ({
     try {
       const { itemId } = itemIdParamSchema.parse(request.params);
       const itemRow = await service.getItem(userId, itemId);
-      return { item: mapItemToDTO(itemRow) };
+
+      const mediaResult = await db.query<
+        CatalogImportMediaRow & { canonical_url: string | null }
+      >(
+        `SELECT m.*, a.canonical_url
+         FROM catalog_import_media m
+         LEFT JOIN media_assets a ON a.id = m.media_asset_id
+         WHERE m.import_item_id = $1
+         ORDER BY m.position`,
+        [itemId],
+      );
+
+      return { item: mapItemToDTO(itemRow, mediaResult.rows) };
     } catch (error) {
       if (error instanceof CatalogImportError) {
         reply.code(error.statusCode);

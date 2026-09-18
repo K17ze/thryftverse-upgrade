@@ -214,6 +214,32 @@ export async function performUserErasure(
 
   await client.query('DELETE FROM ai_usage_events WHERE user_id = $1', [userId]);
 
+  // Agent runtime rows — actor-attributable run records, their step spans,
+  // and approval requests. agent_runs.actor_user_id and
+  // agent_approval_requests.actor_user_id are ON DELETE RESTRICT, so these
+  // rows both hold user attribution after anonymisation and would block a
+  // future hard delete. Steps and approvals also cascade from agent_runs
+  // via run_id, but are deleted explicitly since they carry their own
+  // actor_user_id references.
+  await client.query(
+    `DELETE FROM agent_run_steps
+     WHERE run_id IN (SELECT id FROM agent_runs WHERE actor_user_id = $1)`,
+    [userId]
+  );
+  // Approvals the user decided on other actors' runs are detached rather
+  // than deleted — the decision record belongs to that run's audit trail.
+  await client.query(
+    `UPDATE agent_approval_requests SET decided_by = NULL WHERE decided_by = $1`,
+    [userId]
+  );
+  await client.query(
+    `DELETE FROM agent_approval_requests
+     WHERE actor_user_id = $1
+        OR run_id IN (SELECT id FROM agent_runs WHERE actor_user_id = $1)`,
+    [userId]
+  );
+  await client.query('DELETE FROM agent_runs WHERE actor_user_id = $1', [userId]);
+
   await client.query(
     `
       UPDATE listings

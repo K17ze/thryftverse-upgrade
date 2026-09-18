@@ -13,7 +13,10 @@
  * independently — tool policy is a precondition, not a substitute.
  */
 
-import type { Pool } from 'pg';
+import type { PoolClient } from 'pg';
+
+/** Minimal queryable — a Pool or a PoolClient both satisfy this. */
+export type ToolRegistryDb = Pick<PoolClient, 'query'>;
 
 export type ToolRisk = 'read' | 'reversible_write' | 'consequential_write' | 'destructive';
 export type ToolPolicy = 'automatic' | 'ask_once' | 'ask_each_time' | 'blocked';
@@ -41,7 +44,7 @@ export interface PolicyDecision {
 /**
  * Load all enabled tools from the database.
  */
-export async function loadEnabledTools(db: Pool): Promise<ToolDefinition[]> {
+export async function loadEnabledTools(db: ToolRegistryDb): Promise<ToolDefinition[]> {
   const result = await db.query<{
     name: string;
     description: string;
@@ -66,7 +69,7 @@ export async function loadEnabledTools(db: Pool): Promise<ToolDefinition[]> {
 /**
  * Load tool bindings for a specific bot.
  */
-export async function loadToolBindings(db: Pool, botId: string): Promise<ToolBinding[]> {
+export async function loadToolBindings(db: ToolRegistryDb, botId: string): Promise<ToolBinding[]> {
   const result = await db.query<{ tool_name: string; policy: ToolPolicy }>(
     `SELECT tool_name, policy FROM agent_tool_bindings WHERE bot_id = $1`,
     [botId]

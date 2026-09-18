@@ -314,6 +314,12 @@ export const config = {
   openAiAgentDefaultModel: process.env.OPENAI_AGENT_DEFAULT_MODEL?.trim() || 'gpt-5.6-terra',
   openAiAgentMaxOutputTokens: asNumber(process.env.OPENAI_AGENT_MAX_OUTPUT_TOKENS, 900),
   openAiAgentTimeoutMs: asNumber(process.env.OPENAI_AGENT_TIMEOUT_MS, 30_000),
+  /**
+   * AES-256-GCM vault key for provider_connections.encrypted_key. This is a
+   * dedicated secret — it must never fall back to OPENAI_API_KEY (rotating or
+   * leaking the provider key would silently corrupt every stored credential).
+   */
+  encryptionKey: requiredSecret('ENCRYPTION_KEY', 'dev-only-provider-key-encryption-secret-32b!'),
   aiUsagePricingVersion: process.env.AI_USAGE_PRICING_VERSION?.trim() || 'unconfigured',
   openAiInputCostMicrousdPerMillionTokens: asNumber(
     process.env.OPENAI_INPUT_COST_MICROUSD_PER_MILLION_TOKENS,
@@ -578,6 +584,8 @@ export const config = {
     'ONEZE_ATTESTATION_SIGNING_SECRET',
     'dev-only-oneze-attestation-signing-secret'
   ),
+  onezeAttestationSigningKeyId:
+    process.env.ONEZE_ATTESTATION_SIGNING_KEY_ID?.trim() || 'v1',
   // ── Meilisearch — full-text search ─────────────────────────────────
   meilisearchUrl: process.env.MEILISEARCH_URL?.trim() || 'http://localhost:7700',
   meilisearchApiKey: process.env.MEILISEARCH_API_KEY?.trim() || '',

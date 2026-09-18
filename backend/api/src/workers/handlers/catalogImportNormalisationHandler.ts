@@ -393,13 +393,18 @@ async function transitionBatchForReview(
   hasOperatorBlockers: boolean,
 ): Promise<void> {
   const targetStatus = hasOperatorBlockers ? 'awaiting_operator' : 'awaiting_seller';
+  // The batch should already be 'normalising', but a fully-normalised batch
+  // can legitimately still sit in an earlier stage when every item finished
+  // before the stage advances landed — review readiness is what matters.
   await db.query(
     `UPDATE catalog_import_batches
      SET status = $2,
          status_reason = NULL,
+         checkpoint_json = COALESCE(checkpoint_json, '{}'::jsonb)
+           || jsonb_build_object('phase', $2::text),
          updated_at = NOW()
      WHERE id = $1
-       AND status = 'normalising'`,
+       AND status IN ('normalising', 'ingesting_media', 'hydrating')`,
     [batchId, targetStatus],
   );
 }
@@ -505,6 +510,33 @@ export async function processCatalogImportNormalisation(
     return;
   }
 
+  // A job queued before a cancel/pause/approve must not rewrite items.
+  if (
+    batch.status !== 'hydrating' &&
+    batch.status !== 'ingesting_media' &&
+    batch.status !== 'normalising'
+  ) {
+    logger.info(
+      { batchId, itemId, status: batch.status },
+      'catalogImportNormalisation.skipped_batch_not_active',
+    );
+    return;
+  }
+
+  // Advance the batch into 'normalising' on entry — nothing else performs
+  // ingesting_media→normalising, and a fast zero-media item can legitimately
+  // arrive while the batch is still 'hydrating'. Records the resume phase.
+  await db.query(
+    `UPDATE catalog_import_batches
+     SET status = 'normalising',
+         checkpoint_json = COALESCE(checkpoint_json, '{}'::jsonb)
+           || jsonb_build_object('phase', 'normalising'),
+         updated_at = NOW()
+     WHERE id = $1
+       AND status IN ('hydrating', 'ingesting_media')`,
+    [batchId],
+  );
+
   const source = batch.source as CatalogSource;
 
   // Extract source fields from normalised_fields (seller_package) or
@@ -609,7 +641,12 @@ export async function processCatalogImportNormalisation(
        FROM catalog_import_items
        WHERE batch_id = $1
          AND readiness = 'needs_input'
-         AND blocking_issues @> '[{"code":"missing_category"},{"code":"low_confidence_category"},{"code":"missing_condition"},{"code":"ambiguous_condition"}]'::jsonb`,
+         AND EXISTS (
+           SELECT 1 FROM jsonb_array_elements(blocking_issues) AS issue
+           WHERE issue->>'code' = ANY(
+             '{missing_category,low_confidence_category,missing_condition,ambiguous_condition}'::text[]
+           )
+         )`,
       [batchId],
     );
     const hasOperatorBlockers = Number(operatorBlockerResult.rows[0]?.pending ?? 0) > 0;

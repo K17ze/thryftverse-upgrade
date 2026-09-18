@@ -39,12 +39,14 @@ import {
   isBatchState,
   isConnectionState,
   isItemReadiness,
+  isValidBatchTransition,
 } from './catalogImportStateMachine.js';
 import {
   enqueueCatalogImportDiscoveryJob,
   enqueueCatalogImportHydrationJob,
   enqueueCatalogImportMediaJob,
   enqueueCatalogImportNormalisationJob,
+  enqueueCatalogImportPublicationJob,
 } from '../../lib/queues.js';
 import { validateAttestation } from './catalogImportValidation.js';
 
@@ -97,7 +99,7 @@ function assertOwnsItem(
  * Once approved, publishing, or terminal, corrections must not land — the
  * published listing content is fixed at approval time.
  */
-const BATCH_FIELD_EDITABLE_STATES: readonly BatchState[] = [
+export const BATCH_FIELD_EDITABLE_STATES: readonly BatchState[] = [
   'created',
   'discovering',
   'hydrating',
@@ -110,7 +112,7 @@ const BATCH_FIELD_EDITABLE_STATES: readonly BatchState[] = [
   'failed_recoverable',
 ];
 
-function assertBatchFieldEditable(
+export function assertBatchFieldEditable(
   batch: CatalogImportBatchRow,
 ): void {
   if (!BATCH_FIELD_EDITABLE_STATES.includes(batch.status)) {
@@ -119,6 +121,36 @@ function assertBatchFieldEditable(
       'This import can no longer be edited — it has already been approved or published.',
     );
   }
+}
+
+/**
+ * Seller edits arrive as raw scalars ({title: "x"}) but normalised_fields
+ * stores the canonical {value, sourceKind, sourceValue, confidence} shape
+ * that the publication layer and review UI read. Wrap raw values so a
+ * seller edit never collapses the canonical shape — a plain scalar would
+ * publish as empty and render blank on reload.
+ */
+function toCanonicalFieldPatch(fields: Record<string, unknown>): Record<string, unknown> {
+  const wrapped: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(fields)) {
+    if (
+      value !== null &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      'value' in (value as Record<string, unknown>)
+    ) {
+      wrapped[key] = value;
+    } else {
+      wrapped[key] = {
+        value,
+        sourceKind: 'seller',
+        sourceValue: value,
+        confidence: 'high',
+        reasonCode: 'seller_edit',
+      };
+    }
+  }
+  return wrapped;
 }
 
 // ---------------------------------------------------------------------------
@@ -400,6 +432,41 @@ export class CatalogImportService {
   }): Promise<CatalogImportBatchRow> {
     const id = createId('batch');
 
+    // Ownership gates: a batch must never bind to another tenant's OAuth
+    // connection or uploaded package — discovery would pull that tenant's
+    // catalogue (using their tokens) into this seller's batch.
+    if (input.connectionId) {
+      const connResult = await db.query<{
+        user_id: string;
+        status: string;
+        source: string;
+      }>(
+        `SELECT user_id, status, source FROM catalog_import_connections WHERE id = $1 LIMIT 1`,
+        [input.connectionId],
+      );
+      const conn = connResult.rows[0];
+      if (!conn || conn.user_id !== input.userId) {
+        throw new CatalogImportError('permission_denied', 'You do not own this connection');
+      }
+      if (conn.status !== 'active') {
+        throw new CatalogImportError('connection_not_active', 'Connection requires reauthorisation');
+      }
+      if (conn.source !== input.source) {
+        throw new CatalogImportError('validation_failed', 'Connection source does not match the batch source');
+      }
+    }
+
+    if (input.packageId) {
+      const pkgResult = await db.query<{ owner_id: string }>(
+        `SELECT owner_id FROM upload_finalizations WHERE id = $1 LIMIT 1`,
+        [input.packageId],
+      );
+      const pkg = pkgResult.rows[0];
+      if (!pkg || pkg.owner_id !== input.userId) {
+        throw new CatalogImportError('permission_denied', 'You do not own this package');
+      }
+    }
+
     // Persist the packageId in checkpoint_json so the discovery worker can
     // locate the uploaded package for seller_package imports. For OAuth
     // sources the checkpoint starts empty and is populated during discovery.
@@ -569,6 +636,11 @@ export class CatalogImportService {
         }
         return;
       }
+      case 'publishing':
+        // A publish-saga crash leaves the batch in 'publishing' with work
+        // half-done — the publication job resumes per-item idempotently.
+        await enqueueCatalogImportPublicationJob({ batchId });
+        return;
       default:
         // awaiting_operator / awaiting_seller wait for a human — no jobs.
         return;
@@ -584,6 +656,13 @@ export class CatalogImportService {
     const batch = await this.getBatch(userId, batchId);
 
     if (batch.status === 'cancelling' || batch.status === 'cancelled') {
+      return;
+    }
+
+    // States that can move straight to 'cancelled' (approved, publishing)
+    // have no 'cancelling' hop in the state machine — go directly.
+    if (!isValidBatchTransition(batch.status, 'cancelling')) {
+      await this.updateBatchStatus(userId, batchId, 'cancelled', 'seller_cancelled');
       return;
     }
 
@@ -609,7 +688,7 @@ export class CatalogImportService {
 
     if (checkpoint && typeof checkpoint === 'object' && 'phase' in checkpoint) {
       const phase = (checkpoint as Record<string, unknown>).phase;
-      if (phase === 'hydrating' || phase === 'ingesting_media' || phase === 'normalising' || phase === 'awaiting_operator' || phase === 'awaiting_seller') {
+      if (phase === 'hydrating' || phase === 'ingesting_media' || phase === 'normalising' || phase === 'awaiting_operator' || phase === 'awaiting_seller' || phase === 'publishing') {
         targetState = phase as BatchState;
       } else {
         targetState = 'discovering';
@@ -704,6 +783,16 @@ export class CatalogImportService {
       return [];
     }
 
+    // source is NOT NULL with no default — inherit it from the parent batch.
+    const batchResult = await db.query<{ source: string }>(
+      `SELECT source FROM catalog_import_batches WHERE id = $1 LIMIT 1`,
+      [batchId],
+    );
+    const batchSource = batchResult.rows[0]?.source;
+    if (!batchSource) {
+      throw new CatalogImportError('batch_not_found', 'Batch not found');
+    }
+
     // Build a multi-row INSERT with ON CONFLICT DO NOTHING on
     // (batch_id, external_item_id).
     const values: string[] = [];
@@ -716,25 +805,26 @@ export class CatalogImportService {
       const sourceUpdatedAt = item.sourceUpdatedAt ? new Date(item.sourceUpdatedAt) : null;
 
       values.push(
-        `($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, $${paramIndex + 4}, $${paramIndex + 5}, $${paramIndex + 6}, $${paramIndex + 7}, $${paramIndex + 8}, $${paramIndex + 9})`,
+        `($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, $${paramIndex + 4}, $${paramIndex + 5}, $${paramIndex + 6}, $${paramIndex + 7}, $${paramIndex + 8}, $${paramIndex + 9}, $${paramIndex + 10})`,
       );
       params.push(
         id,
         batchId,
         userId,
         item.externalItemId,
+        batchSource,
         sourceUrl,
         item.sourceState,
         sourceUpdatedAt,
         item.sourceChecksum,
         JSON.stringify(item.minimal),
       );
-      paramIndex += 9;
+      paramIndex += 10;
     }
 
     const queryText = `
       INSERT INTO catalog_import_items (
-        id, batch_id, user_id, external_item_id, source_url,
+        id, batch_id, user_id, external_item_id, source, source_url,
         source_state, source_updated_at, source_checksum, raw_snapshot_ciphertext
       )
       VALUES ${values.join(', ')}
@@ -879,7 +969,7 @@ export class CatalogImportService {
       assertOwnsItem(row, userId);
 
       const batchResult = await client.query(
-        `SELECT * FROM catalog_import_batches WHERE id = $1 LIMIT 1`,
+        `SELECT * FROM catalog_import_batches WHERE id = $1 FOR UPDATE`,
         [row.batch_id],
       );
       const batch = batchResult.rows.length > 0
@@ -900,7 +990,7 @@ export class CatalogImportService {
 
       // Merge the patched fields into the existing normalised_fields.
       const currentFields = row.normalised_fields ?? {};
-      const mergedFields = { ...currentFields, ...fields };
+      const mergedFields = { ...currentFields, ...toCanonicalFieldPatch(fields) };
 
       await client.query(
         `UPDATE catalog_import_items
@@ -943,29 +1033,48 @@ export class CatalogImportService {
       return 0;
     }
 
-    const batch = await this.getBatch(userId, batchId);
-    assertBatchFieldEditable(batch);
+    const client = await db.connect();
+    try {
+      await client.query('BEGIN');
 
-    const result = await db.query(
-      `UPDATE catalog_import_items
-       SET normalised_fields = normalised_fields || $3::jsonb,
-           field_revision = $4,
-           updated_at = NOW()
-       WHERE batch_id = $1 AND id = ANY($2::text[])`,
-      [
-        batchId,
-        itemIds,
-        JSON.stringify(fields),
-        createId('frev'),
-      ],
-    );
+      const batchResult = await client.query(
+        `SELECT * FROM catalog_import_batches WHERE id = $1 FOR UPDATE`,
+        [batchId],
+      );
+      const batch = batchResult.rows.length > 0
+        ? mapBatchRow(batchResult.rows[0] as Record<string, unknown>)
+        : null;
+      assertOwnsBatch(batch, userId);
+      assertBatchFieldEditable(batch);
 
-    logger.info(
-      { batchId, updatedCount: result.rowCount, itemCount: itemIds.length },
-      'catalogImport.bulkUpdateItems',
-    );
+      const result = await client.query(
+        `UPDATE catalog_import_items
+         SET normalised_fields = normalised_fields || $3::jsonb,
+             field_revision = $4,
+             updated_at = NOW()
+         WHERE batch_id = $1 AND id = ANY($2::text[])`,
+        [
+          batchId,
+          itemIds,
+          JSON.stringify(toCanonicalFieldPatch(fields)),
+          createId('frev'),
+        ],
+      );
 
-    return result.rowCount ?? 0;
+      await client.query('COMMIT');
+
+      logger.info(
+        { batchId, updatedCount: result.rowCount, itemCount: itemIds.length },
+        'catalogImport.bulkUpdateItems',
+      );
+
+      return result.rowCount ?? 0;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async updateItemCounts(batchId: string): Promise<void> {

@@ -60,11 +60,11 @@ describe('cross-tenant IDOR guards', () => {
     assert.ok(match, 'getBatchItemSummary must assert batch ownership');
   });
 
-  it('bulkUpdateItems requires userId, asserts ownership, and freezes on non-editable batches', () => {
+  it('bulkUpdateItems requires userId, locks the batch, and freezes on non-editable batches', () => {
     const match = serviceSource.match(
-      /async bulkUpdateItems\(\s*userId: string,\s*batchId: string,[\s\S]*?await this\.getBatch\(userId, batchId\);\s*assertBatchFieldEditable\(batch\);/,
+      /async bulkUpdateItems\(\s*userId: string,\s*batchId: string,[\s\S]*?FOR UPDATE[\s\S]*?assertOwnsBatch\(batch, userId\);\s*assertBatchFieldEditable\(batch\);/,
     );
-    assert.ok(match, 'bulkUpdateItems must assert ownership and the editable-state freeze');
+    assert.ok(match, 'bulkUpdateItems must lock the batch and assert ownership + the editable-state freeze');
   });
 
   it('updateItemFields locks the parent batch and enforces the editable freeze', () => {
@@ -178,5 +178,43 @@ describe('publication saga integrity', () => {
       /catalog_import_batches WHERE id = \$1 FOR UPDATE[\s\S]*?'approved' && batchStatus !== 'publishing'/,
     );
     assert.ok(match, 'a mid-saga cancel must stop further draft creation');
+  });
+});
+
+describe('reconcile and retention', () => {
+  it('reconcileOutcomeUnknown republishes a proven-absent draft instead of parking it', () => {
+    const match = publicationSource.match(
+      /publication_status = 'approved'[\s\S]*?createDraftListing\(\s*row\.batch_id/,
+    );
+    assert.ok(match, 'a reconciled item reset to approved must be republished, not stranded');
+  });
+
+  it('createDraftListing accepts completed batches for reconcile retries only', () => {
+    assert.ok(
+      publicationSource.includes("batchStatus !== 'completed'"),
+      'the draft guard must admit completed batches so reconcile retries can publish',
+    );
+    assert.ok(
+      publicationSource.match(/batchStatus !== 'approved' && batchStatus !== 'publishing' && batchStatus !== 'completed'/),
+      'cancelled/failed batches must still be rejected',
+    );
+  });
+
+  it('the daily retention sweep enforces catalogue-import raw-data expiry', () => {
+    const sweepSource = readFileSync(
+      join(here, '..', 'workers', 'handlers', 'retentionSweepHandler.ts'),
+      'utf8',
+    );
+    assert.ok(
+      sweepSource.includes('findExpiredBatches') && sweepSource.includes('enforceRetention'),
+      'the retention sweep must enforce expired catalogue-import batches',
+    );
+  });
+
+  it('media retries converge on deterministic finalization and asset ids', () => {
+    assert.ok(
+      mediaSource.includes("`ufin_${media.id}`") && mediaSource.includes("`masset_${media.id}`"),
+      'media finalization/asset ids must derive from the media row id so retries cannot mint orphans',
+    );
   });
 });

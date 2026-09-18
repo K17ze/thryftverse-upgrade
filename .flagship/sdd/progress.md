@@ -866,3 +866,31 @@ Audited three departments in parallel (live shopping, AI agents, catalogue impor
 **Verification**: backend tsc clean, frontend tsc clean, `catalogImportHardening` 16/16 (new), streamingHardening updated for canonical viewer-count event 47/47 suite, referralAttribution 8/8, eslint 0 errors on touched files.
 
 **Deferred**: playground FK-dead rows, fallback-encryption detail, remaining 11 AI-agent P1s pending next audit-integration pass; live viewer_count still in-memory (multi-instance Redis sync unbuilt); "withdraw key rotation" still needs original audit detail.
+
+## Wave AK — catalogue-import runtime + AI-agent contract hardening (in progress)
+
+**Adversarial re-review of Wave AJ** found the import pipeline still dead at runtime
+(source-level tests missed real schema/worker defects) and 14 verified AI-agent
+contract breaks. Both fixed:
+
+- **Import runtime**: `source` column on all item INSERTs (was NOT NULL → every
+  insert failed); `ingesting_media→normalising` now actually advances; batch
+  connection/package ownership validated (third IDOR); worker transitions gated;
+  publish saga idempotent + `publishing`-resumable + skip-published; extraction
+  decisions freeze on non-editable batches; media previews join real rows;
+  reconcile republishes proven-absent drafts (completed-batch path); retention
+  sweep enforces the 30-day raw purge (was never scheduled); deterministic media
+  finalization/asset ids kill retry orphans; frontend stops polling paused states;
+  approve attestations now collected explicitly (sheet), not synthesized `true`.
+- **AI agents** (parallel fix-agent, reviewed): playground real conversation row +
+  per-user quota + provider credential; db/runId threaded into real runs;
+  argument-aware approval matching + atomic decisions + expiry; stale-run sweeper;
+  per-provider key verification + SSRF guard; ENCRYPTION_KEY required-secret;
+  is_active filters; SSE envelope unwrap; idempotency race; erasure unblocked.
+- **1ZE**: attestation envelope carries `kid` for rotation.
+
+**Verification so far**: backend tsc clean, frontend tsc clean,
+catalogImportHardening 20/20, botRuntime 23/23, offerLifecycle 11/11,
+two stale test mocks fixed (upload-finalize db.query delegate, offer.created
+conversation-membership query). Full suite running; creator-camera files are a
+separate in-flight workstream, excluded from this wave's commit.

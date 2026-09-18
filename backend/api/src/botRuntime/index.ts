@@ -23,7 +23,7 @@ import type { Pool, PoolClient } from 'pg';
 import type { BotRuntimeContext, BotInstallInfo, BotHandlerResult } from './types.js';
 import { resolveBotHandler } from './handlers.js';
 import { normalizeAgentConfig } from './agentConfig.js';
-import { encryptMessageBody, resolveMessageBody } from '../lib/messageEncryption.js';
+import { decryptApiKey, encryptMessageBody, resolveMessageBody } from '../lib/messageEncryption.js';
 import { logger } from '../lib/logger.js';
 
 interface DbQueryable {
@@ -48,6 +48,7 @@ export async function listActiveBotInstalls(
     runtime_mode: string;
     bot_status: string;
     agent_config: unknown;
+    provider_connection_id: string | null;
   }>(
     `
       SELECT
@@ -60,6 +61,7 @@ export async function listActiveBotInstalls(
         i.permissions_snapshot,
         b.runtime_mode,
         b.status AS bot_status,
+        b.provider_connection_id,
         COALESCE(av.agent_config, b.agent_config) as agent_config
       FROM chat_bot_installs i
       JOIN chat_bots b ON b.id = i.bot_id
@@ -84,6 +86,7 @@ export async function listActiveBotInstalls(
     runtimeMode: row.runtime_mode,
     status: row.bot_status,
     agentConfig: row.runtime_mode === 'ai' ? normalizeAgentConfig(row.agent_config) : null,
+    providerConnectionId: row.provider_connection_id,
   }));
 }
 
@@ -370,6 +373,35 @@ async function logBotAuditEvent(
 }
 
 /**
+ * Resolve a bot's bound provider connection to an execution credential.
+ * Soft-deleted connections (is_active = FALSE) are never decrypted — a
+ * revoked credential must not keep working through a stale binding. A
+ * bound bot whose connection is missing or revoked fails the run rather
+ * than silently falling back to the platform key.
+ */
+export async function resolveProviderConnectionCredential(
+  client: DbQueryable,
+  connectionId: string
+): Promise<{ apiKey: string; baseUrl: string }> {
+  const result = await client.query<{
+    encrypted_key: string;
+    base_url: string | null;
+  }>(
+    `SELECT encrypted_key, base_url FROM provider_connections
+     WHERE id = $1 AND is_active = TRUE
+     LIMIT 1`,
+    [connectionId]
+  );
+  if (!result.rowCount) {
+    throw new Error(`provider connection ${connectionId} is inactive or missing`);
+  }
+  return {
+    apiKey: decryptApiKey(result.rows[0].encrypted_key),
+    baseUrl: result.rows[0].base_url ?? 'https://api.openai.com/v1',
+  };
+}
+
+/**
  * Execute a bot command in a conversation.
  * Returns the bot response message if one was generated, otherwise null.
  */
@@ -386,6 +418,7 @@ export async function executeBotCommand(
     command?: string; // optional: bypass text matching
     args?: string[]; // optional: bypass text matching
     stream?: boolean; // optional: stream AI agent responses via realtime events
+    runId?: string; // optional: durable agent_runs id — enables tool/approval loading
   }
 ): Promise<{ messageId: string | null; botId: string | null; text: string | null }> {
   const installs = await listActiveBotInstalls(client, input.conversationId);
@@ -442,10 +475,11 @@ export async function executeBotCommand(
     }
 
     const useStreaming = install.runtimeMode === 'ai' && input.stream === true;
-    const handler = install.runtimeMode === 'ai'
-      ? (await import('./openaiAgent.js')).executeOpenAiAgent
-      : resolveBotHandler(install.botCategory);
-    if (!handler) continue;
+    const openAiAgent = install.runtimeMode === 'ai'
+      ? await import('./openaiAgent.js')
+      : null;
+    const handler = openAiAgent ? null : resolveBotHandler(install.botCategory);
+    if (!openAiAgent && !handler) continue;
 
     const conversationHistory =
       install.agentConfig && effectivePermissions.includes('read_messages')
@@ -516,25 +550,40 @@ export async function executeBotCommand(
             resetsAt: aiQuota.resetsAt,
           },
         };
-      } else if (useStreaming) {
-        // Stream the AI response, publishing partial realtime events so
-        // the UI can render text as it arrives. The final assembled
-        // result (with confidence, explanation, usage) is returned.
-        const { streamOpenAiAgent } = await import('./openaiAgent.js');
-        const { publishRealtimeEvent } = await import('../lib/realtime.js');
-        result = await streamOpenAiAgent(ctx, (delta) => {
-          publishRealtimeEvent({
-            topic: `chat.conversation:${input.conversationId}`,
-            type: 'chat.agent.stream_delta',
-            payload: {
-              conversationId: input.conversationId,
-              botId: install.botId,
-              delta,
-            },
-          });
-        });
+      } else if (openAiAgent) {
+        // Resolve the bot's bound provider connection (if any) — the
+        // credential decides which provider account pays for this run. A
+        // bound-but-inactive connection throws and lands in the standard
+        // failure path below rather than silently using the platform key.
+        const connectionCredential = install.providerConnectionId
+          ? await resolveProviderConnectionCredential(client, install.providerConnectionId)
+          : undefined;
+        if (useStreaming) {
+          // Stream the AI response, publishing partial realtime events so
+          // the UI can render text as it arrives. The final assembled
+          // result (with confidence, explanation, usage) is returned.
+          const { publishRealtimeEvent } = await import('../lib/realtime.js');
+          result = await openAiAgent.streamOpenAiAgent(ctx, (delta) => {
+            publishRealtimeEvent({
+              topic: `chat.conversation:${input.conversationId}`,
+              type: 'chat.agent.stream_delta',
+              payload: {
+                conversationId: input.conversationId,
+                botId: install.botId,
+                delta,
+              },
+            });
+          }, connectionCredential, client, input.runId);
+        } else {
+          result = await openAiAgent.executeOpenAiAgent(
+            ctx,
+            connectionCredential,
+            client,
+            input.runId,
+          );
+        }
       } else {
-        result = await handler(ctx);
+        result = await handler!(ctx);
       }
     } catch (error) {
       await logBotAuditEvent(client, {
@@ -761,25 +810,32 @@ export async function enqueueAgentRun(
       ? `${input.triggerMessageId}:${install.botId}`
       : `${createRuntimeId('idem')}:${install.botId}`;
 
-    // Skip if a run with the same idempotency key already exists.
-    const existing = await client.query<{ id: string; status: string }>(
-      `SELECT id, status FROM agent_runs WHERE idempotency_key = $1 LIMIT 1`,
-      [idempotencyKey]
-    );
-
-    if (existing.rowCount) {
-      runs.push({ runId: existing.rows[0].id, queued: false });
-      continue;
-    }
-
     const runId = createRuntimeId('run');
     const triggerType = install.agentConfig?.triggerMode ?? 'mention';
 
-    await client.query(
+    // Atomic dedup: INSERT ... ON CONFLICT DO NOTHING collapses the
+    // check-then-insert race — two concurrent enqueues for the same
+    // trigger can no longer both pass a SELECT and hit
+    // UNIQUE(idempotency_key). Zero returned rows means an identical run
+    // already exists; resolve its id for the dedup contract.
+    const inserted = await client.query<{ id: string }>(
       `INSERT INTO agent_runs (id, bot_id, conversation_id, actor_user_id, agent_version_id, trigger_type, trigger_message_id, status, idempotency_key)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'queued', $8)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'queued', $8)
+       ON CONFLICT (idempotency_key) DO NOTHING
+       RETURNING id`,
       [runId, install.botId, input.conversationId, input.actorUserId, null, triggerType, input.triggerMessageId, idempotencyKey]
     );
+
+    if (!inserted.rowCount) {
+      const existing = await client.query<{ id: string }>(
+        `SELECT id FROM agent_runs WHERE idempotency_key = $1 LIMIT 1`,
+        [idempotencyKey]
+      );
+      if (existing.rowCount) {
+        runs.push({ runId: existing.rows[0].id, queued: false });
+      }
+      continue;
+    }
 
     await logBotAuditEvent(client, {
       botId: install.botId,
@@ -888,10 +944,13 @@ export async function processAgentRun(
       actorUserName: null,
       messageText: triggerBody,
       targetBotId: run.bot_id,
+      runId,
     });
 
+    // Guarded on status='running': a run cancelled mid-execution must stay
+    // cancelled — a late completion must not resurrect it.
     await db.query(
-      `UPDATE agent_runs SET status = 'succeeded', completed_at = NOW(), result_message_id = $2, result_text = $3 WHERE id = $1`,
+      `UPDATE agent_runs SET status = 'succeeded', completed_at = NOW(), result_message_id = $2, result_text = $3 WHERE id = $1 AND status = 'running'`,
       [runId, result.messageId, result.text]
     );
 
@@ -907,8 +966,10 @@ export async function processAgentRun(
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message.slice(0, 500) : 'unknown error';
+    // Guarded on status='running': a run cancelled mid-execution must stay
+    // cancelled — a late failure must not resurrect it.
     await db.query(
-      `UPDATE agent_runs SET status = 'failed', completed_at = NOW(), error_message = $2 WHERE id = $1`,
+      `UPDATE agent_runs SET status = 'failed', completed_at = NOW(), error_message = $2 WHERE id = $1 AND status = 'running'`,
       [runId, errorMessage]
     );
 
@@ -923,4 +984,30 @@ export async function processAgentRun(
       },
     });
   }
+}
+
+/**
+ * Recover stale agent runs. A crash between the queued → running claim and
+ * the terminal write leaves status='running' forever, and a run whose
+ * BullMQ job was lost sits in 'queued' indefinitely — BullMQ retries
+ * early-return on status!=='queued', so neither self-heals. Runs older
+ * than the stale threshold are moved to a terminal state: 'running' →
+ * 'timed_out' (it started but never finished), 'queued' → 'unknown_outcome'
+ * (it may never have been claimed). Returns the number of rows recovered.
+ */
+export async function sweepStaleAgentRuns(
+  db: DbQueryable,
+  staleThresholdMinutes = 15
+): Promise<number> {
+  const result = await db.query<{ id: string }>(
+    `UPDATE agent_runs
+     SET status = CASE WHEN status = 'running' THEN 'timed_out' ELSE 'unknown_outcome' END,
+         completed_at = COALESCE(completed_at, NOW()),
+         error_message = COALESCE(error_message, 'run abandoned — recovered by stale-run sweep')
+     WHERE status IN ('queued', 'running')
+       AND created_at < NOW() - ($1 || ' minutes')::interval
+     RETURNING id`,
+    [staleThresholdMinutes]
+  );
+  return result.rowCount ?? 0;
 }

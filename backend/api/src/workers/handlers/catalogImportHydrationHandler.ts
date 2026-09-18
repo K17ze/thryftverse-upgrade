@@ -150,17 +150,28 @@ async function hydrateOAuthItem(
   // Store the raw payload encrypted (ciphertext placeholder).
   const rawCiphertext = JSON.stringify(hydrated.raw);
 
+  // Guarded like the seller-package path: a replayed hydration must not
+  // regress an item the seller already excluded or the pipeline advanced.
+  if (!isValidItemReadinessTransition(item.readiness, 'media_pending')) {
+    logger.warn(
+      { itemId: item.id, readiness: item.readiness },
+      'catalogImportHydration.invalid_transition_oauth',
+    );
+    return;
+  }
+
   await db.query(
     `UPDATE catalog_import_items
      SET raw_snapshot_ciphertext = $2,
          source_updated_at = COALESCE($3, source_updated_at),
          readiness = 'media_pending',
          updated_at = NOW()
-     WHERE id = $1`,
+     WHERE id = $1 AND readiness = $4`,
     [
       item.id,
       rawCiphertext,
       hydrated.sourceUpdatedAt ? new Date(hydrated.sourceUpdatedAt) : null,
+      item.readiness,
     ],
   );
 
@@ -207,11 +218,14 @@ async function checkAllItemsMediaPending(
 async function transitionBatchToIngestingMedia(
   batchId: string,
 ): Promise<void> {
-  // Only transition if the batch is in 'hydrating' state.
+  // Only transition if the batch is in 'hydrating' state. Records the
+  // resume phase so a mid-stage failure retries from ingesting_media.
   await db.query(
     `UPDATE catalog_import_batches
      SET status = 'ingesting_media',
          status_reason = NULL,
+         checkpoint_json = COALESCE(checkpoint_json, '{}'::jsonb)
+           || jsonb_build_object('phase', 'ingesting_media'),
          updated_at = NOW()
      WHERE id = $1
        AND status = 'hydrating'`,
@@ -247,6 +261,33 @@ export async function processCatalogImportHydration(
     return;
   }
 
+  // Jobs enqueued before a cancel/pause/approve must not mutate items or
+  // burn provider calls — only active pipeline states accept work.
+  const batchResult = await db.query<{
+    source: CatalogSource;
+    connection_id: string | null;
+    status: string;
+  }>(
+    `SELECT source, connection_id, status FROM catalog_import_batches WHERE id = $1 LIMIT 1`,
+    [batchId],
+  );
+  const batch = batchResult.rows[0];
+  if (!batch) {
+    logger.warn({ batchId }, 'catalogImportHydration.batch_not_found');
+    return;
+  }
+  if (
+    batch.status !== 'hydrating' &&
+    batch.status !== 'ingesting_media' &&
+    batch.status !== 'normalising'
+  ) {
+    logger.info(
+      { batchId, itemId, status: batch.status },
+      'catalogImportHydration.skipped_batch_not_active',
+    );
+    return;
+  }
+
   // Idempotency: skip if already past media_pending.
   if (
     item.readiness === 'media_pending' ||
@@ -260,16 +301,6 @@ export async function processCatalogImportHydration(
       'catalogImportHydration.skipped_already_progressed',
     );
   } else {
-    // Load the batch to get the source.
-    const batchResult = await db.query<{ source: CatalogSource; connection_id: string | null }>(
-      `SELECT source, connection_id FROM catalog_import_batches WHERE id = $1 LIMIT 1`,
-      [batchId],
-    );
-    const batch = batchResult.rows[0];
-    if (!batch) {
-      logger.warn({ batchId }, 'catalogImportHydration.batch_not_found');
-      return;
-    }
 
     try {
       if (batch.source === 'seller_package') {
