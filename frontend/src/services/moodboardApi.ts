@@ -3,7 +3,11 @@
  *
  * This service provides the data contract for the ThryftVerse Moodboard — a
  * Depop "Outfits" / Pinterest board equivalent that lets users create and
- * share their own editorial collages from marketplace listings.
+ * share their own editorial collages from mixed-source items: marketplace
+ * listings, source looks, and user-uploaded device media (images and video).
+ * Items carry a `sourceType` discriminator plus media fields (`mediaType`,
+ * `videoUri`, `aspectRatio`, `caption`) so the canvas can render each source
+ * faithfully and navigate back to its origin.
  *
  * The service calls the real backend (`/moodboards`). It does NOT silently
  * fall back to mock data on failure — errors propagate to the caller so the
@@ -30,17 +34,35 @@ export interface MoodboardItemPosition {
   rotation: number;
 }
 
-/** A single listing placed on a moodboard canvas. */
+/** Where a moodboard canvas item originated. */
+export type MoodboardItemSourceType = 'listing' | 'media' | 'look' | 'note';
+
+/** A single item placed on a moodboard canvas (listing, look, media, or note). */
 export interface MoodboardItem {
   id: string;
-  /** The source listing ID (for navigation back to the listing). */
+  /** What kind of source produced this item. */
+  sourceType: MoodboardItemSourceType;
+  /** Marketplace listing ID — '' unless sourceType==='listing'. */
   listingId: string;
-  /** Image URI for the item on the canvas. */
+  /** Source look ID for look-sourced items — enables navigation back to the look. */
+  sourceLookId: string | null;
+  /** Media-asset lineage for uploaded media items — lets the client re-add
+   * the item through the verified-source path (conflict resolution). */
+  mediaAssetId: string | null;
+  /** Display image URI — poster frame for video items. */
   imageUri: string;
-  /** Display title (listing title at time of addition). */
+  /** Playback URL for video items — '' unless mediaType==='video'. */
+  videoUri: string;
+  /** Whether the underlying media is a still image or a video. */
+  mediaType: 'image' | 'video';
+  /** Display title (source title at time of addition). */
   title: string;
-  /** Price in GBP at time of addition. */
+  /** Free-form caption attached to media items — '' when unset. */
+  caption: string;
+  /** Price in GBP at time of addition — 0 for non-listing items. */
   price: number;
+  /** Width/height ratio of the source media — 1 when unknown. */
+  aspectRatio: number;
   /** Position and transform on the canvas. */
   position: MoodboardItemPosition;
   /** ISO timestamp of when the item was added. */
@@ -186,16 +208,7 @@ interface ApiMoodboard {
   description: string;
   curator: string;
   curatorAvatar: string;
-  items: Array<{
-    id: string;
-    listingId: string;
-    imageUri: string;
-    title: string;
-    price: number;
-    position: { x: number; y: number; scale: number; rotation: number };
-    addedAt: string;
-    revision: number;
-  }>;
+  items: ApiMoodboardItemResponse[];
   coverImage: string;
   isPublic: boolean;
   theme: string;
@@ -219,6 +232,15 @@ interface ApiMoodboardItemResponse {
   price: number;
   position: { x: number; y: number; scale: number; rotation: number };
   addedAt: string;
+  // Mixed-source fields — optional so older servers and the picker-items
+  // endpoint (which returns listing-shaped rows) don't break the mapping.
+  sourceType?: MoodboardItemSourceType;
+  sourceLookId?: string | null;
+  mediaAssetId?: string | null;
+  videoUri?: string;
+  mediaType?: 'image' | 'video';
+  caption?: string;
+  aspectRatio?: number;
   revision: number;
 }
 
@@ -229,7 +251,7 @@ function mapApiMoodboard(raw: ApiMoodboard): Moodboard {
     description: raw.description,
     curator: raw.curator,
     curatorAvatar: raw.curatorAvatar,
-    items: raw.items.map((it) => ({ ...it, isDemo: false })),
+    items: raw.items.map(mapApiItem),
     coverImage: raw.coverImage,
     isPublic: raw.isPublic,
     theme: raw.theme,
@@ -244,7 +266,26 @@ function mapApiMoodboard(raw: ApiMoodboard): Moodboard {
 }
 
 function mapApiItem(raw: ApiMoodboardItemResponse): MoodboardItem {
-  return { ...raw, isDemo: false };
+  // Defensive defaults — older servers and the picker-items endpoint return
+  // listing-shaped rows without the mixed-source fields.
+  return {
+    id: raw.id,
+    sourceType: raw.sourceType ?? (raw.listingId ? 'listing' : 'media'),
+    listingId: raw.listingId ?? '',
+    sourceLookId: raw.sourceLookId ?? null,
+    mediaAssetId: raw.mediaAssetId ?? null,
+    imageUri: raw.imageUri ?? '',
+    videoUri: raw.videoUri ?? '',
+    mediaType: raw.mediaType ?? 'image',
+    title: raw.title ?? '',
+    caption: raw.caption ?? '',
+    price: raw.price ?? 0,
+    aspectRatio: raw.aspectRatio ?? 1,
+    position: raw.position,
+    addedAt: raw.addedAt,
+    isDemo: false,
+    revision: raw.revision ?? 0,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -296,20 +337,51 @@ export async function createMoodboard(title: string, theme: string): Promise<Moo
 }
 
 /**
- * Add an item (by listing ID) to a moodboard.
+ * Discriminated input for addItemToMoodboard — one variant per item source.
+ * - listing: an existing marketplace listing (optional mediaUrl override).
+ * - media: user-uploaded device media referenced by its finalization ID.
+ * - look: an existing look pinned onto the board.
+ */
+export type MoodboardAddItemInput =
+  | { source: 'listing'; listingId: string; mediaUrl?: string }
+  | { source: 'media'; mediaFinalizationId: string; mediaType?: 'image' | 'video'; title?: string; caption?: string; aspectRatio?: number }
+  | { source: 'look'; lookId: string };
+
+/**
+ * Add a mixed-source item (listing, media, or look) to a moodboard.
  * Errors propagate to the caller — no silent mock fallback.
  */
 export async function addItemToMoodboard(
   moodboardId: string,
-  listingId: string,
+  input: MoodboardAddItemInput,
 ): Promise<MoodboardItem | null> {
+  let body: Record<string, unknown>;
+  switch (input.source) {
+    case 'listing': {
+      body = { listingId: input.listingId };
+      if (input.mediaUrl) body.mediaUrl = input.mediaUrl;
+      break;
+    }
+    case 'media': {
+      body = { mediaFinalizationId: input.mediaFinalizationId };
+      if (input.mediaType) body.mediaType = input.mediaType;
+      if (input.title) body.title = input.title;
+      if (input.caption) body.caption = input.caption;
+      if (input.aspectRatio != null) body.aspectRatio = input.aspectRatio;
+      break;
+    }
+    case 'look': {
+      body = { lookId: input.lookId };
+      break;
+    }
+  }
   try {
     const data = await fetchJson<ApiMoodboardItemResponse>(
       `/moodboards/${moodboardId}/items`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ listingId }),
+        body: JSON.stringify(body),
       },
     );
     return mapApiItem(data);
