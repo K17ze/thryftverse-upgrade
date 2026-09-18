@@ -88,7 +88,7 @@ export function CreatorAnalyticsEarnings({
             </Text>
           </AnimatedPressable>
           {payoutError ? (
-            <Text style={[styles.payoutErrorText, { color: colors.danger }]}>
+            <Text style={[styles.payoutErrorText, { color: colors.dangerText }]}>
               {payoutError}
             </Text>
           ) : null}
@@ -124,7 +124,7 @@ export function CreatorAnalyticsEarnings({
               <Text
                 style={[
                   styles.entryAmount,
-                  { color: entry.amountMinor < 0 ? colors.danger : colors.textPrimary },
+                  { color: entry.amountMinor < 0 ? colors.dangerText : colors.textPrimary },
                 ]}
               >
                 {formatMoney(entry.amountMinor, ledgerCurrency)}

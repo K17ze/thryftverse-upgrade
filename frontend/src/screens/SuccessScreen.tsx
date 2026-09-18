@@ -123,7 +123,7 @@ export default function SuccessScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.centerContent}>
-          <Ionicons name="checkmark" size={64} color={colors.success} style={styles.successIcon} />
+          <Ionicons name="checkmark" size={64} color={colors.successText} style={styles.successIcon} />
 
           <View>
             <Text style={styles.title} accessibilityRole="header">Payment Successful</Text>
@@ -245,7 +245,7 @@ function TimelineStep({
 }) {
   const { colors } = useAppTheme();
   const timelineStyles = useMemo(() => createTimelineStyles(colors), [colors]);
-  const color = isComplete ? colors.success : isActive ? colors.brand : colors.textMuted;
+  const color = isComplete ? colors.successText : isActive ? colors.brand : colors.textMuted;
   return (
     <View style={timelineStyles.step}>
       <View style={timelineStyles.iconCol}>

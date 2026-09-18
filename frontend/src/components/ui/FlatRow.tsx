@@ -146,7 +146,7 @@ export function FlatRow({
   const labelColor = disabled
     ? colors.textMuted
     : danger
-      ? colors.danger
+      ? colors.dangerText
       : colors.textPrimary;
 
   const resolvedValueColor = valueColor ?? colors.textMuted;
@@ -159,9 +159,9 @@ export function FlatRow({
 
   const badgeBg = (() => {
     switch (badgeTone) {
-      case 'success': return colors.success;
-      case 'danger': return colors.danger;
-      case 'warning': return colors.warning;
+      case 'success': return colors.successText;
+      case 'danger': return colors.dangerText;
+      case 'warning': return colors.warningText;
       case 'brand': return colors.brand;
       default: return colors.surfaceAlt;
     }
@@ -199,7 +199,7 @@ export function FlatRow({
             <AppIcon
               name={icon}
               size={IconSize.md}
-              color={iconColor ?? (danger ? 'danger' : 'textSecondary')}
+              color={iconColor ?? (danger ? 'dangerText' : 'textSecondary')}
               opticalCenter={true}
               accessible={false}
             />

@@ -33,11 +33,12 @@ import type { InAppNotification, NotificationType } from '../../services/inAppNo
 
 interface TypeConfig {
   icon: keyof typeof Ionicons.glyphMap;
-  /** Semantic accent color key from ThemeColors. */
+  /** Semantic accent color key from ThemeColors — the readable *Text
+   *  foregrounds, since the accent drives icon + action text (F08). */
   accentKey:
-    | 'success'
-    | 'warning'
-    | 'danger'
+    | 'successText'
+    | 'warningText'
+    | 'dangerText'
     | 'brand'
     | 'discovery'
     | 'social'
@@ -46,9 +47,9 @@ interface TypeConfig {
 }
 
 const TYPE_CONFIG: Record<NotificationType, TypeConfig> = {
-  success: { icon: 'checkmark-circle', accentKey: 'success' },
-  warning: { icon: 'warning', accentKey: 'warning' },
-  error: { icon: 'alert-circle', accentKey: 'danger' },
+  success: { icon: 'checkmark-circle', accentKey: 'successText' },
+  warning: { icon: 'warning', accentKey: 'warningText' },
+  error: { icon: 'alert-circle', accentKey: 'dangerText' },
   info: { icon: 'information-circle', accentKey: 'brand' },
   offer: { icon: 'cash-outline', accentKey: 'discovery' },
   message: { icon: 'chatbubble', accentKey: 'social' },

@@ -311,7 +311,7 @@ export default function ManageListingScreen() {
   // Status metadata for the flat identity block.
   const statusLabel = isSold ? t('manage.statusSold') : isPaused ? t('manage.statusPaused') : t('manage.statusActive');
   // Per 2026 best practices: Active (success), Paused (warning), Sold (brand).
-  const statusColor = isSold ? colors.brand : isPaused ? colors.warning : colors.success;
+  const statusColor = isSold ? colors.brand : isPaused ? colors.warningText : colors.successText;
 
   // ── Real engagement data (from backend engagement summary) ──
   // GET /listings/:id emits exactly: likes (wishlist adds), wishlistCount,

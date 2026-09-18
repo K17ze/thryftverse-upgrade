@@ -19,7 +19,7 @@
  * type, and dispatch typed payloads to the caller. Topic subscription and
  * handler registration are cleaned up automatically on unmount.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useRealtimeSafe, type RealtimeConnectionState, type RealtimeEnvelope } from '../platform/realtime';
 import { useStore } from '../store/useStore';
 import type { Message as ConversationMessage } from '../domain';
@@ -597,6 +597,131 @@ export function useTypingUsers(conversationId: string | undefined): {
     ? typingUserIds.filter((id) => id !== selfId)
     : typingUserIds;
   return { typingUserIds: filteredTypingUserIds, isTyping: filteredTypingUserIds.length > 0 };
+}
+
+// ── Inbox-wide typing map ───────────────────────────────────────────
+//
+// The inbox already subscribes to every loaded conversation topic for
+// new-message events — typing updates arrive on those same topics but
+// were never consumed. This module keeps a tiny external store of
+// conversationId → typing userIds so inbox rows can render the same
+// typing dots the thread shows, without per-row subscriptions.
+//
+// Auto-clear: each (conversation, user) entry expires 4s after the last
+// typing event, matching useTypingUsers' staleness rule.
+
+const typingUsersByConversation = new Map<string, Set<string>>();
+const typingListeners = new Set<() => void>();
+const typingClearTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function notifyTypingListeners() {
+  for (const listener of typingListeners) listener();
+}
+
+function setUserTyping(conversationId: string, userId: string, isTyping: boolean) {
+  const timerKey = `${conversationId}:${userId}`;
+  const existing = typingClearTimers.get(timerKey);
+  if (existing) {
+    clearTimeout(existing);
+    typingClearTimers.delete(timerKey);
+  }
+
+  if (isTyping) {
+    let users = typingUsersByConversation.get(conversationId);
+    if (!users) {
+      users = new Set();
+      typingUsersByConversation.set(conversationId, users);
+    }
+    users.add(userId);
+    typingClearTimers.set(
+      timerKey,
+      setTimeout(() => {
+        users.delete(userId);
+        if (users.size === 0) typingUsersByConversation.delete(conversationId);
+        typingClearTimers.delete(timerKey);
+        notifyTypingListeners();
+      }, 4000),
+    );
+  } else {
+    const users = typingUsersByConversation.get(conversationId);
+    // Unknown stop-typing events are a no-op — don't churn listeners.
+    if (!users || !users.has(userId)) return;
+    users.delete(userId);
+    if (users.size === 0) typingUsersByConversation.delete(conversationId);
+  }
+  notifyTypingListeners();
+}
+
+/**
+ * useConversationTyping — read the inbox-level typing state for one
+ * conversation. Reactive via useSyncExternalStore; no subscription of
+ * its own — `useInboxTypingEvents` feeds the shared map.
+ *
+ * The snapshot re-filters self at read time: a self-echo that arrived
+ * while `selfId` was still hydrating is evicted as soon as it resolves,
+ * matching the belt-filter useTypingUsers applies at its render boundary.
+ */
+export function useConversationTyping(conversationId: string | undefined): boolean {
+  const selfId = useStore((s) => s.currentUser?.id);
+  return useSyncExternalStore(
+    useCallback((onStoreChange) => {
+      typingListeners.add(onStoreChange);
+      return () => { typingListeners.delete(onStoreChange); };
+    }, []),
+    () => {
+      if (!conversationId) return false;
+      const users = typingUsersByConversation.get(conversationId);
+      if (!users) return false;
+      for (const userId of users) {
+        if (userId !== selfId) return true;
+      }
+      return false;
+    },
+  );
+}
+
+/**
+ * useInboxTypingEvents — subscribe to `chat.typing.update` across all
+ * loaded conversation topics (the same topic set useInboxMessageEvent
+ * reconciles) and feed the shared typing map. Topics are refcounted, so
+ * sharing the set with the message hook costs nothing — but this hook
+ * subscribes its own copy so it works even when mounted alone.
+ * Self-echoes are dropped: the backend excludes the actor, this is the
+ * belt-filter.
+ */
+export function useInboxTypingEvents(): void {
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
+  const conversations = useStore((state) => state.conversations);
+  const selfId = useStore((s) => s.currentUser?.id);
+
+  // `conversations` gets a new array identity on every message upsert;
+  // only id membership should re-run the subscription effect.
+  const topicsKey = conversations.map((c) => c.id).join(',');
+
+  useEffect(() => {
+    if (!client) return;
+    const ids = topicsKey ? topicsKey.split(',') : [];
+    const topics = ids.map((id) => chatConversationTopic(id));
+    if (topics.length) client.subscribe(topics);
+
+    const unsubscribers = ids.map((conversationId) =>
+      client.on<ChatTypingUpdatePayload>(chatConversationTopic(conversationId), (envelope) => {
+        if (envelope.type !== CHAT_TYPING_EVENT) return;
+        const payload = envelope.payload;
+        if (payload.conversationId && payload.conversationId !== conversationId) return;
+        const userId = payload.userId;
+        if (!userId) return;
+        if (selfId && userId === selfId) return;
+        setUserTyping(conversationId, userId, !!payload.isTyping);
+      }),
+    );
+
+    return () => {
+      for (const unsubscribe of unsubscribers) unsubscribe();
+      if (topics.length) client.unsubscribe(topics);
+    };
+  }, [client, topicsKey, selfId]);
 }
 
 // ── Inbox-wide message event hook ───────────────────────────────────

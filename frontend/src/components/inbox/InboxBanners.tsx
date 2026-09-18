@@ -19,9 +19,9 @@ export function InboxSyncBanner({ onRetry }: InboxSyncBannerProps) {
   const { colors } = useAppTheme();
   return (
     <View style={[styles.errorBanner, { backgroundColor: colors.dangerSubtle, borderBottomColor: colors.border }]}>
-      <Ionicons name="alert-circle-outline" size={16} color={colors.danger} accessible={false} />
+      <Ionicons name="alert-circle-outline" size={16} color={colors.dangerText} accessible={false} />
       <View style={styles.errorBannerCopy}>
-        <Text style={[styles.errorBannerTitle, { color: colors.danger }]} accessibilityLiveRegion="polite">Couldn't sync messages</Text>
+        <Text style={[styles.errorBannerTitle, { color: colors.dangerText }]} accessibilityLiveRegion="polite">Couldn't sync messages</Text>
         <Text style={[styles.errorBannerSub, { color: colors.textMuted }]}>Check your connection or retry.</Text>
       </View>
       <AnimatedPressable

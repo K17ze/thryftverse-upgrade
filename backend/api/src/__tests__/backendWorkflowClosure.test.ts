@@ -917,7 +917,7 @@ test('upload finalization ignores client metadata and verifies the canonical pre
     finalized_at: null,
   };
   const client = {
-    async query(sql: string) {
+    async query(sql: string, _params?: unknown[]) {
       const normalized = sql.replace(/\s+/g, ' ').trim();
       // The pre-transaction intent read and any in-transaction refetch both
       // resolve to the canonical presign row.

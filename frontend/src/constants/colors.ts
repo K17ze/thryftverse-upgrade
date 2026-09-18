@@ -50,13 +50,21 @@ export const DARK_COLORS = {
   // Canonical name (mirrors ThemeContext). borderLight kept as alias below.
   borderSubtle: '#1E1E1E',
 
-  // Status (minimal set) — WCAG-compliant, mirrors ThemeContext
+  // Status (minimal set) — WCAG-compliant, mirrors ThemeContext.
+  // `danger`/`success`/`warning` are FILL + icon accents — on dark surfaces
+  // they are too deep to read as text (danger ≈2:1, success ≈2.3:1 on
+  // #141414 — fails WCAG AA). The `*Text` variants are the readable
+  // foregrounds for status words/numbers on plain and subtle-tinted
+  // surfaces (F08): dangerText ≈5.2:1, successText ≈7:1, warningText ≈7:1.
   danger: '#9b0202',
   dangerSubtle: 'rgba(155,2,2,0.10)',
+  dangerText: '#EF6461',
   success: '#215634',
   successSubtle: 'rgba(33,86,52,0.10)',
+  successText: '#4BB377',
   warning: '#D49454',
   warningSubtle: 'rgba(212,148,84,0.12)',
+  warningText: '#D49454',
   ratingStar: '#D49454',
   brandBorder: 'rgba(244,240,232,0.20)',
   warningBorder: 'rgba(212,148,84,0.25)',
@@ -170,13 +178,20 @@ export const LIGHT_COLORS = {
   // Canonical name (mirrors ThemeContext). borderLight kept as alias below.
   borderSubtle: '#F0F0F0',
 
-  // Status (minimal set) — WCAG-compliant, mirrors ThemeContext
+  // Status (minimal set) — WCAG-compliant, mirrors ThemeContext.
+  // `danger`/`success`/`warning` are FILL + icon accents. `warning` at
+  // ≈3.1:1 on surface #F5F5F5 fails AA for normal text — `warningText`
+  // (≈5.3:1) is the readable foreground. `*Text` tokens exist in both
+  // themes so call sites use one grammar (F08).
   danger: '#9b0202',
   dangerSubtle: 'rgba(155,2,2,0.08)',
+  dangerText: '#9b0202',
   success: '#215634',
   successSubtle: 'rgba(33,86,52,0.08)',
+  successText: '#215634',
   warning: '#C47A2E',
   warningSubtle: 'rgba(196,122,46,0.10)',
+  warningText: '#8F5A10',
   ratingStar: '#C47A2E',
   brandBorder: 'rgba(17,17,17,0.16)',
   warningBorder: 'rgba(196,122,46,0.20)',

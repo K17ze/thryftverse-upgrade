@@ -1420,6 +1420,8 @@
       "subtitleNone": "Create an agent and connect a provider to get started",
       "subtitleNoAgents": "Connect a provider, then create your first agent",
       "subtitleNoConnections": "Connect a provider server-side to power agent execution",
+      "subtitleNoHealthy": "No healthy connections — review your provider keys",
+      "subtitleDegraded": "{{healthy}} of {{total}} connections healthy — some providers need attention",
       "subtitleReady": "Agents run on your connected server-side keys"
     },
     "agentStatus": {

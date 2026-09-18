@@ -73,12 +73,12 @@ const DISPOSITION_LABEL: Record<CaseResolutionDisposition, string> = {
 // ============================================================================
 interface PriorityDisplay {
   label: string;
-  color: 'danger' | 'warning' | 'textSecondary' | 'textMuted';
+  color: 'dangerText' | 'warningText' | 'textSecondary' | 'textMuted';
 }
 
 const PRIORITY_DISPLAY: Record<SupportCase['priority'], PriorityDisplay> = {
-  urgent: { label: 'Urgent', color: 'danger' },
-  high: { label: 'High', color: 'warning' },
+  urgent: { label: 'Urgent', color: 'dangerText' },
+  high: { label: 'High', color: 'warningText' },
   normal: { label: 'Normal', color: 'textSecondary' },
   low: { label: 'Low', color: 'textMuted' } };
 

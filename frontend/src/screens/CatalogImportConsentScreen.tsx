@@ -495,7 +495,7 @@ const createStyles = (colors: ThemeColors) =>
       fontFamily: FontFamily.medium,
       fontSize: TypographyV2.meta.size,
       lineHeight: TypographyV2.meta.lineHeight,
-      color: colors.danger,
+      color: colors.dangerText,
       marginTop: Space.sm },
     dock: {
       position: 'absolute',

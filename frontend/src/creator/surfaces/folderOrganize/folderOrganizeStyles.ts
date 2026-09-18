@@ -249,7 +249,7 @@ export function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
     },
     quickChipTextUnfile: {
-      color: colors.danger,
+      color: colors.dangerText,
       fontFamily: FontFamily.medium,
       fontSize: TypographyV2.body.size,
     },

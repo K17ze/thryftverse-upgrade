@@ -16,7 +16,7 @@ export function MakeOfferErrorBlock({ message, onRetry }: MakeOfferErrorBlockPro
 
   return (
     <View style={styles.errorBlock}>
-      <Text style={[styles.errorText, { color: colors.danger }]}>
+      <Text style={[styles.errorText, { color: colors.dangerText }]}>
         {message}
       </Text>
       <Pressable
@@ -29,8 +29,8 @@ export function MakeOfferErrorBlock({ message, onRetry }: MakeOfferErrorBlockPro
         accessibilityRole="button"
         accessibilityLabel="Retry submitting offer"
       >
-        <Ionicons name="refresh-outline" size={15} color={colors.danger} />
-        <Text style={[styles.retryBtnText, { color: colors.danger }]}>Retry</Text>
+        <Ionicons name="refresh-outline" size={15} color={colors.dangerText} />
+        <Text style={[styles.retryBtnText, { color: colors.dangerText }]}>Retry</Text>
       </Pressable>
     </View>
   );

@@ -66,7 +66,7 @@ export function ImportedFieldDiff({
             <Ionicons
               name="alert-circle"
               size={WARNING_GLYPH_SIZE}
-              color={colors.warning}
+              color={colors.warningText}
               style={styles.warningGlyph}
             />
           ) : null}

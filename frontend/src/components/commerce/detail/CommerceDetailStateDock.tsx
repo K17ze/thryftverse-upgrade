@@ -214,7 +214,7 @@ export function CommerceDetailStateDock({
             <View
               style={[styles.protectionStrip, { borderBottomColor: colors.borderSubtle }]}
             >
-              <Ionicons name="checkmark-circle-outline" size={CommerceLayout.dockProtectionIcon} color={colors.success} />
+              <Ionicons name="checkmark-circle-outline" size={CommerceLayout.dockProtectionIcon} color={colors.successText} />
               <Text style={[styles.protectionText, { color: colors.textSecondary }]} numberOfLines={1}>
                 High-value item — authentication may be available
               </Text>
@@ -238,7 +238,7 @@ export function CommerceDetailStateDock({
             <View
               style={[styles.protectionStrip, { borderBottomColor: colors.borderSubtle }]}
             >
-              <Ionicons name="checkmark-circle-outline" size={CommerceLayout.dockProtectionIcon} color={colors.success} />
+              <Ionicons name="checkmark-circle-outline" size={CommerceLayout.dockProtectionIcon} color={colors.successText} />
               <Text style={[styles.protectionText, { color: colors.textSecondary }]} numberOfLines={1}>
                 Buyer protection
               </Text>
@@ -336,7 +336,7 @@ export function CommerceDetailStateDock({
               directly beside/above the Buy Now button. */}
           {lowStockHint && !stateBadge ? (
             <Text
-              style={[styles.lowStockHint, { color: colors.warning }]}
+              style={[styles.lowStockHint, { color: colors.warningText }]}
               numberOfLines={1}
               accessibilityRole="text"
             >

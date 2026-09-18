@@ -33,7 +33,7 @@ export function FlagshipDangerZone({
         style,
       ]}
     >
-      <Text style={[styles.title, { color: colors.danger }]}>{title}</Text>
+      <Text style={[styles.title, { color: colors.dangerText }]}>{title}</Text>
       <Text style={[styles.description, { color: colors.textSecondary }]}>{description}</Text>
       <AppButton
         title={actionLabel}
@@ -41,7 +41,7 @@ export function FlagshipDangerZone({
         onPress={onAction}
         size="sm"
         hapticFeedback="heavy"
-        titleStyle={destructive ? undefined : { color: colors.danger }}
+        titleStyle={destructive ? undefined : { color: colors.dangerText }}
       />
     </View>
   );

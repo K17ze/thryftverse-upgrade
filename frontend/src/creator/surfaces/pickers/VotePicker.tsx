@@ -134,7 +134,7 @@ export const VotePicker = React.memo(function VotePicker({ onClose, onAddLayer }
               {options.length > 2 && (
                 <Pressable onPress={() => removeOption(i)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityLabel={`Remove option ${i + 1}`}
                 accessibilityHint="Removes this option" accessibilityRole="button">
-                  <Ionicons name="close-circle" size={IconGrammar.standard} color={colors.danger} aria-hidden={true} />
+                  <Ionicons name="close-circle" size={IconGrammar.standard} color={colors.dangerText} aria-hidden={true} />
                 </Pressable>
               )}
             </View>

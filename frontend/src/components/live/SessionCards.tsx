@@ -196,7 +196,7 @@ export const UpcomingSessionRow = React.memo(function UpcomingSessionRow({
           </View>
         ) : null}
         {remindError ? (
-          <Text style={[styles.upcomingMeta, { color: colors.danger }]}>{remindError}</Text>
+          <Text style={[styles.upcomingMeta, { color: colors.dangerText }]}>{remindError}</Text>
         ) : null}
       </View>
       {onToggleReminder ? (

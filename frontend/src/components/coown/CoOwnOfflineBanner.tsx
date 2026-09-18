@@ -34,9 +34,9 @@ export function CoOwnOfflineBanner({ isOffline, lastSyncedLabel }: CoOwnOfflineB
       accessibilityRole="alert"
       accessibilityLabel={`Offline. ${lastSyncedLabel ? `Last synced ${lastSyncedLabel}.` : ''} Showing cached data.`}
     >
-      <Ionicons name="cloud-offline-outline" size={14} color={colors.warning} />
+      <Ionicons name="cloud-offline-outline" size={14} color={colors.warningText} />
       <View style={styles.textWrap}>
-        <Text style={[styles.title, { color: colors.warning }]} numberOfLines={1}>
+        <Text style={[styles.title, { color: colors.warningText }]} numberOfLines={1}>
           Offline
         </Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1}>

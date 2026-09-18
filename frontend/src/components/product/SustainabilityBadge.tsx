@@ -148,7 +148,7 @@ export function SustainabilityBadge({
                 <Ionicons
                   name={factor.positive ? 'checkmark-circle' : 'ellipse-outline'}
                   size={15}
-                  color={factor.positive ? colors.success : colors.textMuted}
+                  color={factor.positive ? colors.successText : colors.textMuted}
                 />
                 <Text style={[styles.factorLabel, { color: colors.textPrimary }]}>
                   {factor.label}
@@ -168,7 +168,7 @@ export function SustainabilityBadge({
       {/* CO2 + water savings — two stat cells (water only if > 0). */}
       <View style={[styles.statRow, { borderTopColor: colors.borderSubtle }]}>
         <View style={styles.statCell}>
-          <Ionicons name="cloud-outline" size={16} color={colors.success} />
+          <Ionicons name="cloud-outline" size={16} color={colors.successText} />
           <Text style={[styles.statValue, { color: colors.textPrimary }]}>
             ~{score.co2SavedKg} kg
           </Text>
@@ -180,7 +180,7 @@ export function SustainabilityBadge({
           <>
             <View style={[styles.statDivider, { backgroundColor: colors.borderSubtle }]} />
             <View style={styles.statCell}>
-              <Ionicons name="water-outline" size={16} color={colors.success} />
+              <Ionicons name="water-outline" size={16} color={colors.successText} />
               <Text style={[styles.statValue, { color: colors.textPrimary }]}>
                 ~{score.waterSavedL.toLocaleString('en-GB')} L
               </Text>

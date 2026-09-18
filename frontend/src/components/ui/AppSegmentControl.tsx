@@ -3,7 +3,8 @@ import { StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-n
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring } from 'react-native-reanimated';
+  withSpring,
+  withTiming } from 'react-native-reanimated';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { Radius, Space } from '../../theme/designTokens';
@@ -15,6 +16,12 @@ export interface AppSegmentOption<T extends string> {
   label: string;
   icon?: React.ReactNode;
   accessibilityLabel?: string;
+  /** Tint for the sliding indicator when this option is active — lets a
+   *  segment carry semantic colour (e.g. buy=green, sell=red on a trade
+   *  ticket). Defaults to the neutral surface fill. */
+  activeBackgroundColor?: string;
+  /** Label colour when this option is active. Defaults to textPrimary. */
+  activeTextColor?: string;
 }
 
 interface AppSegmentControlProps<T extends string> {
@@ -40,7 +47,7 @@ export function AppSegmentControl<T extends string>({
   optionTextActiveStyle,
   fullWidth = false }: AppSegmentControlProps<T>) {
   const { colors } = useAppTheme();
-  const { spring } = useMotionConfig();
+  const { spring, duration } = useMotionConfig();
   const indicatorX = useSharedValue(0);
   const indicatorWidth = useSharedValue(0);
   const optionLayouts = useRef<Array<{ x: number; width: number }>>([]);
@@ -54,9 +61,22 @@ export function AppSegmentControl<T extends string>({
     }
   }, [value, options, spring, indicatorX, indicatorWidth]);
 
+  // Semantic indicator tint — the active option can carry colour (buy/sell
+  // direction, destructive toggles). Animated so switching segments
+  // cross-fades colour alongside the position spring.
+  const activeOption = options.find((o) => o.value === value);
+  const indicatorBg = activeOption?.activeBackgroundColor ?? colors.surface;
+  const indicatorColor = useSharedValue(indicatorBg);
+  useEffect(() => {
+    // duration.fast collapses to 0 under reduced motion — the tint snaps
+    // instantly alongside the critically-damped position spring.
+    indicatorColor.value = withTiming(indicatorBg, { duration: duration.fast });
+  }, [indicatorBg, indicatorColor, duration]);
+
   const indicatorStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: indicatorX.value }],
-    width: indicatorWidth.value }));
+    width: indicatorWidth.value,
+    backgroundColor: indicatorColor.value }));
 
   return (
     <View
@@ -70,7 +90,6 @@ export function AppSegmentControl<T extends string>({
       <Reanimated.View
         style={[
           styles.indicator,
-          { backgroundColor: colors.surface },
           indicatorStyle,
         ]}
         pointerEvents="none"
@@ -116,7 +135,7 @@ export function AppSegmentControl<T extends string>({
                 styles.optionText,
                 { color: colors.textSecondary },
                 optionTextStyle,
-                isActive && { color: colors.textPrimary },
+                isActive && { color: option.activeTextColor ?? colors.textPrimary },
                 isActive && optionTextActiveStyle,
               ]}
               maxFontSizeMultiplier={1.3}

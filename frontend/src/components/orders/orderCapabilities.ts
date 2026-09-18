@@ -145,11 +145,11 @@ export function getStatusColor(
   const colors = colorsOrFallback;
   switch (tone) {
     case 'success':
-      return colors.success;
+      return colors.successText;
     case 'danger':
-      return colors.danger;
+      return colors.dangerText;
     case 'pending':
-      return colors.warning;
+      return colors.warningText;
     case 'active':
       // Transit stages get a distinct hue from processing stages so buyers
       // can scan the list and immediately see "shipped" vs "preparing".

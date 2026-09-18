@@ -29,32 +29,32 @@ export function SettingsHealthPills() {
     <View style={styles.healthRow}>
       {currentUser.emailVerified ? (
         <View style={[styles.healthPill, { backgroundColor: colors.successSubtle }]}>
-          <Ionicons name="checkmark-circle" size={13} color={colors.success} />
-          <Text style={[styles.healthPillText, { color: colors.success }]}>{ts('health.emailConfirmed')}</Text>
+          <Ionicons name="checkmark-circle" size={13} color={colors.successText} />
+          <Text style={[styles.healthPillText, { color: colors.successText }]}>{ts('health.emailConfirmed')}</Text>
         </View>
       ) : null}
       {twoFactorEnabled ? (
         <View style={[styles.healthPill, { backgroundColor: colors.successSubtle }]}>
-          <Ionicons name="checkmark-circle" size={13} color={colors.success} />
-          <Text style={[styles.healthPillText, { color: colors.success }]}>{ts('health.twoFA')}</Text>
+          <Ionicons name="checkmark-circle" size={13} color={colors.successText} />
+          <Text style={[styles.healthPillText, { color: colors.successText }]}>{ts('health.twoFA')}</Text>
         </View>
       ) : null}
       {biometricEnabled ? (
         <View style={[styles.healthPill, { backgroundColor: colors.successSubtle }]}>
-          <Ionicons name="checkmark-circle" size={13} color={colors.success} />
-          <Text style={[styles.healthPillText, { color: colors.success }]}>{ts('health.biometric')}</Text>
+          <Ionicons name="checkmark-circle" size={13} color={colors.successText} />
+          <Text style={[styles.healthPillText, { color: colors.successText }]}>{ts('health.biometric')}</Text>
         </View>
       ) : null}
       {savedPaymentMethod ? (
         <View style={[styles.healthPill, { backgroundColor: colors.successSubtle }]}>
-          <Ionicons name="checkmark-circle" size={13} color={colors.success} />
-          <Text style={[styles.healthPillText, { color: colors.success }]}>{ts('health.payment')}</Text>
+          <Ionicons name="checkmark-circle" size={13} color={colors.successText} />
+          <Text style={[styles.healthPillText, { color: colors.successText }]}>{ts('health.payment')}</Text>
         </View>
       ) : null}
       {savedAddress ? (
         <View style={[styles.healthPill, { backgroundColor: colors.successSubtle }]}>
-          <Ionicons name="checkmark-circle" size={13} color={colors.success} />
-          <Text style={[styles.healthPillText, { color: colors.success }]}>{ts('health.address')}</Text>
+          <Ionicons name="checkmark-circle" size={13} color={colors.successText} />
+          <Text style={[styles.healthPillText, { color: colors.successText }]}>{ts('health.address')}</Text>
         </View>
       ) : null}
     </View>

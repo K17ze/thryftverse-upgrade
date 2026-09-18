@@ -378,7 +378,7 @@ export default function DeleteAccountScreen({ navigation }: Props) {
                 <Ionicons name="warning" size={20} color={colors.surface} />
               </View>
               <View style={styles.warningHeaderText}>
-                <Text style={[styles.warningTitle, { color: colors.danger }]}>Permanent action</Text>
+                <Text style={[styles.warningTitle, { color: colors.dangerText }]}>Permanent action</Text>
                 <Text style={[styles.warningSubtitle, { color: colors.textSecondary }]}>
                   This cannot be undone
                 </Text>
@@ -495,7 +495,7 @@ export default function DeleteAccountScreen({ navigation }: Props) {
                     { backgroundColor: colors.successSubtle, borderColor: colors.successBorder },
                   ]}
                 >
-                  <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+                  <Ionicons name="checkmark-circle" size={18} color={colors.successText} />
                   <Text style={[styles.oauthNoticeText, { color: colors.textPrimary }]}>
                     Verified with {oauthProof.provider === 'google' ? 'Google' : 'Apple'}
                   </Text>
@@ -550,8 +550,8 @@ export default function DeleteAccountScreen({ navigation }: Props) {
                     { backgroundColor: colors.dangerSubtle, borderColor: colors.dangerBorder },
                   ]}
                 >
-                  <Ionicons name="alert-circle" size={16} color={colors.danger} />
-                  <Text style={[styles.errorText, { color: colors.danger }]}>{oauthError}</Text>
+                  <Ionicons name="alert-circle" size={16} color={colors.dangerText} />
+                  <Text style={[styles.errorText, { color: colors.dangerText }]}>{oauthError}</Text>
                 </View>
               ) : null}
             </View>
@@ -632,8 +632,8 @@ export default function DeleteAccountScreen({ navigation }: Props) {
           {/* Error state */}
           {deleteError ? (
             <View style={[styles.errorRow, { backgroundColor: colors.dangerSubtle, borderColor: colors.dangerBorder }]}>
-              <Ionicons name="alert-circle" size={16} color={colors.danger} />
-              <Text style={[styles.errorText, { color: colors.danger }]}>{deleteError}</Text>
+              <Ionicons name="alert-circle" size={16} color={colors.dangerText} />
+              <Text style={[styles.errorText, { color: colors.dangerText }]}>{deleteError}</Text>
             </View>
           ) : null}
         </View>

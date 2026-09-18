@@ -108,8 +108,8 @@ export function LayerOverflowActionSheet({
             accessibilityHint={opt.danger ? `Deletes the layer` : `Performs ${opt.label.toLowerCase()} on the layer`}
             accessibilityRole="button"
           >
-            <Ionicons name={opt.icon} size={IconGrammar.standard} color={opt.danger ? colors.danger : colors.textPrimary} />
-            <Text style={[overflowStyles.optionText, { color: opt.danger ? colors.danger : colors.textPrimary }]}>
+            <Ionicons name={opt.icon} size={IconGrammar.standard} color={opt.danger ? colors.dangerText : colors.textPrimary} />
+            <Text style={[overflowStyles.optionText, { color: opt.danger ? colors.dangerText : colors.textPrimary }]}>
               {opt.label}
             </Text>
           </Pressable>

@@ -76,10 +76,10 @@ function AuctionRunwayCardBase({
     : viewerState === 'won' ? 'Won'
     : viewerState === 'lost' ? 'Lost'
     : null;
-  const personalColor = viewerState === 'outbid' ? colors.danger
-    : viewerState === 'leading' ? colors.success
-    : viewerState === 'won' ? colors.success
-    : viewerState === 'lost' ? colors.danger
+  const personalColor = viewerState === 'outbid' ? colors.dangerText
+    : viewerState === 'leading' ? colors.successText
+    : viewerState === 'won' ? colors.successText
+    : viewerState === 'lost' ? colors.dangerText
     : colors.textSecondary;
 
   if (metadataBelow) {

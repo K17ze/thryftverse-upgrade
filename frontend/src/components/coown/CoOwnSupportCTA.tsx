@@ -80,7 +80,7 @@ export function CoOwnSupportCTA({
                   Contact support
                 </Text>
                 {isSupportAvailable != null && (
-                  <Text style={[styles.actionSub, { color: isSupportAvailable ? colors.success : colors.textMuted }]} numberOfLines={1}>
+                  <Text style={[styles.actionSub, { color: isSupportAvailable ? colors.successText : colors.textMuted }]} numberOfLines={1}>
                     {isSupportAvailable ? 'Available now' : 'Leave a message'}
                   </Text>
                 )}

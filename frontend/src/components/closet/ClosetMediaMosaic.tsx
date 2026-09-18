@@ -224,7 +224,7 @@ const ClosetMediaTile = React.memo(function ClosetMediaTile({
                 <Ionicons
                   name={isFav ? 'heart' : 'heart-outline'}
                   size={18}
-                  color={isFav ? colors.danger : colors.scrimTextPrimary}
+                  color={isFav ? colors.dangerText : colors.scrimTextPrimary}
                   style={styles.toggleGlyph}
                 />
               </AnimatedPressable>

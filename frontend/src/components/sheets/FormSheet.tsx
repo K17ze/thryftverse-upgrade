@@ -33,6 +33,12 @@ export interface FormSheetProps {
   };
   /** Fraction of screen height. Defaults to 0.6. */
   snapPoint?: number;
+  /**
+   * Forwarded to BottomSheet. Set false when the content owns its own
+   * scroll surface (e.g. a FlatList) so it isn't nested inside the
+   * sheet's ScrollView.
+   */
+  scrollable?: boolean;
 }
 
 export function FormSheet({
@@ -42,7 +48,8 @@ export function FormSheet({
   title,
   leftAction,
   rightAction,
-  snapPoint = 0.6 }: FormSheetProps) {
+  snapPoint = 0.6,
+  scrollable }: FormSheetProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -52,6 +59,7 @@ export function FormSheet({
       onDismiss={onDismiss}
       snapPoint={snapPoint}
       variant="form"
+      scrollable={scrollable}
     >
       {(title || leftAction || rightAction) && (
         <View style={styles.titleBar}>
@@ -126,7 +134,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       color: colors.textPrimary },
     actionTextDestructive: {
       fontFamily: FontFamily.semibold,
-      color: colors.danger },
+      color: colors.dangerText },
     title: {
       flex: 1,
       textAlign: 'center',

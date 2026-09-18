@@ -242,7 +242,7 @@ export default function CreatorAnalyticsDashboardScreen() {
         {/* ── 6. PARTIAL ERROR BANNER ──────────────────────────────── */}
         {partialError ? (
           <View style={[styles.partialBanner, { backgroundColor: colors.warningSubtle }]}>
-            <Ionicons name="alert-circle-outline" size={14} color={colors.warning} />
+            <Ionicons name="alert-circle-outline" size={14} color={colors.warningText} />
             <Text style={[styles.partialText, { color: colors.textSecondary }]}>
               {partialError}
             </Text>

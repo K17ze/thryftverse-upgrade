@@ -1,10 +1,10 @@
 /**
  * EditGroupMediaSection — the editable identity media for the edit-group
  * screen: the full-width cover banner (3:1) and the circular group avatar
- * with camera badges, upload spinners and change/remove actions.
- * Presentation only; pick/remove wiring and upload state stay in the
- * orchestrator via useEditGroupMedia. Extracted verbatim from
- * EditGroupScreen.
+ * overlapping its bottom edge, with camera badges and upload spinners.
+ * Tapping either object opens the media source sheet, which owns
+ * change/remove — no duplicated text actions. Presentation only; pick
+ * wiring and upload state stay in the orchestrator via useEditGroupMedia.
  */
 
 import React, { useMemo } from 'react';
@@ -14,7 +14,7 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { AppIcon } from '../common/AppIcon';
 import { GroupAvatarMosaic, type MosaicMember } from '../chat/GroupAvatarMosaic';
-import { Control, Radius, Space, Typography } from '../../theme/designTokens';
+import { Radius, Space } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 
 export interface EditGroupMediaSectionProps {
@@ -27,9 +27,7 @@ export interface EditGroupMediaSectionProps {
   fallbackInitials: string;
   groupId: string;
   onPickCover: () => void;
-  onRemoveCover: () => void;
   onPickAvatar: () => void;
-  onRemoveAvatar: () => void;
 }
 
 export function EditGroupMediaSection({
@@ -42,16 +40,18 @@ export function EditGroupMediaSection({
   fallbackInitials,
   groupId,
   onPickCover,
-  onRemoveCover,
   onPickAvatar,
-  onRemoveAvatar,
 }: EditGroupMediaSectionProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <>
-      {/* Cover photo — full-width banner (3:1 aspect), separate from the
-          circular avatar. Standard group edit pattern. */}
+      {/* Cover + avatar as one composed identity block: the avatar
+          straddles the cover's bottom edge (WhatsApp/Telegram/Discord
+          group-edit pattern) with a background ring to lift it. Both
+          media objects open the media source sheet, which owns the
+          Camera/Gallery/preset/Remove action set — no duplicated text
+          buttons under each object. */}
       <View style={styles.coverSection}>
         <AnimatedPressable
           onPress={onPickCover}
@@ -61,7 +61,7 @@ export function EditGroupMediaSection({
           activeOpacity={0.85}
           accessibilityRole="button"
           accessibilityLabel={coverDisplayUri ? 'Change cover photo' : 'Add cover photo'}
-          accessibilityHint="Choose a wide cover image from camera or gallery"
+          accessibilityHint="Opens options for camera, gallery, presets and remove"
           accessibilityState={{ busy: isUploadingCover, disabled: isSaving }}
         >
           {coverDisplayUri ? (
@@ -79,7 +79,6 @@ export function EditGroupMediaSection({
               </Text>
             </View>
           )}
-          {/* Camera badge */}
           <View style={styles.coverCameraBadge}>
             {isUploadingCover ? (
               <ActivityIndicator size="small" color={colors.scrimTextPrimary} />
@@ -88,47 +87,21 @@ export function EditGroupMediaSection({
             )}
           </View>
         </AnimatedPressable>
-        {coverDisplayUri ? (
-          <View style={styles.coverActions}>
-            <AnimatedPressable
-              onPress={onPickCover}
-              disabled={isUploadingCover || isSaving}
-              style={styles.coverActionBtn}
-              activeOpacity={0.65}
-              scaleValue={0.98}
-              accessibilityRole="button"
-              accessibilityLabel="Change cover photo"
-            >
-              <Text style={[styles.coverActionText, { color: colors.brand }]}>
-                {isUploadingCover ? 'Uploading…' : 'Change cover'}
-              </Text>
-            </AnimatedPressable>
-            <AnimatedPressable
-              onPress={onRemoveCover}
-              disabled={isSaving}
-              style={styles.coverActionBtn}
-              activeOpacity={0.65}
-              scaleValue={0.98}
-              accessibilityRole="button"
-              accessibilityLabel="Remove cover photo"
-            >
-              <Text style={[styles.coverActionText, { color: colors.textMuted }]}>Remove</Text>
-            </AnimatedPressable>
-          </View>
-        ) : null}
       </View>
 
-      {/* Group avatar — circular profile picture, separate from cover */}
+      {/* Group avatar — overlaps the cover's bottom edge. The background
+          ring is what makes the overlap read as intentional layering
+          rather than a collision. */}
       <View style={styles.identity}>
         <AnimatedPressable
           onPress={onPickAvatar}
           disabled={isUploadingPhoto || isSaving}
-          style={styles.avatarTarget}
+          style={[styles.avatarTarget, { borderColor: colors.background }]}
           scaleValue={0.98}
           activeOpacity={0.8}
           accessibilityRole="button"
           accessibilityLabel={avatarDisplayUri ? 'Change group photo' : 'Add group photo'}
-          accessibilityHint="Choose from camera or gallery"
+          accessibilityHint="Opens options for camera, gallery, presets and remove"
           accessibilityState={{ busy: isUploadingPhoto, disabled: isSaving }}
         >
           <GroupAvatarMosaic
@@ -146,33 +119,6 @@ export function EditGroupMediaSection({
             )}
           </View>
         </AnimatedPressable>
-        <AnimatedPressable
-          style={styles.photoAction}
-          onPress={onPickAvatar}
-          disabled={isUploadingPhoto || isSaving}
-          activeOpacity={0.65}
-          scaleValue={0.98}
-          accessibilityRole="button"
-          accessibilityLabel={avatarDisplayUri ? 'Change group photo' : 'Add group photo'}
-          accessibilityState={{ busy: isUploadingPhoto, disabled: isSaving }}
-        >
-          <Text style={styles.photoActionText}>
-            {isUploadingPhoto ? 'Uploading…' : avatarDisplayUri ? 'Change photo' : 'Add group photo'}
-          </Text>
-        </AnimatedPressable>
-        {avatarDisplayUri ? (
-          <AnimatedPressable
-            style={styles.removePhoto}
-            onPress={onRemoveAvatar}
-            disabled={isSaving}
-            activeOpacity={0.65}
-            scaleValue={0.98}
-            accessibilityRole="button"
-            accessibilityLabel="Remove group photo"
-          >
-            <Text style={styles.removePhotoText}>Remove photo</Text>
-          </AnimatedPressable>
-        ) : null}
       </View>
     </>
   );
@@ -214,38 +160,27 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
       backgroundColor: colors.overlay,
     },
-    coverActions: {
-      flexDirection: 'row',
-      justifyContent: 'center',
-      gap: Space.lg,
-      paddingVertical: Space.xs,
-    },
-    coverActionBtn: {
-      minHeight: Control.hit,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: Space.sm,
-    },
-    coverActionText: {
-      fontSize: TypographyV2.body.size,
-      fontFamily: TypographyV2.body.fontFamily,
-    },
     identity: {
       alignItems: 'center',
       paddingHorizontal: Space.md,
-      paddingTop: Space.md,
-      paddingBottom: Space.sm,
+      // The parent content column applies `gap: Space.lg` (24) between
+      // siblings; a -64 top margin nets a 40px overlap over the cover —
+      // a deliberate avatar-on-banner stack, not a collision.
+      marginTop: -64,
+      paddingBottom: Space.xs,
     },
     avatarTarget: {
       width: 104,
       height: 104,
+      borderRadius: 52,
+      borderWidth: 4,
       alignItems: 'center',
       justifyContent: 'center',
     },
     cameraBadge: {
       position: 'absolute',
-      right: 0,
-      bottom: 2,
+      right: -2,
+      bottom: 0,
       width: 32,
       height: 32,
       borderRadius: Radius.full,
@@ -254,30 +189,6 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.brand,
       borderWidth: 2,
       borderColor: colors.background,
-    },
-    photoAction: {
-      marginTop: Space.xs,
-      minHeight: Control.hit,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: Space.sm,
-    },
-    photoActionText: {
-      color: colors.brand,
-      fontFamily: Typography.family.medium,
-      fontSize: TypographyV2.body.size,
-    },
-    removePhoto: {
-      marginTop: -Space.sm,
-      minHeight: Control.hit,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: Space.sm,
-    },
-    removePhotoText: {
-      color: colors.textMuted,
-      fontFamily: Typography.family.medium,
-      fontSize: TypographyV2.meta.size,
     },
   });
 }

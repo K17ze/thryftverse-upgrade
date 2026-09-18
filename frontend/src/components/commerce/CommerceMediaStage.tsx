@@ -1081,7 +1081,7 @@ export function CommerceMediaStage({
                   isActive={isFav}
                   onToggle={onToggleFav}
                   size={24}
-                  activeColor={colors.danger}
+                  activeColor={colors.dangerText}
                   inactiveColor={colors.scrimTextPrimary}
                 />
               </View>

@@ -83,7 +83,7 @@ function createStyles(colors: ThemeColors) {
     fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textPrimary },
   optionTextDestructive: {
-    color: colors.danger },
+    color: colors.dangerText },
   optionTextDisabled: {
     color: colors.textMuted } });
 }

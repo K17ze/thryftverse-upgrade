@@ -96,23 +96,29 @@ export function BackendDataProvider({ children }: { children: React.ReactNode })
   }, []);
 
   const loadMoreListings = React.useCallback(async () => {
-    if (!cursor || isLoadingMore || isSyncing) return;
+    if (!hasMore || !cursor || isLoadingMore || isSyncing) return;
     setIsLoadingMore(true);
-    const result = await fetchHomeFeed(cursor);
-    if (result.listings.length > 0) {
-      setListings((prev) => {
-        const existingIds = new Set(prev.map((l) => l.id));
-        const newOnes = result.listings.filter((l) => !existingIds.has(l.id));
-        return [...prev, ...newOnes];
-      });
-      setCursor(result.nextCursor ?? undefined);
-      setHasMore(Boolean(result.nextCursor));
-    } else {
-      setHasMore(false);
+    try {
+      const result = await fetchHomeFeed(cursor);
+      if (result.listings.length > 0) {
+        setListings((prev) => {
+          const existingIds = new Set(prev.map((l) => l.id));
+          const newOnes = result.listings.filter((l) => !existingIds.has(l.id));
+          return [...prev, ...newOnes];
+        });
+        setCursor(result.nextCursor ?? undefined);
+        setHasMore(Boolean(result.nextCursor));
+      } else {
+        setCursor(undefined);
+        setHasMore(false);
+      }
+      recordListingsSync(result.listings.length, result.error ?? null);
+    } catch {
+      recordListingsSync(0, 'load-more-failed');
+    } finally {
+      setIsLoadingMore(false);
     }
-    recordListingsSync(result.listings.length, result.error ?? null);
-    setIsLoadingMore(false);
-  }, [cursor, isLoadingMore, isSyncing]);
+  }, [hasMore, cursor, isLoadingMore, isSyncing]);
 
   const updateListing = React.useCallback((id: string, updates: Partial<Listing>) => {
     setListings((prev) =>

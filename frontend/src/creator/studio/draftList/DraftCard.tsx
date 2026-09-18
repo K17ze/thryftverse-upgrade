@@ -84,7 +84,7 @@ export function DraftCard({
           icon: 'trash-outline',
           label: 'Delete',
           onPress: onSwipeDelete,
-          color: colors.danger }}
+          color: colors.dangerText }}
         swipeThreshold={88}
       >
         <View style={styles.draftRow}>
@@ -146,7 +146,7 @@ export function DraftCard({
               accessibilityHint="Shows the delete confirmation"
               accessibilityRole="button"
             >
-              <Ionicons name="trash-outline" size={IconGrammar.metadata} color={colors.danger} />
+              <Ionicons name="trash-outline" size={IconGrammar.metadata} color={colors.dangerText} />
             </Pressable>
           </View>
         </View>

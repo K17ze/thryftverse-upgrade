@@ -835,7 +835,7 @@ function createStyles(colors: ThemeColors) {
       paddingBottom: Space.xs / 2,
       fontVariant: ['tabular-nums'] as ['tabular-nums'] },
     fieldCounterError: {
-      color: colors.danger },
+      color: colors.dangerText },
     fieldHelper: {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
@@ -845,7 +845,7 @@ function createStyles(colors: ThemeColors) {
     fieldError: {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
-      color: colors.danger,
+      color: colors.dangerText,
       marginTop: Space.xs + 2,
       lineHeight: TypographyV2.meta.lineHeight },
     selectableField: {

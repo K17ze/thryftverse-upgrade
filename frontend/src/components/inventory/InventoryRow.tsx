@@ -74,9 +74,9 @@ export function InventoryRow({
   const { currencyCode, currencySymbol, formatFromFiat } = useFormattedPrice();
   const statusConfig = STATUS_CONFIG[item.status] ?? STATUS_CONFIG.unknown;
   const statusColor =
-    statusConfig.accent === 'success' ? colors.success
+    statusConfig.accent === 'success' ? colors.successText
     : statusConfig.accent === 'muted' ? colors.textMuted
-    : statusConfig.accent === 'warning' ? colors.warning
+    : statusConfig.accent === 'warning' ? colors.warningText
     : statusConfig.accent === 'brand' ? colors.brand
     : colors.textMuted;
 
@@ -152,8 +152,8 @@ export function InventoryRow({
                         promotion.status === 'active'
                           ? colors.brand
                           : promotion.status === 'exhausted'
-                            ? colors.danger
-                            : colors.warning }]}
+                            ? colors.dangerText
+                            : colors.warningText }]}
                   numberOfLines={1}
                 >
                   {promotion.status === 'active'
@@ -199,7 +199,7 @@ export function InventoryRow({
             {isSold ? (
               <IconButton icon="repeat-outline" onPress={onRelist} color={colors.textSecondary} label="Relist item" />
             ) : null}
-            <IconButton icon="trash-outline" onPress={onDelete} color={colors.danger} label="Delete listing" />
+            <IconButton icon="trash-outline" onPress={onDelete} color={colors.dangerText} label="Delete listing" />
           </View>
         )}
       </AnimatedPressable>

@@ -71,7 +71,7 @@ export function MakeOfferPriceSection({
       {/* Discount indicator — dynamic, shows how much below asking */}
       {discountPct != null && (
         <View style={styles.discountRow}>
-          <Text style={[styles.discountText, { color: colors.warning }]}>
+          <Text style={[styles.discountText, { color: colors.warningText }]}>
             {t('makeOffer.discount.belowAsking', { percent: discountPct })}
           </Text>
         </View>

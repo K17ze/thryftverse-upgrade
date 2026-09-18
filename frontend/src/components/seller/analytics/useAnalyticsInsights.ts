@@ -228,7 +228,7 @@ export function useAnalyticsInsights({ listings, selectedListingId, analytics, p
       const existing = map.get(cat) || { count: 0, totalGbp: 0 };
       map.set(cat, { count: existing.count + 1, totalGbp: existing.totalGbp + price });
     }
-    const colorPalette = [colors.brand, colors.textSecondary, colors.textMuted, colors.success];
+    const colorPalette = [colors.brand, colors.textSecondary, colors.textMuted, colors.successText];
     return Array.from(map.entries())
       .map(([category, stats], i) => ({
         category,

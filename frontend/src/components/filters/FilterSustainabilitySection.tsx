@@ -36,7 +36,7 @@ function FilterSustainabilitySectionBase({ expanded, onToggle, checked, onToggle
           <Ionicons
             name="leaf"
             size={16}
-            color={checked ? colors.success : colors.textSecondary}
+            color={checked ? colors.successText : colors.textSecondary}
             aria-hidden={true}
           />
           <View style={styles.sustainableTextWrap}>

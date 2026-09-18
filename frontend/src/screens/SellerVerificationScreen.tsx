@@ -40,10 +40,10 @@ const STATUS_ICONS: Record<string, React.ComponentProps<typeof Ionicons>['name']
 
 function getStatusColor(status: string, colors: ThemeColors): string {
   switch (status) {
-    case 'pending': return colors.warning;
+    case 'pending': return colors.warningText;
     case 'responded': return colors.brand;
-    case 'compliant': return colors.success;
-    case 'failed': return colors.danger;
+    case 'compliant': return colors.successText;
+    case 'failed': return colors.dangerText;
     case 'expired':
     case 'withdrawn':
     default: return colors.textMuted;
@@ -160,12 +160,12 @@ export default function SellerVerificationScreen() {
               <Ionicons
                 name={statusIcon}
                 size={14}
-                color={isOverdue ? colors.danger : statusColor}
+                color={isOverdue ? colors.dangerText : statusColor}
               />
               <Text
                 style={[
                   styles.statusText,
-                  { color: isOverdue ? colors.danger : statusColor },
+                  { color: isOverdue ? colors.dangerText : statusColor },
                 ]}
               >
                 {isOverdue ? 'Overdue' : demand.status}
@@ -192,7 +192,7 @@ export default function SellerVerificationScreen() {
               </Text>
             )}
             {demand.status === 'failed' && (
-              <Text style={[styles.deadlineText, { color: colors.danger }]}>
+              <Text style={[styles.deadlineText, { color: colors.dangerText }]}>
                 Recourse triggered
               </Text>
             )}
@@ -204,12 +204,12 @@ export default function SellerVerificationScreen() {
               <Ionicons
                 name={isOverdue ? 'warning-outline' : 'arrow-forward-circle-outline'}
                 size={16}
-                color={isOverdue ? colors.danger : colors.brand}
+                color={isOverdue ? colors.dangerText : colors.brand}
               />
               <Text
                 style={[
                   styles.actionPromptText,
-                  { color: isOverdue ? colors.danger : colors.textPrimary },
+                  { color: isOverdue ? colors.dangerText : colors.textPrimary },
                 ]}
               >
                 {isOverdue
@@ -267,7 +267,7 @@ export default function SellerVerificationScreen() {
         {demands.length > 0 && (
           <View style={[styles.summaryBanner, { backgroundColor: colors.surface }]}>
             <View style={styles.summaryItem}>
-              <Text style={[styles.summaryNumber, { color: pendingCount > 0 ? colors.warning : colors.textPrimary }]}>
+              <Text style={[styles.summaryNumber, { color: pendingCount > 0 ? colors.warningText : colors.textPrimary }]}>
                 {pendingCount}
               </Text>
               <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>

@@ -42,7 +42,7 @@ export function OrderTrackingTimeline({ entries, warningText }: Props) {
                 : 'ellipse-outline';
         const iconColor =
           entry.state === 'failure'
-            ? colors.danger
+            ? colors.dangerText
             : entry.state === 'completed'
               ? colors.brand
               : entry.state === 'active'

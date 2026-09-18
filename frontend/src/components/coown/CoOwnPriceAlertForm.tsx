@@ -96,7 +96,7 @@ export function CoOwnPriceAlertForm({
           <View style={priceAlertStyles.conditionRow}>
             {(['above', 'below'] as const).map((c) => {
               const isSelected = alertCondition === c;
-              const semanticColor = c === 'above' ? colors.success : colors.danger;
+              const semanticColor = c === 'above' ? colors.successText : colors.dangerText;
               return (
                 <Pressable
                   key={c}

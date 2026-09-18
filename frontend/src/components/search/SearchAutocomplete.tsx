@@ -285,7 +285,7 @@ export function SearchAutocomplete({
             accessibilityLabel={`Search trending: ${item.term}`}
             accessibilityHint="Fills the search box and searches"
           >
-            <Ionicons name="trending-up" size={18} color={colors.success} style={styles.rowIcon} />
+            <Ionicons name="trending-up" size={18} color={colors.successText} style={styles.rowIcon} />
             <Text style={styles.rowText} numberOfLines={1}>
               {item.term}
             </Text>

@@ -496,7 +496,7 @@ export function PrivacyManifest({
     },
     warningText: {
       fontSize: TypographyV2.body.size,
-      color: colors.warning,
+      color: colors.warningText,
     },
     sdkCard: {
       paddingHorizontal: Space.lg,
@@ -563,7 +563,7 @@ export function PrivacyManifest({
     },
     trackingText: {
       fontSize: TypographyV2.meta.size,
-      color: colors.warning,
+      color: colors.warningText,
       fontWeight: '500',
     },
     privacyLink: {

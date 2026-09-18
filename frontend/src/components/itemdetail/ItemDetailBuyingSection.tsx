@@ -31,7 +31,7 @@ export function ItemDetailBuyingSection({
   if (!purchaseSummary) return null;
 
   return (
-    <CommerceDetailSection label="Buying this item" variant="continuation">
+    <CommerceDetailSection variant="continuation">
       <CommerceDetailDisclosureRow
         label="Costs, delivery & protection"
         summary="Full breakdown"

@@ -108,10 +108,10 @@ export function getStatusTone(normalised: string): StatusTone {
 
 export function resolveStatusColor(tone: StatusTone, colors: ThemeColors): string {
   switch (tone) {
-    case 'success': return colors.success;
+    case 'success': return colors.successText;
     case 'active': return colors.brand;
-    case 'danger': return colors.danger;
-    case 'pending': return colors.warning;
+    case 'danger': return colors.dangerText;
+    case 'pending': return colors.warningText;
     default: return colors.textMuted;
   }
 }

@@ -144,7 +144,7 @@ export function resolveStatePresentation(
   if (isSold) {
     return {
       stateLabel: 'Sold',
-      stateColor: colors.success,
+      stateColor: colors.successText,
       leadingLabel: `Sold · ${item.bidCount} ${item.bidCount === 1 ? 'bid' : 'bids'}`,
       leadingColor: colors.textSecondary,
       actionLabel: 'View sale',
@@ -165,9 +165,9 @@ export function resolveStatePresentation(
     const finalUrgency = urgency === 'finalMinutes';
     return {
       stateLabel: finalUrgency ? 'Ending' : 'Live',
-      stateColor: finalUrgency ? colors.danger : colors.textPrimary,
+      stateColor: finalUrgency ? colors.dangerText : colors.textPrimary,
       leadingLabel: timeLabel,
-      leadingColor: finalUrgency ? colors.danger : colors.textSecondary,
+      leadingColor: finalUrgency ? colors.dangerText : colors.textSecondary,
       actionLabel: 'View bids',
       showLiveDot: true,
       useDangerState: finalUrgency };

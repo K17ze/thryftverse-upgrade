@@ -25,7 +25,7 @@ export function EscrowBanner({ order, normalisedStatus }: Props) {
 
   return (
     <View style={[styles.escrowBanner, themed.escrowBanner]}>
-      <Ionicons name="lock-closed" size={16} color={colors.success} aria-hidden={true} />
+      <Ionicons name="lock-closed" size={16} color={colors.successText} aria-hidden={true} />
       <View style={styles.escrowTextWrap}>
         <Text style={[styles.escrowTitle, themed.escrowTitle]}>Funds held in escrow</Text>
         <Text style={[styles.escrowSub, themed.escrowSub]}>

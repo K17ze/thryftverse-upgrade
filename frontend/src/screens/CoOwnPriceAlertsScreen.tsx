@@ -185,8 +185,8 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
                 CRUD but no evaluator/delivery consumer for Co-Own alerts.
                 Do not imply the alerts work. */}
             <View style={[styles.monitoringNotice, { backgroundColor: colors.warningSubtle, borderColor: colors.warning }]}>
-              <Ionicons name="alert-circle-outline" size={16} color={colors.warning} />
-              <Text style={[styles.monitoringNoticeText, { color: colors.warning }]}>
+              <Ionicons name="alert-circle-outline" size={16} color={colors.warningText} />
+              <Text style={[styles.monitoringNoticeText, { color: colors.warningText }]}>
                 Alert monitoring is not yet active. Alerts are saved but will not trigger until this feature is live.
               </Text>
             </View>
@@ -197,7 +197,7 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
                 <Text style={styles.sectionTitle}>Active</Text>
                 {alerts.filter((a) => a.active && !a.triggeredAt).map((alert) => {
                   const isAbove = alert.condition === 'above';
-                  const badgeColor = isAbove ? colors.success : colors.danger;
+                  const badgeColor = isAbove ? colors.successText : colors.dangerText;
                   const isToggling = togglingIds.has(alert.id);
                   return (
                     <View key={alert.id}>
@@ -254,7 +254,7 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
                           accessibilityLabel="Delete alert"
                           hitSlop={12}
                         >
-                          <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                          <Ionicons name="trash-outline" size={18} color={colors.dangerText} />
                         </Pressable>
                       </View>
                     </View>
@@ -323,7 +323,7 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
                           accessibilityLabel="Delete alert"
                           hitSlop={12}
                         >
-                          <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                          <Ionicons name="trash-outline" size={18} color={colors.dangerText} />
                         </Pressable>
                       </View>
                     </View>
@@ -348,7 +348,7 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
                           accessibilityLabel={`View asset, triggered alert ${alert.condition} ${formatGbp(alert.targetPriceGbpMinor)}`}
                         >
                           <View style={[styles.conditionBadge, { backgroundColor: colors.warningSubtle }]}>
-                            <Ionicons name="checkmark" size={16} color={colors.warning} />
+                            <Ionicons name="checkmark" size={16} color={colors.warningText} />
                           </View>
                           <View style={styles.alertText}>
                             <Text style={styles.alertCondition}>
@@ -372,7 +372,7 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
                           accessibilityLabel="Delete alert"
                           hitSlop={12}
                         >
-                          <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                          <Ionicons name="trash-outline" size={18} color={colors.dangerText} />
                         </Pressable>
                       </View>
                     </View>

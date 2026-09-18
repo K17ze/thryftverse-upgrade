@@ -631,7 +631,7 @@ export function DiscoverScene({
         <EmptyState
           density="compact"
           icon="cloud-offline-outline"
-          iconColor={colors.danger}
+          iconColor={colors.dangerText}
           title="Explore unavailable"
           subtitle="We couldn't load discovery right now. Check your connection and try again."
           ctaLabel="Retry"

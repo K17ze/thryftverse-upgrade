@@ -44,7 +44,7 @@ export function PortfolioPnlSection({ summary, positions, totalCostBasisGbp }: P
             signed
             showUnit={false}
             showGlyph={false}
-            color={(summary.totalUnrealizedGbp + summary.totalRealizedGbp) >= 0 ? colors.success : colors.danger}
+            color={(summary.totalUnrealizedGbp + summary.totalRealizedGbp) >= 0 ? colors.successText : colors.dangerText}
           />
         </View>
         <View style={[styles.pnlRow, { borderBottomColor: colors.border }]}>
@@ -56,7 +56,7 @@ export function PortfolioPnlSection({ summary, positions, totalCostBasisGbp }: P
             signed
             showUnit={false}
             showGlyph={false}
-            color={summary.totalUnrealizedGbp >= 0 ? colors.success : colors.danger}
+            color={summary.totalUnrealizedGbp >= 0 ? colors.successText : colors.dangerText}
           />
         </View>
         <View style={[styles.pnlRow, { borderBottomColor: colors.border }]}>
@@ -68,7 +68,7 @@ export function PortfolioPnlSection({ summary, positions, totalCostBasisGbp }: P
             signed
             showUnit={false}
             showGlyph={false}
-            color={summary.totalRealizedGbp >= 0 ? colors.success : colors.danger}
+            color={summary.totalRealizedGbp >= 0 ? colors.successText : colors.dangerText}
           />
         </View>
         {totalDistributionsGbp > 0 && (
@@ -81,7 +81,7 @@ export function PortfolioPnlSection({ summary, positions, totalCostBasisGbp }: P
               signed
               showUnit={false}
               showGlyph={false}
-              color={totalDistributionsGbp >= 0 ? colors.success : colors.danger}
+              color={totalDistributionsGbp >= 0 ? colors.successText : colors.dangerText}
             />
           </View>
         )}

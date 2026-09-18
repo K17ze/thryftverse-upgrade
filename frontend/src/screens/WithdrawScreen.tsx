@@ -267,7 +267,7 @@ export default function WithdrawScreen() {
     >
       {isOffline && (
         <View style={[styles.offlineBanner, { backgroundColor: colors.dangerSubtle, borderBottomColor: colors.border }]}>
-          <Ionicons name="cloud-offline-outline" size={16} color={colors.danger} />
+          <Ionicons name="cloud-offline-outline" size={16} color={colors.dangerText} />
           <Text style={[styles.offlineBannerText, { color: colors.textPrimary }]}>
             {COPY.offline}
           </Text>

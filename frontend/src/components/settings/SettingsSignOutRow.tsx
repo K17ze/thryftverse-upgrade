@@ -34,7 +34,7 @@ const createStyles = (colors: ThemeColors) =>
       flex: 1,
       fontSize: TypographyV2.bodyStrong.size,
       fontFamily: FontFamily.regular,
-      color: colors.danger,
+      color: colors.dangerText,
       letterSpacing: TypographyV2.body.letterSpacing } });
 
 export function SettingsSignOutRow({ username, onSignOut }: SettingsSignOutRowProps) {
@@ -72,10 +72,10 @@ export function SettingsSignOutRow({ username, onSignOut }: SettingsSignOutRowPr
     >
       <View style={styles.row}>
         {isBusy ? (
-          <ActivityIndicator size={20} color={colors.danger} style={styles.icon} />
+          <ActivityIndicator size={20} color={colors.dangerText} style={styles.icon} />
         ) : (
           <View style={styles.icon}>
-            <AppIcon name="log-out-outline" size={IconSize.lg} color="danger" accessible={false} />
+            <AppIcon name="log-out-outline" size={IconSize.lg} color="dangerText" accessible={false} />
           </View>
         )}
         <Text style={styles.label}>

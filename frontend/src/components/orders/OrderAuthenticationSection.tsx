@@ -37,8 +37,8 @@ function OrderAuthenticationSectionBase({
     const toneColor: Record<AuthenticationTone, string> = {
       muted: colors.textMuted,
       info: colors.brand,
-      success: colors.success,
-      danger: colors.danger };
+      success: colors.successText,
+      danger: colors.dangerText };
     return {
       label: { color: colors.textPrimary },
       detail: { color: colors.textMuted },

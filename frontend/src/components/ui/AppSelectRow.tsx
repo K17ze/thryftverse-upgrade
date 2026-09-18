@@ -33,7 +33,7 @@ export function AppSelectRow({
   const isEmpty = !value || value.length === 0;
 
   const borderColor = hasError
-    ? colors.danger
+    ? colors.dangerText
     : colors.border;
 
   return (
@@ -57,7 +57,7 @@ export function AppSelectRow({
           <Ionicons
             name={icon}
             size={18}
-            color={hasError ? colors.danger : colors.textMuted}
+            color={hasError ? colors.dangerText : colors.textMuted}
             style={styles.icon}
           />
         ) : null}
@@ -98,7 +98,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: Space.sm,
     letterSpacing: 0.2 },
   labelError: {
-    color: colors.danger },
+    color: colors.dangerText },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -129,5 +129,5 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginTop: Space.sm,
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.danger,
+    color: colors.dangerText,
     lineHeight: 17 } });

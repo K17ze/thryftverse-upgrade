@@ -38,7 +38,7 @@ export function FlagshipAssetCard({
   const ownershipPct = totalUnits > 0 ? Math.round((yourUnits / totalUnits) * 100) : 0;
 
   const statusColor =
-    status === 'active' ? colors.success : status === 'pending' ? colors.textSecondary : status === 'sold' ? colors.textMuted : colors.textSecondary;
+    status === 'active' ? colors.successText : status === 'pending' ? colors.textSecondary : status === 'sold' ? colors.textMuted : colors.textSecondary;
 
   const cardLabel = `${name}, ${unitPrice} per unit, ${yourUnits} of ${totalUnits} units owned (${ownershipPct}%)`;
 

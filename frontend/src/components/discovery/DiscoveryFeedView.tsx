@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, Pressable, ScrollView, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -38,6 +38,11 @@ export function DiscoveryFeedView({
   onMoodboardPress,
   onCollectionPress,
   onRefresh,
+  staleModules,
+  isRefreshing,
+  hasMore,
+  isLoadingMore,
+  onEndReached,
   scrollRef,
   onItemSaveToggle,
   onItemSaveLongPress,
@@ -59,6 +64,19 @@ export function DiscoveryFeedView({
   onMoodboardPress: (id: string) => void;
   onCollectionPress: (id: string) => void;
   onRefresh: () => void;
+  /** Modules whose last refresh rejected — their cached content stays
+   *  visible but must be labelled stale, not fresh (F21). */
+  staleModules?: string[];
+  /** True while the pull-to-refresh gesture's sources are still settling —
+   *  keeps the RefreshControl honest (F06). */
+  isRefreshing: boolean;
+  /** Whether another page of backend listings exists. */
+  hasMore: boolean;
+  /** True while the next page is in flight — drives the grid footer. */
+  isLoadingMore: boolean;
+  /** Loads the next page; undefined when the feed is a fixed recommendation
+   *  page (the grid then shows its honest end-of-list state). */
+  onEndReached?: () => void;
   scrollRef: React.MutableRefObject<any>;
   onItemSaveToggle?: (listing: DiscoveryListingSummary) => void;
   onItemSaveLongPress?: (listing: DiscoveryListingSummary) => void;
@@ -119,6 +137,22 @@ export function DiscoveryFeedView({
   const listHeader = (
     <>
       {isOffline && <OfflineBanner onRetry={onRefresh} />}
+
+      {/* Module-level staleness (F21): partial refresh failures keep their
+          cached sections visible, but the feed must say so — a quiet
+          tappable note, never a blocking error over working content. */}
+      {!isOffline && staleModules && staleModules.length > 0 && (
+        <Pressable
+          onPress={onRefresh}
+          accessibilityRole="button"
+          accessibilityLabel="Some sections couldn't refresh. Tap to retry."
+          style={({ pressed }) => [styles.staleNote, { opacity: pressed ? 0.6 : 1 }]}
+        >
+          <Text style={[styles.staleNoteText, { color: colors.textMuted }]} maxFontSizeMultiplier={2}>
+            Some sections couldn't refresh — tap to retry
+          </Text>
+        </Pressable>
+      )}
 
       {/* Category pills — horizontal scroll, dynamically driven by user algorithm.
           Wrapped in a ScrollView so 8+ pills scroll on narrow screens with a
@@ -228,7 +262,18 @@ export function DiscoveryFeedView({
       onMoodboardPress={onMoodboardPress}
       numColumns={2}
       isLoading={isLoading}
-      hasMore={false}
+      hasMore={hasMore}
+      isLoadingMore={isLoadingMore}
+      onEndReached={onEndReached}
+      refreshControl={
+        <RefreshControl
+          refreshing={isRefreshing}
+          onRefresh={onRefresh}
+          tintColor={colors.brand}
+          colors={[colors.brand]}
+          progressBackgroundColor={colors.surface}
+        />
+      }
       scrollRef={scrollRef}
       listHeaderComponent={listHeader}
       onItemSaveToggle={onItemSaveToggle}

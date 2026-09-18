@@ -265,7 +265,7 @@ function ReceiptRow({
     tone === 'success'
       ? colors.textPrimary
       : tone === 'danger'
-        ? colors.danger
+        ? colors.dangerText
         : tone === 'muted'
           ? colors.textMuted
           : colors.textSecondary;
@@ -391,7 +391,7 @@ const createStyles = (colors: ThemeColors) =>
       fontFamily: FontFamily.semibold,
       fontSize: TypographyV2.bodyStrong.size,
       lineHeight: TypographyV2.bodyStrong.lineHeight,
-      color: colors.warning },
+      color: colors.warningText },
     unknownBody: {
       fontFamily: FontFamily.regular,
       fontSize: TypographyV2.body.size,

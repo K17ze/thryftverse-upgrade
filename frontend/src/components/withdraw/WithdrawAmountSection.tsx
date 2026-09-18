@@ -109,5 +109,5 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: TypographyV2.meta.letterSpacing,
-    color: colors.danger },
+    color: colors.dangerText },
 });

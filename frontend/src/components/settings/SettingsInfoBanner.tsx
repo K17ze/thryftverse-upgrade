@@ -34,11 +34,11 @@ export function SettingsInfoBanner({
   const resolvedTone: BannerTone = tone ?? variant ?? 'info';
   const color =
     resolvedTone === 'error'
-      ? colors.danger
+      ? colors.dangerText
       : resolvedTone === 'warning'
-      ? colors.warning
+      ? colors.warningText
       : resolvedTone === 'success'
-      ? colors.success
+      ? colors.successText
       : colors.textMuted;
 
   const hasTwoLine = Boolean(title || description);

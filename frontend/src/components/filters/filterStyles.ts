@@ -425,7 +425,7 @@ export function createFilterStyles(colors: ThemeColors) {
   priceRangeError: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.danger,
+    color: colors.dangerText,
     paddingHorizontal: Space.xl,
     marginTop: Space.sm } });
 }

@@ -336,7 +336,7 @@ export function ItemDetailSheets({
           accessibilityState={{ selected: isFav }}
           accessibilityLabel={isFav ? 'Remove from Saved' : 'Add to Saved'}
         >
-          <Ionicons name={isFav ? 'heart' : 'heart-outline'} size={20} color={isFav ? colors.danger : colors.textPrimary} />
+          <Ionicons name={isFav ? 'heart' : 'heart-outline'} size={20} color={isFav ? colors.dangerText : colors.textPrimary} />
           <Text style={[styles.overflowRowText, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>
             {isFav ? 'Remove from Saved' : 'Add to Saved'}
           </Text>

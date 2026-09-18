@@ -110,7 +110,7 @@ export function getLayerColor(type: CreatorLayer['type'], colors: ThemeColors): 
     case 'product': return colors.bronze;
     case 'mention': return colors.social;
     case 'look': return colors.discovery;
-    case 'vote': return colors.success;
+    case 'vote': return colors.successText;
     case 'quiz': return colors.brand;
     case 'question': return colors.social;
     case 'emojiSlider': return colors.brand;

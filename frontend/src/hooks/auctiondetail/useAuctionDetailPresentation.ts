@@ -376,9 +376,9 @@ export function useAuctionDetailPresentation({
     if (!presentation) return null;
     const colorByKey: Record<typeof presentation.colorKey, string> = {
       brand: colors.brand,
-      success: colors.success,
-      danger: colors.danger,
-      warning: colors.warning,
+      success: colors.successText,
+      danger: colors.dangerText,
+      warning: colors.warningText,
       textPrimary: colors.textPrimary,
       textSecondary: colors.textSecondary,
       textMuted: colors.textMuted,

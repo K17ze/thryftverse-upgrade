@@ -165,9 +165,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
           fallbackInitials={form.name.trim() || 'Group'}
           groupId={conversationId}
           onPickCover={handlePickCoverPhoto}
-          onRemoveCover={media.removeCover}
           onPickAvatar={handlePickGroupPhoto}
-          onRemoveAvatar={media.removeAvatar}
         />
 
         <View style={styles.formColumn}>
@@ -218,9 +216,9 @@ export default function EditGroupScreen({ navigation, route }: Props) {
             accessibilityState={{ busy: isLeaving, disabled: isLeaving }}
           >
             {isLeaving ? (
-              <ActivityIndicator size="small" color={colors.danger} />
+              <ActivityIndicator size="small" color={colors.dangerText} />
             ) : (
-              <AppIcon name="log-out-outline" size="md" color="danger" accessible={false} />
+              <AppIcon name="log-out-outline" size="md" color="dangerText" accessible={false} />
             )}
             <Text style={styles.leaveText}>{isLeaving ? 'Leaving…' : 'Leave group'}</Text>
           </AnimatedPressable>
@@ -270,7 +268,7 @@ function createStyles(colors: ThemeColors) {
       borderColor: colors.border,
     },
     leaveText: {
-      color: colors.danger,
+      color: colors.dangerText,
       fontFamily: Typography.family.medium,
       fontSize: TypographyV2.body.size,
     },

@@ -305,7 +305,7 @@ function LooksPane({
         ))}
       </HorizontalRail>
       {notice && (
-        <Text style={[styles.noticeText, { color: colors.danger }]}>{notice}</Text>
+        <Text style={[styles.noticeText, { color: colors.dangerText }]}>{notice}</Text>
       )}
     </View>
   );

@@ -50,9 +50,9 @@ export const CoOwnInstrumentCard = React.memo(function CoOwnInstrumentCard({
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const statusColor = status === 'open'
-    ? colors.success
+    ? colors.successText
     : status === 'paused'
-      ? colors.warning
+      ? colors.warningText
       : colors.textMuted;
 
   // Watch icon visual state — pending dims the icon, failed tints it warning.
@@ -61,7 +61,7 @@ export const CoOwnInstrumentCard = React.memo(function CoOwnInstrumentCard({
   const watchIconColor = isPending
     ? colors.textMuted
     : isFailed
-      ? colors.warning
+      ? colors.warningText
       : isWatched
         ? colors.textPrimary
         : colors.textSecondary;

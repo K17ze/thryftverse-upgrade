@@ -36,7 +36,7 @@ function OutfitBuilderHeaderImpl({ onClose, onClear }: OutfitBuilderHeaderProps)
         accessibilityLabel="Clear outfit"
         hapticFeedback="light"
       >
-        <Ionicons name="trash-outline" size={22} color={colors.danger} />
+        <Ionicons name="trash-outline" size={22} color={colors.dangerText} />
       </AnimatedPressable>
     </View>
   );

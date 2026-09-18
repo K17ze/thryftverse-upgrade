@@ -33,7 +33,7 @@ export function lotStatusColor(status: LotStatus, colors: ThemeColors): string {
     case 'sold':
       return colors.scrimDeltaPositive;
     case 'closing':
-      return colors.warning;
+      return colors.warningText;
     default:
       return colors.scrimTextSecondary;
   }

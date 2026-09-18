@@ -262,7 +262,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           accessibilityRole="alert"
           accessibilityLabel="Push notifications blocked by device settings"
         >
-          <Ionicons name="notifications-off-outline" size={18} color={colors.danger} />
+          <Ionicons name="notifications-off-outline" size={18} color={colors.dangerText} />
           <Text style={[styles.permissionBannerText, { color: colors.textSecondary }]}>
             Push is blocked by device settings.
           </Text>

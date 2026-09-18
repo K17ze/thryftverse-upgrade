@@ -128,7 +128,7 @@ export default function PushNotificationsScreen({ navigation }: Props) {
     <FlagshipScreen header={<FlagshipHeader title="Push notifications" onBack={() => navigation.goBack()} />}>
       {permissionDenied && (
         <View style={styles.permissionBanner}>
-          <Ionicons name="notifications-off-outline" size={18} color={colors.danger} />
+          <Ionicons name="notifications-off-outline" size={18} color={colors.dangerText} />
           <Text style={styles.permissionBannerText}>
             Push is blocked. Enable it in Settings to receive alerts.
           </Text>

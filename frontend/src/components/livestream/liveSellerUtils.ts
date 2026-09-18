@@ -23,9 +23,9 @@ export function lotStatusColor(status: LotStatus, colors: ThemeColors): string {
   switch (status) {
     case 'open':
     case 'sold':
-      return colors.success;
+      return colors.successText;
     case 'closing':
-      return colors.warning;
+      return colors.warningText;
     case 'scheduled':
       return colors.textSecondary;
     default:

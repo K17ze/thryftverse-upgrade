@@ -108,7 +108,7 @@ export function LiveStreamEndedScreen({ summary, onBack }: EndedProps) {
       contentStyle={styles.stateFlush}
     >
       <View style={styles.endedWrap}>
-        <AppIcon name="check" variant="filled" size={IconSize.display} color="success" accessible={false} />
+        <AppIcon name="check" variant="filled" size={IconSize.display} color="successText" accessible={false} />
         <Text style={[styles.endedTitle, { color: colors.textPrimary }]} accessibilityRole="header">
           {t('ended.title')}
         </Text>

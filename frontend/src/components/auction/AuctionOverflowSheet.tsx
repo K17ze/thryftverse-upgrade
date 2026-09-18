@@ -114,7 +114,7 @@ export function AuctionOverflowSheet({
         <Ionicons
           name={isLiked ? 'heart' : 'heart-outline'}
           size={20}
-          color={isLiked ? colors.danger : colors.textPrimary}
+          color={isLiked ? colors.dangerText : colors.textPrimary}
         />
         <Text style={[styles.overflowRowText, { color: colors.textPrimary }]}>
           {isLiked ? 'Remove from wishlist' : 'Add to wishlist'}

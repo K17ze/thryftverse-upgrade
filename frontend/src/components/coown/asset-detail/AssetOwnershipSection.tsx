@@ -162,7 +162,7 @@ export function AssetOwnershipSection({
   const distStatus = lastDistribution?.status ?? '';
   const distSettled = distStatus === 'settled' || distStatus === 'paid';
   const distChipBg = distSettled ? colors.successSubtle : colors.warningSubtle;
-  const distChipColor = distSettled ? colors.success : colors.warning;
+  const distChipColor = distSettled ? colors.successText : colors.warningText;
   const distChipLabel = distSettled ? 'Settled'
     : distStatus === 'scheduled' ? 'Scheduled' : 'Pending';
   // ── Per-unit yield on reference price ──
@@ -361,7 +361,7 @@ export function AssetOwnershipSection({
                 </Text>
               ) : null}
               {Number.isFinite(expiryMs) ? (
-                <Text style={[styles.caption, { color: colors.warning }]}>
+                <Text style={[styles.caption, { color: colors.warningText }]}>
                   Expires {formatDayMonth(activeBuyoutOfferExpiry!)}
                 </Text>
               ) : null}
@@ -479,7 +479,7 @@ export function AssetOwnershipSection({
           muted={typeof rights?.transferable !== 'boolean'}
           trailing={Number.isFinite(lockupMs) ? (
             <View style={[styles.lockupChip, { backgroundColor: lockupActive ? colors.warningSubtle : colors.surfaceAlt }]}>
-              <Text style={[styles.lockupChipText, { color: lockupActive ? colors.warning : colors.textMuted }]}>
+              <Text style={[styles.lockupChipText, { color: lockupActive ? colors.warningText : colors.textMuted }]}>
                 {lockupLabel}
               </Text>
             </View>

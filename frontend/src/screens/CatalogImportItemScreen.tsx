@@ -427,7 +427,7 @@ export default function CatalogImportItemScreen() {
         {/* ── Extraction error — compact inline, no toast ── */}
         {extraction.error ? (
           <View style={styles.extractionErrorRow}>
-            <Ionicons name="alert-circle" size={14} color={colors.warning} />
+            <Ionicons name="alert-circle" size={14} color={colors.warningText} />
             <Text style={styles.extractionErrorText} numberOfLines={2}>
               {extraction.error}
             </Text>
@@ -466,7 +466,7 @@ export default function CatalogImportItemScreen() {
                   <Ionicons
                     name="alert-circle"
                     size={WARNING_GLYPH_SIZE}
-                    color={colors.warning}
+                    color={colors.warningText}
                     style={styles.issueGlyph}
                   />
                   <View style={styles.issueText}>
@@ -727,7 +727,7 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: TypographyV2.meta.size,
       lineHeight: TypographyV2.meta.lineHeight,
       letterSpacing: TypographyV2.meta.letterSpacing,
-      color: colors.warning },
+      color: colors.warningText },
     thumb: {
       width: THUMB_SIZE,
       height: THUMB_SIZE,

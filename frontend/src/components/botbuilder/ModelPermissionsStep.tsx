@@ -128,7 +128,7 @@ export function ModelPermissionsStep({
                 <AppIcon
                   name={RISK_DOT[group.risk]}
                   size={IconSize.sm}
-                  color={group.risk === 'critical' ? 'danger' : 'textSecondary'}
+                  color={group.risk === 'critical' ? 'dangerText' : 'textSecondary'}
                   opticalCenter
                   accessible={false}
                 />

@@ -379,7 +379,7 @@ const createStyles = (colors: ThemeColors) =>
       fontFamily: FontFamily.regular,
       fontSize: TypographyV2.body.size,
       lineHeight: TypographyV2.body.lineHeight,
-      color: colors.danger,
+      color: colors.dangerText,
       textAlign: 'center' },
     barWrap: {
       paddingTop: Space.md },
@@ -413,4 +413,4 @@ const createStyles = (colors: ThemeColors) =>
       fontFamily: FontFamily.medium,
       fontSize: TypographyV2.body.size,
       lineHeight: TypographyV2.body.lineHeight,
-      color: colors.danger } });
+      color: colors.dangerText } });

@@ -5,6 +5,7 @@ import {
   useInboxGroupIdentityEvent,
   useInboxUserEvent,
   useInboxReadEvent,
+  useInboxTypingEvents,
   realtimePayloadToMessage,
 } from '../../services/realtimeClient';
 
@@ -89,6 +90,12 @@ export function useInboxRealtime(loadConversations: () => Promise<void>) {
       [conversations, currentUser?.id, upsertConversation],
     ),
   );
+
+  // Typing indicators — the same per-conversation topics already carry
+  // `chat.typing.update`; this feeds the shared map that inbox rows read
+  // via useConversationTyping so "typing…" appears in the list, not just
+  // inside the thread.
+  useInboxTypingEvents();
 
   // Per-user inbox signals — a new DM, a new group, or being added to a
   // group can never arrive on a per-conversation topic (we don't subscribe

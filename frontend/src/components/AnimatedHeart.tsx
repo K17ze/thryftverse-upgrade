@@ -100,7 +100,7 @@ export function AnimatedHeart({
   inactiveColor,
 }: Props) {
   const { colors } = useAppTheme();
-  const resolvedActiveColor = activeColor ?? colors.danger;
+  const resolvedActiveColor = activeColor ?? colors.dangerText;
   const resolvedInactiveColor = inactiveColor ?? colors.surfaceElevated;
   const haptic = useHaptic();
   const reducedMotionEnabled = useReducedMotion();

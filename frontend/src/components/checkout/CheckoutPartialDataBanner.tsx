@@ -23,7 +23,7 @@ function CheckoutPartialDataBannerBase({ icon, message, actionLabel, onAction }:
 
   return (
     <View style={styles.banner}>
-      <Ionicons name={icon} size={16} color={colors.warning} importantForAccessibility="no" />
+      <Ionicons name={icon} size={16} color={colors.warningText} importantForAccessibility="no" />
       <Text style={styles.message} numberOfLines={3} maxFontSizeMultiplier={2}>
         {message}
       </Text>
@@ -65,7 +65,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.medium,
     fontVariant: ['tabular-nums'],
-    color: colors.warning,
+    color: colors.warningText,
   },
   action: {
     paddingHorizontal: Space.sm + 2,
@@ -74,13 +74,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderWidth: Stroke.standard,
     minHeight: Control.chromeCompact,
     justifyContent: 'center',
-    // TODO: replace `${colors.warning}80` and `${colors.surfaceAlt}99` with tokens when available
+    // TODO: replace `${colors.warningText}80` and `${colors.surfaceAlt}99` with tokens when available
     borderColor: `${colors.warning}80`,
     backgroundColor: `${colors.surfaceAlt}99`,
   },
   actionText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
-    color: colors.warning,
+    color: colors.warningText,
   },
 });

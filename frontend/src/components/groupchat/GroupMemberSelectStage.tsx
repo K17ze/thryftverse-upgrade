@@ -127,7 +127,7 @@ export function GroupMemberSelectStage({
 
       {searchError ? (
         <View style={styles.searchErrorBanner}>
-          <AppIcon name="alert" size="sm" color="danger" accessible={false} />
+          <AppIcon name="alert" size="sm" color="dangerText" accessible={false} />
           <Text style={styles.searchErrorText}>
             {isOffline ? 'You are offline. ' : ''}{searchError}
           </Text>

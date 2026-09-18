@@ -18,6 +18,19 @@ export interface PortfolioPerformersCardProps {
  * the best and worst positions by unrealized P&L without "TOP PERFORMER"
  * / "LAGGING" labels that gamify holding.
  */
+/** Direction (glyph + colour) derives from the SIGNED return, never from
+ *  rank: the "highest return" row can still be a loss and must render red
+ *  down — never a green up arrow on a negative position (F09). */
+function directionFor(pct: number, colors: { coownUp: string; coownDown: string; textMuted: string }) {
+  if (pct > 0) return { icon: 'arrow-up-outline' as const, color: colors.coownUp };
+  if (pct < 0) return { icon: 'arrow-down-outline' as const, color: colors.coownDown };
+  return { icon: 'remove-outline' as const, color: colors.textMuted };
+}
+
+function returnPct(p: CoOwnPositionVM): number {
+  return (p.unrealizedPnlGbp / (p.avgEntryPriceGbp * p.unitsOwned)) * 100;
+}
+
 export function PortfolioPerformersCard({ performers, onPositionPress }: PortfolioPerformersCardProps) {
   const { colors } = useAppTheme();
 
@@ -25,54 +38,62 @@ export function PortfolioPerformersCard({ performers, onPositionPress }: Portfol
 
   return (
     <View style={[styles.insightCard, { borderBottomColor: colors.border }]}>
-      {performers.best && performers.best.avgEntryPriceGbp > 0 && (
-        <AnimatedPressable
-          style={styles.insightRow}
-          onPress={() => onPositionPress(performers.best!)}
-          accessibilityRole="button"
-          accessibilityLabel={`Best position: ${performers.best.title}`}
-        >
-          <Ionicons name="arrow-up-outline" size={14} color={colors.success} />
-          <Text style={[styles.insightLabel, { color: colors.textMuted }]} numberOfLines={1}>
-            Best position
-          </Text>
-          <Text style={[styles.insightTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-            {performers.best.title}
-          </Text>
-          <CoOwnNumericText
-            value={(performers.best.unrealizedPnlGbp / (performers.best.avgEntryPriceGbp * performers.best.unitsOwned)) * 100}
-            unit="pct"
-            size="mono"
-            signed
-            showGlyph={false}
-            color={colors.success}
-          />
-        </AnimatedPressable>
-      )}
-      {performers.worst && performers.worst.avgEntryPriceGbp > 0 && performers.worst.assetId !== performers.best?.assetId && (
-        <AnimatedPressable
-          style={[styles.insightRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}
-          onPress={() => onPositionPress(performers.worst!)}
-          accessibilityRole="button"
-          accessibilityLabel={`Worst position: ${performers.worst.title}`}
-        >
-          <Ionicons name="arrow-down-outline" size={14} color={colors.danger} />
-          <Text style={[styles.insightLabel, { color: colors.textMuted }]} numberOfLines={1}>
-            Worst position
-          </Text>
-          <Text style={[styles.insightTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-            {performers.worst.title}
-          </Text>
-          <CoOwnNumericText
-            value={(performers.worst.unrealizedPnlGbp / (performers.worst.avgEntryPriceGbp * performers.worst.unitsOwned)) * 100}
-            unit="pct"
-            size="mono"
-            signed
-            showGlyph={false}
-            color={colors.danger}
-          />
-        </AnimatedPressable>
-      )}
+      {performers.best && performers.best.avgEntryPriceGbp > 0 && (() => {
+        const pct = returnPct(performers.best);
+        const dir = directionFor(pct, colors);
+        return (
+          <AnimatedPressable
+            style={styles.insightRow}
+            onPress={() => onPositionPress(performers.best!)}
+            accessibilityRole="button"
+            accessibilityLabel={`Highest return: ${performers.best!.title}, ${pct.toFixed(1)} percent`}
+          >
+            <Ionicons name={dir.icon} size={14} color={dir.color} />
+            <Text style={[styles.insightLabel, { color: colors.textMuted }]} numberOfLines={1}>
+              Highest return
+            </Text>
+            <Text style={[styles.insightTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+              {performers.best!.title}
+            </Text>
+            <CoOwnNumericText
+              value={pct}
+              unit="pct"
+              size="mono"
+              signed
+              showGlyph={false}
+              color={dir.color}
+            />
+          </AnimatedPressable>
+        );
+      })()}
+      {performers.worst && performers.worst.avgEntryPriceGbp > 0 && performers.worst.assetId !== performers.best?.assetId && (() => {
+        const pct = returnPct(performers.worst!);
+        const dir = directionFor(pct, colors);
+        return (
+          <AnimatedPressable
+            style={[styles.insightRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}
+            onPress={() => onPositionPress(performers.worst!)}
+            accessibilityRole="button"
+            accessibilityLabel={`Lowest return: ${performers.worst!.title}, ${pct.toFixed(1)} percent`}
+          >
+            <Ionicons name={dir.icon} size={14} color={dir.color} />
+            <Text style={[styles.insightLabel, { color: colors.textMuted }]} numberOfLines={1}>
+              Lowest return
+            </Text>
+            <Text style={[styles.insightTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+              {performers.worst!.title}
+            </Text>
+            <CoOwnNumericText
+              value={pct}
+              unit="pct"
+              size="mono"
+              signed
+              showGlyph={false}
+              color={dir.color}
+            />
+          </AnimatedPressable>
+        );
+      })()}
     </View>
   );
 }

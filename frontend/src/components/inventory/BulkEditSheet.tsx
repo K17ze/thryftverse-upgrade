@@ -300,7 +300,7 @@ export function BulkEditSheet({
                 <Text style={styles.resultTitle} numberOfLines={1}>
                   {s.title}
                 </Text>
-                <Text style={[styles.resultReason, { color: colors.warning }]}>
+                <Text style={[styles.resultReason, { color: colors.warningText }]}>
                   Skipped — {s.reason}
                 </Text>
               </View>
@@ -395,7 +395,7 @@ export function BulkEditSheet({
                 {built.skipped.map((s) => (
                   <View key={`preview-${s.listingId}`} style={styles.resultRow}>
                     <Text style={styles.resultTitle} numberOfLines={1}>{s.title}</Text>
-                    <Text style={[styles.resultReason, { color: colors.warning }]}>
+                    <Text style={[styles.resultReason, { color: colors.warningText }]}>
                       Skipped — {s.reason}
                     </Text>
                   </View>
@@ -466,7 +466,7 @@ const createStyles = (colors: ThemeColors) =>
     errorText: {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
-      color: colors.danger,
+      color: colors.dangerText,
       marginTop: Space.xs },
     resultRow: {
       flexDirection: 'row',
@@ -484,7 +484,7 @@ const createStyles = (colors: ThemeColors) =>
     resultReason: {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
-      color: colors.danger },
+      color: colors.dangerText },
     skippedBlock: {
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.border,

@@ -678,7 +678,7 @@ export default function CreateAuctionScreen() {
                       />
                       {buyNowPriceNum ? (
                         <View style={styles.izeConversionPill}>
-                          <Ionicons name="flash" size={13} color={colors.warning} />
+                          <Ionicons name="flash" size={13} color={colors.warningText} />
                           <Text style={styles.izeConversionText}>
                             Instant buyout at {formatIzeAmount(toIze(buyNowPriceNum, currencyCode, fxRates))}
                           </Text>
@@ -777,7 +777,7 @@ export default function CreateAuctionScreen() {
         <View style={styles.resultOverlay}>
           <View style={styles.resultCard}>
             <View style={styles.resultBadgeWrap}>
-              <Ionicons name="flame" size={32} color={colors.warning} />
+              <Ionicons name="flame" size={32} color={colors.warningText} />
             </View>
 
             <Text style={styles.resultTitle}>AUCTION DROP IS LIVE</Text>
@@ -1333,7 +1333,7 @@ function createStyles(colors: ThemeColors, isDark: boolean) {
     presetChipClearText: {
       fontSize: 11,
       fontFamily: Typography.family.bold,
-      color: colors.danger,
+      color: colors.dangerText,
     },
 
     // ── Buy Now Toggle ──

@@ -39,7 +39,7 @@ export function LiveChatList({ messages }: LiveChatListProps) {
       <View style={styles.chatRow}>
         <Text style={styles.chatLine} numberOfLines={2}>
           {item.isSeller ? (
-            <Text style={[styles.chatSellerMark, { color: colors.warning }]}>{t('chat.seller')} · </Text>
+            <Text style={[styles.chatSellerMark, { color: colors.warningText }]}>{t('chat.seller')} · </Text>
           ) : null}
           <Text style={[styles.chatSender, { color: colors.scrimTextSecondary }]}>
             {item.userName}

@@ -299,8 +299,8 @@ export function CoOwnPriceChart({
           {/* Phase 2: last-age badge */}
           {lastAgeLabel && (
             <View style={[styles.lastAgeBadge, { backgroundColor: (isStaleLast ? colors.warning : colors.textMuted) + '22' /* TODO: replace with subtle token once dynamic color is resolved */ }]}>
-              <Ionicons name="time-outline" size={10} color={isStaleLast ? colors.warning : colors.textMuted} />
-              <Text style={[styles.lastAgeText, { color: isStaleLast ? colors.warning : colors.textMuted }]}>
+              <Ionicons name="time-outline" size={10} color={isStaleLast ? colors.warningText : colors.textMuted} />
+              <Text style={[styles.lastAgeText, { color: isStaleLast ? colors.warningText : colors.textMuted }]}>
                 {lastAgeLabel}
               </Text>
             </View>

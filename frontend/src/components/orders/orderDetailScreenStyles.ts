@@ -215,6 +215,6 @@ export function createOrderDetailThemedStyles(colors: ThemeColors) {
     retryLink: { color: colors.brand },
     sectionDivider: { backgroundColor: colors.border },
     staleBanner: { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder },
-    staleText: { color: colors.warning },
+    staleText: { color: colors.warningText },
     detailLabel: { color: colors.textSecondary } };
 }

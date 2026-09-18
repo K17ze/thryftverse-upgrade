@@ -346,7 +346,7 @@ export default function PaymentsScreen({ navigation }: Props) {
               checkout' message next to the card number field is more
               effective than security badges in the footer." */}
           <View style={[styles.inlineTrustRow, { borderColor: colors.border }]}>
-            <Ionicons name="lock-closed-outline" size={14} color={colors.success} aria-hidden={true} />
+            <Ionicons name="lock-closed-outline" size={14} color={colors.successText} aria-hidden={true} />
             <Text style={[styles.inlineTrustText, { color: colors.textSecondary }]}>
               {t('payments.trust.inline')}
             </Text>

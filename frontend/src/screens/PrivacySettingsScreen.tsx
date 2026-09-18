@@ -125,7 +125,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
         <SettingsSection title="Privacy posture">
           <SettingsRow
             icon="cloud-offline-outline"
-            iconColor={colors.danger}
+            iconColor={colors.dangerText}
             title="Couldn't load privacy settings"
             subtitle="Check your connection and try again."
             isFirst
@@ -153,7 +153,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
         <SettingsSection title="Privacy posture">
           <SettingsRow
             icon="checkmark-circle-outline"
-            iconColor={activeCount > 0 ? colors.success : colors.textMuted}
+            iconColor={activeCount > 0 ? colors.successText : colors.textMuted}
             title="Privacy posture"
             subtitle={`${activeCount} of ${postureItems.length} protections active`}
             isFirst
@@ -265,7 +265,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           <SettingsRow
             key={tip}
             icon="checkmark-circle"
-            iconColor={colors.success}
+            iconColor={colors.successText}
             title={tip}
             isFirst={i === 0}
             isLast={i === SAFETY_TIPS.length - 1}

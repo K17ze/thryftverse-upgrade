@@ -302,7 +302,7 @@ export default function KYCVerificationScreen({ navigation }: Props) {
       <FlagshipScreen header={<FlagshipHeader title="Identity verification" onBack={handleBack} />}>
         <View style={styles.stateFill} accessibilityLiveRegion="polite">
           <View style={styles.stateIconWrap} accessible={false}>
-            <Ionicons name="hourglass-outline" size={Control.icon + 6} color={colors.warning} aria-hidden={true} accessible={false} />
+            <Ionicons name="hourglass-outline" size={Control.icon + 6} color={colors.warningText} aria-hidden={true} accessible={false} />
           </View>
           <Text style={styles.stateTitle} maxFontSizeMultiplier={1.3}>Checking your details</Text>
           <Text style={styles.stateBody} maxFontSizeMultiplier={1.3}>
@@ -336,7 +336,7 @@ export default function KYCVerificationScreen({ navigation }: Props) {
       <FlagshipScreen header={<FlagshipHeader title="Identity verification" onBack={handleBack} />}>
         <View style={styles.stateFill} accessibilityLiveRegion="polite">
           <View style={[styles.stateIconWrap, { backgroundColor: colors.successSubtle, borderRadius: Radius.full }]} accessible={false}>
-            <Ionicons name="checkmark-circle" size={Control.icon + 6} color={colors.success} aria-hidden={true} accessible={false} />
+            <Ionicons name="checkmark-circle" size={Control.icon + 6} color={colors.successText} aria-hidden={true} accessible={false} />
           </View>
           <Text style={styles.stateTitle} maxFontSizeMultiplier={1.3}>Identity checked</Text>
           <Text style={styles.stateBody} maxFontSizeMultiplier={1.3}>
@@ -370,7 +370,7 @@ export default function KYCVerificationScreen({ navigation }: Props) {
       <FlagshipScreen header={<FlagshipHeader title="Identity verification" onBack={handleBack} />}>
         <View style={styles.stateFill} accessibilityLiveRegion="polite">
           <View style={[styles.stateIconWrap, { backgroundColor: colors.dangerSubtle, borderRadius: Radius.full }]} accessible={false}>
-            <Ionicons name="close-circle-outline" size={Control.icon + 6} color={colors.danger} aria-hidden={true} accessible={false} />
+            <Ionicons name="close-circle-outline" size={Control.icon + 6} color={colors.dangerText} aria-hidden={true} accessible={false} />
           </View>
           <Text style={styles.stateTitle} maxFontSizeMultiplier={1.3}>Verification wasn't approved</Text>
           <Text style={styles.stateBody} maxFontSizeMultiplier={1.3}>
@@ -407,7 +407,7 @@ export default function KYCVerificationScreen({ navigation }: Props) {
       <FlagshipScreen header={<FlagshipHeader title="Identity verification" onBack={handleBack} />}>
         <View style={styles.stateFill} accessibilityLiveRegion="polite">
           <View style={[styles.stateIconWrap, { backgroundColor: colors.warningSubtle, borderRadius: Radius.full }]} accessible={false}>
-            <Ionicons name="time-outline" size={Control.icon + 6} color={colors.warning} aria-hidden={true} accessible={false} />
+            <Ionicons name="time-outline" size={Control.icon + 6} color={colors.warningText} aria-hidden={true} accessible={false} />
           </View>
           <Text style={styles.stateTitle} maxFontSizeMultiplier={1.3}>Verification expired</Text>
           <Text style={styles.stateBody} maxFontSizeMultiplier={1.3}>

@@ -345,7 +345,7 @@ export function PosterCanvasStage({
         {/* Draft load error overlay ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â visible when loading failed */}
         {!isLoadingDraft && draftError && (
           <View style={styles.canvasErrorOverlay}>
-            <Ionicons name="alert-circle-outline" size={28} color={colors.danger} />
+            <Ionicons name="alert-circle-outline" size={28} color={colors.dangerText} />
             <Text style={[styles.canvasErrorTitle, { color: colors.textPrimary }]}>
               Couldn't load draft
             </Text>

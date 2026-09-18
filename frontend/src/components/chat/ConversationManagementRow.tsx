@@ -61,7 +61,7 @@ export function ConversationManagementRow({
   const { colors } = useAppTheme();
   const { t } = useAppTranslation('messaging');
   const identity = resolveIdentity(conversation, currentUserId);
-  const actionColor = destructive ? colors.danger : colors.textPrimary;
+  const actionColor = destructive ? colors.dangerText : colors.textPrimary;
 
   return (
     <View style={[styles.row, !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.borderSubtle }]}>
@@ -129,7 +129,7 @@ export function ConversationManagementRow({
           <Ionicons
             name={secondaryActionIcon}
             size={19}
-            color={secondaryDestructive ? colors.danger : colors.textPrimary}
+            color={secondaryDestructive ? colors.dangerText : colors.textPrimary}
           />
         </AnimatedPressable>
       ) : null}

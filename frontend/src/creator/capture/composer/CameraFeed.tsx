@@ -29,7 +29,7 @@ import { CameraInitOverlay } from './CameraInitOverlay';
 export interface CameraFeedProps {
   doubleTapGesture: ReturnType<typeof Gesture.Tap>;
   onTapFocus: (evt: GestureResponderEvent) => void;
-  cameraFlipStyle: StyleProp<AnimatedStyle<ViewStyle>>;
+  cameraFlipVeilStyle: StyleProp<AnimatedStyle<ViewStyle>>;
   cameraEffect: CameraEffectId;
   cameraRef: RefObject<CameraRef | SkiaCameraRef | null>;
   device: NonNullable<ReturnType<typeof useCameraDevice>>;
@@ -49,7 +49,7 @@ export interface CameraFeedProps {
 export function CameraFeed({
   doubleTapGesture,
   onTapFocus,
-  cameraFlipStyle,
+  cameraFlipVeilStyle,
   cameraEffect,
   cameraRef,
   device,
@@ -76,7 +76,11 @@ export function CameraFeed({
           accessibilityLabel="Camera viewfinder"
           accessibilityHint="Tap to focus at that point"
         >
-          <Reanimated.View style={[StyleSheet.absoluteFill, cameraFlipStyle]}>
+          {/* Camera sits in a plain View — never animate a SurfaceView's
+              ancestor (opacity/transform forces a composition-mode switch
+              that destroys the preview surface mid-session). The flip
+              fade is a black veil sibling instead. */}
+          <View style={StyleSheet.absoluteFill}>
             {cameraEffect !== 'none' ? (
               <SkiaCamera
                 ref={cameraRef as React.RefObject<SkiaCameraRef>}
@@ -112,7 +116,14 @@ export function CameraFeed({
             {!cameraReady && (
               <CameraInitOverlay showInitLabel={showInitLabel} spinnerStyle={spinnerStyle} />
             )}
-          </Reanimated.View>
+          </View>
+          {/* Camera flip fade — black veil above the viewfinder, animated
+              opacity (1 - flipOpacity). Lives outside the camera's View so
+              the SurfaceView's composition mode never changes. */}
+          <Reanimated.View
+            pointerEvents="none"
+            style={[StyleSheet.absoluteFill, { backgroundColor: 'black' }, cameraFlipVeilStyle]}
+          />
         </Pressable>
       </View>
     </GestureDetector>

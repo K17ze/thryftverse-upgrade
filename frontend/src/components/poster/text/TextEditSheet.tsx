@@ -79,8 +79,8 @@ export function TextEditSheet({
 
   const COLOR_OPTIONS = useMemo(
     () => [
-      colors.textPrimary, colors.textInverse, colors.danger, colors.bronze, colors.antiqueGold,
-      colors.success, colors.commerceTrust, colors.social, colors.discovery, colors.coownDown,
+      colors.textPrimary, colors.textInverse, colors.dangerText, colors.bronze, colors.antiqueGold,
+      colors.successText, colors.commerceTrust, colors.social, colors.discovery, colors.coownDown,
       ...PASTEL_OPTIONS, colors.textMuted,
     ],
     [colors]
@@ -89,7 +89,7 @@ export function TextEditSheet({
   const STROKE_COLORS = useMemo(
     () => [
       '#000000', '#ffffff', colors.bronze, colors.antiqueGold,
-      colors.danger, colors.success, colors.commerceTrust,
+      colors.dangerText, colors.successText, colors.commerceTrust,
     ],
     [colors]
   );
@@ -99,9 +99,9 @@ export function TextEditSheet({
       undefined,
       'rgba(0,0,0,0.6)',
       'rgba(255,255,255,0.8)',
-      colors.danger,
+      colors.dangerText,
       colors.commerceTrust,
-      colors.success,
+      colors.successText,
       colors.bronze,
       colors.social,
       colors.discovery,

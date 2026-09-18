@@ -78,7 +78,7 @@ export function TrashZone({ manipulationActiveSV, isInTrashZoneSV }: TrashZonePr
           <AppIcon
             name="trash"
             size={IconSize.lg}
-            color="danger"
+            color="dangerText"
             opticalCenter={true}
             accessible={false}
           />

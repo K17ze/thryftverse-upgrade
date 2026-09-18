@@ -366,13 +366,13 @@ export default function DrawingCanvas({ strokes, onStrokesChange, canvasSize, is
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   // ── Brush state ──
-  const [brushColor, setBrushColor] = React.useState(colors.danger);
+  const [brushColor, setBrushColor] = React.useState(colors.dangerText);
   const [brushWidth, setBrushWidth] = React.useState(6);
   const [brushType, setBrushType] = React.useState<BrushType>('marker');
   const [redoStack, setRedoStack] = React.useState<BrushStroke[]>([]);
   const [recentColors, setRecentColors] = React.useState<string[]>([]);
   const [showCustomColor, setShowCustomColor] = React.useState(false);
-  const [hsl, setHsl] = React.useState(() => hexToHsl(colors.danger));
+  const [hsl, setHsl] = React.useState(() => hexToHsl(colors.dangerText));
   const [showClearConfirm, setShowClearConfirm] = React.useState(false);
 
   // ── Drawing performance: refs for in-progress stroke (avoid re-renders) ──

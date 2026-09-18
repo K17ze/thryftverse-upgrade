@@ -18,7 +18,7 @@ export function DispatchBlockedNotice({ statusLabel }: DispatchBlockedNoticeProp
 
   return (
     <View style={styles.warningInline}>
-      <Ionicons name="alert-circle-outline" size={16} color={colors.danger} aria-hidden={true} />
+      <Ionicons name="alert-circle-outline" size={16} color={colors.dangerText} aria-hidden={true} />
       <Text style={styles.warningText}>
         This order cannot be dispatched from its current status ({statusLabel}).
       </Text>

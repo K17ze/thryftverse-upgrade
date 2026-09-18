@@ -132,7 +132,9 @@ export function formatQuoteAge(isoTimestamp: string): string {
   return `${days}d`;
 }
 
+/** Market state — the authoritative VM field. `availableUnits` is the
+ *  viewer's sellable quantity (excludes reserved units), NOT market state:
+ *  a fully-reserved position on an open market is still open (F10). */
 export function formatPositionStatus(p: CoOwnPositionVM): 'open' | 'closed' | 'paused' {
-  if (!p.isOpen) return 'closed';
-  return p.availableUnits > 0 ? 'open' : 'closed';
+  return p.status ?? (p.isOpen ? 'open' : 'closed');
 }

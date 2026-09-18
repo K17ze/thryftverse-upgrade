@@ -191,7 +191,7 @@ function CrashRecoveryUI({
 
         {/* Warning icon */}
         <Reanimated.View entering={enter} style={styles.iconBox}>
-          <Ionicons name="warning-outline" size={56} color={colors.danger} />
+          <Ionicons name="warning-outline" size={56} color={colors.dangerText} />
         </Reanimated.View>
 
         <Reanimated.Text entering={enter} style={styles.title}>
@@ -333,7 +333,7 @@ function createStyles(colors: ThemeColors) {
     devMessage: {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
-      color: colors.danger,
+      color: colors.dangerText,
       textAlign: 'center',
       marginBottom: Space.lg,
       lineHeight: 18,

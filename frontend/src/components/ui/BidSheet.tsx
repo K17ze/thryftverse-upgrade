@@ -93,11 +93,11 @@ export function BidSheet({
     surface: colors.surface,
     surfaceAlt: colors.surfaceAlt,
     surfaceElevated: colors.surfaceElevated,
-    danger: colors.danger,
+    danger: colors.dangerText,
     dangerSubtle: colors.dangerSubtle,
-    success: colors.success,
+    success: colors.successText,
     successSubtle: colors.successSubtle,
-    warning: colors.warning,
+    warning: colors.warningText,
     background: colors.background,
     textInverse: colors.textInverse };
   const styles = React.useMemo(() => createStyles(themed), [themed]);

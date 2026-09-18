@@ -680,7 +680,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
           title={conversation?.title ?? groupName}
           subtitle={headerSubtitle}
           avatarUrl={conversation?.avatar ?? null}
-          groupId={groupId}
+          avatarSeedId={groupId}
           variant="group"
           isSearchActive={isSearchActive}
           searchValue={searchQuery}

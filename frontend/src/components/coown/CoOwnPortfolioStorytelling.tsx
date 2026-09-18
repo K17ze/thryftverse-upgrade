@@ -86,7 +86,7 @@ export function CoOwnPortfolioStorytelling({
                 {lastPriceLabel}
               </Text>
               {markAgeLabel && (
-                <Text style={[styles.comparisonAge, { color: isStaleMark ? colors.warning : colors.textMuted }]} numberOfLines={1}>
+                <Text style={[styles.comparisonAge, { color: isStaleMark ? colors.warningText : colors.textMuted }]} numberOfLines={1}>
                   {markSourceLabel ? `${markSourceLabel} · ` : ''}{markAgeLabel}
                 </Text>
               )}
@@ -161,8 +161,8 @@ export function CoOwnPortfolioStorytelling({
       {/* Stale mark warning */}
       {isStaleMark && (
         <View style={[styles.staleWarning, { backgroundColor: colors.warningSubtle }]}>
-          <Ionicons name="time-outline" size={12} color={colors.warning} />
-          <Text style={[styles.staleWarningText, { color: colors.warning }]}>
+          <Ionicons name="time-outline" size={12} color={colors.warningText} />
+          <Text style={[styles.staleWarningText, { color: colors.warningText }]}>
             Mark is stale ({markAgeLabel}). The last trade was more than 24h ago — treat the price with caution.
           </Text>
         </View>

@@ -53,9 +53,9 @@ export function FulfilmentItemHeader({
             styles.shipByLine,
             {
               color: shipByOverdue
-                ? colors.danger
+                ? colors.dangerText
                 : shipByUrgent
-                  ? colors.warning
+                  ? colors.warningText
                   : colors.textSecondary },
           ]}
         >

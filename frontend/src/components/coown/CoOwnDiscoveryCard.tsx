@@ -35,7 +35,7 @@ export function CoOwnDiscoveryCard({
 
   const allocatedPct = totalUnits > 0 ? Math.round(((totalUnits - availableUnits) / totalUnits) * 100) : 0;
   const statusColor =
-    status === 'open' ? colors.success : status === 'paused' ? colors.textSecondary : colors.textMuted;
+    status === 'open' ? colors.successText : status === 'paused' ? colors.textSecondary : colors.textMuted;
   const statusLabel =
     status === 'open' ? 'Available' : status === 'paused' ? 'Paused' : 'Allocated';
 

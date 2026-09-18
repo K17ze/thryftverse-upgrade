@@ -108,7 +108,7 @@ export default function ForgotPasswordScreen() {
           <View
             style={styles.successState}
           >
-            <Ionicons name="mail-unread-outline" size={48} color={colors.success} />
+            <Ionicons name="mail-unread-outline" size={48} color={colors.successText} />
             <Text style={styles.successText}>We have sent a password reset link to {email}.</Text>
             {/* Spam-folder hint — guides the user if the email does not
                 arrive immediately. Honest guidance, not a claim. */}
@@ -196,7 +196,7 @@ function createStyles(colors: ThemeColors) {
   inputGroup: { marginBottom: Space.xl },
 
   footer: { paddingBottom: Space.xl },
-  errorText: { color: colors.danger, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, marginBottom: Space.xs },
+  errorText: { color: colors.dangerText, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, marginBottom: Space.xs },
 
   successState: {
     alignItems: 'center',

@@ -25,7 +25,7 @@ export function EditListingInlineError({
   if (!errorMsg || saveStage === 'idle') return null;
   return (
     <View style={styles.inlineErrorRow}>
-      <AppIcon name="alert-circle" size={16} color="danger" opticalCenter accessible={false} />
+      <AppIcon name="alert-circle" size={16} color="dangerText" opticalCenter accessible={false} />
       <Text style={[styles.inlineErrorText, themed.inlineErrorText]}>{errorMsg}</Text>
     </View>
   );
@@ -46,12 +46,12 @@ export function EditListingCompletenessRow({
       <AppIcon
         name={canActivate ? 'checkmark-circle' : 'alert-circle-outline'}
         size={IconSize.sm}
-        color={canActivate ? 'success' : 'warning'}
+        color={canActivate ? 'successText' : 'warningText'}
         opticalCenter
         accessible={false}
       />
       <View style={styles.completenessTextWrap}>
-        <Text style={[styles.completenessLabel, { color: canActivate ? colors.success : colors.textSecondary }]}>
+        <Text style={[styles.completenessLabel, { color: canActivate ? colors.successText : colors.textSecondary }]}>
           {completenessLabel}
         </Text>
         {recommendedLabel && !canActivate ? (

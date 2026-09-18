@@ -112,7 +112,7 @@ export function IntegratedDispatchSection({
       {/* Label errors stay attached to the label action with retry. */}
       {labelError && (
         <View style={styles.labelErrorInline}>
-          <Ionicons name="alert-circle-outline" size={16} color={colors.danger} aria-hidden={true} />
+          <Ionicons name="alert-circle-outline" size={16} color={colors.dangerText} aria-hidden={true} />
           <Text style={styles.labelErrorText}>{labelError}</Text>
         </View>
       )}

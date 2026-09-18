@@ -69,7 +69,7 @@ export function ChatSelectionToolbar({
         accessibilityRole="button"
         accessibilityHint="Permanently removes the selected messages from this conversation"
       >
-        <Ionicons name="trash-outline" size={Control.icon} color={colors.danger} />
+        <Ionicons name="trash-outline" size={Control.icon} color={colors.dangerText} />
       </AnimatedPressable>
     </View>
   );

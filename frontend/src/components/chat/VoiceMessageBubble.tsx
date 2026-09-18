@@ -336,4 +336,4 @@ const createStyles = (colors: ThemeColors, isMe: boolean) =>
     error: {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.body.fontFamily,
-      color: colors.danger } });
+      color: colors.dangerText } });

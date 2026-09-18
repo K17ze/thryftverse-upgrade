@@ -64,14 +64,14 @@ function SwipeableNotificationRowBase({
         <View style={styles.swipeActionContainer}>
           <View style={styles.swipeReadAction}>
             <Animated.View style={{ transform: [{ scale: iconScale }] }}>
-              <Ionicons name="checkmark-circle-outline" size={22} color={colors.success} />
+              <Ionicons name="checkmark-circle-outline" size={22} color={colors.successText} />
             </Animated.View>
             <Text style={styles.swipeReadText}>Read</Text>
           </View>
         </View>
       );
     },
-    [card.read, colors.success, reducedMotion, styles]
+    [card.read, colors.successText, reducedMotion, styles]
   );
 
   const renderDeleteAction = useCallback(
@@ -88,14 +88,14 @@ function SwipeableNotificationRowBase({
         <View style={styles.swipeActionContainer}>
           <View style={styles.swipeDeleteAction}>
             <Animated.View style={{ transform: [{ scale: iconScale }] }}>
-              <Ionicons name="trash-outline" size={20} color={colors.danger} />
+              <Ionicons name="trash-outline" size={20} color={colors.dangerText} />
             </Animated.View>
             <Text style={styles.swipeDeleteText}>Clear</Text>
           </View>
         </View>
       );
     },
-    [colors.danger, reducedMotion, styles]
+    [colors.dangerText, reducedMotion, styles]
   );
 
   // Non-gesture equivalents of the swipe actions for assistive tech —
@@ -262,7 +262,7 @@ function createStyles(colors: ThemeColors) {
   swipeReadText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.success },
+    color: colors.successText },
   swipeDeleteAction: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -272,6 +272,6 @@ function createStyles(colors: ThemeColors) {
   swipeDeleteText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.danger },
+    color: colors.dangerText },
   });
 }

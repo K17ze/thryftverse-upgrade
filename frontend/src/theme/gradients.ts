@@ -50,7 +50,8 @@ function computeGradients(colors: GradientColorSource) {
     brand: [colors.brandPressed, colors.brand] as [string, string],
     /** Surface gradient — subtle depth on backgrounds */
     dark: [colors.background, colors.surface] as [string, string],
-    /** Danger gradient for destructive states */
+    /** Danger gradient for destructive states — gradients are fills,
+     *  so they keep the deep fill accent, not the *Text foregrounds. */
     danger: [DARK_COLORS.danger, colors.danger] as [string, string],
     /** Success gradient for positive states */
     success: [DARK_COLORS.success, colors.success] as [string, string],

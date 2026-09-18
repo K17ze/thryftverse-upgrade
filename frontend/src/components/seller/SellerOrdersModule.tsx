@@ -177,7 +177,7 @@ export const SellerOrdersModule: React.FC<SellerOrdersModuleProps> = ({
       {(pendingOrdersCount > 0 || atStakeGbp > 0) && (
         <Text style={styles.triageLine} accessibilityRole="text">
           {pendingOrdersCount > 0 ? (
-            <Text style={[styles.triageShip, { color: colors.danger }]}>
+            <Text style={[styles.triageShip, { color: colors.dangerText }]}>
               {pendingOrdersCount} to ship
             </Text>
           ) : null}
@@ -249,7 +249,7 @@ export const SellerOrdersModule: React.FC<SellerOrdersModuleProps> = ({
                       <Text
                         style={[
                           styles.slaChipText,
-                          { color: sla.tone === 'danger' ? colors.danger : colors.textSecondary },
+                          { color: sla.tone === 'danger' ? colors.dangerText : colors.textSecondary },
                         ]}
                       >
                         {sla.label}
@@ -311,12 +311,12 @@ export const SellerOrdersModule: React.FC<SellerOrdersModuleProps> = ({
                     concept={TASK_ICON[task.type].concept}
                     name={TASK_ICON[task.type].name}
                     size={IconSize.xs}
-                    color={critical ? 'danger' : 'brand'}
+                    color={critical ? 'dangerText' : 'brand'}
                     accessible={false}
                   />
                 </View>
                 <View style={styles.taskInfo}>
-                  <Text style={[styles.taskTitle, { color: critical ? colors.danger : colors.textPrimary }]}>
+                  <Text style={[styles.taskTitle, { color: critical ? colors.dangerText : colors.textPrimary }]}>
                     {taskTitle(task)}
                   </Text>
                   <Text style={styles.taskConsequence} numberOfLines={1}>
@@ -324,7 +324,7 @@ export const SellerOrdersModule: React.FC<SellerOrdersModuleProps> = ({
                   </Text>
                 </View>
                 {dueLabel ? (
-                  <Text style={[styles.taskDue, { color: urgent ? colors.danger : colors.textMuted }]}>
+                  <Text style={[styles.taskDue, { color: urgent ? colors.dangerText : colors.textMuted }]}>
                     {dueLabel}
                   </Text>
                 ) : null}
@@ -337,7 +337,7 @@ export const SellerOrdersModule: React.FC<SellerOrdersModuleProps> = ({
         /* ── Clear state — honest, and qualified when sources are stale ── */
         <View style={styles.clearRow}>
           <View style={[styles.taskIconWrap, { backgroundColor: colors.successSubtle }]}>
-            <AppIcon concept="check" size={IconSize.xs} color="success" accessible={false} />
+            <AppIcon concept="check" size={IconSize.xs} color="successText" accessible={false} />
           </View>
           <View style={styles.taskInfo}>
             <Text style={styles.clearTitle}>All clear</Text>
@@ -383,7 +383,7 @@ function createStyles(colors: ThemeColors) {
       lineHeight: TypographyV2.meta.lineHeight,
       fontFamily: FontFamily.semibold,
       fontVariant: ['tabular-nums'],
-      color: colors.danger,
+      color: colors.dangerText,
     },
     viewAllHit: {
       minHeight: Control.hit,

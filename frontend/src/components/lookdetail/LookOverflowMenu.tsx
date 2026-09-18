@@ -76,8 +76,8 @@ function LookOverflowMenuImpl({
                 accessibilityRole="menuitem"
                 accessibilityLabel="Delete look"
               >
-                <AppIcon name="trash" size={IconSize.md} color="danger" opticalCenter accessible={false} />
-                <Text style={[styles.overflowItemText, { color: colors.danger }]}>Delete look</Text>
+                <AppIcon name="trash" size={IconSize.md} color="dangerText" opticalCenter accessible={false} />
+                <Text style={[styles.overflowItemText, { color: colors.dangerText }]}>Delete look</Text>
               </Pressable>
             </>
           ) : (
@@ -119,8 +119,8 @@ function LookOverflowMenuImpl({
                 accessibilityLabel="Report this look"
                 accessibilityHint="Reports the creator of this look"
               >
-                <AppIcon name="warning" size={IconSize.md} color="danger" opticalCenter accessible={false} />
-                <Text style={[styles.overflowItemText, { color: colors.danger }]}>Report</Text>
+                <AppIcon name="warning" size={IconSize.md} color="dangerText" opticalCenter accessible={false} />
+                <Text style={[styles.overflowItemText, { color: colors.dangerText }]}>Report</Text>
               </Pressable>
             </>
           )}

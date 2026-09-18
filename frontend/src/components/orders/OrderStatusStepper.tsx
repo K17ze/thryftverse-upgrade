@@ -63,9 +63,9 @@ export function OrderStatusStepper({
     return (
       <View style={[styles.container, styles.failureContainer]}>
         <View style={[styles.stageIconWrap, styles.failureIconWrap]}>
-          <Ionicons name="close-circle" size={20} color={colors.danger} />
+          <Ionicons name="close-circle" size={20} color={colors.dangerText} />
         </View>
-        <Text style={[styles.failureLabel, { color: colors.danger }]}>{failureLabel}</Text>
+        <Text style={[styles.failureLabel, { color: colors.dangerText }]}>{failureLabel}</Text>
       </View>
     );
   }

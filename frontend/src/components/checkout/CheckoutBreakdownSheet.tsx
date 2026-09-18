@@ -61,7 +61,7 @@ export function CheckoutBreakdownSheet({
           <PriceRow label="Item verification" value={verificationLabel} />
         ) : null}
         <View style={styles.protectionIncludedRow}>
-          <Ionicons name="checkmark-circle" size={12} color={colors.success} importantForAccessibility="no" />
+          <Ionicons name="checkmark-circle" size={12} color={colors.successText} importantForAccessibility="no" />
           <Text style={styles.protectionIncludedText}>
             Includes buyer protection — funds held until you receive your order
           </Text>
@@ -119,7 +119,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
     lineHeight: TypographyV2.meta.lineHeight,
-    color: colors.success,
+    color: colors.successText,
   },
   divider: {
     height: StyleSheet.hairlineWidth,

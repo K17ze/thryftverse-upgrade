@@ -249,7 +249,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     rolePillText: { fontFamily: FontFamily.medium, fontSize: TypographyV2.meta.size, color: colors.textSecondary },
     rolePillTextSelected: { color: colors.brand },
     removeButton: { minHeight: Control.hit, justifyContent: 'center', paddingHorizontal: Space.xs },
-    removeText: { fontFamily: FontFamily.medium, fontSize: TypographyV2.meta.size, color: colors.danger },
+    removeText: { fontFamily: FontFamily.medium, fontSize: TypographyV2.meta.size, color: colors.dangerText },
     sectionLabel: {
       fontFamily: FontFamily.semibold, fontSize: TypographyV2.label.size,
       lineHeight: TypographyV2.label.lineHeight, letterSpacing: TypographyV2.label.letterSpacing,

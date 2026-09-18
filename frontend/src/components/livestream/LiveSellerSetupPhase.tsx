@@ -232,7 +232,7 @@ export function LiveSellerSetupPhase({
       stickyFooter={
         <View style={[styles.footer, { paddingBottom: insets.bottom || Space.sm }]}>
           {setupError ? (
-            <Text style={[styles.footerError, { color: colors.danger }]}>{setupError}</Text>
+            <Text style={[styles.footerError, { color: colors.dangerText }]}>{setupError}</Text>
           ) : null}
           <AnimatedPressable
             onPress={handlePrimaryAction}

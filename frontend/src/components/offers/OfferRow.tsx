@@ -205,11 +205,11 @@ function statusTone(
 ): { word: string; color: string; icon: keyof typeof Ionicons.glyphMap } {
   switch (status) {
     case 'accepted':
-      return { word: t('offers.status.accepted'), color: colors.success, icon: 'checkmark-circle-outline' };
+      return { word: t('offers.status.accepted'), color: colors.successText, icon: 'checkmark-circle-outline' };
     case 'declined':
       return { word: t('offers.status.declined'), color: colors.textMuted, icon: 'close-circle-outline' };
     case 'expired':
-      return { word: t('offers.status.expired'), color: colors.warning, icon: 'time-outline' };
+      return { word: t('offers.status.expired'), color: colors.warningText, icon: 'time-outline' };
     case 'cancelled':
       return { word: t('offers.status.cancelled'), color: colors.textMuted, icon: 'remove-circle-outline' };
     case 'countered':
@@ -234,8 +234,8 @@ function formatTimeLeft(expiresAt: string, nowMs: number): string {
 function expiryToneColor(expiresAt: string, nowMs: number, colors: ThemeColors): string {
   const ms = Date.parse(expiresAt) - nowMs;
   if (!Number.isFinite(ms) || ms <= 0) return colors.textMuted;
-  if (ms <= 60 * 60 * 1000) return colors.danger;
-  if (ms <= 12 * 60 * 60 * 1000) return colors.warning;
+  if (ms <= 60 * 60 * 1000) return colors.dangerText;
+  if (ms <= 12 * 60 * 60 * 1000) return colors.warningText;
   return colors.textMuted;
 }
 

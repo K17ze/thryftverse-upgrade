@@ -75,7 +75,7 @@ export function createGroupChatStyles(colors: ThemeColors) {
     marginBottom: Space.sm },
   searchErrorText: {
     flex: 1,
-    color: colors.danger,
+    color: colors.dangerText,
     fontSize: TypographyV2.meta.size },
   memberList: {
     paddingBottom: Space.xxl + 24 },
@@ -177,6 +177,10 @@ export function createGroupChatStyles(colors: ThemeColors) {
   avatarSelectorWrap: {
     alignItems: 'center',
     gap: Space.xs,
+    // Pull the avatar up over the cover's bottom edge: cover has
+    // marginBottom Space.md (16), so -56 nets a 40pt overlap — the same
+    // avatar-on-banner composition as the edit-group screen.
+    marginTop: -56,
     marginBottom: Space.lg },
   // Cover photo
   coverSelector: {
@@ -206,7 +210,11 @@ export function createGroupChatStyles(colors: ThemeColors) {
     justifyContent: 'center' },
   avatarSelectorPressable: {
     position: 'relative',
-    borderRadius: Radius.full },
+    borderRadius: Radius.full,
+    // Background ring lifts the avatar off the cover — the overlap reads
+    // as intentional layering, not a collision.
+    borderWidth: 4,
+    borderColor: colors.background },
   avatarSelectorPressed: {
     opacity: 0.7 },
   cameraBadge: {
@@ -220,7 +228,7 @@ export function createGroupChatStyles(colors: ThemeColors) {
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: colors.surface },
+    borderColor: colors.background },
   avatarUploadingOverlay: {
     position: 'absolute',
     top: 0,
@@ -233,10 +241,6 @@ export function createGroupChatStyles(colors: ThemeColors) {
     alignItems: 'center' },
   avatarHint: {
     fontSize: TypographyV2.meta.size },
-  removeText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
-    marginTop: Space.xs / 2 },
   mediaErrorRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -247,14 +251,6 @@ export function createGroupChatStyles(colors: ThemeColors) {
     flex: 1,
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight },
-  coverRemoveBtn: {
-    position: 'absolute',
-    top: Space.xs,
-    right: Space.xs,
-    width: Control.hit,
-    height: Control.hit,
-    alignItems: 'center',
-    justifyContent: 'center' },
   fieldGroup: {
     marginBottom: Space.lg },
   fieldLabel: {
@@ -332,7 +328,7 @@ export function createGroupChatStyles(colors: ThemeColors) {
     marginBottom: Space.sm },
   createErrorText: {
     flex: 1,
-    color: colors.danger,
+    color: colors.dangerText,
     fontSize: TypographyV2.meta.size },
   retryText: {
     color: colors.brand,

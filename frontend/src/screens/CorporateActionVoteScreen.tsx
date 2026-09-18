@@ -251,7 +251,7 @@ export default function CorporateActionVoteScreen() {
         maxFontSizeMultiplier={1.4}
         style={[
           styles.statusChipText,
-          { color: action.status === 'open' ? colors.success : colors.textSecondary },
+          { color: action.status === 'open' ? colors.successText : colors.textSecondary },
         ]}
       >
         {statusLabel(action.status)}
@@ -401,7 +401,7 @@ export default function CorporateActionVoteScreen() {
           {action.votingDeadline != null && (
             <View style={styles.row}>
               <Text maxFontSizeMultiplier={1.5} style={[styles.rowLabel, { color: colors.textMuted }]}>Voting deadline</Text>
-              <Text maxFontSizeMultiplier={1.5} style={[styles.rowValue, { color: deadlinePassed ? colors.danger : colors.textPrimary }]}>
+              <Text maxFontSizeMultiplier={1.5} style={[styles.rowValue, { color: deadlinePassed ? colors.dangerText : colors.textPrimary }]}>
                 {formatDeadline(action.votingDeadline)}
               </Text>
             </View>
@@ -454,7 +454,7 @@ export default function CorporateActionVoteScreen() {
               const entry = votes.summary.find((s) => s.vote === opt.value);
               const power = entry?.votingPowerUnits ?? 0;
               const pct = totalVotingPower > 0 ? (power / totalVotingPower) * 100 : 0;
-              const color = opt.value === 'for' ? colors.success : opt.value === 'against' ? colors.danger : colors.textMuted;
+              const color = opt.value === 'for' ? colors.successText : opt.value === 'against' ? colors.dangerText : colors.textMuted;
               return (
                 <View key={opt.value} style={styles.tallyRow}>
                   <Text maxFontSizeMultiplier={1.5} style={[styles.tallyLabel, { color: colors.textSecondary }]}>
@@ -478,7 +478,7 @@ export default function CorporateActionVoteScreen() {
         {/* Vote fetch error — surfaced with retry, not swallowed. */}
         {voteError && (
           <View style={styles.section}>
-            <Text maxFontSizeMultiplier={1.5} style={[styles.errorText, { color: colors.danger }]}>{voteError}</Text>
+            <Text maxFontSizeMultiplier={1.5} style={[styles.errorText, { color: colors.dangerText }]}>{voteError}</Text>
             <AppButton
               title="Retry"
               onPress={() => { haptics.tap(); void loadVotes(); }}
@@ -496,7 +496,7 @@ export default function CorporateActionVoteScreen() {
             style={[styles.myVoteNote, { backgroundColor: colors.successSubtle }]}
             accessibilityLiveRegion="polite"
           >
-            <Ionicons name="checkmark-circle" size={16} color={colors.success} aria-hidden={true} />
+            <Ionicons name="checkmark-circle" size={16} color={colors.successText} aria-hidden={true} />
             <Text maxFontSizeMultiplier={1.5} style={[styles.myVoteText, { color: colors.textPrimary }]}>
               {`You voted ${voteLabel((receipt?.vote ?? myVote) as VoteChoice)}${myVotePower != null ? ` · ${myVotePower.toLocaleString()} units voting power` : ''}`}
             </Text>
@@ -506,7 +506,7 @@ export default function CorporateActionVoteScreen() {
         {/* Uncertain-submit reconciliation */}
         {castUncertain && !voteError && (
           <View style={[styles.myVoteNote, { backgroundColor: colors.warningSubtle }]}>
-            <Ionicons name="cloud-offline-outline" size={16} color={colors.warning} aria-hidden={true} />
+            <Ionicons name="cloud-offline-outline" size={16} color={colors.warningText} aria-hidden={true} />
             <Text maxFontSizeMultiplier={1.5} style={[styles.myVoteText, { color: colors.textPrimary }]}>
               Vote not confirmed — check back.
             </Text>
@@ -526,7 +526,7 @@ export default function CorporateActionVoteScreen() {
         {/* Ineligible — server-supplied reason, generic fallback. */}
         {voteOpen && eligibility && !eligibility.eligible && (
           <View style={[styles.myVoteNote, { backgroundColor: colors.warningSubtle }]}>
-            <Ionicons name="lock-closed-outline" size={16} color={colors.warning} aria-hidden={true} />
+            <Ionicons name="lock-closed-outline" size={16} color={colors.warningText} aria-hidden={true} />
             <Text maxFontSizeMultiplier={1.5} style={[styles.myVoteText, { color: colors.textPrimary }]}>
               {eligibility.reason || 'You are not eligible to vote on this action'}
             </Text>

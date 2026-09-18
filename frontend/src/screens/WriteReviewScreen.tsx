@@ -287,7 +287,7 @@ export default function WriteReviewScreen() {
 
           {existingIsTerminal ? (
             <View style={styles.existingState}>
-              <AppIcon name="checkmark-circle" focused size={IconSize.xl} color="success" opticalCenter accessible={false} />
+              <AppIcon name="checkmark-circle" focused size={IconSize.xl} color="successText" opticalCenter accessible={false} />
               <Text style={styles.existingTitle}>Review published</Text>
               <Text style={styles.existingSub}>
                 {existingReview.rating} star{existingReview.rating > 1 ? 's' : ''} ·{' '}
@@ -389,7 +389,7 @@ export default function WriteReviewScreen() {
                           accessibilityRole="button"
                           accessibilityLabel={`Remove photo ${index + 1}`}
                         >
-                          <AppIcon name="close" size={IconSize.md} color="danger" opticalCenter accessible={false} />
+                          <AppIcon name="close" size={IconSize.md} color="dangerText" opticalCenter accessible={false} />
                         </Pressable>
                       </View>
                     ))}

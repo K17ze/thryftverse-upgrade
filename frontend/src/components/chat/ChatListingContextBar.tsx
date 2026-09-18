@@ -60,9 +60,9 @@ function deriveStatusBadge(context: ConversationContext): StatusBadge | null {
 function badgeColor(tone: BadgeTone, colors: ReturnType<typeof useAppTheme>['colors']): string {
   switch (tone) {
     case 'brand': return colors.brand;
-    case 'success': return colors.success;
-    case 'warning': return colors.warning;
-    case 'danger': return colors.danger;
+    case 'success': return colors.successText;
+    case 'warning': return colors.warningText;
+    case 'danger': return colors.dangerText;
     default: return colors.textMuted;
   }
 }

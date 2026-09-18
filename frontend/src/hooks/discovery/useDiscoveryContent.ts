@@ -23,6 +23,10 @@ export function useDiscoveryContent() {
   const [editorials, setEditorials] = useState<GalleriaEditorial[]>([]);
   const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(true);
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
+  // Per-module freshness (F21): modules that rejected their last refresh.
+  // Their previous data stays visible, but the surface must say it's
+  // stale rather than presenting it as fresh.
+  const [staleModules, setStaleModules] = useState<string[]>([]);
 
   // ── Load all discovery content ──
   const loadDiscoveryContent = useCallback(async () => {
@@ -37,14 +41,16 @@ export function useDiscoveryContent() {
     ]);
 
     let fulfilled = 0;
-    if (looksRes.status === 'fulfilled') { setLooks(looksRes.value.items ?? []); fulfilled++; }
-    if (postersRes.status === 'fulfilled') { setPosters(postersRes.value.items ?? []); fulfilled++; }
+    const stale: string[] = [];
+    if (looksRes.status === 'fulfilled') { setLooks(looksRes.value.items ?? []); fulfilled++; } else { stale.push('looks'); }
+    if (postersRes.status === 'fulfilled') { setPosters(postersRes.value.items ?? []); fulfilled++; } else { stale.push('posters'); }
     if (moodboardsRes.status === 'fulfilled') {
       setMoodboards(moodboardsRes.value.filter((m) => !m.isDemo));
       fulfilled++;
-    }
-    if (colsRes.status === 'fulfilled') { setCollections(colsRes.value); fulfilled++; }
-    if (edsRes.status === 'fulfilled') { setEditorials(edsRes.value); fulfilled++; }
+    } else { stale.push('moodboards'); }
+    if (colsRes.status === 'fulfilled') { setCollections(colsRes.value); fulfilled++; } else { stale.push('collections'); }
+    if (edsRes.status === 'fulfilled') { setEditorials(edsRes.value); fulfilled++; } else { stale.push('editorials'); }
+    setStaleModules(stale);
 
     // If every discovery endpoint failed, surface an error state.
     if (fulfilled === 0) {
@@ -65,6 +71,7 @@ export function useDiscoveryContent() {
     editorials,
     isDiscoveryLoading,
     discoveryError,
+    staleModules,
     loadDiscoveryContent,
   };
 }

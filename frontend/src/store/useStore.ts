@@ -70,6 +70,7 @@ import {
   resetContextPatch,
 } from './browseFilterContexts';
 import { queryClient } from '../platform/server/queryClient';
+import { clearUserScopedQueryCache } from '../platform/server/clearUserCache';
 import { queryKeys } from '../platform/server/queryKeys';
 import { fetchMyProfile as fetchMyProfileFromApi, getBlockedUsers, getMutedUsers, getRestrictedUsers } from '../services/profileApi';
 import {
@@ -848,6 +849,12 @@ export const useStore = create<StoreState>()(
   logout: (opts) => {
     set({ currentUser: null, isAuthenticated: false, twoFactorEnabled: false, biometricLoginPending: false, blockedUsers: [], mutedUsers: [], restrictedUsers: [], coOwnWatchlist: [], coOwnWatchStatus: {}, savedSearches: [], wishlist: [], savedProducts: [], collections: [], sessionExpiredNotice: opts?.sessionExpired === true });
     persistLocalAuthSnapshot(null, false);
+    // Centralized session termination (F14): purge the query cache here —
+    // the single owner — so settings sign-out, token-expiry and biometric
+    // paths all cancel in-flight requests and drop private caches before
+    // the next account can observe them. Realtime disconnect is driven by
+    // RealtimeProvider watching the auth token.
+    clearUserScopedQueryCache();
     // Scrub Sentry user context on logout so subsequent crashes are anonymous.
     setSentryUser(null);
     track('user_logged_out');

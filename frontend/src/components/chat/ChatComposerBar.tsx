@@ -95,7 +95,7 @@ export function ChatComposerBar({
       {dangerWarning ? (
         <View style={styles.dangerBanner}>
           <View style={styles.dangerBannerContent}>
-            <Ionicons name="warning" size={14} color={colors.danger} />
+            <Ionicons name="warning" size={14} color={colors.dangerText} />
             <Text style={styles.dangerBannerText}>{dangerWarning}</Text>
           </View>
           {onDismissDangerWarning ? (
@@ -123,7 +123,7 @@ export function ChatComposerBar({
       {cautionWarning && !dangerWarning ? (
         <View style={styles.cautionBanner}>
           <View style={styles.cautionBannerContent}>
-            <Ionicons name="alert-circle-outline" size={14} color={colors.warning} />
+            <Ionicons name="alert-circle-outline" size={14} color={colors.warningText} />
             <Text style={styles.cautionBannerText}>{cautionWarning}</Text>
           </View>
           {onDismissCautionWarning ? (
@@ -316,7 +316,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flex: 1,
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.danger,
+    color: colors.dangerText,
     lineHeight: 16 },
   cautionBanner: {
     flexDirection: 'row',
@@ -337,7 +337,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flex: 1,
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.warning,
+    color: colors.warningText,
     lineHeight: 16 },
   attachmentStrip: {
     maxHeight: 48 },

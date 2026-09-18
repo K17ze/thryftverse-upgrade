@@ -118,7 +118,7 @@ export function SettingsRow({
             <AppIcon
               name={icon}
               size={IconSize.lg}
-              color={iconColor ?? (danger ? 'danger' : 'textSecondary')}
+              color={iconColor ?? (danger ? 'dangerText' : 'textSecondary')}
               opticalCenter={true}
               accessible={false}
             />
@@ -129,7 +129,7 @@ export function SettingsRow({
           <Text
             style={[
               styles.title,
-              { color: danger ? colors.danger : colors.textPrimary },
+              { color: danger ? colors.dangerText : colors.textPrimary },
               titleStyle,
             ]}
             numberOfLines={1}

@@ -229,7 +229,7 @@ export default function SellerEarningsScreen({ navigation }: Props) {
                         >
                           {item.listingTitle ?? 'Order'}
                         </Text>
-                        <Text style={[styles.scheduleItemMeta, { color: isException ? colors.danger : isDisputed ? colors.warning : colors.textMuted }]}>
+                        <Text style={[styles.scheduleItemMeta, { color: isException ? colors.dangerText : isDisputed ? colors.warningText : colors.textMuted }]}>
                           {isException
                             ? 'Exception — funds on hold pending resolution'
                             : isDisputed
@@ -241,7 +241,7 @@ export default function SellerEarningsScreen({ navigation }: Props) {
                                 : `Awaiting ${item.orderStatus === 'shipped' || item.orderStatus === 'in transit' || item.orderStatus === 'out for delivery' ? 'delivery' : 'shipment'}`}
                         </Text>
                       </View>
-                      <Text style={[styles.scheduleItemAmount, { color: isException ? colors.danger : colors.textPrimary }]}>
+                      <Text style={[styles.scheduleItemAmount, { color: isException ? colors.dangerText : colors.textPrimary }]}>
                         {formatFromFiat(item.amountGbp, 'GBP', { displayMode: 'fiat' })}
                       </Text>
                     </View>

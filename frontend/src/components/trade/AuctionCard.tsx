@@ -104,7 +104,7 @@ function AuctionCardBase({
         />
         {isLive && (
           <View style={styles.livePill}>
-            <LiveDot color={colors.danger} />
+            <LiveDot color={colors.dangerText} />
             <Meta style={styles.liveText}>LIVE</Meta>
           </View>
         )}

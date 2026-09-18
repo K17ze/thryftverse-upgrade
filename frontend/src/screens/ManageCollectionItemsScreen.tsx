@@ -178,7 +178,7 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
           accessibilityLabel="Remove from collection"
           accessibilityRole="button"
         >
-          <Ionicons name="trash-outline" size={18} color={colors.danger} />
+          <Ionicons name="trash-outline" size={18} color={colors.dangerText} />
         </AnimatedPressable>
       </AnimatedPressable>
     );

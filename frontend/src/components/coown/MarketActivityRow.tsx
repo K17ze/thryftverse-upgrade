@@ -6,8 +6,11 @@ import { Space, FontFamily } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { formatShortDateTime } from '../../utils/dateFormat';
 
-export function MarketActivityRow({ title, detail, amount, status, timestamp, onPress }: {
+export function MarketActivityRow({ title, detail, amount, status, timestamp, onPress, titleColor }: {
   title: string; detail?: string; amount: string; status: string; timestamp: string; onPress: () => void;
+  /** Optional accent for the title — direction colour for buy/sell rows.
+   *  The title text stays explicit so direction is never colour-only. */
+  titleColor?: string;
 }) {
   const { colors } = useAppTheme();
   return (
@@ -15,7 +18,7 @@ export function MarketActivityRow({ title, detail, amount, status, timestamp, on
       accessibilityLabel={`${title}, ${amount}, ${status}, ${formatShortDateTime(timestamp)}`}
       style={({ pressed }) => [styles.row, { borderBottomColor: colors.borderSubtle, opacity: pressed ? 0.65 : 1 }]}>
       <View style={styles.copy}>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
+        <Text style={[styles.title, { color: titleColor ?? colors.textPrimary }]}>{title}</Text>
         {detail ? <Text style={[styles.meta, { color: colors.textSecondary }]} numberOfLines={2}>{detail}</Text> : null}
         <Text style={[styles.meta, { color: colors.textMuted }]}>{formatShortDateTime(timestamp)}</Text>
       </View>

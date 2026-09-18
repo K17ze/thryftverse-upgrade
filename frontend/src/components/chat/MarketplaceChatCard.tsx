@@ -116,8 +116,8 @@ function formatCountdown(msRemaining: number): string {
 
 function getExpiryTone(msRemaining: number, colors: ThemeColors): { color: string; icon: keyof typeof Ionicons.glyphMap } {
   if (msRemaining <= 0) return { color: colors.textMuted, icon: 'time-outline' };
-  if (msRemaining <= 60 * 60 * 1000) return { color: colors.danger, icon: 'timer-outline' };
-  if (msRemaining <= 12 * 60 * 60 * 1000) return { color: colors.warning, icon: 'timer-outline' };
+  if (msRemaining <= 60 * 60 * 1000) return { color: colors.dangerText, icon: 'timer-outline' };
+  if (msRemaining <= 12 * 60 * 60 * 1000) return { color: colors.warningText, icon: 'timer-outline' };
   return { color: colors.textSecondary, icon: 'time-outline' };
 }
 
@@ -301,9 +301,9 @@ export function MarketplaceChatCard({
         {/* Status Indicators */}
         {status === 'accepted' && (
           <View style={[styles.offerStatusBanner, styles.offerStatusAccepted]}>
-            <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+            <Ionicons name="checkmark-circle" size={16} color={colors.successText} />
             <View style={styles.offerStatusTextWrap}>
-              <Text style={[styles.offerStatusTitle, { color: colors.success }]}>
+              <Text style={[styles.offerStatusTitle, { color: colors.successText }]}>
                 {t('offers.accepted')}
               </Text>
               <Text style={styles.offerStatusSubtitle}>
@@ -329,9 +329,9 @@ export function MarketplaceChatCard({
 
         {status === 'declined' && (
           <View style={[styles.offerStatusBanner, styles.offerStatusDeclined]}>
-            <Ionicons name="close-circle-outline" size={16} color={colors.danger} />
+            <Ionicons name="close-circle-outline" size={16} color={colors.dangerText} />
             <View style={styles.offerStatusTextWrap}>
-              <Text style={[styles.offerStatusTitle, { color: colors.danger }]}>
+              <Text style={[styles.offerStatusTitle, { color: colors.dangerText }]}>
                 {t('offers.declined')}
               </Text>
               <Text style={styles.offerStatusSubtitle}>
@@ -496,7 +496,7 @@ export function MarketplaceChatCard({
               <Text style={styles.shareSellerText}>@{listing.sellerUsername}</Text>
               {listing.sellerRating && (
                 <View style={styles.shareRatingChip}>
-                  <Ionicons name="star" size={10} color={colors.warning} />
+                  <Ionicons name="star" size={10} color={colors.warningText} />
                   <Text style={styles.shareRatingText}>{listing.sellerRating.toFixed(1)}</Text>
                 </View>
               )}
@@ -546,7 +546,7 @@ export function MarketplaceChatCard({
       <View style={styles.purchaseReceiptCard}>
         <View style={styles.purchaseReceiptHeader}>
           <View style={[styles.receiptIconCircle, { backgroundColor: `${colors.success}18` }]}>
-            <Ionicons name="checkmark" size={16} color={colors.success} />
+            <Ionicons name="checkmark" size={16} color={colors.successText} />
           </View>
           <View style={styles.receiptTitleWrap}>
             <Text style={styles.receiptTitle}>{headerTitle}</Text>
@@ -760,7 +760,7 @@ const createStyles = (colors: ThemeColors) =>
     offerDiscountText: {
       fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.bold,
-      color: colors.success,
+      color: colors.successText,
       fontVariant: ['tabular-nums'],
     },
     offerWaitingRow: {

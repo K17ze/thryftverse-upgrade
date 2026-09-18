@@ -207,7 +207,7 @@ export function ContextMenu({
             <View style={styles.actionRow}>
               {actions.map((action) => {
                 const isDanger = !!action.danger;
-                const color = isDanger ? colors.danger : resolvedAccent;
+                const color = isDanger ? colors.dangerText : resolvedAccent;
                 return (
                   <Pressable
                     key={action.id}
@@ -224,7 +224,7 @@ export function ContextMenu({
                     <Text
                       style={[
                         styles.actionLabel,
-                        { color: isDanger ? colors.danger : colors.textPrimary },
+                        { color: isDanger ? colors.dangerText : colors.textPrimary },
                       ]}
                     >
                       {action.label}

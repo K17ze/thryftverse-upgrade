@@ -8,7 +8,7 @@
  *
  * Design principles (AGENTS.md §4, §14):
  *   - No aggressive red for errors — uses `colors.textMuted` and
- *     `colors.warning` for calm urgency.
+ *     `colors.warningText` for calm urgency.
  *   - Icons are Ionicons, 24pt, `colors.textMuted`.
  *   - Every state offers a clear next step (no dead ends).
  *   - No hardcoded colors — all colors come from `useAppTheme().colors`.
@@ -115,7 +115,7 @@ export function StateCopyView({
       <Ionicons name={iconName} size={24} color={colors.textMuted} />
 
       <Text
-        style={[styles.message, { color: isErrorish ? colors.warning : colors.textSecondary }]}
+        style={[styles.message, { color: isErrorish ? colors.warningText : colors.textSecondary }]}
         accessibilityRole="text"
       >
         {message}

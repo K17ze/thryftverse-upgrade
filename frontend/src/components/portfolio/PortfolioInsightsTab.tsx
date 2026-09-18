@@ -91,7 +91,7 @@ export function PortfolioInsightsTab({
               signed
               showUnit={false}
               showGlyph={false}
-              color={summary.totalRealizedGbp >= 0 ? colors.success : colors.danger}
+              color={summary.totalRealizedGbp >= 0 ? colors.successText : colors.dangerText}
             />
           </View>
         </View>

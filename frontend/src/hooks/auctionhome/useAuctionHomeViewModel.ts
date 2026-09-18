@@ -221,11 +221,11 @@ export function useAuctionHomeViewModel({
   //   Results  → textMuted (muted/gray — ended)
   //   Watching → textSecondary (restrained — personal)
   const scopeSegments: Segment[] = useMemo(() => [
-    { key: 'live', label: 'Live', count: homeData.live.length + homeData.closingSoon.length, accentColor: colors.danger },
+    { key: 'live', label: 'Live', count: homeData.live.length + homeData.closingSoon.length, accentColor: colors.dangerText },
     { key: 'upcoming', label: 'Upcoming', count: homeData.upcoming.length, accentColor: colors.brand },
     { key: 'results', label: 'Results', count: homeData.recentlyClosed.length, accentColor: colors.textMuted },
     { key: 'watching', label: 'Watching', count: dedupedWatchlist.length, accentColor: colors.textSecondary },
-  ], [homeData.live.length, homeData.closingSoon.length, homeData.upcoming.length, homeData.recentlyClosed.length, dedupedWatchlist.length, colors.danger, colors.brand, colors.textMuted, colors.textSecondary]);
+  ], [homeData.live.length, homeData.closingSoon.length, homeData.upcoming.length, homeData.recentlyClosed.length, dedupedWatchlist.length, colors.dangerText, colors.brand, colors.textMuted, colors.textSecondary]);
 
   // ── Compact header context ──
   const headerContext = useMemo(() => {

@@ -248,7 +248,7 @@ export function ListingQA({
               {q.answer ? (
                 <View style={styles.answerWrap}>
                   <View style={styles.answerHeader}>
-                    <Ionicons name="checkmark-circle-outline" size={12} color={colors.success} />
+                    <Ionicons name="checkmark-circle-outline" size={12} color={colors.successText} />
                     <Text style={styles.answerLabel}>Seller · {q.answer.responderName}</Text>
                     <Text style={styles.qTime}>{formatTime(q.answer.createdAt)}</Text>
                   </View>
@@ -433,7 +433,7 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.success },
+    color: colors.successText },
   answerText: {
     fontSize: TypographyV2.meta.size,
     lineHeight: 18,

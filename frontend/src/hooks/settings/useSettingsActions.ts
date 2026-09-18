@@ -9,12 +9,11 @@ import { useToast } from '../../context/ToastContext';
 import { useAppTranslation } from '../../i18n/useAppTranslation';
 import { t } from '../../i18n';
 import { logoutFromSession } from '../../services/authApi';
-import { clearUserScopedQueryCache } from '../../platform/server';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 export interface UseSettingsActionsResult {
-  /** Sign-out flow: server logout → query cache wipe → store logout → auth landing. */
+  /** Sign-out flow: server logout → store logout (owns the cache purge) → auth landing. */
   handleLogout: () => Promise<void>;
   handleClearSearchHistory: () => Promise<void>;
   handleOpenExternal: (url: string) => Promise<void>;
@@ -32,7 +31,8 @@ export function useSettingsActions(): UseSettingsActionsResult {
 
   const handleLogout = React.useCallback(async () => {
     await logoutFromSession();
-    clearUserScopedQueryCache();
+    // logout() owns the centralized purge (F14) — cancel in-flight
+    // requests, clear all query caches, drop private store state.
     logout();
     navigation.replace('AuthLanding');
   }, [logout, navigation]);

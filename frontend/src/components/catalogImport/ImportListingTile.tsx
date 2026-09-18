@@ -21,11 +21,11 @@ interface Props {
   onPress: (itemId: string) => void;
 }
 
-const STATUS_DOT_COLOR: Partial<Record<ItemReadiness, 'success' | 'warning' | 'brand' | 'danger'>> = {
-  ready: 'success',
-  needs_input: 'warning',
+const STATUS_DOT_COLOR: Partial<Record<ItemReadiness, 'successText' | 'warningText' | 'brand' | 'dangerText'>> = {
+  ready: 'successText',
+  needs_input: 'warningText',
   probable_duplicate: 'brand',
-  source_changed: 'danger' };
+  source_changed: 'dangerText' };
 
 const DOT_SIZE = 8;
 

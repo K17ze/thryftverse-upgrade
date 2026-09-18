@@ -353,7 +353,7 @@ export default function AuthLandingScreen() {
             accessibilityRole="alert"
             accessibilityLiveRegion="assertive"
           >
-            <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
+            <Ionicons name="alert-circle-outline" size={18} color={colors.dangerText} />
             <Text style={styles.errorBannerText} maxFontSizeMultiplier={1.3}>{authError}</Text>
             <Pressable
               onPress={() => setAuthError(null)}
@@ -638,7 +638,7 @@ export default function AuthLandingScreen() {
               }}
             >
               {isDevBypassLoading ? (
-                <ActivityIndicator size="small" color={colors.success} />
+                <ActivityIndicator size="small" color={colors.successText} />
               ) : (
                 <Text style={styles.devBypassText} maxFontSizeMultiplier={1.3}>Dev Bypass (UI Testing)</Text>
               )}
@@ -686,7 +686,7 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.danger,
+    color: colors.dangerText,
     lineHeight: TypographyV2.meta.size + 2 },
   twoFactorNotice: {
     paddingHorizontal: Space.lg,
@@ -759,7 +759,7 @@ function createStyles(colors: ThemeColors) {
   twoFactorNoticeError: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.danger,
+    color: colors.dangerText,
     lineHeight: TypographyV2.meta.size + 2,
     marginBottom: Space.sm },
   // Primary social buttons — Apple + Google. Full-width, clear hierarchy.
@@ -820,6 +820,6 @@ function createStyles(colors: ThemeColors) {
   devBypassText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.success,
+    color: colors.successText,
     textAlign: 'center' } });
 }

@@ -81,7 +81,7 @@ export function GroupInfoHero({
             )}
           </View>
           <View style={styles.heroAvatarOverlap}>
-            <View style={styles.heroAvatarWrap}>
+            <View style={[styles.heroAvatarWrap, styles.heroAvatarRing]}>
               <GroupAvatarMosaic
                 members={members}
                 groupPhoto={avatarUri}
@@ -138,8 +138,8 @@ export function GroupInfoHero({
         </Text>
 
         <Text style={styles.identityMeta}>
-          Group · <Text style={{ color: colors.brand, fontFamily: FontFamily.bold }}>{memberCount} members</Text>
-          {agentCount > 0 ? ` · ${agentCount} agent connected` : ''}
+          Group · {memberCount} {memberCount === 1 ? 'member' : 'members'}
+          {agentCount > 0 ? ` · ${agentCount} agent${agentCount === 1 ? '' : 's'} connected` : ''}
         </Text>
 
         {description ? (
@@ -203,6 +203,13 @@ function createStyles(colors: ThemeColors) {
     },
     heroAvatarWrap: {
       position: 'relative',
+    },
+    // Background-coloured ring so the avatar reads as layered on top of the
+    // cover — the same overlap treatment the edit-group screen uses.
+    heroAvatarRing: {
+      borderRadius: 52,
+      borderWidth: 4,
+      borderColor: colors.background,
     },
     avatarEditBadge: {
       position: 'absolute',

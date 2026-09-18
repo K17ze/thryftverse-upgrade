@@ -215,7 +215,7 @@ function createStyles(colors: ThemeColors) {
     errorText: {
       fontSize: TypographyV2.meta.size,
       lineHeight: TypographyV2.meta.lineHeight,
-      color: colors.danger,
+      color: colors.dangerText,
       textAlign: 'center',
       marginTop: Space.md },
     authButton: {

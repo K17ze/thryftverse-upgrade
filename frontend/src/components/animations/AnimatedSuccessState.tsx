@@ -92,7 +92,7 @@ export function AnimatedSuccessState({
           entering={enter}
           style={styles.iconSlot}
         >
-          <Ionicons name="checkmark" size={32} color={colors.success} />
+          <Ionicons name="checkmark" size={32} color={colors.successText} />
         </Reanimated.View>
       )}
 

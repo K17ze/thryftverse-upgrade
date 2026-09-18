@@ -19,7 +19,7 @@ export function FieldErrorRow({ message }: { message: string }) {
       accessibilityRole="alert"
       accessibilityLiveRegion="polite"
     >
-      <AppIcon name="warning" size={IconSize.xs} color="danger" opticalCenter accessible={false} />
+      <AppIcon name="warning" size={IconSize.xs} color="dangerText" opticalCenter accessible={false} />
       <Text style={styles.errorText}>{message}</Text>
     </View>
   );

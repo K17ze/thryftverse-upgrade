@@ -54,9 +54,9 @@ export function CommerceDetailFreshnessBanner({
         accessibilityRole="button"
         accessibilityLabel="Couldn't refresh. Tap to retry."
       >
-        <Ionicons name="refresh-circle-outline" size={14} color={colors.danger} />
+        <Ionicons name="refresh-circle-outline" size={14} color={colors.dangerText} />
         <View style={styles.textWrap}>
-          <Text style={[styles.title, { color: colors.danger }]} numberOfLines={1}>
+          <Text style={[styles.title, { color: colors.dangerText }]} numberOfLines={1}>
             Couldn't refresh
           </Text>
           <Text
@@ -106,9 +106,9 @@ export function CommerceDetailFreshnessBanner({
             borderColor: colors.warningBorder },
         ]}
       >
-        <Ionicons name="time-outline" size={14} color={colors.warning} />
+        <Ionicons name="time-outline" size={14} color={colors.warningText} />
         <View style={styles.textWrap}>
-          <Text style={[styles.title, { color: colors.warning }]} numberOfLines={1}>
+          <Text style={[styles.title, { color: colors.warningText }]} numberOfLines={1}>
             Reconnecting
           </Text>
           <Text

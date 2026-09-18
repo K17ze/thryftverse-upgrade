@@ -39,7 +39,7 @@ export function PublishStep({
         <AppIcon
           name={canPublish ? 'checkmark-circle' : 'ellipse-outline'}
           size={IconSize.md}
-          color={canPublish ? 'success' : 'textMuted'}
+          color={canPublish ? 'successText' : 'textMuted'}
           opticalCenter
           accessible={false}
         />
@@ -74,18 +74,18 @@ export function PublishStep({
               <Text
                 style={[
                   styles.validationStatus,
-                  { color: validationResult.valid ? colors.success : colors.danger },
+                  { color: validationResult.valid ? colors.successText : colors.dangerText },
                 ]}
               >
                 {validationResult.valid ? 'Valid' : 'Issues found'}
               </Text>
               {validationResult.validationError ? (
-                <Text style={[styles.validationError, { color: colors.danger }]}>
+                <Text style={[styles.validationError, { color: colors.dangerText }]}>
                   {validationResult.validationError}
                 </Text>
               ) : null}
               {validationResult.runtimeReady === false && validationResult.runtimeReadinessReason ? (
-                <Text style={[styles.validationError, { color: colors.warning }]}>
+                <Text style={[styles.validationError, { color: colors.warningText }]}>
                   {validationResult.runtimeReadinessReason}
                 </Text>
               ) : null}

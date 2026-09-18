@@ -85,9 +85,9 @@ function ActivityCard({ item, onPress, colors, styles, formatPrice }: { item: Ac
     fresh_drop: 'bag-handle-outline',
     price_drop: 'trending-down-outline' };
   const accentMap: Record<ActivityType, string> = {
-    auction_live: colors.danger,
+    auction_live: colors.dangerText,
     fresh_drop: colors.brand,
-    price_drop: colors.warning };
+    price_drop: colors.warningText };
 
   return (
     <AnimatedPressable style={styles.activityCard} onPress={onPress} activeOpacity={0.92}>
@@ -408,7 +408,7 @@ function createStyles(colors: ThemeColors) {
   liveText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.semibold,
-    color: colors.warning,
+    color: colors.warningText,
     fontVariant: ['tabular-nums'],
     marginTop: Space.xs },
 
@@ -455,7 +455,7 @@ function createStyles(colors: ThemeColors) {
     marginTop: 2,
     fontVariant: ['tabular-nums'] },
   activityMetaAccent: {
-    color: colors.danger,
+    color: colors.dangerText,
     fontFamily: Typography.family.semibold },
   activityAction: {
     flexDirection: 'row',

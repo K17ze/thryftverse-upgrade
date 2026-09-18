@@ -41,7 +41,7 @@ export function AuctionAttentionStrip({
   const isWatching = kind === 'watching';
   const accentColor =
     kind === 'outbid'
-      ? colors.danger
+      ? colors.dangerText
       : kind === 'leading' || kind === 'won' || kind === 'ending_soon'
       ? colors.brand
       : colors.textSecondary;

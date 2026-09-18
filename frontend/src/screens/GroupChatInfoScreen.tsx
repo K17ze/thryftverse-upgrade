@@ -339,9 +339,9 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
           />
           <GroupInfoRow
             icon="trash"
-            iconColor={colors.danger}
+            iconColor={colors.dangerText}
             label="Clear chat"
-            labelColor={colors.danger}
+            labelColor={colors.dangerText}
             onPress={clearChat}
             isLast
           />
@@ -351,17 +351,17 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
         <FlagshipFormSection variant="flat">
           <GroupInfoRow
             icon="log-out-outline"
-            iconColor={colors.danger}
+            iconColor={colors.dangerText}
             label={isLeaving ? 'Leaving…' : 'Exit group'}
-            labelColor={colors.danger}
+            labelColor={colors.dangerText}
             onPress={leaveGroup}
             busy={isLeaving}
           />
           <GroupInfoRow
             icon="flag"
-            iconColor={colors.danger}
+            iconColor={colors.dangerText}
             label="Report group"
-            labelColor={colors.danger}
+            labelColor={colors.dangerText}
             onPress={() => navigation.navigate('Report', { type: 'group', targetId: conversationId })}
             isLast
           />

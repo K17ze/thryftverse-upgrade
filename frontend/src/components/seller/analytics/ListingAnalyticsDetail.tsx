@@ -86,7 +86,7 @@ export function ListingAnalyticsDetail({ model }: { model: SellerAnalyticsModel 
                     {
                       color:
                         (listingAnalytics?.listing.status ?? currentListingItem?.status) === 'sold'
-                          ? colors.success
+                          ? colors.successText
                           : colors.brand,
                     },
                   ]}
@@ -106,7 +106,7 @@ export function ListingAnalyticsDetail({ model }: { model: SellerAnalyticsModel 
                     );
                   }
                   const badgeBg = dom < 7 ? colors.successSubtle : dom <= 14 ? colors.surfaceAlt : colors.dangerSubtle;
-                  const badgeColor = dom < 7 ? colors.success : dom <= 14 ? colors.textPrimary : colors.danger;
+                  const badgeColor = dom < 7 ? colors.successText : dom <= 14 ? colors.textPrimary : colors.dangerText;
                   const badgeLabel = dom < 7 ? `${dom}d · High velocity` : dom <= 14 ? `${dom}d on market` : `${dom}d · Stale inventory`;
                   return (
                     <View style={[styles.velocityTag, { backgroundColor: badgeBg }]}>
@@ -177,7 +177,7 @@ export function ListingAnalyticsDetail({ model }: { model: SellerAnalyticsModel 
 
             {listingError ? (
               <View style={styles.listingErrorState}>
-                <Text style={[styles.listingErrorText, { color: colors.danger }]}>
+                <Text style={[styles.listingErrorText, { color: colors.dangerText }]}>
                   Couldn't refresh listing engagement metrics
                 </Text>
                 <Pressable
@@ -298,7 +298,7 @@ export function ListingAnalyticsDetail({ model }: { model: SellerAnalyticsModel 
                         <Text
                           style={[
                             styles.spectrumPillText,
-                            { color: isBelowMedian ? colors.success : colors.textPrimary },
+                            { color: isBelowMedian ? colors.successText : colors.textPrimary },
                           ]}
                         >
                           {posBadge}
@@ -412,8 +412,8 @@ export function ListingAnalyticsDetail({ model }: { model: SellerAnalyticsModel 
                           accessibilityRole="button"
                           accessibilityLabel={`Match market median price of ${formatFromFiat(medP, undefined, { displayMode: 'fiat' })}`}
                         >
-                          <Text style={[styles.quickRepriceStrategy, { color: colors.success }]}>Sell Now</Text>
-                          <Text style={[styles.quickRepriceButtonText, { color: colors.success }]}>Match</Text>
+                          <Text style={[styles.quickRepriceStrategy, { color: colors.successText }]}>Sell Now</Text>
+                          <Text style={[styles.quickRepriceButtonText, { color: colors.successText }]}>Match</Text>
                           <Text style={[styles.quickRepriceSubtext, { color: colors.textMuted }]}>
                             {formatFromFiat(medP, undefined, { displayMode: 'fiat' })}
                           </Text>
@@ -437,7 +437,7 @@ export function ListingAnalyticsDetail({ model }: { model: SellerAnalyticsModel 
                         <AppIcon
                           name={isReduction ? 'trending-down' : 'trending-up'}
                           size={IconSize.sm}
-                          color={isReduction ? 'success' : 'textMuted'}
+                          color={isReduction ? 'successText' : 'textMuted'}
                           opticalCenter
                           accessible={false}
                         />

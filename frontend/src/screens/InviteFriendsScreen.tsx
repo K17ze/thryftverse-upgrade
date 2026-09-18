@@ -46,7 +46,7 @@ export default function InviteFriendsScreen({ navigation }: Props) {
   const BORDER = colors.border;
   const MUTED = colors.textMuted;
   const TEXT = colors.textPrimary;
-  const SUCCESS = colors.success;
+  const SUCCESS = colors.successText;
 
   // Server-owned referral code — a client-derived code cannot attribute
   // signups, so there is no honest fallback value. When the fetch fails the
@@ -635,5 +635,5 @@ function createStyles(colors: ThemeColors) {
     badgeSuccess: {
       backgroundColor: colors.successSubtle },
     badgeSuccessText: {
-      color: colors.success } });
+      color: colors.successText } });
 }

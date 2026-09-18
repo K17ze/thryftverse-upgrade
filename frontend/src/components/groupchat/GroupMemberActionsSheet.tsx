@@ -126,7 +126,7 @@ export function GroupMemberActionsSheet({
                 <SheetAction
                   icon="person-remove-outline"
                   label={removeLabel}
-                  color={colors.danger}
+                  color={colors.dangerText}
                   onPress={() => onRemove(member)}
                   accessibilityLabel={removeLabel}
                 />

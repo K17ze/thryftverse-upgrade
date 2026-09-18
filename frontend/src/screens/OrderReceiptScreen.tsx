@@ -6,7 +6,7 @@ import {
   StatusBar,
   ScrollView,
   Pressable,
-  ActivityIndicator,
+  RefreshControl,
   Share,
   Clipboard,
   Platform } from 'react-native';
@@ -22,10 +22,9 @@ import { useToast } from '../context/ToastContext';
 import { getOrder, type CommerceOrder } from '../services/commerceApi';
 import { CachedImage } from '../components/CachedImage';
 import { SkeletonLoader } from '../components/SkeletonLoader';
-import { normaliseOrderStatus, humaniseStatus, isTerminalStatus } from '../components/orders/orderCapabilities';
+import { normaliseOrderStatus, humaniseStatus, isTerminalStatus, getStatusColor } from '../components/orders/orderCapabilities';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { haptics } from '../utils/haptics';
-import { t } from '../i18n';
 import { useConnectivity } from '../hooks/useConnectivity';
 
 
@@ -55,15 +54,13 @@ export default function OrderReceiptScreen() {
   // Theme-aware color overrides for the static styles.
   const themed = React.useMemo(() => ({
     container: { backgroundColor: colors.background },
-    loadingText: { color: colors.textMuted },
     errorTitle: { color: colors.textPrimary },
     retryBtn: { backgroundColor: colors.brand },
     retryBtnText: { color: colors.textInverse },
     successIconWrap: { backgroundColor: colors.successSubtle },
     successTitle: { color: colors.textPrimary },
     successSubtitle: { color: colors.textMuted },
-    receiptTitle: { color: colors.textPrimary },
-    orderIdLabel: { color: colors.textSecondary },
+    orderIdLabel: { color: colors.textPrimary },
     sectionLabel: { color: colors.textMuted },
     receiptRowLabel: { color: colors.textSecondary },
     receiptRowValue: { color: colors.textPrimary },
@@ -84,9 +81,13 @@ export default function OrderReceiptScreen() {
 
   const [order, setOrder] = useState<CommerceOrder | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const isMountedRef = useRef(true);
+  // A ref, not state: adding `order` to fetchOrder's deps would re-create
+  // the callback on every successful fetch and loop the load effect.
+  const hasLoadedOrderRef = useRef(false);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -98,17 +99,35 @@ export default function OrderReceiptScreen() {
       const fetched = await getOrder(orderId);
       if (!isMountedRef.current) return;
       setOrder(fetched);
+      hasLoadedOrderRef.current = true;
       setLoadError(null);
     } catch (error) {
       if (!isMountedRef.current) return;
-      setLoadError('Receipt could not be loaded. Check your connection and try again.');
+      // A failed refresh must not destroy a receipt already on screen —
+      // keep the document and surface the failure as a toast instead.
+      if (hasLoadedOrderRef.current) {
+        show('Could not refresh receipt', 'error');
+      } else {
+        setLoadError('Receipt could not be loaded. Check your connection and try again.');
+      }
     } finally {
       if (isMountedRef.current) setIsLoading(false);
     }
-  }, [orderId]);
+  }, [orderId, show]);
 
   useEffect(() => {
     void fetchOrder();
+  }, [fetchOrder]);
+
+  // Pull-to-refresh — the "this receipt will update" promise below is only
+  // true if the document can actually be re-fetched on demand.
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await fetchOrder();
+    } finally {
+      if (isMountedRef.current) setIsRefreshing(false);
+    }
   }, [fetchOrder]);
 
   const isBuyer = currentUser?.id === order?.buyerId;
@@ -243,6 +262,31 @@ export default function OrderReceiptScreen() {
   const statusLabel = humaniseStatus(order.status);
   const normalisedStatus = normaliseOrderStatus(order.status);
   const isReceiptFinal = isTerminalStatus(normalisedStatus);
+  // Status stamp — the document's headline fact, rendered in the canonical
+  // order-status tone (same getStatusColor grammar as the orders ledger).
+  const statusColor = getStatusColor(order.status, colors);
+  const fulfilment = order.fulfilmentSnapshot ?? null;
+  const hasDeliveryFacts = Boolean(
+    order.trackingNumber
+    || fulfilment?.destinationSummary
+    || fulfilment?.serviceName
+    || order.shippingProvider
+    || order.shipByDate
+    || order.shippedAt
+    || order.deliveredAt);
+  const etaLabel = fulfilment?.etaMinDays != null && fulfilment?.etaMaxDays != null
+    ? fulfilment.etaMinDays === fulfilment.etaMaxDays
+      ? `${fulfilment.etaMinDays} day${fulfilment.etaMinDays === 1 ? '' : 's'}`
+      : `${fulfilment.etaMinDays}–${fulfilment.etaMaxDays} days`
+    : null;
+  // Escrow projection — the seller's most-asked question on a receipt.
+  const releaseLabel = isSeller
+    ? order.moneyProjection?.releasedAt
+      ? `Released ${formatReceiptDate(order.moneyProjection.releasedAt)}`
+      : order.moneyProjection?.estimatedReleaseAt
+        ? `Estimated ${formatReceiptDate(order.moneyProjection.estimatedReleaseAt)}`
+        : null
+    : null;
 
   const fiatOpts = { displayMode: 'fiat' as const };
   const subtotal = formatFromFiat(order.subtotalGbp, 'GBP', fiatOpts);
@@ -293,12 +337,19 @@ export default function OrderReceiptScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 40 + insets.bottom }]}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => void handleRefresh()}
+            tintColor={colors.textMuted}
+          />
+        }
       >
         {/* Success header for completed orders */}
         {isReceiptFinal && normalisedStatus !== 'cancelled' && normalisedStatus !== 'refunded' ? (
           <View style={styles.successHeader}>
             <View style={[styles.successIconWrap, themed.successIconWrap]}>
-              <Ionicons name="checkmark" size={28} color={colors.success} />
+              <Ionicons name="checkmark" size={28} color={colors.successText} />
             </View>
             <Text style={[styles.successTitle, themed.successTitle]}>
               {isBuyer ? 'Order complete' : 'Payment received'}
@@ -307,9 +358,12 @@ export default function OrderReceiptScreen() {
           </View>
         ) : null}
 
-        <View style={styles.receiptCard}>
+        {/* The receipt document — the one contained panel on this surface.
+            Identifier on the left, status stamp on the right: the two facts
+            a receipt must answer at a glance. No inner title duplicating
+            the screen header. */}
+        <View style={[styles.receiptCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.receiptHeader}>
-            <Text style={[styles.receiptTitle, themed.receiptTitle]}>Order Receipt</Text>
             <Pressable
               onPress={handleCopyOrderId}
               hitSlop={{ top: 8, bottom: 8 }}
@@ -321,12 +375,26 @@ export default function OrderReceiptScreen() {
                 <Ionicons name="copy-outline" size={14} color={colors.textMuted} />
               </View>
             </Pressable>
+            <View style={[styles.statusStamp, { backgroundColor: `${statusColor}15` }]}>
+              <View style={[styles.statusStampDot, { backgroundColor: statusColor }]} />
+              <Text style={[styles.statusStampText, { color: statusColor }]} numberOfLines={1}>
+                {statusLabel}
+              </Text>
+            </View>
           </View>
 
           <View style={styles.receiptSection}>
             <ReceiptRow label="Date" value={formatReceiptDate(order.createdAt)} />
-            <ReceiptRow label="Status" value={statusLabel} />
+            {order.paidAt ? (
+              <ReceiptRow label="Paid" value={formatReceiptDate(order.paidAt)} />
+            ) : null}
             <ReceiptRow label={counterpartyRole} value={`@${counterpartyName}`} />
+            {releaseLabel ? (
+              <ReceiptRow label="Funds" value={releaseLabel} />
+            ) : null}
+            {order.inspectionDeadlineAt ? (
+              <ReceiptRow label="Inspection ends" value={formatReceiptDate(order.inspectionDeadlineAt)} />
+            ) : null}
           </View>
 
           <View style={[styles.receiptDivider, themed.receiptDivider]} />
@@ -369,30 +437,44 @@ export default function OrderReceiptScreen() {
               <ReceiptRow label="Platform charge" value={platformCharge} />
             )}
             <ReceiptRow label="Delivery" value={postage} />
-            <View style={styles.totalRow}>
+            <View style={[styles.totalRow, { borderTopColor: colors.border }]}>
               <Text style={[styles.totalLabel, themed.totalLabel]}>Total</Text>
               <Text style={[styles.totalValue, themed.totalValue]}>{total}</Text>
             </View>
           </View>
 
-          {order.trackingNumber && (
+          {hasDeliveryFacts ? (
             <>
               <View style={[styles.receiptDivider, themed.receiptDivider]} />
               <View style={styles.receiptSection}>
-                <Text style={[styles.sectionLabel, themed.sectionLabel]}>Shipping</Text>
-                {order.shippingProvider && (
+                <Text style={[styles.sectionLabel, themed.sectionLabel]}>Delivery</Text>
+                {fulfilment?.destinationSummary ? (
+                  <ReceiptRow label="Deliver to" value={fulfilment.destinationSummary} />
+                ) : null}
+                {fulfilment?.serviceName ? (
+                  <ReceiptRow label="Service" value={fulfilment.serviceName} />
+                ) : null}
+                {order.shippingProvider ? (
                   <ReceiptRow label="Carrier" value={order.shippingProvider} />
-                )}
-                <ReceiptRow label="Tracking" value={order.trackingNumber} />
-                {order.shippedAt && (
+                ) : null}
+                {etaLabel ? (
+                  <ReceiptRow label="ETA" value={etaLabel} />
+                ) : null}
+                {!isReceiptFinal && order.shipByDate && !order.shippedAt ? (
+                  <ReceiptRow label="Ship by" value={formatReceiptDate(order.shipByDate)} />
+                ) : null}
+                {order.trackingNumber ? (
+                  <ReceiptRow label="Tracking" value={order.trackingNumber} />
+                ) : null}
+                {order.shippedAt ? (
                   <ReceiptRow label="Shipped" value={formatReceiptDate(order.shippedAt)} />
-                )}
-                {order.deliveredAt && (
+                ) : null}
+                {order.deliveredAt ? (
                   <ReceiptRow label="Delivered" value={formatReceiptDate(order.deliveredAt)} />
-                )}
+                ) : null}
               </View>
             </>
-          )}
+          ) : null}
 
           <View style={[styles.receiptDivider, themed.receiptDivider]} />
 
@@ -450,8 +532,8 @@ export default function OrderReceiptScreen() {
           accessibilityRole="button"
           accessibilityLabel="Save or share receipt"
         >
-          <Ionicons name="download-outline" size={18} color={colors.brand} />
-          <Text style={[styles.saveBtnText, themed.viewDetailBtnText]}>Save or share receipt</Text>
+          <Ionicons name="share-social-outline" size={18} color={colors.brand} />
+          <Text style={[styles.saveBtnText, themed.viewDetailBtnText]}>Share receipt</Text>
         </Pressable>
       </ScrollView>
     </View>
@@ -466,7 +548,7 @@ function ReceiptRow({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.receiptRow}>
       <Text style={[styles.receiptRowLabel, rowThemed.label]}>{label}</Text>
-      <Text style={[styles.receiptRowValue, rowThemed.value]} numberOfLines={1}>{value}</Text>
+      <Text style={[styles.receiptRowValue, rowThemed.value]} numberOfLines={2}>{value}</Text>
     </View>
   );
 }
@@ -489,14 +571,6 @@ const styles = StyleSheet.create({
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center' },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.md },
-  loadingText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily },
   skeletonContainer: {
     flex: 1,
     paddingHorizontal: Space.md,
@@ -547,29 +621,48 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: Space.xs },
   successTitle: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily,
-    letterSpacing: TypographyV2.body.letterSpacing },
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   successSubtitle: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily },
   receiptCard: {
-    padding: Space.md },
+    padding: Space.md,
+    // The receipt is a document — the single contained panel this surface
+    // is allowed. Surface fill + hairline gives the ledger object-hood
+    // without decorative chrome.
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth },
   receiptHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: Space.md },
-  receiptTitle: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily },
   orderIdRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs },
   orderIdLabel: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
+  // Status stamp — canonical dot+label pill in getStatusColor tone, the
+  // same grammar as the orders ledger badge.
+  statusStamp: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs - 2,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs - 2,
+    borderRadius: Radius.full },
+  statusStampDot: {
+    width: 6,
+    height: 6,
+    borderRadius: Radius.full },
+  statusStampText: {
+    fontSize: TypographyV2.captionElevated.size,
+    fontFamily: TypographyV2.captionElevated.fontFamily },
   receiptSection: {
     gap: Space.sm },
   sectionLabel: {
@@ -599,13 +692,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: Space.xs },
+    marginTop: Space.xs,
+    paddingTop: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth },
   totalLabel: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
+  // The total is the document's dominant figure — priceList tabular bold,
+  // clearly ranked above the body-size fee rows.
   totalValue: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily },
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: TypographyV2.priceList.fontFamily,
+    letterSpacing: TypographyV2.priceList.letterSpacing },
   immutableNotice: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -642,7 +740,7 @@ const styles = StyleSheet.create({
   nextStepDot: {
     width: Space.sm,
     height: Space.sm,
-    borderRadius: Radius.sm },
+    borderRadius: Radius.full },
   nextStepDotActive: {},
   nextStepDotPending: {},
   nextStepText: {

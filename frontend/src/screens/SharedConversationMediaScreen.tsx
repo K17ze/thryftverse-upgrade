@@ -312,7 +312,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
           <Ionicons
             name="trash-outline"
             size={Control.icon}
-            color={selectedIds.size === 0 ? colors.textMuted : colors.danger}
+            color={selectedIds.size === 0 ? colors.textMuted : colors.dangerText}
           />
         </AnimatedPressable>
       }

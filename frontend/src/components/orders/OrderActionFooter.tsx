@@ -55,7 +55,7 @@ export function OrderActionFooter({
               busy: secondaryAction.loading }}
           >
             {secondaryAction.loading ? (
-              <ActivityIndicator size="small" color={colors.danger} />
+              <ActivityIndicator size="small" color={colors.dangerText} />
             ) : null}
             <Text
               style={[
@@ -137,4 +137,4 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   btnTextSecondary: {
     color: colors.textPrimary },
   btnTextDestructive: {
-    color: colors.danger } });
+    color: colors.dangerText } });

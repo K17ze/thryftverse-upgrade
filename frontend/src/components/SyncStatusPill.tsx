@@ -20,23 +20,23 @@ function resolveToneStyles(tone: SyncStatusTone, colors: ThemeColors) {
         icon: 'checkmark-circle' as keyof typeof Ionicons.glyphMap,
         background: colors.successSubtle,
         border: colors.borderSubtle,
-        iconColor: colors.success,
-        textColor: colors.success };
+        iconColor: colors.successText,
+        textColor: colors.successText };
     case 'syncing':
       return {
         icon: 'sync-outline' as keyof typeof Ionicons.glyphMap,
         background: colors.warningSubtle,
         border: colors.borderSubtle,
-        iconColor: colors.warning,
-        textColor: colors.warning };
+        iconColor: colors.warningText,
+        textColor: colors.warningText };
     case 'offline':
     default:
       return {
         icon: 'cloud-offline-outline' as keyof typeof Ionicons.glyphMap,
         background: colors.dangerSubtle,
         border: colors.borderSubtle,
-        iconColor: colors.danger,
-        textColor: colors.danger };
+        iconColor: colors.dangerText,
+        textColor: colors.dangerText };
   }
 }
 

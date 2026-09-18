@@ -322,7 +322,7 @@ export function AssetOverviewSection({
               </Text>
             )}
             {marketDataStale ? (
-              <Text style={[styles.chartStaleLine, { color: colors.warning }]} numberOfLines={1}>
+              <Text style={[styles.chartStaleLine, { color: colors.warningText }]} numberOfLines={1}>
                 Stale{marketDataAgeLabel ? ` · ${marketDataAgeLabel}` : ''}
               </Text>
             ) : null}

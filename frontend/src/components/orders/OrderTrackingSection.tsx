@@ -84,7 +84,7 @@ export function OrderTrackingSection({
       {/* Stale tracking warning — last event > 48h old while in transit */}
       {isStaleTracking ? (
         <View style={[styles.staleBanner, themed.staleBanner]}>
-          <Ionicons name="time-outline" size={16} color={colors.warning} aria-hidden={true} />
+          <Ionicons name="time-outline" size={16} color={colors.warningText} aria-hidden={true} />
           <Text style={[styles.staleText, themed.staleText]}>
             Tracking hasn't updated in over 48 hours — the carrier may be delayed.
           </Text>

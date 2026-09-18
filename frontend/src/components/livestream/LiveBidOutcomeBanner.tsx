@@ -33,7 +33,7 @@ export function LiveBidOutcomeBanner({ checkPending, onCheck, onDismiss }: LiveB
       pointerEvents="box-none"
     >
       <View style={styles.unknownBannerContent}>
-        <AppIcon name="warning" size={IconSize.md} color="warning" accessible={false} />
+        <AppIcon name="warning" size={IconSize.md} color="warningText" accessible={false} />
         <View style={styles.unknownBannerText}>
           <Text style={[styles.unknownBannerTitle, { color: colors.textPrimary }]}>
             {t('unknown.title')}

@@ -47,7 +47,7 @@ export function MoodboardSyncOverlay({
     <View style={styles.savingOverlay} pointerEvents={syncStatus === 'conflict' || syncStatus === 'error' ? 'auto' : 'none'}>
       {syncStatus === 'conflict' && conflictDetail ? (
         <View style={styles.conflictCard}>
-          <AppIcon name="alert-circle-outline" size={IconSize.sm} color={colors.warning} accessible={false} />
+          <AppIcon name="alert-circle-outline" size={IconSize.sm} color={colors.warningText} accessible={false} />
           <Text style={styles.conflictText}>{conflictDetail.message}</Text>
           <Pressable
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -150,7 +150,7 @@ function useStyles() {
         retryText: {
           fontSize: TypographyV2.body.size,
           fontFamily: TypographyV2.bodyStrong.fontFamily,
-          color: colors.danger },
+          color: colors.dangerText },
         conflictCard: {
           flexDirection: 'row',
           alignItems: 'center',
@@ -168,11 +168,11 @@ function useStyles() {
           fontSize: TypographyV2.meta.size,
           lineHeight: TypographyV2.meta.lineHeight,
           fontFamily: TypographyV2.meta.fontFamily,
-          color: colors.warning },
+          color: colors.warningText },
         conflictDismiss: {
           fontSize: TypographyV2.bodyStrong.size,
           fontFamily: TypographyV2.bodyStrong.fontFamily,
-          color: colors.warning } }),
+          color: colors.warningText } }),
     [colors],
   );
 }

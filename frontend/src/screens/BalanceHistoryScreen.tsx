@@ -34,8 +34,8 @@ function iconForType(type: string, lineType: string): React.ComponentProps<typeo
 
 function colorForType(type: string, lineType: string, colors: ThemeColors) {
   if (lineType.includes('refund') || type === 'refund') return colors.textSecondary;
-  if (lineType.includes('withdrawal') || type === 'withdrawal') return colors.danger;
-  if (lineType.includes('seller_payable') || type === 'sale') return colors.success;
+  if (lineType.includes('withdrawal') || type === 'withdrawal') return colors.dangerText;
+  if (lineType.includes('seller_payable') || type === 'sale') return colors.successText;
   if (lineType.includes('buyer_spend') || type === 'purchase') return colors.textSecondary;
   if (lineType.includes('payout') || type === 'payout') return colors.brand;
   return colors.textMuted;
@@ -175,7 +175,7 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
             <Text
               style={[
                 styles.heroValue,
-                { color: netFlow >= 0 ? colors.success : colors.danger },
+                { color: netFlow >= 0 ? colors.successText : colors.dangerText },
               ]}
               accessibilityLabel={`Net of loaded activity ${formatFromFiat(Math.abs(netFlow), 'GBP', { displayMode: 'fiat' })}`}
             >
@@ -199,7 +199,7 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
                     <Text style={styles.txLabel}>{labelForType(tx.type, tx.lineType)}</Text>
                     <Text style={styles.txDate}>{formatDateLabel(tx.createdAt)}</Text>
                   </View>
-                  <Text style={[styles.txAmount, { color: tx.direction === 'credit' ? colors.success : colors.textPrimary }]}>
+                  <Text style={[styles.txAmount, { color: tx.direction === 'credit' ? colors.successText : colors.textPrimary }]}>
                     {tx.direction === 'credit' ? '+' : '-'}{formatFromFiat(Math.abs(tx.amount), 'GBP', { displayMode: 'fiat' })}
                   </Text>
                 </View>

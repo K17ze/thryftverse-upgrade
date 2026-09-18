@@ -61,7 +61,7 @@ export function WithdrawSuccessStep({ successData, onClose }: Props) {
       >
         <View style={{ alignItems: 'center', paddingHorizontal: Space.md }}>
           <View style={styles.successHeaderRow}>
-            <Ionicons name="checkmark-circle" size={24} color={colors.success} />
+            <Ionicons name="checkmark-circle" size={24} color={colors.successText} />
             <Text style={[styles.successTitle, { color: colors.textPrimary }]}>
               Withdrawal requested
             </Text>

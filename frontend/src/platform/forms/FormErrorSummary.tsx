@@ -44,11 +44,11 @@ function createStyles(colors: ThemeColors) {
   title: {
     fontSize: TypographyV2.body.size,
     fontFamily: TypographyV2.body.fontFamily,
-    color: colors.danger,
+    color: colors.dangerText,
     marginBottom: 6 },
   errorItem: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.danger,
+    color: colors.dangerText,
     marginBottom: 2 } });
 }

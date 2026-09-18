@@ -117,7 +117,7 @@ export function SustainabilityTags({
         <Ionicons
           name="leaf"
           size={Control.iconCompact}
-          color={colors.success}
+          color={colors.successText}
           style={styles.headerIcon}
         />
         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
@@ -181,9 +181,9 @@ export function SustainabilityTags({
             <Ionicons
               name="earth-outline"
               size={Control.iconCompact}
-              color={colors.success}
+              color={colors.successText}
             />
-            <Text style={[styles.summaryTitle, { color: colors.success }]}>
+            <Text style={[styles.summaryTitle, { color: colors.successText }]}>
               Sustainability impact
             </Text>
           </View>
@@ -192,7 +192,7 @@ export function SustainabilityTags({
               <Ionicons
                 name="checkmark-circle"
                 size={13}
-                color={colors.success}
+                color={colors.successText}
                 style={styles.summaryCheck}
               />
               <Text style={[styles.summaryText, { color: colors.textPrimary }]}>

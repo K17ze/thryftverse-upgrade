@@ -42,7 +42,7 @@ export function CoOwnFeaturedHero({
   const statusLabel =
     status === 'open' ? 'Available' : status === 'paused' ? 'Paused' : 'Fully allocated';
   const statusColor =
-    status === 'open' ? colors.success : status === 'paused' ? colors.textSecondary : colors.textMuted;
+    status === 'open' ? colors.successText : status === 'paused' ? colors.textSecondary : colors.textMuted;
 
   return (
     <View>

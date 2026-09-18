@@ -143,7 +143,7 @@ export function createConvertStyles(colors: ThemeColors) {
       lineHeight: TypographyV2.meta.lineHeight,
       fontFamily: TypographyV2.meta.fontFamily,
       letterSpacing: TypographyV2.meta.letterSpacing,
-      color: colors.danger },
+      color: colors.dangerText },
 
     // -- Calculation / summary (flat, no card wrapper) --
     calcBlock: {

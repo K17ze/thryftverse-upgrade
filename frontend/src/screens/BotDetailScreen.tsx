@@ -499,7 +499,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
 
             {playgroundError ? (
               <View style={styles.playgroundError}>
-                <AppIcon name="alert" size={IconSize.xs} color="danger" opticalCenter accessible={false} />
+                <AppIcon name="alert" size={IconSize.xs} color="dangerText" opticalCenter accessible={false} />
                 <Text style={styles.playgroundErrorText}>{playgroundError}</Text>
               </View>
             ) : null}
@@ -820,7 +820,7 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs,
     paddingVertical: Space.xs },
   playgroundErrorText: {
-    color: colors.danger,
+    color: colors.dangerText,
     fontFamily: Typography.family.regular,
     fontSize: TypographyV2.meta.size,
     flex: 1 },

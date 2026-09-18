@@ -233,11 +233,11 @@ export function buildItemDetailDerived(
   const conditionMeta = (() => {
     switch (item.condition) {
       case 'New with tags':
-        return { color: colors.success, definition: 'Unworn, with original tags and packaging intact.' };
+        return { color: colors.successText, definition: 'Unworn, with original tags and packaging intact.' };
       case 'Very good':
         return { color: colors.commerceTrust, definition: 'No visible flaws; minimal signs of wear.' };
       case 'Good':
-        return { color: colors.warning, definition: 'Light wear consistent with gentle use; no major flaws.' };
+        return { color: colors.warningText, definition: 'Light wear consistent with gentle use; no major flaws.' };
       case 'Satisfactory':
         return { color: colors.bronze, definition: 'Visible wear or minor flaws; fully wearable.' };
       default:

@@ -68,8 +68,8 @@ function resolveTone(tone: AppStatusTone, colors: ThemeColors, variant: AppStatu
       return {
         backgroundColor: colors.successSubtle,
         borderColor: colors.successBorder,
-        textColor: colors.success,
-        dotColor: colors.success };
+        textColor: colors.successText,
+        dotColor: colors.successText };
     case 'shipped':
       return {
         backgroundColor: colors.brandSubtle,
@@ -81,8 +81,8 @@ function resolveTone(tone: AppStatusTone, colors: ThemeColors, variant: AppStatu
       return {
         backgroundColor: colors.dangerSubtle,
         borderColor: colors.dangerBorder,
-        textColor: colors.danger,
-        dotColor: colors.danger };
+        textColor: colors.dangerText,
+        dotColor: colors.dangerText };
     case 'pending':
       return {
         backgroundColor: colors.surfaceAlt,
@@ -100,20 +100,20 @@ function resolveTone(tone: AppStatusTone, colors: ThemeColors, variant: AppStatu
       return {
         backgroundColor: colors.successSubtle,
         borderColor: colors.successBorder,
-        textColor: colors.success,
-        dotColor: colors.success };
+        textColor: colors.successText,
+        dotColor: colors.successText };
     case 'negative':
       return {
         backgroundColor: colors.dangerSubtle,
         borderColor: colors.dangerBorder,
-        textColor: colors.danger,
-        dotColor: colors.danger };
+        textColor: colors.dangerText,
+        dotColor: colors.dangerText };
     case 'warning':
       return {
         backgroundColor: colors.warningSubtle,
         borderColor: colors.warningBorder,
-        textColor: colors.warning,
-        dotColor: colors.warning };
+        textColor: colors.warningText,
+        dotColor: colors.warningText };
     case 'neutral':
     default:
       // The block variant (formerly PremiumStatusPill) uses a muted neutral

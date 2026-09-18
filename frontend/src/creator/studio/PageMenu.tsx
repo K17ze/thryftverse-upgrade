@@ -145,8 +145,8 @@ export function PageMenu({
             accessibilityRole="button"
             accessibilityState={{ disabled: !canDelete }}
           >
-            <Ionicons name="trash-outline" size={IconGrammar.standard} color={canDelete ? colors.danger : colors.textMuted} />
-            <Text style={[styles.pageSheetActionLabel, { color: canDelete ? colors.danger : colors.textMuted }]}>Delete</Text>
+            <Ionicons name="trash-outline" size={IconGrammar.standard} color={canDelete ? colors.dangerText : colors.textMuted} />
+            <Text style={[styles.pageSheetActionLabel, { color: canDelete ? colors.dangerText : colors.textMuted }]}>Delete</Text>
           </Pressable>
         </View>
       </View>

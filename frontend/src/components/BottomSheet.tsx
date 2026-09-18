@@ -125,6 +125,14 @@ interface BottomSheetProps {
    * the document, not to an arbitrary element (U63).
    */
   triggerRef?: React.RefObject<View>;
+  /**
+   * When false, children render directly in the sheet body without the
+   * internal KeyboardAwareScrollView. Required when the content owns its
+   * own scroll surface (e.g. a FlatList/FlashList) — a vertical list nested
+   * inside the sheet's ScrollView breaks windowing and the nested-scroll
+   * arbitration. Default true.
+   */
+  scrollable?: boolean;
 }
 
 export function BottomSheet({
@@ -137,6 +145,7 @@ export function BottomSheet({
   blurIntensity = 25,
   springDamping = 18,
   triggerRef,
+  scrollable = true,
 }: BottomSheetProps) {
   void springDamping; // physics sourced from useMotionConfig (reduced-motion aware)
 
@@ -294,14 +303,18 @@ export function BottomSheet({
           </View>
 
           <GestureDetector gesture={nativeScrollGesture}>
-            <KeyboardAwareScrollView
-              style={styles.contentWrap}
-              contentContainerStyle={{ flex: 1 }}
-              keyboardShouldPersistTaps="handled"
-              keyboardDismissMode="on-drag"
-            >
-              {children}
-            </KeyboardAwareScrollView>
+            {scrollable ? (
+              <KeyboardAwareScrollView
+                style={styles.contentWrap}
+                contentContainerStyle={{ flex: 1 }}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+              >
+                {children}
+              </KeyboardAwareScrollView>
+            ) : (
+              <View style={styles.contentWrap}>{children}</View>
+            )}
           </GestureDetector>
         </Reanimated.View>
       </GestureDetector>

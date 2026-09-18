@@ -264,7 +264,7 @@ export function AssetDetailDock({
           >
             <View style={[styles.chip, { backgroundColor: colors.warningSubtle }]}>
               <Text
-                style={[styles.chipText, { color: colors.warning }]}
+                style={[styles.chipText, { color: colors.warningText }]}
                 numberOfLines={1}
               >
                 Distribution pending

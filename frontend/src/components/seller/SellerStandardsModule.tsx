@@ -201,7 +201,7 @@ export const SellerStandardsModule: React.FC<SellerStandardsModuleProps> = ({
         <Text style={styles.appealDone}>Appeal submitted — under review</Text>
       ) : null}
       {appealResult === 'error' && !appealOpen ? (
-        <Text style={[styles.appealDone, { color: colors.danger }]}>
+        <Text style={[styles.appealDone, { color: colors.dangerText }]}>
           Appeal couldn't be submitted — try again
         </Text>
       ) : null}
@@ -277,7 +277,7 @@ export const SellerStandardsModule: React.FC<SellerStandardsModuleProps> = ({
             />
 
             {appealResult === 'error' ? (
-              <Text style={[styles.appealDone, { color: colors.danger }]}>
+              <Text style={[styles.appealDone, { color: colors.dangerText }]}>
                 Appeal couldn't be submitted — try again
               </Text>
             ) : null}

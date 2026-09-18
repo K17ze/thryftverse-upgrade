@@ -172,7 +172,7 @@ export function CoOwnSegmentNav({
               : undefined;
         // Badge colour encodes the type of actionable state: brand for
         // open orders, warning for claimable distributions.
-        const badgeColor = tab.key === 'ownership' ? colors.warning : colors.brand;
+        const badgeColor = tab.key === 'ownership' ? colors.warningText : colors.brand;
         // Anti-AI type budget: both states share the `body` 14pt size so the
         // first viewport stays within the three-size cap. Active vs inactive
         // is differentiated by weight (semibold vs regular) and color only;

@@ -3,7 +3,7 @@ import type { Conversation, ConversationContext } from '../domain';
 export type ConversationRole = 'buying' | 'selling' | 'group' | 'general';
 
 /** Visual tone for a commerce status badge, mapped from offer/order state. */
-export type CommerceStatusTone = 'brand' | 'success' | 'warning' | 'neutral';
+export type CommerceStatusTone = 'brand' | 'success' | 'warning' | 'danger' | 'neutral';
 
 export interface ConversationClassification {
   role: ConversationRole;
@@ -139,53 +139,48 @@ export function getRoleLabel(role: ConversationRole): string {
 }
 
 /**
- * Derive a compact commerce status label and tone for an inbox row badge.
- * Returns null when there is no active offer/order worth surfacing.
- *
- * Priority: order lifecycle > offer lifecycle. This keeps the most
- * operationally relevant state visible (a paid order matters more than a
- * pending offer on the same item).
+ * Compact commerce-status badge for inbox rows — mirrors the labels and
+ * tones the thread's ChatListingContextBar shows, so a buyer/seller sees
+ * money in flight ("Offer pending", "Paid", "Shipped") without opening the
+ * thread. Order beats offer beats listing terminal state, same priority
+ * as the context bar. Reads only the server-authoritative
+ * ConversationContext — returns null when it has nothing truthful to say.
  */
-export function getCommerceStatus(
-  conversation: Conversation
+export function deriveInboxCommerceBadge(
+  context: ConversationContext | undefined,
 ): { label: string; tone: CommerceStatusTone } | null {
-  const ctx = conversation.context;
-  if (!ctx) return null;
-
-  if (ctx.order) {
-    switch (ctx.order.status) {
-      case 'pending':
-        return { label: 'Order pending', tone: 'neutral' };
-      case 'paid':
-        return { label: 'Paid', tone: 'brand' };
-      case 'shipped':
-        return { label: 'Shipped', tone: 'brand' };
-      case 'delivered':
-        return { label: 'Delivered', tone: 'success' };
-      case 'completed':
-        return { label: 'Completed', tone: 'success' };
-      case 'cancelled':
-        return { label: 'Cancelled', tone: 'neutral' };
-      case 'refunded':
-        return { label: 'Refunded', tone: 'neutral' };
-    }
+  if (!context) return null;
+  if (context.order) {
+    const map: Record<string, { label: string; tone: CommerceStatusTone }> = {
+      pending: { label: 'Order placed', tone: 'brand' },
+      paid: { label: 'Paid', tone: 'brand' },
+      shipped: { label: 'Shipped', tone: 'brand' },
+      delivered: { label: 'Delivered', tone: 'success' },
+      completed: { label: 'Completed', tone: 'success' },
+      cancelled: { label: 'Cancelled', tone: 'danger' },
+      refunded: { label: 'Refunded', tone: 'danger' },
+    };
+    return map[context.order.status] ?? null;
   }
-
-  if (ctx.offer) {
-    switch (ctx.offer.status) {
-      case 'pending':
-        return { label: 'Offer pending', tone: 'warning' };
-      case 'countered':
-        return { label: 'Counter sent', tone: 'warning' };
-      case 'accepted':
-        return { label: 'Offer accepted', tone: 'success' };
-      case 'rejected':
-      case 'expired':
-      case 'withdrawn':
-        return null;
-    }
+  if (context.offer) {
+    const map: Record<string, { label: string; tone: CommerceStatusTone }> = {
+      pending: { label: 'Offer pending', tone: 'warning' },
+      countered: { label: 'Countered', tone: 'warning' },
+      accepted: { label: 'Offer accepted', tone: 'success' },
+      rejected: { label: 'Offer declined', tone: 'danger' },
+      expired: { label: 'Offer expired', tone: 'neutral' },
+      withdrawn: { label: 'Offer withdrawn', tone: 'neutral' },
+    };
+    return map[context.offer.status] ?? null;
   }
-
+  if (context.listing) {
+    const map: Record<string, { label: string; tone: CommerceStatusTone }> = {
+      sold: { label: 'Sold', tone: 'neutral' },
+      paused: { label: 'Paused', tone: 'neutral' },
+      deleted: { label: 'Removed', tone: 'neutral' },
+    };
+    return map[context.listing.status] ?? null;
+  }
   return null;
 }
 

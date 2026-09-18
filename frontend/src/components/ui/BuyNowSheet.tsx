@@ -318,7 +318,7 @@ export function BuyNowSheet({
                 accessibilityRole="alert"
                 accessibilityLiveRegion="polite"
               >
-                <Ionicons name="alert-circle-outline" size={14} color={colors.danger} accessible={false} />
+                <Ionicons name="alert-circle-outline" size={14} color={colors.dangerText} accessible={false} />
                 <Text style={styles.errorText}>{error.message}</Text>
               </View>
             )}
@@ -385,7 +385,7 @@ export function BuyNowSheet({
         {stage === 'success' && (
           <View style={styles.centerStage}>
             <View style={styles.successIcon}>
-              <Ionicons name="checkmark-circle" size={56} color={colors.success} />
+              <Ionicons name="checkmark-circle" size={56} color={colors.successText} />
             </View>
             <Text style={styles.successTitle}>Auction won with Buy Now</Text>
             <Text style={styles.successDetail}>
@@ -414,7 +414,7 @@ export function BuyNowSheet({
               <Ionicons
                 name={error.isAmbiguous ? 'cloud-offline-outline' : 'alert-circle-outline'}
                 size={24}
-                color={error.isAmbiguous ? colors.warning : colors.danger}
+                color={error.isAmbiguous ? colors.warningText : colors.dangerText}
               />
             </View>
             <Text style={styles.errorTitle}>{error.message}</Text>
@@ -560,7 +560,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
   errorText: {
     flex: 1,
     fontSize: TypographyV2.meta.size,
-    color: colors.danger,
+    color: colors.dangerText,
     fontFamily: TypographyV2.meta.fontFamily,
     lineHeight: 18 },
   actions: {

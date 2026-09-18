@@ -371,7 +371,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.textMuted },
   tileMissing: {
     fontSize: TypographyV2.meta.size,
-    color: colors.danger },
+    color: colors.dangerText },
   resetTile: {
     width: '100%',
     backgroundColor: colors.dangerSubtle,
@@ -387,7 +387,7 @@ function createStyles(colors: ThemeColors) {
   resetTileLabel: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.danger,
+    color: colors.dangerText,
     textAlign: 'center' },
   resetTileCaption: {
     fontSize: TypographyV2.meta.size,

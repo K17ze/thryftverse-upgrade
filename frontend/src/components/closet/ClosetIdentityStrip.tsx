@@ -41,7 +41,7 @@ export function ClosetIdentityStrip({ stats }: ClosetIdentityStripProps) {
       </View>
       {stats.totalSavings > 0 ? (
         <View style={[closetStyles.savingsRow, t.savingsRow]}>
-          <Ionicons name="trending-down" size={12} color={colors.success} />
+          <Ionicons name="trending-down" size={12} color={colors.successText} />
           <Text style={[closetStyles.savingsText, t.savingsText]} maxFontSizeMultiplier={2}>
             {formatFromFiat(stats.totalSavings, 'GBP')} in price drops tracked
           </Text>

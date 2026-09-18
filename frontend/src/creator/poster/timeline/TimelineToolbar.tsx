@@ -224,7 +224,7 @@ const ToolButton = React.memo(function ToolButton({
   haptic,
 }: ToolButtonProps) {
   const { colors } = useAppTheme();
-  const tint = danger ? colors.danger : colors.textPrimary;
+  const tint = danger ? colors.dangerText : colors.textPrimary;
   return (
     <PressScale
       onPress={() => {
@@ -240,7 +240,7 @@ const ToolButton = React.memo(function ToolButton({
       accessibilityState={{ disabled: !!disabled }}
       hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
     >
-      <AppIcon name={icon} size={IconSize.lg} color={danger ? 'danger' : 'textPrimary'} opticalCenter={true} accessible={false} />
+      <AppIcon name={icon} size={IconSize.lg} color={danger ? 'dangerText' : 'textPrimary'} opticalCenter={true} accessible={false} />
       <Text style={[toolbarStyles.toolLabel, { color: tint }]} numberOfLines={1}>
         {label}
       </Text>

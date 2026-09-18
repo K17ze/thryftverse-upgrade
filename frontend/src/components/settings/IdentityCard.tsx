@@ -54,8 +54,8 @@ export function IdentityCard({ user, onPress, variant = 'default' }: IdentityCar
           )}
           {user?.isVerified && (
             <View style={[styles.verifiedRow, { backgroundColor: colors.successSubtle }]}>
-              <Ionicons name="checkmark-circle" size={12} color={colors.success} />
-              <Text style={[styles.verifiedLabel, { color: colors.success }]}>Verified</Text>
+              <Ionicons name="checkmark-circle" size={12} color={colors.successText} />
+              <Text style={[styles.verifiedLabel, { color: colors.successText }]}>Verified</Text>
             </View>
           )}
         </View>

@@ -39,7 +39,7 @@ export function ConvertRateTimestamp({
         {label} {rateTimestampLabel}
       </Text>
       {rateExpiryMs !== null && (
-        <Text style={[styles.rateExpiryText, { color: isRateExpired ? colors.danger : colors.textMuted }]}>
+        <Text style={[styles.rateExpiryText, { color: isRateExpired ? colors.dangerText : colors.textMuted }]}>
           {isRateExpired ? ' · Expired' : ` · Valid ${rateExpiryLabel}`}
         </Text>
       )}

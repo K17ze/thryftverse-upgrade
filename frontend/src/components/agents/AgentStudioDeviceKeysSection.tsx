@@ -119,9 +119,9 @@ export function AgentStudioDeviceKeysSection({
                   styles.providerStatus,
                   {
                     color: status === 'connected'
-                      ? colors.success
+                      ? colors.successText
                       : status === 'invalid'
-                        ? colors.danger
+                        ? colors.dangerText
                         : colors.textMuted },
                 ]}
                 numberOfLines={1}
@@ -149,7 +149,7 @@ export function AgentStudioDeviceKeysSection({
                   </Text>
                 ) : null}
                 {state.testResult && state.testResult.status === 'valid' ? (
-                  <Text style={[styles.validNote, { color: colors.success }]}>
+                  <Text style={[styles.validNote, { color: colors.successText }]}>
                     {state.testResult.message}
                   </Text>
                 ) : null}
@@ -285,7 +285,7 @@ export function AgentStudioDeviceKeysSection({
                       styles.testResult,
                       {
                         color:
-                          state.testResult.status === 'valid' ? colors.success : colors.danger },
+                          state.testResult.status === 'valid' ? colors.successText : colors.dangerText },
                     ]}
                   >
                     {state.testResult.message}

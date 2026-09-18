@@ -210,7 +210,7 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
                 })}
               </View>
               {categoryError && (
-                <Text style={[styles.inlineError, { color: colors.danger }]}>
+                <Text style={[styles.inlineError, { color: colors.dangerText }]}>
                   {categoryError}
                 </Text>
               )}
@@ -230,7 +230,7 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
                 containerStyle={{ marginBottom: 0 }}
               />
               {descriptionError && (
-                <Text style={[styles.inlineError, { color: colors.danger }]}>
+                <Text style={[styles.inlineError, { color: colors.dangerText }]}>
                   {descriptionError}
                 </Text>
               )}

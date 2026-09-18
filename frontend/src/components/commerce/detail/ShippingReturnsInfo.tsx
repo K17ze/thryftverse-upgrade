@@ -91,7 +91,7 @@ export function ShippingReturnsInfo({
           </Text>
           <View style={styles.summaryRow}>
             {isFreeShipping ? (
-              <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+              <Ionicons name="checkmark-circle" size={14} color={colors.successText} />
             ) : hasKnownShippingCost ? (
               <Ionicons name="car-outline" size={14} color={colors.textSecondary} />
             ) : (
@@ -134,8 +134,8 @@ export function ShippingReturnsInfo({
           />
           {carbonNeutral ? (
             <View style={[styles.badgeRow, { backgroundColor: colors.successSubtle }]}>
-              <Ionicons name="leaf" size={14} color={colors.success} />
-              <Text style={[styles.badgeText, { color: colors.success }]}>
+              <Ionicons name="leaf" size={14} color={colors.successText} />
+              <Text style={[styles.badgeText, { color: colors.successText }]}>
                 Carbon-neutral shipping
               </Text>
             </View>

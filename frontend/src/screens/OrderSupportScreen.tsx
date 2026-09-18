@@ -408,7 +408,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
                   <Text style={styles.guidanceBody}>{guidance[topic.id] ?? guidance.other}</Text>
                   {isEscrowHeld && (
                     <View style={styles.escrowNoticeRow}>
-                      <Ionicons name="lock-closed" size={12} color={colors.success} />
+                      <Ionicons name="lock-closed" size={12} color={colors.successText} />
                       <Text style={styles.escrowNoticeText}>
                         Your funds remain held in escrow while this request is open.
                       </Text>
@@ -632,7 +632,7 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.success },
+    color: colors.successText },
   topicRow: {
     flexDirection: 'row',
     alignItems: 'center',

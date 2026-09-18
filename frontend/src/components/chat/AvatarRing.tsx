@@ -3,6 +3,7 @@ import { View, StyleSheet } from 'react-native';
 import { CachedImage } from '../CachedImage';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Radius } from '../../theme/designTokens';
+import { colorForId } from '../../utils/avatarColor';
 
 import { Text } from 'react-native';
 
@@ -12,6 +13,12 @@ interface AvatarRingProps {
   isUnread?: boolean;
   ringWidth?: number;
   fallbackInitials?: string;
+  /**
+   * Stable id (counterparty user id for DMs, conversation id for groups)
+   * for the deterministic placeholder color — the same identity grammar
+   * the chat top bar and group avatars use. Omit for a neutral fallback.
+   */
+  seedId?: string;
 }
 
 export function AvatarRing({
@@ -20,10 +27,13 @@ export function AvatarRing({
   isUnread = false,
   ringWidth = 2,
   fallbackInitials,
+  seedId,
 }: AvatarRingProps) {
   const { colors } = useAppTheme();
 
   const ringColor = isUnread ? colors.brand : 'transparent';
+  // AVATAR_PALETTE fills are tuned for ≥3:1 against white initials.
+  const seeded = !uri && seedId ? colorForId(seedId) : null;
 
   return (
     <View style={[styles.container, { width: size, height: size }]}>
@@ -56,12 +66,12 @@ export function AvatarRing({
               width: size - (isUnread ? ringWidth * 2 : 0),
               height: size - (isUnread ? ringWidth * 2 : 0),
               borderRadius: (size - (isUnread ? ringWidth * 2 : 0)) / 2,
-              backgroundColor: colors.surface,
+              backgroundColor: seeded ?? colors.surface,
               justifyContent: 'center',
               alignItems: 'center',
             }}
           >
-            <Text style={{ fontSize: size * 0.35, color: colors.textPrimary, fontWeight: '600' }}>
+            <Text style={{ fontSize: size * 0.35, color: seeded ? '#FFFFFF' : colors.textPrimary, fontWeight: '600' }}>
               {fallbackInitials}
             </Text>
           </View>

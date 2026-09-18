@@ -19,7 +19,7 @@ export function ScamWarningCard({ dismissed, onDismiss, isMe }: ScamWarningCardP
 
   return (
     <View style={[styles.container, { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder }, isMe && styles.containerMe]}>
-      <Ionicons name="shield-outline" size={18} color={colors.warning} />
+      <Ionicons name="shield-outline" size={18} color={colors.warningText} />
       <View style={styles.textCol}>
         <Text style={[styles.body, { color: colors.textSecondary }]}>
           {t('safety.scamWarningBody')}

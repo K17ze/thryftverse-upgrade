@@ -22,7 +22,7 @@ export function RetryState({ onRetry, message = 'Something went wrong.' }: Retry
   return (
     <View style={styles.container}>
       <Reanimated.View entering={enter} style={styles.iconBox}>
-        <Ionicons name="warning-outline" size={64} color={colors.danger} />
+        <Ionicons name="warning-outline" size={64} color={colors.dangerText} />
       </Reanimated.View>
 
       <Reanimated.Text entering={enter} style={styles.title}>

@@ -61,7 +61,7 @@ export function CoOwnAssetTile({
   const allocatedPct = totalUnits > 0 ? Math.round(((totalUnits - availableUnits) / totalUnits) * 100) : 0;
 
   const statusLabel = status === 'open' ? 'Available' : status === 'paused' ? 'Paused' : 'Allocated';
-  const statusColor = status === 'open' ? colors.success : status === 'paused' ? colors.textSecondary : colors.textMuted;
+  const statusColor = status === 'open' ? colors.successText : status === 'paused' ? colors.textSecondary : colors.textMuted;
 
   // Market variant — sortable market row
   if (variant === 'market') {

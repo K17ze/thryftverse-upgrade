@@ -150,7 +150,7 @@ export function LookSocialActions({
         <AppIcon
           name="heart"
           size={IconSize.md}
-          color={liked ? 'danger' : 'textPrimary'}
+          color={liked ? 'dangerText' : 'textPrimary'}
           focused={liked}
           accessible={false}
         />

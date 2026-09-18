@@ -99,7 +99,7 @@ export function ExtractionStatusBanner({
   if (outcome === 'failed') {
     return (
       <View style={styles.row}>
-        <Ionicons name="alert-circle" size={Control.iconCompact} color={colors.warning} />
+        <Ionicons name="alert-circle" size={Control.iconCompact} color={colors.warningText} />
         <Text style={styles.statusText}>Extraction failed — fill fields manually</Text>
       </View>
     );
@@ -108,7 +108,7 @@ export function ExtractionStatusBanner({
   if (outcome === 'outcome_unknown') {
     return (
       <View style={styles.row}>
-        <Ionicons name="help-circle-outline" size={Control.iconCompact} color={colors.warning} />
+        <Ionicons name="help-circle-outline" size={Control.iconCompact} color={colors.warningText} />
         <Text style={styles.statusText}>Extraction result unclear — check and fill manually</Text>
       </View>
     );

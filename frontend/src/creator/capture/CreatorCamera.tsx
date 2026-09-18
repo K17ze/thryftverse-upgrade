@@ -325,7 +325,12 @@ export default function CreatorCamera({
   // ── Framing-guide opacity (crossfade on mode switch) ──
 
   // ── Flip: quick opacity fade (1→0→1) to hide the device switch ──
-  const cameraFlipStyle = useAnimatedStyle(() => ({ opacity: flipOpacity.value }));
+  // Flip fade is applied to a black veil ABOVE the camera, not to the
+  // camera view itself — animating opacity on a SurfaceView's ancestor
+  // switches its composition mode and destroys/recreates the preview
+  // surface mid-session (observed on MIUI: Surface was abandoned →
+  // ERROR_GRAPH_CONFIG on first entry).
+  const cameraFlipVeilStyle = useAnimatedStyle(() => ({ opacity: 1 - flipOpacity.value }));
 
   // ── Permission entrance: timing slide-up + fade when denied ──
   // Per §5.14: entrance uses timing (ease-out), not spring.
@@ -434,7 +439,7 @@ export default function CreatorCamera({
         <CameraFeed
           doubleTapGesture={doubleTapGesture}
           onTapFocus={handleTapFocus}
-          cameraFlipStyle={cameraFlipStyle}
+          cameraFlipVeilStyle={cameraFlipVeilStyle}
           cameraEffect={cameraEffect}
           cameraRef={cameraRef}
           device={device}

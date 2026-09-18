@@ -54,7 +54,7 @@ export function createSellerFulfilmentStyles(colors: ThemeColors) {
     breachFootnote: {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
-      color: colors.danger,
+      color: colors.dangerText,
       marginTop: Space.xs,
       marginBottom: Space.lg },
     // ─── B. One next action ───
@@ -90,7 +90,7 @@ export function createSellerFulfilmentStyles(colors: ThemeColors) {
       flex: 1,
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
-      color: colors.danger,
+      color: colors.dangerText,
       lineHeight: TypographyV2.meta.size + 4 },
     manualAltHint: {
       fontSize: TypographyV2.meta.size,
@@ -216,7 +216,7 @@ export function createSellerFulfilmentStyles(colors: ThemeColors) {
       flex: 1,
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
-      color: colors.danger,
+      color: colors.dangerText,
       lineHeight: TypographyV2.meta.size + 4 },
     // ─── Dispatch extension — quiet row + inline day chips ───
     extensionPendingLine: {

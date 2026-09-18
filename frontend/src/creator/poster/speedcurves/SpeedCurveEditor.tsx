@@ -472,8 +472,8 @@ export function SpeedCurveEditor({ curve, onChange }: SpeedCurveEditorProps) {
             accessibilityHint="Removes this control point"
             style={({ pressed }) => [styles.deleteButton, pressed && { opacity: 0.6 }]}
           >
-            <Ionicons name="trash-outline" size={16} color={colors.danger} />
-            <Text style={[styles.deleteLabel, { color: colors.danger }]}>Delete</Text>
+            <Ionicons name="trash-outline" size={16} color={colors.dangerText} />
+            <Text style={[styles.deleteLabel, { color: colors.dangerText }]}>Delete</Text>
           </Pressable>
         </View>
       )}

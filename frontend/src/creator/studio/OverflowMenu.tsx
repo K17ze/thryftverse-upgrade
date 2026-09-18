@@ -56,7 +56,7 @@ export const OverflowItem = React.memo(function OverflowItem({
   const contentColor = disabled
     ? colors.textMuted
     : danger
-      ? colors.danger
+      ? colors.dangerText
       : colors.textPrimary;
   return (
     <PressScale

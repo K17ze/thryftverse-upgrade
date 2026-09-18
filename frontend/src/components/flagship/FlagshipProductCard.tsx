@@ -90,7 +90,7 @@ export function FlagshipProductCard({
             <Ionicons
               name={saved ? 'heart' : 'heart-outline'}
               size={IconGrammar.standard}
-              color={saved ? colors.danger : colors.scrimTextPrimary}
+              color={saved ? colors.dangerText : colors.scrimTextPrimary}
             />
           </Pressable>
         )}

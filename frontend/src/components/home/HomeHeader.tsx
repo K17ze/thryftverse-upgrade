@@ -200,7 +200,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.semibold,
-    color: colors.danger,
+    color: colors.dangerText,
     letterSpacing: TypographyV2.meta.letterSpacing },
   headerBtn: {
     width: Control.hit,

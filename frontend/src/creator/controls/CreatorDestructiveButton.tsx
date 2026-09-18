@@ -170,7 +170,7 @@ export function CreatorDestructiveButton({
   });
 
   const isDisabled = disabled || loading;
-  const dangerColor = colors.danger;
+  const dangerColor = colors.dangerText;
 
   return (
     <Pressable

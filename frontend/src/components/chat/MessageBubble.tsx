@@ -511,7 +511,7 @@ function MessageBubbleBase({
                 {isUploading || readStatus === 'sending' ? (
                   <Ionicons name="time-outline" size={12} color={metaColor} />
                 ) : hasFailed ? (
-                  <Ionicons name="alert-circle" size={12} color={isMe ? colors.textInverse : colors.danger} />
+                  <Ionicons name="alert-circle" size={12} color={isMe ? colors.textInverse : colors.dangerText} />
                 ) : status === 'reconciling' ? (
                   // The HTTP send failed but the server may have created
                   // the message — a muted sync glyph is the honest state:
@@ -555,7 +555,7 @@ function MessageBubbleBase({
 
         {hasFailed && onRetry ? (
           <Pressable onPress={onRetry} style={styles.retryBadge} accessibilityRole="button" accessibilityLabel="Retry sending message">
-            <Ionicons name="refresh" size={11} color={colors.danger} />
+            <Ionicons name="refresh" size={11} color={colors.dangerText} />
             <Text style={styles.retryText}>Tap to retry</Text>
           </Pressable>
         ) : null}
@@ -571,7 +571,7 @@ function MessageBubbleBase({
             accessibilityRole="button"
             accessibilityLabel="Retry sending agent draft"
           >
-            <Ionicons name="refresh" size={11} color={colors.danger} />
+            <Ionicons name="refresh" size={11} color={colors.dangerText} />
             <Text style={styles.retryText}>Tap to retry</Text>
           </Pressable>
         ) : null}
@@ -820,7 +820,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   retryText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.danger },
+    color: colors.dangerText },
   reactions: {
     flexDirection: 'row',
     gap: 4,

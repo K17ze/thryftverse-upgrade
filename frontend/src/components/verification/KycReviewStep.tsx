@@ -67,7 +67,7 @@ export function KycReviewStep({
             accessibilityLabel="Uploaded document preview"
           />
           <View style={styles.reviewDocumentInfo}>
-            <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+            <Ionicons name="checkmark-circle" size={16} color={colors.successText} />
             <Text style={[styles.reviewDocumentText, { color: colors.textSecondary }]}>
               Document photo attached
             </Text>

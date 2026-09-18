@@ -433,7 +433,7 @@ export function AddMoneySheet({
         {receipt ? (
           <View style={styles.receiptWrap}>
             <View style={[styles.receiptIcon, { backgroundColor: colors.successSubtle }]}>
-              <Ionicons name="checkmark-circle" size={28} color={colors.success} />
+              <Ionicons name="checkmark-circle" size={28} color={colors.successText} />
             </View>
             <Text style={[styles.receiptTitle, { color: colors.textPrimary }]}>
               {receipt.title}
@@ -614,7 +614,7 @@ export function AddMoneySheet({
             )}
 
             {isOffline && (
-              <Text style={[styles.offlineNote, { color: colors.danger }]}>
+              <Text style={[styles.offlineNote, { color: colors.dangerText }]}>
                 You appear to be offline. Add money needs a connection.
               </Text>
             )}

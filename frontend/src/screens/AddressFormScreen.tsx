@@ -305,7 +305,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
           accessibilityRole="alert"
           accessibilityLiveRegion="polite"
         >
-          <AppIcon name="warning" size={IconSize.xs} color="danger" opticalCenter accessible={false} />
+          <AppIcon name="warning" size={IconSize.xs} color="dangerText" opticalCenter accessible={false} />
           <Text style={styles.saveErrorText}>{saveError}</Text>
         </View>
       ) : null}

@@ -165,11 +165,11 @@ export function createGroupMembersStyles(colors: ThemeColors) {
   removeText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.danger },
+    color: colors.dangerText },
   leaveText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.danger },
+    color: colors.dangerText },
   memberActionSheet: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm },
@@ -190,7 +190,7 @@ export function createGroupMembersStyles(colors: ThemeColors) {
     fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary },
   memberActionLabelDanger: {
-    color: colors.danger } });
+    color: colors.dangerText } });
 }
 
 export type GroupMembersStyles = ReturnType<typeof createGroupMembersStyles>;

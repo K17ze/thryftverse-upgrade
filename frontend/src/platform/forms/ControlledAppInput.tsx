@@ -69,7 +69,7 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.danger },
   errorText: {
     fontSize: TypographyV2.meta.size,
-    color: colors.danger,
+    color: colors.dangerText,
     marginTop: Space.xs,
     fontFamily: TypographyV2.meta.fontFamily } });
 }

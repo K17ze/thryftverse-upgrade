@@ -206,9 +206,9 @@ export function AgentStudioConnectionsSection({
           {connections.map((conn, index) => {
             const isLast = index === connections.length - 1;
             const healthColor =
-              conn.healthStatus === 'healthy' ? colors.success
-                : conn.healthStatus === 'failed' || conn.healthStatus === 'revoked' || conn.healthStatus === 'expired' ? colors.danger
-                  : conn.healthStatus === 'degraded' ? colors.warning
+              conn.healthStatus === 'healthy' ? colors.successText
+                : conn.healthStatus === 'failed' || conn.healthStatus === 'revoked' || conn.healthStatus === 'expired' ? colors.dangerText
+                  : conn.healthStatus === 'degraded' ? colors.warningText
                     : colors.textMuted;
             const healthLabel =
               conn.healthStatus === 'healthy' ? t('health.healthy')
@@ -328,14 +328,14 @@ export function AgentStudioConnectionsSection({
           <AppIcon
             name={toast.kind === 'success' ? 'verified' : 'warning'}
             size={IconSize.sm}
-            color={toast.kind === 'success' ? 'success' : 'danger'}
+            color={toast.kind === 'success' ? 'successText' : 'dangerText'}
             opticalCenter
             accessible={false}
           />
           <Text
             style={[
               styles.toastText,
-              { color: toast.kind === 'success' ? colors.success : colors.danger },
+              { color: toast.kind === 'success' ? colors.successText : colors.dangerText },
             ]}
             numberOfLines={3}
           >

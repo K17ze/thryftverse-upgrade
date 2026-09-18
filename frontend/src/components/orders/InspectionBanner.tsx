@@ -76,8 +76,8 @@ export function InspectionBanner({
           accessibilityRole="button"
           accessibilityLabel={t('orderDetail.inspection.reportA11yLabel')}
         >
-          <Ionicons name="alert-circle-outline" size={22} color={colors.danger} aria-hidden={true} />
-          <Text style={[styles.inspectionSecondaryBtnText, { color: colors.danger }]}>
+          <Ionicons name="alert-circle-outline" size={22} color={colors.dangerText} aria-hidden={true} />
+          <Text style={[styles.inspectionSecondaryBtnText, { color: colors.dangerText }]}>
             {t('orderDetail.inspection.reportIssue')}
           </Text>
         </Pressable>

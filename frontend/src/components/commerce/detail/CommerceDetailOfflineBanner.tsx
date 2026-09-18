@@ -40,9 +40,9 @@ export function CommerceDetailOfflineBanner({
           borderColor: colors.warningBorder },
       ]}
     >
-      <Ionicons name="cloud-offline-outline" size={14} color={colors.warning} />
+      <Ionicons name="cloud-offline-outline" size={14} color={colors.warningText} />
       <View style={styles.textWrap}>
-        <Text style={[styles.title, { color: colors.warning }]} numberOfLines={1}>
+        <Text style={[styles.title, { color: colors.warningText }]} numberOfLines={1}>
           Offline
         </Text>
         <Text

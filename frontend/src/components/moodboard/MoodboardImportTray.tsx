@@ -137,7 +137,7 @@ function JobTile({
       <Text
         style={[
           styles.jobStage,
-          { color: failed ? colors.danger : colors.textMuted },
+          { color: failed ? colors.dangerText : colors.textMuted },
         ]}
         numberOfLines={1}
       >

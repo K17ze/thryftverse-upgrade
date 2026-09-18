@@ -88,7 +88,7 @@ export function CoOwnLedgerSummary({
             <Text
               style={[
                 styles.markUsedLabel,
-                { color: isStaleMark ? colors.warning : colors.textSecondary },
+                { color: isStaleMark ? colors.warningText : colors.textSecondary },
               ]}
               numberOfLines={1}
             >
@@ -99,7 +99,7 @@ export function CoOwnLedgerSummary({
             <Text
               style={[
                 styles.markTimestamp,
-                { color: isStaleMark ? colors.warning : colors.textMuted },
+                { color: isStaleMark ? colors.warningText : colors.textMuted },
               ]}
               numberOfLines={1}
             >

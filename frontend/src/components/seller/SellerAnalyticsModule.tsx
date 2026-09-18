@@ -97,8 +97,8 @@ export const SellerAnalyticsModule: React.FC<SellerAnalyticsModuleProps> = ({
     trend == null || trend.direction === 'flat'
       ? colors.textMuted
       : trend.direction === 'up'
-      ? colors.success
-      : colors.danger;
+      ? colors.successText
+      : colors.dangerText;
 
   return (
     <AnimatedPressable

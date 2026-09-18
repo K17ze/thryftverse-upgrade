@@ -98,7 +98,7 @@ export function AuctionBidHistorySheet({
                       <View style={styles.bidRowNameLine}>
                         <Text style={[styles.bidderName, { color: colors.textSecondary }]}>{row.bidderLabel}</Text>
                         {row.isTopBid && (
-                          <Text style={[styles.topBidLabel, { color: colors.success }]}>Top bid</Text>
+                          <Text style={[styles.topBidLabel, { color: colors.successText }]}>Top bid</Text>
                         )}
                       </View>
                       {row.relativeTime && (

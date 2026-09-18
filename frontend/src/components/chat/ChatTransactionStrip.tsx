@@ -152,10 +152,10 @@ export function ChatTransactionStrip({ listingId }: ChatTransactionStripProps) {
   // warning/danger, not the calm "active" brand tint.
   const toneColor = (() => {
     switch (capabilities.statusTone) {
-      case 'danger': return colors.danger;
-      case 'success': return colors.success;
+      case 'danger': return colors.dangerText;
+      case 'success': return colors.successText;
       case 'muted': return colors.textMuted;
-      case 'pending': return colors.warning;
+      case 'pending': return colors.warningText;
       default: return normalised === 'paid' || normalised === 'shipped' || normalised === 'in transit' || normalised === 'out for delivery'
         ? colors.brand
         : colors.textPrimary;
@@ -186,7 +186,7 @@ export function ChatTransactionStrip({ listingId }: ChatTransactionStripProps) {
           {statusLabel}
         </Text>
         {deadlineLabel && (
-          <Text style={[styles.deadline, { color: shipByOverdue ? colors.danger : colors.textSecondary }]} numberOfLines={1}>
+          <Text style={[styles.deadline, { color: shipByOverdue ? colors.dangerText : colors.textSecondary }]} numberOfLines={1}>
             {deadlineLabel}
           </Text>
         )}

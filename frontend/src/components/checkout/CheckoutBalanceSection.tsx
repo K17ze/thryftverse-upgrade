@@ -53,7 +53,7 @@ function CheckoutBalanceSectionBase({ visible, useBalance, balanceLabel, savings
 
       {savingsAmount ? (
         <View style={styles.savingsBadge}>
-          <Ionicons name="wallet-outline" size={12} color={colors.success} importantForAccessibility="no" />
+          <Ionicons name="wallet-outline" size={12} color={colors.successText} importantForAccessibility="no" />
           <Text style={styles.savingsText} maxFontSizeMultiplier={2}>
             Saving {savingsAmount} with wallet balance
           </Text>
@@ -138,6 +138,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
     fontVariant: ['tabular-nums'],
-    color: colors.success,
+    color: colors.successText,
   },
 });

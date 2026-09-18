@@ -64,7 +64,7 @@ export function CapabilityRow({
           <AppIcon
             name={enabled ? 'checkmark-circle' : 'ellipse-outline'}
             size={IconSize.md}
-            color={enabled ? (isCritical ? 'danger' : 'textPrimary') : 'textMuted'}
+            color={enabled ? (isCritical ? 'dangerText' : 'textPrimary') : 'textMuted'}
             opticalCenter
             accessible={false}
           />

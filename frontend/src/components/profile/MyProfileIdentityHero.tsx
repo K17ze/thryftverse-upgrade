@@ -221,7 +221,7 @@ export function MyProfileIdentityHero({
               color={
                 VERIFICATION_TIERS[verificationTier].color === 'brand'
                   ? colors.brand
-                  : colors.success
+                  : colors.successText
               }
               accessibilityLabel={VERIFICATION_TIERS[verificationTier].label}
             />

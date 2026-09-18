@@ -121,7 +121,7 @@ export function CoOwnRiskDisclosure({ disclosures, risks, onReportIssue, acknowl
             <Ionicons
               name="checkmark-circle"
               size={14}
-              color={colors.success}
+              color={colors.successText}
               accessibilityElementsHidden
               importantForAccessibility="no-hide-descendants"
             />

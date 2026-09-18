@@ -64,9 +64,9 @@ export function OfferToLikersSheet({
     surface: colors.surface,
     surfaceAlt: colors.surfaceAlt,
     surfaceElevated: colors.surfaceElevated,
-    danger: colors.danger,
-    success: colors.success,
-    warning: colors.warning,
+    danger: colors.dangerText,
+    success: colors.successText,
+    warning: colors.warningText,
     background: colors.background,
     textInverse: colors.textInverse,
     overlay: colors.overlay };

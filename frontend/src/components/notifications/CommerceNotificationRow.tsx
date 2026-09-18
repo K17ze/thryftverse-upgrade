@@ -44,7 +44,7 @@ export interface CommerceNotificationRowProps {
 
 interface CommerceVisual {
   icon: keyof typeof Ionicons.glyphMap;
-  accentKey: 'success' | 'warning' | 'danger' | 'brand' | 'commerceTrust';
+  accentKey: 'successText' | 'warningText' | 'dangerText' | 'brand' | 'commerceTrust';
   statusLabel: string;
 }
 
@@ -53,39 +53,39 @@ function resolveCommerceVisual(eventType: NotificationEventV2['eventType']): Com
     case 'order_created':
       return { icon: 'bag-outline', accentKey: 'brand', statusLabel: 'New order' };
     case 'order_paid':
-      return { icon: 'card-outline', accentKey: 'success', statusLabel: 'Paid' };
+      return { icon: 'card-outline', accentKey: 'successText', statusLabel: 'Paid' };
     case 'order_dispatched':
       return { icon: 'car-outline', accentKey: 'commerceTrust', statusLabel: 'Dispatched' };
     case 'order_in_transit':
       return { icon: 'airplane-outline', accentKey: 'commerceTrust', statusLabel: 'In transit' };
     case 'order_out_for_delivery':
-      return { icon: 'bicycle-outline', accentKey: 'warning', statusLabel: 'Out for delivery' };
+      return { icon: 'bicycle-outline', accentKey: 'warningText', statusLabel: 'Out for delivery' };
     case 'order_delivered':
-      return { icon: 'checkmark-circle-outline', accentKey: 'success', statusLabel: 'Delivered' };
+      return { icon: 'checkmark-circle-outline', accentKey: 'successText', statusLabel: 'Delivered' };
     case 'order_cancelled':
-      return { icon: 'close-circle-outline', accentKey: 'danger', statusLabel: 'Cancelled' };
+      return { icon: 'close-circle-outline', accentKey: 'dangerText', statusLabel: 'Cancelled' };
     case 'order_refunded':
-      return { icon: 'cash-outline', accentKey: 'warning', statusLabel: 'Refunded' };
+      return { icon: 'cash-outline', accentKey: 'warningText', statusLabel: 'Refunded' };
     case 'order_dispatch_sla_breach':
-      return { icon: 'alert-circle-outline', accentKey: 'danger', statusLabel: 'Dispatch overdue' };
+      return { icon: 'alert-circle-outline', accentKey: 'dangerText', statusLabel: 'Dispatch overdue' };
     case 'price_drop':
-      return { icon: 'trending-down-outline', accentKey: 'success', statusLabel: 'Price drop' };
+      return { icon: 'trending-down-outline', accentKey: 'successText', statusLabel: 'Price drop' };
     case 'saved_search_match':
       return { icon: 'search-outline', accentKey: 'brand', statusLabel: 'Saved search match' };
     case 'offer_created':
       return { icon: 'pricetag-outline', accentKey: 'brand', statusLabel: 'New offer' };
     case 'offer_countered':
-      return { icon: 'swap-horizontal-outline', accentKey: 'warning', statusLabel: 'Counter-offer' };
+      return { icon: 'swap-horizontal-outline', accentKey: 'warningText', statusLabel: 'Counter-offer' };
     case 'offer_accepted':
-      return { icon: 'checkmark-circle-outline', accentKey: 'success', statusLabel: 'Offer accepted' };
+      return { icon: 'checkmark-circle-outline', accentKey: 'successText', statusLabel: 'Offer accepted' };
     case 'offer_declined':
-      return { icon: 'close-circle-outline', accentKey: 'danger', statusLabel: 'Offer declined' };
+      return { icon: 'close-circle-outline', accentKey: 'dangerText', statusLabel: 'Offer declined' };
     case 'offer_expired':
-      return { icon: 'time-outline', accentKey: 'warning', statusLabel: 'Offer expired' };
+      return { icon: 'time-outline', accentKey: 'warningText', statusLabel: 'Offer expired' };
     case 'offer_cancelled':
-      return { icon: 'close-circle-outline', accentKey: 'warning', statusLabel: 'Offer cancelled' };
+      return { icon: 'close-circle-outline', accentKey: 'warningText', statusLabel: 'Offer cancelled' };
     case 'dispatch_extension_proposed':
-      return { icon: 'time-outline', accentKey: 'warning', statusLabel: 'Extension requested' };
+      return { icon: 'time-outline', accentKey: 'warningText', statusLabel: 'Extension requested' };
     case 'dispatch_extension_responded':
       return { icon: 'time-outline', accentKey: 'brand', statusLabel: 'Extension update' };
     default:

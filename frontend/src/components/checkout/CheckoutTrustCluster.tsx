@@ -15,8 +15,8 @@ function CheckoutTrustClusterBase() {
   return (
     <View style={styles.trustCluster}>
       <View style={styles.trustRow}>
-        <Ionicons name="shield-checkmark-outline" size={13} color={colors.success} importantForAccessibility="no" />
-        <Text style={[styles.trustText, { color: colors.success }]} maxFontSizeMultiplier={2}>
+        <Ionicons name="shield-checkmark-outline" size={13} color={colors.successText} importantForAccessibility="no" />
+        <Text style={[styles.trustText, { color: colors.successText }]} maxFontSizeMultiplier={2}>
           Buyer protection included
         </Text>
       </View>

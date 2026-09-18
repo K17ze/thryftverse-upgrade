@@ -244,7 +244,7 @@ export function AssetOverviewDetails({
               )}
               {failedDocument ? (
                 <View accessibilityLiveRegion="polite">
-                  <Text style={[styles.caption, { color: colors.warning }]}>
+                  <Text style={[styles.caption, { color: colors.warningText }]}>
                     Could not open {failedDocument.label}.
                   </Text>
                   <Pressable onPress={() => void openDocument(failedDocument)} style={styles.link}

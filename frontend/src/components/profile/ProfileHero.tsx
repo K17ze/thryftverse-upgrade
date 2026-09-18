@@ -249,7 +249,7 @@ export function ProfileHero({
               <Ionicons
                 name={VERIFICATION_TIERS[verificationTier].icon as keyof typeof Ionicons.glyphMap}
                 size={18}
-                color={VERIFICATION_TIERS[verificationTier].color === 'brand' ? colors.brand : colors.success}
+                color={VERIFICATION_TIERS[verificationTier].color === 'brand' ? colors.brand : colors.successText}
                 style={styles.verifiedBadge}
                 accessibilityLabel={VERIFICATION_TIERS[verificationTier].label}
               />

@@ -54,7 +54,7 @@ function CheckoutVerificationSectionBase({ visible, enabled, onToggle }: Props) 
 
       {enabled ? (
         <View style={styles.enabledBadge}>
-          <Ionicons name="shield-checkmark-outline" size={12} color={colors.success} importantForAccessibility="no" />
+          <Ionicons name="shield-checkmark-outline" size={12} color={colors.successText} importantForAccessibility="no" />
           <Text style={styles.enabledText} maxFontSizeMultiplier={2}>
             Verification requested — a record is added to your order
           </Text>
@@ -126,7 +126,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   freeTag: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
-    color: colors.success,
+    color: colors.successText,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -149,6 +149,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   enabledText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
-    color: colors.success,
+    color: colors.successText,
   },
 });

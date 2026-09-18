@@ -161,7 +161,7 @@ function ProductCardBase({
     : 0;
 
   // Condition badge — color-coded status pill overlaid on the preview.
-  //   New with tags → green (colors.success)
+  //   New with tags → green (colors.successText)
   //   Used (very good / good / satisfactory) → dark gray scrim
   //   Sold → dark gray scrim with a "Sold" label
   // Badge backgrounds are always dark, so the label uses a fixed white
@@ -299,7 +299,7 @@ function ProductCardBase({
               isActive={isFav}
               onToggle={handleToggleFav}
               size={21}
-              activeColor={colors.danger}
+              activeColor={colors.dangerText}
               inactiveColor={colors.scrimTextPrimary}
             />
           </View>
@@ -362,7 +362,7 @@ function ProductCardBase({
                 <Ionicons
                   name="checkmark-circle-outline"
                   size={11}
-                  color={colors.success}
+                  color={colors.successText}
                   style={styles.sellerVerifiedIcon}
                   accessibilityLabel="Verified seller"
                 />

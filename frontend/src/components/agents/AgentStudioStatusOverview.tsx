@@ -39,8 +39,8 @@ export function AgentStudioStatusOverview({
   if (failed) {
     return (
       <Pressable onPress={onRetry} accessibilityRole="button" style={({ pressed }) => [styles.flatRow, { opacity: pressed ? 0.7 : 1 }]}>
-        <Text style={{ color: colors.warning, flex: 1 }}>Some agent data couldn't refresh. Tap to retry.</Text>
-        <AppIcon name="refresh" size={IconSize.md} color="warning" />
+        <Text style={{ color: colors.warningText, flex: 1 }}>Some agent data couldn't refresh. Tap to retry.</Text>
+        <AppIcon name="refresh" size={IconSize.md} color="warningText" />
       </Pressable>
     );
   }
@@ -60,14 +60,26 @@ export function AgentStudioStatusOverview({
             </Text>
             {t('status.agents', { count: agentCount })}
             {'  ·  '}
-            <Text style={{ color: totalConnections > 0 ? colors.success : colors.textMuted }}>
+            {/* Health derives from the healthy/total RATIO, never from
+                totalConnections > 0 — 0/2 healthy is a failure state, not
+                success (F11): all-healthy=success, some=warning, none=danger,
+                no connections at all=muted. */}
+            <Text style={{
+              color: totalConnections === 0
+                ? colors.textMuted
+                : healthyConnections === totalConnections
+                  ? colors.successText
+                  : healthyConnections === 0
+                    ? colors.dangerText
+                    : colors.warningText,
+            }}>
               {healthyConnections}/{totalConnections}
             </Text>
             {' ' + t('status.connections')}
             {pendingApprovalCount > 0 ? (
               <>
                 {'  ·  '}
-                <Text style={{ color: colors.warning }}>
+                <Text style={{ color: colors.warningText }}>
                   {t('status.pendingApprovals', { count: pendingApprovalCount })}
                 </Text>
               </>
@@ -80,7 +92,11 @@ export function AgentStudioStatusOverview({
                 ? t('status.subtitleNoAgents')
                 : totalConnections === 0
                   ? t('status.subtitleNoConnections')
-                  : t('status.subtitleReady')}
+                  : healthyConnections === totalConnections
+                    ? t('status.subtitleReady')
+                    : healthyConnections === 0
+                      ? t('status.subtitleNoHealthy')
+                      : t('status.subtitleDegraded', { healthy: healthyConnections, total: totalConnections })}
           </Text>
           {pendingApprovalCount > 0 ? (
             <Pressable
@@ -89,7 +105,7 @@ export function AgentStudioStatusOverview({
               accessibilityRole="button"
               accessibilityLabel={`View ${pendingApprovalCount} pending approval${pendingApprovalCount === 1 ? '' : 's'}`}
             >
-              <Text style={[styles.pendingActionText, { color: colors.warning }]}>
+              <Text style={[styles.pendingActionText, { color: colors.warningText }]}>
                 {t('status.viewPending', { count: pendingApprovalCount })} →
               </Text>
             </Pressable>

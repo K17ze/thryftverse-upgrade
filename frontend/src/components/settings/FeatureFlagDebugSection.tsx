@@ -65,7 +65,7 @@ function FeatureFlagRow({ flagKey }: { flagKey: FeatureFlagKey }) {
         <Text
           style={[
             flagStyles.statusText,
-            { color: enabled ? colors.success : colors.textMuted },
+            { color: enabled ? colors.successText : colors.textMuted },
           ]}
         >
           {enabled ? 'On' : 'Off'}

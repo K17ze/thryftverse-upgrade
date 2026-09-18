@@ -150,7 +150,7 @@ function useHexFieldStyles(colors: ThemeColors) {
         errorText: {
           fontFamily: Typography.family.regular,
           fontSize: TypographyV2.meta.size,
-          color: colors.danger } }),
+          color: colors.dangerText } }),
     [colors],
   );
 }

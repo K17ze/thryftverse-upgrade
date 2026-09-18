@@ -15,8 +15,12 @@ interface ChatTopBarProps {
   subtitle?: string;
   avatarUrl?: string | null;
   initials?: string;
-  /** Stable id for deterministic group placeholder color. */
-  groupId?: string;
+  /**
+   * Stable id for deterministic placeholder color (conversation id for
+   * groups, counterparty user id for DMs) — matches the inbox/group
+   * identity grammar so the same person reads the same color everywhere.
+   */
+  avatarSeedId?: string;
   /** Show a verified badge next to the title (trusted seller/partner) */
   isVerified?: boolean;
   /**
@@ -45,7 +49,7 @@ export function ChatTopBar({
   subtitle,
   avatarUrl,
   initials,
-  groupId,
+  avatarSeedId,
   isVerified = false,
   isOnline = false,
   onBack,
@@ -149,11 +153,16 @@ export function ChatTopBar({
             accessibilityRole={onTitlePress ? 'button' : undefined}
             accessibilityLabel={onTitlePress ? (variant === 'group' ? 'Open group info' : 'Open profile') : undefined}
           >
-            <View style={[styles.avatar, !avatarUrl && { backgroundColor: variant === 'group' && groupId ? colorForId(groupId) : colors.surfaceAlt }]}>
+            <View style={[styles.avatar, !avatarUrl && { backgroundColor: avatarSeedId ? colorForId(avatarSeedId) : colors.surfaceAlt }]}>
               {avatarUrl ? (
                 <CachedImage uri={avatarUrl} style={styles.avatarImage} contentFit="cover" />
-              ) : variant === 'group' ? (
-                <Text style={[styles.avatarText, { color: colors.textInverse }]}>{initials ?? 'G'}</Text>
+              ) : avatarSeedId ? (
+                // Fixed white — AVATAR_PALETTE fills are tuned for ≥3:1
+                // against white; textInverse flips to black in dark mode
+                // and would fail contrast on the same fills.
+                <Text style={[styles.avatarText, { color: '#FFFFFF' }]}>
+                  {initials ?? (variant === 'group' ? 'G' : '?')}
+                </Text>
               ) : (
                 <Text style={styles.avatarText}>{initials ?? '?'}</Text>
               )}

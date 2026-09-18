@@ -57,18 +57,18 @@ interface ToneStyle {
 function resolveTone(status: SyncStatus, colors: ThemeColors): ToneStyle {
   switch (status) {
     case 'syncing':
-      return { icon: 'sync-outline', color: colors.warning };
+      return { icon: 'sync-outline', color: colors.warningText };
     case 'pending':
-      return { icon: 'sync-outline', color: colors.warning };
+      return { icon: 'sync-outline', color: colors.warningText };
     case 'failed':
-      return { icon: 'warning-outline', color: colors.danger };
+      return { icon: 'warning-outline', color: colors.dangerText };
     case 'offline':
-      return { icon: 'cloud-offline-outline', color: colors.warning };
+      return { icon: 'cloud-offline-outline', color: colors.warningText };
     case 'conflict':
-      return { icon: 'alert-circle-outline', color: colors.danger };
+      return { icon: 'alert-circle-outline', color: colors.dangerText };
     case 'idle':
     default:
-      return { icon: 'checkmark-circle-outline', color: colors.success };
+      return { icon: 'checkmark-circle-outline', color: colors.successText };
   }
 }
 

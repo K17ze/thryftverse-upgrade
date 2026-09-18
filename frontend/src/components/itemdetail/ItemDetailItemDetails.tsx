@@ -40,6 +40,18 @@ export function ItemDetailItemDetails({
 }: ItemDetailItemDetailsProps) {
   const { colors } = useAppTheme();
 
+  // Real rendered overflow (F13): collapse is by LINES (numberOfLines=3),
+  // so expansion must be offered by lines too — a short description with
+  // explicit line breaks still overflows three lines, and a long one-line
+  // string never does. A hidden copy measures the true laid-out line count
+  // at the same width; the character-length check only survives as the
+  // pre-measurement fallback so behaviour never regresses.
+  const DESCRIPTION_COLLAPSED_LINES = 3;
+  const [measuredDescLines, setMeasuredDescLines] = React.useState(0);
+  const descriptionOverflows = measuredDescLines > 0
+    ? measuredDescLines > DESCRIPTION_COLLAPSED_LINES
+    : (item.description?.length ?? 0) > 120;
+
   return (
     <CommerceDetailSection label="Item details" divider variant="editorial">
       {/* ── Condition evidence ──
@@ -88,6 +100,19 @@ export function ItemDetailItemDetails({
       ) : null}
       {item.description ? (
         <View style={styles.descriptionWrap}>
+          {/* Hidden full-measure copy — lays out the untruncated text at
+              the same width to count real rendered lines. Not visible,
+              not touchable, not announced. */}
+          <Text
+            style={[styles.descriptionText, styles.descriptionMeasure]}
+            maxFontSizeMultiplier={2}
+            onTextLayout={(e) => setMeasuredDescLines(e.nativeEvent.lines.length)}
+            pointerEvents="none"
+            accessible={false}
+            importantForAccessibility="no-hide-descendants"
+          >
+            {item.description}
+          </Text>
           {/* Full-area tap target — the entire collapsed text is
               tappable, not just the "Read more" link. Buyers often
               do not notice that a description can be expanded via
@@ -95,14 +120,14 @@ export function ItemDetailItemDetails({
               is the hit target. */}
           <Pressable
             onPress={() => {
-              if (item.description && item.description.length > 120) {
+              if (descriptionOverflows) {
                 setDescriptionExpanded((prev) => !prev);
               }
             }}
             accessibilityLabel={descriptionExpanded ? 'Show less' : 'Read more'}
             accessibilityRole="button"
             accessibilityState={{ expanded: descriptionExpanded }}
-            disabled={descriptionExpanded || (item.description.length <= 120)}
+            disabled={descriptionExpanded || !descriptionOverflows}
           >
             <Text
               style={[styles.descriptionText, { color: colors.textPrimary }]}
@@ -113,7 +138,7 @@ export function ItemDetailItemDetails({
             </Text>
             {/* Gradient fade at the collapse edge when collapsed.
                 Visual signal that there's more content below. */}
-            {!descriptionExpanded && item.description.length > 120 && (
+            {!descriptionExpanded && descriptionOverflows && (
               <LinearGradient
                 // NOTE: hex-alpha required for gradient stops — token substitution not applicable
                 colors={[`${colors.background}00`, colors.background]}
@@ -123,7 +148,7 @@ export function ItemDetailItemDetails({
               />
             )}
           </Pressable>
-          {item.description.length > 120 && (
+          {descriptionOverflows && (
             <AnimatedPressable
               onPress={() => setDescriptionExpanded((prev) => !prev)}
               hitSlop={8}
@@ -326,6 +351,15 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.body.size,
     lineHeight: TypographyV2.body.lineHeight + Space.sm,
     fontFamily: FontFamily.regular,
+  },
+  // Hidden measurement copy — same width and typography as the visible
+  // text so onTextLayout reports the true untruncated line count (F13).
+  descriptionMeasure: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    opacity: 0,
   },
   descriptionToggle: {
     fontSize: TypographyV2.meta.size,

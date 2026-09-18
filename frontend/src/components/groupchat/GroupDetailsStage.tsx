@@ -101,7 +101,7 @@ export function GroupDetailsStage({
           <>
             {createError ? (
               <View style={styles.createErrorBanner}>
-                <AppIcon name="alert" variant="filled" size="sm" color="danger" accessible={false} />
+                <AppIcon name="alert" variant="filled" size="sm" color="dangerText" accessible={false} />
                 <Text style={styles.createErrorText}>{createError}</Text>
                 <AnimatedPressable
                   onPress={onRetryCreate}
@@ -129,15 +129,18 @@ export function GroupDetailsStage({
           </>
         }
       >
-        {/* Cover photo — wide banner, optional. Separate from the circular
-            group avatar. Standard group creation pattern. */}
+        {/* Cover + avatar as one composed identity block — the avatar
+            straddles the cover's bottom edge with a background ring (same
+            grammar as the edit-group and group-info surfaces). Tapping
+            either object opens the media sheet, which owns
+            camera/gallery/presets/remove — no ad-hoc remove chrome. */}
         <AnimatedPressable
           onPress={onPickCoverPhoto}
           disabled={isUploadingCover}
           style={styles.coverSelector}
           accessibilityRole="button"
           accessibilityLabel={coverDisplayUri ? 'Change cover photo' : 'Add cover photo'}
-          accessibilityHint="Choose a wide cover image from camera or gallery"
+          accessibilityHint="Opens options for camera, gallery, presets and remove"
         >
           {coverDisplayUri ? (
             <CachedImage
@@ -159,17 +162,6 @@ export function GroupDetailsStage({
               <ActivityIndicator size="small" color={colors.scrimTextPrimary} />
             </View>
           ) : null}
-          {coverDisplayUri && !isUploadingCover ? (
-            <Pressable
-              style={styles.coverRemoveBtn}
-              onPress={onRemoveCoverPhoto}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Remove cover photo"
-            >
-              <AppIcon name="close" variant="filled" size="lg" color="scrimTextPrimary" accessible={false} />
-            </Pressable>
-          ) : null}
         </AnimatedPressable>
 
         <View style={styles.avatarSelectorWrap}>
@@ -178,8 +170,8 @@ export function GroupDetailsStage({
             disabled={isUploadingPhoto}
             style={styles.avatarSelectorPressable}
             accessibilityRole="button"
-            accessibilityLabel="Set group photo"
-            accessibilityHint="Choose a group photo from camera or gallery"
+            accessibilityLabel={avatarDisplayUri ? 'Change group photo' : 'Set group photo'}
+            accessibilityHint="Opens options for camera, gallery, presets and remove"
           >
             <GroupAvatarMosaic
               members={mosaicMembers}
@@ -198,27 +190,17 @@ export function GroupDetailsStage({
               </View>
             )}
           </AnimatedPressable>
-          <Caption color={colors.textMuted} style={styles.avatarHint}>
-            {isUploadingPhoto
-              ? 'Uploading photo...'
-              : avatarDisplayUri
-                ? 'Tap to change photo'
+          {!avatarDisplayUri || isUploadingPhoto ? (
+            <Caption color={colors.textMuted} style={styles.avatarHint}>
+              {isUploadingPhoto
+                ? 'Uploading photo…'
                 : 'Tap to add photo · mosaic auto-generated'}
-          </Caption>
-          {avatarDisplayUri && !isUploadingPhoto ? (
-            <Pressable
-              onPress={onRemoveGroupPhoto}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Remove group photo"
-            >
-              <Caption color={colors.danger} style={styles.removeText}>Remove photo</Caption>
-            </Pressable>
+            </Caption>
           ) : null}
           {avatarUploadFailed ? (
             <View style={styles.mediaErrorRow}>
-              <AppIcon name="warning" size="micro" color="danger" accessible={false} />
-              <Text style={[styles.mediaErrorText, { color: colors.danger }]} numberOfLines={2}>
+              <AppIcon name="warning" size="micro" color="dangerText" accessible={false} />
+              <Text style={[styles.mediaErrorText, { color: colors.dangerText }]} numberOfLines={2}>
                 {avatarUploadError}
               </Text>
               <Pressable
@@ -297,6 +279,8 @@ export function GroupDetailsStage({
         title={mediaSheetTarget === 'avatar' ? 'Group photo' : 'Cover photo'}
         presets={getAestheticPresets(mediaSheetTarget)}
         onSelectPreset={onSelectPreset}
+        canRemove={mediaSheetTarget === 'avatar' ? Boolean(avatarDisplayUri) : Boolean(coverDisplayUri)}
+        onRemove={mediaSheetTarget === 'avatar' ? onRemoveGroupPhoto : onRemoveCoverPhoto}
       />
     </FlagshipScreen>
   );

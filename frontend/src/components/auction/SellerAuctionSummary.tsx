@@ -23,7 +23,7 @@ export function SellerAuctionSummary({
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const active = stats.live;
-  const activeColor = active > 0 ? colors.danger : colors.textPrimary;
+  const activeColor = active > 0 ? colors.dangerText : colors.textPrimary;
   const hasBidContext = stats.totalBids > 0 && stats.highestBid > 0;
   const highestBidIze = hasBidContext
     ? formatAuctionIze(toIze(stats.highestBid, currencyCode, fxRates))
@@ -38,7 +38,7 @@ export function SellerAuctionSummary({
         {/* Primary measure — Active auctions */}
         <View style={styles.summaryPrimary}>
           <Text style={[styles.summaryPrimaryValue, { color: activeColor }]}>{active}</Text>
-          <Text style={[styles.summaryPrimaryLabel, { color: active > 0 ? colors.danger : colors.textMuted }]}>
+          <Text style={[styles.summaryPrimaryLabel, { color: active > 0 ? colors.dangerText : colors.textMuted }]}>
             Active auctions
           </Text>
         </View>

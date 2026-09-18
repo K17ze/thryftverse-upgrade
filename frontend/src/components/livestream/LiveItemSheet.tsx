@@ -73,13 +73,13 @@ export function LiveItemSheet({ lot, buyNowPending, onClose, onPlaceBid, onBuyNo
           <AppIcon
             name="clock"
             size={IconSize.xs}
-            color={timeRemaining <= 10 ? 'danger' : 'textSecondary'}
+            color={timeRemaining <= 10 ? 'dangerText' : 'textSecondary'}
             accessible={false}
           />
           <Text
             style={[
               styles.sheetTimeText,
-              { color: timeRemaining <= 10 ? colors.danger : colors.textSecondary },
+              { color: timeRemaining <= 10 ? colors.dangerText : colors.textSecondary },
             ]}
           >
             {formatClock(timeRemaining)}

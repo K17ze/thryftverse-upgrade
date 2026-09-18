@@ -87,7 +87,7 @@ export function LayerFloatingMenu({ visible, actions, x, y }: LayerFloatingMenuP
           <Ionicons
             name={action.icon}
             size={18}
-            color={action.destructive ? colors.danger : colors.textPrimary}
+            color={action.destructive ? colors.dangerText : colors.textPrimary}
           />
         </Pressable>
       ))}

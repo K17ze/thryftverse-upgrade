@@ -293,12 +293,15 @@ describe('product-detail-flagship-reconstruction: Auction terminal dock', () => 
 // Spec 03_COOWN: Order book typography consistency
 // ───────────────────────────────────────────────────────────────────────────
 // adjustsFontSizeToFit was removed to maintain stable design-token
-// typography. numberOfLines={1} handles truncation instead.
+// typography. Values wrap to at most two lines inside the fixed rails —
+// financial figures must stay exact at large text sizes, never clipped
+// (F12 accessibility fix supersedes the earlier numberOfLines={1} rule).
 describe('product-detail-flagship-reconstruction: Co-Own order book typography', () => {
   const src = readComponent('coown/CoOwnOrderBook.tsx');
 
-  it('price column uses numberOfLines for truncation', () => {
-    expect(src).toContain('numberOfLines={1}');
+  it('price column wraps to at most two lines (F12 — no silent clipping)', () => {
+    expect(src).toContain('numberOfLines={2}');
+    expect(src).not.toContain('numberOfLines={1}');
   });
 
   it('does not use adjustsFontSizeToFit (stable typography)', () => {

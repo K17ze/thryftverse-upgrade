@@ -89,7 +89,7 @@ export function Confetti({ count = 40 }: { count?: number }) {
   const reducedMotion = useReducedMotion();
   const { colors } = useAppTheme();
   const { width, height } = useWindowDimensions();
-  const confettiColors = [colors.antiqueGold, colors.danger, colors.bronze, colors.surfaceElevated];
+  const confettiColors = [colors.antiqueGold, colors.dangerText, colors.bronze, colors.surfaceElevated];
   const particles = Array.from({ length: count }).map((_, i) => ({
     id: i,
     x: (Math.random() - 0.5) * width,

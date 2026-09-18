@@ -297,7 +297,7 @@ export default function DistributionHistoryScreen() {
           {/* Summary */}
           <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Total received (settled)</Text>
-            <Text style={[styles.summaryValue, { color: colors.success }]}>
+            <Text style={[styles.summaryValue, { color: colors.successText }]}>
               {formatDistributionAmount(totalReceived)}
             </Text>
             <Text style={[styles.summaryCount, { color: colors.textSecondary }]}>
@@ -309,7 +309,7 @@ export default function DistributionHistoryScreen() {
                 {pendingDistributions.length > 0 && (
                   <View style={styles.breakdownRow}>
                     <Text style={[styles.breakdownLabel, { color: colors.textMuted }]}>Pending</Text>
-                    <Text style={[styles.breakdownValue, { color: colors.warning }]}>
+                    <Text style={[styles.breakdownValue, { color: colors.warningText }]}>
                       {formatDistributionAmount(pendingTotal)}
                     </Text>
                   </View>
@@ -317,7 +317,7 @@ export default function DistributionHistoryScreen() {
                 {reversedDistributions.length > 0 && (
                   <View style={styles.breakdownRow}>
                     <Text style={[styles.breakdownLabel, { color: colors.textMuted }]}>Reversed</Text>
-                    <Text style={[styles.breakdownValue, { color: colors.danger }]}>
+                    <Text style={[styles.breakdownValue, { color: colors.dangerText }]}>
                       {formatDistributionAmount(reversedTotal)}
                     </Text>
                   </View>
@@ -349,8 +349,8 @@ export default function DistributionHistoryScreen() {
             {dripFetchError ? (
               <View style={[styles.dripErrorWrap, { borderTopColor: colors.borderSubtle }]}>
                 <View style={styles.dripErrorRow}>
-                  <Ionicons name="cloud-offline-outline" size={16} color={colors.danger} />
-                  <Text style={[styles.dripErrorText, { color: colors.danger }]} numberOfLines={2}>
+                  <Ionicons name="cloud-offline-outline" size={16} color={colors.dangerText} />
+                  <Text style={[styles.dripErrorText, { color: colors.dangerText }]} numberOfLines={2}>
                     {dripFetchError}
                   </Text>
                 </View>
@@ -376,12 +376,12 @@ export default function DistributionHistoryScreen() {
                         </Text>
                         {state.enrolled && (
                           <View style={[styles.dripEnrolledBadge, { backgroundColor: colors.successSubtle }]}>
-                            <Text style={[styles.dripEnrolledText, { color: colors.success }]}>Active</Text>
+                            <Text style={[styles.dripEnrolledText, { color: colors.successText }]}>Active</Text>
                           </View>
                         )}
                         {/* U55: Per-asset error indicator */}
                         {state.error && (
-                          <Ionicons name="alert-circle" size={14} color={colors.danger} />
+                          <Ionicons name="alert-circle" size={14} color={colors.dangerText} />
                         )}
                       </View>
                       <Switch
@@ -396,7 +396,7 @@ export default function DistributionHistoryScreen() {
                     </View>
                     {/* U55: Per-asset error message */}
                     {state.error && (
-                      <Text style={[styles.dripAssetError, { color: colors.danger }]} numberOfLines={1}>
+                      <Text style={[styles.dripAssetError, { color: colors.dangerText }]} numberOfLines={1}>
                         {state.error}
                       </Text>
                     )}
@@ -454,12 +454,12 @@ export default function DistributionHistoryScreen() {
             // U50: Status-specific amount badge colours — settled (success),
             // pending (warning), reversed (danger), reinvested (brand/info),
             // reinvest_failed (danger), retained_cash (muted).
-            const amountColor = dist.status === 'settled' ? colors.success
-              : dist.status === 'reversed' ? colors.danger
+            const amountColor = dist.status === 'settled' ? colors.successText
+              : dist.status === 'reversed' ? colors.dangerText
               : dist.status === 'reinvested' ? colors.brand
-              : dist.status === 'reinvest_failed' ? colors.danger
+              : dist.status === 'reinvest_failed' ? colors.dangerText
               : dist.status === 'retained_cash' ? colors.textSecondary
-              : colors.warning;
+              : colors.warningText;
             const amountBg = dist.status === 'settled' ? colors.successSubtle
               : dist.status === 'reversed' ? colors.dangerSubtle
               : dist.status === 'reinvested' ? (colors.brandSubtle ?? colors.surfaceAlt)

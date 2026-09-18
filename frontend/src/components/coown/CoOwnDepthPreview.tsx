@@ -53,8 +53,8 @@ export function CoOwnDepthPreview({
           Depth impact
         </Text>
         <View style={[styles.warningRow, { backgroundColor: colors.warningSubtle }]}>
-          <Ionicons name="warning-outline" size={14} color={colors.warning} />
-          <Text style={[styles.warningText, { color: colors.warning }]}>
+          <Ionicons name="warning-outline" size={14} color={colors.warningText} />
+          <Text style={[styles.warningText, { color: colors.warningText }]}>
             Slippage beyond visible depth — use limit
           </Text>
         </View>
@@ -87,7 +87,7 @@ export function CoOwnDepthPreview({
         <Text
           style={[
             styles.barLabel,
-            { color: isHighImpact ? colors.warning : colors.textSecondary },
+            { color: isHighImpact ? colors.warningText : colors.textSecondary },
           ]}
         >
           {consumePct}%

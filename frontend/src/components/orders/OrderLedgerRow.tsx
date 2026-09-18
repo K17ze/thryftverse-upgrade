@@ -171,11 +171,11 @@ function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowPr
             <Ionicons
               name={shipByOverdue ? 'alert-circle' : 'time-outline'}
               size={12}
-              color={shipByOverdue ? colors.danger : shipByUrgent ? colors.warning : colors.textSecondary}
+              color={shipByOverdue ? colors.dangerText : shipByUrgent ? colors.warningText : colors.textSecondary}
             />
             <Text style={[
               styles.deadlineText,
-              { color: shipByOverdue ? colors.danger : shipByUrgent ? colors.warning : colors.textSecondary },
+              { color: shipByOverdue ? colors.dangerText : shipByUrgent ? colors.warningText : colors.textSecondary },
             ]}>
               {shipByOverdue
                 ? 'Overdue — dispatch now'
@@ -192,8 +192,8 @@ function OrderLedgerRowImpl({ order, formattedTotal, onPress }: OrderLedgerRowPr
             flight on this order. A single muted line, not a badge: it's a
             state signal, not an action. */}
         {order.hasOpenResolution && (
-          <Text style={[styles.tracking, { color: colors.warning }]} numberOfLines={1}>
-            <Ionicons name="shield-half-outline" size={11} color={colors.warning} /> Resolution in progress
+          <Text style={[styles.tracking, { color: colors.warningText }]} numberOfLines={1}>
+            <Ionicons name="shield-half-outline" size={11} color={colors.warningText} /> Resolution in progress
           </Text>
         )}
 

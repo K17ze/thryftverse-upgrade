@@ -209,7 +209,7 @@ export function LookCanvasStage({
         {/* Source look error banner — minimal, one line + retry button */}
         {sourceLookError && !isLoadingSourceLook && (
           <View style={[styles.sourceLookErrorBanner, { backgroundColor: colors.surfaceAlt }]}>
-            <Text style={[styles.sourceLookErrorText, { color: colors.danger }]}>
+            <Text style={[styles.sourceLookErrorText, { color: colors.dangerText }]}>
               Couldn't load source look
             </Text>
             <Pressable
@@ -219,7 +219,7 @@ export function LookCanvasStage({
               accessibilityHint="Reloads the source look"
               accessibilityRole="button"
             >
-              <Text style={[styles.sourceLookErrorRetry, { color: colors.danger }]}>
+              <Text style={[styles.sourceLookErrorRetry, { color: colors.dangerText }]}>
                 Retry
               </Text>
             </Pressable>

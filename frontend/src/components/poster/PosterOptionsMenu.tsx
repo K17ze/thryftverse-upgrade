@@ -97,8 +97,8 @@ function PosterOptionsMenuImpl({
                 accessibilityRole="menuitem"
                 accessibilityLabel="Delete story"
               >
-                <AppIcon name="trash" size={IconSize.md} color="danger" opticalCenter accessible={false} />
-                <Text style={[styles.itemText, { color: colors.danger }]}>Delete story</Text>
+                <AppIcon name="trash" size={IconSize.md} color="dangerText" opticalCenter accessible={false} />
+                <Text style={[styles.itemText, { color: colors.dangerText }]}>Delete story</Text>
               </Pressable>
             </>
           )}

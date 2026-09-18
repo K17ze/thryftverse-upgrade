@@ -410,7 +410,7 @@ export function MakeOfferSheet({
         </Text>
         {discountPct ? (
           <View style={[styles.discountChip, { backgroundColor: colors.successSubtle }]}>
-            <Text style={[styles.discountChipText, { color: colors.success }]}>
+            <Text style={[styles.discountChipText, { color: colors.successText }]}>
               -{discountPct}%
             </Text>
           </View>
@@ -525,8 +525,8 @@ export function MakeOfferSheet({
           accessibilityRole="alert"
           accessibilityLiveRegion="polite"
         >
-          <Ionicons name="alert-circle-outline" size={15} color={colors.danger} accessible={false} />
-          <Text style={[styles.errorText, { color: colors.danger }]}>{errorMsg}</Text>
+          <Ionicons name="alert-circle-outline" size={15} color={colors.dangerText} accessible={false} />
+          <Text style={[styles.errorText, { color: colors.dangerText }]}>{errorMsg}</Text>
         </View>
       ) : null}
 

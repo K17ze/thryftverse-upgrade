@@ -75,9 +75,9 @@ export function DispatchCountdown({ shipByDate, shipped }: Props) {
   const urgency = resolveUrgency(msRemaining);
 
   const color =
-    urgency === 'overdue' ? colors.danger :
-    urgency === 'urgent' ? colors.danger :
-    urgency === 'warning' ? colors.warning :
+    urgency === 'overdue' ? colors.dangerText :
+    urgency === 'urgent' ? colors.dangerText :
+    urgency === 'warning' ? colors.warningText :
     colors.textPrimary;
 
   const bgColor =

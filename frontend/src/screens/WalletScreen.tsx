@@ -258,7 +258,7 @@ export default function WalletScreen({ navigation }: Props) {
         {hasPendingAttention && !balanceHidden && (
           <FlagshipNavigationRow
             icon="time-outline"
-            iconColor={colors.warning}
+            iconColor={colors.warningText}
             title={pendingAttentionTitle}
             onPress={handleViewEarnings}
             style={{ marginTop: Space.md }}
