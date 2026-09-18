@@ -96,7 +96,6 @@ export default function SavedSearchesScreen({ navigation }: Props) {
       sort: search.filters.sort ?? 'Recommended',
       priceMin: search.filters.minPrice ?? null,
       priceMax: search.filters.maxPrice ?? null,
-      sustainableOnly: false,
     });
     navigation.navigate('Browse', {
       categoryId,

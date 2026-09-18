@@ -71,7 +71,6 @@ export default function CategoryDetailScreen() {
     browseFilters.brands.length > 0 ||
     browseFilters.sizes.length > 0 ||
     browseFilters.condition !== 'Any' ||
-    browseFilters.sustainableOnly ||
     browseFilters.priceMin != null ||
     browseFilters.priceMax != null;
 
@@ -374,19 +373,6 @@ export default function CategoryDetailScreen() {
                 <Text style={[styles.filterPillText, styles.filterPillTextActive]}>{browseFilters.condition}</Text>
               </AnimatedPressable>
             )}
-            {browseFilters.sustainableOnly && (
-              <AnimatedPressable
-                style={[styles.filterPill, styles.filterPillActive]}
-                onPress={() => { haptic.light(); updateBrowseFilters({ sustainableOnly: false }); }}
-                activeOpacity={0.85}
-                accessibilityRole="switch"
-                accessibilityState={{ checked: browseFilters.sustainableOnly }}
-                accessibilityLabel="Toggle sustainable items only"
-              >
-                <Ionicons name="leaf" size={14} color={colors.textPrimary} />
-                <Text style={[styles.filterPillText, styles.filterPillTextActive]}>Sustainable</Text>
-              </AnimatedPressable>
-            )}
           </ScrollView>
         </View>
 
@@ -431,7 +417,7 @@ export default function CategoryDetailScreen() {
               onPressItem={(item) =>
                 openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'CategoryDetail' })
               }
-              numColumns={2}
+              numColumns={3}
               onItemSaveToggle={handleQuickSave}
               onItemSaveLongPress={handleSaveLongPress}
               isItemSaved={isSavedProduct}
@@ -450,7 +436,6 @@ export default function CategoryDetailScreen() {
                   brands: [],
                   sizes: [],
                   condition: 'Any',
-                  sustainableOnly: false,
                   priceMin: null,
                   priceMax: null,
                   sort: 'Recommended' });

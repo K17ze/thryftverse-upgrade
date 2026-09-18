@@ -5,31 +5,25 @@ import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { Space, Control } from '../../../theme/designTokens';
 import { FontFamily } from '../../../theme/fontFamily';
 import { TypographyV2 } from '../../../theme/typography.v2';
-import { CommerceDetailSellerRow } from './CommerceDetailSellerRow';
 import { formatShortDate } from '../../../utils/dateFormat';
 import type { SellerTrustSummary, ListingCommerceContext } from '../../../platform/product/listingDetailContract';
 
 /**
  * First-viewport seller trust dossier.
  *
- * Composes the rich seller row (avatar, name, verification, stats)
- * with the inline trust-facts IIFE that follows it — seller rating,
- * verification, response time, dispatch time, and buyer protection
- * fallback. Up to three facts are elevated as flat hairline-separated
- * rows. This is the buyer's trust signal: who is selling this item,
- * rendered display-only in the first viewport.
+ * Renders the inline trust-facts only — seller rating, response time,
+ * dispatch time, and buyer protection fallback — as flat hairline-
+ * separated rows. Seller identity is deliberately NOT repeated here:
+ * the navigable SellerInfoCard in Zone E is the sole profile entry
+ * point, and a second avatar/name row read as a duplicated link.
  */
 export interface CommerceTrustDossierProps {
   seller: SellerTrustSummary | null;
-  sellerStatsLine: string | undefined;
-  sellerVerified: boolean;
   commerce: ListingCommerceContext;
 }
 
 export function CommerceTrustDossier({
   seller,
-  sellerStatsLine,
-  sellerVerified,
   commerce,
 }: CommerceTrustDossierProps) {
   const { colors } = useAppTheme();
@@ -37,32 +31,6 @@ export function CommerceTrustDossier({
 
   return (
     <>
-      {/* ── First-viewport seller trust row (display-only) ──
-          Seller identity + verification badge + stats line appears
-          after the price/identity chapter. This is the buyer's trust
-          signal — who is selling this item. Display-only — no onPress.
-          The full SellerInfoCard (with Follow / Message / View shop
-          actions and the "More from this seller" rail) lives in Zone
-          E below and is the sole profile navigation point. */}
-      {seller ? (
-        <View style={[styles.firstViewportSellerRow, { borderBottomColor: colors.borderSubtle }]}>
-          <CommerceDetailSellerRow
-            variant="rich"
-            avatarUri={seller.avatar ?? undefined}
-            name={seller.username}
-            verified={sellerVerified}
-            statsLine={sellerStatsLine}
-            ratingLine={
-              seller?.rating != null && seller.rating > 0
-                ? (seller.reviewCount != null && seller.reviewCount > 0
-                  ? `${seller.rating.toFixed(1)} · ${seller.reviewCount} reviews`
-                  : `${seller.rating.toFixed(1)}`)
-                : undefined
-            }
-            locationLine={seller?.location ?? undefined}
-          />
-        </View>
-      ) : null}
 
       {/* ── Zone C — Trust facts (max 3) ──
           Seller rating and dispatch time — the facts a buyer needs
@@ -92,7 +60,18 @@ export function CommerceTrustDossier({
               : seller?.awayMessage || 'Seller away — shop paused',
           });
         }
-        // Rating and verification already belong to the seller identity above.
+        // 2. Seller rating — the trust signal the removed identity row
+        // used to carry; kept as a fact row so the first viewport still
+        // shows reputation without duplicating the Zone E seller card.
+        if (seller?.rating != null && seller.rating > 0) {
+          trustRows.push({
+            icon: 'star',
+            label:
+              seller.reviewCount != null && seller.reviewCount > 0
+                ? `${seller.rating.toFixed(1)} · ${seller.reviewCount} reviews`
+                : `${seller.rating.toFixed(1)} seller rating`,
+          });
+        }
         // 3. Response time — "Usually responds in 2h" signal. Gated on
         // real measured hours: the backend infers responseTimeLabel from
         // response-rate bands when avgResponseHours is null, and that
@@ -163,16 +142,6 @@ export function CommerceTrustDossier({
 }
 
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
-  // ── First-viewport seller trust row ──
-  // Sits on the flat canvas right after the media stage, before the
-  // price identity chapter. Horizontal padding matches the identity
-  // rhythm; no card surface — hairline-only separation per surface
-  // budget. The row itself carries its own vertical padding.
-  firstViewportSellerRow: {
-    paddingHorizontal: Space.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'transparent', // overridden inline with theme color
-  },
   // ── Trust facts (flat rows with hairline separators) ──
   // Flat rows, no chips, no cards. Each row is one fact with icon +
   // label, separated by hairlines. Flat canvas + hairlines are the

@@ -507,7 +507,7 @@ export default function LooksTab() {
         ref={scrollRef}
         data={looks}
         masonry
-        numColumns={2}
+        numColumns={3}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         onEndReached={onEndReached}
@@ -633,8 +633,8 @@ function createStyles(colors: ThemeColors) {
       letterSpacing: TypographyV2.meta.letterSpacing },
     // ── Tile ──
     tileCell: {
-      paddingHorizontal: Space.sm,
-      paddingBottom: Space.sm,
+      paddingHorizontal: Space.xs,
+      paddingBottom: Space.xs,
       width: '100%' },
     tile: {
       width: '100%',

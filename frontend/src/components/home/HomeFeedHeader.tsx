@@ -353,13 +353,10 @@ export function HomeFeedHeader({
           <View style={{ flex: 1 }}>
             <EmptyState
               density="compact"
-              icon="thumbs-up-outline"
-              title="No recommendations yet"
-              subtitle="We're learning what you like. Browse listings and save items to build your feed."
+              title="Nothing picked for you yet"
+              subtitle="Your feed builds as you browse and save."
               ctaLabel="Browse all"
               onCtaPress={onBrowse}
-              secondaryCtaLabel="Refresh"
-              onSecondaryCtaPress={onForYouRefresh}
             />
           </View>
         ) : (
@@ -442,11 +439,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.xs,
     alignItems: 'center' },
   signalChip: {
-    paddingHorizontal: Space.sm + 2,
-    paddingVertical: Space.xs,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
     borderRadius: RadiusRoleValue.pillAvatar,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    borderColor: colors.borderSubtle,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5 },

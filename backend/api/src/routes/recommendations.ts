@@ -744,16 +744,17 @@ export function registerRecommendationRoutes({
        seller_response_times AS (
          WITH seller_convos AS (
            SELECT
-             c.seller_id,
+             li.seller_id,
              c.id AS conversation_id,
-             MIN(CASE WHEN m.sender_user_id = c.seller_id THEN m.created_at END) AS first_seller_msg,
-             MIN(CASE WHEN m.sender_user_id != c.seller_id THEN m.created_at END) AS first_buyer_msg
+             MIN(CASE WHEN m.sender_user_id = li.seller_id THEN m.created_at END) AS first_seller_msg,
+             MIN(CASE WHEN m.sender_user_id != li.seller_id THEN m.created_at END) AS first_buyer_msg
            FROM chat_messages m
-           JOIN conversations c ON c.id = m.conversation_id
+           JOIN chat_conversations c ON c.id = m.conversation_id
+           JOIN listings li ON li.id = c.item_id
            WHERE m.sender_user_id IS NOT NULL
              AND m.deleted_for_everyone_at IS NULL
              AND m.created_at > NOW() - INTERVAL '30 days'
-           GROUP BY c.seller_id, c.id
+           GROUP BY li.seller_id, c.id
          )
          SELECT seller_id,
            PERCENTILE_CONT(0.5) WITHIN GROUP (

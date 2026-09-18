@@ -248,7 +248,7 @@ export function DiscoveryFeedView({
   if (isLoading) {
     return (
       <View style={styles.skeletonWrap}>
-        <MasonrySkeleton numColumns={2} itemCount={8} />
+        <MasonrySkeleton numColumns={3} itemCount={9} />
       </View>
     );
   }
@@ -260,7 +260,7 @@ export function DiscoveryFeedView({
       onLookPress={onLookPress}
       onPosterPress={onPosterPress}
       onMoodboardPress={onMoodboardPress}
-      numColumns={2}
+      numColumns={3}
       isLoading={isLoading}
       hasMore={hasMore}
       isLoadingMore={isLoadingMore}

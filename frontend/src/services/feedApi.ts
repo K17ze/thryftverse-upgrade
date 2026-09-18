@@ -256,7 +256,6 @@ export interface ListingSearchFilters {
   sizes?: string[];
   priceMin?: number;
   priceMax?: number;
-  sustainableOnly?: boolean;
   sort?: ListingSearchSort;
   page?: number;
 }
@@ -281,7 +280,6 @@ export async function searchListingsFromApi(
   if (options.sizes && options.sizes.length > 0) params.set('sizes', options.sizes.join(','));
   if (options.priceMin != null) params.set('priceMin', String(options.priceMin));
   if (options.priceMax != null) params.set('priceMax', String(options.priceMax));
-  if (options.sustainableOnly) params.set('sustainableOnly', 'true');
   if (options.sort && options.sort !== 'relevance') params.set('sort', options.sort);
   if (options.page && options.page > 1) params.set('page', String(options.page));
 

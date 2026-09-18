@@ -76,5 +76,19 @@ export function useSaveToCollectionPicker() {
     });
   }, [getItemCollections, hasSeenSaveToListHint, haptic, isSavedProduct, markSaveToListHintSeen, openSavePicker, requireAuth, show, toggleSavedProduct]);
 
-  return { savePickerItemId, handleQuickSave, handleSaveLongPress, closeSavePicker };
+  /**
+   * Teaches the hold-to-file gesture on surfaces where items are already
+   * saved (the Closet) — there is no quick-save tap to piggyback on there.
+   * Same guards as the quick-save hint: once per session, never again once
+   * the gesture has been learned or dismissed.
+   */
+  const teachLongPressHint = useCallback(() => {
+    if (hasSeenSaveToListHint || hintShownThisSession) return;
+    hintShownThisSession = true;
+    show('Hold a saved item to add it to a list', 'info', {
+      onDismiss: markSaveToListHintSeen,
+    });
+  }, [hasSeenSaveToListHint, markSaveToListHintSeen, show]);
+
+  return { savePickerItemId, handleQuickSave, handleSaveLongPress, closeSavePicker, teachLongPressHint };
 }

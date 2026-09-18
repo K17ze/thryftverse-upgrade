@@ -224,6 +224,12 @@ export function BottomSheet({
   const nativeScrollGesture = React.useMemo(() => Gesture.Native(), []);
   const panGesture = Gesture.Pan()
     .requireExternalGestureToFail(nativeScrollGesture)
+    // The sheet dismisses on vertical drags only. Without the offset
+    // constraints the pan activates on horizontal drags too — once the
+    // native scroll fails — and pre-empts horizontal responders inside
+    // the content (e.g. the offer sheet's price slider).
+    .activeOffsetY([-10, 10])
+    .failOffsetX([-15, 15])
     .onStart(() => {
       'worklet';
       contextY.value = translateY.value;

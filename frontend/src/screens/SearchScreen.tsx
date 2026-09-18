@@ -111,7 +111,6 @@ export default function SearchScreen() {
     browseFilters.brands.length +
     browseFilters.sizes.length +
     (browseFilters.condition !== 'Any' ? 1 : 0) +
-    (browseFilters.sustainableOnly ? 1 : 0) +
     (browseFilters.priceMin != null || browseFilters.priceMax != null ? 1 : 0);
 
   // The autocomplete surface only mounts when it can render at least one

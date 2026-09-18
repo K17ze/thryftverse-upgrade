@@ -5,7 +5,6 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, Stroke} from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { FlagshipEmptyGraphic } from '../flagship';
 
 export type CoOwnStateVariant =
   | 'loading'
@@ -36,6 +35,17 @@ export interface CoOwnStateCanvasProps {
   restrictedReason?: string;
   children?: React.ReactNode;
 }
+
+/** Graphic variants resolve to a single bare glyph — no tinted-circle
+ *  chrome. The state icon stays semantic (search for discovery-empty,
+ *  cube for ledger-empty) but quiet: small, muted, one optical size. */
+const GRAPHIC_ICON_MAP: Record<'bag' | 'box' | 'search' | 'chat' | 'image', keyof typeof Ionicons.glyphMap> = {
+  bag: 'bag-outline',
+  box: 'cube-outline',
+  search: 'search-outline',
+  chat: 'chatbubble-outline',
+  image: 'image-outline',
+};
 
 const DEFAULTS: Record<CoOwnStateVariant, { title: string; subtitle: string; icon: string; graphic: 'bag' | 'box' | 'search' | 'chat' | 'image' }> = {
   loading: { title: 'Loading', subtitle: 'Preparing the marketplace…', icon: 'sync-outline', graphic: 'bag' },
@@ -95,10 +105,11 @@ export function CoOwnStateCanvas({
 
   return (
     <View style={styles.center}>
-      <FlagshipEmptyGraphic
-        variant={emptyGraphicVariant ?? defaults.graphic}
-        size={140}
-        color={colors.brand}
+      <Ionicons
+        name={icon ?? GRAPHIC_ICON_MAP[emptyGraphicVariant ?? defaults.graphic]}
+        size={30}
+        color={colors.textMuted}
+        style={styles.stateIcon}
       />
       <Text style={[styles.title, { color: colors.textPrimary }]}>
         {title ?? defaults.title}
@@ -143,6 +154,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: Space.xxl,
     paddingHorizontal: Space.lg,
+  },
+  stateIcon: {
+    marginBottom: Space.md,
   },
   loadingText: {
     marginTop: Space.md,

@@ -242,6 +242,215 @@
       "fix": "ClosetGrid caps preview at 12 (View-all -> MyListings); reorder mode keeps full list. staleModules tracked -> quiet 'pull to retry' note in feed header.",
       "status": "done",
       "verified": "tsc clean; discoveryRuntime tests green"
+    },
+    {
+      "id": "AUDIT-F15-SSRF-REBINDING",
+      "department": "backend / media import security",
+      "severity": "P0",
+      "evidence": "safeRemoteMediaFetch validated DNS then called fetch() on the hostname — a DNS-rebinding TOCTOU window let a second resolution land on a blocked address; no timeout bound request duration.",
+      "fix": "resolveValidatedAddresses() returns the validated set; a per-hop undici Agent overrides connect.lookup so the TCP connection is pinned to validated addresses only (SNI/Host unchanged). AbortSignal.timeout(remainingMs) bounds DNS+redirects+streaming under one 15s deadline (timeoutMs option). IPv6 URL.hostname brackets stripped so literals skip DNS.",
+      "status": "done",
+      "verified": "safeRemoteMediaFetch.test.ts 21/21 green incl. new pinning, rebinding-redirect and timeout tests; tsc --noEmit clean"
+    },
+    {
+      "id": "AUDIT-F02-RESIDUE-GATE",
+      "department": "frontend / release gates",
+      "severity": "P1",
+      "evidence": "check-production-residue.mjs exited 1 with 7 false positives: GALLERIA_DEMO_MODE=true inside ENABLE_RUNTIME_MOCKS branches and honest isDemo labels on degraded catch paths.",
+      "fix": "Added enclosingGateKind(): upward brace-scan evaluating every enclosing block opener with statement-boundary context — gate tokens (ENABLE_RUNTIME_MOCKS/__DEV__) suppress demo-mode/is-demo literals; catch suppresses is-demo labels only (bare-catch DEMO_MODE=true still rejected as fabrication).",
+      "status": "done",
+      "verified": "check:residue exits 0 (was 7 errors); productionResidueGate.test.ts 10/10 green pinning allowed + rejected shapes"
+    },
+    {
+      "id": "AUDIT-F04-TEST-SEPARATION",
+      "department": "backend / test infrastructure",
+      "severity": "P1",
+      "evidence": "npm test ran node --test over src/**/*.test.ts including 13 vitest-dialect files (failing); vitest.config include list had drifted 4 files stale.",
+      "fix": "scripts/run-unit-tests.mjs classifies every .test.ts by framework import — node:test files run under node --test (88 files), vitest files run via test:vitest (13 files). vitest.config.ts derives its include dynamically from the same classifier. Added test:vitest + test:all scripts.",
+      "status": "done",
+      "verified": "vitest run: 13 files / 257 tests green; unit runner collects exactly the 88 node:test files"
+    },
+    {
+      "id": "AUDIT-F16-VENDOR-SYNC-HONESTY",
+      "department": "backend / support vendor outbox",
+      "severity": "P1",
+      "evidence": "vendorSyncHandler marked every outbox entry delivered around a stub log line — no vendor call existed, so failed/unconfigured sync was reported as delivered.",
+      "fix": "New vendorClient.ts: resolveVendorClient() requires SUPPORT_VENDOR_<NAME>_API_URL+TOKEN (https or localhost) else null → entries stay pending. HttpVendorClient delivers with idempotency key + 10s timeout; 4xx→VendorPermanentError→skipped (dead-letter via new markOutboxSkipped), 5xx/429/network→failed retryable; >5 attempts→skipped. Handler takes injectable client/db for tests.",
+      "status": "done",
+      "verified": "vendorSyncHandler.test.ts 6/6 green covering unconfigured/success/retryable/permanent/max-attempts/idempotent; tsc clean"
+    },
+    {
+      "id": "AUDIT-F18-EAS-OTA-SIGNING",
+      "department": "release / EAS submit + OTA",
+      "severity": "P1",
+      "evidence": "eas.json submit.production used literal EAS_* placeholder strings (no env interpolation exists in eas.json); OTA signing conditional — production could ship unsigned; release-train publish steps never passed the signing key; keys/ dir absent.",
+      "fix": "app.config.js fail-closed: production profile without EXPO_PUBLIC_OTA_CODE_SIGNING_KEY throws; signing enabled but keys/update-certificate.pem missing throws; preview warns. New check-release-config.mjs (ota|submit|all modes) wired as check:release-config and as a gate step in release-train.yml; signing key secret now passed to eas update steps.",
+      "status": "done",
+      "verified": "gate exits 1 listing each placeholder/missing file; app.config throws for unsigned production build, passes dev"
+    },
+    {
+      "id": "AUDIT-F05-DEPENDENCY-TRIAGE",
+      "department": "dependencies / supply chain",
+      "severity": "P1",
+      "evidence": "Audit: 28 frontend + 3 backend advisories incl. runtime-reachable fastify (schema-validation bypass, X-Forwarded-* spoofing) and fast-uri SSRF chain.",
+      "fix": "npm audit fix both packages: backend fastify 5.8.x→5.12.5 (both advisories covered), fast-uri + js-yaml resolved — backend 5→2 low. Frontend 39→20: xmldom, browserslist, vitest-mocker, decode-uri-component resolved. Remaining are dev/build-chain only (reg-suit adm-zip+tmp, expo config-plugins/xcode uuid, @simplewebauthn breaking-14 upgrade — mitigated: passkeyService uses attestationType none so attestation-chain path is not the boundary). AppNavigator getRootState() now null-checked for @react-navigation 7.3.16.",
+      "status": "done",
+      "verified": "npm audit: backend 2 low (esbuild dev, simplewebauthn breaking-upgrade deferred w/ mitigation); frontend 20 dev-chain; tsc clean both sides"
+    },
+    {
+      "id": "AUDIT-F01-VISUAL-EVIDENCE",
+      "department": "release / visual certification",
+      "severity": "P1",
+      "evidence": "Golden-parity contract machinery exists (dimension checks, exit codes, mandatory-route list) but no native screenshot baselines have been captured — requires device capture runs.",
+      "fix": "Deferred: baseline capture requires a scheduled device-run session on POCO M2 Pro (63b57c28).",
+      "status": "open",
+      "verified": "machinery verified; baselines absent"
+    },
+    {
+      "id": "AUDIT-F17-AI-LEARNED-MODEL",
+      "department": "AI / model capability",
+      "severity": "P2",
+      "evidence": "AI infrastructure is ahead of model implementation: placeholders are honestly labeled and visual search does not rank on embeddings, but no learned model/evaluation exists.",
+      "fix": "Deferred by design — requires model selection, training data and an eval harness. Meilisearch Meilisearch-export bug fixed meanwhile (hybrid path now actually engages instead of silently degrading to lexical).",
+      "status": "open",
+      "verified": "vectorSearch getMeiliClient fixed (MeiliSearch→Meilisearch export rename); 5 readiness tests green"
+    },
+    {
+      "id": "AUDIT-F22-ARCHITECTURE-SCALE",
+      "department": "architecture / enforcement",
+      "severity": "P2",
+      "evidence": "backend/api/src/index.ts ~40k lines; PosterViewerScreen 1.7k, SellScreen 1.5k — structural debt exceeds current enforcement.",
+      "fix": "Deferred — staged decomposition plan needed; not a quick fix.",
+      "status": "open",
+      "verified": "re-measured during F-verification; unchanged"
+    },
+    {
+      "id": "DEVICE-UX-01-OFFER-SLIDER",
+      "status": "done",
+      "area": "commerce/offer",
+      "severity": "P1",
+      "evidence": "PanResponder stale closure (trackWidth=0 while sheet hidden) — ref metrics + 44pt wrap responder + tap-to-seek; device-verified both directions",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "DEVICE-UX-02-PRICE-FILTER-1ZE",
+      "status": "done",
+      "area": "filters",
+      "severity": "P2",
+      "evidence": "displayMode:fiat at 5 call sites; sheet shows fiat-only labels on-device",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "DEVICE-UX-03-DUP-SELLER-ROW",
+      "status": "done",
+      "area": "itemdetail",
+      "severity": "P2",
+      "evidence": "Display-only seller identity removed from CommerceTrustDossier; single navigable SellerInfoCard; device-verified",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "DEVICE-UX-04-IMAGE-SWIPE",
+      "status": "done",
+      "area": "media",
+      "severity": "P1",
+      "evidence": "pointerEvents=none on stage overlays; fullscreen pan gated to isZoomed + vertical-only dismiss; device-verified pager+fullscreen+dismiss",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "DEVICE-UX-05-DEPT-INCONSISTENCY",
+      "status": "done",
+      "area": "discovery",
+      "severity": "P2",
+      "evidence": "Three chip impls unified — HomeFeedHeader signalChip now matches categoryPill grammar exactly",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "DEVICE-UX-06-PROFILE-500",
+      "status": "done",
+      "area": "backend/users",
+      "severity": "P0",
+      "evidence": "Migration 319 DSA trader-disclosure columns; /users/seed_u1|u2/profile 200; profile renders on-device",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "DEVICE-UX-07-ORDERBOOK-BAND",
+      "status": "done",
+      "area": "coown",
+      "severity": "P2",
+      "evidence": "Bid(green)|spread|ask(red) band continuing depth-bar axis + tick-rule last-trade coloring (Polymarket grammar)",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "DEVICE-UX-08-PROFILE-HERO",
+      "status": "done",
+      "area": "profile",
+      "severity": "P2",
+      "evidence": "Big Edit/Share pair (52pt), bio budget 125→200 chars / 4 lines; device-verified",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "DEVICE-UX-09-CONDITION-BADGES",
+      "status": "done",
+      "area": "cards",
+      "severity": "P2",
+      "evidence": "Removed from product/discovery cards; retained in item detail + a11y; device-verified",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "DEVICE-UX-10-GRID-DENSITY",
+      "status": "done",
+      "area": "discovery",
+      "severity": "P2",
+      "evidence": "3-col masonry on Discover/Looks/Category/VisualSearch/SearchResults; browse compact default",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "BACKEND-01-FEED-HOME-42P18",
+      "status": "done",
+      "area": "backend/feed",
+      "severity": "P0",
+      "evidence": "Shared cursorParams left unreferenced  in posters/looks for signed-in users; per-query params; /feed/home 200 + populated feed",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "BACKEND-02-FEED-FOLLOWING-AMBIG",
+      "status": "done",
+      "area": "backend/feed",
+      "severity": "P1",
+      "evidence": "Unqualified created_at over user_follows join; per-alias clauses",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "BACKEND-03-MEDIA-CHECK-VIOLATION",
+      "status": "done",
+      "area": "backend/media",
+      "severity": "P1",
+      "evidence": "deadLetterIngestJob wrote processing_failed to processing_status (enum: pending/processing/completed/failed); -> failed; deployed",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "BACKEND-04-S3-ENDPOINT-TOPOLOGY",
+      "status": "done",
+      "area": "infra/compose",
+      "severity": "P1",
+      "evidence": "S3_ENDPOINT localhost:9000 resolved to container itself; -> http://minio:9000; attestation reachable (200)",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "BACKEND-05-RECS-CONVERSATIONS",
+      "status": "done",
+      "area": "backend/recommendations",
+      "severity": "P0",
+      "evidence": "Joined nonexistent conversations; -> chat_conversations + seller via item_id->listings.seller_id",
+      "date": "2026-09-18"
+    },
+    {
+      "id": "BACKEND-06-MIGRATION-306-UUID",
+      "status": "done",
+      "area": "backend/migrations",
+      "severity": "P0",
+      "evidence": "uuid FKs vs text schema since 001; -> text; API no longer crash-loops",
+      "date": "2026-09-18"
     }
   ]
 }

@@ -1026,7 +1026,7 @@ export function CommerceMediaStage({
       )}
 
       {isSold && (
-        <View style={styles.soldOverlay}>
+        <View style={styles.soldOverlay} pointerEvents="none">
           <Text style={styles.soldText}>SOLD</Text>
         </View>
       )}
@@ -1091,13 +1091,15 @@ export function CommerceMediaStage({
       )}
 
       {overlayTopContent && (
-        <View style={styles.overlayTopZone}>
+        // box-none: touches on the zone's empty area fall through to the
+        // pager; interactive children still receive their own touches.
+        <View style={styles.overlayTopZone} pointerEvents="box-none">
           {overlayTopContent}
         </View>
       )}
 
       {overlayBottomContent && (
-        <Reanimated.View style={[styles.overlayBottomZone, bottomContentStyle]}>
+        <Reanimated.View style={[styles.overlayBottomZone, bottomContentStyle]} pointerEvents="box-none">
           {overlayBottomContent}
         </Reanimated.View>
       )}
@@ -1150,7 +1152,9 @@ export function CommerceMediaStage({
       )}
 
       {showThumbnailStrip && mediaItems.length > 1 && (
-        <View style={styles.thumbnailStrip}>
+        // box-none: the strip's padding area passes swipes to the pager;
+        // the rail itself still owns touches on the thumbnails.
+        <View style={styles.thumbnailStrip} pointerEvents="box-none">
           <FlatList
             data={mediaItems}
             keyExtractor={(item, i) => item.id ?? `${item.uri}-${i}`}

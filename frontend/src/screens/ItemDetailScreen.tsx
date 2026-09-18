@@ -259,7 +259,7 @@ export default function ItemDetailScreen() {
     commerce, bundleItems, seenInLooksItems, interestSignal, socialProofLine,
     attributeLine, conditionMeta, secondaryLine, mediaItems,
     scrollBottomPadding, priceInsightRows, priceInsightSummary,
-    purchaseSummary, sellerStatsLine, sellerVerified,
+    purchaseSummary,
   } = buildItemDetailDerived({
     item, seller, listingEngagement, serverCommerce,
     currentUserId: currentUser?.id, isFav, isItemSavedAnywhere,
@@ -460,17 +460,12 @@ export default function ItemDetailScreen() {
           onSizeGuidePress={() => overlay.open.sizeGuide()}
         />
 
-        {/* ── First-viewport seller trust row (display-only) ──
-            Seller identity + verification badge + stats line appears
-            after the price/identity chapter. This is the buyer's trust
-            signal — who is selling this item. Display-only — no onPress.
-            The full SellerInfoCard (with Follow / Message / View shop
-            actions and the "More from this seller" rail) lives in Zone
-            E below and is the sole profile navigation point. */}
+        {/* ── First-viewport trust facts (no identity row) ──
+            Rating / response / dispatch facts only. Seller identity is
+            rendered once — the navigable SellerInfoCard in Zone E is the
+            sole profile entry point. */}
         <CommerceTrustDossier
           seller={seller}
-          sellerStatsLine={sellerStatsLine}
-          sellerVerified={sellerVerified}
           commerce={commerce}
         />
 
@@ -553,16 +548,33 @@ export default function ItemDetailScreen() {
           onTogglePriceAlert={handleTogglePriceAlert}
         />
 
+        {/* The whole section hides when neither row can render (e.g. the
+            owner viewing their own listing with no public questions). */}
+        {(capabilities.isAvailable && !capabilities.isOwner && seller?.reachState !== 'suspended')
+          || (qaSummary?.questionCount ?? listingEngagement?.questionCount) ? (
         <CommerceDetailSection label="Questions" variant="compact" divider>
-          <CommerceDetailDisclosureRow
-            label={qaSummary?.questionCount ? 'View all questions' : 'Ask a question'}
-            summary={qaSummary?.questionCount ? undefined : 'No questions yet'}
-            count={qaSummary?.questionCount ?? listingEngagement?.questionCount}
-            onPress={() => overlay.open.qa()}
-            leadingIcon="help-circle-outline"
-            accessibilityLabel="View questions and answers"
-          />
+          {/* "Ask a question" opens a direct message with the seller — the
+              structured public Q&A stays discoverable as the archive row
+              below whenever answered questions exist. */}
+          {capabilities.isAvailable && !capabilities.isOwner && seller?.reachState !== 'suspended' ? (
+            <CommerceDetailDisclosureRow
+              label="Ask the seller a question"
+              onPress={handleMessageSeller}
+              leadingIcon="chatbubble-ellipses-outline"
+              accessibilityLabel="Message the seller a question"
+            />
+          ) : null}
+          {(qaSummary?.questionCount ?? listingEngagement?.questionCount) ? (
+            <CommerceDetailDisclosureRow
+              label="View all questions"
+              count={qaSummary?.questionCount ?? listingEngagement?.questionCount}
+              onPress={() => overlay.open.qa()}
+              leadingIcon="help-circle-outline"
+              accessibilityLabel="View questions and answers"
+            />
+          ) : null}
         </CommerceDetailSection>
+        ) : null}
 
         {/* ── Zone G — Related / recommended (below fold) ──
             Bundle upsell + visual-similar grid. These are discovery

@@ -58,7 +58,9 @@ import {
 import {
   getNotificationPreferences,
   sendTestPushNotification,
-  updateNotificationPreferences } from '../services/notificationsApi';
+  updateNotificationPreferences,
+  type NotificationPreviewPolicy } from '../services/notificationsApi';
+import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { Space, Radius, Typography } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { formatHour } from '../utils/timeFormat';
@@ -66,8 +68,18 @@ import { formatHour } from '../utils/timeFormat';
 type Props = NativeStackScreenProps<RootStackParamList, 'NotificationPreferences'>;
 
 const SHOW_PREVIEW_KEY = '@thryftverse/notif_prefs_show_preview';
+// Snapshot of the category mix taken when the master switch pauses every
+// alert — re-enabling restores it instead of force-enabling all eight.
+const PAUSED_MIX_KEY = '@thryftverse/notif_prefs_paused_mix';
 
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i);
+const HOUR_LABELS = HOUR_OPTIONS.map((h) => formatHour(h));
+
+const PREVIEW_POLICY_LABELS: Record<NotificationPreviewPolicy, string> = {
+  full: 'Show content',
+  sender_only: 'Sender only',
+  hidden: 'Hidden' };
+const PREVIEW_POLICY_ORDER: NotificationPreviewPolicy[] = ['full', 'sender_only', 'hidden'];
 
 export default function NotificationPreferencesScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
@@ -83,8 +95,10 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
     quietHours,
     setQuietHours } = useSettingsPreferences();
 
-  // Local-only toggles — persisted to AsyncStorage so they survive restarts.
-  const [showPreview, setShowPreview] = React.useState(true);
+  // Preview policy — server-persisted ('full' | 'sender_only' | 'hidden');
+  // AsyncStorage is the first-paint cache until the GET reconciles.
+  const [previewPolicy, setPreviewPolicy] = React.useState<NotificationPreviewPolicy>('full');
+  const [previewPickerOpen, setPreviewPickerOpen] = React.useState(false);
   const [editingQuietTime, setEditingQuietTime] = React.useState<'start' | 'end' | null>(null);
   const [syncingKeys, setSyncingKeys] = React.useState<Set<string>>(new Set());
   const [prefsLoading, setPrefsLoading] = React.useState(true);
@@ -114,9 +128,8 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           setQuietHours(serverPrefs.quietHours);
         }
         if (serverPrefs.previewPolicy) {
-          const preview = serverPrefs.previewPolicy !== 'hidden';
-          setShowPreview(preview);
-          AsyncStorage.setItem(SHOW_PREVIEW_KEY, String(preview)).catch(() => {});
+          setPreviewPolicy(serverPrefs.previewPolicy);
+          AsyncStorage.setItem(SHOW_PREVIEW_KEY, serverPrefs.previewPolicy).catch(() => {});
         }
       } catch {
         // best-effort — local state remains as cache
@@ -128,14 +141,29 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Hydrate local toggles from AsyncStorage on mount.
+  // Hydrate the first-paint cache + the paused category mix on mount.
   React.useEffect(() => {
     let mounted = true;
     (async () => {
       try {
-        const spVal = await AsyncStorage.getItem(SHOW_PREVIEW_KEY);
+        const [spVal, pausedVal] = await Promise.all([
+          AsyncStorage.getItem(SHOW_PREVIEW_KEY),
+          AsyncStorage.getItem(PAUSED_MIX_KEY),
+        ]);
         if (!mounted) return;
-        if (spVal !== null) setShowPreview(spVal === 'true');
+        if (spVal !== null) {
+          // Legacy boolean cache migrates to the policy vocabulary.
+          if (spVal === 'true') setPreviewPolicy('full');
+          else if (spVal === 'false') setPreviewPolicy('hidden');
+          else if (spVal === 'full' || spVal === 'sender_only' || spVal === 'hidden') {
+            setPreviewPolicy(spVal);
+          }
+        }
+        if (pausedVal) {
+          try {
+            pausedMixRef.current = JSON.parse(pausedVal) as Record<string, boolean>;
+          } catch { /* malformed cache — ignore */ }
+        }
       } catch {
         // AsyncStorage read failure — keep defaults
       }
@@ -143,23 +171,29 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
     return () => { mounted = false; };
   }, []);
 
+  // The paused category mix — kept in a ref (not state) because it is only
+  // read when the master switch turns back on.
+  const pausedMixRef = React.useRef<Record<string, boolean> | null>(null);
+
   // Preview policy — persisted server-side so the lock-screen posture
   // follows the account, not the device. AsyncStorage stays as the local
   // cache; rollback mirrors the category-toggle pattern.
-  const handleShowPreviewChange = React.useCallback((v: boolean) => {
+  const handlePreviewPolicyChange = React.useCallback((policy: NotificationPreviewPolicy) => {
     haptic.selection();
-    const previous = showPreview;
-    setShowPreview(v);
-    AsyncStorage.setItem(SHOW_PREVIEW_KEY, String(v)).catch(() => {});
+    setPreviewPickerOpen(false);
+    if (policy === previewPolicy) return;
+    const previous = previewPolicy;
+    setPreviewPolicy(policy);
+    AsyncStorage.setItem(SHOW_PREVIEW_KEY, policy).catch(() => {});
     updateNotificationPreferences({
       preferences: { ...toggles },
-      previewPolicy: v ? 'full' : 'hidden',
+      previewPolicy: policy,
     }).catch(() => {
-      setShowPreview(previous);
-      AsyncStorage.setItem(SHOW_PREVIEW_KEY, String(previous)).catch(() => {});
+      setPreviewPolicy(previous);
+      AsyncStorage.setItem(SHOW_PREVIEW_KEY, previous).catch(() => {});
       show('Failed to update preview setting. Try again.', 'error');
     });
-  }, [haptic, showPreview, toggles, show]);
+  }, [haptic, previewPolicy, toggles, show]);
 
   // Quiet hours — user-level on the server so every device honours the
   // same DND window. Local state applies instantly; failure rolls back.
@@ -188,20 +222,55 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
 
   const masterOn = enabledCount > 0;
 
+  // Master is a pause/resume, not a reset: turning it off silences every
+  // category but keeps the user's mix (snapshotted locally + persisted),
+  // and turning it back on restores that mix. A user with no snapshot gets
+  // all categories enabled — the previous reset behaviour for first use.
   const handleMasterToggle = async (v: boolean) => {
     haptic.selection();
     const previousToggles = { ...toggles };
-    setAllPushNotificationToggles(v);
-    try {
-      const allPrefs: Record<string, boolean> = {};
-      for (const key of Object.keys(toggles)) {
-        allPrefs[key] = v;
+
+    if (!v) {
+      const hadAnyEnabled = Object.values(previousToggles).some(Boolean);
+      if (hadAnyEnabled) {
+        pausedMixRef.current = previousToggles;
+        AsyncStorage.setItem(PAUSED_MIX_KEY, JSON.stringify(previousToggles)).catch(() => {});
       }
-      await updateNotificationPreferences({ preferences: allPrefs });
+      setAllPushNotificationToggles(false);
+      try {
+        const allOff: Record<string, boolean> = {};
+        for (const key of Object.keys(toggles)) allOff[key] = false;
+        await updateNotificationPreferences({ preferences: allOff });
+      } catch {
+        for (const [key, value] of Object.entries(previousToggles)) {
+          setPushNotificationToggle(key, value);
+        }
+        pausedMixRef.current = null;
+        AsyncStorage.removeItem(PAUSED_MIX_KEY).catch(() => {});
+        show('Failed to update push preferences. Try again.', 'error');
+      }
+      return;
+    }
+
+    // Resume — restore the paused mix when one exists, else enable all.
+    const snapshot = pausedMixRef.current;
+    const restored: Record<string, boolean> = {};
+    for (const key of Object.keys(toggles)) {
+      restored[key] = snapshot?.[key] ?? true;
+    }
+    for (const [key, value] of Object.entries(restored)) {
+      setPushNotificationToggle(key, value);
+    }
+    pausedMixRef.current = null;
+    AsyncStorage.removeItem(PAUSED_MIX_KEY).catch(() => {});
+    try {
+      await updateNotificationPreferences({ preferences: restored });
     } catch {
       for (const [key, value] of Object.entries(previousToggles)) {
         setPushNotificationToggle(key, value);
       }
+      pausedMixRef.current = snapshot;
+      if (snapshot) AsyncStorage.setItem(PAUSED_MIX_KEY, JSON.stringify(snapshot)).catch(() => {});
       show('Failed to update push preferences. Try again.', 'error');
     }
   };
@@ -279,11 +348,12 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
         </View>
       )}
 
-      {/* ── Master toggle ── */}
-        <SettingsSection title="Push notifications" noCard>
+      {/* ── Master toggle — a pause/resume, not a category reset ── */}
+        <SettingsSection title="Delivery" noCard>
           <SettingsRow
             icon="notifications-outline"
-            title="Enable push notifications"
+            title="Push notifications"
+            subtitle={masterOn ? 'Alerts reach this device' : 'Paused — your categories are kept'}
             toggleValue={masterOn}
             onToggle={(v) => void handleMasterToggle(v)}
             isFirst
@@ -312,6 +382,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
                     key={item.key}
                     icon={item.icon}
                     title={item.label}
+                    subtitle={item.subtitle}
                     toggleValue={!!toggles[item.key]}
                     onToggle={() => void toggleCategory(item.key)}
                     disabled={!masterOn}
@@ -364,47 +435,6 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
               </AnimatedPressable>
             </View>
           ) : null}
-          {quietHours.enabled && editingQuietTime ? (
-            <View style={styles.quietHoursPickerSheet}>
-              <Text style={[styles.quietHoursPickerTitle, { color: colors.textSecondary }]}>
-                {editingQuietTime === 'start' ? 'Start time' : 'End time'}
-              </Text>
-              <View style={styles.quietHoursPickerGrid}>
-                {HOUR_OPTIONS.map((h) => {
-                  const selected = editingQuietTime === 'start'
-                    ? quietHours.startHour === h
-                    : quietHours.endHour === h;
-                  return (
-                    <AnimatedPressable
-                      key={h}
-                      scaleValue={0.98}
-                      hapticFeedback="light"
-                      style={[
-                        styles.quietHourCell,
-                        { backgroundColor: colors.surfaceAlt },
-                        selected && [styles.quietHourCellActive, { backgroundColor: colors.brand }],
-                      ]}
-                      onPress={() => {
-                        haptic.light();
-                        if (editingQuietTime === 'start') {
-                          void applyQuietHours({ startHour: h });
-                        } else {
-                          void applyQuietHours({ endHour: h });
-                        }
-                        setEditingQuietTime(null);
-                      }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Set ${editingQuietTime === 'start' ? 'start' : 'end'} time to ${formatHour(h)}`}
-                    >
-                      <Text style={[styles.quietHourCellText, { color: colors.textPrimary }, selected && [styles.quietHourCellTextActive, { color: colors.textInverse }]]}>
-                        {formatHour(h)}
-                      </Text>
-                    </AnimatedPressable>
-                  );
-                })}
-              </View>
-            </View>
-          ) : null}
           {quietHours.enabled ? (
             <SettingsInfoBanner
               icon="moon-outline"
@@ -413,28 +443,62 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           ) : null}
         </SettingsSection>
 
-      {/* ── Notification preview ── */}
-        <SettingsSection title="Privacy" noCard>
+      {/* ── Notification preview — lock-screen policy, three choices ── */}
+        <SettingsSection title="Lock screen" noCard>
           <SettingsRow
             icon="eye-off-outline"
             title="Notification preview"
-            toggleValue={showPreview}
-            onToggle={handleShowPreviewChange}
+            subtitle={PREVIEW_POLICY_LABELS[previewPolicy]}
+            onPress={() => { haptic.selection(); setPreviewPickerOpen(true); }}
             isFirst
             isLast
           />
         </SettingsSection>
 
-      {/* ── Test notification ── */}
-        <SettingsSection title="Diagnostics" noCard>
-          <SettingsRow
-            icon="notifications-outline"
-            title="Send test notification"
-            onPress={handleTestNotification}
-            isFirst
-            isLast
-          />
-        </SettingsSection>
+      {/* ── Diagnostics — quiet footer action, not a settings row ── */}
+        <AnimatedPressable
+          scaleValue={0.98}
+          hapticFeedback="light"
+          onPress={() => void handleTestNotification()}
+          style={styles.testLink}
+          accessibilityRole="button"
+          accessibilityLabel="Send a test push notification"
+        >
+          <Text style={[styles.testLinkText, { color: colors.textMuted }]}>
+            Send test notification
+          </Text>
+        </AnimatedPressable>
+
+      {/* ── Quiet-hours pickers — bottom sheet, not a 24-cell wall ── */}
+      <BottomSheetPicker
+        visible={editingQuietTime !== null}
+        onClose={() => setEditingQuietTime(null)}
+        title={editingQuietTime === 'start' ? 'Quiet hours start' : 'Quiet hours end'}
+        options={HOUR_LABELS}
+        selectedValue={formatHour(editingQuietTime === 'start' ? quietHours.startHour : quietHours.endHour)}
+        onSelect={(label) => {
+          const hour = HOUR_OPTIONS[HOUR_LABELS.indexOf(label)];
+          if (hour === undefined) return;
+          if (editingQuietTime === 'start') {
+            void applyQuietHours({ startHour: hour });
+          } else if (editingQuietTime === 'end') {
+            void applyQuietHours({ endHour: hour });
+          }
+          setEditingQuietTime(null);
+        }}
+      />
+
+      <BottomSheetPicker
+        visible={previewPickerOpen}
+        onClose={() => setPreviewPickerOpen(false)}
+        title="Notification preview"
+        options={PREVIEW_POLICY_ORDER.map((policy) => PREVIEW_POLICY_LABELS[policy])}
+        selectedValue={PREVIEW_POLICY_LABELS[previewPolicy]}
+        onSelect={(label) => {
+          const policy = PREVIEW_POLICY_ORDER.find((p) => PREVIEW_POLICY_LABELS[p] === label);
+          if (policy) handlePreviewPolicyChange(policy);
+        }}
+      />
     </FlagshipScreen>
   );
 }
@@ -491,33 +555,14 @@ function createStyles(colors: ThemeColors) {
       fontSize: TypographyV2.bodyStrong.size,
       fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textPrimary },
-    quietHoursPickerSheet: {
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm },
-    quietHoursPickerTitle: {
-      fontSize: TypographyV2.meta.size,
-      fontFamily: TypographyV2.meta.fontFamily,
-      color: colors.textSecondary,
-      marginBottom: Space.xs },
-    quietHoursPickerGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: Space.xs + 2 },
-    quietHourCell: {
-      paddingHorizontal: Space.sm + Space.xs,
-      paddingVertical: Space.sm + 2,
-      borderRadius: Radius.sm,
-      backgroundColor: colors.surfaceAlt,
-      minHeight: Space.xl + Space.sm,
+    testLink: {
+      alignSelf: 'center',
       alignItems: 'center',
-      justifyContent: 'center' },
-    quietHourCellActive: {
-      backgroundColor: colors.brand },
-    quietHourCellText: {
+      justifyContent: 'center',
+      minHeight: 44,
+      paddingHorizontal: Space.md,
+      marginTop: Space.lg },
+    testLinkText: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypographyV2.meta.fontFamily,
-      color: colors.textPrimary },
-    quietHourCellTextActive: {
-      color: colors.textInverse,
-      fontFamily: Typography.family.bold } });
+      fontFamily: TypographyV2.meta.fontFamily } });
 }

@@ -1021,6 +1021,8 @@
       "shippingDefault": "Tracking provided on dispatch.",
       "returns": "Returns",
       "returnsValue": "Returns accepted for items not as described.",
+      "additionalPolicies": "Additional policies",
+      "editShopDetails": "Edit shop details",
       "responseRate": "Response rate",
       "response": "Response",
       "responseSeller": "Seller typically replies {{label}}.",

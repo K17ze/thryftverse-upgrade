@@ -129,3 +129,60 @@ Reviewer lacked file access — all findings arrived as VERIFY items; each verif
 ### Post-repair verification
 - `npx tsc --noEmit` clean (after key-map + BackendDataContext fixes).
 - Vitest: 6 files / 75 tests green (discoverySurfaces, backendContractsFlagshipClosure, backendListingMapperRuntime, productionAuditWave, runtimeFlagsFailClosed, platformRuntime).
+
+## Audit remediation wave 2 (2026-09-18, F15/F02/F04/F16/F18/F05)
+
+### F15 — SSRF rebinding + unbounded duration (done)
+- `resolveValidatedAddresses` returns the DNS-validated set; a per-hop undici `Agent` (`connect.lookup`) pins the TCP connection to those addresses — no second resolution at connect time. TLS SNI/Host preserved via hostname URL.
+- One shared `deadlineAt` budget (default 15s, `timeoutMs` option) covers DNS + every redirect hop + streaming via `AbortSignal.timeout(remainingMs)`.
+- IPv6 `URL.hostname` brackets stripped — `[::1]`/`[fe80::]` literals now skip DNS and hit the literal blocklist (latent bug: 2 tests were previously failing).
+- Verified: `safeRemoteMediaFetch.test.ts` 21/21 green incl. dispatcher-pinning, rebinding-redirect and timeout tests.
+
+### F02 — residue gate false positives (done)
+- `enclosingGateKind` walks brace structure upward through ALL enclosing block openers (statement-boundary context, not fixed window) — `ENABLE_RUNTIME_MOCKS`/`__DEV__` gate suppresses demo-mode + is-demo literals; `catch` suppresses is-demo labels only (bare-catch `DEMO_MODE = true` still errors — would fabricate on prod failure).
+- Verified: `check:residue` exits 0 (was 7 errors); `productionResidueGate.test.ts` 10/10 green (allowed + rejected shapes pinned).
+
+### F04 — test dialect separation (done)
+- `scripts/run-unit-tests.mjs` classifies `src/**/*.test.ts` by framework import: 88 node:test files → `node --import tsx --test`; 13 vitest files → `npm run test:vitest`. `vitest.config.ts` derives include dynamically (was 4 files stale).
+- Verified: vitest 13 files / 257 tests green. Fixed en route: `meilisearch@0.60` exports `Meilisearch` not `MeiliSearch` — getMeiliClient always returned null (hybrid search silently degraded); GTIN test data had wrong check digits / non-GTIN-14 lengths.
+
+### F16 — vendor sync honesty (done)
+- `vendorClient.ts`: `resolveVendorClient` needs `SUPPORT_VENDOR_<NAME>_API_URL`+`TOKEN` (https/localhost) else null → entries stay `pending` (never fake-delivered). HTTP client sends idempotency key, 10s timeout. 4xx→`VendorPermanentError`→`skipped` dead-letter (new `markOutboxSkipped`); 5xx/429/network→`failed` retryable; ≥5 attempts→`skipped`.
+- Verified: `vendorSyncHandler.test.ts` 6/6 green; tsc clean.
+
+### F18 — EAS submit + OTA signing (done)
+- `app.config.js` fail-closed: `EAS_BUILD_PROFILE=production` without `EXPO_PUBLIC_OTA_CODE_SIGNING_KEY` throws; signing enabled but `keys/update-certificate.pem` missing throws; preview warns. Verified live: throws unsigned-production, throws missing-cert, dev passes.
+- `check-release-config.mjs` (`ota|submit|all`) → `check:release-config` script + gate step in `release-train.yml` publish job; signing key secret now actually passed to `eas update` steps (was absent → unsigned OTAs even with secret).
+- Residual: operator must provision real ASC IDs, service-account JSON, and run `eas update:configure-code-signing` — gate fails closed until then (by design).
+
+### F05 — dependency triage (done)
+- Backend `npm audit fix`: fastify 5.8.x→5.12.5 (covers schema-bypass + X-Forwarded-spoof advisories), fast-uri SSRF chain + js-yaml resolved. 5→2 low: esbuild (dev-only tsx/vitest), @simplewebauthn (breaking v14; passkeyService uses `attestationType:'none'` so attestation-chain path isn't the boundary — documented defer).
+- Frontend `npm audit fix`: 39→20. Resolved: xmldom, browserslist, vitest-mocker, decode-uri-component, baseline-browser-mapping. Remaining are dev/build-chain only (reg-suit adm-zip+tmp no-fix, expo config-plugins/xcode uuid, @expo/ngrok) — none ship in the app binary.
+- Fixed en route: `AppNavigator.getRootState()` null-checks for @react-navigation 7.3.16 (returns `| undefined`).
+- Verified: tsc --noEmit clean frontend + backend.
+
+## Device UX wave + backend bug-class sweep (2026-09-19)
+
+### Device-verified (POCO M2 Pro, dev client via adb reverse)
+- **Offer slider**: PanResponder stale closure (trackWidth frozen at 0 while sheet hidden) — ref-based metrics + responder on 44pt wrapper + tap-to-seek. Verified live: thumb drags both directions, amount/−%/fee recompute.
+- **Price filter**: `displayMode:'fiat'` at 5 call sites — sheet shows "£0.00 — No limit", no 1ze equivalency.
+- **Duplicate seller row**: removed display-only seller identity from CommerceTrustDossier; single navigable SellerInfoCard remains. Verified.
+- **Image swipe**: `pointerEvents="none"` on non-interactive media-stage overlays; fullscreen viewer pan gated to `isZoomed` + vertical-only dismiss. Verified: inline pager 1→2, fullscreen 2/2, swipe-dismiss.
+- **Profile**: migration 319 adds DSA trader-disclosure columns (route queried missing schema → 42703). `/users/seed_u1|seed_u2/profile` → 200; hero renders Edit Profile/Share pair + bio.
+- **Condition badges**: removed from product/discovery cards, retained in item detail + a11y labels. Verified both states.
+- **Density**: Discover/Looks/Category/VisualSearch/DiscoverySearchResults → 3-col masonry; browse `gridDensity` default → compact.
+
+### Backend fixes found via device-driven log review
+- **`/feed/home` 500 (42P18)**: shared `cursorParams` left unreferenced `$1` in posters/looks queries once viewer param bound (signed-in users only). Per-query param lists; same-class `/feed/following` ambiguity (unqualified `created_at` over user_follows join) fixed. Verified: 200 + populated feed.
+- **`media_assets_processing_status_check` (23514)**: `deadLetterIngestJob` wrote `'processing_failed'` to `processing_status` (enum is pending/processing/completed/failed; `'processing_failed'` belongs to lifecycle `status`). → `'failed'`.
+- **`S3_ENDPOINT` topology**: api container pointed at `localhost:9000` (itself). → `http://minio:9000` matching root compose convention; public/CDN endpoints unchanged. Verified: minio health 200 from container.
+- **Mock-id `l8` DM 404**: dev-mode fixture data (MOCK_LISTINGS[7]) reaching real API — expected dev-client behavior, not production bug. qa-summary endpoints return 200.
+
+### Cross-compare (Polymarket/Robinhood grammar)
+- Order book spread band: bid(green subtle)|centre|ask(red subtle) continuing depth-bar axis; last-trade value now tick-rule coloured (≥ask→buy green, ≤bid→sell red, inside→neutral) + side announced in a11y label.
+- Chip grammar unified: HomeFeedHeader signalChip now matches discovery categoryPill exactly (padding sm/md, borderSubtle) — all three category rails identical.
+
+### Verification
+- Frontend tsc clean; backend tsc clean; targeted vitest 22/22 (orderBookDepth, discoverySurfaces, browseFilterContexts).
+- API image rebuilt+redeployed (feed fix + pipeline fix); `/feed/home` 200, `/health` 200, minio reachable, zero new dead-letter errors.
+- User-removed `sustainableOnly` filter — completed removal (store field + 2 hook refs + screen + test fixture); i18n keys + optional API params retained (server contract unchanged).

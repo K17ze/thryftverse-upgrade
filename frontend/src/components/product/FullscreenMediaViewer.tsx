@@ -74,6 +74,11 @@ function FullscreenImagePage({
   // Drag-to-dismiss vertical offset (only when not zoomed).
   const dismissY = useSharedValue(0);
   const dismissOpacity = useSharedValue(1);
+  // Zoom state lives in React state so each pan can be enabled/disabled.
+  // An always-on pan activates at touch-slop in ANY direction on Android
+  // and beats the pager FlatList — horizontal page swipes then rubber-
+  // band the image instead of paging. Same fix as the inline MediaPage.
+  const [isZoomed, setIsZoomed] = useState(false);
 
   const pinch = Gesture.Pinch()
     .onStart(() => {
@@ -90,44 +95,28 @@ function FullscreenImagePage({
         savedScale.value = MIN_ZOOM;
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
+        runOnJS(setIsZoomed)(false);
       } else {
         savedScale.value = scale.value;
+        runOnJS(setIsZoomed)(true);
       }
     });
 
-  const pan = Gesture.Pan()
+  // Zoom pan — only while zoomed in.
+  const panZoom = Gesture.Pan()
+    .enabled(isZoomed)
     .onUpdate((e) => {
-      const zoom = Math.max(scale.value, savedScale.value);
-      if (zoom > 1) {
-        const maxX = (width * (zoom - 1)) / 2;
-        const maxY = (height * (zoom - 1)) / 2;
-        translateX.value = savedTranslateX.value + e.translationX;
-        translateY.value = savedTranslateY.value + e.translationY;
-      } else {
-        // Not zoomed — drag-to-dismiss with rubber-band resistance.
-        dismissY.value = rubberBand(e.translationY, -150, 150, 0.35);
-        dismissOpacity.value = interpolate(
-          Math.abs(dismissY.value),
-          [0, 150],
-          [1, 0.4],
-          Extrapolation.CLAMP,
-        );
-      }
+      translateX.value = savedTranslateX.value + e.translationX;
+      translateY.value = savedTranslateY.value + e.translationY;
     })
     .onEnd((e) => {
       const zoom = Math.max(scale.value, savedScale.value);
       if (zoom <= 1) {
-        // Dismiss if dragged far enough, else spring back.
-        if (Math.abs(e.translationY) > 120 && onClose) {
-          runOnJS(onClose)();
-        } else {
-          dismissY.value = withSpring(0, spring.entrance);
-          dismissOpacity.value = withTiming(1, { duration: 180 });
-        }
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
         translateX.value = withSpring(0, spring.tap);
         translateY.value = withSpring(0, spring.tap);
+        runOnJS(setIsZoomed)(false);
         return;
       }
       const maxX = (width * (zoom - 1)) / 2;
@@ -140,6 +129,34 @@ function FullscreenImagePage({
       translateY.value = withSpring(ty, spring.tap);
     });
 
+  // Dismiss pan — vertical-only while unzoomed. The offset constraints
+  // make horizontal swipes fail fast so the pager FlatList pages.
+  const panDismiss = Gesture.Pan()
+    .enabled(!isZoomed)
+    .activeOffsetY([-10, 10])
+    .failOffsetX([-25, 25])
+    .onUpdate((e) => {
+      // Drag-to-dismiss with rubber-band resistance.
+      dismissY.value = rubberBand(e.translationY, -150, 150, 0.35);
+      dismissOpacity.value = interpolate(
+        Math.abs(dismissY.value),
+        [0, 150],
+        [1, 0.4],
+        Extrapolation.CLAMP,
+      );
+    })
+    .onEnd((e) => {
+      // Dismiss if dragged far enough, else spring back.
+      if (Math.abs(e.translationY) > 120 && onClose) {
+        runOnJS(onClose)();
+      } else {
+        dismissY.value = withSpring(0, spring.entrance);
+        dismissOpacity.value = withTiming(1, { duration: 180 });
+      }
+      savedTranslateX.value = 0;
+      savedTranslateY.value = 0;
+    });
+
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
     .onEnd(() => {
@@ -150,10 +167,12 @@ function FullscreenImagePage({
         savedScale.value = 1;
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
+        runOnJS(setIsZoomed)(false);
       } else {
         const target = reducedMotion ? 2 : 3;
         scale.value = withSpring(target, spring.lift);
         savedScale.value = target;
+        runOnJS(setIsZoomed)(true);
       }
     });
 
@@ -163,7 +182,7 @@ function FullscreenImagePage({
       if (onToggleChrome) runOnJS(onToggleChrome)();
     });
 
-  const composed = Gesture.Simultaneous(Gesture.Race(doubleTap, pan, singleTap), pinch);
+  const composed = Gesture.Simultaneous(Gesture.Race(doubleTap, panZoom, panDismiss, singleTap), pinch);
   const animStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: translateX.value },

@@ -76,15 +76,27 @@ export function UserProfileAboutTab({ targetProfile, storefrontSummary, sellerTr
         <View style={[styles.aboutRow, { borderBottomColor: BORDER }]}>
           <Text style={[styles.aboutLabel, { color: MUTED }]}>Shipping</Text>
           <Text style={[styles.aboutValue, { color: TEXT }]}>
-            {sellerTrust?.dispatchTimeLabel
-              ? `Seller ${sellerTrust.dispatchTimeLabel.toLowerCase()}. Tracking provided on dispatch.`
-              : 'Tracking provided on dispatch.'}
+            {storefrontSummary?.policies?.shipping?.trim()
+              ? storefrontSummary.policies.shipping.trim()
+              : sellerTrust?.dispatchTimeLabel
+                ? `Seller ${sellerTrust.dispatchTimeLabel.toLowerCase()}. Tracking provided on dispatch.`
+                : 'Tracking provided on dispatch.'}
           </Text>
         </View>
         <View style={[styles.aboutRow, { borderBottomColor: BORDER }]}>
           <Text style={[styles.aboutLabel, { color: MUTED }]}>Returns</Text>
-          <Text style={[styles.aboutValue, { color: TEXT }]}>Returns accepted for items not as described.</Text>
+          <Text style={[styles.aboutValue, { color: TEXT }]}>
+            {storefrontSummary?.policies?.returns?.trim()
+              ? storefrontSummary.policies.returns.trim()
+              : 'Returns accepted for items not as described.'}
+          </Text>
         </View>
+        {storefrontSummary?.policies?.additional?.trim() ? (
+          <View style={[styles.aboutRow, { borderBottomColor: BORDER }]}>
+            <Text style={[styles.aboutLabel, { color: MUTED }]}>Policies</Text>
+            <Text style={[styles.aboutValue, { color: TEXT }]}>{storefrontSummary.policies.additional.trim()}</Text>
+          </View>
+        ) : null}
         {sellerTrust?.responseRate !== null && sellerTrust?.responseRate !== undefined ? (
           <View style={[styles.aboutRow, { borderBottomColor: BORDER }]}>
             <Text style={[styles.aboutLabel, { color: MUTED }]}>Response rate</Text>

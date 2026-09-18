@@ -47,7 +47,7 @@ vi.mock('../store/useStore', () => ({
       notificationCount: 0,
       hasSeenPoster: false,
       customPosters: [],
-      browseFilters: { brands: [], sizes: [], condition: 'Any', sort: 'Recommended', query: '', sustainableOnly: false },
+      browseFilters: { brands: [], sizes: [], condition: 'Any', sort: 'Recommended', query: '' },
       updateBrowseFilters: vi.fn(),
       resetBrowseFilters: vi.fn(),
       customAuctions: [],

@@ -191,8 +191,6 @@ export interface BrowseFilterState {
   brands: string[];
   sizes: string[];
   condition: BrowseConditionOption;
-  /** Client-side filter: only show items with an estimated A/B sustainability grade. */
-  sustainableOnly: boolean;
   /** Price range filter in GBP. null means no constraint on that bound. */
   priceMin: number | null;
   priceMax: number | null;

@@ -8,7 +8,7 @@ import { formatCoOwnIze } from '../../../utils/currency';
 import type { CoOwnCorporateAction, CoOwnDistribution, MarketCoOwnAsset } from '../../../services/marketApi';
 import { CoOwnCorporateActionRow, type CoOwnCorporateActionStatus, type CoOwnCorporateActionType } from '../';
 import { CoOwnDripToggle } from '../CoOwnDripToggle';
-import { CoOwnDistributionCalendar, type CoOwnDistributionCalendarEntry } from '../CoOwnDistributionCalendar';
+import type { CoOwnDistributionCalendarEntry } from '../CoOwnDistributionCalendar';
 import { CommerceDetailDisclosureRow, CommerceDetailMetricRow } from '../../commerce/detail';
 import { formatDayMonth, corporateActionAmountLabel } from './corporateActionHelpers';
 
@@ -72,9 +72,9 @@ export interface AssetOwnershipSectionProps {
   activeBuyoutOfferPremiumPct?: number | null;
   /** Active buyout offer expiry (ISO date). */
   activeBuyoutOfferExpiry?: string | null;
-  /** Distribution calendar entries (upcoming + recent). Undefined when
-   * the parent does not supply a history list — the disclosure is
-   * omitted. Empty array = no distributions scheduled. */
+  /** Distribution entries (upcoming + recent) shared with the parent —
+   * used to derive the single "Next · per-unit · payable" line in the
+   * hero. The full timeline lives on the distribution history screen. */
   distributionCalendarEntries?: CoOwnDistributionCalendarEntry[];
   /** DRIP (dividend reinvestment) support + enrollment. The toggle is
    * only rendered when the asset supports DRIP and the viewer holds
@@ -120,7 +120,6 @@ export function AssetOwnershipSection({
   const { colors } = useAppTheme();
   const [allocationExpanded, setAllocationExpanded] = useState(false);
   const [eventsExpanded, setEventsExpanded] = useState(false);
-  const [calendarExpanded, setCalendarExpanded] = useState(false);
   const lockupMs = lockupEndDate ? new Date(lockupEndDate).getTime() : NaN;
   const lockupActive = Number.isFinite(lockupMs) && lockupMs > Date.now();
   const expiryMs = activeBuyoutOfferExpiry ? new Date(activeBuyoutOfferExpiry).getTime() : NaN;
@@ -182,9 +181,19 @@ export function AssetOwnershipSection({
     && dripSupported === true
     && typeof onToggleDrip === 'function';
 
-  // ── Distribution calendar visibility ──
-  // Show the disclosure only when the parent supplies calendar entries.
-  const showCalendar = distributionCalendarEntries !== undefined;
+  // ── Next scheduled distribution ──
+  // The forward-looking fact a buyer actually needs ("buy before the
+  // ex-date to receive this payout") is folded into the hero as a single
+  // line. The full timeline lives on the distribution history screen —
+  // a second collapsed disclosure here only duplicated it.
+  const nextScheduled = React.useMemo(() => {
+    const scheduled = (distributionCalendarEntries ?? [])
+      .filter(entry => entry.status === 'scheduled')
+      .map(entry => ({ entry, ms: new Date(entry.payableDate ?? entry.date).getTime() }))
+      .filter(({ ms }) => Number.isFinite(ms))
+      .sort((a, b) => a.ms - b.ms);
+    return scheduled[0]?.entry ?? null;
+  }, [distributionCalendarEntries]);
 
   return (
     <View style={styles.container}>
@@ -534,6 +543,11 @@ export function AssetOwnershipSection({
                 : 'No distributions yet.'}
           </Text>
         )}
+        {nextScheduled ? (
+          <Text style={[styles.caption, { color: colors.textSecondary }]}>
+            Next · {formatCoOwnIze(nextScheduled.perUnitGbp)} per unit · payable {formatDayMonth(nextScheduled.payableDate ?? nextScheduled.date)}
+          </Text>
+        ) : null}
         {lastDistribution && distributionsFailed ? (
           <Text style={[styles.caption, { color: colors.textMuted }]}>Could not refresh distributions.</Text>
         ) : null}
@@ -550,23 +564,6 @@ export function AssetOwnershipSection({
           </View>
         ) : null}
         <CommerceDetailDisclosureRow label="Distribution history" onPress={onNavigateToDistributionHistory} />
-        {showCalendar ? (
-          <>
-            <Pressable onPress={() => setCalendarExpanded(value => !value)}
-              accessibilityRole="button" accessibilityState={{ expanded: calendarExpanded }}
-              accessibilityLabel="Distribution calendar"
-              style={({ pressed }) => [styles.disclosure, { borderTopColor: colors.borderSubtle }, pressed && styles.pressed]}>
-              <Text style={[styles.body, styles.flex, { color: colors.textPrimary }]}>Distribution calendar</Text>
-              <Ionicons name={calendarExpanded ? 'chevron-up' : 'chevron-down'} size={20} color={colors.textMuted} />
-            </Pressable>
-            {calendarExpanded ? (
-              <CoOwnDistributionCalendar
-                entries={distributionCalendarEntries ?? []}
-                userUnits={owned && yourUnits != null && yourUnits > 0 ? yourUnits : undefined}
-              />
-            ) : null}
-          </>
-        ) : null}
       </View>
     </View>
   );

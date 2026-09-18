@@ -279,15 +279,20 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
     const { limit, cursor } = homeQuerySchema.parse(request.query ?? {});
 
     const viewerUserId = request.authUser?.userId ?? null;
-    const cursorCondition = cursor ? `AND created_at < $1` : '';
-    const cursorParams: unknown[] = cursor ? [cursor] : [];
+    // Each source query carries its own parameter list: the listings query
+    // binds cursor + viewer + limit, while posters/looks bind only
+    // cursor + limit. Sharing one array would leave unreferenced $N slots
+    // Postgres cannot type (42P18) — and the listings-qualified cursor
+    // clause is invalid in the posters/looks FROM scope.
+    const listingsParams: unknown[] = cursor ? [cursor] : [];
+    const listingsCursorClause = cursor ? `AND listings.created_at < $1` : '';
     // Bidirectional block exclusion in-SQL (not post-LIMIT, which would
     // shrink pages): hide listings from sellers the viewer blocked AND
     // from sellers who blocked the viewer.
     let blockedClause = '';
     if (viewerUserId) {
-      cursorParams.push(viewerUserId);
-      const viewerSlot = `$${cursorParams.length}`;
+      listingsParams.push(viewerUserId);
+      const viewerSlot = `$${listingsParams.length}`;
       blockedClause = `
         AND NOT EXISTS (
           SELECT 1 FROM user_blocks
@@ -295,8 +300,14 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
              OR (blocked_id = ${viewerSlot} AND blocker_id = listings.seller_id)
         )`;
     }
-    cursorParams.push(limit);
-    const limitSlot = `$${cursorParams.length}`;
+    listingsParams.push(limit);
+    const listingsLimitSlot = `$${listingsParams.length}`;
+
+    const tailParams: unknown[] = cursor ? [cursor] : [];
+    const postersCursorClause = cursor ? `AND posters.created_at < $1` : '';
+    const looksCursorClause = cursor ? `AND looks.created_at < $1` : '';
+    tailParams.push(limit);
+    const tailLimitSlot = `$${tailParams.length}`;
 
     const listingsResult = await readDb.query<{
       id: string;
@@ -314,18 +325,20 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
       created_at: string;
     }>(
       `
-        SELECT id, seller_id, title, description, price_gbp, image_url,
-          status, category, brand, size, condition, original_price_gbp, created_at
+        SELECT listings.id, listings.seller_id, listings.title, listings.description,
+          listings.price_gbp, listings.image_url, listings.status, listings.category,
+          listings.brand, listings.size, listings.condition, listings.original_price_gbp,
+          listings.created_at
         FROM listings
         ${reachJoinSql('reach_u', 'listings.seller_id')}
-        WHERE status = 'active'
+        WHERE listings.status = 'active'
           ${reachExcludedSql('reach_u')}
           ${blockedClause}
-          ${cursorCondition}
-        ORDER BY created_at DESC
-        LIMIT ${limitSlot}
+          ${listingsCursorClause}
+        ORDER BY listings.created_at DESC
+        LIMIT ${listingsLimitSlot}
       `,
-      cursorParams
+      listingsParams
     );
 
     const listingIds = listingsResult.rows.map((r) => r.id);
@@ -349,11 +362,11 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
                caption, created_at
         FROM posters
         WHERE status = 'published'
-          ${cursorCondition}
+          ${postersCursorClause}
         ORDER BY created_at DESC
-        LIMIT ${limitSlot}
+        LIMIT ${tailLimitSlot}
       `,
-      cursorParams
+      tailParams
     );
 
     const looksResult = await readDb.query<{
@@ -369,11 +382,11 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
                created_at
         FROM looks
         WHERE status = 'published'
-          ${cursorCondition}
+          ${looksCursorClause}
         ORDER BY created_at DESC
-        LIMIT ${limitSlot}
+        LIMIT ${tailLimitSlot}
       `,
-      cursorParams
+      tailParams
     );
 
     type HomeFeedItemType = 'listing' | 'poster' | 'look';
@@ -601,9 +614,12 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
 
     const { limit, cursor } = followingQuerySchema.parse(request.query);
 
-    const cursorCondition = cursor
-      ? `AND created_at < $2`
-      : `AND created_at > NOW() - INTERVAL '7 days'`;
+    const listingsCursorCondition = cursor
+      ? `AND l.created_at < $2`
+      : `AND l.created_at > NOW() - INTERVAL '7 days'`;
+    const looksCursorCondition = cursor
+      ? `AND lk.created_at < $2`
+      : `AND lk.created_at > NOW() - INTERVAL '7 days'`;
     const cursorParams = cursor ? [request.authUser.userId, cursor, limit] : [request.authUser.userId, limit];
 
     // Union of listings and looks from followed users
@@ -623,7 +639,7 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
         WHERE uf.follower_id = $1
           AND l.status = 'active'
           ${reachExcludedSql('reach_u')}
-          ${cursorCondition}
+          ${listingsCursorCondition}
         ORDER BY l.created_at DESC
         LIMIT $${cursorParams.length}
       `,
@@ -645,7 +661,7 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
         JOIN user_follows uf ON uf.following_id = lk.creator_id
         WHERE uf.follower_id = $1
           AND lk.status = 'published'
-          ${cursorCondition}
+          ${looksCursorCondition}
         ORDER BY lk.created_at DESC
         LIMIT $${cursorParams.length}
       `,

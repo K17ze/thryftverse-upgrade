@@ -178,13 +178,23 @@ export function MakeOfferSheet({
   }, [numericOfferDisplay, minDisplay, maxDisplay]);
 
   // ── Slider drag handling ──
-  const [trackWidth, setTrackWidth] = useState(0);
+  // The PanResponder is created once on first render — before the sheet
+  // has laid out — so every mutable value it reads must come from refs.
+  // Reading `trackMetrics`, `setOfferFromFraction` or `reducedMotion`
+  // directly would freeze them at their first-render values (track width
+  // === 0) and the slider could never move. Same ref pattern as
+  // AIPhotoEnhancementScreen's before/after slider.
+  const [trackMetrics, setTrackMetrics] = useState<{ width: number; x: number }>({ width: 0, x: Space.md });
+  const trackWidthRef = useRef(0);
+  const trackOffsetXRef = useRef<number>(Space.md);
   const grantFractionRef = useRef(0);
   const sliderFractionRef = useRef(0);
   sliderFractionRef.current = sliderFraction;
-  const handleTrackLayout = useCallback((e: LayoutChangeEvent) => {
-    setTrackWidth(e.nativeEvent.layout.width);
-  }, []);
+  const reducedMotionRef = useRef(reducedMotion);
+  reducedMotionRef.current = reducedMotion;
+  // null = intent undecided; true = horizontal scrub; false = let a
+  // vertical scroll claim the gesture instead of dead-locking the strip.
+  const horizontalIntentRef = useRef<boolean | null>(null);
 
   const setOfferFromFraction = useCallback(
     (fraction: number) => {
@@ -195,23 +205,55 @@ export function MakeOfferSheet({
     },
     [minDisplay, maxDisplay, errorMsg],
   );
+  const setOfferFromFractionRef = useRef(setOfferFromFraction);
+  setOfferFromFractionRef.current = setOfferFromFraction;
+
+  const handleTrackLayout = useCallback((e: LayoutChangeEvent) => {
+    const { width, x } = e.nativeEvent.layout;
+    trackWidthRef.current = width;
+    trackOffsetXRef.current = x;
+    setTrackMetrics({ width, x });
+  }, []);
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        if (trackWidth <= 0) return;
-        grantFractionRef.current = sliderFractionRef.current;
-        if (!reducedMotion) haptics.tap();
+      onPanResponderGrant: (e) => {
+        const width = trackWidthRef.current;
+        if (width <= 0) return;
+        horizontalIntentRef.current = null;
+        // Tap-to-seek: a press anywhere on the track jumps the offer to
+        // that point; a press on the thumb resolves to the current
+        // fraction, so drags stay anchored to where they started.
+        const fraction = Math.max(
+          0,
+          Math.min(1, (e.nativeEvent.locationX - trackOffsetXRef.current) / width),
+        );
+        grantFractionRef.current = fraction;
+        setOfferFromFractionRef.current(fraction);
+        if (!reducedMotionRef.current) haptics.tap();
       },
       onPanResponderMove: (_e, gesture) => {
-        if (trackWidth <= 0) return;
-        const deltaFraction = gesture.dx / trackWidth;
-        setOfferFromFraction(grantFractionRef.current + deltaFraction);
+        const width = trackWidthRef.current;
+        if (width <= 0) return;
+        if (horizontalIntentRef.current === null) {
+          if (Math.abs(gesture.dx) < 4 && Math.abs(gesture.dy) < 4) return;
+          horizontalIntentRef.current = Math.abs(gesture.dx) >= Math.abs(gesture.dy);
+        }
+        if (!horizontalIntentRef.current) return;
+        setOfferFromFractionRef.current(grantFractionRef.current + gesture.dx / width);
       },
       onPanResponderRelease: () => {
-        if (!reducedMotion) haptics.tap();
+        horizontalIntentRef.current = null;
+        if (!reducedMotionRef.current) haptics.tap();
+      },
+      // Only hold the responder once the gesture is clearly a horizontal
+      // scrub — otherwise a vertical pull on the strip should be able to
+      // scroll the sheet content.
+      onPanResponderTerminationRequest: () => horizontalIntentRef.current !== true,
+      onPanResponderTerminate: () => {
+        horizontalIntentRef.current = null;
       } }),
   ).current;
 
@@ -417,10 +459,11 @@ export function MakeOfferSheet({
         ) : null}
       </View>
 
-      {/* Offer amount slider */}
+      {/* Offer amount slider — the responder lives on the 44pt wrap so the
+          whole strip is draggable/seekable, not just the 24pt thumb. */}
       <View
         style={styles.sliderWrap}
-        onLayout={handleTrackLayout}
+        {...panResponder.panHandlers}
         accessibilityRole="adjustable"
         accessibilityLabel="Offer amount slider"
         accessibilityHint="Drag to adjust your offer amount"
@@ -435,7 +478,10 @@ export function MakeOfferSheet({
           else if (e.nativeEvent.actionName === 'decrement') accessibilityDecrement();
         }}
       >
-        <View style={[styles.track, { backgroundColor: colors.surfaceAlt }]}>
+        <View
+          style={[styles.track, { backgroundColor: colors.surfaceAlt }]}
+          onLayout={handleTrackLayout}
+        >
           {/* Filled portion */}
           <View
             style={[
@@ -446,13 +492,14 @@ export function MakeOfferSheet({
             ]}
           />
         </View>
-        {/* Thumb */}
+        {/* Thumb — centre tracks the fraction along the measured track,
+            not the padded wrap (percentage-of-wrap left the thumb ~16pt
+            off the track ends). */}
         <View
-          {...panResponder.panHandlers}
           style={[
             styles.thumb,
             {
-              left: `${sliderFraction * 100}%`,
+              left: trackMetrics.x + sliderFraction * trackMetrics.width,
               backgroundColor: colors.brand,
               borderColor: colors.surface },
           ]}

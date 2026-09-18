@@ -160,24 +160,6 @@ function ProductCardBase({
     ? Math.round(((item.originalPrice! - item.price) / item.originalPrice!) * 100)
     : 0;
 
-  // Condition badge — color-coded status pill overlaid on the preview.
-  //   New with tags → green (colors.successText)
-  //   Used (very good / good / satisfactory) → dark gray scrim
-  //   Sold → dark gray scrim with a "Sold" label
-  // Badge backgrounds are always dark, so the label uses a fixed white
-  // ink instead of a theme text token (which would render black-on-dark
-  // in dark mode). Width is auto so longer conditions still fit at 20pt.
-  const conditionBadge = (() => {
-    if (item.isSold) {
-      return { label: 'Sold', bg: colors.overlay };
-    }
-    if (!item.condition) return null;
-    const isNew = item.condition === 'New with tags';
-    return {
-      label: isNew ? 'New' : item.condition,
-      bg: isNew ? colors.success : colors.overlay };
-  })();
-
   const cardContent = (
     <View style={[styles.container, item.isSold && styles.soldContainer]}>
       {/* Image - Full bleed, subtle radius for modern feel */}
@@ -246,15 +228,6 @@ function ProductCardBase({
               variant="compact"
               onMedia
             />
-          </View>
-        ) : null}
-
-        {/* Condition badge — lower-left, color-coded (green = New,
-            dark = Used / Sold). Small 20pt pill so it never dominates
-            the media; auto width keeps longer conditions legible. */}
-        {conditionBadge ? (
-          <View style={[styles.conditionBadge, { backgroundColor: conditionBadge.bg }]}>
-            <Text style={styles.conditionText}>{conditionBadge.label}</Text>
           </View>
         ) : null}
 
@@ -568,17 +541,6 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     paddingHorizontal: Space.sm,
     paddingVertical: 5,
     borderRadius: Radius.md },
-  // Condition badge — lower-left, color-coded via inline backgroundColor.
-  // Small 20pt pill with an 8pt radius so it reads as metadata, not chrome.
-  conditionBadge: {
-    position: 'absolute',
-    bottom: Space.xs,
-    left: Space.xs,
-    height: 20,
-    paddingHorizontal: 6,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center' },
   conditionText: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
@@ -665,18 +627,14 @@ function ProductDiscoveryTileBase({
   // `contentPosition` format — the same mechanism CachedImage uses.
   const focalPoint = getCategoryFocalPoint(item.category);
 
-  // Condition badge — single state marker only (sold > condition). Sits over
-  // the media on the semantic `overlay` scrim; "New with tags" uses the
-  // `success` semantic. Label text is fixed white because the overlay is
-  // always dark and no semantic on-scrim text token exists (same convention
-  // as the condition badge above, lines ~643–654).
+  // Sold badge — the only state marker the tile keeps. Sits over the
+  // media on the semantic `overlay` scrim; label text is fixed white
+  // because the overlay is always dark and no semantic on-scrim text
+  // token exists. Condition (Very good / Good / …) is no longer shown
+  // on cards — it stays available in the item detail screens.
   const conditionBadge = item.isSold
     ? { label: 'Sold', bg: colors.overlay }
-    : item.condition
-      ? {
-          label: item.condition === 'New with tags' ? 'New' : item.condition,
-          bg: item.condition === 'New with tags' ? colors.success : colors.overlay }
-      : null;
+    : null;
 
   const handleSavePress = useCallback(
     (e: { stopPropagation?: () => void; preventDefault?: () => void }) => {

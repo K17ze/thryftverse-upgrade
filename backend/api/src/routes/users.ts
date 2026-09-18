@@ -1891,9 +1891,9 @@ app.get('/users/:userId/profile', async (request, reply) => {
 async function loadStorefrontSummary(
   readDb: Pool,
   sellerId: string
-): Promise<{ storefront?: { announcement: string | null; sections: { kind: string; title: string; sortOrder: number }[]; featuredListingIds: string[] } }> {
-  const sfResult = await readDb.query<{ id: string; announcement: string | null }>(
-    `SELECT id, announcement FROM storefronts
+): Promise<{ storefront?: { announcement: string | null; policies: { shipping: string | null; returns: string | null; additional: string | null }; sections: { kind: string; title: string; sortOrder: number }[]; featuredListingIds: string[] } }> {
+  const sfResult = await readDb.query<{ id: string; announcement: string | null; policies: unknown }>(
+    `SELECT id, announcement, policies FROM storefronts
      WHERE seller_id = $1 AND status = 'published' LIMIT 1`,
     [sellerId]
   );
@@ -1911,9 +1911,20 @@ async function loadStorefrontSummary(
     [sf.id]
   );
 
+  const policySource = sf.policies && typeof sf.policies === 'object' ? (sf.policies as Record<string, unknown>) : {};
+  const policyValue = (key: string): string | null => {
+    const value = policySource[key];
+    return typeof value === 'string' && value.trim().length > 0 ? value : null;
+  };
+
   return {
     storefront: {
       announcement: sf.announcement,
+      policies: {
+        shipping: policyValue('shipping'),
+        returns: policyValue('returns'),
+        additional: policyValue('additional'),
+      },
       sections: sectionsResult.rows.map((s) => ({
         kind: s.kind,
         title: s.title,

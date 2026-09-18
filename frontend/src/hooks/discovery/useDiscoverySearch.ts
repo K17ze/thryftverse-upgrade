@@ -69,7 +69,6 @@ export function useDiscoverySearch(initialQuery?: string) {
     condition: browseFilters.condition !== 'Any' ? browseFilters.condition : undefined,
     priceMin: browseFilters.priceMin ?? undefined,
     priceMax: browseFilters.priceMax ?? undefined,
-    sustainableOnly: browseFilters.sustainableOnly || undefined,
     sort: SEARCH_SORT_MAP[browseFilters.sort] ?? 'relevance',
   }), [browseFilters]);
 
@@ -79,7 +78,6 @@ export function useDiscoverySearch(initialQuery?: string) {
     browseFilters.brands.length +
     browseFilters.sizes.length +
     (browseFilters.condition !== 'Any' ? 1 : 0) +
-    (browseFilters.sustainableOnly ? 1 : 0) +
     (browseFilters.priceMin != null || browseFilters.priceMax != null ? 1 : 0);
 
   const clearSearchFilters = useCallback(() => {
@@ -88,7 +86,6 @@ export function useDiscoverySearch(initialQuery?: string) {
       brands: [],
       sizes: [],
       condition: 'Any',
-      sustainableOnly: false,
       priceMin: null,
       priceMax: null,
     });

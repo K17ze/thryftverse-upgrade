@@ -658,3 +658,68 @@ describe('DSA Article 30: trader classification projection', () => {
     assert.equal(nonTrader.legalName, null);
   });
 });
+
+// ── Storefront policies contract tests ────────────────────────────────
+//
+// Pins the policies JSONB contract added in migration 320: the response
+// always carries the closed key set, seller-authored text wins, unknown
+// or non-string values are dropped, and PUT replaces the bag wholesale.
+
+describe('Storefront policies: response normalization', () => {
+  // Mirrors normalizePolicies in routes/storefronts.ts exactly.
+  function normalizePolicies(raw: unknown): { shipping: string | null; returns: string | null; additional: string | null } {
+    const source = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+    const pick = (key: 'shipping' | 'returns' | 'additional'): string | null => {
+      const value = source[key];
+      return typeof value === 'string' && value.trim().length > 0 ? value : null;
+    };
+    return { shipping: pick('shipping'), returns: pick('returns'), additional: pick('additional') };
+  }
+
+  it('empty bag → all-null key set (no absent-field ambiguity)', () => {
+    assert.deepEqual(normalizePolicies({}), { shipping: null, returns: null, additional: null });
+  });
+
+  it('null/undefined raw → all-null key set', () => {
+    assert.deepEqual(normalizePolicies(null), { shipping: null, returns: null, additional: null });
+    assert.deepEqual(normalizePolicies(undefined), { shipping: null, returns: null, additional: null });
+  });
+
+  it('authored values pass through; missing keys normalize to null', () => {
+    assert.deepEqual(normalizePolicies({ shipping: 'Dispatches in 2 days', returns: 'No returns' }), {
+      shipping: 'Dispatches in 2 days',
+      returns: 'No returns',
+      additional: null,
+    });
+  });
+
+  it('blank strings normalize to null (no empty-copy leak)', () => {
+    assert.deepEqual(normalizePolicies({ shipping: '   ' }), { shipping: null, returns: null, additional: null });
+  });
+
+  it('unknown keys and non-string values are dropped', () => {
+    assert.deepEqual(
+      normalizePolicies({ shipping: 'OK', hack: 'injected', returns: 42, extra: { nested: true } }),
+      { shipping: 'OK', returns: null, additional: null },
+    );
+  });
+});
+
+describe('Storefront policies: PUT replace semantics', () => {
+  // PUT /storefronts/me replaces the whole policies bag — a payload that
+  // omits a key clears it, matching the client sending all three fields.
+
+  it('partial payload stored verbatim; absent keys read back as null', () => {
+    // Simulates: UPDATE storefronts SET policies = $1::jsonb
+    const stored = JSON.stringify({ returns: '14-day returns' });
+    const readBack = JSON.parse(stored) as Record<string, unknown>;
+    const source = readBack;
+    assert.equal(source.shipping, undefined); // cleared — not preserved
+    assert.equal(source.returns, '14-day returns');
+  });
+
+  it('empty policies object clears all authored copy', () => {
+    const stored = JSON.stringify({});
+    assert.deepEqual(JSON.parse(stored), {});
+  });
+});

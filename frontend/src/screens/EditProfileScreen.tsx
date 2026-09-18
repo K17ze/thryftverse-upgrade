@@ -25,6 +25,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { PremiumToggle } from '../components/PremiumToggle';
 import { checkUsernameAvailability, updateMyProfile, type UpdateProfileInput } from '../services/profileApi';
+import { fetchMyStorefront, updateMyStorefront } from '../services/storefrontApi';
 import { parseApiError } from '../lib/apiClient';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { FlagshipScreen, FlagshipHeader, FlagshipNavigationRow } from '../components/flagship';
@@ -89,6 +90,50 @@ export default function EditProfileScreen() {
     user?.coverPhoto ?? null,
   );
 
+  // Shop section — seller-authored announcement + policies persisted on the
+  // storefront (PUT /storefronts/me). Fields stay disabled until the owner's
+  // storefront loads so a failed fetch can never overwrite existing copy
+  // with blanks. Shop fields only join the save payload once loaded.
+  const [shopStatus, setShopStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
+  const [announcement, setAnnouncement] = useState('');
+  const [shippingPolicy, setShippingPolicy] = useState('');
+  const [returnsPolicy, setReturnsPolicy] = useState('');
+  const [additionalPolicy, setAdditionalPolicy] = useState('');
+  const initialShopRef = useRef<{ announcement: string; shipping: string; returns: string; additional: string } | null>(null);
+
+  const loadShop = useCallback(() => {
+    let cancelled = false;
+    setShopStatus('loading');
+    fetchMyStorefront()
+      .then((sf) => {
+        if (cancelled) return;
+        const initial = {
+          announcement: sf.announcement ?? '',
+          shipping: sf.policies?.shipping ?? '',
+          returns: sf.policies?.returns ?? '',
+          additional: sf.policies?.additional ?? '',
+        };
+        initialShopRef.current = initial;
+        setAnnouncement(initial.announcement);
+        setShippingPolicy(initial.shipping);
+        setReturnsPolicy(initial.returns);
+        setAdditionalPolicy(initial.additional);
+        setShopStatus('loaded');
+      })
+      .catch(() => { if (!cancelled) setShopStatus('error'); });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => loadShop(), [loadShop]);
+
+  const shopChanged =
+    shopStatus === 'loaded' &&
+    initialShopRef.current !== null &&
+    (announcement !== initialShopRef.current.announcement ||
+      shippingPolicy !== initialShopRef.current.shipping ||
+      returnsPolicy !== initialShopRef.current.returns ||
+      additionalPolicy !== initialShopRef.current.additional);
+
   const [isSaving, setIsSaving] = useState(false);
   const [websiteError, setWebsiteError] = useState('');
   const [nameError, setNameError] = useState('');
@@ -118,6 +163,7 @@ export default function EditProfileScreen() {
     website !== (user?.website ?? '') ||
     (gender === 'Custom' ? customGender.trim() : gender) !== (user?.gender ?? 'Prefer not to say') ||
     isAiCreator !== (user?.isAiCreator ?? false) ||
+    shopChanged ||
     hasUnsavedMedia;
 
   const validateWebsite = useCallback((value: string) => {
@@ -218,6 +264,23 @@ export default function EditProfileScreen() {
           coverPhoto: updated.coverPhoto,
           coverVideo: updated.coverVideo,
         });
+      }
+
+      if (shopChanged) {
+        await updateMyStorefront({
+          announcement: announcement.trim() || null,
+          policies: {
+            shipping: shippingPolicy.trim() || null,
+            returns: returnsPolicy.trim() || null,
+            additional: additionalPolicy.trim() || null,
+          },
+        });
+        initialShopRef.current = {
+          announcement,
+          shipping: shippingPolicy,
+          returns: returnsPolicy,
+          additional: additionalPolicy,
+        };
       }
 
       clearCommittedMedia();
@@ -511,6 +574,72 @@ export default function EditProfileScreen() {
             returnKeyType="done"
           />
 
+        </View>
+
+        <View style={styles.sectionGroup}>
+          <Text style={styles.sectionLabel}>Shop</Text>
+          {shopStatus === 'error' ? (
+            <View style={styles.shopStatusRow}>
+              <Text style={styles.fieldHelper}>Couldn't load your shop details.</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Retry loading shop details"
+                onPress={loadShop}
+                style={({ pressed }) => [styles.recoveryButton, pressed && styles.pressed]}
+              >
+                <Text style={styles.editPictureActionText}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : shopStatus === 'loading' ? (
+            <View accessibilityElementsHidden={true} importantForAccessibility="no-hide-descendants">
+              <View style={styles.skeletonField} />
+              <View style={styles.skeletonField} />
+            </View>
+          ) : (
+            <>
+              <ProfileEditField
+                label="Shop announcement"
+                value={announcement}
+                onChangeText={setAnnouncement}
+                editable={!isSaving}
+                placeholder="A note shown at the top of your shop…"
+                multiline
+                maxLength={500}
+                autoCapitalize="sentences"
+              />
+              <ProfileEditField
+                label="Shipping policy"
+                value={shippingPolicy}
+                onChangeText={setShippingPolicy}
+                editable={!isSaving}
+                placeholder="e.g. Dispatches within 2 days, tracked shipping"
+                multiline
+                maxLength={500}
+                autoCapitalize="sentences"
+              />
+              <ProfileEditField
+                label="Returns policy"
+                value={returnsPolicy}
+                onChangeText={setReturnsPolicy}
+                editable={!isSaving}
+                placeholder="e.g. Returns accepted within 14 days"
+                multiline
+                maxLength={500}
+                autoCapitalize="sentences"
+              />
+              <ProfileEditField
+                label="Additional policies"
+                value={additionalPolicy}
+                onChangeText={setAdditionalPolicy}
+                editable={!isSaving}
+                placeholder="Anything else buyers should know…"
+                multiline
+                maxLength={500}
+                autoCapitalize="sentences"
+                isLast
+              />
+            </>
+          )}
         </View>
 
         <View style={styles.sectionGroup}>
@@ -907,6 +1036,19 @@ function createStyles(colors: ThemeColors) {
       marginHorizontal: Space.md,
       borderRadius: Radius.md,
       marginTop: Space.md,
+    },
+    shopStatusRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      minHeight: Control.hit,
+      gap: Space.md,
+    },
+    skeletonField: {
+      minHeight: 104,
+      borderRadius: Radius.lg,
+      backgroundColor: colors.surfaceAlt,
+      marginBottom: Space.md,
     },
     recoveryActions: {
       flexDirection: 'row',

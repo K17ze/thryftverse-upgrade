@@ -215,8 +215,6 @@ describe('seller-away surfaces (react-test-renderer)', () => {
     const renderer = renderTree(
       <CommerceTrustDossier
         seller={seller}
-        sellerStatsLine="100 sales"
-        sellerVerified={false}
         commerce={commerce}
       />
     );
@@ -237,8 +235,6 @@ describe('seller-away surfaces (react-test-renderer)', () => {
     const renderer = renderTree(
       <CommerceTrustDossier
         seller={seller}
-        sellerStatsLine="100 sales"
-        sellerVerified={false}
         commerce={commerce}
       />
     );

@@ -16351,6 +16351,9 @@ app.get('/listings', async (request, reply) => {
     category: z.string().optional(),
     subcategory: z.string().optional(),
     brand: z.string().optional(),
+    // Multi-select brands — CSV of brand names; takes precedence over the
+    // single `brand` value when present.
+    brands: z.string().optional(),
     size: z.string().optional(),
     condition: z.string().optional(),
     minPrice: z.coerce.number().nonnegative().optional(),
@@ -16392,7 +16395,13 @@ app.get('/listings', async (request, reply) => {
     conditions.push(`l.subcategory ILIKE $${args.length + 1}`);
     args.push(`%${params.subcategory}%`);
   }
-  if (params.brand) {
+  const brandsList = params.brands
+    ? params.brands.split(',').map((b) => b.trim()).filter(Boolean)
+    : [];
+  if (brandsList.length > 0) {
+    conditions.push(`l.brand ILIKE ANY($${args.length + 1})`);
+    args.push(brandsList.map((b) => `%${b}%`));
+  } else if (params.brand) {
     conditions.push(`l.brand ILIKE $${args.length + 1}`);
     args.push(`%${params.brand}%`);
   }

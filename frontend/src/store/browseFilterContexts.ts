@@ -6,7 +6,6 @@ export const DEFAULT_BROWSE_FILTERS: BrowseFilterState = {
   brands: [],
   sizes: [],
   condition: 'Any',
-  sustainableOnly: false,
   priceMin: null,
   priceMax: null,
 };

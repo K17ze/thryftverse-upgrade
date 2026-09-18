@@ -214,12 +214,14 @@ export async function fetchFilteredListings(options?: {
   category?: string;
   subcategory?: string;
   brand?: string;
+  /** Multi-select brands — serialized as CSV; takes precedence over the
+   *  single `brand` value on the backend. */
+  brands?: string[];
   size?: string;
   condition?: string;
   minPrice?: number;
   maxPrice?: number;
   sort?: 'newest' | 'price_asc' | 'price_desc' | 'most_liked' | 'ending_soon';
-  sustainableOnly?: boolean;
   limit?: number;
   cursor?: string;
 }): Promise<ListingsSyncResult> {
@@ -227,13 +229,13 @@ export async function fetchFilteredListings(options?: {
   if (options?.query) params.set('q', options.query.trim());
   if (options?.category) params.set('category', options.category);
   if (options?.subcategory) params.set('subcategory', options.subcategory);
-  if (options?.brand) params.set('brand', options.brand);
+  if (options?.brands?.length) params.set('brands', options.brands.join(','));
+  else if (options?.brand) params.set('brand', options.brand);
   if (options?.size) params.set('size', options.size);
   if (options?.condition) params.set('condition', options.condition);
   if (options?.minPrice !== undefined) params.set('minPrice', String(options.minPrice));
   if (options?.maxPrice !== undefined) params.set('maxPrice', String(options.maxPrice));
   if (options?.sort) params.set('sort', options.sort);
-  if (options?.sustainableOnly) params.set('sustainableOnly', 'true');
   if (options?.limit) params.set('limit', String(options.limit));
   if (options?.cursor) params.set('cursor', options.cursor);
   const qs = params.toString();

@@ -35,8 +35,17 @@ const sectionSchema = z.object({
   sortOrder: z.number().int().min(0).max(1000),
 });
 
+const policiesSchema = z
+  .object({
+    shipping: z.string().trim().max(500).nullable().optional(),
+    returns: z.string().trim().max(500).nullable().optional(),
+    additional: z.string().trim().max(500).nullable().optional(),
+  })
+  .strict();
+
 const storefrontUpdateSchema = z.object({
   announcement: z.string().trim().max(500).nullable().optional(),
+  policies: policiesSchema.optional(),
   coverAssetId: z.string().min(2).max(160).nullable().optional(),
   logoAssetId: z.string().min(2).max(160).nullable().optional(),
   sections: z.array(sectionSchema).max(MAX_SECTIONS).optional(),
@@ -62,12 +71,19 @@ export interface StorefrontSectionResponse {
   sortOrder: number;
 }
 
+export interface StorefrontPolicies {
+  shipping: string | null;
+  returns: string | null;
+  additional: string | null;
+}
+
 export interface StorefrontResponse {
   id: string;
   sellerId: string;
   status: 'draft' | 'published' | 'paused';
   revision: number;
   announcement: string | null;
+  policies: StorefrontPolicies;
   coverAssetId: string | null;
   logoAssetId: string | null;
   sections: StorefrontSectionResponse[];
@@ -77,6 +93,17 @@ export interface StorefrontResponse {
 }
 
 // ── Helper: serialize a storefront row + sections into response shape ──
+
+// Normalizes the JSONB policies bag to the closed key set. Unknown or
+// non-string values are dropped rather than leaked into the contract.
+function normalizePolicies(raw: unknown): StorefrontPolicies {
+  const source = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const pick = (key: keyof StorefrontPolicies): string | null => {
+    const value = source[key];
+    return typeof value === 'string' && value.trim().length > 0 ? value : null;
+  };
+  return { shipping: pick('shipping'), returns: pick('returns'), additional: pick('additional') };
+}
 
 async function serializeStorefront(
   readDb: Pool,
@@ -88,14 +115,15 @@ async function serializeStorefront(
     status: string;
     revision: number;
     announcement: string | null;
+    policies: unknown;
     cover_asset_id: string | null;
     logo_asset_id: string | null;
     published_at: string | null;
     created_at: string;
     updated_at: string;
   }>(
-    `SELECT id, seller_id, status, revision, announcement, cover_asset_id,
-            logo_asset_id, published_at, created_at, updated_at
+    `SELECT id, seller_id, status, revision, announcement, policies,
+            cover_asset_id, logo_asset_id, published_at, created_at, updated_at
      FROM storefronts WHERE id = $1 LIMIT 1`,
     [storefrontId]
   );
@@ -128,6 +156,7 @@ async function serializeStorefront(
     status: sf.status as 'draft' | 'published' | 'paused',
     revision: sf.revision,
     announcement: sf.announcement,
+    policies: normalizePolicies(sf.policies),
     coverAssetId: sf.cover_asset_id,
     logoAssetId: sf.logo_asset_id,
     sections: sectionsResult.rows.map((s) => ({
@@ -174,6 +203,7 @@ export const registerStorefrontRoutes = ({
           status: 'draft' as const,
           revision: 0,
           announcement: null,
+          policies: { shipping: null, returns: null, additional: null },
           coverAssetId: null,
           logoAssetId: null,
           sections: [],
@@ -328,6 +358,10 @@ export const registerStorefrontRoutes = ({
     if (payload.announcement !== undefined) {
       updateFields.push(`announcement = $${paramIdx++}`);
       updateValues.push(payload.announcement);
+    }
+    if (payload.policies !== undefined) {
+      updateFields.push(`policies = $${paramIdx++}::jsonb`);
+      updateValues.push(JSON.stringify(payload.policies));
     }
     if (payload.coverAssetId !== undefined) {
       updateFields.push(`cover_asset_id = $${paramIdx++}`);

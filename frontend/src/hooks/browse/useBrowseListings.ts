@@ -93,15 +93,6 @@ export function useBrowseListings({
       if (browseFilters.priceMin != null && listing.price < browseFilters.priceMin) return false;
       if (browseFilters.priceMax != null && listing.price > browseFilters.priceMax) return false;
 
-      // Sustainable — fail-closed: when the backend has no emissions data
-      // the grade is null, so the item does not pass the sustainable filter.
-      if (
-        browseFilters.sustainableOnly &&
-        !(listing.sustainabilityGrade === 'A' || listing.sustainabilityGrade === 'B')
-      ) {
-        return false;
-      }
-
       return true;
     });
 
@@ -169,11 +160,6 @@ export function useBrowseListings({
           (l) => l.subcategory?.toLowerCase()?.includes(subcategoryToken) ?? false,
         );
       }
-      if (browseFilters.sustainableOnly) {
-        result = result.filter(
-          (l) => l.sustainabilityGrade === 'A' || l.sustainabilityGrade === 'B',
-        );
-      }
       // Signal rail predicates are client-only (engagement heuristics) — the
       // backend path previously bypassed them, rendering the rail inert.
       if (activeSignal.filterKey !== 'all') {
@@ -181,12 +167,8 @@ export function useBrowseListings({
       }
       return result;
     }
-    const base = dataToRender;
-    if (!browseFilters.sustainableOnly) return base;
-    return base.filter((listing) =>
-      listing.sustainabilityGrade === 'A' || listing.sustainabilityGrade === 'B',
-    );
-  }, [backendListings, dataToRender, browseFilters.sustainableOnly, browseFilters.brands, browseFilters.sizes, categoryId, subcategoryId, title, activeSignal]);
+    return dataToRender;
+  }, [backendListings, dataToRender, browseFilters.brands, browseFilters.sizes, categoryId, subcategoryId, title, activeSignal]);
 
   return { dataToRender, displayListings, displayCount: displayListings.length };
 }

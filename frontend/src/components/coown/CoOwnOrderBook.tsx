@@ -409,9 +409,11 @@ function BookSide({
   );
 }
 
-/** Spread row — between asks and bids. Rendered as a recessed band
- *  (darker fill between the two hairlines) so the book reads as two
- *  distinct sides meeting at a mid-market divider. */
+/** Spread band — between asks and bids. Rendered as a bid–spread–ask
+ *  bar (Polymarket/Robinhood grammar): the green bid half and red ask
+ *  half continue each side's depth-bar axis into the divider and meet
+ *  at a neutral centre carrying the spread and last trade. Labels keep
+ *  meaning colour-independent. */
 function SpreadRow({
   bestBid,
   bestAsk,
@@ -430,32 +432,64 @@ function SpreadRow({
   const spread = bestBid != null && bestAsk != null ? bestAsk - bestBid : null;
   const mid = bestBid != null && bestAsk != null ? (bestBid + bestAsk) / 2 : null;
   const spreadBps = spread != null && mid != null && mid > 0 ? (spread / mid) * 10000 : null;
+  // Trade-side inference (tick rule): a last price at/above the ask was a
+  // buy lift, at/below the bid a sell hit, inside the spread is neutral.
+  // Mirrors how Polymarket/Robinhood colour the last print on the band.
+  const lastSide: 'buy' | 'sell' | null =
+    lastPrice == null ? null
+    : bestAsk != null && lastPrice >= bestAsk ? 'buy'
+    : bestBid != null && lastPrice <= bestBid ? 'sell'
+    : null;
+  const lastColor =
+    lastSide === 'buy' ? colors.coownUp
+    : lastSide === 'sell' ? colors.coownDown
+    : colors.textSecondary;
 
   return (
-    <View style={[styles.spreadRow, { borderColor: colors.border, backgroundColor: bandColor }]}>
-      <View style={styles.spreadLeft}>
-        <Text style={[styles.spreadLabel, { color: colors.textMuted }]}>Spread</Text>
-        <Text style={[styles.spreadValue, { color: colors.textSecondary }]}>
-          {spread != null ? spread.toFixed(2) : '—'}
-          {spreadBps != null && ` · ${spreadBps.toFixed(0)}bps`}
+    <View
+      style={[styles.spreadRow, { borderColor: colors.border, backgroundColor: bandColor }]}
+      accessibilityRole="text"
+      accessibilityLabel={
+        `Best bid ${bestBid != null ? bestBid.toFixed(2) : 'none'}, best ask ${bestAsk != null ? bestAsk.toFixed(2) : 'none'}` +
+        (spread != null ? `, spread ${spread.toFixed(2)}${spreadBps != null ? `, ${spreadBps.toFixed(0)} basis points` : ''}` : '') +
+        (lastPrice != null ? `, last trade ${lastPrice.toFixed(2)}${lastSide ? `, ${lastSide}-side` : ''}${lastAgeSeconds != null ? `, ${formatAge(lastAgeSeconds)}` : ''}` : '')
+      }
+    >
+      {/* Bid half — continues the bid depth-bar axis (bars grow from
+          the left) into the band. */}
+      <View style={[styles.spreadSide, bestBid != null && { backgroundColor: colors.coownUpSubtle }]}>
+        <Text style={[styles.spreadSideLabel, { color: colors.textMuted }]}>Bid</Text>
+        <Text style={[styles.spreadSideValue, { color: bestBid != null ? colors.coownUp : colors.textMuted }]}>
+          {bestBid != null ? bestBid.toFixed(2) : '—'}
         </Text>
       </View>
-      {lastPrice != null && (
-        <View style={styles.spreadRight}>
-          <Text style={[styles.lastLabel, { color: colors.textMuted }]}>Last</Text>
-          <Text style={[styles.lastValue, { color: colors.textPrimary }]}>
-            {lastPrice.toFixed(2)}
+
+      {/* Neutral centre — spread magnitude + last trade, stacked. */}
+      <View style={styles.spreadCenter}>
+        <Text style={[styles.spreadCenterMeta, { color: colors.textMuted }]}>
+          Spread{' '}
+          <Text style={[styles.spreadCenterValue, { color: colors.textSecondary }]}>
+            {spread != null ? spread.toFixed(2) : '—'}
+            {spreadBps != null ? ` · ${spreadBps.toFixed(0)}bps` : ''}
           </Text>
-          {lastAgeSeconds != null && (
-            <Text
-              style={[styles.lastAge, { color: colors.textMuted }]}
-              accessibilityLabel={`Last trade ${formatAge(lastAgeSeconds)}`}
-            >
-              · {formatAge(lastAgeSeconds)}
-            </Text>
-          )}
-        </View>
-      )}
+        </Text>
+        {lastPrice != null && (
+          <Text style={[styles.spreadCenterMeta, { color: colors.textMuted }]}>
+            Last{' '}
+            <Text style={{ color: lastColor }}>{lastPrice.toFixed(2)}</Text>
+            {lastAgeSeconds != null ? ` · ${formatAge(lastAgeSeconds)}` : ''}
+          </Text>
+        )}
+      </View>
+
+      {/* Ask half — ask depth bars grow from the right, so the red
+          tone anchors the right edge. */}
+      <View style={[styles.spreadSide, styles.spreadSideRight, bestAsk != null && { backgroundColor: colors.coownDownSubtle }]}>
+        <Text style={[styles.spreadSideLabel, { color: colors.textMuted }]}>Ask</Text>
+        <Text style={[styles.spreadSideValue, { color: bestAsk != null ? colors.coownDown : colors.textMuted }]}>
+          {bestAsk != null ? bestAsk.toFixed(2) : '—'}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -619,55 +653,55 @@ const styles = StyleSheet.create({
   },
   spreadRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: Space.xs + 2,
+    alignItems: 'stretch',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  spreadLeft: {
+  // Bid/ask halves — each side's depth-bar tone field extends into the
+  // band so the divider reads as green | neutral | red, matching the
+  // column axis (bids grow left, asks grow right).
+  spreadSide: {
+    flex: 1,
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: Space.xs,
+    paddingVertical: Space.xs + 2,
+    paddingHorizontal: Space.xs,
   },
-  spreadLabel: {
-    fontSize: TypographyV2.captionElevated.size,
-    lineHeight: TypographyV2.captionElevated.lineHeight,
-    fontFamily: TypographyV2.captionElevated.fontFamily,
-    letterSpacing: TypographyV2.captionElevated.letterSpacing,
+  spreadSideRight: {
+    justifyContent: 'center',
+  },
+  spreadSideLabel: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     textTransform: 'uppercase',
   },
-  spreadValue: {
-    fontSize: TypographyV2.captionElevated.size,
-    lineHeight: TypographyV2.captionElevated.lineHeight,
-    fontFamily: TypographyV2.captionElevated.fontFamily,
-    letterSpacing: TypographyV2.captionElevated.letterSpacing,
+  spreadSideValue: {
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     fontVariant: ['tabular-nums'],
   },
-  spreadRight: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: Space.xs,
+  spreadCenter: {
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 1,
+    paddingVertical: Space.xs + 2,
+    paddingHorizontal: Space.sm,
   },
-  lastLabel: {
-    fontSize: TypographyV2.captionElevated.size,
-    lineHeight: TypographyV2.captionElevated.lineHeight,
-    fontFamily: TypographyV2.captionElevated.fontFamily,
-    letterSpacing: TypographyV2.captionElevated.letterSpacing,
-    textTransform: 'uppercase',
-  },
-  lastValue: {
-    fontSize: TypographyV2.captionElevated.size,
-    lineHeight: TypographyV2.captionElevated.lineHeight,
-    fontFamily: TypographyV2.captionElevated.fontFamily,
-    letterSpacing: TypographyV2.captionElevated.letterSpacing,
+  spreadCenterValue: {
+    fontFamily: FontFamily.semibold,
     fontVariant: ['tabular-nums'],
   },
-  lastAge: {
-    fontSize: TypographyV2.captionElevated.size,
-    lineHeight: TypographyV2.captionElevated.lineHeight,
-    fontFamily: TypographyV2.captionElevated.fontFamily,
-    letterSpacing: TypographyV2.captionElevated.letterSpacing,
+  spreadCenterMeta: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'],
   },
   // Bid/ask imbalance strip — one thin proportional gauge under the
   // ladder. Green share = resting bid units, red share = resting ask

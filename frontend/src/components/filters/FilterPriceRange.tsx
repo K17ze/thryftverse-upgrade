@@ -36,7 +36,7 @@ function FilterPriceRangeBase({ expanded, onToggle, priceMin, priceMax, onChange
           <Text style={styles.priceInputLabel}>Min</Text>
           <TextInput
             style={styles.priceInput}
-            placeholder={formatFromFiat(0, 'GBP')}
+            placeholder={formatFromFiat(0, 'GBP', { displayMode: 'fiat' })}
             placeholderTextColor={colors.textMuted}
             value={priceMin}
             onChangeText={onChangeMin}

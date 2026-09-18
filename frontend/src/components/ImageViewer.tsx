@@ -42,6 +42,10 @@ function ImagePage({ uri, onDoubleTap, sharedTransitionTag, screenWidth }: Image
   const translateY = useSharedValue(0);
   const savedTranslateX = useSharedValue(0);
   const savedTranslateY = useSharedValue(0);
+  // Pan is only enabled while zoomed — an always-on pan activates on any
+  // direction at touch-slop and beats the pager FlatList, so horizontal
+  // page swipes would dead-end on this page.
+  const [isZoomed, setIsZoomed] = React.useState(false);
 
   const pinchGesture = Gesture.Pinch()
     .onUpdate((e) => {
@@ -56,12 +60,15 @@ function ImagePage({ uri, onDoubleTap, sharedTransitionTag, screenWidth }: Image
         savedScale.value = MIN_ZOOM;
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
+        runOnJS(setIsZoomed)(false);
       } else {
         savedScale.value = scale.value;
+        runOnJS(setIsZoomed)(true);
       }
     });
 
   const panGesture = Gesture.Pan()
+    .enabled(isZoomed)
     .onUpdate((e) => {
       const zoomLevel = Math.max(scale.value, savedScale.value);
       if (zoomLevel > 1) {
@@ -108,10 +115,12 @@ function ImagePage({ uri, onDoubleTap, sharedTransitionTag, screenWidth }: Image
         savedScale.value = 1;
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
+        runOnJS(setIsZoomed)(false);
       } else {
         const zoomTarget = reducedMotionEnabled ? 2 : 2.5;
         scale.value = withTiming(zoomTarget, { duration: Motion.duration.normal, easing: Easing.out(Easing.cubic) });
         savedScale.value = zoomTarget;
+        runOnJS(setIsZoomed)(true);
         if (onDoubleTap) runOnJS(onDoubleTap)();
       }
     });

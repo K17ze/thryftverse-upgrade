@@ -151,8 +151,10 @@ export default function AppNavigator() {
     const readyUnsub = navigationContainerRef.addListener('ready', restore);
     const stateUnsub = navigationContainerRef.addListener('state', () => {
       if (navigationContainerRef.isReady()) {
-        const state: NavigationState = navigationContainerRef.getRootState();
-        saveNavigationState(state);
+        const state = navigationContainerRef.getRootState();
+        if (state) {
+          saveNavigationState(state);
+        }
       }
     });
 
@@ -175,6 +177,7 @@ export default function AppNavigator() {
     const checkRoutes = () => {
       if (!navigationContainerRef?.isReady()) return;
       const state = navigationContainerRef.getRootState();
+      if (!state) return;
       const registeredNames = new Set<string>(state.routeNames);
       const missing = ROOT_STACK_ROUTES.filter(
         (route) => !registeredNames.has(route),

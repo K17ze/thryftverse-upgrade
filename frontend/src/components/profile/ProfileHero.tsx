@@ -34,7 +34,6 @@ interface ProfileHeroProps {
   displayUsername: string;
   displayAvatar?: string;
   displayCover: string;
-  isSelfProfile: boolean;
   viewer: PublicProfileViewer | null;
   stats: PublicProfileStats | null;
   activeCount: number;
@@ -51,7 +50,6 @@ interface ProfileHeroProps {
   onFollowToggle: () => void;
   onMessage: () => void;
   onMore: () => void;
-  onEditProfile?: () => void;
   onOpenConnections: (segment: 'followers' | 'following') => void;
   onTabSelect: (tab: 'Listings' | 'Reviews') => void;
   onShopSegmentSelect: (segment: 'forsale' | 'sold') => void;
@@ -107,7 +105,6 @@ export function ProfileHero({
   displayUsername,
   displayAvatar,
   displayCover,
-  isSelfProfile,
   viewer,
   stats,
   activeCount,
@@ -122,7 +119,6 @@ export function ProfileHero({
   onFollowToggle,
   onMessage,
   onMore,
-  onEditProfile,
   onOpenConnections,
   onTabSelect,
   onShopSegmentSelect }: ProfileHeroProps) {
@@ -138,7 +134,6 @@ export function ProfileHero({
 
   const initials = getInitials(targetProfile?.displayName || displayUsername || 'Thryft');
   const followerCount = stats?.followerCount ?? 0;
-  const followingCount = stats?.followingCount ?? 0;
   // Verification tier — only from seller trust (authoritative backend source).
   // Email verification is never used as a proxy for seller/identity verification.
   const verificationTier: VerificationTier | null =
@@ -151,7 +146,7 @@ export function ProfileHero({
         <FlagshipProfileMedia
           coverUri={displayCover}
           coverVideoUri={isVideoUri(displayCover) ? displayCover : undefined}
-          isSelf={isSelfProfile}
+          isSelf={false}
           coverOnly
           style={{ width: '100%' }}
           coverHeight={COVER_HEIGHT}
@@ -230,12 +225,12 @@ export function ProfileHero({
               <View style={styles.seamStatDivider} />
               <Pressable
                 style={({ pressed }) => [styles.seamStat, pressed && { opacity: 0.55 }]}
-                onPress={() => onOpenConnections('following')}
+                onPress={() => { onTabSelect('Listings'); onShopSegmentSelect('sold'); }}
                 accessibilityRole="button"
-                accessibilityLabel={`${formatFullCount(followingCount)} following — view following`}
+                accessibilityLabel={`${formatFullCount(soldCount)} sold — view sold items`}
               >
-                <Text style={styles.seamStatValue} numberOfLines={1}>{formatCompactCount(followingCount)}</Text>
-                <Text style={styles.seamStatLabel} numberOfLines={1}>Following</Text>
+                <Text style={styles.seamStatValue} numberOfLines={1}>{formatCompactCount(soldCount)}</Text>
+                <Text style={styles.seamStatLabel} numberOfLines={1}>Sold</Text>
               </Pressable>
             </View>
           </View>
@@ -264,30 +259,16 @@ export function ProfileHero({
             <BioText bio={targetProfile.bio} style={styles.bio} linkStyle={styles.bioLink} seeMoreStyle={styles.bioSeeMore} />
           ) : null}
 
-          {/* Seller trust header — marketplace meta row (sold, response time)
-              + joined caption on a separate, less prominent line. Ratings live
-              in the Reviews tab, not beside the bio. */}
-          {soldCount > 0 || memberSince || sellerTrust?.responseTimeLabel ? (
+          {/* Seller trust header — response time + joined caption. The sold
+              count lives in the seam stats above; ratings live in the
+              Reviews tab. */}
+          {memberSince || sellerTrust?.responseTimeLabel ? (
             <View style={styles.trustBlock}>
-              {soldCount > 0 || sellerTrust?.responseTimeLabel ? (
+              {sellerTrust?.responseTimeLabel ? (
                 <View style={styles.trustMetaRow}>
-                  {soldCount > 0 ? (
-                    <Pressable
-                      onPress={() => { onTabSelect('Listings'); onShopSegmentSelect('sold'); }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${soldCount} sold — view sold items`}
-                      style={({ pressed }) => pressed && { opacity: 0.6 }}
-                    >
-                      <Text style={styles.trustLink}>{soldCount} sold</Text>
-                    </Pressable>
-                  ) : null}
-                  {soldCount > 0 && sellerTrust?.responseTimeLabel ? <Text style={styles.trustDot}> · </Text> : null}
-                  {sellerTrust?.responseTimeLabel ? (
-                    <Text style={styles.trustResponse}>Replies {sellerTrust.responseTimeLabel}</Text>
-                  ) : null}
+                  <Text style={styles.trustResponse}>Replies {sellerTrust.responseTimeLabel}</Text>
                 </View>
               ) : null}
-              {/* Joined — less prominent caption on its own line, no dot separator */}
               {memberSince ? <Text style={styles.trustJoined}>Joined {memberSince}</Text> : null}
             </View>
           ) : null}
@@ -314,62 +295,51 @@ export function ProfileHero({
               Ratings and detailed metrics live in the Reviews tab. */}
         </View>
 
-        {/* Actions — flat 11pt radius, restrained, content-first */}
-        {!isSelfProfile && viewer ? (
+        {/* Actions — marketplace grammar, not the IG pill row. Message is
+            the conversion action (the one filled control); Follow is a
+            quiet stateful text action; overflow is a transparent 44pt hit
+            target. Hairline separates the row from the identity canvas. */}
+        {viewer ? (
           <View style={styles.actionRow}>
-            <AnimatedPressable
-              style={[styles.followBtn, viewer.isFollowing ? styles.followingBtn : styles.followBtnActive, followPending && styles.btnDisabled]}
-              onPress={onFollowToggle}
-              activeOpacity={0.88}
-              disabled={followPending || isBlocked}
-              hapticFeedback="light"
-              accessibilityRole="button"
-              accessibilityLabel={viewer.isFollowing ? 'Unfollow user' : 'Follow user'}
-              accessibilityState={{ disabled: followPending || isBlocked }}
-            >
-              {followPending ? (
-                <ActivityIndicator size="small" color={viewer.isFollowing ? colors.textPrimary : colors.textInverse} />
-              ) : (
-                <Text style={[styles.followBtnText, viewer.isFollowing ? styles.followingBtnText : styles.followActiveBtnText]}>
-                  {viewer.isFollowing ? 'Following' : 'Follow'}
-                </Text>
-              )}
-            </AnimatedPressable>
             <AnimatedPressable
               style={[styles.messageBtn, !viewer.canMessage && styles.btnDisabled]}
               onPress={onMessage}
               activeOpacity={0.88}
               disabled={!viewer.canMessage}
+              hapticFeedback="light"
               accessibilityRole="button"
-              accessibilityLabel={viewer.canMessage ? 'Send message to seller' : 'Messaging unavailable'}
+              accessibilityLabel={viewer.canMessage ? 'Message seller' : 'Messaging unavailable'}
               accessibilityState={{ disabled: !viewer.canMessage }}
             >
-              <Ionicons name="chatbubble-outline" size={15} color={colors.textPrimary} />
+              <Ionicons name="chatbubble-outline" size={15} color={colors.textInverse} />
               <Text style={styles.messageBtnText}>Message</Text>
             </AnimatedPressable>
             <AnimatedPressable
-              style={styles.moreBtn}
+              style={[styles.followHit, (followPending || isBlocked) && styles.btnDisabled]}
+              onPress={onFollowToggle}
+              activeOpacity={0.7}
+              disabled={followPending || isBlocked}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel={viewer.isFollowing ? 'Unfollow seller' : 'Follow seller'}
+              accessibilityState={{ selected: viewer.isFollowing, disabled: followPending || isBlocked }}
+            >
+              {followPending ? (
+                <ActivityIndicator size="small" color={colors.brand} />
+              ) : (
+                <Text style={[styles.followText, { color: viewer.isFollowing ? colors.textSecondary : colors.brand }]}>
+                  {viewer.isFollowing ? 'Following' : 'Follow'}
+                </Text>
+              )}
+            </AnimatedPressable>
+            <AnimatedPressable
+              style={styles.moreHit}
               onPress={onMore}
-              activeOpacity={0.88}
+              activeOpacity={0.7}
               accessibilityRole="button"
               accessibilityLabel="More options"
             >
               <Ionicons name="ellipsis-horizontal" size={18} color={colors.textPrimary} />
-            </AnimatedPressable>
-          </View>
-        ) : null}
-
-        {isSelfProfile ? (
-          <View style={styles.actionRow}>
-            <AnimatedPressable
-              style={styles.editProfileBtn}
-              onPress={onEditProfile}
-              activeOpacity={0.88}
-              accessibilityRole="button"
-              accessibilityLabel="Edit profile"
-            >
-              <Ionicons name="create-outline" size={15} color={colors.textPrimary} />
-              <Text style={styles.editProfileBtnText}>Edit profile</Text>
             </AnimatedPressable>
           </View>
         ) : null}
@@ -546,10 +516,6 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap' },
-  trustLink: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textPrimary },
   trustJoined: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
@@ -559,33 +525,21 @@ function createStyles(colors: ThemeColors) {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted },
-  trustDot: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textMuted },
 
-  // Actions — flat 11pt radius, restrained
+  // Actions — marketplace grammar: one filled conversion control, quiet
+  // text actions, transparent hit targets. Hairline top border separates
+  // the row from the identity canvas (SellerInfoCard grammar).
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
+    gap: Space.lg,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle,
     backgroundColor: colors.background },
-  followBtn: {
-    flex: 1,
-    height: ACTION_HEIGHT,
-    borderRadius: ACTION_RADIUS,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  followBtnActive: { backgroundColor: colors.brand },
-  followingBtn: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.background },
-  followBtnText: { fontSize: TypographyV2.bodyStrong.size, fontFamily: TypographyV2.bodyStrong.fontFamily },
-  followActiveBtnText: { color: colors.textInverse },
-  followingBtnText: { color: colors.textPrimary },
+  // Message — the conversion action. The single filled control on the
+  // surface; everything else stays quiet.
   messageBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -594,30 +548,26 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs + 3,
     height: ACTION_HEIGHT,
     borderRadius: ACTION_RADIUS,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.background },
-  messageBtnText: { fontSize: TypographyV2.bodyStrong.size, fontFamily: TypographyV2.bodyStrong.fontFamily, color: colors.textPrimary },
-  moreBtn: {
-    width: ACTION_HEIGHT,
+    backgroundColor: colors.brand },
+  messageBtnText: {
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    color: colors.textInverse },
+  // Follow — quiet stateful text action (brand when idle, muted when
+  // following). 44pt hit target, no visible container.
+  followHit: {
+    minWidth: ACTION_HEIGHT,
     height: ACTION_HEIGHT,
-    borderRadius: ACTION_RADIUS,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center' },
-  editProfileBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.xs + 3,
+  followText: {
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
+  // Overflow — transparent 44pt hit target, glyph only.
+  moreHit: {
+    width: ACTION_HEIGHT,
     height: ACTION_HEIGHT,
-    borderRadius: ACTION_RADIUS,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.background },
-  editProfileBtnText: { fontSize: TypographyV2.bodyStrong.size, fontFamily: TypographyV2.bodyStrong.fontFamily, color: colors.textPrimary },
+    alignItems: 'center',
+    justifyContent: 'center' },
   btnDisabled: { opacity: 0.5 } });
 }
