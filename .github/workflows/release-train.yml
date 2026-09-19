@@ -177,6 +177,13 @@ jobs:
           expo-version: latest
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
+      - name: Verify release configuration (F18)
+        # Fail-closed: an OTA publish without the signing key produces an
+        # unsigned update — stop here rather than shipping it.
+        working-directory: frontend
+        run: npm run check:release-config -- ota
+        env:
+          EXPO_PUBLIC_OTA_CODE_SIGNING_KEY: ${{ secrets.EXPO_PUBLIC_OTA_CODE_SIGNING_KEY }}
       - name: Rollback — re-publish previous update
         if: needs.determine-channel.outputs.is_rollback == 'true'
         working-directory: frontend
@@ -188,6 +195,7 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EAS_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+          EXPO_PUBLIC_OTA_CODE_SIGNING_KEY: ${{ secrets.EXPO_PUBLIC_OTA_CODE_SIGNING_KEY }}
       - name: Publish new update
         if: needs.determine-channel.outputs.is_rollback != 'true'
         working-directory: frontend
@@ -198,6 +206,7 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EAS_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+          EXPO_PUBLIC_OTA_CODE_SIGNING_KEY: ${{ secrets.EXPO_PUBLIC_OTA_CODE_SIGNING_KEY }}
 
   tag-release:
     name: Tag semantic version

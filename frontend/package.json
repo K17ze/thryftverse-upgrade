@@ -28,6 +28,7 @@
     "check:visual-gates": "node scripts/check-visual-release-gates.mjs",
     "check:visual-gates:report": "node scripts/check-visual-release-gates.mjs --report",
     "check:residue": "node scripts/check-production-residue.mjs",
+    "check:release-config": "node scripts/check-release-config.mjs",
     "check:domain-imports": "node scripts/check-mockdata-imports.mjs",
     "check:mockdata-boundary": "node scripts/check-mockdata-boundary.mjs",
     "check:golden-parity": "node scripts/check-golden-parity.mjs",
