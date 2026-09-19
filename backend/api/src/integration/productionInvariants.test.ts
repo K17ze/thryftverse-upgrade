@@ -743,6 +743,24 @@ describe('Production invariants (real PostgreSQL)', () => {
         }),
         /REFUND_AMOUNT_EXCEEDS_REMAINING|fully refunded/,
       );
+
+      // Migration 324 also admits the other kinds production writes that the
+      // original CHECK rejected: CONVERT_TO_FIAT (1ZE→fiat conversion),
+      // CREATOR_EARNING_PAYOUT (creator earnings → wallet) and CO_OWN_DRIP
+      // (DRIP reinvestment). Each must insert cleanly.
+      for (const [kind, asset, amount] of [
+        ['CONVERT_TO_FIAT', '1ZE', -1000],
+        ['CREATOR_EARNING_PAYOUT', 'FIAT', 500],
+        ['CO_OWN_DRIP', '1ZE', -250],
+      ] as const) {
+        await applyWalletLedgerDelta(client, {
+          walletId,
+          txId: `inv_tx_${kind}_${suffix()}`,
+          asset,
+          amount,
+          kind,
+        });
+      }
     } finally {
       await client.query('ROLLBACK').catch(() => undefined);
       client.release();

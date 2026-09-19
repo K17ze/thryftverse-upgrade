@@ -30455,14 +30455,16 @@ app.post('/webhooks/:provider', async (request, reply) => {
       ]
     );
 
+    let webhookEventRowId = webhookInsert.rows[0]?.id ?? null;
+
     if (!webhookInsert.rowCount) {
       // PAY-03 fix: The insert returned 0 rows because this event was
-      // already received. But "received" != "processed" â€” a crash after
+      // already received. But "received" != "processed" — a crash after
       // the insert but before processed_at was set leaves the event
       // unprocessed. Check whether the existing row has processed_at.
       // If not, re-process it instead of silently returning duplicate.
-      const existingRow = await client.query<{ processed_at: string | null }>(
-        `SELECT processed_at FROM payment_webhook_events
+      const existingRow = await client.query<{ id: number; processed_at: string | null }>(
+        `SELECT id, processed_at FROM payment_webhook_events
          WHERE gateway_id = $1 AND provider_event_id = $2
          LIMIT 1`,
         [expectedGateway, event.providerEventId]
@@ -30476,7 +30478,8 @@ app.post('/webhooks/:provider', async (request, reply) => {
         };
       }
 
-      // Event was received but never processed â€” fall through and process it.
+      // Event was received but never processed — fall through and process it.
+      webhookEventRowId = existingRow.rows[0]?.id ?? null;
       await client.query(
         `UPDATE payment_webhook_events
          SET event_type = $3, intent_id = $4
@@ -30841,9 +30844,23 @@ app.post('/webhooks/:provider', async (request, reply) => {
       }
     }
 
-    await client.query('UPDATE payment_webhook_events SET processed_at = NOW() WHERE id = $1', [
-      webhookInsert.rows[0].id,
-    ]);
+    if (webhookEventRowId !== null) {
+      await client.query('UPDATE payment_webhook_events SET processed_at = NOW() WHERE id = $1', [
+        webhookEventRowId,
+      ]);
+    }
+
+    // Advance the Stripe inbox row written by the up-front dedupe insert:
+    // without this it sits at status='received' forever and any future
+    // retry sweeper would treat a fully-processed event as eligible work.
+    if (provider === 'stripe' && event.providerEventId) {
+      await client.query(
+        `UPDATE webhook_events
+         SET status = 'succeeded', processed_at = NOW()
+         WHERE event_id = $1 AND provider = 'stripe'`,
+        [event.providerEventId]
+      );
+    }
 
     await client.query('COMMIT');
 
