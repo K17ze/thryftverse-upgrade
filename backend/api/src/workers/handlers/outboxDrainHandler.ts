@@ -892,6 +892,91 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
     return;
   }
 
+  // Co-Own price alert crossing — emitted by the alert evaluator worker.
+  // Without this branch the event dead-letters after 10 retries and the
+  // user is never notified.
+  if (event.eventType === 'coown_price_alert_triggered') {
+    const payload = z.object({
+      alertId: z.string().min(2),
+      userId: z.string().min(2),
+      assetId: z.string().min(2),
+      condition: z.enum(['above', 'below']),
+      triggerPriceGbpMinor: z.number().nonnegative(),
+      currentPriceGbpMinor: z.number().nonnegative(),
+      tradeId: z.string().optional(),
+    }).parse(event.payload);
+
+    const direction = payload.condition === 'above' ? 'rose above' : 'fell below';
+    await queueUserNotification({
+      userId: payload.userId,
+      title: 'Price alert triggered',
+      body: `A co-own asset you watch ${direction} ${formatGbpAmount(payload.triggerPriceGbpMinor / 100)} — now at ${formatGbpAmount(payload.currentPriceGbpMinor / 100)}.`,
+      eventType: 'coown_price_alert_triggered',
+      payload: {
+        event: 'coown_price_alert_triggered',
+        alertId: payload.alertId,
+        assetId: payload.assetId,
+        condition: payload.condition,
+        triggerPriceGbpMinor: payload.triggerPriceGbpMinor,
+        currentPriceGbpMinor: payload.currentPriceGbpMinor,
+        tradeId: payload.tradeId ?? null,
+      },
+      route: { screen: 'AssetDetail', params: { assetId: payload.assetId } },
+      idempotencyKey: `coown_price_alert_notif_${payload.alertId}`,
+      metadata: { outboxEventId: event.id },
+    });
+    return;
+  }
+
+  // Co-Own DRIP receipt — emitted by the DRIP execution worker after a
+  // distribution resolves to reinvested / retained_cash / reinvest_failed.
+  if (event.eventType === 'coown_drip_receipt') {
+    const payload = z.object({
+      distributionId: z.string().min(2),
+      userId: z.string().min(2),
+      assetId: z.string().min(2),
+      outcome: z.enum(['reinvested', 'retained_cash', 'reinvest_failed']),
+      tradeId: z.string().nullable().optional(),
+      units: z.number().int().nonnegative().optional(),
+      unitPriceGbp: z.number().nonnegative().optional(),
+      notionalGbp: z.number().nonnegative().optional(),
+      amountGbpMinor: z.number().nonnegative().optional(),
+      cause: z.string().optional(),
+    }).parse(event.payload);
+
+    const title =
+      payload.outcome === 'reinvested'
+        ? 'Distribution reinvested'
+        : payload.outcome === 'retained_cash'
+          ? 'Distribution paid as cash'
+          : 'Reinvestment could not complete';
+    const body =
+      payload.outcome === 'reinvested'
+        ? `Your distribution bought ${payload.units ?? 0} unit${payload.units === 1 ? '' : 's'}${payload.unitPriceGbp ? ` at ${formatGbpAmount(payload.unitPriceGbp)}` : ''}.`
+        : payload.outcome === 'retained_cash'
+          ? 'Automatic reinvestment was not possible, so your distribution stays in your balance as cash.'
+          : 'Automatic reinvestment failed. Your distribution was not reinvested — you can reinvest manually.';
+
+    await queueUserNotification({
+      userId: payload.userId,
+      title,
+      body,
+      eventType: 'coown_drip_receipt',
+      payload: {
+        event: 'coown_drip_receipt',
+        distributionId: payload.distributionId,
+        assetId: payload.assetId,
+        outcome: payload.outcome,
+        tradeId: payload.tradeId ?? null,
+        cause: payload.cause ?? null,
+      },
+      route: { screen: 'AssetDetail', params: { assetId: payload.assetId } },
+      idempotencyKey: `coown_drip_receipt_${payload.distributionId}`,
+      metadata: { outboxEventId: event.id },
+    });
+    return;
+  }
+
   throw new Error(`Unsupported domain outbox event: ${event.eventType}`);
 }
 

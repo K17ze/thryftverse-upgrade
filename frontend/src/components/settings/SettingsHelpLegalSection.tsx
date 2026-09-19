@@ -30,12 +30,12 @@ export function SettingsHelpLegalSection({ onOpenExternal }: SettingsHelpLegalSe
       <SettingsRow
         icon="document"
         title={ts('rows.termsOfService')}
-        onPress={() => void onOpenExternal('https://thryftverse.app/terms')}
+        onPress={() => void onOpenExternal('https://thryftverse.com/terms')}
       />
       <SettingsRow
         glyph="privacy-document"
         title={ts('rows.privacyPolicy')}
-        onPress={() => void onOpenExternal('https://thryftverse.app/privacy')}
+        onPress={() => void onOpenExternal('https://thryftverse.com/privacy')}
       />
       <SettingsRow
         icon="info"

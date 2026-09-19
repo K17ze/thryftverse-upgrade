@@ -26,6 +26,7 @@
 import type { PoolClient } from 'pg';
 import { db } from '../../db/pool.js';
 import { logger } from '../../lib/logger.js';
+import { appendDomainEvent } from '../../lib/domainOutbox.js';
 
 export type CoOwnDripExecutionHandlerDeps = {
   /** Uses shared db singleton. */
@@ -171,9 +172,7 @@ async function reinvestDistribution(
     );
     const asset = assetResult.rows[0];
     if (!asset) {
-      await markDistributionFailed(
-        client,
-        item.distribution_id,
+      await markDistributionFailed(client, item,
         'asset_not_found',
       );
       await client.query('COMMIT');
@@ -181,9 +180,7 @@ async function reinvestDistribution(
     }
 
     if (!asset.is_open) {
-      await markDistributionFailed(
-        client,
-        item.distribution_id,
+      await markDistributionFailed(client, item,
         'asset_not_open',
       );
       await client.query('COMMIT');
@@ -193,9 +190,7 @@ async function reinvestDistribution(
     // Current market price: last settled trade, else reference price.
     const priceGbp = await resolveCurrentPriceGbp(client, item.asset_id, asset.unit_price_gbp);
     if (priceGbp === null || priceGbp <= 0) {
-      await markDistributionFailed(
-        client,
-        item.distribution_id,
+      await markDistributionFailed(client, item,
         'no_market_price',
       );
       await client.query('COMMIT');
@@ -204,9 +199,7 @@ async function reinvestDistribution(
 
     const priceMinor = Math.round(priceGbp * 100);
     if (priceMinor <= 0) {
-      await markDistributionFailed(
-        client,
-        item.distribution_id,
+      await markDistributionFailed(client, item,
         'invalid_market_price',
       );
       await client.query('COMMIT');
@@ -216,9 +209,7 @@ async function reinvestDistribution(
     // Whole units only — the holdings schema stores integer units.
     let unitsToBuy = Math.floor(amountMinor / priceMinor);
     if (unitsToBuy < 1) {
-      await markDistributionFailed(
-        client,
-        item.distribution_id,
+      await markDistributionFailed(client, item,
         `insufficient_amount_for_one_unit:amount_minor=${amountMinor}:price_minor=${priceMinor}`,
       );
       await client.query('COMMIT');
@@ -247,7 +238,7 @@ async function reinvestDistribution(
           : headroom < 1
             ? 'holding_cap_reached'
             : 'insufficient_amount_for_one_unit';
-      await markDistributionFailed(client, item.distribution_id, cause);
+      await markDistributionFailed(client, item, cause);
       await client.query('COMMIT');
       return 'failed';
     }
@@ -272,7 +263,7 @@ async function reinvestDistribution(
       );
       const wallet = walletResult.rows[0];
       if (!wallet) {
-        await markDistributionFailed(client, item.distribution_id, 'wallet_not_found');
+        await markDistributionFailed(client, item, 'wallet_not_found');
         await client.query('COMMIT');
         return 'failed';
       }
@@ -281,7 +272,7 @@ async function reinvestDistribution(
         // P1-1 fix: Insufficient balance — mark as 'retained_cash' so the
         // distribution is not retried forever. The user keeps the cash (if
         // it was credited) and can manually reinvest later.
-        await markDistributionRetainedCash(client, item.distribution_id, 'insufficient_balance');
+        await markDistributionRetainedCash(client, item, 'insufficient_balance');
         await client.query('COMMIT');
         logger.warn(
           {
@@ -295,7 +286,10 @@ async function reinvestDistribution(
         return 'failed';
       }
       const balanceAfter = balanceUnits - dripDebit1zeUnits;
-      const dripTxId = `coown_drip_${item.distribution_id}_${Date.now()}`;
+      // Deterministic ledger tx id — the distribution row lock serializes
+      // execution, and a stable id means a replay can never mint a second
+      // debit even if the status transition were bypassed.
+      const dripTxId = `coown_drip_${item.distribution_id}`;
       await client.query(
         `UPDATE wallets SET oneze_balance_units = $2, version = version + 1, updated_at = NOW() WHERE id = $1`,
         [wallet.id, balanceAfter],
@@ -431,6 +425,15 @@ async function reinvestDistribution(
       [item.distribution_id, `drip_trade:${tradeId}`],
     );
 
+    // Durable receipt — same commit as the status transition so the
+    // notification can never be lost or emitted for a rolled-back write.
+    await emitDripReceiptEvent(client, item, 'reinvested', {
+      tradeId,
+      units: unitsToBuy,
+      unitPriceGbp: priceGbp,
+      notionalGbp,
+    });
+
     await client.query('COMMIT');
 
     logger.info(
@@ -458,7 +461,7 @@ async function reinvestDistribution(
     if (!isTransient) {
       try {
         await markDistributionFailedStandalone(
-          item.distribution_id,
+          item,
           error instanceof Error ? error.message : String(error),
         );
       } catch (markError) {
@@ -508,11 +511,53 @@ async function resolveCurrentPriceGbp(
 }
 
 /**
+ * Append the durable DRIP receipt event. Called inside the same transaction
+ * as the distribution status transition (or standalone after a rolled-back
+ * attempt) so every settled distribution produces exactly one receipt the
+ * outbox drain turns into a user notification. The deduplication key makes
+ * replays and duplicate passes idempotent.
+ */
+async function emitDripReceiptEvent(
+  queryable: PoolClient | typeof db,
+  item: DripWorkItem,
+  outcome: 'reinvested' | 'retained_cash' | 'reinvest_failed',
+  extra: {
+    tradeId?: string | null;
+    units?: number;
+    unitPriceGbp?: number;
+    notionalGbp?: number;
+    cause?: string;
+  } = {},
+): Promise<void> {
+  await appendDomainEvent(queryable, {
+    aggregateType: 'coown_distribution',
+    aggregateId: item.distribution_id,
+    eventType: 'coown_drip_receipt',
+    deduplicationKey: `coown_drip_receipt:${item.distribution_id}`,
+    idempotencyKey: `coown_drip_receipt:${item.distribution_id}`,
+    actorId: item.user_id,
+    payload: {
+      distributionId: item.distribution_id,
+      userId: item.user_id,
+      assetId: item.asset_id,
+      outcome,
+      amountGbpMinor: Number(item.amount_gbp_minor),
+      tradeId: extra.tradeId ?? null,
+      units: extra.units,
+      unitPriceGbp: extra.unitPriceGbp,
+      notionalGbp: extra.notionalGbp,
+      cause: extra.cause,
+      recordedAt: new Date().toISOString(),
+    },
+  });
+}
+
+/**
  * Mark a distribution as failed inside the current transaction.
  */
 async function markDistributionFailed(
   client: PoolClient,
-  distributionId: string,
+  item: DripWorkItem,
   cause: string,
 ): Promise<void> {
   await client.query(
@@ -523,10 +568,11 @@ async function markDistributionFailed(
           updated_at = NOW()
       WHERE id = $1
     `,
-    [distributionId, `drip_failed:${cause}`.slice(0, 255)],
+    [item.distribution_id, `drip_failed:${cause}`.slice(0, 255)],
   );
+  await emitDripReceiptEvent(client, item, 'reinvest_failed', { cause });
   logger.warn(
-    { distributionId, cause },
+    { distributionId: item.distribution_id, cause },
     'coOwnDripExecution: distribution reinvestment failed',
   );
 }
@@ -536,10 +582,10 @@ async function markDistributionFailed(
  * the reinvestment attempt threw and we still want a durable failure marker).
  */
 async function markDistributionFailedStandalone(
-  distributionId: string,
+  item: DripWorkItem,
   cause: string,
 ): Promise<void> {
-  await db.query(
+  const result = await db.query(
     `
       UPDATE coOwn_distributions
       SET status = 'reinvest_failed',
@@ -547,8 +593,11 @@ async function markDistributionFailedStandalone(
           updated_at = NOW()
       WHERE id = $1 AND status = 'settled'
     `,
-    [distributionId, `drip_failed:${cause}`.slice(0, 255)],
+    [item.distribution_id, `drip_failed:${cause}`.slice(0, 255)],
   );
+  if (result.rowCount && result.rowCount > 0) {
+    await emitDripReceiptEvent(db, item, 'reinvest_failed', { cause });
+  }
 }
 
 /**
@@ -558,7 +607,7 @@ async function markDistributionFailedStandalone(
  */
 async function markDistributionRetainedCash(
   client: PoolClient,
-  distributionId: string,
+  item: DripWorkItem,
   cause: string,
 ): Promise<void> {
   await client.query(
@@ -569,10 +618,11 @@ async function markDistributionRetainedCash(
           updated_at = NOW()
       WHERE id = $1
     `,
-    [distributionId, `drip_retained:${cause}`.slice(0, 255)],
+    [item.distribution_id, `drip_retained:${cause}`.slice(0, 255)],
   );
+  await emitDripReceiptEvent(client, item, 'retained_cash', { cause });
   logger.info(
-    { distributionId, cause },
+    { distributionId: item.distribution_id, cause },
     'coOwnDripExecution: distribution retained as cash (not reinvested)',
   );
 }

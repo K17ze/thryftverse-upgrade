@@ -122,6 +122,7 @@ export function attachedEvidenceUris(items: EvidenceItem[]): string[] {
 export function reportTitleKey(type: ReportTargetType | undefined): string {
   return type === 'user' ? 'header.reportAccount'
     : type === 'group' ? 'header.reportGroup'
+    : type === 'ugc' ? 'header.reportContent'
     : 'header.reportListing';
 }
 

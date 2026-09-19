@@ -16,6 +16,8 @@ export interface PosterOptionsMenuProps {
   onSaveToCameraRoll: () => void;
   onArchive: () => void;
   onDelete: () => void;
+  /** Report the story — non-owners only (Apple UGC reportability). */
+  onReport?: () => void;
 }
 
 /**
@@ -36,6 +38,7 @@ function PosterOptionsMenuImpl({
   onSaveToCameraRoll,
   onArchive,
   onDelete,
+  onReport,
 }: PosterOptionsMenuProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -77,6 +80,21 @@ function PosterOptionsMenuImpl({
               <AppIcon name="download-outline" size={IconSize.md} color="textPrimary" opticalCenter accessible={false} />
               <Text style={styles.itemText}>Save to camera roll</Text>
             </Pressable>
+          )}
+
+          {!isOwner && onReport && (
+            <>
+              <View style={styles.divider} />
+              <Pressable
+                style={styles.item}
+                onPress={onReport}
+                accessibilityRole="menuitem"
+                accessibilityLabel="Report story"
+              >
+                <AppIcon name="flag" size={IconSize.md} color="textPrimary" opticalCenter accessible={false} />
+                <Text style={styles.itemText}>Report story</Text>
+              </Pressable>
+            </>
           )}
 
           {isOwner && (

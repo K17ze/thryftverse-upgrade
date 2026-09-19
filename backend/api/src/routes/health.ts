@@ -16,6 +16,7 @@ import {
 import { assertKeyServiceConnectivity } from '../lib/keyService.js';
 import { assertS3BucketConnectivity } from '../lib/s3.js';
 import { getConfiguredClusters } from '../lib/countryCapabilities.js';
+import { createSearchAdapter } from '../lib/searchAdapter.js';
 
 type HealthRouteDependencies = {
   app: FastifyInstance;
@@ -77,6 +78,27 @@ export const registerHealthRoutes = ({
       allHealthy = false;
     }
 
+    // Search: 'ok' when the configured backend serves; 'degraded' when the
+    // shared backend is configured but unreachable (fallback serves) or
+    // production is running the opted-in process-local index. Degraded
+    // still answers queries, so it does not fail readiness — but it must be
+    // visible here rather than hidden behind a green check.
+    try {
+      const adapter = createSearchAdapter();
+      const info = adapter.retrievalInfo();
+      const healthy = await adapter.health();
+      if (!healthy || info.degraded === true) {
+        checks.search = 'degraded';
+      } else if (config.nodeEnv === 'production' && info.backend === 'in_memory') {
+        checks.search = 'degraded';
+      } else {
+        checks.search = 'ok';
+      }
+    } catch {
+      checks.search = 'down';
+      allHealthy = false;
+    }
+
     const body = { ok: allHealthy, service: 'thryftverse-api', checks, timestamp: new Date().toISOString() };
     if (!allHealthy) {
       reply.code(503);
@@ -110,6 +132,7 @@ export const registerHealthRoutes = ({
       keyService: 'unknown',
       ml: 'unknown',
       s3: 'unknown',
+      search: 'unknown',
     } as const;
 
     const result: {
@@ -122,6 +145,7 @@ export const registerHealthRoutes = ({
         keyService: string;
         ml: string;
         s3: string;
+        search: string;
       };
       details?: Record<string, unknown>;
     } = {
@@ -199,6 +223,26 @@ export const registerHealthRoutes = ({
       result.ok = false;
       result.checks.s3 = 'error';
       result.details!.s3 = (error as Error).message;
+    }
+
+    // Search backend identity + reachability. A degraded shared backend is
+    // reported but does not fail deep health on its own — queries still
+    // serve via the process-local fallback; the `degraded` flag in details
+    // is the ops signal.
+    try {
+      const adapter = createSearchAdapter();
+      const info = adapter.retrievalInfo();
+      const healthy = await adapter.health();
+      result.checks.search = healthy && !info.degraded ? 'ok' : 'degraded';
+      result.details!.search = {
+        backend: info.backend,
+        degraded: info.degraded === true,
+        embedderConfigured: info.embedderConfigured,
+        searchEngineVersion: info.searchEngineVersion ?? null,
+      };
+    } catch (error) {
+      result.checks.search = 'error';
+      result.details!.search = (error as Error).message;
     }
 
     const paymentClusters = getConfiguredClusters();

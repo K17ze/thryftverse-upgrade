@@ -642,6 +642,36 @@ async function sendChatMessageToBackend(
   }
 }
 
+/** Report a live chat message — bridged into the safety case graph. */
+export async function reportLiveChatMessage(
+  sessionId: string,
+  messageId: string,
+  reason:
+    | 'spam'
+    | 'harassment'
+    | 'scam_fraud'
+    | 'inappropriate_content'
+    | 'off_platform_payment'
+    | 'impersonation'
+    | 'other',
+  details?: string,
+  idempotencyKey?: string,
+): Promise<{ ok: boolean }> {
+  try {
+    const response = await fetchJson<{ ok: boolean }>(
+      `/streaming/sessions/${encodeURIComponent(sessionId)}/chat/${encodeURIComponent(messageId)}/report`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason, details, idempotencyKey }),
+      },
+    );
+    return { ok: response.ok === true };
+  } catch {
+    return { ok: false };
+  }
+}
+
 /** Fetch the current lot for a session from the backend. */
 async function fetchCurrentLotFromBackend(
   sessionId: string,

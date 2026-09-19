@@ -15,6 +15,10 @@ import {
   LIVE_LOT_ANTI_SNIPE_WINDOW_MS,
   sweepDueLiveLots,
 } from "./liveLotEngine.js";
+import { moderateListingText } from "../lib/moderation/moderationService.js";
+import { scanMessageForScamPatterns } from "../lib/messageScamScanner.js";
+import { recordConsumerReport } from "../lib/safetyCaseService.js";
+import { createRuntimeId } from "../lib/workerHelpers.js";
 
 /**
  * Signature of the notification queueing seam — mirrors `queueUserNotification`
@@ -70,6 +74,7 @@ type LiveShoppingChatMessageRow = {
   message: string;
   type: string;
   is_seller: boolean;
+  moderation_state: string;
   created_at: string;
 };
 
@@ -308,6 +313,7 @@ const mapChatRow = (row: LiveShoppingChatMessageRow) => ({
   message: row.message,
   type: row.type,
   isSeller: row.is_seller,
+  moderationState: row.moderation_state ?? 'visible',
   createdAt: row.created_at,
 });
 
@@ -1126,27 +1132,83 @@ export const registerStreamingRoutes = ({
       // messages are flagged with isSeller so the UI can badge them.
       const isHost = row.host_user_id === userId;
 
+      // UGC safety (Apple 1.2): a user blocked in either direction by the
+      // host cannot participate in the room's chat.
+      if (!isHost) {
+        const blockCheck = await db.query<{ id: string }>(
+          `SELECT id FROM user_blocks
+           WHERE (blocker_id = $1 AND blocked_id = $2)
+              OR (blocker_id = $2 AND blocked_id = $1)
+           LIMIT 1`,
+          [userId, row.host_user_id],
+        );
+        if (blockCheck.rowCount) {
+          reply.code(403);
+          return {
+            ok: false,
+            error: "You cannot chat in this stream",
+            code: "STREAM_CHAT_BLOCKED",
+          };
+        }
+      }
+
+      // Deterministic scam-pattern gate — same classifier as DMs so live
+      // chat cannot be used to move payments off-platform.
+      const scamScan = scanMessageForScamPatterns(message);
+      if (scamScan.severity === "high") {
+        reply.code(400);
+        return {
+          ok: false,
+          error: "This message contains patterns associated with scams. Please keep payments on the platform.",
+          code: "STREAM_CHAT_SCAM_PATTERN",
+        };
+      }
+
+      // Provider text moderation: 'rejected' never persists; 'review'
+      // persists quarantined (visible to the sender, filtered from the room)
+      // so a human reviewer sees the flagged text in context.
+      const moderation = await moderateListingText(`live_chat_${sessionId}`, message);
+      if (moderation.status === "rejected") {
+        reply.code(422);
+        return {
+          ok: false,
+          error: "Message rejected by content moderation",
+          code: "MODERATION_REJECTED",
+          labels: moderation.labels,
+        };
+      }
+      const moderationState = moderation.status === "review" ? "quarantined" : "visible";
+
       const messageId = randomUUID();
       const userName = request.authUser?.userId ?? userId;
       const isSeller = isHost;
 
       const result = await db.query<LiveShoppingChatMessageRow>(
         `INSERT INTO live_shopping_chat_messages
-           (id, session_id, user_id, user_name, message, type, is_seller)
-         VALUES ($1, $2, $3, $4, $5, 'message', $6)
+           (id, session_id, user_id, user_name, message, type, is_seller, moderation_state)
+         VALUES ($1, $2, $3, $4, $5, 'message', $6, $7)
          RETURNING *`,
-        [messageId, sessionId, userId, userName, message, isSeller],
+        [messageId, sessionId, userId, userName, message, isSeller, moderationState],
       );
 
       const chatMessage = mapChatRow(result.rows[0]);
 
-      void publishRealtimeEvent({
-        topic: liveSessionTopic(sessionId),
-        type: "live.chat.message",
-        payload: { message: chatMessage },
-        seq: true,
-        version: 1,
-      });
+      // Quarantined messages are not broadcast to the room — they exist for
+      // review but must not reach viewers before that review completes.
+      if (moderationState === "visible") {
+        void publishRealtimeEvent({
+          topic: liveSessionTopic(sessionId),
+          type: "live.chat.message",
+          payload: { message: chatMessage },
+          seq: true,
+          version: 1,
+        });
+      } else {
+        logger.warn(
+          { sessionId, messageId, labels: moderation.labels },
+          "Live chat message quarantined for review",
+        );
+      }
 
       reply.code(201);
       return { ok: true, message: chatMessage };
@@ -1157,23 +1219,99 @@ export const registerStreamingRoutes = ({
   app.get("/streaming/sessions/:sessionId/chat", async (request) => {
     const { sessionId } = sessionIdParamsSchema.parse(request.params);
     const { limit, before } = chatQuerySchema.parse(request.query ?? {});
+    const viewerId = request.authUser?.userId ?? null;
+
+    // For signed-in viewers, hide messages where a block exists between the
+    // viewer and the author in either direction — the same predicate the
+    // send path enforces between sender and host.
+    const blockFilter = viewerId
+      ? `AND NOT EXISTS (
+           SELECT 1 FROM user_blocks ub
+           WHERE (ub.blocker_id = ${"$v"} AND ub.blocked_id = m.user_id)
+              OR (ub.blocker_id = m.user_id AND ub.blocked_id = ${"$v"})
+         )`
+      : '';
+    const baseSelect = `SELECT m.* FROM live_shopping_chat_messages m
+            WHERE m.session_id = $1
+              AND m.moderation_state = 'visible'`;
 
     const result = await db.query<LiveShoppingChatMessageRow>(
       before
-        ? `SELECT * FROM live_shopping_chat_messages
-            WHERE session_id = $1 AND created_at < $2
-            ORDER BY created_at DESC
+        ? `${baseSelect} AND m.created_at < $2 ${blockFilter.replaceAll('$v', '$4')}
+            ORDER BY m.created_at DESC
             LIMIT $3`
-        : `SELECT * FROM live_shopping_chat_messages
-            WHERE session_id = $1
-            ORDER BY created_at DESC
+        : `${baseSelect} ${blockFilter.replaceAll('$v', '$3')}
+            ORDER BY m.created_at DESC
             LIMIT $2`,
-      before ? [sessionId, before, limit] : [sessionId, limit],
+      before
+        ? viewerId ? [sessionId, before, limit, viewerId] : [sessionId, before, limit]
+        : viewerId ? [sessionId, limit, viewerId] : [sessionId, limit],
     );
 
     const messages = result.rows.map(mapChatRow).reverse();
     return { ok: true, messages };
   });
+
+  // ── Live chat: report a message ──
+  // UGC report path bridged into the safety case graph — the subject is the
+  // message, so severity>=3 reports can auto-limit the author's reach.
+  app.post(
+    "/streaming/sessions/:sessionId/chat/:messageId/report",
+    async (request, reply) => {
+      const reporterId = resolveAuthenticatedUserId(request);
+      const { sessionId, messageId } = z
+        .object({
+          sessionId: z.string().min(2).max(200),
+          messageId: z.string().min(2).max(200),
+        })
+        .parse(request.params);
+      const payload = z
+        .object({
+          reason: z.enum([
+            'spam', 'harassment', 'scam_fraud', 'inappropriate_content',
+            'off_platform_payment', 'impersonation', 'other',
+          ]),
+          details: z.string().trim().max(2000).optional(),
+          idempotencyKey: z.string().min(2).optional(),
+        })
+        .parse(request.body ?? {});
+
+      const messageResult = await db.query<LiveShoppingChatMessageRow>(
+        `SELECT * FROM live_shopping_chat_messages
+         WHERE id = $1 AND session_id = $2
+         LIMIT 1`,
+        [messageId, sessionId],
+      );
+      const target = messageResult.rows[0];
+      if (!target) {
+        reply.code(404);
+        return { ok: false, error: "Chat message not found", code: "STREAM_CHAT_MESSAGE_NOT_FOUND" };
+      }
+      if (target.user_id === reporterId) {
+        reply.code(400);
+        return { ok: false, error: "You cannot report your own message", code: "STREAM_CHAT_REPORT_SELF" };
+      }
+
+      const { reportId: effectiveReportId, duplicated } = await recordConsumerReport(db, {
+        kind: 'live_chat',
+        reportId: createRuntimeId('lcrpt'),
+        reporterId,
+        subjectId: messageId,
+        reason: payload.reason,
+        details: payload.details ?? null,
+        evidenceMessageId: messageId,
+        idempotencyKey: payload.idempotencyKey ?? null,
+        subjectSnapshot: {
+          sessionId,
+          authorUserId: target.user_id,
+          messageExcerpt: target.message.slice(0, 280),
+        },
+      });
+
+      reply.code(duplicated ? 200 : 201);
+      return { ok: true, reportId: effectiveReportId, duplicated };
+    },
+  );
 
   // ── Current lot: host sets the current lot ──
   app.put("/streaming/sessions/:sessionId/current-lot", async (request, reply) => {

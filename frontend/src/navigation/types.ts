@@ -317,7 +317,12 @@ export type RootStackParamList = {
   WriteReview: { orderId: string; initialRating?: number };
 
   // ── Support & Help ──
-  Report: { type: 'item' | 'user' | 'group'; targetId?: string };
+  Report: {
+    type: 'item' | 'user' | 'group' | 'ugc';
+    targetId?: string;
+    /** Required when type === 'ugc' — the concrete content surface. */
+    ugcSubjectType?: 'look' | 'look_comment' | 'poster' | 'moodboard_comment' | 'listing_qa';
+  };
   Appeal: { decisionId: string };
 
   // ── Auctions & Trading ──

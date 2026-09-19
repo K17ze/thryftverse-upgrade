@@ -990,8 +990,13 @@ app.patch('/co-own/price-alerts/:id', async (request, reply) => {
     triggered_at: string | null;
     created_at: string;
   }>(
+    // Re-activation re-arms the alert: triggered_at must clear or the
+    // evaluator (which only scans triggered_at IS NULL) would never look
+    // at the alert again — a silent dead toggle.
     `UPDATE coown_price_alerts
-     SET active = $3, updated_at = NOW()
+     SET active = $3,
+         triggered_at = CASE WHEN $3 THEN NULL ELSE triggered_at END,
+         updated_at = NOW()
      WHERE id = $1 AND user_id = $2
      RETURNING id, asset_id, condition, target_price_gbp_minor, active, triggered_at, created_at`,
     [id, request.authUser.userId, active]

@@ -109,7 +109,10 @@ export async function checkHealth(): Promise<HealthCheckResult> {
         clearTimeout(timeout);
       }
     } else {
-      services.meilisearch = true;
+      // Unconfigured means in-memory search is serving — that is not a
+      // healthy Meilisearch dependency; only non-production deployments
+      // should treat it as such.
+      services.meilisearch = process.env.NODE_ENV !== 'production';
     }
   } catch {
     services.meilisearch = false;

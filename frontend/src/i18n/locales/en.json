@@ -1672,6 +1672,7 @@
     "header": {
       "title": "Report",
       "reportAccount": "Report account",
+      "reportContent": "Report content",
       "reportGroup": "Report group",
       "reportListing": "Report listing",
       "subtitle": "Reports are confidential"

@@ -313,7 +313,12 @@ export async function createSafetyNotice(
 // of an already-persisted report (conversation_reports carries a client
 // idempotency key) returns the original notice instead of double-filing.
 
-export type ConsumerReportKind = 'user' | 'listing' | 'conversation';
+export type ConsumerReportKind =
+  | 'user'
+  | 'listing'
+  | 'conversation'
+  | 'live_chat'
+  | 'ugc';
 
 // Maps the mobile report vocabularies onto the seeded safety_reason_codes
 // taxonomy (migration 172). The user/listing enums are already 1:1 with
@@ -497,11 +502,101 @@ export async function recordConsumerReport(
         }
         break;
       }
+      case 'live_chat': {
+        // subjectId is the live_shopping_chat_messages.id; session and
+        // author ids travel in the subject snapshot passed by the route.
+        const snapshot = input.subjectSnapshot ?? {};
+        const insertResult = await client.query<{ id: string }>(
+          `INSERT INTO live_chat_reports
+             (id, session_id, message_id, author_user_id, reporter_user_id,
+              reason, details, status, created_at, updated_at, idempotency_key)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'submitted', NOW(), NOW(), $8)
+           ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL
+           DO NOTHING
+           RETURNING id`,
+          [
+            input.reportId,
+            String(snapshot.sessionId ?? ''),
+            input.evidenceMessageId ?? input.subjectId,
+            String(snapshot.authorUserId ?? ''),
+            input.reporterId,
+            input.reason,
+            input.details ?? null,
+            input.idempotencyKey ?? null,
+          ],
+        );
+        if (insertResult.rowCount && insertResult.rowCount > 0) {
+          effectiveReportId = insertResult.rows[0].id;
+        } else {
+          duplicated = true;
+          if (input.idempotencyKey) {
+            const existing = await client.query<{ id: string }>(
+              `SELECT id FROM live_chat_reports WHERE idempotency_key = $1 LIMIT 1`,
+              [input.idempotencyKey],
+            );
+            if (existing.rows[0]) {
+              effectiveReportId = existing.rows[0].id;
+            }
+          }
+        }
+        break;
+      }
+      case 'ugc': {
+        // Polymorphic UGC report — the concrete surface type
+        // (look / look_comment / poster / moodboard_comment / listing_qa)
+        // and the author id travel in the subject snapshot.
+        const snapshot = input.subjectSnapshot ?? {};
+        const insertResult = await client.query<{ id: string }>(
+          `INSERT INTO ugc_reports
+             (id, subject_type, subject_id, author_user_id, reporter_user_id,
+              reason, details, status, created_at, updated_at, idempotency_key)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'submitted', NOW(), NOW(), $8)
+           ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL
+           DO NOTHING
+           RETURNING id`,
+          [
+            input.reportId,
+            String(snapshot.subjectType ?? ''),
+            input.subjectId,
+            String(snapshot.authorUserId ?? ''),
+            input.reporterId,
+            input.reason,
+            input.details ?? null,
+            input.idempotencyKey ?? null,
+          ],
+        );
+        if (insertResult.rowCount && insertResult.rowCount > 0) {
+          effectiveReportId = insertResult.rows[0].id;
+        } else {
+          duplicated = true;
+          if (input.idempotencyKey) {
+            const existing = await client.query<{ id: string }>(
+              `SELECT id FROM ugc_reports WHERE idempotency_key = $1 LIMIT 1`,
+              [input.idempotencyKey],
+            );
+            if (existing.rows[0]) {
+              effectiveReportId = existing.rows[0].id;
+            }
+          }
+        }
+        break;
+      }
     }
 
     const notice = await createSafetyNotice(client, {
       reporter_id: input.reporterId,
-      subject_type: input.kind,
+      // 'live_chat' report rows key the live_chat_reports table, but the
+      // notice's subject_type CHECK allows 'message' — a live chat report's
+      // subject is the reported message. UGC reports map onto the closest
+      // allowed type: posts/looks are 'media', comment-like text is 'message'.
+      subject_type:
+        input.kind === 'live_chat'
+          ? 'message'
+          : input.kind === 'ugc'
+            ? ['look', 'poster'].includes(String(input.subjectSnapshot?.subjectType))
+              ? 'media'
+              : 'message'
+            : input.kind,
       subject_id: input.subjectId,
       subject_snapshot: {
         reportId: effectiveReportId,
@@ -532,8 +627,14 @@ export async function recordConsumerReport(
       ? null
       : await maybeAutoLimitReachForNotice(client, {
           noticeId: notice.id,
-          subjectType: input.kind,
-          subjectId: input.subjectId,
+          // For UGC the enforcement target is the content author, resolved
+          // by the route at report time — the polymorphic subject id itself
+          // has no single owner table to look up.
+          subjectType: input.kind === 'ugc' ? 'user' : input.kind,
+          subjectId:
+            input.kind === 'ugc'
+              ? String(input.subjectSnapshot?.authorUserId ?? input.subjectId)
+              : input.subjectId,
           reasonCode,
           urgency: EMERGENCY_REASON_CODES.has(reasonCode)
             ? 'emergency'
@@ -1291,6 +1392,15 @@ async function resolveSubjectUserId(
       [subjectId],
     );
     return listingResult.rows[0]?.seller_id ?? null;
+  }
+  if (subjectType === 'live_chat') {
+    // The subject is the reported message — the enforcement target is its
+    // author.
+    const messageResult = await client.query<{ user_id: string }>(
+      `SELECT user_id FROM live_shopping_chat_messages WHERE id = $1 LIMIT 1`,
+      [subjectId],
+    );
+    return messageResult.rows[0]?.user_id ?? null;
   }
   return null;
 }

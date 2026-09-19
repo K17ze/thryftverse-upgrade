@@ -558,6 +558,33 @@ export const NOTIFICATION_EVENT_REGISTRY: Record<string, NotificationEventMetada
     objectExtractor: () => undefined,
   },
 
+  // Co-own price alert triggered — the user set a crossing threshold and the
+  // asset's last settled trade crossed it. Actionable for the alert owner.
+  coown_price_alert_triggered: {
+    semanticRole: "financial",
+    attention: "important",
+    requiresAction: false,
+    aggregationTemplate: (payload) => {
+      const id = getString(payload, "assetId");
+      return id ? `coown_alert:${id}` : null;
+    },
+    objectExtractor: () => undefined,
+  },
+
+  // Co-own DRIP receipt — a settled distribution resolved to reinvested,
+  // retained cash, or a failed reinvestment. Financial receipt the user is
+  // owed regardless of outcome.
+  coown_drip_receipt: {
+    semanticRole: "financial",
+    attention: "important",
+    requiresAction: false,
+    aggregationTemplate: (payload) => {
+      const id = getString(payload, "assetId");
+      return id ? `coown_drip:${id}` : null;
+    },
+    objectExtractor: () => undefined,
+  },
+
   // Co-own verification demand responded — the custodian submitted evidence
   // against a buyer's verification request. Informational for the buyer.
   coown_verification_responded: {

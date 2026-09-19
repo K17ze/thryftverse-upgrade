@@ -362,6 +362,7 @@ import { registerComplianceRoutes } from './routes/compliance.js';
 import { registerSyncRoutes } from './routes/sync.js';
 import { registerImpactRoutes } from './routes/impact.js';
 import { registerStreamingRoutes } from './routes/streaming.js';
+import { registerUgcReportRoutes } from './routes/ugcReports.js';
 import { registerLiveLotEngineRoutes } from './routes/liveLotEngine.js';
 import { registerSecureProfilesRoutes } from './routes/secureProfiles.js';
 import { registerSecureMessagesRoutes } from './routes/secureMessages.js';
@@ -475,8 +476,10 @@ import { validateListingActivation } from './lib/listingCategoryPolicy.js';
 import {
   configureSearchIndex,
   removeListingFromIndex,
+  syncListingsToSearchIndex,
   syncSingleListing,
 } from './lib/searchSync.js';
+import { createSearchAdapter } from './lib/searchAdapter.js';
 
 const app = Fastify({
   logger: {
@@ -6537,8 +6540,8 @@ async function createGatewayPaymentIntent(input: {
         value: providerMoney.value,
       },
       description: `Thryftverse ${input.channel} ${input.intentId}`,
-      redirectUrl: input.returnUrl ?? 'https://thryftverse.app/payments/return',
-      webhookUrl: input.webhookUrl ?? 'https://thryftverse.app/webhooks/mollie',
+      redirectUrl: input.returnUrl ?? 'https://thryftverse.com/payments/return',
+      webhookUrl: input.webhookUrl ?? 'https://thryftverse.com/webhooks/mollie',
       metadata: toStripeMetadata(baseMetadata),
     });
 
@@ -6570,9 +6573,9 @@ async function createGatewayPaymentIntent(input: {
         tx_ref: txRef,
         amount: providerMoney.value,
         currency: normalizedCurrency,
-        redirect_url: input.returnUrl ?? 'https://thryftverse.app/payments/return',
+        redirect_url: input.returnUrl ?? 'https://thryftverse.com/payments/return',
         customer: {
-          email: input.customerEmail ?? 'payments@thryftverse.app',
+          email: input.customerEmail ?? 'payments@thryftverse.com',
         },
         customizations: {
           title: 'Thryftverse Payment',
@@ -6617,7 +6620,7 @@ async function createGatewayPaymentIntent(input: {
           id: 'src_all',
         },
         redirect: {
-          url: input.returnUrl ?? 'https://thryftverse.app/payments/return',
+          url: input.returnUrl ?? 'https://thryftverse.com/payments/return',
         },
         metadata: toStripeMetadata(baseMetadata),
       }),
@@ -17547,6 +17550,17 @@ app.post('/listings/:listingId/questions', async (request, reply) => {
     reply.code(403);
     return { ok: false, error: 'Sellers cannot ask questions on their own listing' };
   }
+  // Public UGC must pass text moderation — questions render unauthenticated.
+  const questionModeration = await moderateListingText(`listing_qa_${listingId}`, text);
+  if (questionModeration.status === 'rejected') {
+    reply.code(422);
+    return {
+      ok: false,
+      error: 'Question was rejected by content moderation',
+      code: 'MODERATION_REJECTED',
+      labels: questionModeration.labels,
+    };
+  }
   const questionId = `lq_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
   const result = await db.query<{ id: string; created_at: string }>(
     `INSERT INTO listing_qa (id, listing_id, asker_id, question_text)
@@ -17596,6 +17610,17 @@ app.post('/listings/:listingId/questions/:questionId/answer', async (request, re
   if (ownerResult.rows[0].seller_id !== request.authUser.userId) {
     reply.code(403);
     return { ok: false, error: 'Only the seller can answer listing questions' };
+  }
+  // Public UGC must pass text moderation — answers render unauthenticated.
+  const answerModeration = await moderateListingText(`listing_qa_${listingId}`, text);
+  if (answerModeration.status === 'rejected') {
+    reply.code(422);
+    return {
+      ok: false,
+      error: 'Answer was rejected by content moderation',
+      code: 'MODERATION_REJECTED',
+      labels: answerModeration.labels,
+    };
   }
   const result = await db.query<{ answered_at: string }>(
     `UPDATE listing_qa
@@ -38344,6 +38369,42 @@ const start = async () => {
     // search backend never blocks the API from serving traffic.
     void configureSearchIndex().catch(() => {});
 
+    // Probe the search backend and make its serving mode explicit at boot.
+    // A configured-but-unreachable shared backend degrades to the
+    // process-local index — that must be a loud, durable log event, not a
+    // silent fallback. When the serving backend is in-memory (dev, explicit
+    // production opt-in, or degraded), warm it from PostgreSQL so the
+    // process-local index does not start empty.
+    void (async () => {
+      try {
+        const adapter = createSearchAdapter();
+        const info = adapter.retrievalInfo();
+        const healthy = await adapter.health();
+        if (!healthy || info.degraded === true) {
+          app.log.error(
+            { backend: info.backend, degraded: true },
+            'search.backend.degraded — configured shared search backend is unreachable; serving process-local index',
+          );
+        } else if (config.nodeEnv === 'production' && info.backend === 'in_memory') {
+          app.log.warn(
+            { backend: info.backend },
+            'search.backend.in_memory — production is serving the process-local index (SEARCH_ALLOW_IN_MEMORY opt-in)',
+          );
+        } else {
+          app.log.info({ backend: info.backend }, 'search.backend.ready');
+        }
+        if (info.backend === 'in_memory') {
+          const summary = await syncListingsToSearchIndex(db);
+          app.log.info(
+            { synced: summary.synced, failed: summary.failed },
+            'search.index.warmed — process-local index rebuilt from PostgreSQL',
+          );
+        }
+      } catch (error) {
+        app.log.warn({ err: error }, 'Search backend startup probe failed');
+      }
+    })();
+
     // P0-9: AI/ML deploy-time validation. Log blocking errors and warnings
     // before serving traffic so ops can see whether the deployment may
     // honestly claim AI capability. Does not block startup â€” heuristic
@@ -40196,6 +40257,7 @@ registerChatComposerStateRoutes({ app, db, resolveAuthenticatedUserId });
 registerVoiceMessageRoutes({ app, db, resolveAuthenticatedUserId });
 
 registerStreamingRoutes({ app, db, createApiError, resolveAuthenticatedUserId, queueUserNotification });
+registerUgcReportRoutes({ app, db, resolveAuthenticatedUserId });
 
 registerLiveLotEngineRoutes({
   app,

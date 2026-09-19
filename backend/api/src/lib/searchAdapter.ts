@@ -17,6 +17,7 @@ import {
   type SearchResult as InMemorySearchResult,
   type AutocompleteEntry,
 } from './searchIndex.js';
+import { logger } from './logger.js';
 
 // ── Public Types ─────────────────────────────────────────────────────────────
 
@@ -43,6 +44,14 @@ export interface RetrievalInfo {
    * Set to true only when a hybrid/semantic search actually succeeds.
    */
   embedderConfigured: boolean;
+  /**
+   * True when a shared backend was configured but is unreachable and the
+   * adapter is serving from the process-local fallback. This is the
+   * observability signal ops must alert on — results still render, but
+   * they are per-replica and can diverge. Absent/false when the selected
+   * backend is serving as configured.
+   */
+  degraded?: boolean;
   /** Engine version string when known. */
   searchEngineVersion?: string;
 }
@@ -214,12 +223,32 @@ export class MeilisearchSearchAdapter implements SearchAdapter {
   private fallback = new InMemorySearchAdapter();
   private readonly url: string;
   private readonly key: string | undefined;
+  /**
+   * True only while the configured backend is actually serving. Flips false
+   * on init failure or any request error so `health()` and `retrievalInfo()`
+   * report the degraded state instead of claiming Meilisearch while the
+   * process-local fallback does the work.
+   */
+  private backendReachable = false;
 
   constructor(options?: { url?: string; key?: string; indexName?: string }) {
     this.url = options?.url ?? process.env.MEILISEARCH_URL ?? '';
     this.key = options?.key ?? process.env.MEILISEARCH_KEY;
     this.indexName = options?.indexName ?? process.env.MEILISEARCH_INDEX ?? 'listings';
     void this.initClient();
+  }
+
+  private warnedDegraded = false;
+
+  private warnDegradedOnce(reason: string, error?: unknown): void {
+    if (this.warnedDegraded) {
+      return;
+    }
+    this.warnedDegraded = true;
+    logger.warn(
+      { url: this.url, index: this.indexName, reason, error },
+      'search.backend.degraded — Meilisearch unavailable, serving process-local index',
+    );
   }
 
   private async initClient(): Promise<void> {
@@ -232,12 +261,29 @@ export class MeilisearchSearchAdapter implements SearchAdapter {
         | { MeiliSearch: new (config: { host: string; apiKey?: string }) => unknown }
         | null;
       if (!mod) {
+        this.warnDegradedOnce('sdk_unavailable');
         return;
       }
       this.client = new mod.MeiliSearch({ host: this.url, apiKey: this.key });
-    } catch {
+      this.backendReachable = true;
+    } catch (error) {
       this.client = null;
+      this.backendReachable = false;
+      this.warnDegradedOnce('client_init_failed', error);
     }
+  }
+
+  /**
+   * Record a real-backend failure: mark the backend unreachable and drop the
+   * client so subsequent calls take the fallback fast-path and
+   * `retrievalInfo()` reports `in_memory` + `degraded` rather than
+   * 'meilisearch'. The call then falls through to the in-memory index so
+   * reads keep serving during an outage — the degraded state is surfaced via
+   * `retrievalInfo()`, `serveMode` and `/search/health`, not hidden.
+   */
+  private markBackendDown(): void {
+    this.client = null;
+    this.backendReachable = false;
   }
 
   private async ensureClient(): Promise<{ index: { addDocuments: (docs: unknown[]) => Promise<unknown>; deleteDocument: (id: string) => Promise<unknown>; search: (q: string, opts?: unknown) => Promise<unknown> } } | null> {
@@ -257,7 +303,13 @@ export class MeilisearchSearchAdapter implements SearchAdapter {
       await this.fallback.index(listing);
       return;
     }
-    await handle.index.addDocuments([listing]);
+    try {
+      await handle.index.addDocuments([listing]);
+      this.backendReachable = true;
+    } catch {
+      this.markBackendDown();
+      await this.fallback.index(listing);
+    }
   }
 
   async remove(id: string): Promise<void> {
@@ -266,7 +318,13 @@ export class MeilisearchSearchAdapter implements SearchAdapter {
       await this.fallback.remove(id);
       return;
     }
-    await handle.index.deleteDocument(id);
+    try {
+      await handle.index.deleteDocument(id);
+      this.backendReachable = true;
+    } catch {
+      this.markBackendDown();
+      await this.fallback.remove(id);
+    }
   }
 
   async search(query: SearchQuery): Promise<SearchResult[]> {
@@ -283,11 +341,19 @@ export class MeilisearchSearchAdapter implements SearchAdapter {
     if (f?.minPrice !== undefined) filterExpressions.push(`price >= ${f.minPrice}`);
     if (f?.maxPrice !== undefined) filterExpressions.push(`price <= ${f.maxPrice}`);
 
-    const response = (await handle.index.search(query.query, {
-      filter: filterExpressions.length > 0 ? filterExpressions.join(' AND ') : undefined,
-      limit: query.limit ?? 24,
-      offset: query.offset ?? 0,
-    })) as { hits?: Array<Record<string, unknown> & { _rankingScore?: number }> };
+    let response: { hits?: Array<Record<string, unknown> & { _rankingScore?: number }> };
+    try {
+      response = (await handle.index.search(query.query, {
+        filter: filterExpressions.length > 0 ? filterExpressions.join(' AND ') : undefined,
+        limit: query.limit ?? 24,
+        offset: query.offset ?? 0,
+      })) as typeof response;
+      this.backendReachable = true;
+    } catch (error) {
+      this.markBackendDown();
+      this.warnDegradedOnce('search_request_failed', error);
+      return this.fallback.search(query);
+    }
 
     return (response.hits ?? []).map((hit) => ({
       id: String(hit.id),
@@ -301,10 +367,17 @@ export class MeilisearchSearchAdapter implements SearchAdapter {
     if (!handle) {
       return this.fallback.autocomplete(prefix, limit);
     }
-    const response = (await handle.index.search(prefix, {
-      limit,
-      attributesToRetrieve: ['title', 'brand', 'category'],
-    })) as { hits?: Array<{ title?: string; brand?: string; category?: string; _rankingScore?: number }> };
+    let response: { hits?: Array<{ title?: string; brand?: string; category?: string; _rankingScore?: number }> };
+    try {
+      response = (await handle.index.search(prefix, {
+        limit,
+        attributesToRetrieve: ['title', 'brand', 'category'],
+      })) as typeof response;
+      this.backendReachable = true;
+    } catch {
+      this.markBackendDown();
+      return this.fallback.autocomplete(prefix, limit);
+    }
     return (response.hits ?? [])
       .map((hit): AutocompleteEntry | null => {
         const text = (hit.title ?? '').trim();
@@ -320,22 +393,28 @@ export class MeilisearchSearchAdapter implements SearchAdapter {
   async health(): Promise<boolean> {
     const handle = await this.ensureClient();
     if (!handle) {
-      return this.fallback.health();
+      // The configured backend is down or the SDK is absent — report the
+      // real state, not the fallback's. Serving continues via the in-memory
+      // index, but health must say the shared backend is unavailable.
+      return false;
     }
     try {
       // A lightweight search with zero results confirms connectivity.
       await handle.index.search('', { limit: 0 });
+      this.backendReachable = true;
       return true;
     } catch {
+      this.markBackendDown();
       return false;
     }
   }
 
   retrievalInfo(): RetrievalInfo {
-    const actuallyMeili = this.client !== null;
+    const actuallyMeili = this.client !== null && this.backendReachable;
     return {
       backend: actuallyMeili ? 'meilisearch' : 'in_memory',
       embedderConfigured: false,
+      degraded: !actuallyMeili,
       searchEngineVersion: actuallyMeili ? 'meilisearch-0.60' : 'in-memory-v1',
     };
   }
@@ -408,13 +487,33 @@ export function createSearchAdapter(): SearchAdapter {
 
   const meiliUrl = process.env.MEILISEARCH_URL;
   const esUrl = process.env.ELASTICSEARCH_URL;
+  const isProduction = process.env.NODE_ENV === 'production';
+  const inMemoryAllowed = process.env.SEARCH_ALLOW_IN_MEMORY === 'true';
 
   if (meiliUrl) {
     cachedAdapter = new MeilisearchSearchAdapter({ url: meiliUrl });
+    logger.info({ backend: 'meilisearch', url: meiliUrl }, 'Search backend selected');
+  } else if (isProduction && !inMemoryAllowed) {
+    // Production must not silently serve the process-local index: results
+    // diverge across replicas and resets wipe the index. Fail loudly —
+    // deployments that intentionally run a single instance opt in via
+    // SEARCH_ALLOW_IN_MEMORY=true. The Elasticsearch adapter is a
+    // placeholder that serves in-memory, so ELASTICSEARCH_URL does not
+    // satisfy this gate either.
+    throw new Error(
+      esUrl
+        ? 'Search backend misconfigured: ELASTICSEARCH_URL is set but the Elasticsearch adapter is a placeholder that serves the in-memory index. Configure MEILISEARCH_URL or set SEARCH_ALLOW_IN_MEMORY=true to opt into the process-local index.'
+        : 'Search backend misconfigured: production requires MEILISEARCH_URL for a shared, durable index. Set SEARCH_ALLOW_IN_MEMORY=true only to opt into the process-local index for single-instance deployments.',
+    );
   } else if (esUrl) {
     cachedAdapter = new ElasticsearchSearchAdapter();
+    logger.info(
+      { backend: 'elasticsearch_placeholder' },
+      'Search backend selected (placeholder — serving in-memory index)',
+    );
   } else {
     cachedAdapter = new InMemorySearchAdapter();
+    logger.info({ backend: 'in_memory' }, 'Search backend selected');
   }
 
   return cachedAdapter;

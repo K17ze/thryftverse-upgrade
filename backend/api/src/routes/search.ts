@@ -143,6 +143,8 @@ export function registerSearchRoutes({
         method: 'lexical',
         embedderConfigured: info.embedderConfigured,
         searchEngineVersion: info.searchEngineVersion,
+        backend: info.backend,
+        degraded: info.degraded === true ? true : undefined,
       };
       const serveMode = deriveServeMode(info.backend, readiness.ready, retrievalMeta.method);
       return {
@@ -186,9 +188,18 @@ export function registerSearchRoutes({
   app.get('/search/health', async (_request, reply) => {
     try {
       const adapter = createSearchAdapter();
+      const info = adapter.retrievalInfo();
       const healthy = await adapter.health();
       reply.code(healthy ? 200 : 503);
-      return { ok: healthy };
+      // Report which backend actually serves and whether the configured
+      // shared backend is degraded — a 200 here must mean the configured
+      // backend answers, never that the in-memory fallback does.
+      return {
+        ok: healthy,
+        backend: info.backend,
+        degraded: info.degraded === true,
+        searchEngineVersion: info.searchEngineVersion ?? null,
+      };
     } catch (error) {
       reply.code(503);
       return { ok: false, error: 'Search backend unhealthy' };
@@ -209,6 +220,7 @@ export function registerSearchRoutes({
           reason: readiness.reason ?? null,
         },
         backend: info.backend,
+        degraded: info.degraded === true,
         searchEngineVersion: info.searchEngineVersion ?? null,
       };
     } catch (error) {
@@ -269,7 +281,11 @@ export function registerSearchRoutes({
         ok: true,
         query,
         total: visibleResults.length,
-        retrievalMeta,
+        retrievalMeta: {
+          ...retrievalMeta,
+          backend: info.backend,
+          degraded: info.degraded === true ? true : undefined,
+        },
         serveMode,
         items: visibleResults.map((result) => ({
           score: result.score,

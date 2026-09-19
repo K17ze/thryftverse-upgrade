@@ -583,14 +583,14 @@ export default function AuthLandingScreen() {
             by continuing, you agree to our{' '}
             <Text
               style={styles.termsLink}
-              onPress={() => void Linking.openURL('https://thryftverse.app/terms')}
+              onPress={() => void Linking.openURL('https://thryftverse.com/terms')}
             >
               terms
             </Text>
             {' '}and{' '}
             <Text
               style={styles.termsLink}
-              onPress={() => void Linking.openURL('https://thryftverse.app/privacy')}
+              onPress={() => void Linking.openURL('https://thryftverse.com/privacy')}
             >
               privacy policy
             </Text>

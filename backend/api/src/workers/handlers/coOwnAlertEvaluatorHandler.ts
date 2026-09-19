@@ -41,6 +41,11 @@ interface PriceRow {
   unit_price_gbp: string;
 }
 
+interface TradePriceRow {
+  id: string;
+  unit_price_gbp: string;
+}
+
 /**
  * Evaluate all active co-own price alerts against the current market price.
  *
@@ -104,21 +109,23 @@ export async function evaluateCoOwnPriceAlerts(
 async function fetchCurrentPriceMinor(
   client: PoolClient,
   assetId: string,
-): Promise<number | null> {
-  const lastTrade = await client.query<PriceRow>(
+): Promise<{ priceMinor: number; tradeId: string | null } | null> {
+  const lastTrade = await client.query<TradePriceRow>(
     `
-      SELECT unit_price_gbp::text
+      SELECT id::text, unit_price_gbp::text
       FROM coOwn_trades
       WHERE asset_id = $1 AND settlement_status = 'settled'
-      ORDER BY created_at DESC
+      ORDER BY created_at DESC, id DESC
       LIMIT 1
     `,
     [assetId],
   );
 
   let priceGbpStr: string | undefined;
+  let tradeId: string | null = null;
   if (lastTrade.rowCount && lastTrade.rows[0]) {
     priceGbpStr = lastTrade.rows[0].unit_price_gbp;
+    tradeId = lastTrade.rows[0].id;
   } else {
     // Fall back to appraisal value first (independent reference), then
     // offering price — matches the portfolio projection mark precedence.
@@ -133,7 +140,7 @@ async function fetchCurrentPriceMinor(
   if (!priceGbpStr) return null;
   const priceGbp = Number(priceGbpStr);
   if (!Number.isFinite(priceGbp) || priceGbp <= 0) return null;
-  return Math.round(priceGbp * 100);
+  return { priceMinor: Math.round(priceGbp * 100), tradeId };
 }
 
 /**
@@ -166,12 +173,13 @@ async function evaluateAlert(
       return false;
     }
 
-    const currentMinor = await fetchCurrentPriceMinor(client, alert.asset_id);
-    if (currentMinor === null) {
+    const mark = await fetchCurrentPriceMinor(client, alert.asset_id);
+    if (mark === null) {
       // Asset gone or no usable price — leave active for a future pass.
       await client.query('ROLLBACK');
       return false;
     }
+    const currentMinor = mark.priceMinor;
 
     const crossed =
       alert.condition === 'above'
@@ -211,6 +219,9 @@ async function evaluateAlert(
         condition: alert.condition,
         triggerPriceGbpMinor: targetMinor,
         currentPriceGbpMinor: currentMinor,
+        // The settled trade that set the triggering price — the
+        // authoritative execution reference for audit and replay.
+        tradeId: mark.tradeId,
         reason,
         triggeredAt: new Date().toISOString(),
       },

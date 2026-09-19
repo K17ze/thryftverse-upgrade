@@ -10,6 +10,9 @@ import { FormSheet } from './sheets/FormSheet';
 import { AnimatedPressable } from './AnimatedPressable';
 import { CachedImage } from './CachedImage';
 import { useStore } from '../store/useStore';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/types';
 import { formatRelativeTime } from '../utils/dateFormat';
 import {
   fetchMoodboardComments, createMoodboardComment, resolveMoodboardComment,
@@ -30,6 +33,7 @@ export function MoodboardCommentsSheet({
   visible, onDismiss, moodboardId, itemId }: MoodboardCommentsSheetProps) {
   const { colors } = useAppTheme();
   const currentUserId = useStore((s) => s.currentUser?.id);
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [comments, setComments] = useState<MoodboardComment[]>([]);
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [draft, setDraft] = useState('');
@@ -140,6 +144,25 @@ export function MoodboardCommentsSheet({
                 color={item.resolved ? colors.successText : colors.textMuted}
               />
             </AnimatedPressable>
+            {!isAuthor && currentUserId && (
+              <AnimatedPressable
+                style={styles.iconButton}
+                onPress={() => {
+                  onDismiss();
+                  navigation.navigate('Report', {
+                    type: 'ugc',
+                    ugcSubjectType: 'moodboard_comment',
+                    targetId: item.id,
+                  });
+                }}
+                accessibilityLabel="Report comment"
+                accessibilityHint="Reports this comment for review"
+                accessibilityRole="button"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="flag-outline" size={Control.icon} color={colors.textMuted} />
+              </AnimatedPressable>
+            )}
             {isAuthor && (
               <AnimatedPressable
                 style={styles.iconButton}
@@ -155,7 +178,7 @@ export function MoodboardCommentsSheet({
         </View>
       </View>
     );
-  }, [styles, currentUserId, colors, handleToggleResolve, handleDelete]);
+  }, [styles, currentUserId, colors, handleToggleResolve, handleDelete, navigation, onDismiss]);
 
   const emptyState = useMemo(() => {
     if (status === 'loading') {

@@ -15,6 +15,7 @@ import {
 import { reportUser } from '../services/profileApi';
 import { reportListing, type ListingReportReason } from '../services/listingsApi';
 import { reportConversationOnApi } from '../services/chatApi';
+import { reportUgcContent, type UgcReportReason } from '../services/ugcReportsApi';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useAppTranslation } from '../i18n/useAppTranslation';
 import {
@@ -33,7 +34,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Report'>;
 export default function ReportScreen({ navigation, route }: Props) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createReportScreenStyles(colors), [colors]);
-  const { type, targetId } = route.params ?? {};
+  const { type, targetId, ugcSubjectType } = route.params ?? {};
   const { t } = useAppTranslation('report');
 
   const { isSubmitting, isSubmitted, reportId, submittedAt, submit } =
@@ -69,6 +70,14 @@ export default function ReportScreen({ navigation, route }: Props) {
           evidenceParam,
         );
       }
+      if (type === 'ugc' && ugcSubjectType) {
+        return reportUgcContent(
+          ugcSubjectType,
+          targetId,
+          selectedReason as UgcReportReason,
+          detailsParam,
+        );
+      }
       return reportListing(
         targetId,
         selectedReason as ListingReportReason,
@@ -82,6 +91,7 @@ export default function ReportScreen({ navigation, route }: Props) {
     selectedReason,
     targetId,
     type,
+    ugcSubjectType,
     details,
     evidenceItems,
     submit,

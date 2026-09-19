@@ -293,7 +293,7 @@ export const config = {
   // ── WebAuthn / Passkeys (AUTH-017) ────────────────────────────────────
   // The RP name shown to users in the passkey prompt. The RP ID is derived
   // from the app URL's hostname. In production, set WEBAUTHN_RP_ID to the
-  // naked domain (e.g. "thryftverse.app") and WEBAUTHN_ORIGINS to the
+  // naked domain (e.g. "thryftverse.com") and WEBAUTHN_ORIGINS to the
   // allowed origins (comma-separated, including the mobile app's origin
   // if using app links).
   webauthnRpName: process.env.WEBAUTHN_RP_NAME?.trim() || 'ThryftVerse',
@@ -501,7 +501,7 @@ export const config = {
     || process.env.SHIPPING_EASYSHIP_WEBHOOK_SECRET?.trim()
     || null,
   shippingFallbackLabelBaseUrl:
-    process.env.SHIPPING_FALLBACK_LABEL_BASE_URL?.trim() || 'https://thryftverse.app/mock-shipping',
+    process.env.SHIPPING_FALLBACK_LABEL_BASE_URL?.trim() || 'https://thryftverse.com/mock-shipping',
   dailyPayoutVelocityLimitGbp: asNumber(process.env.DAILY_PAYOUT_VELOCITY_LIMIT_GBP, 2000),
   payoutManualReviewThresholdGbp: asNumber(process.env.PAYOUT_MANUAL_REVIEW_THRESHOLD_GBP, 500),
   reconciliationScheduleUtcHour: asNumber(process.env.RECONCILIATION_SCHEDULE_UTC_HOUR, 2),
@@ -588,7 +588,13 @@ export const config = {
     process.env.ONEZE_ATTESTATION_SIGNING_KEY_ID?.trim() || 'v1',
   // ── Meilisearch — full-text search ─────────────────────────────────
   meilisearchUrl: process.env.MEILISEARCH_URL?.trim() || 'http://localhost:7700',
-  meilisearchApiKey: process.env.MEILISEARCH_API_KEY?.trim() || '',
+  // Canonical var is MEILISEARCH_KEY (used by searchAdapter/searchSync/
+  // vectorSearch/meilisearchConfig); MEILISEARCH_API_KEY kept as a legacy
+  // fallback so existing deploys keep working.
+  meilisearchApiKey:
+    process.env.MEILISEARCH_KEY?.trim() ||
+    process.env.MEILISEARCH_API_KEY?.trim() ||
+    '',
   meilisearchIndexPrefix: process.env.MEILISEARCH_INDEX_PREFIX?.trim() || 'thryftverse_',
   // ── Content moderation ─────────────────────────────────────────────
   moderationProvider: process.env.MODERATION_PROVIDER?.trim() || 'mock',

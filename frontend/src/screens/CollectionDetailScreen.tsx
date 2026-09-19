@@ -432,7 +432,7 @@ export default function CollectionDetailScreen() {
       <ShareSheet
         visible={shareVisible}
         onDismiss={() => setShareVisible(false)}
-        url={`https://thryftverse.app/collection/${collectionId}`}
+        url={`https://thryftverse.com/collection/${collectionId}`}
         title={collection.name}
         imageUri={coverImage ?? undefined}
       />

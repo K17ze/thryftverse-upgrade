@@ -10,6 +10,11 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
+import { Alert } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../navigation/types';
+import { useStore } from '../../store/useStore';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useToast } from '../../context/ToastContext';
 import { useSignupWall } from '../../hooks/useSignupWall';
@@ -24,6 +29,7 @@ import { parseApiError } from '../../lib/apiClient';
 export interface ListingQuestion {
   id: string;
   listingId: string;
+  askerId?: string;
   askerName: string;
   askerAvatar?: string;
   text: string;
@@ -39,6 +45,7 @@ function mapApiQuestion(q: ListingQuestionApi, fallbackAskerName?: string): List
   return {
     id: q.id,
     listingId: q.listingId,
+    askerId: q.askerId,
     // The POST response carries the real asker username; fall back to the
     // signed-in viewer's name for their own just-posted question, then the
     // neutral 'Member' label — never a fabricated name.
@@ -83,6 +90,29 @@ export function ListingQA({
   const haptic = useHaptic();
   const { show } = useToast();
   const { requireAuth } = useSignupWall();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const currentUserId = useStore((s) => s.currentUser?.id);
+
+  const confirmReportQuestion = useCallback((question: ListingQuestion) => {
+    haptic.light();
+    Alert.alert(
+      'Report this question?',
+      undefined,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Report',
+          onPress: () => {
+            navigation.navigate('Report', {
+              type: 'ugc',
+              ugcSubjectType: 'listing_qa',
+              targetId: question.id,
+            });
+          },
+        },
+      ],
+    );
+  }, [haptic, navigation]);
 
   const cancelledRef = React.useRef(false);
 
@@ -231,7 +261,16 @@ export function ListingQA({
       ) : (
         <View style={styles.qList}>
           {questions.map((q) => (
-            <View key={q.id} style={styles.qItem}>
+            <Pressable
+              key={q.id}
+              style={styles.qItem}
+              onLongPress={
+                currentUserId && q.askerId && q.askerId !== currentUserId
+                  ? () => confirmReportQuestion(q)
+                  : undefined
+              }
+              accessibilityLabel={`Question from ${q.askerName}`}
+            >
               {/* Question */}
               <View style={styles.qHeader}>
                 <View style={styles.avatarPlaceholder}>
@@ -306,7 +345,7 @@ export function ListingQA({
               {!q.answer && !isSeller && (
                 <Text style={styles.pendingAnswer}>Awaiting seller response</Text>
               )}
-            </View>
+            </Pressable>
           ))}
         </View>
       )}
