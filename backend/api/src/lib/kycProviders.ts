@@ -180,7 +180,12 @@ export function verifyPersonaWebhook(input: {
     .createHmac('sha256', input.webhookSecret)
     .update(input.payload)
     .digest('hex');
-  return expected === input.signature;
+  const expectedBuffer = Buffer.from(expected, 'hex');
+  const providedBuffer = Buffer.from(input.signature, 'hex');
+  return (
+    expectedBuffer.length === providedBuffer.length
+    && crypto.timingSafeEqual(expectedBuffer, providedBuffer)
+  );
 }
 
 /**
@@ -190,7 +195,13 @@ export function verifyOnfidoWebhook(input: {
   token: string;
   expectedToken: string;
 }): boolean {
-  return input.token === input.expectedToken;
+  const crypto = require('node:crypto');
+  const expectedBuffer = Buffer.from(input.expectedToken, 'utf8');
+  const providedBuffer = Buffer.from(input.token, 'utf8');
+  return (
+    expectedBuffer.length === providedBuffer.length
+    && crypto.timingSafeEqual(expectedBuffer, providedBuffer)
+  );
 }
 
 function mapPersonaStatus(status: string): KycStatus {

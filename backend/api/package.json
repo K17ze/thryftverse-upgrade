@@ -13,6 +13,7 @@
     "test:all": "npm test && npm run test:vitest",
     "test:integration": "node --import tsx --test \"src/integration/**/*.test.ts\"",
     "backup:db": "node scripts/postgres-backup.mjs",
+    "restore:verify": "node scripts/postgres-restore-verify.mjs",
     "migrate": "tsx src/db/migrate.ts",
     "migrate:rollback": "tsx src/db/migrate.ts down",
     "seed": "tsx scripts/seed-dev-data.ts",

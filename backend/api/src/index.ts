@@ -24980,6 +24980,21 @@ app.post('/users/:userId/payout-accounts', async (request, reply) => {
       'A verified provider payout account reference is required',
       { gatewayId: resolvedGatewayId }
     );
+  } else {
+    // Non-Stripe gateways have no provider-side onboarding/KYC handshake —
+    // a bare providerAccountRef alone must not open the settlement path.
+    // Gate on the platform's own capability policy: 'settlement' is a
+    // sensitive capability requiring kycStatus === 'verified'.
+    const settlementCapability = await evaluateWalletCapability(db, userId, 'settlement', {
+      currency: resolvedCurrency,
+    });
+    if (!settlementCapability.allowed) {
+      throw createApiError(
+        settlementCapability.code,
+        settlementCapability.reason ?? 'Payout accounts require a verified compliance profile',
+        { capability: 'settlement', restrictions: settlementCapability.restrictions },
+      );
+    }
   }
 
   const result = await db.query<{

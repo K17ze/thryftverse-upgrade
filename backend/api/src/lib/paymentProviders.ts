@@ -859,6 +859,14 @@ export async function verifyAndNormalizeWebhook(
           reason: 'Invalid Mollie webhook signature',
         };
       }
+    } else if (!config.mollieApiKey) {
+      // With neither a webhook secret nor an API key there is no
+      // authentication channel at all — the payload status cannot be
+      // trusted. Fail closed rather than accepting unverifiable events.
+      return {
+        verified: false,
+        reason: 'Missing Mollie webhook authentication configuration',
+      };
     }
 
     return {
@@ -871,7 +879,7 @@ export async function verifyAndNormalizeWebhook(
     const provided = headerValue(headers, 'verif-hash');
     const expected = config.flutterwaveWebhookSecret ?? config.flutterwaveSecretKey;
 
-    if (!provided || !expected || provided !== expected) {
+    if (!provided || !expected || !timingSafeEqualString(provided, expected)) {
       return {
         verified: false,
         reason: 'Invalid Flutterwave webhook signature',
