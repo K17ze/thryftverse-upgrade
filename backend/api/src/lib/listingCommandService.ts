@@ -347,6 +347,7 @@ export async function executeListingCommand(
         seller_id: string;
         offer_price_gbp: string;
         conversation_id: string | null;
+        offered_by_user_id: string | null;
       }>(
         `UPDATE listing_offers
             SET status = 'cancelled',
@@ -354,7 +355,8 @@ export async function executeListingCommand(
                 updated_at = NOW()
           WHERE listing_id = $1
             AND status = 'pending'
-          RETURNING id, buyer_id, seller_id, offer_price_gbp::text, conversation_id`,
+          RETURNING id, buyer_id, seller_id, offer_price_gbp::text,
+                    conversation_id, offered_by_user_id`,
         [listingId],
       );
       cancelledOffers = cancelResult.rowCount ?? 0;
@@ -378,6 +380,11 @@ export async function executeListingCommand(
             sellerId: cancelledOffer.seller_id,
             offerPriceGbp: Number(cancelledOffer.offer_price_gbp),
             conversationId: cancelledOffer.conversation_id,
+            offeredByUserId: cancelledOffer.offered_by_user_id ?? cancelledOffer.buyer_id,
+            // Seller-side cancellation (listing delete/mark-sold) — the
+            // drain notifies the author, not the actor.
+            cancelledByUserId: command.actorId ?? null,
+            cancellationReason: 'listing_unavailable',
           },
         });
       }

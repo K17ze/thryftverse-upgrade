@@ -49,7 +49,7 @@ export function VerificationStatusSection({
         />
         <SettingsRow
           icon="card-outline"
-          iconColor={kycVerified ? colors.brand : kycPending ? colors.warning : colors.textMuted}
+          iconColor={kycVerified ? colors.brand : kycPending ? colors.warningText : colors.textMuted}
           title="Identity verification"
           subtitle={identityCopy.subtitle}
           value={identityCopy.value}

@@ -42,7 +42,7 @@ export const SellerHubNotices: React.FC<SellerHubNoticesProps> = ({
     <>
       {importError && (
         <View style={styles.importErrorBanner}>
-          <AppIcon concept="warning" size={IconSize.xs} color="warning" opticalCenter accessible={false} />
+          <AppIcon concept="warning" size={IconSize.xs} color="warningText" opticalCenter accessible={false} />
           <Text style={[styles.importErrorText, { color: colors.textSecondary }]}>
             Couldn't load import status. Pull to retry.
           </Text>

@@ -45,6 +45,7 @@ export default function SettingsScreen({ navigation }: Props) {
   const {
     isHydrating,
     walletBalance,
+    walletBalanceFailed,
     isBiometricAvailable } = useSettingsScreenData();
 
   const {
@@ -135,7 +136,7 @@ export default function SettingsScreen({ navigation }: Props) {
           <SettingsIdentityRow />
 
           {/* ── Thryft Balance Card — Depop flagship benchmark (settings reference.png) ── */}
-          <SettingsBalanceCard walletBalance={walletBalance} />
+          <SettingsBalanceCard walletBalance={walletBalance} walletBalanceFailed={walletBalanceFailed} />
 
           {/* ── ACCOUNT HEALTH INDICATOR — compact status pills ──
               Shows completed security steps at a glance. Each pill is a

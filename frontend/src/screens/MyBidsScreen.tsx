@@ -91,10 +91,10 @@ function bidToActivity(b: MyAuctionBid): ActivityItem {
 }
 
 function getStateInfo(state: ActivityItem['bidState'], colors: ThemeColors): { label: string; color: string; icon: keyof typeof Ionicons.glyphMap; nextAction: string } {
-  if (state === 'won') return { label: 'Won', color: colors.success, icon: 'trophy-outline', nextAction: 'View result' };
+  if (state === 'won') return { label: 'Won', color: colors.successText, icon: 'trophy-outline', nextAction: 'View result' };
   if (state === 'lost') return { label: 'Lost', color: colors.textMuted, icon: 'close-circle-outline', nextAction: 'Browse more' };
-  if (state === 'outbid') return { label: "You're outbid", color: colors.danger, icon: 'trending-down', nextAction: 'Bid again' };
-  if (state === 'leading') return { label: "You're winning", color: colors.success, icon: 'trending-up', nextAction: 'View auction' };
+  if (state === 'outbid') return { label: "You're outbid", color: colors.dangerText, icon: 'trending-down', nextAction: 'Bid again' };
+  if (state === 'leading') return { label: "You're winning", color: colors.successText, icon: 'trending-up', nextAction: 'View auction' };
   if (state === 'watching') return { label: 'Watching', color: colors.textSecondary, icon: 'eye-outline', nextAction: 'View auction' };
   return { label: 'Active', color: colors.brand, icon: 'hammer-outline', nextAction: 'View auction' };
 }

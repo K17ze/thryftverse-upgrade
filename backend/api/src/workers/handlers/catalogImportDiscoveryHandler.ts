@@ -23,6 +23,7 @@ import crypto from 'node:crypto';
 
 import { db } from '../../db/pool.js';
 import { logger } from '../../lib/logger.js';
+import { enqueueCatalogImportHydrationJob } from '../../lib/queues.js';
 import { connectorRegistry } from '../../integrations/catalogSources/connectorRegistry.js';
 import type {
   BatchState,
@@ -89,10 +90,17 @@ async function transitionBatch(
   toStatus: BatchState,
   statusReason: string | null,
 ): Promise<void> {
+  // Forward-stage transitions record checkpoint_json.phase so retryBatch can
+  // resume the interrupted stage. Pauses/failures preserve the last phase.
   await db.query(
     `UPDATE catalog_import_batches
      SET status = $2,
          status_reason = $3,
+         checkpoint_json = CASE
+           WHEN $2 IN ('discovering','hydrating','ingesting_media','normalising','awaiting_operator','awaiting_seller','publishing')
+           THEN COALESCE(checkpoint_json, '{}'::jsonb) || jsonb_build_object('phase', $2::text)
+           ELSE checkpoint_json
+         END,
          updated_at = NOW()
      WHERE id = $1
        AND status = $4`,
@@ -149,6 +157,15 @@ async function discoverSellerPackage(
     );
   }
 
+  // Defence in depth: the package must belong to the batch owner. createBatch
+  // validates this at write time; re-checking here protects batches created
+  // before that gate and any path that bypassed the service.
+  if (finRow.owner_id !== batch.user_id) {
+    throw new Error(
+      `DISCOVERY_FAILED: package ${packageId} is not owned by batch owner`,
+    );
+  }
+
   const manifest: SellerPackageManifest = {
     packageId: finRow.id,
     fileName: finRow.file_name,
@@ -165,17 +182,18 @@ async function discoverSellerPackage(
     const itemId = `cii_${crypto.randomUUID()}`;
     const itemInsert = await db.query(
       `INSERT INTO catalog_import_items (
-         id, batch_id, user_id, external_item_id,
+         id, batch_id, user_id, external_item_id, source,
          source_url, source_state, source_checksum,
          normalised_fields, readiness
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, 'discovered')
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, 'discovered')
        ON CONFLICT (batch_id, external_item_id) DO NOTHING`,
       [
         itemId,
         batch.id,
         batch.user_id,
         item.externalItemId,
+        batch.source,
         item.sourceUrl ?? null,
         item.sourceState,
         item.sourceChecksum,
@@ -272,9 +290,9 @@ async function discoverOAuthSource(
   }>(
     `SELECT encrypted_access_token, external_account_id, status
      FROM catalog_import_connections
-     WHERE id = $1
+     WHERE id = $1 AND user_id = $2
      LIMIT 1`,
-    [batch.connection_id],
+    [batch.connection_id, batch.user_id],
   );
 
   const conn = connResult.rows[0];
@@ -315,17 +333,18 @@ async function discoverOAuthSource(
       const itemId = `cii_${crypto.randomUUID()}`;
       const itemInsert = await db.query(
         `INSERT INTO catalog_import_items (
-           id, batch_id, user_id, external_item_id,
+           id, batch_id, user_id, external_item_id, source,
            source_url, source_state, source_checksum,
            normalised_fields, readiness
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, 'discovered')
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, 'discovered')
          ON CONFLICT (batch_id, external_item_id) DO NOTHING`,
         [
           itemId,
           batch.id,
           batch.user_id,
           item.externalItemId,
+          batch.source,
           item.sourceUrl ?? null,
           item.sourceState,
           item.sourceChecksum,
@@ -435,8 +454,17 @@ export async function processCatalogImportDiscovery(
       'catalogImportDiscovery.complete',
     );
 
-    // Transition batch to 'hydrating'.
+    // Transition batch to 'hydrating' and enqueue a hydration job per
+    // discovered item — deterministic jobIds dedupe any replay overlap.
     await transitionBatch(batchId, batch.status, 'hydrating', null);
+
+    const itemRows = await db.query<{ id: string }>(
+      `SELECT id FROM catalog_import_items WHERE batch_id = $1`,
+      [batchId],
+    );
+    for (const row of itemRows.rows) {
+      await enqueueCatalogImportHydrationJob({ batchId, itemId: row.id });
+    }
   } catch (err) {
     const classified = classifyError(err);
     logger.error(

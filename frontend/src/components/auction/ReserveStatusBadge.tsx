@@ -19,7 +19,7 @@ export function ReserveStatusBadge({ status, compact, showExplanation }: Props) 
 
   const isMet = status === 'met';
   const iconName = isMet ? 'checkmark-circle-outline' : 'alert-circle-outline';
-  const color = isMet ? colors.success : colors.warning;
+  const color = isMet ? colors.successText : colors.warningText;
   const label = isMet ? 'Reserve met' : 'Reserve not met';
   const explanation = isMet
     ? 'The seller\u2019s minimum price has been reached.'

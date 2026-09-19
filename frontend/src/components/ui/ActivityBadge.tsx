@@ -50,14 +50,14 @@ function buildVariantConfig(colors: ThemeColors): Record<ActivityBadgeVariant, {
       accent: true },
     recentSale: {
       icon: 'checkmark-circle-outline',
-      iconColor: colors.success,
-      glowColor: colors.success,
+      iconColor: colors.successText,
+      glowColor: colors.successText,
       defaultLabel: 'sold recently',
       accent: false },
     trending: {
       icon: 'flame-outline',
-      iconColor: colors.warning,
-      glowColor: colors.warning,
+      iconColor: colors.warningText,
+      glowColor: colors.warningText,
       defaultLabel: 'trending',
       accent: true },
     offersPending: {
@@ -68,8 +68,8 @@ function buildVariantConfig(colors: ThemeColors): Record<ActivityBadgeVariant, {
       accent: true },
     priceDropped: {
       icon: 'trending-down-outline',
-      iconColor: colors.success,
-      glowColor: colors.success,
+      iconColor: colors.successText,
+      glowColor: colors.successText,
       defaultLabel: 'price dropped',
       accent: false },
     rareItem: {
@@ -80,8 +80,8 @@ function buildVariantConfig(colors: ThemeColors): Record<ActivityBadgeVariant, {
       accent: true },
     fastSelling: {
       icon: 'timer-outline',
-      iconColor: colors.warning,
-      glowColor: colors.warning,
+      iconColor: colors.warningText,
+      glowColor: colors.warningText,
       defaultLabel: 'selling fast',
       accent: true } };
 }

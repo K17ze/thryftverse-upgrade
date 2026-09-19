@@ -131,7 +131,7 @@ export function CommerceDetailSellerRow({
         {institutional && verified ? (
           <AppIcon name="verified" size={IconSize.xs} color="brand" opticalCenter accessible={false} />
         ) : verified ? (
-          <AppIcon name="shieldCheck" focused size={IconSize.xs} color="success" opticalCenter accessible={false} />
+          <AppIcon name="shieldCheck" focused size={IconSize.xs} color="successText" opticalCenter accessible={false} />
         ) : null}
       </View>
       {isRich && statsLine ? (

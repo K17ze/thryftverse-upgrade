@@ -91,7 +91,7 @@ export function EditListingPricingSection({
             )}
             {priceVsMarket === 'above' && (
               <View style={styles.soldCompsHint}>
-                <AppIcon name="trending-up-outline" size={12} color="warning" opticalCenter accessible={false} />
+                <AppIcon name="trending-up-outline" size={12} color="warningText" opticalCenter accessible={false} />
                 <Text style={[styles.soldCompsText, themed.priceMarketHigh]}>
                   {t('listing.create.pricedAboveRange')}
                 </Text>
@@ -107,7 +107,7 @@ export function EditListingPricingSection({
             )}
             {priceVsMarket === 'in_range' && (
               <View style={styles.soldCompsHint}>
-                <AppIcon name="checkmark-circle" size={12} color="success" opticalCenter accessible={false} />
+                <AppIcon name="checkmark-circle" size={12} color="successText" opticalCenter accessible={false} />
                 <Text style={[styles.soldCompsText, themed.priceMarketGood]}>
                   {t('listing.create.pricedInRange')}
                 </Text>

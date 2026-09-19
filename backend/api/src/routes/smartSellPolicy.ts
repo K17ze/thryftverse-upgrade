@@ -3,6 +3,10 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import { appendDomainEvent } from '../lib/domainOutbox.js';
+import { emitOrderCommerceCard } from '../lib/orderChatCards.js';
+import { executeOfferAcceptance } from '../lib/offerAcceptance.js';
+import { fetchSellerAwayState } from '../lib/sellerAway.js';
+import { getSellerReach } from '../lib/sellerReach.js';
 
 type SmartSellPolicyRouteDependencies = {
   app: FastifyInstance;
@@ -636,6 +640,14 @@ export const registerSmartSellPolicyRoutes = ({
         return { ok: true, skipped: true, reason: 'Offer is waiting for buyer response' };
       }
 
+      // An overdue offer must never be auto-accepted — the expiry sweep owns
+      // that transition. Without this guard a decision delayed past
+      // expires_at could still bind the seller.
+      if (Date.parse(offer.expires_at) <= Date.now()) {
+        await client.query('ROLLBACK');
+        return { ok: true, skipped: true, reason: 'Offer expired' };
+      }
+
       // Lock the Smart Sell policy for this listing.
       const policyResult = await client.query<SmartSellPolicyRow>(
         `SELECT id, listing_id, seller_id, floor_price_gbp::text, listing_price_gbp::text,
@@ -656,6 +668,26 @@ export const registerSmartSellPolicyRoutes = ({
       if (policy.status !== 'active') {
         await client.query('ROLLBACK');
         return { ok: true, skipped: true, reason: `Policy is ${policy.status}` };
+      }
+
+      // Automation is not seller activity: an away seller cannot fulfil an
+      // auto-accepted order, so the policy must not bind them while the
+      // hard-pause flag is set (same rule the create/counter routes apply).
+      // Skipping leaves the offer pending to expire naturally.
+      const sellerAway = await fetchSellerAwayState(client, offer.seller_id);
+      if (sellerAway.away) {
+        await client.query('ROLLBACK');
+        return { ok: true, skipped: true, reason: 'Seller is away — policy not evaluated' };
+      }
+
+      // Same SELLER_RESTRICTED gate the manual accept route enforces: a
+      // seller suspended after the offer was created must not be auto-bound
+      // by their policy. Unlike the away check this blocks ALL decisions,
+      // not just accept — a suspended seller shouldn't be countering either.
+      const sellerReach = await getSellerReach(client, offer.seller_id);
+      if (sellerReach?.state === 'suspended') {
+        await client.query('ROLLBACK');
+        return { ok: true, skipped: true, reason: 'Seller is suspended — policy not evaluated' };
       }
 
       // Check for an existing decision for this offer (idempotency).
@@ -742,11 +774,39 @@ export const registerSmartSellPolicyRoutes = ({
       );
 
       // Execute the decision.
+      let acceptedOrderId: string | null = null;
       if (decision === 'accept') {
-        // Mark the offer as accepted by Smart Sell.
-        // The actual checkout/order creation is handled by the existing
-        // offer accept flow — here we just set the metadata to indicate
-        // Smart Sell accepted it, and the worker will call the accept endpoint.
+        // Smart Sell acts as the seller accepting a buyer-authored pending
+        // offer. The accept must execute the same durable transition as the
+        // manual route — order + reservation + sibling declines + listing
+        // pause + offer.accepted — not just a metadata stamp (the previous
+        // stamp-only path left the offer pending forever; no worker ever
+        // called the accept endpoint).
+        const listingResult = await client.query<{ status: string }>(
+          `SELECT status FROM listings WHERE id = $1 LIMIT 1 FOR UPDATE`,
+          [offer.listing_id],
+        );
+        if (!listingResult.rowCount || listingResult.rows[0].status !== 'active') {
+          await client.query('ROLLBACK');
+          return {
+            ok: true,
+            skipped: true,
+            reason: 'Listing no longer active — accept skipped',
+          };
+        }
+        const acceptance = await executeOfferAcceptance(client, {
+          offerId,
+          listingId: offer.listing_id,
+          buyerId: offer.buyer_id,
+          sellerId: offer.seller_id,
+          offerPriceGbp,
+          // Smart Sell decides on the seller's behalf — the seller is the
+          // accepting actor for audit + notification attribution.
+          actorUserId: offer.seller_id,
+          correlationId: request.id,
+          calculatePlatformChargeGbp,
+        });
+        acceptedOrderId = acceptance.orderId;
         await client.query(
           `UPDATE listing_offers
            SET metadata = COALESCE(metadata, '{}'::jsonb)
@@ -875,10 +935,21 @@ export const registerSmartSellPolicyRoutes = ({
           grossSaleGbp: net.grossSaleGbp,
           policyVersion: policy.policy_version,
           counterRound,
+          orderId: acceptedOrderId,
+          conversationId: offer.conversation_id,
         },
       });
 
       await client.query('COMMIT');
+      // In-thread commerce card for the order an auto-accept just created —
+      // same post-commit step the manual accept route performs.
+      if (acceptedOrderId) {
+        await emitOrderCommerceCard({
+          orderId: acceptedOrderId,
+          stateType: 'order_placed',
+          log: request.log,
+        });
+      }
       try {
         await enqueueOutboxDrain();
       } catch (error) {

@@ -31,8 +31,8 @@ export const ResultRow = memo(function ResultRow({
     : item.terminalReason === 'cancelled' ? 'Cancelled'
     : item.bidCount === 0 ? 'No bids'
     : 'Sold';
-  const resultColor = item.viewerState === 'won' ? colors.success
-    : item.viewerState === 'lost' ? colors.danger
+  const resultColor = item.viewerState === 'won' ? colors.successText
+    : item.viewerState === 'lost' ? colors.dangerText
     : item.terminalReason === 'cancelled' ? colors.textMuted
     : item.bidCount === 0 ? colors.textMuted
     : colors.textSecondary;

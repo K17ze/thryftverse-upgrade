@@ -231,7 +231,7 @@ export function GroupMembersDirectory({
               accessibilityRole="button"
               accessibilityLabel="Revoke invite link"
             >
-              <AppIcon name="trash" size="sm" color="danger" accessible={false} />
+              <AppIcon name="trash" size="sm" color="dangerText" accessible={false} />
             </AnimatedPressable>
           </View>
         </View>

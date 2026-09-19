@@ -68,11 +68,11 @@ function emptyDraft(): BulkListingItem {
     errors: [] };
 }
 
-const STATUS_META: Record<ItemStatus, { label: string; colorKey: 'textMuted' | 'warning' | 'success' | 'danger' }> = {
+const STATUS_META: Record<ItemStatus, { label: string; colorKey: 'textMuted' | 'warningText' | 'successText' | 'dangerText' }> = {
   pending: { label: 'Pending', colorKey: 'textMuted' },
-  validating: { label: 'Validating', colorKey: 'warning' },
-  ready: { label: 'Ready', colorKey: 'success' },
-  error: { label: 'Error', colorKey: 'danger' } };
+  validating: { label: 'Validating', colorKey: 'warningText' },
+  ready: { label: 'Ready', colorKey: 'successText' },
+  error: { label: 'Error', colorKey: 'dangerText' } };
 
 export default function BulkListingScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
@@ -303,8 +303,8 @@ export default function BulkListingScreen({ navigation }: Props) {
             accessibilityRole="button"
             accessibilityLabel="Publish all ready listings"
           >
-            <Ionicons name="cloud-upload-outline" size={16} color={canPublish ? colors.success : colors.textMuted} />
-            <Text style={[styles.bulkActionText, { color: canPublish ? colors.success : colors.textMuted }]}>Publish all</Text>
+            <Ionicons name="cloud-upload-outline" size={16} color={canPublish ? colors.successText : colors.textMuted} />
+            <Text style={[styles.bulkActionText, { color: canPublish ? colors.successText : colors.textMuted }]}>Publish all</Text>
           </AnimatedPressable>
           <AnimatedPressable
             style={[styles.bulkAction, { borderColor: colors.dangerBorder }]}
@@ -313,19 +313,19 @@ export default function BulkListingScreen({ navigation }: Props) {
             accessibilityRole="button"
             accessibilityLabel="Clear all draft listings"
           >
-            <Ionicons name="trash-outline" size={16} color={colors.danger} />
-            <Text style={[styles.bulkActionText, { color: colors.danger }]}>Clear all</Text>
+            <Ionicons name="trash-outline" size={16} color={colors.dangerText} />
+            <Text style={[styles.bulkActionText, { color: colors.dangerText }]}>Clear all</Text>
           </AnimatedPressable>
         </View>
         {(readyCount > 0 || errorCount > 0) && (
           <View style={styles.statusSummaryRow}>
             {readyCount > 0 && (
-              <Text style={[styles.statusSummaryText, { color: colors.success }]}>
+              <Text style={[styles.statusSummaryText, { color: colors.successText }]}>
                 {readyCount} ready
               </Text>
             )}
             {errorCount > 0 && (
-              <Text style={[styles.statusSummaryText, { color: colors.danger }]}>
+              <Text style={[styles.statusSummaryText, { color: colors.dangerText }]}>
                 {errorCount} need attention
               </Text>
             )}
@@ -546,7 +546,7 @@ const BulkRow = React.memo(function BulkRow({
           {item.errors && item.errors.length > 0 && (
             <View style={styles.errorList}>
               {item.errors.map((err, i) => (
-                <Text key={i} style={[styles.errorText, { color: colors.danger }]}>
+                <Text key={i} style={[styles.errorText, { color: colors.dangerText }]}>
                   • {err}
                 </Text>
               ))}
@@ -580,7 +580,7 @@ const BulkRow = React.memo(function BulkRow({
               variant="ghost"
               size="sm"
               onPress={onDelete}
-              titleStyle={{ color: colors.danger }}
+              titleStyle={{ color: colors.dangerText }}
               hapticFeedback="medium"
               accessibilityLabel="Delete this draft"
             />
@@ -740,7 +740,7 @@ function DraftForm({
       {!validation.valid && (form.title || form.price > 0 || form.images.length > 0) && (
         <View style={styles.formErrorList}>
           {validation.errors.map((err, i) => (
-            <Text key={i} style={[styles.formErrorText, { color: colors.danger }]}>
+            <Text key={i} style={[styles.formErrorText, { color: colors.dangerText }]}>
               • {err}
             </Text>
           ))}

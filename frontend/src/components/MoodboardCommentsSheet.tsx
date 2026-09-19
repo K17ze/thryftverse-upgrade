@@ -137,7 +137,7 @@ export function MoodboardCommentsSheet({
               <Ionicons
                 name={item.resolved ? 'checkmark-circle' : 'checkmark-circle-outline'}
                 size={Control.icon}
-                color={item.resolved ? colors.success : colors.textMuted}
+                color={item.resolved ? colors.successText : colors.textMuted}
               />
             </AnimatedPressable>
             {isAuthor && (
@@ -148,7 +148,7 @@ export function MoodboardCommentsSheet({
                 accessibilityRole="button"
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Ionicons name="trash-outline" size={Control.icon} color={colors.danger} />
+                <Ionicons name="trash-outline" size={Control.icon} color={colors.dangerText} />
               </AnimatedPressable>
             )}
           </View>
@@ -182,7 +182,7 @@ export function MoodboardCommentsSheet({
   const canSend = draft.trim().length > 0 && !submitting;
 
   return (
-    <FormSheet visible={visible} onDismiss={onDismiss} title="Comments" snapPoint={0.7}>
+    <FormSheet visible={visible} onDismiss={onDismiss} title="Comments" snapPoint={0.7} scrollable={false}>
       <View style={styles.bodyWrap}>
         <FlatList
           data={visibleComments}

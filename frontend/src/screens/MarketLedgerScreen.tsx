@@ -205,6 +205,9 @@ export default function MarketLedgerScreen() {
     return (
       <MarketActivityRow
         title={title}
+        // Direction accent for order rows — same green/red grammar as the
+        // book and ticket. Auction rows stay neutral.
+        titleColor={item.action === 'buy-units' ? colors.coownUp : item.action === 'sell-units' ? colors.coownDown : undefined}
         detail={[item.note, item.units != null ? `${item.units} units` : null].filter(Boolean).join(' · ')}
         amount={isAuction ? formatMoney(item.amountGBP) : formatCoOwnIze(item.amountGBP)}
         status={stateLabel}
@@ -227,7 +230,7 @@ export default function MarketLedgerScreen() {
         }}
       />
     );
-  }, [navigation, formatMoney]);
+  }, [navigation, formatMoney, colors.coownUp, colors.coownDown]);
 
   // ── Loading state (initial sync, no entries yet) ──
   if (isSyncingLedger && entries.length === 0) {

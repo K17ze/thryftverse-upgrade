@@ -79,6 +79,20 @@ export interface MarketplaceChatCardProps {
   };
   onAccept?: () => void;
   onDecline?: () => void;
+  /** Label for the decline/exit button — "Pass" for a seller declining,
+   *  "Cancel" for a buyer withdrawing (cancel is the buyer's only exit;
+   *  decline is seller-only server-side). */
+  declineLabel?: string;
+  /** Author-side retract on a pending offer — buyers cancel their offer,
+   *  sellers withdraw their counter (decline route is seller-only). */
+  onWithdraw?: () => void;
+  withdrawLabel?: string;
+  /** Override for the "Offer sent · Waiting…" copy (e.g. counter sent). */
+  waitingLabel?: string;
+  /** The viewer authored the pending offer/counter even when the card
+   *  message sender didn't flip (counter on a buyer-authored card) —
+   *  renders the waiting/retract state instead of response actions. */
+  viewerAuthoredPending?: boolean;
   onCounter?: () => void;
   onViewListing?: () => void;
   onMakeOffer?: () => void;
@@ -102,8 +116,8 @@ function formatCountdown(msRemaining: number): string {
 
 function getExpiryTone(msRemaining: number, colors: ThemeColors): { color: string; icon: keyof typeof Ionicons.glyphMap } {
   if (msRemaining <= 0) return { color: colors.textMuted, icon: 'time-outline' };
-  if (msRemaining <= 60 * 60 * 1000) return { color: colors.danger, icon: 'timer-outline' };
-  if (msRemaining <= 12 * 60 * 60 * 1000) return { color: colors.warning, icon: 'timer-outline' };
+  if (msRemaining <= 60 * 60 * 1000) return { color: colors.dangerText, icon: 'timer-outline' };
+  if (msRemaining <= 12 * 60 * 60 * 1000) return { color: colors.warningText, icon: 'timer-outline' };
   return { color: colors.textSecondary, icon: 'time-outline' };
 }
 
@@ -148,6 +162,11 @@ export function MarketplaceChatCard({
   commerceState,
   onAccept,
   onDecline,
+  declineLabel,
+  onWithdraw,
+  withdrawLabel,
+  waitingLabel,
+  viewerAuthoredPending,
   onCounter,
   onViewListing,
   onMakeOffer,
@@ -282,9 +301,9 @@ export function MarketplaceChatCard({
         {/* Status Indicators */}
         {status === 'accepted' && (
           <View style={[styles.offerStatusBanner, styles.offerStatusAccepted]}>
-            <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+            <Ionicons name="checkmark-circle" size={16} color={colors.successText} />
             <View style={styles.offerStatusTextWrap}>
-              <Text style={[styles.offerStatusTitle, { color: colors.success }]}>
+              <Text style={[styles.offerStatusTitle, { color: colors.successText }]}>
                 {t('offers.accepted')}
               </Text>
               <Text style={styles.offerStatusSubtitle}>
@@ -310,9 +329,9 @@ export function MarketplaceChatCard({
 
         {status === 'declined' && (
           <View style={[styles.offerStatusBanner, styles.offerStatusDeclined]}>
-            <Ionicons name="close-circle-outline" size={16} color={colors.danger} />
+            <Ionicons name="close-circle-outline" size={16} color={colors.dangerText} />
             <View style={styles.offerStatusTextWrap}>
-              <Text style={[styles.offerStatusTitle, { color: colors.danger }]}>
+              <Text style={[styles.offerStatusTitle, { color: colors.dangerText }]}>
                 {t('offers.declined')}
               </Text>
               <Text style={styles.offerStatusSubtitle}>
@@ -364,18 +383,33 @@ export function MarketplaceChatCard({
           </View>
         )}
 
-        {/* Sender Outgoing State: Waiting for response */}
-        {isPending && isMe && (
+        {/* Sender Outgoing State: Waiting for response — the author can
+            still retract a pending offer/counter (cancel for buyers,
+            withdraw for sellers). */}
+        {isPending && (isMe || viewerAuthoredPending) && (
           <View style={styles.offerWaitingRow}>
             <Ionicons name="paper-plane-outline" size={13} color={colors.textSecondary} />
             <Text style={styles.offerWaitingText}>
-              Offer sent · Waiting for seller response
+              {waitingLabel ?? 'Offer sent · Waiting for response'}
             </Text>
+            {onWithdraw && (
+              <AnimatedPressable
+                onPress={onWithdraw}
+                activeOpacity={0.8}
+                scaleValue={0.96}
+                hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel={withdrawLabel ?? 'Withdraw offer'}
+              >
+                <Text style={styles.offerWithdrawText}>{withdrawLabel ?? 'Withdraw'}</Text>
+              </AnimatedPressable>
+            )}
           </View>
         )}
 
-        {/* Recipient Incoming State: Action buttons */}
-        {isPending && !isMe && (
+        {/* Recipient Incoming State: Action buttons — suppressed when the
+            viewer authored the pending offer themselves. */}
+        {isPending && !isMe && !viewerAuthoredPending && (
           <View style={styles.offerActions}>
             <AnimatedPressable
               style={styles.offerPass}
@@ -384,9 +418,9 @@ export function MarketplaceChatCard({
               scaleValue={0.96}
               hapticFeedback="light"
               accessibilityRole="button"
-              accessibilityLabel={t('offers.declineOffer')}
+              accessibilityLabel={declineLabel ?? t('offers.declineOffer')}
             >
-              <Text style={styles.offerPassText}>{t('offers.pass')}</Text>
+              <Text style={styles.offerPassText}>{declineLabel ?? t('offers.pass')}</Text>
             </AnimatedPressable>
 
             {onCounter && (
@@ -462,7 +496,7 @@ export function MarketplaceChatCard({
               <Text style={styles.shareSellerText}>@{listing.sellerUsername}</Text>
               {listing.sellerRating && (
                 <View style={styles.shareRatingChip}>
-                  <Ionicons name="star" size={10} color={colors.warning} />
+                  <Ionicons name="star" size={10} color={colors.warningText} />
                   <Text style={styles.shareRatingText}>{listing.sellerRating.toFixed(1)}</Text>
                 </View>
               )}
@@ -512,7 +546,7 @@ export function MarketplaceChatCard({
       <View style={styles.purchaseReceiptCard}>
         <View style={styles.purchaseReceiptHeader}>
           <View style={[styles.receiptIconCircle, { backgroundColor: `${colors.success}18` }]}>
-            <Ionicons name="checkmark" size={16} color={colors.success} />
+            <Ionicons name="checkmark" size={16} color={colors.successText} />
           </View>
           <View style={styles.receiptTitleWrap}>
             <Text style={styles.receiptTitle}>{headerTitle}</Text>
@@ -726,7 +760,7 @@ const createStyles = (colors: ThemeColors) =>
     offerDiscountText: {
       fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.bold,
-      color: colors.success,
+      color: colors.successText,
       fontVariant: ['tabular-nums'],
     },
     offerWaitingRow: {
@@ -738,8 +772,14 @@ const createStyles = (colors: ThemeColors) =>
       borderTopColor: colors.borderSubtle,
     },
     offerWaitingText: {
+      flex: 1,
       fontSize: TypographyV2.caption.size,
       fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary,
+    },
+    offerWithdrawText: {
+      fontSize: TypographyV2.caption.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textSecondary,
     },
     offerStatusBanner: {

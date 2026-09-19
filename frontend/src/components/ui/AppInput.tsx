@@ -97,7 +97,7 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
   // ── Section variant (formerly PremiumTextField) ────────────────────
   if (variant === 'section') {
     const sectionBorderColor = hasError
-      ? colors.danger
+      ? colors.dangerText
       : isFocused
         ? colors.brand
         : colors.border;
@@ -126,7 +126,7 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
     })();
 
     const resolvedMinHeight = minHeight ?? (multiline ? 120 : 52);
-    const leftIconColor = hasError ? colors.danger : isFocused ? colors.brand : colors.textMuted;
+    const leftIconColor = hasError ? colors.dangerText : isFocused ? colors.brand : colors.textMuted;
 
     return (
       <View style={[sectionStyles.container, containerStyle]}>
@@ -134,7 +134,7 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
           <Text
             style={[
               sectionStyles.label,
-              { color: hasError ? colors.danger : isFocused ? colors.brand : colors.textSecondary },
+              { color: hasError ? colors.dangerText : isFocused ? colors.brand : colors.textSecondary },
               labelStyle,
             ]}
           >
@@ -184,7 +184,7 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
 
         {hasError ? (
           <Text
-            style={[sectionStyles.errorText, { color: colors.danger }, helperStyle]}
+            style={[sectionStyles.errorText, { color: colors.dangerText }, helperStyle]}
             accessibilityRole="alert"
             accessibilityLiveRegion="polite"
           >{errorText}</Text>
@@ -220,7 +220,7 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
   })();
 
   const appearanceBorderColor = hasError
-    ? colors.danger
+    ? colors.dangerText
     : isFocused
       ? colors.brand
       : colors.border;
@@ -260,7 +260,7 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
       </View>
       {errorText ? (
         <Text
-          style={[styles.errorText, { color: colors.danger }, helperStyle]}
+          style={[styles.errorText, { color: colors.dangerText }, helperStyle]}
           accessibilityRole="alert"
           accessibilityLiveRegion="polite"
         >{errorText}</Text>

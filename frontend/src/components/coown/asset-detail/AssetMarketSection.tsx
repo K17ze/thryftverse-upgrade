@@ -224,10 +224,10 @@ export function AssetMarketSection({
   // live → success, stale/degraded/errored/paused → warning, closed /
   // offline / synchronizing → muted.
   const connectionDotColor = quoteStateLabel == null
-    ? colors.success
+    ? colors.successText
     : quoteStateLabel === 'Offline' || quoteStateLabel === 'Market closed' || quoteStateLabel === 'Synchronizing'
       ? colors.textMuted
-      : colors.warning;
+      : colors.warningText;
 
   // When offline or the source watermark is stale, rendered bid/ask values
   // are last-known, not live — mute them so the numbers read as quotes,
@@ -354,9 +354,9 @@ export function AssetMarketSection({
               styles.marketStateDot,
               {
                 backgroundColor: reconciliationActive
-                  ? colors.warning
+                  ? colors.warningText
                   : isMarketOpen
-                    ? colors.success
+                    ? colors.successText
                     : colors.textMuted,
               },
             ]}
@@ -366,7 +366,7 @@ export function AssetMarketSection({
               styles.marketStateText,
               {
                 color: reconciliationActive
-                  ? colors.warning
+                  ? colors.warningText
                   : isMarketOpen
                     ? colors.coownUp
                     : colors.textMuted,
@@ -430,9 +430,9 @@ export function AssetMarketSection({
               styles.liveIndicatorDot,
               {
                 backgroundColor: isSecondaryMarket && marketDataStale
-                  ? colors.warning
+                  ? colors.warningText
                   : orderBookStreaming
-                    ? colors.success
+                    ? colors.successText
                     : colors.textMuted,
               },
             ]}
@@ -453,18 +453,19 @@ export function AssetMarketSection({
         </Pressable>
       </View>
 
-      {/* ── 3. Order Book card — Ladder / Depth / Tape in one rectangle ──
-          A single card wraps all three order-flow views. The segmented
-          control lives in the card header. Contents stay flat — no nested
-          cards. Hairline border + surface fill, no shadow (flat canvas). */}
-      <View style={[styles.orderBookCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
-        {/* Card header: Order Book label + Ladder/Depth/Tape segmented control */}
-        <View style={[styles.orderBookCardHeader, { borderBottomColor: colors.borderSubtle }]}>
+      {/* ── 3. Order Book card — Book / Depth / Trades in one panel ──
+          The order book owns the dominant dedicated box on the market tab
+          (Binance/Kraken convention: the book is a bounded terminal panel,
+          not loose rows on canvas). surfaceAlt + full-strength border make
+          the panel edge unambiguous on both themes; contents stay flat. */}
+      <View style={[styles.orderBookCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+        {/* Card header: Order Book label + Book/Depth/Trades segmented control */}
+        <View style={[styles.orderBookCardHeader, { borderBottomColor: colors.border }]}>
           <Text
             style={[styles.orderBookCardTitle, { color: colors.textPrimary }]}
             accessibilityRole="header"
           >
-            Market depth
+            Order book
           </Text>
           <View style={styles.orderBookTabs}>
             {(['ladder', 'depth', 'tape'] as const).map((view) => {
@@ -486,7 +487,7 @@ export function AssetMarketSection({
                       isActive && { fontFamily: FontFamily.semibold },
                     ]}
                   >
-                    {view === 'ladder' ? 'Orders' : view === 'depth' ? 'Depth' : 'Trades'}
+                    {view === 'ladder' ? 'Book' : view === 'depth' ? 'Depth' : 'Trades'}
                   </Text>
                   {isActive && <View style={[styles.orderBookTabUnderline, { backgroundColor: colors.brand }]} />}
                 </Pressable>
@@ -712,7 +713,7 @@ export function AssetMarketSection({
                         accessibilityRole="button"
                         accessibilityLabel={`Cancel ${isBuy ? 'buy' : 'sell'} order ${order.orderId}`}
                       >
-                        <Text style={[styles.cancelLinkText, { color: colors.warning }]}>
+                        <Text style={[styles.cancelLinkText, { color: colors.warningText }]}>
                           Cancel
                         </Text>
                       </Pressable>

@@ -88,7 +88,7 @@ export function RecordingRing({
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke={colors.danger}
+          stroke={colors.dangerText}
           strokeWidth={stroke}
           fill="none"
           strokeLinecap="round"

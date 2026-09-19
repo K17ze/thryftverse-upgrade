@@ -3,9 +3,10 @@ import {
   View,
   Text,
   StyleSheet,
-  ActivityIndicator,
   Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Google from 'expo-auth-session/providers/google';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useForm, Controller } from 'react-hook-form';
@@ -19,7 +20,13 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { ApiRequestError, parseApiError } from '../lib/apiClient';
-import { requestAccountDeletion } from '../services/accountApi';
+import {
+  fetchConnectedAccounts,
+  requestAccountDeletion,
+  type ConnectedAccount,
+  type DeleteAccountOauthProof,
+} from '../services/accountApi';
+import { hasGoogleOAuthConfig } from '../components/login/loginViewModels';
 import { logoutFromSession } from '../services/authApi';
 import { clearUserScopedQueryCache } from '../platform/server';
 import { AppButton } from '../components/ui/AppButton';
@@ -49,9 +56,10 @@ const deleteSchema = z.object({
       (v) => v.trim().toUpperCase() === DELETE_CONFIRM_PHRASE,
       `Type "${DELETE_CONFIRM_PHRASE}" exactly to confirm`,
     ),
-  password: z
-    .string()
-    .min(1, 'Enter your password to verify identity'),
+  // Optional at the schema level — whether a password is actually required
+  // depends on the account's credential type. The component-level superRefine
+  // enforces it unless the account is OAuth-only (hasPassword === false).
+  password: z.string().optional(),
   totpCode: z.string().optional(),
   reason: z.string().optional() });
 
@@ -77,14 +85,50 @@ export default function DeleteAccountScreen({ navigation }: Props) {
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
   const [selectedReason, setSelectedReason] = React.useState<string | null>(null);
 
+  // ── Credential type + OAuth re-auth (passwordless accounts) ──
+  // `hasPassword === null` means "still loading" — the form fails toward the
+  // passworded path, which is the common case.
+  const [hasPassword, setHasPassword] = React.useState<boolean | null>(null);
+  const [connectedAccounts, setConnectedAccounts] =
+    React.useState<ConnectedAccount[] | null>(null);
+  const [oauthProof, setOauthProof] = React.useState<DeleteAccountOauthProof | null>(null);
+  const [oauthLoading, setOauthLoading] = React.useState<'google' | 'apple' | null>(null);
+  const [oauthError, setOauthError] = React.useState<string | null>(null);
+
   const username = currentUser?.username ?? '';
+
+  // Identity-token request only — unlike the login flow, this token is sent
+  // to DELETE /users/me as re-auth proof and never creates a session.
+  const [googleRequest, googleResponse, promptGoogleAuth] = Google.useIdTokenAuthRequest({
+    clientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID || 'dev-client-id-placeholder',
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_IOS_CLIENT_ID,
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_ANDROID_CLIENT_ID || 'dev-android-client-id-placeholder',
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_WEB_CLIENT_ID });
+
+  // A password is required only when the account actually has one; OAuth-only
+  // accounts prove identity with a provider identity token instead. RHF reads
+  // the resolver from its options on every validation pass, so keying the
+  // schema on `hasPassword` is safe.
+  const resolvedDeleteSchema = useMemo(
+    () =>
+      deleteSchema.superRefine((values, ctx) => {
+        if (hasPassword !== false && !(values.password ?? '').trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['password'],
+            message: 'Enter your password to verify identity',
+          });
+        }
+      }),
+    [hasPassword],
+  );
 
   const {
     control,
     handleSubmit,
     watch,
     formState: { errors } } = useForm<DeleteFormValues>({
-    resolver: zodResolver(deleteSchema),
+    resolver: zodResolver(resolvedDeleteSchema),
     defaultValues: {
       confirmText: '',
       password: '',
@@ -95,11 +139,120 @@ export default function DeleteAccountScreen({ navigation }: Props) {
   const confirmTextValue = watch('confirmText');
   const passwordValue = watch('password');
   const totpCodeValue = watch('totpCode');
+  // OAuth-only accounts submit a captured provider identity token instead of
+  // a password; with no linked provider there is no viable path and the UI
+  // shows a support message rather than a dead button.
+  const identityVerified =
+    hasPassword === false ? oauthProof !== null : (passwordValue?.length ?? 0) > 0;
   const canSubmit =
     confirmTextValue?.trim().toUpperCase() === DELETE_CONFIRM_PHRASE &&
-    (passwordValue?.length ?? 0) > 0 &&
+    identityVerified &&
     (!twoFactorEnabled || (totpCodeValue?.replace(/\s+/g, '').length ?? 0) >= 6) &&
     !isDeleting;
+
+  // Load the account's credential type so OAuth-only accounts get provider
+  // re-auth instead of a password field. On failure `hasPassword` stays null
+  // and the password form remains — the backend is still the source of truth
+  // (it returns 400 OAUTH_REAUTH_REQUIRED when oauth proof is missing).
+  React.useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const data = await fetchConnectedAccounts();
+        if (cancelled) return;
+        setConnectedAccounts(data.accounts);
+        setHasPassword(data.hasPassword);
+      } catch {
+        // Keep hasPassword null — the password field stays visible.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Capture the Google identity token once the OAuth round-trip resolves.
+  React.useEffect(() => {
+    if (!googleResponse) return;
+    if (googleResponse.type !== 'success') {
+      if (googleResponse.type === 'error') {
+        setOauthError('Google verification failed. Please try again.');
+      }
+      setOauthLoading(null);
+      return;
+    }
+    const idToken =
+      googleResponse.authentication?.idToken ??
+      (typeof googleResponse.params?.id_token === 'string'
+        ? googleResponse.params.id_token
+        : null);
+    if (!idToken) {
+      setOauthLoading(null);
+      setOauthError('Google verification failed: no identity token returned.');
+      return;
+    }
+    setOauthProof({ provider: 'google', identityToken: idToken });
+    setOauthError(null);
+    setOauthLoading(null);
+  }, [googleResponse]);
+
+  const handleGoogleVerify = useCallback(async () => {
+    if (oauthLoading || isDeleting) return;
+    if (!hasGoogleOAuthConfig() || !googleRequest) {
+      setOauthError('Google verification is unavailable in this build.');
+      return;
+    }
+    setOauthLoading('google');
+    setOauthError(null);
+    try {
+      const response = await promptGoogleAuth();
+      // Success is captured by the googleResponse effect above; only the
+      // non-success path needs the loading flag cleared here.
+      if (response.type !== 'success') setOauthLoading(null);
+    } catch (error) {
+      setOauthLoading(null);
+      setOauthError(`Google verification failed: ${(error as Error).message}`);
+    }
+  }, [oauthLoading, isDeleting, googleRequest, promptGoogleAuth]);
+
+  const handleAppleVerify = useCallback(async () => {
+    if (oauthLoading || isDeleting) return;
+    const available = await AppleAuthentication.isAvailableAsync();
+    if (!available) {
+      setOauthError('Apple verification is only available on supported iOS devices.');
+      return;
+    }
+    setOauthLoading('apple');
+    setOauthError(null);
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ] });
+      if (!credential.identityToken) throw new Error('Missing Apple identity token');
+      setOauthProof({ provider: 'apple', identityToken: credential.identityToken });
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (code !== 'ERR_REQUEST_CANCELED') {
+        setOauthError(`Apple verification failed: ${(error as Error).message}`);
+      }
+    } finally {
+      setOauthLoading(null);
+    }
+  }, [oauthLoading, isDeleting]);
+
+  // Providers offered for re-auth: the google/apple identities linked to the
+  // account. When the accounts list is unavailable both are offered; when it
+  // is loaded and neither is linked there is no viable re-auth path.
+  const oauthProviders = useMemo<('google' | 'apple')[]>(() => {
+    if (connectedAccounts === null) return ['google', 'apple'];
+    const linked = new Set<'google' | 'apple'>();
+    for (const account of connectedAccounts) {
+      if (account.provider === 'google' || account.provider === 'apple') {
+        linked.add(account.provider);
+      }
+    }
+    return Array.from(linked);
+  }, [connectedAccounts]);
 
   const onSubmit = useCallback(
     async (values: DeleteFormValues) => {
@@ -118,6 +271,7 @@ export default function DeleteAccountScreen({ navigation }: Props) {
           values.confirmText,
           reasonLabel,
           values.totpCode,
+          oauthProof ?? undefined,
         );
         await logoutFromSession();
         clearUserScopedQueryCache();
@@ -153,7 +307,7 @@ export default function DeleteAccountScreen({ navigation }: Props) {
         setIsDeleting(false);
       }
     },
-    [currentUser?.id, logout, show, haptic, navigation, selectedReason],
+    [currentUser?.id, logout, show, haptic, navigation, selectedReason, oauthProof],
   );
 
   const consequences = useMemo(
@@ -224,7 +378,7 @@ export default function DeleteAccountScreen({ navigation }: Props) {
                 <Ionicons name="warning" size={20} color={colors.surface} />
               </View>
               <View style={styles.warningHeaderText}>
-                <Text style={[styles.warningTitle, { color: colors.danger }]}>Permanent action</Text>
+                <Text style={[styles.warningTitle, { color: colors.dangerText }]}>Permanent action</Text>
                 <Text style={[styles.warningSubtitle, { color: colors.textSecondary }]}>
                   This cannot be undone
                 </Text>
@@ -290,27 +444,118 @@ export default function DeleteAccountScreen({ navigation }: Props) {
             )}
           />
 
-          {/* Password */}
-          <Controller
-            control={control}
-            name="password"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <AppInput
-                label="Enter your password to verify identity"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                secureTextEntry
-                autoCapitalize="none"
-                autoCorrect={false}
-                placeholder="Password"
-                errorText={errors.password?.message}
-                accessibilityLabel="Password to verify identity before deletion"
-                accessibilityHint="Enter your account password to confirm you are the account owner"
-                containerStyle={styles.fieldWrap}
-              />
-            )}
-          />
+          {/* Password — credential accounts only. While `hasPassword` is
+              still loading (null) the password field stays visible; once the
+              account is known to be OAuth-only it is replaced by provider
+              re-auth below. */}
+          {hasPassword !== false ? (
+            <Controller
+              control={control}
+              name="password"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <AppInput
+                  label="Enter your password to verify identity"
+                  value={value}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  placeholder="Password"
+                  errorText={errors.password?.message}
+                  accessibilityLabel="Password to verify identity before deletion"
+                  accessibilityHint="Enter your account password to confirm you are the account owner"
+                  containerStyle={styles.fieldWrap}
+                />
+              )}
+            />
+          ) : (
+            <View style={styles.fieldWrap}>
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+                Verify your identity with a linked account
+              </Text>
+              {oauthProviders.length === 0 ? (
+                /* No linked google/apple identity and no password — there is
+                   no self-serve re-auth path, so say so honestly. */
+                <View
+                  style={[
+                    styles.oauthNotice,
+                    { backgroundColor: colors.surface, borderColor: colors.border },
+                  ]}
+                >
+                  <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
+                  <Text style={[styles.oauthNoticeText, { color: colors.textSecondary }]}>
+                    Contact support to delete this account.
+                  </Text>
+                </View>
+              ) : oauthProof ? (
+                <View
+                  style={[
+                    styles.oauthNotice,
+                    { backgroundColor: colors.successSubtle, borderColor: colors.successBorder },
+                  ]}
+                >
+                  <Ionicons name="checkmark-circle" size={18} color={colors.successText} />
+                  <Text style={[styles.oauthNoticeText, { color: colors.textPrimary }]}>
+                    Verified with {oauthProof.provider === 'google' ? 'Google' : 'Apple'}
+                  </Text>
+                  <Pressable
+                    onPress={() => {
+                      setOauthProof(null);
+                      setOauthError(null);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Verify with a different method"
+                    hitSlop={8}
+                  >
+                    <Text style={[styles.oauthChangeText, { color: colors.brand }]}>Change</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <View style={styles.oauthButtons}>
+                  {oauthProviders.includes('google') ? (
+                    <AppButton
+                      title="Verify with Google"
+                      variant="secondary"
+                      size="md"
+                      icon={<Ionicons name="logo-google" size={18} color={colors.textPrimary} />}
+                      onPress={() => void handleGoogleVerify()}
+                      loading={oauthLoading === 'google'}
+                      disabled={oauthLoading !== null || isDeleting}
+                      accessibilityLabel="Verify your identity with Google"
+                      accessibilityHint="Opens Google sign-in to confirm you own this account"
+                      style={styles.oauthButton}
+                    />
+                  ) : null}
+                  {oauthProviders.includes('apple') ? (
+                    <AppButton
+                      title="Verify with Apple"
+                      variant="secondary"
+                      size="md"
+                      icon={<Ionicons name="logo-apple" size={18} color={colors.textPrimary} />}
+                      onPress={() => void handleAppleVerify()}
+                      loading={oauthLoading === 'apple'}
+                      disabled={oauthLoading !== null || isDeleting}
+                      accessibilityLabel="Verify your identity with Apple"
+                      accessibilityHint="Opens Apple sign-in to confirm you own this account"
+                      style={styles.oauthButton}
+                    />
+                  ) : null}
+                </View>
+              )}
+              {oauthError ? (
+                <View
+                  style={[
+                    styles.errorRow,
+                    { backgroundColor: colors.dangerSubtle, borderColor: colors.dangerBorder },
+                  ]}
+                >
+                  <Ionicons name="alert-circle" size={16} color={colors.dangerText} />
+                  <Text style={[styles.errorText, { color: colors.dangerText }]}>{oauthError}</Text>
+                </View>
+              ) : null}
+            </View>
+          )}
 
           {/* 2FA code — only when two-factor authentication is enabled */}
           {twoFactorEnabled ? (
@@ -387,8 +632,8 @@ export default function DeleteAccountScreen({ navigation }: Props) {
           {/* Error state */}
           {deleteError ? (
             <View style={[styles.errorRow, { backgroundColor: colors.dangerSubtle, borderColor: colors.dangerBorder }]}>
-              <Ionicons name="alert-circle" size={16} color={colors.danger} />
-              <Text style={[styles.errorText, { color: colors.danger }]}>{deleteError}</Text>
+              <Ionicons name="alert-circle" size={16} color={colors.dangerText} />
+              <Text style={[styles.errorText, { color: colors.dangerText }]}>{deleteError}</Text>
             </View>
           ) : null}
         </View>
@@ -517,6 +762,28 @@ function createStyles(colors: ThemeColors) {
       fontFamily: TypographyV2.meta.fontFamily,
       marginTop: Space.xs,
       letterSpacing: TypographyV2.meta.letterSpacing },
+    oauthButtons: {
+      gap: Space.sm },
+    oauthButton: {
+      width: '100%' },
+    oauthNotice: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      borderRadius: Radius.md,
+      borderWidth: Stroke.standard,
+      paddingVertical: Space.sm + 2,
+      paddingHorizontal: Space.md },
+    oauthNoticeText: {
+      flex: 1,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight },
+    oauthChangeText: {
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing },
     reasonChips: {
       flexDirection: 'row',
       flexWrap: 'wrap',

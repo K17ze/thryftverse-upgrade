@@ -375,7 +375,7 @@ export function LineChart({
     return (
       <View style={containerStyle} onLayout={onLayout}>
         <View style={[styles.placeholder, { height }]}>
-          <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
+          <Text style={[styles.errorText, { color: colors.dangerText }]}>{error}</Text>
         </View>
       </View>
     );

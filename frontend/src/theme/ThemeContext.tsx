@@ -41,12 +41,22 @@ export interface ThemeColors {
   danger: string;
   /** Subtle danger tint — destructive surface backgrounds, danger badges. Replaces hex-alpha. */
   dangerSubtle: string;
+  /** Readable danger FOREGROUND for status words/numbers on plain and
+   *  subtle-tinted surfaces — `danger` is a fill/icon accent that fails
+   *  WCAG AA as text in dark mode (≈2:1). Use this for text (F08). */
+  dangerText: string;
   success: string;
   /** Subtle success tint — positive surface backgrounds, success badges. Replaces hex-alpha. */
   successSubtle: string;
+  /** Readable success FOREGROUND for status text — `success` fails AA as
+   *  text in dark mode (≈2.3:1). Use this for text (F08). */
+  successText: string;
   warning: string;
   /** Subtle warning tint — cautionary surface backgrounds, warning badges. Replaces hex-alpha. */
   warningSubtle: string;
+  /** Readable warning FOREGROUND for status text — `warning` fails AA for
+   *  normal text in light mode (≈3.1:1). Use this for text (F08). */
+  warningText: string;
   /** Border-tint variants for status-colored borders. Replaces hex-alpha border concatenation. */
   brandBorder: string;
   warningBorder: string;

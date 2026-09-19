@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
-import type { Pool } from 'pg';
 import type { BotRuntimeContext, BotHandlerResult, AgentStreamChunkHandler } from './types.js';
 import { AI_RATE_LIMITS, computeRetryDelayMs } from '../lib/aiTruth.js';
+import { canonicalizeJson } from '../lib/canonicalJson.js';
 import {
   loadEnabledTools,
   loadToolBindings,
@@ -9,7 +9,11 @@ import {
   evaluateToolPolicy,
   type ToolDefinition,
   type ToolBinding,
+  type ToolRegistryDb,
 } from './toolRegistry.js';
+
+/** Minimal queryable — a Pool or a PoolClient both satisfy this. */
+type AgentDb = ToolRegistryDb;
 
 const runtimeConfig = {
   apiKey: process.env.OPENAI_API_KEY?.trim() || null,
@@ -300,6 +304,10 @@ function parseToolArguments(raw: string): Record<string, unknown> {
   }
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
 /**
  * Process proposed tool calls through the policy engine. Returns a
  * BotHandlerResult describing the outcome. When a tool call requires
@@ -314,7 +322,7 @@ async function processToolCalls(
   payload: unknown,
   attempt: number,
   startedAtMs: number,
-  db?: Pool,
+  db?: AgentDb,
   runId?: string,
 ): Promise<BotHandlerResult> {
   const bindingMap = new Map(bindings.map((b) => [b.toolName, b]));
@@ -327,6 +335,46 @@ async function processToolCalls(
   const approvedCalls: string[] = [];
   const deniedCalls: string[] = [];
   const pendingApprovals: string[] = [];
+  // Effective arguments per allowed call — an approver's edited_arguments
+  // win over the model's proposed arguments.
+  const effectiveArgumentsByCall = new Map<string, Record<string, unknown>>();
+
+  // Prior human approvals for this run — an approved request lets the
+  // matching tool call proceed when the run resumes after the user's
+  // decision. Matching is on (tool_name, canonical arguments): approving
+  // call A must not silently authorise a different call B that merely
+  // shares the tool name. A row matches either its original proposed
+  // arguments or its edited_arguments (the approver's amended call).
+  const approvedArguments = new Map<string, Record<string, unknown>>();
+  if (db && runId) {
+    const priorApprovals = await db.query<{
+      tool_name: string;
+      tool_arguments: unknown;
+      edited_arguments: unknown;
+    }>(
+      `SELECT tool_name, tool_arguments, edited_arguments FROM agent_approval_requests
+       WHERE run_id = $1 AND status = 'approved'
+         AND (expires_at IS NULL OR expires_at > NOW())`,
+      [runId],
+    );
+    for (const row of priorApprovals.rows) {
+      const effective = isPlainObject(row.edited_arguments)
+        ? row.edited_arguments
+        : isPlainObject(row.tool_arguments)
+          ? row.tool_arguments
+          : {};
+      approvedArguments.set(
+        `${row.tool_name}:${canonicalizeJson(row.tool_arguments ?? {})}`,
+        effective,
+      );
+      if (isPlainObject(row.edited_arguments)) {
+        approvedArguments.set(
+          `${row.tool_name}:${canonicalizeJson(row.edited_arguments)}`,
+          effective,
+        );
+      }
+    }
+  }
 
   for (const call of toolCalls) {
     const tool = toolMap.get(call.name);
@@ -335,18 +383,28 @@ async function processToolCalls(
       continue;
     }
 
+    const proposedArgs = parseToolArguments(call.arguments);
+    const priorApproval = approvedArguments.get(
+      `${call.name}:${canonicalizeJson(proposedArgs)}`,
+    );
+    // The effective call is what the human approved — edited arguments
+    // replace the model's proposal when the approver amended them.
+    const effectiveArgs = priorApproval ?? proposedArgs;
+
     const binding = bindingMap.get(call.name);
     const decision = evaluateToolPolicy(
       tool,
       binding,
       ctx.permissionsSnapshot,
-      false, // No prior approval in this phase
+      priorApproval !== undefined,
     );
 
     if (decision.decision === 'allow') {
       approvedCalls.push(call.name);
+      effectiveArgumentsByCall.set(call.callId, effectiveArgs);
       // Phase 5: tool execution is minimal — actual execution is Phase 6.
-      // We log the call but return a placeholder result.
+      // We log the call (with its effective arguments) but return a
+      // placeholder result.
     } else if (decision.decision === 'require_approval') {
       pendingApprovals.push(call.name);
 
@@ -417,7 +475,10 @@ async function processToolCalls(
   // All tool calls were either allowed or denied. Return a summary.
   const parts: string[] = [];
   if (approvedCalls.length > 0) {
-    parts.push(`I can help with that. I've prepared the following action(s): ${approvedCalls.join(', ')}.`);
+    parts.push(
+      `I can help with that — the following action(s) are allowed: ${approvedCalls.join(', ')}. ` +
+      'They have not been run; action execution is not available yet.',
+    );
   }
   if (deniedCalls.length > 0) {
     parts.push(`I wasn't able to proceed with: ${deniedCalls.join(', ')}.`);
@@ -442,7 +503,13 @@ async function processToolCalls(
       providerUsage,
       providerLatencyMs: Date.now() - startedAtMs,
       attempt,
-      toolCalls: toolCalls.map((c) => ({ name: c.name, callId: c.callId })),
+      toolCalls: toolCalls.map((c) => ({
+        name: c.name,
+        callId: c.callId,
+        // The args that would be executed — the approver's edited_arguments
+        // when they amended the proposal, else the model's proposal.
+        effectiveArguments: effectiveArgumentsByCall.get(c.callId) ?? null,
+      })),
       approvedTools: approvedCalls,
       deniedTools: deniedCalls,
     },
@@ -518,7 +585,7 @@ function buildSuccessResult(
 export async function executeOpenAiAgent(
   ctx: BotRuntimeContext,
   connectionCredential?: { apiKey: string; baseUrl: string },
-  db?: Pool,
+  db?: AgentDb,
   runId?: string,
 ): Promise<BotHandlerResult> {
   if (!ctx.agentConfig) {
@@ -672,11 +739,24 @@ function extractDeltaText(event: SseEvent): string {
   return '';
 }
 
+// response.completed / response.incomplete SSE events wrap the response
+// object as { type, response: {…} } — unwrap so usage and tool-call
+// extraction see the real payload.
+function unwrapStreamResponsePayload(data: unknown): unknown {
+  if (data && typeof data === 'object') {
+    const record = data as Record<string, unknown>;
+    if (record.response && typeof record.response === 'object') {
+      return record.response;
+    }
+  }
+  return data;
+}
+
 export async function streamOpenAiAgent(
   ctx: BotRuntimeContext,
   onChunk: AgentStreamChunkHandler,
   connectionCredential?: { apiKey: string; baseUrl: string },
-  db?: Pool,
+  db?: AgentDb,
   runId?: string,
 ): Promise<BotHandlerResult> {
   if (!ctx.agentConfig) {
@@ -744,7 +824,7 @@ export async function streamOpenAiAgent(
             event.type === 'response.completed'
             || event.type === 'response.incomplete'
           ) {
-            finalPayload = event.data;
+            finalPayload = unwrapStreamResponsePayload(event.data);
           }
         }
 

@@ -64,10 +64,10 @@ function Row({
 }) {
   return (
     <View style={styles.row}>
-      <Text style={[styles.rowLabel, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>
+      <Text style={[styles.rowLabel, { color: colors.textMuted }]} maxFontSizeMultiplier={2}>
         {label}
       </Text>
-      <Text style={[styles.rowValue, { color: colors.textPrimary }]} numberOfLines={2} maxFontSizeMultiplier={1.3}>
+      <Text style={[styles.rowValue, { color: colors.textPrimary }]} numberOfLines={2} maxFontSizeMultiplier={2}>
         {value}
       </Text>
     </View>
@@ -87,7 +87,7 @@ function SectionTitle({
     <Text
       style={[styles.sectionTitle, { color: colors.textPrimary, borderTopColor: colors.borderSubtle }, first && styles.sectionTitleFirst]}
       accessibilityRole="header"
-      maxFontSizeMultiplier={1.3}
+      maxFontSizeMultiplier={2}
     >
       {title}
     </Text>
@@ -224,7 +224,7 @@ export function CoOwnAssetProspectus({ asset, onOpenRiskDisclosure }: CoOwnAsset
           exists for platform remuneration, so this is stated once in
           plain language rather than implied by a fabricated fee row. */}
       <View style={[styles.conflictsBlock, { borderTopColor: colors.borderSubtle }]}>
-        <Text style={[styles.conflictsText, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>
+        <Text style={[styles.conflictsText, { color: colors.textMuted }]} maxFontSizeMultiplier={2}>
           ThryftVerse and its affiliates may receive fees from this vehicle. The issuer controls asset decisions per the rights agreement.
         </Text>
       </View>
@@ -234,10 +234,10 @@ export function CoOwnAssetProspectus({ asset, onOpenRiskDisclosure }: CoOwnAsset
           <SectionTitle title="Key risks" colors={colors} />
           {topRisks.map((risk) => (
             <View key={risk.title} style={styles.riskRow}>
-              <Text style={[styles.riskTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
+              <Text style={[styles.riskTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>
                 {risk.title}
               </Text>
-              <Text style={[styles.riskBody, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>
+              <Text style={[styles.riskBody, { color: colors.textSecondary }]} maxFontSizeMultiplier={2}>
                 {risk.body}
               </Text>
             </View>
@@ -250,7 +250,7 @@ export function CoOwnAssetProspectus({ asset, onOpenRiskDisclosure }: CoOwnAsset
               accessibilityRole="button"
               accessibilityLabel="Open full risk disclosure"
             >
-              <Text style={[styles.linkText, { color: colors.brand }]} maxFontSizeMultiplier={1.3}>
+              <Text style={[styles.linkText, { color: colors.brand }]} maxFontSizeMultiplier={2}>
                 Full risk disclosure
               </Text>
               <Ionicons
@@ -285,7 +285,7 @@ export function CoOwnAssetProspectus({ asset, onOpenRiskDisclosure }: CoOwnAsset
                   accessibilityElementsHidden
                   importantForAccessibility="no-hide-descendants"
                 />
-                <Text style={[styles.docChipText, { color: colors.brand }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>
+                <Text style={[styles.docChipText, { color: colors.brand }]} numberOfLines={1} maxFontSizeMultiplier={2}>
                   {doc.label}
                 </Text>
               </Pressable>

@@ -66,7 +66,7 @@ export function MakeOfferSummarySection({
           trust signals are decision inputs, not decoration. */}
       <View>
       <View style={styles.trustRow}>
-        <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
+        <Ionicons name="checkmark-circle-outline" size={16} color={colors.successText} />
         <Text style={[styles.trustText, { color: colors.textSecondary }]}>
           Protected by ThryftVerse Buyer Protection — secure settlement and support included.
         </Text>

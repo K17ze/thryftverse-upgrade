@@ -32,6 +32,13 @@ export interface ClosetGridProps {
  * Listings tab body — portfolio grid with reorder/pin controls and empty states.
  * Extracted from MyProfileScreen to isolate the closet grid domain.
  */
+/** Preview cap for the nested grid (F20): this FlashList renders inside the
+ *  screen's ScrollView with scrollEnabled={false}, so every cell mounts
+ *  eagerly — an unbounded closet stalls the whole profile. The profile grid
+ *  is a preview; "View all" deep-links to MyListings. Reorder mode keeps the
+ *  full set visible since the user is explicitly managing featured order. */
+const PREVIEW_LIMIT = 12;
+
 export function ClosetGrid({
   listings,
   reorderMode,
@@ -45,6 +52,9 @@ export function ClosetGrid({
   const { colors } = useAppTheme();
   const { t: tt } = useAppTranslation('myProfile');
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+
+  const visibleListings = reorderMode ? listings : listings.slice(0, PREVIEW_LIMIT);
+  const isCapped = !reorderMode && listings.length > visibleListings.length;
 
   return (
     <Reanimated.View
@@ -115,12 +125,28 @@ export function ClosetGrid({
             </View>
           </View>
           <FlashList
-            data={listings}
+            data={visibleListings}
             numColumns={3}
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
             scrollEnabled={false}
           />
+          {/* Deep-link to the full closet when the preview is capped — the
+              trailing affordance keeps the complete collection reachable
+              from the end of the grid (F20). */}
+          {isCapped ? (
+            <Pressable
+              onPress={onViewAll}
+              accessibilityRole="button"
+              accessibilityLabel={`View all ${listings.length} listings`}
+              hitSlop={8}
+              style={styles.viewAllFooter}
+            >
+              <Text style={styles.viewAllFooterText} maxFontSizeMultiplier={2}>
+                {tt('listings.viewAll')} ({listings.length})
+              </Text>
+            </Pressable>
+          ) : null}
         </>
       )}
     </Reanimated.View>
@@ -141,6 +167,15 @@ function createStyles(colors: ThemeColors) {
       color: colors.textMuted,
       fontVariant: ['tabular-nums'] as ['tabular-nums'] },
     gridHeaderAction: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.semibold,
+      color: colors.brand },
+    // Trailing "View all" affordance after a capped preview grid (F20).
+    viewAllFooter: {
+      alignItems: 'center',
+      paddingVertical: Space.md,
+      paddingHorizontal: Space.md },
+    viewAllFooterText: {
       fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.semibold,
       color: colors.brand },

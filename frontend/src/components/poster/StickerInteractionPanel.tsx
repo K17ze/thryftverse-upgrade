@@ -178,10 +178,10 @@ export function StickerInteractionPanel({
                     </Text>
                   )}
                   {isCorrectQuiz && (
-                    <Ionicons name="checkmark-circle" size={16} color={colors.success} style={styles.optionIcon} />
+                    <Ionicons name="checkmark-circle" size={16} color={colors.successText} style={styles.optionIcon} />
                   )}
                   {isSelected && !isCorrectQuiz && sticker.type === 'quiz' && (
-                    <Ionicons name="close-circle" size={16} color={colors.danger} style={styles.optionIcon} />
+                    <Ionicons name="close-circle" size={16} color={colors.dangerText} style={styles.optionIcon} />
                   )}
                 </Pressable>
               );
@@ -193,7 +193,7 @@ export function StickerInteractionPanel({
         {sticker.type === 'quiz' && quizResult && (
           <Text style={[
             styles.resultSummary,
-            { color: quizResult.isCorrect ? colors.success : colors.danger },
+            { color: quizResult.isCorrect ? colors.successText : colors.dangerText },
           ]}>
             {quizResult.isCorrect ? 'Correct!' : 'Incorrect'} • {quizResult.totalVotes} votes
           </Text>
@@ -211,7 +211,7 @@ export function StickerInteractionPanel({
           <View style={styles.questionInputArea}>
             {questionAnswerSent ? (
               <View style={styles.answerSentWrap}>
-                <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                <Ionicons name="checkmark-circle" size={20} color={colors.successText} />
                 <Text style={styles.answerSentText}>Answer sent</Text>
               </View>
             ) : (
@@ -373,7 +373,7 @@ function createStickerPanelStyles(colors: ReturnType<typeof useAppTheme>['colors
     gap: Space.sm,
     paddingVertical: Space.sm },
   answerSentText: {
-    color: colors.success,
+    color: colors.successText,
     fontSize: TypographyV2.body.size,
     fontFamily: TypographyV2.body.fontFamily } });
 }

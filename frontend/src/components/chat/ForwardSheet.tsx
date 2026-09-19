@@ -19,6 +19,7 @@ import { CachedImage } from '../CachedImage';
 import { Motion } from '../../theme/motionTokens';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { colorForId, initialsFromName } from '../../utils/avatarColor';
+import { useStore } from '../../store/useStore';
 import type { Conversation } from '../../domain';
 
 interface ForwardSheetProps {
@@ -48,6 +49,7 @@ export function ForwardSheet({
   onClose,
 }: ForwardSheetProps) {
   const { colors } = useAppTheme();
+  const currentUserId = useStore((s) => s.currentUser?.id);
   const reducedMotion = useReducedMotion();
   const { height: screenHeight } = useWindowDimensions();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -165,7 +167,13 @@ export function ForwardSheet({
             renderItem={({ item }) => {
               const title = item.title ?? 'Conversation';
               const initials = initialsFromName(title);
-              const avatarColor = colorForId(item.id);
+              // Same seed grammar as inbox rows and the thread top bar:
+              // groups by conversation id, DMs by counterparty user id —
+              // so one identity reads one color everywhere.
+              const counterpartyId = item.type === 'group'
+                ? null
+                : item.participantIds?.find((id) => id !== 'me' && id !== currentUserId) ?? null;
+              const avatarColor = colorForId(counterpartyId ?? item.id);
               return (
                 <Pressable
                   onPress={() => handleSelect(item.id)}

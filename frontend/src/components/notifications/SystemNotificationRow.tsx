@@ -38,7 +38,7 @@ export interface SystemNotificationRowProps {
 
 interface SystemVisual {
   icon: keyof typeof Ionicons.glyphMap;
-  accentKey: 'warning' | 'danger' | 'brand';
+  accentKey: 'warningText' | 'dangerText' | 'brand';
   statusLabel: string;
   actionLabel?: string;
 }
@@ -46,7 +46,7 @@ interface SystemVisual {
 function resolveSystemVisual(eventType: NotificationEventV2['eventType']): SystemVisual {
   switch (eventType) {
     case 'resolution_opened':
-      return { icon: 'alert-circle-outline', accentKey: 'warning', statusLabel: 'Dispute opened', actionLabel: 'Respond' };
+      return { icon: 'alert-circle-outline', accentKey: 'warningText', statusLabel: 'Dispute opened', actionLabel: 'Respond' };
     case 'resolution_status_changed':
       return { icon: 'document-text-outline', accentKey: 'brand', statusLabel: 'Status updated' };
     default:

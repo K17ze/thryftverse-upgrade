@@ -53,6 +53,9 @@ export interface Message {
     counterRound?: number;
     buyerId?: string;
     sellerId?: string;
+    /** Author of the pending offer — the card needs it to pick the
+     *  role-correct exit action (buyer cancels, seller declines). */
+    offeredByUserId?: string;
     listingId?: string;
     itemId?: string;
     listingTitle?: string;
@@ -193,6 +196,8 @@ export interface Conversation {
   lastMessage: string;
   lastMessageTime: string;
   unread: boolean;
+  /** Server-derived count of unread messages (0 when fully read). */
+  unreadCount?: number;
   messages: Message[];
   isPinned?: boolean;
   draftText?: string;

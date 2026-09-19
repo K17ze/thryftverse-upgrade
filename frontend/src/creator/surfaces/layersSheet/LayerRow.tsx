@@ -118,7 +118,7 @@ export function LayerRow({
           )}
           {layer.locked && (
             <View style={[styles.lockBadge, { backgroundColor: colors.surfaceElevated }]}>
-              <Ionicons name="lock-closed" size={IconGrammar.badge} color={colors.warning} />
+              <Ionicons name="lock-closed" size={IconGrammar.badge} color={colors.warningText} />
             </View>
           )}
         </Reanimated.View>
@@ -226,7 +226,7 @@ export function LayerRow({
           icon: 'trash-outline',
           label: 'Delete',
           onPress: () => onQuickDelete(layer.id),
-          color: colors.danger }}
+          color: colors.dangerText }}
         swipeThreshold={80}
       >
         {rowContent}

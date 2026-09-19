@@ -59,6 +59,9 @@ export interface OfferChatCardPayload {
   status: 'pending' | 'accepted' | 'declined' | 'countered' | 'expired' | 'cancelled';
   expiresAt: string;
   counterRound: number;
+  /** Who authored the pending offer — the card needs it to render
+   *  role-correct actions (buyer exits via cancel, seller via decline). */
+  offeredByUserId?: string;
   listingTitle?: string;
 }
 
@@ -103,7 +106,8 @@ async function loadOfferRow(
   const result = await queryable.query<OfferRow>(
     `SELECT o.id, o.listing_id, o.buyer_id, o.seller_id,
             o.offer_price_gbp::text, o.original_price_gbp::text,
-            o.counter_round, o.status, o.expires_at::text,
+            o.counter_round, o.status,
+            TO_CHAR(o.expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS expires_at,
             o.conversation_id, o.offered_by_user_id,
             l.title AS item_title
      FROM listing_offers o
@@ -183,6 +187,7 @@ function buildOfferPayload(offer: OfferRow): OfferChatCardPayload {
     status: offer.status as OfferChatCardPayload['status'],
     expiresAt: offer.expires_at,
     counterRound: offer.counter_round,
+    offeredByUserId: offer.offered_by_user_id ?? offer.buyer_id,
     listingTitle: offer.item_title ?? undefined,
   };
 }

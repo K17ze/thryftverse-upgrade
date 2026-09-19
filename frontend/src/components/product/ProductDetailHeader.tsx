@@ -107,7 +107,7 @@ export function ProductDetailHeader({
             <Ionicons
               name={isFav ? 'heart' : 'heart-outline'}
               size={20}
-              color={isFav ? colors.danger : colors.textPrimary}
+              color={isFav ? colors.dangerText : colors.textPrimary}
               onPress={onToggleFav}
               accessibilityLabel={isFav ? 'Remove from wishlist' : 'Add to wishlist'}
               accessibilityRole="button"

@@ -224,7 +224,7 @@ export const HomeDiscoveryCard = React.memo(function HomeDiscoveryCard({
             <Ionicons
               name={item.saved ? 'heart' : 'heart-outline'}
               size={22}
-              color={item.saved ? colors.danger : colors.scrimTextPrimary}
+              color={item.saved ? colors.dangerText : colors.scrimTextPrimary}
               style={styles.saveGlyph}
             />
           </Pressable>

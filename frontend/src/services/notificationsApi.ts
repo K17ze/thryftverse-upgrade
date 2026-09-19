@@ -37,6 +37,7 @@ export type NotificationEventType =
   | 'offer_declined'
   | 'offer_expired'
   | 'offer_cancelled'
+  | 'smart_sell_decision'
   | 'new_follower'
   | 'follow_received'
   | 'price_drop'
@@ -586,6 +587,15 @@ export const NotificationEventRegistry: Record<NotificationEventType, Notificati
   offer_cancelled: {
     semanticRole: 'commerce',
     attention: 'info',
+    requiresAction: false,
+    aggregationTemplate: offerAggregation,
+    objectExtractor: listingObjectExtractor,
+  },
+  // Smart Sell automation acted on the seller's behalf (auto-accept or
+  // auto-counter) — the seller must see that their policy fired.
+  smart_sell_decision: {
+    semanticRole: 'commerce',
+    attention: 'important',
     requiresAction: false,
     aggregationTemplate: offerAggregation,
     objectExtractor: listingObjectExtractor,

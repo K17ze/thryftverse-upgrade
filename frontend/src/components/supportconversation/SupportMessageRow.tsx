@@ -78,7 +78,7 @@ export function SupportMessageRow({ message, onRetry }: SupportMessageRowProps) 
           accessibilityRole="button"
           accessibilityLabel="Retry sending message"
         >
-          <Ionicons name="alert-circle" size={13} color={colors.danger} />
+          <Ionicons name="alert-circle" size={13} color={colors.dangerText} />
           <Text style={styles.retryText}>Tap to retry</Text>
         </AnimatedPressable>
       )}
@@ -193,6 +193,6 @@ function createStyles(colors: ThemeColors) {
     retryText: {
       fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.medium,
-      color: colors.danger,
+      color: colors.dangerText,
       letterSpacing: TypographyV2.meta.letterSpacing } });
 }

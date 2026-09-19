@@ -22,7 +22,7 @@
  * are owned by PinterestMasonryGrid and are not touched here.
  */
 
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -108,12 +108,20 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
   const heroEditorial = content.editorials[0];
 
   // ── Handlers ──
+  // Pull-to-refresh drives a real spinner: the RefreshControl stays active
+  // until every feed source settles, so the gesture never lies about a
+  // refresh that is still in flight.
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const handleRefresh = useCallback(() => {
+    if (isRefreshing) return;
     haptic.selection();
-    void content.loadDiscoveryContent();
-    void feed.forYouFeed.refresh();
-    void feed.refreshListings();
-  }, [haptic, content.loadDiscoveryContent, feed.forYouFeed, feed.refreshListings]);
+    setIsRefreshing(true);
+    void Promise.allSettled([
+      Promise.resolve(content.loadDiscoveryContent()),
+      Promise.resolve(feed.forYouFeed.refresh()),
+      Promise.resolve(feed.refreshListings()),
+    ]).finally(() => setIsRefreshing(false));
+  }, [isRefreshing, haptic, content.loadDiscoveryContent, feed.forYouFeed, feed.refreshListings]);
 
   const handleListingPress = useCallback((item: DiscoveryListingSummary) => {
     // DiscoveryListingSummary carries id + sellerId — route via canonical resolver.
@@ -216,6 +224,11 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
             onMoodboardPress={handleMoodboardPress}
             onCollectionPress={handleCollectionPress}
             onRefresh={handleRefresh}
+            staleModules={content.staleModules}
+            isRefreshing={isRefreshing}
+            hasMore={feed.feedHasMore}
+            isLoadingMore={feed.feedIsLoadingMore}
+            onEndReached={feed.loadMore}
             scrollRef={scrollRef}
             onItemSaveToggle={handleQuickSave}
             onItemSaveLongPress={handleSaveLongPress}

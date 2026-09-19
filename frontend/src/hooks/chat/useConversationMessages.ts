@@ -52,7 +52,7 @@ import {
 } from "../../services/realtimeClient";
 import { useRealtimeResnapshot } from "../../platform/realtime";
 import { requestPushPermissionWithSoftAsk } from "../../lib/pushPermission";
-import { ApiRequestError } from "../../lib/apiClient";
+import { ApiRequestError, parseApiError } from "../../lib/apiClient";
 import { isVideoUri } from "../../utils/media";
 import { makeStableId, createStableId } from "../../utils/createStableId";
 import { t } from "../../i18n";
@@ -234,8 +234,19 @@ export function useConversationMessages({
       const serverClientIds = new Set(
         apiMessages.map((m) => m.clientMessageId).filter(Boolean) as string[],
       );
+      // The synced page is the head of the thread only. Messages the user
+      // already paged in below it are confirmed history — absence from page
+      // 1 means "older than the window", not "deleted". They prepend before
+      // the synced page; their edits/deletes arrive via realtime events.
+      const windowStartTs = Math.min(
+        ...syncedMessages.map((m) => {
+          const ts = Date.parse(m.date ?? '');
+          return Number.isNaN(ts) ? Number.MAX_SAFE_INTEGER : ts;
+        }),
+      );
       const localMessages = messagesRef.current;
-      const preserved: Message[] = [];
+      const preservedHistory: Message[] = [];
+      const preservedTail: Message[] = [];
       for (const m of localMessages) {
         if (m.status === 'sending' || m.status === 'draft') {
           // In-flight optimistic messages must survive sync — the server
@@ -250,25 +261,43 @@ export function useConversationMessages({
           ) {
             continue;
           }
-          preserved.push(m);
-        } else if (
-          (m.status === 'sent' || m.status === 'reconciling') &&
-          !serverIds.has(m.id) &&
-          !(m.clientMessageId && serverClientIds.has(m.clientMessageId))
+          preservedTail.push(m);
+          continue;
+        }
+        if (
+          serverIds.has(m.id) ||
+          (m.clientMessageId && serverClientIds.has(m.clientMessageId))
         ) {
-          // A previously sent/reconciling message that is absent from the
-          // server response has failed to persist — mark it as failed so
-          // the user can retry instead of silently losing it.
-          preserved.push({ ...m, status: 'failed' as const });
+          continue;
+        }
+        const localTs = Date.parse(m.date ?? '');
+        if (!Number.isNaN(localTs) && localTs < windowStartTs) {
+          preservedHistory.push(m);
+          continue;
+        }
+        // A message of mine inside the synced window that the server does
+        // not return has failed to persist — mark it failed so the user
+        // can retry instead of silently losing it. A *received* message
+        // absent in-window was deleted or moderation-filtered server-side
+        // — dropping it is the truthful convergence, not "failed".
+        if (m.sender === 'me' && (m.status === 'sent' || m.status === 'reconciling' || !m.status)) {
+          preservedTail.push({ ...m, status: 'failed' as const });
         }
       }
-      const merged = [...syncedMessages, ...preserved] as unknown as ConversationMessage[];
+      const merged = [...preservedHistory, ...syncedMessages, ...preservedTail] as unknown as ConversationMessage[];
 
       replaceConversationMessages(conversationId, merged);
-      // P0.6: Capture cursors for incremental pagination.
-      setOldestCursor(oc);
+      // P0.6: Capture cursors for incremental pagination. When older
+      // history survived the resync, the tail cursor still points at the
+      // true oldest loaded message — adopting page-1's cursor would make
+      // the next loadOlder refetch the preserved span.
+      if (preservedHistory.length) {
+        // keep oldestCursor/hasMoreOlder as-is — the tail didn't move
+      } else {
+        setOldestCursor(oc);
+        setHasMoreOlder(hasMore ?? Boolean(oc));
+      }
       setNewestCursor(nc);
-      setHasMoreOlder(hasMore ?? Boolean(oc));
     } catch {
       setSyncError(true);
     } finally {
@@ -1081,6 +1110,26 @@ export function useConversationMessages({
             patchStoreMessage({ clientMessageId }, { status: "failed" });
             return;
           }
+          // Terminal rejections — never reconciling, never outbox-queued.
+          // Retrying a recipient-block or a revoked-membership send can
+          // never succeed; leaving the bubble 'reconciling' would promise
+          // a delivery that is impossible.
+          if (err instanceof ApiRequestError && err.status === 403) {
+            const code = parseApiError(err).code;
+            show(
+              code === 'BLOCKED_BY_RECIPIENT'
+                ? "You can't send messages to this user."
+                : "You can no longer send messages in this conversation.",
+              "error",
+            );
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === localId ? { ...m, status: "failed" as const } : m,
+              ),
+            );
+            patchStoreMessage({ clientMessageId }, { status: "failed" });
+            return;
+          }
           // P0.2: A dropped response is an UNKNOWN outcome, not a known
           // failure. The server may have accepted the message. Mark as
           // "reconciling" — the user sees a quiet pending state, not a
@@ -1236,6 +1285,118 @@ export function useConversationMessages({
         pushPermissionAskedRef.current = true;
         requestPushPermissionWithSoftAsk("chat").catch(() => undefined);
       }
+    },
+    [conversationId, show, currentUser?.id, patchStoreMessage],
+  );
+
+  // Documents ride the same upload → canonical-URL → typed-send pipeline as
+  // media — the only difference is the message type and the display
+  // metadata (name/mime) the bubble needs to render the file row.
+  const sendDocumentMessage = useCallback(
+    async (
+      msgId: string,
+      doc: { uri: string; name: string; mimeType?: string },
+      existingCanonicalUrl?: string,
+      stableClientMessageId?: string,
+    ) => {
+      if (!conversationId) return;
+      const clientMessageId = stableClientMessageId ?? createStableId('cmsg');
+
+      let canonicalUrl: string;
+      if (existingCanonicalUrl && existingCanonicalUrl.startsWith('http')) {
+        canonicalUrl = existingCanonicalUrl;
+      } else {
+        try {
+          const uploaded = await uploadMedia(doc.uri, 'uploads');
+          canonicalUrl = uploaded.publicUrl;
+        } catch {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === msgId ? { ...m, uploadStatus: "failed" as const } : m,
+            ),
+          );
+          patchStoreMessage({ id: msgId, clientMessageId }, { uploadStatus: "failed" });
+          show("Document upload failed. Tap to retry.", "error");
+          return;
+        }
+      }
+
+      sendConversationMessageOnApi(
+        conversationId,
+        doc.name,
+        {
+          mediaUri: canonicalUrl,
+          mediaType: 'document',
+          documentUri: canonicalUrl,
+          documentName: doc.name,
+          documentMimeType: doc.mimeType,
+        },
+        clientMessageId,
+        {
+          type: 'document',
+          mediaUri: canonicalUrl,
+          documentName: doc.name,
+          documentMimeType: doc.mimeType,
+        },
+        currentUser?.id,
+      )
+        .then((serverMsg) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === msgId
+                ? { ...m, id: serverMsg.id, uploadStatus: "sent" as const, status: "sent" as const, documentUri: canonicalUrl }
+                : m,
+            ),
+          );
+          patchStoreMessage(
+            { id: msgId, clientMessageId },
+            { id: serverMsg.id, status: "sent", uploadStatus: "sent", documentUri: canonicalUrl },
+          );
+        })
+        .catch((err: unknown) => {
+          // Terminal rejections mirror the text path — a block/membership
+          // loss can never succeed on retry.
+          if (err instanceof ApiRequestError && (err.status === 400 || err.status === 403)) {
+            show(
+              err.status === 400
+                ? "This message was blocked to protect you from potential scams. Keep payments on the platform."
+                : "You can't send messages in this conversation.",
+              "error",
+            );
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === msgId ? { ...m, status: "failed" as const, uploadStatus: "sent" as const, documentUri: canonicalUrl } : m,
+              ),
+            );
+            patchStoreMessage(
+              { id: msgId, clientMessageId },
+              { status: "failed", uploadStatus: "sent", documentUri: canonicalUrl },
+            );
+            return;
+          }
+          // Upload succeeded, send outcome unknown — reconcile, don't fail.
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === msgId ? { ...m, status: "reconciling" as const, uploadStatus: "sent" as const, documentUri: canonicalUrl } : m,
+            ),
+          );
+          patchStoreMessage(
+            { id: msgId, clientMessageId },
+            { status: "reconciling", uploadStatus: "sent", documentUri: canonicalUrl },
+          );
+          enqueueChatMessage({
+            conversationId,
+            clientMessageId,
+            text: doc.name,
+            metadata: {
+              mediaUri: canonicalUrl,
+              type: 'document',
+              documentUri: canonicalUrl,
+              documentName: doc.name,
+              documentMimeType: doc.mimeType,
+            },
+          });
+        });
     },
     [conversationId, show, currentUser?.id, patchStoreMessage],
   );
@@ -1497,6 +1658,39 @@ export function useConversationMessages({
       setPendingAttachment(null);
     },
     [createMediaMessage, pushMessage, appendToConversationStore, currentUser?.id, haptic, scheduleScrollToEnd, sendMediaMessage],
+  );
+
+  // Document send — real upload + typed message, same optimistic lifecycle
+  // as media. The bubble renders the document row from documentUri.
+  const handleSendPendingDocument = useCallback(
+    (
+      pendingDocument: { uri: string; name: string; mimeType?: string } | null,
+      setPendingDocument: (v: null) => void,
+    ) => {
+      if (!pendingDocument || !conversationId) return;
+      const outgoing: Message = {
+        id: makeStableId('msg_doc', 7),
+        type: 'document',
+        sender: 'me',
+        senderId: currentUser?.id ?? 'me',
+        timestamp: new Date().toISOString(),
+        senderLabel: currentUser?.username ?? 'you',
+        text: '',
+        documentUri: pendingDocument.uri,
+        documentName: pendingDocument.name,
+        documentMimeType: pendingDocument.mimeType,
+        uploadStatus: 'uploading',
+        status: 'sending',
+        clientMessageId: createStableId('cmsg'),
+      };
+      pushMessage(outgoing);
+      appendToConversationStore(outgoing, currentUser?.id ?? 'me');
+      haptic.success();
+      scheduleScrollToEnd();
+      sendDocumentMessage(outgoing.id, pendingDocument, undefined, outgoing.clientMessageId);
+      setPendingDocument(null);
+    },
+    [conversationId, currentUser?.id, currentUser?.username, pushMessage, appendToConversationStore, haptic, scheduleScrollToEnd, sendDocumentMessage],
   );
 
   // Share the conversation's linked listing as a product card. Optimistic
@@ -2005,6 +2199,8 @@ export function useConversationMessages({
     sendListingShare,
     sendMediaMessage,
     sendVoiceMessage,
+    sendDocumentMessage,
+    handleSendPendingDocument,
     handleSendVoice,
     createVoiceMessage,
     handleRetryUpload,

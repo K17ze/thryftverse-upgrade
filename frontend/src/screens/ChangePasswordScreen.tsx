@@ -108,7 +108,7 @@ export default function ChangePasswordScreen() {
             <Ionicons
               name="warning-outline"
               size={20}
-              color={colors.warning}
+              color={colors.warningText}
             />
             <View style={styles.bannerText}>
               <Text style={[styles.bannerTitle, { color: colors.textPrimary }]}>
@@ -124,7 +124,7 @@ export default function ChangePasswordScreen() {
           title={twoFactorEnabled ? 'Two-factor authentication' : 'Set up 2FA'}
           subtitle={twoFactorEnabled ? 'Enabled' : 'Strengthen your account security'}
           icon="lock-closed-outline"
-          iconColor={twoFactorEnabled ? colors.success : undefined}
+          iconColor={twoFactorEnabled ? colors.successText : undefined}
           onPress={() => navigation.navigate('TwoFactorSetup')}
           accessibilityLabel="Two-factor authentication"
           accessibilityHint={twoFactorEnabled ? 'View two-factor settings' : 'Set up two-factor authentication'}
@@ -194,7 +194,7 @@ export default function ChangePasswordScreen() {
           {confirmPassword.length > 0 && (
             <View style={styles.matchRow}>
               <View style={[styles.matchDot, { backgroundColor: passwordsMatch ? colors.success : colors.danger }]} />
-              <Text style={[styles.matchText, { color: passwordsMatch ? colors.success : colors.danger }]}>
+              <Text style={[styles.matchText, { color: passwordsMatch ? colors.successText : colors.dangerText }]}>
                 {passwordsMatch ? 'Passwords match' : 'Passwords do not match'}
               </Text>
             </View>

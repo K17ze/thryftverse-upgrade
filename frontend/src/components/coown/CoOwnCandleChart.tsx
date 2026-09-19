@@ -18,11 +18,10 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, ViewStyle, useWindowDimensions, PanResponder, Pressable } from 'react-native';
 import { Canvas, Rect, Line, Path, Skia, LinearGradient, vec } from '@shopify/react-native-skia';
-import { Ionicons } from '@expo/vector-icons';
+import Svg, { Path as SvgPath, Line as SvgLine, Rect as SvgRect, Circle as SvgCircle } from 'react-native-svg';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
-import { FontFamily } from '../../theme/fontFamily';
 import { DIRECTION_COLORS } from '../../constants/colors';
 import { withAlpha } from '../poster/shared/colorUtils';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -88,7 +87,6 @@ export function CoOwnCandleChart({
   const [measuredWidth, setMeasuredWidth] = useState<number | null>(null);
   const CHART_WIDTH = measuredWidth ?? Math.max(screenWidth - 64, 160);
   const [crosshairIndex, setCrosshairIndex] = useState<number | null>(null);
-  const [typeMenuOpen, setTypeMenuOpen] = useState(false);
 
   // Compute price range across all candles
   const { minPrice, maxPrice, maxVolume } = useMemo(() => {
@@ -306,19 +304,12 @@ export function CoOwnCandleChart({
           colors={colors}
         />
         {onChartTypeChange && (
-          <ChartTypeSwitcher
+          <ChartTypeSegments
             chartType={chartType}
             onChartTypeChange={(t) => {
               onChartTypeChange(t);
-              setTypeMenuOpen(false);
               haptics.selection();
             }}
-            open={typeMenuOpen}
-            onToggleOpen={() => {
-              setTypeMenuOpen((v) => !v);
-              haptics.tap();
-            }}
-            onClose={() => setTypeMenuOpen(false)}
             colors={colors}
           />
         )}
@@ -541,80 +532,108 @@ function RangeChips({
   );
 }
 
-const CHART_TYPE_OPTIONS: { value: CoOwnChartType; label: string }[] = [
+const CHART_TYPE_SEGMENTS: { value: CoOwnChartType; label: string }[] = [
   { value: 'line', label: 'Line' },
   { value: 'candle', label: 'Candlestick' },
   { value: 'area', label: 'Area' },
 ];
 
-/** Compact chart-type switcher — a settings icon that opens a small,
- *  flat popover menu. NOT a persistent segmented control: research
- *  (Robinhood Legend, Questrade, IBKR Mobile) shows flagship brokers
- *  treat chart type as a settings affordance, not primary navigation. */
-function ChartTypeSwitcher({
+/** Line-chart glyph — rising polyline with a terminal point marker. */
+function LineGlyph({ color }: { color: string }) {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 16 16">
+      <SvgPath
+        d="M2.5 11.5 L6 7.5 L9.5 9.5 L13 4"
+        stroke={color}
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <SvgCircle cx={13} cy={4} r={1.5} fill={color} />
+    </Svg>
+  );
+}
+
+/** Candlestick glyph — two OHLC marks (wick + body), the trading primitive. */
+function CandleGlyph({ color }: { color: string }) {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 16 16">
+      <SvgLine x1={5} y1={2} x2={5} y2={14} stroke={color} strokeWidth={1.2} strokeLinecap="round" />
+      <SvgRect x={3.6} y={4.6} width={2.8} height={5} rx={0.5} fill={color} />
+      <SvgLine x1={11} y1={3} x2={11} y2={13.5} stroke={color} strokeWidth={1.2} strokeLinecap="round" />
+      <SvgRect x={9.6} y={6.5} width={2.8} height={4} rx={0.5} fill={color} />
+    </Svg>
+  );
+}
+
+/** Area-chart glyph — the line path filled down to the baseline. */
+function AreaGlyph({ color }: { color: string }) {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 16 16">
+      <SvgPath
+        d="M2 12 L6 7.5 L9.5 9.5 L13.5 4.5 L13.5 14 L2 14 Z"
+        fill={color}
+        opacity={0.28}
+      />
+      <SvgPath
+        d="M2 12 L6 7.5 L9.5 9.5 L13.5 4.5"
+        stroke={color}
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+    </Svg>
+  );
+}
+
+const CHART_TYPE_GLYPHS: Record<CoOwnChartType, (color: string) => React.ReactElement> = {
+  line: (color) => <LineGlyph color={color} />,
+  candle: (color) => <CandleGlyph color={color} />,
+  area: (color) => <AreaGlyph color={color} />,
+};
+
+/** Visible chart-type segmented control — line / candle / area glyphs in a
+ *  single bordered group. Broker convention (Binance, Coinbase Advanced,
+ *  TradingView mobile): the chart-type switcher is always visible in the
+ *  chart header and communicates the active type by glyph, not a generic
+ *  settings icon. One tap switches; no menu. */
+function ChartTypeSegments({
   chartType,
   onChartTypeChange,
-  open,
-  onToggleOpen,
-  onClose,
   colors,
 }: {
   chartType: CoOwnChartType;
   onChartTypeChange: (t: CoOwnChartType) => void;
-  open: boolean;
-  onToggleOpen: () => void;
-  onClose: () => void;
   colors: ReturnType<typeof useAppTheme>['colors'];
 }) {
   return (
-    <View style={styles.switcherWrap}>
-      <Pressable
-        onPress={onToggleOpen}
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        accessibilityRole="button"
-        accessibilityLabel={`Chart type: ${chartType}. Tap to change.`}
-        accessibilityHint="Switch between line, candlestick, and area chart types."
-      >
-        <Ionicons name="options-outline" size={20} color={colors.textSecondary} />
-      </Pressable>
-      {open && (
-        <View style={[styles.typeMenu, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          {CHART_TYPE_OPTIONS.map((opt) => {
-            const isActive = opt.value === chartType;
-            return (
-              <Pressable
-                key={opt.value}
-                style={styles.typeMenuItem}
-                onPress={() => onChartTypeChange(opt.value)}
-                accessibilityRole="button"
-                accessibilityLabel={`Chart type: ${opt.label}`}
-                accessibilityState={{ selected: isActive }}
-              >
-                <Text
-                  style={[
-                    styles.typeMenuText,
-                    { color: isActive ? colors.textPrimary : colors.textSecondary },
-                    isActive && { fontFamily: FontFamily.semibold },
-                  ]}
-                >
-                  {opt.label}
-                </Text>
-                {isActive && (
-                  <Ionicons name="checkmark" size={16} color={colors.brand} />
-                )}
-              </Pressable>
-            );
-          })}
-        </View>
-      )}
-      {open && (
-        <Pressable
-          style={styles.typeMenuBackdrop}
-          onPress={onClose}
-          accessibilityLabel="Close chart type menu"
-          accessibilityRole="button"
-        />
-      )}
+    <View
+      style={[styles.typeSegments, { borderColor: colors.border }]}
+      accessibilityRole="tablist"
+      accessibilityLabel="Chart type"
+    >
+      {CHART_TYPE_SEGMENTS.map((opt, i) => {
+        const isActive = opt.value === chartType;
+        return (
+          <Pressable
+            key={opt.value}
+            onPress={() => onChartTypeChange(opt.value)}
+            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+            style={[
+              styles.typeSegment,
+              i > 0 && [styles.typeSegmentDivider, { borderLeftColor: colors.border }],
+              isActive && { backgroundColor: colors.brandSubtle },
+            ]}
+            accessibilityRole="tab"
+            accessibilityLabel={`Chart type: ${opt.label}`}
+            accessibilityState={{ selected: isActive }}
+          >
+            {CHART_TYPE_GLYPHS[opt.value](isActive ? colors.brand : colors.textSecondary)}
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -678,39 +697,25 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: Space.xs,
   },
-  switcherWrap: {
-    position: 'relative',
-  },
-  typeMenu: {
-    position: 'absolute',
-    top: 28,
-    right: 0,
-    minWidth: 140,
-    borderRadius: Radius.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingVertical: Space.xs,
-    zIndex: 10,
-  },
-  typeMenuItem: {
+  // Chart-type segmented group — one bordered pill, hairline dividers
+  // between segments, active segment tinted. Hit areas reach 44pt via
+  // hitSlop; the visible group stays compact per the icon grammar.
+  typeSegments: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.sm,
-    minHeight: 44,
-    gap: Space.sm,
+    borderRadius: Radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+    alignSelf: 'flex-start',
   },
-  typeMenuText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily,
+  typeSegment: {
+    width: 34,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  typeMenuBackdrop: {
-    position: 'absolute',
-    top: -1000,
-    left: -1000,
-    right: -1000,
-    bottom: -1000,
-    zIndex: 9,
+  typeSegmentDivider: {
+    borderLeftWidth: StyleSheet.hairlineWidth,
   },
   rangeChip: {
     paddingVertical: Space.sm,

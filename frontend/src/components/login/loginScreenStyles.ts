@@ -168,8 +168,8 @@ export function createLoginScreenStyles(colors: ThemeColors) {
     fontFamily: TypographyV2.meta.fontFamily },
 
   footer: { paddingTop: Space.sm, position: 'relative' },
-  infoText: { color: colors.success, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, textAlign: 'center', marginBottom: Space.md - 4 },
-  errorText: { color: colors.danger, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, textAlign: 'center', marginBottom: Space.md - 4 },
+  infoText: { color: colors.successText, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, textAlign: 'center', marginBottom: Space.md - 4 },
+  errorText: { color: colors.dangerText, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, textAlign: 'center', marginBottom: Space.md - 4 },
   primaryBtnDisabled: { opacity: 0.45 },
   primaryText: { color: colors.textInverse, fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily },
   switchRow: {

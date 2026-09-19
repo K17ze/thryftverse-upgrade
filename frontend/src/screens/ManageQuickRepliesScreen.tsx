@@ -256,7 +256,7 @@ export default function ManageQuickRepliesScreen({ navigation, route }: Props) {
                     accessibilityRole="button"
                     style={styles.iconBtn}
                   >
-                    <AppIcon name="trash" size="md" color="danger" accessible={false} />
+                    <AppIcon name="trash" size="md" color="dangerText" accessible={false} />
                   </AnimatedPressable>
                 </View>
                 {index < replies.length - 1 && <View style={styles.divider} />}
@@ -504,7 +504,7 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
-      color: colors.danger },
+      color: colors.dangerText },
     charCount: {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,

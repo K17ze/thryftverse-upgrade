@@ -41,13 +41,13 @@ function computeStrength(password: string): PasswordStrength {
 function strengthColor(strength: PasswordStrength, colors: ThemeColors): string {
   switch (strength) {
     case 'weak':
-      return colors.danger;
+      return colors.dangerText;
     case 'fair':
       return colors.bronze;
     case 'good':
-      return colors.success;
+      return colors.successText;
     case 'strong':
-      return colors.success;
+      return colors.successText;
   }
 }
 
@@ -150,7 +150,7 @@ export function PasswordStrengthBar({ password, showChecklist = true }: Password
                   <Ionicons
                     name={met ? 'checkmark' : 'close'}
                     size={12}
-                    color={met ? colors.success : colors.textMuted}
+                    color={met ? colors.successText : colors.textMuted}
                   />
                 </View>
                 <Text

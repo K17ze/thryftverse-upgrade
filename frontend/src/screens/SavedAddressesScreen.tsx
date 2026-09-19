@@ -234,9 +234,9 @@ export default function SavedAddressesScreen({ navigation }: Props) {
                   accessibilityLabel={`Remove address for ${address.name}`}
                 >
                   {isDeleting ? (
-                    <ActivityIndicator size="small" color={colors.danger} />
+                    <ActivityIndicator size="small" color={colors.dangerText} />
                   ) : (
-                    <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                    <Ionicons name="trash-outline" size={18} color={colors.dangerText} />
                   )}
                 </AnimatedPressable>
               </View>

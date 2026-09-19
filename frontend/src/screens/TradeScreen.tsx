@@ -612,10 +612,17 @@ export default function TradeScreen() {
         showsVerticalScrollIndicator={false}
         onScrollBeginDrag={Keyboard.dismiss}
       >
-        {/* Buy/Sell selector */}
+        {/* Buy/Sell selector — direction-tinted segments (broker
+            convention): the active side takes the semantic direction
+            colour so the order direction is legible at a glance and
+            never colour-only (labels stay explicit). */}
         <View>
           <AppSegmentControl
-            options={TRADE_SIDE_OPTIONS}
+            options={TRADE_SIDE_OPTIONS.map((opt) => ({
+              ...opt,
+              activeBackgroundColor: opt.value === 'buy' ? colors.coownUpSubtle : colors.coownDownSubtle,
+              activeTextColor: opt.value === 'buy' ? colors.coownUp : colors.coownDown,
+            }))}
             value={side}
             onChange={setSide}
             fullWidth
@@ -628,8 +635,8 @@ export default function TradeScreen() {
           <View>
             <View style={[styles.alertCard, { backgroundColor: colors.dangerSubtle, borderColor: colors.dangerBorder }]}>
               <View style={styles.alertRow}>
-                <Ionicons name="warning-outline" size={16} color={colors.danger} />
-                <Text style={[styles.alertTitle, { color: colors.danger }]} maxFontSizeMultiplier={2}>Trading restricted</Text>
+                <Ionicons name="warning-outline" size={16} color={colors.dangerText} />
+                <Text style={[styles.alertTitle, { color: colors.dangerText }]} maxFontSizeMultiplier={2}>Trading restricted</Text>
               </View>
               <Text style={[styles.alertText, { color: colors.textSecondary }]} maxFontSizeMultiplier={2}>{eligibility.message}</Text>
             </View>
@@ -641,8 +648,8 @@ export default function TradeScreen() {
           <View>
             <View style={[styles.alertCard, { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder }]}>
               <View style={styles.alertRow}>
-                <Ionicons name="document-text-outline" size={16} color={colors.warning} />
-                <Text style={[styles.alertTitle, { color: colors.warning }]} maxFontSizeMultiplier={2}>Rights incomplete</Text>
+                <Ionicons name="document-text-outline" size={16} color={colors.warningText} />
+                <Text style={[styles.alertTitle, { color: colors.warningText }]} maxFontSizeMultiplier={2}>Rights incomplete</Text>
               </View>
               <Text style={[styles.alertText, { color: colors.textSecondary }]} maxFontSizeMultiplier={2}>
                 This instrument has rights rows marked "To be confirmed". Trading is blocked until all rights are confirmed.
@@ -684,7 +691,7 @@ export default function TradeScreen() {
           <Ionicons
             name={canUseMarketSource ? 'pulse-outline' : 'pause-circle-outline'}
             size={14}
-            color={canUseMarketSource ? colors.success : colors.warning}
+            color={canUseMarketSource ? colors.successText : colors.warningText}
           />
           <Text style={[styles.illustrativeBannerText, { color: colors.textSecondary }]} numberOfLines={3} maxFontSizeMultiplier={2}>
             {isPrimaryOfferingBuy
@@ -990,7 +997,7 @@ export default function TradeScreen() {
         ) : (
           <View style={styles.submitDockWrap}>
             <AppButton
-              title="Review order"
+              title={`Review ${side} order`}
               icon={<Ionicons name="arrow-forward" size={18} color={colors.background} />}
               onPress={handleSubmit}
               disabled={!canSubmit || isSubmittingOrder}
@@ -998,7 +1005,17 @@ export default function TradeScreen() {
               size="lg"
               hapticFeedback="medium"
               accessibilityLabel={`Review ${side} order${submitDisabledReason ? ` — ${submitDisabledReason}` : ''}`}
-              style={styles.submitBtn}
+              // Direction-tinted CTA (broker convention): buy=green,
+              // sell=red. `colors.background` text reads on both the
+              // light-pastel dark-theme and deep light-theme direction
+              // tokens.
+              style={[
+                styles.submitBtn,
+                {
+                  backgroundColor: side === 'buy' ? colors.coownUp : colors.coownDown,
+                  borderColor: side === 'buy' ? colors.coownUp : colors.coownDown,
+                },
+              ]}
             />
             {!canSubmit && submitDisabledReason && (
               <Text style={[styles.submitDisabledReason, { color: colors.textMuted }]} numberOfLines={1}>

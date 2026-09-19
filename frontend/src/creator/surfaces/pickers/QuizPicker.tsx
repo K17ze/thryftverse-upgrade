@@ -90,7 +90,7 @@ export const QuizPicker = React.memo(function QuizPicker({ onClose, onAddLayer, 
             <View key={i} style={[styles.quizPreviewOption, correctIdx === i && styles.quizPreviewOptionCorrect]}>
               <Text style={styles.quizPreviewOptionText} numberOfLines={1}>{opt.trim()}</Text>
               {correctIdx === i && (
-                <Ionicons name="checkmark-circle" size={IconGrammar.metadata} color={colors.success} aria-hidden={true} />
+                <Ionicons name="checkmark-circle" size={IconGrammar.metadata} color={colors.successText} aria-hidden={true} />
               )}
             </View>
           ))}
@@ -147,7 +147,7 @@ export const QuizPicker = React.memo(function QuizPicker({ onClose, onAddLayer, 
                 accessibilityRole="button"
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <Ionicons name="close-circle" size={IconGrammar.standard} color={colors.danger} aria-hidden={true} />
+                <Ionicons name="close-circle" size={IconGrammar.standard} color={colors.dangerText} aria-hidden={true} />
               </Pressable>
             )}
           </View>

@@ -45,7 +45,9 @@ import {
   type FeedbackAttribution,
 } from '../../services/recommendationFeedbackApi';
 
-const DISCOVER_NUM_COLUMNS = 2;
+// Compact 3-column discovery grammar — matches Browse's compact density
+// and roughly doubles the visible tile count per viewport on phones.
+const DISCOVER_NUM_COLUMNS = 3;
 type DiscoverNavigation = NativeStackNavigationProp<RootStackParamList>;
 
 // ============================================================================
@@ -67,9 +69,10 @@ interface DiscoverCategoryBarProps {
 /**
  * DiscoverCategoryBar — a horizontal scrollable row of category pills that
  * scrolls with the feed (mounted as the FlashList's ListHeaderComponent, not
- * sticky-fixed). Active pill uses `surfaceAlt` with bold text; inactive pills
- * are transparent with muted text. A hairline bottom border separates the bar
- * from the masonry grid.
+ * sticky-fixed). Pills use the canonical discovery-chip grammar — hairline
+ * outline, full radius, inverted fill when active — matching the
+ * UnifiedDiscovery and Home signal rails. A hairline bottom border
+ * separates the bar from the masonry grid.
  *
  * Selecting a pill filters the feed client-side (see getFilterFn in
  * DiscoverScene). "All" is the default and shows every listing. The pills
@@ -104,9 +107,12 @@ function DiscoverCategoryBar({ activeCategory, categories, onSelect }: DiscoverC
               accessibilityLabel={`${category.name} category${category.isPersonalized ? ', personalized' : ''}`}
             >
               {category.isPersonalized && category.id !== 'All' ? (
-                <View style={styles.pillDot} />
+                <View style={[styles.pillDot, isActive && styles.pillDotActive]} />
               ) : null}
-              <Text style={[styles.pillText, isActive && styles.pillTextActive]}>
+              <Text
+                style={[styles.pillText, isActive && styles.pillTextActive]}
+                maxFontSizeMultiplier={2}
+              >
                 {category.name}
               </Text>
             </Pressable>
@@ -131,35 +137,40 @@ function createCategoryBarStyles(colors: ThemeColors) {
       // (Design.md: 44pt interaction band with 32–36pt visible chrome).
       minHeight: 44 },
     pill: {
-      // 36pt visible chrome inside a 44pt interaction band (Design.md).
-      // paddingVertical: Space.sm (8pt) + text line-height yields ~36pt.
+      // Canonical discovery-chip grammar — hairline-outlined full-radius
+      // pill, same as UnifiedDiscovery + Home signal rails. 36pt visible
+      // chrome inside a 44pt interaction band (Design.md).
       minHeight: 36,
       paddingVertical: Space.sm,
-      paddingHorizontal: Space.smMd,
-      borderRadius: Radius.md,
+      paddingHorizontal: Space.md,
+      borderRadius: Radius.full,
       backgroundColor: 'transparent',
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
       flexDirection: 'row',
       alignItems: 'center',
       gap: 5 },
     pillPersonalized: {
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.borderSubtle },
-    pillActive: {
+      borderColor: colors.border,
       backgroundColor: colors.surfaceAlt },
+    pillActive: {
+      backgroundColor: colors.textPrimary,
+      borderColor: colors.textPrimary },
     pillDot: {
       width: 5,
       height: 5,
       borderRadius: 2.5,
       backgroundColor: colors.brand },
+    pillDotActive: {
+      backgroundColor: colors.background },
     pillText: {
       fontSize: TypographyV2.meta.size,
       lineHeight: TypographyV2.meta.lineHeight,
-      fontFamily: FontFamily.regular,
-      color: colors.textMuted,
+      fontFamily: FontFamily.medium,
+      color: colors.textSecondary,
       letterSpacing: TypographyV2.meta.letterSpacing },
     pillTextActive: {
-      fontFamily: FontFamily.bold,
-      color: colors.textPrimary } });
+      color: colors.textInverse } });
 }
 
 export interface DiscoverSceneProps {
@@ -631,7 +642,7 @@ export function DiscoverScene({
         <EmptyState
           density="compact"
           icon="cloud-offline-outline"
-          iconColor={colors.danger}
+          iconColor={colors.dangerText}
           title="Explore unavailable"
           subtitle="We couldn't load discovery right now. Check your connection and try again."
           ctaLabel="Retry"

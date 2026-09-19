@@ -74,7 +74,7 @@ export function GroupMembersAddSection({
       )}
 
       {!isSearching && searchError ? (
-        <Caption color={colors.danger} style={styles.searchStatusText}>
+        <Caption color={colors.dangerText} style={styles.searchStatusText}>
           {isOffline ? 'You are offline. ' : ''}{searchError}
         </Caption>
       ) : null}

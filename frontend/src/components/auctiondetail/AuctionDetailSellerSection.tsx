@@ -90,6 +90,10 @@ export function AuctionDetailSellerSection({
                     try {
                       const conversation = await createDmConversationOnApi({
                         recipientUserId: auction.seller.id,
+                        // Attach the listing so the DM opens with the item
+                        // context card — same contract as the item-detail
+                        // message-seller path.
+                        itemId: auction.listingId,
                       });
                       upsertConversation(conversation);
                       navigation.navigate('Chat', {

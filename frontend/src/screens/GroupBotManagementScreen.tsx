@@ -396,7 +396,7 @@ function AgentRow({
               <AppIcon
                 name={deployed ? 'remove' : 'plus'}
                 size={deployed ? IconSize.sm : IconSize.md}
-                color={deployed ? 'danger' : 'textPrimary'}
+                color={deployed ? 'dangerText' : 'textPrimary'}
                 opticalCenter
                 accessible={false}
               />

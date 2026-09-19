@@ -16,6 +16,7 @@
  */
 const DEFAULT_API_BASE_URL = 'http://localhost:4000';
 const DEFAULT_ENVIRONMENT = 'development';
+const OTA_CERT_PATH = 'keys/update-certificate.pem';
 
 function readEnv(name) {
   const value = process.env[name];
@@ -210,6 +211,33 @@ module.exports = function ({ config }) {
   const otaCodeSigningKey = readEnv('EXPO_PUBLIC_OTA_CODE_SIGNING_KEY');
   const hasOtaCodeSigning = Boolean(otaCodeSigningKey) && !isDevBuild;
 
+  // F18 — OTA signing must fail closed on release profiles. A production EAS
+  // build without the signing key would silently ship a binary that applies
+  // unsigned OTA updates; refuse the build instead. Local `expo start`
+  // (buildProfile undefined) and dev/preview profiles are unaffected.
+  const { existsSync } = require('node:fs');
+  const { join } = require('node:path');
+  if (buildProfile === 'production' && !otaCodeSigningKey) {
+    throw new Error(
+      '[app.config] EAS production build requires EXPO_PUBLIC_OTA_CODE_SIGNING_KEY. ' +
+        'Set it as an EAS secret: eas secret:create --scope project --name EXPO_PUBLIC_OTA_CODE_SIGNING_KEY --value <key>. ' +
+        'Refusing to produce an unsigned release binary.',
+    );
+  }
+  if (hasOtaCodeSigning && !existsSync(join(__dirname, OTA_CERT_PATH))) {
+    throw new Error(
+      `[app.config] OTA code signing is enabled but ${OTA_CERT_PATH} is missing. ` +
+        'Generate the pair: eas update:configure-code-signing --key-output-directory keys ' +
+        '(commit the certificate, keep private-key.pem out of the repo).',
+    );
+  }
+  if (buildProfile === 'preview' && !otaCodeSigningKey) {
+    console.warn(
+      '[app.config] preview build without EXPO_PUBLIC_OTA_CODE_SIGNING_KEY — ' +
+        'OTA updates on this binary are unsigned. Production requires the key.',
+    );
+  }
+
   /**
    * iOS App Transport Security (ATS) with SSL pinning.
    *
@@ -317,7 +345,7 @@ module.exports = function ({ config }) {
       // the EXPO_PUBLIC_OTA_CODE_SIGNING_KEY env var / EAS secret.
       ...(hasOtaCodeSigning
         ? {
-          codeSigningCertificate: 'keys/update-certificate.pem',
+          codeSigningCertificate: OTA_CERT_PATH,
           codeSigningMetadata: { keyid: 'main', alg: 'rsa-v1_5-sha256' },
         }
         : {}),

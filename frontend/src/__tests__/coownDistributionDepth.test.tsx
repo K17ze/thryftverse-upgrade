@@ -498,14 +498,48 @@ describe('CoOwnDistributionCalendar — record/ex/payable dates', () => {
 // B. DistributionHistoryScreen — proceeds waterfall
 // ═══════════════════════════════════════════════════════════════════
 describe('DistributionHistoryScreen — proceeds waterfall', () => {
-  async function renderScreen(items: Array<Record<string, unknown>>) {
+  async function renderScreen(items: Array<Record<string, unknown>>, opts: { expand?: boolean } = {}) {
     fetchCoOwnDistributions.mockResolvedValue({ items, nextCursor: null });
     fetchDripEnrollments.mockResolvedValue([]);
     fetchCoOwnAssetById.mockResolvedValue({ title: 'Fractional Vault Asset' });
     const renderer = renderTree(React.createElement(DistributionHistoryScreen));
     await act(async () => {});
+    if (opts.expand !== false) {
+      // Ledger rows collapse detail behind a tap — expand every row so
+      // the waterfall/date assertions inspect the full disclosure.
+      // findAll matches both the mocked Pressable composite and its host
+      // element (same handler reference), so dedupe by function identity —
+      // calling the same onPress twice toggles the row open then shut.
+      await act(async () => {
+        const handlers = new Set(
+          renderer.root
+            .findAll((n) => typeof n.props.onPress === 'function'
+              && n.props.accessibilityState?.expanded === false)
+            .map((n) => n.props.onPress as () => void),
+        );
+        handlers.forEach((fn) => fn());
+      });
+    }
     return renderer;
   }
+
+  it('collapses ledger detail behind a tap', async () => {
+    const renderer = await renderScreen([makeDistribution()], { expand: false });
+    const text = getAllText(renderer).join('\n');
+    // Row summary renders; the waterfall stays hidden until expanded.
+    expect(text).toContain('Revenue share');
+    expect(text).not.toContain('Proceeds');
+    await act(async () => {
+      const handlers = new Set(
+        renderer.root
+          .findAll((n) => typeof n.props.onPress === 'function'
+            && n.props.accessibilityState?.expanded === false)
+          .map((n) => n.props.onPress as () => void),
+      );
+      handlers.forEach((fn) => fn());
+    });
+    expect(getAllText(renderer).join('\n')).toContain('Proceeds');
+  });
 
   it('renders the honest partial waterfall gross → per unit → units → received', async () => {
     const renderer = await renderScreen([makeDistribution()]);

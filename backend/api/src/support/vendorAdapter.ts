@@ -294,6 +294,26 @@ export async function markOutboxFailed(
   );
 }
 
+/**
+ * Dead-letters an outbox entry after a permanent (non-retryable) failure —
+ * e.g. the vendor rejected the payload with a 4xx. The entry is removed
+ * from the retry pool but keeps last_error for manual review (F16).
+ */
+export async function markOutboxSkipped(
+  db: Pool,
+  outboxId: string,
+  reason: string,
+): Promise<void> {
+  await db.query(
+    `
+      UPDATE support_vendor_outbox
+      SET state = 'skipped', last_error = $2, attempts = attempts + 1, updated_at = NOW()
+      WHERE id = $1
+    `,
+    [outboxId, reason],
+  );
+}
+
 // ── Public API: Inbox ──
 
 /**

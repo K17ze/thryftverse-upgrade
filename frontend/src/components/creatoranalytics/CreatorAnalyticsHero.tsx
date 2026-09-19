@@ -75,11 +75,11 @@ export function CreatorAnalyticsHero({
                 <Ionicons
                   name={viewsUp ? 'arrow-up' : 'arrow-down'}
                   size={11}
-                  color={viewsUp ? colors.success : colors.danger}
+                  color={viewsUp ? colors.successText : colors.dangerText}
                 />
                 <Text style={[
                   styles.heroDeltaText,
-                  { color: viewsUp ? colors.success : colors.danger },
+                  { color: viewsUp ? colors.successText : colors.dangerText },
                 ]}>
                   {viewsDelta}
                 </Text>

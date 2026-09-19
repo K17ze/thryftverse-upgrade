@@ -331,7 +331,7 @@ function BotRow({
             accessibilityRole="button"
             accessibilityLabel="Delete agent"
           >
-            <AppIcon name="trash" size={IconSize.md} color="danger" opticalCenter accessible={false} />
+            <AppIcon name="trash" size={IconSize.md} color="dangerText" opticalCenter accessible={false} />
           </AnimatedPressable>
         </View>
       </View>

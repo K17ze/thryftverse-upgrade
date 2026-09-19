@@ -284,7 +284,7 @@ export default function MessageRequestsScreen() {
               accessibilityState={{ busy: isPending && pendingAction === 'block', disabled: isPending || isOffline }}
               style={styles.safetyLink}
             >
-              <AppIcon name="ban" size="micro" color="danger" accessible={false} />
+              <AppIcon name="ban" size="micro" color="dangerText" accessible={false} />
               <Text style={styles.safetyLinkTextDanger}>{t('common.block')}</Text>
             </AnimatedPressable>
             <View style={styles.safetyDivider} />
@@ -506,7 +506,7 @@ function createStyles(colors: ThemeColors) {
     safetyLinkTextDanger: {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.bodyStrong.fontFamily,
-      color: colors.danger },
+      color: colors.dangerText },
     safetyLinkText: {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.bodyStrong.fontFamily,

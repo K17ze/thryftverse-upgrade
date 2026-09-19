@@ -62,6 +62,19 @@ export function useLiveStreamSession(sessionId: string) {
 
         setStream(connected);
         setViewerCount(connected.viewerCount);
+
+        // Non-live sessions render their own states — an ended session gets
+        // the ended screen (no summary: stats only exist for a stream the
+        // viewer actually watched), a scheduled one the scheduled state.
+        if (connected.status === 'ended') {
+          setConnectionState('ended');
+          return;
+        }
+        if (connected.status === 'scheduled') {
+          setConnectionState('scheduled');
+          return;
+        }
+
         const lot = connected.lots[connected.currentLotIndex] ?? null;
         setCurrentLot(lot);
         setConnectionState('live');
@@ -141,14 +154,23 @@ export function useLiveStreamSession(sessionId: string) {
             closesAt?: string | null;
             extensionCount?: number;
             highBidMinor?: number;
+            highBidderId?: string | null;
+            winnerId?: string | null;
+            orderId?: string | null;
+          } | null;
+          // lot.opened carries the immutable listing snapshot (title/image).
+          const snapshot = (raw.snapshot ?? null) as {
+            title?: string;
+            imageUrl?: string | null;
           } | null;
           setCurrentLot((prev) => {
             if (!prev) return prev;
             const lotId = dto?.id ?? (raw.lotId as string | undefined);
             const listingId = dto?.listingId ?? (raw.listingId as string | undefined);
-            if (listingId !== prev.listingId && lotId !== prev.id) return prev;
+            if (listingId !== prev.listingId && lotId !== prev.id && lotId !== prev.lotId) return prev;
             const next = { ...prev };
             if (dto) {
+              if (dto.id) next.lotId = dto.id;
               if (dto.closesAt !== undefined) next.closesAt = dto.closesAt;
               if (typeof dto.extensionCount === 'number') {
                 next.extensionCount = dto.extensionCount;
@@ -158,6 +180,7 @@ export function useLiveStreamSession(sessionId: string) {
               if (typeof dto.highBidMinor === 'number' && dto.highBidMinor > 0) {
                 next.currentPrice = Math.max(prev.currentPrice, dto.highBidMinor / 100);
               }
+              if (dto.highBidderId !== undefined) next.highBidderId = dto.highBidderId;
               if (dto.status === 'open' || dto.status === 'closing') {
                 next.status = 'active';
               } else if (dto.status === 'sold') {
@@ -166,6 +189,14 @@ export function useLiveStreamSession(sessionId: string) {
                 next.status = 'passed';
               }
             }
+            // lot.sold carries winnerId both inside the lot dto and at the
+            // payload top level; the order link arrives on lot.order_created.
+            const winnerId = dto?.winnerId ?? (raw.winnerId as string | null | undefined);
+            if (winnerId !== undefined) next.winnerId = winnerId;
+            const orderId = dto?.orderId ?? (raw.orderId as string | null | undefined);
+            if (orderId) next.orderId = orderId;
+            if (snapshot?.title) next.title = snapshot.title;
+            if (snapshot?.imageUrl) next.imageUri = snapshot.imageUrl;
             if (typeof raw.closesAt === 'string' || raw.closesAt === null) {
               next.closesAt = raw.closesAt as string | null;
             }

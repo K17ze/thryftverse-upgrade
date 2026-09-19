@@ -74,11 +74,11 @@ export function ReturnCaseCard({
         ? 'shield-outline'
         : 'time-outline';
   const statusColor = isTerminal
-    ? colors.success
+    ? colors.successText
     : returnCase.status === 'rejected'
-      ? colors.danger
+      ? colors.dangerText
       : returnCase.status === 'appealed'
-        ? colors.warning
+        ? colors.warningText
         : colors.brand;
 
   return (

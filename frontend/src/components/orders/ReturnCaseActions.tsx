@@ -110,8 +110,8 @@ export function ReturnCaseActions({ returnCase, role, isSubmitting, onAction, fo
       accessibilityLabel={label}
       accessibilityState={{ busy: isSubmitting }}
     >
-      <Ionicons name={icon} size={18} color={danger ? colors.danger : colors.brand} aria-hidden={true} />
-      <Text style={[styles.actionText, { color: danger ? colors.danger : colors.brand }]}>{label}</Text>
+      <Ionicons name={icon} size={18} color={danger ? colors.dangerText : colors.brand} aria-hidden={true} />
+      <Text style={[styles.actionText, { color: danger ? colors.dangerText : colors.brand }]}>{label}</Text>
     </Pressable>
   );
 

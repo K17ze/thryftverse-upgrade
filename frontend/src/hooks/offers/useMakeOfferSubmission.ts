@@ -32,10 +32,12 @@ import { createDmConversationOnApi } from '../../services/chatApi';
 export interface UseMakeOfferSubmissionParams {
   navigation: NativeStackScreenProps<RootStackParamList, 'MakeOffer'>['navigation'];
   itemId: string;
+  /** Live GBP listing price (fetched); falls back to the route param. */
   price: number;
   title: string;
   isCounterOffer: boolean;
   previousOffer: number | undefined;
+  counterRound: number;
   parentOfferId: string | undefined;
   routeConversationId: string | undefined;
   listing: any;
@@ -74,6 +76,7 @@ export function useMakeOfferSubmission(params: UseMakeOfferSubmissionParams): Ma
     title,
     isCounterOffer,
     previousOffer,
+    counterRound,
     parentOfferId,
     routeConversationId,
     listing,
@@ -92,6 +95,9 @@ export function useMakeOfferSubmission(params: UseMakeOfferSubmissionParams): Ma
   const [expiryHours, setExpiryHours] = useState(48);
   const [showReview, setShowReview] = useState(false);
   const idempotencyKeyRef = useRef<string | null>(null);
+  // Hard re-entrancy guard — isSubmitting state is async and the confirm
+  // button can be double-tapped inside a single frame.
+  const submittingRef = useRef(false);
   const { reconcile } = useUnknownOutcomeReconciliation();
 
   const handleOfferChange = (value: string) => {
@@ -108,15 +114,16 @@ export function useMakeOfferSubmission(params: UseMakeOfferSubmissionParams): Ma
     if (numericOfferGbp > price * 2) {
       return t('makeOffer.error.tooHigh');
     }
-    const sellerMinOffer = listing?.minimumOfferGbp ?? listing?.minimum_offer_gbp ?? 0;
-    if (sellerMinOffer > 0 && numericOfferGbp < sellerMinOffer) {
-      return t('makeOffer.error.sellerMinOffer', { amount: formatFromFiat(sellerMinOffer, 'GBP') });
+    // Server counter cap is round 10 (POST /offers/:id/counter → 409 past
+    // it) — fail here with an honest message instead of a dead submission.
+    if (isCounterOffer && counterRound + 1 > 10) {
+      return t('makeOffer.error.counterDepthExceeded');
     }
     if (!listing?.sellerId) {
       return t('makeOffer.error.couldNotLoadSeller');
     }
     return null;
-  }, [numericOffer, numericOfferGbp, price, listing, formatFromFiat]);
+  }, [numericOffer, numericOfferGbp, price, listing, formatFromFiat, isCounterOffer, counterRound]);
 
   const handleReviewOffer = useCallback(() => {
     const validationError = validateOffer();
@@ -166,6 +173,9 @@ export function useMakeOfferSubmission(params: UseMakeOfferSubmissionParams): Ma
   }, [itemId, routeConversationId, navigation, upsertConversation, show]);
 
   const handleSendOffer = async () => {
+    // Re-entrancy: a double-tap inside one frame or a retry while the
+    // reconciliation poll is still running must not submit twice.
+    if (submittingRef.current) return;
     // The review step already validated, but re-check defensively.
     const validationError = validateOffer();
     if (validationError) {
@@ -174,6 +184,7 @@ export function useMakeOfferSubmission(params: UseMakeOfferSubmissionParams): Ma
       return;
     }
 
+    submittingRef.current = true;
     setIsSubmitting(true);
     try {
       // Persist the offer server-side so expiry, accept/decline and counter
@@ -272,8 +283,16 @@ export function useMakeOfferSubmission(params: UseMakeOfferSubmissionParams): Ma
         ? t('makeOffer.error.offline')
         : err instanceof Error ? err.message : t('makeOffer.error.couldNotSubmit');
       setErrorMsg(message);
+      // Deterministic failure (4xx, validation, conflict): the key's hash
+      // no longer represents intent — regenerate so a retry after editing
+      // the amount doesn't hit IDEMPOTENCY_PAYLOAD_MISMATCH. Network
+      // failures keep the key so a resend reconciles as the same offer.
+      if (!isNetworkError) {
+        idempotencyKeyRef.current = null;
+      }
       // Stay on review step so the user can retry without re-entering details.
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };

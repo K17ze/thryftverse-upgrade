@@ -23,7 +23,9 @@
 
 import { getDb, isDbAvailable } from './db';
 import { fetchJson } from '../lib/apiClient';
-import type { MoodboardOperationResponse } from '../services/moodboardApi';
+import type {
+  MoodboardOperationResponse,
+  MoodboardOperationType } from '../services/moodboardApi';
 
 interface MoodboardOutboxRow {
   seq: number;
@@ -43,7 +45,8 @@ interface MoodboardOutboxRow {
 export async function enqueueMoodboardOperation(input: {
   operationId: string;
   boardId: string;
-  operation: string;
+  /** Must match the backend `submitOperationSchema` enum or the op is rejected. */
+  operation: MoodboardOperationType;
   payload: Record<string, unknown>;
   baseRev: number;
 }): Promise<void> {
@@ -75,11 +78,31 @@ export async function removeMoodboardOutboxOperation(operationId: string): Promi
 }
 
 /**
- * Drain pending moodboard outbox rows to the operations endpoint.
- * Returns the number of rows successfully pushed.
+ * Discard all not-yet-applied moodboard outbox rows for one board. Used when
+ * the queued intent is superseded — e.g. the user resolved a conflict by
+ * keeping the server version, or a local snapshot is re-applied wholesale.
  */
-export async function drainMoodboardOutbox(): Promise<{ pushed: number; conflicts: number; errors: number }> {
-  if (!isDbAvailable()) return { pushed: 0, conflicts: 0, errors: 0 };
+export async function clearMoodboardOutboxForBoard(boardId: string): Promise<void> {
+  if (!isDbAvailable()) return;
+  const db = await getDb();
+  db.execute(
+    `DELETE FROM mutation_outbox
+     WHERE entity_type = 'moodboard' AND entity_id = ?
+       AND state IN ('pending', 'pushing', 'conflict', 'failed');`,
+    boardId,
+  );
+}
+
+/**
+ * Drain pending moodboard outbox rows to the operations endpoint.
+ * Returns per-outcome counts so the caller can surface honest status.
+ *
+ * After each applied/duplicate row the remaining queued rows for that board
+ * are rebased onto the new revision — otherwise a multi-op queue would
+ * conflict against itself on the second op.
+ */
+export async function drainMoodboardOutbox(): Promise<{ pushed: number; conflicts: number; forbidden: number; errors: number }> {
+  if (!isDbAvailable()) return { pushed: 0, conflicts: 0, forbidden: 0, errors: 0 };
   const db = await getDb();
   const result = db.execute(
     `SELECT seq, operation_id, entity_id, operation, payload_json, base_rev, state, attempt_count
@@ -90,6 +113,7 @@ export async function drainMoodboardOutbox(): Promise<{ pushed: number; conflict
 
   let pushed = 0;
   let conflicts = 0;
+  let forbidden = 0;
   let errors = 0;
 
   for (let i = 0; i < result.rows.length; i++) {
@@ -131,6 +155,15 @@ export async function drainMoodboardOutbox(): Promise<{ pushed: number; conflict
       if (response.outcome === 'applied' || response.outcome === 'duplicate') {
         db.execute(`DELETE FROM mutation_outbox WHERE seq = ?;`, op.seq);
         pushed++;
+        // Rebase the rest of this board's queue onto the new revision so a
+        // multi-op drain does not conflict against itself.
+        db.execute(
+          `UPDATE mutation_outbox SET base_rev = ?
+           WHERE entity_type = 'moodboard' AND entity_id = ? AND state = 'pending' AND seq > ?;`,
+          response.revision,
+          op.entityId,
+          op.seq,
+        );
       } else if (response.outcome === 'conflict') {
         db.execute(
           `UPDATE mutation_outbox
@@ -152,9 +185,27 @@ export async function drainMoodboardOutbox(): Promise<{ pushed: number; conflict
           op.attemptCount + 1,
           op.seq,
         );
-        errors++;
+        forbidden++;
       }
     } catch (error) {
+      const status = (error as { status?: number }).status;
+      if (typeof status === 'number' && status >= 400 && status < 500) {
+        // Deterministic rejection (validation, gone, conflict-class 4xx) —
+        // retrying can never succeed. Mark the row failed so it cannot
+        // poison the queue, then continue draining the rows behind it.
+        // Per apiClient's contract, 4xx responses are not retried.
+        db.execute(
+          `UPDATE mutation_outbox
+           SET state = 'failed', attempt_count = ?, last_error = ?,
+           updated_at = datetime('now')
+           WHERE seq = ?;`,
+          op.attemptCount + 1,
+          `rejected ${status}: ${error instanceof Error ? error.message : String(error)}`,
+          op.seq,
+        );
+        errors++;
+        continue;
+      }
       // Network / server error — leave the row as `pending` for the next run.
       db.execute(
         `UPDATE mutation_outbox
@@ -171,7 +222,7 @@ export async function drainMoodboardOutbox(): Promise<{ pushed: number; conflict
     }
   }
 
-  return { pushed, conflicts, errors };
+  return { pushed, conflicts, forbidden, errors };
 }
 
 /**

@@ -388,7 +388,7 @@ export function CutoutPreviewSheet({
 
   // ── Brush colour for the current mode ─────────────────────────────
   const currentBrushColor =
-    brushMode === 'erase' ? colors.danger : colors.success;
+    brushMode === 'erase' ? colors.dangerText : colors.successText;
 
   // ── Mode button config ────────────────────────────────────────────
   const modeButtons: ModeButton[] = [

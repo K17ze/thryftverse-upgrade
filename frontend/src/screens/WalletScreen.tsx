@@ -66,6 +66,7 @@ export default function WalletScreen({ navigation }: Props) {
     balance,
     availableFiatBalance,
     sellerBalances,
+    sellerBalancesError,
     isLoading,
     isError,
     refreshing,
@@ -179,6 +180,13 @@ export default function WalletScreen({ navigation }: Props) {
       sellerBalances.pendingGbp > 0 ||
       sellerBalances.heldInReserveGbp > 0);
   if (balance.available === 0 && balance.reservedForOrders === 0 && !hasSellerFunds) {
+    // Seller-balance fetch failed — a real-balance seller must not land on
+    // the empty state and read their funds as gone. Offer error + retry.
+    if (sellerBalancesError) {
+      return (
+        <WalletErrorScreen onBack={handleBack} onRetry={loadBalance} />
+      );
+    }
     return (
       <WalletEmptyScreen onBack={handleBack} onAddMoney={handleAddMoney}>
         {addMoneySheet}
@@ -250,7 +258,7 @@ export default function WalletScreen({ navigation }: Props) {
         {hasPendingAttention && !balanceHidden && (
           <FlagshipNavigationRow
             icon="time-outline"
-            iconColor={colors.warning}
+            iconColor={colors.warningText}
             title={pendingAttentionTitle}
             onPress={handleViewEarnings}
             style={{ marginTop: Space.md }}

@@ -382,7 +382,7 @@ export function LookMediaComposer({
                     accessibilityRole="button"
                     accessibilityLabel="Remove tag"
                   >
-                    <Ionicons name="close-circle" size={20} color={colors.danger} />
+                    <Ionicons name="close-circle" size={20} color={colors.dangerText} />
                   </Pressable>
                 </View>
               )}

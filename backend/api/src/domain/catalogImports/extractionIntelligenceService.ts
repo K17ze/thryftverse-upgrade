@@ -37,6 +37,7 @@ import type { PoolClient } from 'pg';
 import { db } from '../../db/pool.js';
 import { logger } from '../../lib/logger.js';
 import { CatalogImportError } from './catalogImportTypes.js';
+import type { BatchState } from './catalogImportTypes.js';
 import type {
   ExtractionRunRow,
   FieldCandidateRow,
@@ -59,6 +60,24 @@ import {
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
+
+/**
+ * Mirror of catalogImportService.BATCH_FIELD_EDITABLE_STATES — duplicated
+ * locally rather than imported so this module doesn't pull the queue
+ * graph (BullMQ instances) into its module scope. Keep in sync.
+ */
+const FIELD_EDITABLE_BATCH_STATES: readonly BatchState[] = [
+  'created',
+  'discovering',
+  'hydrating',
+  'ingesting_media',
+  'normalising',
+  'awaiting_operator',
+  'awaiting_seller',
+  'paused_rate_limit',
+  'paused_reauth',
+  'failed_recoverable',
+];
 
 /** The model_artifacts task identifier for catalogue import extraction. */
 export const EXTRACTION_MODEL_TASK = 'catalogue_import' as const;
@@ -883,6 +902,25 @@ export class ExtractionIntelligenceService {
         throw new CatalogImportError(
           'approval_revision_mismatch',
           'The item has been modified since you last read it. Please refresh and try again.',
+        );
+      }
+
+      // Editable freeze: field decisions mutate normalised_fields, so they
+      // must obey the same rule as direct edits — once the batch is approved
+      // or publishing, the published content is fixed. Lock the batch row so
+      // an approve racing this decision serializes against it.
+      const batchResult = await client.query<{ status: BatchState }>(
+        `SELECT status FROM catalog_import_batches WHERE id = $1 FOR UPDATE`,
+        [item.batch_id],
+      );
+      if (
+        !batchResult.rows[0] ||
+        !FIELD_EDITABLE_BATCH_STATES.includes(batchResult.rows[0].status)
+      ) {
+        await client.query('COMMIT');
+        throw new CatalogImportError(
+          'invalid_state_transition',
+          'This import can no longer be edited — it has already been approved or published.',
         );
       }
 

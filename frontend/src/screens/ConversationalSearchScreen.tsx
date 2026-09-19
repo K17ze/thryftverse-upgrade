@@ -192,7 +192,6 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
       if (filters.brands?.length) updates.brands = filters.brands;
       if (filters.sizes?.length) updates.sizes = filters.sizes;
       if (filters.conditions?.length) updates.condition = filters.conditions[0] as any;
-      if (filters.sustainableOnly) updates.sustainableOnly = true;
       // Use the first category as the search query so Browse's text filter
       // catches category-relevant listings.
       const queryText =
@@ -257,13 +256,11 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
       if (filters.priceRange) {
         const { min, max } = filters.priceRange;
         let priceLabel = t('filters.priceLabel');
-        if (min !== undefined && max !== undefined) priceLabel += `${formatFromFiat(min, 'GBP')}–${formatFromFiat(max, 'GBP')}`;
-        else if (max !== undefined) priceLabel += t('filters.priceUnder', { value: formatFromFiat(max, 'GBP') });
-        else if (min !== undefined) priceLabel += t('filters.priceOver', { value: formatFromFiat(min, 'GBP') });
+        const fiat = { displayMode: 'fiat' as const };
+        if (min !== undefined && max !== undefined) priceLabel += `${formatFromFiat(min, 'GBP', fiat)}–${formatFromFiat(max, 'GBP', fiat)}`;
+        else if (max !== undefined) priceLabel += t('filters.priceUnder', { value: formatFromFiat(max, 'GBP', fiat) });
+        else if (min !== undefined) priceLabel += t('filters.priceOver', { value: formatFromFiat(min, 'GBP', fiat) });
         chips.push({ label: priceLabel, key: 'price' });
-      }
-      if (filters.sustainableOnly) {
-        chips.push({ label: t('filters.sustainableOnly'), key: 'sust' });
       }
       return chips;
     },

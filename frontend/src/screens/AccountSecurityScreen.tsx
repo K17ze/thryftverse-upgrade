@@ -346,7 +346,7 @@ export default function AccountSecurityScreen({ navigation }: Props) {
             title="Sign out other devices"
             subtitle={`${otherSessions.length} other session${otherSessions.length === 1 ? '' : 's'}`}
             icon="log-out-outline"
-            iconColor={colors.danger}
+            iconColor={colors.dangerText}
             danger
             onPress={handleRevokeOthers}
             separator={false}
@@ -462,7 +462,7 @@ function SessionRow({
         <Text style={[styles.sessionDevice, { color: colors.textPrimary }]}>
           {session.deviceName || session.platform || 'Unknown device'}
           {session.isCurrent && (
-            <Text style={[styles.sessionCurrent, { color: colors.success }]}>  · This device</Text>
+            <Text style={[styles.sessionCurrent, { color: colors.successText }]}>  · This device</Text>
           )}
         </Text>
         <Text style={[styles.sessionMeta, { color: colors.textSecondary }]}>

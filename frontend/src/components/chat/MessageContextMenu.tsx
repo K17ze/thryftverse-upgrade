@@ -174,10 +174,10 @@ export function MessageContextMenu({
                   <Ionicons
                     name={action.icon}
                     size={22}
-                    color={action.destructive ? colors.danger : colors.textPrimary}
+                    color={action.destructive ? colors.dangerText : colors.textPrimary}
                   />
                   <BodyEmphasis
-                    color={action.destructive ? colors.danger : colors.textPrimary}
+                    color={action.destructive ? colors.dangerText : colors.textPrimary}
                     style={styles.actionLabel}
                   >
                     {action.label}

@@ -79,14 +79,14 @@ export function PaymentStateBanner({
         };
       case 'payment_succeeded':
         return {
-          accentColor: colors.success,
-          icon: <Ionicons name="checkmark-circle" size={16} color={colors.success} aria-hidden={true} />,
+          accentColor: colors.successText,
+          icon: <Ionicons name="checkmark-circle" size={16} color={colors.successText} aria-hidden={true} />,
           showDot: false,
         };
       case 'payment_failed':
         return {
-          accentColor: colors.danger,
-          icon: <Ionicons name="alert-circle" size={16} color={colors.danger} aria-hidden={true} />,
+          accentColor: colors.dangerText,
+          icon: <Ionicons name="alert-circle" size={16} color={colors.dangerText} aria-hidden={true} />,
           showDot: false,
         };
       case 'payment_pending':
@@ -102,8 +102,8 @@ export function PaymentStateBanner({
         // pulsing dot, so the user can read the recovery message without
         // motion competing for attention (audit F11/F15).
         return {
-          accentColor: colors.warning,
-          icon: <Ionicons name="sync-outline" size={16} color={colors.warning} aria-hidden={true} />,
+          accentColor: colors.warningText,
+          icon: <Ionicons name="sync-outline" size={16} color={colors.warningText} aria-hidden={true} />,
           showDot: false,
         };
       default:
@@ -144,9 +144,9 @@ export function PaymentStateBanner({
               {
                 color:
                   stage === 'payment_failed'
-                    ? colors.danger
+                    ? colors.dangerText
                     : stage === 'payment_succeeded'
-                      ? colors.success
+                      ? colors.successText
                       : stage === 'unknown_outcome'
                         ? colors.textPrimary
                         : colors.textSecondary,

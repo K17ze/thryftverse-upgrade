@@ -275,7 +275,7 @@ export function createReportScreenStyles(colors: ThemeColors) {
     maxWidth: 300 },
   blockedNoteText: {
     flex: 1,
-    color: colors.success,
+    color: colors.successText,
     fontFamily: Typography.family.medium,
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight + 2 },

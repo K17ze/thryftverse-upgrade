@@ -23,7 +23,10 @@ import type { CommerceDetailSectionVariant } from './types';
  * Optional `trailing` slot renders a quiet action (e.g. "See all").
  */
 export interface CommerceDetailSectionProps {
-  label: string;
+  /** Section heading text. Omit when the disclosure row above already
+   * names the section (avoids a duplicated heading inside the expanded
+   * block). */
+  label?: string;
   /** Optional trailing quiet action (e.g. "See all"). */
   trailing?: React.ReactNode;
   children?: React.ReactNode;
@@ -79,16 +82,20 @@ export function CommerceDetailSection({
       {showDivider ? (
         <View style={[styles.divider, { backgroundColor: colors.borderSubtle }]} />
       ) : null}
-      <View style={styles.header}>
-        <Text
-          style={labelStyle}
-          accessibilityRole="header"
-          accessibilityLabel={accessibilityLabel ?? label}
-        >
-          {label}
-        </Text>
-        {trailing}
-      </View>
+      {label || trailing ? (
+        <View style={styles.header}>
+          {label ? (
+            <Text
+              style={labelStyle}
+              accessibilityRole="header"
+              accessibilityLabel={accessibilityLabel ?? label}
+            >
+              {label}
+            </Text>
+          ) : null}
+          {trailing}
+        </View>
+      ) : null}
       {children}
     </View>
   );

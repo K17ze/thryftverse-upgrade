@@ -34,6 +34,11 @@ const DEVELOPMENT_DEFAULTS: Readonly<Record<string, readonly string[]>> = {
     "replace_with_long_random_secret",
   ],
   ONEZE_FX_PROVIDER_API_KEY: ["replace_with_live_fx_provider_key"],
+  ENCRYPTION_KEY: [
+    "dev-only-provider-key-encryption-secret-32b!",
+    "fallback-dev-key-not-for-production-32b",
+    "replace_with_long_random_secret",
+  ],
   S3_ACCESS_KEY: ["minioadmin", "minio_service_user"],
   S3_SECRET_KEY: ["minioadmin", "replace_with_strong_password"],
 };
@@ -58,6 +63,7 @@ const REQUIRED_PRODUCTION_VALUES = [
   "API_SECURITY_ADMIN_TOKEN",
   "API_INTERNAL_SERVICE_TOKEN",
   "DECISION_SERVICE_TOKEN",
+  "ENCRYPTION_KEY",
   "ONEZE_ATTESTATION_SIGNING_SECRET",
   "ONEZE_FX_PROVIDER_URL",
   "ONEZE_FX_PROVIDER_API_KEY",
@@ -73,6 +79,7 @@ const MINIMUM_SECRET_LENGTHS: Readonly<Record<string, number>> = {
   API_SECURITY_ADMIN_TOKEN: 32,
   API_INTERNAL_SERVICE_TOKEN: 32,
   DECISION_SERVICE_TOKEN: 32,
+  ENCRYPTION_KEY: 32,
   KEY_SERVICE_CLIENT_TOKEN: 32,
   KEY_SERVICE_ADMIN_TOKEN: 32,
   ONEZE_ATTESTATION_SIGNING_SECRET: 32,

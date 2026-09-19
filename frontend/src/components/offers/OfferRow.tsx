@@ -29,14 +29,15 @@ export function effectiveOfferStatus(offer: ListingOffer, nowMs: number): Listin
 /**
  * Actions derived from the server's actual authorization rules
  * (POST /offers/:id/accept|decline|cancel|counter):
- *   - Only the seller can accept or decline.
- *   - Only the buyer can cancel.
+ *   - The participant who did NOT author the pending offer may accept —
+ *     the seller accepts a buyer's offer; the buyer accepts a seller's
+ *     counter (`offered_by_user_id !== actor` is the server's own check).
+ *   - Only the seller can decline; only the buyer can cancel — cancel is
+ *     the buyer's exit whether or not the pending offer is theirs. Decline
+ *     on the seller's OWN pending counter retracts it (the server's only
+ *     check is `seller_id === actor`).
  *   - Either participant can counter, but only when the pending offer was
- *     made by the OTHER party (`offeredByUserId !== actor`).
- *
- * The legacy client-side `offerStateMachine.getQuickActions` is deliberately
- * not used here — it predates the server contract and would grant the buyer
- * an "accept" the server always rejects.
+ *     made by the OTHER party.
  */
 export function resolveOfferActions(
   offer: ListingOffer,
@@ -49,8 +50,9 @@ export function resolveOfferActions(
   const isBuyer = offer.buyerId === currentUserId;
   const ownMove = offer.offeredByUserId === currentUserId;
   if (isSeller && !ownMove) return ['accept', 'counter', 'decline'];
-  if (isBuyer && !ownMove) return ['counter', 'cancel'];
+  if (isBuyer && !ownMove) return ['accept', 'counter', 'cancel'];
   if (isBuyer && ownMove) return ['cancel'];
+  if (isSeller && ownMove) return ['decline'];
   return [];
 }
 
@@ -72,14 +74,15 @@ export interface OfferRowProps {
   onAction: (offer: ListingOffer, action: OfferRowAction) => void;
 }
 
-function actionLabel(action: OfferRowAction): string {
+function actionLabel(action: OfferRowAction, ownMove: boolean): string {
   switch (action) {
     case 'accept':
       return t('offers.action.accept');
     case 'counter':
       return t('offers.action.counter');
     case 'decline':
-      return t('offers.action.decline');
+      // Retracting your own counter is a withdrawal, not a rejection.
+      return ownMove ? t('offers.action.withdraw') : t('offers.action.decline');
     case 'cancel':
       return t('offers.action.cancel');
   }
@@ -109,6 +112,7 @@ export function OfferRow({
   const status = effectiveOfferStatus(offer, nowMs);
   const tone = statusTone(status, colors);
   const actions = resolveOfferActions(offer, currentUserId, nowMs);
+  const ownMove = offer.offeredByUserId === currentUserId;
   const amount = formatFromFiat(offer.offerPriceGbp, 'GBP', { displayMode: 'fiat' });
   const counterpartyWord = direction === 'received' ? t('offers.row.from') : t('offers.row.to');
   const timeLeft = status === 'pending' ? formatTimeLeft(offer.expiresAt, nowMs) : null;
@@ -172,7 +176,7 @@ export function OfferRow({
               onPress={() => onAction(offer, action)}
               disabled={isActing}
               accessibilityRole="button"
-              accessibilityLabel={`${actionLabel(action)} — ${listingTitle ?? t('offers.row.listingFallback')}, ${amount}`}
+              accessibilityLabel={`${actionLabel(action, ownMove)} — ${listingTitle ?? t('offers.row.listingFallback')}, ${amount}`}
               accessibilityState={{ disabled: isActing, busy: isActing }}
             >
               <Text
@@ -183,7 +187,7 @@ export function OfferRow({
                   (action === 'decline' || action === 'cancel') && { color: colors.textSecondary },
                 ]}
               >
-                {actionLabel(action)}
+                {actionLabel(action, ownMove)}
               </Text>
             </Pressable>
           ))}
@@ -201,11 +205,11 @@ function statusTone(
 ): { word: string; color: string; icon: keyof typeof Ionicons.glyphMap } {
   switch (status) {
     case 'accepted':
-      return { word: t('offers.status.accepted'), color: colors.success, icon: 'checkmark-circle-outline' };
+      return { word: t('offers.status.accepted'), color: colors.successText, icon: 'checkmark-circle-outline' };
     case 'declined':
       return { word: t('offers.status.declined'), color: colors.textMuted, icon: 'close-circle-outline' };
     case 'expired':
-      return { word: t('offers.status.expired'), color: colors.warning, icon: 'time-outline' };
+      return { word: t('offers.status.expired'), color: colors.warningText, icon: 'time-outline' };
     case 'cancelled':
       return { word: t('offers.status.cancelled'), color: colors.textMuted, icon: 'remove-circle-outline' };
     case 'countered':
@@ -230,8 +234,8 @@ function formatTimeLeft(expiresAt: string, nowMs: number): string {
 function expiryToneColor(expiresAt: string, nowMs: number, colors: ThemeColors): string {
   const ms = Date.parse(expiresAt) - nowMs;
   if (!Number.isFinite(ms) || ms <= 0) return colors.textMuted;
-  if (ms <= 60 * 60 * 1000) return colors.danger;
-  if (ms <= 12 * 60 * 60 * 1000) return colors.warning;
+  if (ms <= 60 * 60 * 1000) return colors.dangerText;
+  if (ms <= 12 * 60 * 60 * 1000) return colors.warningText;
   return colors.textMuted;
 }
 

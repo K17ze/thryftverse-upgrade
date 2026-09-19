@@ -583,7 +583,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
         {/* ── Error state ── */}
         {phase === 'error' && error && (
           <View style={styles.stateBlock}>
-            <Text style={[styles.stateTitle, { color: colors.danger }]}>Something went wrong</Text>
+            <Text style={[styles.stateTitle, { color: colors.dangerText }]}>Something went wrong</Text>
             <Text style={[styles.stateBody, { color: colors.textSecondary }]}>{error}</Text>
             <RetryLink label="Try again" onPress={handleRetry} colors={colors} styles={styles} />
           </View>
@@ -592,7 +592,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
         {/* ── Outcome unknown — network dropped during submit ── */}
         {phase === 'outcome_unknown' && (
           <View style={styles.stateBlock}>
-            <Ionicons name="help-circle-outline" size={24} color={colors.warning} />
+            <Ionicons name="help-circle-outline" size={24} color={colors.warningText} />
             <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>Check result</Text>
             <Text style={[styles.stateBody, { color: colors.textSecondary }]}>
               {error ?? 'The connection dropped during enhancement. The job may still be processing.'}
@@ -837,8 +837,8 @@ interface OfflineNoticeProps {
 function OfflineNotice({ colors, styles }: OfflineNoticeProps) {
   return (
     <View style={[styles.offlineNotice, { backgroundColor: colors.dangerSubtle }]}>
-      <Ionicons name="cloud-offline-outline" size={16} color={colors.danger} />
-      <Text style={[styles.offlineNoticeText, { color: colors.danger }]}>
+      <Ionicons name="cloud-offline-outline" size={16} color={colors.dangerText} />
+      <Text style={[styles.offlineNoticeText, { color: colors.dangerText }]}>
         Offline — enhancement requires a connection
       </Text>
     </View>

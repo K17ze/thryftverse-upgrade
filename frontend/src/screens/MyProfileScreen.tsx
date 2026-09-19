@@ -87,7 +87,8 @@ export default function MyProfileScreen() {
     looksLoading,
     looksError,
     loadMyLooks,
-    highlights } = useMyProfileData(currentUser?.id);
+    highlights,
+    myStorefront } = useMyProfileData(currentUser?.id);
 
   // Profile media — display priority chain and upload state passthrough.
   // Avatar/cover picking lives in Edit Profile; this surface is display-only.
@@ -260,13 +261,12 @@ export default function MyProfileScreen() {
             sellerTrust={sellerTrust}
             responseTimeLabel={sellerTrust?.responseTimeLabel ?? null}
             followerCount={followCounts.followerCount}
-            followingCount={followCounts.followingCount}
+            listingCount={allOwnedListings.length}
             followCountsStatus={followCountsStatus}
             onEditProfile={() => navigation.navigate('EditProfile', {})}
-            onShare={handleShare}
             onPressSold={() => { haptic.light(); navigation.navigate('MyOrders'); }}
             onPressFollowers={() => { haptic.light(); navigation.navigate('ConnectionList', { userId: currentUser!.id, mode: 'followers' }); }}
-            onPressFollowing={() => { haptic.light(); navigation.navigate('ConnectionList', { userId: currentUser!.id, mode: 'following' }); }}
+            onPressListings={() => { haptic.light(); /* listings tab is directly below — no-op scroll target needed */ }}
           />
 
           {/* Away-mode indicator — shown when holiday mode is enabled */}
@@ -343,7 +343,10 @@ export default function MyProfileScreen() {
           coOwnHoldings={coOwnHoldings}
           website={user.website ?? null}
           sellerTrust={sellerTrust}
+          shopAnnouncement={myStorefront?.announcement ?? null}
+          shopPolicies={myStorefront?.policies ?? null}
           onViewPortfolio={() => { haptic.light(); navigation.navigate('CoOwnHub'); }}
+          onEditShop={() => { haptic.light(); navigation.navigate('EditProfile', {}); }}
           reviewSummary={myReviewSummary}
           reviewCount={myReviewCount}
           reviewsLoading={reviewsLoading}

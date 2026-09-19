@@ -82,9 +82,9 @@ function getStageColors(colors: ReturnType<typeof useAppTheme>['colors']): Recor
   return {
     upcoming: { text: colors.brand, icon: colors.brand, bar: colors.brand },
     plenty: { text: colors.textPrimary, icon: colors.textMuted, bar: colors.textMuted },
-    moderate: { text: colors.textPrimary, icon: colors.warning, bar: colors.warning },
-    urgent: { text: colors.danger, icon: colors.danger, bar: colors.danger },
-    final: { text: colors.danger, icon: colors.danger, bar: colors.danger },
+    moderate: { text: colors.textPrimary, icon: colors.warningText, bar: colors.warning },
+    urgent: { text: colors.dangerText, icon: colors.dangerText, bar: colors.danger },
+    final: { text: colors.dangerText, icon: colors.dangerText, bar: colors.danger },
     ended: { text: colors.textMuted, icon: colors.textMuted, bar: colors.border },
   };
 }

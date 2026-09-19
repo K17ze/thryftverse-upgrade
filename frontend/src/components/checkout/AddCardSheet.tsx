@@ -51,7 +51,7 @@ export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
     border: colors.border,
     surface: colors.surface,
     surfaceAlt: colors.surfaceAlt,
-    success: colors.success,
+    success: colors.successText,
     textInverse: colors.textInverse };
   const styles = useMemo(() => createStyles(themed), [themed]);
 

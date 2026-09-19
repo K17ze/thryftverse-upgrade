@@ -26,7 +26,7 @@ interface TrustChipProps {
 
 function TrustChip({ icon, label, tone = 'default', colors, styles }: TrustChipProps & { colors: ThemeColors; styles: ReturnType<typeof createStyles> }) {
   const color =
-    tone === 'success' ? colors.success : tone === 'muted' ? colors.textMuted : colors.textSecondary;
+    tone === 'success' ? colors.successText : tone === 'muted' ? colors.textMuted : colors.textSecondary;
   const isStar = icon === 'star';
   return (
     <View style={styles.chip}>
@@ -34,7 +34,7 @@ function TrustChip({ icon, label, tone = 'default', colors, styles }: TrustChipP
         name={icon}
         focused={isStar}
         size={IconSize.xs}
-        color={isStar ? 'ratingStar' : (tone === 'success' ? 'success' : tone === 'muted' ? 'textMuted' : 'textSecondary')}
+        color={isStar ? 'ratingStar' : (tone === 'success' ? 'successText' : tone === 'muted' ? 'textMuted' : 'textSecondary')}
         opticalCenter
         accessible={false}
       />

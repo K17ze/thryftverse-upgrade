@@ -69,13 +69,13 @@ function CheckoutSelectionRowBase({
             {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
             {warningText ? (
               <View style={styles.alertRow}>
-                <Ionicons name="warning-outline" size={12} color={colors.warning} />
+                <Ionicons name="warning-outline" size={12} color={colors.warningText} />
                 <Text style={styles.warningText}>{warningText}</Text>
               </View>
             ) : null}
             {errorText ? (
               <View style={styles.alertRow}>
-                <Ionicons name="alert-circle-outline" size={12} color={colors.danger} />
+                <Ionicons name="alert-circle-outline" size={12} color={colors.dangerText} />
                 <Text style={styles.errorText}>{errorText}</Text>
               </View>
             ) : null}
@@ -148,11 +148,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   warningText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.warning },
+    color: colors.warningText },
   errorText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.danger },
+    color: colors.dangerText },
   right: {
     flexDirection: 'row',
     alignItems: 'center',

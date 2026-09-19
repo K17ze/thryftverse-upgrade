@@ -390,7 +390,7 @@ function SmartSellSheet({
                 {`Platform fee (${Math.round(policy.feeRate * 100)}%)`}
               </Text>
               <Text
-                style={[styles.quoteValue, { color: colors.danger }]}
+                style={[styles.quoteValue, { color: colors.dangerText }]}
                 accessibilityLabel={`Platform fee ${acceptQuote.fee} pounds`}
                 accessibilityHint="The platform fee deducted"
               >
@@ -403,7 +403,7 @@ function SmartSellSheet({
                 You receive
               </Text>
               <Text
-                style={[styles.quoteNetValue, { color: colors.success }]}
+                style={[styles.quoteNetValue, { color: colors.successText }]}
                 accessibilityLabel={`You receive ${acceptQuote.net} pounds`}
                 accessibilityHint="Your net payout after fees"
               >
@@ -546,7 +546,7 @@ function SmartSellSheet({
             <Ionicons
               name="information-circle-outline"
               size={14}
-              color={colors.warning}
+              color={colors.warningText}
               aria-hidden={true}
             />
             <Text style={[styles.previewText, { color: colors.textSecondary }]}>
@@ -578,11 +578,11 @@ function SmartSellSheet({
                       {
                         backgroundColor:
                           d.decision === 'accept'
-                            ? colors.success
+                            ? colors.successText
                             : d.decision === 'counter'
                               ? colors.brand
                               : d.decision === 'escalate'
-                                ? colors.warning
+                                ? colors.warningText
                                 : colors.textMuted },
                     ]}
                   />

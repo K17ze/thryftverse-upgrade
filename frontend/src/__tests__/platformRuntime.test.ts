@@ -121,16 +121,19 @@ describe('Platform: queryKeys behaviour', () => {
 });
 
 describe('Platform: clearUserScopedQueryCache behaviour', () => {
-  it('removes user-scoped queries from cache', async () => {
+  it('purges the entire query cache — private data can never leak to the next account (F14)', async () => {
     queryClient.setQueryData(queryKeys.user.profile('u1'), { id: 'u1' });
     queryClient.setQueryData(queryKeys.chat.conversations, []);
     queryClient.setQueryData(['listing', 'detail', 'l1'], { id: 'l1' });
+    queryClient.setQueryData(['coown', 'holdings'], []);
 
     clearUserScopedQueryCache();
 
     expect(queryClient.getQueryData(queryKeys.user.profile('u1'))).toBeUndefined();
     expect(queryClient.getQueryData(queryKeys.chat.conversations)).toBeUndefined();
-    expect(queryClient.getQueryData(['listing', 'detail', 'l1'])).toEqual({ id: 'l1' });
+    // Public-shaped keys are purged too — account isolation beats a warm cache.
+    expect(queryClient.getQueryData(['listing', 'detail', 'l1'])).toBeUndefined();
+    expect(queryClient.getQueryData(['coown', 'holdings'])).toBeUndefined();
   });
 
   it('resets unread notification count to 0', () => {

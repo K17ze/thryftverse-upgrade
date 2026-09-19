@@ -377,8 +377,14 @@ const mapBackendSessionToLiveSession = (room: BackendStreamRoom): LiveSession =>
     category: 'All',
     viewerCount: room.viewerCount,
     likeCount: 0,
-    // 'created' sessions (incl. scheduled shows) surface as upcoming.
-    status: room.status === 'live' ? 'live' : room.status === 'ended' ? 'ended' : 'upcoming',
+    // 'created' sessions (incl. scheduled shows) surface as upcoming;
+    // 'ending' is still live; 'failed' is honestly ended.
+    status:
+      room.status === 'live' || (room.status as string) === 'ending'
+        ? 'live'
+        : room.status === 'ended' || room.status === 'failed'
+          ? 'ended'
+          : 'upcoming',
     startedAt: room.startedAt,
     scheduledAt: scheduledStartAt,
     endedAt: room.endedAt,
@@ -402,39 +408,41 @@ async function fetchLiveSessionsFromBackend(
 ): Promise<LiveSessionSummary> {
   void opts.cursor;
   void opts.category;
-  try {
-    const response = await fetchJson<BackendStreamSessionsResponse>('/streaming/sessions');
-    const sessions = (response.sessions ?? []).map(mapBackendSessionToLiveSession);
+  // Errors propagate — swallowing them renders a fake "No live sessions"
+  // empty state on a real outage instead of the error/retry state.
+  const response = await fetchJson<BackendStreamSessionsResponse>('/streaming/sessions');
+  const sessions = (response.sessions ?? []).map(mapBackendSessionToLiveSession);
 
-    // When the backend does not echo a per-viewer `reminded` flag, merge the
-    // on-device reminder state so the toggle survives reloads. A reported
-    // flag always wins.
+  // When the backend does not echo a per-viewer `reminded` flag, merge the
+  // on-device reminder state so the toggle survives reloads. A reported
+  // flag always wins. Reminder-merge failure must not break the load.
+  try {
     const localReminders = await loadLocalReminderIds();
     for (const session of sessions) {
       if (session.reminderSet == null) {
         session.reminderSet = localReminders.has(session.id);
       }
     }
-
-    sessions.sort((a, b) => {
-      const order = { live: 0, upcoming: 1, ended: 2 };
-      if (order[a.status] !== order[b.status]) {
-        return order[a.status] - order[b.status];
-      }
-      if (a.status === 'live') {
-        return b.viewerCount - a.viewerCount;
-      }
-      if (a.status === 'upcoming') {
-        return new Date(a.scheduledAt ?? 0).getTime() - new Date(b.scheduledAt ?? 0).getTime();
-      }
-      return new Date(b.endedAt ?? 0).getTime() - new Date(a.endedAt ?? 0).getTime();
-    });
-
-    const featured = sessions.find((s) => s.status === 'live') ?? null;
-    return { sessions, featured, cursor: null };
   } catch {
-    return { sessions: [], featured: null, cursor: null };
+    // Local reminder state is best-effort.
   }
+
+  sessions.sort((a, b) => {
+    const order = { live: 0, upcoming: 1, ended: 2 };
+    if (order[a.status] !== order[b.status]) {
+      return order[a.status] - order[b.status];
+    }
+    if (a.status === 'live') {
+      return b.viewerCount - a.viewerCount;
+    }
+    if (a.status === 'upcoming') {
+      return new Date(a.scheduledAt ?? 0).getTime() - new Date(b.scheduledAt ?? 0).getTime();
+    }
+    return new Date(b.endedAt ?? 0).getTime() - new Date(a.endedAt ?? 0).getTime();
+  });
+
+  const featured = sessions.find((s) => s.status === 'live') ?? null;
+  return { sessions, featured, cursor: null };
 }
 
 /**
@@ -494,10 +502,64 @@ interface BackendCurrentLot {
   currentPrice: number;
   bidCount: number;
   updatedAt: string;
+  /** Authoritative live_lots linkage (joined server-side). */
+  lotId?: string | null;
+  lotStatus?: string | null;
+  winnerId?: string | null;
+  orderId?: string | null;
+  highBidderId?: string | null;
+  /** Pinned-product identity. */
+  title?: string | null;
+  imageUrl?: string | null;
   /** Server-set auto-close deadline (null when the lot is host-closed only). */
   closesAt?: string | null;
   /** Anti-snipe extensions applied so far. */
   extensionCount?: number;
+  /** Minimum bid increment and floor price in minor units. */
+  minIncrementMinor?: number | null;
+  startPriceMinor?: number | null;
+}
+
+/** Backend lot status → viewer LotStatus ('active' when unknown — the
+ *  projection only exists once a lot is pinned). */
+function backendLotStatusToLive(status: string | null | undefined): LiveLot['status'] {
+  switch (status) {
+    case 'open':
+    case 'closing':
+      return 'active';
+    case 'sold':
+      return 'sold';
+    case 'passed':
+    case 'cancelled':
+      return 'passed';
+    case 'scheduled':
+      return 'upcoming';
+    default:
+      return 'active';
+  }
+}
+
+/** Map the enriched current-lot projection → LiveLot. Shared by connect,
+ *  realtime lot-change and bid responses so the pinned product, winner and
+ *  settle identity stay consistent everywhere. */
+function mapBackendCurrentLot(lot: BackendCurrentLot): LiveLot {
+  return {
+    id: lot.lotId ?? lot.listingId,
+    lotId: lot.lotId ?? null,
+    listingId: lot.listingId,
+    title: lot.title ?? '',
+    imageUri: lot.imageUrl ?? '',
+    startingPrice: lot.currentPrice,
+    currentPrice: lot.currentPrice,
+    bidCount: lot.bidCount,
+    status: backendLotStatusToLive(lot.lotStatus),
+    winnerId: lot.winnerId ?? null,
+    orderId: lot.orderId ?? null,
+    highBidderId: lot.highBidderId ?? null,
+    closesAt: lot.closesAt ?? null,
+    extensionCount: lot.extensionCount ?? 0,
+    minIncrementMinor: lot.minIncrementMinor ?? null,
+  };
 }
 
 interface BackendCurrentLotResponse {
@@ -633,18 +695,7 @@ async function placeBidOnBackend(
     );
 
     if (response.idempotent && response.success) {
-      const lot: LiveLot | null = response.lot
-        ? {
-            id: response.lot.listingId,
-            listingId: response.lot.listingId,
-            title: '',
-            imageUri: '',
-            startingPrice: response.lot.currentPrice,
-            currentPrice: response.lot.currentPrice,
-            bidCount: response.lot.bidCount,
-            status: 'active',
-          }
-        : null;
+      const lot: LiveLot | null = response.lot ? mapBackendCurrentLot(response.lot) : null;
       return { success: true, lot, bid: null, clientBidId: bidId, idempotent: true };
     }
 
@@ -659,18 +710,7 @@ async function placeBidOnBackend(
       amount: response.bid.amount,
       timestamp: response.bid.createdAt,
     };
-    const lot: LiveLot = {
-      id: response.lot!.listingId,
-      listingId: response.lot!.listingId,
-      title: '',
-      imageUri: '',
-      startingPrice: response.lot!.currentPrice,
-      currentPrice: response.lot!.currentPrice,
-      bidCount: response.lot!.bidCount,
-      status: 'active',
-      closesAt: response.lot!.closesAt ?? null,
-      extensionCount: response.lot!.extensionCount ?? 0,
-    };
+    const lot: LiveLot = mapBackendCurrentLot(response.lot!);
     return { success: true, lot, bid, clientBidId: bidId };
   } catch (error) {
     if (error instanceof ApiRequestError && error.status !== undefined) {
@@ -698,17 +738,9 @@ async function leaveSessionOnBackend(sessionId: string): Promise<void> {
  *  snapshot suitable for the viewer screen. */
 async function connectToStreamFromBackend(streamId: string): Promise<LiveStream | null> {
   try {
-    const tokenResponse = await fetchJson<BackendStreamTokenResponse>(
-      `/streaming/sessions/${encodeURIComponent(streamId)}/token`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: 'viewer' }),
-      },
-    );
-    const tokenData = tokenResponse.ok ? tokenResponse.token : null;
-
-    // Fetch the session metadata.
+    // Fetch the session metadata FIRST — the viewer-token endpoint 409s on
+    // ended/scheduled sessions, which previously surfaced as a generic
+    // connection error instead of the truthful ended/scheduled state.
     const sessionResponse = await fetchJson<{
       ok: boolean;
       session: BackendStreamRoom | null;
@@ -716,22 +748,39 @@ async function connectToStreamFromBackend(streamId: string): Promise<LiveStream 
     const session = sessionResponse.session;
     if (!session) return null;
 
+    // 'ending' is a real backend status not yet in the declared union.
+    const rawStatus = session.status as string;
+    const mappedStatus: LiveStream['status'] =
+      rawStatus === 'live' || rawStatus === 'ending'
+        ? 'live'
+        : rawStatus === 'ended' || rawStatus === 'failed'
+          ? 'ended'
+          : 'scheduled';
+
+    // Request a viewer token only for live sessions — ended/scheduled
+    // sessions render their own states without one.
+    let tokenData: { token: string; wsUrl?: string } | null = null;
+    if (mappedStatus === 'live') {
+      try {
+        const tokenResponse = await fetchJson<BackendStreamTokenResponse>(
+          `/streaming/sessions/${encodeURIComponent(streamId)}/token`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role: 'viewer' }),
+          },
+        );
+        tokenData = tokenResponse.ok ? tokenResponse.token : null;
+      } catch {
+        // A token failure still lets the viewer render the stream shell —
+        // the stage degrades to "video unavailable" instead of erroring.
+        tokenData = null;
+      }
+    }
+
     // Fetch the current lot (if set).
     const currentLot = await fetchCurrentLotFromBackend(streamId);
-    const lots: LiveLot[] = currentLot
-      ? [{
-          id: currentLot.listingId,
-          listingId: currentLot.listingId,
-          title: '',
-          imageUri: '',
-          startingPrice: currentLot.currentPrice,
-          currentPrice: currentLot.currentPrice,
-          bidCount: currentLot.bidCount,
-          status: 'active',
-          closesAt: currentLot.closesAt ?? null,
-          extensionCount: currentLot.extensionCount ?? 0,
-        }]
-      : [];
+    const lots: LiveLot[] = currentLot ? [mapBackendCurrentLot(currentLot)] : [];
 
     const stream: LiveStream = {
       id: session.roomId,
@@ -740,7 +789,7 @@ async function connectToStreamFromBackend(streamId: string): Promise<LiveStream 
       sellerAvatar: session.hostAvatarUrl ?? undefined,
       sellerVerified: session.hostVerified ?? undefined,
       title: session.title,
-      status: session.status === 'live' ? 'live' : session.status === 'ended' ? 'ended' : 'scheduled',
+      status: mappedStatus,
       startedAt: session.startedAt,
       scheduledStartAt: session.scheduledStartAt ?? session.scheduled_start_at ?? undefined,
       endedAt: session.endedAt,
@@ -748,7 +797,7 @@ async function connectToStreamFromBackend(streamId: string): Promise<LiveStream 
       likeCount: 0,
       currentLotIndex: 0,
       lots,
-      chatEnabled: true,
+      chatEnabled: mappedStatus === 'live',
       isDemo: false,
       token: tokenData?.token,
       wsUrl: tokenData?.wsUrl,
@@ -816,7 +865,11 @@ function backendToStreamEventType(type: string): StreamEventType | null {
     case 'lot.passed':
     case 'lot.cancelled':
     case 'lot.extension':
+    case 'lot.settlement_started':
+    case 'lot.order_created':
       return 'lot_update';
+    case 'live.session.ended':
+      return 'stream_end';
     default:
       return null;
   }
@@ -993,6 +1046,9 @@ export interface LiveStream {
 export interface LiveLot {
   id: string;
   listingId: string;
+  /** Authoritative live_lots aggregate id — the identity the settle
+   *  endpoint needs. Null on demo/mock lots. */
+  lotId?: string | null;
   title: string;
   imageUri: string;
   startingPrice: number;
@@ -1000,6 +1056,15 @@ export interface LiveLot {
   currentHighBidder?: string;
   bidCount: number;
   status: 'upcoming' | 'active' | 'sold' | 'passed';
+  /** Winner of a sold lot (real user id from the lot engine). */
+  winnerId?: string | null;
+  /** Order bound to the lot after settlement begins. */
+  orderId?: string | null;
+  /** Current high bidder's user id. */
+  highBidderId?: string | null;
+  /** Minimum bid increment in minor units — bids below
+   *  currentPrice + minIncrement are rejected server-side. */
+  minIncrementMinor?: number | null;
   /** Seconds remaining for the active auction (null when not active). */
   timeRemaining?: number;
   buyNowPrice?: number;
@@ -1154,9 +1219,12 @@ export type PurchaseEventPayload = {
 
 export type StreamEndEventPayload = {
   endedAt: string;
-  totalViewers: number;
-  totalSales: number;
-  lotsSold: number;
+  /** Optional — absent when the viewer joined after the stream ended and
+   *  the backend summary was never received. The ended screen hides
+   *  metrics it does not have rather than showing zeros. */
+  totalViewers?: number;
+  totalSales?: number;
+  lotsSold?: number;
 };
 
 export type LotSoldEventPayload = {
@@ -1572,20 +1640,7 @@ export function subscribeToLotChanges(
       const raw = event.payload as Record<string, unknown>;
       const backendLot = raw.lot as BackendCurrentLot | undefined;
       // Map BackendCurrentLot → LiveLot for the frontend contract.
-      const lot: LiveLot = backendLot
-        ? {
-            id: backendLot.listingId,
-            listingId: backendLot.listingId,
-            title: '',
-            imageUri: '',
-            startingPrice: backendLot.currentPrice,
-            currentPrice: backendLot.currentPrice,
-            bidCount: backendLot.bidCount,
-            status: 'active',
-            closesAt: backendLot.closesAt ?? null,
-            extensionCount: backendLot.extensionCount ?? 0,
-          }
-        : (raw.lot as LiveLot);
+      const lot: LiveLot = backendLot ? mapBackendCurrentLot(backendLot) : (raw.lot as LiveLot);
       callback({
         previousLotIndex: raw.previousLotIndex as number,
         newLotIndex: raw.newLotIndex as number,
@@ -2174,8 +2229,15 @@ interface BackendLotActionResponse {
 
 interface BackendSettleLotResponse {
   ok: boolean;
-  orderId: string;
-  status: LotSettlementStatus;
+  idempotent?: boolean;
+  lot?: BackendLotAggregate;
+  order?: { id: string; status?: string };
+  checkout?: {
+    reservationId?: string;
+    expiresAt?: string;
+    quoteVersion?: number;
+    quoteHash?: string;
+  };
 }
 
 const mapBackendLotToAggregate = (lot: BackendLotAggregate): LiveLotAggregate => ({
@@ -2363,17 +2425,25 @@ export async function fetchSessionLots(
 export async function settleLot(
   sessionId: string,
   lotId: string,
-): Promise<{ orderId: string; status: LotSettlementStatus }> {
+): Promise<{ orderId: string | null; reservationId: string | null; status: LotSettlementStatus }> {
   if (!LIVE_SHOPPING_DEMO_MODE) {
     const response = await fetchJson<BackendSettleLotResponse>(
       `/streaming/sessions/${encodeURIComponent(sessionId)}/lots/${encodeURIComponent(lotId)}/settle`,
       { method: 'POST' },
     );
-    return { orderId: response.orderId, status: response.status };
+    // Backend contract: { ok, lot, order: {id}, checkout: {reservationId} }.
+    // An order id means settlement created the order — 'order_created' is
+    // the honest status for the seller panel.
+    return {
+      orderId: response.order?.id ?? null,
+      reservationId: response.checkout?.reservationId ?? null,
+      status: response.order?.id ? 'order_created' : 'none',
+    };
   }
   await delay(300);
   return {
     orderId: `order-${lotId}-${Date.now()}`,
+    reservationId: `rsv-${lotId}`,
     status: 'order_created',
   };
 }

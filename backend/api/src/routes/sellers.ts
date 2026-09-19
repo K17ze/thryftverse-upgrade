@@ -9,6 +9,7 @@ import {
 } from '../lib/sellerPerformance.js';
 import { isEffectivelyAway } from '../lib/sellerAway.js';
 import { createApiError } from '../lib/workerHelpers.js';
+import { applyListingFieldPatch } from '../lib/listingPatch.js';
 
 type SellerRouteDependencies = {
   app: FastifyInstance;
@@ -1700,29 +1701,17 @@ export const registerSellerRoutes = ({ app, db, readDb, queueUserNotification }:
 
     const { defectMetric, grounds, details, evidenceUrls } = parsed.data;
 
-    // Ensure the appeals table exists (idempotent). Inline CREATE IF NOT EXISTS
-    // per task scope — a dedicated migration can replace this later.
-    await db.query(
-      `CREATE TABLE IF NOT EXISTS seller_standards_appeals (
-        id TEXT PRIMARY KEY,
-        seller_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        defect_metric TEXT NOT NULL,
-        grounds TEXT NOT NULL CHECK (grounds IN ('factual_error', 'carrier_delay', 'system_error', 'mitigating_circumstance')),
-        details TEXT NOT NULL,
-        evidence_urls TEXT[],
-        status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'under_review', 'upheld', 'overturned', 'withdrawn')),
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        decided_at TIMESTAMPTZ,
-        decided_by TEXT REFERENCES users(id) ON DELETE SET NULL,
-        decision_rationale TEXT
-      )`
-    );
-
+    // One open appeal per (seller, defect metric) — enforced by the partial
+    // unique index from migration 315 so a double-tap or lost-response retry
+    // can never insert a duplicate.
     const appealId = crypto.randomUUID();
-    await db.query(
+    const insertResult = await db.query<{ id: string }>(
       `INSERT INTO seller_standards_appeals
          (id, seller_id, defect_metric, grounds, details, evidence_urls, status)
-       VALUES ($1, $2, $3, $4, $5, $6, 'open')`,
+       VALUES ($1, $2, $3, $4, $5, $6, 'open')
+       ON CONFLICT (seller_id, defect_metric) WHERE status IN ('open', 'under_review')
+       DO NOTHING
+       RETURNING id`,
       [
         appealId,
         sellerId,
@@ -1732,6 +1721,20 @@ export const registerSellerRoutes = ({ app, db, readDb, queueUserNotification }:
         evidenceUrls && evidenceUrls.length > 0 ? evidenceUrls : null,
       ]
     );
+
+    if (!insertResult.rowCount) {
+      const existingAppeal = await db.query<{ id: string }>(
+        `SELECT id FROM seller_standards_appeals
+         WHERE seller_id = $1 AND defect_metric = $2 AND status IN ('open', 'under_review')
+         LIMIT 1`,
+        [sellerId, defectMetric]
+      );
+      return {
+        ok: true,
+        appealId: existingAppeal.rows[0]?.id ?? appealId,
+        alreadyOpen: true,
+      };
+    }
 
     reply.code(201);
     return { ok: true, appealId };
@@ -1766,9 +1769,11 @@ export const registerSellerRoutes = ({ app, db, readDb, queueUserNotification }:
 
     const roundedNewPrice = Math.round(parsed.data.newPriceGbp * 100) / 100;
 
-    // Verify listing ownership and current price
-    const listingResult = await db.query<{ id: string; price_gbp: number | string; status: string }>(
-      `SELECT id, price_gbp, status FROM listings WHERE id = $1 AND seller_id = $2 LIMIT 1`,
+    // UX pre-check only — the authoritative previous price is read under
+    // FOR UPDATE inside applyListingFieldPatch, so a concurrent edit can
+    // never produce a stale recorded previous_price_gbp.
+    const listingResult = await db.query<{ price_gbp: number | string }>(
+      `SELECT price_gbp FROM listings WHERE id = $1 AND seller_id = $2 LIMIT 1`,
       [listingId, sellerId]
     );
     const listing = listingResult.rows[0];
@@ -1776,39 +1781,45 @@ export const registerSellerRoutes = ({ app, db, readDb, queueUserNotification }:
       reply.code(404);
       return { ok: false, error: 'Listing not found' };
     }
-
-    const previousPrice = Number(listing.price_gbp);
-    if (Math.abs(previousPrice - roundedNewPrice) < 0.01) {
+    if (Math.abs(Number(listing.price_gbp) - roundedNewPrice) < 0.01) {
       reply.code(400);
       return { ok: false, error: 'New price must differ from current price' };
     }
 
-    const client = await db.connect();
-    try {
-      await client.query('BEGIN');
-      await client.query(
-        `UPDATE listings SET price_gbp = $1, updated_at = NOW() WHERE id = $2`,
-        [roundedNewPrice, listingId]
-      );
-      await client.query(
-        `INSERT INTO listing_price_events (listing_id, previous_price_gbp, new_price_gbp, changed_at)
-         VALUES ($1, $2, $3, NOW())`,
-        [listingId, previousPrice, roundedNewPrice]
-      );
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
+    // Route through the canonical listing field-patch — FOR UPDATE lock,
+    // status gate, durable price event + outbox entry, price-alert
+    // evaluation via the drain, and post-commit search sync. A raw UPDATE
+    // here previously skipped all of those side effects.
+    const result = await applyListingFieldPatch(db, {
+      listingId,
+      patch: { priceGbp: roundedNewPrice },
+      actorId: sellerId,
+      correlationId: request.id,
+    });
+
+    if (result.status === 'conflict') {
+      reply.code(500);
+      return { ok: false, error: 'Failed to adjust price' };
+    }
+    if (result.status === 'rejected') {
+      if (result.reason === 'not_found') {
+        reply.code(404);
+        return { ok: false, error: 'Listing not found' };
+      }
+      if (result.reason === 'forbidden') {
+        reply.code(403);
+        return { ok: false, error: 'You can only adjust prices for your own listings' };
+      }
+      reply.code(409);
+      return { ok: false, error: `Listing cannot be repriced while ${result.currentStatus}` };
     }
 
     return {
       ok: true,
       listingId,
-      previousPriceGbp: previousPrice,
+      previousPriceGbp: result.previousPriceGbp ?? null,
       newPriceGbp: roundedNewPrice,
-      changedAt: new Date().toISOString(),
+      changedAt: result.updatedAt ?? new Date().toISOString(),
     };
   });
 };

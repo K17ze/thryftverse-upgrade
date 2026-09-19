@@ -80,7 +80,7 @@ export function CoOwnDripToggle({
 
       {error ? (
         <View style={styles.errorRow}>
-          <Text style={[styles.errorText, { color: colors.danger }]} numberOfLines={2}>
+          <Text style={[styles.errorText, { color: colors.dangerText }]} numberOfLines={2}>
             {error}
           </Text>
         </View>

@@ -9,7 +9,6 @@ interface BrowseFiltersSnapshot {
   brands: string[];
   sizes: string[];
   condition: ConditionOption;
-  sustainableOnly: boolean;
   priceMin: number | null;
   priceMax: number | null;
 }
@@ -23,7 +22,6 @@ export function useFilterScreenState(browseFilters: BrowseFiltersSnapshot) {
   const [selectedBrands, setSelectedBrands] = useState<string[]>(browseFilters.brands);
   const [selectedSizes, setSelectedSizes] = useState<string[]>(browseFilters.sizes);
   const [selectedCondition, setSelectedCondition] = useState<ConditionOption>(browseFilters.condition);
-  const [sustainableOnly, setSustainableOnly] = useState<boolean>(browseFilters.sustainableOnly);
   const [priceMin, setPriceMin] = useState<string>(browseFilters.priceMin != null ? String(browseFilters.priceMin) : '');
   const [priceMax, setPriceMax] = useState<string>(browseFilters.priceMax != null ? String(browseFilters.priceMax) : '');
 
@@ -49,16 +47,11 @@ export function useFilterScreenState(browseFilters: BrowseFiltersSnapshot) {
     setSelectedSizes(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
   }, []);
 
-  const toggleSustainableOnly = useCallback(() => {
-    setSustainableOnly((prev) => !prev);
-  }, []);
-
   const handleClear = useCallback(() => {
     setActiveSort('Recommended');
     setSelectedBrands([]);
     setSelectedSizes([]);
     setSelectedCondition('Any');
-    setSustainableOnly(false);
     setPriceMin('');
     setPriceMax('');
   }, []);
@@ -80,14 +73,13 @@ export function useFilterScreenState(browseFilters: BrowseFiltersSnapshot) {
   [activeSort, selectedBrands, selectedSizes, selectedCondition]);
 
   const hasActiveSelection =
-    selectedBrands.length > 0 || selectedSizes.length > 0 || selectedCondition !== 'Any' || activeSort !== 'Recommended' || sustainableOnly || priceMin.trim() !== '' || priceMax.trim() !== '';
+    selectedBrands.length > 0 || selectedSizes.length > 0 || selectedCondition !== 'Any' || activeSort !== 'Recommended' || priceMin.trim() !== '' || priceMax.trim() !== '';
 
   const activeFilterCount =
     selectedBrands.length
     + selectedSizes.length
     + (selectedCondition !== 'Any' ? 1 : 0)
     + (activeSort !== 'Recommended' ? 1 : 0)
-    + (sustainableOnly ? 1 : 0)
     + (priceMin.trim() !== '' ? 1 : 0)
     + (priceMax.trim() !== '' ? 1 : 0);
 
@@ -100,8 +92,6 @@ export function useFilterScreenState(browseFilters: BrowseFiltersSnapshot) {
     toggleSize,
     selectedCondition,
     setSelectedCondition,
-    sustainableOnly,
-    toggleSustainableOnly,
     priceMin,
     setPriceMin,
     priceMax,

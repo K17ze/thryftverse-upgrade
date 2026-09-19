@@ -187,14 +187,14 @@ function CommentLikeButton({
           <Ionicons
             name={liked ? 'heart' : 'heart-outline'}
             size={16}
-            color={liked ? colors.danger : colors.textMuted}
+            color={liked ? colors.dangerText : colors.textMuted}
           />
         </Reanimated.View>
         {likeCount > 0 && (
           <Text
             style={[
               likeButtonStyles.count,
-              { color: liked ? colors.danger : colors.textMuted },
+              { color: liked ? colors.dangerText : colors.textMuted },
             ]}
           >
             {likeCount}
@@ -457,7 +457,7 @@ function createRowStyles(colors: ThemeColors) {
     retryAction: {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
-      color: colors.danger,
+      color: colors.dangerText,
       marginTop: 2,
     },
     tombstoneBody: {
@@ -1074,8 +1074,8 @@ export function LookCommentsSheet({
             )}
             {menuComment && currentUserId === menuComment.authorId && isAuthenticated && (
               <Pressable style={styles.menuItem} onPress={handleMenuDelete} accessibilityRole="button" accessibilityLabel="Delete comment" accessibilityHint="Removes this comment permanently">
-                <Ionicons name="trash-outline" size={20} color={colors.danger} />
-                <Text style={[styles.menuItemText, { color: colors.danger }]}>Delete comment</Text>
+                <Ionicons name="trash-outline" size={20} color={colors.dangerText} />
+                <Text style={[styles.menuItemText, { color: colors.dangerText }]}>Delete comment</Text>
               </Pressable>
             )}
             <Pressable style={styles.menuCancel} onPress={closeMenu} accessibilityRole="button" accessibilityLabel="Cancel" accessibilityHint="Closes the menu">

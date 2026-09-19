@@ -35,6 +35,14 @@ export async function canUserSubscribeToRealtimeTopic(
     return normalized === `notifications.user:${userId.toLowerCase()}`;
   }
 
+  // Per-user chat inbox topic (`chat.user:{userId}`) carries
+  // new-conversation signals (dm created, group membership added). Without
+  // it a recipient never learns about a conversation they aren't yet
+  // subscribed to — per-conversation topics require prior membership.
+  if (normalized.startsWith('chat.user:')) {
+    return normalized === `chat.user:${userId.toLowerCase()}`;
+  }
+
   // Dyad presence topics (`presence.user:{userId}`) carry online/offline
   // transitions for a user. A user may always subscribe to their own topic;
   // anyone else must share a DM channel with the target so presence is only

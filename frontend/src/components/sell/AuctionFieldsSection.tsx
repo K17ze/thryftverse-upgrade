@@ -58,7 +58,7 @@ function AuctionFieldsSection({
             maxLength={8}
           />
         </View>
-        {errors.startingBid ? <Text style={[styles.fieldError, { color: colors.danger }]}>{errors.startingBid}</Text> : null}
+        {errors.startingBid ? <Text style={[styles.fieldError, { color: colors.dangerText }]}>{errors.startingBid}</Text> : null}
 
         {/* ── Seller proceeds estimate (auction) ──
             Per audit 04 P1: "Add seller-proceeds preview beside price."
@@ -73,7 +73,7 @@ function AuctionFieldsSection({
               </Text>
             </View>
             <View style={styles.proceedsRight}>
-              <Text style={[styles.proceedsAmount, { color: colors.success }]}>
+              <Text style={[styles.proceedsAmount, { color: colors.successText }]}>
                 {currencySymbol}{(numericStartingBid - calculatePlatformChargeGbp(numericStartingBid)).toFixed(2)}
               </Text>
               <Text style={[styles.proceedsFeeHint, { color: colors.textMuted }]}>

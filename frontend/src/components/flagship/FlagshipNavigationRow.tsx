@@ -92,7 +92,7 @@ export function FlagshipNavigationRow({
   const titleColor = disabled
     ? colors.textMuted
     : danger
-      ? colors.danger
+      ? colors.dangerText
       : colors.textPrimary;
 
   const resolvedLabel = accessibilityLabel ?? [title, subtitle].filter(Boolean).join(', ');
@@ -106,7 +106,7 @@ export function FlagshipNavigationRow({
           <AppIcon
             name={icon}
             size={IconSize.md}
-            color={iconColor ?? (danger ? colors.danger : colors.textSecondary)}
+            color={iconColor ?? (danger ? colors.dangerText : colors.textSecondary)}
             opticalCenter
             accessible={false}
           />

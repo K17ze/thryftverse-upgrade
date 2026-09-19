@@ -54,9 +54,9 @@ export function completenessLabel(c: Completeness): string {
 
 export function completenessColor(c: Completeness, colors: ThemeColors): string {
   switch (c) {
-    case 'complete': return colors.success;
-    case 'provisional': return colors.warning;
-    case 'delayed': return colors.warning;
+    case 'complete': return colors.successText;
+    case 'provisional': return colors.warningText;
+    case 'delayed': return colors.warningText;
     case 'unavailable': return colors.textMuted;
   }
 }

@@ -121,7 +121,7 @@ export function CoOwnPositionCard({
   React.useEffect(() => setExpanded(false), [positionId, title, imageUri]);
 
   const statusLabel = status === 'open' ? 'Active' : status === 'paused' ? 'Paused' : 'Closed';
-  const statusColor = status === 'open' ? colors.success : status === 'paused' ? colors.textSecondary : colors.textMuted;
+  const statusColor = status === 'open' ? colors.successText : status === 'paused' ? colors.textSecondary : colors.textMuted;
 
   // Mark source label + age
   // U38: 'reference' is a reference price, NOT a bid/ask midpoint.
@@ -195,7 +195,7 @@ export function CoOwnPositionCard({
                 )}
                 {isStaleMark && (
                   <View style={[styles.staleBadge, { backgroundColor: colors.warningSubtle }]}>
-                    <Text style={[styles.staleBadgeText, { color: colors.warning }]}>Stale mark</Text>
+                    <Text style={[styles.staleBadgeText, { color: colors.warningText }]}>Stale mark</Text>
                   </View>
                 )}
               </View>
@@ -221,8 +221,8 @@ export function CoOwnPositionCard({
           {/* Doc 10 §3.3: settlement state badge for pending units */}
           {settlementState && settlementState === 'settling' && pendingInUnits > 0 && (
             <View style={[styles.settlementBadge, { backgroundColor: colors.warningSubtle }]}>
-              <Ionicons name="hourglass-outline" size={11} color={colors.warning} />
-              <Text style={[styles.settlementBadgeText, { color: colors.warning }]} numberOfLines={1}>
+              <Ionicons name="hourglass-outline" size={11} color={colors.warningText} />
+              <Text style={[styles.settlementBadgeText, { color: colors.warningText }]} numberOfLines={1}>
                 Settling{settlementEtaLabel ? ` · ${settlementEtaLabel}` : ''} · {pendingInUnits} units pending
               </Text>
             </View>
@@ -383,14 +383,17 @@ export function CoOwnPositionCard({
             {onBuyMore ? (
               <Pressable
                 onPress={(e) => { if (status !== 'open') return; e.stopPropagation(); onBuyMore(); }}
-                style={({ pressed }) => [styles.buyBtn, { backgroundColor: colors.background, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth, opacity: status !== 'open' ? 0.4 : pressed ? 0.65 : 1 }]}
+                // Direction-tinted secondary action — subtle bid fill +
+                // direction border + direction label, the same quiet
+                // grammar as the book's depth rows.
+                style={({ pressed }) => [styles.buyBtn, { backgroundColor: colors.coownUpSubtle, borderColor: colors.coownUpBorder, borderWidth: StyleSheet.hairlineWidth, opacity: status !== 'open' ? 0.4 : pressed ? 0.65 : 1 }]}
                 disabled={status !== 'open'}
                 accessibilityState={{ disabled: status !== 'open' }}
                 accessibilityRole="button"
                 accessibilityLabel={status === 'open' ? `Buy more units of ${title}` : `Buy unavailable — ${statusLabel}`}
                 accessibilityHint={status === 'open' ? undefined : `Item is ${statusLabel.toLowerCase()}`}
               >
-                <Text style={[styles.buyBtnText, { color: colors.textPrimary }]}>
+                <Text style={[styles.buyBtnText, { color: status === 'open' ? colors.coownUp : colors.textMuted }]}>
                   {status === 'open' ? 'Buy more' : statusLabel}
                 </Text>
               </Pressable>
@@ -398,14 +401,14 @@ export function CoOwnPositionCard({
             {onSell ? (
               <Pressable
                 onPress={(e) => { if (!sellable) return; e.stopPropagation(); onSell(); }}
-                style={({ pressed }) => [styles.sellBtn, { borderColor: colors.border, opacity: !sellable ? 0.4 : pressed ? 0.65 : 1 }]}
+                style={({ pressed }) => [styles.sellBtn, { backgroundColor: sellable ? colors.coownDownSubtle : 'transparent', borderColor: sellable ? colors.coownDownBorder : colors.border, opacity: !sellable ? 0.4 : pressed ? 0.65 : 1 }]}
                 disabled={!sellable}
                 accessibilityState={{ disabled: !sellable }}
                 accessibilityRole="button"
                 accessibilityLabel={sellable ? `Sell units of ${title}` : `Sell unavailable for ${title}`}
                 accessibilityHint={sellable ? undefined : 'No sellable units'}
               >
-                <Text style={[styles.sellBtnText, { color: colors.textPrimary }]}>
+                <Text style={[styles.sellBtnText, { color: sellable ? colors.coownDown : colors.textMuted }]}>
                   {sellable ? 'Sell' : 'No sellable'}
                 </Text>
               </Pressable>

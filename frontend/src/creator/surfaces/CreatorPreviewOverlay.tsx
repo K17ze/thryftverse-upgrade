@@ -359,8 +359,8 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
       {/* Offline banner — quiet, bottom-anchored. Publish is gated above. */}
       {isOffline && (
         <SafeAreaView style={styles.offlineBanner} edges={['bottom']}>
-          <Ionicons name="cloud-offline-outline" size={14} color={colors.warning} />
-          <Text style={[styles.offlineText, { color: colors.warning }]} numberOfLines={1}>
+          <Ionicons name="cloud-offline-outline" size={14} color={colors.warningText} />
+          <Text style={[styles.offlineText, { color: colors.warningText }]} numberOfLines={1}>
             Offline — preview only, publish when connected.
           </Text>
         </SafeAreaView>

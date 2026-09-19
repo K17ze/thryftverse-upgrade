@@ -134,6 +134,7 @@ export default function ItemDetailScreen() {
   // make-offer, price-alert toggle, enquire / request viewing) ──
   const actions = useItemDetailActions({
     listing: item,
+    expectedItemId: itemId,
     seller,
     currentUserId: currentUser?.id,
     navigation,
@@ -258,7 +259,7 @@ export default function ItemDetailScreen() {
     commerce, bundleItems, seenInLooksItems, interestSignal, socialProofLine,
     attributeLine, conditionMeta, secondaryLine, mediaItems,
     scrollBottomPadding, priceInsightRows, priceInsightSummary,
-    purchaseSummary, sellerStatsLine, sellerVerified,
+    purchaseSummary,
   } = buildItemDetailDerived({
     item, seller, listingEngagement, serverCommerce,
     currentUserId: currentUser?.id, isFav, isItemSavedAnywhere,
@@ -271,7 +272,13 @@ export default function ItemDetailScreen() {
   // commitment, reversible with a second tap. Long-press = "file to
   // board" — opens the collection picker. Both tiers are gated by the
   // save auth wall.
+  // True while the listing query is serving keepPreviousData for a
+  // previous itemId — rendered content is stale, so commerce/save CTAs
+  // must no-op rather than act on the wrong listing.
+  const listingIsCurrent = item.id === itemId;
+
   const handleQuickSave = () => {
+    if (!listingIsCurrent) return;
     if (!requireAuth('save_item')) return;
     haptic.patterns.save();
     // The bookmark icon reflects saved-anywhere (Saved list ∪ collections),
@@ -308,6 +315,8 @@ export default function ItemDetailScreen() {
     recReasonCode?: string,
     recPersonalised?: boolean,
   ) => {
+    // A rail item that is the current listing must not push a duplicate PDP.
+    if (recItem.id === itemId) return;
     openProductDetail(navigation, {
       referenceKind: 'listing',
       canonicalId: recItem.id,
@@ -451,17 +460,12 @@ export default function ItemDetailScreen() {
           onSizeGuidePress={() => overlay.open.sizeGuide()}
         />
 
-        {/* ── First-viewport seller trust row (display-only) ──
-            Seller identity + verification badge + stats line appears
-            after the price/identity chapter. This is the buyer's trust
-            signal — who is selling this item. Display-only — no onPress.
-            The full SellerInfoCard (with Follow / Message / View shop
-            actions and the "More from this seller" rail) lives in Zone
-            E below and is the sole profile navigation point. */}
+        {/* ── First-viewport trust facts (no identity row) ──
+            Rating / response / dispatch facts only. Seller identity is
+            rendered once — the navigable SellerInfoCard in Zone E is the
+            sole profile entry point. */}
         <CommerceTrustDossier
           seller={seller}
-          sellerStatsLine={sellerStatsLine}
-          sellerVerified={sellerVerified}
           commerce={commerce}
         />
 
@@ -544,16 +548,33 @@ export default function ItemDetailScreen() {
           onTogglePriceAlert={handleTogglePriceAlert}
         />
 
+        {/* The whole section hides when neither row can render (e.g. the
+            owner viewing their own listing with no public questions). */}
+        {(capabilities.isAvailable && !capabilities.isOwner && seller?.reachState !== 'suspended')
+          || (qaSummary?.questionCount ?? listingEngagement?.questionCount) ? (
         <CommerceDetailSection label="Questions" variant="compact" divider>
-          <CommerceDetailDisclosureRow
-            label={qaSummary?.questionCount ? 'View all questions' : 'Ask a question'}
-            summary={qaSummary?.questionCount ? undefined : 'No questions yet'}
-            count={qaSummary?.questionCount ?? listingEngagement?.questionCount}
-            onPress={() => overlay.open.qa()}
-            leadingIcon="help-circle-outline"
-            accessibilityLabel="View questions and answers"
-          />
+          {/* "Ask a question" opens a direct message with the seller — the
+              structured public Q&A stays discoverable as the archive row
+              below whenever answered questions exist. */}
+          {capabilities.isAvailable && !capabilities.isOwner && seller?.reachState !== 'suspended' ? (
+            <CommerceDetailDisclosureRow
+              label="Ask the seller a question"
+              onPress={handleMessageSeller}
+              leadingIcon="chatbubble-ellipses-outline"
+              accessibilityLabel="Message the seller a question"
+            />
+          ) : null}
+          {(qaSummary?.questionCount ?? listingEngagement?.questionCount) ? (
+            <CommerceDetailDisclosureRow
+              label="View all questions"
+              count={qaSummary?.questionCount ?? listingEngagement?.questionCount}
+              onPress={() => overlay.open.qa()}
+              leadingIcon="help-circle-outline"
+              accessibilityLabel="View questions and answers"
+            />
+          ) : null}
         </CommerceDetailSection>
+        ) : null}
 
         {/* ── Zone G — Related / recommended (below fold) ──
             Bundle upsell + visual-similar grid. These are discovery
@@ -602,7 +623,11 @@ export default function ItemDetailScreen() {
       {/* ── Zone I — Sticky action dock ──
           Buyer: price + Buy now + Make offer.
           Seller: Manage listing.
-          Sold/unavailable: factual state + one next action. */}
+          Sold/unavailable: factual state + one next action.
+          Hidden while placeholder data is on screen — a dock quoting the
+          previous listing's price with dead CTAs is worse than no dock
+          for the brief swap window. */}
+      {listingIsCurrent ? (
       <CommerceActionDock
         item={item}
         capabilities={capabilities}
@@ -611,9 +636,13 @@ export default function ItemDetailScreen() {
         formattedPrice={formattedPrice}
         formattedOriginal={formattedOriginal}
         hasDiscount={hasDiscount}
-        onManageListing={() => navigation.navigate('ManageListing', { itemId: item.id })}
+        onManageListing={() => {
+          if (!listingIsCurrent) return;
+          navigation.navigate('ManageListing', { itemId: item.id });
+        }}
         onBrowseSimilar={() => navigation.navigate('MainTabs', { screen: 'Explore' })}
         onBuyNow={() => {
+          if (!listingIsCurrent) return;
           if (!requireAuth('purchase')) return;
           if (item) ProductAnalytics.checkoutStart(item.id);
           // Do not fire a success haptic before the purchase has
@@ -625,6 +654,7 @@ export default function ItemDetailScreen() {
           navigation.navigate('Checkout', { itemId: item.id });
         }}
         onMakeOffer={() => {
+          if (!listingIsCurrent) return;
           if (!requireAuth('purchase')) return;
           if (item) ProductAnalytics.offerStart(item.id);
           overlay.open.makeOffer();
@@ -632,6 +662,7 @@ export default function ItemDetailScreen() {
         onEnquire={handleEnquire}
         onRequestViewing={handleRequestViewing}
       />
+      ) : null}
       </View>
 
       {/* ── Sheets & modals ──

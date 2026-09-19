@@ -196,7 +196,7 @@ export function DiscoverySearchResultsView({
         isSearching && units.length === 0 ? (
           // Skeleton, not a spinner — the loading frame matches the final
           // masonry geometry so results land without a layout shift.
-          <MasonrySkeleton numColumns={2} itemCount={8} />
+          <MasonrySkeleton numColumns={3} itemCount={9} />
         ) : searchError && units.length === 0 ? (
           <View style={styles.stateWrap}>
             <FlagshipState
@@ -237,7 +237,7 @@ export function DiscoverySearchResultsView({
             onLookPress={onLookPress}
             onPosterPress={onPosterPress}
             onMoodboardPress={onMoodboardPress}
-            numColumns={2}
+            numColumns={3}
             scrollRef={scrollRef}
             onItemSaveToggle={onItemSaveToggle}
             onItemSaveLongPress={onItemSaveLongPress}

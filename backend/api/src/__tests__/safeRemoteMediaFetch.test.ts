@@ -259,6 +259,73 @@ describe('safeFetchMediaBuffer — SSRF protection', () => {
   });
 
   // -------------------------------------------------------------------------
+  // 7b. F15 — connection pinned to validated addresses
+  // -------------------------------------------------------------------------
+
+  describe('DNS pinning (F15)', () => {
+    it('passes a dispatcher so the connection cannot re-resolve DNS', async () => {
+      fetchSpy.mockResolvedValueOnce(
+        new Response(MINIMAL_PNG, { status: 200 }),
+      );
+
+      const result = await safeFetchMediaBuffer('http://example.com/img.png');
+      expect(result).not.toBeNull();
+
+      // The fetch init must carry a `dispatcher` — the pinned Agent that
+      // overrides connect.lookup with the pre-validated address set. Without
+      // it, undici re-resolves the hostname at connect time (rebinding).
+      const init = fetchSpy.mock.calls[0]![1] as Record<string, unknown>;
+      expect(init).toHaveProperty('dispatcher');
+      expect(init.dispatcher).toBeDefined();
+    });
+
+    it('returns null when DNS rebinding flips a hostname to a blocked IP', async () => {
+      // First hop's hostname is validated against a public IP, but the
+      // redirect target hostname resolves to a private address — the
+      // per-hop revalidation must reject it before fetch.
+      dnsMock.lookup
+        .mockResolvedValueOnce([{ address: PUBLIC_IP, family: 4 }])
+        .mockResolvedValueOnce([{ address: '10.0.0.5', family: 4 }]);
+
+      fetchSpy.mockResolvedValueOnce(
+        new Response(null, {
+          status: 302,
+          headers: { location: 'http://attacker.example.com/img.png' },
+        }),
+      );
+
+      const result = await safeFetchMediaBuffer('http://example.com/img.png');
+      expect(result).toBeNull();
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 7c. F15 — bounded request duration
+  // -------------------------------------------------------------------------
+
+  describe('request timeout (F15)', () => {
+    it('returns null when the request exceeds timeoutMs', async () => {
+      // Mock fetch honours the abort signal the way undici does — the
+      // signal fires after timeoutMs and the in-flight request rejects.
+      fetchSpy.mockImplementation(
+        (_url: unknown, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () =>
+              reject(new Error('The operation was aborted')),
+            );
+            // Never resolves on its own — only the timeout can end it.
+          }),
+      );
+
+      const result = await safeFetchMediaBuffer('http://example.com/slow.png', {
+        timeoutMs: 25,
+      });
+      expect(result).toBeNull();
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // 8. Successful fetch
   // -------------------------------------------------------------------------
 

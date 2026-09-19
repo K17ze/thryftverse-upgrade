@@ -420,6 +420,15 @@ export const NOTIFICATION_EVENT_REGISTRY: Record<string, NotificationEventMetada
     aggregationTemplate: offerAggregation,
     objectExtractor: getListingObject,
   },
+  // A Smart Sell policy acted on the seller's behalf — the seller must be
+  // told; `escalate` means a live offer needs their manual response.
+  smart_sell_decision: {
+    semanticRole: "commerce",
+    attention: "important",
+    requiresAction: false,
+    aggregationTemplate: offerAggregation,
+    objectExtractor: getListingObject,
+  },
 
   // Declared in the event-type list and push taxonomy but previously
   // unregistered — they fell back to generic semantics.
@@ -669,6 +678,7 @@ export const NOTIFICATION_FILTER_EVENT_TYPES: Record<
     "offer_declined",
     "offer_expired",
     "offer_cancelled",
+    "smart_sell_decision",
   ],
   new_item: [
     "new_listing_from_followed_seller",

@@ -137,7 +137,7 @@ function VisualSearchResultsBase({
     <PinterestMasonryGrid
       items={results}
       onPressItem={onPressItem}
-      numColumns={2}
+      numColumns={3}
       onItemSaveToggle={onItemSaveToggle}
       onItemSaveLongPress={onItemSaveLongPress}
       isItemSaved={isItemSaved}

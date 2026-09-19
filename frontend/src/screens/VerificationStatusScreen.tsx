@@ -255,7 +255,7 @@ export default function VerificationStatusScreen({ navigation }: Props) {
                 <ReviewCheckItem icon="happy-outline" text="Selfie matches the document photo" colors={colors} styles={styles} />
                 <ReviewCheckItem icon="lock-closed-outline" text="Sanctions and fraud screening" colors={colors} styles={styles} />
                 <View style={[styles.etaBanner, { backgroundColor: colors.surfaceAlt }]}>
-                  <Ionicons name="time-outline" size={16} color={colors.warning} />
+                  <Ionicons name="time-outline" size={16} color={colors.warningText} />
                   <Text style={[styles.etaText, { color: colors.textSecondary }]}>
                     Estimated review time: within 24 hours
                   </Text>
@@ -358,11 +358,11 @@ function StatusHero({ status }: { status: EffectiveStatus }) {
   const config = STATUS_HERO_CONFIG[status];
   const accentColor =
     config.accent === 'success'
-      ? colors.success
+      ? colors.successText
       : config.accent === 'warning'
-      ? colors.warning
+      ? colors.warningText
       : config.accent === 'danger'
-      ? colors.danger
+      ? colors.dangerText
       : colors.brand;
 
   return (
@@ -441,7 +441,7 @@ function BenefitItem({
 }) {
   return (
     <View style={styles.checkRow}>
-      <Ionicons name={icon} size={18} color={colors.success} />
+      <Ionicons name={icon} size={18} color={colors.successText} />
       <Text style={[styles.checkText, { color: colors.textPrimary }]}>{text}</Text>
     </View>
   );
@@ -459,9 +459,9 @@ function TimelineRow({
 }) {
   const color =
     step.status === 'complete'
-      ? colors.success
+      ? colors.successText
       : step.status === 'active'
-      ? colors.warning
+      ? colors.warningText
       : colors.textMuted;
 
   return (

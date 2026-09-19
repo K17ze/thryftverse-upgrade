@@ -638,7 +638,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                   </Pressable>
                   {/* Condition always requires seller attestation — no suggestion */}
                   {conditionField?.abstained && !condition && (
-                    <Text style={[styles.attentionHint, { color: colors.warning }]}>
+                    <Text style={[styles.attentionHint, { color: colors.warningText }]}>
                       {conditionField.reason}
                     </Text>
                   )}
@@ -1100,8 +1100,8 @@ function ErrorBanner({ message, onRetry, onDismiss, colors, styles }: ErrorBanne
   return (
     <View style={[styles.errorBanner, { backgroundColor: colors.dangerSubtle, borderColor: colors.dangerBorder }]}>
       <View style={styles.errorHeader}>
-        <AppIcon name="warning" size={IconSize.sm} color="danger" opticalCenter accessible={false} />
-        <Text style={[styles.errorText, { color: colors.danger }]} numberOfLines={3}>
+        <AppIcon name="warning" size={IconSize.sm} color="dangerText" opticalCenter accessible={false} />
+        <Text style={[styles.errorText, { color: colors.dangerText }]} numberOfLines={3}>
           {message}
         </Text>
         <Pressable
@@ -1122,7 +1122,7 @@ function ErrorBanner({ message, onRetry, onDismiss, colors, styles }: ErrorBanne
         accessibilityLabel={t('error.retry')}
         accessibilityHint={t('accessibility.retryHint')}
       >
-        <Text style={[styles.errorRetryText, { color: colors.danger }]}>{t('error.retry')}</Text>
+        <Text style={[styles.errorRetryText, { color: colors.dangerText }]}>{t('error.retry')}</Text>
       </Pressable>
     </View>
   );

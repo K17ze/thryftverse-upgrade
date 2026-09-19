@@ -8,8 +8,8 @@
 -- bookmark (saved) so the two UI concepts share one contract.
 
 CREATE TABLE IF NOT EXISTS user_saved_listings (
-  user_id    uuid        NOT NULL REFERENCES users(id)    ON DELETE CASCADE,
-  listing_id uuid        NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+  user_id    text        NOT NULL REFERENCES users(id)    ON DELETE CASCADE,
+  listing_id text        NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
   list       text        NOT NULL CHECK (list IN ('wishlist', 'saved')),
   created_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (user_id, list, listing_id)

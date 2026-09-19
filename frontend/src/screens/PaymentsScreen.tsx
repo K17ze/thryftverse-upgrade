@@ -165,11 +165,14 @@ export default function PaymentsScreen({ navigation }: Props) {
       confirmLabel: t('payments.alert.remove'),
       cancelLabel: t('payments.alert.cancel'),
       onConfirm: async () => {
+        const userId = currentUser?.id;
+        // Guard before the optimistic mutation — without a user the delete
+        // can't be sent, so removing the row locally would desync the UI
+        // from the server (method hidden here, still attached there).
+        if (!userId) return;
         const previous = backendPaymentMethods;
         setBackendPaymentMethods((prev) => prev.filter((m) => m.id !== method.id));
         show(t('payments.toast.removed'), 'info');
-        const userId = currentUser?.id;
-        if (!userId) return;
         try {
           await deleteUserPaymentMethod(userId, method.providerPaymentMethodId);
           if (method.id === defaultMethod?.id) {
@@ -343,7 +346,7 @@ export default function PaymentsScreen({ navigation }: Props) {
               checkout' message next to the card number field is more
               effective than security badges in the footer." */}
           <View style={[styles.inlineTrustRow, { borderColor: colors.border }]}>
-            <Ionicons name="lock-closed-outline" size={14} color={colors.success} aria-hidden={true} />
+            <Ionicons name="lock-closed-outline" size={14} color={colors.successText} aria-hidden={true} />
             <Text style={[styles.inlineTrustText, { color: colors.textSecondary }]}>
               {t('payments.trust.inline')}
             </Text>

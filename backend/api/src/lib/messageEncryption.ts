@@ -16,6 +16,8 @@
  *   loop with a configurable batch size.
  */
 
+import { createHash, randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
+import { config } from '../config.js';
 import { encryptJsonPayload, decryptJsonPayload } from './keyService.js';
 import { logger } from './logger.js';
 
@@ -87,4 +89,42 @@ export async function resolveMessageBody(
     // rows, but it's better than throwing and breaking the chat UI.
     return body;
   }
+}
+
+// ── Provider connection credential vault ───────────────────────────────
+//
+// Provider API keys (provider_connections.encrypted_key) are encrypted at
+// rest with AES-256-GCM. The vault key is `config.encryptionKey` (the
+// ENCRYPTION_KEY env var; a dev-only fallback outside production — see
+// productionReadiness.ts). It never falls back to OPENAI_API_KEY: rotating
+// or leaking the provider key would silently corrupt every stored
+// credential. The raw key is NEVER returned in API responses — only the
+// masked form.
+
+const PROVIDER_VAULT_KEY_BYTES = createHash('sha256')
+  .update(config.encryptionKey)
+  .digest()
+  .slice(0, 32);
+
+export function encryptApiKey(apiKey: string): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', PROVIDER_VAULT_KEY_BYTES, iv);
+  const encrypted = Buffer.concat([cipher.update(apiKey, 'utf8'), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  return Buffer.concat([iv, authTag, encrypted]).toString('base64');
+}
+
+export function decryptApiKey(encryptedKey: string): string {
+  const buf = Buffer.from(encryptedKey, 'base64');
+  const iv = buf.slice(0, 12);
+  const authTag = buf.slice(12, 28);
+  const ciphertext = buf.slice(28);
+  const decipher = createDecipheriv('aes-256-gcm', PROVIDER_VAULT_KEY_BYTES, iv);
+  decipher.setAuthTag(authTag);
+  return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
+}
+
+export function maskApiKey(key: string): string {
+  if (key.length <= 8) return '••••';
+  return key.slice(0, 3) + '••••' + key.slice(-4);
 }

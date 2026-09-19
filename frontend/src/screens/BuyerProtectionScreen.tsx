@@ -151,7 +151,7 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
     return (
       <FlagshipScreen header={<FlagshipHeader title="Buyer Protection" onBack={() => navigation.goBack()} />}>
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle-outline" size={40} color={colors.danger} />
+          <Ionicons name="alert-circle-outline" size={40} color={colors.dangerText} />
           <Text style={styles.errorTitle}>Couldn't load protection info</Text>
           <Text style={styles.errorBody}>{error}</Text>
           <AppButton
@@ -193,10 +193,10 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
 
         {/* What's covered */}
           <SettingsSection title="What's covered">
-            <SettingsRow title="Item not as described" icon="checkmark-circle-outline" iconColor={colors.success} isFirst />
-            <SettingsRow title="Item not received" icon="checkmark-circle-outline" iconColor={colors.success} />
-            <SettingsRow title="Counterfeit or fake items" icon="checkmark-circle-outline" iconColor={colors.success} />
-            <SettingsRow title="Damaged in transit" icon="checkmark-circle-outline" iconColor={colors.success} isLast />
+            <SettingsRow title="Item not as described" icon="checkmark-circle-outline" iconColor={colors.successText} isFirst />
+            <SettingsRow title="Item not received" icon="checkmark-circle-outline" iconColor={colors.successText} />
+            <SettingsRow title="Counterfeit or fake items" icon="checkmark-circle-outline" iconColor={colors.successText} />
+            <SettingsRow title="Damaged in transit" icon="checkmark-circle-outline" iconColor={colors.successText} isLast />
           </SettingsSection>
 
         {/* Claims history */}
@@ -209,7 +209,7 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
                   subtitle={`Updated ${formatDate(claim.createdAt)}`}
                   value={claim.status.charAt(0).toUpperCase() + claim.status.slice(1)}
                   icon={claim.status === 'open' ? 'hourglass-outline' : claim.status === 'resolved' ? 'checkmark-circle-outline' : 'alert-circle-outline'}
-                  iconColor={claim.status === 'open' ? colors.warning : claim.status === 'resolved' ? colors.success : colors.textMuted}
+                  iconColor={claim.status === 'open' ? colors.warningText : claim.status === 'resolved' ? colors.successText : colors.textMuted}
                   isFirst={idx === 0}
                   isLast={idx === protection.claims.length - 1}
                 />

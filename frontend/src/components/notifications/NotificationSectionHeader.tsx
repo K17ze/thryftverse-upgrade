@@ -30,7 +30,7 @@ function NotificationSectionHeaderBase({
     <View style={[styles.sectionHeaderRow, isAttention && styles.sectionHeaderRowAttention]}>
       {isAttention ? (
         <View style={styles.sectionAttentionLeading}>
-          <Ionicons name="alert-circle" size={13} color={colors.danger} />
+          <Ionicons name="alert-circle" size={13} color={colors.dangerText} />
           <Text style={[styles.sectionTitle, styles.sectionTitleAttention]}>{sectionTitle}</Text>
         </View>
       ) : (
@@ -82,7 +82,7 @@ function createStyles(colors: ThemeColors) {
     color: colors.textMuted,
     letterSpacing: TypographyV2.meta.letterSpacing },
   sectionTitleAttention: {
-    color: colors.danger,
+    color: colors.dangerText,
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily },
   sectionCountBadge: {

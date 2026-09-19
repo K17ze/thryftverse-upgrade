@@ -33,6 +33,7 @@
 
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join, resolve, extname, relative } from 'path';
+import { fileURLToPath } from 'url';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const SRC = join(ROOT, 'src');
@@ -112,6 +113,65 @@ function isCommentLine(line) {
   );
 }
 
+// ─── Enclosing-block gate detection (F02) ────────────────────────────────────
+//
+// Some flagged assignments are legitimate because of WHERE they sit:
+//   - inside `if (ENABLE_RUNTIME_MOCKS)` / `if (__DEV__)` blocks — dead code
+//     in production (F19 fail-closes the flag), so the gate is real.
+//   - inside `catch` blocks — an honest degraded-state label (e.g. `isDemo`
+//     marking that a fallback path produced the result), not fabrication.
+//
+// `enclosingGateKind` walks the brace structure upward from the flagged
+// line, evaluating every enclosing block opener (not just the innermost)
+// so nested `if (cond) { if (ENABLE_RUNTIME_MOCKS) { … } }` is still
+// recognised. Returns 'gate' | 'catch' | null.
+
+const GATE_TOKEN = /ENABLE_RUNTIME_MOCKS|__DEV__/;
+const CATCH_TOKEN = /\bcatch\b/;
+
+function enclosingGateKind(lines, lineIndex, charIndex) {
+  // Evaluate the statement that owns the block opener. Walk upward from the
+  // opener line only until a statement boundary (a line ending in `;`, `{`,
+  // `}` or blank) — this includes multi-line conditions like
+  // `if (\n  ENABLE_RUNTIME_MOCKS && x\n) {` but stops before an unrelated
+  // `} catch (e) {` line, so `if (ENABLE_RUNTIME_MOCKS) {` inside a catch is
+  // classified 'gate', not 'catch'.
+  const openerKind = (openerLineIdx) => {
+    let start = openerLineIdx;
+    while (start > 0) {
+      const above = lines[start - 1].trimEnd();
+      if (above === '' || /[;{}]$/.test(above)) break;
+      start--;
+    }
+    const context = lines.slice(start, openerLineIdx + 1).join(' ');
+    if (CATCH_TOKEN.test(context)) return 'catch';
+    if (GATE_TOKEN.test(context)) return 'gate';
+    return null;
+  };
+
+  // Scan upward tracking brace depth. Each line is processed right-to-left
+  // so the rightmost `{` (the nearest opener) is found before the `}` that
+  // may close a sibling block on the same line (`} catch {`, `} else {`).
+  let depth = 0;
+  for (let i = lineIndex; i >= 0; i--) {
+    const text = i === lineIndex ? lines[i].slice(0, charIndex) : lines[i];
+    for (let c = text.length - 1; c >= 0; c--) {
+      const ch = text[c];
+      if (ch === '}') {
+        depth++;
+      } else if (ch === '{') {
+        depth--;
+        if (depth < 0) {
+          const kind = openerKind(i);
+          if (kind) return kind;
+          depth++; // consume this opener and keep scanning outward
+        }
+      }
+    }
+  }
+  return null;
+}
+
 // ─── ERROR checks ────────────────────────────────────────────────────────────
 
 /**
@@ -125,30 +185,42 @@ function checkDemoModeTrue(src, filePath) {
     const line = lines[i];
     if (isCommentLine(line)) continue;
 
-    // DEMO_MODE = true not gated behind __DEV__
+    // DEMO_MODE = true not gated behind __DEV__/ENABLE_RUNTIME_MOCKS.
     // Matches: FOO_DEMO_MODE = true, const BAR_DEMO_MODE = true
     // Does NOT match: DEMO_MODE = __DEV__ or DEMO_MODE = false
     const demoMatch = /(\w*DEMO_MODE)\s*=\s*true\b/.exec(line);
     if (demoMatch) {
-      violations.push({
-        file: relPath(filePath),
-        line: i + 1,
-        rule: 'demo-mode-true',
-        severity: 'error',
-        message: `${demoMatch[1]} = true is not gated behind __DEV__ — use \` = __DEV__\` instead`,
-      });
+      const gate = enclosingGateKind(lines, i, demoMatch.index);
+      // 'gate' — inside an ENABLE_RUNTIME_MOCKS/__DEV__ block: dead code in
+      // production (F19 fail-closes the flag). A bare `catch` does NOT
+      // excuse it — activating mocks on production failure is residue.
+      if (gate !== 'gate') {
+        violations.push({
+          file: relPath(filePath),
+          line: i + 1,
+          rule: 'demo-mode-true',
+          severity: 'error',
+          message: `${demoMatch[1]} = true is not gated behind __DEV__/ENABLE_RUNTIME_MOCKS — use \` = __DEV__\` or an ENABLE_RUNTIME_MOCKS branch instead`,
+        });
+      }
     }
 
     // isDemo = true literal assignment (not isDemo: someFlag which is a property)
     const isDemoMatch = /\bisDemo\s*=\s*true\b/.exec(line);
     if (isDemoMatch) {
-      violations.push({
-        file: relPath(filePath),
-        line: i + 1,
-        rule: 'is-demo-true',
-        severity: 'error',
-        message: `isDemo = true in production code — use a __DEV__-gated flag instead`,
-      });
+      const gate = enclosingGateKind(lines, i, isDemoMatch.index);
+      // 'gate' — dev/mocks-gated. 'catch' — honest degraded-state label:
+      // the fallback path ran, and flagging the result as demo keeps the
+      // disclosure truthful rather than fabricating a clean success.
+      if (!gate) {
+        violations.push({
+          file: relPath(filePath),
+          line: i + 1,
+          rule: 'is-demo-true',
+          severity: 'error',
+          message: `isDemo = true in production code — use a __DEV__-gated flag or a degraded-path (catch) label instead`,
+        });
+      }
     }
   }
   return violations;
@@ -793,4 +865,12 @@ function main() {
   process.exit(0);
 }
 
-main();
+// Exported for the regression suite (check-production-residue.test.mjs) —
+// importing the module must not run the CLI scan.
+export { checkDemoModeTrue, enclosingGateKind };
+
+const invokedAsScript =
+  process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (invokedAsScript) {
+  main();
+}

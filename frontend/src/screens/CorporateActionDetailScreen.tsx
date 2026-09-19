@@ -309,7 +309,7 @@ export default function CorporateActionDetailScreen() {
     >
       <Text
         maxFontSizeMultiplier={1.4}
-        style={[styles.statusChipText, { color: displayStatus === 'open' ? colors.success : colors.textSecondary }]}
+        style={[styles.statusChipText, { color: displayStatus === 'open' ? colors.successText : colors.textSecondary }]}
       >
         {statusLabel(displayStatus)}
       </Text>
@@ -380,7 +380,7 @@ export default function CorporateActionDetailScreen() {
   const renderRow = (label: string, value: string, opts?: { danger?: boolean }) => (
     <View style={styles.row} key={label}>
       <Text maxFontSizeMultiplier={1.5} style={[styles.rowLabel, { color: colors.textMuted }]}>{label}</Text>
-      <Text maxFontSizeMultiplier={1.5} style={[styles.rowValue, { color: opts?.danger ? colors.danger : colors.textPrimary }]}>
+      <Text maxFontSizeMultiplier={1.5} style={[styles.rowValue, { color: opts?.danger ? colors.dangerText : colors.textPrimary }]}>
         {value}
       </Text>
     </View>
@@ -518,7 +518,7 @@ export default function CorporateActionDetailScreen() {
                   const entry = votes.summary.find((s) => s.vote === v);
                   const power = entry?.votingPowerUnits ?? 0;
                   const pct = totalVotingPower > 0 ? (power / totalVotingPower) * 100 : 0;
-                  const color = v === 'for' ? colors.success : v === 'against' ? colors.danger : colors.textMuted;
+                  const color = v === 'for' ? colors.successText : v === 'against' ? colors.dangerText : colors.textMuted;
                   return (
                     <View key={v} style={styles.tallyRow}>
                       <Text maxFontSizeMultiplier={1.5} style={[styles.tallyLabel, { color: colors.textSecondary }]}>
@@ -542,7 +542,7 @@ export default function CorporateActionDetailScreen() {
             {/* My vote / eligibility / closed notes — honest states. */}
             {myVote && (
               <View style={[styles.note, { backgroundColor: colors.successSubtle }]} accessibilityLiveRegion="polite">
-                <Ionicons name="checkmark-circle" size={16} color={colors.success} aria-hidden={true} />
+                <Ionicons name="checkmark-circle" size={16} color={colors.successText} aria-hidden={true} />
                 <Text maxFontSizeMultiplier={1.5} style={[styles.noteText, { color: colors.textPrimary }]}>
                   {`You voted ${voteLabel(myVote)}${eligibility ? ` · ${eligibility.votingPowerUnits.toLocaleString()} units voting power` : ''}`}
                 </Text>
@@ -558,7 +558,7 @@ export default function CorporateActionDetailScreen() {
             )}
             {voteOpen && eligibility && !eligibility.eligible && (
               <View style={[styles.note, { backgroundColor: colors.warningSubtle }]}>
-                <Ionicons name="lock-closed-outline" size={16} color={colors.warning} aria-hidden={true} />
+                <Ionicons name="lock-closed-outline" size={16} color={colors.warningText} aria-hidden={true} />
                 <Text maxFontSizeMultiplier={1.5} style={[styles.noteText, { color: colors.textPrimary }]}>
                   {eligibility.reason || 'You are not eligible to vote on this action'}
                 </Text>
@@ -568,7 +568,7 @@ export default function CorporateActionDetailScreen() {
             {/* Vote fetch error — surfaced with retry, not swallowed. */}
             {voteError && (
               <View style={styles.voteError}>
-                <Text maxFontSizeMultiplier={1.5} style={[styles.errorText, { color: colors.danger }]}>{voteError}</Text>
+                <Text maxFontSizeMultiplier={1.5} style={[styles.errorText, { color: colors.dangerText }]}>{voteError}</Text>
                 <AppButton
                   title="Retry"
                   onPress={() => { haptics.tap(); void loadVotes(); }}

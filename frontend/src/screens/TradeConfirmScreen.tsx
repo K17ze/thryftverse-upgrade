@@ -583,7 +583,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
             return to the ticket for a fresh preview before committing. */}
         {quoteChanged && !isExpired && (
           <View style={[styles.quoteChangedCard, { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder }]}>
-            <Text style={[styles.remainderHeader, { color: colors.warning }]}>
+            <Text style={[styles.remainderHeader, { color: colors.warningText }]}>
               Quote changed
             </Text>
             <Text style={[styles.remainderText, { color: colors.textSecondary }]}>
@@ -598,7 +598,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
             the ticket produces a fresh quote. */}
         {commitBlocked && !isExpired && (
           <View style={[styles.quoteChangedCard, { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder }]}>
-            <Text style={[styles.remainderHeader, { color: colors.warning }]}>
+            <Text style={[styles.remainderHeader, { color: colors.warningText }]}>
               {feeUnavailable ? 'Fee unavailable' : 'Quote incomplete'}
             </Text>
             <Text style={[styles.remainderText, { color: colors.textSecondary }]}>
@@ -642,6 +642,10 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
             requireHold={requireHold}
             title={isBuy ? 'Confirm buy' : 'Confirm sell'}
             iconName={isBuy ? 'arrow-up-circle-outline' : 'arrow-down-circle-outline'}
+            // Direction-coloured commit — the final action carries the
+            // same green/red grammar as the ticket and book, so the
+            // direction is unmistakable at the point of commitment.
+            accentColor={isBuy ? colors.coownUp : colors.coownDown}
             onSubmit={handleConfirm}
             disabled={isSubmitting || isReleasing || isExpired || quoteChanged || commitBlocked}
             accessibilityLabel={isExpired

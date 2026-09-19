@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
   withTiming,
@@ -392,6 +392,28 @@ function MessageBubbleBase({
             </>
           ) : null}
 
+          {documentUri ? (
+            <Pressable
+              onPress={() => { Linking.openURL(documentUri).catch(() => undefined); }}
+              style={[styles.documentRow, { borderColor: isMe ? colors.scrimTextTertiary : colors.border }]}
+              accessibilityRole="button"
+              accessibilityLabel={documentName ? `Open document ${documentName}` : 'Open document'}
+            >
+              <Ionicons name="document-outline" size={22} color={isMe ? colors.textInverse : colors.brand} />
+              <View style={styles.documentMeta}>
+                <Text style={[styles.documentName, { color: bubbleText }]} numberOfLines={1}>
+                  {documentName ?? 'Document'}
+                </Text>
+                {documentMimeType ? (
+                  <Text style={[styles.documentMime, { color: metaColor }]} numberOfLines={1}>
+                    {documentMimeType}
+                  </Text>
+                ) : null}
+              </View>
+              <Ionicons name="download-outline" size={16} color={metaColor} />
+            </Pressable>
+          ) : null}
+
           {text ? (
             <>
               {isDraft ? (
@@ -489,7 +511,7 @@ function MessageBubbleBase({
                 {isUploading || readStatus === 'sending' ? (
                   <Ionicons name="time-outline" size={12} color={metaColor} />
                 ) : hasFailed ? (
-                  <Ionicons name="alert-circle" size={12} color={isMe ? colors.textInverse : colors.danger} />
+                  <Ionicons name="alert-circle" size={12} color={isMe ? colors.textInverse : colors.dangerText} />
                 ) : status === 'reconciling' ? (
                   // The HTTP send failed but the server may have created
                   // the message — a muted sync glyph is the honest state:
@@ -533,7 +555,7 @@ function MessageBubbleBase({
 
         {hasFailed && onRetry ? (
           <Pressable onPress={onRetry} style={styles.retryBadge} accessibilityRole="button" accessibilityLabel="Retry sending message">
-            <Ionicons name="refresh" size={11} color={colors.danger} />
+            <Ionicons name="refresh" size={11} color={colors.dangerText} />
             <Text style={styles.retryText}>Tap to retry</Text>
           </Pressable>
         ) : null}
@@ -549,7 +571,7 @@ function MessageBubbleBase({
             accessibilityRole="button"
             accessibilityLabel="Retry sending agent draft"
           >
-            <Ionicons name="refresh" size={11} color={colors.danger} />
+            <Ionicons name="refresh" size={11} color={colors.dangerText} />
             <Text style={styles.retryText}>Tap to retry</Text>
           </Pressable>
         ) : null}
@@ -733,6 +755,25 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: TypographyV2.label.letterSpacing },
+  documentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.sm,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs + 2,
+    minWidth: 180,
+    marginBottom: 2 },
+  documentMeta: {
+    flex: 1,
+    gap: 1 },
+  documentName: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
+  documentMime: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   mediaWrap: {
     backgroundColor: 'transparent',
     position: 'relative' },
@@ -779,7 +820,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   retryText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.danger },
+    color: colors.dangerText },
   reactions: {
     flexDirection: 'row',
     gap: 4,

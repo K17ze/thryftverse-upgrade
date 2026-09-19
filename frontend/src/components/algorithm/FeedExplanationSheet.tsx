@@ -323,11 +323,11 @@ export function FeedExplanationSheet({
                 accessibilityState={{ disabled: removingTopic !== null }}
               >
                 {removingTopic !== null ? (
-                  <ActivityIndicator size="small" color={colors.danger} />
+                  <ActivityIndicator size="small" color={colors.dangerText} />
                 ) : (
                   <>
-                    <Ionicons name="trash-outline" size={16} color={colors.danger} />
-                    <Text style={[styles.removeActionText, { color: colors.danger }]}>
+                    <Ionicons name="trash-outline" size={16} color={colors.dangerText} />
+                    <Text style={[styles.removeActionText, { color: colors.dangerText }]}>
                       Remove this topic
                     </Text>
                   </>

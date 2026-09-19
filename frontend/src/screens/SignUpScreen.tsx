@@ -42,6 +42,7 @@ export default function SignUpScreen() {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [referralCode, setReferralCode] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [socialLoading, setSocialLoading] = useState<'google' | 'apple' | null>(null);
@@ -160,10 +161,10 @@ export default function SignUpScreen() {
     if (len >= 12) score++;
     if (variety >= 3) score++;
     if (variety >= 4 && len >= 10) score++;
-    if (score <= 1) return { level: 1, label: 'Weak', color: colors.danger };
-    if (score === 2) return { level: 2, label: 'Fair', color: colors.warning };
+    if (score <= 1) return { level: 1, label: 'Weak', color: colors.dangerText };
+    if (score === 2) return { level: 2, label: 'Fair', color: colors.warningText };
     if (score === 3) return { level: 3, label: 'Good', color: colors.bronze };
-    return { level: 4, label: 'Strong', color: colors.success };
+    return { level: 4, label: 'Strong', color: colors.successText };
   }, [password, colors]);
 
   const errorPulse = useSharedValue(1);
@@ -277,10 +278,12 @@ export default function SignUpScreen() {
     trackFunnelStep('signup', 'signup_started', { method: 'email' });
 
     try {
+      const normalizedReferralCode = referralCode.trim().toUpperCase();
       const result = await signupWithPassword({
         username: normalizedUsername,
         email: normalizedEmail,
-        password });
+        password,
+        ...(normalizedReferralCode ? { referralCode: normalizedReferralCode } : {}) });
 
       login(result.storeUser);
       setTwoFactorEnabled(result.user.twoFactorEnabled);
@@ -399,7 +402,7 @@ export default function SignUpScreen() {
           {/* Inline auth error banner for social signup failures */}
           {authError ? (
             <View style={styles.errorBanner} accessibilityRole="alert" accessibilityLiveRegion="assertive">
-              <Ionicons name="alert-circle-outline" size={16} color={colors.danger} />
+              <Ionicons name="alert-circle-outline" size={16} color={colors.dangerText} />
               <Text style={styles.errorBannerText} maxFontSizeMultiplier={1.3}>{authError}</Text>
               <Pressable
                 onPress={() => setAuthError(null)}
@@ -509,6 +512,24 @@ export default function SignUpScreen() {
                     if (errorMsg) setErrorMsg('');
                     if (usernameError) setUsernameError('');
                   }}
+                  onSubmitEditing={() => {
+                    Keyboard.dismiss();
+                    if (canSubmit) void handleSignUp();
+                  }}
+                  containerStyle={styles.inputGroup}
+                />
+
+                {/* Optional referral code — attributes this signup to the
+                    friend who invited them. Skippable; an empty field is a
+                    normal signup. */}
+                <AppInput
+                  label="Referral code (optional)"
+                  placeholder="TV-XXXXXX"
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  value={referralCode}
+                  onChangeText={setReferralCode}
                   onSubmitEditing={() => {
                     Keyboard.dismiss();
                     if (canSubmit) void handleSignUp();
@@ -688,7 +709,7 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.danger,
+    color: colors.dangerText,
     lineHeight: TypographyV2.meta.size + 2 },
 
   inputGroup: { marginBottom: Space.md },
@@ -738,7 +759,7 @@ function createStyles(colors: ThemeColors) {
   termsLink: { fontFamily: Typography.family.semibold, color: colors.textPrimary, textDecorationLine: 'underline' },
 
   footer: { paddingBottom: Space.sm, position: 'relative' },
-  errorText: { color: colors.danger, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, textAlign: 'center', marginBottom: Space.md - 4 },
+  errorText: { color: colors.dangerText, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, textAlign: 'center', marginBottom: Space.md - 4 },
   primaryBtn: { backgroundColor: colors.brand, height: 56, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
   primaryBtnDisabled: { opacity: 0.45 },
   primaryText: { color: colors.textInverse, fontSize: TypographyV2.body.size + 2, fontFamily: TypographyV2.body.fontFamily } });

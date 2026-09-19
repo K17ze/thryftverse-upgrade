@@ -94,9 +94,9 @@ export function CoOwnMarketHighlightsCarousel({
 
   const renderItem = React.useCallback(({ item }: { item: CoOwnMarketHighlight }) => {
     const statusColor = item.status === 'open'
-      ? colors.success
+      ? colors.successText
       : item.status === 'paused'
-        ? colors.warning
+        ? colors.warningText
         : colors.textMuted;
 
     return (

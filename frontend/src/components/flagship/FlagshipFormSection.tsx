@@ -91,9 +91,9 @@ export function FlagshipFormSection({
 function resolveToneColor(colors: ReturnType<typeof useAppTheme>['colors'], tone: string): string {
   switch (tone) {
     case 'brand': return colors.brand;
-    case 'success': return colors.success;
-    case 'warning': return colors.warning;
-    case 'danger': return colors.danger;
+    case 'success': return colors.successText;
+    case 'warning': return colors.warningText;
+    case 'danger': return colors.dangerText;
     default: return colors.border;
   }
 }

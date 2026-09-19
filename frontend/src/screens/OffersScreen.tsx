@@ -53,6 +53,7 @@ import { fetchPublicProfile } from '../services/profileApi';
 import { useBackendData } from '../context/BackendDataContext';
 import { useStore } from '../store/useStore';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useUserOfferEvent } from '../services/realtimeClient';
 import { useNotifications } from '../hooks/useNotifications';
 import { useHaptic } from '../hooks/useHaptic';
 import { useVisuallyComplete } from '../performance/visuallyComplete';
@@ -133,6 +134,15 @@ export default function OffersScreen() {
   }, [showError]);
 
   useFocusEffect(
+    useCallback(() => {
+      void loadOffers();
+    }, [loadOffers]),
+  );
+
+  // Offer lifecycle events arrive participant-privately on the user topic —
+  // refetch so accept/decline/counter/expiry land without a manual refresh.
+  useUserOfferEvent(
+    currentUserId,
     useCallback(() => {
       void loadOffers();
     }, [loadOffers]),
@@ -388,7 +398,11 @@ export default function OffersScreen() {
 
   const handleRowPress = useCallback(
     (offer: ListingOffer) => {
-      if (offer.conversationId) {
+      // An accepted offer is a deal in flight — its truthful destination is
+      // the bound order, not the negotiation thread.
+      if (offer.orderId) {
+        navigation.navigate('OrderDetail', { orderId: offer.orderId });
+      } else if (offer.conversationId) {
         navigation.navigate('Chat', { conversationId: offer.conversationId });
       } else {
         navigation.navigate('ItemDetail', { itemId: offer.listingId });
@@ -414,12 +428,18 @@ export default function OffersScreen() {
           message: t('offers.confirm.acceptBody'),
           confirmLabel: t('offers.action.accept'),
         };
-      case 'decline':
+      case 'decline': {
+        const ownCounter = confirm.offer.offeredByUserId === currentUserId;
         return {
-          title: t('offers.confirm.declineTitle', { amount }),
-          message: t('offers.confirm.declineBody'),
-          confirmLabel: t('offers.action.decline'),
+          title: ownCounter
+            ? t('offers.confirm.withdrawTitle', { amount })
+            : t('offers.confirm.declineTitle', { amount }),
+          message: ownCounter
+            ? t('offers.confirm.withdrawBody')
+            : t('offers.confirm.declineBody'),
+          confirmLabel: ownCounter ? t('offers.action.withdraw') : t('offers.action.decline'),
         };
+      }
       case 'cancel':
       default:
         return {
@@ -428,7 +448,7 @@ export default function OffersScreen() {
           confirmLabel: t('offers.action.cancel'),
         };
     }
-  }, [confirm.offer, confirm.action, formatFromFiat]);
+  }, [confirm.offer, confirm.action, formatFromFiat, currentUserId]);
 
   const renderRow = useCallback(
     ({ item }: { item: ListingOffer }) => (

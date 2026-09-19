@@ -174,13 +174,13 @@ export default function SellScreen() {
     fieldLabel: { color: colors.textMuted },
     fieldInput: { color: colors.textPrimary },
     fieldHelper: { color: colors.textMuted },
-    fieldError: { color: colors.danger },
+    fieldError: { color: colors.dangerText },
     hairline: { backgroundColor: colors.border },
     pickerValue: { color: colors.textPrimary },
     pickerPlaceholder: { color: colors.textMuted },
     currencySymbol: { color: colors.textMuted },
     priceInput: { color: colors.textPrimary },
-    discountPreview: { color: colors.danger },
+    discountPreview: { color: colors.dangerText },
     soldCompsText: { color: colors.textMuted },
     soldCompsAction: { color: colors.brand },
     togglePill: { backgroundColor: colors.surface, borderColor: colors.border },
@@ -189,14 +189,14 @@ export default function SellScreen() {
     toggleTextActive: { color: colors.textInverse },
     authThumb: { backgroundColor: colors.surfaceAlt },
     authAddBtn: { borderColor: colors.border, backgroundColor: colors.surface },
-    inlineErrorText: { color: colors.danger },
+    inlineErrorText: { color: colors.dangerText },
     mediaHintText: { color: colors.textMuted },
     priceSuggestion: { color: colors.brand },
-    priceMarketHigh: { color: colors.warning },
+    priceMarketHigh: { color: colors.warningText },
     priceMarketLow: { color: colors.textMuted },
-    priceMarketGood: { color: colors.success },
+    priceMarketGood: { color: colors.successText },
     priceNoCompsHint: { color: colors.textMuted },
-    charCountWarn: { color: colors.warning },
+    charCountWarn: { color: colors.warningText },
     fieldRequiredHint: { color: colors.textMuted },
     autofillCard: { backgroundColor: colors.brandSubtle },
     autofillTitle: { color: colors.textPrimary },
@@ -226,8 +226,8 @@ export default function SellScreen() {
                 exiting={reducedMotion ? undefined : FadeOut.duration(200)}
                 style={styles.navDraftSavedRow}
               >
-                <AppIcon name="verified" focused size={IconSize.micro} color="success" opticalCenter accessible={false} />
-                <Text style={[styles.navDraftText, { color: colors.success }]}>{t('listing.create.saved')}</Text>
+                <AppIcon name="verified" focused size={IconSize.micro} color="successText" opticalCenter accessible={false} />
+                <Text style={[styles.navDraftText, { color: colors.successText }]}>{t('listing.create.saved')}</Text>
               </Reanimated.View>
             ) : null}
           </View>
@@ -339,7 +339,7 @@ export default function SellScreen() {
               <View style={styles.fieldLabelRow}>
                 <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.listingTitle')}</Text>
                 {title.trim().length > 0 ? (
-                  <AppIcon name="verified" focused size={IconSize.micro} color="success" opticalCenter accessible={false} />
+                  <AppIcon name="verified" focused size={IconSize.micro} color="successText" opticalCenter accessible={false} />
                 ) : (
                   <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                 )}
@@ -456,7 +456,7 @@ export default function SellScreen() {
                 <View style={styles.fieldLabelRow}>
                   <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.category')}</Text>
                   {category ? (
-                    <AppIcon name="verified" focused size={IconSize.micro} color="success" opticalCenter accessible={false} />
+                    <AppIcon name="verified" focused size={IconSize.micro} color="successText" opticalCenter accessible={false} />
                   ) : (
                     <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                   )}
@@ -488,7 +488,7 @@ export default function SellScreen() {
                     <View style={styles.fieldLabelRow}>
                       <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.subcategory')}</Text>
                       {subcategory ? (
-                        <AppIcon name="verified" focused size={IconSize.micro} color="success" opticalCenter accessible={false} />
+                        <AppIcon name="verified" focused size={IconSize.micro} color="successText" opticalCenter accessible={false} />
                       ) : (
                         <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.optional')}</Text>
                       )}
@@ -515,7 +515,7 @@ export default function SellScreen() {
                 <View style={styles.fieldLabelRow}>
                   <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.brand')}</Text>
                   {brand ? (
-                    <AppIcon name="verified" focused size={IconSize.micro} color="success" opticalCenter accessible={false} />
+                    <AppIcon name="verified" focused size={IconSize.micro} color="successText" opticalCenter accessible={false} />
                   ) : completeness.policy.brandlessValid ? (
                     <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.optional')}</Text>
                   ) : (
@@ -549,7 +549,7 @@ export default function SellScreen() {
                 <View style={styles.fieldLabelRow}>
                   <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.size')}</Text>
                   {size ? (
-                    <AppIcon name="verified" focused size={IconSize.micro} color="success" opticalCenter accessible={false} />
+                    <AppIcon name="verified" focused size={IconSize.micro} color="successText" opticalCenter accessible={false} />
                   ) : completeness.policy.sizelessValid ? (
                     <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.optional')}</Text>
                   ) : (
@@ -585,7 +585,7 @@ export default function SellScreen() {
                 <View style={styles.fieldLabelRow}>
                   <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.condition')}</Text>
                   {condition ? (
-                    <AppIcon name="verified" focused size={IconSize.micro} color="success" opticalCenter accessible={false} />
+                    <AppIcon name="verified" focused size={IconSize.micro} color="successText" opticalCenter accessible={false} />
                   ) : (
                     <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                   )}
@@ -650,7 +650,7 @@ export default function SellScreen() {
                       )}
                       {priceVsMarket === 'above' && (
                         <View style={styles.soldCompsHint}>
-                          <AppIcon name="trending-up-outline" size={IconSize.micro} color="warning" opticalCenter accessible={false} />
+                          <AppIcon name="trending-up-outline" size={IconSize.micro} color="warningText" opticalCenter accessible={false} />
                           <Text style={[styles.soldCompsText, themed.priceMarketHigh]}>
                             {t('listing.create.pricedAboveRange')}
                           </Text>
@@ -666,7 +666,7 @@ export default function SellScreen() {
                       )}
                       {priceVsMarket === 'in_range' && (
                         <View style={styles.soldCompsHint}>
-                          <AppIcon name="verified" focused size={IconSize.micro} color="success" opticalCenter accessible={false} />
+                          <AppIcon name="verified" focused size={IconSize.micro} color="successText" opticalCenter accessible={false} />
                           <Text style={[styles.soldCompsText, themed.priceMarketGood]}>
                             {t('listing.create.pricedInRange')}
                           </Text>
@@ -698,7 +698,7 @@ export default function SellScreen() {
                         </Text>
                       </View>
                       <View style={styles.proceedsRight}>
-                        <Text style={[styles.proceedsAmount, { color: colors.success }]}>
+                        <Text style={[styles.proceedsAmount, { color: colors.successText }]}>
                           {currencySymbol}{(numericPrice - calculatePlatformChargeGbp(numericPrice)).toFixed(2)}
                         </Text>
                         <Text style={[styles.proceedsFeeHint, themed.fieldHelper]}>
@@ -841,7 +841,7 @@ export default function SellScreen() {
               <View style={styles.fieldLabelRow}>
                 <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.description')}</Text>
                 {desc.trim().length >= 10 ? (
-                  <AppIcon name="checkmark-circle" size={12} color="success" opticalCenter accessible={false} />
+                  <AppIcon name="checkmark-circle" size={12} color="successText" opticalCenter accessible={false} />
                 ) : (
                   <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                 )}
@@ -984,7 +984,7 @@ export default function SellScreen() {
               only when the pipeline is idle. */}
           {errorMsg && (
             <View style={styles.inlineErrorRow}>
-              <AppIcon name="alert-circle-outline" size={16} color="danger" opticalCenter accessible={false} />
+              <AppIcon name="alert-circle-outline" size={16} color="dangerText" opticalCenter accessible={false} />
               <Text style={[styles.inlineErrorText, themed.inlineErrorText]}>{errorMsg}</Text>
             </View>
           )}
@@ -1000,12 +1000,12 @@ export default function SellScreen() {
             <AppIcon
               name={completeness.canActivate ? 'checkmark-circle' : 'alert-circle-outline'}
               size={16}
-              color={completeness.canActivate ? colors.success : colors.warning}
+              color={completeness.canActivate ? colors.successText : colors.warningText}
               opticalCenter
               accessible={false}
             />
             <View style={styles.completenessTextWrap}>
-              <Text style={[styles.completenessLabel, { color: completeness.canActivate ? colors.success : colors.textSecondary }]}>
+              <Text style={[styles.completenessLabel, { color: completeness.canActivate ? colors.successText : colors.textSecondary }]}>
                 {completenessLabel}
               </Text>
               {recommendedLabel && !completeness.canActivate ? (

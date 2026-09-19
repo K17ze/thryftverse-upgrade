@@ -113,11 +113,11 @@ export function CoOwnCorporateActionRow({
           : colors.surfaceAlt;
   const statusText =
     statusCfg.tone === 'success'
-      ? colors.success
+      ? colors.successText
       : statusCfg.tone === 'danger'
-        ? colors.danger
+        ? colors.dangerText
         : statusCfg.tone === 'warning'
-          ? colors.warning
+          ? colors.warningText
           : colors.textSecondary;
 
   const amountColor = amountLabel

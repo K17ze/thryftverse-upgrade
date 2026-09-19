@@ -91,10 +91,10 @@ export function EditListingFooter({
             <ActivityIndicator size="small" color={colors.brand} />
           )}
           {saveStage === 'failed_recoverable' && (
-            <AppIcon name="warning-outline" size={14} color="danger" opticalCenter accessible={false} />
+            <AppIcon name="warning-outline" size={14} color="dangerText" opticalCenter accessible={false} />
           )}
           {saveStage === 'completed' && (
-            <AppIcon name="checkmark-circle" size={14} color="success" opticalCenter accessible={false} />
+            <AppIcon name="checkmark-circle" size={14} color="successText" opticalCenter accessible={false} />
           )}
           <Text
             style={[
@@ -178,7 +178,7 @@ function createStyles(colors: ThemeColors) {
     fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary },
   feedbackTextError: {
-    color: colors.danger,
+    color: colors.dangerText,
     fontFamily: Typography.family.semibold },
   actionRow: {
     flexDirection: 'row',

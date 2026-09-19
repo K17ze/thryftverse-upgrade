@@ -106,6 +106,11 @@ export interface PublicProfileStorefrontSection {
 
 export interface PublicProfileStorefrontSummary {
   announcement: string | null;
+  policies: {
+    shipping: string | null;
+    returns: string | null;
+    additional: string | null;
+  };
   sections: PublicProfileStorefrontSection[];
   featuredListingIds: string[];
 }

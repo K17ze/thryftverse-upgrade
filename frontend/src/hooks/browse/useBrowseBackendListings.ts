@@ -84,7 +84,6 @@ export function useBrowseBackendListings({
       browseFilters.sizes.length > 0 ||
       browseFilters.condition !== 'Any' ||
       browseFilters.sort !== 'Recommended' ||
-      browseFilters.sustainableOnly ||
       (categoryId && categoryId !== 'search' && categoryId !== 'all');
 
     if (!hasBackendFilters) {
@@ -94,10 +93,9 @@ export function useBrowseBackendListings({
       return;
     }
 
-    // GET /listings accepts a single brand/size value (ILIKE match). When
-    // the user multi-selects, sending only [0] silently narrows to the
-    // first pick — omit the param instead and let useBrowseListings apply
-    // the full multi-select predicate client-side over the returned page.
+    // GET /listings accepts a CSV `brands` param (ILIKE ANY match). Sizes
+    // still only support a single value — for multi-select sizes the client
+    // predicate in useBrowseListings narrows the returned page.
     const subcategoryToken =
       categoryId !== 'search' && categoryId !== 'all'
         ? getSubcategoryToken(categoryId, subcategoryId, title)
@@ -106,13 +104,12 @@ export function useBrowseBackendListings({
       query: browseFilters.query.trim() || undefined,
       category: categoryId !== 'search' && categoryId !== 'all' ? categoryId : undefined,
       subcategory: subcategoryToken || undefined,
-      brand: browseFilters.brands.length === 1 ? browseFilters.brands[0] : undefined,
+      brands: browseFilters.brands.length > 0 ? browseFilters.brands : undefined,
       size: browseFilters.sizes.length === 1 ? browseFilters.sizes[0] : undefined,
       condition: browseFilters.condition !== 'Any' ? browseFilters.condition : undefined,
       minPrice: browseFilters.priceMin ?? undefined,
       maxPrice: browseFilters.priceMax ?? undefined,
-      sort: SORT_MAP[browseFilters.sort] || 'newest',
-      sustainableOnly: browseFilters.sustainableOnly };
+      sort: SORT_MAP[browseFilters.sort] || 'newest' };
     requestParamsRef.current = requestParams;
 
     let cancelled = false;

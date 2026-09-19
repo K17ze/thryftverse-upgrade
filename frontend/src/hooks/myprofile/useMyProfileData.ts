@@ -5,6 +5,7 @@ import { listCoOwnAssets, fetchCoOwnHoldings } from '../../services/marketApi';
 import { fetchFollowCounts } from '../../services/profileApi';
 import { fetchLooksFromApi, type LookApiItem } from '../../services/looksApi';
 import { fetchPosterHighlights, type PosterHighlight } from '../../services/postersApi';
+import { fetchMyStorefront, type StorefrontResponse } from '../../services/storefrontApi';
 import { parseApiError } from '../../lib/apiClient';
 import { useSellerTrust } from '../../platform/product';
 import { useSellerReviewsInfinite } from '../../platform/server';
@@ -118,6 +119,11 @@ export function useMyProfileData(userId: string | undefined) {
     }
   }, [userId]);
 
+  // Own storefront — announcement + seller-authored policies for the About
+  // tab. Focus-refreshed so edits made in Edit Profile appear on return.
+  // Failure leaves null; the tab falls back to platform/trust copy.
+  const [myStorefront, setMyStorefront] = useState<StorefrontResponse | null>(null);
+
   // Refetch looks on focus so newly published content appears without
   // requiring a manual refresh. React Query cache invalidation after
   // publish marks these queries stale, but the direct-fetch pattern
@@ -125,7 +131,12 @@ export function useMyProfileData(userId: string | undefined) {
   useFocusEffect(
     useCallback(() => {
       void loadMyLooks();
-    }, [loadMyLooks]),
+      if (userId) {
+        fetchMyStorefront()
+          .then(setMyStorefront)
+          .catch(() => {});
+      }
+    }, [loadMyLooks, userId]),
   );
 
   // Story highlights — fetched for the highlights rail between identity hero
@@ -162,5 +173,6 @@ export function useMyProfileData(userId: string | undefined) {
     looksError,
     loadMyLooks,
     highlights,
+    myStorefront,
   };
 }

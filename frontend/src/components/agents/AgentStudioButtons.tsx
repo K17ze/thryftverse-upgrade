@@ -75,7 +75,7 @@ export function SecondaryButton({
       hitSlop={8}
     >
       <Text
-        style={[styles.secondaryBtnText, { color: danger ? colors.danger : colors.textPrimary }]}
+        style={[styles.secondaryBtnText, { color: danger ? colors.dangerText : colors.textPrimary }]}
         numberOfLines={1}
       >
         {label}

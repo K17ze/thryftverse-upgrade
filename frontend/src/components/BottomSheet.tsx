@@ -125,6 +125,14 @@ interface BottomSheetProps {
    * the document, not to an arbitrary element (U63).
    */
   triggerRef?: React.RefObject<View>;
+  /**
+   * When false, children render directly in the sheet body without the
+   * internal KeyboardAwareScrollView. Required when the content owns its
+   * own scroll surface (e.g. a FlatList/FlashList) — a vertical list nested
+   * inside the sheet's ScrollView breaks windowing and the nested-scroll
+   * arbitration. Default true.
+   */
+  scrollable?: boolean;
 }
 
 export function BottomSheet({
@@ -137,6 +145,7 @@ export function BottomSheet({
   blurIntensity = 25,
   springDamping = 18,
   triggerRef,
+  scrollable = true,
 }: BottomSheetProps) {
   void springDamping; // physics sourced from useMotionConfig (reduced-motion aware)
 
@@ -215,6 +224,12 @@ export function BottomSheet({
   const nativeScrollGesture = React.useMemo(() => Gesture.Native(), []);
   const panGesture = Gesture.Pan()
     .requireExternalGestureToFail(nativeScrollGesture)
+    // The sheet dismisses on vertical drags only. Without the offset
+    // constraints the pan activates on horizontal drags too — once the
+    // native scroll fails — and pre-empts horizontal responders inside
+    // the content (e.g. the offer sheet's price slider).
+    .activeOffsetY([-10, 10])
+    .failOffsetX([-15, 15])
     .onStart(() => {
       'worklet';
       contextY.value = translateY.value;
@@ -294,14 +309,18 @@ export function BottomSheet({
           </View>
 
           <GestureDetector gesture={nativeScrollGesture}>
-            <KeyboardAwareScrollView
-              style={styles.contentWrap}
-              contentContainerStyle={{ flex: 1 }}
-              keyboardShouldPersistTaps="handled"
-              keyboardDismissMode="on-drag"
-            >
-              {children}
-            </KeyboardAwareScrollView>
+            {scrollable ? (
+              <KeyboardAwareScrollView
+                style={styles.contentWrap}
+                contentContainerStyle={{ flex: 1 }}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+              >
+                {children}
+              </KeyboardAwareScrollView>
+            ) : (
+              <View style={styles.contentWrap}>{children}</View>
+            )}
           </GestureDetector>
         </Reanimated.View>
       </GestureDetector>

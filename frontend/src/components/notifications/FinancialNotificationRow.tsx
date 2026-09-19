@@ -36,20 +36,20 @@ export interface FinancialNotificationRowProps {
 
 interface FinancialVisual {
   icon: keyof typeof Ionicons.glyphMap;
-  accentKey: 'success' | 'warning';
+  accentKey: 'successText' | 'warningText';
   typeLabel: string;
 }
 
 function resolveFinancialVisual(eventType: NotificationEventV2['eventType']): FinancialVisual {
   switch (eventType) {
     case 'payout_processed':
-      return { icon: 'cash-outline', accentKey: 'success', typeLabel: 'Payout' };
+      return { icon: 'cash-outline', accentKey: 'successText', typeLabel: 'Payout' };
     case 'refund_completed':
-      return { icon: 'return-down-back-outline', accentKey: 'warning', typeLabel: 'Refund' };
+      return { icon: 'return-down-back-outline', accentKey: 'warningText', typeLabel: 'Refund' };
     case 'order_refunded':
-      return { icon: 'return-down-back-outline', accentKey: 'warning', typeLabel: 'Refund' };
+      return { icon: 'return-down-back-outline', accentKey: 'warningText', typeLabel: 'Refund' };
     default:
-      return { icon: 'wallet-outline', accentKey: 'success', typeLabel: 'Transaction' };
+      return { icon: 'wallet-outline', accentKey: 'successText', typeLabel: 'Transaction' };
   }
 }
 

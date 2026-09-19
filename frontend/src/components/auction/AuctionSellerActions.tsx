@@ -48,8 +48,8 @@ export function AuctionSellerActions(props: Props) {
           accessibilityState={{ disabled: action.disabled, busy: action.disabled }}
           style={({ pressed }) => [styles.row, { borderTopColor: colors.borderSubtle, opacity: pressed || action.disabled ? 0.6 : 1 }]}
         >
-          <Ionicons name={action.icon} size={22} color={action.destructive ? colors.danger : colors.textSecondary} />
-          <Text style={[styles.label, { color: action.destructive ? colors.danger : colors.textPrimary }]}>{action.label}</Text>
+          <Ionicons name={action.icon} size={22} color={action.destructive ? colors.dangerText : colors.textSecondary} />
+          <Text style={[styles.label, { color: action.destructive ? colors.dangerText : colors.textPrimary }]}>{action.label}</Text>
           {!action.destructive ? <Ionicons name="chevron-forward" size={18} color={colors.textMuted} /> : null}
         </Pressable>
       ))}

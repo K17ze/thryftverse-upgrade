@@ -439,7 +439,7 @@ function createStyles(colors: ThemeColors) {
   statusText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.success,
+    color: colors.successText,
     textTransform: 'uppercase',
     letterSpacing: TypographyV2.meta.letterSpacing,
     lineHeight: TypographyV2.meta.lineHeight },

@@ -41,6 +41,10 @@ export interface HoldToSubmitButtonProps {
   onSubmit: () => void;
   /** Accessibility label. */
   accessibilityLabel?: string;
+  /** Optional accent fill — direction colour for commit actions
+   *  (buy=coownUp, sell=coownDown). Defaults to brand. The label text
+   *  stays explicit so direction is never colour-only. */
+  accentColor?: string;
 }
 
 export function HoldToSubmitButton({
@@ -49,7 +53,8 @@ export function HoldToSubmitButton({
   iconName,
   disabled,
   onSubmit,
-  accessibilityLabel }: HoldToSubmitButtonProps) {
+  accessibilityLabel,
+  accentColor }: HoldToSubmitButtonProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const haptic = useHaptic();
@@ -102,7 +107,7 @@ export function HoldToSubmitButton({
   const ringStyle = useAnimatedStyle(() => ({
     transform: [{ scale: progress.value }] }));
 
-  const bgColor = disabled ? colors.surfaceAlt : colors.brand;
+  const bgColor = disabled ? colors.surfaceAlt : (accentColor ?? colors.brand);
   const textColor = disabled ? colors.textMuted : colors.background;
 
   const a11yHint = requireHold && !reducedMotion

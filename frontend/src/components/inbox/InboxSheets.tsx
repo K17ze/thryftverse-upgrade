@@ -110,8 +110,8 @@ export function InboxSheets({
               accessibilityRole="button"
               accessibilityLabel="Delete conversation"
             >
-              <Ionicons name="trash-outline" size={22} color={colors.danger} />
-              <Text style={[styles.actionSheetRowLabel, { color: colors.danger }]}>
+              <Ionicons name="trash-outline" size={22} color={colors.dangerText} />
+              <Text style={[styles.actionSheetRowLabel, { color: colors.dangerText }]}>
                 Delete
               </Text>
             </AnimatedPressable>

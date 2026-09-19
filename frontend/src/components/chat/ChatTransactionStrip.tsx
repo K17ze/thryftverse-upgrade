@@ -25,7 +25,7 @@ import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useStore } from '../../store/useStore';
 import { listUserOrders, type CommerceUserOrder } from '../../services/commerceApi';
-import { normaliseOrderStatus, humaniseStatus, isTerminalStatus, needsAction } from '../orders/orderCapabilities';
+import { normaliseOrderStatus, humaniseStatus, isTerminalStatus, needsAction, resolveCapabilities, type OrderAction } from '../orders/orderCapabilities';
 import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 // ── Props ─────────────────────────────────────────────────────────────
@@ -83,33 +83,54 @@ export function ChatTransactionStrip({ listingId }: ChatTransactionStripProps) {
   const role = isSeller ? 'seller' : 'buyer';
   const isNeedsAction = needsAction(order.status, role);
 
-  // Ship-by deadline for seller
-  const shipByDate = order.shipByDate ?? order.fulfilmentSnapshot?.shipByDate ?? null;
+  // The canonical capability resolver owns which action is legal for this
+  // (status, role) pair — the strip must not recompute its own condition
+  // tree (audit rule: every order-action surface consumes the resolver).
+  const capabilities = resolveCapabilities({
+    status: order.status,
+    role,
+    hasOpenResolution: order.hasOpenResolution === true,
+    hasReview: order.hasReview === true,
+    hasTracking: Boolean(order.trackingNumber),
+    fulfilmentSnapshot: order.fulfilmentSnapshot ?? null,
+    shipByDate: order.shipByDate ?? null,
+  });
+
+  // Ship-by deadline for seller — resolver output already folds in any
+  // accepted dispatch extension (server value preferred over snapshot).
+  const shipByDate = capabilities.shipByDate;
   const shipByDaysLeft = shipByDate
     ? Math.ceil((new Date(shipByDate).getTime() - Date.now()) / (24 * 60 * 60 * 1000))
     : null;
   const shipByOverdue = shipByDaysLeft != null && shipByDaysLeft < 0;
 
-  // ETA for buyer
-  const etaWindow = order.fulfilmentSnapshot?.etaMinDays != null && order.fulfilmentSnapshot?.etaMaxDays != null
-    ? (order.fulfilmentSnapshot.etaMinDays !== order.fulfilmentSnapshot.etaMaxDays
-        ? t('orders.etaWindow', { min: order.fulfilmentSnapshot.etaMinDays, max: order.fulfilmentSnapshot.etaMaxDays })
-        : t('orders.etaDay', { count: order.fulfilmentSnapshot.etaMinDays }))
-    : null;
+  // ETA for buyer — resolver-formatted window from the fulfilment snapshot.
+  const etaWindow = capabilities.etaWindow;
 
-  // Determine the contextual CTA
+  // Action → (label, icon, route). The strip is a navigation surface, not
+  // a mutation surface — every CTA deep-links to the screen that owns the
+  // action rather than performing it inline.
+  const ACTION_PRESENTATION: Record<OrderAction, { label: string; icon: keyof typeof Ionicons.glyphMap; screen: string }> = {
+    pay: { label: t('orders.viewOrder'), icon: 'card-outline', screen: 'OrderDetail' },
+    dispatch: { label: t('orders.dispatchItem'), icon: 'car-outline', screen: 'SellerFulfilment' },
+    propose_extension: { label: t('orders.viewOrder'), icon: 'time-outline', screen: 'OrderDetail' },
+    respond_extension: { label: t('orders.viewOrder'), icon: 'time-outline', screen: 'OrderDetail' },
+    confirm_delivery: { label: t('orders.checkItem'), icon: 'checkmark-circle-outline', screen: 'OrderDetail' },
+    cancel: { label: t('orders.viewOrder'), icon: 'close-circle-outline', screen: 'OrderDetail' },
+    report_issue: { label: t('orders.reportIssue', { defaultValue: 'Report an issue' }), icon: 'flag-outline', screen: 'OrderDetail' },
+    view_resolution: { label: t('orders.viewOrder'), icon: 'shield-checkmark-outline', screen: 'OrderDetail' },
+    leave_review: { label: t('orders.checkItem'), icon: 'star-outline', screen: 'OrderDetail' },
+    view_review: { label: t('orders.viewOrder'), icon: 'star-outline', screen: 'OrderDetail' },
+    view_receipt: { label: t('orders.viewOrder'), icon: 'receipt-outline', screen: 'OrderDetail' },
+    track_order: { label: t('orders.trackParcel'), icon: 'navigate-outline', screen: 'OrderDetail' },
+    inspect: { label: t('orders.checkItem'), icon: 'checkmark-circle-outline', screen: 'OrderDetail' },
+    contact: { label: t('orders.viewOrder'), icon: 'chatbubble-outline', screen: 'OrderDetail' },
+  };
+
   const cta = (() => {
-    if (terminal) return null;
-    if (isSeller && normalised === 'paid') {
-      return { label: t('orders.dispatchItem'), icon: 'car-outline' as const, screen: 'SellerFulfilment', params: { orderId: order.id } };
-    }
-    if (!isSeller && (normalised === 'shipped' || normalised === 'in transit' || normalised === 'out for delivery')) {
-      return { label: t('orders.trackParcel'), icon: 'navigate-outline' as const, screen: 'OrderDetail', params: { orderId: order.id } };
-    }
-    if (!isSeller && normalised === 'delivered') {
-      return { label: t('orders.checkItem'), icon: 'checkmark-circle-outline' as const, screen: 'OrderDetail', params: { orderId: order.id } };
-    }
-    return { label: t('orders.viewOrder'), icon: 'receipt-outline' as const, screen: 'OrderDetail', params: { orderId: order.id } };
+    if (terminal || !capabilities.primaryAction) return null;
+    const presentation = ACTION_PRESENTATION[capabilities.primaryAction];
+    return { ...presentation, params: { orderId: order.id } };
   })();
 
   // Deadline/ETA label
@@ -127,6 +148,20 @@ export function ChatTransactionStrip({ listingId }: ChatTransactionStripProps) {
     return null;
   })();
 
+  // Status tone — the resolver's tone grammar: carrier failures read as
+  // warning/danger, not the calm "active" brand tint.
+  const toneColor = (() => {
+    switch (capabilities.statusTone) {
+      case 'danger': return colors.dangerText;
+      case 'success': return colors.successText;
+      case 'muted': return colors.textMuted;
+      case 'pending': return colors.warningText;
+      default: return normalised === 'paid' || normalised === 'shipped' || normalised === 'in transit' || normalised === 'out for delivery'
+        ? colors.brand
+        : colors.textPrimary;
+    }
+  })();
+
   const handlePress = () => {
     if (cta) {
       navigation.navigate(cta.screen, cta.params);
@@ -135,12 +170,8 @@ export function ChatTransactionStrip({ listingId }: ChatTransactionStripProps) {
     }
   };
 
-  // Status color
-  const statusColor = normalised === 'paid' || normalised === 'shipped' || normalised === 'in transit' || normalised === 'out for delivery'
-    ? colors.brand
-    : terminal
-      ? colors.textMuted
-      : colors.textPrimary;
+  // Status color — resolver tone wins; legacy normalised check is the fallback.
+  const statusColor = toneColor;
 
   return (
     <Pressable
@@ -155,7 +186,7 @@ export function ChatTransactionStrip({ listingId }: ChatTransactionStripProps) {
           {statusLabel}
         </Text>
         {deadlineLabel && (
-          <Text style={[styles.deadline, { color: shipByOverdue ? colors.danger : colors.textSecondary }]} numberOfLines={1}>
+          <Text style={[styles.deadline, { color: shipByOverdue ? colors.dangerText : colors.textSecondary }]} numberOfLines={1}>
             {deadlineLabel}
           </Text>
         )}

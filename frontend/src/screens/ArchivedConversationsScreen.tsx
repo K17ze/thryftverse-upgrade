@@ -208,6 +208,6 @@ function createStyles(colors: ThemeColors) {
     clearAllBtn: {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
-      color: colors.danger,
+      color: colors.dangerText,
       letterSpacing: TypographyV2.meta.letterSpacing } });
 }

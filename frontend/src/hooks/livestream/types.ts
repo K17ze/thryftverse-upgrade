@@ -2,7 +2,7 @@
  * Shared state types for the live stream viewer and seller domain hooks.
  */
 
-export type ConnectionState = 'connecting' | 'live' | 'error' | 'ended';
+export type ConnectionState = 'connecting' | 'live' | 'error' | 'ended' | 'scheduled';
 
 /** Seller broadcast phases: setup → live → summary. */
 export type SellerPhase = 'setup' | 'live' | 'summary';

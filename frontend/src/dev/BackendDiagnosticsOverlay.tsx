@@ -38,8 +38,8 @@ export function BackendDiagnosticsOverlay() {
     diag.isReachable === null
       ? colors.textMuted
       : diag.isReachable
-        ? colors.success
-        : colors.danger;
+        ? colors.successText
+        : colors.dangerText;
   const statusLabel =
     diag.isReachable === null
       ? 'unknown'
@@ -85,7 +85,7 @@ export function BackendDiagnosticsOverlay() {
               <DiagRow
                 label="Last error"
                 value={diag.lastError ?? '—'}
-                valueColor={diag.lastError ? colors.danger : undefined}
+                valueColor={diag.lastError ? colors.dangerText : undefined}
                 styles={styles}
               />
 

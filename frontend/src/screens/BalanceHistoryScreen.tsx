@@ -34,8 +34,8 @@ function iconForType(type: string, lineType: string): React.ComponentProps<typeo
 
 function colorForType(type: string, lineType: string, colors: ThemeColors) {
   if (lineType.includes('refund') || type === 'refund') return colors.textSecondary;
-  if (lineType.includes('withdrawal') || type === 'withdrawal') return colors.danger;
-  if (lineType.includes('seller_payable') || type === 'sale') return colors.success;
+  if (lineType.includes('withdrawal') || type === 'withdrawal') return colors.dangerText;
+  if (lineType.includes('seller_payable') || type === 'sale') return colors.successText;
   if (lineType.includes('buyer_spend') || type === 'purchase') return colors.textSecondary;
   if (lineType.includes('payout') || type === 'payout') return colors.brand;
   return colors.textMuted;
@@ -131,7 +131,9 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
     }
   }, [isLoadingMore, hasMore, offset, currentUser?.id]);
 
-  // ── Net flow: total in minus total out (the useful hero metric) ──
+  // ── Net flow: total in minus total out across the loaded pages only.
+  // The hero must not read as a lifetime aggregate — older transactions
+  // may still be unpaginated (hasMore). ──
   const netFlow = useMemo(() => {
     return transactions.reduce((sum, tx) => {
       return sum + (tx.direction === 'credit' ? Math.abs(tx.amount) : -Math.abs(tx.amount));
@@ -169,13 +171,13 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
         <>
           {/* ── Net flow hero — flat, no card (replaces redundant count) ── */}
           <View style={styles.heroSection}>
-            <Text style={[styles.heroLabel, { color: colors.textMuted }]}>Net flow</Text>
+            <Text style={[styles.heroLabel, { color: colors.textMuted }]}>Net — loaded activity</Text>
             <Text
               style={[
                 styles.heroValue,
-                { color: netFlow >= 0 ? colors.success : colors.danger },
+                { color: netFlow >= 0 ? colors.successText : colors.dangerText },
               ]}
-              accessibilityLabel={`Net flow ${formatFromFiat(Math.abs(netFlow), 'GBP', { displayMode: 'fiat' })}`}
+              accessibilityLabel={`Net of loaded activity ${formatFromFiat(Math.abs(netFlow), 'GBP', { displayMode: 'fiat' })}`}
             >
               {netFlow >= 0 ? '+' : '-'}{formatFromFiat(Math.abs(netFlow), 'GBP', { displayMode: 'fiat' })}
             </Text>
@@ -197,7 +199,7 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
                     <Text style={styles.txLabel}>{labelForType(tx.type, tx.lineType)}</Text>
                     <Text style={styles.txDate}>{formatDateLabel(tx.createdAt)}</Text>
                   </View>
-                  <Text style={[styles.txAmount, { color: tx.direction === 'credit' ? colors.success : colors.textPrimary }]}>
+                  <Text style={[styles.txAmount, { color: tx.direction === 'credit' ? colors.successText : colors.textPrimary }]}>
                     {tx.direction === 'credit' ? '+' : '-'}{formatFromFiat(Math.abs(tx.amount), 'GBP', { displayMode: 'fiat' })}
                   </Text>
                 </View>

@@ -68,7 +68,7 @@ export function CoOwnOwnershipPanel({
 
   const settlementLabel = '1ZE';
   const statusLabel = status === 'open' ? 'Available' : status === 'paused' ? 'Paused' : 'Fully allocated';
-  const statusColor = status === 'open' ? colors.success : status === 'paused' ? colors.textSecondary : colors.textMuted;
+  const statusColor = status === 'open' ? colors.successText : status === 'paused' ? colors.textSecondary : colors.textMuted;
 
   // Use viewerPosition if available, fall back to legacy viewerUnits/viewerPct
   const hasViewerPosition = viewerPosition != null;

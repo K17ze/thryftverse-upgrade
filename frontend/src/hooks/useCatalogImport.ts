@@ -30,6 +30,16 @@ const TERMINAL_BATCH_STATES: ReadonlySet<BatchState> = new Set<BatchState>([
   'failed_recoverable',
 ]);
 
+/**
+ * Paused batches need human action (reconnect, wait for rate limit) —
+ * polling them forever burns requests without changing anything. The
+ * progress screen exposes resume/retry for these states.
+ */
+const PAUSED_BATCH_STATES: ReadonlySet<BatchState> = new Set<BatchState>([
+  'paused_rate_limit',
+  'paused_reauth',
+]);
+
 export interface UseCatalogImportResult {
   batch: BatchSummaryDTO | null;
   phase: string;
@@ -118,6 +128,7 @@ export function useCatalogImport(batchId: string | null | undefined): UseCatalog
     clearPollTimer();
     if (!batch) return;
     if (TERMINAL_BATCH_STATES.has(batch.status)) return;
+    if (PAUSED_BATCH_STATES.has(batch.status)) return;
 
     pollTimerRef.current = setTimeout(() => {
       void load();

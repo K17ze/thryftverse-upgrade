@@ -96,7 +96,6 @@ export default function SavedSearchesScreen({ navigation }: Props) {
       sort: search.filters.sort ?? 'Recommended',
       priceMin: search.filters.minPrice ?? null,
       priceMax: search.filters.maxPrice ?? null,
-      sustainableOnly: false,
     });
     navigation.navigate('Browse', {
       categoryId,
@@ -373,7 +372,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
                       accessibilityLabel="Remove saved search"
                       accessibilityRole="button"
                     >
-                      <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                      <Ionicons name="trash-outline" size={18} color={colors.dangerText} />
                     </AnimatedPressable>
                   </View>
                 </View>

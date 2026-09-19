@@ -120,7 +120,7 @@ export function VoiceMessageRecorder({
         accessibilityLabel="Microphone permission denied. Tap to request permission."
       >
         <View style={styles.micBtn}>
-          <Ionicons name="mic-off" size={22} color={colors.warning} />
+          <Ionicons name="mic-off" size={22} color={colors.warningText} />
         </View>
       </Pressable>
     );
@@ -147,10 +147,10 @@ export function VoiceMessageRecorder({
           accessibilityRole="button"
           accessibilityLabel="Delete recording and start over"
         >
-          <Ionicons name="trash-outline" size={20} color={colors.danger} />
+          <Ionicons name="trash-outline" size={20} color={colors.dangerText} />
         </Pressable>
         <View style={styles.previewInfo}>
-          <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+          <Ionicons name="checkmark-circle" size={14} color={colors.successText} />
           <Text style={styles.previewDuration}>{recorder.durationLabel}</Text>
           <Text style={styles.previewHint}>Ready to send</Text>
         </View>
@@ -205,7 +205,7 @@ export function VoiceMessageRecorder({
           accessibilityRole="button"
           accessibilityLabel="Cancel recording and delete it"
         >
-          <Ionicons name="close" size={20} color={colors.danger} />
+          <Ionicons name="close" size={20} color={colors.dangerText} />
         </Pressable>
       </View>
     );

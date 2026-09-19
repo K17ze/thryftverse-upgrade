@@ -208,7 +208,7 @@ export function VoiceTranscriptionPanel({
     return (
       <View style={styles.container}>
         <View style={styles.row}>
-          <Ionicons name="alert-circle-outline" size={14} color={colors.danger} />
+          <Ionicons name="alert-circle-outline" size={14} color={colors.dangerText} />
           <Text style={styles.errorText} numberOfLines={2}>{error ?? 'Transcription failed'}</Text>
         </View>
         <Pressable onPress={handleCollapse} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close transcript">
@@ -222,7 +222,7 @@ export function VoiceTranscriptionPanel({
     return (
       <View style={styles.container}>
         <View style={styles.row}>
-          <Ionicons name="alert-circle-outline" size={14} color={colors.warning} />
+          <Ionicons name="alert-circle-outline" size={14} color={colors.warningText} />
           <Text style={styles.warningText} numberOfLines={2}>{error ?? 'Temporarily unavailable'}</Text>
         </View>
         <View style={styles.actions}>
@@ -285,7 +285,7 @@ export function VoiceTranscriptionPanel({
           <Ionicons
             name="thumbs-down-outline"
             size={14}
-            color={userRating === 'bad' ? colors.danger : colors.textMuted}
+            color={userRating === 'bad' ? colors.dangerText : colors.textMuted}
           />
         </Pressable>
         <Pressable onPress={handleCollapse} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close transcript">
@@ -346,12 +346,12 @@ const createStyles = (colors: ThemeColors) =>
       flex: 1,
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.body.fontFamily,
-      color: colors.danger },
+      color: colors.dangerText },
     warningText: {
       flex: 1,
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.body.fontFamily,
-      color: colors.warning },
+      color: colors.warningText },
     actions: {
       flexDirection: 'row',
       alignItems: 'center',

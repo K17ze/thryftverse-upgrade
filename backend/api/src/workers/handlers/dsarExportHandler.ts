@@ -47,6 +47,18 @@ interface ExportRow {
   amlAlerts: unknown[];
   aiUsageEvents: unknown[];
   gdprHistory: unknown[];
+  listings: unknown[];
+  chatMessages: unknown[];
+  walletLedger: unknown[];
+  walletOperations: unknown[];
+  payoutRequests: unknown[];
+  orderReviews: unknown[];
+  savedListings: unknown[];
+  savedSearches: unknown[];
+  follows: unknown[];
+  blocks: unknown[];
+  notificationPreferences: unknown | null;
+  emailPreferences: unknown | null;
 }
 
 async function gatherExportData(
@@ -69,6 +81,18 @@ async function gatherExportData(
     amlAlerts,
     aiUsageEvents,
     gdprHistory,
+    listings,
+    chatMessages,
+    walletLedger,
+    walletOperations,
+    payoutRequests,
+    orderReviews,
+    savedListings,
+    savedSearches,
+    follows,
+    blocks,
+    notificationPrefs,
+    emailPrefs,
   ] = await Promise.all([
     pool.query(
       `SELECT id, username, email, role, email_verified_at::text, created_at::text,
@@ -96,6 +120,26 @@ async function gatherExportData(
       [userId],
     ),
     pool.query('SELECT id, request_type, status, requested_at, completed_at FROM gdpr_requests WHERE user_id = $1 ORDER BY requested_at DESC LIMIT 100', [userId]),
+    pool.query('SELECT * FROM listings WHERE seller_id = $1 ORDER BY created_at DESC LIMIT 1000', [userId]),
+    pool.query(
+      'SELECT id, conversation_id, kind, text, created_at, edited_at, deleted_at FROM chat_messages WHERE sender_user_id = $1 ORDER BY created_at DESC LIMIT 5000',
+      [userId]
+    ),
+    pool.query(
+      `SELECT wl.* FROM wallet_ledger wl
+       JOIN wallets w ON w.id = wl.wallet_id
+       WHERE w.user_id = $1 ORDER BY wl.created_at DESC LIMIT 2000`,
+      [userId]
+    ),
+    pool.query('SELECT * FROM wallet_ize_operations WHERE user_id = $1 ORDER BY created_at DESC LIMIT 2000', [userId]),
+    pool.query('SELECT * FROM payout_requests WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1000', [userId]),
+    pool.query('SELECT * FROM order_reviews WHERE reviewer_id = $1 OR seller_id = $1 ORDER BY created_at DESC LIMIT 1000', [userId]),
+    pool.query('SELECT * FROM user_saved_listings WHERE user_id = $1 ORDER BY created_at DESC LIMIT 2000', [userId]),
+    pool.query('SELECT * FROM saved_searches WHERE user_id = $1 ORDER BY created_at DESC LIMIT 500', [userId]),
+    pool.query('SELECT * FROM user_follows WHERE follower_id = $1 OR following_id = $1 ORDER BY created_at DESC LIMIT 5000', [userId]),
+    pool.query('SELECT * FROM user_blocks WHERE blocker_id = $1 OR blocked_id = $1 ORDER BY created_at DESC LIMIT 1000', [userId]),
+    pool.query('SELECT * FROM notification_preferences WHERE user_id = $1 LIMIT 1', [userId]),
+    pool.query('SELECT * FROM user_email_preferences WHERE user_id = $1 LIMIT 1', [userId]),
   ]);
 
   return {
@@ -114,6 +158,18 @@ async function gatherExportData(
     amlAlerts: amlAlerts.rows,
     aiUsageEvents: aiUsageEvents.rows,
     gdprHistory: gdprHistory.rows,
+    listings: listings.rows,
+    chatMessages: chatMessages.rows,
+    walletLedger: walletLedger.rows,
+    walletOperations: walletOperations.rows,
+    payoutRequests: payoutRequests.rows,
+    orderReviews: orderReviews.rows,
+    savedListings: savedListings.rows,
+    savedSearches: savedSearches.rows,
+    follows: follows.rows,
+    blocks: blocks.rows,
+    notificationPreferences: notificationPrefs.rows[0] ?? null,
+    emailPreferences: emailPrefs.rows[0] ?? null,
   };
 }
 

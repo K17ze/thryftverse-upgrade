@@ -111,7 +111,7 @@ export function EditProfilePreview({
               size={28}
             />
           ) : hasCoverError ? (
-            <Ionicons name="alert-circle" size={18} color={colors.danger} />
+            <Ionicons name="alert-circle" size={18} color={colors.dangerText} />
           ) : (
             <Ionicons name="camera" size={18} color={coverUri ? colors.textInverse : colors.textSecondary} />
           )}
@@ -150,7 +150,7 @@ export function EditProfilePreview({
                 size={20}
               />
             ) : hasAvatarError ? (
-              <Ionicons name="alert-circle" size={13} color={colors.danger} />
+              <Ionicons name="alert-circle" size={13} color={colors.dangerText} />
             ) : (
               <Ionicons name="camera" size={13} color={colors.textInverse} />
             )}

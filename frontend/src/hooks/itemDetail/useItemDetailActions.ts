@@ -19,6 +19,11 @@ type ItemDetailNav = NativeStackNavigationProp<RootStackParamList>;
 export interface ItemDetailActionsContext {
   /** The resolved listing (null while loading). Actions no-op when null. */
   listing: Listing | null;
+  /** The route param this screen is displaying. When the listing query is
+   *  serving keepPreviousData during an itemId swap, `listing.id` is the
+   *  PREVIOUS item — every mutating/navigating action must no-op until the
+   *  resolved listing matches the route again. */
+  expectedItemId?: string;
   /** Resolved seller trust summary. */
   seller: SellerTrustSummary | null;
   /** Current user id (for owner checks + profile navigation). */
@@ -76,7 +81,12 @@ export interface ItemDetailActionsResult {
 export function useItemDetailActions(
   ctx: ItemDetailActionsContext,
 ): ItemDetailActionsResult {
-  const { listing: item, seller, currentUserId, navigation } = ctx;
+  const { listing: item, expectedItemId, seller, currentUserId, navigation } = ctx;
+
+  // True when the rendered listing is the one the route asked for. False
+  // only while a placeholder (previous listing) is being served during a
+  // param swap — acting on it would save/message/checkout the wrong item.
+  const listingIsCurrent = !expectedItemId || item?.id === expectedItemId;
 
   const isFav = useStore((state) => state.isWishlisted(item?.id ?? ''));
   const toggleFav = useStore((state) => state.toggleWishlist);
@@ -103,7 +113,7 @@ export function useItemDetailActions(
   }, [item?.id]);
 
   const handleToggleFav = useCallback(() => {
-    if (!item) return;
+    if (!item || !listingIsCurrent) return;
     if (!requireAuth('save_item')) return;
     toggleFav(item.id);
     ProductAnalytics.itemSave(item.id);
@@ -113,66 +123,77 @@ export function useItemDetailActions(
       // deterministic key — no duplicate call here.
       show('Added to wishlist', 'success');
     }
-  }, [item, requireAuth, toggleFav, isFav, show]);
+  }, [item, listingIsCurrent, requireAuth, toggleFav, isFav, show]);
 
   const handleDoubleTap = useCallback((): boolean => {
     haptic.heavy();
-    if (!item) return false;
+    if (!item || !listingIsCurrent) return false;
     // Already saved — the heart state is truthful, allow the animation.
     if (isFav) return true;
     if (!requireAuth('save_item')) return false;
     toggleFav(item.id);
     show('Added to wishlist', 'success');
     return true;
-  }, [haptic, item, isFav, requireAuth, toggleFav, show]);
+  }, [haptic, item, listingIsCurrent, isFav, requireAuth, toggleFav, show]);
 
   const handleShare = useCallback(() => {
+    if (!listingIsCurrent) return;
     setShareVisible(true);
     if (item) {
       ProductAnalytics.itemShare(item.id);
       trackListingInteraction(item.id, 'share').catch(() => {});
     }
-  }, [item]);
+  }, [item, listingIsCurrent]);
 
   const closeShare = useCallback(() => {
     setShareVisible(false);
   }, []);
 
+  // Seller identity for navigation/messaging resolves from the trust
+  // summary when present, but the listing's own sellerId/seller.id are
+  // equally authoritative — a missing username must not turn "View
+  // seller" and "Message" into silent dead ends.
+  const resolveSellerId = useCallback((): string | null => {
+    return seller?.id ?? item?.sellerId ?? item?.seller?.id ?? null;
+  }, [seller?.id, item?.sellerId, item?.seller?.id]);
+
   const handleViewSeller = useCallback(() => {
-    if (!item || !seller) return;
-    ProductAnalytics.sellerProfileOpen(item.id, seller.id);
-    openProfile(navigation, seller.id, currentUserId);
-  }, [item, seller, navigation, currentUserId]);
+    const sellerId = resolveSellerId();
+    if (!item || !sellerId || !listingIsCurrent) return;
+    ProductAnalytics.sellerProfileOpen(item.id, sellerId);
+    openProfile(navigation, sellerId, currentUserId);
+  }, [item, listingIsCurrent, resolveSellerId, navigation, currentUserId]);
 
   const handleMessageSeller = useCallback(async () => {
-    if (!item || !seller) return;
+    const sellerId = resolveSellerId();
+    if (!item || !sellerId || !listingIsCurrent) return;
     if (!requireAuth('message_seller')) return;
     if (isResolvingConversation) return;
     ProductAnalytics.sellerMessageStart(item.id);
     setIsResolvingConversation(true);
     try {
       const conversation = await createDmConversationOnApi({
-        recipientUserId: seller.id,
+        recipientUserId: sellerId,
         itemId: item.id,
       });
       upsertConversation(conversation);
       navigation.navigate('Chat', {
         conversationId: conversation.id,
-        partnerUserId: seller.id,
+        partnerUserId: sellerId,
       });
     } catch {
       show('Could not start conversation. Try again.', 'error');
     } finally {
       setIsResolvingConversation(false);
     }
-  }, [item, seller, requireAuth, isResolvingConversation, upsertConversation, navigation, show]);
+  }, [item, listingIsCurrent, resolveSellerId, requireAuth, isResolvingConversation, upsertConversation, navigation, show]);
 
   // Shared helper for the brokered-tier dock actions (enquire / request
   // viewing). Both open a DM conversation with the seller using the
   // listing's sellerId, following the same createDmConversationOnApi →
   // Chat navigation pattern as handleMessageSeller.
   const startSellerConversation = useCallback(async (sellerId: string) => {
-    if (!item) return;
+    if (!item || !listingIsCurrent) return;
     if (!requireAuth('message_seller')) return;
     if (isResolvingConversation) return;
     ProductAnalytics.sellerMessageStart(item.id);
@@ -193,22 +214,22 @@ export function useItemDetailActions(
     } finally {
       setIsResolvingConversation(false);
     }
-  }, [item, requireAuth, isResolvingConversation, upsertConversation, haptic, navigation, show]);
+  }, [item, listingIsCurrent, requireAuth, isResolvingConversation, upsertConversation, haptic, navigation, show]);
 
   const handleEnquire = useCallback(async () => {
-    const sellerId = item?.sellerId ?? item?.seller?.id;
+    const sellerId = resolveSellerId();
     if (!sellerId) return;
     await startSellerConversation(sellerId);
-  }, [item, startSellerConversation]);
+  }, [resolveSellerId, startSellerConversation]);
 
   const handleRequestViewing = useCallback(async () => {
-    const sellerId = item?.sellerId ?? item?.seller?.id;
+    const sellerId = resolveSellerId();
     if (!sellerId) return;
     await startSellerConversation(sellerId);
-  }, [item, startSellerConversation]);
+  }, [resolveSellerId, startSellerConversation]);
 
   const handleTogglePriceAlert = useCallback(async () => {
-    if (!item?.id || priceAlertLoading) return;
+    if (!item?.id || !listingIsCurrent || priceAlertLoading) return;
     // Price alerts are a per-user subscription — the auth wall must gate
     // the toggle before any local state or backend call, same as saving.
     if (!requireAuth('save_item')) return;
@@ -229,7 +250,7 @@ export function useItemDetailActions(
     } finally {
       setPriceAlertLoading(false);
     }
-  }, [item?.id, priceAlertEnabled, priceAlertLoading, requireAuth, show]);
+  }, [item?.id, listingIsCurrent, priceAlertEnabled, priceAlertLoading, requireAuth, show]);
 
   return {
     isFav,

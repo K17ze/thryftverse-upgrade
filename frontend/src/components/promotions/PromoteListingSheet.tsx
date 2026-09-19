@@ -304,7 +304,7 @@ export function PromoteListingSheet({
                 <Text
                   style={[
                     styles.balanceValue,
-                    insufficientBalance ? { color: colors.danger } : null,
+                    insufficientBalance ? { color: colors.dangerText } : null,
                   ]}
                 >
                   {formatFromFiat(balanceMinor / 100, 'GBP')}
@@ -464,7 +464,7 @@ const createStyles = (colors: ThemeColors) =>
     errorText: {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
-      color: colors.danger,
+      color: colors.dangerText,
       marginTop: Space.xs },
     footer: {
       marginTop: Space.md,

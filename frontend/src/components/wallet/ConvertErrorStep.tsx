@@ -21,7 +21,7 @@ export function ConvertErrorStep({ errorMessage, onTryAgain, onCancel }: Props) 
     <View
       style={styles.centeredStep}
     >
-      <Ionicons name="close-circle-outline" size={56} color={colors.danger} style={styles.stepIcon} />
+      <Ionicons name="close-circle-outline" size={56} color={colors.dangerText} style={styles.stepIcon} />
       <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>
         Conversion failed
       </Text>

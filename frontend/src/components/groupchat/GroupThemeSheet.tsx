@@ -42,7 +42,7 @@ export function GroupThemeSheet({
           Customize the accent tones of this conversation on this device. Not synced to other devices.
         </Text>
         {error ? (
-          <Text style={[styles.subtitle, { color: colors.danger, marginTop: 4 }]}>{error}</Text>
+          <Text style={[styles.subtitle, { color: colors.dangerText, marginTop: 4 }]}>{error}</Text>
         ) : null}
         {themes.map((theme) => {
           const isSelected = selected === theme;

@@ -108,7 +108,7 @@ function SectionHeader({
       <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{title}</Text>
       {badge && (
         <View style={[styles.badge, { backgroundColor: colors.warningSubtle }]}>
-          <Text style={[styles.badgeText, { color: colors.warning }]} numberOfLines={1}>
+          <Text style={[styles.badgeText, { color: colors.warningText }]} numberOfLines={1}>
             {badge}
           </Text>
         </View>
@@ -249,7 +249,7 @@ export function CoOwnAssetDossier({
             label="Insured"
             value={storage.insured ? 'Yes' : 'Not insured'}
             colors={colors}
-            valueColor={storage.insured ? colors.success : colors.danger}
+            valueColor={storage.insured ? colors.successText : colors.dangerText}
           />
           {storage.policyRef && (
             <InfoRow label="Policy ref" value={storage.policyRef} colors={colors} />
@@ -313,7 +313,7 @@ export function CoOwnAssetDossier({
               label="Insured"
               value={assetProtection.insured ? 'Insured' : 'Not insured'}
               colors={colors}
-              valueColor={assetProtection.insured ? colors.success : colors.danger}
+              valueColor={assetProtection.insured ? colors.successText : colors.dangerText}
             />
           )}
           {assetProtection.insurer ? (
@@ -340,7 +340,7 @@ export function CoOwnAssetDossier({
               label="Safeguarded"
               value={moneyProtection.safeguarded ? 'Safeguarded' : 'Not safeguarded'}
               colors={colors}
-              valueColor={moneyProtection.safeguarded ? colors.success : colors.danger}
+              valueColor={moneyProtection.safeguarded ? colors.successText : colors.dangerText}
             />
           )}
           {moneyProtection.safeguardingPartner ? (

@@ -115,8 +115,8 @@ export function ConvertAmountStep({
               </View>
             ) : quoteError ? (
               <View style={styles.quoteErrorRow}>
-                <Ionicons name="alert-circle-outline" size={14} color={colors.danger} />
-                <Text style={[styles.quoteStatusText, { color: colors.danger }]}>
+                <Ionicons name="alert-circle-outline" size={14} color={colors.dangerText} />
+                <Text style={[styles.quoteStatusText, { color: colors.dangerText }]}>
                   Couldn't fetch quote.
                 </Text>
                 <Pressable

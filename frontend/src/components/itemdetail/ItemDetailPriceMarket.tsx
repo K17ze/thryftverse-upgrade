@@ -58,7 +58,7 @@ export function ItemDetailPriceMarket({
         accessibilityLabel="Toggle price history and market"
       />
       {expanded ? (
-        <CommerceDetailSection label="Price history & market" variant="continuation">
+        <CommerceDetailSection variant="continuation">
           {rows.map((row) => (
             <CommerceDetailMetricRow
               key={row.label}

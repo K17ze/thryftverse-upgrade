@@ -154,10 +154,19 @@ export async function publishBatch(
 ): Promise<PublicationReceiptDTO> {
   const batch = await service.getBatch(userId, batchId);
 
-  if (batch.status !== 'approved') {
+  if (batch.status === 'completed') {
+    // Idempotent replay: the saga already committed — return the stored
+    // receipt instead of throwing or publishing twice.
+    const existing = await getPublicationReceipt(userId, batchId);
+    if (existing) {
+      return existing;
+    }
+  }
+
+  if (batch.status !== 'approved' && batch.status !== 'publishing') {
     throw new CatalogImportError(
       'approval_required_before_publish',
-      `Batch must be in "approved" state to publish, but is in "${batch.status}"`,
+      `Batch must be in "approved" or "publishing" state to publish, but is in "${batch.status}"`,
     );
   }
 
@@ -169,14 +178,22 @@ export async function publishBatch(
     );
   }
 
-  // Transition to publishing.
-  await service.updateBatchStatus(userId, batchId, 'publishing', 'publication_started');
+  // Transition to publishing (a resumed saga is already there).
+  if (batch.status === 'approved') {
+    await service.updateBatchStatus(
+      userId,
+      batchId,
+      'publishing',
+      'publication_started',
+      { phase: 'publishing' },
+    );
+  }
 
   // Fetch all selected, ready items.
   const itemsToPublish: CatalogImportItemRow[] = [];
   let cursor: string | null = null;
   do {
-    const page = await service.getBatchItems(batchId, {
+    const page = await service.getBatchItems(userId, batchId, {
       cursor,
       readiness: 'ready',
       decision: 'selected',
@@ -194,6 +211,20 @@ export async function publishBatch(
 
   for (const item of itemsToPublish) {
     const idempotencyKey = `pub_${item.id}_${approvalRevision}`;
+
+    // Saga resume: an item the previous run already committed is counted,
+    // not republished.
+    if (item.publication_status === 'draft_created' && item.draft_listing_id) {
+      receiptItems.push({
+        itemId: item.id,
+        externalItemId: item.external_item_id,
+        publicationStatus: 'draft_created',
+        draftListingId: item.draft_listing_id,
+        reason: null,
+      });
+      draftCount += 1;
+      continue;
+    }
 
     if (!item.normalised_fields) {
       receiptItems.push({
@@ -265,7 +296,7 @@ export async function publishBatch(
   // Count items that were not selected for publication as excluded. This
   // includes items the seller explicitly excluded and items that were not
   // ready (needs_input, probable_duplicate, etc.).
-  const allItemsSummary = await service.getBatchItemSummary(batchId);
+  const allItemsSummary = await service.getBatchItemSummary(userId, batchId);
   excludedCount = allItemsSummary.total - itemsToPublish.length;
 
   // Create the batch receipt.
@@ -327,12 +358,28 @@ async function createDraftListing(
   try {
     await client.query('BEGIN');
 
+    // Cancellation check under the batch row lock — a mid-saga cancel
+    // serializes here so no draft is created after the batch is cancelled.
+    // 'completed' is also accepted: reconcileOutcomeUnknown retries
+    // proven-absent drafts on batches whose saga already finished.
+    const batchCheck = await client.query<{ status: string }>(
+      `SELECT status FROM catalog_import_batches WHERE id = $1 FOR UPDATE`,
+      [batchId],
+    );
+    const batchStatus = batchCheck.rows[0]?.status;
+    if (batchStatus !== 'approved' && batchStatus !== 'publishing' && batchStatus !== 'completed') {
+      throw new CatalogImportError(
+        'invalid_state_transition',
+        `Batch is in "${batchStatus}" — publication can no longer create drafts`,
+      );
+    }
+
     // Insert the publication record with idempotency. The idempotency_key
     // has a unique constraint so a replayed publish hits the same row.
     const pubRecordId = createId('pubrec');
     const listingId = createId('listing');
 
-    const pubResult = await client.query<{ id: string }>(
+    const pubResult = await client.query<{ id: string; listing_id: string; inserted: boolean }>(
       `INSERT INTO catalog_import_publication_records (
          id, batch_id, item_id, idempotency_key, request_hash,
          status, listing_id, created_at, updated_at
@@ -340,9 +387,17 @@ async function createDraftListing(
        VALUES ($1, $2, $3, $4, $5, 'draft_created', $6, NOW(), NOW())
        ON CONFLICT (idempotency_key) DO UPDATE
          SET updated_at = catalog_import_publication_records.updated_at
-       RETURNING id`,
+       RETURNING id, listing_id, (xmax = 0) AS inserted`,
       [pubRecordId, batchId, item.id, idempotencyKey, requestHash, listingId],
     );
+
+    // Replay: the record already existed — return the committed listing id
+    // instead of inserting a duplicate draft under a fresh id.
+    const pubRow = pubResult.rows[0];
+    if (pubRow && !pubRow.inserted && pubRow.listing_id) {
+      await client.query('COMMIT');
+      return pubRow.listing_id;
+    }
 
     // Create the draft listing in the listings table.
     await client.query(
@@ -506,7 +561,16 @@ export async function reconcileOutcomeUnknown(itemId: string): Promise<void> {
       'catalogImport.reconcileOutcomeUnknown.retry',
     );
 
-    // Reset to approved so the publication can be retried.
+    // The batch saga may already be 'completed' (terminal), so the
+    // batch-level publish job cannot be resumed — capture everything the
+    // single-item republish needs before committing the reset.
+    const batchRevResult = await client.query<{ approval_revision: string | null }>(
+      `SELECT approval_revision FROM catalog_import_batches WHERE id = $1 LIMIT 1`,
+      [row.batch_id],
+    );
+    const approvalRevision = batchRevResult.rows[0]?.approval_revision ?? null;
+
+    // Reset to approved so the retry below is recorded as a fresh attempt.
     await client.query(
       `UPDATE catalog_import_items
        SET publication_status = 'approved',
@@ -518,6 +582,52 @@ export async function reconcileOutcomeUnknown(itemId: string): Promise<void> {
     );
 
     await client.query('COMMIT');
+
+    // Republish the single item post-commit. createDraftListing runs its
+    // own transaction, re-checks the batch row under lock, and is
+    // idempotent on the publication-record idempotency key.
+    if (!row.normalised_fields) {
+      await db.query(
+        `UPDATE catalog_import_items
+         SET publication_status = 'failed_recoverable', updated_at = NOW()
+         WHERE id = $1`,
+        [itemId],
+      );
+      return;
+    }
+
+    try {
+      const requestHash = computeRequestHash(row.normalised_fields);
+      const fields = extractListingFields(row.normalised_fields);
+      const idempotencyKey = approvalRevision
+        ? `pub_${itemId}_${approvalRevision}`
+        : `recon_${itemId}_${createId('k')}`;
+
+      const listingId = await createDraftListing(
+        row.batch_id,
+        { ...row, publication_status: 'approved' },
+        idempotencyKey,
+        requestHash,
+        fields,
+      );
+
+      logger.info(
+        { itemId, draftListingId: listingId },
+        'catalogImport.reconcileOutcomeUnknown.republished',
+      );
+    } catch (error) {
+      const pubStatus = isTimeoutError(error) ? 'outcome_unknown' : 'failed_recoverable';
+      await db.query(
+        `UPDATE catalog_import_items
+         SET publication_status = $2, updated_at = NOW()
+         WHERE id = $1`,
+        [itemId, pubStatus],
+      );
+      logger.error(
+        { itemId, err: error, pubStatus },
+        'catalogImport.reconcileOutcomeUnknown.retryFailed',
+      );
+    }
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;

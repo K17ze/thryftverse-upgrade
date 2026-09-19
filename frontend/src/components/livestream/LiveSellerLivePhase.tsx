@@ -114,9 +114,9 @@ export function LiveSellerLivePhase({
               accessibilityState={{ busy: endingStream }}
             >
               {endingStream ? (
-                <ActivityIndicator size="small" color={colors.danger} />
+                <ActivityIndicator size="small" color={colors.dangerText} />
               ) : (
-                <Text style={[styles.endText, { color: colors.danger }]}>End</Text>
+                <Text style={[styles.endText, { color: colors.dangerText }]}>End</Text>
               )}
             </AnimatedPressable>
           }
@@ -162,12 +162,12 @@ export function LiveSellerLivePhase({
             {previewCaption}
           </Text>
           {publishError ? (
-            <Text style={[styles.footerError, { color: colors.danger, paddingHorizontal: 0 }]}>
+            <Text style={[styles.footerError, { color: colors.dangerText, paddingHorizontal: 0 }]}>
               {publishError}
             </Text>
           ) : null}
           {endError ? (
-            <Text style={[styles.footerError, { color: colors.danger, paddingHorizontal: 0 }]}>
+            <Text style={[styles.footerError, { color: colors.dangerText, paddingHorizontal: 0 }]}>
               {endError}
             </Text>
           ) : null}

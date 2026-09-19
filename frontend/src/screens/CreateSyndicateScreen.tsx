@@ -484,7 +484,7 @@ export default function CreateCoOwnScreen() {
                   retry — not silently downgraded to email tier. */}
               {issuerTier === 'unavailable' && (
                 <View style={[styles.kycGateCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-                  <Ionicons name="cloud-offline-outline" size={20} color={colors.warning} />
+                  <Ionicons name="cloud-offline-outline" size={20} color={colors.warningText} />
                   <View style={styles.kycGateBody}>
                     <Text style={[styles.kycGateTitle, { color: colors.textPrimary }]}>
                       Verification status unavailable
@@ -507,7 +507,7 @@ export default function CreateCoOwnScreen() {
               )}
               {issuerTier !== 'loading' && issuerTier !== 'unavailable' && !canIssue && (
                 <View style={[styles.kycGateCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-                  <Ionicons name="lock-closed-outline" size={20} color={colors.warning} />
+                  <Ionicons name="lock-closed-outline" size={20} color={colors.warningText} />
                   <View style={styles.kycGateBody}>
                     <Text style={[styles.kycGateTitle, { color: colors.textPrimary }]}>
                       Identity verification required

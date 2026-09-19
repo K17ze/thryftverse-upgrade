@@ -107,7 +107,7 @@ export default function SellerAnalyticsScreen() {
       >
         <EmptyState
           icon="cloud-offline-outline"
-          iconColor={colors.danger}
+          iconColor={colors.dangerText}
           title="Couldn't load analytics"
           subtitle="Check your connection and try again."
           ctaLabel="Retry"

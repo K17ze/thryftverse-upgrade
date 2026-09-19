@@ -26,7 +26,7 @@ export function EditListingFieldLabel({ label, status }: { label: string; status
     <View style={styles.fieldLabelRow}>
       <Text style={[styles.fieldLabel, themed.fieldLabel]}>{label}</Text>
       {status === 'filled' ? (
-        <AppIcon name="checkmark-circle" size={12} color="success" opticalCenter accessible={false} />
+        <AppIcon name="checkmark-circle" size={12} color="successText" opticalCenter accessible={false} />
       ) : status === 'optional' ? (
         <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.optional')}</Text>
       ) : status === 'required' ? (

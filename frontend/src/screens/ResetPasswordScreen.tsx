@@ -136,7 +136,7 @@ export default function ResetPasswordScreen({ navigation, route }: Props) {
         }
       >
         <View style={styles.stateContainer}>
-          <Ionicons name="checkmark-circle-outline" size={48} color={colors.success} />
+          <Ionicons name="checkmark-circle-outline" size={48} color={colors.successText} />
           <Text style={styles.stateTitle}>Password reset</Text>
           <Text style={styles.stateBody} maxFontSizeMultiplier={1.3}>
             {passkeysEnrolled
@@ -280,7 +280,7 @@ function createStyles(colors: ThemeColors) {
     inputGroup: { marginBottom: Space.lg },
     footer: { paddingBottom: Space.xl },
     errorText: {
-      color: colors.danger,
+      color: colors.dangerText,
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
       marginBottom: Space.xs },

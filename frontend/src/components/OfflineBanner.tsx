@@ -72,9 +72,9 @@ export function OfflineBanner({
         accessibilityRole="alert"
         accessibilityLabel={text}
       >
-        <Ionicons name="cloud-offline-outline" size={13} color={colors.warning} />
+        <Ionicons name="cloud-offline-outline" size={13} color={colors.warningText} />
         <Text
-          style={[styles.compactText, { color: colors.warning }]}
+          style={[styles.compactText, { color: colors.warningText }]}
           numberOfLines={1}
         >
           Offline
@@ -89,7 +89,7 @@ export function OfflineBanner({
             accessibilityLabel="Retry"
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Text style={[styles.retryText, { color: colors.warning }]}>
+            <Text style={[styles.retryText, { color: colors.warningText }]}>
               Retry
             </Text>
           </AnimatedPressable>
@@ -111,7 +111,7 @@ export function OfflineBanner({
       accessibilityRole="alert"
       accessibilityLabel={text}
     >
-      <Ionicons name="cloud-offline-outline" size={15} color={colors.warning} />
+      <Ionicons name="cloud-offline-outline" size={15} color={colors.warningText} />
       <Text
         style={[styles.text, { color: colors.textSecondary }]}
         numberOfLines={2}
@@ -129,7 +129,7 @@ export function OfflineBanner({
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           style={styles.retryBtn}
         >
-          <Text style={[styles.retryText, { color: colors.warning }]}>
+          <Text style={[styles.retryText, { color: colors.warningText }]}>
             Retry
           </Text>
         </AnimatedPressable>

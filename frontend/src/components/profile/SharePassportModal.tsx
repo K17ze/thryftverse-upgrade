@@ -168,9 +168,9 @@ export function SharePassportModal({
               <Ionicons
                 name={copied ? 'checkmark-circle' : 'copy-outline'}
                 size={16}
-                color={copied ? colors.success : colors.textPrimary}
+                color={copied ? colors.successText : colors.textPrimary}
               />
-              <Text style={[styles.actionBtnSecondaryText, copied && { color: colors.success }]}>
+              <Text style={[styles.actionBtnSecondaryText, copied && { color: colors.successText }]}>
                 {copied ? 'Copied' : 'Copy link'}
               </Text>
             </AnimatedPressable>

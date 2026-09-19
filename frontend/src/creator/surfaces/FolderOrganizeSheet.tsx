@@ -377,7 +377,7 @@ export function FolderOrganizeSheet({
       {/* Error banner */}
       {error && (
         <View style={styles.errorBanner}>
-          <Ionicons name="alert-circle" size={IconGrammar.metadata} color={colors.danger} />
+          <Ionicons name="alert-circle" size={IconGrammar.metadata} color={colors.dangerText} />
           <Text style={styles.errorText}>{error}</Text>
         </View>
       )}

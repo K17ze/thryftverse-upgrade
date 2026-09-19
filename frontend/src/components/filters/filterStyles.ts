@@ -242,6 +242,31 @@ export function createFilterStyles(colors: ThemeColors) {
   seeAllRow: {
     paddingHorizontal: Space.xl,
     marginBottom: Space.sm },
+  brandSearchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: Space.xl,
+    marginBottom: Space.sm,
+    height: Space.xl + Space.xs + 2,
+    borderRadius: Radius.lg,
+    borderWidth: Stroke.hairline,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingHorizontal: Space.md },
+  brandSearchIcon: { marginRight: Space.sm },
+  brandSearchInput: {
+    flex: 1,
+    height: '100%',
+    padding: 0,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
+  brandSearchClear: {
+    minHeight: Control.chromeCompact,
+    borderRadius: Radius.lg,
+    paddingHorizontal: Space.sm,
+    borderWidth: 0,
+    backgroundColor: 'transparent' },
   seeAllBtn: {
     minHeight: Control.chromeCompact,
     borderRadius: Radius.xl,
@@ -425,7 +450,7 @@ export function createFilterStyles(colors: ThemeColors) {
   priceRangeError: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.danger,
+    color: colors.dangerText,
     paddingHorizontal: Space.xl,
     marginTop: Space.sm } });
 }

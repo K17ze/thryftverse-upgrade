@@ -61,7 +61,7 @@ export function createAddressFormStyles(colors: ThemeColors) {
   errorText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.danger },
+    color: colors.dangerText },
   postcodeSuggestion: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -91,7 +91,7 @@ export function createAddressFormStyles(colors: ThemeColors) {
     flex: 1,
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.danger },
+    color: colors.dangerText },
 
   // Country
   countryRow: {

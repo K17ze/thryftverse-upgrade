@@ -96,7 +96,7 @@ export function createOverlayStyles(colors: ThemeColors) {
       flex: 1,
     },
     overlayOptionTextCorrect: {
-      color: colors.success,
+      color: colors.successText,
       fontFamily: TypographyV2.meta.fontFamily,
     },
     overlayCorrectBadge: {

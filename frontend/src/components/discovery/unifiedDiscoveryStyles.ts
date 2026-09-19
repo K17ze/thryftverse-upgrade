@@ -36,6 +36,15 @@ export function createUnifiedDiscoveryStyles(colors: ThemeColors) {
       paddingBottom: Space.sm },
     searchBar: {
       flex: 1 },
+    // Stale-module note — quiet hairline strip above the pills (F21)
+    staleNote: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border },
+    staleNoteText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.regular },
     // Category pills
     categoryBar: {
       paddingVertical: Space.xs },

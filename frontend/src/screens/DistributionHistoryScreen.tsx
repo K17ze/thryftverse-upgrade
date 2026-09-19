@@ -17,18 +17,18 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
-import { Space, Radius, Control } from '../theme/designTokens';
+import { Space, Radius } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { haptics } from '../utils/haptics';
 import {
   CoOwnStateCanvas } from '../components/coown';
+import { CoOwnDistributionCalendar } from '../components/coown/CoOwnDistributionCalendar';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { CoOwnActivitySkeleton } from '../components/coown/CoOwnSkeletons';
 import { fetchCoOwnDistributions, fetchDripEnrollments, updateDripEnrollment, fetchCoOwnAssetById, type CoOwnDistribution } from '../services/marketApi';
 import { formatCoOwnIze } from '../utils/currency';
 import { useToast } from '../context/ToastContext';
 import { Switch } from 'react-native';
-import { AppButton } from '../components/ui/AppButton';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
@@ -251,6 +251,37 @@ export default function DistributionHistoryScreen() {
   const pendingTotal = pendingDistributions.reduce((sum, d) => sum + d.amountGbpMinor, 0);
   const reversedTotal = reversedDistributions.reduce((sum, d) => sum + d.amountGbpMinor, 0);
 
+  // Upcoming — the forward-looking slice of the same fetched list. This
+  // section replaces the asset-detail "Distribution calendar" disclosure:
+  // one canonical timeline lives here, not two duplicate rows upstream.
+  const upcomingEntries = React.useMemo(
+    () => distributions
+      .filter((d) => d.status === 'scheduled')
+      .map((d) => ({
+        id: d.id,
+        date: d.projectedPayableDate ?? d.createdAt,
+        perUnitGbp: d.perUnitGbpMinor != null ? d.perUnitGbpMinor / 100 : 0,
+        totalPoolGbp: d.amountGbpMinor != null ? d.amountGbpMinor / 100 : 0,
+        status: 'scheduled' as const,
+        recordDate: d.recordDate ?? null,
+        exDate: d.exDate ?? null,
+        payableDate: d.projectedPayableDate ?? null,
+      })),
+    [distributions],
+  );
+
+  // Ledger rows collapse to one line each — detail (reference, dates,
+  // proceeds waterfall) expands in place on tap.
+  const [expandedIds, setExpandedIds] = React.useState<ReadonlySet<string>>(new Set());
+  const toggleExpanded = React.useCallback((id: string) => {
+    haptics.tap();
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) { next.delete(id); } else { next.add(id); }
+      return next;
+    });
+  }, []);
+
   return (
     <FlagshipScreen
       header={
@@ -278,7 +309,7 @@ export default function DistributionHistoryScreen() {
         <CoOwnStateCanvas
           variant="empty"
           title="No distributions yet"
-          subtitle="Distributions appear here with amount and dates."
+          subtitle="Payouts from assets you hold appear here."
           actionLabel="Back to portfolio"
           onAction={() => { haptics.tap(); handleBack(); }}
         />
@@ -294,68 +325,70 @@ export default function DistributionHistoryScreen() {
             />
           }
         >
-          {/* Summary */}
-          <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Total received (settled)</Text>
-            <Text style={[styles.summaryValue, { color: colors.success }]}>
+          {/* Total — typographic hero on canvas. The number is the
+              object; no card, no icon, no badge chrome. */}
+          <View style={styles.section}>
+            <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Total received</Text>
+            <Text style={[styles.summaryValue, { color: colors.successText }]}>
               {formatDistributionAmount(totalReceived)}
             </Text>
             <Text style={[styles.summaryCount, { color: colors.textSecondary }]}>
               {settledDistributions.length} settled distribution{settledDistributions.length !== 1 ? 's' : ''}
             </Text>
             {/* U50: Pending and reversed shown separately from the settled total */}
-            {(pendingDistributions.length > 0 || reversedDistributions.length > 0) && (
-              <View style={[styles.summaryBreakdown, { borderTopColor: colors.borderSubtle }]}>
+            {pendingDistributions.length > 0 || reversedDistributions.length > 0 ? (
+              <View style={styles.summaryBreakdown}>
                 {pendingDistributions.length > 0 && (
-                  <View style={styles.breakdownRow}>
+                  <View style={[styles.breakdownRow, { borderTopColor: colors.borderSubtle }]}>
                     <Text style={[styles.breakdownLabel, { color: colors.textMuted }]}>Pending</Text>
-                    <Text style={[styles.breakdownValue, { color: colors.warning }]}>
+                    <Text style={[styles.breakdownValue, { color: colors.warningText }]}>
                       {formatDistributionAmount(pendingTotal)}
                     </Text>
                   </View>
                 )}
                 {reversedDistributions.length > 0 && (
-                  <View style={styles.breakdownRow}>
+                  <View style={[styles.breakdownRow, { borderTopColor: colors.borderSubtle }]}>
                     <Text style={[styles.breakdownLabel, { color: colors.textMuted }]}>Reversed</Text>
-                    <Text style={[styles.breakdownValue, { color: colors.danger }]}>
+                    <Text style={[styles.breakdownValue, { color: colors.dangerText }]}>
                       {formatDistributionAmount(reversedTotal)}
                     </Text>
                   </View>
                 )}
               </View>
-            )}
+            ) : null}
           </View>
 
-          {/* DRIP enrollment card — flagship treatment with count badge and status indicators */}
-          <View style={[styles.dripCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={styles.dripHeader}>
-              <View style={[styles.dripIcon, { backgroundColor: colors.brand }]}>
-                <Ionicons name="repeat" size={20} color={colors.textInverse} />
-              </View>
-              <View style={styles.dripHeaderText}>
-                <Text style={[styles.dripTitle, { color: colors.textPrimary }]}>Dividend reinvestment</Text>
-                <Text style={[styles.dripBody, { color: colors.textSecondary }]}>
-                  Automatically reinvest distributions into additional units of the same asset.
-                </Text>
-              </View>
+          {/* Upcoming — scheduled distributions, the forward-looking half
+              of the timeline. Replaces the asset-detail calendar
+              disclosure: this screen is the single canonical schedule. */}
+          {upcomingEntries.length > 0 ? (
+            <View style={[styles.section, styles.sectionSeparated, { borderTopColor: colors.borderSubtle }]}>
+              <Text accessibilityRole="header" style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+                Upcoming
+              </Text>
+              <CoOwnDistributionCalendar entries={upcomingEntries} maxEntries={4} />
             </View>
+          ) : null}
 
-            {/* U53: DRIP is now processed automatically by the backend
-                worker. The previous "not yet processed" warning has been
-                removed since the DRIP execution consumer is active. */}
+          {/* Dividend reinvestment — flat section: state rows with
+              switches, hairline-separated. */}
+          <View style={[styles.section, styles.sectionSeparated, { borderTopColor: colors.borderSubtle }]}>
+            <Text accessibilityRole="header" style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+              Dividend reinvestment
+            </Text>
+            <Text style={[styles.sectionBody, { color: colors.textSecondary }]}>
+              Automatically reinvest distributions into additional units of the same asset.
+            </Text>
 
             {/* U55: Section-level fetch error with retry — distinct from
                 per-asset toggle errors. Preserves "unknown" vs "off". */}
             {dripFetchError ? (
-              <View style={[styles.dripErrorWrap, { borderTopColor: colors.borderSubtle }]}>
-                <View style={styles.dripErrorRow}>
-                  <Ionicons name="cloud-offline-outline" size={16} color={colors.danger} />
-                  <Text style={[styles.dripErrorText, { color: colors.danger }]} numberOfLines={2}>
-                    {dripFetchError}
-                  </Text>
-                </View>
+              <View style={styles.dripErrorWrap}>
+                <Text style={[styles.dripErrorText, { color: colors.dangerText }]} numberOfLines={2}>
+                  {dripFetchError}
+                </Text>
                 <Pressable
-                  style={({ pressed }) => [styles.dripRetryBtn, { borderColor: colors.brand }, pressed && { opacity: 0.7 }]}
+                  style={({ pressed }) => pressed && { opacity: 0.6 }}
                   onPress={handleRetryDrip}
                   accessibilityRole="button"
                   accessibilityLabel="Retry loading DRIP settings"
@@ -364,26 +397,16 @@ export default function DistributionHistoryScreen() {
                 </Pressable>
               </View>
             ) : Object.keys(dripStates).length > 0 ? (
-              /* Per-asset DRIP toggles with status indicators */
-              <View style={[styles.dripAssetList, { borderTopColor: colors.borderSubtle }]}>
-                {Object.entries(dripStates).map(([assetId, state]) => (
-                  <View key={assetId}>
+              <View>
+                {Object.entries(dripStates).map(([assetId, state], index) => (
+                  <View key={assetId} style={index > 0 ? [styles.rowSeparated, { borderTopColor: colors.borderSubtle }] : undefined}>
                     <View style={styles.dripAssetRow}>
-                      <View style={styles.dripAssetInfo}>
-                        <View style={[styles.dripAssetDot, { backgroundColor: state.enrolled ? colors.success : state.unknown ? colors.warning : colors.textMuted }]} />
-                        <Text style={[styles.dripAssetName, { color: colors.textPrimary }]} numberOfLines={1}>
-                          {assetTitles[assetId] ?? 'Asset'}
-                        </Text>
-                        {state.enrolled && (
-                          <View style={[styles.dripEnrolledBadge, { backgroundColor: colors.successSubtle }]}>
-                            <Text style={[styles.dripEnrolledText, { color: colors.success }]}>Active</Text>
-                          </View>
-                        )}
-                        {/* U55: Per-asset error indicator */}
-                        {state.error && (
-                          <Ionicons name="alert-circle" size={14} color={colors.danger} />
-                        )}
-                      </View>
+                      <Text style={[styles.dripAssetName, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {assetTitles[assetId] ?? 'Asset'}
+                      </Text>
+                      {state.error ? (
+                        <Ionicons name="alert-circle" size={14} color={colors.dangerText} />
+                      ) : null}
                       <Switch
                         value={state.enrolled}
                         onValueChange={(v) => void handleToggleDrip(assetId, v)}
@@ -395,47 +418,43 @@ export default function DistributionHistoryScreen() {
                       />
                     </View>
                     {/* U55: Per-asset error message */}
-                    {state.error && (
-                      <Text style={[styles.dripAssetError, { color: colors.danger }]} numberOfLines={1}>
+                    {state.error ? (
+                      <Text style={[styles.dripAssetError, { color: colors.dangerText }]} numberOfLines={1}>
                         {state.error}
                       </Text>
-                    )}
+                    ) : null}
                     {/* U55: Unknown state indicator */}
-                    {state.unknown && !state.error && (
+                    {state.unknown && !state.error ? (
                       <Text style={[styles.dripAssetUnknown, { color: colors.textMuted }]}>
                         Enrollment status unavailable
                       </Text>
-                    )}
+                    ) : null}
                   </View>
                 ))}
               </View>
             ) : (
-              /* U54: Zero-enrollment path — show eligible holdings and provide
-                  a route to enrollment through the existing distribution flow. */
-              <View style={[styles.dripEmptyWrap, { borderTopColor: colors.borderSubtle }]}>
-                <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
-                <Text style={[styles.dripEmpty, { color: colors.textMuted }]}>
-                  No DRIP enrollments yet. Eligible holdings from your distributions are shown below.
-                </Text>
-              </View>
+              <Text style={[styles.sectionBody, { color: colors.textMuted }]}>
+                No DRIP enrollments yet.
+              </Text>
             )}
 
-            {/* U54: First enrollment path — when the user has distributions
-                but zero DRIP enrollments, show eligible assets with a CTA to
-                navigate to the asset detail for enrollment. */}
+            {/* U54: First enrollment path — eligible assets as plain
+                disclosure rows into the asset detail enrollment flow. */}
             {Object.keys(dripStates).length === 0 && !dripFetchError && distributions.length > 0 && (
-              <View style={[styles.dripEnrollCta, { borderTopColor: colors.borderSubtle }]}>
-                {Array.from(new Set(distributions.map((d) => d.assetId))).slice(0, 3).map((assetId) => (
+              <View>
+                {Array.from(new Set(distributions.map((d) => d.assetId))).slice(0, 3).map((assetId, index) => (
                   <Pressable
                     key={assetId}
-                    style={({ pressed }) => [styles.eligibleRow, { borderColor: colors.borderSubtle }, pressed && { opacity: 0.7 }]}
+                    style={({ pressed }) => [
+                      styles.eligibleRow,
+                      index > 0 && styles.rowSeparated,
+                      { borderTopColor: colors.borderSubtle },
+                      pressed && { opacity: 0.6 },
+                    ]}
                     onPress={() => { haptics.tap(); navigation.navigate('AssetDetail', { assetId }); }}
                     accessibilityRole="button"
                     accessibilityLabel={`View ${assetTitles[assetId] ?? 'asset'} to enroll in DRIP`}
                   >
-                    <View style={[styles.eligibleIcon, { backgroundColor: colors.surfaceAlt }]}>
-                      <Ionicons name="cube-outline" size={16} color={colors.brand} />
-                    </View>
                     <Text style={[styles.eligibleName, { color: colors.textPrimary }]} numberOfLines={1}>
                       {assetTitles[assetId] ?? 'Asset'}
                     </Text>
@@ -443,53 +462,55 @@ export default function DistributionHistoryScreen() {
                   </Pressable>
                 ))}
                 <Text style={[styles.eligibleNote, { color: colors.textMuted }]}>
-                  Tap an asset to view details and enable DRIP from its distribution card.
+                  Enable DRIP from an asset's distribution card.
                 </Text>
               </View>
             )}
           </View>
 
-          {/* Distribution list */}
-          {distributions.map((dist) => {
-            // U50: Status-specific amount badge colours — settled (success),
-            // pending (warning), reversed (danger), reinvested (brand/info),
-            // reinvest_failed (danger), retained_cash (muted).
-            const amountColor = dist.status === 'settled' ? colors.success
-              : dist.status === 'reversed' ? colors.danger
-              : dist.status === 'reinvested' ? colors.brand
-              : dist.status === 'reinvest_failed' ? colors.danger
-              : dist.status === 'retained_cash' ? colors.textSecondary
-              : colors.warning;
-            const amountBg = dist.status === 'settled' ? colors.successSubtle
-              : dist.status === 'reversed' ? colors.dangerSubtle
-              : dist.status === 'reinvested' ? (colors.brandSubtle ?? colors.surfaceAlt)
-              : dist.status === 'reinvest_failed' ? colors.dangerSubtle
-              : dist.status === 'retained_cash' ? colors.surfaceAlt
-              : colors.warningSubtle;
-            return (
-            <View key={dist.id}>
-              <View style={[styles.distCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <View style={styles.distHeader}>
-                  <View style={[styles.distIcon, { backgroundColor: colors.surfaceAlt }]}>
-                    <Ionicons name="cash-outline" size={18} color={amountColor} />
-                  </View>
-                  <View style={styles.distHeaderText}>
-                    <Text style={[styles.distType, { color: colors.textPrimary }]}>
-                      {dist.distributionType === 'revenue_share' ? 'Revenue share' :
-                       dist.distributionType === 'dividend' ? 'Dividend' :
-                       dist.distributionType.charAt(0).toUpperCase() + dist.distributionType.slice(1).replace(/_/g, ' ')}
-                    </Text>
-                    <Text style={[styles.distDate, { color: colors.textMuted }]}>
-                      {formatDate(dist.settledAt ?? dist.createdAt)}
-                    </Text>
-                  </View>
-                  <View style={[styles.amountBadge, { backgroundColor: amountBg }]}>
-                    <Text style={[styles.amountText, { color: amountColor }]}>
-                      {dist.status === 'reversed' ? '-' : dist.status === 'reinvested' || dist.status === 'retained_cash' ? '' : '+'}{formatDistributionAmount(dist.amountGbpMinor)}
-                    </Text>
-                  </View>
-                </View>
-                <View style={[styles.distDetails, { borderTopColor: colors.borderSubtle }]}>
+          {/* History — one-line ledger rows that expand in place for
+              reference, dates and the proceeds waterfall. */}
+          <View style={[styles.section, styles.sectionSeparated, { borderTopColor: colors.borderSubtle }]}>
+            <Text accessibilityRole="header" style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+              History
+            </Text>
+            {distributions.map((dist, index) => {
+              // U50: Status-specific amount colours — settled (success),
+              // pending (warning), reversed (danger), reinvested (brand),
+              // reinvest_failed (danger), retained_cash (muted).
+              const amountColor = dist.status === 'settled' ? colors.successText
+                : dist.status === 'reversed' ? colors.dangerText
+                : dist.status === 'reinvested' ? colors.brand
+                : dist.status === 'reinvest_failed' ? colors.dangerText
+                : dist.status === 'retained_cash' ? colors.textSecondary
+                : colors.warningText;
+              const typeLabel = dist.distributionType === 'revenue_share' ? 'Revenue share'
+                : dist.distributionType === 'dividend' ? 'Dividend'
+                : dist.distributionType.charAt(0).toUpperCase() + dist.distributionType.slice(1).replace(/_/g, ' ');
+              const expanded = expandedIds.has(dist.id);
+              const amountLabel = `${dist.status === 'reversed' ? '−' : dist.status === 'reinvested' || dist.status === 'retained_cash' ? '' : '+'}${formatDistributionAmount(dist.amountGbpMinor)}`;
+              return (
+                <View key={dist.id} style={index > 0 ? [styles.rowSeparated, { borderTopColor: colors.borderSubtle }] : undefined}>
+                  <Pressable
+                    onPress={() => toggleExpanded(dist.id)}
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded }}
+                    accessibilityLabel={`${typeLabel}, ${formatDate(dist.settledAt ?? dist.createdAt)}, ${amountLabel}`}
+                    style={({ pressed }) => [styles.distRow, pressed && { opacity: 0.6 }]}
+                  >
+                    <View style={styles.distHeaderText}>
+                      <Text style={[styles.distType, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {typeLabel}
+                      </Text>
+                      <Text style={[styles.distDate, { color: colors.textMuted }]} numberOfLines={1}>
+                        {[formatDate(dist.settledAt ?? dist.createdAt), assetTitles[dist.assetId]].filter(Boolean).join(' · ')}
+                      </Text>
+                    </View>
+                    <Text style={[styles.amountText, { color: amountColor }]}>{amountLabel}</Text>
+                    <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
+                  </Pressable>
+                  {expanded ? (
+                    <View style={styles.distDetails}>
                   {dist.reference && (
                     <View style={styles.detailRow}>
                       <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Reference</Text>
@@ -562,11 +583,12 @@ export default function DistributionHistoryScreen() {
                       Costs and fees are not itemised for this distribution.
                     </Text>
                   </View>
+                    </View>
+                  ) : null}
                 </View>
-              </View>
-            </View>
-            );
-          })}
+              );
+            })}
+          </View>
 
           {/* U50: Load more — cursor pagination beyond the first 100 rows */}
           {nextCursor && (
@@ -601,12 +623,23 @@ function createStyles(colors: ThemeColors) {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center' },
-  summaryCard: {
-    borderRadius: Radius.xl,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.lg,
-    alignItems: 'center',
+  // Flat sections — typography and hairlines carry the hierarchy.
+  section: {
     gap: Space.xs },
+  sectionSeparated: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: Space.md,
+    marginTop: Space.xs },
+  sectionTitle: {
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
+  sectionBody: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight },
+  rowSeparated: {
+    borderTopWidth: StyleSheet.hairlineWidth },
   summaryLabel: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
@@ -620,21 +653,12 @@ function createStyles(colors: ThemeColors) {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: TypographyV2.meta.letterSpacing },
-  distCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden' },
-  distHeader: {
+  distRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    padding: Space.md },
-  distIcon: {
-    width: Control.chrome,
-    height: Control.chrome,
-    borderRadius: Radius.md,
-    justifyContent: 'center',
-    alignItems: 'center' },
+    paddingVertical: Space.sm + 2,
+    minHeight: 44 },
   distHeaderText: {
     flex: 1 },
   distType: {
@@ -646,19 +670,14 @@ function createStyles(colors: ThemeColors) {
     fontFamily: TypographyV2.meta.fontFamily,
     marginTop: Space.xs - 2,
     letterSpacing: TypographyV2.meta.letterSpacing },
-  amountBadge: {
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs + 2,
-    borderRadius: Radius.md },
   amountText: {
     fontSize: TypographyV2.bodyStrong.size,
     fontFamily: TypographyV2.bodyStrong.fontFamily,
     fontVariant: ['tabular-nums'],
     letterSpacing: TypographyV2.bodyStrong.letterSpacing },
   distDetails: {
-    padding: Space.md,
-    gap: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth },
+    paddingBottom: Space.sm,
+    gap: Space.sm },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -689,69 +708,15 @@ function createStyles(colors: ThemeColors) {
     fontSize: TypographyV2.meta.size - 1,
     fontFamily: TypographyV2.meta.fontFamily,
     lineHeight: TypographyV2.meta.lineHeight },
-  dripCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    gap: Space.sm },
-  dripHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.md },
-  dripIcon: {
-    width: Space.xl + 8,
-    height: Space.xl + 8,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center' },
-  dripHeaderText: {
-    flex: 1 },
-  dripTitle: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
-    letterSpacing: TypographyV2.body.letterSpacing },
-  dripBody: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    marginTop: Space.xs - 2,
-    lineHeight: TypographyV2.meta.lineHeight },
-  dripAssetList: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: Space.sm,
-    gap: Space.sm + 2 },
   dripAssetRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between' },
-  dripAssetInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    justifyContent: 'space-between',
     gap: Space.sm,
-    flex: 1 },
-  dripAssetDot: {
-    width: Space.sm,
-    height: Space.sm,
-    borderRadius: Radius.sm },
+    paddingVertical: Space.sm },
   dripAssetName: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    flex: 1 },
-  dripEnrolledBadge: {
-    borderRadius: Radius.full,
-    paddingHorizontal: Space.xs + 2,
-    paddingVertical: Space.xs - 2 },
-  dripEnrolledText: {
-    fontSize: TypographyV2.meta.size - 1,
-    fontFamily: TypographyV2.meta.fontFamily },
-  dripEmptyWrap: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.xs,
-    paddingTop: Space.xs },
-  dripEmpty: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    lineHeight: TypographyV2.meta.lineHeight,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     flex: 1 },
   // U50: Summary breakdown for pending/reversed
   summaryBreakdown: {
@@ -775,24 +740,11 @@ function createStyles(colors: ThemeColors) {
     letterSpacing: TypographyV2.meta.letterSpacing },
   // U55: DRIP section error + retry
   dripErrorWrap: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: Space.sm,
-    gap: Space.sm },
-  dripErrorRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
     gap: Space.xs },
   dripErrorText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    lineHeight: TypographyV2.meta.lineHeight,
-    flex: 1 },
-  dripRetryBtn: {
-    alignSelf: 'flex-start',
-    paddingVertical: Space.xs,
-    paddingHorizontal: Space.md,
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth },
+    lineHeight: TypographyV2.meta.lineHeight },
   dripRetryText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
@@ -801,35 +753,21 @@ function createStyles(colors: ThemeColors) {
   dripAssetError: {
     fontSize: TypographyV2.meta.size - 1,
     fontFamily: TypographyV2.meta.fontFamily,
-    marginTop: Space.xs - 2,
-    paddingLeft: Space.sm + Space.sm + Space.xs },
+    marginTop: Space.xs - 2 },
   dripAssetUnknown: {
     fontSize: TypographyV2.meta.size - 1,
     fontFamily: TypographyV2.meta.fontFamily,
-    marginTop: Space.xs - 2,
-    paddingLeft: Space.sm + Space.sm + Space.xs },
-  // U54: Eligible holdings CTA
-  dripEnrollCta: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: Space.sm,
-    gap: Space.sm },
+    marginTop: Space.xs - 2 },
+  // U54: Eligible holdings — plain disclosure rows
   eligibleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: Space.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: Radius.md,
-    paddingHorizontal: Space.sm },
-  eligibleIcon: {
-    width: Space.xl,
-    height: Space.xl,
-    borderRadius: Radius.md,
-    justifyContent: 'center',
-    alignItems: 'center' },
+    paddingVertical: Space.sm + 2,
+    minHeight: 44 },
   eligibleName: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     flex: 1 },
   eligibleNote: {
     fontSize: TypographyV2.meta.size - 1,

@@ -13,6 +13,7 @@ import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
+import { useTaxonomy } from '../context/TaxonomyContext';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -25,10 +26,9 @@ import { FilterSheetHeader } from '../components/filters/FilterSheetHeader';
 import { FilterPresets } from '../components/filters/FilterPresets';
 import { FilterLoadingState } from '../components/filters/FilterLoadingState';
 import { FilterSortSection } from '../components/filters/FilterSortSection';
-import { FilterBrandSection } from '../components/filters/FilterBrandSection';
+import { FilterBrandSection, type BrandOption } from '../components/filters/FilterBrandSection';
 import { FilterSizeSection } from '../components/filters/FilterSizeSection';
 import { FilterConditionSection } from '../components/filters/FilterConditionSection';
-import { FilterSustainabilitySection } from '../components/filters/FilterSustainabilitySection';
 import { FilterPriceRange } from '../components/filters/FilterPriceRange';
 import { FilterAdvancedSection } from '../components/filters/FilterAdvancedSection';
 import { FilterFooter } from '../components/filters/FilterFooter';
@@ -44,6 +44,7 @@ export default function FilterScreen() {
   const browseFilters = useStore((state) => state.browseFilters);
   const updateBrowseFilters = useStore((state) => state.updateBrowseFilters);
   const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
+  const { brands: taxonomyBrands } = useTaxonomy();
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const { height, width } = useWindowDimensions();
@@ -79,8 +80,6 @@ export default function FilterScreen() {
     toggleSize,
     selectedCondition,
     setSelectedCondition,
-    sustainableOnly,
-    toggleSustainableOnly,
     priceMin,
     setPriceMin,
     priceMax,
@@ -101,15 +100,28 @@ export default function FilterScreen() {
     reducedMotion,
     onClose: navigation.goBack });
 
-  const brandOptions = React.useMemo(() => {
-    return Array.from(
-      new Set(
-        listings
-          .map((listing) => listing.brand?.trim())
-          .filter((brand): brand is string => Boolean(brand)),
-      ),
-    );
-  }, [listings]);
+  // Brand facet — the curated taxonomy is the canonical list; brands seen
+  // in the listing snapshot but missing from the taxonomy are appended so
+  // nothing selectable disappears. Synonyms/display keys become the search
+  // keywords for the in-facet search input.
+  const brandOptions = React.useMemo<BrandOption[]>(() => {
+    const options: BrandOption[] = taxonomyBrands.map((node) => ({
+      name: node.name,
+      keywords: [node.displayKey, ...(node.synonyms ?? [])] }));
+    const known = new Set(options.map((o) => o.name.toLowerCase()));
+    const extras = new Set<string>();
+    for (const listing of listings) {
+      const brand = listing.brand?.trim();
+      if (brand && !known.has(brand.toLowerCase())) extras.add(brand);
+    }
+    for (const brand of selectedBrands) {
+      if (brand && !known.has(brand.toLowerCase())) extras.add(brand);
+    }
+    for (const name of Array.from(extras).sort((a, b) => a.localeCompare(b))) {
+      options.push({ name, keywords: [] });
+    }
+    return options;
+  }, [taxonomyBrands, listings, selectedBrands]);
 
   const sizeOptions = React.useMemo(() => {
     return Array.from(
@@ -144,8 +156,7 @@ export default function FilterScreen() {
     selectedSizes,
     selectedCondition,
     priceMin,
-    priceMax,
-    sustainableOnly });
+    priceMax });
 
   // Min must not exceed max — surfaced inline on the price row so Apply is
   // blocked honestly rather than silently applying an inverted range.
@@ -165,7 +176,6 @@ export default function FilterScreen() {
       brands: selectedBrands,
       sizes: selectedSizes,
       condition: selectedCondition as typeof browseFilters.condition,
-      sustainableOnly,
       priceMin: parsedMin != null && !Number.isNaN(parsedMin) ? parsedMin : null,
       priceMax: parsedMax != null && !Number.isNaN(parsedMax) ? parsedMax : null });
     track('filter_applied', { filter_name: 'sort', filter_value: activeSort });
@@ -177,9 +187,6 @@ export default function FilterScreen() {
     }
     if (selectedCondition !== 'Any') {
       track('filter_applied', { filter_name: 'condition', filter_value: selectedCondition });
-    }
-    if (sustainableOnly) {
-      track('filter_applied', { filter_name: 'sustainableOnly', filter_value: true });
     }
     if (parsedMin != null && !Number.isNaN(parsedMin)) {
       track('filter_applied', { filter_name: 'priceMin', filter_value: parsedMin });
@@ -280,15 +287,6 @@ export default function FilterScreen() {
                   onToggle={() => toggleSection('condition')}
                   value={selectedCondition}
                   onChange={setSelectedCondition}
-                />
-
-                <View style={filterStyles.sectionDivider} />
-
-                <FilterSustainabilitySection
-                  expanded={expandedSections.has('sustainability')}
-                  onToggle={() => toggleSection('sustainability')}
-                  checked={sustainableOnly}
-                  onToggleChecked={toggleSustainableOnly}
                 />
 
                 <View style={filterStyles.sectionDivider} />

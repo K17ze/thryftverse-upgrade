@@ -23,9 +23,9 @@ export interface VerificationBadgeProps {
 }
 
 function resolveColor(colorKey: string, colors: ThemeColors): string {
-  if (colorKey === 'success') return colors.success;
+  if (colorKey === 'success') return colors.successText;
   if (colorKey === 'brand') return colors.brand;
-  if (colorKey === 'danger') return colors.danger;
+  if (colorKey === 'danger') return colors.dangerText;
   return colors.textSecondary;
 }
 

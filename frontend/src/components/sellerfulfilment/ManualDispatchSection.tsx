@@ -30,7 +30,7 @@ export function ManualDispatchSection({
     <View style={styles.actionSection}>
       {labelGenerationUnavailable && labelError && (
         <View style={styles.labelErrorInline}>
-          <Ionicons name="alert-circle-outline" size={16} color={colors.danger} aria-hidden={true} />
+          <Ionicons name="alert-circle-outline" size={16} color={colors.dangerText} aria-hidden={true} />
           <Text style={styles.labelErrorText}>{labelError}</Text>
         </View>
       )}

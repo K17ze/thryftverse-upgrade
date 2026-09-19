@@ -241,8 +241,8 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
               title="Delete collection"
               variant="secondary"
               size="lg"
-              icon={<Ionicons name="trash-outline" size={18} color={colors.danger} />}
-              titleStyle={{ color: colors.danger }}
+              icon={<Ionicons name="trash-outline" size={18} color={colors.dangerText} />}
+              titleStyle={{ color: colors.dangerText }}
               style={styles.deleteBtn}
               onPress={handleDelete}
               hapticFeedback="heavy"

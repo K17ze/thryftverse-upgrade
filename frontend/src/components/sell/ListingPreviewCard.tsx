@@ -105,12 +105,6 @@ export function ListingPreviewCard({
             />
           )}
 
-          {/* Condition badge — same priority as ProductCard */}
-          {condition ? (
-            <View style={styles.conditionBadge}>
-              <Text style={styles.conditionText}>{condition}</Text>
-            </View>
-          ) : null}
         </View>
 
         {/* Info — clean hierarchy */}
@@ -182,21 +176,6 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     image: {
       width: '100%',
       aspectRatio: AspectRatio.portrait },
-    conditionBadge: {
-      position: 'absolute',
-      top: Space.xs,
-      left: Space.xs,
-      backgroundColor: colors.overlay,
-      paddingHorizontal: Space.xs + 1,
-      paddingVertical: Space.xs / 2,
-      borderRadius: Radius.sm },
-    conditionText: {
-      fontSize: TypographyV2.meta.size,
-      lineHeight: TypographyV2.meta.lineHeight,
-      fontFamily: TypographyV2.meta.fontFamily,
-      color: colors.textInverse,
-      letterSpacing: 0.3,
-      textTransform: 'uppercase' },
     // Info
     info: {
       flex: 1,

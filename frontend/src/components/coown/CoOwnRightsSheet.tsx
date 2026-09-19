@@ -105,7 +105,7 @@ function RightsRowItem({
           style={[
             styles.rowLabel,
             { color: colors.textPrimary },
-            row.isTbc && { color: colors.warning },
+            row.isTbc && { color: colors.warningText },
           ]}
           numberOfLines={expanded ? undefined : 1}
         >
@@ -114,7 +114,7 @@ function RightsRowItem({
         <View style={styles.rowRight}>
           {row.isTbc && (
             <View style={[styles.tbcBadge, { backgroundColor: colors.warningSubtle }]}>
-              <Text style={[styles.tbcBadgeText, { color: colors.warning }]}>TBC</Text>
+              <Text style={[styles.tbcBadgeText, { color: colors.warningText }]}>TBC</Text>
             </View>
           )}
           <Ionicons
@@ -133,12 +133,12 @@ function RightsRowItem({
           {row.isTbc && (row.tbcReason || formatTbcEta(row.tbcEtaDate)) && (
             <View style={[styles.tbcDetail, { borderColor: colors.warningSubtle, backgroundColor: colors.warningSubtle }]}>
               {row.tbcReason && (
-                <Text style={[styles.tbcReasonText, { color: colors.warning }]}>
+                <Text style={[styles.tbcReasonText, { color: colors.warningText }]}>
                   {row.tbcReason}
                 </Text>
               )}
               {formatTbcEta(row.tbcEtaDate) && (
-                <Text style={[styles.tbcEtaText, { color: colors.warning }]}>
+                <Text style={[styles.tbcEtaText, { color: colors.warningText }]}>
                   {formatTbcEta(row.tbcEtaDate)}
                 </Text>
               )}
@@ -211,8 +211,8 @@ export function CoOwnRightsSheet({
         {/* TBC warning banner */}
         {hasTbc && (
           <View style={[styles.tbcBanner, { backgroundColor: colors.warningSubtle }]}>
-            <Ionicons name="alert-circle-outline" size={16} color={colors.warning} />
-            <Text style={[styles.tbcBannerText, { color: colors.warning }]}>
+            <Ionicons name="alert-circle-outline" size={16} color={colors.warningText} />
+            <Text style={[styles.tbcBannerText, { color: colors.warningText }]}>
               {tbcCount} {tbcCount === 1 ? 'row' : 'rows'} to be confirmed — not yet tradable
             </Text>
           </View>

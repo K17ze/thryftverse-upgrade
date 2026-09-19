@@ -58,7 +58,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: Space.sm,
     flex: 1,
     fontVariant: ['tabular-nums'],
-    color: colors.danger,
+    color: colors.dangerText,
   },
   retryBtn: {
     paddingHorizontal: Space.sm + 2,

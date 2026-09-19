@@ -45,6 +45,8 @@ const GRID_PADDING = Space.md;
 interface ClosetMediaMosaicProps {
   items: Listing[];
   onPressItem: (item: Listing) => void;
+  /** Long-press a tile — opens the save-to-collection picker (Saved tab). */
+  onItemLongPress?: (item: Listing) => void;
   /** When true, shows a bookmark toggle overlay (Saved tab). */
   showSaveButton?: boolean;
   /** When true, shows a heart toggle overlay (Wishlist tab). */
@@ -54,6 +56,7 @@ interface ClosetMediaMosaicProps {
 export function ClosetMediaMosaic({
   items,
   onPressItem,
+  onItemLongPress,
   showSaveButton = false,
   showWishlistButton = false }: ClosetMediaMosaicProps) {
   const { colors } = useAppTheme();
@@ -84,6 +87,7 @@ export function ClosetMediaMosaic({
               tileWidth={tileW}
               tileHeight={tileH}
               onPress={() => onPressItem(item)}
+              onLongPress={onItemLongPress ? () => onItemLongPress(item) : undefined}
               showSaveButton={showSaveButton}
               showWishlistButton={showWishlistButton}
             />
@@ -103,6 +107,7 @@ interface TileProps {
   tileWidth: number;
   tileHeight: number;
   onPress: () => void;
+  onLongPress?: () => void;
   showSaveButton?: boolean;
   showWishlistButton?: boolean;
 }
@@ -113,6 +118,7 @@ const ClosetMediaTile = React.memo(function ClosetMediaTile({
   tileWidth,
   tileHeight,
   onPress,
+  onLongPress,
   showSaveButton = false,
   showWishlistButton = false }: TileProps) {
   const { colors } = useAppTheme();
@@ -164,13 +170,14 @@ const ClosetMediaTile = React.memo(function ClosetMediaTile({
     <View style={[styles.tileWrap, { width: tileWidth }]}>
       <AnimatedPressable
         onPress={onPress}
+        onLongPress={onLongPress}
         style={styles.tile}
         activeOpacity={0.9}
         scaleValue={PressScale.gentle}
         hapticFeedback="light"
         accessibilityRole="button"
         accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.brand ? `, ${item.brand}` : ''}${isSold ? ', Sold' : ''}`}
-        accessibilityHint="Opens item details"
+        accessibilityHint={onLongPress ? 'Opens item details. Hold to add to a list.' : 'Opens item details'}
       >
         {/* Media — 3:4 portrait, full bleed */}
         {showPlaceholder ? (
@@ -224,7 +231,7 @@ const ClosetMediaTile = React.memo(function ClosetMediaTile({
                 <Ionicons
                   name={isFav ? 'heart' : 'heart-outline'}
                   size={18}
-                  color={isFav ? colors.danger : colors.scrimTextPrimary}
+                  color={isFav ? colors.dangerText : colors.scrimTextPrimary}
                   style={styles.toggleGlyph}
                 />
               </AnimatedPressable>

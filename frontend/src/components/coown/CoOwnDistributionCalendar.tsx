@@ -73,11 +73,11 @@ function formatDate(iso: string): string {
 function statusColor(colors: ReturnType<typeof useAppTheme>['colors'], tone: 'muted' | 'warning' | 'success' | 'danger'): string {
   switch (tone) {
     case 'warning':
-      return colors.warning;
+      return colors.warningText;
     case 'success':
-      return colors.success;
+      return colors.successText;
     case 'danger':
-      return colors.danger;
+      return colors.dangerText;
     default:
       return colors.textMuted;
   }

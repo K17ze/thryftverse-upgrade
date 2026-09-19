@@ -17,6 +17,10 @@ import { runRetentionSweep } from '../../lib/retentionEngine.js';
 import { runMediaGarbageCollection } from '../../lib/mediaGc.js';
 import { cleanupExpiredDsarExports } from './dsarExportHandler.js';
 import { purgeAllDLQs } from '../../lib/dlqMonitor.js';
+import {
+  enforceRetention,
+  findExpiredBatches,
+} from '../../domain/catalogImports/catalogImportRetention.js';
 
 export interface RetentionSweepJobData {
   reason: 'scheduled' | 'manual';
@@ -81,6 +85,30 @@ export async function processRetentionSweep(
 
     if (dlqPurged > 0) {
       logger.info({ reason, dlqPurged }, 'retentionSweep.dlqPurgeComplete');
+    }
+
+    // Catalogue-import raw snapshots: batches whose 30-day window expired
+    // keep encrypted source payloads until this pass purges them. Per-batch
+    // failures are logged, not thrown — one bad batch must not stop the
+    // remaining sweeps.
+    const expiredImportBatches = await findExpiredBatches().catch((err) => {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error({ reason, err: message }, 'retentionSweep.catalogImportScanFailed');
+      return [] as string[];
+    });
+
+    for (const batchId of expiredImportBatches) {
+      const result = await enforceRetention(batchId).catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        logger.error({ reason, batchId, err: message }, 'retentionSweep.catalogImportRetentionFailed');
+        return null;
+      });
+      if (result && (result.deletedRawSnapshots > 0 || result.deletedSourceUrls > 0)) {
+        logger.info(
+          { reason, batchId, ...result },
+          'retentionSweep.catalogImportRetentionComplete',
+        );
+      }
     }
 
     logger.info({ reason }, 'retentionSweep.complete');

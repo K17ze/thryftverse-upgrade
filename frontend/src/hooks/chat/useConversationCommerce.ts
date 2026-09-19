@@ -13,7 +13,7 @@
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { acceptListingOfferOnApi, declineListingOfferOnApi } from "../../services/listingOffersApi";
+import { acceptListingOfferOnApi, cancelListingOfferOnApi, declineListingOfferOnApi } from "../../services/listingOffersApi";
 import { queryKeys } from "../../platform/server/queryKeys";
 import type { ListingDetailResult } from "../../platform/product/useListingQueries";
 import { useBackendData } from "../../context/BackendDataContext";
@@ -194,6 +194,57 @@ export function useConversationCommerce({
     [messages, setMessages, routeItemId, conversationItemId, context, onUpdateContext, show, haptic, queryClient],
   );
 
+  // The buyer's exit on a seller-authored offer is cancel, not decline —
+  // decline is seller-only server-side. Same optimistic/revert shape as
+  // handleDeclineOffer.
+  const handleCancelOffer = useCallback(
+    async (msgId: string) => {
+      const msg = messages.find((m) => m.id === msgId);
+      const offerId = msg?.offer?.offerId;
+      if (!offerId) {
+        show("Cannot cancel this offer — missing offer reference.", "error");
+        return;
+      }
+
+      haptic.light();
+
+      const prevStatus = msg?.offer?.status;
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === msgId && m.offer
+            ? { ...m, offer: { ...m.offer, status: "cancelled" as const } }
+            : m,
+        ),
+      );
+
+      if (context?.offer && onUpdateContext) {
+        onUpdateContext({ ...context, offer: { ...context.offer, status: "withdrawn" } });
+      }
+
+      try {
+        await cancelListingOfferOnApi(offerId);
+        const linkedItemId = routeItemId || conversationItemId;
+        if (linkedItemId) {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(linkedItemId) });
+        }
+      } catch {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === msgId && m.offer
+              ? { ...m, offer: { ...m.offer, status: prevStatus ?? "pending" } }
+              : m,
+          ),
+        );
+        if (context?.offer && onUpdateContext) {
+          const revertedStatus = prevStatus ? MESSAGE_OFFER_TO_CONTEXT_STATUS[prevStatus] ?? "pending" : "pending";
+          onUpdateContext({ ...context, offer: { ...context.offer, status: revertedStatus } });
+        }
+        show("Could not cancel offer. Try again.", "error");
+      }
+    },
+    [messages, setMessages, routeItemId, conversationItemId, context, onUpdateContext, show, haptic, queryClient],
+  );
+
   const handleCounterOffer = useCallback(
     (msgId: string, offerPrice?: number, originalPrice?: number) => {
       haptic.medium();
@@ -238,6 +289,7 @@ export function useConversationCommerce({
   return {
     handleAcceptOffer,
     handleDeclineOffer,
+    handleCancelOffer,
     handleCounterOffer,
     handleOfferExpired,
   };

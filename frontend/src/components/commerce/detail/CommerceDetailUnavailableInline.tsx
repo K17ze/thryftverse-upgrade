@@ -46,14 +46,14 @@ export function CommerceDetailUnavailableInline({
         <Ionicons
           name={icon}
           size={Control.iconCompact}
-          color={critical ? colors.danger : colors.textMuted}
+          color={critical ? colors.dangerText : colors.textMuted}
           style={styles.icon}
         />
         <View style={styles.copy}>
           <Text
             style={[
               styles.title,
-              { color: critical ? colors.danger : colors.textSecondary },
+              { color: critical ? colors.dangerText : colors.textSecondary },
             ]}
             numberOfLines={2}
           >

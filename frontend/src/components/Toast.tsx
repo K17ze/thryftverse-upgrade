@@ -22,8 +22,8 @@ import {
 // Success and error use theme tokens.
 function getTypeConfig(colors: ReturnType<typeof useAppTheme>['colors']): Record<ToastType, { borderColor: string; icon: keyof typeof Ionicons.glyphMap; iconColor: string }> {
   return {
-    success: { borderColor: colors.success, icon: 'checkmark-circle', iconColor: colors.success },
-    error: { borderColor: colors.danger, icon: 'alert-circle', iconColor: colors.danger },
+    success: { borderColor: colors.success, icon: 'checkmark-circle', iconColor: colors.successText },
+    error: { borderColor: colors.danger, icon: 'alert-circle', iconColor: colors.dangerText },
     info: { borderColor: colors.antiqueGold, icon: 'information-circle', iconColor: colors.antiqueGold } };
 }
 

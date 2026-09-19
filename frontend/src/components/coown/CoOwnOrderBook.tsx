@@ -20,10 +20,9 @@ import { TypographyV2 } from '../../theme/typography.v2';
 import { buildDepthRows } from '../../utils/orderBookDepth';
 
 /**
- * Order-book row height. The shared `ExchangeLayout.bookRowHeight` token is
- * 44pt (the canonical touch target); the order book levels are not
- * interactive, so we tighten them to 32pt to expose more depth per viewport
- * while keeping the 44pt hit target for the header row below.
+ * Order-book row height = the canonical 44pt touch target — levels are
+ * interactive (tap a level to pre-fill the order ticket), so rows keep
+ * the full hit height rather than tightening for density.
  */
 const BOOK_ROW_HEIGHT = 44;
 /** Fixed-width price rail — wider to accommodate larger tabular figures. */
@@ -117,7 +116,6 @@ export function CoOwnOrderBook({
             side="ask"
             colors={colors}
             maxCumulative={getMaxCumulative(asks, bids)}
-            maxSize={getMaxSize(asks, bids)}
             onSelectLevel={undefined}
           />
           <SpreadRow
@@ -132,7 +130,6 @@ export function CoOwnOrderBook({
             side="bid"
             colors={colors}
             maxCumulative={getMaxCumulative(asks, bids)}
-            maxSize={getMaxSize(asks, bids)}
             onSelectLevel={undefined}
           />
         </View>
@@ -141,9 +138,15 @@ export function CoOwnOrderBook({
   }
 
   const maxCumulative = getMaxCumulative(asks, bids);
-  const maxSize = getMaxSize(asks, bids);
   const visibleAsks = asks.slice(0, visibleLevels);
   const visibleBids = bids.slice(0, visibleLevels);
+  // Bid/ask imbalance — the resting-unit ratio across the visible book.
+  // Rendered as a proportional green/red strip beneath the ladder
+  // (Binance B/S gauge convention). Only shown when both sides carry units.
+  const bidsTotal = visibleBids.reduce((sum, l) => sum + l.size, 0);
+  const asksTotal = visibleAsks.reduce((sum, l) => sum + l.size, 0);
+  const imbalanceTotal = bidsTotal + asksTotal;
+  const bidShare = imbalanceTotal > 0 ? bidsTotal / imbalanceTotal : null;
 
   // Call auction — show indicative auction note
   const isCallAuction = mode === 'call_auction';
@@ -156,16 +159,16 @@ export function CoOwnOrderBook({
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Order book</Text>
           {isCallAuction && (
             <View style={[styles.auctionBadge, { backgroundColor: colors.warningSubtle }]}>
-              <Ionicons name="time-outline" size={11} color={colors.warning} />
-              <Text style={[styles.auctionBadgeText, { color: colors.warning }]}>Call auction</Text>
+              <Ionicons name="time-outline" size={11} color={colors.warningText} />
+              <Text style={[styles.auctionBadgeText, { color: colors.warningText }]}>Call auction</Text>
             </View>
           )}
         </View>
       ) : isCallAuction ? (
         <View style={styles.headerRow}>
           <View style={[styles.auctionBadge, { backgroundColor: colors.warningSubtle }]}>
-            <Ionicons name="time-outline" size={11} color={colors.warning} />
-            <Text style={[styles.auctionBadgeText, { color: colors.warning }]}>Call auction</Text>
+            <Ionicons name="time-outline" size={11} color={colors.warningText} />
+            <Text style={[styles.auctionBadgeText, { color: colors.warningText }]}>Call auction</Text>
           </View>
         </View>
       ) : null}
@@ -186,17 +189,17 @@ export function CoOwnOrderBook({
         side="ask"
         colors={colors}
         maxCumulative={maxCumulative}
-        maxSize={maxSize}
         onSelectLevel={onSelectLevel}
         reverseOrder
       />
 
-      {/* Spread row */}
+      {/* Spread row — recessed band between the two sides */}
       <SpreadRow
         bestBid={bids[0]?.price}
         bestAsk={asks[0]?.price}
         lastPrice={lastPrice}
         lastAgeSeconds={lastAgeSeconds}
+        bandColor={embedded ? colors.surface : colors.surfaceAlt}
         colors={colors}
       />
 
@@ -206,9 +209,34 @@ export function CoOwnOrderBook({
         side="bid"
         colors={colors}
         maxCumulative={maxCumulative}
-        maxSize={maxSize}
         onSelectLevel={onSelectLevel}
       />
+
+      {/* Bid/ask imbalance — proportional B/S strip under the ladder.
+          Reads like Binance's B/S gauge: green share = resting bid units,
+          red share = resting ask units across the visible depth. */}
+      {bidShare != null ? (
+        <View
+          style={styles.imbalanceWrap}
+          accessibilityRole="text"
+          accessibilityLabel={`Order book imbalance: ${Math.round(bidShare * 100)}% bids, ${Math.round((1 - bidShare) * 100)}% asks across visible depth`}
+        >
+          <Text style={[styles.imbalanceLabel, { color: colors.coownUp }]}>
+            {Math.round(bidShare * 100)}%
+          </Text>
+          <View style={[styles.imbalanceTrack, { backgroundColor: colors.coownDown }]}>
+            <View
+              style={[
+                styles.imbalanceFill,
+                { backgroundColor: colors.coownUp, width: `${bidShare * 100}%` },
+              ]}
+            />
+          </View>
+          <Text style={[styles.imbalanceLabel, { color: colors.coownDown }]}>
+            {Math.round((1 - bidShare) * 100)}%
+          </Text>
+        </View>
+      ) : null}
 
       {/* Empty state — flat inline notice, no centered icon box */}
       {bids.length === 0 && asks.length === 0 && (
@@ -223,19 +251,14 @@ export function CoOwnOrderBook({
   );
 }
 
-/** Get the max cumulative size across both sides for depth bar scaling. */
+/** Max cumulative depth across both sides — the scale for the classic
+ *  order-book fan: each row's fill is its cumulative units relative to the
+ *  deepest side's total, so bars grow toward the far edge (Binance/Kraken
+ *  book convention). */
 function getMaxCumulative(asks: CoOwnBookLevel[], bids: CoOwnBookLevel[]): number {
-  const askMax = asks.length > 0 ? (asks[asks.length - 1].cumulative ?? asks[asks.length - 1].size) : 0;
-  const bidMax = bids.length > 0 ? (bids[bids.length - 1].cumulative ?? bids[bids.length - 1].size) : 0;
-  return Math.max(askMax, bidMax, 1);
-}
-
-/** Get the max per-level size across both sides — depth bars are proportional
- *  to each level's own size relative to the deepest level in the book. */
-function getMaxSize(asks: CoOwnBookLevel[], bids: CoOwnBookLevel[]): number {
-  const askMax = asks.reduce((m, l) => Math.max(m, l.size), 0);
-  const bidMax = bids.reduce((m, l) => Math.max(m, l.size), 0);
-  return Math.max(askMax, bidMax, 1);
+  const asksTotal = asks.reduce((sum, l) => sum + l.size, 0);
+  const bidsTotal = bids.reduce((sum, l) => sum + l.size, 0);
+  return Math.max(asksTotal, bidsTotal, 1);
 }
 
 /**
@@ -253,7 +276,6 @@ const BookLevelRow = React.memo(function BookLevelRow({
   side,
   cumulative,
   depthFraction,
-  isEdge,
   colors,
   onSelectLevel,
 }: {
@@ -261,15 +283,12 @@ const BookLevelRow = React.memo(function BookLevelRow({
   side: 'bid' | 'ask';
   cumulative: number;
   depthFraction: number;
-  isEdge: boolean;
   colors: ReturnType<typeof useAppTheme>['colors'];
   onSelectLevel?: (side: 'bid' | 'ask', price: number) => void;
 }) {
-  // Depth bars read as structure — theme-resolved subtle fills keep them
-  // visible on both canvases (F28 static-palette reconciliation). The bar
-  // sits behind the text at 40% opacity so tabular figures stay readable.
+  // Depth fills are the order book's core visual: full-strength theme
+  // subtle tints so the green bid / red ask mass reads at a glance.
   const barColor = side === 'bid' ? colors.coownUpSubtle : colors.coownDownSubtle;
-  const barEdgeColor = side === 'bid' ? colors.coownUpBorder : colors.coownDownBorder;
   // Per Design.md: use coownUp/coownDown for financial truth (bid=up/buy,
   // ask=down/sell), not generic success/danger.
   const priceColor = side === 'bid' ? colors.coownUp : colors.coownDown;
@@ -284,34 +303,36 @@ const BookLevelRow = React.memo(function BookLevelRow({
       style={({ pressed }) => pressed && { opacity: 0.6 }}
     >
       <View style={[styles.levelRow, { minHeight: BOOK_ROW_HEIGHT }]}>
-        {/* Depth bar — behind the text (z-index), grows from the
-            outer edge: left for bids, right for asks. Fills the full
-            row height at 40% opacity so figures stay readable. */}
+        {/* Depth fill — behind the text, sized by CUMULATIVE units at this
+            level so the book reads as the classic fan: short bars nearest
+            the spread, full bars at the far edge. Bids grow from the left,
+            asks from the right. */}
         <View
           style={[
             side === 'ask' ? styles.depthBarRight : styles.depthBarLeft,
             {
               width: `${Math.min(depthFraction * 100, 100)}%`,
-              backgroundColor: isEdge ? barEdgeColor : barColor,
-              opacity: 0.4,
+              backgroundColor: barColor,
             },
           ]}
         />
+        {/* Financial values must remain exact at large text sizes — two
+            lines inside the fixed rail instead of silently clipping (F12). */}
         <Text
           style={[styles.levelPrice, { color: priceColor }]}
-          numberOfLines={1}
+          numberOfLines={2}
         >
           {level.price.toFixed(2)}
         </Text>
         <Text
           style={[styles.levelSize, { color: colors.textPrimary }]}
-          numberOfLines={1}
+          numberOfLines={2}
         >
           {level.size.toLocaleString('en-GB')}
         </Text>
         <Text
           style={[styles.levelTotal, { color: colors.textSecondary }]}
-          numberOfLines={1}
+          numberOfLines={2}
         >
           {cumulative.toLocaleString('en-GB')}
         </Text>
@@ -326,7 +347,6 @@ function BookSide({
   side,
   colors,
   maxCumulative,
-  maxSize,
   onSelectLevel,
   reverseOrder,
 }: {
@@ -334,7 +354,6 @@ function BookSide({
   side: 'bid' | 'ask';
   colors: ReturnType<typeof useAppTheme>['colors'];
   maxCumulative: number;
-  maxSize: number;
   onSelectLevel?: (side: 'bid' | 'ask', price: number) => void;
   reverseOrder?: boolean;
 }) {
@@ -369,11 +388,10 @@ function BookSide({
       <Text style={[styles.sideLabelText, { color: side === 'bid' ? colors.coownUp : colors.coownDown }]}>
         {side === 'bid' ? 'Bids' : 'Asks'}
       </Text>
-      {rows.map(({ level, cumulative }, i) => {
-        // Depth bars are proportional to each level's own size relative to
-        // the deepest level in the book — visual depth, not cumulative total.
-        const depthFraction = level.size / maxSize;
-        const isEdge = reverseOrder ? i === rows.length - 1 : i === 0;
+      {rows.map(({ level, cumulative }) => {
+        // Depth fills scale by cumulative units at this level relative to
+        // the deepest side's total — the classic book fan.
+        const depthFraction = cumulative / maxCumulative;
 
         return (
           <BookLevelRow
@@ -382,7 +400,6 @@ function BookSide({
             side={side}
             cumulative={cumulative}
             depthFraction={depthFraction}
-            isEdge={isEdge}
             colors={colors}
             onSelectLevel={onSelectLevel}
           />
@@ -392,49 +409,87 @@ function BookSide({
   );
 }
 
-/** Spread row — between asks and bids. */
+/** Spread band — between asks and bids. Rendered as a bid–spread–ask
+ *  bar (Polymarket/Robinhood grammar): the green bid half and red ask
+ *  half continue each side's depth-bar axis into the divider and meet
+ *  at a neutral centre carrying the spread and last trade. Labels keep
+ *  meaning colour-independent. */
 function SpreadRow({
   bestBid,
   bestAsk,
   lastPrice,
   lastAgeSeconds,
+  bandColor,
   colors,
 }: {
   bestBid?: number;
   bestAsk?: number;
   lastPrice?: number;
   lastAgeSeconds?: number | null;
+  bandColor?: string;
   colors: ReturnType<typeof useAppTheme>['colors'];
 }) {
   const spread = bestBid != null && bestAsk != null ? bestAsk - bestBid : null;
   const mid = bestBid != null && bestAsk != null ? (bestBid + bestAsk) / 2 : null;
   const spreadBps = spread != null && mid != null && mid > 0 ? (spread / mid) * 10000 : null;
+  // Trade-side inference (tick rule): a last price at/above the ask was a
+  // buy lift, at/below the bid a sell hit, inside the spread is neutral.
+  // Mirrors how Polymarket/Robinhood colour the last print on the band.
+  const lastSide: 'buy' | 'sell' | null =
+    lastPrice == null ? null
+    : bestAsk != null && lastPrice >= bestAsk ? 'buy'
+    : bestBid != null && lastPrice <= bestBid ? 'sell'
+    : null;
+  const lastColor =
+    lastSide === 'buy' ? colors.coownUp
+    : lastSide === 'sell' ? colors.coownDown
+    : colors.textSecondary;
 
   return (
-    <View style={[styles.spreadRow, { borderColor: colors.border }]}>
-      <View style={styles.spreadLeft}>
-        <Text style={[styles.spreadLabel, { color: colors.textMuted }]}>Spread</Text>
-        <Text style={[styles.spreadValue, { color: colors.textSecondary }]}>
-          {spread != null ? spread.toFixed(2) : '—'}
-          {spreadBps != null && ` · ${spreadBps.toFixed(0)}bps`}
+    <View
+      style={[styles.spreadRow, { borderColor: colors.border, backgroundColor: bandColor }]}
+      accessibilityRole="text"
+      accessibilityLabel={
+        `Best bid ${bestBid != null ? bestBid.toFixed(2) : 'none'}, best ask ${bestAsk != null ? bestAsk.toFixed(2) : 'none'}` +
+        (spread != null ? `, spread ${spread.toFixed(2)}${spreadBps != null ? `, ${spreadBps.toFixed(0)} basis points` : ''}` : '') +
+        (lastPrice != null ? `, last trade ${lastPrice.toFixed(2)}${lastSide ? `, ${lastSide}-side` : ''}${lastAgeSeconds != null ? `, ${formatAge(lastAgeSeconds)}` : ''}` : '')
+      }
+    >
+      {/* Bid half — continues the bid depth-bar axis (bars grow from
+          the left) into the band. */}
+      <View style={[styles.spreadSide, bestBid != null && { backgroundColor: colors.coownUpSubtle }]}>
+        <Text style={[styles.spreadSideLabel, { color: colors.textMuted }]}>Bid</Text>
+        <Text style={[styles.spreadSideValue, { color: bestBid != null ? colors.coownUp : colors.textMuted }]}>
+          {bestBid != null ? bestBid.toFixed(2) : '—'}
         </Text>
       </View>
-      {lastPrice != null && (
-        <View style={styles.spreadRight}>
-          <Text style={[styles.lastLabel, { color: colors.textMuted }]}>Last</Text>
-          <Text style={[styles.lastValue, { color: colors.textPrimary }]}>
-            {lastPrice.toFixed(2)}
+
+      {/* Neutral centre — spread magnitude + last trade, stacked. */}
+      <View style={styles.spreadCenter}>
+        <Text style={[styles.spreadCenterMeta, { color: colors.textMuted }]}>
+          Spread{' '}
+          <Text style={[styles.spreadCenterValue, { color: colors.textSecondary }]}>
+            {spread != null ? spread.toFixed(2) : '—'}
+            {spreadBps != null ? ` · ${spreadBps.toFixed(0)}bps` : ''}
           </Text>
-          {lastAgeSeconds != null && (
-            <Text
-              style={[styles.lastAge, { color: colors.textMuted }]}
-              accessibilityLabel={`Last trade ${formatAge(lastAgeSeconds)}`}
-            >
-              · {formatAge(lastAgeSeconds)}
-            </Text>
-          )}
-        </View>
-      )}
+        </Text>
+        {lastPrice != null && (
+          <Text style={[styles.spreadCenterMeta, { color: colors.textMuted }]}>
+            Last{' '}
+            <Text style={{ color: lastColor }}>{lastPrice.toFixed(2)}</Text>
+            {lastAgeSeconds != null ? ` · ${formatAge(lastAgeSeconds)}` : ''}
+          </Text>
+        )}
+      </View>
+
+      {/* Ask half — ask depth bars grow from the right, so the red
+          tone anchors the right edge. */}
+      <View style={[styles.spreadSide, styles.spreadSideRight, bestAsk != null && { backgroundColor: colors.coownDownSubtle }]}>
+        <Text style={[styles.spreadSideLabel, { color: colors.textMuted }]}>Ask</Text>
+        <Text style={[styles.spreadSideValue, { color: bestAsk != null ? colors.coownDown : colors.textMuted }]}>
+          {bestAsk != null ? bestAsk.toFixed(2) : '—'}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -598,55 +653,82 @@ const styles = StyleSheet.create({
   },
   spreadRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: Space.xs + 2,
+    alignItems: 'stretch',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  spreadLeft: {
+  // Bid/ask halves — each side's depth-bar tone field extends into the
+  // band so the divider reads as green | neutral | red, matching the
+  // column axis (bids grow left, asks grow right).
+  spreadSide: {
+    flex: 1,
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: Space.xs,
+    paddingVertical: Space.xs + 2,
+    paddingHorizontal: Space.xs,
   },
-  spreadLabel: {
-    fontSize: TypographyV2.captionElevated.size,
-    lineHeight: TypographyV2.captionElevated.lineHeight,
-    fontFamily: TypographyV2.captionElevated.fontFamily,
-    letterSpacing: TypographyV2.captionElevated.letterSpacing,
+  spreadSideRight: {
+    justifyContent: 'center',
+  },
+  spreadSideLabel: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     textTransform: 'uppercase',
   },
-  spreadValue: {
-    fontSize: TypographyV2.captionElevated.size,
-    lineHeight: TypographyV2.captionElevated.lineHeight,
-    fontFamily: TypographyV2.captionElevated.fontFamily,
-    letterSpacing: TypographyV2.captionElevated.letterSpacing,
+  spreadSideValue: {
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     fontVariant: ['tabular-nums'],
   },
-  spreadRight: {
+  spreadCenter: {
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 1,
+    paddingVertical: Space.xs + 2,
+    paddingHorizontal: Space.sm,
+  },
+  spreadCenterValue: {
+    fontFamily: FontFamily.semibold,
+    fontVariant: ['tabular-nums'],
+  },
+  spreadCenterMeta: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'],
+  },
+  // Bid/ask imbalance strip — one thin proportional gauge under the
+  // ladder. Green share = resting bid units, red share = resting ask
+  // units. Labels carry the numbers; the bar carries the ratio.
+  imbalanceWrap: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: Space.xs,
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingTop: Space.xs + 2,
+    paddingBottom: 2,
+    paddingHorizontal: Space.xs,
   },
-  lastLabel: {
-    fontSize: TypographyV2.captionElevated.size,
-    lineHeight: TypographyV2.captionElevated.lineHeight,
-    fontFamily: TypographyV2.captionElevated.fontFamily,
-    letterSpacing: TypographyV2.captionElevated.letterSpacing,
-    textTransform: 'uppercase',
+  imbalanceTrack: {
+    flex: 1,
+    height: 3,
+    borderRadius: 2,
+    overflow: 'hidden',
+    flexDirection: 'row',
   },
-  lastValue: {
-    fontSize: TypographyV2.captionElevated.size,
-    lineHeight: TypographyV2.captionElevated.lineHeight,
-    fontFamily: TypographyV2.captionElevated.fontFamily,
-    letterSpacing: TypographyV2.captionElevated.letterSpacing,
+  imbalanceFill: {
+    height: 3,
+  },
+  imbalanceLabel: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.semibold,
     fontVariant: ['tabular-nums'],
-  },
-  lastAge: {
-    fontSize: TypographyV2.captionElevated.size,
-    lineHeight: TypographyV2.captionElevated.lineHeight,
-    fontFamily: TypographyV2.captionElevated.fontFamily,
-    letterSpacing: TypographyV2.captionElevated.letterSpacing,
   },
   emptyBlock: {
     paddingVertical: Space.md,

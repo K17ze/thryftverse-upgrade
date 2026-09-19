@@ -100,7 +100,7 @@ export function CoOwnTradeReceipt({
   const { colors } = useAppTheme();
   const isBuy = side === 'buy';
   const statusCfg = STATUS_CONFIG[status];
-  const statusColor = statusCfg.positive ? colors.success : colors.textSecondary;
+  const statusColor = statusCfg.positive ? colors.successText : colors.textSecondary;
 
   // Composite accessibility label for screen readers
   const a11yParts: string[] = [
@@ -298,8 +298,8 @@ export function CoOwnTradeReceipt({
       {marketWarning && (
         <View style={[styles.warningCard, { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder }]}>
           <View style={styles.warningRow}>
-            <Ionicons name="warning-outline" size={14} color={colors.warning} />
-            <Text style={[styles.warningTitle, { color: colors.warning }]}>Market & liquidity</Text>
+            <Ionicons name="warning-outline" size={14} color={colors.warningText} />
+            <Text style={[styles.warningTitle, { color: colors.warningText }]}>Market & liquidity</Text>
           </View>
           <Text style={[styles.warningText, { color: colors.textSecondary }]}>
             {marketWarning}

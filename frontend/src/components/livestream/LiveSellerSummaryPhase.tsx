@@ -42,7 +42,7 @@ export function LiveSellerSummaryPhase({
       contentStyle={styles.flushContent}
     >
       <View style={styles.summaryWrap}>
-        <AppIcon name="check" variant="filled" size={IconSize.display} color="success" accessible={false} />
+        <AppIcon name="check" variant="filled" size={IconSize.display} color="successText" accessible={false} />
         <Text style={[styles.summaryTitle, { color: colors.textPrimary }]} accessibilityRole="header">
           Stream ended
         </Text>

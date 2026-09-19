@@ -160,6 +160,8 @@ export default function CheckoutScreen() {
     useOnezePayment,
     setUseOnezePayment,
     balanceLoading,
+    balanceError,
+    reloadBalance,
   } = useCheckoutData({
     currentUserId: currentUser?.id,
     item,
@@ -836,6 +838,16 @@ export default function CheckoutScreen() {
               }
             : undefined}
         />
+
+        {/* Balance load failure — the position fetch failed, so the 1ZE
+            option and wallet toggle stay hidden rather than rendering
+            fabricated zeros. An inline error + retry takes their place. */}
+        {balanceError ? (
+          <CheckoutCapabilityError
+            message={balanceError}
+            onRetry={reloadBalance}
+          />
+        ) : null}
 
         {/* 5aa. Item verification add-on — a request flag on the order, no
             charge (the backend exposes no verification price). Rendered

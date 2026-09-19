@@ -264,7 +264,7 @@ export async function deadLetterIngestJob(db: Pool, jobId: string, assetId: stri
     await client.query(
       `UPDATE media_assets
        SET status = 'processing_failed',
-           processing_status = 'processing_failed',
+           processing_status = 'failed',
            failure_reason = 'Processing attempts exhausted with a stale worker lock'
        WHERE id = $1
          AND status = 'processing'`,

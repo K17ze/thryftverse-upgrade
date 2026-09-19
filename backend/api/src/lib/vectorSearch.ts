@@ -32,7 +32,10 @@ interface MeiliIndex {
 }
 
 interface MeiliModule {
-  MeiliSearch: new (config: { host: string; apiKey?: string }) => MeiliSearchClient;
+  // meilisearch <0.35 exported `MeiliSearch`; >=0.35 renamed it `Meilisearch`.
+  // Accept either so the client is found on whichever version resolves.
+  MeiliSearch?: new (config: { host: string; apiKey?: string }) => MeiliSearchClient;
+  Meilisearch?: new (config: { host: string; apiKey?: string }) => MeiliSearchClient;
 }
 
 let cachedMeiliClient: MeiliSearchClient | null | undefined;
@@ -59,11 +62,12 @@ async function getMeiliClient(): Promise<MeiliSearchClient | null> {
 
   try {
     const mod = (await import('meilisearch').catch(() => null)) as MeiliModule | null;
-    if (!mod) {
+    const Client = mod?.MeiliSearch ?? mod?.Meilisearch;
+    if (!Client) {
       cachedMeiliClient = null;
       return null;
     }
-    cachedMeiliClient = new mod.MeiliSearch({
+    cachedMeiliClient = new Client({
       host: url,
       apiKey: process.env.MEILISEARCH_KEY,
     });

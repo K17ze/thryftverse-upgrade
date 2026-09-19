@@ -86,7 +86,7 @@ function getStateConfig(
         subtitle: t('orders.paymentConfirmedBody'),
         badgeLabel: 'PAID',
         icon: 'checkmark-circle-outline',
-        iconColor: colors.success,
+        iconColor: colors.successText,
         stage: 'paid',
         nextStep: 'Seller preparing for dispatch',
       };
@@ -116,7 +116,7 @@ function getStateConfig(
         subtitle: t('orders.deliveredBody'),
         badgeLabel: 'DELIVERED',
         icon: 'checkmark-done-circle-outline',
-        iconColor: colors.success,
+        iconColor: colors.successText,
         stage: 'delivered',
       };
     case 'label_created':
@@ -135,7 +135,7 @@ function getStateConfig(
         subtitle: t('orders.confirmReceiptBody'),
         badgeLabel: 'ACTION NEEDED',
         icon: 'cube-outline',
-        iconColor: colors.warning,
+        iconColor: colors.warningText,
         stage: 'delivered',
         ctaLabel: t('orders.confirmReceiptCta'),
       };
@@ -145,7 +145,7 @@ function getStateConfig(
         subtitle: t('orders.leaveFeedbackBody'),
         badgeLabel: 'REVIEW',
         icon: 'star-outline',
-        iconColor: colors.warning,
+        iconColor: colors.warningText,
         stage: 'delivered',
         ctaLabel: t('orders.leaveFeedbackCta'),
       };
@@ -172,7 +172,7 @@ function getStateConfig(
         subtitle: t('orders.cancelledBody'),
         badgeLabel: 'CANCELLED',
         icon: 'close-circle-outline',
-        iconColor: colors.danger,
+        iconColor: colors.dangerText,
         isFailure: true,
         failureLabel: 'Cancelled',
       };
@@ -182,7 +182,7 @@ function getStateConfig(
         subtitle: t('orders.refundedBody'),
         badgeLabel: 'REFUNDED',
         icon: 'cash-outline',
-        iconColor: colors.danger,
+        iconColor: colors.dangerText,
         isFailure: true,
         failureLabel: 'Refunded',
       };
@@ -194,7 +194,7 @@ function getStateConfig(
           : t('orders.partiallyRefundedBodyGeneric'),
         badgeLabel: 'PARTIAL REFUND',
         icon: 'cash-outline',
-        iconColor: colors.warning,
+        iconColor: colors.warningText,
       };
   }
 }

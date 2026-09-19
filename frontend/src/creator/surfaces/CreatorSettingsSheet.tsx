@@ -131,7 +131,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
           {/* Shared: Caption */}
           <View style={styles.labelRow}>
             <Text style={styles.sectionLabel}>Caption</Text>
-            <Text style={[styles.charCount, { color: caption.length > 2000 ? colors.danger : colors.textMuted }]}>
+            <Text style={[styles.charCount, { color: caption.length > 2000 ? colors.dangerText : colors.textMuted }]}>
               {caption.length}/2200
             </Text>
           </View>

@@ -37,7 +37,7 @@ const FILTERS: Array<{ value: TicketFilter; labelKey: string; accessibilityKey: 
 function getStatusConfig(colors: ThemeColors): Record<string, { labelKey: string; color: string; icon: string }> {
   return {
     open: { labelKey: 'resolutionCentre.statusOpen', color: colors.brand, icon: 'folder' },
-    resolved: { labelKey: 'resolutionCentre.statusResolved', color: colors.success, icon: 'checkmark-circle-outline' },
+    resolved: { labelKey: 'resolutionCentre.statusResolved', color: colors.successText, icon: 'checkmark-circle-outline' },
     closed: { labelKey: 'resolutionCentre.statusClosed', color: colors.textMuted, icon: 'close' },
   };
 }

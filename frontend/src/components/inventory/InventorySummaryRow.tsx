@@ -18,9 +18,9 @@ export function InventorySummaryRow({ summary, valueLabel, colors, styles }: Inv
     <View>
       <View style={styles.summaryRow}>
         <SummaryCell label="Items" value={String(summary.total)} colors={colors} styles={styles} />
-        <SummaryCell label="Active" value={String(summary.active)} colors={colors} styles={styles} accent={colors.success} />
+        <SummaryCell label="Active" value={String(summary.active)} colors={colors} styles={styles} accent={colors.successText} />
         <SummaryCell label="Sold" value={String(summary.sold)} colors={colors} styles={styles} accent={colors.textMuted} />
-        <SummaryCell label="Paused" value={String(summary.paused)} colors={colors} styles={styles} accent={colors.warning} />
+        <SummaryCell label="Paused" value={String(summary.paused)} colors={colors} styles={styles} accent={colors.warningText} />
         <SummaryCell label="Value" value={valueLabel} colors={colors} styles={styles} accent={colors.brand} last />
       </View>
       {/* Truthful partial label: when server totals are unreachable the

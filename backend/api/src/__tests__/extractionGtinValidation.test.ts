@@ -13,8 +13,8 @@ describe('validateGtin', () => {
   // ── Valid GTINs (verified check digits) ──────────────────────────────────
 
   it('validates a correct GTIN-8', () => {
-    // GTIN-8: 00012345 with check digit 7 → 00012347
-    expect(validateGtin('00012347')).toBe('valid');
+    // GTIN-8: payload 0001234, GS1 check digit 8 → 00012348
+    expect(validateGtin('00012348')).toBe('valid');
   });
 
   it('validates a correct GTIN-12 (UPC-A)', () => {
@@ -28,11 +28,8 @@ describe('validateGtin', () => {
   });
 
   it('validates a correct GTIN-14', () => {
-    // GTIN-14: 1006381333931 with check digit 7 → 10063813339317
-    // Actually let's use a known-good one: 00012345600012
-    // GTIN-14 for a case containing UPC-A 036000291452:
-    // 1 + 03600029145 + check digit. The check digit for 103600029145 is 2.
-    expect(validateGtin('1036000291452')).toBe('valid');
+    // GTIN-14: payload 0001234560001, GS1 check digit 2 → 00012345600012
+    expect(validateGtin('00012345600012')).toBe('valid');
   });
 
   // ── Invalid GTINs (wrong check digit) ────────────────────────────────────
@@ -89,7 +86,7 @@ describe('validateGtin', () => {
   });
 
   it('handles a GTIN-14 with leading zeros', () => {
-    // 00003600029145 + check digit 2 → 000036000291452
-    expect(validateGtin('000036000291452')).toBe('valid');
+    // Payload 0003600029145 + check digit 2 → 00036000291452
+    expect(validateGtin('00036000291452')).toBe('valid');
   });
 });

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Control } from '../../theme/designTokens';
+import { Space, Radius, Control, FontFamily } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { AppStatusPill } from '../ui/AppStatusPill';
@@ -71,11 +71,15 @@ interface OrderHistoryRowProps {
 }
 
 function resolveSideIcon(side: OrderSide): keyof typeof Ionicons.glyphMap {
-  return side === 'buy' ? 'wallet-outline' : 'cash-outline';
+  // Direction glyph — buy = position growing (arrow up), sell = position
+  // leaving (arrow down). Matches the order book's bid/ask grammar.
+  return side === 'buy' ? 'arrow-up' : 'arrow-down';
 }
 
 function resolveSideColor(side: OrderSide, colors: ThemeColors): string {
-  return side === 'buy' ? colors.brand : colors.textSecondary;
+  // Semantic direction colours — the same coownUp/coownDown grammar the
+  // book, depth chart and trade ticket use. Buy is never "neutral brand".
+  return side === 'buy' ? colors.coownUp : colors.coownDown;
 }
 
 function resolveStatusTone(status: string) {
@@ -164,7 +168,10 @@ export function OrderHistoryRow({
 
         <View style={styles.metaRow}>
           <Meta style={styles.metaLabel} numberOfLines={1}>
-            {side.toUpperCase()}  {type}  {status === 'partially_filled' && filledQuantity != null
+            <Meta style={[styles.sideWord, { color: resolveSideColor(side, colors) }]}>
+              {side.toUpperCase()}
+            </Meta>
+            {'  '}{type}  {status === 'partially_filled' && filledQuantity != null
               ? `${filledQuantity} of ${quantity} filled`
               : `${quantity} units`}
           </Meta>
@@ -264,9 +271,9 @@ export function OrderHistoryRow({
             <Ionicons
               name={cancelFailed ? 'alert-circle-outline' : 'close-circle-outline'}
               size={15}
-              color={cancelFailed ? colors.danger : colors.textSecondary}
+              color={cancelFailed ? colors.dangerText : colors.textSecondary}
             />
-            <Meta style={[styles.cancelText, cancelFailed && { color: colors.danger }]}>
+            <Meta style={[styles.cancelText, cancelFailed && { color: colors.dangerText }]}>
               {cancelFailed
                 ? 'Cancel failed — retry'
                 : isCancelling
@@ -359,6 +366,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   metaLabel: {
     flexShrink: 1,
     minWidth: 0,
+  },
+  // Side word carries the direction colour AND heavier weight — direction
+  // is never colour-only (the word itself is the label).
+  sideWord: {
+    fontFamily: FontFamily.semibold,
   },
   timestamp: {
     flexShrink: 0,

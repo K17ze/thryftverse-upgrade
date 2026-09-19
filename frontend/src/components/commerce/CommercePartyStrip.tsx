@@ -90,10 +90,10 @@ export function CommercePartyStrip({
                 {party.displayName ?? party.username}
               </Text>
               {showSellerVerified && (
-                <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+                <Ionicons name="checkmark-circle" size={14} color={colors.successText} />
               )}
               {showIssuerVerified && (
-                <Ionicons name="checkmark-circle-outline" size={14} color={colors.success} />
+                <Ionicons name="checkmark-circle-outline" size={14} color={colors.successText} />
               )}
             </View>
             {party.location ? (

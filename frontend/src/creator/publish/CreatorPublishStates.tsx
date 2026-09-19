@@ -132,7 +132,7 @@ export function ErrorStateView({
 
   return (
     <Reanimated.View style={[localStyles.centerState, animatedStyle]}>
-      <Ionicons name="alert-circle-outline" size={24} color={colors.danger} aria-hidden={true} />
+      <Ionicons name="alert-circle-outline" size={24} color={colors.dangerText} aria-hidden={true} />
       <Text style={localStyles.errorTitle}>Couldn't publish</Text>
       <Text style={localStyles.errorDetail}>{humanizePublishError(errorMessage)}</Text>
       <PressScale
@@ -196,7 +196,7 @@ export function SuccessView({
   return (
     <Reanimated.View style={[localStyles.centerState, contentStyle]}>
       <Reanimated.View style={[localStyles.successCircle, iconStyle]}>
-        <Ionicons name="checkmark" size={IconGrammar.hero} color={colors.success} aria-hidden={true} />
+        <Ionicons name="checkmark" size={IconGrammar.hero} color={colors.successText} aria-hidden={true} />
       </Reanimated.View>
       <Text style={localStyles.successTitle}>Shared</Text>
       <PressScale
@@ -274,7 +274,7 @@ export function UnknownOutcomeView({
       accessibilityLiveRegion="polite"
     >
       <View style={localStyles.unknownCircle}>
-        <Ionicons name="help" size={IconGrammar.hero} color={colors.warning} aria-hidden={true} />
+        <Ionicons name="help" size={IconGrammar.hero} color={colors.warningText} aria-hidden={true} />
       </View>
       <Text style={localStyles.centerStateTitle}>Result unknown</Text>
       <Text style={localStyles.centerStateText}>
@@ -329,7 +329,7 @@ export function ConflictStateView({
   return (
     <Reanimated.View style={[localStyles.centerState, animatedStyle]}>
       <View style={localStyles.errorCircle}>
-        <Ionicons name="sync-outline" size={IconGrammar.hero} color={colors.warning} aria-hidden={true} />
+        <Ionicons name="sync-outline" size={IconGrammar.hero} color={colors.warningText} aria-hidden={true} />
       </View>
       <Text style={localStyles.centerStateTitle}>Document was edited elsewhere</Text>
       <Text style={localStyles.centerStateText}>
@@ -398,7 +398,7 @@ export function ScheduleFailedView({
   return (
     <Reanimated.View style={[localStyles.centerState, animatedStyle]}>
       <View style={localStyles.errorCircle}>
-        <Ionicons name="time-outline" size={IconGrammar.hero} color={colors.danger} aria-hidden={true} />
+        <Ionicons name="time-outline" size={IconGrammar.hero} color={colors.dangerText} aria-hidden={true} />
       </View>
       <Text style={localStyles.centerStateTitle}>Couldn't schedule</Text>
       <Text style={localStyles.centerStateText}>

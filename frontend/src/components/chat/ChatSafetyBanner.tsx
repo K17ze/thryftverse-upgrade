@@ -54,9 +54,9 @@ export function ChatSafetyBanner({ warning }: ChatSafetyBannerProps) {
         size={14}
         color={
           warning.level === "danger"
-            ? colors.danger
+            ? colors.dangerText
             : warning.level === "caution"
-              ? colors.warning
+              ? colors.warningText
               : colors.textMuted
         }
       />
@@ -66,9 +66,9 @@ export function ChatSafetyBanner({ warning }: ChatSafetyBannerProps) {
           {
             color:
               warning.level === "danger"
-                ? colors.danger
+                ? colors.dangerText
                 : warning.level === "caution"
-                  ? colors.warning
+                  ? colors.warningText
                   : colors.textSecondary },
         ]}
         numberOfLines={2}

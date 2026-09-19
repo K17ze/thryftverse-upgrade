@@ -225,7 +225,7 @@ export function useClosetThemedStyles() {
     statValue: { color: colors.textPrimary },
     statLabel: { color: colors.textMuted },
     savingsRow: { borderTopColor: colors.border },
-    savingsText: { color: colors.success },
+    savingsText: { color: colors.successText },
     brandChip: { backgroundColor: 'transparent', borderColor: colors.border },
     brandChipActive: { backgroundColor: colors.brand, borderColor: colors.brand },
     brandChipText: { color: colors.textSecondary },

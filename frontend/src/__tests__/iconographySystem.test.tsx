@@ -23,6 +23,9 @@ vi.mock('../theme/ThemeContext', () => ({
       danger: '#FF3B30',
       success: '#34C759',
       warning: '#FF9500',
+      dangerText: '#FF3B30',
+      successText: '#34C759',
+      warningText: '#FF9500',
       surface: '#FFFFFF',
       surfaceAlt: '#F5F5F5',
       surfaceElevated: '#EEEEEE',
@@ -123,7 +126,7 @@ describe('AppIcon Primitive Component', () => {
   it('resolves theme color tokens', () => {
     let renderer: any;
     act(() => {
-      renderer = TestRenderer.create(<AppIcon name="heart" color="danger" testID="test-danger-icon" />);
+      renderer = TestRenderer.create(<AppIcon name="heart" color="dangerText" testID="test-danger-icon" />);
     });
     const root = renderer.root;
     const ionic = root.findByType('Ionicons');

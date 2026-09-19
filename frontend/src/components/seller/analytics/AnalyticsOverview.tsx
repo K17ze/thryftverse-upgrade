@@ -35,7 +35,7 @@ export function AnalyticsOverview({ model }: { model: SellerAnalyticsModel }) {
                   ]}>
                     <Text style={[
                       styles.heroDeltaText,
-                      { color: revenueDelta > 0 ? colors.success : colors.danger },
+                      { color: revenueDelta > 0 ? colors.successText : colors.dangerText },
                     ]}>
                       {revenueDelta > 0 ? '+' : ''}{revenueDelta.toFixed(0)}%
                     </Text>

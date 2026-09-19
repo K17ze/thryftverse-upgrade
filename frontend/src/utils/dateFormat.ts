@@ -52,11 +52,29 @@ function getRelativeTimeFormatter(locale: string): RtfLike {
 }
 
 /**
- * Parse an ISO string or Date into a valid Date, returning null for invalid input.
+ * Parse a server timestamp into a valid Date, returning null for invalid input.
+ *
+ * The backend emits Postgres `::text` timestamps ('2026-07-28 12:34:56.789+00')
+ * alongside ISO-8601. The space separator and bare ±HH offset are
+ * implementation-defined for `Date.parse` — Hermes (Android) returns NaN,
+ * which silently breaks status derivation (NaN <= now is always false).
+ * Normalize to ISO before constructing the Date.
  */
-function toDate(value: string | Date | number): Date | null {
-  const d = value instanceof Date ? value : new Date(value);
+export function parseServerDate(value: string | Date | number | null | undefined): Date | null {
+  if (value == null) return null;
+  let normalized: string | Date | number = value;
+  if (typeof value === 'string') {
+    normalized = value
+      .replace(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})/, '$1T$2')
+      .replace(/([+-]\d{2})(\d{2})$/, '$1:$2')
+      .replace(/([+-]\d{2})$/, '$1:00');
+  }
+  const d = normalized instanceof Date ? normalized : new Date(normalized);
   return Number.isFinite(d.getTime()) ? d : null;
+}
+
+function toDate(value: string | Date | number): Date | null {
+  return parseServerDate(value);
 }
 
 /**

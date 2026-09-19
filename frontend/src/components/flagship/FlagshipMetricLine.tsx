@@ -62,9 +62,9 @@ export function FlagshipMetricLine({
   const { colors } = useAppTheme();
 
   const valueColor = danger
-    ? colors.danger
+    ? colors.dangerText
     : success
-      ? colors.success
+      ? colors.successText
       : muted
         ? colors.textMuted
         : colors.textPrimary;

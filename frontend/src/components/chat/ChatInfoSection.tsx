@@ -20,7 +20,7 @@ export function ChatInfoSection({
 
   return (
     <View style={styles.section}>
-      <Meta color={danger ? colors.danger : colors.textMuted} style={styles.sectionLabel}>
+      <Meta color={danger ? colors.dangerText : colors.textMuted} style={styles.sectionLabel}>
         {title}
       </Meta>
       <View>
@@ -55,14 +55,14 @@ export function ChatInfoRow({
   trailing?: React.ReactNode;
 }) {
   const { colors } = useAppTheme();
-  const foreground = danger ? colors.danger : colors.textPrimary;
+  const foreground = danger ? colors.dangerText : colors.textPrimary;
   const content = (
     <View style={[styles.row, !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.borderSubtle }]}>
       <View style={styles.iconTarget} importantForAccessibility="no-hide-descendants">
         <Ionicons
           name={icon}
           size={20}
-          color={danger ? colors.danger : colors.textSecondary}
+          color={danger ? colors.dangerText : colors.textSecondary}
         />
       </View>
       <View style={styles.copy}>

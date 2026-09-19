@@ -54,16 +54,16 @@ type RunStatus =
   | 'waiting_for_approval'
   | 'waiting_for_input';
 
-const STATUS_COLOR_KEY: Record<RunStatus, 'success' | 'danger' | 'brand' | 'textMuted' | 'warning'> = {
-  succeeded: 'success',
-  failed: 'danger',
+const STATUS_COLOR_KEY: Record<RunStatus, 'successText' | 'dangerText' | 'brand' | 'textMuted' | 'warningText'> = {
+  succeeded: 'successText',
+  failed: 'dangerText',
   running: 'brand',
   queued: 'textMuted',
   cancelled: 'textMuted',
-  timed_out: 'danger',
-  unknown_outcome: 'warning',
-  waiting_for_approval: 'warning',
-  waiting_for_input: 'warning',
+  timed_out: 'dangerText',
+  unknown_outcome: 'warningText',
+  waiting_for_approval: 'warningText',
+  waiting_for_input: 'warningText',
 };
 
 const STATUS_LABEL_KEY: Record<RunStatus, string> = {
@@ -497,7 +497,7 @@ export default function AgentLedgerScreen({ navigation }: Props) {
                           { opacity: isApproving ? 0.5 : pressed ? 0.7 : 1 },
                         ]}
                       >
-                        <Text style={[styles.approveText, { color: colors.success }]}>
+                        <Text style={[styles.approveText, { color: colors.successText }]}>
                           {isApproving ? t('approvals.approving') : t('approvals.approve')}
                         </Text>
                       </Pressable>
@@ -512,7 +512,7 @@ export default function AgentLedgerScreen({ navigation }: Props) {
                           { opacity: isRejecting ? 0.5 : pressed ? 0.7 : 1 },
                         ]}
                       >
-                        <Text style={[styles.rejectText, { color: colors.danger }]}>
+                        <Text style={[styles.rejectText, { color: colors.dangerText }]}>
                           {isRejecting ? t('approvals.rejecting') : t('approvals.reject')}
                         </Text>
                       </Pressable>
@@ -577,7 +577,7 @@ export default function AgentLedgerScreen({ navigation }: Props) {
                   ) : null}
 
                   {run.status === 'failed' && run.errorMessage ? (
-                    <Text style={[styles.errorText, { color: colors.danger }]} numberOfLines={2}>
+                    <Text style={[styles.errorText, { color: colors.dangerText }]} numberOfLines={2}>
                       {run.errorMessage}
                     </Text>
                   ) : null}
@@ -594,7 +594,7 @@ export default function AgentLedgerScreen({ navigation }: Props) {
                         { borderColor: colors.danger, opacity: cancellingId === run.id ? 0.5 : pressed ? 0.7 : 1 },
                       ]}
                     >
-                      <Text style={[styles.cancelBtnText, { color: colors.danger }]}>
+                      <Text style={[styles.cancelBtnText, { color: colors.dangerText }]}>
                         {cancellingId === run.id ? t('cancel.cancelling') : t('cancel.cancel')}
                       </Text>
                     </Pressable>

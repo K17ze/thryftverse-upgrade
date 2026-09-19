@@ -46,7 +46,7 @@ export function CollapsibleStep({
       >
         <View style={styles.stepHeaderLeft}>
           {complete ? (
-            <AppIcon name="checkmark-circle" size={IconSize.sm} color="success" opticalCenter accessible={false} />
+            <AppIcon name="checkmark-circle" size={IconSize.sm} color="successText" opticalCenter accessible={false} />
           ) : (
             <Text style={[styles.stepNumber, { color: colors.textMuted }]}>{stepNumber}</Text>
           )}

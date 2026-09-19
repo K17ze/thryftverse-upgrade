@@ -7,6 +7,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { useStore } from '../../store/useStore';
 import { Space, Radius, Control, Stroke } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -71,6 +72,7 @@ export function LiveLotDock({
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { t } = useAppTranslation('liveStreamViewer');
   const { formatFromFiat, currencySymbol } = useFormattedPrice();
+  const viewerUserId = useStore((s) => s.currentUser?.id ?? null);
 
   // Server-driven countdown: closes_at wins over the local timeRemaining
   // hint; absent closes_at leaves timeRemaining undefined so the lot is
@@ -78,7 +80,7 @@ export function LiveLotDock({
   const serverRemaining = useServerCountdown(lot.closesAt, lot.status === 'active');
   const timeRemainingSec = serverRemaining ?? lot.timeRemaining;
   const derivedLotStatus = deriveLotStatus({ ...lot, timeRemaining: timeRemainingSec });
-  const isWinner = isWinningViewer(lot);
+  const isWinner = isWinningViewer(lot, viewerUserId);
   const timeRemaining = timeRemainingSec ?? 0;
   const buyNowPrice = lot.buyNowPrice ?? 0;
 

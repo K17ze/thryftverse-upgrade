@@ -96,7 +96,10 @@ services:
       MEILISEARCH_URL: http://meilisearch:7700
       MEILISEARCH_API_KEY: local-meilisearch-master-key
       MEILISEARCH_INDEX_PREFIX: thryftverse_
-      S3_ENDPOINT: http://localhost:9000
+      # In-network endpoint for container-to-container S3 calls (jobs,
+      # presigning, pipeline). The public/CDN endpoints stay localhost —
+      # those URLs are served to clients which reach MinIO via the host.
+      S3_ENDPOINT: http://minio:9000
       S3_PUBLIC_ENDPOINT: http://localhost:9000
       S3_REGION: us-east-1
       S3_ACCESS_KEY: minioadmin

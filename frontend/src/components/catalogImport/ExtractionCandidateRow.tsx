@@ -109,14 +109,14 @@ export function ExtractionCandidateRow({
             <Ionicons
               name="alert-circle"
               size={14}
-              color={colors.danger}
+              color={colors.dangerText}
               style={styles.warningGlyph}
             />
           ) : hasWarning ? (
             <Ionicons
               name="alert"
               size={14}
-              color={colors.warning}
+              color={colors.warningText}
               style={styles.warningGlyph}
             />
           ) : null}

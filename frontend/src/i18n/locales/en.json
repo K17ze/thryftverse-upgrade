@@ -1021,6 +1021,8 @@
       "shippingDefault": "Tracking provided on dispatch.",
       "returns": "Returns",
       "returnsValue": "Returns accepted for items not as described.",
+      "additionalPolicies": "Additional policies",
+      "editShopDetails": "Edit shop details",
       "responseRate": "Response rate",
       "response": "Response",
       "responseSeller": "Seller typically replies {{label}}.",
@@ -1246,6 +1248,11 @@
       "totalSales": "Total Sales",
       "done": "Done"
     },
+    "scheduled": {
+      "title": "Not live yet",
+      "subtitle": "This show hasn't started — check back later",
+      "subtitleAt": "Starts {{time}}"
+    },
     "demo": {
       "label": "DEMO",
       "stream": "Demo stream"
@@ -1415,6 +1422,8 @@
       "subtitleNone": "Create an agent and connect a provider to get started",
       "subtitleNoAgents": "Connect a provider, then create your first agent",
       "subtitleNoConnections": "Connect a provider server-side to power agent execution",
+      "subtitleNoHealthy": "No healthy connections — review your provider keys",
+      "subtitleDegraded": "{{healthy}} of {{total}} connections healthy — some providers need attention",
       "subtitleReady": "Agents run on your connected server-side keys"
     },
     "agentStatus": {

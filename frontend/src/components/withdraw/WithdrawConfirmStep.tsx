@@ -86,7 +86,9 @@ export function WithdrawConfirmStep({
             <FlagshipMetricLine label="Fee" value={feeLabel} separated />
             <FlagshipMetricLine label="You receive" value={amountLabel} emphasis separated />
             <FlagshipMetricLine label="Destination" value={destinationLabel} separated />
-            <FlagshipMetricLine label="Estimated arrival" value="1–3 business days" separated />
+            {/* No ETA is promised — payout requests sit in `requested`
+                until an admin manually approves and sends them. */}
+            <FlagshipMetricLine label="Payout review" value="Reviewed by our team before it's sent" separated />
           </FlagshipFormSection>
         </View>
 

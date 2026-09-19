@@ -84,7 +84,7 @@ export function GroupMembersRow({
           accessibilityLabel="Leave group"
         >
           {isLeaving ? (
-            <ActivityIndicator size="small" color={colors.danger} />
+            <ActivityIndicator size="small" color={colors.dangerText} />
           ) : (
             <Text style={styles.leaveText}>Leave</Text>
           )}
@@ -99,7 +99,7 @@ export function GroupMembersRow({
           accessibilityLabel={`Remove ${member.name}`}
         >
           {isRemoving ? (
-            <ActivityIndicator size="small" color={colors.danger} />
+            <ActivityIndicator size="small" color={colors.dangerText} />
           ) : (
             <Text style={styles.removeText}>Remove</Text>
           )}

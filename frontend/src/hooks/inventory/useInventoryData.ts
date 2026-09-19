@@ -22,6 +22,7 @@ export function useInventoryData() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [totals, setTotals] = useState<SellerInventoryTotals | null>(null);
@@ -37,6 +38,7 @@ export function useInventoryData() {
     }
     if (!silent) setIsLoading(true);
     setError(null);
+    setLoadMoreError(null);
     setCursor(null);
     setHasMore(false);
     try {
@@ -65,17 +67,26 @@ export function useInventoryData() {
   const loadMore = useCallback(async () => {
     if (!currentUser?.id || isLoadingMore || !hasMore || !cursor) return;
     setIsLoadingMore(true);
+    setLoadMoreError(null);
     try {
       const res = await fetchUserListingsFromApi(currentUser.id, { limit: PAGE_SIZE, cursor });
       setListings((prev) => [...prev, ...res.items]);
       setCursor(res.nextCursor ?? null);
       setHasMore(Boolean(res.nextCursor));
-    } catch {
-      // Non-fatal — user can pull to refresh to retry
+    } catch (err) {
+      // Non-fatal — the list footer renders a retry row so the failure is
+      // visible and recoverable without a pull-to-refresh.
+      setLoadMoreError(parseApiError(err, 'Could not load more listings').message);
     } finally {
       setIsLoadingMore(false);
     }
   }, [currentUser?.id, isLoadingMore, hasMore, cursor]);
+
+  // Same fetch as loadMore — a dedicated name lets the footer's retry row
+  // express intent without re-triggering via onEndReached bookkeeping.
+  const retryLoadMore = useCallback(() => {
+    void loadMore();
+  }, [loadMore]);
 
   useFocusEffect(
     useCallback(() => {
@@ -127,11 +138,13 @@ export function useInventoryData() {
     isLoading,
     isRefreshing,
     isLoadingMore,
+    loadMoreError,
     isOffline,
     error,
     summary,
     load,
     loadMore,
+    retryLoadMore,
     onRefresh,
   };
 }

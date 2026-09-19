@@ -67,14 +67,14 @@ export function CommerceDetailDisclosureRow({
           <Ionicons
             name={leadingIcon}
             size={Control.iconCompact}
-            color={critical ? colors.danger : colors.textSecondary}
+            color={critical ? colors.dangerText : colors.textSecondary}
             style={styles.leadingIcon}
           />
         ) : null}
         <Text
           style={[
             styles.label,
-            { color: critical ? colors.danger : colors.textPrimary },
+            { color: critical ? colors.dangerText : colors.textPrimary },
           ]}
           numberOfLines={1}
         >

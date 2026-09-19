@@ -533,7 +533,7 @@ export default function AppealScreen({ navigation, route }: Props) {
                     accessibilityRole="button"
                     accessibilityLabel={t('accessibility.removeEvidencePhoto', { index: i + 1 })}
                   >
-                    <Ionicons name="close-circle" size={22} color={colors.danger} />
+                    <Ionicons name="close-circle" size={22} color={colors.dangerText} />
                   </Pressable>
                 ) : null}
               </View>

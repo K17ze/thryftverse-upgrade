@@ -109,7 +109,7 @@ export function AnalyticsListings({ model }: { model: SellerAnalyticsModel }) {
                           <Text style={[styles.attentionTitle, { color: colors.textPrimary }]} numberOfLines={1}>
                             {item.title}
                           </Text>
-                          <Text style={[styles.attentionIssue, { color: colors.warning }]}>
+                          <Text style={[styles.attentionIssue, { color: colors.warningText }]}>
                             {item.views} views · {item.likes} saves
                           </Text>
                         </View>

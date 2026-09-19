@@ -82,7 +82,7 @@ function createCaptionStyles(colors: ThemeColorsType) {
     captionErrorText: {
       fontFamily: Typography.family.medium,
       fontSize: TypographyV2.meta.size,
-      color: colors.danger },
+      color: colors.dangerText },
   });
 }
 

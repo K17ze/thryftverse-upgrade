@@ -119,33 +119,6 @@ export function BrowseFilterBar({
           <Text style={[styles.filterPillText, browseFilters.condition !== 'Any' && styles.filterPillTextActive]}>{browseFilters.condition !== 'Any' ? browseFilters.condition : 'Condition'}</Text>
           <AppIcon name="chevronDown" size={IconSize.micro} color={browseFilters.condition !== 'Any' ? 'textPrimary' : 'textMuted'} accessible={false} />
         </AnimatedPressable>
-        <AnimatedPressable
-          style={[styles.filterPillOutline, browseFilters.sustainableOnly && styles.filterPillActive]}
-          onPress={() => {
-            haptic.light();
-            updateBrowseFilters({ sustainableOnly: !browseFilters.sustainableOnly });
-          }}
-          activeOpacity={0.85}
-          accessibilityRole="switch"
-          accessibilityState={{ checked: browseFilters.sustainableOnly }}
-          accessibilityLabel="Toggle sustainable items only"
-        >
-          <AppIcon
-            name="leaf"
-            size={IconSize.sm}
-            color={browseFilters.sustainableOnly ? 'textPrimary' : 'textMuted'}
-            focused={browseFilters.sustainableOnly}
-            accessible={false}
-          />
-          <Text
-            style={[
-              styles.filterPillText,
-              browseFilters.sustainableOnly && styles.filterPillTextActive,
-            ]}
-           maxFontSizeMultiplier={2}>
-            Sustainable
-          </Text>
-        </AnimatedPressable>
         {saveSearchLabel && saveSearchLabel !== 'Browse All' && (
           <AnimatedPressable
             style={[styles.filterPillOutline, isCurrentSaved && styles.saveSearchPillActive]}

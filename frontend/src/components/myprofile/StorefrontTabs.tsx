@@ -23,6 +23,7 @@ import type { SellerReviewItem, SellerReviewSummary } from '../../services/selle
 import type { SellerTrustSummary } from '../../platform/product';
 import { ClosetGrid, type ClosetGridProps } from './ClosetGrid';
 import { StorefrontAboutTab, type CoOwnHoldingPreview } from './StorefrontAboutTab';
+import type { StorefrontPolicies } from '../../services/storefrontApi';
 
 type TabKey = 'listings' | 'looks' | 'about' | 'reviews';
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -65,7 +66,10 @@ export interface StorefrontTabsProps {
   coOwnHoldings: CoOwnHoldingPreview[];
   website: string | null;
   sellerTrust: SellerTrustSummary | null | undefined;
+  shopAnnouncement: string | null;
+  shopPolicies: StorefrontPolicies | null;
   onViewPortfolio: () => void;
+  onEditShop: () => void;
 
   // Reviews tab
   reviewSummary: SellerReviewSummary | null;
@@ -110,7 +114,10 @@ export function StorefrontTabs(props: StorefrontTabsProps) {
     coOwnHoldings,
     website,
     sellerTrust,
+    shopAnnouncement,
+    shopPolicies,
     onViewPortfolio,
+    onEditShop,
     // Reviews
     reviewSummary,
     reviewCount,
@@ -205,8 +212,11 @@ export function StorefrontTabs(props: StorefrontTabsProps) {
             coOwnHoldings={coOwnHoldings}
             website={website}
             sellerTrust={sellerTrust}
+            shopAnnouncement={shopAnnouncement}
+            shopPolicies={shopPolicies}
             reducedMotion={reducedMotion}
             onViewPortfolio={onViewPortfolio}
+            onEditShop={onEditShop}
           />
         )}
 

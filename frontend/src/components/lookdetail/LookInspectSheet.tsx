@@ -159,7 +159,7 @@ function createStyles(colors: ThemeColors) {
     inspectSold: {
       fontSize: TypographyV2.priceList.size,
       fontFamily: TypographyV2.priceList.fontFamily,
-      color: colors.danger },
+      color: colors.dangerText },
     inspectLabel: {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,

@@ -42,11 +42,15 @@ const updateMoodboardSchema = z.object({
 
 const addItemSchema = z.object({
   listingId: z.string().trim().max(120).optional(),
+  lookId: z.string().trim().max(120).optional(),
   mediaUrl: z.string().trim().max(1000).default(''),
   mediaFinalizationId: z.string().trim().max(120).optional(),
+  mediaAssetId: z.string().trim().max(120).optional(),
+  mediaType: z.enum(['image', 'video']).default('image'),
   title: z.string().trim().max(200).default(''),
   priceGbp: z.coerce.number().min(0).default(0),
   caption: z.string().trim().max(500).default(''),
+  aspectRatio: z.coerce.number().min(0.2).max(5).default(1),
   positionX: z.coerce.number().min(0).max(1).default(0.5),
   positionY: z.coerce.number().min(0).max(1).default(0.5),
   rotation: z.coerce.number().default(0),
@@ -123,7 +127,13 @@ type MoodboardItemRow = {
   id: string;
   moodboard_id: string;
   listing_id: string | null;
+  source_type: string;
+  source_look_id: string | null;
+  media_type: string;
   media_url: string;
+  poster_url: string;
+  aspect_ratio: string | number;
+  media_asset_id: string | null;
   title: string;
   price_gbp: string | number;
   caption: string;
@@ -160,9 +170,18 @@ type MoodboardSnapshot = {
   items: Array<{
     id: string;
     listingId: string | null;
+    // Added by migration 318; optional so snapshots taken before the column
+    // set existed still restore cleanly.
+    sourceType?: string | null;
+    sourceLookId?: string | null;
+    mediaAssetId?: string | null;
+    mediaType?: string | null;
     mediaUrl: string;
+    posterUrl?: string | null;
     title: string;
     priceGbp: string | number;
+    caption?: string | null;
+    aspectRatio?: string | number | null;
     positionX: string | number;
     positionY: string | number;
     rotation: string | number;
@@ -194,18 +213,27 @@ const MOODBOARD_SELECT_COLUMNS = `
 `;
 
 const MOODBOARD_ITEM_SELECT_COLUMNS = `
-  id, moodboard_id, listing_id, media_url, title, price_gbp, caption,
+  id, moodboard_id, listing_id, source_type, source_look_id, media_type,
+  media_url, poster_url, aspect_ratio, media_asset_id, title, price_gbp, caption,
   position_x, position_y, rotation, scale, sort_order, created_at,
   revision, deleted_at
 `;
 
 function mapItem(row: MoodboardItemRow) {
+  const isVideo = row.media_type === 'video';
   return {
     id: row.id,
     listingId: row.listing_id ?? '',
-    imageUri: row.media_url,
+    sourceType: row.source_type,
+    sourceLookId: row.source_look_id ?? null,
+    mediaType: row.media_type,
+    imageUri: isVideo ? (row.poster_url || row.media_url) : row.media_url,
+    videoUri: isVideo ? row.media_url : '',
+    mediaAssetId: row.media_asset_id ?? null,
     title: row.title,
+    caption: row.caption ?? '',
     price: Number(row.price_gbp),
+    aspectRatio: Number(row.aspect_ratio),
     position: {
       x: Number(row.position_x),
       y: Number(row.position_y),
@@ -274,6 +302,278 @@ function hasCapability(
   if (request.authUser?.role === 'admin') return true;
   if (!member) return false;
   return requiredRoles.includes(member.role);
+}
+
+// ── Item source resolution — single trust boundary ──────────────────
+// Both POST /items and the item.add ops path funnel through this helper.
+// Denormalised item fields (media_url, title, price, media_type,
+// aspect_ratio) are resolved server-side from the declared source;
+// client-supplied values are accepted only as explicit overrides for
+// fields the server cannot derive (e.g. a custom caption/title), never
+// as a substitute for verification.
+
+type ItemSourceInput = {
+  listingId?: string | null;
+  lookId?: string | null;
+  mediaUrl?: string;
+  mediaFinalizationId?: string | null;
+  mediaAssetId?: string | null;
+  mediaType?: 'image' | 'video';
+  title?: string;
+  priceGbp?: number;
+  aspectRatio?: number;
+};
+
+type ResolvedItemSource = {
+  ok: true;
+  sourceType: 'listing' | 'media' | 'look' | 'note';
+  listingId: string | null;
+  sourceLookId: string | null;
+  mediaUrl: string;
+  posterUrl: string;
+  mediaType: 'image' | 'video';
+  mediaAssetId: string | null;
+  title: string;
+  priceGbp: number;
+  aspectRatio: number;
+};
+
+type ItemSourceFailure = {
+  ok: false;
+  status: number;
+  error: string;
+  code?: string;
+};
+
+function clampAspectRatio(value: number | undefined | null): number {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return 1.0;
+  return Math.min(5, Math.max(0.2, n));
+}
+
+async function resolveItemSource(
+  client: QueryClient,
+  actorUserId: string,
+  data: ItemSourceInput,
+): Promise<ResolvedItemSource | ItemSourceFailure> {
+  if (data.mediaFinalizationId) {
+    // Verified upload receipt: owner + finalized, joined to the media
+    // asset for kind/dimensions/canonical URL.
+    const finResult = await client.query<{
+      owner_id: string;
+      status: string;
+      public_url: string;
+      media_asset_id: string | null;
+      media_kind: string | null;
+      width: number | null;
+      height: number | null;
+      canonical_url: string | null;
+    }>(
+      `SELECT uf.owner_id, uf.status, uf.public_url, uf.media_asset_id,
+              ma.media_kind, ma.width, ma.height, ma.canonical_url
+       FROM upload_finalizations uf
+       LEFT JOIN media_assets ma ON ma.id = uf.media_asset_id
+       WHERE uf.id = $1
+       LIMIT 1`,
+      [data.mediaFinalizationId]
+    );
+    const receipt = finResult.rows[0];
+    if (
+      !receipt
+      || receipt.owner_id !== actorUserId
+      || receipt.status !== 'finalized'
+    ) {
+      return {
+        ok: false,
+        status: 422,
+        error: 'Media finalization receipt could not be verified',
+        code: 'MEDIA_RECEIPT_MISMATCH',
+      };
+    }
+    const assetAspectRatio =
+      receipt.width && receipt.height ? receipt.width / receipt.height : null;
+    return {
+      ok: true,
+      sourceType: 'media',
+      listingId: null,
+      sourceLookId: null,
+      mediaUrl: receipt.public_url || receipt.canonical_url || (data.mediaUrl ?? ''),
+      posterUrl: '',
+      mediaType:
+        receipt.media_kind === 'video'
+          ? 'video'
+          : receipt.media_kind === 'image'
+            ? 'image'
+            : data.mediaType === 'video'
+              ? 'video'
+              : 'image',
+      mediaAssetId: receipt.media_asset_id,
+      title: data.title ?? '',
+      priceGbp: data.priceGbp ?? 0,
+      aspectRatio: assetAspectRatio ?? clampAspectRatio(data.aspectRatio),
+    };
+  }
+
+  if (data.mediaAssetId) {
+    // Re-add path for previously-finalized media (e.g. keep-my-version
+    // conflict resolution): the asset id locates the same verified
+    // finalization receipt — identical trust semantics to
+    // mediaFinalizationId, just addressed through the asset.
+    const finResult = await client.query<{
+      owner_id: string;
+      status: string;
+      public_url: string;
+      media_asset_id: string | null;
+      media_kind: string | null;
+      width: number | null;
+      height: number | null;
+      canonical_url: string | null;
+    }>(
+      `SELECT uf.owner_id, uf.status, uf.public_url, uf.media_asset_id,
+              ma.media_kind, ma.width, ma.height, ma.canonical_url
+       FROM upload_finalizations uf
+       LEFT JOIN media_assets ma ON ma.id = uf.media_asset_id
+       WHERE uf.media_asset_id = $1 AND uf.status = 'finalized'
+       ORDER BY uf.created_at DESC
+       LIMIT 1`,
+      [data.mediaAssetId]
+    );
+    const receipt = finResult.rows[0];
+    if (!receipt || receipt.owner_id !== actorUserId) {
+      return {
+        ok: false,
+        status: 422,
+        error: 'Media asset could not be verified',
+        code: 'MEDIA_RECEIPT_MISMATCH',
+      };
+    }
+    const assetAspectRatio =
+      receipt.width && receipt.height ? receipt.width / receipt.height : null;
+    return {
+      ok: true,
+      sourceType: 'media',
+      listingId: null,
+      sourceLookId: null,
+      mediaUrl: receipt.public_url || receipt.canonical_url || (data.mediaUrl ?? ''),
+      posterUrl: '',
+      mediaType:
+        receipt.media_kind === 'video'
+          ? 'video'
+          : receipt.media_kind === 'image'
+            ? 'image'
+            : data.mediaType === 'video'
+              ? 'video'
+              : 'image',
+      mediaAssetId: receipt.media_asset_id,
+      title: data.title ?? '',
+      priceGbp: data.priceGbp ?? 0,
+      aspectRatio: assetAspectRatio ?? clampAspectRatio(data.aspectRatio),
+    };
+  }
+
+  if (data.lookId) {
+    // Own published looks only — a look is resolved into its playback URL
+    // (m3u8 for video), poster frame and media kind server-side.
+    const lookResult = await client.query<{
+      id: string;
+      creator_id: string;
+      status: string;
+      title: string;
+      media_url: string;
+      media_type: string;
+      poster_url: string | null;
+    }>(
+      `SELECT id, creator_id, status, title, media_url, media_type, poster_url
+       FROM looks
+       WHERE id = $1
+       LIMIT 1`,
+      [data.lookId]
+    );
+    const look = lookResult.rows[0];
+    if (
+      !look
+      || look.creator_id !== actorUserId
+      || look.status !== 'published'
+    ) {
+      return {
+        ok: false,
+        status: 422,
+        error: 'Look source could not be verified',
+        code: 'LOOK_SOURCE_INVALID',
+      };
+    }
+    const mediaType: 'image' | 'video' = look.media_type === 'video' ? 'video' : 'image';
+    return {
+      ok: true,
+      sourceType: 'look',
+      listingId: null,
+      sourceLookId: look.id,
+      mediaUrl: look.media_url,
+      posterUrl: mediaType === 'video' ? (look.poster_url ?? '') : '',
+      mediaType,
+      mediaAssetId: null,
+      title: look.title || (data.title ?? ''),
+      priceGbp: data.priceGbp ?? 0,
+      aspectRatio: clampAspectRatio(data.aspectRatio),
+    };
+  }
+
+  if (data.listingId) {
+    // Listing tiles resolve their primary image, title and price from the
+    // listings row — the client may hint via mediaUrl/title/priceGbp but
+    // server values win whenever they exist. Listing videos are not
+    // playable canvas items in this scope: the video's poster frame is
+    // used and media_type stays 'image'.
+    const listingResult = await client.query<{
+      id: string;
+      title: string;
+      price_gbp: string | number | null;
+      resolved_image_url: string;
+    }>(
+      `SELECT l.id, l.title, l.price_gbp,
+              COALESCE(
+                l.image_url,
+                (SELECT COALESCE(
+                          CASE WHEN li.media_type = 'video' THEN li.poster_url END,
+                          li.image_url)
+                 FROM listing_images li
+                 WHERE li.listing_id = l.id ORDER BY li.sort_order LIMIT 1),
+                ''
+              ) AS resolved_image_url
+       FROM listings l
+       WHERE l.id = $1
+       LIMIT 1`,
+      [data.listingId]
+    );
+    const listing = listingResult.rows[0];
+    if (!listing) {
+      return {
+        ok: false,
+        status: 422,
+        error: 'Listing source could not be verified',
+        code: 'LISTING_SOURCE_INVALID',
+      };
+    }
+    return {
+      ok: true,
+      sourceType: 'listing',
+      listingId: listing.id,
+      sourceLookId: null,
+      mediaUrl: listing.resolved_image_url || (data.mediaUrl ?? ''),
+      posterUrl: '',
+      mediaType: 'image',
+      mediaAssetId: null,
+      title: listing.title || (data.title ?? ''),
+      priceGbp: listing.price_gbp != null ? Number(listing.price_gbp) : (data.priceGbp ?? 0),
+      aspectRatio: clampAspectRatio(data.aspectRatio),
+    };
+  }
+
+  return {
+    ok: false,
+    status: 400,
+    error: 'mediaFinalizationId, lookId or listingId required',
+  };
 }
 
 export function registerMoodboardRoutes({
@@ -774,39 +1074,6 @@ export function registerMoodboardRoutes({
       const itemId = randomUUID();
       const now = new Date();
 
-      let resolvedMediaUrl = data.mediaUrl;
-
-      if (data.mediaFinalizationId) {
-        const finalization = await db.query<{
-          owner_id: string;
-          status: string;
-          public_url: string;
-        }>(
-          `SELECT owner_id, status, public_url
-           FROM upload_finalizations
-           WHERE id = $1
-           LIMIT 1`,
-          [data.mediaFinalizationId]
-        );
-        const receipt = finalization.rows[0];
-        if (
-          !receipt
-          || receipt.owner_id !== actorUserId
-          || receipt.status !== 'finalized'
-        ) {
-          reply.code(422);
-          return {
-            ok: false,
-            error: 'Media finalization receipt could not be verified',
-            code: 'MEDIA_RECEIPT_MISMATCH',
-          };
-        }
-        resolvedMediaUrl = receipt.public_url;
-      } else if (!data.listingId) {
-        reply.code(400);
-        return { ok: false, error: 'mediaFinalizationId or listingId required' };
-      }
-
       const client = await db.connect();
       let itemRow: MoodboardItemRow | null = null;
       try {
@@ -823,6 +1090,17 @@ export function registerMoodboardRoutes({
           return { ok: false, error: 'Forbidden: insufficient capability' };
         }
 
+        const resolved = await resolveItemSource(client, actorUserId, data);
+        if (!resolved.ok) {
+          await client.query('ROLLBACK');
+          reply.code(resolved.status);
+          return {
+            ok: false,
+            error: resolved.error,
+            ...(resolved.code ? { code: resolved.code } : {}),
+          };
+        }
+
         const sortOrderResult = await client.query<{ max_sort: string | number | null }>(
           `SELECT COALESCE(MAX(sort_order), -1) AS max_sort FROM moodboard_items WHERE moodboard_id = $1 AND deleted_at IS NULL FOR UPDATE`,
           [moodboardId]
@@ -832,17 +1110,25 @@ export function registerMoodboardRoutes({
 
         await client.query(
           `INSERT INTO moodboard_items
-            (id, moodboard_id, listing_id, media_url, title, price_gbp, caption,
+            (id, moodboard_id, listing_id, source_type, source_look_id,
+             media_url, poster_url, media_type, media_asset_id,
+             title, price_gbp, caption, aspect_ratio,
              position_x, position_y, rotation, scale, sort_order, created_at, revision)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`,
           [
             itemId,
             moodboardId,
-            data.listingId ?? null,
-            resolvedMediaUrl,
-            data.title,
-            data.priceGbp,
+            resolved.listingId,
+            resolved.sourceType,
+            resolved.sourceLookId,
+            resolved.mediaUrl,
+            resolved.posterUrl,
+            resolved.mediaType,
+            resolved.mediaAssetId,
+            resolved.title,
+            resolved.priceGbp,
             data.caption,
+            resolved.aspectRatio,
             data.positionX,
             data.positionY,
             data.rotation,
@@ -853,12 +1139,18 @@ export function registerMoodboardRoutes({
           ]
         );
 
-        if (resolvedMediaUrl) {
+        // A board cover must be a renderable image — use the poster frame
+        // for video items.
+        const coverCandidate =
+          resolved.mediaType === 'video'
+            ? resolved.posterUrl || resolved.mediaUrl
+            : resolved.mediaUrl;
+        if (coverCandidate) {
           // If no cover image is set on the moodboard, use the first item's media.
           await client.query(
             `UPDATE moodboards SET cover_image_url = $1, updated_at = NOW()
              WHERE id = $2 AND (cover_image_url = '' OR cover_image_url IS NULL)`,
-            [resolvedMediaUrl, moodboardId]
+            [coverCandidate, moodboardId]
           );
         }
 
@@ -1235,6 +1527,37 @@ export function registerMoodboardRoutes({
         // 5. Apply the operation.
         const payload = op.payload as Record<string, any>;
         if (op.type === 'item.add') {
+          // Same trust boundary as POST /items — payload media fields are
+          // never trusted; the source key (mediaFinalizationId / lookId /
+          // listingId) is re-verified and resolved inside this transaction.
+          const resolved = await resolveItemSource(client, actorUserId, {
+            listingId: typeof payload.listingId === 'string' ? payload.listingId : undefined,
+            lookId: typeof payload.lookId === 'string' ? payload.lookId : undefined,
+            mediaUrl: typeof payload.mediaUrl === 'string' ? payload.mediaUrl : '',
+            mediaFinalizationId:
+              typeof payload.mediaFinalizationId === 'string' ? payload.mediaFinalizationId : undefined,
+            mediaAssetId:
+              typeof payload.mediaAssetId === 'string' ? payload.mediaAssetId : undefined,
+            mediaType: payload.mediaType === 'video' ? 'video' : 'image',
+            title: typeof payload.title === 'string' ? payload.title : '',
+            priceGbp:
+              Number.isFinite(Number(payload.priceGbp)) && Number(payload.priceGbp) >= 0
+                ? Number(payload.priceGbp)
+                : 0,
+            aspectRatio: Number.isFinite(Number(payload.aspectRatio))
+              ? Number(payload.aspectRatio)
+              : undefined,
+          });
+          if (!resolved.ok) {
+            await client.query('ROLLBACK');
+            reply.code(resolved.status);
+            return {
+              ok: false,
+              error: resolved.error,
+              ...(resolved.code ? { code: resolved.code } : {}),
+            };
+          }
+
           const sortOrderResult = await client.query<{ max_sort: string | number | null }>(
             `SELECT COALESCE(MAX(sort_order), -1) AS max_sort FROM moodboard_items WHERE moodboard_id = $1 AND deleted_at IS NULL FOR UPDATE`,
             [moodboardId]
@@ -1243,17 +1566,25 @@ export function registerMoodboardRoutes({
           const newItemId = (payload.itemId as string) ?? randomUUID();
           await client.query(
             `INSERT INTO moodboard_items
-              (id, moodboard_id, listing_id, media_url, title, price_gbp, caption,
+              (id, moodboard_id, listing_id, source_type, source_look_id,
+               media_url, poster_url, media_type, media_asset_id,
+               title, price_gbp, caption, aspect_ratio,
                position_x, position_y, rotation, scale, sort_order, created_at, revision)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`,
             [
               newItemId,
               moodboardId,
-              (payload.listingId as string) ?? null,
-              (payload.mediaUrl as string) ?? '',
-              (payload.title as string) ?? '',
-              Number(payload.priceGbp ?? 0),
-              (payload.caption as string) ?? '',
+              resolved.listingId,
+              resolved.sourceType,
+              resolved.sourceLookId,
+              resolved.mediaUrl,
+              resolved.posterUrl,
+              resolved.mediaType,
+              resolved.mediaAssetId,
+              resolved.title,
+              resolved.priceGbp,
+              typeof payload.caption === 'string' ? payload.caption : '',
+              resolved.aspectRatio,
               Number(payload.positionX ?? 0.5),
               Number(payload.positionY ?? 0.5),
               Number(payload.rotation ?? 0),
@@ -2149,7 +2480,7 @@ export function registerMoodboardRoutes({
         const boardRevision = Number(board.revision);
 
         const snapshotResult = await client.query<{ snapshot: MoodboardSnapshot }>(
-          `SELECT jsonb_build_object('title', m.title, 'description', m.description, 'theme', m.theme, 'visibility', m.visibility, 'items', (SELECT jsonb_agg(jsonb_build_object('id', mi.id, 'listingId', mi.listing_id, 'mediaUrl', mi.media_url, 'title', mi.title, 'priceGbp', mi.price_gbp, 'positionX', mi.position_x, 'positionY', mi.position_y, 'rotation', mi.rotation, 'scale', mi.scale, 'sortOrder', mi.sort_order) ORDER BY mi.sort_order) FROM moodboard_items mi WHERE mi.moodboard_id = m.id AND mi.deleted_at IS NULL)) AS snapshot FROM moodboards m WHERE m.id = $1`,
+          `SELECT jsonb_build_object('title', m.title, 'description', m.description, 'theme', m.theme, 'visibility', m.visibility, 'items', (SELECT jsonb_agg(jsonb_build_object('id', mi.id, 'listingId', mi.listing_id, 'sourceType', mi.source_type, 'sourceLookId', mi.source_look_id, 'mediaAssetId', mi.media_asset_id, 'mediaType', mi.media_type, 'mediaUrl', mi.media_url, 'posterUrl', mi.poster_url, 'title', mi.title, 'priceGbp', mi.price_gbp, 'caption', mi.caption, 'aspectRatio', mi.aspect_ratio, 'positionX', mi.position_x, 'positionY', mi.position_y, 'rotation', mi.rotation, 'scale', mi.scale, 'sortOrder', mi.sort_order) ORDER BY mi.sort_order) FROM moodboard_items mi WHERE mi.moodboard_id = m.id AND mi.deleted_at IS NULL)) AS snapshot FROM moodboards m WHERE m.id = $1`,
           [moodboardId]
         );
 
@@ -2315,17 +2646,25 @@ export function registerMoodboardRoutes({
           const newItemId = randomUUID();
           await client.query(
             `INSERT INTO moodboard_items
-              (id, moodboard_id, listing_id, media_url, title, price_gbp, caption,
+              (id, moodboard_id, listing_id, source_type, source_look_id,
+               media_url, poster_url, media_type, media_asset_id,
+               title, price_gbp, caption, aspect_ratio,
                position_x, position_y, rotation, scale, sort_order, created_at, revision)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`,
             [
               newItemId,
               moodboardId,
               item.listingId ?? null,
+              item.sourceType ?? (item.listingId ? 'listing' : 'media'),
+              item.sourceLookId ?? null,
               item.mediaUrl,
+              item.posterUrl ?? '',
+              item.mediaType === 'video' ? 'video' : 'image',
+              item.mediaAssetId ?? null,
               item.title,
               Number(item.priceGbp),
-              '',
+              item.caption ?? '',
+              clampAspectRatio(item.aspectRatio == null ? undefined : Number(item.aspectRatio)),
               Number(item.positionX),
               Number(item.positionY),
               Number(item.rotation),

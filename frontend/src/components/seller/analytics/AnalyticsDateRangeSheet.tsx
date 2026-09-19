@@ -154,7 +154,7 @@ export function AnalyticsDateRangeSheet({
 
         {/* Validation error */}
         {validationError ? (
-          <Text style={[styles.errorText, { color: colors.danger }]}>
+          <Text style={[styles.errorText, { color: colors.dangerText }]}>
             {validationError}
           </Text>
         ) : null}

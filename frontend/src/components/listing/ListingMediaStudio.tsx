@@ -640,7 +640,7 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
   errorText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.danger,
+    color: colors.dangerText,
     paddingHorizontal: Space.md,
     paddingTop: Space.xs },
   lockedNote: {

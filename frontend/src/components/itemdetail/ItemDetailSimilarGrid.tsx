@@ -90,11 +90,11 @@ export function ItemDetailSimilarGrid({
               <Text style={[styles.moreLikeThisTitle, { color: colors.textPrimary }]} numberOfLines={2} maxFontSizeMultiplier={2}>
                 {simItem.title}
               </Text>
-              {(simItem.brand || simItem.condition) && (
+              {simItem.brand ? (
                 <Text style={[styles.moreLikeThisMeta, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={2}>
-                  {[simItem.brand, simItem.condition].filter(Boolean).join(' · ')}
+                  {simItem.brand}
                 </Text>
-              )}
+              ) : null}
               <Text style={[styles.moreLikeThisPrice, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={2}>
                 {simPriceFormatted}
               </Text>

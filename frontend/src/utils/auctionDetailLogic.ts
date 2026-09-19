@@ -1390,11 +1390,11 @@ export function resolveLiveMsToStart(auction: { startsAt: string }, clockMs: num
 export function resolveCountdownColor(
   isLive: boolean,
   liveMsToEnd: number,
-  colors: { textPrimary: string; danger: string; warning: string },
+  colors: { textPrimary: string; danger: string; warning: string; dangerText?: string; warningText?: string },
 ): string {
   if (!isLive) return colors.textPrimary;
-  if (liveMsToEnd <= 10_000) return colors.danger;
-  if (liveMsToEnd <= 60_000) return colors.warning;
+  if (liveMsToEnd <= 10_000) return colors.dangerText ?? colors.danger;
+  if (liveMsToEnd <= 60_000) return colors.warningText ?? colors.warning;
   return colors.textPrimary;
 }
 

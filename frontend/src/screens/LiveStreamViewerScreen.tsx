@@ -50,7 +50,8 @@ import { LiveBidSheet } from '../components/livestream/LiveBidSheet';
 import {
   LiveStreamConnectingScreen,
   LiveStreamErrorScreen,
-  LiveStreamEndedScreen } from '../components/livestream/LiveStreamStateScreens';
+  LiveStreamEndedScreen,
+  LiveStreamScheduledScreen } from '../components/livestream/LiveStreamStateScreens';
 import { resolveStageCaption } from '../components/livestream/livestreamUtils';
 import { LiveKitVideoSurface } from '../components/live/BroadcastPreview';
 
@@ -140,6 +141,13 @@ export function LiveStreamViewerScreen() {
   if (connectionState === 'ended') {
     return (
       <LiveStreamEndedScreen summary={streamEndSummary} onBack={goBack} />
+    );
+  }
+
+  // ── Scheduled state — the show exists but has not gone live ──
+  if (connectionState === 'scheduled') {
+    return (
+      <LiveStreamScheduledScreen scheduledStartAt={stream?.scheduledStartAt} onBack={goBack} />
     );
   }
 

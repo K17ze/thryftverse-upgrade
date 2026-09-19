@@ -19,7 +19,7 @@
  * type, and dispatch typed payloads to the caller. Topic subscription and
  * handler registration are cleaned up automatically on unmount.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useRealtimeSafe, type RealtimeConnectionState, type RealtimeEnvelope } from '../platform/realtime';
 import { useStore } from '../store/useStore';
 import type { Message as ConversationMessage } from '../domain';
@@ -69,6 +69,9 @@ export const CHAT_POLL_VOTED_EVENT = 'chat.poll.voted';
  *  without a manual refetch. */
 export const CHAT_GROUP_IDENTITY_UPDATED_EVENT = 'chat.group.identity.updated';
 export const CHAT_GROUP_SETTINGS_UPDATED_EVENT = 'chat.group.settings.updated';
+export const CHAT_DM_CREATED_EVENT = 'chat.dm.created';
+export const CHAT_GROUP_CREATED_EVENT = 'chat.group.created';
+export const CHAT_MEMBER_ADDED_EVENT = 'chat.member.added';
 export const CHAT_MEMBER_REMOVED_EVENT = 'chat.member.removed';
 export const CHAT_MEMBER_LEFT_EVENT = 'chat.member.left';
 export const CHAT_MEMBER_ROLE_UPDATED_EVENT = 'chat.member.role_updated';
@@ -184,6 +187,9 @@ export interface ChatMessageReadPayload {
   /** Message IDs that were marked read in this event. When absent, the
    *  event is a legacy conversation-level cursor (mark all up to readAt). */
   messageIds?: string[];
+  /** Read cursor — the newest message the reader has seen. The authoritative
+   *  signal for "read up to here"; `messageIds` is bounded receipt detail. */
+  upToMessageId?: string;
 }
 
 /** Payload shape for `chat.typing.update`. */
@@ -265,6 +271,13 @@ export type ChatTypingEnvelope = RealtimeEnvelope<ChatTypingUpdatePayload>;
 /** Build the realtime topic for a conversation. */
 export function chatConversationTopic(conversationId: string): string {
   return `chat.conversation:${conversationId}`;
+}
+
+/** Build the per-user inbox topic — carries new-conversation signals
+ *  (dm created, group created, member added) that can never arrive on a
+ *  conversation topic the recipient hasn't subscribed to yet. */
+export function chatUserTopic(userId: string): string {
+  return `chat.user:${userId}`;
 }
 
 /** Build the realtime topic carrying presence transitions for a user.
@@ -586,6 +599,131 @@ export function useTypingUsers(conversationId: string | undefined): {
   return { typingUserIds: filteredTypingUserIds, isTyping: filteredTypingUserIds.length > 0 };
 }
 
+// ── Inbox-wide typing map ───────────────────────────────────────────
+//
+// The inbox already subscribes to every loaded conversation topic for
+// new-message events — typing updates arrive on those same topics but
+// were never consumed. This module keeps a tiny external store of
+// conversationId → typing userIds so inbox rows can render the same
+// typing dots the thread shows, without per-row subscriptions.
+//
+// Auto-clear: each (conversation, user) entry expires 4s after the last
+// typing event, matching useTypingUsers' staleness rule.
+
+const typingUsersByConversation = new Map<string, Set<string>>();
+const typingListeners = new Set<() => void>();
+const typingClearTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function notifyTypingListeners() {
+  for (const listener of typingListeners) listener();
+}
+
+function setUserTyping(conversationId: string, userId: string, isTyping: boolean) {
+  const timerKey = `${conversationId}:${userId}`;
+  const existing = typingClearTimers.get(timerKey);
+  if (existing) {
+    clearTimeout(existing);
+    typingClearTimers.delete(timerKey);
+  }
+
+  if (isTyping) {
+    let users = typingUsersByConversation.get(conversationId);
+    if (!users) {
+      users = new Set();
+      typingUsersByConversation.set(conversationId, users);
+    }
+    users.add(userId);
+    typingClearTimers.set(
+      timerKey,
+      setTimeout(() => {
+        users.delete(userId);
+        if (users.size === 0) typingUsersByConversation.delete(conversationId);
+        typingClearTimers.delete(timerKey);
+        notifyTypingListeners();
+      }, 4000),
+    );
+  } else {
+    const users = typingUsersByConversation.get(conversationId);
+    // Unknown stop-typing events are a no-op — don't churn listeners.
+    if (!users || !users.has(userId)) return;
+    users.delete(userId);
+    if (users.size === 0) typingUsersByConversation.delete(conversationId);
+  }
+  notifyTypingListeners();
+}
+
+/**
+ * useConversationTyping — read the inbox-level typing state for one
+ * conversation. Reactive via useSyncExternalStore; no subscription of
+ * its own — `useInboxTypingEvents` feeds the shared map.
+ *
+ * The snapshot re-filters self at read time: a self-echo that arrived
+ * while `selfId` was still hydrating is evicted as soon as it resolves,
+ * matching the belt-filter useTypingUsers applies at its render boundary.
+ */
+export function useConversationTyping(conversationId: string | undefined): boolean {
+  const selfId = useStore((s) => s.currentUser?.id);
+  return useSyncExternalStore(
+    useCallback((onStoreChange) => {
+      typingListeners.add(onStoreChange);
+      return () => { typingListeners.delete(onStoreChange); };
+    }, []),
+    () => {
+      if (!conversationId) return false;
+      const users = typingUsersByConversation.get(conversationId);
+      if (!users) return false;
+      for (const userId of users) {
+        if (userId !== selfId) return true;
+      }
+      return false;
+    },
+  );
+}
+
+/**
+ * useInboxTypingEvents — subscribe to `chat.typing.update` across all
+ * loaded conversation topics (the same topic set useInboxMessageEvent
+ * reconciles) and feed the shared typing map. Topics are refcounted, so
+ * sharing the set with the message hook costs nothing — but this hook
+ * subscribes its own copy so it works even when mounted alone.
+ * Self-echoes are dropped: the backend excludes the actor, this is the
+ * belt-filter.
+ */
+export function useInboxTypingEvents(): void {
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
+  const conversations = useStore((state) => state.conversations);
+  const selfId = useStore((s) => s.currentUser?.id);
+
+  // `conversations` gets a new array identity on every message upsert;
+  // only id membership should re-run the subscription effect.
+  const topicsKey = conversations.map((c) => c.id).join(',');
+
+  useEffect(() => {
+    if (!client) return;
+    const ids = topicsKey ? topicsKey.split(',') : [];
+    const topics = ids.map((id) => chatConversationTopic(id));
+    if (topics.length) client.subscribe(topics);
+
+    const unsubscribers = ids.map((conversationId) =>
+      client.on<ChatTypingUpdatePayload>(chatConversationTopic(conversationId), (envelope) => {
+        if (envelope.type !== CHAT_TYPING_EVENT) return;
+        const payload = envelope.payload;
+        if (payload.conversationId && payload.conversationId !== conversationId) return;
+        const userId = payload.userId;
+        if (!userId) return;
+        if (selfId && userId === selfId) return;
+        setUserTyping(conversationId, userId, !!payload.isTyping);
+      }),
+    );
+
+    return () => {
+      for (const unsubscribe of unsubscribers) unsubscribe();
+      if (topics.length) client.unsubscribe(topics);
+    };
+  }, [client, topicsKey, selfId]);
+}
+
 // ── Inbox-wide message event hook ───────────────────────────────────
 
 /**
@@ -641,6 +779,139 @@ export function useInboxMessageEvent(
       for (const unsubscribe of unsubscribers) unsubscribe();
     };
   }, [client, conversations]);
+}
+
+/**
+ * useInboxReadEvent — subscribe to `chat.message.read` across all loaded
+ * conversation topics. When the current user reads a thread on another
+ * device, the server broadcasts a read cursor with their userId — the inbox
+ * clears the row's unread state without a refetch.
+ */
+export function useInboxReadEvent(
+  handler: (payload: ChatMessageReadPayload) => void,
+): void {
+  const handlerRef = useRef(handler);
+  handlerRef.current = handler;
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
+  const conversations = useStore((state) => state.conversations);
+
+  const desiredTopics = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!client) return;
+    const next = new Set(conversations.map((c) => chatConversationTopic(c.id)));
+    const prev = desiredTopics.current;
+
+    const toAdd = Array.from(next).filter((t) => !prev.has(t));
+    const toRemove = Array.from(prev).filter((t) => !next.has(t));
+
+    if (toAdd.length) client.subscribe(toAdd);
+    if (toRemove.length) client.unsubscribe(toRemove);
+    desiredTopics.current = next;
+  }, [client, conversations]);
+
+  useEffect(() => {
+    if (!client) return;
+    const unsubscribers: Array<() => void> = [];
+    for (const topic of desiredTopics.current) {
+      const unsubscribe = client.on<ChatMessageReadPayload>(topic, (envelope) => {
+        if (envelope.type !== CHAT_MESSAGE_READ_EVENT) return;
+        handlerRef.current(envelope.payload);
+      });
+      unsubscribers.push(unsubscribe);
+    }
+    return () => {
+      for (const unsubscribe of unsubscribers) unsubscribe();
+    };
+  }, [client, conversations]);
+}
+
+// ── Per-user inbox signal hook ──────────────────────────────────────
+
+export interface ChatInboxSignalPayload {
+  conversationId: string;
+}
+
+/**
+ * useInboxUserEvent — subscribe to `chat.user:{userId}` for new-conversation
+ * signals (`chat.dm.created`, `chat.group.created`, `chat.member.added`).
+ * Per-conversation subscriptions can't deliver these: the recipient isn't a
+ * subscriber of a conversation they don't know exists yet. The handler
+ * should refetch the inbox — the signal deliberately carries minimal data.
+ */
+export function useInboxUserEvent(
+  userId: string | undefined,
+  handler: (payload: ChatInboxSignalPayload, eventType: string) => void,
+): void {
+  const handlerRef = useRef(handler);
+  handlerRef.current = handler;
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
+
+  const topic = userId ? chatUserTopic(userId) : null;
+
+  useEffect(() => {
+    if (!topic || !client) return;
+
+    client.subscribe([topic]);
+    const unsubscribe = client.on<ChatInboxSignalPayload>(topic, (envelope) => {
+      if (
+        envelope.type !== CHAT_DM_CREATED_EVENT &&
+        envelope.type !== CHAT_GROUP_CREATED_EVENT &&
+        envelope.type !== CHAT_MEMBER_ADDED_EVENT
+      ) {
+        return;
+      }
+      handlerRef.current(envelope.payload, envelope.type);
+    });
+
+    return () => {
+      unsubscribe();
+      client.unsubscribe([topic]);
+    };
+  }, [client, topic]);
+}
+
+// ── Per-user offer lifecycle hook ───────────────────────────────────
+
+/**
+ * useUserOfferEvent — subscribe to `chat.user:{userId}` for offer
+ * lifecycle signals (`offer.*`, `smart_sell_decision.*`). The drain
+ * publishes these participant-privately because offers are never
+ * observable on a public listing topic. The handler should refetch the
+ * offers list — the payload deliberately stays thin.
+ */
+export function useUserOfferEvent(
+  userId: string | undefined,
+  handler: (payload: Record<string, unknown>, eventType: string) => void,
+): void {
+  const handlerRef = useRef(handler);
+  handlerRef.current = handler;
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
+
+  const topic = userId ? chatUserTopic(userId) : null;
+
+  useEffect(() => {
+    if (!topic || !client) return;
+
+    client.subscribe([topic]);
+    const unsubscribe = client.on<Record<string, unknown>>(topic, (envelope) => {
+      if (
+        !envelope.type.startsWith('offer.') &&
+        !envelope.type.startsWith('smart_sell_decision.')
+      ) {
+        return;
+      }
+      handlerRef.current(envelope.payload, envelope.type);
+    });
+
+    return () => {
+      unsubscribe();
+      client.unsubscribe([topic]);
+    };
+  }, [client, topic]);
 }
 
 // ── Group identity event hook (single conversation) ─────────────────

@@ -35,6 +35,8 @@ import { ClosetIdentityStrip } from '../components/closet/ClosetIdentityStrip';
 import { ClosetListingSection } from '../components/closet/ClosetListingSection';
 import { ClosetCollectionsSection } from '../components/closet/ClosetCollectionsSection';
 import { ClosetOutfitsSection } from '../components/closet/ClosetOutfitsSection';
+import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
+import { useSaveToCollectionPicker } from '../hooks/useSaveToCollectionPicker';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -85,6 +87,16 @@ export default function ClosetScreen() {
   const { scrollY, scrollHandler, headerBgStyle } = useClosetScroll();
   const { confirmSheet, confirmDeleteOutfit, dismissConfirmSheet, handleShareCloset } =
     useClosetActions();
+  const { savePickerItemId, handleSaveLongPress, closeSavePicker, teachLongPressHint } =
+    useSaveToCollectionPicker();
+
+  // Teach the hold-to-file gesture once — the Saved tab has no quick-save
+  // tap to piggyback on, so the first populated view carries the hint.
+  React.useEffect(() => {
+    if (activeTab === 'SAVED' && filteredSaved.length > 0) {
+      teachLongPressHint();
+    }
+  }, [activeTab, filteredSaved.length, teachLongPressHint]);
 
   // ── Navigation wiring ──
   const handleGoBack = useCallback(() => {
@@ -243,6 +255,7 @@ export default function ClosetScreen() {
               showSkeleton={isSyncing && listings.length === 0}
               items={filteredSaved}
               onPressItem={(item) => openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'ClosetSaved' })}
+              onItemLongPress={handleSaveLongPress}
               onBrowse={handleBrowse}
             />
           </Reanimated.View>
@@ -294,6 +307,13 @@ export default function ClosetScreen() {
         confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
         variant={confirmSheet.variant ?? 'default'}
         onConfirm={confirmSheet.onConfirm}
+      />
+
+      {/* Save-to-collection picker — hold a saved tile to file it. */}
+      <SaveToCollectionModal
+        visible={savePickerItemId !== null}
+        itemId={savePickerItemId ?? ''}
+        onClose={closeSavePicker}
       />
     </SafeAreaView>
   );

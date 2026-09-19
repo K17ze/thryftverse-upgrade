@@ -205,7 +205,7 @@ async function invoke(
 // ── Viewer-count honesty ─────────────────────────────────────────────────────
 
 describe('viewer count emission uses the in-memory membership set', () => {
-  it('token_issued emits the post-insert set size, not the stale DB column', async () => {
+  it('join emits live.viewer_count.update with the post-insert set size, not the stale DB column', async () => {
     const sessionId = 'sess-vc-emit';
     const db = createMockDb({
       sessionRow: SESSION_ROW({
@@ -232,11 +232,11 @@ describe('viewer count emission uses the in-memory membership set', () => {
     assert.equal(second.reply._sentCode, 200);
 
     const events = capturedEvents().filter(
-      (e) => e.type === 'live.viewer.token_issued' && e.topic === `live.session:${sessionId}`,
+      (e) => e.type === 'live.viewer_count.update' && e.topic === `live.session:${sessionId}`,
     );
     assert.equal(events.length, 2);
-    assert.equal(events[0].payload.viewerCount, 1, 'first join must emit the real count, not 7');
-    assert.equal(events[1].payload.viewerCount, 2, 'second join must emit the real count, not 7');
+    assert.equal(events[0].payload.count, 1, 'first join must emit the real count, not 7');
+    assert.equal(events[1].payload.count, 2, 'second join must emit the real count, not 7');
   });
 
   it('leave emits live.viewer_count.update with the post-delete set size', async () => {
@@ -270,8 +270,9 @@ describe('viewer count emission uses the in-memory membership set', () => {
     const updates = capturedEvents().filter(
       (e) => e.type === 'live.viewer_count.update' && e.topic === `live.session:${sessionId}`,
     );
-    assert.equal(updates.length, 1);
-    assert.equal(updates[0].payload.count, 1);
+    // Two joins + one leave — the last emission is the post-delete count.
+    assert.equal(updates.length, 3);
+    assert.equal(updates[2].payload.count, 1);
 
     // The pinned floor-guarded decrement still runs against the DB column.
     const decrementCalls = db.queryCalls.filter((c) =>

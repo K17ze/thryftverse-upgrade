@@ -26,6 +26,7 @@
 
 import { isIP } from 'node:net';
 import { lookup as dnsLookup } from 'node:dns/promises';
+import { Agent } from 'undici';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -36,6 +37,9 @@ export interface SafeFetchOptions {
   maxBytes?: number;
   /** Maximum redirect hops. Default: 3. */
   maxRedirects?: number;
+  /** Overall deadline for the entire fetch pipeline in ms — DNS, all
+   *  redirect hops and body streaming share this budget. Default: 15s. */
+  timeoutMs?: number;
 }
 
 export interface SafeFetchResult {
@@ -50,6 +54,7 @@ export interface SafeFetchResult {
 
 const DEFAULT_MAX_BYTES = 50 * 1024 * 1024; // 50 MB
 const DEFAULT_MAX_REDIRECTS = 3;
+const DEFAULT_TIMEOUT_MS = 15_000;
 
 // ---------------------------------------------------------------------------
 // IP classification
@@ -227,16 +232,26 @@ function sniffMimeType(buffer: Buffer): string | null {
 // Host validation
 // ---------------------------------------------------------------------------
 
+interface ResolvedAddress {
+  address: string;
+  family: number;
+}
+
 /**
- * Resolve a hostname and verify that none of the resolved addresses fall in
- * a blocked range. IP-literal hosts are checked directly without DNS.
+ * Resolve a hostname, verify that none of the resolved addresses fall in a
+ * blocked range, and return the validated address set. IP-literal hosts are
+ * checked directly without DNS.
  *
- * Returns true if the host is safe, false otherwise.
+ * Returns the addresses to connect to, or null if the host is unsafe /
+ * unresolvable. The returned set is what the connection MUST be pinned to —
+ * resolving again at connect time would reopen the DNS-rebinding window
+ * (F15): an attacker-controlled record could return a private address on the
+ * second lookup.
  */
-async function isHostAllowed(host: string): Promise<boolean> {
+async function resolveValidatedAddresses(host: string): Promise<ResolvedAddress[] | null> {
   // IP literal — check directly, no DNS lookup needed.
   if (isIP(host) !== 0) {
-    return !isBlockedIp(host);
+    return isBlockedIp(host) ? null : [{ address: host, family: isIP(host) }];
   }
 
   // Hostname — resolve via DNS and check all addresses.
@@ -244,20 +259,38 @@ async function isHostAllowed(host: string): Promise<boolean> {
   try {
     addresses = await dnsLookup(host, { all: true });
   } catch {
-    return false;
+    return null;
   }
 
   if (addresses.length === 0) {
-    return false;
+    return null;
   }
 
   for (const addr of addresses) {
     if (isBlockedIp(addr.address)) {
-      return false;
+      return null;
     }
   }
 
-  return true;
+  return addresses;
+}
+
+/**
+ * Build an undici Agent whose DNS lookup returns ONLY the pre-validated
+ * address set. The TCP connection therefore lands on an address that passed
+ * the blocklist check — a DNS change between validation and connection
+ * cannot redirect it (F15). The URL keeps its hostname, so TLS SNI and the
+ * Host header remain correct.
+ */
+function pinnedAgent(addresses: ResolvedAddress[]): Agent {
+  return new Agent({
+    keepAliveTimeout: 1,
+    connect: {
+      lookup: (_hostname, _options, callback) => {
+        callback(null, addresses);
+      },
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -280,6 +313,11 @@ export async function safeFetchMediaBuffer(
 ): Promise<SafeFetchResult | null> {
   const maxBytes = options?.maxBytes ?? DEFAULT_MAX_BYTES;
   const maxRedirects = options?.maxRedirects ?? DEFAULT_MAX_REDIRECTS;
+  const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  // One shared deadline for the whole pipeline — DNS validation, every
+  // redirect hop and the streaming body read all draw from this budget so a
+  // stall at any stage cannot hang the worker indefinitely (F15).
+  const deadlineAt = Date.now() + timeoutMs;
 
   let currentUrl = url;
   let redirectCount = 0;
@@ -298,23 +336,35 @@ export async function safeFetchMediaBuffer(
       return null;
     }
 
-    const host = parsed.hostname.toLowerCase();
+    // URL.hostname keeps brackets around IPv6 literals ("[::1]") — strip
+    // them so isIP() recognises the literal and skips DNS entirely.
+    const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
     if (!host) {
       return null;
     }
 
-    // --- DNS / IP validation ---
-    const allowed = await isHostAllowed(host);
-    if (!allowed) {
+    const remainingMs = deadlineAt - Date.now();
+    if (remainingMs <= 0) {
       return null;
     }
 
-    // --- Fetch (manual redirect handling for revalidation) ---
+    // --- DNS / IP validation → validated address set ---
+    const addresses = await resolveValidatedAddresses(host);
+    if (!addresses) {
+      return null;
+    }
+
+    // --- Fetch pinned to the validated addresses (manual redirects) ---
+    const agent = pinnedAgent(addresses);
     let response: Response;
     try {
       response = await fetch(parsed, {
         method: 'GET',
         redirect: 'manual',
+        signal: AbortSignal.timeout(remainingMs),
+        // `dispatcher` is an undici extension honoured by Node's global fetch;
+        // it pins the TCP connection to the addresses validated above.
+        ...({ dispatcher: agent } as object),
         headers: {
           'User-Agent': 'ThryftVerse-Catalog-Importer/1.0',
           Accept: 'image/*',
@@ -322,6 +372,9 @@ export async function safeFetchMediaBuffer(
       });
     } catch {
       return null;
+    } finally {
+      // One-shot agent — never leave its keep-alive pool hanging.
+      void agent.close().catch(() => undefined);
     }
 
     // --- Handle redirects (3xx) with full revalidation ---

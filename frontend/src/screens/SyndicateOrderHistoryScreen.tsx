@@ -657,6 +657,15 @@ export default function CoOwnOrderHistoryScreen() {
         <View style={styles.sideTabs} accessibilityRole="tablist">
           {SIDE_FILTERS.map((filter) => {
             const selected = sideFilter === filter.value;
+            // Direction grammar: the Buy/Sell filters take the same
+            // coownUp/coownDown colours the book and ticket use; All stays
+            // neutral.
+            const activeColor =
+              filter.value === 'buy'
+                ? colors.coownUp
+                : filter.value === 'sell'
+                  ? colors.coownDown
+                  : colors.textPrimary;
             return (
               <AnimatedPressable
                 key={filter.value}
@@ -672,12 +681,12 @@ export default function CoOwnOrderHistoryScreen() {
               >
                 <Text style={[
                   styles.sideTabText,
-                  { color: selected ? colors.textPrimary : colors.textMuted },
+                  { color: selected ? activeColor : colors.textMuted },
                   selected && styles.sideTabTextActive,
                 ]}>
                   {filter.label.charAt(0) + filter.label.slice(1).toLowerCase()}
                 </Text>
-                {selected ? <View style={[styles.sideTabIndicator, { backgroundColor: colors.textPrimary }]} /> : null}
+                {selected ? <View style={[styles.sideTabIndicator, { backgroundColor: activeColor }]} /> : null}
               </AnimatedPressable>
             );
           })}

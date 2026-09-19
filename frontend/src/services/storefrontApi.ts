@@ -35,12 +35,19 @@ export interface StorefrontSectionResponse {
   sortOrder: number;
 }
 
+export interface StorefrontPolicies {
+  shipping: string | null;
+  returns: string | null;
+  additional: string | null;
+}
+
 export interface StorefrontResponse {
   id: string | null;
   sellerId: string;
   status: StorefrontStatus;
   revision: number;
   announcement: string | null;
+  policies: StorefrontPolicies;
   coverAssetId: string | null;
   logoAssetId: string | null;
   sections: StorefrontSectionResponse[];
@@ -59,6 +66,8 @@ export interface StorefrontFeaturedListing {
 
 export interface StorefrontUpdateInput {
   announcement?: string | null;
+  /** Replaces the whole policies bag — send all keys, null clears a field. */
+  policies?: StorefrontPolicies;
   coverAssetId?: string | null;
   logoAssetId?: string | null;
   sections?: StorefrontSectionInput[];

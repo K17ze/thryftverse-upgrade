@@ -77,11 +77,12 @@ export const FilterSheet = memo(function FilterSheet({
   }, [setDraftBrowse]);
 
   const priceLabel = useMemo(() => {
+    const fiat = { displayMode: 'fiat' as const };
     if (draftBrowse.priceMin != null && draftBrowse.priceMax != null) {
-      return `${formatFromFiat(draftBrowse.priceMin)} – ${formatFromFiat(draftBrowse.priceMax)}`;
+      return `${formatFromFiat(draftBrowse.priceMin, 'GBP', fiat)} – ${formatFromFiat(draftBrowse.priceMax, 'GBP', fiat)}`;
     }
-    if (draftBrowse.priceMin != null) return `Over ${formatFromFiat(draftBrowse.priceMin)}`;
-    if (draftBrowse.priceMax != null) return `Under ${formatFromFiat(draftBrowse.priceMax)}`;
+    if (draftBrowse.priceMin != null) return `Over ${formatFromFiat(draftBrowse.priceMin, 'GBP', fiat)}`;
+    if (draftBrowse.priceMax != null) return `Under ${formatFromFiat(draftBrowse.priceMax, 'GBP', fiat)}`;
     return 'Any price';
   }, [draftBrowse.priceMin, draftBrowse.priceMax, formatFromFiat]);
 
@@ -147,11 +148,12 @@ export const FilterSheet = memo(function FilterSheet({
             const selected = draftBrowse.priceMin === preset.min && draftBrowse.priceMax === preset.max;
             // Presets are GBP values — format through the fiat formatter so a
             // non-GBP user sees converted amounts, not a bare symbol swap.
+            const fiat = { displayMode: 'fiat' as const };
             const presetLabel = preset.min != null && preset.max != null
-              ? `${formatFromFiat(preset.min)} – ${formatFromFiat(preset.max)}`
+              ? `${formatFromFiat(preset.min, 'GBP', fiat)} – ${formatFromFiat(preset.max, 'GBP', fiat)}`
               : preset.max != null
-                ? `Under ${formatFromFiat(preset.max)}`
-                : `Over ${formatFromFiat(preset.min ?? 0)}`;
+                ? `Under ${formatFromFiat(preset.max, 'GBP', fiat)}`
+                : `Over ${formatFromFiat(preset.min ?? 0, 'GBP', fiat)}`;
             return (
               <Pressable
                 key={presetLabel}

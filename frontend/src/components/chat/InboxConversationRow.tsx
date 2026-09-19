@@ -174,6 +174,7 @@ function InboxConversationRowBase({
     brand: { bg: colors.brandSubtle, fg: colors.brand },
     success: { bg: colors.successSubtle, fg: colors.success },
     warning: { bg: colors.warningSubtle, fg: colors.warning },
+    danger: { bg: colors.dangerSubtle, fg: colors.danger },
     neutral: { bg: colors.surfaceAlt, fg: colors.textSecondary },
   };
   const tone = toneColors[commerceStatusTone] ?? toneColors.neutral;
@@ -182,7 +183,7 @@ function InboxConversationRowBase({
   // thread's receipt grammar (check / double-check / clock / alert).
   const deliveryIcon: { name: keyof typeof Ionicons.glyphMap; color: string; a11y: string } | null =
     deliveryStatus === 'failed'
-      ? { name: 'alert-circle', color: colors.danger, a11y: 'not delivered' }
+      ? { name: 'alert-circle', color: colors.dangerText, a11y: 'not delivered' }
       : deliveryStatus === 'sending'
         ? { name: 'time-outline', color: colors.textMuted, a11y: 'sending' }
         : deliveryStatus === 'read'
@@ -377,9 +378,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: TypographyV2.meta.lineHeight,
     letterSpacing: TypographyV2.meta.letterSpacing },
-  typingPreview: {
-    color: colors.brand,
-    fontFamily: TypographyV2.bodyStrong.fontFamily },
   typingDotsWrap: {
     flex: 1,
     flexDirection: 'row',

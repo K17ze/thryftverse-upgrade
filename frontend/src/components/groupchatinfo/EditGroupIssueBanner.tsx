@@ -32,7 +32,7 @@ export function EditGroupIssueBanner({
   const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.issue} accessibilityLiveRegion="polite">
-      <AppIcon name="alert" size="sm" color="warning" accessible={false} />
+      <AppIcon name="alert" size="sm" color="warningText" accessible={false} />
       <View style={styles.issueText}>
         <Caption color={colors.textSecondary}>{issue}</Caption>
         {outcomeUnknown ? (

@@ -30,11 +30,11 @@ function SheetItem({
       accessibilityLabel={label}
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
     >
-      <Ionicons name={icon} size={20} color={destructive ? colors.danger : colors.textPrimary} />
+      <Ionicons name={icon} size={20} color={destructive ? colors.dangerText : colors.textPrimary} />
       <Text style={[
         styles.sheetItemText,
         { color: colors.textPrimary },
-        destructive && { color: colors.danger },
+        destructive && { color: colors.dangerText },
       ]}>
         {label}
       </Text>

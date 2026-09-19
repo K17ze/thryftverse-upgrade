@@ -48,7 +48,7 @@ export function SelectionHandles({
   layerHeight: number;
   onCommit: () => void;
 }) {
-  const handleColor = layerLocked ? colors.warning : colors.brand;
+  const handleColor = layerLocked ? colors.warningText : colors.brand;
   const haptic = useHaptic();
   const { spring } = useMotionConfig();
   const startScale = useSharedValue(1);

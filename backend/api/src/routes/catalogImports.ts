@@ -37,6 +37,7 @@ import {
   publishBatch,
   getPublicationReceipt,
 } from '../domain/catalogImports/catalogImportPublication.js';
+import { enqueueCatalogImportPublicationJob } from '../lib/queues.js';
 import {
   validateAttestation,
   validatePackageUpload,
@@ -129,7 +130,10 @@ const bulkCorrectionsBodySchema = z.object({
 });
 
 const approveBatchBodySchema = z.object({
-  itemIds: z.array(z.string().min(1).max(120)).min(1).max(500),
+  itemIds: z.array(z.string().min(1).max(120)).max(500).optional(),
+  // When true the server selects every ready item the seller has not
+  // individually excluded — the honest semantic behind an "approve all" CTA.
+  selectAll: z.boolean().optional(),
   attestation: z.object({
     ownsRights: z.boolean(),
     accurateFacts: z.boolean(),
@@ -177,7 +181,9 @@ function mapBatchToDTO(row: CatalogImportBatchRow): BatchSummaryDTO {
   };
 }
 
-function mapMediaToDTO(row: CatalogImportMediaRow): ImportMediaDTO {
+function mapMediaToDTO(
+  row: CatalogImportMediaRow & { canonical_url?: string | null },
+): ImportMediaDTO {
   return {
     id: row.id,
     position: row.position,
@@ -191,7 +197,7 @@ function mapMediaToDTO(row: CatalogImportMediaRow): ImportMediaDTO {
     finalizationId: row.finalization_id,
     moderationStatus: row.moderation_status,
     publishability: row.publishability,
-    previewUrl: null,
+    previewUrl: row.canonical_url ?? null,
   };
 }
 
@@ -751,6 +757,7 @@ export const registerCatalogImportRoutes = ({
         const query = listItemsQuerySchema.parse(request.query);
 
         const { items: itemRows, nextCursor } = await service.getBatchItems(
+          userId,
           batchId,
           {
             cursor: query.cursor,
@@ -760,9 +767,38 @@ export const registerCatalogImportRoutes = ({
           },
         );
 
-        const summary = await service.getBatchItemSummary(batchId);
+        const summary = await service.getBatchItemSummary(userId, batchId);
 
-        const items = itemRows.map((row) => mapItemToDTO(row));
+        // Resolve preview media for the page — review tiles read
+        // media[0].previewUrl, which needs canonical_url from media_assets.
+        const mediaByItem = new Map<
+          string,
+          (CatalogImportMediaRow & { canonical_url: string | null })[]
+        >();
+        if (itemRows.length > 0) {
+          const mediaResult = await db.query<
+            CatalogImportMediaRow & { canonical_url: string | null }
+          >(
+            `SELECT m.*, a.canonical_url
+             FROM catalog_import_media m
+             LEFT JOIN media_assets a ON a.id = m.media_asset_id
+             WHERE m.import_item_id = ANY($1::text[])
+             ORDER BY m.import_item_id, m.position`,
+            [itemRows.map((r) => r.id)],
+          );
+          for (const m of mediaResult.rows) {
+            const list = mediaByItem.get(m.import_item_id);
+            if (list) {
+              list.push(m);
+            } else {
+              mediaByItem.set(m.import_item_id, [m]);
+            }
+          }
+        }
+
+        const items = itemRows.map((row) =>
+          mapItemToDTO(row, mediaByItem.get(row.id)),
+        );
 
         return { items, nextCursor: nextCursor ?? null, summary };
       } catch (error) {
@@ -791,7 +827,19 @@ export const registerCatalogImportRoutes = ({
     try {
       const { itemId } = itemIdParamSchema.parse(request.params);
       const itemRow = await service.getItem(userId, itemId);
-      return { item: mapItemToDTO(itemRow) };
+
+      const mediaResult = await db.query<
+        CatalogImportMediaRow & { canonical_url: string | null }
+      >(
+        `SELECT m.*, a.canonical_url
+         FROM catalog_import_media m
+         LEFT JOIN media_assets a ON a.id = m.media_asset_id
+         WHERE m.import_item_id = $1
+         ORDER BY m.position`,
+        [itemId],
+      );
+
+      return { item: mapItemToDTO(itemRow, mediaResult.rows) };
     } catch (error) {
       if (error instanceof CatalogImportError) {
         reply.code(error.statusCode);
@@ -870,6 +918,7 @@ export const registerCatalogImportRoutes = ({
         const payload = bulkCorrectionsBodySchema.parse(request.body);
 
         const updated = await service.bulkUpdateItems(
+          userId,
           batchId,
           payload.itemIds,
           payload.fields,
@@ -914,12 +963,35 @@ export const registerCatalogImportRoutes = ({
           };
         }
 
+        const itemIds = payload.itemIds ?? [];
+        if (!payload.selectAll && itemIds.length === 0) {
+          reply.code(422);
+          return {
+            ok: false,
+            error: 'itemIds or selectAll is required',
+          };
+        }
+
         const { approvalRevision } = await service.approveBatch(
           userId,
           batchId,
-          payload.itemIds,
+          itemIds,
           payload.attestation,
+          { selectAll: payload.selectAll === true },
         );
+
+        // Approval commits first, then the publication saga runs async —
+        // the batch reads 'publishing' on the next poll while drafts are
+        // created in the background.
+        try {
+          await enqueueCatalogImportPublicationJob({ batchId });
+        } catch (error) {
+          request.log.error(
+            { err: error, batchId },
+            'catalog import publish enqueue failed — batch stays approved and can be republished',
+          );
+        }
+
         const batchRow = await service.getBatch(userId, batchId);
         return { batch: mapBatchToDTO(batchRow), approvalRevision };
       } catch (error) {

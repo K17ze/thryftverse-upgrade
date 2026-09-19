@@ -28,28 +28,29 @@ export default function BlockedUsersScreen({ navigation }: Props) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const blockedIds = useStore((state) => state.blockedUsers);
   const removeBlockedUser = useStore((state) => state.removeBlockedUser);
-  const [serverEntries, setServerEntries] = useState<BlockedUserEntry[]>([]);
-  const [loadingProfiles, setLoadingProfiles] = useState(false);
+  // Server entries are the source of truth for the list — the local store's
+  // `blockedIds` can diverge when hydration fails, so rows render from the
+  // fetched payload and the store is only used for optimistic removal.
+  const [serverEntries, setServerEntries] = useState<BlockedUserEntry[] | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadToken, setReloadToken] = useState(0);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
 
   React.useEffect(() => {
     let cancelled = false;
-    setLoadingProfiles(true);
+    setLoadError(false);
     getBlockedUsers()
       .then((entries) => {
         if (!cancelled) setServerEntries(entries);
       })
       .catch(() => {
-        if (!cancelled) setServerEntries([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingProfiles(false);
+        if (!cancelled) setLoadError(true);
       });
     return () => {
       cancelled = true;
     };
-  }, [blockedIds]);
+  }, [blockedIds, reloadToken]);
 
   const handleUnblock = async (userId: string) => {
     if (pendingId) return;
@@ -57,6 +58,9 @@ export default function BlockedUsersScreen({ navigation }: Props) {
     try {
       await unblockUser(userId);
       removeBlockedUser(userId);
+      // Optimistic removal — the effect refetches on `blockedIds` change,
+      // but the row should disappear immediately.
+      setServerEntries((prev) => prev?.filter((e) => e.userId !== userId) ?? prev);
       show('Account unblocked', 'success');
     } catch {
       show('Could not unblock this account. Try again.', 'error');
@@ -65,31 +69,31 @@ export default function BlockedUsersScreen({ navigation }: Props) {
     }
   };
 
-  const showSearch = blockedIds.length > 0;
+  const entries = serverEntries ?? [];
+  const isInitialLoading = serverEntries === null && !loadError;
+  const showSearch = entries.length > 0;
 
-  const filteredIds = useMemo(() => {
-    if (!query.trim()) return blockedIds;
+  const filteredEntries = useMemo(() => {
+    if (!query.trim()) return entries;
     const q = query.trim().toLowerCase();
-    return blockedIds.filter((userId) => {
-      const entry = serverEntries.find((e) => e.userId === userId);
-      const name = (entry?.displayName || entry?.username || '').toLowerCase();
-      const handle = (entry?.username || '').toLowerCase();
-      return name.includes(q) || handle.includes(q) || userId.toLowerCase().includes(q);
+    return entries.filter((entry) => {
+      const name = (entry.displayName || entry.username || '').toLowerCase();
+      const handle = (entry.username || '').toLowerCase();
+      return name.includes(q) || handle.includes(q) || entry.userId.toLowerCase().includes(q);
     });
-  }, [blockedIds, serverEntries, query]);
+  }, [entries, query]);
 
-  const renderRow = (userId: string, isLast: boolean) => {
-    const entry = serverEntries.find((e) => e.userId === userId);
-    const displayName = entry?.displayName || entry?.username || 'Account unavailable';
+  const renderRow = (entry: BlockedUserEntry, isLast: boolean) => {
+    const displayName = entry.displayName || entry.username || 'Account unavailable';
     return (
       <View
-        key={userId}
+        key={entry.userId}
         style={[
           styles.userRow,
           !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
         ]}
       >
-        {entry?.avatarUrl ? (
+        {entry.avatarUrl ? (
           <CachedImage
             uri={entry.avatarUrl}
             style={styles.avatar}
@@ -107,23 +111,23 @@ export default function BlockedUsersScreen({ navigation }: Props) {
             {displayName}
           </Text>
           <Text style={[styles.userMeta, { color: colors.textMuted }]} numberOfLines={1}>
-            {entry?.username ? `@${entry.username}` : 'Profile details could not be loaded'}
+            {`@${entry.username}`}
           </Text>
         </View>
 
         <AnimatedPressable
           style={[styles.unblockTarget, { backgroundColor: colors.surfaceAlt }]}
-          onPress={() => handleUnblock(userId)}
+          onPress={() => handleUnblock(entry.userId)}
           scaleValue={0.96}
           hapticFeedback="light"
           disabled={pendingId !== null}
           accessibilityLabel={`Unblock ${displayName}`}
           accessibilityRole="button"
           accessibilityState={{
-            busy: pendingId === userId,
+            busy: pendingId === entry.userId,
             disabled: pendingId !== null }}
         >
-          {pendingId === userId ? (
+          {pendingId === entry.userId ? (
             <ActivityIndicator size="small" color={colors.textPrimary} />
           ) : (
             <Text style={[styles.unblockText, { color: colors.textPrimary }]}>Unblock</Text>
@@ -138,12 +142,22 @@ export default function BlockedUsersScreen({ navigation }: Props) {
       header={
         <FlagshipHeader
           title="Blocked accounts"
-          subtitle={blockedIds.length > 0 ? `${blockedIds.length} blocked` : 'Accounts that cannot contact you'}
+          subtitle={entries.length > 0 ? `${entries.length} blocked` : 'Accounts that cannot contact you'}
           onBack={() => navigation.goBack()}
         />
       }
     >
-      {blockedIds.length === 0 ? (
+      {isInitialLoading ? (
+        <SettingsListSkeleton count={4} />
+      ) : loadError && serverEntries === null ? (
+        <EmptyState
+          icon="offline"
+          title="Couldn't load blocked accounts"
+          subtitle="Check your connection and try again."
+          ctaLabel="Retry"
+          onCtaPress={() => { setServerEntries(null); setReloadToken((n) => n + 1); }}
+        />
+      ) : entries.length === 0 ? (
         <EmptyState
           icon="lock"
           title="You haven't blocked anyone"
@@ -177,9 +191,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
             </View>
           )}
 
-          {loadingProfiles && serverEntries.length === 0 ? (
-            <SettingsListSkeleton count={Math.min(blockedIds.length, 4)} />
-          ) : filteredIds.length === 0 ? (
+          {filteredEntries.length === 0 ? (
             <EmptyState
               icon="search"
               title="No matches"
@@ -188,8 +200,8 @@ export default function BlockedUsersScreen({ navigation }: Props) {
             />
           ) : (
             <View style={[styles.list, { borderColor: colors.border }]}>
-              {filteredIds.map((userId, index) =>
-                renderRow(userId, index === filteredIds.length - 1)
+              {filteredEntries.map((entry, index) =>
+                renderRow(entry, index === filteredEntries.length - 1)
               )}
             </View>
           )}

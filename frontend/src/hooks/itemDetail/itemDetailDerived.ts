@@ -217,9 +217,11 @@ export function buildItemDetailDerived(
     return parts.length > 0 ? parts.join(' · ') : undefined;
   })();
 
+  // Condition is deliberately absent here — the condition chip in the
+  // same identity block already renders the grade, so repeating it in
+  // the attribute line is adjacent duplication, not information.
   const attributeLine = [
     item.size && `Size ${item.size}`,
-    item.condition,
     item.category,
   ].filter(Boolean).join(' · ');
 
@@ -231,11 +233,11 @@ export function buildItemDetailDerived(
   const conditionMeta = (() => {
     switch (item.condition) {
       case 'New with tags':
-        return { color: colors.success, definition: 'Unworn, with original tags and packaging intact.' };
+        return { color: colors.successText, definition: 'Unworn, with original tags and packaging intact.' };
       case 'Very good':
         return { color: colors.commerceTrust, definition: 'No visible flaws; minimal signs of wear.' };
       case 'Good':
-        return { color: colors.warning, definition: 'Light wear consistent with gentle use; no major flaws.' };
+        return { color: colors.warningText, definition: 'Light wear consistent with gentle use; no major flaws.' };
       case 'Satisfactory':
         return { color: colors.bronze, definition: 'Visible wear or minor flaws; fully wearable.' };
       default:
@@ -263,10 +265,28 @@ export function buildItemDetailDerived(
           : mediaItem
       );
     }
-    return mediaFromUris(item.images ?? []).map((mediaItem): ProductMediaItem =>
+    // Listing-level authored dimensions describe the cover media — when
+    // the payload only ships flat image URIs, thread them onto the first
+    // item so the hero stage can size itself without a layout jump.
+    // mediaAspectRatio alone encodes as unit-height dims (w/h = ratio).
+    const coverDims = (() => {
+      if (item.mediaWidth && item.mediaHeight && item.mediaWidth > 0 && item.mediaHeight > 0) {
+        return { width: item.mediaWidth, height: item.mediaHeight };
+      }
+      if (item.mediaAspectRatio && item.mediaAspectRatio > 0) {
+        return { width: item.mediaAspectRatio, height: 1 };
+      }
+      return null;
+    })();
+    return mediaFromUris(item.images ?? []).map((mediaItem, index): ProductMediaItem =>
       mediaItem.kind === 'video'
         ? { ...mediaItem, fit: 'contain' }
-        : { ...mediaItem, fit: 'cover', focalPoint: categoryFocalPoint }
+        : {
+            ...mediaItem,
+            fit: 'cover',
+            focalPoint: categoryFocalPoint,
+            ...(index === 0 && coverDims ? coverDims : {}),
+          }
     );
   })();
 

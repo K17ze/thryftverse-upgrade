@@ -15,19 +15,28 @@ type NavT = NativeStackNavigationProp<RootStackParamList>;
 const styles = createSettingsScreenStyles();
 
 export interface SettingsBalanceCardProps {
-  /** Available GBP wallet balance (null until the snapshot resolves). */
+  /** Available GBP wallet balance. Null while loading AND on failure —
+   *  an unknown balance is never rendered as £0 (F07). */
   walletBalance: number | null;
+  /** True when the balance fetch failed — renders "Unavailable". */
+  walletBalanceFailed?: boolean;
 }
 
 /** Thryft Balance Card — Depop flagship benchmark (settings reference.png).
  *  Renders only when a user is signed in. */
-export function SettingsBalanceCard({ walletBalance }: SettingsBalanceCardProps) {
+export function SettingsBalanceCard({ walletBalance, walletBalanceFailed }: SettingsBalanceCardProps) {
   const navigation = useNavigation<NavT>();
   const { colors } = useAppTheme();
   const { formatFromFiat } = useFormattedPrice();
   const currentUser = useStore((state) => state.currentUser);
 
   if (!currentUser) return null;
+
+  const balanceLabel = walletBalanceFailed
+    ? 'Unavailable'
+    : walletBalance === null
+      ? '—'
+      : formatFromFiat(walletBalance, 'GBP');
 
   return (
     <AnimatedPressable
@@ -37,12 +46,12 @@ export function SettingsBalanceCard({ walletBalance }: SettingsBalanceCardProps)
       scaleValue={0.98}
       hapticFeedback="light"
       accessibilityRole="button"
-      accessibilityLabel={`Thryft Balance: ${formatFromFiat(walletBalance ?? 0, 'GBP')}. Tap to open wallet.`}
+      accessibilityLabel={`Thryft Balance: ${walletBalanceFailed ? 'unavailable' : walletBalance === null ? 'loading' : formatFromFiat(walletBalance, 'GBP')}. Tap to open wallet.`}
     >
       <View style={styles.balanceCardLeft}>
         <Text style={[styles.balanceCardLabel, { color: colors.textSecondary }]}>Thryft Balance</Text>
-        <Text style={[styles.balanceCardValue, { color: colors.textPrimary }]}>
-          {formatFromFiat(walletBalance ?? 0, 'GBP')}
+        <Text style={[styles.balanceCardValue, { color: walletBalanceFailed ? colors.warningText : colors.textPrimary }]}>
+          {balanceLabel}
         </Text>
       </View>
       <View style={styles.balanceCardRight}>

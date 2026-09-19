@@ -87,7 +87,7 @@ export function LookPreviewCard({
         {/* Action bar */}
         <View style={styles.actionBar}>
           <AnimatedPressable style={styles.actionItem} onPress={onLike} {...PressPresets.iconButton} accessibilityRole="button" accessibilityLabel={`Like ${title}`} accessibilityHint="Likes this look">
-            <Ionicons name={saved ? 'heart' : 'heart-outline'} size={18} color={saved ? colors.danger : colors.textSecondary} />
+            <Ionicons name={saved ? 'heart' : 'heart-outline'} size={18} color={saved ? colors.dangerText : colors.textSecondary} />
             <Text style={styles.actionText}>{likes}</Text>
           </AnimatedPressable>
           <AnimatedPressable style={styles.actionItem} onPress={onSave} {...PressPresets.iconButton} accessibilityRole="button" accessibilityLabel={saved ? `Unsave ${title}` : `Save ${title}`} accessibilityHint="Saves this look to your closet">

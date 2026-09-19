@@ -69,8 +69,8 @@ export function InventoryBulkActionsBar({
           accessibilityRole="button"
           accessibilityLabel="Delete selected listings"
         >
-          <Ionicons name="trash-outline" size={18} color={colors.danger} />
-          <Text style={[styles.bulkActionText, { color: colors.danger }]}>Delete</Text>
+          <Ionicons name="trash-outline" size={18} color={colors.dangerText} />
+          <Text style={[styles.bulkActionText, { color: colors.dangerText }]}>Delete</Text>
         </Pressable>
         <Pressable
           onPress={onCancel}

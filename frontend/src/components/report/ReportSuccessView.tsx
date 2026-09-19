@@ -97,7 +97,7 @@ export function ReportSuccessView({
           <Ionicons
             name="checkmark-circle"
             size={16}
-            color={colors.success}
+            color={colors.successText}
           />
           <Text style={styles.blockedNoteText}>
             {t('received.blockedNote')}

@@ -71,9 +71,9 @@ const CONFIDENCE_LABEL: Record<AIConfidence, string> = {
 function dotColorFor(confidence: AIConfidence, colors: ThemeColors): string {
   switch (confidence) {
     case 'high':
-      return colors.success;
+      return colors.successText;
     case 'medium':
-      return colors.warning;
+      return colors.warningText;
     case 'low':
       return colors.discovery;
     case 'exploratory':

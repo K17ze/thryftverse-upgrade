@@ -134,8 +134,8 @@ export function WalletTransactionHistory({
 
     // Direction-aware icon color: inflows use success, outflows use textPrimary,
     // neutral trades use brand. This pairs glyph + colour per AGENTS.md §13.
-    const iconColor = isPositive ? colors.success : kindInfo.direction === 'neutral' ? colors.brand : colors.textSecondary;
-    const amountColor = isPositive ? colors.success : colors.textPrimary;
+    const iconColor = isPositive ? colors.successText : kindInfo.direction === 'neutral' ? colors.brand : colors.textSecondary;
+    const amountColor = isPositive ? colors.successText : colors.textPrimary;
 
     return (
       <View style={styles.txRow} accessibilityRole="text" accessibilityLabel={`${kindInfo.label}, ${amountText}, ${formatRelativeTime(item.createdAt)}`}>

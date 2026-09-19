@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ProductAnalytics } from '../../platform/product';
 import type { Listing } from '../../services/listingsApi';
 
@@ -33,6 +33,14 @@ export function useItemDetailMedia(
   const { listing: item } = ctx;
   const [activeIndex, setActiveIndexState] = useState(0);
   const [isViewerVisible, setIsViewerVisible] = useState(false);
+
+  // New listing → back to the cover. Without the reset, navigating
+  // PDP → PDP (or a param swap) left the stage on image N of the
+  // previous item — and, for shorter carousels, an out-of-range index.
+  const itemId = item?.id;
+  useEffect(() => {
+    setActiveIndexState(0);
+  }, [itemId]);
 
   const setActiveIndex = useCallback((index: number) => {
     setActiveIndexState(index);

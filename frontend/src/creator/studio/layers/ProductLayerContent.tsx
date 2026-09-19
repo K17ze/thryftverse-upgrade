@@ -40,7 +40,7 @@ export function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { 
             {payload.snapshotTitle || 'Listing'}
           </Text>
           {payload.snapshotPriceGbp !== undefined && (
-            <Text style={[o.overlayAccent, { fontSize: TypographyV2.meta.size }, isSold && { color: colors.danger }]}>
+            <Text style={[o.overlayAccent, { fontSize: TypographyV2.meta.size }, isSold && { color: colors.dangerText }]}>
               {isSold ? 'SOLD' : `${currencySymbol}${payload.snapshotPriceGbp.toFixed(0)}`}
             </Text>
           )}
@@ -87,7 +87,7 @@ export function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { 
         <Text style={[o.overlayLabel, { fontFamily: TypographyV2.body.fontFamily }]} numberOfLines={1}>{payload.snapshotTitle || 'Listing'}</Text>
       </View>
       {payload.snapshotPriceGbp !== undefined && (
-        <Text style={[o.overlayAccent, isSold && { color: colors.danger }, isDeleted && o.overlayMuted]}>
+        <Text style={[o.overlayAccent, isSold && { color: colors.dangerText }, isDeleted && o.overlayMuted]}>
           {isSold ? 'SOLD' : isDeleted ? 'UNAVAILABLE' : `${currencySymbol}${payload.snapshotPriceGbp.toFixed(0)}`}
         </Text>
       )}

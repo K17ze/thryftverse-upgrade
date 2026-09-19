@@ -26,6 +26,10 @@ export const listingPatchSchema = z.object({
   originalPriceGbp: z.number().nonnegative().optional(),
   shippingMethod: z.string().min(1).optional(),
   shippingPayer: z.string().min(1).optional(),
+  // Optimistic-concurrency token: the `updatedAt` the editor read. When
+  // present the UPDATE is refused with 409 LISTING_STALE if the row has
+  // moved since — prevents silent last-write-wins between devices.
+  expectedUpdatedAt: z.string().min(10).max(60).optional(),
 });
 
 export type ListingPatchBody = z.infer<typeof listingPatchSchema>;
@@ -44,6 +48,7 @@ export const listingEditPatchSchema = listingPatchSchema.omit({
   status: true,
   imageUrl: true,
   coverFinalizationId: true,
+  expectedUpdatedAt: true,
 });
 
 export type ListingEditPatch = z.infer<typeof listingEditPatchSchema>;
@@ -64,7 +69,15 @@ export const LISTING_EDIT_PATCH_COLUMNS: Record<keyof ListingEditPatch, string> 
 };
 
 export type ListingFieldPatchResult =
-  | { status: 'applied'; listingId: string; appliedFields: string[]; currentStatus: string }
+  | {
+      status: 'applied';
+      listingId: string;
+      appliedFields: string[];
+      currentStatus: string;
+      previousPriceGbp?: number;
+      newPriceGbp?: number;
+      updatedAt?: string;
+    }
   | { status: 'rejected'; listingId: string; reason: string; currentStatus: string }
   | { status: 'conflict'; listingId: string; reason: string; currentStatus: string };
 
@@ -163,6 +176,18 @@ export async function applyListingFieldPatch(
       };
     }
 
+    // The documented contract is "any non-deleted status" — enforce it.
+    // Without this gate a deleted listing could be silently repriced/edited.
+    if (current.status === 'deleted') {
+      await client.query('ROLLBACK');
+      return {
+        status: 'rejected',
+        listingId,
+        reason: 'deleted',
+        currentStatus: current.status,
+      };
+    }
+
     // Text moderation — the same gate POST /listings and the single-PATCH
     // route apply — whenever the edit rewrites title or description. The
     // merged text (patched fields over the locked current values) is what
@@ -192,10 +217,11 @@ export async function applyListingFieldPatch(
     sets.push('updated_at = NOW()');
     values.push(listingId);
 
-    await client.query(
-      `UPDATE listings SET ${sets.join(', ')} WHERE id = $${idx}`,
+    const updateResult = await client.query<{ updated_at: Date | string }>(
+      `UPDATE listings SET ${sets.join(', ')} WHERE id = $${idx} RETURNING updated_at`,
       values,
     );
+    const appliedUpdatedAt = updateResult.rows[0]?.updated_at;
 
     // Durable price-change trail — identical to the single-PATCH route so
     // downstream price-alert evaluation cannot distinguish the two paths.
@@ -244,6 +270,14 @@ export async function applyListingFieldPatch(
       listingId,
       appliedFields,
       currentStatus: current.status,
+      ...(patch.priceGbp !== undefined
+        ? { previousPriceGbp: Number(current.price_gbp), newPriceGbp: patch.priceGbp }
+        : {}),
+      updatedAt: appliedUpdatedAt instanceof Date
+        ? appliedUpdatedAt.toISOString()
+        : appliedUpdatedAt != null
+          ? String(appliedUpdatedAt)
+          : undefined,
     };
   } catch (error) {
     try {

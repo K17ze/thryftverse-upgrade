@@ -243,7 +243,7 @@ export function FlagshipState({
         <Ionicons
           name={effectiveIcon}
           size={IconGrammar.hero}
-          color={isErrorish ? colors.danger : colors.textMuted}
+          color={isErrorish ? colors.dangerText : colors.textMuted}
         />
       </Reanimated.View>
       <Reanimated.Text

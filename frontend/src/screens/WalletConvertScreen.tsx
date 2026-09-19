@@ -199,7 +199,7 @@ export default function WalletConvertScreen() {
             { backgroundColor: colors.dangerSubtle, borderBottomColor: colors.border },
           ]}
         >
-          <Ionicons name="cloud-offline-outline" size={IconGrammar.metadata} color={colors.danger} />
+          <Ionicons name="cloud-offline-outline" size={IconGrammar.metadata} color={colors.dangerText} />
           <Text style={[styles.offlineBannerText, { color: colors.textPrimary }]}>
             {COPY.offline}
           </Text>

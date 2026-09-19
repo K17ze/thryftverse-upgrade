@@ -431,6 +431,11 @@ test('creating a listing offer emits a durable offer.created domain event', asyn
           rows: [{ id: 'listing_1', seller_id: 'seller_1', price_gbp: '100.00', status: 'active' }],
         };
       }
+      // The create path verifies a client-supplied conversationId is a real
+      // thread between buyer and seller before binding it to the offer.
+      if (normalized.includes('FROM chat_conversations')) {
+        return { rowCount: 1, rows: [{ '?column?': 1 }] };
+      }
       if (normalized.startsWith('INSERT INTO listing_offers')) {
         return {
           rowCount: 1,
@@ -912,9 +917,11 @@ test('upload finalization ignores client metadata and verifies the canonical pre
     finalized_at: null,
   };
   const client = {
-    async query(sql: string) {
+    async query(sql: string, _params?: unknown[]) {
       const normalized = sql.replace(/\s+/g, ' ').trim();
-      if (normalized.includes('FROM upload_intents') && normalized.includes('FOR UPDATE')) {
+      // The pre-transaction intent read and any in-transaction refetch both
+      // resolve to the canonical presign row.
+      if (normalized.includes('FROM upload_intents')) {
         return { rowCount: 1, rows: [canonical] };
       }
       if (normalized.includes('FROM upload_finalizations')) {
@@ -955,6 +962,11 @@ test('upload finalization ignores client metadata and verifies the canonical pre
   const db = {
     async connect() {
       return client;
+    },
+    // The route's pre-transaction phase (intent read, existing-finalization
+    // read, S3 HEAD) runs pool-direct queries before db.connect() is called.
+    async query(sql: string, params?: unknown[]) {
+      return client.query(sql, params);
     },
   } as unknown as Pool;
 

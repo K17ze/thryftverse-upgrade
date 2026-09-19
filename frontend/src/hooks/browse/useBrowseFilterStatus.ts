@@ -16,7 +16,6 @@ export function useBrowseFilterStatus() {
     browseFilters.brands.length > 0 ||
     browseFilters.sizes.length > 0 ||
     browseFilters.condition !== 'Any' ||
-    browseFilters.sustainableOnly ||
     browseFilters.priceMin != null ||
     browseFilters.priceMax != null;
 
@@ -36,7 +35,6 @@ export function useBrowseFilterStatus() {
       brands: [],
       sizes: [],
       condition: 'Any',
-      sustainableOnly: false,
       priceMin: null,
       priceMax: null });
   }, [updateBrowseFilters]);

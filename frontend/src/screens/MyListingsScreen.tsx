@@ -54,10 +54,10 @@ function ListingRow({ item, onPress }: { item: ListingApiItem; onPress: () => vo
   const { currencySymbol, formatFromFiat } = useFormattedPrice();
 
   const statusColor =
-    item.status === 'active' ? colors.success
+    item.status === 'active' ? colors.successText
     : item.status === 'paused' ? colors.textMuted
     : item.status === 'sold' ? colors.brand
-    : colors.danger;
+    : colors.dangerText;
 
   const views = item.engagement?.views ?? 0;
   const likes = item.engagement?.likes ?? 0;
@@ -110,7 +110,7 @@ function ListingRow({ item, onPress }: { item: ListingApiItem; onPress: () => vo
         {/* Missing details warning — only for active listings with incomplete data */}
         {item.status === 'active' && hasMissingDetails && (
           <View style={styles.missingDetailsRow}>
-            <AppIcon name="warning" size={IconSize.micro} color="warning" opticalCenter accessible={false} />
+            <AppIcon name="warning" size={IconSize.micro} color="warningText" opticalCenter accessible={false} />
             <Text style={styles.missingDetailsText}>{t('myListings.missingDetails')}</Text>
           </View>
         )}
@@ -127,7 +127,7 @@ function ListingRow({ item, onPress }: { item: ListingApiItem; onPress: () => vo
 function FlagshipMetricLine({ icon, label, value, tone }: { icon: SemanticIconName | IoniconsGlyphName; label: string; value: string; tone?: 'default' | 'success' | 'brand' }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const valueColor = tone === 'success' ? colors.success : tone === 'brand' ? colors.brand : colors.textPrimary;
+  const valueColor = tone === 'success' ? colors.successText : tone === 'brand' ? colors.brand : colors.textPrimary;
   return (
     <View style={styles.metricRow}>
       <View style={styles.metricLabel}>
@@ -728,5 +728,5 @@ function createStyles(colors: ThemeColors) {
   missingDetailsText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.warning } });
+    color: colors.warningText } });
 }

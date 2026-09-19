@@ -45,7 +45,7 @@ export function CoOwnFeaturedAsset({
   const heroHeight = Math.min(height * 0.6, 420);
 
   const statusLabel = status === 'open' ? 'Available' : status === 'paused' ? 'Paused' : 'Fully allocated';
-  const statusColor = status === 'open' ? colors.success : status === 'paused' ? colors.textSecondary : colors.textMuted;
+  const statusColor = status === 'open' ? colors.successText : status === 'paused' ? colors.textSecondary : colors.textMuted;
 
   return (
     <Pressable

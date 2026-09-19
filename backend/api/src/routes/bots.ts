@@ -1,12 +1,16 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { createHash, randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
+import { createHash } from 'node:crypto';
+import dns from 'node:dns';
+import net from 'node:net';
 import { normalizeAgentConfig, validatePublishedAgent } from '../botRuntime/agentConfig.js';
 import {
   agentRuntimeReadinessReason,
   isAgentRuntimeReady,
 } from '../botRuntime/openaiAgent.js';
+import { encryptApiKey, decryptApiKey, maskApiKey } from '../lib/messageEncryption.js';
+import { isLoopbackIp, isPrivateIp } from '../lib/media/remoteImport.js';
 
 type BotsRouteDependencies = {
   app: FastifyInstance;
@@ -50,36 +54,9 @@ function publicAgentConfig(value: unknown) {
 
 // ── Provider connection credential vault ───────────────────────────────
 //
-// API keys are encrypted at rest with AES-256-GCM. The encryption key is
-// derived from the server's ENCRYPTION_KEY env var (falling back to the
-// OpenAI key in dev, then a static dev-only key). The raw key is NEVER
-// returned in API responses — only the masked form.
-
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY?.trim() || process.env.OPENAI_API_KEY?.trim() || 'fallback-dev-key-not-for-production-32b';
-const ENCRYPTION_KEY_BYTES = createHash('sha256').update(ENCRYPTION_KEY).digest().slice(0, 32);
-
-function encryptApiKey(apiKey: string): string {
-  const iv = randomBytes(12);
-  const cipher = createCipheriv('aes-256-gcm', ENCRYPTION_KEY_BYTES, iv);
-  const encrypted = Buffer.concat([cipher.update(apiKey, 'utf8'), cipher.final()]);
-  const authTag = cipher.getAuthTag();
-  return Buffer.concat([iv, authTag, encrypted]).toString('base64');
-}
-
-function decryptApiKey(encryptedKey: string): string {
-  const buf = Buffer.from(encryptedKey, 'base64');
-  const iv = buf.slice(0, 12);
-  const authTag = buf.slice(12, 28);
-  const ciphertext = buf.slice(28);
-  const decipher = createDecipheriv('aes-256-gcm', ENCRYPTION_KEY_BYTES, iv);
-  decipher.setAuthTag(authTag);
-  return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
-}
-
-function maskApiKey(key: string): string {
-  if (key.length <= 8) return '••••';
-  return key.slice(0, 3) + '••••' + key.slice(-4);
-}
+// API keys are encrypted at rest with AES-256-GCM via the shared vault in
+// lib/messageEncryption.ts (keyed by config.encryptionKey). The raw key is
+// NEVER returned in API responses — only the masked form.
 
 interface ProviderConnectionRow {
   id: string;
@@ -119,15 +96,126 @@ function serializeConnection(row: ProviderConnectionRow, maskedKey: string) {
   };
 }
 
+// Each provider is verified against its own first-party endpoint with its
+// own auth scheme — a key must never be sent to a different provider's
+// host. `custom` uses the caller-supplied base URL, validated against SSRF
+// below. Callers needing an OpenAI-compatible gateway should use `custom`.
+const PROVIDER_VERIFICATION: Record<
+  string,
+  { baseUrl: string; headers: (apiKey: string) => Record<string, string> }
+> = {
+  openai: {
+    baseUrl: 'https://api.openai.com/v1',
+    headers: (apiKey) => ({ Authorization: `Bearer ${apiKey}` }),
+  },
+  anthropic: {
+    baseUrl: 'https://api.anthropic.com/v1',
+    headers: (apiKey) => ({
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    }),
+  },
+  gemini: {
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+    headers: (apiKey) => ({ 'x-goog-api-key': apiKey }),
+  },
+};
+
+/**
+ * Validate a caller-supplied `custom` provider base URL before sending a
+ * key to it. HTTPS-only, no embedded credentials, and the hostname must
+ * not be — or resolve to — a loopback, private, link-local, or multicast
+ * address (the request carries the user's API key, so an internal or
+ * cloud-metadata endpoint would exfiltrate it).
+ */
+async function assertSafeCustomProviderBaseUrl(rawUrl: string): Promise<URL> {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new Error('custom provider baseUrl is not a valid URL');
+  }
+  if (parsed.protocol !== 'https:') {
+    throw new Error('custom provider baseUrl must use https://');
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error('custom provider baseUrl must not contain credentials');
+  }
+  const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (!host) {
+    throw new Error('custom provider baseUrl has no hostname');
+  }
+
+  const isBlockedAddress = (ip: string) => isLoopbackIp(ip) || isPrivateIp(ip);
+
+  // Literal IP host — check directly, no DNS needed.
+  if (net.isIP(host)) {
+    if (isBlockedAddress(host)) {
+      throw new Error('custom provider baseUrl targets a private or local address');
+    }
+    return parsed;
+  }
+
+  let addresses: dns.LookupAddress[];
+  try {
+    addresses = await dns.promises.lookup(host, { all: true });
+  } catch (error) {
+    throw new Error(
+      `custom provider hostname could not be resolved: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  if (addresses.length === 0) {
+    throw new Error('custom provider hostname has no DNS records');
+  }
+  for (const addr of addresses) {
+    if (isBlockedAddress(addr.address)) {
+      throw new Error('custom provider baseUrl resolves to a private or local address');
+    }
+  }
+  return parsed;
+}
+
 async function verifyProviderKey(
   provider: string,
   apiKey: string,
   baseUrl: string | null,
 ): Promise<{ healthy: boolean; models: string[]; error: string | null }> {
-  const endpoint = baseUrl || 'https://api.openai.com/v1';
+  let endpoint: string;
+  let headers: Record<string, string>;
+
+  if (provider === 'custom') {
+    if (!baseUrl) {
+      return {
+        healthy: false,
+        models: [],
+        error: 'A baseUrl is required for custom providers',
+      };
+    }
+    try {
+      endpoint = (await assertSafeCustomProviderBaseUrl(baseUrl))
+        .toString()
+        .replace(/\/+$/, '');
+    } catch (error) {
+      return {
+        healthy: false,
+        models: [],
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+    // OpenAI-compatible auth convention for custom endpoints.
+    headers = { Authorization: `Bearer ${apiKey}` };
+  } else {
+    const spec = PROVIDER_VERIFICATION[provider];
+    if (!spec) {
+      return { healthy: false, models: [], error: `Unsupported provider: ${provider}` };
+    }
+    endpoint = spec.baseUrl;
+    headers = spec.headers(apiKey);
+  }
+
   try {
     const response = await fetch(`${endpoint}/models`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
+      headers,
       signal: AbortSignal.timeout(10_000),
     });
     if (response.ok) {
@@ -153,16 +241,34 @@ async function verifyProviderKey(
 function extractModelIds(payload: unknown): string[] {
   if (!payload || typeof payload !== 'object') return [];
   const record = payload as Record<string, unknown>;
-  if (!Array.isArray(record.data)) return [];
-  return record.data
-    .map((entry: unknown) => {
-      if (entry && typeof entry === 'object') {
-        const id = (entry as Record<string, unknown>).id;
-        return typeof id === 'string' ? id : '';
-      }
-      return '';
-    })
-    .filter(Boolean);
+
+  // OpenAI / Anthropic / OpenAI-compatible: { data: [{ id }] }
+  if (Array.isArray(record.data)) {
+    return record.data
+      .map((entry: unknown) => {
+        if (entry && typeof entry === 'object') {
+          const id = (entry as Record<string, unknown>).id;
+          return typeof id === 'string' ? id : '';
+        }
+        return '';
+      })
+      .filter(Boolean);
+  }
+
+  // Gemini: { models: [{ name: 'models/<id>' }] }
+  if (Array.isArray(record.models)) {
+    return record.models
+      .map((entry: unknown) => {
+        if (entry && typeof entry === 'object') {
+          const name = (entry as Record<string, unknown>).name;
+          return typeof name === 'string' ? name.replace(/^models\//, '') : '';
+        }
+        return '';
+      })
+      .filter(Boolean);
+  }
+
+  return [];
 }
 
 export const registerBotsRoutes = ({
@@ -566,7 +672,7 @@ export const registerBotsRoutes = ({
 
     const userId = request.authUser.userId;
     const result = await db.query<ProviderConnectionRow>(
-      `SELECT * FROM provider_connections WHERE owner_id = $1 ORDER BY created_at DESC`,
+      `SELECT * FROM provider_connections WHERE owner_id = $1 AND is_active = TRUE ORDER BY created_at DESC`,
       [userId]
     );
 
@@ -594,7 +700,7 @@ export const registerBotsRoutes = ({
     const userId = request.authUser.userId;
 
     const result = await db.query<ProviderConnectionRow>(
-      `SELECT * FROM provider_connections WHERE id = $1 AND owner_id = $2 LIMIT 1`,
+      `SELECT * FROM provider_connections WHERE id = $1 AND owner_id = $2 AND is_active = TRUE LIMIT 1`,
       [id, userId]
     );
 
@@ -743,7 +849,7 @@ export const registerBotsRoutes = ({
     const userId = request.authUser.userId;
 
     const existing = await db.query<ProviderConnectionRow>(
-      `SELECT * FROM provider_connections WHERE id = $1 AND owner_id = $2 LIMIT 1`,
+      `SELECT * FROM provider_connections WHERE id = $1 AND owner_id = $2 AND is_active = TRUE LIMIT 1`,
       [id, userId]
     );
 
@@ -1240,6 +1346,15 @@ export const registerBotsRoutes = ({
     if (!request.authUser) throw createApiError('UNAUTHORIZED', 'Unauthorized');
     const userId = request.authUser.userId;
 
+    // Lazily expire rows past their TTL so the list and the decision
+    // endpoints agree on what is still decidable.
+    await db.query(
+      `UPDATE agent_approval_requests SET status = 'expired'
+       WHERE actor_user_id = $1 AND status = 'pending'
+         AND expires_at IS NOT NULL AND expires_at <= NOW()`,
+      [userId]
+    );
+
     const result = await db.query<{
       id: string; run_id: string; bot_id: string; conversation_id: string;
       tool_name: string; tool_arguments: unknown; status: string;
@@ -1248,6 +1363,7 @@ export const registerBotsRoutes = ({
       `SELECT id, run_id, bot_id, conversation_id, tool_name, tool_arguments, status, expires_at, created_at
        FROM agent_approval_requests
        WHERE actor_user_id = $1 AND status = 'pending'
+         AND (expires_at IS NULL OR expires_at > NOW())
        ORDER BY created_at DESC LIMIT 50`,
       [userId]
     );
@@ -1278,8 +1394,16 @@ export const registerBotsRoutes = ({
     const payload = bodySchema.parse(request.body ?? {});
     const userId = request.authUser.userId;
 
-    const existing = await db.query<{ actor_user_id: string; status: string; run_id: string }>(
-      `SELECT actor_user_id, status, run_id FROM agent_approval_requests WHERE id = $1 LIMIT 1`,
+    const existing = await db.query<{
+      actor_user_id: string;
+      status: string;
+      run_id: string;
+      bot_id: string;
+      conversation_id: string;
+      expires_at: string | null;
+      continuation_token: string;
+    }>(
+      `SELECT actor_user_id, status, run_id, bot_id, conversation_id, expires_at, continuation_token FROM agent_approval_requests WHERE id = $1 LIMIT 1`,
       [id]
     );
     if (!existing.rowCount) throw createApiError('NOT_FOUND', 'Approval request not found', { id });
@@ -1289,10 +1413,34 @@ export const registerBotsRoutes = ({
     if (existing.rows[0].status !== 'pending') {
       throw createApiError('APPROVAL_TERMINAL', 'Approval request is no longer pending');
     }
+    if (existing.rows[0].expires_at && new Date(existing.rows[0].expires_at) <= new Date()) {
+      // Mark expired so the row leaves the pending set permanently.
+      await db.query(
+        `UPDATE agent_approval_requests SET status = 'expired' WHERE id = $1 AND status = 'pending'`,
+        [id]
+      );
+      throw createApiError('APPROVAL_EXPIRED', 'Approval request has expired');
+    }
 
-    await db.query(
-      `UPDATE agent_approval_requests SET status = 'approved', decided_by = $2, decided_at = NOW(), edited_arguments = $3 WHERE id = $1`,
+    // Atomic decision — the status guard is part of the UPDATE so two
+    // concurrent deciders cannot both win. Zero rows means the request was
+    // decided (or expired) between the SELECT above and this write.
+    const decided = await db.query<{ id: string }>(
+      `UPDATE agent_approval_requests SET status = 'approved', decided_by = $2, decided_at = NOW(), edited_arguments = $3
+       WHERE id = $1 AND status = 'pending'
+       RETURNING id`,
       [id, userId, payload.editedArguments ? toJsonString(payload.editedArguments) : null]
+    );
+    if (!decided.rowCount) {
+      throw createApiError('APPROVAL_TERMINAL', 'Approval request is no longer pending');
+    }
+
+    // Sibling pending rows for the same tool call are superseded — only
+    // one decision per proposed call may stand.
+    await db.query(
+      `UPDATE agent_approval_requests SET status = 'superseded'
+       WHERE run_id = $1 AND continuation_token = $2 AND status = 'pending' AND id <> $3`,
+      [existing.rows[0].run_id, existing.rows[0].continuation_token, id]
     );
 
     await db.query(
@@ -1301,10 +1449,29 @@ export const registerBotsRoutes = ({
       [createRuntimeId('baev'), userId, toJsonString({ approvalId: id, edited: Boolean(payload.editedArguments) }), id]
     );
 
-    // TODO: Resume the run from the continuation token (Phase 6)
-    // For now, the run will need to be manually retried or the worker will pick it up
+    // Resume the run: reset it to 'queued' so the worker re-executes —
+    // processToolCalls honors this approval for the same tool. Only a run
+    // that finished waiting (succeeded) is resumed; a failed/cancelled run
+    // stays terminal.
+    const resumed = await db.query<{ id: string }>(
+      `UPDATE agent_runs SET status = 'queued', completed_at = NULL
+       WHERE id = $1 AND status = 'succeeded'
+       RETURNING id`,
+      [existing.rows[0].run_id],
+    );
+    if (resumed.rowCount) {
+      const { agentRunQueue } = await import('../lib/queues.js');
+      await agentRunQueue.add('agent-run', {
+        runId: existing.rows[0].run_id,
+        botId: existing.rows[0].bot_id,
+        conversationId: existing.rows[0].conversation_id,
+        actorUserId: existing.rows[0].actor_user_id,
+        triggerMessageId: null,
+        messageText: '',
+      });
+    }
 
-    return { ok: true, approvalId: id, status: 'approved' };
+    return { ok: true, approvalId: id, status: 'approved', resumed: (resumed.rowCount ?? 0) > 0 };
   });
 
   app.post('/agent-approvals/:id/reject', async (request: FastifyRequest) => {
@@ -1317,8 +1484,14 @@ export const registerBotsRoutes = ({
     const payload = bodySchema.parse(request.body ?? {});
     const userId = request.authUser.userId;
 
-    const existing = await db.query<{ actor_user_id: string; status: string; run_id: string }>(
-      `SELECT actor_user_id, status, run_id FROM agent_approval_requests WHERE id = $1 LIMIT 1`,
+    const existing = await db.query<{
+      actor_user_id: string;
+      status: string;
+      run_id: string;
+      expires_at: string | null;
+      continuation_token: string;
+    }>(
+      `SELECT actor_user_id, status, run_id, expires_at, continuation_token FROM agent_approval_requests WHERE id = $1 LIMIT 1`,
       [id]
     );
     if (!existing.rowCount) throw createApiError('NOT_FOUND', 'Approval request not found', { id });
@@ -1328,10 +1501,34 @@ export const registerBotsRoutes = ({
     if (existing.rows[0].status !== 'pending') {
       throw createApiError('APPROVAL_TERMINAL', 'Approval request is no longer pending');
     }
+    if (existing.rows[0].expires_at && new Date(existing.rows[0].expires_at) <= new Date()) {
+      // Mark expired so the row leaves the pending set permanently.
+      await db.query(
+        `UPDATE agent_approval_requests SET status = 'expired' WHERE id = $1 AND status = 'pending'`,
+        [id]
+      );
+      throw createApiError('APPROVAL_EXPIRED', 'Approval request has expired');
+    }
 
-    await db.query(
-      `UPDATE agent_approval_requests SET status = 'rejected', decided_by = $2, decided_at = NOW(), metadata = metadata || $3 WHERE id = $1`,
+    // Atomic decision — the status guard is part of the UPDATE so two
+    // concurrent deciders cannot both win. Zero rows means the request was
+    // decided (or expired) between the SELECT above and this write.
+    const decided = await db.query<{ id: string }>(
+      `UPDATE agent_approval_requests SET status = 'rejected', decided_by = $2, decided_at = NOW(), metadata = metadata || $3
+       WHERE id = $1 AND status = 'pending'
+       RETURNING id`,
       [id, userId, toJsonString({ rejectionReason: payload.reason ?? null })]
+    );
+    if (!decided.rowCount) {
+      throw createApiError('APPROVAL_TERMINAL', 'Approval request is no longer pending');
+    }
+
+    // Sibling pending rows for the same tool call are superseded — only
+    // one decision per proposed call may stand.
+    await db.query(
+      `UPDATE agent_approval_requests SET status = 'superseded'
+       WHERE run_id = $1 AND continuation_token = $2 AND status = 'pending' AND id <> $3`,
+      [existing.rows[0].run_id, existing.rows[0].continuation_token, id]
     );
 
     await db.query(
@@ -1350,7 +1547,7 @@ export const registerBotsRoutes = ({
   // never posted to a conversation. A temporary agent_runs row with
   // trigger_type='test' is created so the run is observable in the trace UI.
 
-  app.post('/bots/:botId/playground', async (request: FastifyRequest) => {
+  app.post('/bots/:botId/playground', async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.authUser) throw createApiError('UNAUTHORIZED', 'Unauthorized');
     const paramsSchema = z.object({ botId: z.string().min(2).max(120) });
     const bodySchema = z.object({
@@ -1364,8 +1561,8 @@ export const registerBotsRoutes = ({
     const payload = bodySchema.parse(request.body ?? {});
     const userId = request.authUser.userId;
 
-    const botResult = await db.query<{ owner_id: string; type: 'system' | 'custom'; agent_config: unknown; permissions: unknown; runtime_mode: string }>(
-      `SELECT owner_id, type, agent_config, permissions, runtime_mode FROM chat_bots WHERE id = $1 LIMIT 1`,
+    const botResult = await db.query<{ owner_id: string; type: 'system' | 'custom'; agent_config: unknown; permissions: unknown; runtime_mode: string; provider_connection_id: string | null }>(
+      `SELECT owner_id, type, agent_config, permissions, runtime_mode, provider_connection_id FROM chat_bots WHERE id = $1 LIMIT 1`,
       [botId]
     );
     if (!botResult.rowCount) throw createApiError('CHAT_BOT_NOT_FOUND', 'Bot not found', { botId });
@@ -1385,23 +1582,66 @@ export const registerBotsRoutes = ({
 
     const runId = createRuntimeId('run');
 
+    // agent_runs.conversation_id REFERENCES chat_conversations(id), so the
+    // playground needs a real conversation row — a synthetic 'playground'
+    // id violates the FK and 500s every call. A deterministic per-user id
+    // gives each owner their own scratch conversation (and their own
+    // conversation-scoped quota bucket instead of a shared global one).
+    const playgroundConversationId = `agent-playground-${userId}`;
+    await db.query(
+      `INSERT INTO chat_conversations (id, type, title, owner_id, metadata)
+       VALUES ($1, 'dm', 'Agent Playground', $2, '{"playground":true}'::jsonb)
+       ON CONFLICT (id) DO NOTHING`,
+      [playgroundConversationId, userId]
+    );
+
     // Create a test run record
     await db.query(
       `INSERT INTO agent_runs (id, bot_id, conversation_id, actor_user_id, trigger_type, status, idempotency_key)
        VALUES ($1, $2, $3, $4, 'test', 'running', $5)`,
-      [runId, botId, 'playground', userId, `playground:${runId}`]
+      [runId, botId, playgroundConversationId, userId, `playground:${runId}`]
     );
+
+    // Playground calls the real provider — it must consume the same hourly
+    // quota as a conversation run, or it is an unmetered spend path.
+    const { reserveAiUsageQuota, recordAiUsageEvent } = await import('../lib/aiUsage.js');
+    const { redis } = await import('../lib/redis.js');
+    const aiQuota = await reserveAiUsageQuota(
+      { userId, conversationId: playgroundConversationId },
+      redis,
+    );
+
+    if (!aiQuota.allowed) {
+      await db.query(
+        `UPDATE agent_runs SET status = 'failed', completed_at = NOW(), error_message = 'AI_HOURLY_QUOTA_EXCEEDED' WHERE id = $1`,
+        [runId],
+      );
+      reply.code(429);
+      return {
+        ok: false,
+        playground: true,
+        error: 'Hourly AI usage limit reached for this account. Try again at the start of the next hour.',
+        code: 'AI_HOURLY_QUOTA_EXCEEDED',
+        usage: null,
+      };
+    }
 
     try {
       // Execute directly (synchronous for playground)
       const normalizedConfig = normalizeAgentConfig(bot.agent_config);
       const permissions = Array.isArray(bot.permissions) ? bot.permissions.filter((p): p is string => typeof p === 'string') : [];
 
-      // Use the OpenAI agent directly with the test message
+      // Use the OpenAI agent directly with the test message. The bot's
+      // bound provider connection (if any) supplies the credential, exactly
+      // as it would in a real conversation run.
       const { executeOpenAiAgent } = await import('../botRuntime/openaiAgent.js');
+      const { resolveProviderConnectionCredential } = await import('../botRuntime/index.js');
+      const connectionCredential = bot.provider_connection_id
+        ? await resolveProviderConnectionCredential(db, bot.provider_connection_id)
+        : undefined;
       const result = await executeOpenAiAgent({
-        conversationId: 'playground',
-        conversationType: 'group',
+        conversationId: playgroundConversationId,
+        conversationType: 'dm',
         conversationTitle: 'Playground',
         actorUserId: userId,
         actorUserName: null,
@@ -1421,12 +1661,35 @@ export const registerBotsRoutes = ({
           text: m.content,
         })),
         runtimeData: { listings: [], recentMessagesAnalyzed: 0, messagesRequiringReview: 0 },
-      }, undefined, db, runId);
+      }, connectionCredential, db, runId);
 
       await db.query(
         `UPDATE agent_runs SET status = 'succeeded', completed_at = NOW(), result_text = $2, input_tokens = $3, output_tokens = $4, total_tokens = $5 WHERE id = $1`,
         [runId, result.text, result.metadata?.providerUsage ? (result.metadata.providerUsage as { inputTokens: number }).inputTokens : 0, result.metadata?.providerUsage ? (result.metadata.providerUsage as { outputTokens: number }).outputTokens : 0, result.metadata?.providerUsage ? (result.metadata.providerUsage as { totalTokens: number }).totalTokens : 0]
       );
+
+      const providerUsage = result.metadata?.providerUsage as Record<string, unknown> | undefined;
+      await recordAiUsageEvent(db, {
+        id: createRuntimeId('aiuse'),
+        userId,
+        conversationId: playgroundConversationId,
+        botId,
+        model: typeof result.metadata?.model === 'string'
+          ? result.metadata.model
+          : normalizedConfig?.model ?? 'unconfigured',
+        providerRequestId: typeof result.metadata?.providerRequestId === 'string'
+          ? result.metadata.providerRequestId
+          : null,
+        status: 'succeeded',
+        usage: providerUsage
+          ? {
+            inputTokens: Number(providerUsage.inputTokens) || 0,
+            outputTokens: Number(providerUsage.outputTokens) || 0,
+            totalTokens: Number(providerUsage.totalTokens) || 0,
+          }
+          : undefined,
+        metadata: { playground: true, confidence: result.confidence ?? null },
+      });
 
       return {
         ok: true,
@@ -1442,6 +1705,16 @@ export const registerBotsRoutes = ({
         `UPDATE agent_runs SET status = 'failed', completed_at = NOW(), error_message = $2 WHERE id = $1`,
         [runId, errorMessage.slice(0, 500)]
       );
+      await recordAiUsageEvent(db, {
+        id: createRuntimeId('aiuse'),
+        userId,
+        conversationId: playgroundConversationId,
+        botId,
+        model: 'unconfigured',
+        status: 'failed',
+        errorCode: 'AI_EXECUTION_FAILED',
+        metadata: { playground: true },
+      }).catch(() => {});
       throw createApiError('AGENT_EXECUTION_FAILED', errorMessage);
     }
   });

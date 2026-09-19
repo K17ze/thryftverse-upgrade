@@ -79,10 +79,10 @@ export function AgentStudioAgentsSection({
             const statusColor = bot.isDraft
               ? colors.textMuted
               : bot.isDisabled
-                ? colors.danger
+                ? colors.dangerText
                 : bot.runtimeReady === false
-                  ? colors.warning
-                  : colors.success;
+                  ? colors.warningText
+                  : colors.successText;
             const statusLabel = bot.isDraft
               ? t('agentStatus.draft')
               : bot.isDisabled
@@ -154,7 +154,7 @@ export function AgentStudioAgentsSection({
         <AppIcon
           name="pause"
           size={IconSize.md}
-          color={activeAgentSessions > 0 ? 'danger' : 'textMuted'}
+          color={activeAgentSessions > 0 ? 'dangerText' : 'textMuted'}
           opticalCenter
           accessible={false}
         />

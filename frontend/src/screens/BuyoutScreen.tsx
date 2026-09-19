@@ -346,7 +346,7 @@ export default function BuyoutScreen() {
         {/* Status message — flat section */}
         {ownsAll ? (
           <View style={[styles.statusSection, { borderBottomColor: colors.borderSubtle }]}>
-            <Ionicons name="checkmark-circle" size={28} color={colors.success} />
+            <Ionicons name="checkmark-circle" size={28} color={colors.successText} />
             <Text style={[styles.statusTitle, { color: colors.textPrimary }]}>You own 100% of this item</Text>
             <Text style={[styles.statusBody, { color: colors.textSecondary }]}>
               You already hold all units in this Co-Own. No buyout is needed.
@@ -428,7 +428,7 @@ export default function BuyoutScreen() {
             may already be live. The user can retry to resolve it. */}
         {submitUncertain && !ownsAll && (
           <View style={[styles.uncertainSection, { borderBottomColor: colors.borderSubtle }]}>
-            <Ionicons name="cloud-offline-outline" size={24} color={colors.warning} />
+            <Ionicons name="cloud-offline-outline" size={24} color={colors.warningText} />
             <Text style={[styles.uncertainTitle, { color: colors.textPrimary }]}>
               Submission not confirmed
             </Text>
@@ -483,12 +483,12 @@ export default function BuyoutScreen() {
                           £{offer.offerPriceGbp.toFixed(2)} per unit
                         </Text>
                         {offerPremiumPct != null && (
-                          <Text style={[styles.offerPremium, { color: offerPremiumPct >= 0 ? colors.success : colors.danger }]}>
+                          <Text style={[styles.offerPremium, { color: offerPremiumPct >= 0 ? colors.successText : colors.dangerText }]}>
                             {offerPremiumPct >= 0 ? '+' : ''}{offerPremiumPct.toFixed(1)}% vs reference
                           </Text>
                         )}
                       </View>
-                      <Text style={[styles.offerStatus, { color: offerExpired ? colors.textMuted : colors.success }]}>
+                      <Text style={[styles.offerStatus, { color: offerExpired ? colors.textMuted : colors.successText }]}>
                         {offerExpired ? 'Expired' : 'Open'}
                       </Text>
                     </View>

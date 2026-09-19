@@ -44,12 +44,13 @@ export function BrowseActiveFilterBadges({
   if (hasPrice) {
     // Filter values are GBP — format through the fiat formatter so a
     // non-GBP user sees converted amounts on the badge.
+    const fiat = { displayMode: 'fiat' as const };
     const priceLabel =
       browseFilters.priceMin != null && browseFilters.priceMax != null
-        ? `${formatFromFiat(browseFilters.priceMin)} – ${formatFromFiat(browseFilters.priceMax)}`
+        ? `${formatFromFiat(browseFilters.priceMin, 'GBP', fiat)} – ${formatFromFiat(browseFilters.priceMax, 'GBP', fiat)}`
         : browseFilters.priceMin != null
-          ? `Over ${formatFromFiat(browseFilters.priceMin)}`
-          : `Under ${formatFromFiat(browseFilters.priceMax ?? 0)}`;
+          ? `Over ${formatFromFiat(browseFilters.priceMin, 'GBP', fiat)}`
+          : `Under ${formatFromFiat(browseFilters.priceMax ?? 0, 'GBP', fiat)}`;
     badges.push({
       key: 'price',
       label: priceLabel,
@@ -79,14 +80,6 @@ export function BrowseActiveFilterBadges({
       label: browseFilters.condition,
       accessibilityLabel: 'Remove condition filter',
       onRemove: () => updateBrowseFilters({ condition: 'Any' }) });
-  }
-
-  if (browseFilters.sustainableOnly) {
-    badges.push({
-      key: 'sustainable',
-      label: 'Sustainable',
-      accessibilityLabel: 'Remove sustainable filter',
-      onRemove: () => updateBrowseFilters({ sustainableOnly: false }) });
   }
 
   return (

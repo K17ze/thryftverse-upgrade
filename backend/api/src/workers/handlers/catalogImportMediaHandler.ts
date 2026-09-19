@@ -21,14 +21,15 @@
  * @packageDocumentation
  */
 
-import crypto from 'node:crypto';
-
 import { db } from '../../db/pool.js';
 import { logger } from '../../lib/logger.js';
 import { config } from '../../config.js';
 import { putBinaryObject } from '../../lib/s3.js';
 import { mediaKindForContentType } from '../../lib/mediaLifecycle.js';
-import { enqueueMediaIngestJob } from '../../lib/queues.js';
+import {
+  enqueueMediaIngestJob,
+  enqueueCatalogImportNormalisationJob,
+} from '../../lib/queues.js';
 import {
   ingestRemoteMedia,
   type IngestRemoteMediaResult,
@@ -120,6 +121,7 @@ interface ItemContextRow {
   user_id: string;
   batch_id: string;
   external_item_id: string;
+  batch_status: string;
 }
 
 /**
@@ -142,8 +144,10 @@ async function createAuthoritativeMedia(
     result.mimeType,
   );
 
-  const finalizationId = `ufin_${crypto.randomUUID()}`;
-  const mediaAssetId = `masset_${crypto.randomUUID()}`;
+  // Deterministic ids — every attempt at the same media row converges on
+  // the same finalization/asset, so a retry can never mint orphan rows.
+  const finalizationId = `ufin_${media.id}`;
+  const mediaAssetId = `masset_${media.id}`;
   const mediaKind = mediaKindForContentType(result.mimeType);
 
   // Create upload_finalization row.
@@ -249,6 +253,31 @@ async function createAuthoritativeMedia(
   });
 }
 
+/**
+ * When every media row for an item has reached a terminal state, the item
+ * is ready for normalisation — enqueue it. Called at every terminal exit
+ * path so a failed sibling can never strand the item in 'media_pending'.
+ */
+async function maybeEnqueueNormalise(importItemId: string): Promise<void> {
+  const ctx = await db.query<{ batch_id: string }>(
+    `SELECT batch_id FROM catalog_import_items WHERE id = $1 LIMIT 1`,
+    [importItemId],
+  );
+  const batchId = ctx.rows[0]?.batch_id;
+  if (!batchId) {
+    return;
+  }
+  const remaining = await db.query<{ n: string }>(
+    `SELECT COUNT(*)::text AS n FROM catalog_import_media
+     WHERE import_item_id = $1
+       AND fetch_status IN ('pending', 'fetching', 'fetched', 'verifying')`,
+    [importItemId],
+  );
+  if (Number(remaining.rows[0]?.n ?? 0) === 0) {
+    await enqueueCatalogImportNormalisationJob({ batchId, itemId: importItemId });
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Main handler
 // ---------------------------------------------------------------------------
@@ -295,20 +324,13 @@ export async function processCatalogImportMedia(
     return;
   }
 
-  const sourceUrl = media.source_url_ciphertext;
-  if (!sourceUrl) {
-    logger.warn(
-      { mediaId },
-      'catalogImportMedia.no_source_url',
-    );
-    await recordFetchFailure(mediaId, media.attempt_count, 'no_source_url');
-    return;
-  }
-
-  // Load the item context for ownership.
+  // Load the item context for ownership and gate on batch state — a job
+  // queued before a cancel/pause/approve must not fetch media or mutate.
   const itemResult = await db.query<ItemContextRow>(
-    `SELECT i.user_id, i.batch_id, i.external_item_id
+    `SELECT i.user_id, i.batch_id, i.external_item_id,
+            b.status AS batch_status
      FROM catalog_import_items i
+     JOIN catalog_import_batches b ON b.id = i.batch_id
      WHERE i.id = $1
      LIMIT 1`,
     [media.import_item_id],
@@ -320,6 +342,29 @@ export async function processCatalogImportMedia(
       { mediaId, importItemId: media.import_item_id },
       'catalogImportMedia.item_not_found',
     );
+    return;
+  }
+
+  if (
+    itemContext.batch_status !== 'hydrating' &&
+    itemContext.batch_status !== 'ingesting_media' &&
+    itemContext.batch_status !== 'normalising'
+  ) {
+    logger.info(
+      { mediaId, batchId: itemContext.batch_id, status: itemContext.batch_status },
+      'catalogImportMedia.skipped_batch_not_active',
+    );
+    return;
+  }
+
+  const sourceUrl = media.source_url_ciphertext;
+  if (!sourceUrl) {
+    logger.warn(
+      { mediaId },
+      'catalogImportMedia.no_source_url',
+    );
+    await recordFetchFailure(mediaId, media.attempt_count, 'no_source_url');
+    await maybeEnqueueNormalise(media.import_item_id);
     return;
   }
 
@@ -360,6 +405,7 @@ export async function processCatalogImportMedia(
         { mediaId, importItemId: media.import_item_id },
         'catalogImportMedia.ssrf_blocked',
       );
+      await maybeEnqueueNormalise(media.import_item_id);
       return;
     }
 
@@ -376,4 +422,6 @@ export async function processCatalogImportMedia(
       'catalogImportMedia.fetch_failed',
     );
   }
+
+  await maybeEnqueueNormalise(media.import_item_id);
 }

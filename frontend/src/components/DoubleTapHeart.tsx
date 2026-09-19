@@ -87,7 +87,7 @@ export function DoubleTapHeart({
 
         {/* Animated heart overlay */}
         <Animated.View style={[styles.heartOverlay, heartStyle]} pointerEvents="none">
-          <Ionicons name="heart" size={heartSize} color={colors.danger} />
+          <Ionicons name="heart" size={heartSize} color={colors.dangerText} />
         </Animated.View>
       </View>
     </GestureDetector>

@@ -191,7 +191,7 @@ export default function DataExportScreen({ navigation }: Props) {
           <SettingsSection title="Export failed">
             <SettingsRow
               icon="alert-circle-outline"
-              iconColor={colors.danger}
+              iconColor={colors.dangerText}
               title={exportError ?? 'Something went wrong while generating your export.'}
               isFirst
               isLast

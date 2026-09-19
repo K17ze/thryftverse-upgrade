@@ -23,7 +23,7 @@ export type PayoutStatus = PayoutRequestPayload['status'];
 export interface PayoutStatusConfig {
   label: string;
   subtitle: string;
-  colorKey: 'warning' | 'success' | 'danger' | 'textMuted';
+  colorKey: 'warningText' | 'successText' | 'dangerText' | 'textMuted';
 }
 
 export const PAYOUT_STATUS_CONFIG: Record<PayoutStatus, PayoutStatusConfig> = {
@@ -34,15 +34,15 @@ export const PAYOUT_STATUS_CONFIG: Record<PayoutStatus, PayoutStatusConfig> = {
   processing: {
     label: t('withdraw.status.processing'),
     subtitle: t('withdraw.status.transferInitiated'),
-    colorKey: 'warning' },
+    colorKey: 'warningText' },
   paid: {
     label: t('withdraw.status.paid'),
     subtitle: t('withdraw.status.bankConfirmed'),
-    colorKey: 'success' },
+    colorKey: 'successText' },
   failed: {
     label: t('withdraw.status.failed'),
     subtitle: t('withdraw.status.transferCouldNotComplete'),
-    colorKey: 'danger' },
+    colorKey: 'dangerText' },
   cancelled: {
     label: t('withdraw.status.cancelled'),
     subtitle: '',

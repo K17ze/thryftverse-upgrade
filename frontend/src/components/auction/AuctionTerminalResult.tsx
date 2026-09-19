@@ -59,7 +59,7 @@ export function AuctionTerminalResult({
           <Text
             style={[
               styles.terminalResultTitleWon,
-              { color: isPaymentConfirmed || isSettled ? colors.success : colors.warning },
+              { color: isPaymentConfirmed || isSettled ? colors.successText : colors.warningText },
             ]}
           >
             {isPaymentConfirmed || isSettled ? 'You won' : 'Payment required'}
@@ -98,7 +98,7 @@ export function AuctionTerminalResult({
           <Text
             style={[
               styles.terminalResultTitleSold,
-              { color: isSettled ? colors.success : isPaymentConfirmed ? colors.brand : colors.warning },
+              { color: isSettled ? colors.successText : isPaymentConfirmed ? colors.brand : colors.warningText },
             ]}
           >
             {sellerSaleTitle}

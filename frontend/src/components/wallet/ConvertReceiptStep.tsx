@@ -23,7 +23,7 @@ export function ConvertReceiptStep({ result }: Props) {
   return (
     <View>
       <View style={styles.receiptWrap}>
-        <Ionicons name="checkmark-circle" size={56} color={colors.success} style={styles.stepIcon} />
+        <Ionicons name="checkmark-circle" size={56} color={colors.successText} style={styles.stepIcon} />
         <Text style={[styles.receiptTitle, { color: colors.textPrimary }]}>
           Conversion complete
         </Text>

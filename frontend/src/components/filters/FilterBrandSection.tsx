@@ -1,33 +1,51 @@
 import React, { useState } from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, TextInput } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { AppButton } from '../ui/AppButton';
 import { FilterSection } from './FilterSection';
 import { createFilterStyles } from './filterStyles';
 
+/** A selectable brand row — `keywords` carry the taxonomy synonyms/display
+ *  keys so in-facet search matches "lv" → "Louis Vuitton". */
+export interface BrandOption {
+  name: string;
+  keywords: string[];
+}
+
 interface Props {
   expanded: boolean;
   onToggle: () => void;
-  /** Distinct brand values present in the current listing snapshot. */
-  brandOptions: string[];
+  /** Curated taxonomy brands merged with any snapshot-only values. */
+  brandOptions: BrandOption[];
   selectedBrands: string[];
   onToggleBrand: (brand: string) => void;
 }
 
-// Brand section — wrapping chip cloud with a "See all" expansion affordance.
-// Owns the collapsed-to-8 window state; selection lives upstream.
+// Brand section — searchable chip cloud backed by the curated brand
+// taxonomy. Selected brands pin to the top so they stay visible while
+// searching; the collapsed window shows the first 8.
 function FilterBrandSectionBase({ expanded, onToggle, brandOptions, selectedBrands, onToggleBrand }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createFilterStyles(colors), [colors]);
+  const [query, setQuery] = useState('');
   const [showAllBrands, setShowAllBrands] = useState(false);
 
-  const visibleBrandOptions = React.useMemo(() => {
-    if (showAllBrands) {
-      return brandOptions;
-    }
+  const orderedOptions = React.useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const filtered = q
+      ? brandOptions.filter((option) =>
+          option.name.toLowerCase().includes(q) ||
+          option.keywords.some((keyword) => keyword.toLowerCase().includes(q)))
+      : brandOptions;
+    const selected = filtered.filter((option) => selectedBrands.includes(option.name));
+    const rest = filtered.filter((option) => !selectedBrands.includes(option.name));
+    return [...selected, ...rest];
+  }, [brandOptions, query, selectedBrands]);
 
-    return brandOptions.slice(0, 8);
-  }, [brandOptions, showAllBrands]);
+  const isFiltering = query.trim().length > 0;
+  const visibleBrandOptions =
+    isFiltering || showAllBrands ? orderedOptions : orderedOptions.slice(0, 8);
 
   return (
     <FilterSection
@@ -38,9 +56,41 @@ function FilterBrandSectionBase({ expanded, onToggle, brandOptions, selectedBran
       count={selectedBrands.length}
     >
       {brandOptions.length > 8 ? (
+        <View style={styles.brandSearchWrap}>
+          <Ionicons
+            name="search-outline"
+            size={16}
+            color={colors.textMuted}
+            style={styles.brandSearchIcon}
+          />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search brands"
+            placeholderTextColor={colors.textMuted}
+            style={styles.brandSearchInput}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+            accessibilityLabel="Search brands"
+          />
+          {isFiltering ? (
+            <AppButton
+              title="Clear"
+              variant="secondary"
+              size="sm"
+              style={styles.brandSearchClear}
+              titleStyle={styles.seeAllText}
+              onPress={() => setQuery('')}
+              accessibilityLabel="Clear brand search"
+            />
+          ) : null}
+        </View>
+      ) : null}
+      {!isFiltering && brandOptions.length > 8 ? (
         <View style={styles.seeAllRow}>
           <AppButton
-            title={showAllBrands ? 'Show less' : 'See all'}
+            title={showAllBrands ? 'Show less' : `See all ${brandOptions.length} brands`}
             onPress={() => setShowAllBrands((current) => !current)}
             variant="secondary"
             size="sm"
@@ -52,23 +102,26 @@ function FilterBrandSectionBase({ expanded, onToggle, brandOptions, selectedBran
       ) : null}
       <View style={styles.wrapContainer}>
         {visibleBrandOptions.length > 0 ? (
-          visibleBrandOptions.map(b => {
-            const isActive = selectedBrands.includes(b);
+          visibleBrandOptions.map((option) => {
+            const isActive = selectedBrands.includes(option.name);
             return (
               <AppButton
-                key={b}
-                title={b}
+                key={option.name}
+                title={option.name}
                 variant="secondary"
                 size="sm"
                 style={[styles.chip, isActive && styles.chipActive]}
                 titleStyle={[styles.chipText, isActive && styles.chipTextActive]}
-                onPress={() => onToggleBrand(b)}
-                accessibilityLabel={`Toggle brand filter ${b}`}
+                onPress={() => onToggleBrand(option.name)}
+                accessibilityLabel={`Toggle brand filter ${option.name}`}
+                accessibilityState={{ selected: isActive }}
               />
             );
           })
         ) : (
-          <Text style={styles.emptySectionText}>No brands in this category yet.</Text>
+          <Text style={styles.emptySectionText}>
+            {isFiltering ? `No brands match "${query.trim()}".` : 'No brands in this category yet.'}
+          </Text>
         )}
       </View>
     </FilterSection>

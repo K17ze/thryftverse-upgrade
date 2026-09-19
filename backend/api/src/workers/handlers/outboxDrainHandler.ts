@@ -51,7 +51,38 @@ const offerLifecyclePayloadSchema = z.object({
   sellerId: z.string().min(2),
   offerPriceGbp: z.number().nonnegative(),
   conversationId: z.string().nullable().optional(),
+  // Who authored the pending offer that this event ended — buyer for the
+  // initial offer and buyer counters, seller for seller counters. Missing
+  // on pre-change events; those were all buyer-authored.
+  offeredByUserId: z.string().min(2).optional(),
+  // Who performed the cancellation on offer.cancelled — buyer (cancel
+  // route) vs seller/system (listing delete, mark-sold). Legacy events
+  // lack it; they predate seller-side cancellation visibility.
+  cancelledByUserId: z.string().min(2).nullable().optional(),
+  cancellationReason: z.string().optional(),
 });
+
+/**
+ * Offer lifecycle events are participant-private — buyer identity, amounts,
+ * and order/reservation ids must never land on a public listing topic.
+ * `listing:{id}` subscriptions aren't authorized anyway, so those publishes
+ * were dead writes; `chat.user:{id}` reaches exactly the two participants
+ * and lets the Offers screen refresh in realtime.
+ */
+function publishOfferEventToParticipants(input: {
+  type: string;
+  buyerId: string;
+  sellerId: string;
+  payload: Record<string, unknown>;
+}): void {
+  for (const userId of [input.buyerId, input.sellerId]) {
+    publishRealtimeEvent({
+      topic: `chat.user:${userId}`,
+      type: input.type,
+      payload: input.payload,
+    });
+  }
+}
 
 async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void> {
   if (event.eventType === 'listing.price_changed') {
@@ -120,9 +151,10 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
       idempotencyKey: `offer_accepted_seller_${payload.offerId}`,
       metadata: { outboxEventId: event.id },
     });
-    publishRealtimeEvent({
-      topic: `listing:${payload.listingId}`,
+    publishOfferEventToParticipants({
       type: 'offer.accepted',
+      buyerId: payload.buyerId,
+      sellerId: payload.sellerId,
       payload: {
         offerId: payload.offerId,
         listingId: payload.listingId,
@@ -172,9 +204,10 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
       idempotencyKey: `offer_countered_${payload.offerId}_${recipientId}`,
       metadata: { outboxEventId: event.id },
     });
-    publishRealtimeEvent({
-      topic: `listing:${payload.listingId}`,
+    publishOfferEventToParticipants({
       type: 'offer.countered',
+      buyerId: payload.buyerId,
+      sellerId: payload.sellerId,
       payload,
     });
     // In-thread offer card for the new counter, authored by the countering
@@ -217,9 +250,10 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
       idempotencyKey: `offer_created_seller_${payload.offerId}`,
       metadata: { outboxEventId: event.id },
     });
-    publishRealtimeEvent({
-      topic: `listing:${payload.listingId}`,
+    publishOfferEventToParticipants({
       type: 'offer.created',
+      buyerId: payload.buyerId,
+      sellerId: payload.sellerId,
       payload: {
         offerId: payload.offerId,
         listingId: payload.listingId,
@@ -237,10 +271,16 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
 
   if (event.eventType === 'offer.declined') {
     const payload = offerLifecyclePayloadSchema.parse(event.payload);
+    // Only the seller may decline — notify the buyer (the counterparty).
+    // When the pending offer was the seller's own counter, the decline is
+    // effectively a withdrawal: copy must not claim it was the buyer's offer.
+    const authorIsBuyer = (payload.offeredByUserId ?? payload.buyerId) === payload.buyerId;
     await queueUserNotification({
       userId: payload.buyerId,
       title: 'Offer declined',
-      body: `Your ${formatGbpAmount(payload.offerPriceGbp)} offer was declined by the seller.`,
+      body: authorIsBuyer
+        ? `Your ${formatGbpAmount(payload.offerPriceGbp)} offer was declined by the seller.`
+        : `The seller withdrew their ${formatGbpAmount(payload.offerPriceGbp)} counter-offer.`,
       eventType: 'offer_declined',
       actorUserId: payload.sellerId,
       payload: {
@@ -256,9 +296,10 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
       idempotencyKey: `offer_declined_buyer_${payload.offerId}`,
       metadata: { outboxEventId: event.id },
     });
-    publishRealtimeEvent({
-      topic: `listing:${payload.listingId}`,
+    publishOfferEventToParticipants({
       type: 'offer.declined',
+      buyerId: payload.buyerId,
+      sellerId: payload.sellerId,
       payload,
     });
     // Flip the in-thread offer card to 'declined' on both devices.
@@ -271,10 +312,16 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
       acceptedOfferId: z.string().min(2),
       orderId: z.string().min(2),
     }).parse(event.payload);
+    // Notify the AUTHOR of the losing offer — after counters, that can be
+    // the seller whose counter was pending when a different offer won.
+    const siblingAuthorId = payload.offeredByUserId ?? payload.buyerId;
+    const siblingAuthorIsBuyer = siblingAuthorId === payload.buyerId;
     await queueUserNotification({
-      userId: payload.buyerId,
+      userId: siblingAuthorId,
       title: 'Offer declined',
-      body: 'Another offer on this item was accepted, so your offer was declined.',
+      body: siblingAuthorIsBuyer
+        ? 'Another offer on this item was accepted, so your offer was declined.'
+        : 'Your counter-offer was declined — another offer on this item was accepted.',
       eventType: 'offer_declined',
       actorUserId: payload.sellerId,
       payload: {
@@ -286,15 +333,16 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
       },
       route: offerNotificationRoute(
         payload.conversationId,
-        payload.sellerId,
+        siblingAuthorIsBuyer ? payload.sellerId : payload.buyerId,
         payload.listingId,
       ),
-      idempotencyKey: `offer_sibling_declined_buyer_${payload.offerId}`,
+      idempotencyKey: `offer_sibling_declined_${siblingAuthorId}_${payload.offerId}`,
       metadata: { outboxEventId: event.id },
     });
-    publishRealtimeEvent({
-      topic: `listing:${payload.listingId}`,
+    publishOfferEventToParticipants({
       type: 'offer.sibling_declined',
+      buyerId: payload.buyerId,
+      sellerId: payload.sellerId,
       payload,
     });
     // Flip the losing offer's in-thread card to 'declined' on both devices.
@@ -306,10 +354,17 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
     const payload = offerLifecyclePayloadSchema.extend({
       expiresAt: z.string().datetime(),
     }).parse(event.payload);
+    // Expiry has no actor — notify the AUTHOR of the lapsed offer. After
+    // counters that can be the seller; telling the buyer "your offer
+    // expired" about the seller's counter is false.
+    const expiredAuthorId = payload.offeredByUserId ?? payload.buyerId;
+    const expiredAuthorIsBuyer = expiredAuthorId === payload.buyerId;
     await queueUserNotification({
-      userId: payload.buyerId,
+      userId: expiredAuthorId,
       title: 'Offer expired',
-      body: `Your ${formatGbpAmount(payload.offerPriceGbp)} offer expired without a response.`,
+      body: expiredAuthorIsBuyer
+        ? `Your ${formatGbpAmount(payload.offerPriceGbp)} offer expired without a response.`
+        : `Your ${formatGbpAmount(payload.offerPriceGbp)} counter-offer expired without a response.`,
       eventType: 'offer_expired',
       payload: {
         event: 'offer_expired',
@@ -319,15 +374,16 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
       },
       route: offerNotificationRoute(
         payload.conversationId,
-        payload.sellerId,
+        expiredAuthorIsBuyer ? payload.sellerId : payload.buyerId,
         payload.listingId,
       ),
-      idempotencyKey: `offer_expired_buyer_${payload.offerId}`,
+      idempotencyKey: `offer_expired_${expiredAuthorId}_${payload.offerId}`,
       metadata: { outboxEventId: event.id },
     });
-    publishRealtimeEvent({
-      topic: `listing:${payload.listingId}`,
+    publishOfferEventToParticipants({
       type: 'offer.expired',
+      buyerId: payload.buyerId,
+      sellerId: payload.sellerId,
       payload,
     });
     // Flip the in-thread offer card to 'expired' on both devices.
@@ -337,11 +393,28 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
 
   if (event.eventType === 'offer.cancelled') {
     const payload = offerLifecyclePayloadSchema.parse(event.payload);
+    // Notify the party who did NOT act. Buyer-initiated cancels (the only
+    // kind the cancel route allows) must reach the SELLER — previously the
+    // buyer got a self-notification and the seller heard nothing.
+    // Seller/system cancels (listing delete / mark-sold) reach the buyer.
+    const cancelledByBuyer = payload.cancelledByUserId === payload.buyerId;
+    const authorIsBuyer = (payload.offeredByUserId ?? payload.buyerId) === payload.buyerId;
+    const cancelledRecipient = cancelledByBuyer ? payload.sellerId : payload.buyerId;
+    const cancelledBody = cancelledByBuyer
+      ? (authorIsBuyer
+        ? `The buyer withdrew their ${formatGbpAmount(payload.offerPriceGbp)} offer.`
+        : `The buyer declined your ${formatGbpAmount(payload.offerPriceGbp)} counter-offer.`)
+      : (authorIsBuyer
+        ? (payload.cancellationReason === 'listing_unavailable'
+          ? `Your ${formatGbpAmount(payload.offerPriceGbp)} offer was cancelled — the listing is no longer available.`
+          : `Your ${formatGbpAmount(payload.offerPriceGbp)} offer was cancelled by the seller.`)
+        : `The seller withdrew their ${formatGbpAmount(payload.offerPriceGbp)} counter-offer.`);
     await queueUserNotification({
-      userId: payload.buyerId,
+      userId: cancelledRecipient,
       title: 'Offer cancelled',
-      body: `Your ${formatGbpAmount(payload.offerPriceGbp)} offer was cancelled.`,
+      body: cancelledBody,
       eventType: 'offer_cancelled',
+      actorUserId: payload.cancelledByUserId ?? undefined,
       payload: {
         event: 'offer_cancelled',
         offerId: payload.offerId,
@@ -349,19 +422,125 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
       },
       route: offerNotificationRoute(
         payload.conversationId,
-        payload.sellerId,
+        cancelledByBuyer ? payload.buyerId : payload.sellerId,
         payload.listingId,
       ),
-      idempotencyKey: `offer_cancelled_buyer_${payload.offerId}`,
+      idempotencyKey: `offer_cancelled_${cancelledRecipient}_${payload.offerId}`,
       metadata: { outboxEventId: event.id },
     });
-    publishRealtimeEvent({
-      topic: `listing:${payload.listingId}`,
+    publishOfferEventToParticipants({
       type: 'offer.cancelled',
+      buyerId: payload.buyerId,
+      sellerId: payload.sellerId,
       payload,
     });
     // Flip the in-thread offer card to 'cancelled' on both devices.
     await syncOfferChatCardStatus({ offerId: payload.offerId, log: logger });
+    return;
+  }
+
+  if (event.eventType === 'offer.checkout_expired') {
+    // An accepted offer's checkout reservation lapsed (or the bound order
+    // was cancelled before payment): the deal is dead and the listing is
+    // back on sale. Both parties must hear about it — previously the
+    // reconcile trigger flipped the offer silently, leaving a stale
+    // 'accepted' card in the thread and no notification either way.
+    const payload = z.object({
+      offerId: z.string().min(2),
+      listingId: z.string().min(2),
+      orderId: z.string().min(2),
+      buyerId: z.string().min(2),
+      sellerId: z.string().min(2),
+    }).parse(event.payload);
+    await queueUserNotification({
+      userId: payload.buyerId,
+      title: 'Checkout window expired',
+      body: 'Your accepted offer lapsed because checkout was not completed in time.',
+      eventType: 'offer_expired',
+      payload: {
+        event: 'offer_checkout_expired',
+        offerId: payload.offerId,
+        listingId: payload.listingId,
+        orderId: payload.orderId,
+      },
+      route: { screen: 'Offers', params: {} },
+      idempotencyKey: `offer_checkout_expired_buyer_${payload.offerId}`,
+      metadata: { outboxEventId: event.id },
+    });
+    await queueUserNotification({
+      userId: payload.sellerId,
+      title: 'Reservation expired',
+      body: 'The buyer did not complete checkout. Your listing is back on sale.',
+      eventType: 'offer_expired',
+      payload: {
+        event: 'offer_checkout_expired',
+        offerId: payload.offerId,
+        listingId: payload.listingId,
+        orderId: payload.orderId,
+      },
+      route: { screen: 'Offers', params: {} },
+      idempotencyKey: `offer_checkout_expired_seller_${payload.offerId}`,
+      metadata: { outboxEventId: event.id },
+    });
+    publishOfferEventToParticipants({
+      type: 'offer.checkout_expired',
+      buyerId: payload.buyerId,
+      sellerId: payload.sellerId,
+      payload,
+    });
+    // Flip the in-thread offer card off 'accepted' on both devices.
+    await syncOfferChatCardStatus({ offerId: payload.offerId, log: logger });
+    return;
+  }
+
+  if (event.eventType.startsWith('smart_sell_decision.')) {
+    // A Smart Sell policy decided on the seller's behalf. The counterparty
+    // was already notified by the offer.* lifecycle event emitted alongside
+    // (offer.accepted / offer.countered) — this notification is for the
+    // SELLER, who must know their automation acted. Without this branch the
+    // events dead-lettered and Smart Sell was silent.
+    const payload = z.object({
+      decisionId: z.string().min(2),
+      offerId: z.string().min(2),
+      listingId: z.string().min(2),
+      buyerId: z.string().min(2),
+      sellerId: z.string().min(2),
+      decision: z.enum(['accept', 'counter', 'decline', 'escalate']),
+      reason: z.string(),
+      offerPriceGbp: z.number().positive(),
+      counterPriceGbp: z.number().positive().nullable(),
+      orderId: z.string().min(2).nullable().optional(),
+      conversationId: z.string().nullable().optional(),
+    }).parse(event.payload);
+    const body = {
+      accept: `Smart Sell accepted an offer of ${formatGbpAmount(payload.offerPriceGbp)} — the item is reserved while the buyer checks out.`,
+      counter: `Smart Sell countered at ${formatGbpAmount(payload.counterPriceGbp ?? payload.offerPriceGbp)} on your behalf.`,
+      escalate: `An offer of ${formatGbpAmount(payload.offerPriceGbp)} is below your floor and needs your response.`,
+      decline: `Smart Sell declined an offer of ${formatGbpAmount(payload.offerPriceGbp)}.`,
+    }[payload.decision];
+    await queueUserNotification({
+      userId: payload.sellerId,
+      title: 'Smart Sell',
+      body,
+      eventType: 'smart_sell_decision',
+      payload: {
+        event: 'smart_sell_decision',
+        decisionId: payload.decisionId,
+        offerId: payload.offerId,
+        listingId: payload.listingId,
+        decision: payload.decision,
+        orderId: payload.orderId ?? null,
+      },
+      route: payload.orderId
+        ? { screen: 'OrderDetail', params: { orderId: payload.orderId } }
+        : offerNotificationRoute(
+            payload.conversationId,
+            payload.buyerId,
+            payload.listingId,
+          ),
+      idempotencyKey: `smart_sell_decision_seller_${payload.decisionId}`,
+      metadata: { outboxEventId: event.id },
+    });
     return;
   }
 
@@ -392,9 +571,10 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
       idempotencyKey: `order_created_seller_${payload.orderId}`,
       metadata: { outboxEventId: event.id },
     });
-    publishRealtimeEvent({
-      topic: `listing:${payload.listingId}`,
+    publishOfferEventToParticipants({
       type: 'listing.reserved',
+      buyerId: payload.buyerId,
+      sellerId: payload.sellerId,
       payload: {
         orderId: payload.orderId,
         listingId: payload.listingId,

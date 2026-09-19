@@ -99,7 +99,7 @@ export function CommerceRelatedRail({
                       </Text>
                     ) : null}
                     {item.countdownText ? (
-                      <Text style={[styles.cardMeta, { color: colors.danger }]}>{item.countdownText}</Text>
+                      <Text style={[styles.cardMeta, { color: colors.dangerText }]}>{item.countdownText}</Text>
                     ) : null}
                   </>
                 ) : mode === 'co_own' ? (

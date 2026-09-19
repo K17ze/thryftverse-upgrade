@@ -224,7 +224,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
               <Ionicons
                 name={saved ? 'bookmark' : 'bookmark-outline'}
                 size={20}
-                color={saved ? colors.success : colors.textPrimary}
+                color={saved ? colors.successText : colors.textPrimary}
               />
               <View>
                 <Text style={[styles.savedRowTitle, { color: colors.textPrimary }]}>
@@ -238,7 +238,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
             <Ionicons
               name={saved ? 'checkmark-circle' : 'ellipse-outline'}
               size={24}
-              color={saved ? colors.success : colors.border}
+              color={saved ? colors.successText : colors.border}
             />
           </Pressable>
 

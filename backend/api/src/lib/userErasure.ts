@@ -214,6 +214,32 @@ export async function performUserErasure(
 
   await client.query('DELETE FROM ai_usage_events WHERE user_id = $1', [userId]);
 
+  // Agent runtime rows — actor-attributable run records, their step spans,
+  // and approval requests. agent_runs.actor_user_id and
+  // agent_approval_requests.actor_user_id are ON DELETE RESTRICT, so these
+  // rows both hold user attribution after anonymisation and would block a
+  // future hard delete. Steps and approvals also cascade from agent_runs
+  // via run_id, but are deleted explicitly since they carry their own
+  // actor_user_id references.
+  await client.query(
+    `DELETE FROM agent_run_steps
+     WHERE run_id IN (SELECT id FROM agent_runs WHERE actor_user_id = $1)`,
+    [userId]
+  );
+  // Approvals the user decided on other actors' runs are detached rather
+  // than deleted — the decision record belongs to that run's audit trail.
+  await client.query(
+    `UPDATE agent_approval_requests SET decided_by = NULL WHERE decided_by = $1`,
+    [userId]
+  );
+  await client.query(
+    `DELETE FROM agent_approval_requests
+     WHERE actor_user_id = $1
+        OR run_id IN (SELECT id FROM agent_runs WHERE actor_user_id = $1)`,
+    [userId]
+  );
+  await client.query('DELETE FROM agent_runs WHERE actor_user_id = $1', [userId]);
+
   await client.query(
     `
       UPDATE listings
@@ -346,6 +372,53 @@ export async function performUserErasure(
   // Chat message reports — reporter is attributable.
   await client.query(
     `DELETE FROM chat_message_reports WHERE reporter_user_id = $1`,
+    [userId]
+  );
+
+  // ── Identity-provider and preference residue ──
+  // These rows are all keyed by user_id on an anonymised (not hard-deleted)
+  // user row, so FK CASCADE never fires. Each holds either direct PII
+  // (provider emails, credential metadata) or user-attributable
+  // relationship/preference state that must not outlive erasure.
+
+  // OAuth identities — provider email and external subject id are PII.
+  // Deleting also prevents a stale identity from silently re-linking.
+  await client.query(`DELETE FROM auth_oauth_identities WHERE user_id = $1`, [userId]);
+  await client.query(`DELETE FROM user_connected_accounts WHERE user_id = $1`, [userId]);
+
+  // Passkeys — credential ids, public keys, and device names are
+  // user-attributable. The user row is anonymised so the keys are dead.
+  await client.query(`DELETE FROM user_passkeys WHERE user_id = $1`, [userId]);
+  await client.query(`DELETE FROM passkey_challenges WHERE user_id = $1`, [userId]);
+
+  // Preference/consent state — user-attributable rows with no retention basis.
+  await client.query(`DELETE FROM user_privacy_consents WHERE user_id = $1`, [userId]);
+  await client.query(`DELETE FROM user_email_preferences WHERE user_id = $1`, [userId]);
+  await client.query(`DELETE FROM notification_preferences WHERE user_id = $1`, [userId]);
+
+  // Social graph — both directions are attributable to the user.
+  await client.query(
+    `DELETE FROM user_blocks WHERE blocker_id = $1 OR blocked_id = $1`,
+    [userId]
+  );
+  await client.query(
+    `DELETE FROM user_relationship_states WHERE owner_id = $1 OR target_id = $1`,
+    [userId]
+  );
+  await client.query(
+    `DELETE FROM user_follows WHERE follower_id = $1 OR following_id = $1`,
+    [userId]
+  );
+
+  // Saved items and searches — behavioural data attributable to the user.
+  await client.query(`DELETE FROM user_saved_listings WHERE user_id = $1`, [userId]);
+  await client.query(`DELETE FROM saved_searches WHERE user_id = $1`, [userId]);
+
+  // Session/refresh rows are revoked above but still carry the user's
+  // device fingerprint (user_agent, ip_address). Erase the PII columns now
+  // that the sessions are dead.
+  await client.query(
+    `UPDATE user_sessions SET user_agent = NULL, ip_address = NULL WHERE user_id = $1`,
     [userId]
   );
 

@@ -10,6 +10,8 @@ interface ClosetListingSectionProps {
   showSkeleton: boolean;
   items: Listing[];
   onPressItem: (item: Listing) => void;
+  /** Long-press a tile — opens the save-to-collection picker (saved only). */
+  onItemLongPress?: (item: Listing) => void;
   onBrowse: () => void;
   /** 'saved' renders the bookmark mosaic + saved empty copy;
    *  'wishlist' renders the heart mosaic + wishlist empty copy. */
@@ -24,6 +26,7 @@ export function ClosetListingSection({
   showSkeleton,
   items,
   onPressItem,
+  onItemLongPress,
   onBrowse,
   variant,
 }: ClosetListingSectionProps) {
@@ -47,6 +50,7 @@ export function ClosetListingSection({
     <ClosetMediaMosaic
       items={items}
       onPressItem={onPressItem}
+      onItemLongPress={variant === 'saved' ? onItemLongPress : undefined}
       showSaveButton={variant === 'saved'}
       showWishlistButton={variant === 'wishlist'}
     />

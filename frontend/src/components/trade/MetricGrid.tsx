@@ -21,9 +21,9 @@ interface MetricGridProps {
 function resolveToneColor(tone: MetricItem['tone'], colors: ThemeColors) {
   switch (tone) {
     case 'positive':
-      return colors.success;
+      return colors.successText;
     case 'negative':
-      return colors.danger;
+      return colors.dangerText;
     case 'neutral':
     default:
       return colors.textPrimary;

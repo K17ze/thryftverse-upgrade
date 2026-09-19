@@ -162,7 +162,7 @@ export function CoOwnRecoursePanel({
             <Ionicons
               name={item.icon}
               size={16}
-              color={item.positive ? colors.brand : item.warning ? colors.warning : colors.textMuted}
+              color={item.positive ? colors.brand : item.warning ? colors.warningText : colors.textMuted}
             />
             <View style={styles.itemBody}>
               <Text style={[styles.itemLabel, { color: colors.textMuted }]}>{item.label}</Text>
@@ -173,7 +173,7 @@ export function CoOwnRecoursePanel({
                     color: item.positive
                       ? colors.textPrimary
                       : item.warning
-                      ? colors.warning
+                      ? colors.warningText
                       : colors.textSecondary,
                   },
                 ]}
@@ -219,8 +219,8 @@ export function CoOwnRecoursePanel({
           accessibilityRole="button"
           accessibilityLabel="Respond to verification request"
         >
-          <Ionicons name="checkmark-circle-outline" size={16} color={colors.warning} />
-          <Text style={[styles.demandButtonText, { color: colors.warning }]}>
+          <Ionicons name="checkmark-circle-outline" size={16} color={colors.warningText} />
+          <Text style={[styles.demandButtonText, { color: colors.warningText }]}>
             Respond to verification ({activeVerificationDemands} pending)
           </Text>
         </Pressable>
@@ -245,7 +245,7 @@ export function CoOwnRecoursePanel({
                 size={14}
                 color={
                   d.status === 'compliant' ? colors.brand
-                  : d.status === 'failed' ? colors.danger
+                  : d.status === 'failed' ? colors.dangerText
                   : colors.textMuted
                 }
               />

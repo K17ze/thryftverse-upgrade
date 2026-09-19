@@ -113,7 +113,6 @@ export function UserProfileHeader({
         displayUsername={displayUsername}
         displayAvatar={displayAvatar}
         displayCover={displayCover}
-        isSelfProfile={false}
         viewer={viewer}
         stats={stats}
         activeCount={activeCount}

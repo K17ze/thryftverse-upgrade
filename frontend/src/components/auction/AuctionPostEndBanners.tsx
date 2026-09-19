@@ -45,7 +45,7 @@ export function AuctionPostEndBanners({
         accessibilityLiveRegion="polite"
         accessibilityLabel="Reserve not met"
       >
-        <Ionicons name="information-circle-outline" size={16} color={colors.warning} />
+        <Ionicons name="information-circle-outline" size={16} color={colors.warningText} />
         <Text
           style={[styles.countdownBarText, { color: colors.textPrimary }]}
           numberOfLines={2}
@@ -75,7 +75,7 @@ export function AuctionPostEndBanners({
         <Ionicons
           name="time-outline"
           size={16}
-          color={isUrgent ? colors.textInverse : colors.warning}
+          color={isUrgent ? colors.textInverse : colors.warningText}
         />
         <Text
           style={[
@@ -100,7 +100,7 @@ export function AuctionPostEndBanners({
         accessibilityLiveRegion="polite"
         accessibilityLabel="Awaiting buyer payment"
       >
-        <Ionicons name="time-outline" size={16} color={colors.warning} />
+        <Ionicons name="time-outline" size={16} color={colors.warningText} />
         <Text
           style={[styles.countdownBarText, { color: colors.textPrimary }]}
           numberOfLines={1}
@@ -118,7 +118,7 @@ export function AuctionPostEndBanners({
         accessibilityLiveRegion="polite"
         accessibilityLabel="Payment expired"
       >
-        <Ionicons name="information-circle-outline" size={16} color={colors.warning} />
+        <Ionicons name="information-circle-outline" size={16} color={colors.warningText} />
         <Text
           style={[styles.countdownBarText, { color: colors.textPrimary }]}
           numberOfLines={1}
@@ -136,7 +136,7 @@ export function AuctionPostEndBanners({
         accessibilityLiveRegion="polite"
         accessibilityLabel="Second chance available"
       >
-        <Ionicons name="gift-outline" size={16} color={colors.warning} />
+        <Ionicons name="gift-outline" size={16} color={colors.warningText} />
         <Text
           style={[styles.countdownBarText, { color: colors.textPrimary }]}
           numberOfLines={2}

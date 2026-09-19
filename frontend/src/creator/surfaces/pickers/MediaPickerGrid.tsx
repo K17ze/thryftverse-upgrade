@@ -152,7 +152,7 @@ export function MediaPickerGrid({
                     accessibilityHint="Deselects this item"
                     accessibilityRole="button"
                   >
-                    <Ionicons name="close" size={12} color={colors.danger} aria-hidden={true} />
+                    <Ionicons name="close" size={12} color={colors.dangerText} aria-hidden={true} />
                   </Pressable>
                 </View>
               );

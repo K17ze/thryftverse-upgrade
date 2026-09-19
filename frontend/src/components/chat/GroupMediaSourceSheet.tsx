@@ -191,8 +191,8 @@ export function GroupMediaSourceSheet({
               accessibilityRole="button"
               accessibilityLabel="Remove photo"
             >
-              <Ionicons name="trash-outline" size={22} color={colors.danger} />
-              <Caption color={colors.danger} style={styles.optionLabel}>Remove photo</Caption>
+              <Ionicons name="trash-outline" size={22} color={colors.dangerText} />
+              <Caption color={colors.dangerText} style={styles.optionLabel}>Remove photo</Caption>
               <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </AnimatedPressable>
           ) : null}

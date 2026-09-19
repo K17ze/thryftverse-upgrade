@@ -25,7 +25,16 @@ const isDevelopmentRuntime =
  */
 export type MockMode = 'fixture-design' | 'integration-truth' | 'production';
 
-function resolveMockMode(): MockMode {
+/** Exported for the fail-closed regression tests (F19). */
+export function resolveMockMode(): MockMode {
+  // Fail closed (F19): EXPO_PUBLIC_* vars are baked into the bundle at build
+  // time — a misconfigured release env must not be able to select fixture
+  // mode and serve mock data to real users. Non-dev runtimes are always
+  // 'production' regardless of env flags; mocks require a dev runtime.
+  if (!isDevelopmentRuntime) {
+    return 'production';
+  }
+
   const explicit = process.env.EXPO_PUBLIC_MOCK_MODE;
   if (explicit === 'fixture-design' || explicit === 'integration-truth' || explicit === 'production') {
     return explicit;

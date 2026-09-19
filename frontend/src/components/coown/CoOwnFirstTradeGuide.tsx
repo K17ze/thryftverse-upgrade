@@ -72,7 +72,7 @@ export function CoOwnFirstTradeGuide({
 
   const isLastStep = currentStep === GUIDE_STEPS.length - 1;
   const step = GUIDE_STEPS[currentStep];
-  const stepIconColor = currentStep === 3 ? colors.warning : colors.textPrimary;
+  const stepIconColor = currentStep === 3 ? colors.warningText : colors.textPrimary;
 
   const handleNext = useCallback(() => {
     if (isLastStep) {

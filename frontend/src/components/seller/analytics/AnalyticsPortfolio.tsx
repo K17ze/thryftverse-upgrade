@@ -65,7 +65,7 @@ export function AnalyticsPortfolio({ model }: { model: SellerAnalyticsModel }) {
                 <Text style={[styles.bottleneckTitle, { color: colors.textPrimary }]}>
                   Conversion lever: {funnelBottleneck.stageFrom} → {funnelBottleneck.stageTo}
                 </Text>
-                <Text style={[styles.bottleneckDrop, { color: colors.danger }]}>
+                <Text style={[styles.bottleneckDrop, { color: colors.dangerText }]}>
                   {funnelBottleneck.dropOffPct}% drop
                 </Text>
               </View>

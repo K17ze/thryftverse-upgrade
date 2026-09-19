@@ -93,7 +93,7 @@ export function BrowseResults({
       ) : lastError && displayListings.length === 0 ? (
         <EmptyState
           icon="cloud-offline-outline"
-          iconColor={colors.danger}
+          iconColor={colors.dangerText}
           title="Browse unavailable"
           subtitle="We couldn't load listings. Check your connection and try again."
           ctaLabel="Retry"

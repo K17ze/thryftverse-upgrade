@@ -42,9 +42,9 @@ export function CoOwnReconciliationBanner({
 
   return (
     <View style={[styles.container, { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder }]}>
-      <Ionicons name="sync-circle-outline" size={20} color={colors.warning} />
+      <Ionicons name="sync-circle-outline" size={20} color={colors.warningText} />
       <View style={styles.body}>
-        <Text style={[styles.title, { color: colors.warning }]} numberOfLines={1}>
+        <Text style={[styles.title, { color: colors.warningText }]} numberOfLines={1}>
           Reconciling
         </Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={2}>
@@ -60,7 +60,7 @@ export function CoOwnReconciliationBanner({
           accessibilityRole="button"
           accessibilityLabel="Contact support about reconciliation"
         >
-          <Text style={[styles.contactText, { color: colors.warning }]} numberOfLines={1}>
+          <Text style={[styles.contactText, { color: colors.warningText }]} numberOfLines={1}>
             Contact
           </Text>
         </Pressable>

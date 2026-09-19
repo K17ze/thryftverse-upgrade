@@ -78,6 +78,15 @@ export function useWithdrawSubmission({
   const idempotencyKeyRef = useRef<string | null>(null);
   const isMountedRef = useRef(true);
 
+  // A changed amount or payout account is a different request — the stored
+  // payload hash would mismatch, so the key resets when the inputs do.
+  // Without this an edit after a server-recorded attempt would return
+  // IDEMPOTENCY_PAYLOAD_MISMATCH forever in-session.
+  // Mirrors useConvertSubmission.
+  useEffect(() => {
+    idempotencyKeyRef.current = null;
+  }, [numericAmount, payoutAccount?.id]);
+
   const canWithdraw =
     numericAmount > 0
     && !exceedsBalance
@@ -242,6 +251,12 @@ export function useWithdrawSubmission({
           return;
         }
       }
+
+      // Deterministic failure — the request was rejected, not lost in
+      // flight, so the recorded key is spent. Clear it so a retry (or an
+      // edited payload) mints a fresh key instead of replaying/mismatching
+      // the old one. Network/unknown outcomes keep the key (handled above).
+      idempotencyKeyRef.current = null;
 
       const parsed = parseApiError(error, isNetworkError ? 'You appear to be offline. Check your connection and try again.' : 'Unable to submit withdrawal right now.');
       show(parsed.message, 'error');

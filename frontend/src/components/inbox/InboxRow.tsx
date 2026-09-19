@@ -14,6 +14,8 @@ import { InboxConversationRow } from '../chat/InboxConversationRow';
 import { useBackendData } from '../../context/BackendDataContext';
 import type { Conversation } from '../../domain';
 import { colorForId, initialsFromName } from '../../utils/avatarColor';
+import { deriveInboxCommerceBadge } from '../../utils/conversationClassification';
+import { useConversationTyping } from '../../services/realtimeClient';
 import { formatInboxTimestamp, deriveInboxDeliveryStatus } from './inboxViewModels';
 
 function ListingContextThumbnail({ itemId }: { itemId: string }) {
@@ -39,6 +41,24 @@ function ListingContextThumbnail({ itemId }: { itemId: string }) {
         contentFit="cover"
       />
     </View>
+  );
+}
+
+/**
+ * Request-row listing label — prefers the server-authoritative
+ * context.listing.title; the ranked feed is only an opportunistic fallback
+ * (it is not a catalog of all listings), then the generic copy. Lives in
+ * its own leaf so the BackendDataContext subscription — which re-fires on
+ * every feed sync — never re-renders the whole row.
+ */
+function RequestListingLabel({ itemId, contextTitle }: { itemId: string; contextTitle?: string }) {
+  const { colors } = useAppTheme();
+  const { listings } = useBackendData();
+  const feedTitle = useMemo(() => listings.find((l) => l.id === itemId)?.title, [listings, itemId]);
+  return (
+    <Text style={[styles.requestListingText, { color: colors.textSecondary }]} numberOfLines={1}>
+      {contextTitle ?? feedTitle ?? 'About a listing'}
+    </Text>
   );
 }
 
@@ -96,6 +116,18 @@ function InboxRowBase({
     ? item.title ?? 'Untitled Group'
     : (counterpartyId ? participantNameLookup.get(counterpartyId) ?? 'Thryft user' : 'Thryft user');
   const safeDisplayTitle = String(displayTitle ?? 'Thryft user');
+
+  // Typing state — fed by useInboxTypingEvents (the inbox already subscribes
+  // to every conversation topic; this reads the shared map, no per-row
+  // subscription).
+  const isTyping = useConversationTyping(item.id);
+
+  // Commerce context — the server projection carries offer/order state and
+  // the listing image, so the row can show "Offer pending"/"Paid" plus the
+  // context thumbnail without opening the thread.
+  const commerceBadge = deriveInboxCommerceBadge(item.context);
+  const contextThumbUri = item.context?.listing?.imageUrl ?? null;
+
   const counterpartySummary = counterpartyId
     ? item.participantProfiles?.find((participant) => participant.id === counterpartyId)
     : undefined;
@@ -125,6 +157,7 @@ function InboxRowBase({
       isUnread={item.unread}
           ringWidth={2}
       fallbackInitials={safeDisplayTitle === 'Thryft user' ? 'T' : safeDisplayTitle.slice(0, 2).toUpperCase()}
+      seedId={counterpartyId}
     />
   );
   const requestRow = (
@@ -140,7 +173,7 @@ function InboxRowBase({
           {item.itemId && (
             <View style={styles.requestListingContext}>
               <ListingContextThumbnail itemId={item.itemId} />
-              <Text style={[styles.requestListingText, { color: colors.textSecondary }]}>About a listing</Text>
+              <RequestListingLabel itemId={item.itemId} contextTitle={item.context?.listing?.title} />
             </View>
           )}
           <View style={styles.requestActions}>
@@ -185,10 +218,10 @@ function InboxRowBase({
       lastMessage={item.lastMessage ?? ''}
       lastMessageTime={formatInboxTimestamp(item.lastMessageTime)}
       unread={!!item.unread}
-      // No truthful unread count exists client-side (the list payload has
-      // no per-message read cursor), so render the plain unread dot rather
-      // than fabricate a number from message history length.
-      unreadCount={undefined}
+      // Authoritative server count — honors read cursor, moderation, and
+      // per-user deletions. Zero collapses to the plain unread dot when the
+      // user only marked the thread unread manually.
+      unreadCount={item.unreadCount && item.unreadCount > 0 ? item.unreadCount : undefined}
       deliveryStatus={deriveInboxDeliveryStatus(lastStoredMessage)}
       isPinned={!!item.isPinned}
       isMuted={isMuted}
@@ -197,6 +230,10 @@ function InboxRowBase({
       draftText={item.draftText}
       itemId={item.itemId}
       itemThumbUri={itemThumbUri}
+      contextThumbUri={contextThumbUri}
+      commerceStatusLabel={commerceBadge?.label}
+      commerceStatusTone={commerceBadge?.tone}
+      isTyping={isTyping}
       avatarElement={avatarEl}
       onPress={() => onOpenConversation(item.id)}
       onLongPress={() => onQuickActions(item.id)}

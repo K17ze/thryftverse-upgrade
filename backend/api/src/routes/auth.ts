@@ -38,7 +38,9 @@ import {
 } from '../lib/totp.js';
 import { resolveClientIp } from '../lib/compliance.js';
 import { checkFraudNonBlocking } from '../lib/fraudDetection.js';
+import { isProtectedChangeHoldActive } from '../lib/accountTakeoverService.js';
 import { recordUserSignup } from '../lib/metrics.js';
+import { attributeSignupToReferralCode } from '../lib/referrals.js';
 import {
   evaluateRisk,
   recordExecution,
@@ -592,6 +594,7 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService, ipReput
             email: { type: 'string', maxLength: 320 },
             username: { type: 'string', minLength: 3, maxLength: 32 },
             password: { type: 'string', minLength: 8, maxLength: 128 },
+            referralCode: { type: 'string', maxLength: 32 },
           },
           additionalProperties: false,
         },
@@ -608,6 +611,7 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService, ipReput
         email: z.string().trim().email().max(320),
         username: z.string().trim().min(3).max(32),
         password: z.string().min(8).max(128),
+        referralCode: z.string().trim().min(4).max(32).optional(),
       });
 
       const payload = bodySchema.parse(request.body ?? {});
@@ -710,6 +714,19 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService, ipReput
 
       const user = createResult.rows[0];
       recordUserSignup('email');
+
+      // Referral attribution — best-effort; an unknown/self code never
+      // blocks signup.
+      if (payload.referralCode) {
+        try {
+          await attributeSignupToReferralCode(db, {
+            referredUserId: user.id,
+            referralCode: payload.referralCode,
+          });
+        } catch (err) {
+          request.log.warn({ err, userId: user.id }, 'Referral attribution failed');
+        }
+      }
 
       // Shadow fraud check (backward-compat during migration). The
       // authoritative decision above (evaluateRisk) is the primary and
@@ -994,6 +1011,18 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService, ipReput
         };
       }
 
+      // ATO hold: MFA enrolment is a protected change while a compromise
+      // case is active — an attacker-held session must not bind a new
+      // factor that locks the owner out.
+      if (await isProtectedChangeHoldActive(request.authUser.userId)) {
+        reply.code(423);
+        return {
+          ok: false,
+          error: 'Account recovery is in progress — security changes are temporarily locked',
+          code: 'PROTECTED_CHANGE_HELD',
+        };
+      }
+
       const existingFactor = await loadTotpFactor(db, user.id, false);
       const hasEnabledFactor = user.two_factor_enabled || (existingFactor?.enabled ?? false);
 
@@ -1133,6 +1162,15 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService, ipReput
         };
       }
 
+      if (await isProtectedChangeHoldActive(request.authUser.userId)) {
+        reply.code(423);
+        return {
+          ok: false,
+          error: 'Account recovery is in progress — security changes are temporarily locked',
+          code: 'PROTECTED_CHANGE_HELD',
+        };
+      }
+
       const bodySchema = z.object({
         code: z.string().trim().min(4).max(12),
       });
@@ -1230,6 +1268,15 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService, ipReput
       return {
         ok: false,
         error: 'Unauthorized',
+      };
+    }
+
+    if (await isProtectedChangeHoldActive(request.authUser.userId)) {
+      reply.code(423);
+      return {
+        ok: false,
+        error: 'Account recovery is in progress — security changes are temporarily locked',
+        code: 'PROTECTED_CHANGE_HELD',
       };
     }
 
@@ -2270,6 +2317,17 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService, ipReput
         return { ok: false, error: 'Unauthorized' };
       }
 
+      // ATO hold: password is a recovery channel — an attacker-held session
+      // must not rotate it while a compromise case is active.
+      if (await isProtectedChangeHoldActive(request.authUser.userId)) {
+        reply.code(423);
+        return {
+          ok: false,
+          error: 'Account recovery is in progress — security changes are temporarily locked',
+          code: 'PROTECTED_CHANGE_HELD',
+        };
+      }
+
       const bodySchema = z.object({
         currentPassword: z.string().min(1).max(128),
         newPassword: z.string().min(8).max(128),
@@ -2551,6 +2609,15 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService, ipReput
       return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
     }
 
+    if (await isProtectedChangeHoldActive(authUser.userId)) {
+      reply.code(423);
+      return {
+        ok: false,
+        error: 'Account recovery is in progress — security changes are temporarily locked',
+        code: 'PROTECTED_CHANGE_HELD',
+      };
+    }
+
     try {
       // Fetch user email for the registration options
       const userResult = await db.query(
@@ -2808,6 +2875,15 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService, ipReput
     if (!authUser) {
       reply.code(401);
       return { ok: false, error: 'Unauthorized', code: 'UNAUTHORIZED' };
+    }
+
+    if (await isProtectedChangeHoldActive(authUser.userId)) {
+      reply.code(423);
+      return {
+        ok: false,
+        error: 'Account recovery is in progress — security changes are temporarily locked',
+        code: 'PROTECTED_CHANGE_HELD',
+      };
     }
 
     const { credentialId } = request.params as { credentialId: string };

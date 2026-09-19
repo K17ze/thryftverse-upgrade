@@ -38,7 +38,7 @@ export interface AuctionNotificationRowProps {
 
 interface AuctionVisual {
   icon: keyof typeof Ionicons.glyphMap;
-  accentKey: 'danger' | 'success' | 'warning';
+  accentKey: 'dangerText' | 'successText' | 'warningText';
   urgencyLabel: string;
   actionLabel: string;
 }
@@ -46,13 +46,13 @@ interface AuctionVisual {
 function resolveAuctionVisual(eventType: NotificationEventV2['eventType']): AuctionVisual {
   switch (eventType) {
     case 'auction_outbid':
-      return { icon: 'trending-up-outline', accentKey: 'danger', urgencyLabel: 'Outbid', actionLabel: 'Bid again' };
+      return { icon: 'trending-up-outline', accentKey: 'dangerText', urgencyLabel: 'Outbid', actionLabel: 'Bid again' };
     case 'auction_won':
-      return { icon: 'trophy-outline', accentKey: 'success', urgencyLabel: 'Auction won', actionLabel: 'Complete purchase' };
+      return { icon: 'trophy-outline', accentKey: 'successText', urgencyLabel: 'Auction won', actionLabel: 'Complete purchase' };
     case 'auction_ending_soon':
-      return { icon: 'time-outline', accentKey: 'warning', urgencyLabel: 'Ending soon', actionLabel: 'Place bid' };
+      return { icon: 'time-outline', accentKey: 'warningText', urgencyLabel: 'Ending soon', actionLabel: 'Place bid' };
     default:
-      return { icon: 'flag-outline', accentKey: 'warning', urgencyLabel: 'Auction update', actionLabel: 'View auction' };
+      return { icon: 'flag-outline', accentKey: 'warningText', urgencyLabel: 'Auction update', actionLabel: 'View auction' };
   }
 }
 

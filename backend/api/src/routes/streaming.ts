@@ -92,10 +92,20 @@ type LiveShoppingCurrentLotRow = {
   updated_at: string;
   /** From migration 186 — the current high bidder on the projection row. */
   high_bidder_id?: string | null;
-  /** Joined from the authoritative live_lots row (NULL when the linked lot
-   *  is not open or carries no server deadline). */
+  /** Joined from the authoritative live_lots row (NULL when no lot row is
+   *  linked). Preferred order: open/closing, then the most recently
+   *  updated terminal lot so a winner can still settle after reload. */
+  lot_id?: string | null;
+  lot_status?: string | null;
+  lot_winner_id?: string | null;
+  lot_order_id?: string | null;
   lot_closes_at?: string | null;
   lot_extension_count?: number | null;
+  lot_min_increment_minor?: string | null;
+  lot_start_price_minor?: string | null;
+  /** Listing identity for the pinned-product surface (title/image). */
+  lot_title?: string | null;
+  lot_image_url?: string | null;
 };
 
 type LiveLotRow = {
@@ -263,13 +273,27 @@ const fetchCurrentLotRow = async (
   sessionId: string,
 ): Promise<LiveShoppingCurrentLotRow | null> => {
   const result = await db.query<LiveShoppingCurrentLotRow>(
-    `SELECT c.*, l.closes_at AS lot_closes_at, l.extension_count AS lot_extension_count
+    `SELECT c.*,
+            l.id AS lot_id,
+            l.status AS lot_status,
+            l.winner_id AS lot_winner_id,
+            l.order_id AS lot_order_id,
+            l.closes_at AS lot_closes_at,
+            l.extension_count AS lot_extension_count,
+            l.min_increment_minor AS lot_min_increment_minor,
+            l.start_price_minor AS lot_start_price_minor,
+            COALESCE(snap.title, li.title) AS lot_title,
+            COALESCE(snap.image_url, li.image_url) AS lot_image_url
        FROM live_shopping_current_lots c
        LEFT JOIN live_lots l
          ON l.session_id = c.session_id
         AND l.listing_id = c.listing_id
-        AND l.status IN ('open', 'closing')
+       LEFT JOIN live_lot_snapshots snap ON snap.lot_id = l.id
+       LEFT JOIN listings li ON li.id = c.listing_id
       WHERE c.session_id = $1
+      ORDER BY CASE WHEN l.status IN ('open', 'closing') THEN 0
+                    WHEN l.status = 'sold' THEN 1 ELSE 2 END,
+               l.updated_at DESC NULLS LAST
       LIMIT 1`,
     [sessionId],
   );
@@ -294,8 +318,19 @@ const mapCurrentLotRow = (row: LiveShoppingCurrentLotRow) => ({
   currentPrice: Number(row.current_price),
   bidCount: row.bid_count,
   updatedAt: row.updated_at,
+  // Authoritative live_lots linkage — the pinned-product identity and the
+  // winner/settlement fields the checkout path needs.
+  lotId: row.lot_id ?? null,
+  lotStatus: row.lot_status ?? null,
+  winnerId: row.lot_winner_id ?? null,
+  orderId: row.lot_order_id ?? null,
+  highBidderId: row.high_bidder_id ?? null,
+  title: row.lot_title ?? null,
+  imageUrl: row.lot_image_url ?? null,
   closesAt: row.lot_closes_at ?? null,
   extensionCount: row.lot_extension_count ?? 0,
+  minIncrementMinor: row.lot_min_increment_minor == null ? null : Number(row.lot_min_increment_minor),
+  startPriceMinor: row.lot_start_price_minor == null ? null : Number(row.lot_start_price_minor),
 });
 
 // ── Discovery enrichment ─────────────────────────────────────────────
@@ -741,6 +776,33 @@ export const registerStreamingRoutes = ({
       row.max_viewers,
       row.scheduled_start_at ?? null,
     );
+
+    // Notify subscribers — without this, viewers strand on "Waiting for
+    // host video" forever; the ended screen is unreachable otherwise.
+    // The sales tally comes from the lot engine, not estimates.
+    const finalViewerCount = activeViewersBySession.get(roomId)?.size ?? 0;
+    activeViewersBySession.delete(roomId);
+    const salesRow = await db.query<{ lots_sold: string; total_sales_minor: string }>(
+      `SELECT COUNT(*)::text AS lots_sold,
+              COALESCE(SUM(high_bid_minor), 0)::text AS total_sales_minor
+         FROM live_lots
+        WHERE session_id = $1 AND status = 'sold'`,
+      [roomId],
+    );
+    void publishRealtimeEvent({
+      topic: liveSessionTopic(roomId),
+      type: "live.session.ended",
+      payload: {
+        sessionId: roomId,
+        endedAt: persisted.ended_at ?? null,
+        totalViewers: finalViewerCount,
+        lotsSold: Number(salesRow.rows[0]?.lots_sold ?? 0),
+        totalSales: Number(salesRow.rows[0]?.total_sales_minor ?? 0) / 100,
+      },
+      seq: true,
+      version: 1,
+    });
+
     return { ok: true, session: mapRowToStreamRoom(persisted) };
   });
 
@@ -966,11 +1028,12 @@ export const registerStreamingRoutes = ({
       // The viewer_count column is deliberately never incremented on token
       // issuance (pinned by bidTransaction.test.ts), so it is always stale.
       // The in-memory membership set is the authoritative live count — emit
-      // its post-insert size so the broadcast reflects reality and can go up.
+      // its post-insert size on the canonical viewer-count event so the
+      // broadcast reflects reality and can go up.
       void publishRealtimeEvent({
         topic: liveSessionTopic(roomId),
-        type: "live.viewer.token_issued",
-        payload: { userId, viewerCount: viewers.size },
+        type: "live.viewer_count.update",
+        payload: { count: viewers.size },
         seq: true,
         version: 1,
       });
@@ -1046,6 +1109,17 @@ export const registerStreamingRoutes = ({
       const row = await fetchSessionRow(db, sessionId);
       if (!row) {
         throw createApiError("STREAM_NOT_FOUND", `Stream session ${sessionId} not found`);
+      }
+
+      // Chat only exists while the stream is live — an ended or not-yet-live
+      // room must not silently accumulate messages nobody will see.
+      if (row.status !== "live" && row.status !== "ending") {
+        reply.code(409);
+        return {
+          ok: false,
+          error: "Session is not live",
+          code: "STREAM_NOT_LIVE",
+        };
       }
 
       // Any authenticated user may chat (viewer or host). The host's
@@ -1256,10 +1330,16 @@ export const registerStreamingRoutes = ({
     try {
       await client.query("BEGIN");
 
+      // Lock the PINNED lot — not just any open lot. A host who advanced
+      // the pin without closing the previous lot could otherwise let a bid
+      // land on a lot that isn't on screen.
       const lotResult = await client.query<LiveLotRow>(
         `SELECT l.*, COALESCE(s.seller_id, li.seller_id) AS seller_id,
                 li.status AS listing_status
            FROM live_lots l
+           JOIN live_shopping_current_lots c
+             ON c.session_id = l.session_id
+            AND c.listing_id = l.listing_id
            LEFT JOIN live_lot_snapshots s ON s.lot_id = l.id
            LEFT JOIN listings li ON li.id = l.listing_id
           WHERE l.session_id = $1 AND l.status = 'open'

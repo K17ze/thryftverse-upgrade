@@ -117,7 +117,12 @@ function normalizeCondition(value: unknown): ListingCondition | null {
 }
 
 function normalizeStatus(value: unknown): ListingLifecycleStatus {
-  switch (value) {
+  // Backend payloads occasionally arrive capitalized ('Active') or padded —
+  // a casing miss previously collapsed the row to 'unknown', which disabled
+  // every commerce action on a perfectly sellable listing.
+  if (typeof value !== 'string') return 'unknown';
+  const normalized = value.trim().toLowerCase();
+  switch (normalized) {
     case 'draft':
     case 'active':
     case 'paused':
@@ -125,7 +130,7 @@ function normalizeStatus(value: unknown): ListingLifecycleStatus {
     case 'sold':
     case 'deleted':
     case 'removed':
-      return value;
+      return normalized;
     default:
       return 'unknown';
   }

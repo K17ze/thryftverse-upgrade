@@ -390,7 +390,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   coverErrorText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.danger },
+    color: colors.dangerText },
   coverErrorActions: {
     flexDirection: 'row',
     gap: Space.sm },

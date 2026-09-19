@@ -306,3 +306,91 @@ The server-owned scheduling path (schedule row → worker publishes at `dueAt`, 
 - **The last three giants**: LookComposerInner 1,094→3-line shell (controller + 16 domain hooks + Workspace); PosterComposerInner 1,117→orchestrator (11 hooks + PosterEditorSurface 533); CreatorCamera 1,002→~396 (7 hooks + CameraFeed/CameraBottomBar; slide-lock ±12pt, dy/80 zoom, 250ms arbitration verbatim).
 - **Checker extended again**: hook-returned handlers now matched as `\w*ScrollHandler\w*` in return objects (usePosterTimelineZoom pattern).
 - Verified: tsc clean; 109 files / 2,028 tests green; eslint src/creator/ = 0 problems.
+
+## 2026-09-17 — Live shopping benchmark research (Wave AJ kickoff)
+
+Sources (live web):
+- getstream.io/blog/tiktok-live-shopping — TikTok Live Shopping UX teardown: product card → in-stream listing → 2-tap checkout overlay → auto-return to stream; social proof via verified badges + real viewer counts + purchase notifications
+- getstream.io/blog/live-selling — host pinning, lightweight reactions, pre-live surfacing, post-live VOD availability
+- forasoft.com/blog/article/live-commerce-platform-development-2026 — 2026 architecture: sub-1s WebRTC hot path + HLS-LL fallback, pinned-SKU swap reaching viewers in 2–3s, checkout <30s in-stream
+- mdpi.com/2076-328X/15/5/673 — eye-tracking study: dense overlays increase cognitive load and reduce purchase intent; restraint wins
+
+Benchmark contract for the audit: pinned-product swap <3s propagation, in-stream checkout <30s, honest viewer/sold counts, ABR/fallback, real chat+reactions, NO fabricated scarcity.
+
+## Wave AK — catalogue-import runtime + AI-agent contract hardening (2026-09-17)
+
+Adversarial re-review of Wave AJ surfaces found the catalogue-import pipeline was still
+dead at runtime and the AI-agent surface had deep contract breaks. Fixes landed:
+
+**Catalogue import (backend)**
+- All three item INSERT paths now persist the required `source` column (was NOT NULL
+  with no default → every discovered item insert failed at runtime).
+- `ingesting_media → normalising` advance implemented inside the normalisation handler
+  entry (nothing previously performed it; batches parked forever). Phase/checkpoint
+  recorded on every forward-stage transition.
+- `createBatch` validates `connectionId`/`packageId` ownership (cross-tenant IDOR).
+- Item readiness machine aligned with worker reality (`discovered→media_pending`,
+  `media_pending→{mapping_pending,ready,needs_input,probable_duplicate}`).
+- `cancelBatch` goes direct to `cancelled` when the `cancelling` hop is invalid;
+  `retryBatch`/`enqueueStageJobs` accept `publishing` as a resume target;
+  `publishBatch` idempotent-replays (stored receipt) and skips already-published items.
+- `updateItemFields`/`bulkUpdateItems` lock the batch `FOR UPDATE` and wrap seller
+  edits in the canonical `{value, sourceKind, sourceValue, confidence}` envelope
+  (raw scalars published as empty and rendered blank).
+- Hydration/media handlers gate on batch status under lock; OAuth hydration no longer
+  overwrites readiness for items already in terminal media state.
+- Operator-blocker detection switched from JSONB `@>` (ALL codes on one item) to
+  `jsonb_array_elements` + `ANY` (any matching code on any item).
+- Extraction field decisions freeze on non-editable batches (same rule as edits).
+- Item routes join `catalog_import_media`/`media_assets` so `previewUrl` is real
+  (was always null).
+- `reconcileOutcomeUnknown` now republishes proven-absent drafts directly —
+  `completed` is terminal so the batch saga could never be resumed. Draft guard
+  admits `approved`/`publishing`/`completed` (still rejects cancelled/failed).
+- Daily `retention_sweep` now runs `findExpiredBatches` + `enforceRetention` —
+  the 30-day raw-data purge machinery existed but was never scheduled.
+- Media finalization/asset ids derived deterministically from the media row id —
+  retries converge instead of minting orphan `upload_finalizations`/`media_assets`.
+
+**Catalogue import (frontend)**
+- `useCatalogImport` stops polling on paused/terminal states.
+- Review screen: approval now collects the seller's three attestations explicitly
+  via a transaction-variant bottom sheet (was hard-coded `true` ×3).
+
+**AI agents**
+- Playground uses a real per-user `chat_conversations` row (was FK-violating
+  `conversation_id='playground'` → every call 500'd), reserves per-user hourly
+  quota, records usage events, resolves the bound provider credential.
+- `db`/`runId` threaded into `executeOpenAiAgent` — tools + approvals now reachable
+  in real chat runs, not just playground.
+- Approval matching is argument-aware (canonical JSON); `edited_arguments` honored;
+  pending siblings superseded; decisions atomic (`UPDATE … WHERE status='pending'`),
+  expired approvals undecidable.
+- Stale-run sweeper (running→timed_out, queued→unknown_outcome) on a guarded 60s
+  scheduler; terminal writes guarded `WHERE status='running'`; cancel gated to
+  live statuses.
+- Provider key verification is per-provider (OpenAI/Anthropic/Gemini/custom) with
+  SSRF guard on custom base URLs (HTTPS-only, no creds, private/loopback rejected).
+- `ENCRYPTION_KEY` is a required secret (prod-ready check ≥32 chars); the
+  `OPENAI_API_KEY` fallback is deleted; AES-256-GCM vault consolidated in
+  `lib/messageEncryption.ts`.
+- All connection queries filter `is_active`; deactivation actually revokes.
+- `response.completed`/`response.incomplete` SSE envelopes unwrapped before
+  tool/usage extraction.
+- Enqueue insert race fixed (`ON CONFLICT (idempotency_key) DO NOTHING`).
+- User erasure clears approval requests + agent runs (was blocked by RESTRICT FKs).
+
+**1ZE attestation**
+- Signature envelope carries `kid` (ONEZE_ATTESTATION_SIGNING_KEY_ID, default 'v1')
+  so secret rotation doesn't orphan historical attestations.
+
+**Test hygiene**
+- `backendWorkflowClosure`: upload-finalize test gained a `db.query` delegate
+  (route's pre-transaction phase is pool-direct); offer.created test covers the
+  conversation-membership query. Both were stale mocks, not product defects.
+- `catalogImportHardening`: bulkUpdateItems assertion updated to the stronger
+  FOR UPDATE contract; +4 regression pins (reconcile republish, completed-batch
+  draft guard, retention sweep, deterministic media ids). 20/20 pass.
+
+Deferred: none. Unrelated in-flight creator-camera changes left untouched in the
+working tree (separate workstream).

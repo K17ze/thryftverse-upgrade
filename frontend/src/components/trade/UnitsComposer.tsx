@@ -111,8 +111,8 @@ export function UnitsComposer({
               style={[
                 styles.quoteRealized,
                 estimatedRealized.startsWith('+')
-                  ? { color: colors.success }
-                  : { color: colors.danger },
+                  ? { color: colors.successText }
+                  : { color: colors.dangerText },
               ]}
             >
               {estimatedRealized}

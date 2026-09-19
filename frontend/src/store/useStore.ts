@@ -70,6 +70,7 @@ import {
   resetContextPatch,
 } from './browseFilterContexts';
 import { queryClient } from '../platform/server/queryClient';
+import { clearUserScopedQueryCache } from '../platform/server/clearUserCache';
 import { queryKeys } from '../platform/server/queryKeys';
 import { fetchMyProfile as fetchMyProfileFromApi, getBlockedUsers, getMutedUsers, getRestrictedUsers } from '../services/profileApi';
 import {
@@ -190,8 +191,6 @@ export interface BrowseFilterState {
   brands: string[];
   sizes: string[];
   condition: BrowseConditionOption;
-  /** Client-side filter: only show items with an estimated A/B sustainability grade. */
-  sustainableOnly: boolean;
   /** Price range filter in GBP. null means no constraint on that bound. */
   priceMin: number | null;
   priceMax: number | null;
@@ -593,7 +592,11 @@ interface StoreState {
   updatePostagePreferences: (updates: Partial<PostagePreferences>) => void;
   hydratePostagePreferences: () => Promise<void>;
   personalisationPreferences: PersonalisationPreferences;
-  updatePersonalisationPreferences: (updates: Partial<PersonalisationPreferences>) => void;
+  /** Applies updates optimistically and persists them server-side. Resolves
+   *  `true` when the write landed; on failure the previous preferences are
+   *  restored and it resolves `false` so callers can render honest
+   *  feedback instead of a premature success toast. */
+  updatePersonalisationPreferences: (updates: Partial<PersonalisationPreferences>) => Promise<boolean>;
 
   // Notifications
   notificationCount: number;
@@ -844,6 +847,12 @@ export const useStore = create<StoreState>()(
   logout: (opts) => {
     set({ currentUser: null, isAuthenticated: false, twoFactorEnabled: false, biometricLoginPending: false, blockedUsers: [], mutedUsers: [], restrictedUsers: [], coOwnWatchlist: [], coOwnWatchStatus: {}, savedSearches: [], wishlist: [], savedProducts: [], collections: [], sessionExpiredNotice: opts?.sessionExpired === true });
     persistLocalAuthSnapshot(null, false);
+    // Centralized session termination (F14): purge the query cache here —
+    // the single owner — so settings sign-out, token-expiry and biometric
+    // paths all cancel in-flight requests and drop private caches before
+    // the next account can observe them. Realtime disconnect is driven by
+    // RealtimeProvider watching the auth token.
+    clearUserScopedQueryCache();
     // Scrub Sentry user context on logout so subsequent crashes are anonymous.
     setSentryUser(null);
     track('user_logged_out');
@@ -1810,10 +1819,18 @@ export const useStore = create<StoreState>()(
     membersPref: 'Everyone',
   },
   updatePersonalisationPreferences: (updates) => {
+    const prev = get().personalisationPreferences;
     set((state) => ({
       personalisationPreferences: { ...state.personalisationPreferences, ...updates },
     }));
-    void updateUserPersonalisation(updates);
+    return updateUserPersonalisation(updates)
+      .then(() => true)
+      .catch(() => {
+        // Rollback on failure — restore previous state so the UI stays
+        // truthful (same convention as updatePostagePreferences).
+        set({ personalisationPreferences: prev });
+        return false;
+      });
   },
 
   notificationCount: ENABLE_RUNTIME_MOCKS ? 3 : 0,

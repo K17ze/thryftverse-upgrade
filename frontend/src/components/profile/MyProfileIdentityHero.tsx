@@ -15,7 +15,7 @@ import { formatCompactCount, formatFullCount } from '../../utils/numberFormat';
 // tappable inline spans. Non-link text uses the base bio style.
 // Bios longer than ~125 chars are truncated with a "see more" expansion.
 const BIO_LINK_PATTERN = /((?:https?:\/\/)?[\w-]+(?:\.[\w-]+)+[^\s]*|(?:^|\s)[@#][\w]+)/gi;
-const BIO_TRUNCATE_CHARS = 125;
+const BIO_TRUNCATE_CHARS = 200;
 
 function BioText({ bio, style, linkStyle, seeMoreStyle }: { bio: string; style: StyleProp<TextStyle>; linkStyle: StyleProp<TextStyle>; seeMoreStyle: StyleProp<TextStyle> }) {
   const [expanded, setExpanded] = React.useState(false);
@@ -54,7 +54,7 @@ function BioText({ bio, style, linkStyle, seeMoreStyle }: { bio: string; style: 
   };
 
   return (
-    <Text style={style} numberOfLines={expanded ? undefined : 3}>
+    <Text style={style} numberOfLines={expanded ? undefined : 4}>
       {segments.map((seg, i) =>
         seg.isLink ? (
           <Text
@@ -84,7 +84,6 @@ function BioText({ bio, style, linkStyle, seeMoreStyle }: { bio: string; style: 
 
 const AVATAR_SIZE = 96; // design contract: 96-128pt seam avatar — matches ProfileHero (2026 standard)
 const AVATAR_OVERLAP = AVATAR_SIZE / 2;
-const ACTION_HEIGHT = 44;
 
 interface MyProfileIdentityHeroProps {
   avatarUri: string | null;
@@ -99,7 +98,6 @@ interface MyProfileIdentityHeroProps {
   sellerTrust?: SellerTrustSummary | null;
   soldCount?: number;
   followerCount?: number;
-  followingCount?: number;
   /** Seller response time label (e.g. "within 2h") — surfaced in the trust
    *  line so the most important marketplace trust signal is visible in the
    *  first viewport, not buried in the About tab. */
@@ -107,10 +105,10 @@ interface MyProfileIdentityHeroProps {
   /** Distinguishes loading/error from a real zero count (M2 — truthful UI). */
   followCountsStatus?: 'loading' | 'error' | 'loaded';
   onEditProfile: () => void;
-  onShare: () => void;
   onPressSold?: () => void;
   onPressFollowers?: () => void;
-  onPressFollowing?: () => void;
+  /** Taps the "For sale" stat — scrolls to / focuses the listings tab. */
+  onPressListings?: () => void;
 }
 
 export function MyProfileIdentityHero({
@@ -121,17 +119,16 @@ export function MyProfileIdentityHero({
   location,
   website,
   memberSince,
+  listingCount = 0,
   sellerTrust,
   soldCount,
   followerCount = 0,
-  followingCount = 0,
   responseTimeLabel,
   followCountsStatus = 'loaded',
   onEditProfile,
-  onShare,
   onPressSold,
   onPressFollowers,
-  onPressFollowing }: MyProfileIdentityHeroProps) {
+  onPressListings }: MyProfileIdentityHeroProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -145,13 +142,9 @@ export function MyProfileIdentityHero({
   // real zero is distinguishable from an unknown count (M2 — truthful UI).
   const countsUnknown = followCountsStatus === 'loading' || followCountsStatus === 'error';
   const followerDisplay = countsUnknown ? '—' : formatCompactCount(followerCount);
-  const followingDisplay = countsUnknown ? '—' : formatCompactCount(followingCount);
   const followerA11y = countsUnknown
     ? 'Followers count loading'
     : `${formatFullCount(followerCount)} followers`;
-  const followingA11y = countsUnknown
-    ? 'Following count loading'
-    : `${formatFullCount(followingCount)} following`;
 
   return (
     <View style={styles.heroRoot}>
@@ -173,27 +166,19 @@ export function MyProfileIdentityHero({
 
       {/* Identity canvas — paddingTop reserves avatar space */}
       <View style={styles.identityCanvas}>
-        {/* ── Seam row — avatar (left) + Followers · Following · Sold (right) ──
-            Followers is the hero stat (parasocial proof). Following is
-            secondary. Sold is marketplace proof. Listings/Looks counts are
-            already visible in the tab rail below — no duplication here. */}
+        {/* ── Seam row — avatar (left) + storefront stats (right) ──
+            For sale · Sold · Followers — the storefront triad, matching the
+            public ProfileHero. "Following" is a social metric and drops out;
+            the marketplace proof (inventory + sales) leads. */}
         <View style={styles.seamRow}>
           <View style={styles.seamSpacer} />
           <View style={styles.seamStats}>
             <ProfileStat
-              value={followerDisplay}
-              label="Followers"
+              value={countsUnknown ? '—' : formatCompactCount(listingCount)}
+              label="For sale"
               styles={styles}
-              onPress={onPressFollowers}
-              a11yLabel={followerA11y}
-            />
-            <View style={styles.seamStatDivider} />
-            <ProfileStat
-              value={followingDisplay}
-              label="Following"
-              styles={styles}
-              onPress={onPressFollowing}
-              a11yLabel={followingA11y}
+              onPress={onPressListings}
+              a11yLabel={countsUnknown ? 'Listings count loading' : `${formatFullCount(listingCount)} for sale`}
             />
             <View style={styles.seamStatDivider} />
             <ProfileStat
@@ -202,6 +187,14 @@ export function MyProfileIdentityHero({
               styles={styles}
               onPress={onPressSold}
               a11yLabel={countsUnknown ? 'Sold count loading' : `${formatFullCount(completedSales)} sold`}
+            />
+            <View style={styles.seamStatDivider} />
+            <ProfileStat
+              value={followerDisplay}
+              label="Followers"
+              styles={styles}
+              onPress={onPressFollowers}
+              a11yLabel={followerA11y}
             />
           </View>
         </View>
@@ -221,7 +214,7 @@ export function MyProfileIdentityHero({
               color={
                 VERIFICATION_TIERS[verificationTier].color === 'brand'
                   ? colors.brand
-                  : colors.success
+                  : colors.successText
               }
               accessibilityLabel={VERIFICATION_TIERS[verificationTier].label}
             />
@@ -232,6 +225,22 @@ export function MyProfileIdentityHero({
         </Text>
 
         {bio ? <BioText bio={bio} style={styles.bio} linkStyle={styles.bioLink} seeMoreStyle={styles.bioSeeMore} /> : null}
+
+        {/* Edit — a single quiet settings row, not the IG twin-pill pair.
+            Share already lives in the cover chrome (top-right icon), so the
+            hero carries only the action that isn't duplicated elsewhere. */}
+        <AnimatedPressable
+          style={styles.editRow}
+          onPress={onEditProfile}
+          activeOpacity={0.7}
+          scaleValue={0.99}
+          hapticFeedback="light"
+          accessibilityLabel="Edit profile and storefront"
+          accessibilityRole="button"
+        >
+          <Text style={styles.editRowText}>Edit profile</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </AnimatedPressable>
 
         {/* Trust header — marketplace meta row (sold, response time) + joined
             caption on a separate, less prominent line. Response time is
@@ -275,34 +284,6 @@ export function MyProfileIdentityHero({
             <Text style={styles.websiteText} numberOfLines={1}>{website}</Text>
           </Pressable>
         ) : null}
-      </View>
-
-      {/* Actions — authored, luxury curator & collector identity controls */}
-      <View style={styles.actionRow}>
-        <AnimatedPressable
-          style={[styles.action, styles.editAction]}
-          onPress={onEditProfile}
-          activeOpacity={0.88}
-          scaleValue={0.98}
-          hapticFeedback="light"
-          accessibilityLabel="Edit profile and curator studio"
-          accessibilityRole="button"
-        >
-          <Ionicons name="create-outline" size={15} color={colors.textPrimary} />
-          <Text style={styles.editActionText}>Edit Profile</Text>
-        </AnimatedPressable>
-        <AnimatedPressable
-          style={[styles.action, styles.shareAction]}
-          onPress={onShare}
-          activeOpacity={0.88}
-          scaleValue={0.98}
-          hapticFeedback="light"
-          accessibilityLabel="Share your profile"
-          accessibilityRole="button"
-        >
-          <Ionicons name="share-outline" size={16} color={colors.brand} />
-          <Text style={styles.shareActionText}>Share</Text>
-        </AnimatedPressable>
       </View>
     </View>
   );
@@ -471,36 +452,18 @@ function createStyles(colors: ThemeColors) {
     fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted },
 
-  // Actions — flat, single row
-  actionRow: {
+  // Edit — a single quiet settings row: hairline top border, label left,
+  // chevron right. 44pt+ row, no filled container.
+  editRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-    paddingHorizontal: Space.md,
+    justifyContent: 'space-between',
+    minHeight: 48,
     paddingVertical: Space.sm,
-    backgroundColor: colors.background },
-  action: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.xs + 3,
-    height: ACTION_HEIGHT,
-    borderRadius: Radius.lg },
-  editAction: {
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  editActionText: {
-    color: colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-    fontSize: TypographyV2.bodyStrong.size },
-  shareAction: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt },
-  shareActionText: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle,
+    marginTop: Space.xs },
+  editRowText: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: TypographyV2.bodyStrong.size },

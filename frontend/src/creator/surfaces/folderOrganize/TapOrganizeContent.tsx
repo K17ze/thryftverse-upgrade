@@ -134,7 +134,7 @@ export function TapOrganizeContent({
                       accessibilityRole="button"
                       hitSlop={8}
                     >
-                      <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                      <Ionicons name="trash-outline" size={18} color={colors.dangerText} />
                     </Pressable>
                   </View>
                 )}
@@ -229,7 +229,7 @@ export function TapOrganizeContent({
                       accessibilityRole="button"
                       hitSlop={8}
                     >
-                      <Ionicons name="remove-circle-outline" size={IconGrammar.metadata} color={colors.danger} />
+                      <Ionicons name="remove-circle-outline" size={IconGrammar.metadata} color={colors.dangerText} />
                     </Pressable>
                   )}
                 </Pressable>

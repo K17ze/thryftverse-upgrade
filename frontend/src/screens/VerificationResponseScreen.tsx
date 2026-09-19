@@ -232,7 +232,7 @@ export default function VerificationResponseScreen() {
       <FlagshipScreen header={<FlagshipHeader title="Respond to Verification" onBack={() => navigation.goBack()} />}>
         <View style={styles.respondedContainer}>
           <View style={[styles.respondedIcon, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name="checkmark-circle" size={48} color={colors.success} />
+            <Ionicons name="checkmark-circle" size={48} color={colors.successText} />
           </View>
           <Text style={[styles.respondedTitle, { color: colors.textPrimary }]}>
             Evidence submitted
@@ -342,10 +342,10 @@ export default function VerificationResponseScreen() {
               <Ionicons
                 name={isOverdue ? 'warning-outline' : 'time-outline'}
                 size={14}
-                color={isOverdue ? colors.danger : colors.textMuted}
+                color={isOverdue ? colors.dangerText : colors.textMuted}
               />
               <Text style={[styles.deadlineBadgeText, {
-                color: isOverdue ? colors.danger : colors.textSecondary }]}>
+                color: isOverdue ? colors.dangerText : colors.textSecondary }]}>
                 {isOverdue
                   ? 'Deadline passed — respond immediately'
                   : daysLeft <= 0
@@ -389,7 +389,7 @@ export default function VerificationResponseScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={`Remove photo ${index + 1}`}
                   >
-                    <Ionicons name="close-circle" size={22} color={colors.danger} />
+                    <Ionicons name="close-circle" size={22} color={colors.dangerText} />
                   </Pressable>
                 </View>
               ))}
@@ -462,7 +462,7 @@ export default function VerificationResponseScreen() {
         {/* Liability warning */}
         <View>
           <View style={[styles.warningBox, { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder }]}>
-            <Ionicons name="lock-closed-outline" size={18} color={colors.warning} />
+            <Ionicons name="lock-closed-outline" size={18} color={colors.warningText} />
             <Text style={[styles.warningText, { color: colors.textSecondary }]}>
               Your personal liability guarantee is active. Failure to provide satisfactory evidence may trigger recourse proceedings.
             </Text>

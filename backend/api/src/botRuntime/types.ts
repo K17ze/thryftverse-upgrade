@@ -85,6 +85,8 @@ export interface BotInstallInfo {
   runtimeMode: string;
   status: string;
   agentConfig: AgentConfig | null;
+  /** Bound provider_connections row — resolved to a credential at execution time. */
+  providerConnectionId: string | null;
 }
 
 /** Callback invoked for each text delta during streaming. */

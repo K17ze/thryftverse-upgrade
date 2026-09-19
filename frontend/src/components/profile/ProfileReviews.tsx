@@ -165,7 +165,7 @@ export const ProfileReviewRow = React.memo(function ProfileReviewRow({
               </View>
             ) : (
               <View style={styles.verifiedBadge}>
-                <AppIcon name="shieldCheck" focused size={IconSize.micro} color="success" opticalCenter accessible={false} />
+                <AppIcon name="shieldCheck" focused size={IconSize.micro} color="successText" opticalCenter accessible={false} />
                 <Text style={styles.verifiedBadgeText}>Verified buyer</Text>
               </View>
             )}
@@ -327,7 +327,7 @@ function createStyles(colors: ThemeColors) {
   reviewNameRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs + 1 },
   reviewName: { fontSize: TypographyV2.bodyStrong.size, fontFamily: TypographyV2.bodyStrong.fontFamily, color: colors.textPrimary, flexShrink: 1, lineHeight: TypographyV2.bodyStrong.lineHeight },
   verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: Space.xs / 2, flexShrink: 0 },
-  verifiedBadgeText: { fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, color: colors.success, letterSpacing: 0.15 },
+  verifiedBadgeText: { fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, color: colors.successText, letterSpacing: 0.15 },
   reviewMetaRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs / 2 },
   reviewDate: { fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, color: colors.textMuted, marginLeft: Space.xs + 2 },
   reviewComment: { fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily, color: colors.textPrimary, lineHeight: TypographyV2.body.lineHeight, marginTop: Space.sm },

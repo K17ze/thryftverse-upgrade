@@ -113,11 +113,11 @@ function PromotionRow({
   const status = statusLabel(promotion);
   const statusColor =
     status.tone === 'live'
-      ? colors.success
+      ? colors.successText
       : status.tone === 'warning'
-        ? colors.warning
+        ? colors.warningText
         : status.tone === 'danger'
-          ? colors.danger
+          ? colors.dangerText
           : colors.textMuted;
 
   // Metrics line — every value traces to a real payload field: spend comes
@@ -197,7 +197,7 @@ function PromotionRow({
                   <RowAction
                     label="End"
                     onPress={() => onConfirmEnd(promotion)}
-                    color={colors.danger}
+                    color={colors.dangerText}
                   />
                 ) : null}
               </>

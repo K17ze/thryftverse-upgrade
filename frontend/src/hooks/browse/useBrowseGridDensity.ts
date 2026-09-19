@@ -11,7 +11,7 @@ export type GridDensity = 'comfortable' | 'compact';
  * BrowseScreen.
  */
 export function useBrowseGridDensity() {
-  const [gridDensity, setGridDensity] = useState<GridDensity>('comfortable');
+  const [gridDensity, setGridDensity] = useState<GridDensity>('compact');
 
   useEffect(() => {
     AsyncStorage.getItem(BROWSE_GRID_DENSITY_PREF_KEY).then((stored) => {

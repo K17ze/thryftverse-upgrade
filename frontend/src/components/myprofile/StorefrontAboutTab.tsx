@@ -13,6 +13,7 @@ import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTranslation } from '../../i18n/useAppTranslation';
 import type { SellerTrustSummary } from '../../platform/product';
+import type { StorefrontPolicies } from '../../services/storefrontApi';
 
 export interface CoOwnHoldingPreview {
   id: string;
@@ -25,8 +26,12 @@ export interface StorefrontAboutTabProps {
   coOwnHoldings: CoOwnHoldingPreview[];
   website: string | null;
   sellerTrust: SellerTrustSummary | null | undefined;
+  /** Seller-authored shop note + policies from the owner's storefront. */
+  shopAnnouncement: string | null;
+  shopPolicies: StorefrontPolicies | null;
   reducedMotion: boolean;
   onViewPortfolio: () => void;
+  onEditShop: () => void;
 }
 
 /**
@@ -37,8 +42,11 @@ export function StorefrontAboutTab({
   coOwnHoldings,
   website,
   sellerTrust,
+  shopAnnouncement,
+  shopPolicies,
   reducedMotion,
-  onViewPortfolio }: StorefrontAboutTabProps) {
+  onViewPortfolio,
+  onEditShop }: StorefrontAboutTabProps) {
   const { colors } = useAppTheme();
   const { t: tt } = useAppTranslation('myProfile');
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -91,6 +99,12 @@ export function StorefrontAboutTab({
         </AnimatedPressable>
       ) : null}
 
+      {shopAnnouncement?.trim() ? (
+        <View style={styles.aboutContainer}>
+          <Text style={styles.announcementText}>{shopAnnouncement.trim()}</Text>
+        </View>
+      ) : null}
+
       {website ? (
         <View style={styles.aboutContainer}>
           <View style={[styles.aboutRow, styles.aboutRowLast]}>
@@ -115,15 +129,25 @@ export function StorefrontAboutTab({
         <View style={styles.aboutRow}>
           <Text style={styles.aboutLabel}>{tt('about.shipping')}</Text>
           <Text style={styles.aboutValue} maxFontSizeMultiplier={2}>
-            {sellerTrust?.dispatchTimeLabel
-              ? tt('about.shippingSeller', { label: sellerTrust.dispatchTimeLabel.toLowerCase() })
-              : tt('about.shippingDefault')}
+            {shopPolicies?.shipping?.trim()
+              ? shopPolicies.shipping.trim()
+              : sellerTrust?.dispatchTimeLabel
+                ? tt('about.shippingSeller', { label: sellerTrust.dispatchTimeLabel.toLowerCase() })
+                : tt('about.shippingDefault')}
           </Text>
         </View>
         <View style={styles.aboutRow}>
           <Text style={styles.aboutLabel}>{tt('about.returns')}</Text>
-          <Text style={styles.aboutValue}>{tt('about.returnsValue')}</Text>
+          <Text style={styles.aboutValue} maxFontSizeMultiplier={2}>
+            {shopPolicies?.returns?.trim() ? shopPolicies.returns.trim() : tt('about.returnsValue')}
+          </Text>
         </View>
+        {shopPolicies?.additional?.trim() ? (
+          <View style={styles.aboutRow}>
+            <Text style={styles.aboutLabel}>{tt('about.additionalPolicies')}</Text>
+            <Text style={styles.aboutValue} maxFontSizeMultiplier={2}>{shopPolicies.additional.trim()}</Text>
+          </View>
+        ) : null}
         {sellerTrust?.responseRate !== null && sellerTrust?.responseRate !== undefined ? (
           <View style={styles.aboutRow}>
             <Text style={styles.aboutLabel}>{tt('about.responseRate')}</Text>
@@ -140,9 +164,21 @@ export function StorefrontAboutTab({
         </View>
       </View>
 
-      {!website && !sellerTrust && (
+      {!website && !sellerTrust && !shopAnnouncement?.trim() && (
         <Text style={styles.aboutEmpty}>{tt('about.noDetails')}</Text>
       )}
+
+      {/* Owner affordance — the About tab is where the authored copy lands,
+          so the edit entry point lives here rather than buried in settings. */}
+      <AnimatedPressable
+        style={styles.editShopLink}
+        onPress={onEditShop}
+        accessibilityRole="button"
+        accessibilityLabel={tt('about.editShopDetails')}
+      >
+        <Text style={styles.editShopLinkText}>{tt('about.editShopDetails')}</Text>
+        <Ionicons name="chevron-forward" size={14} color={colors.textMuted} aria-hidden={true} />
+      </AnimatedPressable>
     </Reanimated.View>
   );
 }
@@ -222,10 +258,28 @@ function createStyles(colors: ThemeColors) {
       fontFamily: FontFamily.regular,
       lineHeight: TypographyV2.body.lineHeight,
       color: colors.textPrimary },
+    announcementText: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: FontFamily.regular,
+      lineHeight: TypographyV2.body.lineHeight,
+      paddingTop: Space.md,
+      color: colors.textPrimary },
     aboutEmpty: {
       fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.regular,
       textAlign: 'center',
       paddingVertical: Space.xl + Space.sm,
-      color: colors.textMuted } });
+      color: colors.textMuted },
+    editShopLink: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginHorizontal: Space.md,
+      marginTop: Space.lg,
+      paddingVertical: Space.sm + 2,
+      minHeight: 44 },
+    editShopLinkText: {
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: FontFamily.semibold,
+      color: colors.textPrimary } });
 }

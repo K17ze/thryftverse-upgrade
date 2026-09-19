@@ -194,6 +194,26 @@ function deliverLocalEvent(
     }
   }
 
+  // Membership revocation: when a member-removal/leave event is delivered,
+  // the affected user's connections must drop the conversation topic —
+  // subscription auth is only checked at subscribe time, so without this a
+  // removed member's socket keeps streaming the conversation indefinitely.
+  // Applying it here (rather than in the route) means every instance that
+  // receives the event over the bus revokes its own local clients.
+  const revokedUserId =
+    event.type === 'chat.member.removed'
+      ? (typeof event.payload.memberUserId === 'string' ? event.payload.memberUserId : null)
+      : event.type === 'chat.member.left'
+        ? (typeof event.payload.actorUserId === 'string' ? event.payload.actorUserId : null)
+        : null;
+  if (revokedUserId) {
+    for (const client of clients.values()) {
+      if (client.userId === revokedUserId && client.topics.delete(event.topic)) {
+        removeTopicSubscription(event.topic);
+      }
+    }
+  }
+
   return delivered;
 }
 

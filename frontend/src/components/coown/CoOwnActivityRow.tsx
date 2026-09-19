@@ -77,7 +77,7 @@ export function CoOwnActivityRow({
 }: CoOwnActivityRowProps) {
   const { colors } = useAppTheme();
   const statusCfg = STATUS_LABELS[status];
-  const statusColor = statusCfg.color === 'success' ? colors.success : statusCfg.color === 'danger' ? colors.danger : colors.textSecondary;
+  const statusColor = statusCfg.color === 'success' ? colors.successText : statusCfg.color === 'danger' ? colors.dangerText : colors.textSecondary;
   const isBuy = side === 'buy';
 
   // Phase 6: status transition indicator
@@ -86,9 +86,9 @@ export function CoOwnActivityRow({
   // Doc 10 §3.3: settlement finality badge
   const settlementCfg = settlementState ? SETTLEMENT_LABELS[settlementState] : null;
   const settlementColor = settlementState === 'settled'
-    ? colors.success
+    ? colors.successText
     : settlementState === 'failed' || settlementState === 'reversed'
-      ? colors.danger
+      ? colors.dangerText
       : colors.textSecondary;
 
   return (
@@ -155,8 +155,8 @@ export function CoOwnActivityRow({
             and the user's recovery path — not just a badge. */}
         {(settlementState === 'failed' || settlementState === 'reversed') && failureReason && (
           <View style={[styles.failureRow, { backgroundColor: colors.dangerSubtle }]}>
-            <Ionicons name="alert-circle-outline" size={12} color={colors.danger} />
-            <Text style={[styles.failureText, { color: colors.danger }]} numberOfLines={2}>
+            <Ionicons name="alert-circle-outline" size={12} color={colors.dangerText} />
+            <Text style={[styles.failureText, { color: colors.dangerText }]} numberOfLines={2}>
               {failureReason}{recoveryAction ? ` · ${recoveryAction}` : ''}
             </Text>
           </View>

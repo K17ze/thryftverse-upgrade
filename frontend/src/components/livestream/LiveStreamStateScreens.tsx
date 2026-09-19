@@ -108,7 +108,7 @@ export function LiveStreamEndedScreen({ summary, onBack }: EndedProps) {
       contentStyle={styles.stateFlush}
     >
       <View style={styles.endedWrap}>
-        <AppIcon name="check" variant="filled" size={IconSize.display} color="success" accessible={false} />
+        <AppIcon name="check" variant="filled" size={IconSize.display} color="successText" accessible={false} />
         <Text style={[styles.endedTitle, { color: colors.textPrimary }]} accessibilityRole="header">
           {t('ended.title')}
         </Text>
@@ -117,23 +117,78 @@ export function LiveStreamEndedScreen({ summary, onBack }: EndedProps) {
         </Text>
         {summary ? (
           <View style={styles.endedStats}>
-            <FlagshipMetricLine
-              label={t('ended.viewers')}
-              value={String(summary.totalViewers)}
-              separated
-            />
-            <FlagshipMetricLine
-              label={t('ended.lotsSold')}
-              value={String(summary.lotsSold)}
-              separated
-            />
-            <FlagshipMetricLine
-              label={t('ended.totalSales')}
-              value={formatFromFiat(summary.totalSales, 'GBP') ?? ''}
-              separated
-            />
+            {summary.totalViewers != null ? (
+              <FlagshipMetricLine
+                label={t('ended.viewers')}
+                value={String(summary.totalViewers)}
+                separated
+              />
+            ) : null}
+            {summary.lotsSold != null ? (
+              <FlagshipMetricLine
+                label={t('ended.lotsSold')}
+                value={String(summary.lotsSold)}
+                separated
+              />
+            ) : null}
+            {summary.totalSales != null ? (
+              <FlagshipMetricLine
+                label={t('ended.totalSales')}
+                value={formatFromFiat(summary.totalSales, 'GBP') ?? ''}
+                separated
+              />
+            ) : null}
           </View>
         ) : null}
+        <AnimatedPressable
+          onPress={onBack}
+          style={[styles.endedDoneBtn, { backgroundColor: colors.brand }]}
+          hapticFeedback="light"
+          accessibilityRole="button"
+          accessibilityLabel={t('ended.done')}
+        >
+          <Text style={[styles.endedDoneText, { color: colors.textInverse }]}>{t('ended.done')}</Text>
+        </AnimatedPressable>
+      </View>
+    </FlagshipScreen>
+  );
+}
+
+interface ScheduledProps {
+  scheduledStartAt?: string;
+  onBack: () => void;
+}
+
+export function LiveStreamScheduledScreen({ scheduledStartAt, onBack }: ScheduledProps) {
+  const { colors } = useAppTheme();
+  const { height: screenHeight } = useWindowDimensions();
+  const styles = useMemo(() => createStyles(colors, screenHeight), [colors, screenHeight]);
+  const { t } = useAppTranslation('liveStreamViewer');
+
+  const startLabel = scheduledStartAt
+    ? new Date(scheduledStartAt).toLocaleString(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      })
+    : null;
+
+  return (
+    <FlagshipScreen
+      header={<FlagshipHeader title={t('live.label')} onBack={onBack} />}
+      scrollEnabled={false}
+      contentStyle={styles.stateFlush}
+    >
+      <View style={styles.endedWrap}>
+        <AppIcon name="calendar" variant="filled" size={IconSize.display} color="brand" accessible={false} />
+        <Text style={[styles.endedTitle, { color: colors.textPrimary }]} accessibilityRole="header">
+          {t('scheduled.title')}
+        </Text>
+        <Text style={[styles.endedSubtitle, { color: colors.textSecondary }]}>
+          {startLabel ? t('scheduled.subtitleAt', { time: startLabel }) : t('scheduled.subtitle')}
+        </Text>
         <AnimatedPressable
           onPress={onBack}
           style={[styles.endedDoneBtn, { backgroundColor: colors.brand }]}

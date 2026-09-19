@@ -401,11 +401,11 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
                     accessibilityState={{ disabled: pendingTopicId === sheetTopic.id }}
                   >
                     {pendingTopicId === sheetTopic.id
-                      ? <ActivityIndicator size="small" color={colors.danger} />
+                      ? <ActivityIndicator size="small" color={colors.dangerText} />
                       : (
                         <View style={styles.sheetRowDangerWrap}>
-                          <AppIcon name="trash" size={IconSize.sm} color={colors.danger} accessible={false} />
-                          <Text style={[styles.sheetRowDanger, { color: colors.danger }]}>
+                          <AppIcon name="trash" size={IconSize.sm} color={colors.dangerText} accessible={false} />
+                          <Text style={[styles.sheetRowDanger, { color: colors.dangerText }]}>
                             {t('topics.removeTopic')}
                           </Text>
                         </View>
@@ -589,7 +589,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     sheetRowDanger: {
       fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.medium,
-      color: colors.danger },
+      color: colors.dangerText },
     sheetLockHint: {
       fontSize: TypographyV2.meta.size,
       lineHeight: TypographyV2.meta.lineHeight,

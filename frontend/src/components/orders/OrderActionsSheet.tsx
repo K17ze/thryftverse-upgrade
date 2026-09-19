@@ -87,7 +87,7 @@ export function OrderActionsSheet({
             {actions.map((action) => {
               const color =
                 action.variant === 'destructive'
-                  ? colors.danger
+                  ? colors.dangerText
                   : action.variant === 'primary'
                     ? colors.brand
                     : colors.textPrimary;

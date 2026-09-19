@@ -180,7 +180,7 @@ export function DragOrganizeContent({
                 accessibilityRole="button"
                 hitSlop={8}
               >
-                <Ionicons name="trash-outline" size={IconGrammar.metadata} color={colors.danger} />
+                <Ionicons name="trash-outline" size={IconGrammar.metadata} color={colors.dangerText} />
               </Pressable>
             </View>
             {folderItems.length === 0 ? (

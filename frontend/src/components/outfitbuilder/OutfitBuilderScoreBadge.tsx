@@ -34,7 +34,7 @@ function OutfitBuilderScoreBadgeImpl({ score }: OutfitBuilderScoreBadgeProps) {
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }] }));
 
-  const scoreColor = score >= 80 ? colors.success : score >= 50 ? colors.brand : colors.danger;
+  const scoreColor = score >= 80 ? colors.successText : score >= 50 ? colors.brand : colors.dangerText;
 
   return (
     <Reanimated.View style={[styles.badge, { borderColor: scoreColor }, animStyle]}>

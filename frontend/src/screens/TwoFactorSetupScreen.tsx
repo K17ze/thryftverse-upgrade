@@ -233,8 +233,8 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
     <>
       <View style={styles.phaseIntro}>
         <View style={[styles.statusBadge, { backgroundColor: colors.successSubtle }]}>
-          <Ionicons name="checkmark-circle" size={18} color={colors.success} />
-          <Text style={[styles.statusBadgeText, { color: colors.success }]}>Protected</Text>
+          <Ionicons name="checkmark-circle" size={18} color={colors.successText} />
+          <Text style={[styles.statusBadgeText, { color: colors.successText }]}>Protected</Text>
         </View>
         <Text style={styles.phaseTitle}>Two-factor authentication is on</Text>
         <Text style={[styles.phaseBody, { color: colors.textSecondary }]}>
@@ -282,8 +282,8 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
     <>
       <View style={styles.phaseIntro}>
         <View style={[styles.statusBadge, { backgroundColor: colors.dangerSubtle }]}>
-          <Ionicons name="lock-closed-outline" size={18} color={colors.danger} />
-          <Text style={[styles.statusBadgeText, { color: colors.danger }]}>Remove protection</Text>
+          <Ionicons name="lock-closed-outline" size={18} color={colors.dangerText} />
+          <Text style={[styles.statusBadgeText, { color: colors.dangerText }]}>Remove protection</Text>
         </View>
         <Text style={styles.phaseTitle}>Confirm with a code</Text>
         <Text style={[styles.phaseBody, { color: colors.textSecondary }]}>
@@ -345,8 +345,8 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
           </View>
         ) : (
           <View style={[styles.qrError, { borderColor: colors.dangerBorder }]}>
-            <Ionicons name="alert-circle-outline" size={28} color={colors.danger} />
-            <Text style={[styles.qrErrorText, { color: colors.danger }]}>Could not generate QR code</Text>
+            <Ionicons name="alert-circle-outline" size={28} color={colors.dangerText} />
+            <Text style={[styles.qrErrorText, { color: colors.dangerText }]}>Could not generate QR code</Text>
             <AnimatedPressable onPress={() => void fetchEnrollment()} scaleValue={0.96}>
               <Text style={[styles.qrRetry, { color: colors.brand }]}>Try again</Text>
             </AnimatedPressable>
@@ -458,8 +458,8 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
     <>
       <View style={styles.phaseIntro}>
         <View style={[styles.statusBadge, { backgroundColor: colors.successSubtle }]}>
-          <Ionicons name="checkmark-circle" size={18} color={colors.success} />
-          <Text style={[styles.statusBadgeText, { color: colors.success }]}>Enabled</Text>
+          <Ionicons name="checkmark-circle" size={18} color={colors.successText} />
+          <Text style={[styles.statusBadgeText, { color: colors.successText }]}>Enabled</Text>
         </View>
         <Text style={styles.phaseTitle}>Save your recovery codes</Text>
         <Text style={[styles.phaseBody, { color: colors.textSecondary }]}>
@@ -491,7 +491,7 @@ export default function TwoFactorSetupScreen({ navigation }: Props) {
           accessibilityRole="button"
           accessibilityLabel="Copy all recovery codes"
         >
-          <Ionicons name={codesCopied ? 'checkmark' : 'copy-outline'} size={18} color={codesCopied ? colors.success : colors.textPrimary} />
+          <Ionicons name={codesCopied ? 'checkmark' : 'copy-outline'} size={18} color={codesCopied ? colors.successText : colors.textPrimary} />
           <Text style={[styles.recoveryActionText, { color: colors.textPrimary }]}>
             {codesCopied ? 'Copied' : 'Copy all'}
           </Text>
@@ -717,7 +717,7 @@ function createStyles(colors: ThemeColors) {
     textAlign: 'center',
     textAlignVertical: 'center' },
   errorText: {
-    color: colors.danger,
+    color: colors.dangerText,
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
     marginTop: Space.sm,

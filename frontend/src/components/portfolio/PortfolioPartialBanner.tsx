@@ -12,7 +12,7 @@ export function PortfolioPartialBanner() {
   const { colors } = useAppTheme();
   return (
     <View style={[styles.partialBanner, { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder }]}>
-      <Ionicons name="alert-circle-outline" size={16} color={colors.warning} />
+      <Ionicons name="alert-circle-outline" size={16} color={colors.warningText} />
       <Text style={[styles.partialBannerText, { color: colors.textSecondary }]} numberOfLines={2}>
         Some positions are unavailable. Totals may be incomplete.
       </Text>

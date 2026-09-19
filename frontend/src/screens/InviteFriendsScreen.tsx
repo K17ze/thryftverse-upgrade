@@ -19,6 +19,7 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { Space, Radius, LetterSpacing, Stroke, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { fetchReferralCode, fetchReferralHistory, fetchReferralStats } from '../services/referralsApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'InviteFriends'>;
 
@@ -30,16 +31,6 @@ interface ReferralHistoryItem {
   joinedAt: string | null;
   status: 'invited' | 'joined' | 'completed' | 'rewarded';
   rewardAmount: number | null;
-}
-
-/**
- * Generate a deterministic referral code from a user ID.
- * Format: TV-XXXXXX (6 chars from user ID, uppercased)
- */
-function generateReferralCode(userId: string): string {
-  const clean = userId.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-  const code = clean.length >= 6 ? clean.slice(0, 6) : clean.padEnd(6, 'X');
-  return `TV-${code}`;
 }
 
 export default function InviteFriendsScreen({ navigation }: Props) {
@@ -55,13 +46,29 @@ export default function InviteFriendsScreen({ navigation }: Props) {
   const BORDER = colors.border;
   const MUTED = colors.textMuted;
   const TEXT = colors.textPrimary;
-  const SUCCESS = colors.success;
+  const SUCCESS = colors.successText;
 
-  const referralCode = useMemo(
-    () => generateReferralCode(currentUser?.id ?? 'GUEST'),
-    [currentUser?.id]
-  );
-  const inviteLink = `https://thryftverse.app/invite/${referralCode}`;
+  // Server-owned referral code — a client-derived code cannot attribute
+  // signups, so there is no honest fallback value. When the fetch fails the
+  // code section shows an unavailable state instead of a fake code.
+  const [referralCode, setReferralCode] = React.useState<string | null>(null);
+  const [codeUnavailable, setCodeUnavailable] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!currentUser?.id) return;
+    let mounted = true;
+    setCodeUnavailable(false);
+    fetchReferralCode(currentUser.id)
+      .then((data) => {
+        if (mounted) setReferralCode(data.code);
+      })
+      .catch(() => {
+        if (mounted) setCodeUnavailable(true);
+      });
+    return () => { mounted = false; };
+  }, [currentUser?.id]);
+
+  const inviteLink = referralCode ? `https://thryftverse.app/invite/${referralCode}` : null;
 
   // Fetch referral stats from backend. Per AGENTS.md §6 (truthful UI), a
   // backend failure must NOT silently show fabricated zeros — the screen
@@ -82,13 +89,9 @@ export default function InviteFriendsScreen({ navigation }: Props) {
     if (!currentUser?.id) return;
     let mounted = true;
     setStatsUnavailable(false);
-    fetch(`${process.env.EXPO_PUBLIC_API_URL ?? ''}/users/${currentUser.id}/referral-stats`)
-      .then((res) => (res.ok ? res.json() : null))
+    fetchReferralStats(currentUser.id)
       .then((data) => {
-        if (!mounted || !data) {
-          if (mounted) setStatsUnavailable(true);
-          return;
-        }
+        if (!mounted) return;
         setReferralStats({
           invited: data.invited ?? 0,
           joined: data.joined ?? 0,
@@ -106,16 +109,26 @@ export default function InviteFriendsScreen({ navigation }: Props) {
     let mounted = true;
     setHistoryLoading(true);
     setHistoryUnavailable(false);
-    fetch(`${process.env.EXPO_PUBLIC_API_URL ?? ''}/users/${currentUser.id}/referrals`)
-      .then((res) => (res.ok ? res.json() : null))
+    fetchReferralHistory(currentUser.id)
       .then((data) => {
         if (!mounted) return;
         setHistoryLoading(false);
-        if (!data || !Array.isArray(data.items)) {
+        if (!Array.isArray(data.items)) {
           setHistoryUnavailable(true);
           return;
         }
-        setReferralHistory(data.items.slice(0, 20));
+        // Shares are not server-observable, so every row is an attributed
+        // join: joinedAt doubles as the display date, rewardAmount is null
+        // until a reward ledger exists.
+        setReferralHistory(data.items.slice(0, 20).map((item) => ({
+          id: item.id,
+          inviteeName: null,
+          inviteeHandle: item.username,
+          invitedAt: item.joinedAt,
+          joinedAt: item.joinedAt,
+          status: 'joined',
+          rewardAmount: null,
+        })));
       })
       .catch(() => {
         if (mounted) {
@@ -143,6 +156,7 @@ export default function InviteFriendsScreen({ navigation }: Props) {
     referralStats.creditsBalance > 0;
 
   const handleShare = async () => {
+    if (!referralCode || !inviteLink) return;
     try {
       await Share.share({
         message: `Join me on Thryftverse — the marketplace for second-hand fashion. Use my code ${referralCode} and we both earn credit when you make your first sale. ${inviteLink}`,
@@ -151,11 +165,13 @@ export default function InviteFriendsScreen({ navigation }: Props) {
   };
 
   const handleCopyLink = React.useCallback(async () => {
+    if (!inviteLink) return;
     await Clipboard.setStringAsync(inviteLink);
     show('Invite link copied to clipboard.', 'success');
   }, [inviteLink, show]);
 
   const handleCopyCode = React.useCallback(async () => {
+    if (!referralCode) return;
     await Clipboard.setStringAsync(referralCode);
     show('Referral code copied.', 'success');
   }, [referralCode, show]);
@@ -215,30 +231,44 @@ export default function InviteFriendsScreen({ navigation }: Props) {
       {/* Referral Code */}
       <View style={styles.flatSection}>
         <Text style={styles.sectionLabel}>YOUR REFERRAL CODE</Text>
-        <View style={styles.codeRow}>
-          <Text style={styles.codeText}>{referralCode}</Text>
-          <AnimatedPressable style={styles.copyBtn} onPress={() => void handleCopyCode()} accessibilityLabel="Copy referral code" accessibilityRole="button">
-            <Ionicons name="copy-outline" size={18} color={ACCENT} />
-            <Text style={styles.copyText}>Copy</Text>
-          </AnimatedPressable>
-        </View>
+        {codeUnavailable ? (
+          <View style={styles.statsUnavailableRow}>
+            <Ionicons name="cloud-offline-outline" size={20} color={MUTED} />
+            <Text style={styles.statsUnavailableText}>
+              Referral code unavailable right now. Try again later.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.codeRow}>
+            <Text style={styles.codeText}>{referralCode ?? '—'}</Text>
+            {referralCode ? (
+              <AnimatedPressable style={styles.copyBtn} onPress={() => void handleCopyCode()} accessibilityLabel="Copy referral code" accessibilityRole="button">
+                <Ionicons name="copy-outline" size={18} color={ACCENT} />
+                <Text style={styles.copyText}>Copy</Text>
+              </AnimatedPressable>
+            ) : null}
+          </View>
+        )}
       </View>
 
       {/* Share Link */}
-      <View style={styles.flatSection}>
-        <Text style={styles.sectionLabel}>YOUR INVITE LINK</Text>
-        <View style={styles.linkRow}>
-          <Text style={styles.linkText} numberOfLines={1}>
-            {inviteLink}
-          </Text>
-          <AnimatedPressable style={styles.copyBtn} onPress={() => void handleCopyLink()} accessibilityLabel="Copy invite link" accessibilityRole="button">
-            <Ionicons name="copy-outline" size={18} color={ACCENT} />
-            <Text style={styles.copyText}>Copy</Text>
-          </AnimatedPressable>
+      {inviteLink ? (
+        <View style={styles.flatSection}>
+          <Text style={styles.sectionLabel}>YOUR INVITE LINK</Text>
+          <View style={styles.linkRow}>
+            <Text style={styles.linkText} numberOfLines={1}>
+              {inviteLink}
+            </Text>
+            <AnimatedPressable style={styles.copyBtn} onPress={() => void handleCopyLink()} accessibilityLabel="Copy invite link" accessibilityRole="button">
+              <Ionicons name="copy-outline" size={18} color={ACCENT} />
+              <Text style={styles.copyText}>Copy</Text>
+            </AnimatedPressable>
+          </View>
         </View>
-      </View>
+      ) : null}
 
-      {/* Share Options */}
+      {/* Share Options — only useful once a real code exists */}
+      {referralCode ? (
       <View>
         <View style={styles.shareRow}>
           {([
@@ -254,6 +284,7 @@ export default function InviteFriendsScreen({ navigation }: Props) {
           ))}
         </View>
       </View>
+      ) : null}
 
       {/* Rewards Summary */}
       <View style={styles.flatSection}>
@@ -604,5 +635,5 @@ function createStyles(colors: ThemeColors) {
     badgeSuccess: {
       backgroundColor: colors.successSubtle },
     badgeSuccessText: {
-      color: colors.success } });
+      color: colors.successText } });
 }

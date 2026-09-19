@@ -395,7 +395,7 @@ export function KeyframeEditor({
             style={styles.deleteButton}
             hitSlop={Control.hit / 2}
           >
-            <Ionicons name="trash-outline" size={IconGrammar.metadata} color={colors.danger} />
+            <Ionicons name="trash-outline" size={IconGrammar.metadata} color={colors.dangerText} />
           </Pressable>
         </View>
       )}

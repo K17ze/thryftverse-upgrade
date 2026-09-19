@@ -331,7 +331,7 @@ export default function HelpSupportScreen({ navigation }: Props) {
               </View>
             ) : searchError ? (
               <View style={styles.searchErrorWrap}>
-                <Ionicons name="alert-circle-outline" size={24} color={colors.danger} />
+                <Ionicons name="alert-circle-outline" size={24} color={colors.dangerText} />
                 <Text style={styles.searchErrorText}>{searchError}</Text>
                 <Text style={styles.searchErrorHint}>Try again, or contact us below.</Text>
               </View>
@@ -560,7 +560,7 @@ function createStyles(colors: ThemeColors) {
     searchErrorText: {
       fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.medium,
-      color: colors.danger,
+      color: colors.dangerText,
       textAlign: 'center',
       letterSpacing: TypographyV2.body.letterSpacing },
     searchErrorHint: {

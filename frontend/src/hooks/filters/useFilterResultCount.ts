@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 import type { Listing } from '../../domain';
-import { isSustainableGrade } from '../../utils/sustainabilityScore';
 import { getSubcategoryToken } from '../../utils/subcategoryToken';
 import type { ConditionOption } from '../../components/filters/filterTypes';
 
@@ -16,7 +15,6 @@ interface Params {
   selectedCondition: ConditionOption;
   priceMin: string;
   priceMax: string;
-  sustainableOnly: boolean;
 }
 
 const toKey = (value: string) => value.trim().toLowerCase();
@@ -35,7 +33,6 @@ export function useFilterResultCount({
   selectedCondition,
   priceMin,
   priceMax,
-  sustainableOnly,
 }: Params): number {
   return useMemo(() => {
     const normalizedCategory = toKey(categoryId);
@@ -90,21 +87,6 @@ export function useFilterResultCount({
       if (minVal != null && !Number.isNaN(minVal) && listing.price < minVal) return false;
       if (maxVal != null && !Number.isNaN(maxVal) && listing.price > maxVal) return false;
 
-      // Sustainable — filters by seller-applied tags / heuristic grade.
-      // Returns false in production (no real data), so the filter yields no
-      // results until a backend impact service or seller tags exist.
-      if (
-        sustainableOnly &&
-        !isSustainableGrade({
-          condition: listing.condition,
-          category: listing.category,
-          subcategory: listing.subcategory,
-          brand: listing.brand,
-          sellerLocation: listing.seller?.location ?? null })
-      ) {
-        return false;
-      }
-
       return true;
     }).length;
   }, [
@@ -118,6 +100,5 @@ export function useFilterResultCount({
     selectedCondition,
     priceMin,
     priceMax,
-    sustainableOnly,
   ]);
 }
