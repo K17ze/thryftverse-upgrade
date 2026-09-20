@@ -1,16 +1,31 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
+import type { Redis } from 'ioredis';
 import { z } from 'zod';
 import {
   chargePromotionForToday,
   getSellerPayableBalanceMinor,
   type PromotionChargeOutcome,
 } from '../lib/promotionServing.js';
+import { checkFraudNonBlocking } from '../lib/fraudDetection.js';
 
 type PromotionRouteDependencies = {
   app: FastifyInstance;
   db: Pool;
+  /** When absent, click events skip the fraud velocity check. */
+  redis?: Redis | null;
+  fraudShadowService?: {
+    scoreShadow(input: unknown): Promise<unknown>;
+    logScoreComparison(
+      eventId: string,
+      eventType: string,
+      userId: string | null,
+      ruleEngineResult: unknown,
+      shadowResult: unknown,
+      input: unknown,
+    ): Promise<void>;
+  } | null;
 };
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -103,7 +118,7 @@ function insufficientBalancePayload(availableMinor: number, requiredMinor: numbe
  *   POST /seller/promotions/:id/end      — permanently retire (auth)
  *   GET  /seller/promotions/:id/stats    — impressions/clicks/spend (auth)
  */
-export const registerPromotionRoutes = ({ app, db }: PromotionRouteDependencies): void => {
+export const registerPromotionRoutes = ({ app, db, redis, fraudShadowService }: PromotionRouteDependencies): void => {
   app.post('/seller/promotions', async (request, reply) => {
     if (!request.authUser) {
       reply.code(401);
@@ -572,6 +587,30 @@ export const registerPromotionRoutes = ({ app, db }: PromotionRouteDependencies)
          VALUES ($1, $2, NULL, 'click', 'tap_through')`,
         [id, promo.listing_id],
       );
+    }
+
+    // R83: promotion-abuse velocity check. The click is already recorded
+    // (metric honesty — never block or silently drop a tap-through); the
+    // fraud engine counts sponsored-click velocity and feeds the account
+    // risk profile / audit trail. Fully non-blocking: a Redis or engine
+    // failure must never affect the click response.
+    if (redis && viewerId) {
+      try {
+        await checkFraudNonBlocking(
+          redis,
+          {
+            eventType: 'promotion_click',
+            userId: viewerId,
+            headers: request.headers as Record<string, string | string[] | undefined>,
+            ip: request.ip,
+          },
+          undefined,
+          request.log,
+          fraudShadowService ?? null,
+        );
+      } catch {
+        // Observational only — click recording already committed.
+      }
     }
 
     return { ok: true };

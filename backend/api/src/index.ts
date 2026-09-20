@@ -18877,7 +18877,7 @@ app.delete('/listings/:listingId', async (request, reply) => {
 });
 
 registerSellerHubRoutes({ app, readDb, db });
-registerPromotionRoutes({ app, db });
+registerPromotionRoutes({ app, db, redis, fraudShadowService });
 
 app.get('/users/:userId/listings', async (request) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });

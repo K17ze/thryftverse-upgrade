@@ -26,7 +26,7 @@ import type { Redis } from 'ioredis';
 // Types
 // ---------------------------------------------------------------------------
 
-export type FraudEventType = 'signup' | 'listing' | 'message' | 'transaction';
+export type FraudEventType = 'signup' | 'listing' | 'message' | 'transaction' | 'promotion_click';
 
 /**
  * Risk level derived from rule-engine evaluation.
@@ -164,6 +164,12 @@ export interface VelocityLimits {
   messageMax: number;
   /** Max login attempts from the same device within the window. */
   loginAttemptMax: number;
+  /**
+   * Max sponsored-unit clicks by the same account within the window.
+   * Click-farming drains seller promotion budgets and inflates CTR —
+   * a real buyer rarely taps 30+ sponsored units in an hour.
+   */
+  promotionClickMax: number;
   /** Velocity window in seconds. */
   windowSeconds: number;
 }
@@ -173,6 +179,7 @@ export interface VelocityCounts {
   listingCreation: number;
   message: number;
   loginAttempt: number;
+  promotionClick: number;
 }
 
 export interface FraudUserRiskProfile {
@@ -197,6 +204,7 @@ export const DEFAULT_VELOCITY_LIMITS: VelocityLimits = {
   listingCreationMax: 20,
   messageMax: 50,
   loginAttemptMax: 10,
+  promotionClickMax: 30,
   windowSeconds: 3600,
 };
 
@@ -380,6 +388,7 @@ async function readVelocityCounts(
   pipeline.zcount(redisKey('vel', 'listing', userId ?? 'anon'), windowStart, now);
   pipeline.zcount(redisKey('vel', 'message', userId ?? 'anon'), windowStart, now);
   pipeline.zcount(redisKey('vel', 'login', deviceFingerprint), windowStart, now);
+  pipeline.zcount(redisKey('vel', 'promo_click', userId ?? 'anon'), windowStart, now);
 
   const results = await pipeline.exec();
   const get = (index: number): number => {
@@ -392,6 +401,7 @@ async function readVelocityCounts(
     listingCreation: get(2),
     message: get(3),
     loginAttempt: get(4),
+    promotionClick: get(5),
   };
 }
 
@@ -443,6 +453,14 @@ export async function recordVelocityEvent(
     await incrementVelocity(
       redis,
       redisKey('vel', 'txn', userId),
+      window
+    );
+  }
+
+  if (eventType === 'promotion_click' && userId) {
+    await incrementVelocity(
+      redis,
+      redisKey('vel', 'promo_click', userId),
       window
     );
   }
@@ -655,6 +673,31 @@ const ruleHighValueNewAccount: FraudRule = (ctx) => {
 };
 
 /**
+ * Rule: Promotion click velocity — the same account tapping sponsored
+ * units at inhuman cadence. Click-farming drains seller budgets and
+ * inflates CTR; the click itself still records (metric honesty) but the
+ * signal feeds the account's risk score and audit trail.
+ */
+const rulePromotionClickVelocity: FraudRule = (ctx) => {
+  if (ctx.eventType !== 'promotion_click') return { signal: null };
+  const limit = ctx.limits.promotionClickMax;
+  const count = ctx.velocity.promotionClick;
+  if (count > limit) {
+    const excess = count - limit;
+    const weight = Math.min(35, 10 + excess * 4);
+    return {
+      signal: {
+        ruleId: 'velocity.promotion_click',
+        description: `Account clicked ${count} sponsored units in the last ${ctx.limits.windowSeconds}s (limit: ${limit})`,
+        weight,
+        observedValue: count,
+      },
+    };
+  }
+  return { signal: null };
+};
+
+/**
  * Rule: Missing user-agent — bots often omit or send minimal headers.
  */
 const ruleMissingUserAgent: FraudRule = (ctx) => {
@@ -674,6 +717,7 @@ const ALL_RULES: FraudRule[] = [
   ruleListingVelocity,
   ruleMessageVelocity,
   ruleLoginVelocity,
+  rulePromotionClickVelocity,
   ruleNewAccount,
   ruleHighValueNewAccount,
   ruleMissingUserAgent,
@@ -745,6 +789,8 @@ export function actionFromRiskLevel(level: FraudRiskLevel): FraudAction {
  * - `listing`     → `allow_low_risk_flow` (can be reviewed post-hoc)
  * - `message`     → `allow_low_risk_flow` (can be reviewed post-hoc)
  * - `transaction` → `hold_for_review`   (money movement: require manual review)
+ * - `promotion_click` → `allow_low_risk_flow` (observational event — the
+ *   click records either way; the signal feeds review, never blocks a tap)
  */
 export function failoverPolicyAction(eventType: FraudEventType): FraudPolicyAction {
   if (eventType === 'transaction') return 'hold_for_review';
@@ -1199,6 +1245,7 @@ function extractVelocityFromResult(result: FraudCheckResult): VelocityCounts {
     listingCreation: 0,
     message: 0,
     loginAttempt: 0,
+    promotionClick: 0,
   };
   for (const signal of result.signals) {
     if (signal.ruleId === 'velocity.account_creation') {
@@ -1209,6 +1256,8 @@ function extractVelocityFromResult(result: FraudCheckResult): VelocityCounts {
       counts.message = Number(signal.observedValue) || 0;
     } else if (signal.ruleId === 'velocity.login_attempt') {
       counts.loginAttempt = Number(signal.observedValue) || 0;
+    } else if (signal.ruleId === 'velocity.promotion_click') {
+      counts.promotionClick = Number(signal.observedValue) || 0;
     }
   }
   return counts;
