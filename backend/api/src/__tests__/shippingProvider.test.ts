@@ -140,6 +140,68 @@ test('normalizeAndVerifyShippingWebhook accepts valid signature and normalizes e
   assert.equal(result.event?.metadata.source, 'test');
 });
 
+test('normalizeAndVerifyShippingWebhook maps a carrier lost report to a discrete event folded for order status', async () => {
+  const { normalizeAndVerifyShippingWebhook } = await loadShippingModule();
+
+  const payload = {
+    eventType: 'lost',
+    trackingNumber: 'trk_lost_1',
+    metadata: { orderId: 'ord_lost_1' },
+  };
+  const rawBody = JSON.stringify(payload);
+  const signature = crypto
+    .createHmac('sha256', process.env.EVRI_WEBHOOK_SECRET ?? '')
+    .update(rawBody, 'utf8')
+    .digest('hex');
+
+  const result = await normalizeAndVerifyShippingWebhook(
+    'evri',
+    { 'x-evri-signature': `sha256=${signature}` },
+    rawBody,
+    payload
+  );
+
+  assert.equal(result.verified, true);
+  // Discrete carrier truth preserved; order-status layer folds to
+  // 'delivery_failed' — orders.status has no lost/damaged state.
+  assert.equal(result.event?.carrierEventType, 'lost');
+  assert.equal(result.event?.eventType, 'delivery_failed');
+  assert.equal(result.event?.metadata.carrierEventType, 'lost');
+  assert.equal(result.event?.metadata.rawCarrierEventType, 'lost');
+  // Synthetic event id carries the discrete type — a 'lost' report must not
+  // dedupe against an earlier 'delivery_failed' on the same tracking number.
+  assert.equal(result.event?.providerEventId, 'evri:lost:trk_lost_1');
+});
+
+test('normalizeAndVerifyShippingWebhook maps a carrier damaged report to a discrete event folded for order status', async () => {
+  const { normalizeAndVerifyShippingWebhook } = await loadShippingModule();
+
+  const payload = {
+    eventType: 'damaged_in_transit',
+    trackingNumber: 'trk_dmg_1',
+    metadata: { orderId: 'ord_dmg_1' },
+  };
+  const rawBody = JSON.stringify(payload);
+  const signature = crypto
+    .createHmac('sha256', process.env.EVRI_WEBHOOK_SECRET ?? '')
+    .update(rawBody, 'utf8')
+    .digest('hex');
+
+  const result = await normalizeAndVerifyShippingWebhook(
+    'evri',
+    { 'x-evri-signature': `sha256=${signature}` },
+    rawBody,
+    payload
+  );
+
+  assert.equal(result.verified, true);
+  // 'damaged_in_transit' must not fall through to 'in_transit' — damage is
+  // a carrier-reported failure, never a generic movement update.
+  assert.equal(result.event?.carrierEventType, 'damaged');
+  assert.equal(result.event?.eventType, 'delivery_failed');
+  assert.equal(result.event?.metadata.carrierEventType, 'damaged');
+});
+
 test('normalizeAndVerifyShippingWebhook rejects invalid signatures and unknown carriers', async () => {
   const { normalizeAndVerifyShippingWebhook } = await loadShippingModule();
 

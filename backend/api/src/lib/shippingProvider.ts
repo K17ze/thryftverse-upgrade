@@ -13,6 +13,21 @@ export type NormalizedParcelEventType =
   | 'delivery_failed'
   | 'returned';
 
+/**
+ * Discrete carrier-reported failure kinds (audit R40). Carriers report
+ * lost/damaged parcels explicitly — distinct facts from a failed delivery
+ * attempt. The order_parcel_events CHECK admits them (migration 325) and
+ * they persist verbatim on the parcel event; the coarse orders.status enum
+ * has no dedicated state, so they fold to 'delivery_failed' at the
+ * order-status layer (migration 313 semantics: "carrier attempted/lost the
+ * parcel; may still recover").
+ */
+export type CarrierFailureEventType = 'lost' | 'damaged';
+
+/** The full discrete carrier event taxonomy — the appliable order-status
+ *  events plus the explicit carrier failure reports. */
+export type NormalizedCarrierEventType = NormalizedParcelEventType | CarrierFailureEventType;
+
 export interface ShippingQuote {
   carrierId: string;
   carrierLabel: string;
@@ -63,7 +78,17 @@ export interface ShipmentResult {
 export interface NormalizedShippingWebhookEvent {
   provider: ShippingCarrierProvider;
   providerEventId: string;
+  /**
+   * The order-status-appliable event. 'lost'/'damaged' carrier reports fold
+   * to 'delivery_failed' here — see appliableParcelEventType — because
+   * orders.status has no dedicated lost/damaged state and delivery_failed is
+   * the honest coarse mapping. The discrete carrier truth is preserved on
+   * `carrierEventType` and on the persisted parcel-event payload.
+   */
   eventType: NormalizedParcelEventType;
+  /** The discrete carrier-reported event before folding — 'lost' and
+   *  'damaged' are preserved verbatim (audit R40). */
+  carrierEventType: NormalizedCarrierEventType;
   trackingNumber: string | null;
   orderId: string | null;
   occurredAt: string;
@@ -1281,8 +1306,20 @@ function normalizeCarrierFromPath(value: string): ShippingCarrierProvider | null
   return null;
 }
 
-function mapProviderEventType(rawEventType: string | null): NormalizedParcelEventType {
+function mapProviderEventType(rawEventType: string | null): NormalizedCarrierEventType {
   const normalized = (rawEventType ?? '').trim().toLowerCase();
+
+  // Explicit carrier failure reports first — 'lost' and 'damaged' are
+  // discrete carrier facts (audit R40). They must never fold into a generic
+  // transit state: 'damaged_in_transit' contains 'transit', and 'lost' used
+  // to be silently lumped into 'delivery_failed'.
+  if (normalized === 'lost' || normalized.includes('lost')) {
+    return 'lost';
+  }
+
+  if (normalized === 'damaged' || normalized === 'damage' || normalized.includes('damag') || normalized.includes('destroy')) {
+    return 'damaged';
+  }
 
   if (normalized === 'picked_up' || normalized === 'pickup' || normalized === 'dispatched' || normalized.includes('picked_up') || normalized.includes('pickup')) {
     return 'picked_up';
@@ -1304,7 +1341,7 @@ function mapProviderEventType(rawEventType: string | null): NormalizedParcelEven
     return 'delivered';
   }
 
-  if (normalized === 'delivery_failed' || normalized === 'failed' || normalized === 'lost' || normalized.includes('failed') || normalized.includes('lost')) {
+  if (normalized === 'delivery_failed' || normalized === 'failed' || normalized.includes('failed')) {
     return 'delivery_failed';
   }
 
@@ -1313,6 +1350,26 @@ function mapProviderEventType(rawEventType: string | null): NormalizedParcelEven
   }
 
   return 'in_transit';
+}
+
+/**
+ * Fold a discrete carrier event into the order-status-appliable set.
+ *
+ * 'lost' and 'damaged' are carrier-reported facts with no dedicated
+ * orders.status — the honest coarse mapping is 'delivery_failed'
+ * (migration 313: "carrier attempted/lost the parcel; may still recover").
+ * A later in_transit/delivered event can still re-advance the order; the
+ * discrete kind is preserved on `carrierEventType` and in the parcel-event
+ * payload so the timeline never claims a generic failed attempt.
+ */
+export function appliableParcelEventType(
+  eventType: NormalizedCarrierEventType
+): NormalizedParcelEventType {
+  if (eventType === 'lost' || eventType === 'damaged') {
+    return 'delivery_failed';
+  }
+
+  return eventType;
 }
 
 function resolveWebhookSecret(provider: ShippingCarrierProvider): string | null {
@@ -1458,6 +1515,8 @@ export async function normalizeAndVerifyShippingWebhook(
     ? new Date(occurredAtRaw).toISOString()
     : new Date().toISOString();
 
+  const carrierEventType = mapProviderEventType(rawEventType);
+
   const providerEventId =
     asString(payload.eventId)
     ?? asString(payload.event_id)
@@ -1468,7 +1527,9 @@ export async function normalizeAndVerifyShippingWebhook(
     ?? asString(resource.webhook_event_id)
     ?? asString(resource.id)
     ?? (trackingNumber
-      ? `${provider}:${mapProviderEventType(rawEventType)}:${trackingNumber}`
+      // Discrete type in the synthetic id: a 'lost' report must not dedupe
+      // against an earlier 'delivery_failed' on the same tracking number.
+      ? `${provider}:${carrierEventType}:${trackingNumber}`
       : crypto.createHash('sha1').update(rawBody, 'utf8').digest('hex'));
 
   return {
@@ -1476,11 +1537,19 @@ export async function normalizeAndVerifyShippingWebhook(
     event: {
       provider,
       providerEventId,
-      eventType: mapProviderEventType(rawEventType),
+      eventType: appliableParcelEventType(carrierEventType),
+      carrierEventType,
       trackingNumber,
       orderId,
       occurredAt,
-      metadata,
+      metadata: {
+        ...metadata,
+        // Carrier truth rides the parcel-event payload — the timeline can
+        // render "reported lost/damaged" even while the coarse event_type
+        // and order status fold to delivery_failed.
+        carrierEventType,
+        rawCarrierEventType: rawEventType ?? null,
+      },
       rawPayload: payload,
     },
   };

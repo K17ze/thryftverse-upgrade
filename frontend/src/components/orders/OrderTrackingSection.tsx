@@ -6,6 +6,7 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { PackageContents } from './PackageContents';
 import { EtaBanner } from './EtaBanner';
 import { OrderTrackingTimeline, type TimelineEntry } from './OrderTrackingTimeline';
+import { t } from '../../i18n';
 import {
   orderDetailScreenStyles as styles,
   createOrderDetailThemedStyles } from './orderDetailScreenStyles';
@@ -81,12 +82,14 @@ export function OrderTrackingSection({
         />
       ) : null}
 
-      {/* Stale tracking warning — last event > 48h old while in transit */}
+      {/* Stale tracking warning — last event > 48h old while in transit.
+          Estimate language only ("may be delayed") — never claims a
+          carrier-reported delay; only the timeline shows carrier facts. */}
       {isStaleTracking ? (
         <View style={[styles.staleBanner, themed.staleBanner]}>
           <Ionicons name="time-outline" size={16} color={colors.warningText} aria-hidden={true} />
           <Text style={[styles.staleText, themed.staleText]}>
-            Tracking hasn't updated in over 48 hours — the carrier may be delayed.
+            {t('orderDetail.tracking.staleWarning')}
           </Text>
         </View>
       ) : null}

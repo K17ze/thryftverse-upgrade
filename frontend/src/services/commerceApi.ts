@@ -330,6 +330,11 @@ export interface OrderParcelEvent {
     | 'collection_confirmed'
     | 'delivery_failed'
     | 'returned'
+    // Discrete carrier-reported failures (migration 325). Webhook-ingested
+    // rows may still carry event_type 'delivery_failed' with the discrete
+    // kind on payload.carrierEventType — see resolveParcelFailureKind.
+    | 'lost'
+    | 'damaged'
     // Seller-asserted drop-off for integrated-label orders — NOT carrier
     // evidence. Written by POST /orders/:id/fulfilment/handoff-assertion.
     | 'handoff_asserted';

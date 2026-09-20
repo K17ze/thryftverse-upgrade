@@ -965,6 +965,8 @@ const PARCEL_EVENT_TYPES = [
   'delivered',
   'collection_confirmed',
   'delivery_failed',
+  'lost',
+  'damaged',
   'returned',
 ] as const;
 type ParcelEventType = (typeof PARCEL_EVENT_TYPES)[number];
@@ -5932,11 +5934,18 @@ async function applyOrderParcelEvent(
     if (order.status === 'paid' || order.status === 'delivery_failed') {
       nextStatus = 'shipped';
     }
-  } else if (input.eventType === 'delivery_failed') {
-    // Carrier truth the old state machine dropped: a failed/lost parcel
-    // must not sit at 'shipped' forever with escrow held. 'paid' orders
-    // stay put — a failure event pre-dispatch is anomalous evidence, not
-    // a state transition.
+  } else if (
+    input.eventType === 'delivery_failed'
+    || input.eventType === 'lost'
+    || input.eventType === 'damaged'
+  ) {
+    // Carrier truth the old state machine dropped: a failed/lost/damaged
+    // parcel must not sit at 'shipped' forever with escrow held. 'lost' and
+    // 'damaged' are discrete carrier facts that fold to 'delivery_failed' at
+    // the order-status layer (orders.status has no dedicated state; the
+    // discrete kind persists on the parcel-event row + payload). 'paid'
+    // orders stay put — a failure event pre-dispatch is anomalous evidence,
+    // not a state transition.
     if (order.status === 'shipped') {
       nextStatus = 'delivery_failed';
     }
@@ -9587,6 +9596,41 @@ async function queueCommerceParcelSettlementNotifications(input: {
       });
     } catch (error) {
       app.log.error({ err: error, orderId: input.orderId }, 'Failed to queue buyer delivered notification');
+    }
+  }
+
+  // Carrier failure truth: a parcel reported failed/lost/damaged must reach
+  // the buyer — escrow stays held and silence reads as "still on the way".
+  // Copy keys off the discrete eventType so 'lost' never reads as a generic
+  // failed attempt. Idempotency keys per discrete type: a 'lost' report
+  // still notifies after an earlier generic 'delivery_failed'.
+  if (input.orderStatus === 'delivery_failed') {
+    const failureCopy =
+      input.eventType === 'lost'
+        ? { event: 'order_parcel_lost', title: 'Parcel reported lost', body: 'The carrier reported your parcel as lost. Funds stay held while this is resolved.' }
+        : input.eventType === 'damaged'
+          ? { event: 'order_parcel_damaged', title: 'Parcel reported damaged', body: 'The carrier reported your parcel was damaged in transit. Funds stay held while this is resolved.' }
+          : { event: 'order_delivery_failed', title: 'Delivery failed', body: 'The carrier could not deliver your parcel. Tracking has the latest.' };
+    try {
+      await queueUserNotification({
+        userId: input.buyerId,
+        title: failureCopy.title,
+        body: failureCopy.body,
+        eventType: failureCopy.event,
+        payload: {
+          event: failureCopy.event,
+          orderId: input.orderId,
+          provider: input.provider,
+          eventType: input.eventType,
+        },
+        route: { screen: 'OrderDetail', params: { orderId: input.orderId } },
+        idempotencyKey: `${failureCopy.event}_buyer_${input.orderId}`,
+        metadata: {
+          source: input.source,
+        },
+      });
+    } catch (error) {
+      app.log.error({ err: error, orderId: input.orderId }, 'Failed to queue buyer parcel-failure notification');
     }
   }
 
@@ -31726,7 +31770,10 @@ const handleShippingWebhook = async (request: FastifyRequest, reply: FastifyRepl
     const applied = await applyOrderParcelEvent(client, {
       orderId,
       provider: event.provider,
-      eventType: event.eventType,
+      // Discrete carrier truth (lost/damaged persist verbatim on the
+      // parcel-event row); applyOrderParcelEvent folds them to the
+      // 'delivery_failed' order state itself.
+      eventType: event.carrierEventType,
       providerEventId: event.providerEventId,
       trackingId: event.trackingNumber ?? undefined,
       occurredAt: event.occurredAt,
