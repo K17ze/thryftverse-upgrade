@@ -2,7 +2,10 @@
  * Shared state types for the live stream viewer and seller domain hooks.
  */
 
-export type ConnectionState = 'connecting' | 'live' | 'error' | 'ended' | 'scheduled';
+// 'removed' — the host kicked this viewer (live.viewer.kicked). Terminal:
+// the server also refuses fresh viewer tokens for kicked-and-muted users,
+// so reconnecting is not offered.
+export type ConnectionState = 'connecting' | 'live' | 'error' | 'ended' | 'scheduled' | 'removed';
 
 /** Seller broadcast phases: setup → live → summary. */
 export type SellerPhase = 'setup' | 'live' | 'summary';

@@ -939,6 +939,11 @@ const LIVE_CHAT_EVENT = 'live.chat.message';
 const LIVE_BID_EVENT = 'live.bid.placed';
 const LIVE_CURRENT_LOT_EVENT = 'live.current_lot.update';
 const LIVE_VIEWER_COUNT_EVENT = 'live.viewer_count.update';
+// Host moderation (R48): the server is authoritative — these events tell a
+// connected viewer their chat is muted or that they must leave.
+const LIVE_VIEWER_MUTED_EVENT = 'live.viewer.muted';
+const LIVE_VIEWER_UNMUTED_EVENT = 'live.viewer.unmuted';
+const LIVE_VIEWER_KICKED_EVENT = 'live.viewer.kicked';
 
 /** Subscribe to a live session realtime topic. Returns an unsubscribe
  *  function. Returns a no-op if the realtime client is not available. */
@@ -989,6 +994,12 @@ function backendToStreamEventType(type: string): StreamEventType | null {
       return 'lot_update';
     case 'live.session.ended':
       return 'stream_end';
+    case LIVE_VIEWER_MUTED_EVENT:
+      return 'viewer_muted';
+    case LIVE_VIEWER_UNMUTED_EVENT:
+      return 'viewer_unmuted';
+    case LIVE_VIEWER_KICKED_EVENT:
+      return 'viewer_kicked';
     default:
       return null;
   }
@@ -1424,7 +1435,14 @@ export type StreamEventType =
    *  lot.sold, lot.passed, lot.cancelled, lot.extension). Payload carries the
    *  lot aggregate when the engine has one, or top-level lot fields for the
    *  anti-snipe extension event. */
-  | 'lot_update';
+  | 'lot_update'
+  // Host viewer moderation (R48) — payload { sessionId, userId }. The kicked
+  // viewer must eject; a muted viewer's composer is disabled (the server
+  // also rejects their sends and new tokens, so this is enforcement UX, not
+  // the security boundary).
+  | 'viewer_muted'
+  | 'viewer_unmuted'
+  | 'viewer_kicked';
 
 export interface StreamEvent<T = unknown> {
   type: StreamEventType;
@@ -1456,6 +1474,13 @@ export type LotChangeEventPayload = {
 
 export type ViewerCountEventPayload = {
   count: number;
+};
+
+/** Host viewer-moderation event payload — server-emitted on the session
+ *  topic; `userId` is the moderated viewer. */
+export type ViewerModerationEventPayload = {
+  sessionId: string;
+  userId: string;
 };
 
 export type LikeEventPayload = {

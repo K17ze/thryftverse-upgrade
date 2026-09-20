@@ -1257,6 +1257,10 @@
       "reconnect": "Reconnect",
       "goBack": "Go back"
     },
+    "removed": {
+      "title": "Removed from this stream",
+      "subtitle": "The host removed you from this live session."
+    },
     "ended": {
       "title": "Stream Ended",
       "subtitle": "Thanks for watching",
@@ -1288,7 +1292,8 @@
     },
     "chat": {
       "seller": "Seller",
-      "placeholder": "Send a message…"
+      "placeholder": "Send a message…",
+      "mutedPlaceholder": "The host muted you in this chat"
     },
     "product": {
       "bids": "bids"

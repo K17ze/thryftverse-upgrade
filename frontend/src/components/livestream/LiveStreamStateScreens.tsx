@@ -89,6 +89,32 @@ export function LiveStreamErrorScreen({ isOffline, onBack, onRetry }: Connecting
   );
 }
 
+/** Removed state — the host kicked this viewer (live.viewer.kicked). No
+ *  reconnect affordance: the server rejects fresh viewer tokens for the
+ *  kicked user, so offering retry would be a dead control. */
+export function LiveStreamRemovedScreen({ onBack }: { onBack: () => void }) {
+  const { colors } = useAppTheme();
+  const { height: screenHeight } = useWindowDimensions();
+  const styles = useMemo(() => createStyles(colors, screenHeight), [colors, screenHeight]);
+  const { t } = useAppTranslation('liveStreamViewer');
+
+  return (
+    <FlagshipScreen
+      header={<FlagshipHeader title={t('live.label')} onBack={onBack} />}
+      scrollEnabled={false}
+      contentStyle={styles.stateFlush}
+    >
+      <FlagshipState
+        variant="error"
+        title={t('removed.title')}
+        subtitle={t('removed.subtitle')}
+        actionLabel={t('error.goBack')}
+        onAction={onBack}
+      />
+    </FlagshipScreen>
+  );
+}
+
 interface EndedProps {
   summary: StreamEndEventPayload | null;
   onBack: () => void;

@@ -51,7 +51,9 @@ import {
   LiveStreamConnectingScreen,
   LiveStreamErrorScreen,
   LiveStreamEndedScreen,
+  LiveStreamRemovedScreen,
   LiveStreamScheduledScreen } from '../components/livestream/LiveStreamStateScreens';
+import { useStore } from '../store/useStore';
 import { resolveStageCaption } from '../components/livestream/livestreamUtils';
 import { LiveKitVideoSurface } from '../components/live/BroadcastPreview';
 
@@ -73,6 +75,9 @@ export function LiveStreamViewerScreen() {
   const closeBidSheet = useCallback(() => setBidSheetVisible(false), []);
 
   // ── Real-time session: connection, subscriptions, lot, chat, identity ──
+  // viewerUserId lets the session hook recognise host-moderation events
+  // addressed to this viewer (kick → removed state, mute → composer lock).
+  const viewerUserId = useStore((s) => s.currentUser?.id);
   const {
     connectionState,
     stream,
@@ -82,7 +87,8 @@ export function LiveStreamViewerScreen() {
     streamEndSummary,
     currentLot,
     setCurrentLot,
-    retry } = useLiveStreamSession(sessionId);
+    viewerMuted,
+    retry } = useLiveStreamSession(sessionId, viewerUserId);
 
   // Real video plane — LiveKit room joined with the viewer token the backend
   // issued. When the session carries no credentials the hook stays
@@ -152,6 +158,11 @@ export function LiveStreamViewerScreen() {
         }
       />
     );
+  }
+
+  // ── Removed state — the host kicked this viewer; terminal, no retry ──
+  if (connectionState === 'removed') {
+    return <LiveStreamRemovedScreen onBack={goBack} />;
   }
 
   // ── Scheduled state — the show exists but has not gone live ──
@@ -226,6 +237,7 @@ export function LiveStreamViewerScreen() {
           value={chatInput}
           onChangeText={setChatInput}
           onSend={handleSendChat}
+          muted={viewerMuted}
         />
       </KeyboardAvoidingView>
 

@@ -27,15 +27,19 @@ import {
   subscribeToViewerCount,
   subscribeToBids,
   subscribeToLotChanges,
-  fetchStreamChatHistory } from '../../services/liveShoppingApi';
+  fetchStreamChatHistory,
+  type ViewerModerationEventPayload } from '../../services/liveShoppingApi';
 import { track } from '../../analytics';
 import type { ConnectionState, SellerIdentity } from './types';
 
-export function useLiveStreamSession(sessionId: string) {
+export function useLiveStreamSession(sessionId: string, viewerUserId?: string) {
   const [connectionState, setConnectionState] = useState<ConnectionState>('connecting');
   const [stream, setStream] = useState<LiveStream | null>(null);
   const [messages, setMessages] = useState<LiveStreamChatMessage[]>([]);
   const [viewerCount, setViewerCount] = useState(0);
+  // Host moderation (R48): true while the server reports this viewer muted —
+  // the composer disables and sends are server-rejected anyway.
+  const [viewerMuted, setViewerMuted] = useState(false);
   const [sellerIdentity, setSellerIdentity] = useState<SellerIdentity | null>(null);
   const [streamEndSummary, setStreamEndSummary] = useState<StreamEndEventPayload | null>(null);
   const [currentLot, setCurrentLot] = useState<LiveLot | null>(null);
@@ -50,6 +54,7 @@ export function useLiveStreamSession(sessionId: string) {
     let unsubLotChanges: (() => void) | null = null;
     let unsubLotLifecycle: (() => void) | null = null;
     let unsubStreamEnd: (() => void) | null = null;
+    let unsubModeration: (() => void) | null = null;
 
     (async () => {
       try {
@@ -214,6 +219,26 @@ export function useLiveStreamSession(sessionId: string) {
             setConnectionState('ended');
           }
         });
+
+        // Host viewer moderation (R48): the kick event is how a connected
+        // viewer learns they were ejected — the server can't revoke an
+        // already-issued token mid-session. Only act when the event targets
+        // this viewer; moderation events about other users are ignored.
+        unsubModeration = subscribeToStreamEvents(sessionId, (event) => {
+          if (!viewerUserId) return;
+          if (
+            event.type !== 'viewer_kicked' &&
+            event.type !== 'viewer_muted' &&
+            event.type !== 'viewer_unmuted'
+          ) return;
+          const payload = event.payload as ViewerModerationEventPayload;
+          if (payload.userId !== viewerUserId) return;
+          if (event.type === 'viewer_kicked') {
+            setConnectionState('removed');
+          } else {
+            setViewerMuted(event.type === 'viewer_muted');
+          }
+        });
       } catch {
         if (!cancelled) {
           setConnectionState('error');
@@ -229,9 +254,10 @@ export function useLiveStreamSession(sessionId: string) {
       unsubLotChanges?.();
       unsubLotLifecycle?.();
       unsubStreamEnd?.();
+      unsubModeration?.();
       disconnectFromStream(sessionId);
     };
-  }, [sessionId, reconnectCount]);
+  }, [sessionId, viewerUserId, reconnectCount]);
 
   const retry = useCallback(() => {
     setConnectionState('connecting');
@@ -252,5 +278,6 @@ export function useLiveStreamSession(sessionId: string) {
     streamEndSummary,
     currentLot,
     setCurrentLot,
+    viewerMuted,
     retry };
 }
