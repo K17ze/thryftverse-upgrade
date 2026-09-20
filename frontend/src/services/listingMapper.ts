@@ -11,6 +11,7 @@ import {
 } from '../contracts/listingCategoryPolicy';
 import { CONDITION_NAMES } from '../contracts/taxonomy';
 import type { ListingMediaRecord } from '../contracts/listingMedia';
+import type { ListingAttributes } from './categoryAttributes';
 
 /**
  * Canonical backend listing → frontend Listing view-model mapper.
@@ -69,6 +70,9 @@ export interface BackendListingRow {
   sustainabilityGrade?: 'A' | 'B' | 'C' | 'D' | null;
   materialComposition?: string | null;
   weightKg?: number | null;
+  /** Structured per-category specifics (listings.attributes JSONB) —
+   *  schema per services/categoryAttributes.ts. Absent on pre-326 rows. */
+  attributes?: ListingAttributes | null;
 }
 
 /**
@@ -114,6 +118,19 @@ function normalizeCondition(value: unknown): ListingCondition | null {
     if (match) return match;
   }
   return null;
+}
+
+function normalizeAttributes(value: unknown): ListingAttributes | null {
+  // Scalar-only map — anything else (arrays, nested objects) is dropped so
+  // PDP attribute rows never render fabricated shapes.
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const out: ListingAttributes = {};
+  for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+      out[key] = v;
+    }
+  }
+  return Object.keys(out).length > 0 ? out : null;
 }
 
 function normalizeStatus(value: unknown): ListingLifecycleStatus {
@@ -266,6 +283,7 @@ export function mapBackendListingToListing(row: BackendListingRow): Listing {
     sustainabilityGrade: row.sustainabilityGrade ?? null,
     materialComposition: row.materialComposition ?? null,
     weightKg: row.weightKg ?? null,
+    attributes: normalizeAttributes(row.attributes),
   };
 }
 

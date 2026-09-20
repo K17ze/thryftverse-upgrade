@@ -3,6 +3,21 @@ import type { Pool, PoolClient } from 'pg';
 import { appendDomainEvent } from './domainOutbox.js';
 import { logger } from './logger.js';
 import { moderateListingText } from './moderation/moderationService.js';
+import {
+  validateListingAttributes,
+  type AttributeValidationError,
+  type ListingAttributes,
+} from './categoryAttributes.js';
+
+/**
+ * Structured category attributes (listings.attributes JSONB, migration
+ * 326) — scalar label/value pairs validated against the category-attribute
+ * registry in lib/categoryAttributes.ts.
+ */
+export const listingAttributesSchema = z.record(
+  z.string(),
+  z.union([z.string(), z.number(), z.boolean()]),
+);
 
 // ── Field patch contract ────────────────────────────────────────────────
 //
@@ -44,12 +59,22 @@ export type ListingPatchBody = z.infer<typeof listingPatchSchema>;
  *  - `imageUrl` / `coverFinalizationId` — cover changes require the
  *    verified upload-finalization flow, which is inherently single-listing.
  */
-export const listingEditPatchSchema = listingPatchSchema.omit({
-  status: true,
-  imageUrl: true,
-  coverFinalizationId: true,
-  expectedUpdatedAt: true,
-});
+export const listingEditPatchSchema = listingPatchSchema
+  .omit({
+    status: true,
+    imageUrl: true,
+    coverFinalizationId: true,
+    expectedUpdatedAt: true,
+  })
+  .extend({
+    // Batch-edit surface only: `subcategory` and `attributes` are applied
+    // by applyListingFieldPatch below (which validates the merged result
+    // against the category-attribute registry). The single-PATCH route in
+    // index.ts applies a hand-mapped `add()` column list — wiring these
+    // keys there requires the corresponding `add()` calls in that handler.
+    subcategory: z.string().min(1).max(120).optional(),
+    attributes: listingAttributesSchema.optional(),
+  });
 
 export type ListingEditPatch = z.infer<typeof listingEditPatchSchema>;
 
@@ -60,9 +85,11 @@ export const LISTING_EDIT_PATCH_COLUMNS: Record<keyof ListingEditPatch, string> 
   description: 'description',
   priceGbp: 'price_gbp',
   category: 'category',
+  subcategory: 'subcategory',
   brand: 'brand',
   size: 'size',
   condition: 'condition',
+  attributes: 'attributes',
   originalPriceGbp: 'original_price_gbp',
   shippingMethod: 'shipping_method',
   shippingPayer: 'shipping_payer',
@@ -78,7 +105,15 @@ export type ListingFieldPatchResult =
       newPriceGbp?: number;
       updatedAt?: string;
     }
-  | { status: 'rejected'; listingId: string; reason: string; currentStatus: string }
+  | {
+      status: 'rejected';
+      listingId: string;
+      reason: string;
+      currentStatus: string;
+      /** Category-attribute registry violations when reason is
+       *  'attribute_validation_failed'. */
+      attributeErrors?: AttributeValidationError[];
+    }
   | { status: 'conflict'; listingId: string; reason: string; currentStatus: string };
 
 interface ListingEditLockRow {
@@ -88,6 +123,10 @@ interface ListingEditLockRow {
   status: string;
   title: string | null;
   description: string | null;
+  category: string | null;
+  subcategory: string | null;
+  condition: string | null;
+  attributes: ListingAttributes | null;
 }
 
 /**
@@ -127,7 +166,9 @@ export async function applyListingFieldPatch(
     const val = patch[key as keyof ListingEditPatch];
     if (val !== undefined) {
       sets.push(`${column} = $${idx++}`);
-      values.push(val);
+      // JSONB column — serialise explicitly (same convention as the
+      // admin_audit_logs metadata write below).
+      values.push(key === 'attributes' ? JSON.stringify(val) : val);
       appliedFields.push(key);
     }
   }
@@ -146,7 +187,8 @@ export async function applyListingFieldPatch(
     await client.query('BEGIN');
 
     const lockResult = await client.query<ListingEditLockRow>(
-      `SELECT id, seller_id, price_gbp, status, title, description
+      `SELECT id, seller_id, price_gbp, status, title, description,
+              category, subcategory, condition, attributes
          FROM listings
          WHERE id = $1
          LIMIT 1
@@ -211,6 +253,49 @@ export async function applyListingFieldPatch(
           { listingId, labels: textModerationResult.labels },
           'listingPatch: listing text edit flagged for human review',
         );
+      }
+    }
+
+    // Category-attribute registry (R30/R31): when the patch touches the
+    // taxonomy surface — category, subcategory, condition or the
+    // attributes map itself — the merged result must satisfy the resolved
+    // category's attribute schema. Condition is always re-checked because
+    // a category change can orphan an otherwise-valid condition (e.g.
+    // 'New with tags' on a listing recategorised to electronics).
+    //
+    // Required attributes are enforced once the listing carries an
+    // authored attributes map or the patch supplies one. Rows whose
+    // attributes are NULL/'{}' (every row written before migration 326)
+    // keep the lenient legacy contract so unrelated field edits on old
+    // listings stay writable.
+    if (
+      patch.category !== undefined ||
+      patch.subcategory !== undefined ||
+      patch.condition !== undefined ||
+      patch.attributes !== undefined
+    ) {
+      const storedAttributes = current.attributes;
+      const mergedAttributes =
+        patch.attributes !== undefined
+          ? patch.attributes
+          : storedAttributes && Object.keys(storedAttributes).length > 0
+            ? storedAttributes
+            : undefined;
+      const attributeValidation = validateListingAttributes(
+        patch.category ?? current.category,
+        mergedAttributes,
+        patch.condition ?? current.condition,
+        patch.subcategory ?? current.subcategory,
+      );
+      if (!attributeValidation.ok) {
+        await client.query('ROLLBACK');
+        return {
+          status: 'rejected',
+          listingId,
+          reason: 'attribute_validation_failed',
+          currentStatus: current.status,
+          attributeErrors: attributeValidation.errors,
+        };
       }
     }
 

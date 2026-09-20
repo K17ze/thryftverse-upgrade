@@ -7,6 +7,7 @@ import {
 import type { DisplayReadyListing } from './listingMapper';
 import type { ListingMediaRecord } from '../contracts/listingMedia';
 import type { SupportedCurrencyCode } from '../constants/currencies';
+import type { ListingAttributes } from './categoryAttributes';
 
 export interface ListingSeller {
   id: string;
@@ -99,6 +100,9 @@ export interface Listing {
   sustainabilityGrade?: 'A' | 'B' | 'C' | 'D' | null;
   materialComposition?: string | null;
   weightKg?: number | null;
+  /** Structured per-category specifics (listings.attributes) — schema in
+   *  services/categoryAttributes.ts. Null when the seller authored none. */
+  attributes?: ListingAttributes | null;
 }
 
 interface ApiListingRow {
@@ -136,6 +140,7 @@ interface ApiListingRow {
   sustainabilityGrade?: 'A' | 'B' | 'C' | 'D' | null;
   materialComposition?: string | null;
   weightKg?: number | null;
+  attributes?: ListingAttributes | null;
 }
 
 interface ApiListingsResponse {
@@ -431,6 +436,9 @@ export interface ListingCreateBody {
   shippingPayer?: string;
   materialComposition?: string;
   weightKg?: number;
+  /** Structured per-category specifics — validated server-side against the
+   *  category-attribute registry (R30/R31). */
+  attributes?: ListingAttributes;
   attachmentOrder?: string[];
   removedAttachmentIds?: string[];
   media?: ListingMediaCommand[];
@@ -476,6 +484,7 @@ export interface ListingApiItem {
   sustainabilityGrade?: 'A' | 'B' | 'C' | 'D' | null;
   materialComposition?: string | null;
   weightKg?: number | null;
+  attributes?: ListingAttributes | null;
 }
 
 export interface ListingSoldComparables {
