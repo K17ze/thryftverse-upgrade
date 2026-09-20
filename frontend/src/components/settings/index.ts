@@ -23,5 +23,6 @@ export * from './SettingsConnectedServicesSection';
 export * from './SettingsHelpLegalSection';
 export * from './SettingsAdvancedSection';
 export * from './SettingsAccountActionsSection';
+export * from './SettingsSyncSection';
 export * from './FeatureFlagDebugSection';
 export * from './settingsScreenStyles';

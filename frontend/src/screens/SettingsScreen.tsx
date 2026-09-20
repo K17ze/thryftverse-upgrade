@@ -23,6 +23,7 @@ import {
   SettingsHelpLegalSection,
   SettingsAdvancedSection,
   SettingsAccountActionsSection,
+  SettingsSyncSection,
   createSettingsScreenStyles } from '../components/settings';
 import {
   useSettingsScreenData,
@@ -172,6 +173,9 @@ export default function SettingsScreen({ navigation }: Props) {
             onOpenLanguagePicker={() => setLanguagePickerVisible(true)}
             onClearSearchHistory={handleClearSearchHistory}
           />
+
+          {/* ── SYNC — only renders while offline writes are pending or failed ── */}
+          <SettingsSyncSection />
 
           {/* ── CONNECTED SERVICES ── */}
           {/* Per spec 18: Agents are a normal product destination, not hidden

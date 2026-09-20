@@ -228,7 +228,21 @@
       "privacyData": "Privacy & data",
       "paymentsPayouts": "Payments & payouts",
       "sellerTools": "Seller tools",
-      "aboutSupport": "About & support"
+      "aboutSupport": "About & support",
+      "sync": "Sync"
+    },
+    "sync": {
+      "title": "Sync issues",
+      "pendingOnlyBody": "Actions you took while offline will sync when you're back online.",
+      "failedBody": "{count} action(s) couldn't be synced after several attempts. Retry them or discard them — discarding permanently drops the change.",
+      "retry": "Retry failed",
+      "discard": "Discard failed",
+      "discardConfirmTitle": "Discard failed actions?",
+      "discardConfirmBody": "{count} action(s) will be permanently dropped. This can't be undone.",
+      "discardConfirm": "Discard",
+      "dismiss": "Not now",
+      "deadLetterToast": "{count} offline action(s) couldn't be synced",
+      "review": "Review"
     },
     "rows": {
       "verification": "Verification",
@@ -305,6 +319,9 @@
       "aboutThryftverse": "About Thryftverse",
       "runtimeSmokeTest": "Runtime smoke test",
       "runtimeSmokeTestSubtitle": "Diagnostic checks for local runtime",
+      "syncTitle": "Offline actions",
+      "syncPending": "{count} waiting to sync",
+      "syncFailed": "{count} failed",
       "deleteAccount": "Delete account",
       "deleteAccountSubtitle": "Permanently remove your account and data",
       "editProfileAccount": "Edit profile & account",
