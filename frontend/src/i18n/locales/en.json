@@ -2032,5 +2032,25 @@
       "loadError": "Couldn't load this image.",
       "retry": "Try again"
     }
+  },
+  "visualSearch": {
+    "frame": {
+      "action": "Frame",
+      "actionLabel": "Frame the object",
+      "actionHint": "Opens a crop view to frame the item you want to match",
+      "title": "Frame the object",
+      "hint": "Drag the frame or its corners around the item you want to match",
+      "cancelHint": "Closes without changing the search",
+      "reset": "Reset",
+      "resetHint": "Expands the frame back to the whole image",
+      "confirm": "Search this area",
+      "areaLabel": "Crop area",
+      "areaHint": "Drag to move the crop area",
+      "cornerHint": "Drag to resize the crop area",
+      "cornerTopLeft": "Crop handle, top left",
+      "cornerTopRight": "Crop handle, top right",
+      "cornerBottomLeft": "Crop handle, bottom left",
+      "cornerBottomRight": "Crop handle, bottom right"
+    }
   }
 }

@@ -74,6 +74,8 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
     results,
     facetCounts,
     refreshing,
+    region,
+    applyRegion,
     runSearch,
     handleRefresh,
     resetResults,
@@ -179,6 +181,8 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
             onRemove={handleRemoveImage}
             onRetake={handleRetake}
             onReplace={openGallery}
+            region={region}
+            onApplyRegion={applyRegion}
           />
           <VisualSearchRefinementBar
             description={description}

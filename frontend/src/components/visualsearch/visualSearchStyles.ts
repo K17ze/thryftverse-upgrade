@@ -227,6 +227,54 @@ export function createVisualSearchStyles(colors: ThemeColors) {
     lineHeight: TypographyV2.meta.size + 4 },
   emptyAction: { marginTop: Space.xs },
 
+  // ── R24 region crop overlay ───────────────────────────────────────────
+  // Flat, restrained: dark scrim around the framed rect, hairline border,
+  // thin-stroke corner brackets. No card chrome.
+  cropRoot: { flex: 1, backgroundColor: colors.background },
+  cropTopBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.smMd },
+  cropTitle: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
+  cropBarAction: {
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs },
+  cropBarActionText: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textSecondary },
+  cropStage: { flex: 1, margin: Space.md },
+  cropFrame: { position: 'absolute', overflow: 'visible' },
+  cropScrim: { position: 'absolute', backgroundColor: colors.mediaOverlayScrim },
+  cropRect: {
+    position: 'absolute',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.scrimTextPrimary },
+  cropHandle: {
+    position: 'absolute',
+    width: Control.hit,
+    height: Control.hit,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  cropHandleBracket: {
+    width: 18,
+    height: 18,
+    borderColor: colors.scrimTextPrimary },
+  cropBottomBar: {
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.md,
+    gap: Space.sm },
+  cropHint: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary,
+    textAlign: 'center' },
+
   // ── Category chips (capture surface) ──────────────────────────────────
   categoryChipsWrap: {
     flexDirection: 'row',

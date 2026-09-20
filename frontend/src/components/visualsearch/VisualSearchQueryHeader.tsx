@@ -3,7 +3,10 @@ import { View, Text, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 import { createVisualSearchStyles } from './visualSearchStyles';
+import { VisualSearchRegionCropper } from './VisualSearchRegionCropper';
+import type { VisualSearchRegion } from './visualSearchTypes';
 
 interface Props {
   imageUri: string;
@@ -12,6 +15,12 @@ interface Props {
   onRemove: () => void;
   onRetake: () => void;
   onReplace: () => void;
+  /** R24: the confirmed region-of-interest, or null for whole-image search.
+   *  Drives the Frame action's active state and seeds the crop overlay. */
+  region: VisualSearchRegion | null;
+  /** Called with the confirmed region, or null when the user confirms the
+   *  whole image — the hook re-runs the search with the new scope. */
+  onApplyRegion: (region: VisualSearchRegion | null) => void;
 }
 
 // ── Visual-query header (photo selected) ─────────────────────────────────
@@ -19,6 +28,8 @@ interface Props {
 // heuristic, not AI. A loading indicator on the thumbnail would imply
 // ML analysis that isn't happening. The honest loading state is a
 // progress label on the results section, not AI theatre on the photo.
+// The Frame affordance opens the R24 crop overlay; a region is only sent
+// when the user confirms a sub-frame crop.
 function VisualSearchQueryHeaderBase({
   imageUri,
   previewFailed,
@@ -26,9 +37,18 @@ function VisualSearchQueryHeaderBase({
   onRemove,
   onRetake,
   onReplace,
+  region,
+  onApplyRegion,
 }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createVisualSearchStyles(colors), [colors]);
+  const { t } = useAppTranslation('visualSearch');
+  const [cropVisible, setCropVisible] = React.useState(false);
+
+  const handleCropConfirm = React.useCallback((next: VisualSearchRegion | null) => {
+    setCropVisible(false);
+    onApplyRegion(next);
+  }, [onApplyRegion]);
 
   return (
     <View style={styles.queryHeader}>
@@ -85,7 +105,35 @@ function VisualSearchQueryHeaderBase({
           <Ionicons name="swap-horizontal-outline" size={18} color={colors.textPrimary} />
           <Text style={styles.queryActionText}>Replace</Text>
         </AnimatedPressable>
+        <AnimatedPressable
+          style={styles.queryActionBtn}
+          onPress={() => setCropVisible(true)}
+          disabled={previewFailed}
+          activeOpacity={0.85}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel={t('frame.actionLabel')}
+          accessibilityHint={t('frame.actionHint')}
+          accessibilityState={{ selected: region !== null }}
+        >
+          <Ionicons
+            name="crop-outline"
+            size={18}
+            color={region ? colors.brand : colors.textPrimary}
+          />
+          <Text style={[styles.queryActionText, region !== null && { color: colors.brand }]}>
+            {t('frame.action')}
+          </Text>
+        </AnimatedPressable>
       </View>
+
+      <VisualSearchRegionCropper
+        visible={cropVisible}
+        imageUri={imageUri}
+        region={region}
+        onConfirm={handleCropConfirm}
+        onCancel={() => setCropVisible(false)}
+      />
     </View>
   );
 }

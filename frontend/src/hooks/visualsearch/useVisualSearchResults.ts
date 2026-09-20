@@ -5,7 +5,8 @@ import { visualSearch } from '../../services/listingsApi';
 import type {
   ResultStatus,
   VisualSearchFacetCounts,
-  VisualSearchFilterPayload } from '../../components/visualsearch/visualSearchTypes';
+  VisualSearchFilterPayload,
+  VisualSearchRegion } from '../../components/visualsearch/visualSearchTypes';
 
 interface Params {
   imageUri: string | null;
@@ -26,6 +27,18 @@ export function useVisualSearchResults({ imageUri, buildFilterPayload, filterCac
   const [similarityMethod, setSimilarityMethod] = useState<string | undefined>(undefined);
   const [resultNote, setResultNote] = useState<string | undefined>(undefined);
   const [refreshing, setRefreshing] = useState(false);
+
+  // ── R24 region-of-interest ────────────────────────────────────────
+  // The rect the user framed on the query image (normalised [0,1]
+  // fractions) — null means whole-image search. `region` is render state
+  // for the query header/crop overlay; `regionRef` is the value runSearch
+  // actually sends, so an applyRegion→re-run in the same commit can never
+  // dispatch a stale crop.
+  const [region, setRegionState] = useState<VisualSearchRegion | null>(null);
+  const regionRef = useRef<VisualSearchRegion | null>(null);
+  // Server-truth disclosure: 'region' only when the backend confirms the
+  // crop actually ran — never inferred from the client-side region alone.
+  const [queryScope, setQueryScope] = useState<'whole_image' | 'region' | undefined>(undefined);
 
   // ── Request sequencing ──────────────────────────────────────────────
   // Monotonic sequence counter ensures a newer crop/filter/refresh request
@@ -86,12 +99,16 @@ export function useVisualSearchResults({ imageUri, buildFilterPayload, filterCac
         ...payload,
         imageBase64: imageBase64 ?? undefined,
         imageUrl: isRemote ? imageUri : undefined,
+        // R24: sent only when the user confirmed a crop — null/undefined
+        // means the backend scores the whole frame.
+        region: regionRef.current ?? undefined,
         signal: controller.signal });
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       if (!isMountedRef.current || mySequence !== requestSequenceRef.current) return;
       // Network/parse failure — try cached listings before declaring error.
       setFacetCounts(null);
+      setQueryScope(undefined);
       const cached = filterCachedListings(payload);
       if (cached.length > 0) {
         setResults(cached);
@@ -142,6 +159,7 @@ export function useVisualSearchResults({ imageUri, buildFilterPayload, filterCac
     setResults(items);
     setVisualMatching(apiResult.visualMatching);
     setSimilarityMethod(apiResult.similarityMethod);
+    setQueryScope(apiResult.retrievalMeta?.queryScope);
     setResultNote(
       usedFallback && !apiResult.visualMatching
         ? 'Showing matches from your category, brand, and description filters.'
@@ -158,6 +176,34 @@ export function useVisualSearchResults({ imageUri, buildFilterPayload, filterCac
     setTimeout(() => { if (isMountedRef.current) setRefreshing(false); }, 400);
   }, [imageUri, runSearch]);
 
+  // R24: confirm or clear the framed region. The region ref is written
+  // synchronously and the search re-runs immediately — a state-driven
+  // effect would dispatch with the pre-commit region value.
+  const applyRegion = useCallback((next: VisualSearchRegion | null) => {
+    regionRef.current = next;
+    setRegionState(next);
+    if (imageUri && status !== 'idle') void runSearch();
+  }, [imageUri, status, runSearch]);
+
+  // A new photo invalidates any framed region — its coordinates describe
+  // the previous image. The image change also re-runs the whole-image
+  // search whenever results were already showing: the screen's auto-run
+  // effect only covers the first capture (status 'idle'), so without this
+  // a retake/replace would leave stale results under the new photo.
+  const prevImageUriRef = useRef(imageUri);
+  useEffect(() => {
+    const prev = prevImageUriRef.current;
+    prevImageUriRef.current = imageUri;
+    if (prev === imageUri) return;
+    regionRef.current = null;
+    setRegionState(null);
+    setQueryScope(undefined);
+    if (imageUri && status !== 'idle') {
+      void runSearch();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- status/runSearch are intentionally read from this render only; depending on them would retrigger the search on unrelated state changes.
+  }, [imageUri]);
+
   // Resets the result surface for "remove photo and start over". Mirrors the
   // pre-extraction reset exactly — similarityMethod/resultNote are left
   // untouched (status returns to 'idle' so they are never rendered).
@@ -165,6 +211,9 @@ export function useVisualSearchResults({ imageUri, buildFilterPayload, filterCac
     setStatus('idle');
     setResults([]);
     setFacetCounts(null);
+    regionRef.current = null;
+    setRegionState(null);
+    setQueryScope(undefined);
   }, []);
 
   // ── Honest integrated note ────────────────────────────────────────────
@@ -172,13 +221,17 @@ export function useVisualSearchResults({ imageUri, buildFilterPayload, filterCac
   // backend used a deterministic colour-and-layout heuristic.
   const honestNoteText = useMemo(() => {
     if (similarityMethod === 'heuristic_color_features') {
-      return 'Results matched by colour similarity (heuristic, not AI).';
+      // R24: only claim region scoping when the backend confirmed the crop
+      // ran — a degenerate region falls back to whole-image scoring.
+      return queryScope === 'region'
+        ? 'Results matched by colour similarity within the framed area (heuristic, not AI).'
+        : 'Results matched by colour similarity (heuristic, not AI).';
     }
     if (similarityMethod === 'filter_only') {
       return resultNote ?? 'Results matched by category, brand & description.';
     }
     return resultNote;
-  }, [similarityMethod, resultNote]);
+  }, [similarityMethod, resultNote, queryScope]);
 
   return {
     status,
@@ -187,6 +240,9 @@ export function useVisualSearchResults({ imageUri, buildFilterPayload, filterCac
     visualMatching,
     similarityMethod,
     refreshing,
+    region,
+    queryScope,
+    applyRegion,
     runSearch,
     handleRefresh,
     resetResults,

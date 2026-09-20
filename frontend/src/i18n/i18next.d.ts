@@ -42,6 +42,7 @@ declare module 'i18next' {
       coOwn: (typeof flattenedResources)['coOwn'];
       stateCopy: (typeof flattenedResources)['stateCopy'];
       creator: (typeof flattenedResources)['creator'];
+      visualSearch: (typeof flattenedResources)['visualSearch'];
     };
   }
 }
