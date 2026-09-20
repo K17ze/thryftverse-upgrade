@@ -1,0 +1,6 @@
+-- Rollback for migration 321.
+--
+-- Intentionally a no-op. The forward migration converts identifier
+-- columns to `text` because `users.id` and `listings.id` are text
+-- primary keys; converting back to `uuid` would break those foreign
+-- keys, so there is no valid reverse operation.
