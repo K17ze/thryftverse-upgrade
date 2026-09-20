@@ -54,4 +54,5 @@ export const ROUTE_METADATA: DestinationMeta[] = [
   { key: 'About', label: 'About Thryftverse', searchTerms: 'version', section: 'Help & legal' },
   // ── Advanced (developer-only tools, not consumer features) ──
   { key: 'RuntimeSmokeTest', label: 'Runtime smoke test', searchTerms: 'diagnostic developer debug', section: 'Advanced', showSection: true },
+  { key: 'ModelRegistry', label: 'Model registry', searchTerms: 'model artifact registry ml lineage promotion rollback', section: 'Advanced' },
 ];

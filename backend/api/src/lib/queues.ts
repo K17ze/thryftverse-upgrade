@@ -3,6 +3,7 @@ import { Redis as IORedis } from 'ioredis';
 import { config } from '../config.js';
 import { recordBackgroundJob, recordBackgroundJobDuration } from './metrics.js';
 import { logger } from './logger.js';
+import { configureQueueRateLimits } from './queuePriorities.js';
 
 export interface PushJobData {
   eventId: string;
@@ -557,6 +558,7 @@ export function startBackgroundWorkers(
       {
         connection: workerConnection,
         concurrency: 6,
+        limiter: configureQueueRateLimits()[PUSH_QUEUE_NAME],
       }
     );
     pushWorker.on('error', (err) => {

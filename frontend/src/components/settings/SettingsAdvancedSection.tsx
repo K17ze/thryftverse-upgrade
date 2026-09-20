@@ -3,6 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useAppTranslation } from '../../i18n/useAppTranslation';
+import { t } from '../../i18n';
 import { SettingsSection } from './SettingsSection';
 import { SettingsRow } from './SettingsRow';
 import { FeatureFlagDebugSection } from './FeatureFlagDebugSection';
@@ -34,6 +35,14 @@ export function SettingsAdvancedSection({ visible }: SettingsAdvancedSectionProp
           subtitle={ts('rows.runtimeSmokeTestSubtitle')}
           onPress={() => navigation.navigate('RuntimeSmokeTest')}
           isFirst
+        />
+        {/* Model artifact registry — admin-gated ops surface (migration 144).
+            Server enforces admin auth on every endpoint. */}
+        <SettingsRow
+          icon="cube-outline"
+          title={t('modelRegistry.settingsRow')}
+          subtitle={t('modelRegistry.settingsRowSubtitle')}
+          onPress={() => navigation.navigate('ModelRegistry')}
           isLast
         />
       </SettingsSection>

@@ -485,6 +485,8 @@ export type RootStackParamList = {
   // ── Auctions & Trading ── (trade confirm)
   // Diagnostic — dev only
   RuntimeSmokeTest: undefined;
+  // Model artifact registry — operator surface (entry via Settings → Advanced)
+  ModelRegistry: undefined;
 
   // ── Seller Tools ── (sell, trade hub, seller hub, analytics, verification)
   Sell: undefined;
@@ -689,6 +691,7 @@ export const ROOT_STACK_ROUTES = [
   'ListingPreview',
   'TradeConfirm',
   'RuntimeSmokeTest',
+  'ModelRegistry',
   'Sell',
   'CatalogImportStart',
   'CatalogImportConsent',

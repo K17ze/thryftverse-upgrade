@@ -490,6 +490,10 @@ export default function AppNavigator() {
       {__DEV__ && (
         <Stack.Screen name="RuntimeSmokeTest" getComponent={() => require('../screens/RuntimeSmokeTestScreen').default} />
       )}
+
+      {/* Model artifact registry — operator surface gated server-side by admin
+          auth; entry point lives in Settings → Advanced (developer mode). */}
+      <Stack.Screen name="ModelRegistry" getComponent={() => require('../screens/ModelRegistryScreen').default} />
     </Stack.Navigator>
     {/* Ambient upload progress — a thin top-edge bar (IG pattern) visible on
         every screen while creator uploads are in flight, including after the
