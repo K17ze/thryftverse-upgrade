@@ -47,7 +47,15 @@ import { db } from '../../db/pool.js';
 import { logger } from '../../lib/logger.js';
 import type { MediaEmbeddingJobData } from '../../lib/queues.js';
 import { safeFetchMediaBuffer } from '../../lib/safeRemoteMediaFetch.js';
-import { computeL2Norm, serialiseEmbedding } from './mediaEmbeddingUtils.js';
+import {
+  EMBEDDING_VECTOR_DIMENSIONS,
+  hasMediaEmbeddingVectorColumn,
+} from '../../lib/mediaEmbeddings.js';
+import {
+  computeL2Norm,
+  embeddingToVectorLiteral,
+  serialiseEmbedding,
+} from './mediaEmbeddingUtils.js';
 
 // Re-exported for callers / tests. The pure helpers live in
 // mediaEmbeddingUtils.ts so they can be unit-tested without importing
@@ -298,28 +306,66 @@ export async function processMediaEmbeddingJob(
   const norm = computeL2Norm(embeddingResult.vector);
   const embeddingStatus: 'placeholder' | 'ready' = embeddingResult.placeholder ? 'placeholder' : 'ready';
 
+  // Dual-write: when migration 326 has provisioned the pgvector column AND
+  // this vector fits vector(512), populate embedding_vec alongside the BYTEA
+  // payload. BYTEA remains the canonical write target so every existing
+  // reader keeps working; non-512-dimensional vectors stay BYTEA-only
+  // (embedding_vec NULL) rather than being truncated to fit the column.
+  const vectorLiteral =
+    embeddingResult.dimensions === EMBEDDING_VECTOR_DIMENSIONS
+      ? embeddingToVectorLiteral(embeddingResult.vector)
+      : null;
+  const writeVectorColumn =
+    vectorLiteral !== null && (await hasMediaEmbeddingVectorColumn(db));
+
   try {
-    await db.query(
-      `INSERT INTO media_embeddings (
-         media_asset_id, model_id, model_version, preprocessing_version,
-         checksum_sha256, dimensions, embedding, generated_at, quality_flags, status, norm
-       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8::jsonb, $9, $10)
-       ON CONFLICT (media_asset_id, model_id, model_version, preprocessing_version)
-       DO NOTHING`,
-      [
-        mediaAssetId,
-        modelId,
-        modelVersion,
-        preprocessingVersion,
-        checksum,
-        embeddingResult.dimensions,
-        embeddingBytes,
-        JSON.stringify(embeddingResult.qualityFlags),
-        embeddingStatus,
-        norm,
-      ],
-    );
+    if (writeVectorColumn && vectorLiteral) {
+      await db.query(
+        `INSERT INTO media_embeddings (
+           media_asset_id, model_id, model_version, preprocessing_version,
+           checksum_sha256, dimensions, embedding, generated_at, quality_flags, status, norm,
+           embedding_vec
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8::jsonb, $9, $10, $11::vector)
+         ON CONFLICT (media_asset_id, model_id, model_version, preprocessing_version)
+         DO NOTHING`,
+        [
+          mediaAssetId,
+          modelId,
+          modelVersion,
+          preprocessingVersion,
+          checksum,
+          embeddingResult.dimensions,
+          embeddingBytes,
+          JSON.stringify(embeddingResult.qualityFlags),
+          embeddingStatus,
+          norm,
+          vectorLiteral,
+        ],
+      );
+    } else {
+      await db.query(
+        `INSERT INTO media_embeddings (
+           media_asset_id, model_id, model_version, preprocessing_version,
+           checksum_sha256, dimensions, embedding, generated_at, quality_flags, status, norm
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8::jsonb, $9, $10)
+         ON CONFLICT (media_asset_id, model_id, model_version, preprocessing_version)
+         DO NOTHING`,
+        [
+          mediaAssetId,
+          modelId,
+          modelVersion,
+          preprocessingVersion,
+          checksum,
+          embeddingResult.dimensions,
+          embeddingBytes,
+          JSON.stringify(embeddingResult.qualityFlags),
+          embeddingStatus,
+          norm,
+        ],
+      );
+    }
 
     logger.info(
       {
@@ -332,6 +378,7 @@ export async function processMediaEmbeddingJob(
         placeholder: embeddingResult.placeholder,
         status: embeddingStatus,
         norm,
+        vectorColumnWritten: writeVectorColumn,
         byteSize: imageBuffer.length,
       },
       'mediaEmbedding.stored',
