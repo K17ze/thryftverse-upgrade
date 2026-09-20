@@ -372,7 +372,7 @@ export default function SellScreen() {
               When the flag is off, the current autofill-only behaviour runs. */}
           {aiListingAssistEnabled && mediaDraftItems.length > 0 ? (
             <View style={[styles.autofillCard, themed.autofillCard, { flexDirection: 'row', alignItems: 'center', gap: Space.sm }]}>
-              <AppIcon concept="sparkles" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
+              <AppIcon concept="sparkle" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.autofillTitle, themed.autofillTitle]}>{t('listing.create.aiAssist')}</Text>
                 <Text style={[themed.autofillDesc, { marginTop: 2 }]}>
@@ -388,7 +388,7 @@ export default function SellScreen() {
           {autofillSuggestion.hasSuggestions && !autofillDismissed && (
             <View style={[styles.autofillCard, themed.autofillCard]}>
               <View style={styles.autofillHeader}>
-                <AppIcon concept="sparkles" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
+                <AppIcon concept="sparkle" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
                 <Text style={[styles.autofillTitle, themed.autofillTitle]}>{t('listing.create.suggestedDetails')}</Text>
                 <AnimatedPressable
                   hitSlop={8}
@@ -646,7 +646,7 @@ export default function SellScreen() {
                           accessibilityRole="button"
                           accessibilityLabel={`Suggested price ${currencySymbol}${soldComps.medianPrice.toFixed(0)}. Tap to set suggested price.`}
                         >
-                          <AppIcon concept="sparkles" size={IconSize.micro} color="brand" opticalCenter accessible={false} />
+                          <AppIcon concept="sparkle" size={IconSize.micro} color="brand" opticalCenter accessible={false} />
                           <Text style={[styles.soldCompsText, themed.priceSuggestion]}>
                             {t('listing.create.suggestedPrice', { amount: `${currencySymbol}${soldComps.medianPrice.toFixed(0)}` })}
                           </Text>
