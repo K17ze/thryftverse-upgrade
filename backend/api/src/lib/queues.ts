@@ -203,6 +203,19 @@ export interface AgentRunJobData {
   messageText: string;
 }
 
+// ---------------------------------------------------------------------------
+// Search indexing queue — periodic full reindex of the listings search
+// index (`search_index_sync` repeatable job). Kept separate from infra_ops
+// so a multi-minute reindex never starves time-sensitive sweeps (auction
+// end, outbox drain) on the concurrency-1 infra worker. Incremental
+// per-listing updates bypass the queue entirely via syncSingleListing;
+// this queue is the self-healing sweep that repairs index drift.
+// ---------------------------------------------------------------------------
+
+export interface SearchIndexSyncJobData {
+  reason: 'scheduled' | 'manual';
+}
+
 type CatalogImportJobData =
   | CatalogImportDiscoveryJobData
   | CatalogImportHydrationJobData
@@ -268,6 +281,11 @@ interface QueueHandlers {
   handleCatalogImportRetentionJob: (job: CatalogImportRetentionJobData) => Promise<void>;
   handleCatalogImportReconcileJob: (job: CatalogImportReconcileJobData) => Promise<void>;
   handleAgentRunJob: (job: AgentRunJobData) => Promise<void>;
+  // Optional so the API process can start its inline worker set without
+  // redeclaring it — the worker falls back to the real handler via dynamic
+  // import (same pattern as the agent-run handler in index.ts) so the
+  // search_indexing queue is drained in both run modes.
+  handleSearchIndexSyncJob?: (job: SearchIndexSyncJobData) => Promise<void>;
 }
 
 export interface BackgroundJobLogger {
@@ -322,6 +340,7 @@ const CATALOG_IMPORT_QUEUE_NAME = 'catalog_import';
 const MEDIA_EMBEDDING_QUEUE_NAME = 'media_embedding';
 const MODERATION_TRIAGE_QUEUE_NAME = 'moderation_triage';
 const IMPORTER_EXTRACTION_QUEUE_NAME = 'importer_extraction';
+const SEARCH_INDEXING_QUEUE_NAME = 'search_indexing';
 export const AGENT_RUN_QUEUE_NAME = 'agent-runs';
 export const AGENT_RUN_DLQ_NAME = 'agent-runs-dlq';
 const PUSH_DLQ_NAME = `${PUSH_QUEUE_NAME}-dlq`;
@@ -331,6 +350,7 @@ const CATALOG_IMPORT_DLQ_NAME = `${CATALOG_IMPORT_QUEUE_NAME}-dlq`;
 const MEDIA_EMBEDDING_DLQ_NAME = `${MEDIA_EMBEDDING_QUEUE_NAME}-dlq`;
 const MODERATION_TRIAGE_DLQ_NAME = `${MODERATION_TRIAGE_QUEUE_NAME}-dlq`;
 const IMPORTER_EXTRACTION_DLQ_NAME = `${IMPORTER_EXTRACTION_QUEUE_NAME}-dlq`;
+const SEARCH_INDEXING_DLQ_NAME = `${SEARCH_INDEXING_QUEUE_NAME}-dlq`;
 const DLQ_RETENTION_SECONDS = 7 * 24 * 60 * 60;
 
 export const QUEUE_DLQ_MAP: Record<string, string> = {
@@ -340,6 +360,7 @@ export const QUEUE_DLQ_MAP: Record<string, string> = {
   [CATALOG_IMPORT_QUEUE_NAME]: CATALOG_IMPORT_DLQ_NAME,
   [MEDIA_EMBEDDING_QUEUE_NAME]: MEDIA_EMBEDDING_DLQ_NAME,
   [IMPORTER_EXTRACTION_QUEUE_NAME]: IMPORTER_EXTRACTION_DLQ_NAME,
+  [SEARCH_INDEXING_QUEUE_NAME]: SEARCH_INDEXING_DLQ_NAME,
   [AGENT_RUN_QUEUE_NAME]: AGENT_RUN_DLQ_NAME,
 };
 
@@ -399,6 +420,14 @@ const importerExtractionDlq = new Queue<ImporterExtractionJobData>(IMPORTER_EXTR
   connection: queueConnection,
 });
 
+const searchIndexingQueue = new Queue<SearchIndexSyncJobData>(SEARCH_INDEXING_QUEUE_NAME, {
+  connection: queueConnection,
+});
+
+const searchIndexingDlq = new Queue<SearchIndexSyncJobData>(SEARCH_INDEXING_DLQ_NAME, {
+  connection: queueConnection,
+});
+
 export const agentRunQueue = new Queue<AgentRunJobData>(AGENT_RUN_QUEUE_NAME, {
   connection: queueConnection,
   defaultJobOptions: {
@@ -421,6 +450,7 @@ export const dlqQueues: Record<string, Queue> = {
   [MEDIA_EMBEDDING_DLQ_NAME]: mediaEmbeddingDlq,
   [MODERATION_TRIAGE_DLQ_NAME]: moderationTriageDlq,
   [IMPORTER_EXTRACTION_DLQ_NAME]: importerExtractionDlq,
+  [SEARCH_INDEXING_DLQ_NAME]: searchIndexingDlq,
   [AGENT_RUN_DLQ_NAME]: agentRunDlq,
 };
 
@@ -432,6 +462,7 @@ export const mainQueues: Record<string, Queue> = {
   [MEDIA_EMBEDDING_QUEUE_NAME]: mediaEmbeddingQueue,
   [MODERATION_TRIAGE_QUEUE_NAME]: moderationTriageQueue,
   [IMPORTER_EXTRACTION_QUEUE_NAME]: importerExtractionQueue,
+  [SEARCH_INDEXING_QUEUE_NAME]: searchIndexingQueue,
   [AGENT_RUN_QUEUE_NAME]: agentRunQueue,
 };
 
@@ -477,6 +508,7 @@ let mediaEmbeddingWorker: Worker<MediaEmbeddingJobData> | null = null;
 let moderationTriageWorker: Worker<ModerationTriageJobData> | null = null;
 let importerExtractionWorker: Worker<ImporterExtractionJobData> | null = null;
 let agentRunWorker: Worker<AgentRunJobData> | null = null;
+let searchIndexingWorker: Worker<SearchIndexSyncJobData> | null = null;
 
 export function startBackgroundWorkers(
   handlers: QueueHandlers,
@@ -946,6 +978,66 @@ export function startBackgroundWorkers(
     agentRunWorker.on('failed', (job, err) => {
       if (job) {
         moveToDlq(agentRunDlq, AGENT_RUN_QUEUE_NAME, job, err);
+      }
+    });
+  }
+
+  if (!searchIndexingWorker) {
+    searchIndexingWorker = new Worker<SearchIndexSyncJobData>(
+      SEARCH_INDEXING_QUEUE_NAME,
+      async (job) => {
+        const jobStart = Date.now();
+        logJobEvent('info', { queue: SEARCH_INDEXING_QUEUE_NAME, job: job.name, jobId: job.id }, 'background_job_started');
+        try {
+          // The handler is optional in QueueHandlers so the API's inline
+          // worker set compiles without redeclaring it; fall back to the
+          // real implementation via dynamic import (same pattern as the
+          // agent-run handler in index.ts) so the queue drains in both
+          // run modes.
+          const handleSearchIndexSync = handlers.handleSearchIndexSyncJob
+            ?? (await import('../workers/handlers/searchIndexSyncHandler.js')).processSearchIndexSync;
+          await handleSearchIndexSync(job.data);
+          const durationMs = Date.now() - jobStart;
+          recordBackgroundJob({
+            queue: SEARCH_INDEXING_QUEUE_NAME,
+            job: job.name,
+            result: 'completed',
+          });
+          recordBackgroundJobDuration({
+            queue: SEARCH_INDEXING_QUEUE_NAME,
+            job: job.name,
+            durationSeconds: durationMs / 1000,
+          });
+          logJobEvent('info', { queue: SEARCH_INDEXING_QUEUE_NAME, job: job.name, jobId: job.id, durationMs }, 'background_job_completed');
+        } catch (error) {
+          const durationMs = Date.now() - jobStart;
+          recordBackgroundJob({
+            queue: SEARCH_INDEXING_QUEUE_NAME,
+            job: job.name,
+            result: 'failed',
+          });
+          recordBackgroundJobDuration({
+            queue: SEARCH_INDEXING_QUEUE_NAME,
+            job: job.name,
+            durationSeconds: durationMs / 1000,
+          });
+          logJobEvent('error', { queue: SEARCH_INDEXING_QUEUE_NAME, job: job.name, jobId: job.id, durationMs, err: error }, 'background_job_failed');
+          throw error;
+        }
+      },
+      {
+        connection: workerConnection,
+        // Full reindex is heavyweight and idempotent — serialise it so a
+        // retried run never overlaps a still-running one.
+        concurrency: 1,
+      }
+    );
+    searchIndexingWorker.on('error', (err) => {
+      logJobEvent('warn', { err: err.message }, 'searchIndexingWorker error');
+    });
+    searchIndexingWorker.on('failed', (job, err) => {
+      if (job) {
+        moveToDlq(searchIndexingDlq, SEARCH_INDEXING_QUEUE_NAME, job, err);
       }
     });
   }
@@ -1552,6 +1644,32 @@ export async function enqueueDsarExportJob(
   );
 }
 
+export async function enqueueSearchIndexSyncJob(
+  reason: SearchIndexSyncJobData['reason'] = 'scheduled',
+): Promise<void> {
+  // Hourly bucket: the scheduled reindex runs once per hour, so overlapping
+  // schedulers (API + standalone worker during deploy overlap) collapse
+  // into a single run.
+  const timeBucket = Math.floor(Date.now() / (60 * 60 * 1000));
+  await searchIndexingQueue.add(
+    'search_index_sync',
+    { reason },
+    {
+      jobId: `search_index_sync_${reason}_${timeBucket}`,
+      attempts: 2,
+      backoff: {
+        type: 'exponential',
+        delay: 30_000,
+      },
+      removeOnComplete: true,
+      // Bound failed-record retention — a retained failure must not
+      // suppress the rest of the bucket's reindex (same hazard as
+      // seller_trust_recompute / feedback_evaluation).
+      removeOnFail: { age: 5 * 60, count: 100 },
+    },
+  );
+}
+
 export async function closeBackgroundQueues(): Promise<void> {
   if (pushWorker) {
     await pushWorker.close();
@@ -1588,6 +1706,11 @@ export async function closeBackgroundQueues(): Promise<void> {
     agentRunWorker = null;
   }
 
+  if (searchIndexingWorker) {
+    await searchIndexingWorker.close();
+    searchIndexingWorker = null;
+  }
+
   await pushQueue.close();
   await infraQueue.close();
   await mediaIngestQueue.close();
@@ -1595,6 +1718,7 @@ export async function closeBackgroundQueues(): Promise<void> {
   await moderationTriageQueue.close();
   await importerExtractionQueue.close();
   await agentRunQueue.close();
+  await searchIndexingQueue.close();
   await pushDlq.close();
   await infraDlq.close();
   await mediaIngestDlq.close();
@@ -1602,6 +1726,7 @@ export async function closeBackgroundQueues(): Promise<void> {
   await moderationTriageDlq.close();
   await importerExtractionDlq.close();
   await agentRunDlq.close();
+  await searchIndexingDlq.close();
   await workerConnection.quit();
   await queueConnection.quit();
 }

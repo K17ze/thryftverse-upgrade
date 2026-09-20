@@ -170,6 +170,7 @@ import {
   enqueueDsarExportJob,
   enqueueSellerTrustRecomputeJob,
   enqueueFeedbackEvaluationJob,
+  enqueueSearchIndexSyncJob,
   startBackgroundWorkers,
 } from './lib/queues.js';
 import {
@@ -410,7 +411,7 @@ import { registerAuctionLifecycleRoutes } from './routes/auctions.js';
 import { registerListingInteractionRoutes } from './routes/listings.js';
 import { checkFraudNonBlocking } from './lib/fraudDetection.js';
 import { FraudShadowScoringService } from './lib/fraudShadowScoring.js';
-import { evaluateRisk, recordExecution } from './lib/riskDecision.js';
+import { evaluateRisk, recordEntityLink, recordExecution } from './lib/riskDecision.js';
 import { createIpReputationProvider } from './lib/ipReputationProviders.js';
 import {
   notifyOrderShipped,
@@ -10075,6 +10076,44 @@ function stopAnalyticsAggregationScheduler(): void {
   }
   clearInterval(analyticsAggregationTimer);
   analyticsAggregationTimer = null;
+}
+
+let searchIndexSyncTimer: NodeJS.Timeout | null = null;
+let searchIndexSyncStartupTimer: NodeJS.Timeout | null = null;
+
+function startSearchIndexSyncScheduler(): void {
+  if (searchIndexSyncTimer) {
+    return;
+  }
+
+  const enqueueSync = () => {
+    void enqueueSearchIndexSyncJob('scheduled').catch((error) => {
+      app.log.error({ err: error }, 'Failed scheduling search index sync job');
+    });
+  };
+
+  // Hourly reindex keeps the search index convergent with listing writes that
+  // bypassed incremental sync. The BullMQ jobId is hour-bucketed, so
+  // overlapping schedulers collapse into a single run.
+  searchIndexSyncTimer = setInterval(enqueueSync, 60 * 60 * 1000);
+  searchIndexSyncTimer.unref?.();
+
+  // Run once shortly after startup so a fresh deploy heals drift accumulated
+  // while the API was down.
+  searchIndexSyncStartupTimer = setTimeout(enqueueSync, 90_000);
+  searchIndexSyncStartupTimer.unref?.();
+}
+
+function stopSearchIndexSyncScheduler(): void {
+  if (searchIndexSyncStartupTimer) {
+    clearTimeout(searchIndexSyncStartupTimer);
+    searchIndexSyncStartupTimer = null;
+  }
+  if (!searchIndexSyncTimer) {
+    return;
+  }
+  clearInterval(searchIndexSyncTimer);
+  searchIndexSyncTimer = null;
 }
 
 let sellerTrustRecomputeTimer: NodeJS.Timeout | null = null;
@@ -24330,6 +24369,14 @@ function requireStripeMobilePaymentConfiguration(reply: FastifyReply): {
 
 registerV2Routes({ app, db, resolveAuthenticatedUserId, ensureUserExists, requireStripeMobilePaymentConfiguration });
 
+/**
+ * DPIA / legitimate-interest reference recorded on entity links written by
+ * the payment/payout write paths. Matches the legal-basis phrasing used by
+ * retention_policy seed rows (migration 175).
+ */
+const ENTITY_LINK_LEGAL_BASIS =
+  'Legitimate interest — fraud prevention (UK-GDPR Art. 6(1)(f))';
+
 app.get('/users/:userId/payment-methods', async (request) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);
@@ -24437,6 +24484,21 @@ app.post('/users/:userId/payment-methods', async (request, reply) => {
     `,
     [userId, payload.type, payload.label, payload.details ?? null, shouldDefault]
   );
+
+  // FR-06: account↔payment_instrument entity link. This legacy path stores
+  // no provider token, so the local row id is the only stable reference.
+  // The live Stripe path records the provider's card fingerprint in
+  // stripePaymentMethods.syncStripePaymentMethodProjections. Fail-open —
+  // a link-write failure must never break the mutation.
+  recordEntityLink(db, {
+    nodeAType: 'account',
+    nodeARef: userId,
+    nodeBType: 'payment_instrument',
+    nodeBRef: `legacy_local:${result.rows[0].id}`,
+    linkType: 'shares_payment_instrument',
+    linkSource: 'transaction',
+    legalBasis: ENTITY_LINK_LEGAL_BASIS,
+  }).catch((err) => request.log.warn({ err, userId }, 'Failed to record payment-method entity link'));
 
   reply.code(201);
   return {
@@ -25066,6 +25128,20 @@ app.post('/users/:userId/payout-accounts', async (request, reply) => {
       'Payout account is already linked to another user'
     );
   }
+
+  // FR-06: account↔payout_destination entity link. The provider account ref
+  // (e.g. Stripe `acct_…`) is the stable tokenised reference — namespaced by
+  // gateway so refs from different providers cannot collide. Fail-open — a
+  // link-write failure must never break the mutation.
+  recordEntityLink(db, {
+    nodeAType: 'account',
+    nodeARef: userId,
+    nodeBType: 'payout_destination',
+    nodeBRef: `payout:${result.rows[0].gateway_id}:${result.rows[0].provider_account_ref}`,
+    linkType: 'shares_payout_destination',
+    linkSource: 'payout',
+    legalBasis: ENTITY_LINK_LEGAL_BASIS,
+  }).catch((err) => request.log.warn({ err, userId }, 'Failed to record payout-account entity link'));
 
   reply.code(201);
   return {
@@ -38382,6 +38458,7 @@ const start = async () => {
     startRetentionSweepScheduler();
     startAnalyticsAggregationScheduler();
     startSellerTrustRecomputeScheduler();
+    startSearchIndexSyncScheduler();
     startPushReceiptReconciliationScheduler();
     startAutoFeedbackSweepScheduler();
     startScheduledPublicationSweepScheduler();

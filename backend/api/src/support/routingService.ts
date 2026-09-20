@@ -90,6 +90,21 @@ interface EscalationTrigger {
 
 const ESCALATION_TRIGGERS: readonly EscalationTrigger[] = [
   {
+    reason: 'Prompt injection or instruction-override attempt.',
+    patterns: [
+      /\b(?:ignore|disregard|forget|override|bypass)\s+(?:(?:all|any|the|your|these|those)\s+)*(?:previous|prior|above|earlier|initial|original)?\s*instructions\b/i,
+      /\byou\s+are\s+now\b/i,
+      /\bpretend\s+(?:you\s+are|you're|you|to\s+be|that)\b/i,
+      /\b(?:act|roleplay|role[-\s]?play)\s+as\b/i,
+      /\bsystem\s+prompt\b/i,
+      /\bnew\s+(?:system\s+)?instructions?\b/i,
+      /\bjailbreak\b|\bdo\s+anything\s+now\b/i,
+      /\baccording\s+to\s+(?:the\s+|your\s+|our\s+)?\S+\s+policy\b/i,
+      /\bpolicy\s+(?:page|update|change|revision)s?\s*:/i,
+      /\b(?:new|updated|revised)\s+(?:policy|rules?|instructions?)\s+(?:in\s+effect|states?|says|requires?)\b/i,
+    ],
+  },
+  {
     reason: 'User explicitly requested a human agent.',
     patterns: [
       /\b(?:i\s+want|need|request|ask\s+for|speak\s+to|talk\s+to)\s+(?:a|an)?\s*(?:human|person|real\s+person|agent|support\s+agent|specialist|manager)\b/i,
@@ -113,9 +128,14 @@ const ESCALATION_TRIGGERS: readonly EscalationTrigger[] = [
   {
     reason: 'Account compromise or identity/security change.',
     patterns: [
-      /\b(?:my\s+)?account\s+(?:is|was|has\s+been)\s+(?:hacked|compromised|breached|taken\s+over|stolen)\b/i,
-      /\bsomeone\s+(?:else\s+)?(?:has\s+)?(?:access|logged\s+in|changed)\s+(?:my|the)\s+(?:account|password|email)\b/i,
-      /\bunauthori[sz]ed\s+(?:access|login|charge|transaction)\b/i,
+      /\b(?:my\s+)?account\s+(?:is|was|got|has\s+been|been)\s+(?:hacked|compromised|breached|taken\s+over|stolen)\b/i,
+      /\bhacked\s+(?:my|the|into\s+(?:my|the))\s+(?:account|email|password)\b/i,
+      /\bsomeone\s+(?:else\s+)?(?:has\s+)?(?:access(?:ed)?|logged\s+in(?:to)?|got\s+into|hacked|broke\s+into|changed)\s+(?:my|the)\s+(?:account|password|email)\b/i,
+      /\bsomeone\s+(?:else\s+)?(?:is\s+)?(?:in|using|on)\s+my\s+account\b/i,
+      /\bunauthori[sz]ed\s+(?:access|login|log[-\s]?in|sign[-\s]?in|charge|transaction|activity|changes?)\b/i,
+      /\bsuspicious\s+(?:activity|login|log[-\s]?in|sign[-\s]?in|charges?)\b/i,
+      /\b(?:can'?t|cannot|can\s+not|unable\s+to)\s+log\s*in\b[\s\S]*\b(?:suspicious|unauthori[sz]ed|someone|unfamiliar|not\s+me)\b/i,
+      /\b(?:suspicious|unauthori[sz]ed|unfamiliar)\b[\s\S]*\b(?:can'?t|cannot|can\s+not|unable\s+to)\s+log\s*in\b/i,
       /\bidentity\s+(?:theft|fraud|change)\b/i,
       /\bchange\s+(?:my\s+)?(?:email|password|phone|2fa|two-factor)\b/i,
       /\b(?:reset|recover)\s+(?:my\s+)?(?:password|account)\b/i,
@@ -217,10 +237,13 @@ const ISSUE_TYPE_RULES: readonly IssueTypeRule[] = [
   {
     issueType: 'account_security',
     patterns: [
-      /\baccount\s+(?:hacked|compromised|breached|stolen|locked|suspended)\b/i,
+      /\baccount\s+(?:(?:is|was|got|has\s+been)\s+)?(?:hacked|compromised|breached|stolen|locked|suspended|taken\s+over)\b/i,
+      /\bhacked\s+(?:my|the|into\s+(?:my|the))\s+account\b/i,
+      /\bsomeone\s+(?:else\s+)?(?:logged|hacked|accessed|got)\s+(?:in(?:to)?|into)\s+(?:my|the)\s+account\b/i,
       /\bpassword|2fa|two-factor|login\s+issue\b/i,
       /\bidentity\s+(?:theft|verification|change)\b/i,
       /\bunauthori[sz]ed\s+access\b/i,
+      /\bsuspicious\s+(?:activity|login|sign[-\s]?in)\b/i,
     ],
   },
   {

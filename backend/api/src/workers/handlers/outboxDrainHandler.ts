@@ -11,6 +11,7 @@ import { logger } from '../../lib/logger.js';
 import { publishRealtimeEvent } from '../../lib/realtime.js';
 import {
   type DomainOutboxEvent,
+  appendDomainEvent,
   claimDomainOutboxBatch,
   completeDomainOutboxEvent,
   failDomainOutboxEvent,
@@ -100,6 +101,76 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
       newPriceGbp: payload.newPriceGbp,
       queueNotification: queueUserNotification,
     });
+
+    // R35 — material-change invalidation. Every pending offer on the
+    // listing was negotiated against the previous price, so a reprice
+    // invalidates them all. They are cancelled inside one transaction and
+    // each emits the same `offer.cancelled` domain event the lifecycle
+    // already drains (notification + participant realtime + in-thread card
+    // flip) — no parallel fan-out path. `cancellationReason` is
+    // 'listing_terms_changed', distinct from 'listing_unavailable': the
+    // listing is still on sale and the buyer may re-offer on the new terms.
+    // The deduplication key matches the command service's cancel key, so
+    // an offer already cancelled by a terminal transition cannot emit a
+    // second event — and this UPDATE only touches 'pending' rows anyway.
+    const offerClient = await db.connect();
+    try {
+      await offerClient.query('BEGIN');
+      const cancelledOffers = await offerClient.query<{
+        id: string;
+        buyer_id: string;
+        seller_id: string;
+        offer_price_gbp: string;
+        conversation_id: string | null;
+        offered_by_user_id: string | null;
+      }>(
+        `UPDATE listing_offers
+            SET status = 'cancelled',
+                cancelled_at = NOW(),
+                updated_at = NOW()
+          WHERE listing_id = $1
+            AND status = 'pending'
+          RETURNING id, buyer_id, seller_id, offer_price_gbp::text,
+                    conversation_id, offered_by_user_id`,
+        [payload.listingId],
+      );
+      for (const cancelledOffer of cancelledOffers.rows) {
+        await appendDomainEvent(offerClient, {
+          aggregateType: 'offer',
+          aggregateId: cancelledOffer.id,
+          eventType: 'offer.cancelled',
+          actorId: event.actorId,
+          correlationId: event.correlationId,
+          causationId: event.id,
+          deduplicationKey: `offer.cancelled:${cancelledOffer.id}`,
+          payload: {
+            offerId: cancelledOffer.id,
+            listingId: payload.listingId,
+            buyerId: cancelledOffer.buyer_id,
+            sellerId: cancelledOffer.seller_id,
+            offerPriceGbp: Number(cancelledOffer.offer_price_gbp),
+            conversationId: cancelledOffer.conversation_id,
+            offeredByUserId:
+              cancelledOffer.offered_by_user_id ?? cancelledOffer.buyer_id,
+            // The price change is a seller-authored mutation — attribute
+            // the cancellation to the actor so the drain notifies the
+            // counterparty (the buyer), not the seller who acted.
+            cancelledByUserId: event.actorId ?? cancelledOffer.seller_id,
+            cancellationReason: 'listing_terms_changed',
+          },
+        });
+      }
+      await offerClient.query('COMMIT');
+    } catch (error) {
+      try {
+        await offerClient.query('ROLLBACK');
+      } catch {
+        // ignore rollback failure — the connection is reset on release
+      }
+      throw error;
+    } finally {
+      offerClient.release();
+    }
     return;
   }
 
@@ -227,13 +298,26 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
       expiresAt: z.string().datetime(),
       counterRound: z.number().int().nonnegative(),
       conversationId: z.string().nullable().optional(),
+      // Who authored the offer — buyer for ordinary offers, seller for
+      // offer-to-likers fan-out. Missing on pre-change events; those were
+      // all buyer-authored.
+      offeredByUserId: z.string().min(2).optional(),
+      source: z.string().optional(),
     }).parse(event.payload);
+    // Buyer-authored offers notify the seller; seller-authored targeted
+    // offers (offer-to-likers) notify the buyer — the liker is the one who
+    // must respond, and telling the seller "you got an offer" about their
+    // own send would be false.
+    const sellerAuthored = payload.offeredByUserId === payload.sellerId;
+    const recipientId = sellerAuthored ? payload.buyerId : payload.sellerId;
     await queueUserNotification({
-      userId: payload.sellerId,
-      title: 'New offer',
-      body: `${formatGbpAmount(payload.amountGbp)} offered on your listing.`,
+      userId: recipientId,
+      title: sellerAuthored ? 'Private offer' : 'New offer',
+      body: sellerAuthored
+        ? `The seller sent you a private offer: ${formatGbpAmount(payload.amountGbp)}.`
+        : `${formatGbpAmount(payload.amountGbp)} offered on your listing.`,
       eventType: 'offer_created',
-      actorUserId: payload.buyerId,
+      actorUserId: sellerAuthored ? payload.sellerId : payload.buyerId,
       payload: {
         event: 'offer_created',
         offerId: payload.offerId,
@@ -244,10 +328,13 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
       },
       route: offerNotificationRoute(
         payload.conversationId,
-        payload.buyerId,
+        sellerAuthored ? payload.sellerId : payload.buyerId,
         payload.listingId,
       ),
-      idempotencyKey: `offer_created_seller_${payload.offerId}`,
+      // Buyer-authored keys keep the historical `..._seller_` shape so
+      // in-flight dedup is unchanged; seller-authored fan-out keys name the
+      // buyer recipient.
+      idempotencyKey: `offer_created_${sellerAuthored ? 'buyer' : 'seller'}_${payload.offerId}`,
       metadata: { outboxEventId: event.id },
     });
     publishOfferEventToParticipants({
@@ -405,10 +492,14 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
         ? `The buyer withdrew their ${formatGbpAmount(payload.offerPriceGbp)} offer.`
         : `The buyer declined your ${formatGbpAmount(payload.offerPriceGbp)} counter-offer.`)
       : (authorIsBuyer
-        ? (payload.cancellationReason === 'listing_unavailable'
-          ? `Your ${formatGbpAmount(payload.offerPriceGbp)} offer was cancelled — the listing is no longer available.`
-          : `Your ${formatGbpAmount(payload.offerPriceGbp)} offer was cancelled by the seller.`)
-        : `The seller withdrew their ${formatGbpAmount(payload.offerPriceGbp)} counter-offer.`);
+        ? (payload.cancellationReason === 'listing_terms_changed'
+          ? `Your ${formatGbpAmount(payload.offerPriceGbp)} offer was cancelled — the listing's price changed. You can send a new offer on the updated terms.`
+          : payload.cancellationReason === 'listing_unavailable'
+            ? `Your ${formatGbpAmount(payload.offerPriceGbp)} offer was cancelled — the listing is no longer available.`
+            : `Your ${formatGbpAmount(payload.offerPriceGbp)} offer was cancelled by the seller.`)
+        : (payload.cancellationReason === 'listing_terms_changed'
+          ? `The seller's ${formatGbpAmount(payload.offerPriceGbp)} counter-offer was withdrawn — the listing's price changed.`
+          : `The seller withdrew their ${formatGbpAmount(payload.offerPriceGbp)} counter-offer.`));
     await queueUserNotification({
       userId: cancelledRecipient,
       title: 'Offer cancelled',

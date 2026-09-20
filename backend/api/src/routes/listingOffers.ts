@@ -47,6 +47,34 @@ const offerIdParamsSchema = z.object({
   offerId: z.string().min(2).max(120),
 });
 
+/**
+ * Offer-to-likers fan-out cap. A single batch can never exceed this many
+ * recipients regardless of what the client asks for — keeps a malicious or
+ * buggy caller from turning one request into an unbounded notification
+ * storm.
+ */
+const MAX_LIKERS_PER_BATCH = 100;
+
+/**
+ * Seller-authored targeted offers ("offer to likers"). Either an explicit
+ * GBP price or a discount percentage off the current list price must be
+ * supplied; when both arrive, offerPriceGbp wins (the sheet computes both
+ * from the same value, so they cannot disagree meaningfully).
+ */
+const offersToLikersSchema = z
+  .object({
+    offerPriceGbp: z.number().positive().max(1_000_000).optional(),
+    discountPercent: z.number().min(1).max(95).optional(),
+    expiryHours: z.number().int().min(MIN_OFFER_HOURS).max(MAX_OFFER_HOURS).default(48),
+    includeFreeShipping: z.boolean().default(false),
+    message: z.string().trim().max(500).optional(),
+    maxRecipients: z.number().int().min(1).max(MAX_LIKERS_PER_BATCH).default(MAX_LIKERS_PER_BATCH),
+    idempotencyKey: z.string().min(8).max(140).optional(),
+  })
+  .refine((v) => v.offerPriceGbp !== undefined || v.discountPercent !== undefined, {
+    message: 'offerPriceGbp or discountPercent is required',
+  });
+
 const listQuerySchema = z.object({
   status: z
     .enum(['pending', 'accepted', 'declined', 'expired', 'cancelled', 'countered'])
@@ -1438,6 +1466,293 @@ export const registerListingOfferRoutes = ({
       app.log.error({ err: error }, 'Failed to cancel listing offer');
       reply.code(500);
       return { ok: false, error: 'Failed to cancel offer' };
+    } finally {
+      client.release();
+    }
+  });
+
+  /**
+   * POST /listings/:listingId/offers-to-likers
+   *
+   * Seller-authored fan-out: creates one pending offer per liker — the users
+   * who hearted the listing (user_saved_listings list='wishlist', migration
+   * 306; the wishlist heart is the product's "like"). Each liker gets a real
+   * listing_offers row authored by the seller (offered_by_user_id = seller),
+   * so the whole existing lifecycle applies unchanged: the liker accepts,
+   * declines, or counters it, and the outbox drain notifies the liker via
+   * offer.created (seller-authored events route to the buyer, not the
+   * seller).
+   *
+   * Semantics:
+   *  - Seller-scoped: only the listing owner; the listing must be active.
+   *  - Likers who already have a live pending offer on this listing are
+   *    skipped — a targeted offer must not clobber an open negotiation.
+   *  - Batch idempotency: `idempotencyKey` marks the batch in each row's
+   *    metadata.offerBatchKey; a replay returns the previously created
+   *    count. Row-level dedup comes from per-offer keys
+   *    (`batchKey:buyerId`) against listing_offers_actor_idempotency_idx
+   *    via ON CONFLICT DO NOTHING.
+   *  - Capped at MAX_LIKERS_PER_BATCH recipients per call.
+   */
+  app.post('/listings/:listingId/offers-to-likers', async (request, reply) => {
+    const actorUserId = resolveAuthenticatedUserId(request);
+    const { listingId } = z
+      .object({ listingId: z.string().min(2).max(120) })
+      .parse(request.params);
+    const payload = offersToLikersSchema.parse(request.body ?? {});
+
+    const client = await db.connect();
+    try {
+      await client.query('BEGIN');
+      const expiredOffers = await expireOverdueOffers(client);
+      await appendOfferExpiredEvents(client, expiredOffers, request.id);
+
+      // Lock the listing for the whole fan-out — every inserted row binds
+      // this seller and requires a still-active listing.
+      const listingResult = await client.query<{
+        id: string;
+        seller_id: string;
+        price_gbp: string;
+        status: string;
+      }>(
+        `SELECT id, seller_id, price_gbp::text, status
+         FROM listings
+         WHERE id = $1
+         LIMIT 1
+         FOR UPDATE`,
+        [listingId],
+      );
+      if (!listingResult.rowCount) {
+        await client.query('ROLLBACK');
+        reply.code(404);
+        return { ok: false, error: 'Listing not found' };
+      }
+      const listing = listingResult.rows[0];
+      if (listing.seller_id !== actorUserId) {
+        await client.query('ROLLBACK');
+        reply.code(403);
+        return { ok: false, error: 'Only the listing owner can send offers to likers' };
+      }
+      if (listing.status !== 'active') {
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return { ok: false, error: 'Listing is not active' };
+      }
+
+      const originalPriceGbp = Number(listing.price_gbp);
+      const offerPriceGbp = payload.offerPriceGbp !== undefined
+        ? payload.offerPriceGbp
+        : Math.round(originalPriceGbp * (1 - payload.discountPercent! / 100) * 100) / 100;
+      if (offerPriceGbp <= 0 || offerPriceGbp > originalPriceGbp * 2) {
+        await client.query('ROLLBACK');
+        reply.code(422);
+        return { ok: false, error: 'Offer amount is unreasonably high' };
+      }
+
+      const requestHash = crypto
+        .createHash('sha256')
+        .update(JSON.stringify({
+          listingId,
+          offerPriceGbp,
+          expiryHours: payload.expiryHours,
+          includeFreeShipping: payload.includeFreeShipping,
+          scope: 'offer_to_likers',
+        }))
+        .digest('hex');
+
+      // Batch-level idempotent replay: the same key with the same payload
+      // reports the prior fan-out; with a different payload it is a 409 —
+      // same contract as single-offer creation.
+      if (payload.idempotencyKey) {
+        const replay = await client.query<{
+          created: string;
+          request_hash: string | null;
+        }>(
+          `SELECT COUNT(*)::text AS created,
+                  MIN(request_hash) AS request_hash
+           FROM listing_offers
+           WHERE listing_id = $1
+             AND offered_by_user_id = $2
+             AND metadata->>'offerBatchKey' = $3`,
+          [listingId, actorUserId, payload.idempotencyKey],
+        );
+        const existing = Number(replay.rows[0]?.created ?? 0);
+        if (existing > 0) {
+          if (replay.rows[0].request_hash !== requestHash) {
+            await client.query('ROLLBACK');
+            reply.code(409);
+            return {
+              ok: false,
+              error: 'Idempotency key was already used with a different offer payload',
+              code: 'IDEMPOTENCY_PAYLOAD_MISMATCH',
+            };
+          }
+          const replayLikerCount = await client.query<{ count: string }>(
+            `SELECT COUNT(*)::text AS count
+             FROM user_saved_listings
+             WHERE listing_id = $1 AND list = 'wishlist' AND user_id <> $2`,
+            [listingId, actorUserId],
+          );
+          const replayLikers = Number(replayLikerCount.rows[0]?.count ?? 0);
+          await client.query('COMMIT');
+          return {
+            ok: true,
+            idempotent: true,
+            batchKey: payload.idempotencyKey,
+            likerCount: replayLikers,
+            created: existing,
+            skipped: Math.max(replayLikers - existing, 0),
+          };
+        }
+      }
+
+      const batchKey = payload.idempotencyKey ?? `likers_${crypto.randomUUID()}`;
+
+      // Likers = wishlist hearts, excluding the seller (self-saves happen)
+      // and likers who already hold a live pending offer on this listing —
+      // expireOverdueOffers ran at transaction start so 'pending' here is
+      // genuinely actionable. JOIN users keeps dangling saves from hitting
+      // the offers FK.
+      const likersResult = await client.query<{ user_id: string }>(
+        `SELECT usl.user_id
+         FROM user_saved_listings usl
+         JOIN users u ON u.id = usl.user_id
+         WHERE usl.listing_id = $1
+           AND usl.list = 'wishlist'
+           AND usl.user_id <> $2
+           AND NOT EXISTS (
+             SELECT 1
+             FROM listing_offers o
+             WHERE o.listing_id = usl.listing_id
+               AND o.buyer_id = usl.user_id
+               AND o.status = 'pending'
+           )
+         ORDER BY usl.created_at DESC
+         LIMIT $3`,
+        [listingId, actorUserId, payload.maxRecipients],
+      );
+
+      const likerCountResult = await client.query<{ count: string }>(
+        `SELECT COUNT(*)::text AS count
+         FROM user_saved_listings
+         WHERE listing_id = $1 AND list = 'wishlist' AND user_id <> $2`,
+        [listingId, actorUserId],
+      );
+      const likerCount = Number(likerCountResult.rows[0]?.count ?? 0);
+
+      if (!likersResult.rowCount) {
+        await client.query('COMMIT');
+        return {
+          ok: true,
+          idempotent: false,
+          batchKey,
+          likerCount,
+          created: 0,
+          skipped: likerCount,
+        };
+      }
+
+      const expiresAt = new Date(Date.now() + payload.expiryHours * 3600_000).toISOString();
+      const offerMetadata = {
+        source: 'offer_to_likers',
+        offerBatchKey: batchKey,
+        ...(payload.discountPercent !== undefined
+          ? { discountPercent: payload.discountPercent }
+          : {}),
+        ...(payload.includeFreeShipping ? { includeFreeShipping: true } : {}),
+        ...(payload.message ? { message: payload.message } : {}),
+      };
+
+      let created = 0;
+      for (const liker of likersResult.rows) {
+        const offerId = `offer_${crypto.randomUUID()}`;
+        const inserted = await client.query<ListingOfferRow>(
+          `INSERT INTO listing_offers (
+             id, listing_id, buyer_id, seller_id,
+             offer_price_gbp, original_price_gbp,
+             counter_round, status, expires_at,
+             conversation_id, parent_offer_id, metadata,
+             offered_by_user_id, idempotency_key, request_hash
+           )
+           VALUES ($1, $2, $3, $4, $5, $6, 0, 'pending', $7, NULL, NULL, $8::jsonb, $4, $9, $10)
+           ON CONFLICT DO NOTHING
+           RETURNING id, listing_id, buyer_id, seller_id,
+                     offer_price_gbp::text, original_price_gbp::text,
+                     counter_round, status, expires_at::text,
+                     accepted_at::text, declined_at::text, expired_at::text, cancelled_at::text, order_id,
+                     conversation_id, parent_offer_id, metadata, offered_by_user_id,
+                     created_at::text, updated_at::text`,
+          [
+            offerId,
+            listingId,
+            liker.user_id,
+            actorUserId,
+            offerPriceGbp,
+            originalPriceGbp,
+            expiresAt,
+            JSON.stringify(offerMetadata),
+            `${batchKey}:${liker.user_id}`,
+            requestHash,
+          ],
+        );
+        if (!inserted.rowCount) {
+          // Concurrent replay of the same batch already wrote this liker's
+          // row — deduped by (offered_by_user_id, idempotency_key).
+          continue;
+        }
+        created += 1;
+        // Same event the buyer-offer route emits. The drain inspects
+        // offeredByUserId: seller-authored offers notify the buyer (the
+        // liker), not the seller who just pressed send.
+        await appendDomainEvent(client, {
+          aggregateType: 'offer',
+          aggregateId: offerId,
+          eventType: 'offer.created',
+          actorId: actorUserId,
+          correlationId: request.id,
+          idempotencyKey: `${batchKey}:${liker.user_id}`,
+          deduplicationKey: `offer.created:${offerId}`,
+          payload: {
+            offerId,
+            listingId,
+            buyerId: liker.user_id,
+            sellerId: actorUserId,
+            offeredByUserId: actorUserId,
+            amountGbp: offerPriceGbp,
+            expiresAt,
+            counterRound: 0,
+            conversationId: null,
+            source: 'offer_to_likers',
+          },
+        });
+      }
+
+      await client.query('COMMIT');
+      try {
+        await enqueueOutboxDrain();
+      } catch (error) {
+        // The events are already durable. The periodic drain will retry even
+        // when Redis is temporarily unavailable at commit time.
+        app.log.error({ err: error, listingId }, 'Failed to enqueue offer-to-likers outbox drain');
+      }
+      reply.code(201);
+      return {
+        ok: true,
+        idempotent: false,
+        batchKey,
+        likerCount,
+        created,
+        skipped: likerCount - created,
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      if (isSerializationConflict(error)) {
+        reply.code(409);
+        return { ok: false, error: 'Offer conflict — please retry', code: 'OFFER_CONFLICT' };
+      }
+      app.log.error({ err: error, listingId }, 'Failed to create offers to likers');
+      reply.code(500);
+      return { ok: false, error: 'Failed to send offers to likers' };
     } finally {
       client.release();
     }

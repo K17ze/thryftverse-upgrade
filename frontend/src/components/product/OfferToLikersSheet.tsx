@@ -10,7 +10,7 @@ import { AppButton } from '../ui/AppButton';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../../context/CurrencyContext';
 import { CURRENCIES } from '../../constants/currencies';
-import { convertGbpToDisplayAmount, sanitizeDecimalInput } from '../../utils/currencyAuthoringFlows';
+import { convertDisplayToGbpAmount, convertGbpToDisplayAmount, sanitizeDecimalInput } from '../../utils/currencyAuthoringFlows';
 import { haptics } from '../../utils/haptics';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -28,11 +28,14 @@ export interface OfferToLikersSheetProps {
   onSend: (params: {
     listingId: string;
     discountPercent: number;
-    offerPrice: number;
+    /** GBP — the canonical currency the offers API transacts in. */
+    offerPriceGbp: number;
     includeFreeShipping: boolean;
     expiryHours: number;
     likerCount: number;
   }) => void;
+  /** Disables the CTA while the parent's submit is in flight. */
+  sending?: boolean;
 }
 
 const DISCOUNT_PRESETS = [10, 15, 20, 25];
@@ -44,7 +47,8 @@ export function OfferToLikersSheet({
   visible,
   listing,
   onClose,
-  onSend }: OfferToLikersSheetProps) {
+  onSend,
+  sending = false }: OfferToLikersSheetProps) {
   const { colors } = useAppTheme();
   const themed = {
     textPrimary: colors.textPrimary,
@@ -94,16 +98,21 @@ export function OfferToLikersSheet({
 
   const askingPrice = listing?.price ?? 0;
 
-  const computedOfferPrice = useMemo(() => {
+  // Always GBP. `customPrice` is authored in the display currency, so the
+  // custom path converts back — sending a display amount to a GBP-priced
+  // endpoint would silently misprice every offer.
+  const computedOfferPriceGbp = useMemo(() => {
     if (useCustomPrice) {
-      return parseFloat(customPrice) || 0;
+      const displayAmount = parseFloat(customPrice) || 0;
+      const gbp = convertDisplayToGbpAmount(displayAmount, currencyCode, fxRates);
+      return Number.isFinite(gbp) ? gbp : 0;
     }
     return askingPrice * (1 - selectedDiscount / 100);
-  }, [useCustomPrice, customPrice, askingPrice, selectedDiscount]);
+  }, [useCustomPrice, customPrice, askingPrice, selectedDiscount, currencyCode, fxRates]);
 
-  const formattedOfferPrice = formatFromFiat(computedOfferPrice, 'GBP');
+  const formattedOfferPrice = formatFromFiat(computedOfferPriceGbp, 'GBP');
   const formattedAskingPrice = formatFromFiat(askingPrice, 'GBP');
-  const savingsAmount = askingPrice - computedOfferPrice;
+  const savingsAmount = askingPrice - computedOfferPriceGbp;
   const formattedSavings = formatFromFiat(savingsAmount, 'GBP');
 
   const likerCount = listing?.likes ?? 0;
@@ -130,19 +139,19 @@ export function OfferToLikersSheet({
   }, []);
 
   const handleSend = useCallback(() => {
-    if (!listing || computedOfferPrice <= 0) return;
+    if (!listing || computedOfferPriceGbp <= 0 || sending) return;
     haptics.press();
     const discountPercent = useCustomPrice
-      ? Math.round(((askingPrice - computedOfferPrice) / askingPrice) * 100)
+      ? Math.round(((askingPrice - computedOfferPriceGbp) / askingPrice) * 100)
       : selectedDiscount;
     onSend({
       listingId: listing.id,
       discountPercent,
-      offerPrice: computedOfferPrice,
+      offerPriceGbp: computedOfferPriceGbp,
       includeFreeShipping,
       expiryHours,
       likerCount });
-  }, [listing, computedOfferPrice, useCustomPrice, askingPrice, selectedDiscount, includeFreeShipping, expiryHours, likerCount, onSend]);
+  }, [listing, computedOfferPriceGbp, sending, useCustomPrice, askingPrice, selectedDiscount, includeFreeShipping, expiryHours, likerCount, onSend]);
 
   if (!listing) return null;
 
@@ -343,7 +352,7 @@ export function OfferToLikersSheet({
               variant="primary"
               size="lg"
               onPress={handleSend}
-              disabled={computedOfferPrice <= 0 || likerCount === 0}
+              disabled={computedOfferPriceGbp <= 0 || likerCount === 0 || sending}
               accessibilityLabel={`Send offer of ${formattedOfferPrice} to ${likerCount} likers`}
             />
           </View>

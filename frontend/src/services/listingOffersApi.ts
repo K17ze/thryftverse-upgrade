@@ -223,3 +223,61 @@ export async function cancelListingOfferOnApi(offerId: string): Promise<{ status
   );
   return { status: payload.status };
 }
+
+// ── Offer to likers (seller-authored fan-out) ───────────────────────
+//
+// POST /listings/:id/offers-to-likers creates one pending offer per
+// wishlist liker, authored by the seller. The batch is idempotent on
+// `idempotencyKey` — a retried submit reports the prior fan-out instead
+// of double-sending.
+
+export interface SendOfferToLikersInput {
+  listingId: string;
+  /** Target price in GBP. The server also accepts discountPercent alone. */
+  offerPriceGbp: number;
+  discountPercent?: number;
+  expiryHours?: number;
+  includeFreeShipping?: boolean;
+  message?: string;
+  maxRecipients?: number;
+  idempotencyKey: string;
+}
+
+export interface OfferToLikersResult {
+  batchKey: string;
+  /** Total wishlist likers on the listing (excluding the seller). */
+  likerCount: number;
+  /** Offers actually created in this batch. */
+  created: number;
+  /** Likers not offered — already negotiating, or beyond the batch cap. */
+  skipped: number;
+  idempotent: boolean;
+}
+
+export async function sendOfferToLikersOnApi(
+  input: SendOfferToLikersInput
+): Promise<OfferToLikersResult> {
+  const payload = await fetchJson<{ ok: true } & OfferToLikersResult>(
+    `/listings/${encodeURIComponent(input.listingId)}/offers-to-likers`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        offerPriceGbp: input.offerPriceGbp,
+        discountPercent: input.discountPercent,
+        expiryHours: input.expiryHours ?? 48,
+        includeFreeShipping: input.includeFreeShipping ?? false,
+        message: input.message,
+        maxRecipients: input.maxRecipients,
+        idempotencyKey: input.idempotencyKey,
+      }),
+    }
+  );
+  return {
+    batchKey: payload.batchKey,
+    likerCount: payload.likerCount,
+    created: payload.created,
+    skipped: payload.skipped,
+    idempotent: payload.idempotent ?? false,
+  };
+}

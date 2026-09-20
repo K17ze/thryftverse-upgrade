@@ -1961,6 +1961,12 @@ export const EN_TRANSLATIONS = {
   'manage.viewOffers': 'View offers',
   'manage.viewOffersActive': '{count} active offer{plural}',
   'manage.a11y.viewOffersHint': 'Opens the offers screen scoped to this listing',
+  'manage.offerToLikers': 'Offer to likers',
+  'manage.offerToLikersSubtitle': 'Send a private discount to {count} liker{plural}',
+  'manage.a11y.offerToLikersHint': 'Opens the offer-to-likers sheet',
+  'manage.offerSentToLikers': 'Offer sent to {count} liker{plural}',
+  'manage.offerToLikersNone': 'No likers could receive this offer',
+  'manage.offerToLikersFailed': "Couldn't send the offer — try again",
 } as const;
 
 export type SupportedLocale = 'en' | 'es' | 'fr' | 'de' | 'ar' | 'hi' | 'zh' | 'pt' | 'ja' | 'ru' | 'tr' | 'ko' | 'id';

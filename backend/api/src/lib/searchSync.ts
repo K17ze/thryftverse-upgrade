@@ -4,6 +4,10 @@ import {
   createSearchAdapter,
   type ListingDocument,
 } from './searchAdapter.js';
+import {
+  configureMeilisearchSynonyms,
+  configureMeilisearchTypoTolerance,
+} from './meilisearchConfig.js';
 
 const BATCH_SIZE = 100;
 
@@ -145,6 +149,15 @@ export async function configureSearchIndex(): Promise<void> {
       { index: MEILISEARCH_INDEX_NAME },
       'Search index configured',
     );
+
+    // Typo tolerance and synonyms live in meilisearchConfig.ts — apply them
+    // on this same configuration path so startup, the admin reindex route,
+    // and the manual searchSync script all converge on one index shape.
+    // Both functions self-guard (no-op without a reachable Meilisearch
+    // backend) and never throw; they run before configureEmbedder so an
+    // embedder failure cannot skip them.
+    await configureMeilisearchTypoTolerance();
+    await configureMeilisearchSynonyms();
 
     await configureEmbedder();
   } catch (error) {

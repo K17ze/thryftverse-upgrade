@@ -90,6 +90,9 @@ export interface AssetDetailModalsProps {
   /** Wave A: Whether the viewer has acknowledged the risk disclosure.
    *  Forwarded to CoOwnRiskDisclosure when onAcknowledgeRisk is set. */
   riskAcknowledged?: boolean;
+  /** While the consent POST is in flight — disables the acknowledge
+   *  control so a double-tap can't submit twice. */
+  riskAcknowledging?: boolean;
   /** Wave A: Marks the risk disclosure as acknowledged. */
   onAcknowledgeRisk?: () => void;
 }
@@ -141,6 +144,7 @@ export const AssetDetailModals = React.memo(function AssetDetailModals({
   onOpenRiskDisclosure,
   onOpenProspectus,
   riskAcknowledged,
+  riskAcknowledging,
   onAcknowledgeRisk,
 }: AssetDetailModalsProps) {
   const { colors } = useAppTheme();
@@ -218,6 +222,7 @@ export const AssetDetailModals = React.memo(function AssetDetailModals({
           <CoOwnRiskDisclosure
             disclosures={asset.riskDisclosures ?? null}
             acknowledged={riskAcknowledged}
+            acknowledging={riskAcknowledging}
             onAcknowledge={onAcknowledgeRisk}
             onReportIssue={() => {
               onCloseSheet('riskDisclosure');

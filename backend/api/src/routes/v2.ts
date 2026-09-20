@@ -164,6 +164,7 @@ export const registerV2Routes = ({
       userId,
       customerId: binding.rows[0].provider_customer_ref,
       hmacSecret: config.paymentMetadataHmacSecret,
+      logger: request.log,
     });
 
     return {
@@ -238,6 +239,7 @@ export const registerV2Routes = ({
       userId,
       customerId: customer.customerId,
       hmacSecret: config.paymentMetadataHmacSecret,
+      logger: request.log,
     });
 
     return { ok: true, idempotent: false };
@@ -294,6 +296,7 @@ export const registerV2Routes = ({
       userId,
       customerId: customer.customerId,
       hmacSecret: config.paymentMetadataHmacSecret,
+      logger: request.log,
     });
 
     return {

@@ -168,6 +168,29 @@ jobs:
         run: node scripts/check-design-tokens.mjs
         working-directory: frontend
 
+  surface-density:
+    name: Surface density check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+        working-directory: frontend
+      - name: Surface density check (report-only — review trigger)
+        # The checker is warn-only by design (always exits 0) and currently
+        # reports hotspots across ~40 files. It is wired as a report-only
+        # signal, not a hard gate; promote to blocking once the backlog is
+        # burned down and thresholds are re-tuned.
+        run: node scripts/check-surface-density.mjs
+        working-directory: frontend
+        continue-on-error: true
+
   animated-scroll:
     name: Animated scroll check
     runs-on: ubuntu-latest

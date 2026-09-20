@@ -34,6 +34,9 @@ import {
   FontFamily } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { fetchListingByIdFromApi, patchListingOnApi, deleteListingOnApi, type ListingApiItem } from '../services/listingsApi';
+import { sendOfferToLikersOnApi } from '../services/listingOffersApi';
+import { OfferToLikersSheet } from '../components/product/OfferToLikersSheet';
+import { createStableId } from '../utils/createStableId';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -77,6 +80,13 @@ export default function ManageListingScreen() {
     variant: 'default' | 'danger';
   }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
   const currentUser = useStore((s) => s.currentUser);
+
+  // Offer-to-likers sheet. The batch idempotency key persists across
+  // retries inside one sheet session so a failed submit can be safely
+  // resent without double-offering; it resets once a send lands.
+  const [offerSheetVisible, setOfferSheetVisible] = React.useState(false);
+  const [offerSending, setOfferSending] = React.useState(false);
+  const offerBatchKeyRef = React.useRef<string | null>(null);
 
   useFocusEffect(React.useCallback(() => {
     let mounted = true;
@@ -203,6 +213,51 @@ export default function ManageListingScreen() {
       });
     } catch {
       // silently fail
+    }
+  };
+
+  const handleSendOfferToLikers = async (params: {
+    listingId: string;
+    discountPercent: number;
+    offerPriceGbp: number;
+    includeFreeShipping: boolean;
+    expiryHours: number;
+    likerCount: number;
+  }) => {
+    if (offerSending) return;
+    if (!offerBatchKeyRef.current) {
+      offerBatchKeyRef.current = createStableId('likeroffer');
+    }
+    setOfferSending(true);
+    try {
+      const result = await sendOfferToLikersOnApi({
+        listingId: params.listingId,
+        offerPriceGbp: params.offerPriceGbp,
+        // Informational only — a custom price above the ask yields a
+        // negative percent the schema rejects; offerPriceGbp is canonical.
+        discountPercent: params.discountPercent > 0 ? params.discountPercent : undefined,
+        includeFreeShipping: params.includeFreeShipping,
+        expiryHours: params.expiryHours,
+        idempotencyKey: offerBatchKeyRef.current,
+      });
+      offerBatchKeyRef.current = null;
+      setOfferSheetVisible(false);
+      if (result.created > 0) {
+        show(t('manage.offerSentToLikers', {
+          count: result.created,
+          plural: result.created === 1 ? '' : 's',
+        }), 'success');
+      } else {
+        // Honest empty outcome — every liker was already negotiating or
+        // the wishlist heart was removed between load and send.
+        show(t('manage.offerToLikersNone'), 'info');
+      }
+      void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(itemId) });
+    } catch {
+      // Keep the batch key — a retry replays the same idempotency key.
+      show(t('manage.offerToLikersFailed'), 'error');
+    } finally {
+      setOfferSending(false);
     }
   };
 
@@ -507,6 +562,19 @@ export default function ManageListingScreen() {
               accessibilityHint={t('manage.a11y.viewOffersHint')}
             />
           ) : null}
+          {/* Offer-to-likers — only when the listing is sellable and the
+              backend engagement metric reports real wishlist likers. Never
+              fabricated. */}
+          {status === 'active' && wishlistCount > 0 ? (
+            <FlagshipNavigationRow
+              title={t('manage.offerToLikers')}
+              subtitle={t('manage.offerToLikersSubtitle', { count: wishlistCount, plural: wishlistCount === 1 ? '' : 's' })}
+              icon="heart"
+              onPress={() => setOfferSheetVisible(true)}
+              accessibilityLabel={t('manage.offerToLikers')}
+              accessibilityHint={t('manage.a11y.offerToLikersHint')}
+            />
+          ) : null}
         </FlagshipFormSection>
 
         {/* ── Progressive disclosure rows ── */}
@@ -615,6 +683,20 @@ export default function ManageListingScreen() {
         cancelLabel={confirmSheet.cancelLabel}
         onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
         variant={confirmSheet.variant}
+      />
+
+      <OfferToLikersSheet
+        visible={offerSheetVisible}
+        listing={item ? {
+          id: item.id,
+          title: item.title,
+          price: item.priceGbp ?? 0,
+          image: images[0],
+          likes: wishlistCount,
+        } : null}
+        sending={offerSending}
+        onClose={() => setOfferSheetVisible(false)}
+        onSend={handleSendOfferToLikers}
       />
     </View>
   );

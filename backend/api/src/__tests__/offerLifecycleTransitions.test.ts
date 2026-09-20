@@ -244,6 +244,39 @@ test('drain routes cancel/expire/sibling notifications to the right party', () =
   assert.ok(drain.includes("event.eventType === 'offer.checkout_expired'"));
 });
 
+test('listing.price_changed invalidates pending offers via offer.cancelled', () => {
+  const drain = repoSrc('workers/handlers/outboxDrainHandler.ts');
+  // R35: a reprice must not leave pending offers actionable — they were
+  // negotiated against the previous price. The drain branch cancels them
+  // (an existing terminal status) and emits the standard offer.cancelled
+  // event so notification, realtime and chat-card flip reuse one path.
+  const priceBranch = drain.slice(
+    drain.indexOf("event.eventType === 'listing.price_changed'"),
+    drain.indexOf("event.eventType === 'offer.accepted'"),
+  );
+  assert.ok(
+    priceBranch.includes('UPDATE listing_offers')
+      && priceBranch.includes("SET status = 'cancelled'")
+      && priceBranch.includes("AND status = 'pending'"),
+    'price_changed must cancel pending offers on the listing',
+  );
+  assert.ok(
+    priceBranch.includes("eventType: 'offer.cancelled'"),
+    'cancelled offers must emit offer.cancelled so the fan-out is uniform',
+  );
+  assert.ok(
+    priceBranch.includes("cancellationReason: 'listing_terms_changed'"),
+    'the cancel reason must be terms-changed, not listing_unavailable',
+  );
+  // Buyer-facing copy must not claim the listing is gone or that the
+  // seller pressed cancel — it must name the price change.
+  assert.ok(
+    drain.includes("payload.cancellationReason === 'listing_terms_changed'")
+      && drain.includes('price changed'),
+    'offer.cancelled copy must explain the material change',
+  );
+});
+
 test('smart sell evaluate guards expiry and seller-away before binding', () => {
   const smartSell = repoSrc('routes/smartSellPolicy.ts');
   assert.ok(
@@ -306,6 +339,38 @@ test('checkout sweep covers trigger-flipped offers and pending-offer lapses', ()
     index.includes('expireOverdueOffers(client)') && index.includes('appendOfferExpiredEvents(client'),
     'sweep must expire overdue pending offers and emit their events',
   );
+});
+
+test('offers-to-likers route is seller-scoped, liker-sourced, and idempotent', () => {
+  const routes = repoSrc('routes/listingOffers.ts');
+  assert.ok(
+    routes.includes("'/listings/:listingId/offers-to-likers'"),
+    'offer-to-likers route missing',
+  );
+  // Seller-scoped: only the listing owner may fan out.
+  assert.ok(routes.includes('Only the listing owner can send offers to likers'));
+  // Likers come from the wishlist heart (user_saved_listings, migration
+  // 306) — the product's real "like" — not a fabricated source.
+  assert.ok(routes.includes("usl.list = 'wishlist'"));
+  // A liker already holding a live pending offer is skipped, not clobbered.
+  assert.ok(routes.includes("o.status = 'pending'"));
+  // Fan-out is capped per batch.
+  assert.ok(routes.includes('MAX_LIKERS_PER_BATCH'));
+  // Batch idempotency: offerBatchKey in metadata + row-level conflict
+  // dedup on (offered_by_user_id, idempotency_key).
+  assert.ok(routes.includes("metadata->>'offerBatchKey'"));
+  assert.ok(routes.includes('ON CONFLICT DO NOTHING'));
+});
+
+test('drain notifies the liker for seller-authored offer.created events', () => {
+  const drain = repoSrc('workers/handlers/outboxDrainHandler.ts');
+  // offer.created with offeredByUserId === sellerId (offer-to-likers) must
+  // land on the buyer — the liker is the one who responds. Telling the
+  // seller "you got an offer" about their own send would be false.
+  assert.ok(drain.includes('payload.offeredByUserId === payload.sellerId'));
+  assert.ok(drain.includes('sellerAuthored ? payload.buyerId : payload.sellerId'));
+  // Buyer-authored notification keys keep their historical shape.
+  assert.ok(drain.includes('offer_created_${sellerAuthored ? \'buyer\' : \'seller\'}'));
 });
 
 test('offer chat card emits ISO expiresAt, not raw Postgres text', () => {

@@ -255,6 +255,19 @@ export async function performUserErasure(
     [userId]
   );
 
+  // Media embeddings (migration 145) — model-versioned embedding rows keyed
+  // by media_asset_id. The FK to media_assets is ON DELETE CASCADE, but the
+  // asset rows are soft-deleted below rather than hard-deleted, so the
+  // cascade never fires and these rows must be deleted explicitly. They are
+  // derived from the user's media and carry no retention basis.
+  await client.query(
+    `
+      DELETE FROM media_embeddings
+      WHERE media_asset_id IN (SELECT id FROM media_assets WHERE owner_id = $1)
+    `,
+    [userId]
+  );
+
   await client.query(
     `
       UPDATE media_assets

@@ -37,6 +37,7 @@ import {
   evaluateCoOwnPriceAlerts,
   processCoOwnDripReinvestment,
   processAutoFeedbackSweep,
+  processSearchIndexSync,
 } from './handlers/index.js';
 
 /**
@@ -168,6 +169,9 @@ async function main(): Promise<void> {
       handleAgentRunJob: async ({ runId }) => {
         const { processAgentRun } = await import('../botRuntime/index.js');
         await processAgentRun(db, runId);
+      },
+      handleSearchIndexSyncJob: async ({ reason }) => {
+        await processSearchIndexSync({ reason });
       },
     },
     logger,

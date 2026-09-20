@@ -255,7 +255,14 @@ interface SavedPaymentMethod {
 interface CoOwnComplianceProfile {
   countryCode: string;
   kycVerified: boolean;
+  /** UX cache only — the server is the source of truth. Set only after
+   *  POST /compliance/consents/accept succeeds; the Co-Own eligibility
+   *  gate (RISK_DISCLOSURE_REQUIRED) is satisfied by the user_consents
+   *  row, not by this flag. */
   riskDisclosureAccepted: boolean;
+  /** Which legal document + version the consent was recorded against. */
+  riskDisclosureDocumentId?: string;
+  riskDisclosureVersion?: string;
   stableCoinWalletConnected: boolean;
   educationCompleted: boolean;
   dac7Completed?: boolean;

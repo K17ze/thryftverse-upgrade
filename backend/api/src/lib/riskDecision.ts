@@ -829,9 +829,12 @@ export interface EntityLinkInput {
 /**
  * Record an entity link in the tokenised graph. If the same link already
  * exists, update the last_seen_at timestamp instead of creating a duplicate.
+ *
+ * Accepts any `query`-capable handle (Pool or PoolClient) so callers inside
+ * an existing transaction can record links on the same connection.
  */
 export async function recordEntityLink(
-  db: Pool,
+  db: Pick<Pool, 'query'>,
   input: EntityLinkInput,
 ): Promise<void> {
   await db.query(

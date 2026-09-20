@@ -24,6 +24,7 @@
     "check:env": "node scripts/check-env.mjs",
     "check:recommendations": "node scripts/recommendation-health.mjs",
     "audit:idempotency": "node scripts/mutation-idempotency-catalog.mjs",
+    "eval:suite": "tsx scripts/run-eval-suite.ts",
     "db:types": "kysely-codegen --dialect postgres --out-file src/lib/database-types.ts --exclude-pattern '(pg_catalog.*|information_schema.*)'",
     "search:sync": "tsx src/scripts/searchSync.ts",
     "worker:start": "tsx src/workers/index.ts"

@@ -108,3 +108,6 @@ export type { CoOwnAlertEvaluatorHandlerDeps } from './coOwnAlertEvaluatorHandle
 
 export { processCoOwnDripReinvestment } from './coOwnDripExecutionHandler.js';
 export type { CoOwnDripExecutionHandlerDeps } from './coOwnDripExecutionHandler.js';
+
+export { processSearchIndexSync } from './searchIndexSyncHandler.js';
+export type { SearchIndexSyncJobData } from './searchIndexSyncHandler.js';
