@@ -300,3 +300,24 @@ jobs:
           name: sbom
           path: sbom/
           retention-days: 30
+
+  support-eval-suite:
+    name: Support agent eval suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/api/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+        working-directory: backend/api
+      - name: Run eval suite (blocking — hard launch gate)
+        # Seed-based safety/router evaluation: prompt-injection detection,
+        # risk-tier tool gating, handoff requirements. No DB/Redis needed.
+        # Exits nonzero on any failure or hard launch-gate violation.
+        run: npm run eval:suite
+        working-directory: backend/api
