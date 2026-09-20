@@ -9,6 +9,10 @@ import {
 import { appendDomainEvent } from '../lib/domainOutbox.js';
 import { canonicalizeJson } from '../lib/canonicalJson.js';
 import { enqueueScheduledPublicationSweepJob } from '../lib/queues.js';
+import {
+  requireDraftRole,
+  type CreatorDocumentRole,
+} from '../lib/creatorDocumentAccess.js';
 
 /**
  * Creator publication routes.
@@ -94,16 +98,15 @@ export const registerCreatorPublicationRoutes = ({
     const actorUserId = resolveAuthenticatedUserId(request);
     const { documentId, idempotencyKey } = idempotencyKeyParamsSchema.parse(request.params);
 
-    // Verify document ownership.
-    const docResult = await db.query<{ creator_id: string }>(
-      `SELECT creator_id FROM creator_documents WHERE id = $1 LIMIT 1`,
-      [documentId],
-    );
-    if (!docResult.rowCount) {
+    // Read path — any active collaborator (owner, editor, viewer).
+    const access = await requireDraftRole(db, documentId, actorUserId, 'viewer', {
+      isAdmin: request.authUser?.role === 'admin',
+    });
+    if (access.status === 'not_found') {
       reply.code(404);
       return { ok: false, error: 'Document not found' };
     }
-    if (docResult.rows[0].creator_id !== actorUserId) {
+    if (access.status === 'denied') {
       reply.code(403);
       return { ok: false, error: 'Access denied' };
     }
@@ -154,15 +157,15 @@ export const registerCreatorPublicationRoutes = ({
     const actorUserId = resolveAuthenticatedUserId(request);
     const { documentId } = documentIdParamsSchema.parse(request.params);
 
-    const docResult = await db.query<{ creator_id: string }>(
-      `SELECT creator_id FROM creator_documents WHERE id = $1 LIMIT 1`,
-      [documentId],
-    );
-    if (!docResult.rowCount) {
+    // Read path — any active collaborator (owner, editor, viewer).
+    const access = await requireDraftRole(db, documentId, actorUserId, 'viewer', {
+      isAdmin: request.authUser?.role === 'admin',
+    });
+    if (access.status === 'not_found') {
       reply.code(404);
       return { ok: false, error: 'Document not found' };
     }
-    if (docResult.rows[0].creator_id !== actorUserId) {
+    if (access.status === 'denied') {
       reply.code(403);
       return { ok: false, error: 'Access denied' };
     }
@@ -295,17 +298,14 @@ export const registerCreatorPublicationRoutes = ({
 
       const docRow = docResult.rows[0];
 
-      // 2. Validate ownership inside the transaction.
+      // 2. Validate capability inside the transaction (P2.12).
+      //    Owner and active editors can schedule; viewers and
+      //    non-collaborators are denied.
       if (docRow.creator_id !== actorUserId) {
-        // P2.12: Collaborator-aware — editors can schedule too.
-        const collabResult = await client.query<{ role: string }>(
-          `SELECT role FROM creator_collaborators
-           WHERE document_id = $1 AND user_id = $2 AND state = 'active'
-           LIMIT 1`,
-          [documentId, actorUserId],
-        );
-        const collabRole = collabResult.rows[0]?.role;
-        if (collabRole !== 'editor') {
+        const access = await requireDraftRole(client, documentId, actorUserId, 'editor', {
+          isAdmin: request.authUser?.role === 'admin',
+        });
+        if (access.status !== 'ok') {
           await client.query('ROLLBACK');
           reply.code(403);
           return { ok: false, error: 'Access denied — only the owner or editors can schedule' };
@@ -479,17 +479,17 @@ export const registerCreatorPublicationRoutes = ({
     const actorUserId = resolveAuthenticatedUserId(request);
     const { documentId } = documentIdParamsSchema.parse(request.params);
 
-    const docResult = await db.query<{ creator_id: string }>(
-      `SELECT creator_id FROM creator_documents WHERE id = $1 LIMIT 1`,
-      [documentId],
-    );
-    if (!docResult.rowCount) {
+    // Editor+ — whoever can schedule must also be able to cancel it.
+    const access = await requireDraftRole(db, documentId, actorUserId, 'editor', {
+      isAdmin: request.authUser?.role === 'admin',
+    });
+    if (access.status === 'not_found') {
       reply.code(404);
       return { ok: false, error: 'Document not found' };
     }
-    if (docResult.rows[0].creator_id !== actorUserId) {
+    if (access.status === 'denied') {
       reply.code(403);
-      return { ok: false, error: 'Access denied' };
+      return { ok: false, error: 'Access denied — only the owner or editors can cancel a schedule' };
     }
 
     const result = await db.query<{ id: string }>(
@@ -522,15 +522,15 @@ export const registerCreatorPublicationRoutes = ({
     const actorUserId = resolveAuthenticatedUserId(request);
     const { documentId } = documentIdParamsSchema.parse(request.params);
 
-    const docResult = await db.query<{ creator_id: string }>(
-      `SELECT creator_id FROM creator_documents WHERE id = $1 LIMIT 1`,
-      [documentId],
-    );
-    if (!docResult.rowCount) {
+    // Read path — any active collaborator (owner, editor, viewer).
+    const access = await requireDraftRole(db, documentId, actorUserId, 'viewer', {
+      isAdmin: request.authUser?.role === 'admin',
+    });
+    if (access.status === 'not_found') {
       reply.code(404);
       return { ok: false, error: 'Document not found' };
     }
-    if (docResult.rows[0].creator_id !== actorUserId) {
+    if (access.status === 'denied') {
       reply.code(403);
       return { ok: false, error: 'Access denied' };
     }
@@ -585,16 +585,15 @@ export const registerCreatorPublicationRoutes = ({
     const actorUserId = resolveAuthenticatedUserId(request);
     const { documentId, idempotencyKey } = idempotencyKeyParamsSchema.parse(request.params);
 
-    // Verify document ownership.
-    const docResult = await db.query<{ creator_id: string }>(
-      `SELECT creator_id FROM creator_documents WHERE id = $1 LIMIT 1`,
-      [documentId],
-    );
-    if (!docResult.rowCount) {
+    // Read path — any active collaborator (owner, editor, viewer).
+    const access = await requireDraftRole(db, documentId, actorUserId, 'viewer', {
+      isAdmin: request.authUser?.role === 'admin',
+    });
+    if (access.status === 'not_found') {
       reply.code(404);
       return { ok: false, error: 'Document not found' };
     }
-    if (docResult.rows[0].creator_id !== actorUserId) {
+    if (access.status === 'denied') {
       reply.code(403);
       return { ok: false, error: 'Access denied' };
     }
@@ -650,18 +649,19 @@ export const registerCreatorPublicationRoutes = ({
 
   // Permission helper: resolve the actor's role on a document.
   // Returns 'owner', 'editor', 'viewer', or null (no access).
+  //
+  // Ownership resolves from creator_documents.creator_id (the capability
+  // root) inside requireDraftRole — NOT solely from the collaborator row —
+  // so the owner is never locked out when the owner row was never
+  // provisioned (documents created between migrations 206 and 326).
+  // Fail-closed: missing/inactive/unknown collaborator rows deny.
   async function resolveCollaboratorRole(
     documentId: string,
     userId: string,
-  ): Promise<'owner' | 'editor' | 'viewer' | null> {
-    const result = await db.query<{ role: string }>(
-      `SELECT role FROM creator_collaborators
-       WHERE document_id = $1 AND user_id = $2 AND state = 'active'
-       LIMIT 1`,
-      [documentId, userId],
-    );
-    if (!result.rowCount) return null;
-    return result.rows[0].role as 'owner' | 'editor' | 'viewer';
+    isAdmin = false,
+  ): Promise<CreatorDocumentRole | null> {
+    const access = await requireDraftRole(db, documentId, userId, 'viewer', { isAdmin });
+    return access.status === 'ok' ? access.role : null;
   }
 
   // Log an auditable operation.
@@ -696,7 +696,7 @@ export const registerCreatorPublicationRoutes = ({
     const actorUserId = resolveAuthenticatedUserId(request);
     const { documentId } = documentIdParamsSchema.parse(request.params);
 
-    const role = await resolveCollaboratorRole(documentId, actorUserId);
+    const role = await resolveCollaboratorRole(documentId, actorUserId, request.authUser?.role === 'admin');
     if (!role) {
       reply.code(403);
       return { ok: false, error: 'Access denied' };
@@ -740,7 +740,7 @@ export const registerCreatorPublicationRoutes = ({
     const { documentId } = documentIdParamsSchema.parse(request.params);
     const body = inviteBodySchema.parse(request.body);
 
-    const actorRole = await resolveCollaboratorRole(documentId, actorUserId);
+    const actorRole = await resolveCollaboratorRole(documentId, actorUserId, request.authUser?.role === 'admin');
     if (actorRole !== 'owner') {
       reply.code(403);
       return { ok: false, error: 'Only the owner can invite collaborators' };
@@ -816,14 +816,21 @@ export const registerCreatorPublicationRoutes = ({
       userId: z.string().min(2).max(120),
     }).parse(request.params);
 
-    const actorRole = await resolveCollaboratorRole(documentId, actorUserId);
+    const actorRole = await resolveCollaboratorRole(documentId, actorUserId, request.authUser?.role === 'admin');
     if (actorRole !== 'owner') {
       reply.code(403);
       return { ok: false, error: 'Only the owner can remove collaborators' };
     }
 
-    // Cannot remove the owner.
-    if (userId === actorUserId) {
+    // Cannot remove an owner — mirrors moodboards ("Cannot remove owner").
+    // Covers both the document creator and any owner-role collaborator row.
+    const target = await db.query<{ role: string }>(
+      `SELECT role FROM creator_collaborators
+       WHERE document_id = $1 AND user_id = $2 AND state IN ('active', 'invited')
+       LIMIT 1`,
+      [documentId, userId],
+    );
+    if (target.rows[0]?.role === 'owner' || userId === actorUserId) {
       reply.code(422);
       return { ok: false, error: 'Cannot remove the document owner' };
     }
@@ -831,7 +838,7 @@ export const registerCreatorPublicationRoutes = ({
     const result = await db.query(
       `UPDATE creator_collaborators
        SET state = 'removed', removed_at = NOW()
-       WHERE document_id = $1 AND user_id = $2 AND state IN ('active', 'invited')`,
+       WHERE document_id = $1 AND user_id = $2 AND role != 'owner' AND state IN ('active', 'invited')`,
       [documentId, userId],
     );
 
@@ -854,16 +861,33 @@ export const registerCreatorPublicationRoutes = ({
     }).parse(request.params);
     const body = roleChangeSchema.parse(request.body);
 
-    const actorRole = await resolveCollaboratorRole(documentId, actorUserId);
+    const actorRole = await resolveCollaboratorRole(documentId, actorUserId, request.authUser?.role === 'admin');
     if (actorRole !== 'owner') {
       reply.code(403);
       return { ok: false, error: 'Only the owner can change collaborator roles' };
     }
 
+    // Cannot change an owner's role — mirrors moodboards
+    // ("Cannot change owner role").
+    const target = await db.query<{ role: string }>(
+      `SELECT role FROM creator_collaborators
+       WHERE document_id = $1 AND user_id = $2 AND state = 'active'
+       LIMIT 1`,
+      [documentId, userId],
+    );
+    if (!target.rowCount) {
+      reply.code(404);
+      return { ok: false, error: 'Active collaborator not found' };
+    }
+    if (target.rows[0].role === 'owner') {
+      reply.code(400);
+      return { ok: false, error: 'Cannot change owner role' };
+    }
+
     const result = await db.query<{ role: string }>(
       `UPDATE creator_collaborators
        SET role = $3
-       WHERE document_id = $1 AND user_id = $2 AND state = 'active'
+       WHERE document_id = $1 AND user_id = $2 AND role != 'owner' AND state = 'active'
        RETURNING role`,
       [documentId, userId, body.role],
     );
@@ -884,7 +908,7 @@ export const registerCreatorPublicationRoutes = ({
     const actorUserId = resolveAuthenticatedUserId(request);
     const { documentId } = documentIdParamsSchema.parse(request.params);
 
-    const role = await resolveCollaboratorRole(documentId, actorUserId);
+    const role = await resolveCollaboratorRole(documentId, actorUserId, request.authUser?.role === 'admin');
     if (!role) {
       reply.code(403);
       return { ok: false, error: 'Access denied' };
@@ -940,7 +964,7 @@ export const registerCreatorPublicationRoutes = ({
     const body = presenceBodySchema.parse(request.body);
 
     // Verify access — owner or active collaborator.
-    const role = await resolveCollaboratorRole(documentId, actorUserId);
+    const role = await resolveCollaboratorRole(documentId, actorUserId, request.authUser?.role === 'admin');
     if (!role) {
       reply.code(403);
       return { ok: false, error: 'Access denied' };
@@ -983,7 +1007,7 @@ export const registerCreatorPublicationRoutes = ({
     const actorUserId = resolveAuthenticatedUserId(request);
     const { documentId } = documentIdParamsSchema.parse(request.params);
 
-    const role = await resolveCollaboratorRole(documentId, actorUserId);
+    const role = await resolveCollaboratorRole(documentId, actorUserId, request.authUser?.role === 'admin');
     if (!role) {
       reply.code(403);
       return { ok: false, error: 'Access denied' };

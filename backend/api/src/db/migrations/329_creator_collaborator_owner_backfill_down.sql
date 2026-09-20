@@ -1,0 +1,7 @@
+-- Rollback for migration 326.
+--
+-- Intentionally a no-op. The forward migration is a data backfill of owner
+-- rows into creator_collaborators; those rows are indistinguishable from
+-- owner rows written by the document-create path, so there is no valid
+-- reverse operation. Deleting them would lock owners out of their own
+-- collaborator surfaces.

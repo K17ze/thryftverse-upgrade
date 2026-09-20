@@ -4,6 +4,10 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import { appendDomainEvent } from '../lib/domainOutbox.js';
 import { canonicalizeJson } from '../lib/canonicalJson.js';
+import {
+  insertOwnerCollaboratorRow,
+  requireDraftRole,
+} from '../lib/creatorDocumentAccess.js';
 
 type CreatorDocumentsRouteDependencies = {
   app: FastifyInstance;
@@ -479,10 +483,18 @@ export const registerCreatorDocumentRoutes = ({
         [payload.id]
       );
 
-      if (existing.rowCount && existing.rows[0].creator_id !== actorUserId) {
-        await client.query('ROLLBACK');
-        reply.code(403);
-        return { ok: false, error: 'Document belongs to another user' };
+      // Co-editing: the owner and active editors can save; viewers and
+      // non-collaborators are denied (fail-closed — see
+      // lib/creatorDocumentAccess.ts).
+      if (existing.rowCount) {
+        const access = await requireDraftRole(client, payload.id, actorUserId, 'editor', {
+          isAdmin: request.authUser?.role === 'admin',
+        });
+        if (access.status !== 'ok') {
+          await client.query('ROLLBACK');
+          reply.code(403);
+          return { ok: false, error: 'Access denied — only the owner or editors can edit' };
+        }
       }
 
       // ── Server-owned canonical timestamps ────────────────────────
@@ -541,7 +553,7 @@ export const registerCreatorDocumentRoutes = ({
                document_hash = $7,
                lock_version = lock_version + 1,
                updated_at = NOW()
-           WHERE id = $1 AND creator_id = $2 AND status = 'draft' AND lock_version = $6
+           WHERE id = $1 AND status = 'draft' AND lock_version = $6
            RETURNING lock_version, head_revision`,
           [
             payload.id,
@@ -575,6 +587,12 @@ export const registerCreatorDocumentRoutes = ({
         );
         serverVersion = inserted.rows[0].lock_version;
         headRevision = inserted.rows[0].head_revision;
+
+        // Provision the owner collaborator row atomically with the document,
+        // mirroring moodboard_members (migration 186). This makes
+        // creator_collaborators the complete membership source of truth for
+        // listing — see migration 329 for the historical backfill.
+        await insertOwnerCollaboratorRow(client, payload.id, actorUserId);
       }
 
       await client.query('COMMIT');
@@ -600,6 +618,9 @@ export const registerCreatorDocumentRoutes = ({
   app.get('/creator/documents', async (request) => {
     const actorUserId = resolveAuthenticatedUserId(request);
 
+    // Own drafts plus drafts shared with the actor as an active collaborator
+    // (editor/viewer). Mirrors moodboards: members see boards they did not
+    // create. collaboratorRole tells the client which capability applies.
     const result = await db.query<{
       id: string;
       type: string;
@@ -607,11 +628,16 @@ export const registerCreatorDocumentRoutes = ({
       status: string;
       lock_version: number;
       updated_at: string;
+      collaborator_role: string;
     }>(
-      `SELECT id, type, document_json::text AS document_json, status, lock_version, updated_at
-       FROM creator_documents
-       WHERE creator_id = $1
-       ORDER BY updated_at DESC
+      `SELECT d.id, d.type, d.document_json::text AS document_json, d.status,
+              d.lock_version, d.updated_at,
+              CASE WHEN d.creator_id = $1 THEN 'owner' ELSE cc.role END AS collaborator_role
+       FROM creator_documents d
+       LEFT JOIN creator_collaborators cc
+         ON cc.document_id = d.id AND cc.user_id = $1 AND cc.state = 'active'
+       WHERE d.creator_id = $1 OR cc.user_id IS NOT NULL
+       ORDER BY d.updated_at DESC
        LIMIT 100`,
       [actorUserId]
     );
@@ -621,6 +647,12 @@ export const registerCreatorDocumentRoutes = ({
       status: row.status,
       serverVersion: row.lock_version,
       serverUpdatedAt: row.updated_at,
+      // Fail-closed: only emit a recognised role; anything else reads as
+      // viewer (least privilege).
+      collaboratorRole:
+        row.collaborator_role === 'owner' || row.collaborator_role === 'editor'
+          ? row.collaborator_role
+          : 'viewer',
     }));
 
     return { ok: true, documents };
@@ -650,7 +682,11 @@ export const registerCreatorDocumentRoutes = ({
       return { ok: false, error: 'Document not found' };
     }
 
-    if (result.rows[0].creator_id !== actorUserId) {
+    // Read access: owner, editors, and viewers can all read the draft.
+    const access = await requireDraftRole(db, documentId, actorUserId, 'viewer', {
+      isAdmin: request.authUser?.role === 'admin',
+    });
+    if (access.status === 'denied') {
       reply.code(403);
       return { ok: false, error: 'Access denied' };
     }
@@ -670,6 +706,7 @@ export const registerCreatorDocumentRoutes = ({
         serverUpdatedAt: result.rows[0].updated_at,
         documentHash,
         headRevision: result.rows[0].head_revision,
+        collaboratorRole: access.status === 'ok' ? access.role : 'viewer',
       },
     };
   });
@@ -688,9 +725,14 @@ export const registerCreatorDocumentRoutes = ({
       return { ok: false, error: 'Document not found' };
     }
 
-    if (result.rows[0].creator_id !== actorUserId) {
+    // Delete is owner-only — editors can edit and publish but cannot delete
+    // or manage collaborators (migration 206 role contract).
+    const access = await requireDraftRole(db, documentId, actorUserId, 'owner', {
+      isAdmin: request.authUser?.role === 'admin',
+    });
+    if (access.status !== 'ok') {
       reply.code(403);
-      return { ok: false, error: 'Access denied' };
+      return { ok: false, error: 'Access denied — only the owner can delete' };
     }
     if (result.rows[0].status !== 'draft') {
       reply.code(409);
@@ -759,10 +801,15 @@ export const registerCreatorDocumentRoutes = ({
         reply.code(404);
         return { ok: false, error: 'Document not found' };
       }
-      if (result.rows[0].creator_id !== actorUserId) {
+      // Owner and editors can publish — the same gate the canonical
+      // publications orchestrator applies (creatorPublicationService.ts).
+      const access = await requireDraftRole(client, documentId, actorUserId, 'editor', {
+        isAdmin: request.authUser?.role === 'admin',
+      });
+      if (access.status !== 'ok') {
         await client.query('ROLLBACK');
         reply.code(403);
-        return { ok: false, error: 'Access denied' };
+        return { ok: false, error: 'Access denied — only the owner or editors can publish' };
       }
 
       const doc = creatorDocumentBodySchema.parse(JSON.parse(result.rows[0].document_json));
@@ -881,17 +928,16 @@ export const registerCreatorDocumentRoutes = ({
     const actorUserId = resolveAuthenticatedUserId(request);
     const { documentId } = documentIdParamsSchema.parse(request.params);
 
-    const docResult = await db.query<{ creator_id: string }>(
-      `SELECT creator_id FROM creator_documents WHERE id = $1 LIMIT 1`,
-      [documentId]
-    );
-
-    if (!docResult.rowCount) {
+    // Revision history is a read path — any collaborator (owner, editor,
+    // viewer) can view it.
+    const access = await requireDraftRole(db, documentId, actorUserId, 'viewer', {
+      isAdmin: request.authUser?.role === 'admin',
+    });
+    if (access.status === 'not_found') {
       reply.code(404);
       return { ok: false, error: 'Document not found' };
     }
-
-    if (docResult.rows[0].creator_id !== actorUserId) {
+    if (access.status === 'denied') {
       reply.code(403);
       return { ok: false, error: 'Access denied' };
     }
@@ -971,6 +1017,9 @@ export const registerCreatorDocumentRoutes = ({
           crypto.createHash('sha256').update(canonicalizeJson(remixedDoc)).digest('hex'),
         ]
       );
+      // The remixed document is owned by the actor — provision its owner
+      // collaborator row atomically, same as the create path.
+      await insertOwnerCollaboratorRow(client, newDocumentId, actorUserId);
       await client.query('COMMIT');
       return { ok: true, document: remixedDoc };
     } catch (error) {

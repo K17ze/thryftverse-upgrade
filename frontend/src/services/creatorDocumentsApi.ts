@@ -25,6 +25,15 @@ export interface CreatorDocumentSaveResult {
   updatedAt: string;
 }
 
+/**
+ * The actor's capability on a document — mirrors the backend
+ * creator_collaborators role model (migration 206): the owner can manage
+ * collaborators and delete; editors can edit and publish; viewers are
+ * read-only. The collaborator-management endpoints themselves are typed in
+ * creatorPublicationsApi.ts.
+ */
+export type CreatorDocumentRole = 'owner' | 'editor' | 'viewer';
+
 export interface CreatorDocumentFetchResult {
   documentId: string;
   lockVersion: number;
@@ -32,7 +41,22 @@ export interface CreatorDocumentFetchResult {
   headRevision: number;
   documentJson: unknown;
   updatedAt: string;
+  /** The caller's capability on this document. */
+  collaboratorRole: CreatorDocumentRole;
 }
+
+/**
+ * A document row in the draft list — the stored document JSON spread with
+ * server-owned metadata. `collaboratorRole` distinguishes own drafts
+ * ('owner') from drafts shared with the actor ('editor' | 'viewer').
+ */
+export type CreatorDocumentListItem = Record<string, unknown> & {
+  id: string;
+  status: string;
+  serverVersion: number;
+  serverUpdatedAt: string;
+  collaboratorRole: CreatorDocumentRole;
+};
 
 /**
  * Raised when the server rejects a save because the document was
@@ -208,10 +232,18 @@ export async function fetchCreatorDocument(documentId: string): Promise<CreatorD
       serverUpdatedAt: string;
       documentHash: string;
       headRevision: number;
+      collaboratorRole?: CreatorDocumentRole;
     };
   }>(`/creator/documents/${documentId}`);
 
-  const { serverVersion, serverUpdatedAt, documentHash, headRevision, ...documentJson } = body.document;
+  const {
+    serverVersion,
+    serverUpdatedAt,
+    documentHash,
+    headRevision,
+    collaboratorRole,
+    ...documentJson
+  } = body.document;
   return {
     documentId: documentJson.id as string,
     lockVersion: serverVersion,
@@ -219,5 +251,21 @@ export async function fetchCreatorDocument(documentId: string): Promise<CreatorD
     headRevision,
     documentJson,
     updatedAt: serverUpdatedAt,
+    // Older servers do not emit collaboratorRole — only the owner could
+    // read the document then, so 'owner' is the accurate fallback.
+    collaboratorRole: collaboratorRole ?? 'owner',
   };
+}
+
+/**
+ * List the actor's drafts plus drafts shared with them as an active
+ * collaborator (editor/viewer). The server annotates each row with
+ * `collaboratorRole` so the client can gate edit affordances.
+ */
+export async function listCreatorDocuments(): Promise<CreatorDocumentListItem[]> {
+  const body = await fetchJson<{
+    ok: boolean;
+    documents: CreatorDocumentListItem[];
+  }>('/creator/documents');
+  return body.documents;
 }

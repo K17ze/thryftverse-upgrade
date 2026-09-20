@@ -8,6 +8,7 @@ import { getVideoRenderPath, isCompositionNonTrivial, renderComposition } from '
 import { generateRenderedVideoHls } from '../lib/media/pipeline.js';
 import { getObject, putBinaryObject } from '../lib/s3.js';
 import { logger } from '../lib/logger.js';
+import { requireDraftRole } from '../lib/creatorDocumentAccess.js';
 
 /**
  * Creator publication orchestration service.
@@ -1492,17 +1493,13 @@ export async function publishCreatorDocumentTransaction(
 
     // P2.12: Collaborator-aware ownership check.
     // The owner (creator_id) can always publish. Editors can also publish.
-    // Viewers and non-collaborators are denied.
+    // Viewers and non-collaborators are denied. Single authz source:
+    // lib/creatorDocumentAccess.ts (fail-closed; also honours owner-role
+    // collaborator rows, which a bare 'editor' check would deny).
     const isOwner = docRow.creator_id === actorUserId;
     if (!isOwner) {
-      const collabResult = await client.query<{ role: string }>(
-        `SELECT role FROM creator_collaborators
-         WHERE document_id = $1 AND user_id = $2 AND state = 'active'
-         LIMIT 1`,
-        [documentId, actorUserId],
-      );
-      const collabRole = collabResult.rows[0]?.role;
-      if (collabRole !== 'editor') {
+      const access = await requireDraftRole(client, documentId, actorUserId, 'editor');
+      if (access.status !== 'ok') {
         await client.query('ROLLBACK');
         return {
           ok: false,
