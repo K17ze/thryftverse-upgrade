@@ -220,6 +220,7 @@ import {
   resolveCountryCapabilities,
   type CapabilityCarrier,
 } from './lib/countryCapabilities.js';
+import { assessCustomsExposure } from './lib/customsEstimate.js';
 import {
   getAllowedGatewayIds,
   isGatewayAllowedForChannel,
@@ -31518,6 +31519,32 @@ app.post('/shipping/quote', async (request, reply) => {
     // Falls back to GB capability profile.
   }
 
+  let sellerCountry: string | null = null;
+  try {
+    if (sellerId && (await onezeP2pTablesAvailable(db))) {
+      const sellerProfile = await getOrCreateComplianceProfile(db, sellerId);
+      sellerCountry = normalizeCountryCode(sellerProfile.countryCode);
+    }
+  } catch {
+    // Seller-country resolution is best-effort; customs block degrades to unknown.
+  }
+
+  let declaredValueGbp = payload.declaredValueGbp ?? null;
+  if (declaredValueGbp === null && payload.listingId) {
+    const listingValue = await db.query<{ price_gbp: string | number }>(
+      'SELECT price_gbp FROM listings WHERE id = $1 LIMIT 1',
+      [payload.listingId]
+    );
+    const parsed = listingValue.rows[0] ? Number(listingValue.rows[0].price_gbp) : Number.NaN;
+    declaredValueGbp = Number.isFinite(parsed) ? parsed : null;
+  }
+
+  const customs = assessCustomsExposure({
+    sellerCountry,
+    buyerCountry: capabilities.countryCode,
+    declaredValueGbp,
+  });
+
   const carriers = [...capabilities.postage.carriers];
 
   if (carriers.length === 0) {
@@ -31528,6 +31555,7 @@ app.post('/shipping/quote', async (request, reply) => {
       destinationPostcode,
       recommendedQuote: null,
       quotes: [],
+      customs,
       unavailableReason: 'Shipping quote not available for your region',
     };
   }
@@ -31628,6 +31656,7 @@ app.post('/shipping/quote', async (request, reply) => {
     destinationPostcode,
     recommendedQuote,
     quotes,
+    customs,
   };
 });
 
