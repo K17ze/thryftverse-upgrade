@@ -23,6 +23,7 @@
     "smoke:profile": "node scripts/smoke-profile-flow.mjs",
     "check:env": "node scripts/check-env.mjs",
     "check:recommendations": "node scripts/recommendation-health.mjs",
+    "audit:idempotency": "node scripts/mutation-idempotency-catalog.mjs",
     "db:types": "kysely-codegen --dialect postgres --out-file src/lib/database-types.ts --exclude-pattern '(pg_catalog.*|information_schema.*)'",
     "search:sync": "tsx src/scripts/searchSync.ts",
     "worker:start": "tsx src/workers/index.ts"

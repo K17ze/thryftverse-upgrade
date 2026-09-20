@@ -1,11 +1,13 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
+import type { Redis } from 'ioredis';
 import crypto from 'node:crypto';
 import { z } from 'zod';
 import type { AuthRole, AuthenticatedUser } from '../lib/auth.js';
 import { COOWN_POLICY, COMMERCE_POLICY_VERSION } from '../lib/commercePolicies.js';
 import { formatGbp } from '../lib/moneyFormat.js';
 import { publishRealtimeEvent } from '../lib/realtime.js';
+import { evaluateRisk } from '../lib/riskDecision.js';
 import {
   createAmlAlert,
   evaluateAmlRisk,
@@ -235,6 +237,22 @@ type CoOwnRouteDependencies = {
       metadata?: Record<string, unknown>;
     }
   ) => Promise<void>;
+  /** R52 surveillance: advisory risk pipeline deps. Order placement and
+   *  cancel emit `coown.order` risk events (velocity, IP reputation,
+   *  rule-engine signals) for ops review — advisory only, never blocks. */
+  redis?: Redis;
+  fraudShadowService?: {
+    scoreShadow(input: unknown): Promise<unknown>;
+    logScoreComparison(
+      eventId: string,
+      eventType: string,
+      userId: string | null,
+      ruleEngineResult: unknown,
+      shadowResult: unknown,
+      input: unknown,
+    ): Promise<void>;
+  } | null;
+  ipReputationProvider?: import('../lib/riskDecision.js').IpReputationProvider;
 };
 
 export const registerCoOwnRoutes = ({
@@ -254,6 +272,9 @@ export const registerCoOwnRoutes = ({
   ledgerTablesAvailable,
   ensureLedgerAccount,
   appendLedgerEntry,
+  redis,
+  fraudShadowService,
+  ipReputationProvider,
 }: CoOwnRouteDependencies): void => {
 
 // ── Co-Own helper functions (moved from index.ts, co-own only) ──
@@ -4668,6 +4689,46 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
       },
     });
 
+    // R52 market-surveillance baseline: record a `coown.order` risk event so
+    // every placement feeds the immutable risk ledger and the advisory rule
+    // engine (velocity, IP reputation, place/cancel patterns). Strictly
+    // advisory — the order is already committed; failures fail open. Skipped
+    // entirely when the route was registered without Redis (test harnesses).
+    if (redis) {
+      try {
+        const notionalGbp = tradedNotionalGbp > 0 ? tradedNotionalGbp : proposedNotionalGbp;
+        await evaluateRisk(
+          { db, redis, logger: request.log, shadowService: fraudShadowService ?? null, ipReputationProvider },
+        {
+          eventType: 'coown.order',
+          subjectRef: assetId,
+          actionRef: String(incomingOrder.rows[0].id),
+          amountMinor: Math.round(notionalGbp * 100),
+          currency: 'GBP',
+          userId: payload.userId,
+          headers: request.headers as Record<string, string | string[] | undefined>,
+          ip: request.ip,
+          dedupeKey: `coown-order-${incomingOrder.rows[0].id}`,
+          context: {
+            assetId,
+            orderId: incomingOrder.rows[0].id,
+            action: 'place',
+            side: payload.side,
+            orderType: payload.orderType,
+            units: payload.units,
+            filledUnits: incomingOrder.rows[0].filled_units,
+            status: incomingOrder.rows[0].status,
+          },
+        },
+        );
+      } catch (riskError) {
+        request.log.error(
+          { err: riskError, assetId, orderId: incomingOrder.rows[0].id },
+          'evaluateRisk failed for co-own order — failing open to allow',
+        );
+      }
+    }
+
     return responseBody;
   } catch (error) {
     await client.query('ROLLBACK');
@@ -4841,6 +4902,37 @@ app.post('/co-own/assets/:assetId/orders/:orderId/cancel', async (request, reply
       seq: true,
       version: 1,
     });
+
+    // R52: cancels feed the same `coown.order` risk stream as placements so
+    // velocity rules can catch place/cancel (spoofing-like) bursts.
+    if (redis) {
+      try {
+        await evaluateRisk(
+          { db, redis, logger: request.log, shadowService: fraudShadowService ?? null, ipReputationProvider },
+          {
+            eventType: 'coown.order',
+            subjectRef: assetId,
+            actionRef: String(orderId),
+            currency: 'GBP',
+            userId,
+            headers: request.headers as Record<string, string | string[] | undefined>,
+            ip: request.ip,
+            dedupeKey: `coown-cancel-${orderId}`,
+            context: {
+              assetId,
+              orderId,
+              action: 'cancel',
+              filledUnits: order.filled_units,
+            },
+          },
+        );
+      } catch (riskError) {
+        request.log.error(
+          { err: riskError, assetId, orderId },
+          'evaluateRisk failed for co-own order cancel — failing open to allow',
+        );
+      }
+    }
 
     return {
       ok: true,

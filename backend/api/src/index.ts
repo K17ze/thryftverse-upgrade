@@ -13979,6 +13979,9 @@ registerCoOwnRoutes({
   ledgerTablesAvailable,
   ensureLedgerAccount,
   appendLedgerEntry,
+  redis,
+  fraudShadowService,
+  ipReputationProvider,
 });
 
 // Co-Own market depth & trade tape (public read endpoints).
