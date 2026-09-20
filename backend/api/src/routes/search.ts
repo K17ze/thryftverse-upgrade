@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { createSearchAdapter, type SearchQuery, type SearchBackend } from '../lib/searchAdapter.js';
 import {
   configureSearchIndex,
+  reindexListingsBlueGreen,
   syncListingsToSearchIndex,
 } from '../lib/searchSync.js';
 import { semanticSearch, checkEmbedderReadiness } from '../lib/vectorSearch.js';
@@ -694,10 +695,18 @@ export function registerSearchRoutes({
     request.log.info({ actorUserId }, 'Admin triggered full search reindex');
 
     try {
-      await configureSearchIndex();
-      const result = await syncListingsToSearchIndex(db);
+      // Blue/green: build a versioned staging index and atomically swap it
+      // live — an admin reindex can never corrupt the serving index.
+      // Degrades to in-place when Meilisearch isn't configured.
+      const result = await reindexListingsBlueGreen(db);
+      if (!result.ok) {
+        reply.code(500);
+        return { ok: false, error: result.error ?? 'Reindex failed' };
+      }
       return {
         ok: true,
+        mode: result.mode,
+        swapped: result.swapped,
         synced: result.synced,
         failed: result.failed,
         total: result.total,

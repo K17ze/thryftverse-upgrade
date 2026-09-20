@@ -14,7 +14,7 @@
 import type { Pool } from 'pg';
 import { db } from '../../db/pool.js';
 import { logger } from '../../lib/logger.js';
-import { syncListingsToSearchIndex } from '../../lib/searchSync.js';
+import { reindexListingsBlueGreen } from '../../lib/searchSync.js';
 
 export interface SearchIndexSyncJobData {
   reason: 'scheduled' | 'manual';
@@ -28,21 +28,28 @@ export async function processSearchIndexSync(
 
   logger.info({ reason }, 'searchIndexSync.start');
 
-  // syncListingsToSearchIndex never throws — per-listing failures are
-  // counted and logged inside the batch loop. Mirror the manual script's
-  // contract: a run that synced nothing but recorded failures is a real
-  // failure and must surface to BullMQ for retry/DLQ, not read as success.
-  const result = await syncListingsToSearchIndex(pool);
+  // Blue/green full reindex: the scheduled drift-repair pass builds a
+  // versioned staging index and atomically swaps it live, so a bad sync
+  // can never corrupt the serving index. Degrades to in-place when
+  // Meilisearch isn't configured. A run that synced nothing but recorded
+  // failures is a real failure and must surface to BullMQ for retry/DLQ.
+  const result = await reindexListingsBlueGreen(pool);
 
   logger.info(
     {
       reason,
+      mode: result.mode,
+      swapped: result.swapped,
       synced: result.synced,
       failed: result.failed,
       total: result.total,
     },
     'searchIndexSync.complete',
   );
+
+  if (!result.ok) {
+    throw new Error(`Search index sync failed — ${result.error ?? 'unknown'}`);
+  }
 
   if (result.failed > 0 && result.synced === 0) {
     throw new Error(
