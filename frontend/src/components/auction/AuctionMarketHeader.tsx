@@ -3,7 +3,9 @@ import { View, Text, StyleSheet, Pressable, useWindowDimensions, Modal } from 'r
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Elevation, Stroke } from '../../theme/designTokens';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
+import { Space, Radius, Elevation, Stroke, IconGrammar } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 
 export type AuctionHeaderActionKey = 'search' | 'filter' | 'create' | 'seller' | 'activity';
@@ -76,7 +78,7 @@ export function AuctionMarketHeader({
             accessibilityLabel="Go back"
             style={styles.iconBtn}
           >
-            <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
+            <AppIcon name="chevron-back" size={IconGrammar.standard} color="textPrimary" />
           </Pressable>
         ) : null}
 
@@ -97,7 +99,7 @@ export function AuctionMarketHeader({
               accessibilityLabel={searchAction.label}
               style={styles.iconBtn}
             >
-              <Ionicons name={searchAction.icon} size={22} color={colors.textPrimary} />
+              <AppIcon name={searchAction.icon} size={IconGrammar.standard} color="textPrimary" />
             </Pressable>
           )}
 
@@ -109,7 +111,7 @@ export function AuctionMarketHeader({
               accessibilityLabel={filterAction.label}
               style={styles.iconBtn}
             >
-              <Ionicons name={filterAction.icon} size={22} color={colors.textPrimary} />
+              <AppIcon name={filterAction.icon} size={IconGrammar.standard} color="textPrimary" />
             </Pressable>
           )}
 
@@ -122,7 +124,7 @@ export function AuctionMarketHeader({
               accessibilityLabel={activityAction.label}
               style={styles.iconBtn}
             >
-              <Ionicons name={activityAction.icon} size={22} color={colors.textPrimary} />
+              <AppIcon name={activityAction.icon} size={IconGrammar.standard} color="textPrimary" />
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>
                   {activityAction.badgeCount! > 9 ? '9+' : activityAction.badgeCount}
@@ -140,7 +142,7 @@ export function AuctionMarketHeader({
               accessibilityLabel="More auction options"
               style={styles.iconBtn}
             >
-              <Ionicons name="ellipsis-horizontal" size={22} color={colors.textPrimary} />
+              <AppIcon name="ellipsis-horizontal" size={IconGrammar.standard} color="textPrimary" />
             </Pressable>
           )}
 
@@ -153,7 +155,7 @@ export function AuctionMarketHeader({
               accessibilityLabel={createAction.label}
               style={styles.createBtn}
             >
-              <Ionicons name={createAction.icon} size={22} color={colors.brand} />
+              <AppIcon name={createAction.icon} size={IconGrammar.standard} color="brand" />
             </Pressable>
           )}
         </View>
@@ -176,7 +178,7 @@ export function AuctionMarketHeader({
                 accessibilityRole="button"
                 accessibilityLabel={action.label}
               >
-                <Ionicons name={action.icon} size={20} color={colors.textPrimary} />
+                <AppIcon name={action.icon} size={IconSize.md} color="textPrimary" />
                 <Text style={styles.overflowLabel}>{action.label}</Text>
                 {action.badgeCount != null && action.badgeCount > 0 && (
                   <View style={styles.overflowBadge}>

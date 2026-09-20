@@ -20,7 +20,8 @@ import {
   GestureDetector,
   Gesture,
   FlatList } from 'react-native-gesture-handler';
-import { Ionicons } from '@expo/vector-icons';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Image as ExpoImage } from 'expo-image';
@@ -214,7 +215,7 @@ function MediaPage({
               accessibilityLabel="Retry loading image"
               accessibilityRole="button"
             >
-              <Ionicons name="refresh-outline" size={18} color={colors.textSecondary} />
+              <AppIcon name="refresh-outline" size={18} color="textSecondary" />
               <Text style={subComponentStyles.retryText}>Retry</Text>
             </Pressable>
           </ImageEmptyGraphic>
@@ -543,7 +544,7 @@ function VideoPage({
               accessibilityLabel="Play video"
               accessibilityRole="button"
             >
-              <Ionicons name="play" size={32} color={colors.scrimTextPrimary} />
+              <AppIcon name="play" variant="filled" size={IconSize.hero} color="scrimTextPrimary" />
             </Pressable>
           )}
 
@@ -557,7 +558,7 @@ function VideoPage({
               accessibilityRole="button"
               hitSlop={8}
             >
-              <Ionicons name={isPlaying ? 'pause' : 'play'} size={20} color={colors.scrimTextPrimary} />
+              <AppIcon name={isPlaying ? 'pause' : 'play'} variant="filled" size={IconSize.md} color="scrimTextPrimary" />
             </Pressable>
 
             {/* Scrub bar — only when duration is meaningful (> 0) */}
@@ -602,7 +603,7 @@ function VideoPage({
               accessibilityRole="button"
               hitSlop={8}
             >
-              <Ionicons name={isMuted ? 'volume-mute' : 'volume-medium'} size={20} color={colors.scrimTextPrimary} />
+              <AppIcon name={isMuted ? 'volume-mute' : 'volume-medium'} size={IconSize.md} color="scrimTextPrimary" />
             </Pressable>
 
             {/* Fullscreen */}
@@ -613,7 +614,7 @@ function VideoPage({
               accessibilityRole="button"
               hitSlop={8}
             >
-              <Ionicons name="expand" size={20} color={colors.scrimTextPrimary} />
+              <AppIcon name="expand" size={IconSize.md} color="scrimTextPrimary" />
             </Pressable>
           </View>
         </>
@@ -1021,7 +1022,7 @@ export function CommerceMediaStage({
           style={[StyleSheet.absoluteFill, styles.bigHeartWrap, bigHeartStyle]}
           pointerEvents="none"
         >
-          <Ionicons name="heart" size={100} color={colors.scrimTextPrimary} style={styles.bigHeartIcon} />
+          <AppIcon name="heart" variant="filled" size={IconSize.display} color="scrimTextPrimary" glyphStyle={styles.bigHeartIcon} />
         </Reanimated.View>
       )}
 
@@ -1040,7 +1041,7 @@ export function CommerceMediaStage({
             activeOpacity={0.85}
             accessibilityLabel="Go back"
           >
-            <Ionicons name="chevron-back" size={24} color={colors.scrimTextPrimary} style={styles.controlIcon} />
+            <AppIcon name="chevron-back" size={IconSize.lg} color="scrimTextPrimary" glyphStyle={styles.controlIcon} />
           </AnimatedPressable>
 
           <View style={styles.headerRight}>
@@ -1051,7 +1052,7 @@ export function CommerceMediaStage({
               activeOpacity={0.85}
               accessibilityLabel="Share"
             >
-              <Ionicons name="share-outline" size={24} color={colors.scrimTextPrimary} style={styles.controlIcon} />
+              <AppIcon name="share-outline" size={IconSize.lg} color="scrimTextPrimary" glyphStyle={styles.controlIcon} />
             </AnimatedPressable>
 
             {showSaveControl && onSave && (
@@ -1066,11 +1067,12 @@ export function CommerceMediaStage({
                   ? 'Tap to save. Long-press to file into a collection.'
                   : undefined}
               >
-                <Ionicons
-                  name={isSaved ? 'bookmark' : 'bookmark-outline'}
-                  size={24}
-                  color={isSaved ? colors.brand : colors.scrimTextPrimary}
-                  style={styles.controlIcon}
+                <AppIcon
+                  name="bookmark"
+                  focused={isSaved}
+                  size={IconSize.lg}
+                  color={isSaved ? 'brand' : 'scrimTextPrimary'}
+                  glyphStyle={styles.controlIcon}
                 />
               </AnimatedPressable>
             )}
@@ -1136,7 +1138,7 @@ export function CommerceMediaStage({
 
       {mediaItems.length > 0 && mediaItems[activeIndex]?.kind === 'video' && (
         <View style={styles.videoBadge}>
-          <Ionicons name="play-circle" size={16} color={colors.scrimTextPrimary} />
+          <AppIcon name="play-circle" size={IconSize.sm} color="scrimTextPrimary" />
           <Text style={styles.videoBadgeText}>Video</Text>
         </View>
       )}
@@ -1146,7 +1148,7 @@ export function CommerceMediaStage({
           visual cue that pinch-to-zoom is available. */}
       {!reducedMotion && mediaItems.length > 0 && (
         <Reanimated.View style={[styles.zoomHint, zoomHintStyle]} pointerEvents="none">
-          <Ionicons name="add-circle-outline" size={18} color={colors.scrimTextPrimary} style={styles.zoomHintIcon} />
+          <AppIcon name="add-circle-outline" size={18} color="scrimTextPrimary" glyphStyle={styles.zoomHintIcon} />
           <Text style={styles.zoomHintText}>Pinch to zoom</Text>
         </Reanimated.View>
       )}
@@ -1177,7 +1179,7 @@ export function CommerceMediaStage({
                 >
                   {isVid ? (
                     <View style={[styles.thumbnailImage, styles.thumbnailVideoFallback]}>
-                      <Ionicons name="play-circle" size={20} color={colors.scrimTextPrimary} />
+                      <AppIcon name="play-circle" size={IconSize.md} color="scrimTextPrimary" />
                     </View>
                   ) : (
                     <CachedImage
@@ -1194,7 +1196,7 @@ export function CommerceMediaStage({
                   )}
                   {isVid && (
                     <View style={styles.thumbnailVideoBadge}>
-                      <Ionicons name="play" size={8} color={colors.scrimTextPrimary} />
+                      <AppIcon name="play" variant="filled" size={IconSize.micro} color="scrimTextPrimary" />
                     </View>
                   )}
                 </Pressable>

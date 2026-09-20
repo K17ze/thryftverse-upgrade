@@ -9,7 +9,8 @@ import {
   Platform,
   ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { openProductDetail } from '../platform/product/openProductDetail';
@@ -145,7 +146,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
       >
         {/* Celebration Header */}
         <View style={styles.heroSection}>
-          <Ionicons name="checkmark" size={28} color={colors.brand} style={styles.heroIcon} aria-hidden={true} />
+          <AppIcon name="checkmark" size={IconSize.xl} color="brand" glyphStyle={styles.heroIcon} accessible={false} />
           <Text style={styles.heroBigText}>Published</Text>
           <Text style={styles.heroSubText}>
             {isActive ? 'Your item is now live on Thryftverse.' : isPaused ? 'Your listing is paused and hidden from buyers.' : isSold ? 'Your item has been marked as sold.' : 'Your listing has been created.'}
@@ -179,11 +180,11 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
             <View
               style={[styles.summaryImageWrap, styles.summaryImageFallback]}
             >
-              <Ionicons
+              <AppIcon
                 name="bag-handle-outline"
-                size={20}
-                color={colors.textMuted}
-                aria-hidden={true}
+                size={IconSize.md}
+                color="textMuted"
+                accessible={false}
               />
             </View>
           )}
@@ -204,7 +205,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
         {smartSellEnabled && (
           <View>
             <ElevatedSurface variant="surface" style={styles.smartSellBanner}>
-              <Ionicons name="trending-up-outline" size={18} color={colors.brand} aria-hidden={true} />
+              <AppIcon name="trending-up-outline" size={18} color="brand" accessible={false} />
               <View style={styles.smartSellBannerBody}>
                 <Text style={styles.smartSellBannerTitle}>Smart Sell enabled (demo)</Text>
                 <Text style={styles.smartSellBannerText}>
@@ -226,20 +227,20 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
           >
             <View style={styles.actionLeft}>
               <View style={styles.actionIconBox}>
-                <Ionicons
+                <AppIcon
                   name="eye-outline"
-                  size={20}
-                  color={colors.textPrimary}
-                  aria-hidden={true}
+                  size={IconSize.md}
+                  color="textPrimary"
+                  accessible={false}
                 />
               </View>
               <Text style={styles.actionText}>view listing</Text>
             </View>
-            <Ionicons
+            <AppIcon
               name="chevron-forward"
-              size={16}
-              color={colors.textMuted}
-              aria-hidden={true}
+              size={IconSize.sm}
+              color="textMuted"
+              accessible={false}
             />
           </AnimatedPressable>
         ) : null}
@@ -252,20 +253,20 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
           >
             <View style={styles.actionLeft}>
               <View style={styles.actionIconBox}>
-                <Ionicons
+                <AppIcon
                   name="settings-outline"
-                  size={20}
-                  color={colors.textPrimary}
-                  aria-hidden={true}
+                  size={IconSize.md}
+                  color="textPrimary"
+                  accessible={false}
                 />
               </View>
               <Text style={styles.actionText}>manage listing</Text>
             </View>
-            <Ionicons
+            <AppIcon
               name="chevron-forward"
-              size={16}
-              color={colors.textMuted}
-              aria-hidden={true}
+              size={IconSize.sm}
+              color="textMuted"
+              accessible={false}
             />
           </AnimatedPressable>
         ) : null}
@@ -278,20 +279,20 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
           >
             <View style={styles.actionLeft}>
               <View style={styles.actionIconBox}>
-                <Ionicons
+                <AppIcon
                   name="share-outline"
-                  size={20}
-                  color={colors.textPrimary}
-                  aria-hidden={true}
+                  size={IconSize.md}
+                  color="textPrimary"
+                  accessible={false}
                 />
               </View>
               <Text style={styles.actionText}>share listing</Text>
             </View>
-            <Ionicons
+            <AppIcon
               name="chevron-forward"
-              size={16}
-              color={colors.textMuted}
-              aria-hidden={true}
+              size={IconSize.sm}
+              color="textMuted"
+              accessible={false}
             />
           </AnimatedPressable>
         ) : null}
@@ -303,20 +304,20 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
         >
           <View style={styles.actionLeft}>
             <View style={styles.actionIconBox}>
-              <Ionicons
+              <AppIcon
                 name="add-circle-outline"
-                size={20}
-                color={colors.textPrimary}
-                aria-hidden={true}
+                size={IconSize.md}
+                color="textPrimary"
+                accessible={false}
               />
             </View>
             <Text style={styles.actionText}>create another listing</Text>
           </View>
-          <Ionicons
+          <AppIcon
             name="chevron-forward"
-            size={16}
-            color={colors.textMuted}
-            aria-hidden={true}
+            size={IconSize.sm}
+            color="textMuted"
+            accessible={false}
           />
         </AnimatedPressable>
 
@@ -327,16 +328,16 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
         >
           <View style={styles.actionLeft}>
             <View style={styles.actionIconBox}>
-              <Ionicons
+              <AppIcon
                 name="home-outline"
-                size={20}
-                color={colors.textPrimary}
-                aria-hidden={true}
+                size={IconSize.md}
+                color="textPrimary"
+                accessible={false}
               />
             </View>
             <Text style={styles.actionText}>back to feed</Text>
           </View>
-          <Ionicons name="arrow-forward" size={16} color={colors.textMuted} aria-hidden={true} />
+          <AppIcon name="arrow-forward" size={IconSize.sm} color="textMuted" accessible={false} />
         </AnimatedPressable>
 
         </ElevatedSurface>
@@ -345,23 +346,23 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
         {/* Tips for selling — first-listing guidance */}
         <View style={styles.tipsCard}>
           <View style={styles.tipsHeader}>
-            <Ionicons name="bulb-outline" size={16} color={colors.brand} aria-hidden={true} />
+            <AppIcon name="bulb-outline" size={IconSize.sm} color="brand" accessible={false} />
             <Text style={styles.tipsTitle}>Tips for selling faster</Text>
           </View>
           <View style={styles.tipRow}>
-            <Ionicons name="camera-outline" size={12} color={colors.textMuted} aria-hidden={true} />
+            <AppIcon name="camera-outline" size={IconSize.micro} color="textMuted" accessible={false} />
             <Text style={styles.tipText}>Add clear, well-lit photos from multiple angles</Text>
           </View>
           <View style={styles.tipRow}>
-            <Ionicons name="cash-outline" size={12} color={colors.textMuted} aria-hidden={true} />
+            <AppIcon name="cash-outline" size={IconSize.micro} color="textMuted" accessible={false} />
             <Text style={styles.tipText}>Price competitively — check similar sold items</Text>
           </View>
           <View style={styles.tipRow}>
-            <Ionicons name="chatbubble-outline" size={12} color={colors.textMuted} aria-hidden={true} />
+            <AppIcon name="chatbubble-outline" size={IconSize.micro} color="textMuted" accessible={false} />
             <Text style={styles.tipText}>Respond quickly to buyer questions and offers</Text>
           </View>
           <View style={styles.tipRow}>
-            <Ionicons name="share-outline" size={12} color={colors.textMuted} aria-hidden={true} />
+            <AppIcon name="share-outline" size={IconSize.micro} color="textMuted" accessible={false} />
             <Text style={styles.tipText}>Share your listing on social media for more reach</Text>
           </View>
         </View>
@@ -373,11 +374,11 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
             activeOpacity={0.8}
             onPress={() => navigation.navigate('HelpSupport')}
           >
-            <Ionicons
+            <AppIcon
               name="help-circle-outline"
-              size={16}
-              color={colors.textMuted}
-              aria-hidden={true}
+              size={IconSize.sm}
+              color="textMuted"
+              accessible={false}
             />
             <Text style={styles.supportLinkText}>
               Need help? Visit the Help Centre

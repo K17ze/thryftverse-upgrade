@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import type { Listing } from '../../services/listingsApi';
 import { SaveToCollectionModal } from '../closet/SaveToCollectionModal';
@@ -24,7 +25,7 @@ import type {
   ItemDetailOverlayVisibility,
   ItemDetailOverlayControls,
 } from '../../hooks/itemDetail/useItemDetailOverlays';
-import { Space, FontFamily, Control } from '../../theme/designTokens';
+import { Space, FontFamily, Control, IconGrammar } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
@@ -199,7 +200,7 @@ export function ItemDetailSheets({
             accessibilityLabel="Close costs, delivery and protection"
             accessibilityRole="button"
           >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <AppIcon name="close" size={IconGrammar.standard} color="textSecondary" />
           </AnimatedPressable>
         </View>
         <View style={styles.purchaseSheetBody}>
@@ -291,7 +292,7 @@ export function ItemDetailSheets({
             accessibilityLabel="Close questions and answers"
             accessibilityRole="button"
           >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <AppIcon name="close" size={IconGrammar.standard} color="textSecondary" />
           </AnimatedPressable>
         </View>
         <ListingQA
@@ -321,7 +322,7 @@ export function ItemDetailSheets({
           accessibilityRole="button"
           accessibilityLabel="Share listing"
         >
-          <Ionicons name="share-outline" size={20} color={colors.textPrimary} />
+          <AppIcon name="share-outline" size={IconSize.md} color="textPrimary" />
           <Text style={[styles.overflowRowText, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>Share listing</Text>
         </AnimatedPressable>
         <AnimatedPressable
@@ -336,7 +337,7 @@ export function ItemDetailSheets({
           accessibilityState={{ selected: isFav }}
           accessibilityLabel={isFav ? 'Remove from Saved' : 'Add to Saved'}
         >
-          <Ionicons name={isFav ? 'heart' : 'heart-outline'} size={20} color={isFav ? colors.dangerText : colors.textPrimary} />
+          <AppIcon name="heart" focused={isFav} size={IconSize.md} color={isFav ? 'dangerText' : 'textPrimary'} />
           <Text style={[styles.overflowRowText, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>
             {isFav ? 'Remove from Saved' : 'Add to Saved'}
           </Text>
@@ -352,7 +353,7 @@ export function ItemDetailSheets({
           accessibilityRole="button"
           accessibilityLabel="Report this listing"
         >
-          <Ionicons name="flag-outline" size={20} color={colors.textSecondary} />
+          <AppIcon name="flag-outline" size={IconSize.md} color="textSecondary" />
           <Text style={[styles.overflowRowText, { color: colors.textSecondary }]} maxFontSizeMultiplier={2}>Report listing</Text>
         </AnimatedPressable>
       </BottomSheet>
@@ -388,7 +389,7 @@ export function ItemDetailSheets({
               accessibilityLabel="Close condition definition"
               accessibilityRole="button"
             >
-              <Ionicons name="close" size={22} color={colors.textSecondary} />
+              <AppIcon name="close" size={IconGrammar.standard} color="textSecondary" />
             </AnimatedPressable>
           </View>
           <View style={styles.conditionSheetBody}>
@@ -417,11 +418,11 @@ export function ItemDetailSheets({
                 accessibilityLabel="View condition evidence photos"
                 accessibilityRole="button"
               >
-                <Ionicons name="images-outline" size={18} color={colors.brand} />
+                <AppIcon name="images-outline" size={18} color="brand" />
                 <Text style={[styles.conditionEvidenceJumpText, { color: colors.brand }]} maxFontSizeMultiplier={2}>
                   View condition photos
                 </Text>
-                <Ionicons name="chevron-forward" size={16} color={colors.brand} />
+                <AppIcon name="chevron-forward" size={IconSize.sm} color="brand" />
               </AnimatedPressable>
             ) : null}
           </View>

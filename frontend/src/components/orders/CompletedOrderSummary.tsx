@@ -1,8 +1,9 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Control } from '../../theme/designTokens';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
+import { Space, Control, IconGrammar } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { haptics } from '../../utils/haptics';
 import { t } from '../../i18n';
@@ -44,9 +45,9 @@ export function CompletedOrderSummary({
         accessibilityRole="button"
         accessibilityLabel={t('orderDetail.completed.viewReceiptA11y')}
       >
-        <Ionicons name="receipt-outline" size={22} color={colors.brand} aria-hidden={true} />
+        <AppIcon name="receipt-outline" size={IconGrammar.standard} color="brand" accessible={false} />
         <Text style={[styles.completedActionText, themed.actionText]}>{t('orderDetail.completed.viewReceipt')}</Text>
-        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
+        <AppIcon name="chevron-forward" size={IconSize.sm} color="textMuted" accessible={false} />
       </Pressable>
 
       {!hasReview ? (
@@ -57,9 +58,9 @@ export function CompletedOrderSummary({
           accessibilityRole="button"
           accessibilityLabel={t('orderDetail.completed.leaveReviewA11y')}
         >
-          <Ionicons name="star-outline" size={22} color={colors.brand} aria-hidden={true} />
+          <AppIcon name="star-outline" size={IconGrammar.standard} color="brand" accessible={false} />
           <Text style={[styles.completedActionText, themed.actionText]}>{t('orderDetail.completed.leaveReview')}</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
+          <AppIcon name="chevron-forward" size={IconSize.sm} color="textMuted" accessible={false} />
         </Pressable>
       ) : null}
 
@@ -70,9 +71,9 @@ export function CompletedOrderSummary({
         accessibilityRole="button"
         accessibilityLabel={t('orderDetail.completed.buyAgainA11y')}
       >
-        <Ionicons name="bag-outline" size={22} color={colors.brand} aria-hidden={true} />
+        <AppIcon name="bag-outline" size={IconGrammar.standard} color="brand" accessible={false} />
         <Text style={[styles.completedActionText, themed.actionText]}>{t('orderDetail.completed.buyAgain')}</Text>
-        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
+        <AppIcon name="chevron-forward" size={IconSize.sm} color="textMuted" accessible={false} />
       </Pressable>
 
       <Pressable
@@ -82,9 +83,9 @@ export function CompletedOrderSummary({
         accessibilityRole="button"
         accessibilityLabel={t('orderDetail.completed.supportHistoryA11y')}
       >
-        <Ionicons name="help-circle-outline" size={22} color={colors.brand} aria-hidden={true} />
+        <AppIcon name="help-circle-outline" size={IconGrammar.standard} color="brand" accessible={false} />
         <Text style={[styles.completedActionText, themed.actionText]}>{t('orderDetail.completed.supportHistory')}</Text>
-        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
+        <AppIcon name="chevron-forward" size={IconSize.sm} color="textMuted" accessible={false} />
       </Pressable>
     </View>
   );

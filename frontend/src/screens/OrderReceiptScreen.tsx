@@ -11,10 +11,11 @@ import {
   Clipboard,
   Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Control, LetterSpacing, IconGrammar } from '../theme/designTokens';
+import { IconSize } from '../theme/iconTokens';
+import { AppIcon } from '../components/common/AppIcon';
 import { TypographyV2 } from '../theme/typography.v2';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
@@ -212,7 +213,7 @@ export default function OrderReceiptScreen() {
           style={{ paddingTop: insets.top, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
         />
         <View style={styles.errorContainer}>
-          <Ionicons name={isOffline ? 'cloud-offline-outline' : 'alert-circle-outline'} size={36} color={colors.textMuted} />
+          <AppIcon name={isOffline ? 'cloud-offline-outline' : 'alert-circle-outline'} size={IconSize.hero} color="textMuted" />
           <Text style={[styles.errorTitle, themed.errorTitle]} maxFontSizeMultiplier={2}>{isOffline ? 'You are offline' : 'Receipt could not be loaded'}</Text>
           {!isOffline && <Text style={[themed.pendingText, { color: colors.textMuted, marginTop: 4 }]} maxFontSizeMultiplier={2}>Check your connection and try again.</Text>}
           <Pressable style={({ pressed }) => [styles.retryBtn, themed.retryBtn, pressed && styles.retryBtnPressed]} onPress={() => { setLoadError(null); setIsLoading(true); void fetchOrder(); }} accessibilityRole="button" accessibilityLabel="Retry">
@@ -233,7 +234,7 @@ export default function OrderReceiptScreen() {
           style={{ paddingTop: insets.top, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
         />
         <View style={styles.errorContainer}>
-          <Ionicons name="document-text-outline" size={36} color={colors.textMuted} />
+          <AppIcon name="document-text-outline" size={IconSize.hero} color="textMuted" />
           <Text style={[styles.errorTitle, themed.errorTitle]} maxFontSizeMultiplier={2}>Order not found</Text>
           <Text style={[themed.pendingText, { color: colors.textMuted, marginTop: 4 }]} maxFontSizeMultiplier={2}>This order may have been removed or is no longer available.</Text>
         </View>
@@ -251,7 +252,7 @@ export default function OrderReceiptScreen() {
           style={{ paddingTop: insets.top, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
         />
         <View style={styles.errorContainer}>
-          <Ionicons name="lock-closed-outline" size={36} color={colors.textMuted} />
+          <AppIcon name="lock-closed-outline" size={IconSize.hero} color="textMuted" />
           <Text style={[styles.errorTitle, themed.errorTitle]}>You do not have access to this receipt</Text>
         </View>
       </View>
@@ -323,11 +324,11 @@ export default function OrderReceiptScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Print receipt"
               >
-                <Ionicons name="print-outline" size={22} color={colors.textPrimary} />
+                <AppIcon name="print-outline" size={IconGrammar.standard} color="textPrimary" />
               </Pressable>
             )}
             <Pressable style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]} onPress={handleShare} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityRole="button" accessibilityLabel="Share receipt">
-              <Ionicons name="share-outline" size={22} color={colors.textPrimary} />
+              <AppIcon name="share-outline" size={IconGrammar.standard} color="textPrimary" />
             </Pressable>
           </View>
         }
@@ -349,7 +350,7 @@ export default function OrderReceiptScreen() {
         {isReceiptFinal && normalisedStatus !== 'cancelled' && normalisedStatus !== 'refunded' ? (
           <View style={styles.successHeader}>
             <View style={[styles.successIconWrap, themed.successIconWrap]}>
-              <Ionicons name="checkmark" size={28} color={colors.successText} />
+              <AppIcon name="checkmark" size={IconSize.xl} color="successText" />
             </View>
             <Text style={[styles.successTitle, themed.successTitle]}>
               {isBuyer ? 'Order complete' : 'Payment received'}
@@ -372,7 +373,7 @@ export default function OrderReceiptScreen() {
             >
               <View style={styles.orderIdRow}>
                 <Text style={[styles.orderIdLabel, themed.orderIdLabel]}>#{shortOrderId}</Text>
-                <Ionicons name="copy-outline" size={14} color={colors.textMuted} />
+                <AppIcon name="copy-outline" size={IconSize.xs} color="textMuted" />
               </View>
             </Pressable>
             <View style={[styles.statusStamp, { backgroundColor: `${statusColor}15` }]}>
@@ -411,7 +412,7 @@ export default function OrderReceiptScreen() {
                 />
               ) : (
                 <View style={[styles.itemThumb, styles.itemThumbPlaceholder]}>
-                  <Ionicons name="image-outline" size={20} color={colors.textMuted} />
+                  <AppIcon name="image-outline" size={IconSize.md} color="textMuted" />
                 </View>
               )}
               <View style={styles.itemizedInfo}>
@@ -479,7 +480,7 @@ export default function OrderReceiptScreen() {
           <View style={[styles.receiptDivider, themed.receiptDivider]} />
 
           <View style={styles.immutableNotice}>
-            <Ionicons name="lock-closed-outline" size={12} color={colors.textMuted} />
+            <AppIcon name="lock-closed-outline" size={IconSize.micro} color="textMuted" />
             <Text style={[styles.immutableText, themed.immutableText]}>
               This receipt is an immutable record of the order.
             </Text>
@@ -487,7 +488,7 @@ export default function OrderReceiptScreen() {
 
           {!isReceiptFinal && (
             <View style={styles.pendingNotice}>
-              <Ionicons name="time-outline" size={12} color={colors.textMuted} />
+              <AppIcon name="time-outline" size={IconSize.micro} color="textMuted" />
               <Text style={[styles.pendingText, themed.pendingText]}>
                 This order is still in progress. The receipt will update as the order progresses.
               </Text>
@@ -522,7 +523,7 @@ export default function OrderReceiptScreen() {
           accessibilityLabel="View order details"
         >
           <Text style={[styles.viewDetailBtnText, themed.viewDetailBtnText]}>View order details</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.brand} />
+          <AppIcon name="chevron-forward" size={IconSize.sm} color="brand" />
         </Pressable>
 
         <Pressable
@@ -532,7 +533,7 @@ export default function OrderReceiptScreen() {
           accessibilityRole="button"
           accessibilityLabel="Save or share receipt"
         >
-          <Ionicons name="share-social-outline" size={18} color={colors.brand} />
+          <AppIcon name="share-social-outline" size={18} color="brand" />
           <Text style={[styles.saveBtnText, themed.viewDetailBtnText]}>Share receipt</Text>
         </Pressable>
       </ScrollView>

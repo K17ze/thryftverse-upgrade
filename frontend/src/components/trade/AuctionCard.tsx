@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 import { Space, Radius, Control } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -110,25 +111,25 @@ function AuctionCardBase({
         )}
         {endingSoon && isLive && (
           <View style={styles.endingSoonBadge}>
-            <Ionicons name="time-outline" size={10} color={colors.textInverse} />
+            <AppIcon name="time-outline" size={IconSize.micro} color="textInverse" />
             <Meta style={styles.viewerBadgeText}>ENDING SOON</Meta>
           </View>
         )}
         {viewerState === 'outbid' && !endingSoon && (
           <View style={styles.outbidBadge}>
-            <Ionicons name="trending-down-outline" size={10} color={colors.textInverse} />
+            <AppIcon name="trending-down-outline" size={IconSize.micro} color="textInverse" />
             <Meta style={styles.viewerBadgeText}>OUTBID</Meta>
           </View>
         )}
         {viewerState === 'leading' && !endingSoon && (
           <View style={styles.leadingBadge}>
-            <Ionicons name="trophy-outline" size={10} color={colors.textInverse} />
+            <AppIcon name="trophy-outline" size={IconSize.micro} color="textInverse" />
             <Meta style={styles.viewerBadgeText}>LEADING</Meta>
           </View>
         )}
         {viewerState === 'won' && !endingSoon && (
           <View style={styles.wonBadge}>
-            <Ionicons name="ribbon-outline" size={10} color={colors.textInverse} />
+            <AppIcon name="ribbon-outline" size={IconSize.micro} color="textInverse" />
             <Meta style={styles.viewerBadgeText}>WON</Meta>
           </View>
         )}
@@ -168,7 +169,7 @@ function AuctionCardBase({
                 accessibilityLabel={`Message ${sellerName}`}
                 accessibilityHint="Opens chat with this seller"
               >
-                <Ionicons name="chatbubble-ellipses-outline" size={14} color={colors.textPrimary} />
+                <AppIcon name="chatbubble-ellipses-outline" size={IconSize.xs} color="textPrimary" />
               </AnimatedPressable>
             )}
           </View>
@@ -180,7 +181,7 @@ function AuctionCardBase({
             <BodyEmphasis style={styles.bidValue}>{currentBid}</BodyEmphasis>
           </View>
           <View style={styles.bidCountWrap}>
-            <Ionicons name="people-outline" size={12} color={colors.textMuted} />
+            <AppIcon name="people-outline" size={IconSize.micro} color="textMuted" />
             <Meta style={styles.bidCount}>{bidCount} bids</Meta>
           </View>
         </View>
@@ -192,9 +193,9 @@ function AuctionCardBase({
             accessibilityRole="button"
             accessibilityLabel={`View bid history for ${title}`}
           >
-            <Ionicons name="list-outline" size={12} color={colors.brand} />
+            <AppIcon name="list-outline" size={IconSize.micro} color="brand" />
             <Meta style={styles.bidHistoryBtnText}>View bid history</Meta>
-            <Ionicons name="chevron-forward" size={10} color={colors.brand} />
+            <AppIcon name="chevron-forward" size={IconSize.micro} color="brand" />
           </Pressable>
         ) : null}
 

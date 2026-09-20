@@ -9,7 +9,6 @@ import {
   Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQueryClient } from '@tanstack/react-query';
@@ -28,6 +27,8 @@ import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Space, Radius, Typography, Stroke, Control } from '../theme/designTokens';
+import { IconSize } from '../theme/iconTokens';
+import { AppIcon } from '../components/common/AppIcon';
 import { TypographyV2 } from '../theme/typography.v2';
 import { createAuction } from '../services/marketApi';
 import { createStableId } from '../utils/createStableId';
@@ -267,7 +268,7 @@ export default function CreateAuctionScreen() {
           hitSlop={12}
           accessibilityLabel="Go back"
         >
-          <Ionicons name="arrow-back" size={20} color={colors.textPrimary} />
+          <AppIcon name="arrow-back" size={IconSize.md} color="textPrimary" />
         </Pressable>
         <View style={styles.headerTitleWrap}>
           <Text style={styles.headerTitle}>LAUNCH AUCTION DROP</Text>
@@ -366,7 +367,7 @@ export default function CreateAuctionScreen() {
                           setShowItemPicker((v) => !v);
                         }}
                       >
-                        <Ionicons name="swap-horizontal" size={14} color={colors.brand} />
+                        <AppIcon name="swap-horizontal" size={IconSize.xs} color="brand" />
                         <Text style={styles.switchPieceText}>
                           {showItemPicker ? 'Hide Other Pieces' : `Switch Piece (${sellerListings.length} available)`}
                         </Text>
@@ -407,7 +408,7 @@ export default function CreateAuctionScreen() {
                             </View>
                             {isSelected && (
                               <View style={styles.pickerItemCheck}>
-                                <Ionicons name="checkmark" size={12} color={colors.textInverse} />
+                                <AppIcon name="checkmark" size={IconSize.micro} color="textInverse" />
                               </View>
                             )}
                           </AnimatedPressable>
@@ -437,10 +438,10 @@ export default function CreateAuctionScreen() {
                       >
                         <View style={styles.windowTileTop}>
                           <View style={[styles.windowIconWrap, isSelected && styles.windowIconWrapSelected]}>
-                            <Ionicons
+                            <AppIcon
                               name={win.icon}
-                              size={16}
-                              color={isSelected ? colors.brand : colors.textMuted}
+                              size={IconSize.sm}
+                              color={isSelected ? 'brand' : 'textMuted'}
                             />
                           </View>
                           <Text style={[styles.windowBadge, isSelected && styles.windowBadgeSelected]}>
@@ -457,7 +458,7 @@ export default function CreateAuctionScreen() {
 
                 {/* Traffic Insight Banner */}
                 <View style={styles.trafficInsightBar}>
-                  <Ionicons name="analytics" size={16} color={colors.brand} />
+                  <AppIcon concept="analytics" size={IconSize.sm} color="brand" />
                   <Text style={styles.trafficInsightText}>
                     {startInMinutes === 0
                       ? '⚡ Instant Live Drop: Your piece will immediately appear on the live auction runway.'
@@ -546,7 +547,7 @@ export default function CreateAuctionScreen() {
 
                   {startingBidNum > 0 && (
                     <View style={styles.izeConversionPill}>
-                      <Ionicons name="cube-outline" size={13} color={colors.brand} />
+                      <AppIcon name="cube-outline" size={13} color="brand" />
                       <Text style={styles.izeConversionText}>
                         Equivalent to {formatIzeAmount(toIze(startingBidNum, currencyCode, fxRates))}
                       </Text>
@@ -582,7 +583,7 @@ export default function CreateAuctionScreen() {
                   <View style={styles.headingWithBadge}>
                     <Text style={styles.sectionEyebrow}>SAFEGUARD PROTECTION</Text>
                     <View style={styles.confidentialPill}>
-                      <Ionicons name="lock-closed" size={10} color={colors.brand} />
+                      <AppIcon name="lock-closed" size={IconSize.micro} color="brand" />
                       <Text style={styles.confidentialPillText}>CONFIDENTIAL</Text>
                     </View>
                   </View>
@@ -605,7 +606,7 @@ export default function CreateAuctionScreen() {
 
                   {reservePriceNum ? (
                     <View style={styles.izeConversionPill}>
-                      <Ionicons name="shield-checkmark" size={13} color={colors.brand} />
+                      <AppIcon name="shield-checkmark" size={13} color="brand" />
                       <Text style={styles.izeConversionText}>
                         Protected at {formatIzeAmount(toIze(reservePriceNum, currencyCode, fxRates))}
                       </Text>
@@ -678,7 +679,7 @@ export default function CreateAuctionScreen() {
                       />
                       {buyNowPriceNum ? (
                         <View style={styles.izeConversionPill}>
-                          <Ionicons name="flash" size={13} color={colors.warningText} />
+                          <AppIcon name="flash" size={13} color="warningText" />
                           <Text style={styles.izeConversionText}>
                             Instant buyout at {formatIzeAmount(toIze(buyNowPriceNum, currencyCode, fxRates))}
                           </Text>
@@ -700,17 +701,17 @@ export default function CreateAuctionScreen() {
                 <View style={styles.settlementCard}>
                   <Text style={styles.settlementHeading}>AUCTION PROTOCOL GUARANTEE</Text>
                   <View style={styles.settlementRow}>
-                    <Ionicons name="cube-outline" size={14} color={colors.textSecondary} />
+                    <AppIcon name="cube-outline" size={IconSize.xs} color="textSecondary" />
                     <Text style={styles.settlementLabel}>Protocol Fee</Text>
                     <Text style={styles.settlementValue}>1.5% on successful hammer</Text>
                   </View>
                   <View style={styles.settlementRow}>
-                    <Ionicons name="lock-closed-outline" size={14} color={colors.textSecondary} />
+                    <AppIcon name="lock-closed-outline" size={IconSize.xs} color="textSecondary" />
                     <Text style={styles.settlementLabel}>Escrow Release</Text>
                     <Text style={styles.settlementValue}>Instant to 1ZE or Bank balance</Text>
                   </View>
                   <View style={styles.settlementRow}>
-                    <Ionicons name="shield-outline" size={14} color={colors.textSecondary} />
+                    <AppIcon name="shield-outline" size={IconSize.xs} color="textSecondary" />
                     <Text style={styles.settlementLabel}>Anti-Sniping Protection</Text>
                     <Text style={styles.settlementValue}>+2 min extension on last-minute bids</Text>
                   </View>
@@ -750,7 +751,7 @@ export default function CreateAuctionScreen() {
                   setStage(0);
                 }}
               >
-                <Ionicons name="arrow-back" size={18} color={colors.textPrimary} />
+                <AppIcon name="arrow-back" size={18} color="textPrimary" />
                 <Text style={styles.dockBackText}>Timing</Text>
               </Pressable>
 
@@ -777,7 +778,7 @@ export default function CreateAuctionScreen() {
         <View style={styles.resultOverlay}>
           <View style={styles.resultCard}>
             <View style={styles.resultBadgeWrap}>
-              <Ionicons name="flame" size={32} color={colors.warningText} />
+              <AppIcon name="flame" size={IconSize.hero} color="warningText" />
             </View>
 
             <Text style={styles.resultTitle}>AUCTION DROP IS LIVE</Text>
