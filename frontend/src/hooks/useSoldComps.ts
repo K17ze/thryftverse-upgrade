@@ -17,6 +17,13 @@ export interface SoldCompsResult {
   sampleSize: number;
   /** Whether there are enough comparables to show guidance (≥2) */
   hasComps: boolean;
+  /** First sale date in the comp set (ISO) — freshness window start.
+   * Only available on the authoritative server path; the client-derived
+   * fallback has no per-comp sold dates, so it reports null rather than
+   * inventing a window. */
+  dateFrom: string | null;
+  /** Last sale date in the comp set (ISO) — freshness window end. */
+  dateTo: string | null;
 }
 
 /**
@@ -63,12 +70,14 @@ export function useSoldComps(
         medianPrice: serverComps.medianPrice,
         sampleSize: serverComps.sampleSize,
         hasComps: true,
+        dateFrom: serverComps.dateFrom,
+        dateTo: serverComps.dateTo,
       };
     }
 
     // Fallback: client-derived from in-memory listings (NOT authoritative)
     if (!category && !brand) {
-      return { minPrice: null, maxPrice: null, medianPrice: null, sampleSize: 0, hasComps: false };
+      return { minPrice: null, maxPrice: null, medianPrice: null, sampleSize: 0, hasComps: false, dateFrom: null, dateTo: null };
     }
 
     const sold = listings.filter((l) => {
@@ -79,7 +88,7 @@ export function useSoldComps(
     });
 
     if (sold.length < 2) {
-      return { minPrice: null, maxPrice: null, medianPrice: null, sampleSize: sold.length, hasComps: false };
+      return { minPrice: null, maxPrice: null, medianPrice: null, sampleSize: sold.length, hasComps: false, dateFrom: null, dateTo: null };
     }
 
     const prices = sold.map((l) => l.price).sort((a, b) => a - b);
@@ -92,6 +101,8 @@ export function useSoldComps(
       medianPrice: median,
       sampleSize: sold.length,
       hasComps: true,
+      dateFrom: null,
+      dateTo: null,
     };
   }, [serverComps, listings, category, brand]);
 }

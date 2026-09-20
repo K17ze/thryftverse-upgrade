@@ -22,6 +22,8 @@ export { useMoodboardBoard, DEFAULT_THEME_ID } from './useMoodboardBoard';
 export type { SyncStatus, ConflictDetail } from './useMoodboardBoard';
 export { useMoodboardSelection } from './useMoodboardSelection';
 export { useMoodboardMutations } from './useMoodboardMutations';
+export { useMoodboardHistory } from './useMoodboardHistory';
+export type { MoodboardHistoryEntry } from './moodboardHistory';
 export { useMoodboardImport } from './useMoodboardImport';
 export type {
   MoodboardImportJob,

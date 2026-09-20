@@ -20,6 +20,7 @@ import { createStableId } from '../../utils/createStableId';
 import {
   importMoodboardAsset,
   type MoodboardImportStage } from '../../services/moodboardImportService';
+import type { MoodboardItem } from '../../services/moodboardApi';
 import type { SelectedAsset } from '../../creator/tools/MediaBrowser/mediaBrowserTypes';
 
 export type MoodboardImportJobStage = MoodboardImportStage | 'queued' | 'failed';
@@ -44,8 +45,9 @@ export interface MoodboardImportController {
 export interface UseMoodboardImportArgs {
   /** Board the imported items belong to — '' until the board exists. */
   moodboardId: string;
-  /** Called after each item lands on the board (e.g. reconcileBoard). */
-  onItemAdded?: () => void | Promise<void>;
+  /** Called after each item lands on the board — receives the placed item
+   *  so callers (board reconcile, undo history) can use it. */
+  onItemAdded?: (item: MoodboardItem | null) => void | Promise<void>;
 }
 
 const MAX_CONCURRENT_IMPORTS = 2;
@@ -110,11 +112,11 @@ export function useMoodboardImport({
         if (!moodboardIdRef.current) {
           throw new Error('The moodboard is not ready yet.');
         }
-        await importMoodboardAsset(moodboardIdRef.current, job.asset, (stage) => {
+        const item = await importMoodboardAsset(moodboardIdRef.current, job.asset, (stage) => {
           patchJob(jobId, { stage });
         });
         patchJob(jobId, { stage: 'added', error: undefined });
-        void onItemAddedRef.current?.();
+        void onItemAddedRef.current?.(item);
         haptic.success();
         scheduleDismiss(jobId);
       } catch (error) {

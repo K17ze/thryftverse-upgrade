@@ -1967,6 +1967,34 @@ export const EN_TRANSLATIONS = {
   'manage.offerSentToLikers': 'Offer sent to {count} liker{plural}',
   'manage.offerToLikersNone': 'No likers could receive this offer',
   'manage.offerToLikersFailed': "Couldn't send the offer — try again",
+  // ── Moodboard editor — undo/redo ──
+  'moodboard.history.undo': 'Undo',
+  'moodboard.history.redo': 'Redo',
+  'moodboard.history.undoHint': 'Undo your last change to this board',
+  'moodboard.history.redoHint': 'Redo the change you undid',
+  'moodboard.history.nothingToUndo': 'Nothing to undo',
+  'moodboard.history.nothingToRedo': 'Nothing to redo',
+  // ── Sold comparables freshness window ──
+  // The comps API reports dateFrom/dateTo (first/last sale in the
+  // evidence set). Rendered inline so buyers and sellers can judge how
+  // stale the price evidence is.
+  'comps.similarSoldWindow': '{count} similar sold · {window}',
+  'comps.verifiedSalesWindow': '{count} verified sales in {category} · {window}',
+  'comps.soldRangeWindow': 'Similar items sold for {min}–{max} ({count} sold) · {window}',
+
+  // ── Live stream host viewer moderation ──
+  // Long-press sheet on viewer chat rows in the host console (R48).
+  'liveModeration.actionsTitle': 'Viewer actions',
+  'liveModeration.muteAction': 'Mute viewer',
+  'liveModeration.unmuteAction': 'Unmute viewer',
+  'liveModeration.kickAction': 'Remove from stream',
+  'liveModeration.cancelAction': 'Cancel',
+  'liveModeration.mutedTag': 'muted',
+  'liveModeration.mutedToast': "{name} muted — they can't chat or rejoin this stream",
+  'liveModeration.unmutedToast': '{name} unmuted',
+  'liveModeration.kickedToast': '{name} removed from the stream',
+  'liveModeration.failedToast': "Couldn't update the viewer — try again",
+  'liveModeration.a11yHint': 'Long-press for viewer moderation actions',
 } as const;
 
 export type SupportedLocale = 'en' | 'es' | 'fr' | 'de' | 'ar' | 'hi' | 'zh' | 'pt' | 'ja' | 'ru' | 'tr' | 'ko' | 'id';

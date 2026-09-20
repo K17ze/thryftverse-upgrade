@@ -204,3 +204,26 @@ export function formatActivityTimestamp(value: string | Date | number, locale: s
   }
   return formatShortDate(d, locale);
 }
+
+/**
+ * "2 Mar – 18 Apr" — compact range for evidence/freshness windows
+ * (e.g. sold-comparables dateFrom/dateTo). Each endpoint uses
+ * formatShortDate semantics: the year is only shown when the date is
+ * not in the current year, so stale windows can't masquerade as recent.
+ *
+ * Degrades without inventing data: a window collapsing to one rendered
+ * day (single comp, or same-day bounds) returns a single date; a single
+ * usable endpoint returns that endpoint alone; nothing usable returns
+ * '' so callers can omit the caption entirely.
+ */
+export function formatDateRange(
+  from: string | Date | number | null | undefined,
+  to: string | Date | number | null | undefined,
+  locale: string = DEFAULT_LOCALE,
+): string {
+  const a = from != null ? formatShortDate(from, locale) : '';
+  const b = to != null ? formatShortDate(to, locale) : '';
+  if (!a && !b) return '';
+  if (!a || !b || a === b) return a || b;
+  return `${a} – ${b}`;
+}

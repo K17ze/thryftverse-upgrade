@@ -10,6 +10,8 @@ import type { useFormattedPrice } from '../useFormattedPrice';
 import { Space, DockConstants } from '../../theme/designTokens';
 import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 import { toIze, formatIzeAmount } from '../../utils/currency';
+import { formatDateRange } from '../../utils/dateFormat';
+import { t, getI18nLocale } from '../../i18n';
 import {
   buildCommerceContext,
   buildCapabilities,
@@ -308,8 +310,15 @@ export function buildItemDetailDerived(
     soldComps.minPrice != null &&
     soldComps.maxPrice != null
   ) {
+    // Freshness window: the endpoint reports the first/last sale dates
+    // backing this evidence — surface them so staleness is legible.
+    // formatDateRange returns '' when the server sent no usable window,
+    // in which case the row keeps the plain count label.
+    const soldWindow = formatDateRange(soldComps.dateFrom, soldComps.dateTo, getI18nLocale());
     priceInsightRows.push({
-      label: `${soldComps.sampleSize} similar sold`,
+      label: soldWindow
+        ? t('comps.similarSoldWindow', { count: soldComps.sampleSize, window: soldWindow })
+        : `${soldComps.sampleSize} similar sold`,
       value: `${formatFromFiat(soldComps.minPrice, soldComps.currency)}–${formatFromFiat(soldComps.maxPrice, soldComps.currency)}`,
       muted: true,
     });

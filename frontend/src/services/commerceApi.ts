@@ -1185,6 +1185,11 @@ export interface ListingAnalyticsComparables {
   minPrice: number | null;
   medianPrice: number | null;
   maxPrice: number | null;
+  /** First sale date in the comp set — freshness window start. Optional:
+   * older API responses may omit the window entirely. */
+  dateFrom?: string | null;
+  /** Last sale date in the comp set — freshness window end. */
+  dateTo?: string | null;
 }
 
 export interface ListingPriceHistoryEvent {

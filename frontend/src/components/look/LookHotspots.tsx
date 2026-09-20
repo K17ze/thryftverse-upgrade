@@ -11,7 +11,10 @@ import type { ProductReferenceKind } from '../../platform/product/openProductDet
 /** A look tag with optional hydrated product fields (title, price, image, etc). */
 export type HydratedLookTag = LookTagApiItem & {
   title?: string;
+  /** Fiat price in `currency` (GBP when hydrated from a listing row). */
   price?: number;
+  /** ISO code of the currency `price` is denominated in. */
+  currency?: string;
   image?: string;
   images?: string[];
   isSold?: boolean;
@@ -87,7 +90,7 @@ function LookHotspotsImpl({
             onPress={() => handlePress(tag)}
             hitSlop={20}
             accessibilityRole="button"
-            accessibilityLabel={`Tagged item: ${tagTitle || 'product'}`}
+            accessibilityLabel={`Tagged item: ${tagTitle || 'product'}${tag.isSold ? ' — sold' : ''}`}
             accessibilityHint="Opens a product preview before viewing details"
           >
             <View style={styles.hotspotHalo} />
@@ -106,7 +109,7 @@ function LookHotspotsImpl({
                   {tag.isSold ? (
                     <Text style={styles.tagTooltipSold}>Sold</Text>
                   ) : typeof tag.price === 'number' && formatPrice ? (
-                    <Text style={styles.tagTooltipPrice}>{formatPrice(tag.price, currencyCode)}</Text>
+                    <Text style={styles.tagTooltipPrice}>{formatPrice(tag.price, tag.currency ?? currencyCode)}</Text>
                   ) : null}
                 </View>
                 <Ionicons name="chevron-forward" size={14} color={colors.scrimTextSecondary} aria-hidden={true} />

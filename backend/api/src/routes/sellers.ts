@@ -1436,17 +1436,25 @@ export const registerSellerRoutes = ({ app, db, readDb, queueUserNotification }:
             .filter((p) => Number.isFinite(p) && p >= 0)
             .sort((a, b) => a - b);
           if (prices.length === 0) {
-            return { sampleSize: 0, minPrice: null, medianPrice: null, maxPrice: null };
+            return { sampleSize: 0, minPrice: null, medianPrice: null, maxPrice: null, dateFrom: null, dateTo: null };
           }
           const middle = Math.floor(prices.length / 2);
           const median = prices.length % 2 === 0
             ? Number(((prices[middle - 1] + prices[middle]) / 2).toFixed(2))
             : prices[middle];
+          // Freshness window — same contract as GET /listings/:id/sold-comparables:
+          // first/last sale dates backing the evidence set (ISO sortable strings).
+          const soldDates = compResult.rows
+            .map((r) => r.sold_at)
+            .filter(Boolean)
+            .sort();
           return {
             sampleSize: prices.length,
             minPrice: prices[0],
             medianPrice: median,
             maxPrice: prices[prices.length - 1],
+            dateFrom: soldDates[0] ?? null,
+            dateTo: soldDates[soldDates.length - 1] ?? null,
           };
         })(),
       ]);

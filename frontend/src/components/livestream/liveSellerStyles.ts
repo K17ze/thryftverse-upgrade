@@ -207,6 +207,10 @@ export const createSellerStyles = (colors: ThemeColors) => StyleSheet.create({
   chatSender: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily },
+  chatMutedTag: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontStyle: 'italic' },
   chatText: {
     fontSize: TypographyV2.body.size,
     fontFamily: TypographyV2.body.fontFamily,

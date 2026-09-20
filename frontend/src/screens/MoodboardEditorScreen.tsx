@@ -63,10 +63,12 @@ import {
   useMoodboardBoard,
   useMoodboardSelection,
   useMoodboardMutations,
+  useMoodboardHistory,
   useMoodboardImport,
   PICKER_TILE_SIZE,
   PICKER_TILE_GAP } from '../components/moodboard';
 import { addItemToMoodboard, type Moodboard } from '../services/moodboardApi';
+import { t } from '../i18n';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MoodboardEditor'>;
 
@@ -95,11 +97,17 @@ export default function MoodboardEditorScreen({ route, navigation }: Partial<Pro
   const board = useMoodboardBoard({ moodboardId });
   const selection = useMoodboardSelection();
   const mutations = useMoodboardMutations({ board, selection });
+  // Undo/redo — wraps the mutation handlers; each edit records its inverse
+  // and replaying it goes through the same op-log sync path.
+  const history = useMoodboardHistory({ board, selection, mutations });
   // Media-import job tray (Photos tab) — reconciles the board after each
   // uploaded item lands; offline jobs queue and auto-resume.
   const importController = useMoodboardImport({
     moodboardId: board.moodboard?.id ?? '',
-    onItemAdded: board.reconcileBoard,
+    onItemAdded: (item) => {
+      if (item) history.recordAddedItem(item);
+      return board.reconcileBoard();
+    },
   });
 
   const {
@@ -128,14 +136,20 @@ export default function MoodboardEditorScreen({ route, navigation }: Partial<Pro
     handleCanvasBackgroundPress } = selection;
   const {
     publishing,
+    handlePublishAsPoster } = mutations;
+  const {
+    canUndo,
+    canRedo,
+    undo,
+    redo,
+    recordAddedItem,
     handlePositionCommit,
     handleAddItem,
     handleDeleteItem,
     handleReorder,
     handleDeleteSelected,
     handleBringAllToFront,
-    handleThemeChange,
-    handlePublishAsPoster } = mutations;
+    handleThemeChange } = history;
 
   const [canvasWidth, setCanvasWidth] = useState(SCREEN_W);
   const [canvasHeight, setCanvasHeight] = useState(CANVAS_HEIGHT);
@@ -171,9 +185,10 @@ export default function MoodboardEditorScreen({ route, navigation }: Partial<Pro
   const handleAddLook = useCallback(
     async (lookId: string) => {
       if (!moodboard) return;
-      await addItemToMoodboard(moodboard.id, { source: 'look', lookId });
+      const added = await addItemToMoodboard(moodboard.id, { source: 'look', lookId });
+      if (added) recordAddedItem(added);
     },
-    [moodboard],
+    [moodboard, recordAddedItem],
   );
 
   // ── Derived ──
@@ -201,6 +216,42 @@ export default function MoodboardEditorScreen({ route, navigation }: Partial<Pro
           <View style={styles.liveDot} />
         </View>
       )}
+      <AnimatedPressable
+        style={styles.headerActionButton}
+        onPress={() => void undo()}
+        activeOpacity={0.7}
+        scaleValue={PressScale.icon}
+        hapticFeedback="light"
+        accessibilityRole="button"
+        accessibilityLabel={t('moodboard.history.undo')}
+        accessibilityHint={canUndo ? t('moodboard.history.undoHint') : t('moodboard.history.nothingToUndo')}
+        disabled={!canUndo}
+      >
+        <AppIcon
+          name="arrow-undo-outline"
+          size={IconSize.md}
+          color={canUndo ? 'textPrimary' : 'textMuted'}
+          accessible={false}
+        />
+      </AnimatedPressable>
+      <AnimatedPressable
+        style={styles.headerActionButton}
+        onPress={() => void redo()}
+        activeOpacity={0.7}
+        scaleValue={PressScale.icon}
+        hapticFeedback="light"
+        accessibilityRole="button"
+        accessibilityLabel={t('moodboard.history.redo')}
+        accessibilityHint={canRedo ? t('moodboard.history.redoHint') : t('moodboard.history.nothingToRedo')}
+        disabled={!canRedo}
+      >
+        <AppIcon
+          name="arrow-redo-outline"
+          size={IconSize.md}
+          color={canRedo ? 'textPrimary' : 'textMuted'}
+          accessible={false}
+        />
+      </AnimatedPressable>
       <AnimatedPressable
         style={styles.headerActionButton}
         onPress={() => {
@@ -483,15 +534,16 @@ export default function MoodboardEditorScreen({ route, navigation }: Partial<Pro
             onKeepLocal={() => {
               setConflictCompareVisible(false);
               // Honest "keep mine": the snapshot is re-applied to the server
-              // via ops (outbox + drain), not just dismissed.
-              void mutations.handleKeepLocalVersion(
+              // via ops (outbox + drain), not just dismissed. The wholesale
+              // re-application also clears the undo stacks.
+              void history.handleKeepLocalVersion(
                 board.conflictLocalSnapshot ?? localConflictSnapshot,
               );
             }}
             onKeepServer={() => {
               setConflictCompareVisible(false);
               // Discards queued local ops for this board, then re-fetches.
-              void mutations.handleKeepServerVersion();
+              void history.handleKeepServerVersion();
             }}
           />
         </>

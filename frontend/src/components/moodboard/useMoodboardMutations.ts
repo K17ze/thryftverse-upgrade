@@ -49,8 +49,8 @@ export function useMoodboardMutations({ board, selection }: UseMoodboardMutation
     setActiveThemeId,
     boardRevisionRef,
     handleOperationResponse,
-    loadAll,
-    retrySync } = board;
+    submitBoardOps,
+    loadAll } = board;
   const {
     selectedItemIds,
     setSelectedItemIds,
@@ -124,8 +124,8 @@ export function useMoodboardMutations({ board, selection }: UseMoodboardMutation
   );
 
   const handleAddItem = useCallback(
-    async (source: MoodboardItem) => {
-      if (!moodboard) return;
+    async (source: MoodboardItem): Promise<MoodboardItem | null> => {
+      if (!moodboard) return null;
       haptic.light();
       setSaving(true);
       try {
@@ -138,8 +138,11 @@ export function useMoodboardMutations({ board, selection }: UseMoodboardMutation
             setSelectedItemId(added.id);
           }
         }
+        // Returned so the history layer can record the inverse (remove).
+        return added;
       } catch {
         haptic.error();
+        return null;
       } finally {
         setSaving(false);
       }
@@ -148,8 +151,8 @@ export function useMoodboardMutations({ board, selection }: UseMoodboardMutation
   );
 
   const handleDeleteItem = useCallback(
-    async (id: string) => {
-      if (!moodboard) return;
+    async (id: string): Promise<boolean> => {
+      if (!moodboard) return false;
       haptic.warning();
       setSaving(true);
       setSelectedItemId(null);
@@ -159,8 +162,10 @@ export function useMoodboardMutations({ board, selection }: UseMoodboardMutation
           const mb = await fetchMoodboardDetail(moodboard.id);
           if (mb) setMoodboard(mb);
         }
+        return ok;
       } catch {
         haptic.error();
+        return false;
       } finally {
         setSaving(false);
       }
@@ -169,8 +174,8 @@ export function useMoodboardMutations({ board, selection }: UseMoodboardMutation
   );
 
   const handleReorder = useCallback(
-    async (id: string, direction: 'front' | 'back') => {
-      if (!moodboard) return;
+    async (id: string, direction: 'front' | 'back'): Promise<boolean> => {
+      if (!moodboard) return false;
       haptic.selection();
       setSaving(true);
       try {
@@ -179,8 +184,10 @@ export function useMoodboardMutations({ board, selection }: UseMoodboardMutation
           const mb = await fetchMoodboardDetail(moodboard.id);
           if (mb) setMoodboard(mb);
         }
+        return ok;
       } catch {
         haptic.error();
+        return false;
       } finally {
         setSaving(false);
       }
@@ -189,8 +196,8 @@ export function useMoodboardMutations({ board, selection }: UseMoodboardMutation
   );
 
   const handleDeleteSelected = useCallback(
-    async () => {
-      if (!moodboard || selectedItemIds.size === 0) return;
+    async (): Promise<boolean> => {
+      if (!moodboard || selectedItemIds.size === 0) return false;
       haptic.warning();
       const ids = Array.from(selectedItemIds);
       setMultiSelectMode(false);
@@ -200,8 +207,10 @@ export function useMoodboardMutations({ board, selection }: UseMoodboardMutation
         await Promise.all(ids.map((id) => removeItemFromMoodboard(moodboard.id, id)));
         const mb = await fetchMoodboardDetail(moodboard.id);
         if (mb) setMoodboard(mb);
+        return true;
       } catch {
         haptic.error();
+        return false;
       } finally {
         setSaving(false);
       }
@@ -210,8 +219,8 @@ export function useMoodboardMutations({ board, selection }: UseMoodboardMutation
   );
 
   const handleBringAllToFront = useCallback(
-    async () => {
-      if (!moodboard || selectedItemIds.size === 0) return;
+    async (): Promise<boolean> => {
+      if (!moodboard || selectedItemIds.size === 0) return false;
       haptic.selection();
       // Preserve relative layer order: bring to front in back→front (array) order.
       const ids = moodboard.items
@@ -224,8 +233,10 @@ export function useMoodboardMutations({ board, selection }: UseMoodboardMutation
         }
         const mb = await fetchMoodboardDetail(moodboard.id);
         if (mb) setMoodboard(mb);
+        return true;
       } catch {
         haptic.error();
+        return false;
       } finally {
         setSaving(false);
       }
@@ -366,52 +377,13 @@ export function useMoodboardMutations({ board, selection }: UseMoodboardMutation
       setActiveThemeId(snapshot.theme);
       setConflictDetail(null);
 
-      if (ops.length === 0) {
-        setSyncStatus('idle');
-        return;
-      }
-
-      setSyncStatus('syncing');
-      if (isDbAvailable()) {
-        for (const op of ops) {
-          await enqueueMoodboardOperation({
-            operationId: op.operationId,
-            boardId: moodboard.id,
-            operation: op.operation,
-            payload: op.payload,
-            baseRev });
-        }
-        // Drain immediately — pushes the ops, reconciles the canonical
-        // board, and reports conflict/error through the status machine.
-        await retrySync();
-      } else {
-        // No durable outbox — submit online in order, advancing the base
-        // revision from each applied response. Tracked locally because the
-        // optimistic setMoodboard above can regress boardRevisionRef.
-        let nextBaseRev = baseRev;
-        for (const op of ops) {
-          try {
-            const response = await submitMoodboardOperation(moodboard.id, {
-              clientOperationId: op.operationId,
-              baseRevision: nextBaseRev,
-              type: op.operation,
-              itemId: typeof op.payload.itemId === 'string' ? op.payload.itemId : undefined,
-              payload: op.payload });
-            if (response.outcome === 'applied' || response.outcome === 'duplicate') {
-              nextBaseRev = response.revision;
-              boardRevisionRef.current = response.revision;
-            }
-            handleOperationResponse(response);
-            if (response.outcome === 'conflict' || response.outcome === 'forbidden') break;
-          } catch {
-            setSyncStatus('error');
-            haptic.error();
-            break;
-          }
-        }
-      }
+      // Push through the shared op-submission path — outbox + drain when a
+      // local DB exists (offline-safe), sequential online submit otherwise.
+      // `baseRev` is passed explicitly because the optimistic setMoodboard
+      // above can regress boardRevisionRef.
+      await submitBoardOps(ops, baseRev);
     },
-    [moodboard, haptic, retrySync, handleOperationResponse, setMoodboard, setActiveThemeId, setSyncStatus, setConflictDetail, boardRevisionRef],
+    [moodboard, haptic, submitBoardOps, setMoodboard, setActiveThemeId, setSyncStatus, setConflictDetail, boardRevisionRef],
   );
 
   // ── "Keep server version" — discard queued local intent, re-fetch ──

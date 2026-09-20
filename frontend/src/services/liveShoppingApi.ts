@@ -672,6 +672,51 @@ export async function reportLiveChatMessage(
   }
 }
 
+/**
+ * Host viewer moderation — mute / unmute / kick scoped to one stream
+ * (host only; the server re-checks session ownership). Semantics:
+ *   mute   — the viewer cannot chat and cannot obtain a new viewer token
+ *   unmute — restores chat + rejoin
+ *   kick   — ejects now; they can rejoin unless also muted
+ */
+export async function moderateLiveStreamViewer(
+  sessionId: string,
+  action: 'mute' | 'unmute' | 'kick',
+  userId: string,
+): Promise<{ ok: boolean }> {
+  try {
+    const response = await fetchJson<{ ok: boolean }>(
+      `/streaming/sessions/${encodeURIComponent(sessionId)}/moderation/${action}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      },
+    );
+    return { ok: response.ok === true };
+  } catch {
+    return { ok: false };
+  }
+}
+
+/** Fetch the muted-viewer set for a session (host only) — seeds the host
+ *  console so already-muted viewers offer "Unmute". */
+export async function fetchLiveStreamMutedViewers(
+  sessionId: string,
+): Promise<{ ok: boolean; muted: { userId: string; mutedAt: string | null }[] }> {
+  try {
+    const response = await fetchJson<{
+      ok: boolean;
+      muted?: { userId: string; mutedAt: string | null }[];
+    }>(
+      `/streaming/sessions/${encodeURIComponent(sessionId)}/moderation/viewers`,
+    );
+    return { ok: response.ok === true, muted: response.muted ?? [] };
+  } catch {
+    return { ok: false, muted: [] };
+  }
+}
+
 /** Fetch the current lot for a session from the backend. */
 async function fetchCurrentLotFromBackend(
   sessionId: string,

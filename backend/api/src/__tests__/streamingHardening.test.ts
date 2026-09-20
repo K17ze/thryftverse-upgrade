@@ -79,15 +79,22 @@ type RouteHandler = (
 
 function createMockApp() {
   const handlers = new Map<string, RouteHandler>();
-  const capture = (path: string, optsOrHandler: unknown, maybeHandler?: RouteHandler) => {
-    handlers.set(path, maybeHandler ?? (optsOrHandler as RouteHandler));
-  };
+  // Handlers are keyed by path for backwards compatibility (last
+  // registration wins, as before) AND by "METHOD path" so routes sharing a
+  // path across methods (e.g. POST vs GET /chat) stay addressable.
+  const capture =
+    (method: string) =>
+    (path: string, optsOrHandler: unknown, maybeHandler?: RouteHandler) => {
+      const handler = maybeHandler ?? (optsOrHandler as RouteHandler);
+      handlers.set(`${method} ${path}`, handler);
+      handlers.set(path, handler);
+    };
   const app = {
-    post: (p: string, o: unknown, h?: RouteHandler) => capture(p, o, h),
-    get: (p: string, o: unknown, h?: RouteHandler) => capture(p, o, h),
-    put: (p: string, o: unknown, h?: RouteHandler) => capture(p, o, h),
-    delete: (p: string, o: unknown, h?: RouteHandler) => capture(p, o, h),
-    patch: (p: string, o: unknown, h?: RouteHandler) => capture(p, o, h),
+    post: (p: string, o: unknown, h?: RouteHandler) => capture('POST')(p, o, h),
+    get: (p: string, o: unknown, h?: RouteHandler) => capture('GET')(p, o, h),
+    put: (p: string, o: unknown, h?: RouteHandler) => capture('PUT')(p, o, h),
+    delete: (p: string, o: unknown, h?: RouteHandler) => capture('DELETE')(p, o, h),
+    patch: (p: string, o: unknown, h?: RouteHandler) => capture('PATCH')(p, o, h),
   };
   return {
     app: app as unknown as Parameters<typeof registerStreamingRoutes>[0]['app'],
@@ -393,5 +400,286 @@ describe('POST /webhooks/livekit', () => {
     const body = result as { ok: boolean; event: string };
     assert.equal(body.ok, true);
     assert.equal(body.event, 'room_started');
+  });
+});
+
+// ── Host viewer moderation (mute / unmute / kick) ────────────────────────────
+//
+// Pinned behaviours:
+//   - mute/unmute/kick and the moderation viewer list are host-or-admin only
+//     (fail-closed 403), and the host can never be the target
+//   - a muted viewer cannot send chat (STREAM_CHAT_MUTED) and cannot obtain
+//     a new viewer token (STREAM_VIEWER_MUTED) — kick+mute keeps them out
+//   - unmute restores chat + viewer-token issuance
+//   - kick emits live.viewer.kicked plus the post-delete viewer count, and a
+//     kicked-but-not-muted viewer can rejoin
+//
+// The mock applies the JSONB metadata writes onto the session row so
+// subsequent fetchSessionRow calls observe the mute state like Postgres
+// would. The audit write (immutable_audit_events) is fire-and-forget in the
+// route — the empty-row mock makes it throw internally and the route's
+// .catch absorbs it.
+
+function createModerationMockDb(sessionRow: Record<string, unknown>) {
+  const queryCalls: { sql: string; args: unknown[] }[] = [];
+  const applyMuteWrite = (mutate: (muted: Record<string, unknown>) => void) => {
+    const metadata = (sessionRow.metadata ?? {}) as Record<string, unknown>;
+    const moderation = (metadata.viewerModeration ?? {}) as Record<string, unknown>;
+    const muted = { ...((moderation.muted ?? {}) as Record<string, unknown>) };
+    mutate(muted);
+    sessionRow.metadata = {
+      ...metadata,
+      viewerModeration: { ...moderation, muted },
+    };
+  };
+  const db = {
+    queryCalls,
+    query: async (sql: string, args: unknown[] = []) => {
+      queryCalls.push({ sql, args });
+      if (sql.includes('jsonb_set') && sql.includes('viewerModeration')) {
+        applyMuteWrite((muted) => {
+          muted[String(args[1])] = JSON.parse(String(args[2]));
+        });
+        return { rows: [] };
+      }
+      if (sql.includes('#-') && sql.includes('viewerModeration')) {
+        applyMuteWrite((muted) => {
+          delete muted[String(args[1])];
+        });
+        return { rows: [] };
+      }
+      if (sql.includes('INSERT INTO live_shopping_chat_messages')) {
+        return {
+          rows: [
+            {
+              id: args[0],
+              session_id: args[1],
+              user_id: args[2],
+              user_name: args[3],
+              message: args[4],
+              type: 'message',
+              is_seller: args[5],
+              moderation_state: args[6],
+              created_at: new Date().toISOString(),
+            },
+          ],
+        };
+      }
+      if (sql.includes('FROM live_shopping_sessions')) {
+        return { rows: [sessionRow] };
+      }
+      return { rows: [] };
+    },
+    connect: async () => {
+      throw new Error('not needed for these tests');
+    },
+  };
+  return db;
+}
+
+describe('host viewer moderation', () => {
+  it('rejects non-host moderation calls with 403 and never targets the host', async () => {
+    const sessionRow = SESSION_ROW({ id: 'sess-mod-1', host_user_id: 'host-mod' });
+    const db = createModerationMockDb(sessionRow);
+    const handlers = setup(db as unknown as ReturnType<typeof createMockDb>);
+
+    const asViewer = await invoke(
+      handlers,
+      '/streaming/sessions/:sessionId/moderation/mute',
+      {
+        params: { sessionId: 'sess-mod-1' },
+        body: { userId: 'viewer-x' },
+        authUser: { userId: 'viewer-y', role: 'viewer' },
+      },
+    );
+    assert.equal(asViewer.reply._sentCode, 403);
+
+    const listAsViewer = await invoke(
+      handlers,
+      '/streaming/sessions/:sessionId/moderation/viewers',
+      {
+        params: { sessionId: 'sess-mod-1' },
+        authUser: { userId: 'viewer-y', role: 'viewer' },
+      },
+    );
+    assert.equal(listAsViewer.reply._sentCode, 403);
+
+    const muteHost = await invoke(
+      handlers,
+      '/streaming/sessions/:sessionId/moderation/mute',
+      {
+        params: { sessionId: 'sess-mod-1' },
+        body: { userId: 'host-mod' },
+        authUser: { userId: 'host-mod', role: 'seller' },
+      },
+    );
+    assert.equal(muteHost.reply._sentCode, 400);
+    assert.equal(
+      (muteHost.result as { code: string }).code,
+      'CANNOT_MODERATE_HOST',
+    );
+  });
+
+  it('mute blocks chat + viewer token; unmute restores both', async () => {
+    const sessionRow = SESSION_ROW({ id: 'sess-mod-2', host_user_id: 'host-mod2' });
+    const db = createModerationMockDb(sessionRow);
+    const handlers = setup(db as unknown as ReturnType<typeof createMockDb>);
+
+    const mute = await invoke(
+      handlers,
+      '/streaming/sessions/:sessionId/moderation/mute',
+      {
+        params: { sessionId: 'sess-mod-2' },
+        body: { userId: 'viewer-m' },
+        authUser: { userId: 'host-mod2', role: 'seller' },
+      },
+    );
+    assert.equal(mute.reply._sentCode, 200);
+    assert.equal((mute.result as { muted: boolean }).muted, true);
+
+    const mutedList = await invoke(
+      handlers,
+      '/streaming/sessions/:sessionId/moderation/viewers',
+      {
+        params: { sessionId: 'sess-mod-2' },
+        authUser: { userId: 'host-mod2', role: 'seller' },
+      },
+    );
+    const listBody = mutedList.result as { muted: Array<{ userId: string }> };
+    assert.deepEqual(listBody.muted.map((m) => m.userId), ['viewer-m']);
+
+    const chatWhileMuted = await invoke(
+      handlers,
+      'POST /streaming/sessions/:sessionId/chat',
+      {
+        params: { sessionId: 'sess-mod-2' },
+        body: { message: 'hello' },
+        authUser: { userId: 'viewer-m', role: 'viewer' },
+      },
+    );
+    assert.equal(chatWhileMuted.reply._sentCode, 403);
+    assert.equal(
+      (chatWhileMuted.result as { code: string }).code,
+      'STREAM_CHAT_MUTED',
+    );
+
+    const tokenWhileMuted = await invoke(
+      handlers,
+      '/streaming/sessions/:roomId/token',
+      {
+        params: { roomId: 'sess-mod-2' },
+        body: { role: 'viewer' },
+        authUser: { userId: 'viewer-m', role: 'viewer' },
+      },
+    );
+    assert.equal(tokenWhileMuted.reply._sentCode, 403);
+    assert.equal(
+      (tokenWhileMuted.result as { code: string }).code,
+      'STREAM_VIEWER_MUTED',
+    );
+
+    const mutedEvent = capturedEvents().find(
+      (e) => e.type === 'live.viewer.muted' && e.topic === 'live.session:sess-mod-2',
+    );
+    assert.ok(mutedEvent, 'mute must broadcast live.viewer.muted on the session topic');
+    assert.equal(mutedEvent.payload.userId, 'viewer-m');
+
+    const unmute = await invoke(
+      handlers,
+      '/streaming/sessions/:sessionId/moderation/unmute',
+      {
+        params: { sessionId: 'sess-mod-2' },
+        body: { userId: 'viewer-m' },
+        authUser: { userId: 'host-mod2', role: 'seller' },
+      },
+    );
+    assert.equal(unmute.reply._sentCode, 200);
+
+    const tokenAfterUnmute = await invoke(
+      handlers,
+      '/streaming/sessions/:roomId/token',
+      {
+        params: { roomId: 'sess-mod-2' },
+        body: { role: 'viewer' },
+        authUser: { userId: 'viewer-m', role: 'viewer' },
+      },
+    );
+    assert.equal(tokenAfterUnmute.reply._sentCode, 200);
+
+    const chatAfterUnmute = await invoke(
+      handlers,
+      'POST /streaming/sessions/:sessionId/chat',
+      {
+        params: { sessionId: 'sess-mod-2' },
+        body: { message: 'hello again' },
+        authUser: { userId: 'viewer-m', role: 'viewer' },
+      },
+    );
+    assert.equal(chatAfterUnmute.reply._sentCode, 201);
+  });
+
+  it('kick ejects the viewer and lets them rejoin unless muted', async () => {
+    const sessionRow = SESSION_ROW({ id: 'sess-mod-3', host_user_id: 'host-mod3' });
+    const db = createModerationMockDb(sessionRow);
+    const handlers = setup(db as unknown as ReturnType<typeof createMockDb>);
+
+    // Two viewers join so the kick has a real post-delete count.
+    for (const viewer of ['viewer-k', 'viewer-other']) {
+      await invoke(handlers, '/streaming/sessions/:roomId/token', {
+        params: { roomId: 'sess-mod-3' },
+        body: { role: 'viewer' },
+        authUser: { userId: viewer, role: 'viewer' },
+      });
+    }
+
+    const kick = await invoke(
+      handlers,
+      '/streaming/sessions/:sessionId/moderation/kick',
+      {
+        params: { sessionId: 'sess-mod-3' },
+        body: { userId: 'viewer-k' },
+        authUser: { userId: 'host-mod3', role: 'seller' },
+      },
+    );
+    assert.equal(kick.reply._sentCode, 200);
+    const kickBody = kick.result as { kicked: boolean; viewerCount: number };
+    assert.equal(kickBody.kicked, true);
+    assert.equal(kickBody.viewerCount, 1);
+
+    const kickedEvent = capturedEvents().find(
+      (e) => e.type === 'live.viewer.kicked' && e.topic === 'live.session:sess-mod-3',
+    );
+    assert.ok(kickedEvent, 'kick must broadcast live.viewer.kicked');
+    assert.equal(kickedEvent.payload.userId, 'viewer-k');
+
+    // Not muted → a fresh viewer token lets them back in.
+    const rejoin = await invoke(handlers, '/streaming/sessions/:roomId/token', {
+      params: { roomId: 'sess-mod-3' },
+      body: { role: 'viewer' },
+      authUser: { userId: 'viewer-k', role: 'viewer' },
+    });
+    assert.equal(rejoin.reply._sentCode, 200);
+
+    // Kick + mute keeps them out.
+    await invoke(handlers, '/streaming/sessions/:sessionId/moderation/mute', {
+      params: { sessionId: 'sess-mod-3' },
+      body: { userId: 'viewer-k' },
+      authUser: { userId: 'host-mod3', role: 'seller' },
+    });
+    await invoke(handlers, '/streaming/sessions/:sessionId/moderation/kick', {
+      params: { sessionId: 'sess-mod-3' },
+      body: { userId: 'viewer-k' },
+      authUser: { userId: 'host-mod3', role: 'seller' },
+    });
+    const rejoinMuted = await invoke(handlers, '/streaming/sessions/:roomId/token', {
+      params: { roomId: 'sess-mod-3' },
+      body: { role: 'viewer' },
+      authUser: { userId: 'viewer-k', role: 'viewer' },
+    });
+    assert.equal(rejoinMuted.reply._sentCode, 403);
+    assert.equal(
+      (rejoinMuted.result as { code: string }).code,
+      'STREAM_VIEWER_MUTED',
+    );
   });
 });

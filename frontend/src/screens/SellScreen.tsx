@@ -32,7 +32,8 @@ import { EmptyState } from '../components/EmptyState';
 import { ListingModeSelector } from '../components/listing/ListingModeSelector';
 import { ListingPublishFooter } from '../components/listing/ListingPublishFooter';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
-import { t } from '../i18n';
+import { t, getI18nLocale } from '../i18n';
+import { formatDateRange } from '../utils/dateFormat';
 import { useSellScreenData, useSellScreenForm, useSellScreenActions } from '../hooks/sell';
 import AuctionFieldsSection from '../components/sell/AuctionFieldsSection';
 import ShippingPickerSheet from '../components/sell/ShippingPickerSheet';
@@ -88,6 +89,10 @@ export default function SellScreen() {
     aiListingAssistEnabled,
     pickerTaxonomy,
   } = data;
+
+  // Freshness window for the sold-comparables hint — '' when the comps
+  // carry no usable date range (client-derived fallback, missing fields).
+  const soldCompsWindow = formatDateRange(soldComps.dateFrom, soldComps.dateTo, getI18nLocale());
 
   const {
     title, desc, price, originalPrice, tags, tagInput, category, subcategory, brand, size, condition,
@@ -623,7 +628,9 @@ export default function SellScreen() {
                       <View style={styles.soldCompsHint}>
                         <AppIcon name="bag-handle-outline" size={IconSize.micro} color="textMuted" opticalCenter accessible={false} />
                         <Text style={[styles.soldCompsText, themed.soldCompsText]}>
-                          {t('listing.create.soldCompsRange', { min: `${currencySymbol}${soldComps.minPrice.toFixed(0)}`, max: `${currencySymbol}${soldComps.maxPrice.toFixed(0)}`, count: soldComps.sampleSize })}
+                          {soldCompsWindow
+                            ? t('comps.soldRangeWindow', { min: `${currencySymbol}${soldComps.minPrice.toFixed(0)}`, max: `${currencySymbol}${soldComps.maxPrice.toFixed(0)}`, count: soldComps.sampleSize, window: soldCompsWindow })
+                            : t('listing.create.soldCompsRange', { min: `${currencySymbol}${soldComps.minPrice.toFixed(0)}`, max: `${currencySymbol}${soldComps.maxPrice.toFixed(0)}`, count: soldComps.sampleSize })}
                         </Text>
                       </View>
                       {soldComps.medianPrice != null && (

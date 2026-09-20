@@ -49,26 +49,32 @@ function findMockListingDetail(listingId: string): ListingDetailResult | null {
   };
 }
 
+/**
+ * Shared fetcher for `queryKeys.listing.detail` — the single canonical read
+ * for GET /listings/:id. Reused by useListingDetail (PDP) and the look-tag
+ * hydrator so every surface shares one cache entry per listing.
+ */
+export async function fetchListingDetailResult(listingId: string): Promise<ListingDetailResult> {
+  try {
+    const res = await fetchListingByIdFromApi(listingId);
+    if (!res.ok || !res.listing) {
+      throw new Error(res.error || 'Listing not found');
+    }
+    return {
+      listing: mapBackendListingToListing(res.listing),
+      commerce: res.commerce,
+    } as ListingDetailResult;
+  } catch (error: unknown) {
+    const mockFallback = findMockListingDetail(listingId);
+    if (mockFallback) return mockFallback;
+    throw error;
+  }
+}
+
 export function useListingDetail(listingId: string | undefined) {
   return useQuery({
     queryKey: listingId ? queryKeys.listing.detail(listingId) : ['listing', 'detail', 'none'],
-    queryFn: async () => {
-      if (!listingId) return null;
-      try {
-        const res = await fetchListingByIdFromApi(listingId);
-        if (!res.ok || !res.listing) {
-          throw new Error(res.error || 'Listing not found');
-        }
-        return {
-          listing: mapBackendListingToListing(res.listing),
-          commerce: res.commerce,
-        } as ListingDetailResult;
-      } catch (error: unknown) {
-        const mockFallback = findMockListingDetail(listingId);
-        if (mockFallback) return mockFallback;
-        throw error;
-      }
-    },
+    queryFn: () => (listingId ? fetchListingDetailResult(listingId) : null),
     enabled: !!listingId,
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,

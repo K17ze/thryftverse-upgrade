@@ -19,17 +19,21 @@ import { track } from '../../analytics';
 import { isDbAvailable } from '../../storage/db';
 import {
   drainMoodboardOutbox,
+  enqueueMoodboardOperation,
   getMoodboardOutboxPendingCount } from '../../storage/moodboardOutbox';
+import { createStableId } from '../../utils/createStableId';
 import {
   fetchMoodboardDetail,
   fetchMoodboardThemes,
   fetchPickerItems,
   createMoodboard,
   getThemeById,
+  submitMoodboardOperation,
   type Moodboard,
   type MoodboardItem,
   type MoodboardTheme,
   type MoodboardOperationResponse } from '../../services/moodboardApi';
+import type { MoodboardQueuedOp } from './moodboardHistory';
 
 export const DEFAULT_THEME_ID = 'theme-linen';
 
@@ -293,6 +297,63 @@ export function useMoodboardBoard({ moodboardId }: { moodboardId?: string }) {
     [haptic, reconcileBoard],
   );
 
+  // ── Submit a batch of operations through the canonical write path ──
+  // Single submission route for multi-op changes (conflict resolution,
+  // undo/redo): when the durable outbox is available the ops are enqueued
+  // with the current base revision (the drain rebases the tail after each
+  // applied op) and flushed immediately — no-oping while offline so queued
+  // rows flush on reconnect. Without a local DB the ops are submitted
+  // online in order, advancing the base revision from each applied
+  // response and stopping on conflict/forbidden.
+  const submitBoardOps = useCallback(
+    async (ops: MoodboardQueuedOp[], baseRev?: number) => {
+      if (!moodboard) return;
+      if (ops.length === 0) {
+        setSyncStatus('idle');
+        return;
+      }
+      setSyncStatus('syncing');
+      setConflictDetail(null);
+      const base = baseRev ?? boardRevisionRef.current;
+
+      if (isDbAvailable()) {
+        for (const op of ops) {
+          await enqueueMoodboardOperation({
+            operationId: op.operationId ?? createStableId('op'),
+            boardId: moodboard.id,
+            operation: op.operation,
+            payload: op.payload,
+            baseRev: base });
+        }
+        await flushOutbox();
+        return;
+      }
+
+      let nextBaseRev = base;
+      for (const op of ops) {
+        try {
+          const response = await submitMoodboardOperation(moodboard.id, {
+            clientOperationId: op.operationId ?? createStableId('op'),
+            baseRevision: nextBaseRev,
+            type: op.operation,
+            itemId: typeof op.payload.itemId === 'string' ? op.payload.itemId : undefined,
+            payload: op.payload });
+          if (response.outcome === 'applied' || response.outcome === 'duplicate') {
+            nextBaseRev = response.revision;
+            boardRevisionRef.current = response.revision;
+          }
+          handleOperationResponse(response);
+          if (response.outcome === 'conflict' || response.outcome === 'forbidden') break;
+        } catch {
+          setSyncStatus('error');
+          haptic.error();
+          break;
+        }
+      }
+    },
+    [moodboard, haptic, flushOutbox, handleOperationResponse],
+  );
+
   return {
     moodboard,
     setMoodboard,
@@ -316,6 +377,8 @@ export function useMoodboardBoard({ moodboardId }: { moodboardId?: string }) {
     loadAll,
     reconcileBoard,
     handleOperationResponse,
+    /** Push a batch of LWW ops via the outbox (or sequentially online). */
+    submitBoardOps,
     /** Re-run the outbox drain + reconcile. Wired to the sync-error retry. */
     retrySync: flushOutbox };
 }
