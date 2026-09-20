@@ -848,7 +848,7 @@ export default function SellScreen() {
               <View style={styles.fieldLabelRow}>
                 <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.description')}</Text>
                 {desc.trim().length >= 10 ? (
-                  <AppIcon name="checkmark-circle" size={12} color="successText" opticalCenter accessible={false} />
+                  <AppIcon name="checkmark-circle" size={IconSize.micro} color="successText" opticalCenter accessible={false} />
                 ) : (
                   <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                 )}
@@ -895,7 +895,7 @@ export default function SellScreen() {
             <Text style={[styles.sectionHeading, themed.sectionHeading]}>{t('listing.create.shipping')}</Text>
             {!shippingMethod && (
               <View style={styles.contextualHintRow}>
-                <AppIcon name="car-outline" size={16} color="brand" opticalCenter accessible={false} />
+                <AppIcon name="car-outline" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
                 <Text style={[styles.contextualHintText, { color: colors.textSecondary }]}>
                   {t('listing.create.shippingMethodHint')}
                 </Text>
@@ -903,7 +903,7 @@ export default function SellScreen() {
             )}
             {shippingMethod && !shippingPayer && (
               <View style={styles.contextualHintRow}>
-                <AppIcon name="card-outline" size={16} color="brand" opticalCenter accessible={false} />
+                <AppIcon name="card-outline" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
                 <Text style={[styles.contextualHintText, { color: colors.textSecondary }]}>
                   {t('listing.create.shippingPayerHint')}
                 </Text>
@@ -925,7 +925,7 @@ export default function SellScreen() {
                   {formatShippingSummary(shippingMethod, shippingPayer)}
                 </Text>
               </View>
-              <AppIcon name="forward" size={16} color="textMuted" opticalCenter accessible={false} />
+              <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
             </AnimatedPressable>
           </View>
 
@@ -965,7 +965,7 @@ export default function SellScreen() {
                       accessibilityRole="button"
                       accessibilityLabel="Remove authentication photo"
                     >
-                      <AppIcon name="close-circle" size={22} color="textPrimary" opticalCenter accessible={false} />
+                      <AppIcon name="close-circle" size={IconSize.lg} color="textPrimary" opticalCenter accessible={false} />
                     </AnimatedPressable>
                   </View>
                 ))}
@@ -978,7 +978,7 @@ export default function SellScreen() {
                     accessibilityRole="button"
                     accessibilityLabel="Add authentication photo"
                   >
-                    <AppIcon name="add" size={22} color="textMuted" opticalCenter accessible={false} />
+                    <AppIcon name="add" size={IconSize.lg} color="textMuted" opticalCenter accessible={false} />
                   </AnimatedPressable>
                 )}
               </View>
@@ -991,7 +991,7 @@ export default function SellScreen() {
               only when the pipeline is idle. */}
           {errorMsg && (
             <View style={styles.inlineErrorRow}>
-              <AppIcon name="alert-circle-outline" size={16} color="dangerText" opticalCenter accessible={false} />
+              <AppIcon name="alert-circle-outline" size={IconSize.sm} color="dangerText" opticalCenter accessible={false} />
               <Text style={[styles.inlineErrorText, themed.inlineErrorText]}>{errorMsg}</Text>
             </View>
           )}
@@ -1006,7 +1006,7 @@ export default function SellScreen() {
           <View style={styles.completenessRow}>
             <AppIcon
               name={completeness.canActivate ? 'checkmark-circle' : 'alert-circle-outline'}
-              size={16}
+              size={IconSize.sm}
               color={completeness.canActivate ? colors.successText : colors.warningText}
               opticalCenter
               accessible={false}
@@ -1035,7 +1035,7 @@ export default function SellScreen() {
             <View style={styles.reviewSummaryRow}>
               <AppIcon
                 name={listingMode === 'auction' ? 'hammer-outline' : 'people-outline'}
-                size={16}
+                size={IconSize.sm}
                 color={colors.textSecondary}
                 opticalCenter
                 accessible={false}

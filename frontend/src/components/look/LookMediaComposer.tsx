@@ -10,9 +10,10 @@ import {
   PanResponder,
   ScrollView,
   ViewStyle } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { CachedImage } from '../CachedImage';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import {
   Space,
@@ -304,7 +305,7 @@ export function LookMediaComposer({
             <ActivityIndicator size="large" color={colors.brand} />
           ) : (
             <>
-              <Ionicons name="camera-outline" size={40} color={colors.textMuted} />
+              <AppIcon name="camera-outline" size={IconSize.hero} color="textMuted" accessible={false} />
               <Text style={styles.placeholderTitle}>Add your outfit photo</Text>
               <Text style={styles.placeholderSubtitle}>
                 {multiMode
@@ -321,7 +322,7 @@ export function LookMediaComposer({
             accessibilityRole="button"
             accessibilityLabel="Pick from gallery"
           >
-            <Ionicons name="images-outline" size={20} color={colors.textSecondary} />
+            <AppIcon name="images-outline" size={IconSize.md} color="textSecondary" accessible={false} />
             <Text style={styles.sourceBtnText}>Gallery</Text>
           </Pressable>
           <Pressable
@@ -330,7 +331,7 @@ export function LookMediaComposer({
             accessibilityRole="button"
             accessibilityLabel="Take a photo"
           >
-            <Ionicons name="camera-outline" size={20} color={colors.textSecondary} />
+            <AppIcon name="camera-outline" size={IconSize.md} color="textSecondary" accessible={false} />
             <Text style={styles.sourceBtnText}>Camera</Text>
           </Pressable>
         </View>
@@ -382,7 +383,7 @@ export function LookMediaComposer({
                     accessibilityRole="button"
                     accessibilityLabel="Remove tag"
                   >
-                    <Ionicons name="close-circle" size={20} color={colors.dangerText} />
+                    <AppIcon name="close-circle" size={IconSize.md} color="dangerText" accessible={false} />
                   </Pressable>
                 </View>
               )}
@@ -403,7 +404,7 @@ export function LookMediaComposer({
             accessibilityRole="button"
             accessibilityLabel="Change photo"
           >
-            <Ionicons name="swap-horizontal" size={16} color={colors.scrimTextPrimary} />
+            <AppIcon name="swap-horizontal" size={IconSize.sm} color="scrimTextPrimary" accessible={false} />
             <Text style={styles.changePhotoText}>Change</Text>
           </Pressable>
         )}
@@ -510,7 +511,7 @@ function ThumbnailStrip({
             accessibilityRole="button"
             accessibilityLabel="Add more photos"
           >
-            <Ionicons name="add" size={24} color={colors.textSecondary} />
+            <AppIcon name="add" size={IconSize.lg} color="textSecondary" accessible={false} />
           </Pressable>
         )}
       </ScrollView>
@@ -645,7 +646,7 @@ function ThumbItem({
           />
           {item.isVideo && (
             <View style={styles.videoBadge}>
-              <Ionicons name="videocam" size={11} color={colors.scrimTextPrimary} />
+              <AppIcon name="videocam" variant="filled" size={IconSize.micro} color="scrimTextPrimary" accessible={false} />
             </View>
           )}
         </Pressable>
@@ -658,7 +659,7 @@ function ThumbItem({
             accessibilityRole="button"
             accessibilityLabel={`Remove photo ${index + 1}`}
           >
-            <Ionicons name="close" size={14} color={colors.scrimTextPrimary} />
+            <AppIcon name="close" size={IconSize.xs} color="scrimTextPrimary" accessible={false} />
           </Pressable>
         )}
 
@@ -672,7 +673,7 @@ function ThumbItem({
               accessibilityRole="button"
               accessibilityLabel="Move photo earlier"
             >
-              <Ionicons name="chevron-back" size={16} color={colors.scrimTextPrimary} />
+              <AppIcon name="chevron-back" size={IconSize.sm} color="scrimTextPrimary" accessible={false} />
             </Pressable>
             <Pressable
               style={styles.reorderArrowBtn}
@@ -682,7 +683,7 @@ function ThumbItem({
               accessibilityRole="button"
               accessibilityLabel="Move photo later"
             >
-              <Ionicons name="chevron-forward" size={16} color={colors.scrimTextPrimary} />
+              <AppIcon name="chevron-forward" size={IconSize.sm} color="scrimTextPrimary" accessible={false} />
             </Pressable>
           </View>
         )}

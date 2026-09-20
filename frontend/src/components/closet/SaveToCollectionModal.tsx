@@ -7,9 +7,10 @@ import {
   FlatList,
   Keyboard,
   Pressable } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Space, Radius } from '../../theme/designTokens';
+import { IconSize } from '../../theme/iconTokens';
+import { AppIcon } from '../common/AppIcon';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -148,7 +149,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
             <CachedImage uri={cover} style={styles.collectionThumb} contentFit="cover" />
           ) : (
             <View style={[styles.collectionThumbEmpty, { backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name="folder-open-outline" size={18} color={colors.textMuted} />
+              <AppIcon name="folder-open-outline" size={18} color="textMuted" accessible={false} />
             </View>
           )}
           <View style={styles.collectionInfo}>
@@ -159,9 +160,9 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
           </View>
         </View>
         {selected ? (
-          <Ionicons name="checkmark-circle" size={24} color={colors.brand} />
+          <AppIcon name="checkmark-circle" size={IconSize.lg} color="brand" accessible={false} />
         ) : (
-          <Ionicons name="ellipse-outline" size={24} color={colors.border} />
+          <AppIcon name="ellipse-outline" size={IconSize.lg} color="border" accessible={false} />
         )}
       </Pressable>
     );
@@ -190,7 +191,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
               accessibilityRole="button"
               style={({ pressed }) => pressed && { opacity: 0.5 }}
             >
-              <Ionicons name="close" size={24} color={colors.textPrimary} />
+              <AppIcon name="close" size={IconSize.lg} color="textPrimary" accessible={false} />
             </Pressable>
           </View>
 
@@ -201,7 +202,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
                 <CachedImage uri={item.images[0]} style={styles.itemThumb} contentFit="cover" />
               ) : (
                 <View style={[styles.itemThumbEmpty, { backgroundColor: colors.surfaceAlt }]}>
-                  <Ionicons name="image-outline" size={20} color={colors.textMuted} />
+                  <AppIcon name="image-outline" size={IconSize.md} color="textMuted" accessible={false} />
                 </View>
               )}
               <View style={styles.itemInfo}>
@@ -221,10 +222,12 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
             accessibilityLabel={saved ? 'Remove from saved items' : 'Save for later'}
           >
             <View style={styles.savedRowLeft}>
-              <Ionicons
-                name={saved ? 'bookmark' : 'bookmark-outline'}
-                size={20}
-                color={saved ? colors.successText : colors.textPrimary}
+              <AppIcon
+                name="bookmark"
+                focused={saved}
+                size={IconSize.md}
+                color={saved ? 'successText' : 'textPrimary'}
+                accessible={false}
               />
               <View>
                 <Text style={[styles.savedRowTitle, { color: colors.textPrimary }]}>
@@ -235,10 +238,11 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
                 </Text>
               </View>
             </View>
-            <Ionicons
+            <AppIcon
               name={saved ? 'checkmark-circle' : 'ellipse-outline'}
-              size={24}
-              color={saved ? colors.successText : colors.border}
+              size={IconSize.lg}
+              color={saved ? 'successText' : 'border'}
+              accessible={false}
             />
           </Pressable>
 
@@ -294,7 +298,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
               accessibilityRole="button"
               accessibilityLabel="Create new collection"
             >
-              <Ionicons name="add-circle-outline" size={20} color={colors.brand} />
+              <AppIcon name="add-circle-outline" size={IconSize.md} color="brand" accessible={false} />
               <Text style={[styles.createTriggerText, { color: colors.brand }]}>
                 Create New Collection
               </Text>

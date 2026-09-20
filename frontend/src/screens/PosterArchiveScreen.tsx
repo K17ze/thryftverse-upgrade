@@ -10,11 +10,12 @@ import {
   useWindowDimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
 import { Space, Radius, Typography, Control, Stroke, Elevation } from '../theme/designTokens';
+import { IconSize } from '../theme/iconTokens';
+import { AppIcon } from '../components/common/AppIcon';
 import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -197,13 +198,13 @@ export default function PosterArchiveScreen({ navigation }: Props) {
             <View style={styles.cardOverlayRight}>
               {viewCount > 0 && (
                 <View style={styles.viewCountPill}>
-                  <Ionicons name="eye-outline" size={11} color={colors.scrimTextPrimary} />
+                  <AppIcon name="eye-outline" size={IconSize.micro} color="scrimTextPrimary" accessible={false} />
                   <Text style={styles.viewCountText}>{viewCount}</Text>
                 </View>
               )}
               {item.totalFrameCount > 1 && (
                 <View style={styles.frameCountPill}>
-                  <Ionicons name="layers" size={12} color={colors.scrimTextPrimary} />
+                  <AppIcon name="layers" variant="filled" size={IconSize.micro} color="scrimTextPrimary" accessible={false} />
                   <Text style={styles.frameCountText}>{item.totalFrameCount}</Text>
                 </View>
               )}
@@ -225,7 +226,7 @@ export default function PosterArchiveScreen({ navigation }: Props) {
             accessibilityRole="button"
             accessibilityHint="Deletes this archived story"
           >
-            <Ionicons name="trash-outline" size={16} color={colors.textMuted} />
+            <AppIcon name="trash-outline" size={IconSize.sm} color="textMuted" accessible={false} />
           </AnimatedPressable>
         </View>
       </AnimatedPressable>
@@ -258,17 +259,17 @@ export default function PosterArchiveScreen({ navigation }: Props) {
             />
           ) : (
             <View style={[styles.cardPlaceholder, { backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name="bookmark-outline" size={28} color={colors.textMuted} />
+              <AppIcon name="bookmark-outline" size={IconSize.xl} color="textMuted" accessible={false} />
             </View>
           )}
           <View style={styles.cardOverlay}>
             <View style={[styles.statusPill, styles.statusHighlight]}>
-              <Ionicons name="bookmark-outline" size={10} color={colors.scrimTextPrimary} />
+              <AppIcon name="bookmark-outline" size={IconSize.micro} color="scrimTextPrimary" accessible={false} />
               <Text style={styles.statusText}>Highlight</Text>
             </View>
             {frameCount > 1 && (
               <View style={styles.frameCountPill}>
-                <Ionicons name="layers" size={12} color={colors.scrimTextPrimary} />
+                <AppIcon name="layers" variant="filled" size={IconSize.micro} color="scrimTextPrimary" accessible={false} />
                 <Text style={styles.frameCountText}>{frameCount}</Text>
               </View>
             )}
@@ -298,7 +299,7 @@ export default function PosterArchiveScreen({ navigation }: Props) {
             accessibilityHint="Returns to the previous screen"
             accessibilityRole="button"
           >
-            <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
+            <AppIcon name="chevron-back" size={IconSize.lg} color="textPrimary" accessible={false} />
           </AnimatedPressable>
           <Text style={styles.topTitle}>Archive</Text>
           <View style={styles.iconBtn} />
@@ -336,14 +337,14 @@ export default function PosterArchiveScreen({ navigation }: Props) {
             accessibilityHint="Returns to the previous screen"
             accessibilityRole="button"
           >
-            <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
+            <AppIcon name="chevron-back" size={IconSize.lg} color="textPrimary" accessible={false} />
           </AnimatedPressable>
           <Text style={styles.topTitle}>Archive</Text>
           <View style={styles.iconBtn} />
         </View>
         <View style={styles.errorBody}>
           <View style={styles.errorIconWrap}>
-            <Ionicons name="cloud-offline-outline" size={36} color={colors.textMuted} />
+            <AppIcon name="cloud-offline-outline" size={IconSize.hero} color="textMuted" accessible={false} />
           </View>
           <Text style={styles.errorTitle}>Could not load archive</Text>
           <Text style={styles.errorHint}>Check your connection and try again.</Text>
@@ -357,7 +358,7 @@ export default function PosterArchiveScreen({ navigation }: Props) {
             accessibilityHint="Reloads the archive"
             accessibilityRole="button"
           >
-            <Ionicons name="refresh-outline" size={18} color={colors.textInverse} />
+            <AppIcon name="refresh-outline" size={18} color="textInverse" accessible={false} />
             <Text style={styles.retryBtnText}>Try again</Text>
           </AnimatedPressable>
         </View>
@@ -380,7 +381,7 @@ export default function PosterArchiveScreen({ navigation }: Props) {
           accessibilityHint="Returns to the previous screen"
           accessibilityRole="button"
         >
-          <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
+          <AppIcon name="chevron-back" size={IconSize.lg} color="textPrimary" accessible={false} />
         </AnimatedPressable>
         <Text style={styles.topTitle}>My Poster Archive</Text>
         <View style={styles.iconBtn} />
@@ -420,7 +421,7 @@ export default function PosterArchiveScreen({ navigation }: Props) {
       {filter !== 'highlights' && (
         <View style={styles.searchRow}>
           <View style={styles.searchBar}>
-            <Ionicons name="search-outline" size={18} color={colors.textMuted} />
+            <AppIcon name="search-outline" size={18} color="textMuted" accessible={false} />
             <TextInput
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -440,7 +441,7 @@ export default function PosterArchiveScreen({ navigation }: Props) {
                 accessibilityLabel="Clear search"
                 accessibilityRole="button"
               >
-                <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+                <AppIcon name="close-circle" size={18} color="textMuted" accessible={false} />
               </AnimatedPressable>
             )}
           </View>
@@ -463,10 +464,11 @@ export default function PosterArchiveScreen({ navigation }: Props) {
         ListEmptyComponent={
           <View style={styles.emptyBody}>
             <View style={styles.emptyIconWrap}>
-              <Ionicons
+              <AppIcon
                 name={searchQuery.trim().length > 0 ? 'search-outline' : 'archive-outline'}
-                size={36}
-                color={colors.textMuted}
+                size={IconSize.hero}
+                color="textMuted"
+                accessible={false}
               />
             </View>
             <Text style={styles.emptyTitle}>

@@ -6,7 +6,6 @@ import {
   TextInput,
   ActivityIndicator } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
   useAnimatedStyle,
   withTiming,
@@ -24,6 +23,8 @@ import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/fla
 import { EmptyState } from '../components/EmptyState';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 import { AppInput } from '../components/ui/AppInput';
 import { BottomSheet } from '../components/BottomSheet';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
@@ -293,7 +294,7 @@ export default function BulkListingScreen({ navigation }: Props) {
             accessibilityRole="button"
             accessibilityLabel="Validate all draft listings"
           >
-            <Ionicons name="checkmark-done-outline" size={16} color={colors.brand} />
+            <AppIcon name="checkmark-done-outline" size={IconSize.sm} color="brand" accessible={false} />
             <Text style={[styles.bulkActionText, { color: colors.brand }]}>Validate all</Text>
           </AnimatedPressable>
           <AnimatedPressable
@@ -303,7 +304,7 @@ export default function BulkListingScreen({ navigation }: Props) {
             accessibilityRole="button"
             accessibilityLabel="Publish all ready listings"
           >
-            <Ionicons name="cloud-upload-outline" size={16} color={canPublish ? colors.successText : colors.textMuted} />
+            <AppIcon name="cloud-upload-outline" size={IconSize.sm} color={canPublish ? 'successText' : 'textMuted'} accessible={false} />
             <Text style={[styles.bulkActionText, { color: canPublish ? colors.successText : colors.textMuted }]}>Publish all</Text>
           </AnimatedPressable>
           <AnimatedPressable
@@ -313,7 +314,7 @@ export default function BulkListingScreen({ navigation }: Props) {
             accessibilityRole="button"
             accessibilityLabel="Clear all draft listings"
           >
-            <Ionicons name="trash-outline" size={16} color={colors.dangerText} />
+            <AppIcon name="trash-outline" size={IconSize.sm} color="dangerText" accessible={false} />
             <Text style={[styles.bulkActionText, { color: colors.dangerText }]}>Clear all</Text>
           </AnimatedPressable>
         </View>
@@ -351,7 +352,7 @@ export default function BulkListingScreen({ navigation }: Props) {
               accessibilityRole="button"
               accessibilityLabel="Add a new draft listing"
             >
-              <Ionicons name="add" size={22} color={colors.brand} />
+              <AppIcon name="add" size={IconSize.lg} color="brand" accessible={false} />
             </AnimatedPressable>
           }
         />
@@ -495,7 +496,7 @@ const BulkRow = React.memo(function BulkRow({
           <CachedImage uri={item.images[0]} style={styles.thumb} containerStyle={styles.thumbWrap} contentFit="cover" />
         ) : (
           <View style={[styles.thumbWrap, styles.thumbFallback]}>
-            <Ionicons name="image-outline" size={18} color={colors.textMuted} />
+            <AppIcon name="image-outline" size={18} color="textMuted" accessible={false} />
           </View>
         )}
 
@@ -536,7 +537,7 @@ const BulkRow = React.memo(function BulkRow({
         </View>
 
         <Reanimated.View style={chevronStyle}>
-          <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
+          <AppIcon name="chevron-down" size={18} color="textMuted" accessible={false} />
         </Reanimated.View>
       </AnimatedPressable>
 
@@ -640,7 +641,7 @@ function DraftForm({
                 accessibilityRole="button"
                 accessibilityLabel="Remove photo"
               >
-                <Ionicons name="close" size={12} color={colors.textInverse} />
+                <AppIcon name="close" size={IconSize.micro} color="textInverse" accessible={false} />
               </AnimatedPressable>
             </View>
           ))}
@@ -651,7 +652,7 @@ function DraftForm({
               accessibilityRole="button"
               accessibilityLabel="Add photos"
             >
-              <Ionicons name="camera-outline" size={20} color={colors.brand} />
+              <AppIcon name="camera-outline" size={IconSize.md} color="brand" accessible={false} />
               <Text style={[styles.photoAddText, { color: colors.brand }]}>Add</Text>
             </AnimatedPressable>
           )}
@@ -710,7 +711,7 @@ function DraftForm({
             <Text style={[styles.pickerValue, { color: form.category ? colors.textPrimary : colors.textMuted }]}>
               {form.category || 'Select…'}
             </Text>
-            <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+            <AppIcon name="chevron-down" size={IconSize.sm} color="textMuted" accessible={false} />
           </View>
         </AnimatedPressable>
         <AnimatedPressable
@@ -724,7 +725,7 @@ function DraftForm({
             <Text style={[styles.pickerValue, { color: form.condition ? colors.textPrimary : colors.textMuted }]}>
               {form.condition || 'Select…'}
             </Text>
-            <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+            <AppIcon name="chevron-down" size={IconSize.sm} color="textMuted" accessible={false} />
           </View>
         </AnimatedPressable>
       </View>

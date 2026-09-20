@@ -20,8 +20,9 @@ import {
   StyleSheet,
   Text,
   ScrollView } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { Radius, Space, Typography, Stroke } from '../../../theme/designTokens';
+import { IconSize, type IoniconsGlyphName } from '../../../theme/iconTokens';
+import { AppIcon } from '../../common/AppIcon';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
@@ -42,7 +43,7 @@ import { isLightColor } from '../shared/colorUtils';
 const ANIMATION_OPTIONS: {
   key: TextAnimation;
   label: string;
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: IoniconsGlyphName;
 }[] = [
   { key: 'none', label: 'None', icon: 'remove-outline' },
   { key: 'fade', label: 'Fade', icon: 'eye-outline' },
@@ -158,7 +159,7 @@ export function TextEditSheet({
             accessibilityRole="button"
             accessibilityState={{ selected: layer.backgroundColor === c }}
           >
-            {!c && <Ionicons name="close" size={12} color={colors.textSecondary} />}
+            {!c && <AppIcon name="close" size={IconSize.micro} color="textSecondary" accessible={false} />}
           </AnimatedPressable>
         ))}
       </ScrollView>
@@ -180,10 +181,11 @@ export function TextEditSheet({
             accessibilityRole="button"
             accessibilityState={{ selected: (layer.animation ?? 'none') === a.key }}
           >
-            <Ionicons
+            <AppIcon
               name={a.icon}
-              size={14}
-              color={(layer.animation ?? 'none') === a.key ? colors.textPrimary : colors.textSecondary}
+              size={IconSize.xs}
+              color={(layer.animation ?? 'none') === a.key ? 'textPrimary' : 'textSecondary'}
+              accessible={false}
             />
             <Text
               style={[
@@ -215,10 +217,11 @@ export function TextEditSheet({
           accessibilityRole="switch"
           accessibilityState={{ checked: layer.strokeEnabled ?? false }}
         >
-          <Ionicons
+          <AppIcon
             name={(layer.strokeEnabled ?? false) ? 'checkmark' : 'close'}
-            size={16}
-            color={(layer.strokeEnabled ?? false) ? colors.textPrimary : colors.textSecondary}
+            size={IconSize.sm}
+            color={(layer.strokeEnabled ?? false) ? 'textPrimary' : 'textSecondary'}
+            accessible={false}
           />
         </AnimatedPressable>
       </View>
@@ -248,10 +251,11 @@ export function TextEditSheet({
                 accessibilityState={{ selected: (layer.strokeColor ?? '#000000') === c }}
               >
                 {(layer.strokeColor ?? '#000000') === c && (
-                  <Ionicons
+                  <AppIcon
                     name="checkmark"
-                    size={14}
+                    size={IconSize.xs}
                     color={isLightColor(c) ? '#000' : '#fff'}
+                    accessible={false}
                   />
                 )}
               </AnimatedPressable>
@@ -272,7 +276,7 @@ export function TextEditSheet({
                 accessibilityLabel="Decrease outline width"
                 accessibilityRole="button"
               >
-                <Ionicons name="remove" size={16} color={colors.textSecondary} />
+                <AppIcon name="remove" variant="filled" size={IconSize.sm} color="textSecondary" accessible={false} />
               </AnimatedPressable>
               <Text style={styles.strokeWidthLabel}>
                 {layer.strokeWidth ?? STROKE_WIDTH_DEFAULT}
@@ -287,7 +291,7 @@ export function TextEditSheet({
                 accessibilityLabel="Increase outline width"
                 accessibilityRole="button"
               >
-                <Ionicons name="add" size={16} color={colors.textPrimary} />
+                <AppIcon name="add" size={IconSize.sm} color="textPrimary" accessible={false} />
               </AnimatedPressable>
             </View>
           </View>
@@ -311,10 +315,11 @@ export function TextEditSheet({
           accessibilityRole="switch"
           accessibilityState={{ checked: layer.shadow ?? true }}
         >
-          <Ionicons
+          <AppIcon
             name={(layer.shadow ?? true) ? 'checkmark' : 'close'}
-            size={16}
-            color={(layer.shadow ?? true) ? colors.textPrimary : colors.textSecondary}
+            size={IconSize.sm}
+            color={(layer.shadow ?? true) ? 'textPrimary' : 'textSecondary'}
+            accessible={false}
           />
         </AnimatedPressable>
       </View>
