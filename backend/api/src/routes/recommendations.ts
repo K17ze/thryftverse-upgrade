@@ -9,6 +9,24 @@ import {
   reachExcludedSql,
   reachJoinSql,
 } from '../lib/sellerReach.js';
+import {
+  hasMediaEmbeddingVectorColumn,
+  nearestMediaEmbeddings,
+} from '../lib/mediaEmbeddings.js';
+import { deserialiseEmbedding } from '../workers/handlers/mediaEmbeddingUtils.js';
+
+// Interaction actions that mark a listing as a positive item-to-item
+// retrieval anchor. Negative/weak signals (rapid_skip, not_interested,
+// unsave, report_content, …) never seed similarity retrieval.
+const POSITIVE_ANCHOR_ACTIONS = new Set<InteractionAction>([
+  'wishlist', 'save', 'share', 'purchase',
+  'qualified_detail_view', 'offer_submitted', 'add_to_basket',
+  'checkout_started',
+]);
+
+// Upper bound on the merged multi-source pool — keeps the decision-service
+// payload bounded even when every auxiliary source returns at cap.
+const MERGED_CANDIDATE_POOL_CAP = 800;
 
 const POLICY_VERSION = 'recommendation-heuristic-v2.0';
 const FALLBACK_POLICY_VERSION = 'recommendation-fallback-v2.0';
@@ -314,6 +332,79 @@ function fallbackDecision(
   };
 }
 
+/**
+ * Candidate-pool SQL shared by every retrieval source (R19). All sources
+ * apply the identical safety predicates — active status, own-listing
+ * exclusion, seller reach exclusion — and differ only in extra predicate,
+ * ordering, and cap, so per-source lineage stays truthful.
+ */
+function candidateListingsSql(
+  extraPredicate: string,
+  orderByClause: string,
+  limit: number,
+): string {
+  return `WITH interaction_counts AS (
+     SELECT listing_id, COUNT(*)::text AS interaction_count
+     FROM interactions
+     WHERE created_at >= NOW() - INTERVAL '30 days'
+     GROUP BY listing_id
+   ),
+   seller_ratings AS (
+     -- Reputation feature is in shadow mode (Phase 0 contract-truth repair).
+     -- Raw AVG/5 was an unsafe trust signal: one 5-star review produced a
+     -- perfect 1.0 trust score while a new seller got 0.5, creating
+     -- incumbent bias and a gaming surface. Until a calibrated Bayesian
+     -- feature with fairness guardrails is shadow-tested, all sellers
+     -- receive a neutral 0.5 so ranking is driven by other features only.
+     SELECT seller_id, NULL::text AS seller_rating
+     FROM (SELECT DISTINCT seller_id FROM listings WHERE seller_id IS NOT NULL) s
+   ),
+   -- G8: Compute median response hours per seller from chat_messages.
+   -- Measures time from buyer's first message to seller's first reply.
+   seller_response_times AS (
+     WITH seller_convos AS (
+       SELECT
+         li.seller_id,
+         c.id AS conversation_id,
+         MIN(CASE WHEN m.sender_user_id = li.seller_id THEN m.created_at END) AS first_seller_msg,
+         MIN(CASE WHEN m.sender_user_id != li.seller_id THEN m.created_at END) AS first_buyer_msg
+       FROM chat_messages m
+       JOIN chat_conversations c ON c.id = m.conversation_id
+       JOIN listings li ON li.id = c.item_id
+       WHERE m.sender_user_id IS NOT NULL
+         AND m.deleted_for_everyone_at IS NULL
+         AND m.created_at > NOW() - INTERVAL '30 days'
+       GROUP BY li.seller_id, c.id
+     )
+     SELECT seller_id,
+       PERCENTILE_CONT(0.5) WITHIN GROUP (
+         ORDER BY EXTRACT(EPOCH FROM (first_seller_msg - first_buyer_msg)) / 3600
+       )::text AS seller_response_hours
+     FROM seller_convos
+     WHERE first_seller_msg IS NOT NULL AND first_buyer_msg IS NOT NULL
+       AND first_seller_msg > first_buyer_msg
+     GROUP BY seller_id
+   )
+   SELECT
+     l.id, l.seller_id, l.title, l.description, l.category, l.brand,
+     l.size, l.condition, l.price_gbp::text, l.image_url,
+     l.created_at::text,
+     COALESCE(ic.interaction_count, '0') AS interaction_count,
+     sr.seller_rating,
+     srt.seller_response_hours,
+     COALESCE(reach_u.reach_state, 'normal') AS seller_reach_state
+   FROM listings l
+   ${reachJoinSql('reach_u', 'l.seller_id')}
+   LEFT JOIN interaction_counts ic ON ic.listing_id = l.id
+   LEFT JOIN seller_ratings sr ON sr.seller_id = l.seller_id
+   LEFT JOIN seller_response_times srt ON srt.seller_id = l.seller_id
+   WHERE l.status = 'active' AND l.seller_id <> $1
+     ${reachExcludedSql('reach_u')}
+     ${extraPredicate}
+   ORDER BY ${orderByClause}
+   LIMIT ${Math.max(1, Math.trunc(limit))}`;
+}
+
 async function recordServe(
   db: Pool,
   input: DecisionResult,
@@ -323,6 +414,8 @@ async function recordServe(
   latencyMs: number,
   intentVersion: number = 0,
   serveMode: string = 'personalized',
+  sourceByListingId?: Map<string, { source: string; sourceRank: number }>,
+  retrievalVersion: string = 'v1_single_source',
 ): Promise<void> {
   const client = await db.connect();
   try {
@@ -360,13 +453,12 @@ async function recordServe(
     );
     // Candidate-source lineage and selection propensity (migration 142).
     //
-    // The current heuristic baseline retrieves every candidate from a single
-    // SQL keyset over recent active listings, so all rows share one source.
-    // source_rank mirrors the final position and source_score mirrors the
-    // served score because there is no separate retrieval stage yet. As the
-    // retrieval funnel matures into multiple sources (text_hybrid, visual,
-    // item_to_item, user_affinity, …) these fields will diverge from the final
-    // rank/score and carry the source's own ordering.
+    // The pool is blended from multiple retrieval sources (R19). Each served
+    // impression stamps `candidate_source` with the source that surfaced the
+    // listing and `source_rank` with its position inside that source's own
+    // ordering — both diverge from the final `position`/`score`, which are
+    // the decision service's output. `source_score` still carries the served
+    // score: per-source scores are not yet propagated through the merge.
     //
     // selection_propensity is the IPW key for unbiased off-policy evaluation.
     // For the deterministic-novelty exploration policy: exploit candidates are
@@ -381,12 +473,11 @@ async function recordServe(
     const resultCount = Math.max(1, input.decision.result_count);
     const explorePropensity = explorationRate / resultCount;
     const exploitPropensity = 1 - explorationRate;
-    const candidateSource = 'recent_sql_keyset';
-    const retrievalVersion = 'v1';
 
     for (const recommendation of input.recommendations) {
       const selectionPropensity =
         recommendation.policy === 'explore' ? explorePropensity : exploitPropensity;
+      const lineage = sourceByListingId?.get(recommendation.listing_id);
       await client.query(
         `INSERT INTO recommendation_impressions (
            request_id, user_id, listing_id, position, score, policy, model,
@@ -405,8 +496,8 @@ async function recordServe(
           recommendation.model,
           recommendation.reason_codes,
           recommendation.component_scores,
-          candidateSource,
-          recommendation.position,
+          lineage?.source ?? 'recent_sql_keyset',
+          lineage?.sourceRank ?? recommendation.position,
           recommendation.score,
           retrievalVersion,
           Number(selectionPropensity.toFixed(6)),
@@ -723,65 +814,7 @@ export function registerRecommendationRoutes({
     const requestId = `rec_${crypto.randomUUID()}`;
 
     const listingsResult = await db.query<ListingRow>(
-      `WITH interaction_counts AS (
-         SELECT listing_id, COUNT(*)::text AS interaction_count
-         FROM interactions
-         WHERE created_at >= NOW() - INTERVAL '30 days'
-         GROUP BY listing_id
-       ),
-       seller_ratings AS (
-         -- Reputation feature is in shadow mode (Phase 0 contract-truth repair).
-         -- Raw AVG/5 was an unsafe trust signal: one 5-star review produced a
-         -- perfect 1.0 trust score while a new seller got 0.5, creating
-         -- incumbent bias and a gaming surface. Until a calibrated Bayesian
-         -- feature with fairness guardrails is shadow-tested, all sellers
-         -- receive a neutral 0.5 so ranking is driven by other features only.
-         SELECT seller_id, NULL::text AS seller_rating
-         FROM (SELECT DISTINCT seller_id FROM listings WHERE seller_id IS NOT NULL) s
-       ),
-       -- G8: Compute median response hours per seller from chat_messages.
-       -- Measures time from buyer's first message to seller's first reply.
-       seller_response_times AS (
-         WITH seller_convos AS (
-           SELECT
-             li.seller_id,
-             c.id AS conversation_id,
-             MIN(CASE WHEN m.sender_user_id = li.seller_id THEN m.created_at END) AS first_seller_msg,
-             MIN(CASE WHEN m.sender_user_id != li.seller_id THEN m.created_at END) AS first_buyer_msg
-           FROM chat_messages m
-           JOIN chat_conversations c ON c.id = m.conversation_id
-           JOIN listings li ON li.id = c.item_id
-           WHERE m.sender_user_id IS NOT NULL
-             AND m.deleted_for_everyone_at IS NULL
-             AND m.created_at > NOW() - INTERVAL '30 days'
-           GROUP BY li.seller_id, c.id
-         )
-         SELECT seller_id,
-           PERCENTILE_CONT(0.5) WITHIN GROUP (
-             ORDER BY EXTRACT(EPOCH FROM (first_seller_msg - first_buyer_msg)) / 3600
-           )::text AS seller_response_hours
-         FROM seller_convos
-         WHERE first_seller_msg IS NOT NULL AND first_buyer_msg IS NOT NULL
-           AND first_seller_msg > first_buyer_msg
-         GROUP BY seller_id
-       )
-       SELECT
-         l.id, l.seller_id, l.title, l.description, l.category, l.brand,
-         l.size, l.condition, l.price_gbp::text, l.image_url,
-         l.created_at::text,
-         COALESCE(ic.interaction_count, '0') AS interaction_count,
-         sr.seller_rating,
-         srt.seller_response_hours,
-         COALESCE(reach_u.reach_state, 'normal') AS seller_reach_state
-       FROM listings l
-       ${reachJoinSql('reach_u', 'l.seller_id')}
-       LEFT JOIN interaction_counts ic ON ic.listing_id = l.id
-       LEFT JOIN seller_ratings sr ON sr.seller_id = l.seller_id
-       LEFT JOIN seller_response_times srt ON srt.seller_id = l.seller_id
-       WHERE l.status = 'active' AND l.seller_id <> $1
-         ${reachExcludedSql('reach_u')}
-       ORDER BY l.created_at DESC, l.id
-       LIMIT 500`,
+      candidateListingsSql('', 'l.created_at DESC, l.id', 500),
       [userId],
     );
 
@@ -886,10 +919,160 @@ export function registerRecommendationRoutes({
       }
     }
 
+    // ── Multi-source retrieval (R19) ─────────────────────────────────────
+    // The candidate pool is blended from independent retrieval sources and
+    // each listing carries truthful lineage — which source surfaced it and
+    // its rank inside that source — stamped onto served impressions below.
+    // Merge happens BEFORE the exclusion filter so user-authored controls
+    // apply identically regardless of origin, and every auxiliary source is
+    // fail-open: a failing source narrows the pool, it never fails the
+    // request. Merge order is claim order — personalized sources tag the
+    // listing first so a candidate surfaced by two sources reports the more
+    // specific origin.
+    const sourceByListingId = new Map<string, { source: string; sourceRank: number }>();
+    const mergedListingRows: ListingRow[] = [];
+    const sourceContributions: Record<string, number> = {};
+    const mergeSource = (rows: ListingRow[], source: string): void => {
+      let contributed = 0;
+      for (let index = 0; index < rows.length; index += 1) {
+        const row = rows[index]!;
+        if (!sourceByListingId.has(row.id)) {
+          sourceByListingId.set(row.id, { source, sourceRank: index });
+          mergedListingRows.push(row);
+          contributed += 1;
+        }
+      }
+      sourceContributions[source] = contributed;
+    };
+
+    // item_to_item_ann — pgvector nearest-neighbour retrieval anchored on the
+    // media embeddings of listings the user recently signalled interest in.
+    // ANN-only by design: the BYTEA exact scan is a bounded test fallback,
+    // not a per-request serving path, so this source stays silent until
+    // migration 326 provisions embedding_vec.
+    try {
+      const anchorListingIds = [...new Set(
+        interactionsResult.rows
+          .filter((row) => POSITIVE_ANCHOR_ACTIONS.has(row.action))
+          .map((row) => row.listing_id),
+      )].slice(0, 6);
+      if (anchorListingIds.length > 0 && await hasMediaEmbeddingVectorColumn(db)) {
+        const anchors = await db.query<{ embedding: Buffer }>(
+          `SELECT DISTINCT ON (mb.target_ref_id) me.embedding
+           FROM media_bindings mb
+           JOIN media_embeddings me ON me.media_asset_id = mb.media_asset_id
+           WHERE mb.target_type = 'listing'
+             AND mb.target_ref_id = ANY($1::text[])
+             AND mb.removed_at IS NULL
+             AND me.status = 'ready'
+             AND me.norm > 0
+           ORDER BY mb.target_ref_id, mb.sort_order
+           LIMIT 3`,
+          [anchorListingIds],
+        );
+        const neighbourAssetIds: string[] = [];
+        for (const anchor of anchors.rows) {
+          const nearest = await nearestMediaEmbeddings(db, {
+            queryEmbedding: deserialiseEmbedding(anchor.embedding),
+            limit: 40,
+          });
+          for (const hit of nearest.hits) neighbourAssetIds.push(hit.mediaAssetId);
+        }
+        if (neighbourAssetIds.length > 0) {
+          const similar = await db.query<{ target_ref_id: string }>(
+            `SELECT DISTINCT target_ref_id
+             FROM media_bindings
+             WHERE media_asset_id = ANY($1::text[])
+               AND target_type = 'listing'
+               AND removed_at IS NULL`,
+            [[...new Set(neighbourAssetIds)]],
+          );
+          const anchorSet = new Set(anchorListingIds);
+          const similarIds = similar.rows
+            .map((row) => row.target_ref_id)
+            .filter((id) => !anchorSet.has(id));
+          if (similarIds.length > 0) {
+            // array_position keeps the nearest-neighbour ordering so
+            // source_rank inside this source is the ANN rank.
+            const i2i = await db.query<ListingRow>(
+              candidateListingsSql(
+                'AND l.id = ANY($2::text[])',
+                'array_position($2::text[], l.id)',
+                150,
+              ),
+              [userId, similarIds],
+            );
+            mergeSource(i2i.rows, 'item_to_item_ann');
+          }
+        }
+      }
+    } catch (error) {
+      request.log.warn({ err: error, userId }, 'item_to_item_ann retrieval failed');
+    }
+
+    // user_affinity — listings matching the user's "show more like this"
+    // directives on category/brand facets.
+    const moreLabels = topicDirectives
+      .filter((directive) => directive.band === 'more')
+      .map((directive) => directive.label.trim().toLowerCase())
+      .filter((label) => label.length > 0);
+    if (moreLabels.length > 0) {
+      try {
+        const affinity = await db.query<ListingRow>(
+          candidateListingsSql(
+            `AND (LOWER(l.category) = ANY($2::text[]) OR LOWER(l.brand) = ANY($2::text[]))`,
+            'l.created_at DESC, l.id',
+            100,
+          ),
+          [userId, moreLabels],
+        );
+        mergeSource(affinity.rows, 'user_affinity');
+      } catch (error) {
+        request.log.warn({ err: error, userId }, 'user_affinity retrieval failed');
+      }
+    }
+
+    // seller_followed — recent listings from sellers the user follows.
+    try {
+      const followed = await db.query<ListingRow>(
+        candidateListingsSql(
+          `AND l.seller_id IN (SELECT following_id FROM user_follows WHERE follower_id = $1)`,
+          'l.created_at DESC, l.id',
+          150,
+        ),
+        [userId],
+      );
+      mergeSource(followed.rows, 'seller_followed');
+    } catch (error) {
+      request.log.warn({ err: error, userId }, 'seller_followed retrieval failed');
+    }
+
+    // trending_30d — globally popular listings by 30-day interaction volume.
+    try {
+      const trending = await db.query<ListingRow>(
+        candidateListingsSql(
+          '',
+          `COALESCE(ic.interaction_count, '0')::bigint DESC, l.created_at DESC, l.id`,
+          150,
+        ),
+        [userId],
+      );
+      mergeSource(trending.rows, 'trending_30d');
+    } catch (error) {
+      request.log.warn({ err: error, userId }, 'trending_30d retrieval failed');
+    }
+
+    // recent_sql_keyset — the always-on recency baseline, merged last so a
+    // personalized source keeps the lineage tag on shared listings.
+    mergeSource(listingsResult.rows, 'recent_sql_keyset');
+    if (mergedListingRows.length > MERGED_CANDIDATE_POOL_CAP) {
+      mergedListingRows.length = MERGED_CANDIDATE_POOL_CAP;
+    }
+
     const excludedTopicLabels = topicDirectives
       .filter((directive) => directive.band === 'excluded')
       .map((directive) => directive.label);
-    const eligibleListingRows = listingsResult.rows.filter((row) => {
+    const eligibleListingRows = mergedListingRows.filter((row) => {
       if (excludedListingIds.has(row.id)) return false;
       if (excludedSellerIds.has(row.seller_id)) return false;
       if (excludedTopicLabels.length > 0) {
@@ -1122,7 +1305,14 @@ export function registerRecommendationRoutes({
     // Observability: how many candidates the user's own controls removed
     // before ranking — the honest answer to "did my feedback do anything".
     result.decision.diagnostics.user_control_suppressed =
-      listingsResult.rows.length - eligibleListingRows.length;
+      mergedListingRows.length - eligibleListingRows.length;
+    // Retrieval-source mix actually contributing candidates this request —
+    // the honest audit trail for "which source is doing the work" (R19).
+    result.decision.diagnostics.retrieval_sources = sourceContributions;
+    const retrievalVersion =
+      Object.values(sourceContributions).filter((count) => count > 0).length > 1
+        ? 'v2_multi_source'
+        : 'v1_single_source';
 
     const baseServeMode =
       result.source === 'fallback' ? 'degraded_baseline' :
@@ -1130,7 +1320,10 @@ export function registerRecommendationRoutes({
       'personalized';
     const serveMode = profileMode === 'non_profiled' ? 'non_profiled' : baseServeMode;
 
-    await recordServe(db, result, userId, surface, sessionId, latencyMs, dbIntentVersion, serveMode);
+    await recordServe(
+      db, result, userId, surface, sessionId, latencyMs, dbIntentVersion,
+      serveMode, sourceByListingId, retrievalVersion,
+    );
     recordRecommendationServe({
       source: result.source,
       policyVersion: result.decision.policy_version,
