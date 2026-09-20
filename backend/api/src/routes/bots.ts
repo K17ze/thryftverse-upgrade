@@ -1612,16 +1612,21 @@ export const registerBotsRoutes = ({
     );
 
     if (!aiQuota.allowed) {
+      // R113: distinguish a platform daily-budget block from the per-hour
+      // rate quota — different cause, different honest message.
+      const quotaCode = aiQuota.budgetExceeded ? 'AI_DAILY_BUDGET_EXCEEDED' : 'AI_HOURLY_QUOTA_EXCEEDED';
       await db.query(
-        `UPDATE agent_runs SET status = 'failed', completed_at = NOW(), error_message = 'AI_HOURLY_QUOTA_EXCEEDED' WHERE id = $1`,
-        [runId],
+        `UPDATE agent_runs SET status = 'failed', completed_at = NOW(), error_message = $2 WHERE id = $1`,
+        [runId, quotaCode],
       );
       reply.code(429);
       return {
         ok: false,
         playground: true,
-        error: 'Hourly AI usage limit reached for this account. Try again at the start of the next hour.',
-        code: 'AI_HOURLY_QUOTA_EXCEEDED',
+        error: aiQuota.budgetExceeded
+          ? "Today's AI usage budget has been reached. Please try again tomorrow."
+          : 'Hourly AI usage limit reached for this account. Try again at the start of the next hour.',
+        code: quotaCode,
         usage: null,
       };
     }
@@ -1689,7 +1694,7 @@ export const registerBotsRoutes = ({
           }
           : undefined,
         metadata: { playground: true, confidence: result.confidence ?? null },
-      });
+      }, redis);
 
       return {
         ok: true,

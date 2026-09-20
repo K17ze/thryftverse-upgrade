@@ -732,6 +732,11 @@ test('creator publish replays an existing idempotency key without allocating ano
     async query(sql: string) {
       const normalized = sql.replace(/\s+/g, ' ').trim();
       statements.push(normalized);
+      // R102 role resolution runs before the document fetch — the owner
+      // resolves from creator_id, no collaborator row needed.
+      if (normalized.startsWith('SELECT creator_id FROM creator_documents')) {
+        return { rowCount: 1, rows: [{ creator_id: 'creator_1' }] };
+      }
       if (normalized.startsWith('SELECT creator_id, document_json')) {
         return {
           rowCount: 1,
@@ -782,6 +787,9 @@ test('published creator documents reject draft overwrite attempts', async () => 
     async query(sql: string) {
       const normalized = sql.replace(/\s+/g, ' ').trim();
       statements.push(normalized);
+      if (normalized.startsWith('SELECT creator_id FROM creator_documents')) {
+        return { rowCount: 1, rows: [{ creator_id: 'creator_1' }] };
+      }
       if (normalized.startsWith('SELECT creator_id, status, lock_version')) {
         return {
           rowCount: 1,
@@ -1250,7 +1258,7 @@ test('AI quota reservation uses one atomic Redis operation for both hourly limit
   const fakeRedis = {
     async eval(...args: unknown[]) {
       calls.push(args);
-      return [1, 4, 9];
+      return [1, 4, 9, 0, 0];
     },
   };
   const now = new Date('2026-07-28T12:15:00.000Z');
@@ -1267,8 +1275,33 @@ test('AI quota reservation uses one atomic Redis operation for both hourly limit
   assert.equal(result.userRemaining, 26);
   assert.equal(result.conversationRemaining, 51);
   assert.equal(result.resetsAt, '2026-07-28T13:00:00.000Z');
+  assert.equal(result.budgetExceeded, false);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0][1], 2);
+  // Three keys: user quota, conversation quota, daily spend bucket (R113).
+  assert.equal(calls[0][1], 3);
   assert.match(String(calls[0][2]), /ai:quota:user:user_1:2026-07-28T12/);
   assert.match(String(calls[0][3]), /ai:quota:conversation:conversation_1:2026-07-28T12/);
+  assert.match(String(calls[0][4]), /ai:spend:daily:2026-07-28/);
+});
+
+test('AI quota reservation reports a daily-budget block distinctly from the rate quota', async () => {
+  const { reserveAiUsageQuota } = await import('../lib/aiUsage.js');
+  const fakeRedis = {
+    async eval() {
+      // allowed=0, userCount=2, conversationCount=3, dailySpend, budgetExceeded=1
+      return [0, 2, 3, 999_000_000, 1];
+    },
+  };
+
+  const result = await reserveAiUsageQuota({
+    userId: 'user_1',
+    conversationId: 'conversation_1',
+    now: new Date('2026-07-28T12:15:00.000Z'),
+  }, fakeRedis);
+
+  assert.equal(result.allowed, false);
+  assert.equal(result.budgetExceeded, true);
+  assert.equal(result.dailySpendMicrousd, 999_000_000);
+  // Rate-quota remainders still report truthfully (not zeroed by the budget block).
+  assert.equal(result.userRemaining, 28);
 });

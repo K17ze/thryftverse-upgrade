@@ -14,6 +14,18 @@ type DbQueryable = {
   query: PoolClient['query'];
 };
 
+type RedisSpendClient = {
+  incrby(key: string, increment: number): Promise<unknown>;
+  expire(key: string, seconds: number): Promise<unknown>;
+};
+
+/** Daily spend buckets live ~48h — long enough for midnight-boundary reads. */
+const DAILY_SPEND_TTL_SECONDS = 48 * 60 * 60;
+
+function dailySpendKey(now: Date): string {
+  return `ai:spend:daily:${now.toISOString().slice(0, 10)}`;
+}
+
 export interface AiQuotaReservation {
   allowed: boolean;
   userCount: number;
@@ -21,6 +33,14 @@ export interface AiQuotaReservation {
   userRemaining: number;
   conversationRemaining: number;
   resetsAt: string;
+  /**
+   * True when the block came from the platform daily spend budget rather
+   * than the per-user/per-conversation rate quota — callers surface a
+   * different (honest) message for a budget exhaustion.
+   */
+  budgetExceeded: boolean;
+  /** Current daily spend in micro-USD read at reservation time. */
+  dailySpendMicrousd: number;
 }
 
 export interface AiProviderUsage {
@@ -32,19 +52,25 @@ export interface AiProviderUsage {
 const RESERVE_AI_QUOTA_SCRIPT = `
 local userCount = tonumber(redis.call('GET', KEYS[1]) or '0')
 local conversationCount = tonumber(redis.call('GET', KEYS[2]) or '0')
+local dailySpend = tonumber(redis.call('GET', KEYS[3]) or '0')
 local userLimit = tonumber(ARGV[1])
 local conversationLimit = tonumber(ARGV[2])
 local ttlSeconds = tonumber(ARGV[3])
+local dailyBudget = tonumber(ARGV[4])
+
+if dailyBudget > 0 and dailySpend >= dailyBudget then
+  return {0, userCount, conversationCount, dailySpend, 1}
+end
 
 if userCount >= userLimit or conversationCount >= conversationLimit then
-  return {0, userCount, conversationCount}
+  return {0, userCount, conversationCount, dailySpend, 0}
 end
 
 userCount = redis.call('INCR', KEYS[1])
 conversationCount = redis.call('INCR', KEYS[2])
 if userCount == 1 then redis.call('EXPIRE', KEYS[1], ttlSeconds) end
 if conversationCount == 1 then redis.call('EXPIRE', KEYS[2], ttlSeconds) end
-return {1, userCount, conversationCount}
+return {1, userCount, conversationCount, dailySpend, 0}
 `;
 
 function quotaWindow(now: Date): {
@@ -77,14 +103,17 @@ export async function reserveAiUsageQuota(
 ): Promise<AiQuotaReservation> {
   const now = input.now ?? new Date();
   const window = quotaWindow(now);
+  const dailyKey = dailySpendKey(now);
   const result = await client.eval(
     RESERVE_AI_QUOTA_SCRIPT,
-    2,
+    3,
     `ai:quota:user:${input.userId}:${window.bucket}`,
     `ai:quota:conversation:${input.conversationId}:${window.bucket}`,
+    dailyKey,
     AI_RATE_LIMITS.perUserPerHour,
     AI_RATE_LIMITS.perConversationPerHour,
     window.ttlSeconds,
+    config.aiDailyBudgetMicrousd,
   );
   const values = Array.isArray(result) ? result : [];
   const allowed = Number(values[0]) === 1;
@@ -100,6 +129,8 @@ export async function reserveAiUsageQuota(
       AI_RATE_LIMITS.perConversationPerHour - conversationCount,
     ),
     resetsAt: window.resetsAt,
+    budgetExceeded: Number(values[4]) === 1,
+    dailySpendMicrousd: asCounter(values[3]),
   };
 }
 
@@ -127,6 +158,7 @@ export async function recordAiUsageEvent(
     errorCode?: string | null;
     metadata?: Record<string, unknown>;
   },
+  redis?: RedisSpendClient | null,
 ): Promise<void> {
   const usage = input.usage ?? {
     inputTokens: 0,
@@ -163,4 +195,23 @@ export async function recordAiUsageEvent(
       JSON.stringify(input.metadata ?? {}),
     ],
   );
+
+  // R113: accumulate the real recorded cost into the daily spend bucket
+  // the quota script reads. Only 'succeeded' events carry provider spend —
+  // quota_blocked/failed runs made no billable request. Best-effort: a
+  // Redis failure must not fail the usage ledger write that already
+  // committed; the daily cap degrades to the Postgres-recorded truth on
+  // the next telemetry read.
+  if (redis && input.status === 'succeeded') {
+    const costMicrousd = calculateAiCostMicrousd(usage);
+    if (costMicrousd > 0) {
+      try {
+        const key = dailySpendKey(new Date());
+        await redis.incrby(key, costMicrousd);
+        await redis.expire(key, DAILY_SPEND_TTL_SECONDS);
+      } catch {
+        // Spend counter is best-effort — the ledger row above is the truth.
+      }
+    }
+  }
 }

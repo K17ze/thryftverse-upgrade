@@ -526,6 +526,7 @@ export async function executeBotCommand(
       userRemaining: number;
       conversationRemaining: number;
       resetsAt: string;
+      budgetExceeded: boolean;
     } | null = null;
     try {
       if (install.runtimeMode === 'ai') {
@@ -538,18 +539,32 @@ export async function executeBotCommand(
       }
 
       if (aiQuota && !aiQuota.allowed) {
-        result = {
-          text: `${install.botName} has reached its hourly usage limit for this account or conversation. Try again at the start of the next hour.`,
-          shouldReply: true,
-          confidence: 1.0,
-          explanation: `Agent invocation was blocked by the per-hour quota guard (user remaining: ${aiQuota.userRemaining}, conversation remaining: ${aiQuota.conversationRemaining}). No provider request was made.`,
-          metadata: {
-            agentQuotaBlocked: true,
-            userRemaining: aiQuota.userRemaining,
-            conversationRemaining: aiQuota.conversationRemaining,
-            resetsAt: aiQuota.resetsAt,
-          },
-        };
+        result = aiQuota.budgetExceeded
+          ? {
+              // R113: platform daily AI budget exhausted — an honest,
+              // distinct message from the per-hour rate quota.
+              text: `${install.botName} is unavailable right now — today's AI usage budget has been reached. Please try again tomorrow.`,
+              shouldReply: true,
+              confidence: 1.0,
+              explanation: 'Agent invocation was blocked by the platform daily AI spend budget. No provider request was made.',
+              metadata: {
+                agentQuotaBlocked: true,
+                budgetExceeded: true,
+                resetsAt: aiQuota.resetsAt,
+              },
+            }
+          : {
+              text: `${install.botName} has reached its hourly usage limit for this account or conversation. Try again at the start of the next hour.`,
+              shouldReply: true,
+              confidence: 1.0,
+              explanation: `Agent invocation was blocked by the per-hour quota guard (user remaining: ${aiQuota.userRemaining}, conversation remaining: ${aiQuota.conversationRemaining}). No provider request was made.`,
+              metadata: {
+                agentQuotaBlocked: true,
+                userRemaining: aiQuota.userRemaining,
+                conversationRemaining: aiQuota.conversationRemaining,
+                resetsAt: aiQuota.resetsAt,
+              },
+            };
       } else if (openAiAgent) {
         // Resolve the bot's bound provider connection (if any) — the
         // credential decides which provider account pays for this run. A
@@ -618,6 +633,7 @@ export async function executeBotCommand(
       const failed = result.metadata?.agentError === true;
       try {
         const { recordAiUsageEvent } = await import('../lib/aiUsage.js');
+        const { redis } = await import('../lib/redis.js');
         await recordAiUsageEvent(client, {
           id: createRuntimeId('aiuse'),
           userId: input.actorUserId,
@@ -631,7 +647,9 @@ export async function executeBotCommand(
             : null,
           status: quotaBlocked ? 'quota_blocked' : failed ? 'failed' : 'succeeded',
           usage: normalizedUsage,
-          errorCode: quotaBlocked ? 'AI_HOURLY_QUOTA_EXCEEDED' : failed ? 'AI_EXECUTION_FAILED' : null,
+          errorCode: quotaBlocked
+            ? (aiQuota?.budgetExceeded ? 'AI_DAILY_BUDGET_EXCEEDED' : 'AI_HOURLY_QUOTA_EXCEEDED')
+            : failed ? 'AI_EXECUTION_FAILED' : null,
           metadata: {
             userRemaining: aiQuota?.userRemaining ?? null,
             conversationRemaining: aiQuota?.conversationRemaining ?? null,
@@ -642,7 +660,7 @@ export async function executeBotCommand(
             needsHumanReview: result.needsHumanReview ?? false,
             confidenceSignals: result.metadata?.confidenceSignals ?? null,
           },
-        });
+        }, redis);
       } catch (usageError) {
         await logBotAuditEvent(client, {
           botId: install.botId,

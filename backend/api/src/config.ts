@@ -329,6 +329,12 @@ export const config = {
     process.env.OPENAI_OUTPUT_COST_MICROUSD_PER_MILLION_TOKENS,
     0
   ),
+  /**
+   * Platform-wide daily AI spend cap in micro-USD (R113). 0 = disabled
+   * — an unconfigured budget is honestly reported as "no cap", never
+   * silently treated as infinite.
+   */
+  aiDailyBudgetMicrousd: asNumber(process.env.AI_DAILY_BUDGET_MICROUSD, 0),
   apiSecurityAdminToken: requiredSecret('API_SECURITY_ADMIN_TOKEN', 'local-security-admin-token'),
   apiInternalServiceToken: requiredSecret('API_INTERNAL_SERVICE_TOKEN', 'local-internal-service-token'),
   apiEnableMockWebhooks: asBoolean(process.env.API_ENABLE_MOCK_WEBHOOKS, false),
