@@ -53,13 +53,39 @@ const FEATURE_CACHE_MAX = 512;
 const featureCache = new Map<string, ImageFeatures>();
 
 /**
+ * Normalised region-of-interest on the query image (R24): fractions of the
+ * source dimensions in [0,1]. The request schema guarantees the rect fits
+ * inside the image; extraction clamps defensively anyway — a region that
+ * rounds to a degenerate pixel box is ignored and the whole image scores.
+ */
+export interface NormalizedImageRegion {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
  * Extract a visual feature vector from an image buffer.
  *
- * The image is decoded once, downscaled to a 16×16 thumbnail for the colour
- * histogram and luminance statistics, and to a 2×2 grid for spatial layout.
- * The original aspect ratio is read from the source metadata.
+ * The image is decoded once, optionally cropped to `opts.region` (a
+ * pre-resize sharp extract — histogram, grid, and aspect ratio then all
+ * describe the object region, not the whole frame), downscaled to a 16×16
+ * thumbnail for the colour histogram and luminance statistics, and to a
+ * 2×2 grid for spatial layout.
  */
-export async function extractImageFeatures(buffer: Buffer): Promise<ImageFeatures> {
+export async function extractImageFeatures(
+  buffer: Buffer,
+  opts?: {
+    region?: NormalizedImageRegion;
+    /**
+     * Reports whether the region crop actually ran — false when the region
+     * resolved to a degenerate pixel box and the whole image was scored.
+     * Callers must not claim a region-scoped query without this.
+     */
+    onRegionApplied?: (applied: boolean) => void;
+  },
+): Promise<ImageFeatures> {
   const source = sharp(buffer, { failOn: 'none' });
   const metadata = await source.metadata();
   const sourceWidth = metadata.width ?? 0;
@@ -68,6 +94,23 @@ export async function extractImageFeatures(buffer: Buffer): Promise<ImageFeature
   if (sourceWidth === 0 || sourceHeight === 0) {
     throw new Error('visualSimilarity: could not decode image dimensions');
   }
+
+  let featureWidth = sourceWidth;
+  let featureHeight = sourceHeight;
+  let regionApplied = false;
+  if (opts?.region) {
+    const px = clampRegionToPixels(opts.region, sourceWidth, sourceHeight);
+    if (px) {
+      // Pre-resize extract: both the 16×16 thumbnail and the 2×2 grid
+      // derive from the region, so a cropped query scores the object the
+      // user framed — not the background around it.
+      source.extract(px);
+      featureWidth = px.width;
+      featureHeight = px.height;
+      regionApplied = true;
+    }
+  }
+  opts?.onRegionApplied?.(regionApplied);
 
   // 16×16 raw RGB pixels for the colour histogram + luminance stats.
   const thumbRaw = await source
@@ -117,9 +160,29 @@ export async function extractImageFeatures(buffer: Buffer): Promise<ImageFeature
   // 2×2 spatial grid of average RGB (each cell averaged in [0,1]).
   const grid = await computeSpatialGrid(source);
 
-  const aspectRatio = sourceWidth / sourceHeight;
+  // Aspect ratio describes the scored area — the region when cropped.
+  const aspectRatio = featureWidth / featureHeight;
 
   return { histogram, grid, luminance, contrast, aspectRatio };
+}
+
+/**
+ * Convert a normalised [0,1] region to a pixel rect for sharp.extract().
+ * Returns null for a region that rounds to under 2px on either axis —
+ * cropping to a sliver would produce a meaningless feature vector, so the
+ * caller falls back to the whole image rather than scoring noise.
+ */
+function clampRegionToPixels(
+  region: NormalizedImageRegion,
+  sourceWidth: number,
+  sourceHeight: number,
+): { left: number; top: number; width: number; height: number } | null {
+  const left = Math.max(0, Math.min(sourceWidth - 1, Math.round(region.x * sourceWidth)));
+  const top = Math.max(0, Math.min(sourceHeight - 1, Math.round(region.y * sourceHeight)));
+  const width = Math.min(sourceWidth - left, Math.round(region.width * sourceWidth));
+  const height = Math.min(sourceHeight - top, Math.round(region.height * sourceHeight));
+  if (width < 2 || height < 2) return null;
+  return { left, top, width, height };
 }
 
 /** Compute a 2×2 grid of average RGB cells (12 values, each in [0,1]). */

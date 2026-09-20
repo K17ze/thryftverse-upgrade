@@ -509,3 +509,90 @@ async function sha256Hex(input: string): Promise<string> {
   const { createHash } = await import('node:crypto');
   return createHash('sha256').update(input).digest('hex');
 }
+
+// ── R24 region-of-interest visual search ──────────────────────────────────────
+
+describe('R24 region-of-interest visual search', () => {
+  const VALID_REGION = { x: 0.1, y: 0.1, width: 0.5, height: 0.5 };
+
+  function register() {
+    const { app, handler } = createMockApp();
+    registerVisualSearchRoutes({
+      app,
+      db: createMockDb(),
+      readDb: createMockReadDb(),
+    } as unknown as Parameters<typeof registerVisualSearchRoutes>[0]);
+    return handler;
+  }
+
+  it('forwards the region to feature extraction and reports queryScope=region', async () => {
+    const handler = register();
+    // The real extractor fires onRegionApplied(true) when the crop ran.
+    vi.mocked(extractImageFeatures).mockImplementation(
+      async (_buffer, opts) => {
+        opts?.onRegionApplied?.(true);
+        return FAKE_FEATURES;
+      },
+    );
+
+    const { result } = await invokeHandler(handler, {
+      imageUrl: 'https://cdn.example.com/query.jpg',
+      region: VALID_REGION,
+    });
+
+    expect(extractImageFeatures).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      expect.objectContaining({ region: VALID_REGION }),
+    );
+    const meta = (result as { retrievalMeta: { queryScope?: string } }).retrievalMeta;
+    expect(meta.queryScope).toBe('region');
+  });
+
+  it('reports whole_image when the extractor rejects the crop as degenerate', async () => {
+    const handler = register();
+    vi.mocked(extractImageFeatures).mockImplementation(
+      async (_buffer, opts) => {
+        opts?.onRegionApplied?.(false);
+        return FAKE_FEATURES;
+      },
+    );
+
+    const { result } = await invokeHandler(handler, {
+      imageUrl: 'https://cdn.example.com/query.jpg',
+      region: VALID_REGION,
+    });
+
+    const meta = (result as { retrievalMeta: { queryScope?: string } }).retrievalMeta;
+    // The crop did not run — the response must not claim region scoping.
+    expect(meta.queryScope).toBe('whole_image');
+  });
+
+  it('reports whole_image when no region is supplied', async () => {
+    const handler = register();
+    const { result } = await invokeHandler(handler, {
+      imageUrl: 'https://cdn.example.com/query.jpg',
+    });
+    const meta = (result as { retrievalMeta: { queryScope?: string } }).retrievalMeta;
+    expect(meta.queryScope).toBe('whole_image');
+  });
+
+  it('rejects a region that exceeds the image bounds', async () => {
+    const handler = register();
+    await expect(
+      invokeHandler(handler, {
+        imageUrl: 'https://cdn.example.com/query.jpg',
+        region: { x: 0.8, y: 0.1, width: 0.5, height: 0.5 },
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('rejects a degenerate sliver region at the schema layer', async () => {
+    const handler = register();
+    await expect(
+      invokeHandler(handler, {
+        imageUrl: 'https://cdn.example.com/query.jpg',
+        region: { x: 0, y: 0, width: 0.01, height: 0.01 },
+      }),
+    ).rejects.toThrow();
+  });
+});

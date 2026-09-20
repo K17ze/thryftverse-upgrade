@@ -54,6 +54,23 @@ const visualSearchBodySchema = z.object({
       style: z.string().trim().min(1).max(60).optional(),
     })
     .optional(),
+  /**
+   * R24 region-of-interest: normalised crop rect ([0,1] fractions of the
+   * query image) the user framed around the object they want to match.
+   * Scoring then extracts features from that region instead of the whole
+   * frame. Minimum 4% linear size — a sliver produces meaningless features.
+   */
+  region: z
+    .object({
+      x: z.number().min(0).max(1),
+      y: z.number().min(0).max(1),
+      width: z.number().min(0.04).max(1),
+      height: z.number().min(0.04).max(1),
+    })
+    .refine((r) => r.x + r.width <= 1.0001 && r.y + r.height <= 1.0001, {
+      message: 'region must fit inside the image bounds',
+    })
+    .optional(),
   sort: z.enum(['newest', 'price_asc', 'price_desc', 'similarity']).optional().default('similarity'),
   limit: z.coerce.number().int().min(1).max(100).optional().default(48),
 });
@@ -467,9 +484,16 @@ async function handleVisualSearch(
     // ── Attempt real visual similarity scoring ───────────────────────────
     const queryBuffer = await decodeQueryImage(payload);
     let queryFeatures: ImageFeatures | null = null;
+    let regionApplied = false;
     if (queryBuffer) {
       try {
-        queryFeatures = await extractImageFeatures(queryBuffer);
+        queryFeatures = await extractImageFeatures(queryBuffer, {
+          region: payload.region,
+          // Truthful meta: the response only reports queryScope 'region'
+          // when the crop actually ran — a degenerate region falls back to
+          // whole-image scoring and must not be claimed as ROI search.
+          onRegionApplied: (applied) => { regionApplied = applied; },
+        });
       } catch {
         queryFeatures = null;
       }
@@ -591,6 +615,10 @@ async function handleVisualSearch(
       method: similarityMethod,
       fallbackReason: visualFallbackReason,
       embedderConfigured: false,
+      // R24: disclose whether the supplied ROI actually cropped the query —
+      // 'region' only when the extract ran, 'whole_image' when no region
+      // was supplied or the crop was degenerate.
+      queryScope: regionApplied ? 'region' : 'whole_image',
     };
 
     // F08: Await the facet-count aggregates kicked off alongside the

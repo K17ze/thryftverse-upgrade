@@ -92,4 +92,11 @@ export interface RetrievalMeta {
    * response may diverge across replicas.
    */
   degraded?: boolean;
+  /**
+   * Visual search only (R24): 'region' when a supplied ROI rect was
+   * actually applied to the query image before feature extraction,
+   * 'whole_image' otherwise. Never reports 'region' for a degenerate crop
+   * that fell back to whole-image scoring.
+   */
+  queryScope?: 'whole_image' | 'region';
 }
