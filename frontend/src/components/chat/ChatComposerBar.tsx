@@ -8,8 +8,9 @@ import {
   Text,
   ScrollView,
   Pressable } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius } from '../../theme/designTokens';
+import { IconSize } from '../../theme/iconTokens';
+import { AppIcon } from '../common/AppIcon';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -95,7 +96,7 @@ export function ChatComposerBar({
       {dangerWarning ? (
         <View style={styles.dangerBanner}>
           <View style={styles.dangerBannerContent}>
-            <Ionicons name="warning" size={14} color={colors.dangerText} />
+            <AppIcon name="warning" variant="filled" size={IconSize.xs} color={colors.dangerText} />
             <Text style={styles.dangerBannerText}>{dangerWarning}</Text>
           </View>
           {onDismissDangerWarning ? (
@@ -105,7 +106,7 @@ export function ChatComposerBar({
               accessibilityLabel={t('compose.dismissSafetyWarning')}
               accessibilityRole="button"
             >
-              <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+              <AppIcon name="closeCircle" variant="filled" size={IconSize.sm} color={colors.textMuted} />
             </Pressable>
           ) : null}
         </View>
@@ -114,7 +115,7 @@ export function ChatComposerBar({
       {/* Info-level static safety reminder */}
       {safetyWarning && !dangerWarning && !cautionWarning ? (
         <View style={styles.safetyBanner}>
-          <Ionicons name="lock-closed-outline" size={12} color={colors.textMuted} />
+          <AppIcon name="lock" size={IconSize.micro} color={colors.textMuted} />
           <Text style={styles.safetyBannerText} numberOfLines={2}>{safetyWarning}</Text>
         </View>
       ) : null}
@@ -123,7 +124,7 @@ export function ChatComposerBar({
       {cautionWarning && !dangerWarning ? (
         <View style={styles.cautionBanner}>
           <View style={styles.cautionBannerContent}>
-            <Ionicons name="alert-circle-outline" size={14} color={colors.warningText} />
+            <AppIcon name="alert" size={IconSize.xs} color={colors.warningText} />
             <Text style={styles.cautionBannerText}>{cautionWarning}</Text>
           </View>
           {onDismissCautionWarning ? (
@@ -133,7 +134,7 @@ export function ChatComposerBar({
               accessibilityLabel={t('compose.dismissCautionWarning')}
               accessibilityRole="button"
             >
-              <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+              <AppIcon name="closeCircle" variant="filled" size={IconSize.sm} color={colors.textMuted} />
             </Pressable>
           ) : null}
         </View>
@@ -143,7 +144,7 @@ export function ChatComposerBar({
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.attachmentStrip} contentContainerStyle={styles.attachmentStripContent}>
           {attachments.map((att, i) => (
             <View key={i} style={styles.attachmentChip}>
-              <Ionicons name={att.type === 'video' ? 'videocam-outline' : 'image-outline'} size={18} color={colors.textSecondary} />
+              <AppIcon name={att.type === 'video' ? 'videocam-outline' : 'image-outline'} size={18} color={colors.textSecondary} />
               {onRemoveAttachment ? (
                 <Pressable
                   onPress={() => onRemoveAttachment(i)}
@@ -151,7 +152,7 @@ export function ChatComposerBar({
                   accessibilityLabel={t('compose.removeAttachment')}
                   accessibilityRole="button"
                 >
-                  <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+                  <AppIcon name="closeCircle" variant="filled" size={IconSize.sm} color={colors.textMuted} />
                 </Pressable>
               ) : null}
             </View>
@@ -190,7 +191,7 @@ export function ChatComposerBar({
             accessibilityRole="button"
             disabled={disabled || isSending || isVoiceRecording}
           >
-            <Ionicons name="add-outline" size={24} color={colors.textSecondary} />
+            <AppIcon name="add-outline" size={IconSize.lg} color={colors.textSecondary} />
           </AnimatedPressable>
         ) : null}
 
@@ -240,7 +241,7 @@ export function ChatComposerBar({
             {isSending ? (
               <ActivityIndicator size="small" color={colors.textInverse} />
             ) : (
-              <Ionicons name="send" size={18} color={canSend ? colors.textInverse : colors.textMuted} />
+              <AppIcon name="send" variant="filled" size={18} color={canSend ? colors.textInverse : colors.textMuted} />
             )}
           </AnimatedPressable>
         ) : (
@@ -256,7 +257,7 @@ export function ChatComposerBar({
                 accessibilityRole="button"
                 disabled={disabled || isSending}
               >
-                <Ionicons name="camera-outline" size={24} color={colors.textSecondary} />
+                <AppIcon name="camera" size={IconSize.lg} color={colors.textSecondary} />
               </AnimatedPressable>
             ) : null}
             {/* Voice entry point — the recorder's idle state is the mic

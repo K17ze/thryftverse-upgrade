@@ -1,9 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Control, AvatarSize } from '../../theme/designTokens';
+import { Space, Radius, Control, AvatarSize, IconGrammar } from '../../theme/designTokens';
+import { IconSize } from '../../theme/iconTokens';
+import { AppIcon } from '../common/AppIcon';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
@@ -81,10 +82,10 @@ export function ChatTopBar({
             accessibilityLabel={t('search.closeSearch')}
             accessibilityRole="button"
           >
-            <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
+            <AppIcon concept="back" size={IconGrammar.standard} color={colors.textPrimary} />
           </AnimatedPressable>
           <View style={styles.searchFieldWrap}>
-            <Ionicons name="search-outline" size={16} color={colors.textMuted} style={styles.searchFieldIcon} />
+            <AppIcon concept="search" size={IconSize.sm} color={colors.textMuted} style={styles.searchFieldIcon} />
             <TextInput
               style={styles.searchInput}
               value={searchValue}
@@ -110,7 +111,7 @@ export function ChatTopBar({
                   accessibilityLabel={t('search.previousResult')}
                   accessibilityRole="button"
                 >
-                  <Ionicons name="chevron-up" size={16} color={colors.textPrimary} />
+                  <AppIcon concept="chevron-up" size={IconSize.sm} color={colors.textPrimary} />
                 </AnimatedPressable>
               ) : null}
               {onNextResult ? (
@@ -123,7 +124,7 @@ export function ChatTopBar({
                   accessibilityLabel={t('search.nextResult')}
                   accessibilityRole="button"
                 >
-                  <Ionicons name="chevron-down" size={16} color={colors.textPrimary} />
+                  <AppIcon concept="chevron-down" size={IconSize.sm} color={colors.textPrimary} />
                 </AnimatedPressable>
               ) : null}
             </View>
@@ -140,7 +141,7 @@ export function ChatTopBar({
             accessibilityLabel={t('common.goBack')}
             accessibilityRole="button"
           >
-            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
+            <AppIcon concept="back" size={IconSize.lg} color={colors.textPrimary} />
           </AnimatedPressable>
 
           <AnimatedPressable
@@ -176,7 +177,7 @@ export function ChatTopBar({
               <View style={styles.titleRow}>
                 <Text style={styles.title} numberOfLines={1}>{title}</Text>
                 {isVerified && variant === 'dm' ? (
-                  <Ionicons
+                  <AppIcon
                     name="checkmark-circle"
                     size={13}
                     color={colors.brand}
@@ -203,7 +204,7 @@ export function ChatTopBar({
                 accessibilityRole="button"
                 accessibilityState={{ selected: isSearchActive }}
               >
-                <Ionicons name={isSearchActive ? 'search' : 'search-outline'} size={20} color={isSearchActive ? colors.brand : colors.textPrimary} />
+                <AppIcon name="search" size={IconSize.md} color={isSearchActive ? colors.brand : colors.textPrimary} focused={isSearchActive} />
               </AnimatedPressable>
             ) : null}
             {onInfo ? (
@@ -216,7 +217,7 @@ export function ChatTopBar({
                 accessibilityLabel={variant === 'group' ? 'Group info' : 'Chat info'}
                 accessibilityRole="button"
               >
-                <Ionicons name="ellipsis-horizontal" size={20} color={colors.textPrimary} />
+                <AppIcon name="more" size={IconSize.md} color={colors.textPrimary} />
               </AnimatedPressable>
             ) : null}
           </View>

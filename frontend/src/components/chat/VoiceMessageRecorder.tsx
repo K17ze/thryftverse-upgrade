@@ -6,8 +6,9 @@ import {
   Pressable,
   ActivityIndicator,
   ViewStyle } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius } from '../../theme/designTokens';
+import { Space, Radius, IconGrammar } from '../../theme/designTokens';
+import { IconSize } from '../../theme/iconTokens';
+import { AppIcon } from '../common/AppIcon';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -104,7 +105,7 @@ export function VoiceMessageRecorder({
         accessibilityHint="Audio recording is not supported in this build"
       >
         <View style={styles.micBtn}>
-          <Ionicons name="mic-off" size={22} color={colors.textMuted} />
+          <AppIcon name="mic-off" size={IconGrammar.standard} color={colors.textMuted} />
         </View>
       </View>
     );
@@ -120,7 +121,7 @@ export function VoiceMessageRecorder({
         accessibilityLabel="Microphone permission denied. Tap to request permission."
       >
         <View style={styles.micBtn}>
-          <Ionicons name="mic-off" size={22} color={colors.warningText} />
+          <AppIcon name="mic-off" size={IconGrammar.standard} color={colors.warningText} />
         </View>
       </Pressable>
     );
@@ -147,10 +148,10 @@ export function VoiceMessageRecorder({
           accessibilityRole="button"
           accessibilityLabel="Delete recording and start over"
         >
-          <Ionicons name="trash-outline" size={20} color={colors.dangerText} />
+          <AppIcon name="trash" size={IconSize.md} color={colors.dangerText} />
         </Pressable>
         <View style={styles.previewInfo}>
-          <Ionicons name="checkmark-circle" size={14} color={colors.successText} />
+          <AppIcon name="checkmark-circle" size={IconSize.xs} color={colors.successText} />
           <Text style={styles.previewDuration}>{recorder.durationLabel}</Text>
           <Text style={styles.previewHint}>Ready to send</Text>
         </View>
@@ -161,7 +162,7 @@ export function VoiceMessageRecorder({
           accessibilityLabel="Send voice message"
           accessibilityHint="Sends the recording. Cannot be undone."
         >
-          <Ionicons name="arrow-up" size={18} color={colors.textInverse} />
+          <AppIcon name="arrow-up" size={18} color={colors.textInverse} />
         </Pressable>
       </View>
     );
@@ -197,7 +198,7 @@ export function VoiceMessageRecorder({
           accessibilityLabel="Stop recording and review"
           accessibilityHint="Tap to finish recording. Review before sending."
         >
-          <Ionicons name="stop" size={16} color={colors.textInverse} />
+          <AppIcon name="stop" variant="filled" size={IconSize.sm} color={colors.textInverse} />
         </Pressable>
         <Pressable
           onPress={handleCancel}
@@ -205,7 +206,7 @@ export function VoiceMessageRecorder({
           accessibilityRole="button"
           accessibilityLabel="Cancel recording and delete it"
         >
-          <Ionicons name="close" size={20} color={colors.dangerText} />
+          <AppIcon name="close" size={IconSize.md} color={colors.dangerText} />
         </Pressable>
       </View>
     );
@@ -223,7 +224,7 @@ export function VoiceMessageRecorder({
       accessibilityState={{ disabled: disabled || !recorder.canStart }}
     >
       <View style={[styles.micBtn, disabled && styles.micBtnDisabled]}>
-        <Ionicons name="mic" size={22} color={disabled ? colors.textMuted : colors.textPrimary} />
+        <AppIcon name="mic" variant="filled" size={IconGrammar.standard} color={disabled ? colors.textMuted : colors.textPrimary} />
       </View>
     </Pressable>
   );

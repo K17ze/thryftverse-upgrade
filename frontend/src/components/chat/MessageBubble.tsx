@@ -1,11 +1,12 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Linking } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
   withTiming,
   withSpring,
   type EntryExitAnimationFunction } from 'react-native-reanimated';
-import { Space, Radius, Stroke, AspectRatio } from '../../theme/designTokens';
+import { Space, Radius, Stroke, AspectRatio, IconGrammar } from '../../theme/designTokens';
+import { IconSize } from '../../theme/iconTokens';
+import { AppIcon } from '../common/AppIcon';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { Motion } from '../../theme/motionTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
@@ -296,9 +297,9 @@ function MessageBubbleBase({
       {showAvatar && !isMe ? (
         isAgent ? (
           <View style={[styles.agentAvatar, { backgroundColor: colors.brandSubtle, borderColor: colors.borderSubtle }]}>
-            <Ionicons
-              name={(agentAvatar ?? 'bulb-outline') as keyof typeof Ionicons.glyphMap}
-              size={14}
+            <AppIcon
+              name={agentAvatar ?? 'bulb-outline'}
+              size={IconSize.xs}
               color={colors.brand}
             />
           </View>
@@ -317,7 +318,7 @@ function MessageBubbleBase({
             <Text style={styles.senderName}>{senderLabel}</Text>
             {isAgent ? (
               <View style={[styles.aiChip, { backgroundColor: colors.brandSubtle, borderColor: colors.borderSubtle }]}>
-                <Ionicons name="bulb-outline" size={9} color={colors.brand} />
+                <AppIcon concept="sparkle" size={IconSize.micro} color={colors.brand} />
                 <Text style={[styles.aiChipText, { color: colors.brand }]}>AI</Text>
               </View>
             ) : null}
@@ -359,7 +360,7 @@ function MessageBubbleBase({
               />
               {mediaType === 'video' ? (
                 <View style={styles.videoBadge}>
-                  <Ionicons name="play" size={16} color={colors.textInverse} />
+                  <AppIcon name="play" variant="filled" size={IconSize.sm} color={colors.textInverse} />
                 </View>
               ) : null}
               {isUploading ? (
@@ -399,7 +400,7 @@ function MessageBubbleBase({
               accessibilityRole="button"
               accessibilityLabel={documentName ? `Open document ${documentName}` : 'Open document'}
             >
-              <Ionicons name="document-outline" size={22} color={isMe ? colors.textInverse : colors.brand} />
+              <AppIcon name="document-outline" size={IconGrammar.standard} color={isMe ? colors.textInverse : colors.brand} />
               <View style={styles.documentMeta}>
                 <Text style={[styles.documentName, { color: bubbleText }]} numberOfLines={1}>
                   {documentName ?? 'Document'}
@@ -410,7 +411,7 @@ function MessageBubbleBase({
                   </Text>
                 ) : null}
               </View>
-              <Ionicons name="download-outline" size={16} color={metaColor} />
+              <AppIcon name="download" size={IconSize.sm} color={metaColor} />
             </Pressable>
           ) : null}
 
@@ -418,7 +419,7 @@ function MessageBubbleBase({
             <>
               {isDraft ? (
                 <View style={styles.draftBadge}>
-                  <Ionicons name="create-outline" size={10} color={colors.textMuted} />
+                  <AppIcon name="edit" size={IconSize.micro} color={colors.textMuted} />
                   <Text style={[styles.draftLabel, { color: colors.textMuted }]}>Draft</Text>
                 </View>
               ) : null}
@@ -494,7 +495,7 @@ function MessageBubbleBase({
                 style={styles.savedMark}
                 accessibilityLabel={t('conversation.savedInChat')}
               >
-                <Ionicons name="bookmark" size={10} color={metaColor} />
+                <AppIcon name="bookmark" variant="filled" size={IconSize.micro} color={metaColor} />
                 <Text style={[styles.timestamp, { color: metaColor }]}>
                   {t('conversation.savedInChat')}
                 </Text>
@@ -509,22 +510,22 @@ function MessageBubbleBase({
             {isMe && (readStatus || status) ? (
               <View style={styles.statusWrap}>
                 {isUploading || readStatus === 'sending' ? (
-                  <Ionicons name="time-outline" size={12} color={metaColor} />
+                  <AppIcon name="clock" size={IconSize.micro} color={metaColor} />
                 ) : hasFailed ? (
-                  <Ionicons name="alert-circle" size={12} color={isMe ? colors.textInverse : colors.dangerText} />
+                  <AppIcon name="alert" variant="filled" size={IconSize.micro} color={isMe ? colors.textInverse : colors.dangerText} />
                 ) : status === 'reconciling' ? (
                   // The HTTP send failed but the server may have created
                   // the message — a muted sync glyph is the honest state:
                   // not "sent" (checkmark) and not a hard failure.
-                  <Ionicons
+                  <AppIcon
                     name="sync-outline"
-                    size={12}
+                    size={IconSize.micro}
                     color={metaColor}
                     accessibilityLabel="Confirming delivery"
                   />
                 ) : readStatus ? (
                   <>
-                    <Ionicons
+                    <AppIcon
                       name={isRead || readStatus === 'read' ? 'checkmark-done' : 'checkmark'}
                       size={13}
                       color={isRead || readStatus === 'read' ? (isMe ? colors.textInverse : colors.brand) : metaColor}
@@ -546,7 +547,7 @@ function MessageBubbleBase({
                     ) : null}
                   </>
                 ) : (
-                  <Ionicons name="checkmark" size={13} color={metaColor} accessibilityLabel="Message sent" />
+                  <AppIcon name="checkmark" size={13} color={metaColor} accessibilityLabel="Message sent" />
                 )}
               </View>
             ) : null}
@@ -555,7 +556,7 @@ function MessageBubbleBase({
 
         {hasFailed && onRetry ? (
           <Pressable onPress={onRetry} style={styles.retryBadge} accessibilityRole="button" accessibilityLabel="Retry sending message">
-            <Ionicons name="refresh" size={11} color={colors.dangerText} />
+            <AppIcon name="refresh" variant="filled" size={IconSize.micro} color={colors.dangerText} />
             <Text style={styles.retryText}>Tap to retry</Text>
           </Pressable>
         ) : null}
@@ -571,7 +572,7 @@ function MessageBubbleBase({
             accessibilityRole="button"
             accessibilityLabel="Retry sending agent draft"
           >
-            <Ionicons name="refresh" size={11} color={colors.dangerText} />
+            <AppIcon name="refresh" variant="filled" size={IconSize.micro} color={colors.dangerText} />
             <Text style={styles.retryText}>Tap to retry</Text>
           </Pressable>
         ) : null}
@@ -587,7 +588,7 @@ function MessageBubbleBase({
             accessibilityRole="button"
             accessibilityLabel="Send agent draft"
           >
-            <Ionicons name="send" size={11} color={colors.brand} />
+            <AppIcon name="send" variant="filled" size={IconSize.micro} color={colors.brand} />
             <Text style={[styles.draftConfirmText, { color: colors.brand }]}>Send</Text>
           </Pressable>
         ) : null}
