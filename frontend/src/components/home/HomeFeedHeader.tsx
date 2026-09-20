@@ -277,7 +277,12 @@ export function HomeFeedHeader({
         <OfflineBanner onRetry={onRetry} />
       ) : hasSyncError ? (
         <SyncRetryBanner
-          message="Sync is unavailable. Showing cached items."
+          // Honest copy: the 'cache'/'offline-cache' source is never set in
+          // this build — on-screen content is the last successfully loaded
+          // page, not a persisted cache (F-home-banner-truth).
+          message={feedDataLength > 0
+            ? "Couldn't refresh — showing your last loaded items."
+            : "Couldn't load the feed."}
           onRetry={onRetry}
           isRetrying={isSyncing || isRefreshing}
           telemetryContext="home_feed_sync"

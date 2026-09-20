@@ -46,6 +46,7 @@ export function DiscoveryFeedView({
   scrollRef,
   onItemSaveToggle,
   onItemSaveLongPress,
+  onListingLongPress,
   isItemSaved }: {
   units: DiscoveryFeedUnit[];
   isLoading: boolean;
@@ -80,6 +81,9 @@ export function DiscoveryFeedView({
   scrollRef: React.MutableRefObject<any>;
   onItemSaveToggle?: (listing: DiscoveryListingSummary) => void;
   onItemSaveLongPress?: (listing: DiscoveryListingSummary) => void;
+  /** Long-press on a listing tile — opens the feed-control sheet
+   *  (not interested / show less / why am I seeing this). */
+  onListingLongPress?: (listing: DiscoveryListingSummary) => void;
   isItemSaved?: (listingId: string) => boolean;
 }) {
   const { colors } = useAppTheme();
@@ -278,6 +282,7 @@ export function DiscoveryFeedView({
       listHeaderComponent={listHeader}
       onItemSaveToggle={onItemSaveToggle}
       onItemSaveLongPress={onItemSaveLongPress}
+      onListingLongPress={onListingLongPress}
       isItemSaved={isItemSaved}
     />
   );

@@ -170,7 +170,10 @@ export function CreatorDestructiveButton({
   });
 
   const isDisabled = disabled || loading;
-  const dangerColor = colors.dangerText;
+  // Fill vs foreground roles (theme contract): `danger` is the fill accent,
+  // `dangerText` is the readable foreground for borders, labels and spinner.
+  const dangerFill = colors.danger;
+  const dangerForeground = colors.dangerText;
 
   return (
     <Pressable
@@ -190,21 +193,24 @@ export function CreatorDestructiveButton({
           styles.button,
           {
             borderRadius: Radius.lg,
-            backgroundColor: confirming ? dangerColor : 'transparent',
+            backgroundColor: confirming ? dangerFill : 'transparent',
             borderWidth: Stroke.standard,
-            borderColor: dangerColor,
+            borderColor: dangerForeground,
           },
           animatedStyle,
           bgStyle,
         ]}
       >
         {loading ? (
-          <ActivityIndicator size="small" color={dangerColor} />
+          <ActivityIndicator
+            size="small"
+            color={confirming ? colors.textInverse : dangerForeground}
+          />
         ) : (
           <Reanimated.Text
             style={[
               styles.label,
-              { color: confirming ? colors.textInverse : dangerColor },
+              { color: confirming ? colors.textInverse : dangerForeground },
             ]}
             numberOfLines={1}
           >

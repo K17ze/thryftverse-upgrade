@@ -54,6 +54,7 @@ import { useRealtimeResnapshot } from "../../platform/realtime";
 import { requestPushPermissionWithSoftAsk } from "../../lib/pushPermission";
 import { ApiRequestError, parseApiError } from "../../lib/apiClient";
 import { isVideoUri } from "../../utils/media";
+import { shouldAutoScrollOnIncomingMessage } from "../../utils/chatScrollAnchor";
 import { makeStableId, createStableId } from "../../utils/createStableId";
 import { t } from "../../i18n";
 import type { SupportedCurrencyCode } from "../../constants/currencies";
@@ -596,7 +597,16 @@ export function useConversationMessages({
           appendConversationMessage(conversationId, domainMessage);
         }
 
-        scheduleScrollToEnd();
+        // Only auto-scroll when the reader is already at the bottom (or the
+        // message is our own echo). A user scrolled up reading history keeps
+        // their position; the unread-below FAB carries the new arrivals
+        // instead of yanking the viewport (F-chat-anchor).
+        if (shouldAutoScrollOnIncomingMessage({
+          isAtBottom: !showScrollToBottom,
+          isOwnMessage: localMessage.sender === 'me',
+        })) {
+          scheduleScrollToEnd();
+        }
       },
       [conversationId, currentUser?.id, appendConversationMessage, scheduleScrollToEnd, showScrollToBottom],
     ),
@@ -1307,7 +1317,10 @@ export function useConversationMessages({
         canonicalUrl = existingCanonicalUrl;
       } else {
         try {
-          const uploaded = await uploadMedia(doc.uri, 'uploads');
+          const uploaded = await uploadMedia(doc.uri, 'uploads', {
+            contentType: doc.mimeType,
+            fileName: doc.name,
+          });
           canonicalUrl = uploaded.publicUrl;
         } catch {
           setMessages((prev) =>

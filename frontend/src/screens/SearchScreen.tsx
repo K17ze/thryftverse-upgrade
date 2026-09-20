@@ -303,6 +303,11 @@ export default function SearchScreen() {
           placeholder="Search items, brands and people"
           onCameraPress={() => navigation.navigate('VisualSearch')}
           inputProps={{
+            // Search is this surface's primary intent — the keyboard is
+            // ready on mount (Instagram/Depop search-tab behaviour).
+            // autoFocus fires once on mount, not on re-focus, so returning
+            // from a detail screen doesn't re-pop the keyboard.
+            autoFocus: true,
             onFocus: () => setIsSearchFocused(true),
             onSubmitEditing: () => submitSearch(searchQuery),
             returnKeyType: 'search',

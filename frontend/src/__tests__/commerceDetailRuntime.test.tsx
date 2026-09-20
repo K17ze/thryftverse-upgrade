@@ -59,6 +59,9 @@ import { CommerceDetailSection } from '../components/commerce/detail/CommerceDet
 import { CommerceDetailIdentity } from '../components/commerce/detail/CommerceDetailIdentity';
 import { CommerceDetailStateDock } from '../components/commerce/detail/CommerceDetailStateDock';
 import { CommerceDetailTransactionSurface } from '../components/commerce/detail/CommerceDetailTransactionSurface';
+import { CommerceActionDock } from '../components/commerce/detail/CommerceActionDock';
+import type { ListingCapabilities, ListingCommerceContext } from '../platform/product/listingDetailContract';
+import type { Listing } from '../services/listingsApi';
 
 function renderTree(el: React.ReactElement): TestRenderer.ReactTestRenderer {
   let renderer: TestRenderer.ReactTestRenderer | null = null;
@@ -328,5 +331,59 @@ describe('commerce-detail runtime tests (react-test-renderer)', () => {
       expect(hasText(renderer, '£25')).toBe(true);
       expect(hasText(renderer, 'Market grid content')).toBe(true);
     });
+  });
+});
+
+describe('CommerceActionDock — blocked seller gate', () => {
+  const buyableCapabilities: ListingCapabilities = {
+    canBuy: true,
+    canOffer: true,
+    canEdit: false,
+    canManage: false,
+    canMessage: true,
+    commerceTier: 'standard',
+    isOwner: false,
+    isSold: false,
+    isAvailable: true,
+    unavailableReason: null,
+  };
+  const commerce: ListingCommerceContext = {
+    itemPrice: 120,
+    currency: 'GBP',
+  };
+  const item = { id: 'l1', sellerId: 's1', images: [] } as unknown as Listing;
+  const noop = () => {};
+
+  const renderDock = (isSellerBlocked: boolean) =>
+    renderTree(
+      <CommerceActionDock
+        item={item}
+        capabilities={buyableCapabilities}
+        commerce={commerce}
+        seller={null}
+        isSellerBlocked={isSellerBlocked}
+        formattedPrice="£120"
+        formattedOriginal={null}
+        hasDiscount={false}
+        onManageListing={noop}
+        onBrowseSimilar={noop}
+        onBuyNow={noop}
+        onMakeOffer={noop}
+        onEnquire={noop}
+        onRequestViewing={noop}
+      />
+    );
+
+  it('renders purchase affordances for an unblocked buyable listing', () => {
+    const renderer = renderDock(false);
+    expect(hasText(renderer, 'Blocked')).toBe(false);
+    expect(hasText(renderer, 'Make offer')).toBe(true);
+  });
+
+  it('suppresses all purchase affordances when the viewer blocked the seller', () => {
+    const renderer = renderDock(true);
+    expect(hasText(renderer, 'Blocked')).toBe(true);
+    expect(hasText(renderer, 'You blocked this seller')).toBe(true);
+    expect(hasText(renderer, 'Make offer')).toBe(false);
   });
 });

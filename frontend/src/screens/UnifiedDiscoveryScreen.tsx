@@ -23,7 +23,7 @@
  */
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { RootStackParamList } from '../navigation/types';
@@ -44,10 +44,49 @@ import {
   DiscoverySearchHeader,
   DiscoverySearchResultsView,
   createUnifiedDiscoveryStyles } from '../components/discovery';
+import type { DiscoveryFeedUnit } from '../contracts/discoveryFeedUnit';
 import type { DiscoveryListingSummary } from '../contracts/DiscoveryListingSummary';
 import { openProductDetail } from '../platform/product/openProductDetail';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
+import { Control, FontFamily, Radius, Space } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { FeedExplanationSheet } from '../components/algorithm/FeedExplanationSheet';
+import {
+  markItemNotInterested,
+  showFewerLikeThis,
+  type FeedbackAttribution } from '../services/recommendationFeedbackApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'UnifiedDiscovery'>;
+
+// Feed-control sheet — flat canvas, hairline-free rows, same idiom as the
+// DiscoverScene feed-control sheet and the YourAlgorithm topic sheet.
+const feedbackStyles = StyleSheet.create({
+  sheetScrim: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end' },
+  sheet: {
+    borderTopLeftRadius: Radius.lg,
+    borderTopRightRadius: Radius.lg,
+    paddingHorizontal: Space.md,
+    paddingTop: Space.lg,
+    paddingBottom: Space.xl },
+  sheetTitle: {
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: FontFamily.semibold,
+    marginBottom: Space.sm },
+  sheetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    minHeight: Control.hit,
+    borderRadius: Radius.md,
+    paddingHorizontal: Space.sm },
+  sheetRowText: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.medium } });
 
 export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
   const { colors } = useAppTheme();
@@ -100,9 +139,110 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
     discoveryError: content.discoveryError,
   });
 
+  // ── Feed controls — long-press a listing tile for "Not interested" /
+  //  "Show less like this" / "Why am I seeing this?". Same intent-profile
+  //  contract as DiscoverScene: suppressions write to the backend intent
+  //  epoch and locally hide immediately regardless of which feed source
+  //  served the tile. ──
+  const [feedbackItem, setFeedbackItem] = useState<DiscoveryListingSummary | null>(null);
+  const [explanationItemId, setExplanationItemId] = useState<string | null>(null);
+  const [hiddenListingIds, setHiddenListingIds] = useState<Set<string>>(new Set());
+
+  const feedbackAttribution = useCallback(
+    (listing: DiscoveryListingSummary): FeedbackAttribution => {
+      const served = feed.forYouFeed.items.find((vm) => vm.listing.id === listing.id);
+      return {
+        surface: 'discover',
+        // Only attach serve attribution when the item came from the
+        // personalised serve — the backend 422s an interaction whose
+        // requestId has no matching impression row for this listing.
+        requestId: served ? feed.forYouFeed.requestId : undefined,
+        position: served?.position,
+        model: served?.model,
+        policyVersion: served ? feed.forYouFeed.policyVersion : undefined,
+      };
+    },
+    [feed.forYouFeed.items, feed.forYouFeed.requestId, feed.forYouFeed.policyVersion],
+  );
+
+  const hideListing = useCallback(
+    (listingId: string) => {
+      setHiddenListingIds((prev) => {
+        if (prev.has(listingId)) return prev;
+        const next = new Set(prev);
+        next.add(listingId);
+        return next;
+      });
+      feed.forYouFeed.dismissListing(listingId);
+    },
+    [feed.forYouFeed],
+  );
+
+  const handleListingLongPress = useCallback(
+    (listing: DiscoveryListingSummary) => {
+      haptic.selection();
+      setFeedbackItem(listing);
+    },
+    [haptic],
+  );
+
+  const handleNotInterested = useCallback(() => {
+    const target = feedbackItem;
+    if (!target) return;
+    haptic.medium();
+    setFeedbackItem(null);
+    hideListing(target.id);
+    void markItemNotInterested(target, feedbackAttribution(target));
+  }, [feedbackItem, haptic, hideListing, feedbackAttribution]);
+
+  const handleShowLess = useCallback(() => {
+    const target = feedbackItem;
+    if (!target) return;
+    haptic.light();
+    setFeedbackItem(null);
+    void showFewerLikeThis(target, feedbackAttribution(target)).then((result) => {
+      // The mutation bumps the intent epoch; refetch so the down-ranking is
+      // visible rather than only applying on the next cold load.
+      if (result.persisted) void feed.forYouFeed.refresh();
+    });
+  }, [feedbackItem, haptic, feedbackAttribution, feed.forYouFeed]);
+
+  const handleWhySeeing = useCallback(() => {
+    const target = feedbackItem;
+    if (!target) return;
+    haptic.selection();
+    setFeedbackItem(null);
+    setExplanationItemId(target.id);
+  }, [feedbackItem, haptic]);
+
+  const handleExplanationChanged = useCallback(() => {
+    void feed.forYouFeed.refresh();
+  }, [feed.forYouFeed]);
+
+  // Real serve attribution for the explanation sheet — reason codes and
+  // component scores are the authoritative "why" for personalised serves.
+  const explanationServedContext = useMemo(() => {
+    if (!explanationItemId) return null;
+    const vm = feed.forYouFeed.items.find((item) => item.listing.id === explanationItemId);
+    if (!vm) return null;
+    return {
+      reasonCodes: vm.reasonCodes,
+      componentScores: vm.componentScores,
+      score: vm.score,
+      itemTitle: vm.listing.title,
+      itemThumbnail: vm.listing.images?.[0] ?? '',
+    };
+  }, [explanationItemId, feed.forYouFeed.items]);
+
   // ── Search results are already feed units (built in the effect) ──
   const searchFeedUnits = search.searchResults;
-  const activeUnits = search.isSearchingMode ? searchFeedUnits : feed.feedUnits;
+  const activeUnits = useMemo<DiscoveryFeedUnit[]>(() => {
+    const units = search.isSearchingMode ? searchFeedUnits : feed.feedUnits;
+    if (hiddenListingIds.size === 0) return units;
+    return units.filter(
+      (unit) => unit.type !== 'listing' || !hiddenListingIds.has(unit.listing.id),
+    );
+  }, [search.isSearchingMode, searchFeedUnits, feed.feedUnits, hiddenListingIds]);
 
   // ── Hero editorial (first one) ──
   const heroEditorial = content.editorials[0];
@@ -232,10 +372,92 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
             scrollRef={scrollRef}
             onItemSaveToggle={handleQuickSave}
             onItemSaveLongPress={handleSaveLongPress}
+            onListingLongPress={handleListingLongPress}
             isItemSaved={isSavedProduct}
           />
         )}
       </View>
+
+      {/* ── Feed control sheet — long-press a listing tile. Three honest
+          actions: suppress the item, down-rank the topic, or inspect why it
+          was served. ── */}
+      <Modal
+        visible={feedbackItem !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setFeedbackItem(null)}
+      >
+        <Pressable
+          style={feedbackStyles.sheetScrim}
+          onPress={() => setFeedbackItem(null)}
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss feed controls"
+        >
+          <View
+            style={[feedbackStyles.sheet, { backgroundColor: colors.surface }]}
+            onStartShouldSetResponder={() => true}
+          >
+            {feedbackItem && (
+              <>
+                <Text style={[feedbackStyles.sheetTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                  {feedbackItem.title}
+                </Text>
+
+                <Pressable
+                  style={feedbackStyles.sheetRow}
+                  onPress={handleNotInterested}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Not interested in ${feedbackItem.title}`}
+                  accessibilityHint="Hides this item and stops recommending it"
+                >
+                  <AppIcon name="eye-off-outline" size={IconSize.md} color="textPrimary" accessible={false} />
+                  <Text style={[feedbackStyles.sheetRowText, { color: colors.textPrimary }]}>
+                    Not interested
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  style={feedbackStyles.sheetRow}
+                  onPress={handleShowLess}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Show less like ${feedbackItem.title}`}
+                  accessibilityHint="Lowers similar items in your feed without hiding them"
+                >
+                  <AppIcon name="remove-circle-outline" size={IconSize.md} color="textPrimary" accessible={false} />
+                  <Text style={[feedbackStyles.sheetRowText, { color: colors.textPrimary }]}>
+                    Show less like this
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  style={feedbackStyles.sheetRow}
+                  onPress={handleWhySeeing}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Why am I seeing ${feedbackItem.title}`}
+                  accessibilityHint="Shows the signals that placed this item in your feed"
+                >
+                  <AppIcon name="information-circle-outline" size={IconSize.md} color="textMuted" accessible={false} />
+                  <Text style={[feedbackStyles.sheetRowText, { color: colors.textSecondary }]}>
+                    Why am I seeing this?
+                  </Text>
+                </Pressable>
+              </>
+            )}
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* ── "Why am I seeing this?" explanation sheet — reasons carry real
+          topic controls wired to the intent profile. ── */}
+      <FeedExplanationSheet
+        visible={explanationItemId !== null}
+        itemId={explanationItemId}
+        servedContext={explanationServedContext}
+        onDismiss={() => setExplanationItemId(null)}
+        onSeeMoreLikeThis={handleExplanationChanged}
+        onShowLessLikeThis={handleExplanationChanged}
+        onTopicRemoved={handleExplanationChanged}
+      />
       <SaveToCollectionModal
         visible={savePickerItemId != null}
         itemId={savePickerItemId ?? ''}

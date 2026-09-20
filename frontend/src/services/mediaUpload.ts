@@ -12,6 +12,13 @@ import {
 export interface MediaUploadOptions {
   signal?: AbortSignal;
   onProgress?: (loadedBytes: number, totalBytes: number) => void;
+  /** Declared MIME type from the picker (e.g. DocumentPicker's mimeType).
+   *  Beats extension inference — without it, a .pdf uploads declared as
+   *  `image/jpeg` and the backend stores a mislabeled object. The actual
+   *  Blob type, when readable, still wins over this declaration. */
+  contentType?: string;
+  /** Declared original file name — used for the presign key extension. */
+  fileName?: string;
 }
 
 export interface PresignResponse {
@@ -508,7 +515,10 @@ export async function uploadMedia(
 
   if (typeof source === 'string') {
     fileUri = source;
-    const ext = fileUri.split('.').pop()?.toLowerCase() ?? 'jpg';
+    // Declared names can lack an extension (sanitized display names) — only
+    // prefer them for inference when they actually carry one.
+    const extSource = opts?.fileName?.includes('.') ? opts.fileName : fileUri;
+    const ext = extSource.split('.').pop()?.toLowerCase() ?? 'jpg';
     // Extension-based inference; refined from the actual bytes below when a
     // Blob is read (web, or the native size-probe last resort). Extension
     // detection alone is unreliable for ph:// and content:// URIs (e.g.
@@ -530,8 +540,14 @@ export async function uploadMedia(
         ? 'audio/ogg'
         : ext === 'webm'
         ? 'audio/webm'
+        : ext === 'pdf'
+        ? 'application/pdf'
         : 'image/jpeg';
-    fileName = `media_${Date.now()}_${Math.floor(Math.random() * 1_000_000).toString(36)}.${ext}`;
+    fileName = opts?.fileName
+      ?? `media_${Date.now()}_${Math.floor(Math.random() * 1_000_000).toString(36)}.${ext}`;
+    if (opts?.contentType) {
+      contentType = opts.contentType;
+    }
 
     const resolved = await resolveUploadSize(fileUri, 0, opts?.signal);
     sizeBytes = resolved.sizeBytes;

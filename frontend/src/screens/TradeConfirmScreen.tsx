@@ -10,6 +10,7 @@ import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { AppButton } from '../components/ui/AppButton';
 import { HoldToSubmitButton } from '../components/ui/HoldToSubmitButton';
 import { useHaptic } from '../hooks/useHaptic';
+import { useBiometricGate } from '../hooks/useBiometricGate';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 import { useToast } from '../context/ToastContext';
 import { cancelCoOwnOrderReservation, placeCoOwnOrder, lookupCoOwnOrderByIdempotencyKey, fetchCoOwnAssetById } from '../services/marketApi';
@@ -93,6 +94,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { isVeryCompact: isCompactDock } = useBreakpoint();
   const haptic = useHaptic();
+  const biometricGate = useBiometricGate();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
   const invalidateCoOwnAsset = useInvalidateCoOwnAsset();
@@ -342,6 +344,19 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
     if (!currentUser?.id) {
       show('Sign in is required to place an order.', 'error');
       return;
+    }
+
+    // Step-up auth: when the user enabled biometric protection and the
+    // hardware is enrolled, committing money requires re-authentication —
+    // the same gate Wallet, Payments, Withdraw and Convert already apply.
+    // Hold-to-submit remains the commitment device when the gate is off or
+    // the device has no enrolled biometric.
+    if (biometricGate.isAvailable) {
+      const authenticated = await biometricGate.authenticate('Authenticate to place this order');
+      if (!authenticated) {
+        show(biometricGate.error ?? 'Authentication required to place the order.', 'info');
+        return;
+      }
     }
 
     haptic.heavy();

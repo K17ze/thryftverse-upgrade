@@ -186,3 +186,43 @@ Reviewer lacked file access — all findings arrived as VERIFY items; each verif
 - Frontend tsc clean; backend tsc clean; targeted vitest 22/22 (orderBookDepth, discoverySurfaces, browseFilterContexts).
 - API image rebuilt+redeployed (feed fix + pipeline fix); `/feed/home` 200, `/health` 200, minio reachable, zero new dead-letter errors.
 - User-removed `sustainableOnly` filter — completed removal (store field + 2 hook refs + screen + test fixture); i18n keys + optional API params retained (server contract unchanged).
+
+## Fresh production audit wave — 2026-09-19 (audit: thryftverse_fresh_production_audit_2026-09-19.md, pinned HEAD fdd63b8)
+
+### Truth-check verdicts
+- **Confirmed + fixed (10 findings)**: pagination storm (empty page re-fetched same cursor forever, thrown fetch stuck isLoadingMore); Home feed skeleton-blanking on background sync + dead onEndReached pagination fetching unrendered data; dishonest cache/offline source copy; feed duplicate listing ids across mixed sources; chat scroll-anchor yank on every incoming message; UnifiedDiscovery long-press feed controls never wired (DiscoverScene had them, the shipped surface didn't); no autofocus on dedicated search; PDP live purchase/message/follow CTAs for viewer-blocked sellers; document uploads declared image/jpeg (PDF mislabel — extension inference had no document branch); Co-Own trade commit missing step-up auth that Wallet/Payments/Withdraw/Convert already enforce.
+- **Verified already-complete**: P0-12 account deletion (password + confirm + TOTP + biometric + 409 blockers + cache purge + session logout); backend upload allowlist strict (image/video/audio/pdf only, exe/apk/html rejected at presign); inbox filters all functional.
+- **External/blocked**: branch protection + required checks, backend test runtime evidence, worker proof, native visual/a11y capture, real EAS secrets, scale drills, legal sign-off — recorded as blocked, not resolved.
+
+### Implementation notes
+- BackendDataContext.loadMoreListings: `!hasMore` guard, cursor clears on empty pages, try/catch/finally.
+- HomeScreen: skeleton only when feeds genuinely empty; removed dead pagination + "Loading more" footer (rendered feeds are finite); dedupe helper applied to both feed transforms.
+- Chat: `utils/chatScrollAnchor.ts` — scroll only at-bottom or own echo; read-marking for visible incoming preserved.
+- UnifiedDiscoveryScreen: `onListingLongPress` wired through DiscoveryFeedView → masonry grid; Not-interested hides locally + persists via markItemNotInterested with real serve attribution (requestId/position/model/policyVersion only when the item came from the personalised serve); FeedExplanationSheet gets real reasonCodes/componentScores.
+- ItemDetailScreen: `isSellerBlocked` derived once → dock renders Blocked state dock, seller row drops Message/Follow, Ask-the-seller gated, seller rail + bundle upsell suppressed.
+- mediaUpload: `MediaUploadOptions.contentType/fileName` overrides; doc send passes picker mimeType+name; `pdf` added to inference map.
+- TradeConfirmScreen: `biometricGate.authenticate('Authenticate to place this order')` required before placeCoOwnOrder when biometric protection is enabled and hardware enrolled.
+
+### Verification
+- `npx tsc --noEmit` clean.
+- Vitest 10 files / 156 tests green incl. NEW: backendDataPagination (4: cursor advance, dedupe, empty-page stop, error reset), discoveryFeedDedup (3), chatScrollAnchor (3 in chatRuntimeBehaviour), CommerceActionDock blocked gate (2 in commerceDetailRuntime).
+- `lint:design-tokens` pass — 2 pre-existing borderRadius:999 warnings in untouched files.
+- Migration prefix check exit 0 (12 allowlisted pre-existing duplicates, warnings only).
+
+### Adversarial review round (fresh-context, verify-items checked against source)
+- mediaUpload ext derivation: extension-less declared fileName would have shadowed the URI's real extension — now only preferred when it carries a dot. FIXED.
+- Biometric opt-in: VERIFIED CLEAN — `isAvailable` requires biometricEnabled preference + enrolled hardware; authenticate awaited with early return.
+- hiddenListingIds drift: parity with shipped DiscoverScene contract (local hide + dismissListing + intent-epoch persist); consistent behavior, not a divergence.
+- Blocked-dock ordering: VERIFIED — backend rejects orders/messages for blocked users; state dock is the honest surface.
+
+### Audit R76 — offline dead-letter truth (2026-09-21)
+- **Gap**: `offlineQueue.ts` moved exhausted writes to `deadLetterQueue` but only persisted `queue`, never surfaced failures in UI, and offered no retry/discard — a user could believe an offline write saved while it silently died.
+- **Fix**: dead letters now persist via `partialize`; new actions `retryDeadLetter`/`dismissDeadLetter`/`retryAllDeadLetters`/`clearDeadLetters`; retries preserve the original request (id, url, options/body → server idempotency keys intact) and trigger an immediate flush via the last captured fetch implementation; `clearQueue` still only clears pending so terminal failures require explicit acknowledgment.
+- **Surface**: `SettingsSyncSection` renders a single flat row under a "Sync" section only while pending or failed writes exist — counts, retry-all, and discard with a two-step destructive confirm. `OfflineDeadLetterWatcher` in App.tsx toasts on *new* dead-letter arrivals only (persisted leftovers don't re-toast on launch) with a Review action into Settings.
+- **Verification**: `offlineQueueDeadLetter.test.ts` 7/7 (dead-letter transition, persistence shape, retry preserves request + resets backoff, immediate flush on retry, retry-all, dismiss/clear, clearQueue preserves dead letters); frontend tsc clean; eslint 0 errors on touched files.
+
+### Audit wave 3 — R52 surveillance + R78 idempotency catalog (2026-09-21)
+- **R52**: `coown.order`/`coown.transfer` were declared risk-taxonomy slots with no producer. Order placement and cancel now call `evaluateRisk` post-commit (advisory, fail-open, immutable risk_events + velocity/IP signals). `registerCoOwnRoutes` gains optional redis/shadow/IP deps; `coOwnSurveillanceContract.test.ts` guards the wiring (3/3).
+- **R78**: `scripts/mutation-idempotency-catalog.mjs` + `npm run audit:idempotency` — scans 471 mutation routes, classifies each handler's idempotency mechanism (bounded at next route declaration), emits `docs/MUTATION_IDEMPOTENCY.md` with the 24 money-path routes flagged for review.
+- Verified covered, no work needed: R50 (protected_market maxPriceGbp enforcement), R53 (per-recipient `units_at_record`/`record_date` entitlement rows), R54 (durable `coown_drip_receipt` events, tx-atomic, dedupe-keyed), R68 (seller net-proceeds preview matches checkout fee math), R36 (checkout `unknown_outcome` stage + payment-status recovery), R34/R47/R49 (existing test/matrix coverage), R79 (CI migration apply + rerun + prefix check), R77 (realtime seq/replay/resnapshot).
+- Environment limitation unchanged: Redis/Postgres-dependent suites can't execute locally.

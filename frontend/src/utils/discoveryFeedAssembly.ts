@@ -80,10 +80,19 @@ export function assembleDiscoveryFeed(
   const chapters = buildCreatorChapters(looks, posters, moodboards, numColumns);
   if (listings.length === 0) return chapters.flat();
 
+  // Within-page dedupe — the serve contract does not guarantee unique ids
+  // across sources; a duplicated listing must never render twice.
+  const seenListingIds = new Set<string>();
+  const uniqueListings = listings.filter((listing) => {
+    if (seenListingIds.has(listing.id)) return false;
+    seenListingIds.add(listing.id);
+    return true;
+  });
+
   const listingUnits: ListingFeedUnit[] = [];
   let listingsSinceHero = HERO_MIN_GAP; // allow the first eligible listing to be a hero
 
-  listings.forEach((listing) => {
+  uniqueListings.forEach((listing) => {
     const aspectRatio = resolveListingMediaAspectRatio(listing);
     const isLandscape = aspectRatio >= HERO_ASPECT_THRESHOLD;
     const canBeHero = isLandscape && listingsSinceHero >= HERO_MIN_GAP;

@@ -26,6 +26,9 @@ export interface ItemDetailSellerSectionProps {
   railItems: DisplayReadyListing[];
   /** Whether the current user owns this listing. */
   isOwner: boolean;
+  /** Viewer blocked this seller — suppress follow/message affordances
+   *  (both fail server-side anyway). */
+  isSellerBlocked?: boolean;
   isFollowing: boolean;
   isFollowPending: boolean;
   onFollow: () => void;
@@ -44,6 +47,7 @@ export function ItemDetailSellerSection({
   seller,
   railItems,
   isOwner,
+  isSellerBlocked = false,
   isFollowing,
   isFollowPending,
   onFollow,
@@ -62,8 +66,8 @@ export function ItemDetailSellerSection({
             isOwner={isOwner}
             isFollowing={isFollowing}
             isFollowPending={isFollowPending}
-            onFollow={onFollow}
-            onMessage={onMessage}
+            onFollow={isSellerBlocked ? undefined : onFollow}
+            onMessage={isSellerBlocked ? undefined : onMessage}
             onViewShop={onViewShop}
           />
         </View>

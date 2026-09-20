@@ -115,6 +115,12 @@ export default function ItemDetailScreen() {
   const serverCommerce = data.commerce;
   const seller = data.seller;
   const sellerFollowMutation = data.sellerFollow;
+  // Viewer-relationship truth: a blocked seller must surface no purchase,
+  // offer, message or follow affordance anywhere on the PDP — every one of
+  // those paths fails server-side anyway, so showing live CTAs is a lie.
+  const sellerId = item?.sellerId ?? item?.seller?.id ?? null;
+  const isSellerBlocked = useStore((state) =>
+    sellerId ? state.blockedUsers.includes(sellerId) : false);
   const recommendationSections = data.recommendationSections;
   const recsError = data.recommendationsError;
   const soldComps = data.soldComparables;
@@ -490,8 +496,9 @@ export default function ItemDetailScreen() {
         <ItemDetailSellerSection
           item={item}
           seller={seller}
-          railItems={bundleItems}
+          railItems={isSellerBlocked ? [] : bundleItems}
           isOwner={capabilities.isOwner}
+          isSellerBlocked={isSellerBlocked}
           isFollowing={seller?.isFollowing ?? false}
           isFollowPending={sellerFollowMutation.isPending}
           onFollow={() => {
@@ -550,13 +557,13 @@ export default function ItemDetailScreen() {
 
         {/* The whole section hides when neither row can render (e.g. the
             owner viewing their own listing with no public questions). */}
-        {(capabilities.isAvailable && !capabilities.isOwner && seller?.reachState !== 'suspended')
+        {(capabilities.isAvailable && !capabilities.isOwner && seller?.reachState !== 'suspended' && !isSellerBlocked)
           || (qaSummary?.questionCount ?? listingEngagement?.questionCount) ? (
         <CommerceDetailSection label="Questions" variant="compact" divider>
           {/* "Ask a question" opens a direct message with the seller — the
               structured public Q&A stays discoverable as the archive row
               below whenever answered questions exist. */}
-          {capabilities.isAvailable && !capabilities.isOwner && seller?.reachState !== 'suspended' ? (
+          {capabilities.isAvailable && !capabilities.isOwner && seller?.reachState !== 'suspended' && !isSellerBlocked ? (
             <CommerceDetailDisclosureRow
               label="Ask the seller a question"
               onPress={handleMessageSeller}
@@ -581,7 +588,7 @@ export default function ItemDetailScreen() {
             surfaces that extend the session — they belong below all
             item-critical content. */}
         <BundleUpsellRow
-          items={bundleItems}
+          items={isSellerBlocked ? [] : bundleItems}
           currentListingId={item.id}
           shippingPayer={commerce.shippingPayer}
           onPressItem={handlePressRecommendation}
@@ -633,6 +640,7 @@ export default function ItemDetailScreen() {
         capabilities={capabilities}
         commerce={commerce}
         seller={seller}
+        isSellerBlocked={isSellerBlocked}
         formattedPrice={formattedPrice}
         formattedOriginal={formattedOriginal}
         hasDiscount={hasDiscount}
