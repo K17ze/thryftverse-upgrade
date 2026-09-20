@@ -56,6 +56,14 @@ export interface LiveSession {
    *  Sourced from the backend `reminded` flag when present, else merged from
    *  on-device persistence. Undefined = backend did not report it. */
   reminderSet?: boolean;
+  /**
+   * VOD replay URL for ended sessions — populated from the backend
+   * `recording_url` column once the LiveKit egress has persisted it. Null
+   * while the recording is still processing, or when none was captured.
+   */
+  recordingUrl?: string | null;
+  /** Whether the host enabled recording for this session (`recording_enabled`). */
+  recordingEnabled?: boolean;
   /** Honest flag — true while this session comes from mock data, not a real stream. */
   isDemo: boolean;
 }
@@ -268,6 +276,32 @@ const MOCK_SESSIONS: LiveSession[] = [
     status: 'ended',
     startedAt: isoMinutesAgo(180),
     endedAt: isoMinutesAgo(120),
+    // Fixture replay so fixture-design builds can exercise the VOD path —
+    // a well-known public HLS test stream, flagged isDemo like the rest.
+    recordingEnabled: true,
+    recordingUrl: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+    watchers: 0,
+    isFollowing: false,
+    isDemo: LIVE_SHOPPING_DEMO_MODE,
+  },
+  {
+    id: 'ended-2',
+    sellerId: 'u1',
+    sellerName: 'mariefullery',
+    sellerAvatar: 'https://ui-avatars.com/api/?name=Marie+F&background=7B0E1E&color=fff&size=128',
+    sellerVerified: true,
+    title: 'Midweek Vintage Drop',
+    thumbnail: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800',
+    category: 'Vintage',
+    viewerCount: 0,
+    likeCount: 830,
+    status: 'ended',
+    startedAt: isoMinutesAgo(400),
+    endedAt: isoMinutesAgo(340),
+    // Recording was enabled but the egress has not persisted a URL yet —
+    // exercises the honest "processing" state instead of a dead player.
+    recordingEnabled: true,
+    recordingUrl: null,
     watchers: 0,
     isFollowing: false,
     isDemo: LIVE_SHOPPING_DEMO_MODE,
@@ -328,6 +362,12 @@ interface BackendStreamRoom {
   hostUserId: string;
   status: 'created' | 'live' | 'ended' | 'failed';
   roomUrl: string;
+  /** VOD replay URL (live_shopping_sessions.recording_url) — populated after
+   *  the LiveKit egress persists it; null while processing or when the
+   *  session was not recorded. */
+  recordingUrl?: string | null;
+  /** Whether the host enabled recording at session creation. */
+  recordingEnabled?: boolean;
   viewerCount: number;
   createdAt: string;
   startedAt?: string;
@@ -390,6 +430,8 @@ const mapBackendSessionToLiveSession = (room: BackendStreamRoom): LiveSession =>
     endedAt: room.endedAt,
     currentItemTitle: room.currentLotTitle ?? undefined,
     currentBid: room.currentLotPriceMinor != null ? room.currentLotPriceMinor / 100 : undefined,
+    recordingUrl: room.recordingUrl ?? null,
+    recordingEnabled: room.recordingEnabled ?? false,
     watchers: room.viewerCount,
     isFollowing: false,
     reminderSet: room.reminded ?? undefined,
@@ -873,6 +915,8 @@ async function connectToStreamFromBackend(streamId: string): Promise<LiveStream 
       currentLotIndex: 0,
       lots,
       chatEnabled: mappedStatus === 'live',
+      recordingUrl: session.recordingUrl ?? null,
+      recordingEnabled: session.recordingEnabled ?? false,
       isDemo: false,
       token: tokenData?.token,
       wsUrl: tokenData?.wsUrl,
@@ -986,6 +1030,134 @@ export async function fetchLiveSessions(
   const featured = sessions.find((s) => s.status === 'live') ?? null;
 
   return { sessions, featured, cursor };
+}
+
+// ---------------------------------------------------------------------------
+// Replays (VOD) — ended-session recordings (R101)
+// ---------------------------------------------------------------------------
+// Real backend contract (backend/api/src/routes/streaming.ts, read-only):
+//   GET /streaming/sessions?limit=N
+//     → { ok, sessions: StreamRoom[] }. The list merges provider-live rooms,
+//       scheduled shows, and the most recent `status='ended'` rows
+//       (ended_at DESC, LIMIT N). Ended rows carry `recordingUrl`
+//       (recording_url), `recordingEnabled` and the discovery enrichment.
+//       There is no `?status=` filter — this client filters honestly.
+//   GET /streaming/sessions/:roomId
+//     → { ok, session: StreamRoom | null } (200 even when absent).
+// There is no dedicated /replays route — do not fabricate one.
+
+export interface LiveSessionReplay {
+  sessionId: string;
+  title: string;
+  hostUserId: string;
+  hostUsername: string | null;
+  hostAvatarUrl: string | null;
+  hostVerified: boolean;
+  status: 'scheduled' | 'live' | 'ended';
+  startedAt: string | null;
+  endedAt: string | null;
+  /** Session card thumbnail from the discovery enrichment — null when the
+   *  session had no current-lot image. Not a recording cover; the backend
+   *  does not expose one. */
+  thumbnailUrl: string | null;
+  /** Playable VOD URL. Null while the egress is still processing, or when
+   *  the session was not recorded — render an honest state, never a dead
+   *  player. */
+  recordingUrl: string | null;
+  /** Whether the host enabled recording for this session. */
+  recordingEnabled: boolean;
+  /** Honest flag — true while this replay comes from mock data. */
+  isDemo: boolean;
+}
+
+function mapBackendRoomToReplay(room: BackendStreamRoom): LiveSessionReplay {
+  const rawStatus = room.status as string;
+  return {
+    sessionId: room.roomId,
+    title: room.title,
+    hostUserId: room.hostUserId,
+    hostUsername: room.hostUsername ?? null,
+    hostAvatarUrl: room.hostAvatarUrl ?? null,
+    hostVerified: room.hostVerified ?? false,
+    status:
+      rawStatus === 'ended' || rawStatus === 'failed'
+        ? 'ended'
+        : rawStatus === 'live' || rawStatus === 'ending'
+          ? 'live'
+          : 'scheduled',
+    startedAt: room.startedAt ?? null,
+    endedAt: room.endedAt ?? null,
+    thumbnailUrl: room.thumbnailUrl ?? null,
+    recordingUrl: room.recordingUrl ?? null,
+    recordingEnabled: room.recordingEnabled ?? false,
+    isDemo: false,
+  };
+}
+
+/**
+ * Fetch ended sessions for the replay surface. Over the real
+ * `GET /streaming/sessions` list — the backend already merges recent ended
+ * rows in, so this filters + sorts them client-side. Errors propagate so
+ * the surface can render its error/retry state instead of a fake empty.
+ */
+export async function fetchPastStreams(
+  opts: { limit?: number } = {},
+): Promise<LiveSession[]> {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    const limit = Math.min(Math.max(opts.limit ?? 20, 1), 100);
+    const response = await fetchJson<BackendStreamSessionsResponse>(
+      `/streaming/sessions?limit=${limit}`,
+    );
+    return (response.sessions ?? [])
+      .map(mapBackendSessionToLiveSession)
+      .filter((session) => session.status === 'ended')
+      .sort(
+        (a, b) =>
+          new Date(b.endedAt ?? 0).getTime() - new Date(a.endedAt ?? 0).getTime(),
+      );
+  }
+  await delay(240);
+  return MOCK_SESSIONS
+    .filter((session) => session.status === 'ended')
+    .map((session) => ({ ...session }))
+    .sort(
+      (a, b) =>
+        new Date(b.endedAt ?? 0).getTime() - new Date(a.endedAt ?? 0).getTime(),
+    );
+}
+
+/**
+ * Fetch the replay payload for a single ended session. Returns null when
+ * the session does not exist; throws on transport/HTTP failure so the
+ * screen can distinguish "not found" from "couldn't load" and offer retry.
+ */
+export async function fetchSessionReplay(
+  sessionId: string,
+): Promise<LiveSessionReplay | null> {
+  if (!LIVE_SHOPPING_DEMO_MODE) {
+    const response = await fetchJson<{ ok: boolean; session: BackendStreamRoom | null }>(
+      `/streaming/sessions/${encodeURIComponent(sessionId)}`,
+    );
+    return response.session ? mapBackendRoomToReplay(response.session) : null;
+  }
+  await delay(280);
+  const session = MOCK_SESSIONS.find((s) => s.id === sessionId);
+  if (!session) return null;
+  return {
+    sessionId: session.id,
+    title: session.title,
+    hostUserId: session.sellerId,
+    hostUsername: session.sellerName || null,
+    hostAvatarUrl: session.sellerAvatar || null,
+    hostVerified: session.sellerVerified,
+    status: session.status === 'ended' ? 'ended' : session.status === 'live' ? 'live' : 'scheduled',
+    startedAt: session.startedAt ?? null,
+    endedAt: session.endedAt ?? null,
+    thumbnailUrl: session.thumbnail || null,
+    recordingUrl: session.recordingUrl ?? null,
+    recordingEnabled: session.recordingEnabled ?? false,
+    isDemo: session.isDemo,
+  };
 }
 
 /**
@@ -1110,6 +1282,11 @@ export interface LiveStream {
   currentLotIndex: number;
   lots: LiveLot[];
   chatEnabled: boolean;
+  /** VOD replay URL for ended sessions (live_shopping_sessions.recording_url).
+   *  Null while the egress is still processing or when recording was off. */
+  recordingUrl?: string | null;
+  /** Whether recording was enabled for this session. */
+  recordingEnabled?: boolean;
   /** Truthful flag — true while this stream comes from mock data. */
   isDemo: boolean;
   /** Viewer connection token issued by the backend (non-demo only). */

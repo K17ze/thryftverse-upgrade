@@ -256,6 +256,14 @@ export const ReplaySessionCard = React.memo(function ReplaySessionCard({
     return t('replay.daysAgo', { count: Math.floor(diffHr / 24) });
   })();
 
+  // Recording truth (R101): the play affordance only renders when the
+  // backend reports a real recordingUrl. A session whose recording is
+  // still processing says so on the meta line instead of implying a
+  // playable replay.
+  const hasRecording = !!session.recordingUrl;
+  const processingLabel =
+    !hasRecording && session.recordingEnabled ? t('replay.processing') : null;
+
   return (
     <AnimatedPressable
       style={styles.liveCard}
@@ -276,10 +284,14 @@ export const ReplaySessionCard = React.memo(function ReplaySessionCard({
           />
         ) : (
           <View style={styles.mediaFallback} accessible={false}>
-            <AppIcon name="play" size={IconSize.xl} color="textMuted" />
+            <AppIcon
+              name={hasRecording ? 'play' : 'videocam'}
+              size={IconSize.xl}
+              color="textMuted"
+            />
           </View>
         )}
-        {session.thumbnail ? (
+        {session.thumbnail && hasRecording ? (
           <View style={styles.replayPlayIcon} accessible={false}>
             <AppIcon name="play" size={IconSize.md} color="scrimTextPrimary" />
           </View>
@@ -308,6 +320,9 @@ export const ReplaySessionCard = React.memo(function ReplaySessionCard({
         </Text>
         {endedLabel ? (
           <Text style={[styles.replayEnded, { color: colors.textMuted }]}>{endedLabel}</Text>
+        ) : null}
+        {processingLabel ? (
+          <Text style={[styles.replayEnded, { color: colors.textMuted }]}>{processingLabel}</Text>
         ) : null}
       </View>
     </AnimatedPressable>

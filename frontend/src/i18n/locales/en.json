@@ -1263,7 +1263,8 @@
       "viewers": "Viewers",
       "lotsSold": "Lots Sold",
       "totalSales": "Total Sales",
-      "done": "Done"
+      "done": "Done",
+      "watchReplay": "Watch replay"
     },
     "scheduled": {
       "title": "Not live yet",
@@ -1341,7 +1342,8 @@
     "replay": {
       "justEnded": "Just ended",
       "hoursAgo": "{{count}}h ago",
-      "daysAgo": "{{count}}d ago"
+      "daysAgo": "{{count}}d ago",
+      "processing": "Recording processing"
     },
     "upcoming": {
       "waiting": "waiting",
@@ -1368,6 +1370,53 @@
       "title": "No live sessions right now",
       "subtitle": "Check back soon.",
       "goToSellerHub": "Go to Seller Hub"
+    }
+  },
+  "liveReplay": {
+    "header": {
+      "title": "Replay"
+    },
+    "error": {
+      "title": "Couldn't load this replay",
+      "subtitle": "Check your connection and try again.",
+      "retry": "Retry",
+      "goBack": "Go back"
+    },
+    "notFound": {
+      "title": "Replay not found",
+      "subtitle": "This stream may have been removed."
+    },
+    "notEnded": {
+      "title": "Not ended yet",
+      "subtitle": "This show hasn't started — there's no replay to watch."
+    },
+    "stillLive": {
+      "title": "Still live",
+      "subtitle": "This stream is live right now — the replay is available after it ends.",
+      "watchLive": "Watch live"
+    },
+    "processing": {
+      "title": "Recording is processing",
+      "subtitle": "Replays are usually ready shortly after a stream ends.",
+      "checkAgain": "Check again"
+    },
+    "noRecording": {
+      "title": "No replay available",
+      "subtitle": "This stream wasn't recorded."
+    },
+    "playbackError": {
+      "title": "Couldn't play this replay",
+      "subtitle": "The recording failed to load.",
+      "retry": "Retry"
+    },
+    "meta": {
+      "justEnded": "Just ended",
+      "hoursAgo": "Ended {{count}}h ago",
+      "daysAgo": "Ended {{count}}d ago"
+    },
+    "moreReplays": {
+      "title": "More replays",
+      "a11y": "More past streams"
     }
   },
   "conversationalSearch": {

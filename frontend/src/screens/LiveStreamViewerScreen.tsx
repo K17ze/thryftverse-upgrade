@@ -137,10 +137,20 @@ export function LiveStreamViewerScreen() {
     );
   }
 
-  // ── Stream ended state ──
+  // ── Stream ended state — offer the VOD replay only when the session
+  //     actually carries a recordingUrl (egress persisted). Recording still
+  //     processing or never enabled → no replay affordance, no dead player.
   if (connectionState === 'ended') {
     return (
-      <LiveStreamEndedScreen summary={streamEndSummary} onBack={goBack} />
+      <LiveStreamEndedScreen
+        summary={streamEndSummary}
+        onBack={goBack}
+        onWatchReplay={
+          stream?.recordingUrl
+            ? () => navigation.navigate('LiveStreamReplay', { sessionId })
+            : undefined
+        }
+      />
     );
   }
 

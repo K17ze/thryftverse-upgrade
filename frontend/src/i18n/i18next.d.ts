@@ -32,6 +32,7 @@ declare module 'i18next' {
       agentLedger: (typeof flattenedResources)['agentLedger'];
       liveStreamViewer: (typeof flattenedResources)['liveStreamViewer'];
       liveShopping: (typeof flattenedResources)['liveShopping'];
+      liveReplay: (typeof flattenedResources)['liveReplay'];
       conversationalSearch: (typeof flattenedResources)['conversationalSearch'];
       aiAgent: (typeof flattenedResources)['aiAgent'];
       algorithm: (typeof flattenedResources)['algorithm'];

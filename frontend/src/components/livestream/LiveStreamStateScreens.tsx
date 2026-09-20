@@ -92,9 +92,12 @@ export function LiveStreamErrorScreen({ isOffline, onBack, onRetry }: Connecting
 interface EndedProps {
   summary: StreamEndEventPayload | null;
   onBack: () => void;
+  /** Set only when the ended session carries a playable recordingUrl —
+   *  renders "Watch replay" as the primary action and demotes Done. */
+  onWatchReplay?: () => void;
 }
 
-export function LiveStreamEndedScreen({ summary, onBack }: EndedProps) {
+export function LiveStreamEndedScreen({ summary, onBack, onWatchReplay }: EndedProps) {
   const { colors } = useAppTheme();
   const { height: screenHeight } = useWindowDimensions();
   const styles = useMemo(() => createStyles(colors, screenHeight), [colors, screenHeight]);
@@ -140,14 +143,39 @@ export function LiveStreamEndedScreen({ summary, onBack }: EndedProps) {
             ) : null}
           </View>
         ) : null}
+        {onWatchReplay ? (
+          <AnimatedPressable
+            onPress={onWatchReplay}
+            style={[styles.endedDoneBtn, { backgroundColor: colors.brand }]}
+            hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel={t('ended.watchReplay')}
+          >
+            <Text style={[styles.endedDoneText, { color: colors.textInverse }]}>
+              {t('ended.watchReplay')}
+            </Text>
+          </AnimatedPressable>
+        ) : null}
         <AnimatedPressable
           onPress={onBack}
-          style={[styles.endedDoneBtn, { backgroundColor: colors.brand }]}
+          style={[
+            styles.endedDoneBtn,
+            onWatchReplay
+              ? { backgroundColor: 'transparent' }
+              : { backgroundColor: colors.brand },
+          ]}
           hapticFeedback="light"
           accessibilityRole="button"
           accessibilityLabel={t('ended.done')}
         >
-          <Text style={[styles.endedDoneText, { color: colors.textInverse }]}>{t('ended.done')}</Text>
+          <Text
+            style={[
+              styles.endedDoneText,
+              { color: onWatchReplay ? colors.textSecondary : colors.textInverse },
+            ]}
+          >
+            {t('ended.done')}
+          </Text>
         </AnimatedPressable>
       </View>
     </FlagshipScreen>

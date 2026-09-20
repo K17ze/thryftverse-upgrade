@@ -2050,6 +2050,33 @@ export const EN_TRANSLATIONS = {
   'modelRegistry.settingsRow': 'Model registry',
   'modelRegistry.settingsRowSubtitle': 'Model artifact lineage and promotion status',
   'modelRegistry.a11y.back': 'Go back',
+
+  // ── Live stream replays (VOD for ended sessions, R101) ────────────────────
+  'liveReplay.header.title': 'Replay',
+  'liveReplay.error.title': "Couldn't load this replay",
+  'liveReplay.error.subtitle': 'Check your connection and try again.',
+  'liveReplay.error.retry': 'Retry',
+  'liveReplay.error.goBack': 'Go back',
+  'liveReplay.notFound.title': 'Replay not found',
+  'liveReplay.notFound.subtitle': 'This stream may have been removed.',
+  'liveReplay.notEnded.title': 'Not ended yet',
+  'liveReplay.notEnded.subtitle': "This show hasn't started — there's no replay to watch.",
+  'liveReplay.stillLive.title': 'Still live',
+  'liveReplay.stillLive.subtitle': 'This stream is live right now — the replay is available after it ends.',
+  'liveReplay.stillLive.watchLive': 'Watch live',
+  'liveReplay.processing.title': 'Recording is processing',
+  'liveReplay.processing.subtitle': 'Replays are usually ready shortly after a stream ends.',
+  'liveReplay.processing.checkAgain': 'Check again',
+  'liveReplay.noRecording.title': 'No replay available',
+  'liveReplay.noRecording.subtitle': "This stream wasn't recorded.",
+  'liveReplay.playbackError.title': "Couldn't play this replay",
+  'liveReplay.playbackError.subtitle': 'The recording failed to load.',
+  'liveReplay.playbackError.retry': 'Retry',
+  'liveReplay.meta.justEnded': 'Just ended',
+  'liveReplay.meta.hoursAgo': 'Ended {count}h ago',
+  'liveReplay.meta.daysAgo': 'Ended {count}d ago',
+  'liveReplay.moreReplays.title': 'More replays',
+  'liveReplay.moreReplays.a11y': 'More past streams',
 } as const;
 
 export type SupportedLocale = 'en' | 'es' | 'fr' | 'de' | 'ar' | 'hi' | 'zh' | 'pt' | 'ja' | 'ru' | 'tr' | 'ko' | 'id';

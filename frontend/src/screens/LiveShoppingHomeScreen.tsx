@@ -281,6 +281,16 @@ export default function LiveShoppingHomeScreen() {
     [navigation],
   );
 
+  // Ended sessions open the replay surface — it owns the honest truth
+  // states (processing / not recorded) so a session without a recording
+  // never lands on a dead player.
+  const openReplay = useCallback(
+    (sessionId: string) => {
+      navigation.navigate('LiveStreamReplay', { sessionId });
+    },
+    [navigation],
+  );
+
   const handleRetry = useCallback(() => {
     void load();
   }, [load]);
@@ -481,7 +491,7 @@ export default function LiveShoppingHomeScreen() {
                     <ReplaySessionCard
                       key={session.id}
                       session={session}
-                      onPress={() => openSession(session.id)}
+                      onPress={() => openReplay(session.id)}
                     />
                   ))}
                 </HorizontalRail>

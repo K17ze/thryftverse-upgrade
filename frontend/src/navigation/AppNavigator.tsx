@@ -458,6 +458,7 @@ export default function AppNavigator() {
       {/* Live shopping — live commerce */}
       <Stack.Screen name="LiveShopping" getComponent={() => require('../screens/LiveShoppingHomeScreen').default} />
       <Stack.Screen name="LiveStreamViewer" getComponent={() => require('../screens/LiveStreamViewerScreen').LiveStreamViewerScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="LiveStreamReplay" getComponent={() => require('../screens/LiveStreamReplayScreen').LiveStreamReplayScreen} options={{ headerShown: false }} />
       <Stack.Screen name="LiveStreamSeller" getComponent={() => require('../screens/LiveStreamSellerScreen').LiveStreamSellerScreen} options={{ headerShown: false }} />
 
       {/* ── Seller Tools ── (AI listing, bulk, inventory, KYC) */}

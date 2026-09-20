@@ -20,6 +20,7 @@ export type ResolvedRoute =
   | { screen: 'UserProfile'; params: { userId: string } }
   | { screen: 'Chat'; params: { conversationId: string; partnerUserId?: string } }
   | { screen: 'LiveStreamViewer'; params: { sessionId: string } }
+  | { screen: 'LiveStreamReplay'; params: { sessionId: string } }
   | { screen: 'AssetDetail'; params: { assetId: string } }
   | { screen: 'VerificationResponse'; params: { assetId: string; demandId: number } }
   | { screen: 'CollectionDetail'; params: { collectionId: string } }
@@ -57,6 +58,7 @@ const VALID_SCREENS: ReadonlySet<string> = new Set<ScreenName>([
   'AuctionDetail',
   'UserProfile',
   'LiveStreamViewer',
+  'LiveStreamReplay',
   'AssetDetail',
   'CollectionDetail',
   'Browse',
@@ -87,6 +89,7 @@ const PARAM_VALIDATED_SCREENS: ReadonlySet<string> = new Set([
   'UserProfile',
   'Chat',
   'LiveStreamViewer',
+  'LiveStreamReplay',
   'AssetDetail',
   'VerificationResponse',
   'CollectionDetail',
@@ -133,6 +136,9 @@ export function resolveNotificationRoute(
     }
     if (screen === 'LiveStreamViewer' && typeof params.sessionId === 'string') {
       return { screen: 'LiveStreamViewer', params: { sessionId: params.sessionId } };
+    }
+    if (screen === 'LiveStreamReplay' && typeof params.sessionId === 'string') {
+      return { screen: 'LiveStreamReplay', params: { sessionId: params.sessionId } };
     }
     if (screen === 'AssetDetail' && typeof params.assetId === 'string') {
       return { screen: 'AssetDetail', params: { assetId: params.assetId } };

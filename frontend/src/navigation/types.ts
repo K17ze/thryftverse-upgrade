@@ -521,6 +521,8 @@ export type RootStackParamList = {
   LiveShopping: undefined;
   // Live stream viewer — watch + bid + chat
   LiveStreamViewer: { sessionId: string };
+  // Live stream replay — VOD playback of an ended session (deep-linkable)
+  LiveStreamReplay: { sessionId: string };
   // Live stream seller — broadcast + manage lots
   LiveStreamSeller: { sessionId?: string };
 
@@ -711,6 +713,7 @@ export const ROOT_STACK_ROUTES = [
   'VerificationResponse',
   'LiveShopping',
   'LiveStreamViewer',
+  'LiveStreamReplay',
   'LiveStreamSeller',
   'AIPoweredListing',
   'BulkListing',
