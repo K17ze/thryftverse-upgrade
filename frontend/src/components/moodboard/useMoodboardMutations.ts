@@ -9,25 +9,21 @@
 import { useCallback, useState } from 'react';
 
 import { useHaptic } from '../../hooks/useHaptic';
-import { useConnectivity } from '../../hooks/useConnectivity';
 import { useToast } from '../../context/ToastContext';
 import { isDbAvailable } from '../../storage/db';
-import {
-  enqueueMoodboardOperation,
-  clearMoodboardOutboxForBoard } from '../../storage/moodboardOutbox';
+import { clearMoodboardOutboxForBoard } from '../../storage/moodboardOutbox';
 import { createStableId } from '../../utils/createStableId';
 import {
   fetchMoodboardDetail,
   addItemToMoodboard,
   removeItemFromMoodboard,
   reorderItem,
-  submitMoodboardOperation,
   publishMoodboardAsPoster,
   type Moodboard,
   type MoodboardItem,
   type MoodboardItemPosition,
   type MoodboardOperationType } from '../../services/moodboardApi';
-import type { useMoodboardBoard } from './useMoodboardBoard';
+import type { SubmitBoardOpsOutcome, useMoodboardBoard } from './useMoodboardBoard';
 import type { useMoodboardSelection } from './useMoodboardSelection';
 
 interface UseMoodboardMutationsArgs {
@@ -37,7 +33,6 @@ interface UseMoodboardMutationsArgs {
 
 export function useMoodboardMutations({ board, selection }: UseMoodboardMutationsArgs) {
   const haptic = useHaptic();
-  const { isOffline } = useConnectivity();
   const { show } = useToast();
 
   const {
@@ -48,7 +43,6 @@ export function useMoodboardMutations({ board, selection }: UseMoodboardMutation
     setConflictDetail,
     setActiveThemeId,
     boardRevisionRef,
-    handleOperationResponse,
     submitBoardOps,
     loadAll } = board;
   const {
@@ -61,8 +55,8 @@ export function useMoodboardMutations({ board, selection }: UseMoodboardMutation
   const [publishing, setPublishing] = useState(false);
 
   const handlePositionCommit = useCallback(
-    async (id: string, position: MoodboardItemPosition) => {
-      if (!moodboard) return;
+    async (id: string, position: MoodboardItemPosition): Promise<SubmitBoardOpsOutcome> => {
+      if (!moodboard) return 'failed';
       // Optimistic local update — the user sees the item move immediately.
       setMoodboard((prev) =>
         prev
@@ -74,53 +68,24 @@ export function useMoodboardMutations({ board, selection }: UseMoodboardMutation
               updatedAt: new Date().toISOString() }
           : prev,
       );
-      setSyncStatus('syncing');
-      setConflictDetail(null);
-      // When offline and the local DB is available, enqueue to the outbox
-      // instead of making a network call that will fail.
-      if (isOffline && isDbAvailable()) {
-        try {
-          await enqueueMoodboardOperation({
-            operationId: `${id}_transform_${Date.now()}`,
-            boardId: moodboard.id,
-            operation: 'item.transform',
-            payload: {
-              itemId: id,
-              positionX: position.x,
-              positionY: position.y,
-              rotation: position.rotation,
-              scale: position.scale },
-            baseRev: moodboard.revision });
-          // Status remains 'syncing' — the outbox will flush on reconnect.
-          return;
-        } catch {
-          // Fall through to online path if enqueue fails
-        }
-      }
-      // Submit via the idempotent operation endpoint with the current base
-      // revision. The client operation id dedups retries.
-      try {
-        const response = await submitMoodboardOperation(moodboard.id, {
-          clientOperationId: createStableId('pos'),
-          baseRevision: boardRevisionRef.current,
-          type: 'item.transform',
+      // Submit through the canonical op path — the durable outbox + drain
+      // when a local DB exists (offline-safe), sequential online submit
+      // otherwise. The discriminated outcome lets the history layer record
+      // the inverse ONLY on applied/queued: a transform that never
+      // persisted no longer lands on the undo stack claiming an applied
+      // edit (P2). A non-applied outcome already surfaced honestly through
+      // the sync status machine inside submitBoardOps.
+      return submitBoardOps([{
+        operationId: createStableId('pos'),
+        operation: 'item.transform',
+        payload: {
           itemId: id,
-          payload: {
-            positionX: position.x,
-            positionY: position.y,
-            rotation: position.rotation,
-            scale: position.scale } });
-        handleOperationResponse(response);
-      } catch {
-        // Network error or server error. The outcome is unknown if the
-        // request may have reached the server — do not fabricate success.
-        // The optimistic update stays visible; the status communicates the
-        // problem. The user can retry by moving the item again.
-        setSyncStatus('error');
-        haptic.error();
-      }
+          positionX: position.x,
+          positionY: position.y,
+          rotation: position.rotation,
+          scale: position.scale } }]);
     },
-    [moodboard, isOffline, handleOperationResponse, haptic, setMoodboard, setSyncStatus, setConflictDetail, boardRevisionRef],
+    [moodboard, setMoodboard, submitBoardOps],
   );
 
   const handleAddItem = useCallback(
@@ -195,6 +160,21 @@ export function useMoodboardMutations({ board, selection }: UseMoodboardMutation
     [haptic, moodboard, setSaving, setMoodboard],
   );
 
+  // Re-fetch the canonical board after a partially-applied multi-item
+  // mutation — the deletes/reorders that already resolved persisted
+  // server-side, so the server board is the truth the canvas must return
+  // to. A failed re-fetch leaves local state untouched; the sync affordance
+  // still communicates trouble and the next load reconciles.
+  const reconcileLocalBoard = useCallback(async () => {
+    if (!moodboard) return;
+    try {
+      const mb = await fetchMoodboardDetail(moodboard.id);
+      if (mb) setMoodboard(mb);
+    } catch {
+      // Keep local state — the next load or mutation reconciles.
+    }
+  }, [moodboard, setMoodboard]);
+
   const handleDeleteSelected = useCallback(
     async (): Promise<boolean> => {
       if (!moodboard || selectedItemIds.size === 0) return false;
@@ -210,12 +190,17 @@ export function useMoodboardMutations({ board, selection }: UseMoodboardMutation
         return true;
       } catch {
         haptic.error();
+        // Partial failure is possible — the deletes that already resolved
+        // persisted server-side while the local board was never updated.
+        // Reconcile against the canonical board so the canvas doesn't keep
+        // rendering items the server no longer has (P2).
+        await reconcileLocalBoard();
         return false;
       } finally {
         setSaving(false);
       }
     },
-    [haptic, moodboard, selectedItemIds, setMultiSelectMode, setSelectedItemIds, setSaving, setMoodboard],
+    [haptic, moodboard, selectedItemIds, setMultiSelectMode, setSelectedItemIds, setSaving, setMoodboard, reconcileLocalBoard],
   );
 
   const handleBringAllToFront = useCallback(
@@ -236,53 +221,36 @@ export function useMoodboardMutations({ board, selection }: UseMoodboardMutation
         return true;
       } catch {
         haptic.error();
+        // A prefix of the reorders may have persisted — the local layer
+        // order no longer matches the server. Reconcile so the canvas
+        // shows the real arrangement (P2).
+        await reconcileLocalBoard();
         return false;
       } finally {
         setSaving(false);
       }
     },
-    [haptic, moodboard, selectedItemIds, setSaving, setMoodboard],
+    [haptic, moodboard, selectedItemIds, setSaving, setMoodboard, reconcileLocalBoard],
   );
 
   const handleThemeChange = useCallback(
-    async (themeId: string) => {
-      if (!moodboard) return;
+    async (themeId: string): Promise<SubmitBoardOpsOutcome> => {
+      if (!moodboard) return 'failed';
       haptic.selection();
       setActiveThemeId(themeId);
       // Optimistic local update — the user sees the theme change immediately.
       setMoodboard((prev) =>
         prev ? { ...prev, theme: themeId, updatedAt: new Date().toISOString() } : prev,
       );
-      setSyncStatus('syncing');
-      setConflictDetail(null);
-      // When offline and the local DB is available, enqueue to the outbox
-      // instead of making a network call that will fail.
-      if (isOffline && isDbAvailable()) {
-        try {
-          await enqueueMoodboardOperation({
-            operationId: `${moodboard.id}_theme_${Date.now()}`,
-            boardId: moodboard.id,
-            operation: 'board.theme',
-            payload: { theme: themeId },
-            baseRev: moodboard.revision });
-          return;
-        } catch {
-          // Fall through to online path
-        }
-      }
-      // Submit via the idempotent operation endpoint.
-      void submitMoodboardOperation(moodboard.id, {
-        clientOperationId: createStableId('theme'),
-        baseRevision: boardRevisionRef.current,
-        type: 'board.theme',
-        payload: { theme: themeId } })
-        .then(handleOperationResponse)
-        .catch(() => {
-          setSyncStatus('error');
-          haptic.error();
-        });
+      // Same canonical op path as position commits — the outcome is awaited
+      // so the history layer only records an undoable inverse when the
+      // theme change actually persisted or is durably queued (P2).
+      return submitBoardOps([{
+        operationId: createStableId('theme'),
+        operation: 'board.theme',
+        payload: { theme: themeId } }]);
     },
-    [haptic, moodboard, isOffline, handleOperationResponse, setActiveThemeId, setMoodboard, setSyncStatus, setConflictDetail, boardRevisionRef],
+    [haptic, moodboard, setActiveThemeId, setMoodboard, submitBoardOps],
   );
 
   // ── "Keep my version" — re-apply the preserved local snapshot via ops ──

@@ -72,6 +72,11 @@ const isPeopleQuery = (text: string) =>
   text.includes("FROM users u") && text.includes("search_visibility");
 const isListingCardQuery = (text: string) =>
   text.includes("FROM listings l") && text.includes("l.id = ANY($1::text[])");
+// Serving-time safety net on the items leg — every returned id is
+// re-checked against live `status = 'active'` rows before render.
+const isListingRecheckQuery = (text: string) =>
+  text.includes("SELECT id, seller_id FROM listings") &&
+  text.includes("id = ANY($1::text[])");
 
 function fakeDb(matcher: (text: string) => QueryResult | undefined) {
   const calls: Array<{ text: string; params?: unknown[] }> = [];
@@ -318,7 +323,15 @@ test("scope=all still returns people/boards when the item leg is empty", async (
 // ── Default scope stays backward compatible ──────────────────────────────────
 
 test("default scope=items keeps the legacy items payload", async () => {
-  const db = fakeDb(() => undefined);
+  const db = fakeDb((text) => {
+    // The items leg unconditionally re-checks hits against live
+    // status='active' rows (index-lag safety net) — corroborate the
+    // seeded listing so it survives the filter.
+    if (isListingRecheckQuery(text)) {
+      return rows([{ id: "lst_v1", seller_id: "usr_s1" }]);
+    }
+    return undefined;
+  });
   const app = await buildApp(db);
 
   const res = await app.inject({ method: "GET", url: "/search?q=vintage" });

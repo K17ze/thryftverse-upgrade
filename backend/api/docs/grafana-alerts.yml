@@ -203,3 +203,40 @@ groups:
             Process resident memory exceeds 80% of the assumed 1GiB container
             limit for 5 minutes. Tune MEMORY_LIMIT_BYTES or investigate leaks.
             Note: replace the 1073741824 constant with your real container limit.
+
+      # 9. SearchIndexStale — p95 listing→index lag above 60s for 10m (R28/R91)
+      - alert: SearchIndexStale
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(thryftverse_search_index_lag_seconds_bucket[10m])))
+          > 60
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Search index lag p95 is {{ $value | humanizeDuration }}"
+          description: >
+            The p95 lag between a listing update and its search-index write
+            exceeds 60s for 10 minutes. Catalogue search is serving stale
+            results — check the search_indexing worker queue and the
+            Meilisearch backend health before listings appear unsellable.
+
+      # 10. SearchSyncFailing — sync error rate above 5% for 10m
+      - alert: SearchSyncFailing
+        expr: |
+          (
+            sum(rate(thryftverse_search_sync_total{result="error"}[10m]))
+            /
+            clamp_min(sum(rate(thryftverse_search_sync_total[10m])), 0.001)
+          ) > 0.05
+        for: 10m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Search sync error rate {{ $value | humanizePercentage }}"
+          description: >
+            More than 5% of search index sync operations have failed over the
+            last 10 minutes. New/updated listings will not appear in search —
+            check adapter connectivity and the search_indexing queue.

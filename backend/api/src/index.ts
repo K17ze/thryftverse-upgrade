@@ -109,21 +109,31 @@ import {
 } from './lib/money.js';
 import {
   applyWalletLedgerDelta,
+  assertP2pTransferContextAuthorized,
+  assertSpendableOnezeUnits,
+  claimWalletIdempotencyKey,
+  completeWalletIdempotencyClaim,
   computeOnezeToFiatConversionQuote,
+  computeSpendableOnezeUnits,
   findWalletIzeOperationByPaymentIntentId,
-  getWalletIdempotentResponse,
   hashWalletIdempotencyPayload,
   isPostgresUniqueViolation,
+  lockWalletRowsForUpdate,
+  MINT_QUOTE_TOPUP_FEE_BASIS_POINTS,
   materializeMintOperationForPaymentIntent,
   planCommerceOrderRefundRecovery,
   refundOnezeInternalWalletDebit,
-  saveWalletIdempotentResponse,
 } from './lib/walletMoneyPath.js';
+import {
+  computeMintQuoteMac,
+  sanitizePaymentIntentClientMetadata,
+} from './lib/paymentIntentMetadata.js';
 // P0.8: Exact decimal string formatting for Co-Own trading API responses.
 // Avoids IEEE 754 representation error in the JSON wire format by emitting
 // decimal string variants (e.g. "49.2500") alongside legacy number fields.
 import { formatGbp } from './lib/moneyFormat.js';
 import { quietWindowDecision } from './lib/workerHelpers.js';
+import { getSloTracker } from './lib/sloTracker.js';
 import { queueUserNotification as queueCanonicalUserNotification } from './lib/workerRuntime.js';
 import { listingPatchSchema } from './lib/listingPatch.js';
 import { canListingTransition } from './lib/listingCommandService.js';
@@ -299,7 +309,10 @@ import { registerUploadRoutes } from './routes/uploads.js';
 import { registerMediaAssetRoutes } from './routes/mediaAssets.js';
 import { registerModerationRoutes } from './routes/moderation.js';
 import { registerModerationTriageRoutes } from './routes/moderationTriage.js';
-import { moderateListingText } from './lib/moderation/moderationService.js';
+import {
+  listingTextGateAction,
+  moderateListingText,
+} from './lib/moderation/moderationService.js';
 import { processMediaAsset } from './lib/media/pipeline.js';
 import {
   loadListingMedia,
@@ -546,6 +559,12 @@ app.addHook('onResponse', async (request, reply) => {
     statusCode: reply.statusCode,
     responseTime: reply.elapsedTime,
   }, 'request completed');
+  // SLO/error-budget tracking — service is the first route segment
+  // ('listings', 'payments', ...). Never throws; falls back to in-memory
+  // counters when Redis is unavailable.
+  const routeUrl = request.routeOptions.url ?? request.url;
+  const service = routeUrl.split('/').filter(Boolean)[0] ?? 'unknown';
+  getSloTracker().recordRequest(service, reply.statusCode < 500, reply.elapsedTime);
 });
 
 // â”€â”€ Sentry breadcrumb on errors â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1385,6 +1404,7 @@ function isPublicRoute(method: string, path: string) {
     'GET /health',
     'GET /health/deep',
     'GET /metrics',
+    'GET /metrics/slo',
     'GET /listings',
     'GET /search/listings',
     'GET /search',
@@ -1407,6 +1427,7 @@ function isPublicRoute(method: string, path: string) {
     'POST /compliance/kyc/webhook',
     'POST /compliance/kyc/webhooks/stripe',
     'GET /compliance/privacy-policy',
+    'GET /compliance/account-deletion',
     'GET /compliance/data-categories',
     // Authenticated by the dedicated service-token check in the route module.
     'POST /offers/sweep-expired',
@@ -2942,8 +2963,11 @@ async function assertOnezeMintBurnNotHalted(): Promise<void> {
 }
 
 // Wallet idempotency helpers (hashWalletIdempotencyPayload,
-// getWalletIdempotentResponse, saveWalletIdempotentResponse) live in
+// claimWalletIdempotencyKey, completeWalletIdempotencyClaim) live in
 // lib/walletMoneyPath.ts so the money-path primitives are unit-testable.
+// The legacy read-then-write pair (getWalletIdempotentResponse /
+// saveWalletIdempotentResponse) is retained there for tests only — every
+// money route claims the key inside the mutation transaction (FIN-04).
 
 // â”€â”€ Co-Own order idempotency (spec 10 Â§1) â”€â”€
 // Prevents duplicate order placement on network retry. The client generates
@@ -3164,35 +3188,65 @@ function hashCoOwnOrderPayload(payload: {
     .digest('hex');
 }
 
+const WALLET_ROW_SELECT = `
+  id,
+  user_id,
+  oneze_balance_units,
+  fiat_balance_minor,
+  fiat_currency,
+  version,
+  created_at::text,
+  updated_at::text
+`;
+
 async function ensureWallet(
   client: DbQueryable,
   userId: string,
   fiatCurrency = DEFAULT_WALLET_FIAT_CURRENCY
 ): Promise<WalletRow> {
-  const result = await client.query<WalletRow>(
-    `
-      INSERT INTO wallets (
-        id,
-        user_id,
-        fiat_currency
-      )
-      VALUES ($1, $2, $3)
-      ON CONFLICT (user_id)
-      DO UPDATE SET user_id = EXCLUDED.user_id
-      RETURNING
-        id,
-        user_id,
-        oneze_balance_units,
-        fiat_balance_minor,
-        fiat_currency,
-        version,
-        created_at::text,
-        updated_at::text
-    `,
-    [createRuntimeId('wal'), userId, fiatCurrency.toUpperCase()]
+  // SELECT ... FOR UPDATE takes the same wallet row lock the old
+  // INSERT ... ON CONFLICT DO UPDATE did — but without writing a dead tuple
+  // on every call (DO UPDATE SET user_id = EXCLUDED.user_id produced a new
+  // row version per invocation, bloating the wallets table on every money
+  // path). Callers that need deterministic multi-wallet lock order (e.g.
+  // the transfer route) sequence these calls by user id and then re-lock in
+  // canonical wallet-id order via lockWalletRowsForUpdate.
+  const existing = await client.query<WalletRow>(
+    `SELECT ${WALLET_ROW_SELECT} FROM wallets WHERE user_id = $1 FOR UPDATE`,
+    [userId]
   );
 
-  const wallet = result.rows[0];
+  let wallet = existing.rows[0];
+  if (!wallet) {
+    const inserted = await client.query<WalletRow>(
+      `
+        INSERT INTO wallets (
+          id,
+          user_id,
+          fiat_currency
+        )
+        VALUES ($1, $2, $3)
+        ON CONFLICT (user_id)
+        DO NOTHING
+        RETURNING ${WALLET_ROW_SELECT}
+      `,
+      [createRuntimeId('wal'), userId, fiatCurrency.toUpperCase()]
+    );
+    wallet = inserted.rows[0];
+    if (!wallet) {
+      // A concurrent insert committed between our SELECT and our speculative
+      // INSERT — re-read the winner's row under the lock.
+      const reloaded = await client.query<WalletRow>(
+        `SELECT ${WALLET_ROW_SELECT} FROM wallets WHERE user_id = $1 FOR UPDATE`,
+        [userId]
+      );
+      wallet = reloaded.rows[0];
+    }
+  }
+
+  if (!wallet) {
+    throw createApiError('WALLET_NOT_FOUND', 'Unable to ensure wallet', { userId });
+  }
 
   const walletLedgerCountResult = await client.query<{ count: string }>(
     `
@@ -3286,8 +3340,55 @@ async function ensureWalletSegments(client: DbQueryable, wallet: WalletRow): Pro
   const walletBalanceUnits = Math.max(0, Number(wallet.oneze_balance_units));
   const segmentTotalUnits = Number(segments.purchased_balance_units) + Number(segments.earned_balance_units);
 
-  if (segmentTotalUnits >= walletBalanceUnits) {
+  if (segmentTotalUnits === walletBalanceUnits) {
     return segments;
+  }
+
+  if (segmentTotalUnits > walletBalanceUnits) {
+    // Surplus: a debit bypassed segment accounting (e.g. a Co-Own trade or
+    // DRIP leg that wrote wallets.oneze_balance_units directly). Leaving the
+    // surplus intact keeps purchased/earned provenance ahead of the real
+    // balance, so future debits could draw segments below zero. Clamp back to
+    // the real balance draining 'earned' first, then 'purchased' — the same
+    // order debitWalletSegmentBalance applies, so provenance converges to
+    // what a canonical debit would have produced.
+    const surplusUnits = segmentTotalUnits - walletBalanceUnits;
+    const earnedReduction = Math.min(Number(segments.earned_balance_units), surplusUnits);
+    const purchasedReduction = surplusUnits - earnedReduction;
+    const surplusPatched = await client.query<WalletSegmentRow>(
+      `
+        UPDATE oneze_wallet_segments
+        SET
+          earned_balance_units = earned_balance_units - $2,
+          purchased_balance_units = purchased_balance_units - $3,
+          metadata = metadata || $4::jsonb,
+          updated_at = NOW()
+        WHERE wallet_id = $1
+        RETURNING
+          wallet_id,
+          purchased_balance_units,
+          earned_balance_units,
+          metadata,
+          created_at::text,
+          updated_at::text
+      `,
+      [
+        wallet.id,
+        earnedReduction,
+        purchasedReduction,
+        toJsonString({
+          paritySync: {
+            at: new Date().toISOString(),
+            deltaUnits: -surplusUnits,
+            earnedReduction,
+            purchasedReduction,
+            reason: 'segment_total_above_wallet_balance',
+          },
+        }),
+      ]
+    );
+
+    return surplusPatched.rows[0] ?? segments;
   }
 
   const parityDeltaUnits = walletBalanceUnits - segmentTotalUnits;
@@ -3719,6 +3820,7 @@ async function evaluateP2pPolicyEligibility(
     amountUnits: number;
     contextType?: string;
     contextId?: string;
+    callerRole?: string | null;
   }
 ): Promise<{
   senderCountry: string;
@@ -3755,6 +3857,18 @@ async function evaluateP2pPolicyEligibility(
       'P2P transfer context is required for all jurisdictions in closed-loop mode'
     );
   }
+
+  // FIN-08: presence is not proof — every privileged context must verify
+  // against a real domain event (reference exists, participants match,
+  // amount matches, caller has authority) before the transfer is eligible.
+  await assertP2pTransferContextAuthorized(client, {
+    contextType: input.contextType,
+    contextId: input.contextId,
+    senderUserId: input.senderUserId,
+    recipientUserId: input.recipientUserId,
+    amountUnits: input.amountUnits,
+    callerRole: input.callerRole ?? null,
+  });
 
   const perTxLimit = Math.min(
     Number(senderPolicy.p2p_per_tx_limit_units ?? Number.MAX_SAFE_INTEGER),
@@ -6674,17 +6788,12 @@ async function createGatewayPaymentIntent(input: {
   // and escrow credit happen in settlePaymentIntent(), flowing through the
   // same commerce escrow, dispute resolution, and seller protection as
   // card payments.
-  if (input.gatewayId === 'oneze_internal') {
-    return {
-      providerIntentRef: `oneze_${input.intentId}`,
-      clientSecret: null,
-      initialStatus: 'succeeded',
-      providerStatus: 'succeeded',
-      nextActionUrl: null,
-      scaExpiresAt: null,
-      ...providerBoundary,
-    };
-  }
+  // NOTE: 'oneze_internal' is handled by the earlier branch in this
+  // function (it returns 'requires_confirmation' — the 1ZE wallet debit
+  // runs in settlePaymentIntent, never at creation). A second
+  // oneze_internal branch here was unreachable and would have minted
+  // intents as 'succeeded' without settlement if ordering ever shifted —
+  // removed (review P2).
 
   if (config.nodeEnv !== 'production' && config.apiEnableMockWebhooks) {
     return {
@@ -7468,6 +7577,16 @@ async function settlePaymentIntent(
           : onezeAmountToUnits(izeAmount);
         const buyerWallet = await ensureWallet(client, paidOrder.buyer_id, 'GBP');
         const walletTxId = createRuntimeId('wtx');
+
+        // The PURCHASE debit must draw on SPENDABLE funds — gross balance
+        // minus enforceable coOwn reservations — not the gross balance alone
+        // (FIN-03). This guards every settle entry point (checkout preflight,
+        // manual confirm, stale-submission reconcile, DLQ retry), not just
+        // the checkout route's spendable preflight.
+        await assertSpendableOnezeUnits(client, {
+          walletId: buyerWallet.id,
+          requiredUnits: debitUnits,
+        });
 
         // Debit the buyer's 1ZE wallet. applyWalletLedgerDelta throws
         // WALLET_INSUFFICIENT_BALANCE if the balance is too low â€” this
@@ -9337,7 +9456,13 @@ async function rewrapDomainRows(
 const NOTIFICATION_EVENT_TYPES = [
   'order_created', 'order_paid', 'order_cancelled', 'order_dispatched',
   'order_in_transit', 'order_out_for_delivery', 'order_delivered',
-  'order_refunded', 'order_dispatch_sla_breach', 'resolution_opened', 'resolution_status_changed',
+  'order_refunded', 'order_dispatch_sla_breach',
+  // Carrier-reported parcel failures — emitted by
+  // queueCommerceParcelSettlementNotifications as discrete types so a lost
+  // parcel never reads as a generic failed attempt. (No quoted literals in
+  // this comment — the contract test scans the whole array source.)
+  'order_delivery_failed', 'order_parcel_lost', 'order_parcel_damaged',
+  'resolution_opened', 'resolution_status_changed',
   'review_received', 'chat_message', 'payout_processed', 'refund_completed',
   'price_drop', 'saved_search_match',
   'offer_created', 'offer_countered', 'offer_accepted', 'offer_declined',
@@ -9351,7 +9476,9 @@ const NOTIFICATION_EVENT_TYPES = [
   'review_response_received', 'review_moderated',
   'scheduled_publication_success', 'scheduled_publication_blocked', 'scheduled_publication_failed',
   'support.operator_reply', 'support.information_requested', 'support.case_resolved',
-  'coown_buyout_accepted', 'coown_verification_responded', 'ops_alert',
+  'coown_buyout_accepted', 'coown_verification_responded',
+  'coown_price_alert_triggered', 'coown_drip_receipt',
+  'ops_alert',
   'safety_outcome',
   'generic',
 ] as const;
@@ -9604,31 +9731,50 @@ async function queueCommerceParcelSettlementNotifications(input: {
   // Copy keys off the discrete eventType so 'lost' never reads as a generic
   // failed attempt. Idempotency keys per discrete type: a 'lost' report
   // still notifies after an earlier generic 'delivery_failed'.
+  //
+  // Contract: the notification registry test scans emit sites for a literal
+  // `eventType`, so each discrete carrier-failure type is spelled out at its
+  // own queueUserNotification call below. Shared fields are built once by
+  // buildFailureNotification and spread behind the literal — do NOT collapse
+  // this back to a computed `eventType` property.
   if (input.orderStatus === 'delivery_failed') {
-    const failureCopy =
-      input.eventType === 'lost'
-        ? { event: 'order_parcel_lost', title: 'Parcel reported lost', body: 'The carrier reported your parcel as lost. Funds stay held while this is resolved.' }
-        : input.eventType === 'damaged'
-          ? { event: 'order_parcel_damaged', title: 'Parcel reported damaged', body: 'The carrier reported your parcel was damaged in transit. Funds stay held while this is resolved.' }
-          : { event: 'order_delivery_failed', title: 'Delivery failed', body: 'The carrier could not deliver your parcel. Tracking has the latest.' };
+    const buildFailureNotification = (
+      event: 'order_parcel_lost' | 'order_parcel_damaged' | 'order_delivery_failed',
+      title: string,
+      body: string,
+    ) => ({
+      userId: input.buyerId,
+      title,
+      body,
+      payload: {
+        event,
+        orderId: input.orderId,
+        provider: input.provider,
+        eventType: input.eventType,
+      },
+      route: { screen: 'OrderDetail', params: { orderId: input.orderId } },
+      idempotencyKey: `${event}_buyer_${input.orderId}`,
+      metadata: {
+        source: input.source,
+      },
+    });
     try {
-      await queueUserNotification({
-        userId: input.buyerId,
-        title: failureCopy.title,
-        body: failureCopy.body,
-        eventType: failureCopy.event,
-        payload: {
-          event: failureCopy.event,
-          orderId: input.orderId,
-          provider: input.provider,
-          eventType: input.eventType,
-        },
-        route: { screen: 'OrderDetail', params: { orderId: input.orderId } },
-        idempotencyKey: `${failureCopy.event}_buyer_${input.orderId}`,
-        metadata: {
-          source: input.source,
-        },
-      });
+      if (input.eventType === 'lost') {
+        await queueUserNotification({
+          eventType: 'order_parcel_lost',
+          ...buildFailureNotification('order_parcel_lost', 'Parcel reported lost', 'The carrier reported your parcel as lost. Funds stay held while this is resolved.'),
+        });
+      } else if (input.eventType === 'damaged') {
+        await queueUserNotification({
+          eventType: 'order_parcel_damaged',
+          ...buildFailureNotification('order_parcel_damaged', 'Parcel reported damaged', 'The carrier reported your parcel was damaged in transit. Funds stay held while this is resolved.'),
+        });
+      } else {
+        await queueUserNotification({
+          eventType: 'order_delivery_failed',
+          ...buildFailureNotification('order_delivery_failed', 'Delivery failed', 'The carrier could not deliver your parcel. Tracking has the latest.'),
+        });
+      }
     } catch (error) {
       app.log.error({ err: error, orderId: input.orderId }, 'Failed to queue buyer parcel-failure notification');
     }
@@ -16831,14 +16977,15 @@ app.post('/listings', {
       code: 'RISK_PUBLISH_DENIED',
     };
   }
-  const effectiveStatus =
+  let effectiveStatus =
     targetStatus === 'active' && publishOutcome !== 'allow'
       ? 'risk_pending'
       : targetStatus;
 
   const listingText = `${payload.title}\n${payload.description}`;
   const textModerationResult = await moderateListingText(payload.id, listingText);
-  if (textModerationResult.status === 'rejected') {
+  const textModerationAction = listingTextGateAction(textModerationResult.status);
+  if (textModerationAction === 'block') {
     reply.code(422);
     return {
       ok: false,
@@ -16847,11 +16994,28 @@ app.post('/listings', {
       labels: textModerationResult.labels,
     };
   }
-  if (textModerationResult.status === 'review') {
+  if (textModerationAction === 'hold') {
+    // B2 fail-closed: 'review' and provider 'failed' verdicts must never
+    // publish unreviewed text. When this write would make the listing
+    // publicly servable it lands on 'risk_pending' — the existing
+    // operator-visible hold every public surface already excludes (feeds,
+    // search, related items and bidding all filter status='active'). The
+    // hold is durable: owner transitions are blocked and only operator
+    // review releases it. Non-public targets (draft/paused) stay as-is —
+    // they are already unservable and the PATCH →active gate re-runs this
+    // same check before any future publish.
     request.log.warn(
-      { listingId: payload.id, labels: textModerationResult.labels },
-      'Listing text flagged for human review',
+      {
+        listingId: payload.id,
+        moderationStatus: textModerationResult.status,
+        moderationError: textModerationResult.error,
+        labels: textModerationResult.labels,
+      },
+      'Listing text moderation returned no clean verdict — holding publish',
     );
+    if (effectiveStatus === 'active') {
+      effectiveStatus = 'risk_pending';
+    }
   }
 
   let resolvedCoverImageUrl = payload.imageUrl ?? null;
@@ -16998,6 +17162,42 @@ app.post('/listings', {
       await client.query('ROLLBACK');
       reply.code(409);
       return { ok: false, error: 'Listing ID belongs to another seller' };
+    }
+
+    // A held upsert (risk or moderation gate landing 'risk_pending') must
+    // not leave biddable live lots behind — settlement rejects held
+    // listings, so bids would land on lots that can never close. Same
+    // cancellation the PATCH hold path performs, in the same transaction.
+    if (effectiveStatus === 'risk_pending' && existingListing.rowCount) {
+      const cancelledLots = await client.query<{
+        id: string;
+        session_id: string;
+        version: number;
+      }>(
+        `UPDATE live_lots
+            SET status = 'cancelled',
+                version = version + 1,
+                updated_at = NOW()
+          WHERE listing_id = $1
+            AND status IN ('scheduled', 'open', 'closing', 'passed')
+          RETURNING id, session_id, version`,
+        [payload.id],
+      );
+      for (const lot of cancelledLots.rows) {
+        await client.query(
+          `INSERT INTO live_lot_events
+             (id, lot_id, session_id, event_type, event_version, actor_id, payload)
+           VALUES ($1, $2, $3, 'lot.cancelled', $4, $5, $6::jsonb)`,
+          [
+            crypto.randomUUID(),
+            lot.id,
+            lot.session_id,
+            lot.version,
+            actorUserId,
+            JSON.stringify({ lotId: lot.id, reason: 'listing_hold' }),
+          ],
+        );
+      }
     }
 
     const previousPriceGbp = existingListing.rowCount
@@ -17151,11 +17351,23 @@ app.post('/listings', {
 
     // Sync the new/updated listing into the search index (fire-and-forget).
     // A risk-held listing must never enter the index — evict any previously
-    // indexed document instead.
+    // indexed document instead. A failed eviction is a moderation-safety
+    // incident (held text stays searchable until the next full sync), so it
+    // is always logged with context — never swallowed silently.
     if (effectiveStatus === 'risk_pending') {
-      void removeListingFromIndex(payload.id).catch(() => {});
+      void removeListingFromIndex(payload.id).catch((evictError) => {
+        request.log.error(
+          { err: evictError, listingId: payload.id, status: effectiveStatus },
+          'Failed to evict risk-held listing from search index'
+        );
+      });
     } else {
-      void syncSingleListing(db, payload.id).catch(() => {});
+      void syncSingleListing(db, payload.id).catch((syncError) => {
+        request.log.error(
+          { err: syncError, listingId: payload.id, status: effectiveStatus },
+          'Failed to sync listing to search index after upsert'
+        );
+      });
     }
 
     // Record how the publish decision was executed (FR-13 separation).
@@ -17243,11 +17455,17 @@ app.get('/listings/:listingId', async (request, reply) => {
 
   const row = result.rows[0];
 
-  // T03: Gate non-public statuses. Only the seller (or an admin role,
-  // if added later) can view draft/paused/deleted listings.
-  const NON_PUBLIC_STATUSES = new Set(['draft', 'paused', 'deleted']);
+  // T03: Gate non-public statuses. Only the seller or a moderation
+  // privileged role (admin/moderator reviewing the hold) can view
+  // draft/paused/deleted/risk_pending listings. 'risk_pending' is the
+  // operator-visible hold every other public surface already excludes —
+  // the detail route is a public surface and must not serve it.
+  const NON_PUBLIC_STATUSES = new Set(['draft', 'paused', 'deleted', 'risk_pending']);
   if (NON_PUBLIC_STATUSES.has(row.status)) {
-    if (!viewerUserId || viewerUserId !== row.seller_id) {
+    const viewerRole = (request as any).authUser?.role as string | undefined;
+    const isPrivilegedViewer =
+      viewerRole === 'admin' || viewerRole === 'moderator';
+    if (!isPrivilegedViewer && (!viewerUserId || viewerUserId !== row.seller_id)) {
       reply.code(403);
       return { ok: false, error: 'You do not have permission to view this listing.', code: 'LISTING_NOT_PUBLIC' };
     }
@@ -17264,12 +17482,19 @@ app.get('/listings/:listingId', async (request, reply) => {
   const estimatedTotal = Number((itemPrice + buyerProtectionFee).toFixed(2));
 
   // Per spec 04_DIRECT Â§5: backend-backed engagement summary.
-  // Query Q&A count from the listing_qa table if it exists.
+  // Query Q&A count from the listing_qa table if it exists — the count uses
+  // the same predicate as GET /listings/:id/questions: 'visible' for everyone
+  // plus the viewer's own 'quarantined' rows ('denied' is hidden from all,
+  // migration 332), so an asker's held question is not silently excluded from
+  // the number shown alongside the list that displays it.
   let questionCount = 0;
   try {
     const qaResult = await readDb.query<{ count: string }>(
-      `SELECT COUNT(*)::text AS count FROM listing_qa WHERE listing_id = $1`,
-      [listingId]
+      `SELECT COUNT(*)::text AS count FROM listing_qa
+       WHERE listing_id = $1
+         AND (moderation_state = 'visible'
+              OR (moderation_state = 'quarantined' AND asker_id = $2))`,
+      [listingId, viewerUserId ?? null]
     );
     questionCount = qaResult.rows[0] ? Number(qaResult.rows[0].count) : 0;
   } catch {
@@ -17294,7 +17519,9 @@ app.get('/listings/:listingId', async (request, reply) => {
       [listingId]
     ),
     readDb.query<{ count: string }>(
-      `SELECT COUNT(*)::text AS count FROM listing_qa WHERE listing_id = $1 AND answer_text IS NOT NULL`,
+      `SELECT COUNT(*)::text AS count FROM listing_qa
+       WHERE listing_id = $1 AND answer_text IS NOT NULL
+         AND moderation_state = 'visible' AND answer_moderation_state = 'visible'`,
       [listingId]
     ),
   ]);
@@ -17525,19 +17752,28 @@ app.get('/listings/:listingId/qa-summary', async (request, reply) => {
     return { ok: false, error: 'Listing not found' };
   }
   const [countsResult, latestResult] = await Promise.all([
+    // Public aggregates count only publicly-visible Q&A — quarantined rows
+    // and held answers never leak into the summary (migration 332).
     readDb.query<{ question_count: string; answered_count: string; latest_activity_at: string | null }>(
       `SELECT
          COUNT(*)::text AS question_count,
-         COUNT(*) FILTER (WHERE answer_text IS NOT NULL)::text AS answered_count,
-         MAX(GREATEST(created_at, COALESCE(answered_at, created_at))) AS latest_activity_at
+         COUNT(*) FILTER (
+           WHERE answer_text IS NOT NULL AND answer_moderation_state = 'visible'
+         )::text AS answered_count,
+         MAX(GREATEST(created_at,
+           CASE WHEN answer_moderation_state = 'visible'
+                THEN COALESCE(answered_at, created_at)
+                ELSE created_at END)) AS latest_activity_at
        FROM listing_qa
-       WHERE listing_id = $1`,
+       WHERE listing_id = $1 AND moderation_state = 'visible'`,
       [listingId]
     ),
     readDb.query<{ question_text: string; answer_text: string; answered_at: string }>(
       `SELECT question_text, answer_text, answered_at
        FROM listing_qa
        WHERE listing_id = $1 AND answer_text IS NOT NULL
+         AND moderation_state = 'visible'
+         AND answer_moderation_state = 'visible'
        ORDER BY answered_at DESC
        LIMIT 1`,
       [listingId]
@@ -17569,6 +17805,12 @@ app.get('/listings/:listingId/questions', async (request, reply) => {
     reply.code(404);
     return { ok: false, error: 'Listing not found' };
   }
+  // Quarantined rows/answers are author-visible only — the same convention
+  // chat_messages.moderation_state uses (migrations 314/322/332). A viewer
+  // sees their own held content marked quarantined; everyone else's held
+  // content never leaves the read path. 'denied' is operator takedown —
+  // hidden from EVERYONE including the author (migration 332 contract).
+  const viewerId = request.authUser?.userId ?? null;
   const result = await readDb.query<{
     id: string;
     asker_id: string;
@@ -17578,6 +17820,9 @@ app.get('/listings/:listingId/questions', async (request, reply) => {
     answer_text: string | null;
     responder_name: string | null;
     answered_at: string | null;
+    answered_by: string | null;
+    moderation_state: string;
+    answer_moderation_state: string;
   }>(
     `SELECT
        q.id,
@@ -17587,14 +17832,19 @@ app.get('/listings/:listingId/questions', async (request, reply) => {
        q.created_at,
        q.answer_text,
        responder.username AS responder_name,
-       q.answered_at
+       q.answered_at,
+       q.answered_by,
+       q.moderation_state,
+       q.answer_moderation_state
      FROM listing_qa q
      INNER JOIN users asker ON asker.id = q.asker_id
      LEFT JOIN users responder ON responder.id = q.answered_by
      WHERE q.listing_id = $1
+       AND (q.moderation_state = 'visible'
+            OR (q.moderation_state = 'quarantined' AND q.asker_id = $2))
      ORDER BY q.created_at DESC
      LIMIT 100`,
-    [listingId]
+    [listingId, viewerId]
   );
   return {
     ok: true,
@@ -17605,11 +17855,15 @@ app.get('/listings/:listingId/questions', async (request, reply) => {
       askerName: row.asker_name,
       text: row.question_text,
       createdAt: row.created_at,
+      moderationState: row.moderation_state,
       answer: row.answer_text && row.answered_at
+        && (row.answer_moderation_state === 'visible'
+            || (row.answer_moderation_state === 'quarantined' && row.answered_by === viewerId))
         ? {
             text: row.answer_text,
             responderName: row.responder_name ?? 'Seller',
             createdAt: row.answered_at,
+            moderationState: row.answer_moderation_state,
           }
         : null,
     })),
@@ -17638,8 +17892,13 @@ app.post('/listings/:listingId/questions', async (request, reply) => {
     return { ok: false, error: 'Sellers cannot ask questions on their own listing' };
   }
   // Public UGC must pass text moderation — questions render unauthenticated.
+  // Same gate vocabulary as listing text: 'rejected' blocks the write;
+  // 'review' and provider 'failed' hold the row 'quarantined' — persisted
+  // and author-visible, but filtered from every public read path until an
+  // operator reviews it (fail-closed; migration 332).
   const questionModeration = await moderateListingText(`listing_qa_${listingId}`, text);
-  if (questionModeration.status === 'rejected') {
+  const questionModerationAction = listingTextGateAction(questionModeration.status);
+  if (questionModerationAction === 'block') {
     reply.code(422);
     return {
       ok: false,
@@ -17648,12 +17907,24 @@ app.post('/listings/:listingId/questions', async (request, reply) => {
       labels: questionModeration.labels,
     };
   }
+  const questionModerationState = questionModerationAction === 'hold' ? 'quarantined' : 'visible';
+  if (questionModerationState === 'quarantined') {
+    request.log.warn(
+      {
+        listingId,
+        moderationStatus: questionModeration.status,
+        moderationError: questionModeration.error,
+        labels: questionModeration.labels,
+      },
+      'Listing question returned no clean moderation verdict — holding quarantined',
+    );
+  }
   const questionId = `lq_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
   const result = await db.query<{ id: string; created_at: string }>(
-    `INSERT INTO listing_qa (id, listing_id, asker_id, question_text)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO listing_qa (id, listing_id, asker_id, question_text, moderation_state)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING id, created_at`,
-    [questionId, listingId, request.authUser.userId, text]
+    [questionId, listingId, request.authUser.userId, text, questionModerationState]
   );
   // Return the real asker display name — the GET endpoint joins users for
   // asker_name, and the POST response must match so the newly posted
@@ -17672,6 +17943,7 @@ app.post('/listings/:listingId/questions', async (request, reply) => {
       askerName: askerResult.rows[0]?.username ?? null,
       text,
       createdAt: result.rows[0].created_at,
+      moderationState: questionModerationState,
       answer: null,
     },
   };
@@ -17699,8 +17971,13 @@ app.post('/listings/:listingId/questions/:questionId/answer', async (request, re
     return { ok: false, error: 'Only the seller can answer listing questions' };
   }
   // Public UGC must pass text moderation — answers render unauthenticated.
+  // Same gate vocabulary as listing text: 'rejected' blocks the write;
+  // 'review' and provider 'failed' hold the answer 'quarantined' — persisted
+  // and author-visible, but hidden from public read paths until an operator
+  // reviews it (fail-closed; migration 332).
   const answerModeration = await moderateListingText(`listing_qa_${listingId}`, text);
-  if (answerModeration.status === 'rejected') {
+  const answerModerationAction = listingTextGateAction(answerModeration.status);
+  if (answerModerationAction === 'block') {
     reply.code(422);
     return {
       ok: false,
@@ -17709,12 +17986,26 @@ app.post('/listings/:listingId/questions/:questionId/answer', async (request, re
       labels: answerModeration.labels,
     };
   }
+  const answerModerationState = answerModerationAction === 'hold' ? 'quarantined' : 'visible';
+  if (answerModerationState === 'quarantined') {
+    request.log.warn(
+      {
+        listingId,
+        questionId,
+        moderationStatus: answerModeration.status,
+        moderationError: answerModeration.error,
+        labels: answerModeration.labels,
+      },
+      'Listing answer returned no clean moderation verdict — holding quarantined',
+    );
+  }
   const result = await db.query<{ answered_at: string }>(
     `UPDATE listing_qa
-     SET answer_text = $4, answered_by = $3, answered_at = NOW(), updated_at = NOW()
+     SET answer_text = $4, answered_by = $3, answered_at = NOW(),
+         answer_moderation_state = $5, updated_at = NOW()
      WHERE id = $1 AND listing_id = $2
      RETURNING answered_at`,
-    [questionId, listingId, request.authUser.userId, text]
+    [questionId, listingId, request.authUser.userId, text, answerModerationState]
   );
   if (!result.rowCount) {
     reply.code(404);
@@ -17733,6 +18024,7 @@ app.post('/listings/:listingId/questions/:questionId/answer', async (request, re
       text,
       responderName: responderResult.rows[0]?.username ?? null,
       createdAt: result.rows[0].answered_at,
+      moderationState: answerModerationState,
     },
   };
 });
@@ -18575,13 +18867,29 @@ app.patch('/listings/:listingId', async (request, reply) => {
     }
 
     // Text moderation — the same gate POST /listings applies — whenever the
-    // edit rewrites title or description. The merged text (patched fields
-    // over the locked current values) is what gets evaluated: 'rejected'
-    // refuses the whole patch, 'review' proceeds with a flag in the logs.
-    if (payload.title !== undefined || payload.description !== undefined) {
+    // edit rewrites title or description, OR when the patch publishes a
+    // non-public listing (draft/paused → active): text written while the
+    // provider was down, or authored before this gate existed, must be
+    // re-evaluated before it can go live. The merged text (patched fields
+    // over the locked current values) is what gets evaluated.
+    //
+    // B2 fail-closed: 'rejected' refuses the whole patch; 'review' and
+    // provider 'failed' hold the listing at 'risk_pending' when the patched
+    // row would be publicly servable — the same operator-visible hold the
+    // risk gate writes, excluded from every public surface that filters
+    // status='active'. Edits that leave the listing non-public stay held
+    // by their own status and are re-checked here on any future publish.
+    const patchActivatesListing =
+      payload.status === 'active' && existing.rows[0].status !== 'active';
+    if (
+      payload.title !== undefined
+      || payload.description !== undefined
+      || patchActivatesListing
+    ) {
       const mergedListingText = `${payload.title ?? existing.rows[0].title}\n${payload.description ?? existing.rows[0].description}`;
       const textModerationResult = await moderateListingText(listingId, mergedListingText);
-      if (textModerationResult.status === 'rejected') {
+      const textModerationAction = listingTextGateAction(textModerationResult.status);
+      if (textModerationAction === 'block') {
         await client.query('ROLLBACK');
         reply.code(422);
         return {
@@ -18591,11 +18899,70 @@ app.patch('/listings/:listingId', async (request, reply) => {
           labels: textModerationResult.labels,
         };
       }
-      if (textModerationResult.status === 'review') {
-        request.log.warn(
-          { listingId, labels: textModerationResult.labels },
-          'Listing text edit flagged for human review',
-        );
+      if (textModerationAction === 'hold') {
+        const statusAfterPatch = payload.status ?? existing.rows[0].status;
+        if (statusAfterPatch === 'active') {
+          patchPublishHeld = true;
+          const statusSetIndex = sets.findIndex((entry) => entry.startsWith('status ='));
+          if (statusSetIndex >= 0) {
+            values[statusSetIndex] = 'risk_pending';
+          } else {
+            // The patch carries no status write (e.g. a text-only edit on a
+            // live listing) — append one. `listingId` was already pushed as
+            // the WHERE parameter, so the new value lands after it.
+            values.push('risk_pending');
+            sets.push(`status = $${values.length}`);
+          }
+          // Same invariant as the risk hold: a held listing must not leave
+          // live lots biddable — settlement rejects 'risk_pending'.
+          const cancelledLots = await client.query<{
+            id: string;
+            session_id: string;
+            version: number;
+          }>(
+            `UPDATE live_lots
+                SET status = 'cancelled',
+                    version = version + 1,
+                    updated_at = NOW()
+              WHERE listing_id = $1
+                AND status IN ('scheduled', 'open', 'closing', 'passed')
+              RETURNING id, session_id, version`,
+            [listingId],
+          );
+          for (const lot of cancelledLots.rows) {
+            await client.query(
+              `INSERT INTO live_lot_events
+                 (id, lot_id, session_id, event_type, event_version, actor_id, payload)
+               VALUES ($1, $2, $3, 'lot.cancelled', $4, $5, $6::jsonb)`,
+              [
+                crypto.randomUUID(),
+                lot.id,
+                lot.session_id,
+                lot.version,
+                actorUserId,
+                JSON.stringify({ lotId: lot.id, reason: 'listing_moderation_hold' }),
+              ],
+            );
+          }
+          request.log.warn(
+            {
+              listingId,
+              moderationStatus: textModerationResult.status,
+              moderationError: textModerationResult.error,
+              labels: textModerationResult.labels,
+            },
+            'Listing text moderation returned no clean verdict — holding listing at risk_pending',
+          );
+        } else {
+          request.log.warn(
+            {
+              listingId,
+              moderationStatus: textModerationResult.status,
+              labels: textModerationResult.labels,
+            },
+            'Listing text edit flagged for human review (listing not public)',
+          );
+        }
       }
     }
 
@@ -18801,11 +19168,23 @@ app.patch('/listings/:listingId', async (request, reply) => {
   });
 
   // Sync the updated listing into the search index (fire-and-forget).
-  // A risk-held listing must leave the index, not enter it.
+  // A risk-held listing must leave the index, not enter it — a failed
+  // eviction is a moderation-safety incident, so it is always logged with
+  // context rather than swallowed silently.
   if (patchPublishHeld) {
-    void removeListingFromIndex(listingId).catch(() => {});
+    void removeListingFromIndex(listingId).catch((evictError) => {
+      request.log.error(
+        { err: evictError, listingId, status: 'risk_pending' },
+        'Failed to evict risk-held listing from search index'
+      );
+    });
   } else {
-    void syncSingleListing(db, listingId).catch(() => {});
+    void syncSingleListing(db, listingId).catch((syncError) => {
+      request.log.error(
+        { err: syncError, listingId },
+        'Failed to sync listing to search index after update'
+      );
+    });
   }
 
   if (patchPublishDecision) {
@@ -18870,8 +19249,14 @@ app.delete('/listings/:listingId', async (request, reply) => {
     app.log.error({ err: cacheError, listingId }, 'Failed to invalidate search cache after listing delete');
   });
 
-  // Remove the deleted listing from the search index (fire-and-forget)
-  void removeListingFromIndex(listingId).catch(() => {});
+  // Remove the deleted listing from the search index (fire-and-forget) —
+  // a failed eviction leaves a deleted listing searchable, so log it.
+  void removeListingFromIndex(listingId).catch((evictError) => {
+    request.log.error(
+      { err: evictError, listingId },
+      'Failed to remove deleted listing from search index'
+    );
+  });
 
   return { ok: true };
 });
@@ -20563,7 +20948,7 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
       fiatCurrency,
       String(toFiatMinor(payload.fiatAmount, fiatCurrency))
     );
-    const feeAllocation = allocateMoneyByBasisPoints(topupMoney, 100);
+    const feeAllocation = allocateMoneyByBasisPoints(topupMoney, MINT_QUOTE_TOPUP_FEE_BASIS_POINTS);
     const feeBreakdown = {
       grossFiatAmount: Number(moneyToMajorDecimal(feeAllocation.gross)),
       platformFeeRate: WALLET_TOPUP_PLATFORM_FEE_RATE,
@@ -20587,18 +20972,34 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
         })
       : null;
 
+    // FIN-04: claim the idempotency key BEFORE any mutation, inside this
+    // transaction. A read-then-write check would let two concurrent same-key
+    // requests both pass and create two payment intents.
+    let idempotencyClaimed = false;
     if (payload.idempotencyKey && idempotencyRequestHash) {
-      const idempotentResponse = await getWalletIdempotentResponse(client, {
+      const claim = await claimWalletIdempotencyKey(client, {
         userId: actorUserId,
         operation: 'mint_quote',
         idempotencyKey: payload.idempotencyKey,
         requestHash: idempotencyRequestHash,
       });
 
-      if (idempotentResponse) {
+      if (claim.status === 'replay') {
         await client.query('COMMIT');
-        return idempotentResponse;
+        return claim.responsePayload;
       }
+
+      if (claim.status === 'in_progress') {
+        await client.query('COMMIT');
+        reply.code(409);
+        return {
+          ok: false,
+          error: 'IDEMPOTENCY_IN_PROGRESS',
+          message: 'A mint quote with this idempotency key is still in progress. Retry to fetch the result.',
+        };
+      }
+
+      idempotencyClaimed = true;
     }
 
     // â”€â”€ At-par model: 1 1ZE = $1.00 USD. Use the raw USDâ†’local FX rate.
@@ -20713,11 +21114,38 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
       webhookUrl: payload.webhookUrl,
       customerEmail: topupCustomerEmail,
       metadata: {
+        // Server-owned keys are stripped from caller metadata — a client
+        // mintOperationId/mintQuote/quoteHash here would let a forged quote
+        // ride on a genuine payment (metadata provenance, review P0).
+        ...sanitizePaymentIntentClientMetadata(payload.metadata),
         userId: actorUserId,
         mintOperationId,
         quoteHash,
-        ...(payload.metadata ?? {}),
       },
+    });
+
+    // The locked quote rides on the intent metadata and is HMAC-bound to
+    // this intent + user (mintQuoteMac). materializeMintOperationForPaymentIntent
+    // re-verifies the MAC before trusting any field, so metadata written by
+    // any other path cannot mint 1ZE.
+    const mintQuote = {
+      fiatAmountMinor: toFiatMinor(feeBreakdown.grossFiatAmount, fiatCurrency),
+      netFiatAmountMinor: toFiatMinor(feeBreakdown.netFiatAmount, fiatCurrency),
+      platformFeeMinor: toFiatMinor(feeBreakdown.platformFeeAmount, fiatCurrency),
+      izeAmountUnits: amountUnits,
+      ratePerGram: mintUnitPrice,
+      rateSource:
+        fiatCurrency === 'GBP'
+          ? 'fixed_par:GBP:1ZE'
+          : `internal_pricing:${pricingQuote.countryCode}:buy`,
+      rateLockedAt: rateLockedAt.toISOString(),
+      rateExpiresAt: rateExpiresAt.toISOString(),
+    };
+    const mintQuoteMac = computeMintQuoteMac({
+      paymentIntentId,
+      userId: actorUserId,
+      mintOperationId,
+      ...mintQuote,
     });
 
     const paymentIntentResult = await client.query<PaymentIntentRow>(
@@ -20806,6 +21234,10 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
           : null,
         idempotencyRequestHash ?? quoteHash,
         toJsonString({
+          // Caller metadata may carry free-form annotations, but never the
+          // server-owned settlement/mint keys — sanitize keeps them out even
+          // though the spread position already favours the server fields.
+          ...sanitizePaymentIntentClientMetadata(payload.metadata),
           mintOperationId,
           quoteHash,
           canonicalMoney: topupMoney,
@@ -20817,21 +21249,11 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
           },
           quoteRateSource: `internal_pricing:${pricingQuote.countryCode}:buy`,
           // Everything needed to materialize the mint_operations row when a
-          // payment event settles this intent.
-          mintQuote: {
-            fiatAmountMinor: toFiatMinor(feeBreakdown.grossFiatAmount, fiatCurrency),
-            netFiatAmountMinor: toFiatMinor(feeBreakdown.netFiatAmount, fiatCurrency),
-            platformFeeMinor: toFiatMinor(feeBreakdown.platformFeeAmount, fiatCurrency),
-            izeAmountUnits: amountUnits,
-            ratePerGram: mintUnitPrice,
-            rateSource:
-              fiatCurrency === 'GBP'
-                ? 'fixed_par:GBP:1ZE'
-                : `internal_pricing:${pricingQuote.countryCode}:buy`,
-            rateLockedAt: rateLockedAt.toISOString(),
-            rateExpiresAt: rateExpiresAt.toISOString(),
-          },
-          ...(payload.metadata ?? {}),
+          // payment event settles this intent. mintQuoteMac authenticates
+          // the quote against this intent + user — the materializer refuses
+          // quotes without a valid MAC.
+          mintQuote,
+          mintQuoteMac,
         }),
       ]
     );
@@ -20880,7 +21302,9 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
         paymentIntentCreatedAt: new Date().toISOString(),
         paymentIntentId,
         gatewayId,
-        ...(payload.metadata ?? {}),
+        // Caller annotations come last but with server-owned keys stripped —
+        // quoteHash/provenance fields must not be clobbered by client input.
+        ...sanitizePaymentIntentClientMetadata(payload.metadata),
       },
       created_at: rateLockedAt.toISOString(),
       updated_at: rateLockedAt.toISOString(),
@@ -20904,8 +21328,8 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
       },
     };
 
-    if (payload.idempotencyKey && idempotencyRequestHash) {
-      await saveWalletIdempotentResponse(client, {
+    if (idempotencyClaimed && payload.idempotencyKey && idempotencyRequestHash) {
+      await completeWalletIdempotencyClaim(client, {
         userId: actorUserId,
         operation: 'mint_quote',
         idempotencyKey: payload.idempotencyKey,
@@ -21172,18 +21596,34 @@ app.post('/wallet/1ze/mint', async (request, reply) => {
         })
       : null;
 
+    // FIN-04: claim the idempotency key BEFORE any mutation, inside this
+    // transaction. The payment_intent_id unique index only catches retries
+    // that carry a paymentIntentId — a key-only retry would mint twice.
+    let idempotencyClaimed = false;
     if (payload.idempotencyKey && idempotencyRequestHash) {
-      const idempotentResponse = await getWalletIdempotentResponse(client, {
+      const claim = await claimWalletIdempotencyKey(client, {
         userId: actorUserId,
         operation: 'mint',
         idempotencyKey: payload.idempotencyKey,
         requestHash: idempotencyRequestHash,
       });
 
-      if (idempotentResponse) {
+      if (claim.status === 'replay') {
         await client.query('COMMIT');
-        return idempotentResponse;
+        return claim.responsePayload;
       }
+
+      if (claim.status === 'in_progress') {
+        await client.query('COMMIT');
+        reply.code(409);
+        return {
+          ok: false,
+          error: 'IDEMPOTENCY_IN_PROGRESS',
+          message: 'A mint with this idempotency key is still in progress. Retry to fetch the result.',
+        };
+      }
+
+      idempotencyClaimed = true;
     }
 
     if (feeBreakdown.netFiatAmount <= 0) {
@@ -21332,8 +21772,8 @@ app.post('/wallet/1ze/mint', async (request, reply) => {
         : null,
     };
 
-    if (payload.idempotencyKey && idempotencyRequestHash) {
-      await saveWalletIdempotentResponse(client, {
+    if (idempotencyClaimed && payload.idempotencyKey && idempotencyRequestHash) {
+      await completeWalletIdempotencyClaim(client, {
         userId: actorUserId,
         operation: 'mint',
         idempotencyKey: payload.idempotencyKey,
@@ -21474,18 +21914,34 @@ app.post('/wallet/1ze/burn', async (request, reply) => {
         })
       : null;
 
+    // FIN-04: claim the idempotency key BEFORE any mutation, inside this
+    // transaction. A read-then-write check would let two concurrent same-key
+    // burns both pass and debit the wallet twice.
+    let idempotencyClaimed = false;
     if (payload.idempotencyKey && idempotencyRequestHash) {
-      const idempotentResponse = await getWalletIdempotentResponse(client, {
+      const claim = await claimWalletIdempotencyKey(client, {
         userId: actorUserId,
         operation: 'burn',
         idempotencyKey: payload.idempotencyKey,
         requestHash: idempotencyRequestHash,
       });
 
-      if (idempotentResponse) {
+      if (claim.status === 'replay') {
         await client.query('COMMIT');
-        return idempotentResponse;
+        return claim.responsePayload;
       }
+
+      if (claim.status === 'in_progress') {
+        await client.query('COMMIT');
+        reply.code(409);
+        return {
+          ok: false,
+          error: 'IDEMPOTENCY_IN_PROGRESS',
+          message: 'A burn with this idempotency key is still in progress. Retry to fetch the result.',
+        };
+      }
+
+      idempotencyClaimed = true;
     }
 
     if (config.nodeEnv === 'production' && !payload.payoutRequestId) {
@@ -21544,6 +22000,41 @@ app.post('/wallet/1ze/burn', async (request, reply) => {
     const feeAmount = Number((principalAmount * feeBps / 10_000).toFixed(6));
     const fiatAmount = Number((principalAmount - feeAmount).toFixed(6));
 
+    const architectureEnabled = await onezeArchitectureTablesAvailable(client);
+    let architectureWalletId: string | null = null;
+    let architectureWalletBalanceUnits: number | null = null;
+    let segmentDebitResult:
+      | {
+          purchasedDebitedUnits: number;
+          earnedDebitedUnits: number;
+          lockedPurchasedUnits: number;
+          redeemableUnits: number;
+          purchasedBalanceUnits: number;
+          earnedBalanceUnits: number;
+        }
+      | null = null;
+    let burnWallet: WalletRow | null = null;
+
+    if (architectureEnabled) {
+      burnWallet = await ensureWallet(client, actorUserId, fiatCurrency);
+      // The BURN debit below must draw on SPENDABLE funds — gross balance
+      // minus enforceable coOwn reservations — not the gross balance alone
+      // (FIN-03). Locks the wallet row FOR UPDATE, then reservation rows in
+      // id order, inside this transaction (the shared lock order).
+      //
+      // The lock is taken BEFORE the redemption-cap reads so concurrent
+      // burns on this wallet serialize on the row: the loser observes the
+      // winner's committed wallet_ize_operations row, so two requests that
+      // are each under the daily/weekly cap cannot both pass (soft-limit
+      // race). Note the non-architecture fallback has no wallet row to
+      // serialize on — documented limitation of that legacy path.
+      await assertSpendableOnezeUnits(client, {
+        walletId: burnWallet.id,
+        requiredUnits: amountUnits,
+      });
+      architectureWalletId = burnWallet.id;
+    }
+
     const [dailyBurnedIze, weeklyBurnedIze] = await Promise.all([
       getCommittedBurnIzeInWindow(client, actorUserId, 24),
       getCommittedBurnIzeInWindow(client, actorUserId, 7 * 24),
@@ -21599,24 +22090,9 @@ app.post('/wallet/1ze/burn', async (request, reply) => {
       }
     }
 
-    const architectureEnabled = await onezeArchitectureTablesAvailable(client);
-    let architectureWalletId: string | null = null;
-    let architectureWalletBalanceUnits: number | null = null;
-    let segmentDebitResult:
-      | {
-          purchasedDebitedUnits: number;
-          earnedDebitedUnits: number;
-          lockedPurchasedUnits: number;
-          redeemableUnits: number;
-          purchasedBalanceUnits: number;
-          earnedBalanceUnits: number;
-        }
-      | null = null;
-
-    if (architectureEnabled) {
-      const wallet = await ensureWallet(client, actorUserId, fiatCurrency);
+    if (architectureEnabled && burnWallet) {
       segmentDebitResult = await debitWalletSegmentBalance(client, {
-        wallet,
+        wallet: burnWallet,
         txId: `seg_${createRuntimeId('ize_burn')}`,
         amountUnits,
         originCountry,
@@ -21628,8 +22104,6 @@ app.post('/wallet/1ze/burn', async (request, reply) => {
           payoutRequestId: payload.payoutRequestId ?? null,
         },
       });
-
-      architectureWalletId = wallet.id;
     }
 
     const operationId = createRuntimeId('ize_burn');
@@ -21655,12 +22129,11 @@ app.post('/wallet/1ze/burn', async (request, reply) => {
       },
     });
 
-    if (architectureEnabled) {
-      const wallet = await ensureWallet(client, actorUserId, fiatCurrency);
+    if (architectureEnabled && burnWallet) {
       const walletTxId = createRuntimeId('wtx');
 
       architectureWalletBalanceUnits = await applyWalletLedgerDelta(client, {
-        walletId: wallet.id,
+        walletId: burnWallet.id,
         txId: walletTxId,
         asset: '1ZE',
         amount: -amountUnits,
@@ -21690,7 +22163,7 @@ app.post('/wallet/1ze/burn', async (request, reply) => {
       if (feeAmount > 0) {
         const feeAmountMinor = Math.round(feeAmount * 100);
         await applyWalletLedgerDelta(client, {
-          walletId: wallet.id,
+          walletId: burnWallet.id,
           txId: walletTxId,
           asset: 'FIAT',
           amount: -feeAmountMinor,
@@ -21785,8 +22258,8 @@ app.post('/wallet/1ze/burn', async (request, reply) => {
         : null,
     };
 
-    if (payload.idempotencyKey && idempotencyRequestHash) {
-      await saveWalletIdempotentResponse(client, {
+    if (idempotencyClaimed && payload.idempotencyKey && idempotencyRequestHash) {
+      await completeWalletIdempotencyClaim(client, {
         userId: actorUserId,
         operation: 'burn',
         idempotencyKey: payload.idempotencyKey,
@@ -21891,18 +22364,34 @@ app.post('/wallet/convert-1ze-to-fiat', async (request, reply) => {
         })
       : null;
 
+    // FIN-04: claim the idempotency key BEFORE any mutation, inside this
+    // transaction. A read-then-write check would let two concurrent same-key
+    // conversions both pass and debit 1ZE / credit fiat twice.
+    let idempotencyClaimed = false;
     if (payload.idempotencyKey && idempotencyRequestHash) {
-      const idempotentResponse = await getWalletIdempotentResponse(client, {
+      const claim = await claimWalletIdempotencyKey(client, {
         userId: actorUserId,
         operation: 'convert_1ze_to_fiat',
         idempotencyKey: payload.idempotencyKey,
         requestHash: idempotencyRequestHash,
       });
 
-      if (idempotentResponse) {
+      if (claim.status === 'replay') {
         await client.query('COMMIT');
-        return idempotentResponse;
+        return claim.responsePayload;
       }
+
+      if (claim.status === 'in_progress') {
+        await client.query('COMMIT');
+        reply.code(409);
+        return {
+          ok: false,
+          error: 'IDEMPOTENCY_IN_PROGRESS',
+          message: 'A conversion with this idempotency key is still in progress. Retry to fetch the result.',
+        };
+      }
+
+      idempotencyClaimed = true;
     }
 
     // â”€â”€ At-par pricing model â”€â”€
@@ -21923,16 +22412,23 @@ app.post('/wallet/convert-1ze-to-fiat', async (request, reply) => {
     const feeAmount = conversionQuote.feeAmount;
     const netRedemption = conversionQuote.netRedemption;
 
-    // Validate 1ze balance
+    // Validate 1ze balance against SPENDABLE funds — gross balance minus
+    // enforceable coOwn reservations (FIN-03) — under the shared lock order
+    // (wallet row FOR UPDATE, then reservation rows in id order) inside this
+    // transaction.
     const wallet = await ensureWallet(client, actorUserId, fiatCurrency);
-    const currentIzeBalance = Number(wallet.oneze_balance_units);
+    const spendableFunds = await computeSpendableOnezeUnits(client, {
+      walletId: wallet.id,
+    });
 
-    if (currentIzeBalance < amountUnits) {
+    if (spendableFunds.spendableUnits < amountUnits) {
       // Must throw — returning here leaks the open transaction (and the wallet
       // row lock) back to the pool because the catch owns ROLLBACK.
-      throw createApiError('INSUFFICIENT_1ZE_BALANCE', 'Insufficient 1ze balance for conversion', {
+      throw createApiError('INSUFFICIENT_1ZE_BALANCE', 'Insufficient spendable 1ze balance for conversion', {
         code: 'INSUFFICIENT_1ZE_BALANCE',
-        currentBalanceUnits: currentIzeBalance,
+        currentBalanceUnits: spendableFunds.grossUnits,
+        reservedUnits: spendableFunds.reservedUnits,
+        spendableUnits: spendableFunds.spendableUnits,
         requestedAmountUnits: amountUnits,
       });
     }
@@ -22099,9 +22595,10 @@ app.post('/wallet/convert-1ze-to-fiat', async (request, reply) => {
 
     // The idempotent response must be persisted atomically with the conversion —
     // a post-commit save can be lost while the burn+credit stay committed,
-    // which makes a same-key retry re-execute the full conversion.
-    if (payload.idempotencyKey && idempotencyRequestHash) {
-      await saveWalletIdempotentResponse(client, {
+    // which makes a same-key retry re-execute the full conversion. Completing
+    // the claimed row in this same transaction is that atomic store.
+    if (idempotencyClaimed && payload.idempotencyKey && idempotencyRequestHash) {
+      await completeWalletIdempotencyClaim(client, {
         userId: actorUserId,
         operation: 'convert_1ze_to_fiat',
         idempotencyKey: payload.idempotencyKey,
@@ -22191,18 +22688,33 @@ app.post('/wallet/buy-1ze', async (request, reply) => {
         })
       : null;
 
+    // FIN-04: claim the key inside this transaction before any mutation —
+    // a read-then-write check lets two concurrent same-key buys both pass.
+    let idempotencyClaimed = false;
     if (payload.idempotencyKey && idempotencyRequestHash) {
-      const idempotentResponse = await getWalletIdempotentResponse(client, {
+      const claim = await claimWalletIdempotencyKey(client, {
         userId: actorUserId,
         operation: 'buy_1ze',
         idempotencyKey: payload.idempotencyKey,
         requestHash: idempotencyRequestHash,
       });
 
-      if (idempotentResponse) {
+      if (claim.status === 'replay') {
         await client.query('COMMIT');
-        return idempotentResponse;
+        return claim.responsePayload;
       }
+
+      if (claim.status === 'in_progress') {
+        await client.query('COMMIT');
+        reply.code(409);
+        return {
+          ok: false,
+          error: 'IDEMPOTENCY_IN_PROGRESS',
+          message: 'A buy-1ze with this idempotency key is still in progress. Retry to fetch the result.',
+        };
+      }
+
+      idempotencyClaimed = true;
     }
 
     // â”€â”€ Compliance gate: verify user can issue (load) 1ZE â”€â”€
@@ -22307,8 +22819,8 @@ app.post('/wallet/buy-1ze', async (request, reply) => {
       },
     };
 
-    if (payload.idempotencyKey && idempotencyRequestHash) {
-      await saveWalletIdempotentResponse(client, {
+    if (idempotencyClaimed && payload.idempotencyKey && idempotencyRequestHash) {
+      await completeWalletIdempotencyClaim(client, {
         userId: actorUserId,
         operation: 'buy_1ze',
         idempotencyKey: payload.idempotencyKey,
@@ -22442,18 +22954,36 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
       })
       : null;
 
+    // FIN-04: claim the idempotency key BEFORE any mutation, inside this
+    // transaction. The INSERT ... ON CONFLICT blocks on a concurrent same-key
+    // claim until it commits (replay its stored response) or aborts (we win
+    // the claim). A read-then-write check would let two requests both pass
+    // and double-spend.
+    let idempotencyClaimed = false;
     if (payload.idempotencyKey && idempotencyRequestHash) {
-      const idempotentResponse = await getWalletIdempotentResponse(client, {
+      const claim = await claimWalletIdempotencyKey(client, {
         userId: senderUserId,
         operation: 'p2p_transfer',
         idempotencyKey: payload.idempotencyKey,
         requestHash: idempotencyRequestHash,
       });
 
-      if (idempotentResponse) {
+      if (claim.status === 'replay') {
         await client.query('COMMIT');
-        return idempotentResponse;
+        return claim.responsePayload;
       }
+
+      if (claim.status === 'in_progress') {
+        await client.query('COMMIT');
+        reply.code(409);
+        return {
+          ok: false,
+          error: 'IDEMPOTENCY_IN_PROGRESS',
+          message: 'A transfer with this idempotency key is still in progress. Retry to fetch the result.',
+        };
+      }
+
+      idempotencyClaimed = true;
     }
 
     const fiatCurrency = payload.fiatCurrency.toUpperCase();
@@ -22471,6 +23001,7 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
       amountUnits,
       contextType: payload.contextType,
       contextId: payload.contextId,
+      callerRole: request.authUser?.role ?? null,
     });
 
     const [senderEligibility, recipientEligibility] = await Promise.all([
@@ -22568,17 +23099,56 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
         }
         : {},
       metadata: {
+        // Caller annotations first — the authorized context pair
+        // (contextType/contextId) must always win: the single-use index on
+        // wallet_ize_transfers keys off the STORED values, so a client
+        // override would launder privileged contexts (review P1).
+        ...(payload.metadata ?? {}),
         note: payload.note,
         contextType: payload.contextType ?? null,
         contextId: payload.contextId ?? null,
         amountUnits,
-        ...(payload.metadata ?? {}),
       },
     });
 
-    const senderWallet = await ensureWallet(client, senderUserId, fiatCurrency);
-    const recipientWallet = await ensureWallet(client, recipientUserId, fiatCurrency);
+    // First-acquire both wallet rows in ONE canonical-order statement:
+    // ORDER BY wallets.id is the same lock order every other money path uses
+    // (coOwn applyCoOwnTransfer, DRIP settlement, lockWalletRowsForUpdate).
+    // The previous ensureWallet-per-party pattern first-acquired in user_id
+    // order — wallets.id is uncorrelated with user_id, so a transfer could
+    // deadlock against a trade/DRIP on the same wallet pair (ABBA).
+    const partyUserIds = [senderUserId, recipientUserId].sort();
+    const lockedWalletRows = await client.query<WalletRow>(
+      `
+        SELECT ${WALLET_ROW_SELECT}
+        FROM wallets
+        WHERE user_id = ANY($1::text[])
+        ORDER BY id
+        FOR UPDATE
+      `,
+      [partyUserIds]
+    );
+    const walletByUserId = new Map(lockedWalletRows.rows.map((row) => [row.user_id, row]));
+    // Create any missing wallet afterwards in deterministic user-id order.
+    // The insert only serializes on the wallets.user_id unique index — it
+    // cannot form a lock cycle with the existing-row locks held above, and
+    // ensureWallet's INSERT ON CONFLICT + re-read self-heals a lost race.
+    for (const partyUserId of partyUserIds) {
+      if (!walletByUserId.has(partyUserId)) {
+        walletByUserId.set(partyUserId, await ensureWallet(client, partyUserId, fiatCurrency));
+      }
+    }
+    const senderWallet = walletByUserId.get(senderUserId)!;
+    const recipientWallet = walletByUserId.get(recipientUserId)!;
     const walletTxId = createRuntimeId('wtx');
+
+    // Both wallet rows are already locked in canonical id order above.
+    // Debit the sender from SPENDABLE funds — gross balance minus enforceable
+    // coOwn reservations — not the gross balance alone (FIN-03).
+    await assertSpendableOnezeUnits(client, {
+      walletId: senderWallet.id,
+      requiredUnits: amountUnits,
+    });
 
     const [senderBalanceAfterUnits, recipientBalanceAfterUnits] = await Promise.all([
       applyWalletLedgerDelta(client, {
@@ -22679,8 +23249,10 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
       },
     };
 
-    if (payload.idempotencyKey && idempotencyRequestHash) {
-      await saveWalletIdempotentResponse(client, {
+    if (idempotencyClaimed && payload.idempotencyKey && idempotencyRequestHash) {
+      // Store the response on the claimed row — same transaction, so the
+      // response commits atomically with the balanced postings above.
+      await completeWalletIdempotencyClaim(client, {
         userId: senderUserId,
         operation: 'p2p_transfer',
         idempotencyKey: payload.idempotencyKey,
@@ -22717,6 +23289,23 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
     return responsePayload;
   } catch (error) {
     await client.query('ROLLBACK');
+    // wallet_ize_transfers_context_uidx (migration 333): a concurrent
+    // transfer carrying the same privileged context committed first — the
+    // loser's transfer INSERT failed 23505. Surface the same
+    // context-consumed error the pre-check raises instead of a 500.
+    if (isPostgresUniqueViolation(error) && payload.contextType && payload.contextId) {
+      reply.code(409);
+      return {
+        ok: false,
+        error: 'Transfer context has already been consumed by a committed transfer',
+        code: 'P2P_TRANSFER_CONTEXT_BLOCKED',
+        details: {
+          contextType: payload.contextType,
+          contextId: payload.contextId,
+        },
+      };
+    }
+
     const apiError = getApiError(error);
     if (apiError) {
       reply.code(statusCodeForApiError(apiError.code));
@@ -22806,18 +23395,34 @@ app.post('/wallet/1ze/withdrawals/quote', async (request, reply) => {
         })
       : null;
 
+    // FIN-04: claim the key inside this transaction before the withdrawals
+    // INSERT — a read-then-write check lets two concurrent same-key requests
+    // create two quotes.
+    let idempotencyClaimed = false;
     if (payload.idempotencyKey && idempotencyRequestHash) {
-      const idempotentResponse = await getWalletIdempotentResponse(client, {
+      const claim = await claimWalletIdempotencyKey(client, {
         userId: actorUserId,
         operation: 'withdraw_quote',
         idempotencyKey: payload.idempotencyKey,
         requestHash: idempotencyRequestHash,
       });
 
-      if (idempotentResponse) {
+      if (claim.status === 'replay') {
         await client.query('COMMIT');
-        return idempotentResponse;
+        return claim.responsePayload;
       }
+
+      if (claim.status === 'in_progress') {
+        await client.query('COMMIT');
+        reply.code(409);
+        return {
+          ok: false,
+          error: 'IDEMPOTENCY_IN_PROGRESS',
+          message: 'A withdrawal quote with this idempotency key is still in progress. Retry to fetch the result.',
+        };
+      }
+
+      idempotencyClaimed = true;
     }
 
     const corridor = await resolvePayoutCorridor(client, targetCurrency);
@@ -22984,8 +23589,8 @@ app.post('/wallet/1ze/withdrawals/quote', async (request, reply) => {
       },
     };
 
-    if (payload.idempotencyKey && idempotencyRequestHash) {
-      await saveWalletIdempotentResponse(client, {
+    if (idempotencyClaimed && payload.idempotencyKey && idempotencyRequestHash) {
+      await completeWalletIdempotencyClaim(client, {
         userId: actorUserId,
         operation: 'withdraw_quote',
         idempotencyKey: payload.idempotencyKey,
@@ -23070,18 +23675,33 @@ app.post('/wallet/1ze/withdrawals/:withdrawalId/accept', async (request, reply) 
         })
       : null;
 
+    // FIN-04: claim the key inside this transaction before the withdrawal
+    // row is locked or mutated.
+    let idempotencyClaimed = false;
     if (payload.idempotencyKey && idempotencyRequestHash) {
-      const idempotentResponse = await getWalletIdempotentResponse(client, {
+      const claim = await claimWalletIdempotencyKey(client, {
         userId: actorUserId,
         operation: 'withdraw_accept',
         idempotencyKey: payload.idempotencyKey,
         requestHash: idempotencyRequestHash,
       });
 
-      if (idempotentResponse) {
+      if (claim.status === 'replay') {
         await client.query('COMMIT');
-        return idempotentResponse;
+        return claim.responsePayload;
       }
+
+      if (claim.status === 'in_progress') {
+        await client.query('COMMIT');
+        reply.code(409);
+        return {
+          ok: false,
+          error: 'IDEMPOTENCY_IN_PROGRESS',
+          message: 'A withdrawal accept with this idempotency key is still in progress. Retry to fetch the result.',
+        };
+      }
+
+      idempotencyClaimed = true;
     }
 
     const withdrawal = await loadWithdrawalById(client, withdrawalId, { forUpdate: true });
@@ -23105,8 +23725,8 @@ app.post('/wallet/1ze/withdrawals/:withdrawalId/accept', async (request, reply) 
         wallet: toWalletPayload(wallet),
       };
 
-      if (payload.idempotencyKey && idempotencyRequestHash) {
-        await saveWalletIdempotentResponse(client, {
+      if (idempotencyClaimed && payload.idempotencyKey && idempotencyRequestHash) {
+        await completeWalletIdempotencyClaim(client, {
           userId: actorUserId,
           operation: 'withdraw_accept',
           idempotencyKey: payload.idempotencyKey,
@@ -23139,6 +23759,15 @@ app.post('/wallet/1ze/withdrawals/:withdrawalId/accept', async (request, reply) 
     const wallet = await ensureWallet(client, withdrawal.user_id, withdrawal.target_currency);
     const pricingQuote = await resolveCountryPricingQuoteByCurrency(client, withdrawal.target_currency);
     const burnTxId = withdrawal.burn_tx_id ?? createRuntimeId('wdburn');
+
+    // The WITHDRAWAL_RESERVED debit below IS the spend decision — the QUOTED
+    // request stage only writes pricing and moves no funds. Debit from
+    // SPENDABLE funds: gross balance minus enforceable coOwn reservations
+    // (FIN-03), under the shared wallet-then-reservations lock order.
+    await assertSpendableOnezeUnits(client, {
+      walletId: wallet.id,
+      requiredUnits: amountUnits,
+    });
 
     const walletBalanceAfterUnits = await applyWalletLedgerDelta(client, {
       walletId: wallet.id,
@@ -23213,6 +23842,20 @@ app.post('/wallet/1ze/withdrawals/:withdrawalId/accept', async (request, reply) 
       },
     };
 
+    // Store the response on the claimed row INSIDE this transaction so it
+    // commits atomically with the RESERVED transition + wallet debit. The
+    // old post-commit save ran in autocommit: non-atomic, and a throw there
+    // returned 500 after the funds had already moved.
+    if (idempotencyClaimed && payload.idempotencyKey && idempotencyRequestHash) {
+      await completeWalletIdempotencyClaim(client, {
+        userId: actorUserId,
+        operation: 'withdraw_accept',
+        idempotencyKey: payload.idempotencyKey,
+        requestHash: idempotencyRequestHash,
+        responsePayload,
+      });
+    }
+
     await client.query('COMMIT');
 
     if (requiresQueuedExecution) {
@@ -23231,17 +23874,27 @@ app.post('/wallet/1ze/withdrawals/:withdrawalId/accept', async (request, reply) 
         const execution = responsePayload.execution as Record<string, unknown>;
         execution.queued = false;
         execution.queueError = 'queue_enqueue_failed';
-      }
-    }
 
-    if (payload.idempotencyKey && idempotencyRequestHash) {
-      await saveWalletIdempotentResponse(client, {
-        userId: actorUserId,
-        operation: 'withdraw_accept',
-        idempotencyKey: payload.idempotencyKey,
-        requestHash: idempotencyRequestHash,
-        responsePayload,
-      });
+        // Best-effort: keep the stored idempotent replay consistent with
+        // the queue failure. This UPDATE runs in autocommit post-commit —
+        // a failure here must not 500 a committed reservation.
+        if (idempotencyClaimed && payload.idempotencyKey && idempotencyRequestHash) {
+          try {
+            await completeWalletIdempotencyClaim(client, {
+              userId: actorUserId,
+              operation: 'withdraw_accept',
+              idempotencyKey: payload.idempotencyKey,
+              requestHash: idempotencyRequestHash,
+              responsePayload,
+            });
+          } catch (idempotencyError) {
+            request.log.warn(
+              { err: idempotencyError, withdrawalId: updatedWithdrawal.id },
+              'Failed to update stored idempotent response after queue enqueue failure'
+            );
+          }
+        }
+      }
     }
 
     return responsePayload;
@@ -28703,7 +29356,10 @@ app.post('/payments/intents', async (request, reply) => {
         payload.idempotencyKey ?? null,
         paymentRequestHash,
         toJsonString({
-          ...(payload.metadata ?? {}),
+          // Server-owned keys (auctionId, winnerBidderId, mintQuote, …) are
+          // stripped from caller metadata — settlement bindings are written
+          // only by server-side code paths (lib/paymentIntentMetadata.ts).
+          ...sanitizePaymentIntentClientMetadata(payload.metadata),
           canonicalMoney: paymentMoney,
         }),
       ]
@@ -28817,7 +29473,7 @@ app.post('/payments/intents', async (request, reply) => {
         radarSessionId: payload.radarSessionId ?? null,
         customerEmail,
         metadata: {
-          ...(payload.metadata ?? {}),
+          ...sanitizePaymentIntentClientMetadata(payload.metadata),
           userId: actorUserId,
           orderId,
           coOwnOrderId,
@@ -28895,9 +29551,15 @@ app.post('/payments/intents', async (request, reply) => {
       if (gatewayId === 'oneze_internal' && channel === 'commerce' && orderId) {
         const debitQuote = await computeOnezeDebitQuote(settleClient, amountGbp);
         const buyerWallet = await ensureWallet(settleClient, actorUserId, 'GBP');
-        // FOR UPDATE — the observed balance cannot be spent concurrently
-        // before applyWalletLedgerDelta debits it inside this transaction.
-        const availableUnits = await readOnezeBalanceUnitsForUpdate(settleClient, buyerWallet.id);
+        // SPENDABLE funds — gross balance minus enforceable coOwn
+        // reservations — under the shared lock order (wallet row FOR UPDATE,
+        // then reservation rows in id order): the observed spendable cannot
+        // be spent concurrently before settlePaymentIntent debits it inside
+        // this transaction (FIN-03).
+        const spendableFunds = await computeSpendableOnezeUnits(settleClient, {
+          walletId: buyerWallet.id,
+        });
+        const availableUnits = spendableFunds.spendableUnits;
 
         if (availableUnits < debitQuote.debitUnits) {
           // Terminal failure inside the same tx: intent → failed, order →
@@ -29256,9 +29918,14 @@ app.post('/payments/intents/:intentId/confirm', async (request, reply) => {
         providerStatus: payload.providerStatus ?? 'processing',
         nextActionUrl: payload.nextActionUrl ?? null,
         scaExpiresAt: payload.scaExpiresAt ?? null,
+        // Same ingest rule as the create routes: client-supplied keys must
+        // pass through the server-owned-key sanitizer so a confirm call
+        // cannot plant auction bindings, mint quotes, or identity fields.
+        // Sanitize-then-spread also keeps `source: 'manual_confirm'` from
+        // being shadowed by a client `source` key.
         metadataPatch: {
           source: 'manual_confirm',
-          ...(payload.payload ?? {}),
+          ...sanitizePaymentIntentClientMetadata(payload.payload),
         },
       });
 
@@ -29279,8 +29946,10 @@ app.post('/payments/intents/:intentId/confirm', async (request, reply) => {
       failureCode: payload.failureCode,
       failureMessage: payload.failureMessage,
       rawPayload: {
-        source: 'manual_confirm',
+        // Client keys are preserved verbatim for forensics, but the server
+        // provenance label must not be shadowable by a client `source` key.
         ...(payload.payload ?? {}),
+        source: 'manual_confirm',
       },
     });
 
@@ -30417,6 +31086,18 @@ app.post('/webhooks/:provider', async (request, reply) => {
   );
 
   if (!verification.verified || !verification.event) {
+    // SEP20-FIN-10: a retryable verification failure (e.g. Mollie payment
+    // retrieval during a provider outage) must answer 5xx so the provider
+    // redelivers — it is never a state transition and never falls back to
+    // the caller-supplied payload.
+    if (verification.retryable) {
+      reply.code(503);
+      return {
+        ok: false,
+        error: verification.reason ?? 'Webhook verification temporarily unavailable',
+        retryable: true,
+      };
+    }
     reply.code(401);
     return {
       ok: false,
@@ -30617,6 +31298,18 @@ app.post('/webhooks/:provider', async (request, reply) => {
     let settledPayoutIdempotent = false;
     let settledCommerceOrderId: string | null = null;
     let settledCancelledOrderId: string | null = null;
+    /** Auction-win settlement applied inside this transaction when the
+     *  verified capture belongs to an auction payment intent (FIN-01). */
+    let settledAuctionWin: {
+      auctionId: string;
+      listingId: string;
+      orderId: string;
+      winnerBidderId: string;
+      sellerId: string;
+      winningBidGbp: number;
+      platformFeeGbp: number;
+      alreadySettled: boolean;
+    } | null = null;
     let refundCompletedUserId: string | null = null;
     let refundCompletedAmountGbp: number | null = null;
     let refundCompletedOrderId: string | null = null;
@@ -30715,6 +31408,25 @@ app.post('/webhooks/:provider', async (request, reply) => {
         settledIntent = settled.intent;
         settledCommerceOrderId = settled.orderSettlement?.orderId ?? settledCommerceOrderId;
         settledCancelledOrderId = settled.orderCancelledOrderId ?? settledCancelledOrderId;
+
+        // FIN-01: auction wins settle ONLY on provider-verified capture —
+        // inside this same transaction so the intent transition and the
+        // auction/order/ledger effects commit or roll back atomically.
+        // No-op for non-auction intents; idempotent on replay. Dynamic
+        // import keeps this edit inside the webhook region (auctions.js is
+        // already loaded — index registers its lifecycle routes).
+        if (event.paymentStatus === 'succeeded') {
+          const { settleAuctionWinForVerifiedIntent } = await import('./routes/auctions.js');
+          const auctionSettlement = await settleAuctionWinForVerifiedIntent(client, intentRow.id);
+          if (auctionSettlement.kind === 'settled') {
+            settledAuctionWin = auctionSettlement.settlement;
+          } else if (auctionSettlement.kind === 'skipped') {
+            request.log.error(
+              { intentId: intentRow.id, reason: auctionSettlement.reason },
+              'Verified capture could not settle its auction — left for reconciliation'
+            );
+          }
+        }
       } else {
         const transitioned = await transitionPaymentIntentStatus(client, {
           intentId: intentRow.id,
@@ -31042,6 +31754,73 @@ app.post('/webhooks/:provider', async (request, reply) => {
         stateType: 'order_cancelled',
         log: request.log,
       });
+    }
+
+    // FIN-01 post-commit effects for a provider-verified auction-win
+    // settlement — mirrors emitAuctionSettlementEffects in
+    // routes/auctions.ts (realtime fanout, in-thread cards, seller
+    // notification). Skipped on idempotent replays.
+    if (settledAuctionWin && !settledAuctionWin.alreadySettled) {
+      try {
+        await publishRealtimeEvent({
+          topic: `auction:${settledAuctionWin.auctionId}`,
+          type: 'auction.settled',
+          payload: {
+            auctionId: settledAuctionWin.auctionId,
+            listingId: settledAuctionWin.listingId,
+            winnerBidderId: settledAuctionWin.winnerBidderId,
+            winnerAmountGbp: settledAuctionWin.winningBidGbp,
+            platformFeeGbp: settledAuctionWin.platformFeeGbp,
+            reason: 'payment_confirmed',
+          },
+          seq: true,
+          version: 1,
+        });
+      } catch (realtimeError) {
+        request.log.error(
+          { err: realtimeError, auctionId: settledAuctionWin.auctionId },
+          'Failed to publish auction settlement event after webhook'
+        );
+      }
+      if (settledAuctionWin.orderId) {
+        try {
+          await emitOrderCommerceCard({
+            orderId: settledAuctionWin.orderId,
+            stateType: 'order_placed',
+            log: request.log,
+          });
+          await emitOrderCommerceCard({
+            orderId: settledAuctionWin.orderId,
+            stateType: 'payment_confirmed',
+            log: request.log,
+          });
+        } catch (cardError) {
+          request.log.error(
+            { err: cardError, orderId: settledAuctionWin.orderId },
+            'Failed to emit auction order commerce cards after webhook'
+          );
+        }
+      }
+      try {
+        await queueUserNotification({
+          userId: settledAuctionWin.sellerId,
+          title: 'Payment received',
+          body: `Payment of £${settledAuctionWin.winningBidGbp.toFixed(2)} received for ${settledAuctionWin.auctionId}. The auction is settled.`,
+          eventType: 'auction_sold',
+          payload: {
+            auctionId: settledAuctionWin.auctionId,
+            event: 'auction_payment_confirmed',
+            orderId: settledAuctionWin.orderId,
+          },
+          route: { screen: 'AuctionDetail', params: { auctionId: settledAuctionWin.auctionId } },
+          idempotencyKey: `auction-payment-${settledAuctionWin.auctionId}`,
+        });
+      } catch (notifyError) {
+        request.log.error(
+          { err: notifyError, auctionId: settledAuctionWin.auctionId },
+          'Failed to queue auction payment notification after webhook'
+        );
+      }
     }
 
     if (settledPayout && settledPayout.status === 'paid' && !settledPayoutIdempotent) {
@@ -38586,6 +39365,16 @@ const start = async () => {
           app.log.info(
             { synced: summary.synced, failed: summary.failed },
             'search.index.warmed — process-local index rebuilt from PostgreSQL',
+          );
+        } else {
+          // The shared backend is healthy — still prime the bounded
+          // process-local fallback so a mid-session outage serves a
+          // coherent corpus rather than only post-boot mirrored writes.
+          const { syncListingsToLocalFallback } = await import('./lib/searchSync.js');
+          const primed = await syncListingsToLocalFallback(db);
+          app.log.info(
+            { synced: primed.synced, failed: primed.failed },
+            'search.fallback.primed — process-local outage corpus rebuilt from PostgreSQL',
           );
         }
       } catch (error) {

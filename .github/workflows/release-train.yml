@@ -18,7 +18,7 @@ on:
           - staging
           - production
       rollback_update_id:
-        description: "EAS Update ID to re-publish (rollback mode, leave empty for normal release)"
+        description: "EAS Update group ID to re-publish (rollback mode, leave empty for normal release)"
         required: false
         default: ""
 
@@ -85,7 +85,10 @@ jobs:
     name: Production approval gate
     needs: determine-channel
     runs-on: ubuntu-latest
-    if: needs.determine-channel.outputs.is_production == 'true' && needs.determine-channel.outputs.is_rollback != 'true'
+    # Applies to every production release — including rollback republishes.
+    # Non-production runs SKIP this job; downstream jobs treat a skipped gate
+    # as "not required" and a failed/cancelled gate as "rejected".
+    if: needs.determine-channel.outputs.is_production == 'true'
     environment: production-approval
     steps:
       - name: Await manual approval
@@ -97,7 +100,17 @@ jobs:
   build-ios:
     name: EAS Build iOS
     needs: [determine-channel, production-approval-gate]
-    if: needs.determine-channel.outputs.is_rollback != 'true'
+    # always() is required: on non-production runs the approval gate is
+    # SKIPPED, and a job whose `needs` includes a skipped job is itself
+    # skipped unless its `if` opts out of the default success() predicate.
+    # Gate semantics: 'skipped' = not required (non-prod), 'success' =
+    # approved, anything else = rejected → build must not run.
+    if: >-
+      always() &&
+      needs.determine-channel.result == 'success' &&
+      needs.determine-channel.outputs.is_rollback != 'true' &&
+      (needs.production-approval-gate.result == 'success' ||
+       needs.production-approval-gate.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 60
     environment: ${{ needs.determine-channel.outputs.channel }}
@@ -127,7 +140,12 @@ jobs:
   build-android:
     name: EAS Build Android
     needs: [determine-channel, production-approval-gate]
-    if: needs.determine-channel.outputs.is_rollback != 'true'
+    if: >-
+      always() &&
+      needs.determine-channel.result == 'success' &&
+      needs.determine-channel.outputs.is_rollback != 'true' &&
+      (needs.production-approval-gate.result == 'success' ||
+       needs.production-approval-gate.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 60
     environment: ${{ needs.determine-channel.outputs.channel }}
@@ -156,8 +174,18 @@ jobs:
 
   publish-update:
     name: Publish EAS Update
-    needs: [determine-channel, build-ios, build-android]
-    if: always() && needs.determine-channel.outputs.is_rollback == 'true' || (needs.build-ios.result == 'success' && needs.build-android.result == 'success')
+    needs: [determine-channel, production-approval-gate, build-ios, build-android]
+    # Every publish path — normal release AND rollback republish — flows
+    # through the approval gate result. 'skipped' means the gate was not
+    # required (non-production); 'success' means it was approved. A failed or
+    # cancelled gate blocks publishing entirely.
+    if: >-
+      always() &&
+      needs.determine-channel.result == 'success' &&
+      (needs.production-approval-gate.result == 'success' ||
+       needs.production-approval-gate.result == 'skipped') &&
+      (needs.determine-channel.outputs.is_rollback == 'true' ||
+       (needs.build-ios.result == 'success' && needs.build-android.result == 'success'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: ${{ needs.determine-channel.outputs.channel }}
@@ -183,30 +211,58 @@ jobs:
         working-directory: frontend
         run: npm run check:release-config -- ota
         env:
-          EXPO_PUBLIC_OTA_CODE_SIGNING_KEY: ${{ secrets.EXPO_PUBLIC_OTA_CODE_SIGNING_KEY }}
+          # check-release-config.mjs reads EXPO_PUBLIC_OTA_CODE_SIGNING_KEY;
+          # prefer the correctly-named private secret, fall back to the
+          # legacy EXPO_PUBLIC_* name still documented in eas.json.
+          EXPO_PUBLIC_OTA_CODE_SIGNING_KEY: ${{ secrets.EXPO_OTA_CODE_SIGNING_PRIVATE_KEY || secrets.EXPO_PUBLIC_OTA_CODE_SIGNING_KEY }}
+      - name: Materialize OTA signing key
+        # The private key is a publish-time input to `eas update` — written
+        # to a runner-local file and passed via --private-key-path. It is
+        # deliberately NOT exposed to the publish steps' env: EXPO_PUBLIC_*
+        # variables are inlined into the update bundle by expo export, which
+        # would ship the private key to every client. Preferred secret name
+        # is EXPO_OTA_CODE_SIGNING_PRIVATE_KEY (no EXPO_PUBLIC_ prefix);
+        # EXPO_PUBLIC_OTA_CODE_SIGNING_KEY is accepted for backwards
+        # compatibility only — never set it on a step that runs expo export.
+        env:
+          OTA_CODE_SIGNING_PRIVATE_KEY: ${{ secrets.EXPO_OTA_CODE_SIGNING_PRIVATE_KEY || secrets.EXPO_PUBLIC_OTA_CODE_SIGNING_KEY }}
+        run: |
+          if [ -z "$OTA_CODE_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::OTA signing private key secret is required (EXPO_OTA_CODE_SIGNING_PRIVATE_KEY) — cannot produce a signed OTA update."
+            exit 1
+          fi
+          key_path="$RUNNER_TEMP/ota-private-key.pem"
+          printf '%s' "$OTA_CODE_SIGNING_PRIVATE_KEY" > "$key_path"
+          chmod 600 "$key_path"
+          echo "OTA_PRIVATE_KEY_PATH=$key_path" >> "$GITHUB_ENV"
       - name: Rollback — re-publish previous update
         if: needs.determine-channel.outputs.is_rollback == 'true'
         working-directory: frontend
         run: |
+          # eas-cli republish selects by --group / --branch / --channel
+          # (mutually exclusive) — there is no --update-id flag. The input
+          # carries the update GROUP id; --channel must not be combined with
+          # it. The destination stays on the group's existing branch.
           eas update:republish \
-            --update-id ${{ inputs.rollback_update_id }} \
-            --channel ${{ needs.determine-channel.outputs.channel }} \
-            --message "rollback: re-publishing update ${{ inputs.rollback_update_id }}"
+            --group ${{ inputs.rollback_update_id }} \
+            --private-key-path "$OTA_PRIVATE_KEY_PATH" \
+            --message "rollback: re-publishing update ${{ inputs.rollback_update_id }}" \
+            --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EAS_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
-          EXPO_PUBLIC_OTA_CODE_SIGNING_KEY: ${{ secrets.EXPO_PUBLIC_OTA_CODE_SIGNING_KEY }}
       - name: Publish new update
         if: needs.determine-channel.outputs.is_rollback != 'true'
         working-directory: frontend
         run: |
           eas update \
             --channel ${{ needs.determine-channel.outputs.channel }} \
-            --message "${{ needs.determine-channel.outputs.channel }}: ${{ github.ref_name }} (${{ github.sha }})"
+            --private-key-path "$OTA_PRIVATE_KEY_PATH" \
+            --message "${{ needs.determine-channel.outputs.channel }}: ${{ github.ref_name }} (${{ github.sha }})" \
+            --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EAS_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
-          EXPO_PUBLIC_OTA_CODE_SIGNING_KEY: ${{ secrets.EXPO_PUBLIC_OTA_CODE_SIGNING_KEY }}
 
   tag-release:
     name: Tag semantic version

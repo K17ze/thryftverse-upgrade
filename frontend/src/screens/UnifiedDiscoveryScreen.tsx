@@ -22,7 +22,7 @@
  * are owned by PinterestMasonryGrid and are not touched here.
  */
 
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -50,11 +50,12 @@ import { openProductDetail } from '../platform/product/openProductDetail';
 import { AppIcon } from '../components/common/AppIcon';
 import { IconSize } from '../theme/iconTokens';
 import { Control, FontFamily, Radius, Space } from '../theme/designTokens';
-import { TypographyV2 } from '../theme/typography.v2';
+import { TypographyV2, MAX_FONT_SCALE } from '../theme/typography.v2';
 import { FeedExplanationSheet } from '../components/algorithm/FeedExplanationSheet';
 import {
   markItemNotInterested,
   showFewerLikeThis,
+  undoItemNotInterested,
   type FeedbackAttribution } from '../services/recommendationFeedbackApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'UnifiedDiscovery'>;
@@ -87,6 +88,56 @@ const feedbackStyles = StyleSheet.create({
   sheetRowText: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.medium } });
+
+// Feed-control notice — a single bottom-anchored strip (hairline top edge,
+// meta-size copy, text actions). Same grammar as the page-failure strip in
+// DiscoverySearchResultsView; no new chrome (S20-05).
+const noticeStyles = StyleSheet.create({
+  bar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
+    borderTopWidth: StyleSheet.hairlineWidth },
+  text: {
+    flex: 1,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular },
+  action: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold } });
+
+/**
+ * Feedback notice states (S20-05):
+ *  - 'queued': the hide is applied locally; the durable write fires when the
+ *    undo window lapses — Undo in this window is a true reversal because
+ *    nothing has been persisted yet.
+ *  - 'saving': the write is in flight; Undo still works — a compensating
+ *    `usual` mutation lifts the exclusion if the write lands.
+ *  - 'saved': persisted — no fake undo (the logged interaction can't be
+ *    retracted), the notice is a brief confirmation.
+ *  - 'session': guest — nothing can persist; the hide is session-local and
+ *    the copy says so.
+ *  - 'failed': the write didn't persist — retry re-issues the same writes.
+ */
+type FeedbackNotice = {
+  listing: DiscoveryListingSummary;
+  attribution: FeedbackAttribution;
+  action: 'not_interested' | 'show_fewer';
+  status: 'queued' | 'saving' | 'saved' | 'session' | 'failed';
+};
+
+// Grace window during which "Undo" cancels the pending durable write.
+const UNDO_WINDOW_MS = 4000;
+// Dwell for confirmation states; a failed notice stays longer so the retry
+// remains reachable.
+const NOTICE_DISMISS_MS = 3200;
+const NOTICE_FAILED_DISMISS_MS = 8000;
 
 export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
   const { colors } = useAppTheme();
@@ -186,26 +237,205 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
     [haptic],
   );
 
+  // ── Feedback persistence notice (S20-05) ──
+  // The hide applies locally at once; the durable write fires after the undo
+  // window so Undo is a genuine reversal. The notice states are honest:
+  // queued → saving → saved / session (guest) / failed (retryable).
+  const [feedbackNotice, setFeedbackNotice] = useState<FeedbackNotice | null>(null);
+  // Queued hides awaiting the end of their undo window, keyed by listing id.
+  // The notice rides along so an unmount flush (or a superseded visible
+  // notice) can still persist an explicit user choice.
+  const pendingHidesRef = useRef(
+    new Map<string, { notice: FeedbackNotice; timer: ReturnType<typeof setTimeout> }>(),
+  );
+  // Listings whose hide was undone while a write was in flight — when that
+  // write lands, a compensating `usual` mutation lifts the exclusion.
+  const undoneHideIdsRef = useRef(new Set<string>());
+  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef = useRef(true);
+
+  const clearNoticeTimer = useCallback(() => {
+    if (noticeTimerRef.current) {
+      clearTimeout(noticeTimerRef.current);
+      noticeTimerRef.current = null;
+    }
+  }, []);
+
+  // Auto-dismiss transient notices; 'failed' lingers longer so the retry
+  // stays reachable, then clears rather than staling forever.
+  const scheduleNoticeDismiss = useCallback((listingId: string, delayMs: number) => {
+    clearNoticeTimer();
+    noticeTimerRef.current = setTimeout(() => {
+      noticeTimerRef.current = null;
+      setFeedbackNotice((prev) =>
+        prev && prev.listing.id === listingId ? null : prev);
+    }, delayMs);
+  }, [clearNoticeTimer]);
+
+  // Apply a settled write result to the notice for this listing — a stale
+  // resolution can never overwrite a newer notice.
+  const settleFeedbackNotice = useCallback(
+    (notice: FeedbackNotice, persisted: boolean, failure?: 'anonymous' | 'unavailable') => {
+      if (!mountedRef.current) return;
+      if (persisted) {
+        setFeedbackNotice((prev) =>
+          prev && prev.listing.id === notice.listing.id && prev.action === notice.action
+            ? { ...prev, status: 'saved' }
+            : prev);
+        scheduleNoticeDismiss(notice.listing.id, NOTICE_DISMISS_MS);
+        return;
+      }
+      const status = failure === 'anonymous' ? 'session' : 'failed';
+      setFeedbackNotice((prev) =>
+        prev && prev.listing.id === notice.listing.id && prev.action === notice.action
+          ? { ...prev, status }
+          : prev);
+      scheduleNoticeDismiss(
+        notice.listing.id,
+        status === 'failed' ? NOTICE_FAILED_DISMISS_MS : NOTICE_DISMISS_MS,
+      );
+    },
+    [scheduleNoticeDismiss],
+  );
+
+  const persistNotInterested = useCallback(
+    (notice: FeedbackNotice) => {
+      const listingId = notice.listing.id;
+      setFeedbackNotice((prev) =>
+        prev && prev.listing.id === listingId && prev.status === 'queued'
+          ? { ...prev, status: 'saving' }
+          : prev);
+      void markItemNotInterested(notice.listing, notice.attribution).then((result) => {
+        if (undoneHideIdsRef.current.has(listingId)) {
+          // Undo raced the in-flight write — lift the exclusion if it landed.
+          if (result.persisted) void undoItemNotInterested(notice.listing);
+          return;
+        }
+        settleFeedbackNotice(notice, result.persisted, result.failure);
+      });
+    },
+    [settleFeedbackNotice],
+  );
+
+  const unhideListing = useCallback((listingId: string) => {
+    setHiddenListingIds((prev) => {
+      if (!prev.has(listingId)) return prev;
+      const next = new Set(prev);
+      next.delete(listingId);
+      return next;
+    });
+  }, []);
+
+  const handleUndoHide = useCallback(() => {
+    const notice = feedbackNotice;
+    if (!notice || notice.action !== 'not_interested') return;
+    haptic.light();
+    const listingId = notice.listing.id;
+    const pending = pendingHidesRef.current.get(listingId);
+    if (pending) {
+      // Still inside the undo window — the write never fires, so nothing
+      // was persisted and the reversal is exact.
+      clearTimeout(pending.timer);
+      pendingHidesRef.current.delete(listingId);
+    }
+    undoneHideIdsRef.current.add(listingId);
+    unhideListing(listingId);
+    clearNoticeTimer();
+    setFeedbackNotice(null);
+    // The dismissed tile was filtered from the served page — refetch so it
+    // returns now rather than on the next cold load.
+    void feed.forYouFeed.refresh();
+  }, [feedbackNotice, haptic, unhideListing, clearNoticeTimer, feed.forYouFeed]);
+
+  const handleRetryNotice = useCallback(() => {
+    const notice = feedbackNotice;
+    if (!notice || notice.status !== 'failed') return;
+    haptic.light();
+    const retrying: FeedbackNotice = { ...notice, status: 'saving' };
+    setFeedbackNotice(retrying);
+    clearNoticeTimer();
+    const write = notice.action === 'not_interested'
+      ? markItemNotInterested(notice.listing, notice.attribution)
+      : showFewerLikeThis(notice.listing, notice.attribution);
+    void write.then((result) => {
+      if (notice.action === 'not_interested' && undoneHideIdsRef.current.has(notice.listing.id)) {
+        if (result.persisted) void undoItemNotInterested(notice.listing);
+        return;
+      }
+      if (result.persisted && notice.action === 'show_fewer') {
+        void feed.forYouFeed.refresh();
+      }
+      settleFeedbackNotice(notice, result.persisted, result.failure);
+    });
+  }, [feedbackNotice, haptic, clearNoticeTimer, settleFeedbackNotice, feed.forYouFeed]);
+
+  // Flush queued hides on unmount — an explicit user choice should still
+  // reach the backend when the surface closes inside the undo window.
+  useEffect(() => {
+    mountedRef.current = true;
+    const pendingHides = pendingHidesRef.current;
+    const undoneIds = undoneHideIdsRef.current;
+    return () => {
+      mountedRef.current = false;
+      clearNoticeTimer();
+      for (const [listingId, pending] of pendingHides) {
+        clearTimeout(pending.timer);
+        if (!undoneIds.has(listingId)) {
+          void markItemNotInterested(pending.notice.listing, pending.notice.attribution);
+        }
+      }
+      pendingHides.clear();
+    };
+  }, [clearNoticeTimer]);
+
   const handleNotInterested = useCallback(() => {
     const target = feedbackItem;
     if (!target) return;
     haptic.medium();
     setFeedbackItem(null);
     hideListing(target.id);
-    void markItemNotInterested(target, feedbackAttribution(target));
-  }, [feedbackItem, haptic, hideListing, feedbackAttribution]);
+    undoneHideIdsRef.current.delete(target.id);
+    clearNoticeTimer();
+    const notice: FeedbackNotice = {
+      listing: target,
+      attribution: feedbackAttribution(target),
+      action: 'not_interested',
+      status: 'queued' };
+    pendingHidesRef.current.set(target.id, {
+      notice,
+      timer: setTimeout(() => {
+        pendingHidesRef.current.delete(target.id);
+        persistNotInterested(notice);
+      }, UNDO_WINDOW_MS) });
+    setFeedbackNotice(notice);
+  }, [feedbackItem, haptic, hideListing, feedbackAttribution, persistNotInterested, clearNoticeTimer]);
 
   const handleShowLess = useCallback(() => {
     const target = feedbackItem;
     if (!target) return;
     haptic.light();
     setFeedbackItem(null);
-    void showFewerLikeThis(target, feedbackAttribution(target)).then((result) => {
-      // The mutation bumps the intent epoch; refetch so the down-ranking is
-      // visible rather than only applying on the next cold load.
-      if (result.persisted) void feed.forYouFeed.refresh();
+    const notice: FeedbackNotice = {
+      listing: target,
+      attribution: feedbackAttribution(target),
+      action: 'show_fewer',
+      status: 'saving' };
+    void showFewerLikeThis(target, notice.attribution).then((result) => {
+      if (result.persisted) {
+        // The mutation bumps the intent epoch; refetch so the down-ranking
+        // is visible rather than only applying on the next cold load.
+        void feed.forYouFeed.refresh();
+        return;
+      }
+      // A failed preference write must not be silent — surface a retry.
+      clearNoticeTimer();
+      setFeedbackNotice({ ...notice, status: result.failure === 'anonymous' ? 'session' : 'failed' });
+      scheduleNoticeDismiss(
+        target.id,
+        result.failure === 'anonymous' ? NOTICE_DISMISS_MS : NOTICE_FAILED_DISMISS_MS,
+      );
     });
-  }, [feedbackItem, haptic, feedbackAttribution, feed.forYouFeed]);
+  }, [feedbackItem, haptic, feedbackAttribution, feed.forYouFeed, clearNoticeTimer, scheduleNoticeDismiss]);
 
   const handleWhySeeing = useCallback(() => {
     const target = feedbackItem;
@@ -237,12 +467,24 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
   // ── Search results are already feed units (built in the effect) ──
   const searchFeedUnits = search.searchResults;
   const activeUnits = useMemo<DiscoveryFeedUnit[]>(() => {
-    const units = search.isSearchingMode ? searchFeedUnits : feed.feedUnits;
-    if (hiddenListingIds.size === 0) return units;
-    return units.filter(
+    // S20-05: "Not interested" is a recommendation preference — it filters
+    // the personalised feed only. An explicit text search is direct user
+    // intent and must still surface a hidden item if it matches.
+    if (search.isSearchingMode) return searchFeedUnits;
+    if (hiddenListingIds.size === 0) return feed.feedUnits;
+    return feed.feedUnits.filter(
       (unit) => unit.type !== 'listing' || !hiddenListingIds.has(unit.listing.id),
     );
   }, [search.isSearchingMode, searchFeedUnits, feed.feedUnits, hiddenListingIds]);
+
+  // ── Hero editorial → the Galleria surface that owns it (FRESH-08). The
+  //  GalleriaEditorial model carries no per-item deep link, so the honest
+  //  destination is the editorial's home surface, where the same piece is
+  //  presented in full. ──
+  const handleEditorialPress = useCallback(() => {
+    haptic.selection();
+    navigation.navigate('Galleria');
+  }, [haptic, navigation]);
 
   // ── Hero editorial (first one) ──
   const heroEditorial = content.editorials[0];
@@ -322,6 +564,8 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
             onRetryPeople={search.retryPeopleSearch}
             searchScope={search.searchScope}
             searchError={search.searchError}
+            pageError={search.searchPageError}
+            onRetryPage={search.retrySearchPage}
             onRetry={search.retrySearch}
             onScopeChange={search.setSearchScope}
             activeFilterCount={search.activeSearchFilterCount}
@@ -365,6 +609,8 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
             onCollectionPress={handleCollectionPress}
             onRefresh={handleRefresh}
             staleModules={content.staleModules}
+            listingsError={feed.lastError}
+            onEditorialPress={handleEditorialPress}
             isRefreshing={isRefreshing}
             hasMore={feed.feedHasMore}
             isLoadingMore={feed.feedIsLoadingMore}
@@ -375,6 +621,63 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
             onListingLongPress={handleListingLongPress}
             isItemSaved={isSavedProduct}
           />
+        )}
+
+        {/* Feed-control notice — honest persistence state for "Not
+            interested" / "Show less": queued (undoable), saved, session-only
+            (guest), or failed with retry. One quiet strip, no modal. */}
+        {feedbackNotice && (
+          <View
+            style={[noticeStyles.bar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}
+            accessibilityLiveRegion="polite"
+          >
+            <Text
+              style={[noticeStyles.text, { color: colors.textSecondary }]}
+              numberOfLines={1}
+              maxFontSizeMultiplier={MAX_FONT_SCALE.utility}
+            >
+              {feedbackNotice.action === 'not_interested'
+                ? feedbackNotice.status === 'saved'
+                  ? "Hidden — won't be recommended again"
+                  : feedbackNotice.status === 'session'
+                    ? 'Hidden for this session'
+                    : feedbackNotice.status === 'failed'
+                      ? "Couldn't save this preference"
+                      : 'Hidden from your feed'
+                : feedbackNotice.status === 'session'
+                  ? 'Sign in to keep feed preferences'
+                  : "Couldn't save this preference"}
+            </Text>
+            {feedbackNotice.status === 'failed' && (
+              <Pressable
+                onPress={handleRetryNotice}
+                accessibilityRole="button"
+                accessibilityLabel="Retry saving preference"
+                hitSlop={8}
+                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+              >
+                <Text style={[noticeStyles.action, { color: colors.brand }]} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
+                  Retry
+                </Text>
+              </Pressable>
+            )}
+            {feedbackNotice.action === 'not_interested' &&
+              (feedbackNotice.status === 'queued' ||
+                feedbackNotice.status === 'saving' ||
+                feedbackNotice.status === 'failed') && (
+              <Pressable
+                onPress={handleUndoHide}
+                accessibilityRole="button"
+                accessibilityLabel={`Undo hiding ${feedbackNotice.listing.title}`}
+                hitSlop={8}
+                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+              >
+                <Text style={[noticeStyles.action, { color: colors.textPrimary }]} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
+                  Undo
+                </Text>
+              </Pressable>
+            )}
+          </View>
         )}
       </View>
 
@@ -408,7 +711,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
                   onPress={handleNotInterested}
                   accessibilityRole="button"
                   accessibilityLabel={`Not interested in ${feedbackItem.title}`}
-                  accessibilityHint="Hides this item and stops recommending it"
+                  accessibilityHint="Hides this item from your recommendations and tries to save the preference; you can undo or retry"
                 >
                   <AppIcon name="eye-off-outline" size={IconSize.md} color="textPrimary" accessible={false} />
                   <Text style={[feedbackStyles.sheetRowText, { color: colors.textPrimary }]}>

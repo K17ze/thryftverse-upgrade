@@ -12,7 +12,10 @@ import {
 import {
   EMBEDDING_VECTOR_DIMENSIONS,
   hasMediaEmbeddingVectorColumn,
+  mapNeighbourAssetsToListings,
+  mediaEmbeddingVectorCapability,
   nearestMediaEmbeddings,
+  resolveServingEmbeddingLineage,
 } from '../lib/mediaEmbeddings.js';
 import type { Queryable } from '../lib/autoFeedback.js';
 
@@ -131,10 +134,123 @@ describe('hasMediaEmbeddingVectorColumn (feature detection)', () => {
   });
 });
 
+describe('mediaEmbeddingVectorCapability (audit N5)', () => {
+  it('reports ann only when an HNSW/IVFFlat index backs the column', async () => {
+    const { db, queries } = fakeDb((sql) => {
+      assert.match(sql, /pg_indexes/);
+      assert.match(sql, /hnsw|ivfflat/i);
+      return [{ has_column: true, has_ann_index: true }];
+    });
+    assert.equal(await mediaEmbeddingVectorCapability(db), 'ann');
+    assert.equal(queries.length, 1);
+  });
+
+  it('reports exact when the column exists without an ANN index', async () => {
+    // Migration 326 swallows index-creation failures as notices — a
+    // no-index deployment must not claim ANN.
+    const { db } = fakeDb(() => [{ has_column: true, has_ann_index: false }]);
+    assert.equal(await mediaEmbeddingVectorCapability(db), 'exact');
+  });
+
+  it('reports none when the column is absent or the probe errors', async () => {
+    const { db } = fakeDb(() => [{ has_column: false, has_ann_index: false }]);
+    assert.equal(await mediaEmbeddingVectorCapability(db), 'none');
+    const failing = {
+      query: async () => {
+        throw new Error('relation media_embeddings does not exist');
+      },
+    } as unknown as Queryable;
+    assert.equal(await mediaEmbeddingVectorCapability(failing), 'none');
+  });
+});
+
+describe('resolveServingEmbeddingLineage (audit N2)', () => {
+  it('returns the dominant ready lineage tuple', async () => {
+    const { db, queries } = fakeDb((sql) => {
+      assert.match(sql, /GROUP BY model_id, model_version, preprocessing_version, dimensions/);
+      assert.match(sql, /status = 'ready' AND norm > 0/);
+      return [
+        {
+          model_id: 'siglip2-so400m',
+          model_version: 'v1.0.0',
+          preprocessing_version: 'v1',
+          dimensions: 512,
+        },
+      ];
+    });
+    const lineage = await resolveServingEmbeddingLineage(db);
+    assert.deepEqual(lineage, {
+      modelId: 'siglip2-so400m',
+      modelVersion: 'v1.0.0',
+      preprocessingVersion: 'v1',
+      dimensions: 512,
+    });
+    assert.equal(queries.length, 1);
+  });
+
+  it('returns null when no lineage is ready and fails closed on error', async () => {
+    const { db } = fakeDb(() => []);
+    assert.equal(await resolveServingEmbeddingLineage(db), null);
+    const failing = {
+      query: async () => {
+        throw new Error('boom');
+      },
+    } as unknown as Queryable;
+    assert.equal(await resolveServingEmbeddingLineage(failing), null);
+  });
+});
+
+describe('mapNeighbourAssetsToListings (audit N4)', () => {
+  it('returns [] without querying for an empty neighbour set', async () => {
+    const { db, queries } = fakeDb(() => {
+      throw new Error('must not query');
+    });
+    assert.deepEqual(await mapNeighbourAssetsToListings(db, new Map()), []);
+    assert.equal(queries.length, 0);
+  });
+
+  it('issues an ordinality-preserving join ordered by best distance', async () => {
+    const { db, queries } = fakeDb((sql) => {
+      assert.match(sql, /WITH ORDINALITY/);
+      assert.match(sql, /ORDER BY best_distance ASC, MIN\(n\.ann_rank\) ASC/);
+      assert.match(sql, /target_type = 'listing'/);
+      assert.match(sql, /removed_at IS NULL/);
+      // Postgres already ordered by best distance — rows arrive ranked.
+      return [
+        { listing_id: 'lst_close', best_distance: '0.10' },
+        { listing_id: 'lst_far', best_distance: '0.30' },
+      ];
+    });
+    const distances = new Map<string, number>([
+      ['ma_a', 0.4],
+      ['ma_b', 0.1],
+    ]);
+    const rows = await mapNeighbourAssetsToListings(db, distances);
+    assert.deepEqual(rows, [
+      { listingId: 'lst_close', distance: 0.1 },
+      { listingId: 'lst_far', distance: 0.3 },
+    ]);
+    const q = queries[0];
+    // Params carry aligned (asset_id, distance) pairs — the ordinality
+    // join is what makes the ANN rank survivable through the mapping.
+    assert.deepEqual(q.params[0], ['ma_a', 'ma_b']);
+    assert.deepEqual(q.params[1], [0.4, 0.1]);
+  });
+
+  it('passes LIMIT $3 when a cap is given', async () => {
+    const { db, queries } = fakeDb(() => []);
+    await mapNeighbourAssetsToListings(db, new Map([['ma_a', 0.1]]), 25);
+    assert.match(queries[0].sql, /LIMIT \$3/);
+    assert.equal(queries[0].params[2], 25);
+  });
+});
+
 describe('nearestMediaEmbeddings', () => {
   it('uses ORDER BY embedding_vec <=> when the vector column exists', async () => {
     const { db, queries } = fakeDb((sql) => {
-      if (/pg_attribute/.test(sql)) return [{ exists: true }];
+      if (/pg_indexes/.test(sql)) {
+        return [{ has_column: true, has_ann_index: true }];
+      }
       if (/embedding_vec <=>/.test(sql)) {
         return [
           {
@@ -150,8 +266,13 @@ describe('nearestMediaEmbeddings', () => {
       throw new Error(`unexpected query: ${sql.slice(0, 120)}`);
     });
 
+    // The pgvector column is vector(512) — the ANN path only serves a
+    // query vector of matching dimensionality.
+    const queryVector = Array.from({ length: EMBEDDING_VECTOR_DIMENSIONS }, (_, i) =>
+      i === 0 ? 1 : 0,
+    );
     const res = await nearestMediaEmbeddings(db, {
-      queryEmbedding: [1, 0, 0],
+      queryEmbedding: queryVector,
       limit: 5,
       filter: { modelId: 'siglip2-so400m' },
     });
@@ -172,13 +293,106 @@ describe('nearestMediaEmbeddings', () => {
     assert.match(annQuery.sql, /norm > 0/);
     // Params: filter args first, then the vector literal, then LIMIT.
     assert.equal(annQuery.params[0], 'siglip2-so400m');
-    assert.equal(annQuery.params[1], '[1,0,0]');
+    assert.equal(annQuery.params[1], embeddingToVectorLiteral(queryVector));
     assert.equal(annQuery.params[2], 5);
+  });
+
+  it('reports pgvector_exact (not ann) when the column has no ANN index', async () => {
+    // Audit N5 regression: column presence alone used to advertise ANN.
+    const { db } = fakeDb((sql) => {
+      if (/pg_indexes/.test(sql)) {
+        return [{ has_column: true, has_ann_index: false }];
+      }
+      if (/embedding_vec <=>/.test(sql)) return [];
+      throw new Error(`unexpected query: ${sql.slice(0, 120)}`);
+    });
+    const res = await nearestMediaEmbeddings(db, {
+      queryEmbedding: Array.from({ length: EMBEDDING_VECTOR_DIMENSIONS }, (_, i) =>
+        i === 0 ? 1 : 0,
+      ),
+    });
+    assert.equal(res.method, 'pgvector_exact');
+    assert.equal(res.degraded, false);
+  });
+
+  it('pins lineage filters (model + versions + dimensions) into the ANN query', async () => {
+    const { db, queries } = fakeDb((sql) => {
+      if (/pg_indexes/.test(sql)) {
+        return [{ has_column: true, has_ann_index: true }];
+      }
+      if (/embedding_vec <=>/.test(sql)) return [];
+      throw new Error(`unexpected query: ${sql.slice(0, 120)}`);
+    });
+    await nearestMediaEmbeddings(db, {
+      queryEmbedding: Array.from({ length: EMBEDDING_VECTOR_DIMENSIONS }, (_, i) =>
+        i === 0 ? 1 : 0,
+      ),
+      filter: {
+        modelId: 'siglip2-so400m',
+        modelVersion: 'v1.0.0',
+        preprocessingVersion: 'v1',
+        dimensions: EMBEDDING_VECTOR_DIMENSIONS,
+      },
+    });
+    const annQuery = queries.find((q) => /embedding_vec <=>/.test(q.sql));
+    assert.ok(annQuery);
+    assert.match(annQuery.sql, /model_id = \$1/);
+    assert.match(annQuery.sql, /model_version = \$2/);
+    assert.match(annQuery.sql, /preprocessing_version = \$3/);
+    assert.match(annQuery.sql, /dimensions = \$4/);
+    assert.deepEqual(annQuery.params.slice(0, 4), [
+      'siglip2-so400m',
+      'v1.0.0',
+      'v1',
+      EMBEDDING_VECTOR_DIMENSIONS,
+    ]);
+  });
+
+  it('routes a non-512-dim query to the BYTEA scan with dimension_mismatch', async () => {
+    // A 3-dim query against vector(512) would raise a Postgres dimension
+    // error — the honest path is the BYTEA scan whose per-row dimensions
+    // check enforces comparability.
+    const { db, queries } = fakeDb((sql) => {
+      if (/pg_indexes/.test(sql)) {
+        return [{ has_column: true, has_ann_index: true }];
+      }
+      if (/FROM media_embeddings/.test(sql)) {
+        return [embeddingRow({ media_asset_id: 'ma_same_dims' })];
+      }
+      throw new Error(`unexpected query: ${sql.slice(0, 120)}`);
+    });
+    const res = await nearestMediaEmbeddings(db, { queryEmbedding: [1, 0, 0] });
+    assert.equal(res.method, 'bytea_exact_scan');
+    assert.equal(res.degraded, true);
+    assert.equal(res.degradedReason, 'dimension_mismatch');
+    assert.equal(res.hits.length, 1);
+    assert.equal(res.hits[0].mediaAssetId, 'ma_same_dims');
+    // The vector column must never receive a mismatched-dimension literal.
+    assert.ok(!queries.some((q) => /embedding_vec <=>/.test(q.sql)));
+  });
+
+  it('rejects a non-finite query vector instead of ranking NaN', async () => {
+    const { db, queries } = fakeDb((sql) => {
+      if (/pg_indexes/.test(sql)) {
+        return [{ has_column: true, has_ann_index: true }];
+      }
+      throw new Error(`unexpected query: ${sql.slice(0, 120)}`);
+    });
+    for (const bad of [[NaN, 0, 0], [Infinity, 1], []]) {
+      const res = await nearestMediaEmbeddings(db, { queryEmbedding: bad });
+      assert.equal(res.hits.length, 0);
+      assert.equal(res.method, 'pgvector_ann');
+      assert.equal(res.degraded, false);
+    }
+    // Only the capability probe ran per call — no ANN or scan query.
+    assert.equal(queries.length, 3);
   });
 
   it('degrades to an exact BYTEA scan when pgvector is not installed', async () => {
     const { db, queries } = fakeDb((sql) => {
-      if (/pg_attribute/.test(sql)) return [{ exists: false }];
+      if (/pg_indexes/.test(sql)) {
+        return [{ has_column: false, has_ann_index: false }];
+      }
       if (/FROM media_embeddings/.test(sql)) {
         return [
           embeddingRow({ media_asset_id: 'ma_parallel' }),
@@ -219,7 +433,9 @@ describe('nearestMediaEmbeddings', () => {
 
   it('skips rows whose BYTEA payload disagrees with dimensions', async () => {
     const { db } = fakeDb((sql) => {
-      if (/pg_attribute/.test(sql)) return [{ exists: false }];
+      if (/pg_indexes/.test(sql)) {
+        return [{ has_column: false, has_ann_index: false }];
+      }
       return [
         embeddingRow({ media_asset_id: 'ma_ok' }),
         embeddingRow({
@@ -240,19 +456,24 @@ describe('nearestMediaEmbeddings', () => {
     // Cosine similarity is undefined for a zero vector — pgvector <=> would
     // return NaN, so the function must short-circuit rather than rank.
     const { db, queries } = fakeDb((sql) => {
-      if (/pg_attribute/.test(sql)) return [{ exists: true }];
+      if (/pg_indexes/.test(sql)) {
+        return [{ has_column: true, has_ann_index: true }];
+      }
       throw new Error(`unexpected query: ${sql.slice(0, 120)}`);
     });
     const res = await nearestMediaEmbeddings(db, { queryEmbedding: [0, 0, 0] });
     assert.equal(res.hits.length, 0);
+    assert.equal(res.method, 'pgvector_ann');
     assert.equal(res.degraded, false);
-    // Only the feature-detection probe ran — no ANN or scan query.
+    // Only the capability probe ran — no ANN or scan query.
     assert.equal(queries.length, 1);
   });
 
   it('honours the limit on the degraded path', async () => {
     const { db } = fakeDb((sql) => {
-      if (/pg_attribute/.test(sql)) return [{ exists: false }];
+      if (/pg_indexes/.test(sql)) {
+        return [{ has_column: false, has_ann_index: false }];
+      }
       return [
         embeddingRow({ media_asset_id: 'ma_1' }),
         embeddingRow({ media_asset_id: 'ma_2' }),
@@ -298,5 +519,123 @@ describe('migration 326 (static contract)', () => {
     // the restored view must be the BYTEA-only projection (migration 181)
     const viewDef = down.slice(down.indexOf('CREATE OR REPLACE VIEW'));
     assert.doesNotMatch(viewDef, /embedding_vec/);
+  });
+});
+
+// Audit N1 regression. The 326/330 SQL codec reassembles a little-endian
+// uint32 from four get_byte() terms. Under the original int4 arithmetic,
+// `get_byte(...) * 16777216` overflows int32 for any high byte >= 128 —
+// every negative float32 — raising "integer out of range" mid-backfill.
+// There is no psql here, so this mirrors the corrected function's
+// arithmetic term-for-term in JS bigint and proves the decode is exact;
+// the paired assertion shows the same bytes DO overflow int32, i.e. this
+// test fails on the pre-fix arithmetic.
+describe('migration 326/330 BYTEA codec — bigint-safe decode (audit N1)', () => {
+  /** JS mirror of _media_embeddings_bytea_le_to_float4 (post-fix). */
+  function decodeLeToFloat4(buf: Buffer, dimensions: number): number[] | null {
+    if (buf.length !== dimensions * 4) return null;
+    const out: number[] = [];
+    for (let i = 0; i < dimensions; i++) {
+      // Per-term bigint promotion — mirrors get_byte(...)::bigint * 16777216.
+      let u =
+        BigInt(buf[i * 4]) +
+        BigInt(buf[i * 4 + 1]) * 256n +
+        BigInt(buf[i * 4 + 2]) * 65536n +
+        BigInt(buf[i * 4 + 3]) * 16777216n;
+      let sign = 1;
+      if (u >= 2147483648n) {
+        sign = -1;
+        u -= 2147483648n;
+      }
+      const exp = Number(u / 8388608n); // bits 23..30
+      const mant = Number(u % 8388608n); // bits 0..22
+      let val: number;
+      if (exp === 255) {
+        val = mant === 0 ? Infinity : NaN;
+      } else if (exp === 0) {
+        val = (mant / 8388608) * Math.pow(2, -126);
+      } else {
+        val = (1 + mant / 8388608) * Math.pow(2, exp - 127);
+      }
+      out.push(Math.fround(sign * val));
+    }
+    return out;
+  }
+
+  it('decodes negative float32s exactly (the int4-overflow case)', () => {
+    const vector = [-2.25, -1, -0.000001, -42.5, 1.5];
+    const payload = serialiseEmbedding(vector);
+    const decoded = decodeLeToFloat4(payload, vector.length);
+    assert.ok(decoded);
+    for (let i = 0; i < vector.length; i++) {
+      assert.ok(
+        Math.abs(decoded[i] - vector[i]) < 1e-6,
+        `index ${i}: ${decoded[i]} !== ${vector[i]}`,
+      );
+    }
+    // Prove the regression input: -2.25's high byte is >= 128, so the
+    // pre-fix int4 term get_byte*16777216 exceeds int32 max and would have
+    // raised "integer out of range" under the old arithmetic.
+    const highByte = payload[3];
+    assert.ok(highByte >= 128, 'test vector must exercise the overflow case');
+    assert.ok(highByte * 16777216 > 0x7fffffff);
+  });
+
+  it('round-trips the full edge range through serialise/deserialise', () => {
+    const vector = [0, -0, 1.5, -2.25, 1e-30, -1e30, 3.4028235e38];
+    const payload = serialiseEmbedding(vector);
+    const decoded = decodeLeToFloat4(payload, vector.length)!;
+    for (let i = 0; i < vector.length; i++) {
+      assert.ok(
+        Math.abs(decoded[i] - vector[i]) <= Math.abs(vector[i]) * 1e-6 + 1e-38,
+        `index ${i}: ${decoded[i]} !== ${vector[i]}`,
+      );
+    }
+  });
+});
+
+describe('migration 330 (static contract — companion codec fix)', () => {
+  const up330 = readFileSync(
+    path.join(MIGRATIONS_DIR, '330_media_embeddings_bytea_codec_bigint.sql'),
+    'utf8',
+  );
+  const down330 = readFileSync(
+    path.join(MIGRATIONS_DIR, '330_media_embeddings_bytea_codec_bigint_down.sql'),
+    'utf8',
+  );
+  const up326 = readFileSync(
+    path.join(MIGRATIONS_DIR, '326_media_embeddings_pgvector.sql'),
+    'utf8',
+  );
+
+  it('replaces the decoder with per-term bigint promotion', () => {
+    assert.match(up330, /CREATE OR REPLACE FUNCTION _media_embeddings_bytea_le_to_float4/);
+    // Every get_byte term multiplied by a weight must be cast to bigint
+    // BEFORE the multiply — the pre-fix expression overflows int32.
+    assert.match(up330, /get_byte\(p_embedding, v_i \* 4 \+ 3\)::bigint \* 16777216/);
+    assert.match(up330, /get_byte\(p_embedding, v_i \* 4 \+ 2\)::bigint \* 65536/);
+  });
+
+  it('re-runs the backfill predicate and stays feature-detected', () => {
+    assert.match(up330, /WHERE embedding_vec IS NULL/);
+    assert.match(up330, /pg_available_extensions/);
+    // No-op branch when pgvector/embedding_vec are absent.
+    assert.match(up330, /no-op by design/);
+  });
+
+  it('326 stays at committed bytes — remediation ships via 330 (checksum-safe)', () => {
+    // 326 is an APPLIED migration: the runner checksum-verifies applied files,
+    // so editing it post-commit aborts runMigrations() on any environment that
+    // already ran it. Fresh DBs still reach the corrected codec — 326 runs
+    // first, then 330 CREATE OR REPLACEs the decoder and re-runs the backfill.
+    // This assertion pins the freeze: if anyone re-edits 326 instead of
+    // shipping a new migration, this test fails before deploy does.
+    assert.doesNotMatch(up326, /get_byte\(p_embedding, v_i \* 4 \+ 3\)::bigint \* 16777216/);
+    assert.match(up326, /get_byte\(p_embedding, v_i \* 4 \+ 3\) \* 16777216/);
+  });
+
+  it('down is a deliberate no-op (reverting restores the corrupt codec)', () => {
+    assert.match(down330, /no-op/);
+    assert.doesNotMatch(down330, /DROP FUNCTION|CREATE OR REPLACE FUNCTION _media/);
   });
 });

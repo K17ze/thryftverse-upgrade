@@ -1,7 +1,9 @@
-import type { Pool, QueryResult } from 'pg';
+import type { Pool, PoolClient, QueryResult } from 'pg';
 import { logger } from './logger.js';
+import { observeSearchIndexLag, recordSearchSync } from './metrics.js';
 import {
   createSearchAdapter,
+  indexIntoLocalFallback,
   MeilisearchSearchAdapter,
   type ListingDocument,
   type SearchAdapter,
@@ -12,6 +14,8 @@ import {
   configureMeilisearchSynonyms,
   configureMeilisearchTypoTolerance,
   loadMeiliClient,
+  meilisearchApiKey,
+  pollMeilisearchTask,
   type MeiliClient,
 } from './meilisearchConfig.js';
 
@@ -28,38 +32,17 @@ interface ListingRow {
   size: string | null;
   condition: string | null;
   created_at: string;
+  updated_at?: string;
 }
 
 interface MeiliTask {
   taskUid: number;
 }
 
-/**
- * Poll the Meilisearch task endpoint until a task succeeds or fails.
- * Throws if the task ends in the `failed` state.
- */
-async function pollMeiliTask(
-  url: string,
-  apiKey: string | undefined,
-  taskUid: number,
-  timeoutMs = 30_000,
-  intervalMs = 500,
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  const headers = { Authorization: `Bearer ${apiKey ?? ''}` };
-  while (Date.now() < deadline) {
-    const response = await fetch(`${url}/tasks/${taskUid}`, { headers });
-    if (!response.ok) {
-      throw new Error(`Task poll failed: ${response.status} ${await response.text()}`);
-    }
-    const task = (await response.json()) as { status: string; error?: unknown };
-    if (task.status === 'succeeded') return;
-    if (task.status === 'failed') {
-      throw new Error(`Meilisearch task ${taskUid} failed: ${JSON.stringify(task.error)}`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
-  }
-  throw new Error(`Meilisearch task ${taskUid} timed out after ${timeoutMs}ms`);
+/** Extract the taskUid from a Meilisearch settings-update response. */
+function taskUidOf(result: unknown): number | null {
+  const uid = (result as { taskUid?: unknown } | null)?.taskUid;
+  return typeof uid === 'number' ? uid : null;
 }
 
 /**
@@ -93,9 +76,17 @@ function rowToDocument(row: ListingRow): ListingDocument {
  *
  * `indexName` defaults to the live index; the blue/green reindex passes the
  * staging index name so it carries the identical settings before the swap.
+ *
+ * `options.awaitTasks` makes settings updates part of swap acceptance:
+ * every `update*` call's task is polled to completion and a failed/timed-out
+ * task THROWS instead of being swallowed — the blue/green path relies on
+ * this so a staged index with unapplied settings can never take traffic.
+ * Callers that omit it keep the fire-and-forget startup semantics (errors
+ * are logged and swallowed).
  */
 export async function configureSearchIndex(
   indexName: string = MEILISEARCH_INDEX_NAME,
+  options?: { awaitTasks?: boolean; pollIntervalMs?: number },
 ): Promise<void> {
   const meiliUrl = process.env.MEILISEARCH_URL;
   if (!meiliUrl) {
@@ -108,32 +99,50 @@ export async function configureSearchIndex(
       return;
     }
     const index = client.index(indexName);
-    await index.updateSearchableAttributes([
+    const settingsTasks: number[] = [];
+    const track = (result: unknown): void => {
+      const uid = taskUidOf(result);
+      if (uid !== null) {
+        settingsTasks.push(uid);
+      }
+    };
+    track(await index.updateSearchableAttributes([
       'title',
       'brand',
       'description',
       'category',
       'condition',
-    ]);
-    await index.updateFilterableAttributes([
+    ]));
+    track(await index.updateFilterableAttributes([
       'category',
       'condition',
       'price',
       'status',
       'sizes',
-    ]);
-    await index.updateSortableAttributes([
+    ]));
+    track(await index.updateSortableAttributes([
       'price',
       'createdAt',
-    ]);
-    await index.updateRankingRules([
+    ]));
+    track(await index.updateRankingRules([
       'words',
       'typo',
       'proximity',
       'attribute',
       'sort',
       'exactness',
-    ]);
+    ]));
+    if (options?.awaitTasks) {
+      for (const taskUid of settingsTasks) {
+        await pollMeilisearchTask(
+          meiliUrl,
+          meilisearchApiKey(),
+          taskUid,
+          30_000,
+          options.pollIntervalMs ?? 500,
+        );
+      }
+    }
     logger.info(
       { index: indexName },
       'Search index configured',
@@ -145,12 +154,17 @@ export async function configureSearchIndex(
     // all converge on one index shape. Each function self-guards (no-op
     // without a reachable Meilisearch backend) and never throws; they run
     // before configureEmbedder so an embedder failure cannot skip them.
-    await configureMeilisearchTypoTolerance(indexName);
-    await configureMeilisearchSynonyms(indexName);
-    await configureMeilisearchLocalizedAttributes(indexName);
+    // In awaitTasks mode they propagate failures and poll their own update
+    // task, so swap acceptance covers every staged settings write.
+    await configureMeilisearchTypoTolerance(indexName, options);
+    await configureMeilisearchSynonyms(indexName, options);
+    await configureMeilisearchLocalizedAttributes(indexName, options);
 
     await configureEmbedder(indexName);
   } catch (error) {
+    if (options?.awaitTasks) {
+      throw error;
+    }
     logger.error(
       { err: error, index: indexName },
       'Failed to configure search index',
@@ -172,7 +186,7 @@ export async function configureEmbedder(
   if (!url) return;
   const source = process.env.MEILISEARCH_EMBEDDER_SOURCE;
   if (!source) return;
-  const apiKey = process.env.MEILISEARCH_KEY;
+  const apiKey = meilisearchApiKey();
   const documentTemplate = '{{doc.title}} {{doc.description}} {{doc.brand}} {{doc.category}}';
 
   const embedderConfig: Record<string, unknown> = { source };
@@ -200,7 +214,7 @@ export async function configureEmbedder(
     throw new Error(`Failed to configure embedder: ${response.status} ${await response.text()}`);
   }
   const task = (await response.json()) as MeiliTask;
-  await pollMeiliTask(url, apiKey, task.taskUid);
+  await pollMeilisearchTask(url, apiKey, task.taskUid);
   logger.info(
     { index: indexName, source },
     'Embedder configured on search index',
@@ -295,7 +309,8 @@ export async function syncSingleListing(
       `
         SELECT
           id, title, description, price_gbp::text, status,
-          category, brand, size, condition, created_at::text
+          category, brand, size, condition, created_at::text,
+          updated_at::text
         FROM listings
         WHERE id = $1
         LIMIT 1
@@ -305,17 +320,37 @@ export async function syncSingleListing(
 
     if (!result.rowCount) {
       await adapter.remove(listingId);
+      recordSearchSync('remove', 'ok');
       return;
     }
 
     const row = result.rows[0];
-    if (row.status === 'deleted' || row.status === 'sold') {
+    // The index corpus is exactly `status = 'active'` — the same predicate
+    // the full sync (syncListingsToSearchIndex) and fallback priming
+    // (syncListingsToLocalFallback) use. Anything else — draft, paused,
+    // risk_pending, sold, deleted — is EVICTED, not indexed: a non-active
+    // document in the index would diverge from the corpus the serving
+    // layer's status='active' re-check assumes.
+    if (row.status !== 'active') {
       await adapter.remove(listingId);
+      recordSearchSync('remove', 'ok');
       return;
     }
 
     await adapter.index(rowToDocument(row));
+    recordSearchSync('index', 'ok');
+    // Freshness signal (R28/R91): lag between the row's last mutation and
+    // the index write landing. Feeds thryftverse_search_index_lag_seconds —
+    // the freshness alert reads the p95 of this histogram.
+    if (row.updated_at) {
+      const lagMs = Date.now() - new Date(row.updated_at).getTime();
+      observeSearchIndexLag(
+        adapter.retrievalInfo().backend,
+        lagMs / 1000,
+      );
+    }
   } catch (error) {
+    recordSearchSync('index', 'error');
     logger.error(
       { err: error, listingId },
       'Failed to sync single listing to search index',
@@ -339,6 +374,58 @@ export async function removeListingFromIndex(
       'Failed to remove listing from search index',
     );
   }
+}
+
+/**
+ * Prime the process-local fallback index from PostgreSQL while the shared
+ * backend is healthy. The Meilisearch adapter mirrors every successful
+ * write into the fallback, but a process that boots healthy then loses the
+ * backend mid-session would otherwise serve only post-boot writes. This
+ * pass pages the same `status = 'active'` corpus as the full sync — same
+ * visibility predicate, so the fallback can never expose a listing the
+ * primary index would not. Returns counts; never throws.
+ */
+export async function syncListingsToLocalFallback(
+  dbPool: Pool,
+): Promise<{ synced: number; failed: number }> {
+  let synced = 0;
+  let failed = 0;
+  let lastId: string | null = null;
+  try {
+    while (true) {
+      const batch: QueryResult<ListingRow> = await dbPool.query<ListingRow>(
+        `
+          SELECT
+            id, title, description, price_gbp::text, status,
+            category, brand, size, condition, created_at::text
+          FROM listings
+          WHERE status = 'active' AND ($1::text IS NULL OR id > $1)
+          ORDER BY id
+          LIMIT $2
+        `,
+        [lastId, BATCH_SIZE],
+      );
+      if (!batch.rowCount || batch.rowCount === 0) {
+        break;
+      }
+      for (const row of batch.rows) {
+        try {
+          await indexIntoLocalFallback(rowToDocument(row));
+          synced += 1;
+        } catch {
+          failed += 1;
+        }
+      }
+      lastId = batch.rows[batch.rows.length - 1].id;
+      if (batch.rowCount < BATCH_SIZE) {
+        break;
+      }
+    }
+  } catch (error) {
+    logger.error({ err: error }, 'Failed to prime process-local search fallback');
+  }
+  logger.info({ synced, failed }, 'Process-local search fallback primed');
+  return { synced, failed };
 }
 
 // ── Blue/green versioned reindex (R27) ──────────────────────────────────────
@@ -366,6 +453,13 @@ const SOURCE_COUNT_DRIFT_RATIO = 0.05;
 const SOURCE_COUNT_DRIFT_FLOOR = 5;
 /** Cap on post-swap catch-up rows changed during the sync window. */
 const CATCH_UP_BATCH_LIMIT = 1000;
+/**
+ * Session-level advisory-lock key serialising search reindex runs across
+ * processes (admin route + hourly worker + manual script). Distinct from
+ * the migration runner's lock pair — never reuse those constants.
+ */
+const REINDEX_LOCK_KEY_A = 20260823;
+const REINDEX_LOCK_KEY_B = 7;
 
 export interface BlueGreenReindexResult {
   ok: boolean;
@@ -379,6 +473,13 @@ export interface BlueGreenReindexResult {
   mode: 'blue_green' | 'in_place';
   /** True only when the live index name was atomically repointed. */
   swapped: boolean;
+  /**
+   * True when the swap task's outcome could not be confirmed — the swap
+   * was enqueued server-side and may still have repointed the live name
+   * even though `swapped` reports false. Callers must treat this as
+   * "state unknown", not "swap did not happen".
+   */
+  swapUndetermined?: boolean;
   /** Index name queries resolve to (MEILISEARCH_INDEX, default 'listings'). */
   liveIndex: string;
   /** Versioned staging index built by this run, when one was created. */
@@ -404,6 +505,30 @@ export interface BlueGreenReindexResult {
 
 const escapeRegExp = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Read a Meilisearch task's current status once. Returns the status string
+ * ('enqueued' | 'processing' | 'succeeded' | 'failed' | 'canceled') or null
+ * when the task endpoint could not be reached — never throws.
+ */
+async function fetchMeiliTaskStatus(
+  url: string,
+  apiKey: string | undefined,
+  taskUid: number,
+): Promise<string | null> {
+  try {
+    const response = await fetch(`${url}/tasks/${taskUid}`, {
+      headers: { Authorization: `Bearer ${apiKey ?? ''}` },
+    });
+    if (!response.ok) {
+      return null;
+    }
+    const task = (await response.json()) as { status?: unknown };
+    return typeof task.status === 'string' ? task.status : null;
+  } catch {
+    return null;
+  }
+}
 
 async function countActiveListings(dbPool: Pool): Promise<number> {
   const result = await dbPool.query<{ active_count: number | string }>(
@@ -521,7 +646,7 @@ async function ensureLiveIndexExists(
     return;
   }
   const task = await client.createIndex(liveIndex, { primaryKey: 'id' });
-  await pollMeiliTask(url, apiKey, task.taskUid, 30_000, intervalMs);
+  await pollMeilisearchTask(url, apiKey, task.taskUid, 30_000, intervalMs);
   await configureSearchIndex(liveIndex);
   logger.info({ index: liveIndex }, 'Created live search index ahead of first swap');
 }
@@ -610,7 +735,7 @@ async function pruneVersionedIndexes(
     for (const uid of versions.slice(keep)) {
       try {
         const task = await client.deleteIndex(uid);
-        await pollMeiliTask(url, apiKey, task.taskUid, 30_000, intervalMs);
+        await pollMeilisearchTask(url, apiKey, task.taskUid, 30_000, intervalMs);
         pruned.push(uid);
       } catch (error) {
         logger.error(
@@ -640,6 +765,13 @@ async function pruneVersionedIndexes(
  * in-place sync against the process-local index and reports
  * `mode: 'in_place'` — there is no shared index to version in that
  * deployment.
+ *
+ * Concurrency: a Postgres advisory lock (REINDEX_LOCK_*) serialises every
+ * caller — the admin POST /search/reindex route, the hourly BullMQ worker
+ * job, and any manual script all land here, and two concurrent blue/green
+ * runs would swap-stomp each other (the loser's staged index could repoint
+ * the live name after the winner's). The lock is DB-scoped so it holds
+ * across replicas and the separate worker process.
  */
 export async function reindexListingsBlueGreen(
   dbPool: Pool,
@@ -651,10 +783,116 @@ export async function reindexListingsBlueGreen(
 ): Promise<BlueGreenReindexResult> {
   const liveIndex = MEILISEARCH_INDEX_NAME;
   const meiliUrl = process.env.MEILISEARCH_URL;
-  const apiKey = process.env.MEILISEARCH_KEY;
+  const apiKey = meilisearchApiKey();
   const pollIntervalMs = options?.pollIntervalMs ?? 500;
   const settleTimeoutMs = options?.settleTimeoutMs ?? INDEX_SETTLE_TIMEOUT_MS;
   const keepVersions = options?.keepVersions ?? VERSIONED_INDEX_KEEP_LAST;
+
+  // Acquire the cross-process reindex lease. A dedicated pool client holds
+  // the session-level lock for the whole run; a second concurrent caller
+  // fails fast with `reindex_in_progress` instead of racing the swap.
+  // connect() runs inside the result contract — a pool acquisition failure
+  // must return BlueGreenReindexResult, not propagate as an exception.
+  let lockClient: PoolClient;
+  try {
+    lockClient = await dbPool.connect();
+  } catch (error) {
+    logger.error({ err: error }, 'Search reindex lock client acquisition failed');
+    return {
+      ok: false,
+      mode: meiliUrl ? 'blue_green' : 'in_place',
+      swapped: false,
+      liveIndex,
+      synced: 0,
+      failed: 0,
+      total: 0,
+      error:
+        'reindex_lock_unavailable — could not acquire a database connection for the reindex advisory lock',
+    };
+  }
+  let lockHeld = false;
+  try {
+    const lock = await lockClient.query<{ acquired: boolean }>(
+      'SELECT pg_try_advisory_lock($1, $2) AS acquired',
+      [REINDEX_LOCK_KEY_A, REINDEX_LOCK_KEY_B],
+    );
+    lockHeld = lock.rows[0]?.acquired === true;
+  } catch (error) {
+    lockClient.release();
+    logger.error({ err: error }, 'Search reindex lock acquisition failed');
+    return {
+      ok: false,
+      mode: meiliUrl ? 'blue_green' : 'in_place',
+      swapped: false,
+      liveIndex,
+      synced: 0,
+      failed: 0,
+      total: 0,
+      error:
+        'reindex_lock_unavailable — could not acquire the reindex advisory lock (database error)',
+    };
+  }
+  if (!lockHeld) {
+    lockClient.release();
+    return {
+      ok: false,
+      mode: meiliUrl ? 'blue_green' : 'in_place',
+      swapped: false,
+      liveIndex,
+      synced: 0,
+      failed: 0,
+      total: 0,
+      error: 'reindex_in_progress — another reindex holds the lease',
+    };
+  }
+
+  try {
+    return await reindexListingsBlueGreenLocked(dbPool, {
+      liveIndex,
+      meiliUrl,
+      apiKey,
+      pollIntervalMs,
+      settleTimeoutMs,
+      keepVersions,
+    });
+  } finally {
+    let unlockError: Error | undefined;
+    try {
+      await lockClient.query(
+        'SELECT pg_advisory_unlock($1, $2)',
+        [REINDEX_LOCK_KEY_A, REINDEX_LOCK_KEY_B],
+      );
+    } catch (error) {
+      unlockError = error instanceof Error ? error : new Error(String(error));
+      logger.warn({ err: error }, 'Search reindex lock release failed');
+    }
+    // release(err) DESTROYS the client instead of returning it to the pool:
+    // when the unlock failed the session may still hold the advisory lock,
+    // and pooling it would report reindex_in_progress to every subsequent
+    // caller until the connection died.
+    lockClient.release(unlockError);
+  }
+}
+
+async function reindexListingsBlueGreenLocked(
+  dbPool: Pool,
+  ctx: {
+    liveIndex: string;
+    meiliUrl: string | undefined;
+    apiKey: string | undefined;
+    pollIntervalMs: number;
+    settleTimeoutMs: number;
+    keepVersions: number;
+  },
+): Promise<BlueGreenReindexResult> {
+  const {
+    liveIndex,
+    meiliUrl,
+    apiKey,
+    pollIntervalMs,
+    settleTimeoutMs,
+    keepVersions,
+  } = ctx;
 
   if (!meiliUrl) {
     await configureSearchIndex();
@@ -668,21 +906,6 @@ export async function reindexListingsBlueGreen(
     };
   }
 
-  const client = await loadMeiliClient();
-  if (!client) {
-    return {
-      ok: false,
-      mode: 'blue_green',
-      swapped: false,
-      liveIndex,
-      synced: 0,
-      failed: 0,
-      total: 0,
-      error:
-        'meilisearch_client_unavailable — MEILISEARCH_URL is set but the client could not be initialised',
-    };
-  }
-
   const stagedIndex = `${liveIndex}_v${Date.now()}`;
   let synced = 0;
   let failed = 0;
@@ -690,14 +913,38 @@ export async function reindexListingsBlueGreen(
   let stagedDocuments: number | undefined;
 
   try {
+    // loadMeiliClient lives inside the result contract — a client-init
+    // throw must produce BlueGreenReindexResult, not propagate.
+    const client = await loadMeiliClient();
+    if (!client) {
+      return {
+        ok: false,
+        mode: 'blue_green',
+        swapped: false,
+        liveIndex,
+        synced: 0,
+        failed: 0,
+        total: 0,
+        error:
+          'meilisearch_client_unavailable — MEILISEARCH_URL is set but the client could not be initialised',
+      };
+    }
+
     // 1. Build the staging index under a versioned name.
     const createTask = await client.createIndex(stagedIndex, {
       primaryKey: 'id',
     });
-    await pollMeiliTask(meiliUrl, apiKey, createTask.taskUid, 30_000, pollIntervalMs);
+    await pollMeilisearchTask(meiliUrl, apiKey, createTask.taskUid, 30_000, pollIntervalMs);
 
-    // 2. Apply the identical settings the live index gets at startup.
-    await configureSearchIndex(stagedIndex);
+    // 2. Apply the identical settings the live index gets at startup —
+    //    awaitTasks makes every settings update part of swap acceptance:
+    //    a failed or never-completing settings task throws here and the
+    //    live index is left untouched rather than swapped onto a
+    //    half-configured staged index.
+    await configureSearchIndex(stagedIndex, {
+      awaitTasks: true,
+      pollIntervalMs,
+    });
 
     // 3. Watermark (database clock) + source count, then sync into staged.
     const nowResult = await dbPool.query<{ now: string }>(
@@ -772,7 +1019,46 @@ export async function reindexListingsBlueGreen(
     const swapTask = await client.swapIndexes([
       { indexes: [liveIndex, stagedIndex] },
     ]);
-    await pollMeiliTask(meiliUrl, apiKey, swapTask.taskUid, 30_000, pollIntervalMs);
+    try {
+      await pollMeilisearchTask(meiliUrl, apiKey, swapTask.taskUid, 30_000, pollIntervalMs);
+    } catch (swapPollError) {
+      // The swap was already enqueued server-side — a poll timeout does NOT
+      // mean it failed. Re-read the task once: 'succeeded' means the live
+      // name repointed and the catch-up replay must still run; 'failed'
+      // means it definitively did not; anything else leaves the outcome
+      // undetermined and is reported as such (never assumed not-swapped).
+      const swapStatus = await fetchMeiliTaskStatus(meiliUrl, apiKey, swapTask.taskUid);
+      if (swapStatus !== 'succeeded') {
+        logger.error(
+          { err: swapPollError, stagedIndex, liveIndex, swapTaskUid: swapTask.taskUid, swapTaskStatus: swapStatus },
+          'Blue/green swap could not be confirmed',
+        );
+        return {
+          ok: false,
+          mode: 'blue_green',
+          swapped: false,
+          swapUndetermined: swapStatus !== 'failed',
+          liveIndex,
+          stagedIndex,
+          synced,
+          failed,
+          total: synced + failed,
+          sourceCount,
+          stagedDocuments,
+          verified: true,
+          error:
+            swapStatus === 'failed'
+              ? `swap task ${swapTask.taskUid} failed — live index left untouched`
+              : `swap task ${swapTask.taskUid} outcome undetermined (${swapStatus ?? 'unreachable'}) — the live index may still repoint server-side`,
+        };
+      }
+      // Swap confirmed server-side despite the poll failure — fall through
+      // to the catch-up replay exactly as if the poll had returned.
+      logger.warn(
+        { err: swapPollError, stagedIndex, liveIndex, swapTaskUid: swapTask.taskUid },
+        'Swap poll failed but the swap task succeeded — continuing post-swap steps',
+      );
+    }
 
     // 7. Replay rows that changed during the sync window so incremental
     //    writes landing on the pre-swap live index are not lost.

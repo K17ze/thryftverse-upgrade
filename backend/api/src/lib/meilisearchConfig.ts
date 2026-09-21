@@ -9,6 +9,91 @@ export const MEILISEARCH_INDEX_NAME =
   process.env.MEILISEARCH_INDEX ?? 'listings';
 
 /**
+ * Resolve the Meilisearch API key. `MEILISEARCH_KEY` is the canonical
+ * variable (documented in .env.example / .env.production.example /
+ * docs/SEARCH_MIGRATION.md and mirrored in config.ts); `MEILISEARCH_API_KEY`
+ * is accepted as a legacy alias so compose definitions that still pass it
+ * (root docker-compose.yml, docker-compose.prod.yml) do not silently
+ * desync auth from the Meilisearch master key.
+ */
+export function meilisearchApiKey(): string | undefined {
+  return (
+    process.env.MEILISEARCH_KEY?.trim() ||
+    process.env.MEILISEARCH_API_KEY?.trim() ||
+    undefined
+  );
+}
+
+/**
+ * Poll the Meilisearch task endpoint until a task succeeds or fails.
+ * Throws if the task ends in the `failed` state or does not settle before
+ * `timeoutMs`. Shared by the blue/green reindex and the settings
+ * configuration path so swap acceptance can require task completion.
+ */
+export async function pollMeilisearchTask(
+  url: string,
+  apiKey: string | undefined,
+  taskUid: number,
+  timeoutMs = 30_000,
+  intervalMs = 500,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  const headers = { Authorization: `Bearer ${apiKey ?? ''}` };
+  while (Date.now() < deadline) {
+    const response = await fetch(`${url}/tasks/${taskUid}`, { headers });
+    if (!response.ok) {
+      throw new Error(`Task poll failed: ${response.status} ${await response.text()}`);
+    }
+    const task = (await response.json()) as { status: string; error?: unknown };
+    if (task.status === 'succeeded') return;
+    if (task.status === 'failed') {
+      throw new Error(`Meilisearch task ${taskUid} failed: ${JSON.stringify(task.error)}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  throw new Error(`Meilisearch task ${taskUid} timed out after ${timeoutMs}ms`);
+}
+
+/**
+ * Options accepted by the index-configuration helpers. `awaitTasks` polls
+ * each returned Meilisearch task to completion instead of fire-and-forget —
+ * the blue/green reindex uses this so a failed/pending settings task can
+ * never reach swap acceptance.
+ */
+export interface MeiliConfigureOptions {
+  awaitTasks?: boolean;
+  pollIntervalMs?: number;
+}
+
+/** Extract the taskUid from a Meilisearch task response, when present. */
+function taskUidOf(result: unknown): number | null {
+  const uid = (result as { taskUid?: unknown } | null)?.taskUid;
+  return typeof uid === 'number' ? uid : null;
+}
+
+/** Poll an update-settings task when the caller asked for acceptance. */
+async function awaitUpdateTask(
+  result: unknown,
+  options: MeiliConfigureOptions | undefined,
+): Promise<void> {
+  if (!options?.awaitTasks) {
+    return;
+  }
+  const url = process.env.MEILISEARCH_URL;
+  const taskUid = taskUidOf(result);
+  if (!url || taskUid === null) {
+    return;
+  }
+  await pollMeilisearchTask(
+    url,
+    meilisearchApiKey(),
+    taskUid,
+    30_000,
+    options.pollIntervalMs ?? 500,
+  );
+}
+
+/**
  * Languages the listings index is expected to serve. Applied through
  * `localizedAttributes` so Meilisearch runs per-document language detection
  * and tokenisation on the searchable text attributes — accented and
@@ -93,7 +178,14 @@ export interface MeiliClient {
 }
 
 interface MeiliModule {
-  MeiliSearch: new (config: {
+  // meilisearch <0.35 exported `MeiliSearch`; >=0.35 renamed it
+  // `Meilisearch`. Accept either so the client resolves on whichever
+  // version is installed.
+  MeiliSearch?: new (config: {
+    host: string;
+    apiKey?: string;
+  }) => MeiliClient;
+  Meilisearch?: new (config: {
     host: string;
     apiKey?: string;
   }) => MeiliClient;
@@ -108,15 +200,16 @@ export async function loadMeiliClient(): Promise<MeiliClient | null> {
     const mod = (await import('meilisearch').catch(() => null)) as
       | MeiliModule
       | null;
-    if (!mod) {
+    const Client = mod?.MeiliSearch ?? mod?.Meilisearch;
+    if (!Client) {
       logger.warn(
         'meilisearch SDK not available — skipping meilisearch configuration',
       );
       return null;
     }
-    return new mod.MeiliSearch({
+    return new Client({
       host: meiliUrl,
-      apiKey: process.env.MEILISEARCH_KEY,
+      apiKey: meilisearchApiKey(),
     });
   } catch (error) {
     logger.error(
@@ -141,6 +234,7 @@ export async function loadMeiliClient(): Promise<MeiliClient | null> {
  */
 export async function configureMeilisearchTypoTolerance(
   indexName: string = MEILISEARCH_INDEX_NAME,
+  options?: MeiliConfigureOptions,
 ): Promise<void> {
   const client = await loadMeiliClient();
   if (!client) {
@@ -148,7 +242,7 @@ export async function configureMeilisearchTypoTolerance(
   }
   try {
     const index = client.index(indexName);
-    await index.updateTypoTolerance({
+    const task = await index.updateTypoTolerance({
       minWordSizeForTypos: {
         oneTypo: 4,
         twoTypos: 8,
@@ -156,11 +250,15 @@ export async function configureMeilisearchTypoTolerance(
       disableOnAttributes: ['id'],
       disableOnWords: [],
     });
+    await awaitUpdateTask(task, options);
     logger.info(
       { index: indexName },
       'Meilisearch typo tolerance configured',
     );
   } catch (error) {
+    if (options?.awaitTasks) {
+      throw error;
+    }
     logger.error(
       { err: error, index: indexName },
       'Failed to configure meilisearch typo tolerance',
@@ -177,6 +275,7 @@ export async function configureMeilisearchTypoTolerance(
  */
 export async function configureMeilisearchSynonyms(
   indexName: string = MEILISEARCH_INDEX_NAME,
+  options?: MeiliConfigureOptions,
 ): Promise<void> {
   const client = await loadMeiliClient();
   if (!client) {
@@ -184,7 +283,7 @@ export async function configureMeilisearchSynonyms(
   }
   try {
     const index = client.index(indexName);
-    await index.updateSynonyms({
+    const task = await index.updateSynonyms({
       sneakers: ['trainers', 'shoes'],
       pants: ['trousers'],
       purse: ['handbag', 'bag'],
@@ -195,11 +294,15 @@ export async function configureMeilisearchSynonyms(
       new: ['mint', 'pristine'],
       used: ['pre-owned', 'secondhand'],
     });
+    await awaitUpdateTask(task, options);
     logger.info(
       { index: indexName },
       'Meilisearch synonyms configured',
     );
   } catch (error) {
+    if (options?.awaitTasks) {
+      throw error;
+    }
     logger.error(
       { err: error, index: indexName },
       'Failed to configure meilisearch synonyms',
@@ -223,6 +326,7 @@ export async function configureMeilisearchSynonyms(
  */
 export async function configureMeilisearchLocalizedAttributes(
   indexName: string = MEILISEARCH_INDEX_NAME,
+  options?: MeiliConfigureOptions,
 ): Promise<void> {
   const client = await loadMeiliClient();
   if (!client) {
@@ -238,7 +342,7 @@ export async function configureMeilisearchLocalizedAttributes(
       );
       return;
     }
-    await index.updateLocalizedAttributes([
+    const task = await index.updateLocalizedAttributes([
       {
         attributePatterns: [
           'title',
@@ -250,11 +354,15 @@ export async function configureMeilisearchLocalizedAttributes(
         locales,
       },
     ]);
+    await awaitUpdateTask(task, options);
     logger.info(
       { index: indexName, locales },
       'Meilisearch localized attributes configured',
     );
   } catch (error) {
+    if (options?.awaitTasks) {
+      throw error;
+    }
     logger.error(
       { err: error, index: indexName, locales },
       'Failed to configure meilisearch localized attributes',

@@ -32,6 +32,7 @@ import {
   detectLifecycleTransition,
 } from '../utils/auctionDetailLogic';
 import { createStableId } from '../utils/createStableId';
+import { waitForPaymentIntentSettlement } from '../services/checkoutPaymentIntent';
 
 export interface UseAuctionDetailOptions {
   openBidSheet?: boolean;
@@ -473,6 +474,10 @@ export function useAuctionDetail(
     }
   };
 
+  // FIN-01: winner payment is a pending → provider-verified transition.
+  // The endpoint mints/reuses a payment intent and returns 'pending' with
+  // the intent (clientSecret / hosted-checkout nextActionUrl). 'paid' is
+  // only truth once the provider confirms capture — never optimistically.
   const handlePayNow = async () => {
     if (!auction || isPayLoading) return;
     if (!requireAuth('purchase')) return;
@@ -482,10 +487,68 @@ export function useAuctionDetail(
         payIdempotencyKeyRef.current = createStableId('pay');
       }
       const idempotencyKey = payIdempotencyKeyRef.current;
-      await payAuction(auction.id, { idempotencyKey });
+      const result = await payAuction(auction.id, { idempotencyKey });
+      // The pay endpoint may also carry the created payment intent (not in
+      // the legacy response contract — intersect the type locally so
+      // services/marketApi.ts stays untouched).
+      const intent = (
+        result as Awaited<ReturnType<typeof payAuction>> & {
+          intent?: {
+            id: string;
+            status: string;
+            nextActionUrl?: string | null;
+            clientSecret?: string | null;
+            gatewayId?: string | null;
+          } | null;
+        }
+      ).intent ?? null;
+
+      if (result.paymentStatus === 'paid') {
+        await fetchDetail();
+        show('Payment confirmed', 'success');
+        payIdempotencyKeyRef.current = null;
+        return;
+      }
+
+      if (result.paymentStatus === 'failed') {
+        show('Payment failed — you can try again.', 'error');
+        payIdempotencyKeyRef.current = null;
+        await fetchDetail();
+        return;
+      }
+
+      // pending — the provider capture is still in flight. Poll for the
+      // authoritative intent outcome (the poller opens the hosted
+      // checkout/3DS URL when the provider requires action), then refresh
+      // so the settled state comes from the server, not the tap.
+      show('Complete the payment to secure your win', 'info');
+      if (!intent?.id) {
+        await fetchDetail();
+        return;
+      }
+      const outcome = await waitForPaymentIntentSettlement(
+        intent.id,
+        () => isMountedRef.current
+      );
+      if (!isMountedRef.current) return;
+
+      if (outcome === 'succeeded') {
+        await fetchDetail();
+        show('Payment confirmed', 'success');
+        payIdempotencyKeyRef.current = null;
+        return;
+      }
+      if (outcome === 'failed') {
+        show('Payment failed — you can try again.', 'error');
+        payIdempotencyKeyRef.current = null;
+        await fetchDetail();
+        return;
+      }
+      // Still pending (or polling aborted) — keep the idempotency key so
+      // the next tap replays the in-flight attempt rather than minting a
+      // second provider payment.
+      show('Waiting for payment confirmation — we will update when it lands.', 'info');
       await fetchDetail();
-      show('Payment initiated', 'success');
-      payIdempotencyKeyRef.current = null;
     } catch (err) {
       const parsed = parseApiError(err, 'Payment failed');
       show(parsed.message, 'error');

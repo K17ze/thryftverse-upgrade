@@ -306,8 +306,12 @@ services:
     environment:
       PORT: 8000
       DECISION_SERVICE_TOKEN: ${DECISION_SERVICE_TOKEN:-local-decision-service-token}
-    ports:
-      - "8000:8000"
+      # Dev-only default — app/main.py requires ADMIN_SERVICE_TOKEN with no
+      # fallback when ENV/NODE_ENV=production (see docker-compose.prod.yml).
+      ADMIN_SERVICE_TOKEN: ${ADMIN_SERVICE_TOKEN:-local-admin-token}
+    # No host port published — the decision service is internal-only and is
+    # reached by the api over the compose network (ML_SERVICE_URL). Publish
+    # deliberately on a throwaway port if a local debug session needs it.
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s

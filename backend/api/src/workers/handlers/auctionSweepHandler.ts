@@ -112,6 +112,10 @@ export async function advanceSecondChanceOffer(input: {
 
   if (next) {
     const secondChanceDeadline = new Date(Date.now() + SECOND_CHANCE_DEADLINE_HOURS * 3600_000).toISOString();
+    // current_bid_gbp moves to the OFFERED bidder's amount — it is the
+    // settlement price, and leaving the flaked winner's higher bid would
+    // overcharge the second-chance buyer (or wedge settlement on an
+    // amount mismatch) when they accept.
     await client.query(
       `
         UPDATE auctions
@@ -119,11 +123,12 @@ export async function advanceSecondChanceOffer(input: {
             second_chance_offered_to = $2,
             winner_bidder_id = $3,
             winner_bid_id = $4,
+            current_bid_gbp = $6,
             payment_deadline_at = $5,
             updated_at = NOW()
         WHERE id = $1
       `,
-      [auction.id, next.bidder_id, next.bidder_id, next.id, secondChanceDeadline],
+      [auction.id, next.bidder_id, next.bidder_id, next.id, secondChanceDeadline, Number(next.amount_gbp)],
     );
 
     publishRealtimeEvent({

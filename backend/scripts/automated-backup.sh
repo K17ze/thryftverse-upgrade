@@ -16,8 +16,11 @@ set -euo pipefail
 #   POSTGRES_USER          — PostgreSQL user (required)
 #   POSTGRES_PASSWORD      — PostgreSQL password (required)
 #   POSTGRES_DB            — Database name (required)
-#   BACKUP_ENCRYPTION_KEY  — If set, encrypts with openssl AES-256-CBC
-#   S3_BACKUP_BUCKET       — S3 bucket name (required for S3 upload)
+#   BACKUP_ENCRYPTION_KEY  — Encrypts with openssl AES-256-CBC
+#                           (required when NODE_ENV=production or
+#                           BACKUP_REQUIRE_ENCRYPTION=true)
+#   S3_BACKUP_BUCKET       — S3 bucket name (required when NODE_ENV=production
+#                           or BACKUP_REQUIRE_DESTINATION=true)
 #   S3_BACKUP_PREFIX       — S3 key prefix (default: db-backups)
 #   AWS_REGION             — AWS region (for S3 CLI)
 #   AWS_ACCESS_KEY_ID      — AWS access key
@@ -40,10 +43,25 @@ S3_BACKUP_PREFIX="${S3_BACKUP_PREFIX:-db-backups}"
 ALERTING_WEBHOOK_URL="${ALERTING_WEBHOOK_URL:-}"
 BACKUP_ENCRYPTION_KEY="${BACKUP_ENCRYPTION_KEY:-}"
 BACKUP_REQUIRE_ENCRYPTION="${BACKUP_REQUIRE_ENCRYPTION:-}"
+BACKUP_REQUIRE_DESTINATION="${BACKUP_REQUIRE_DESTINATION:-}"
 
 if { [ "$BACKUP_REQUIRE_ENCRYPTION" = "true" ] || [ "${NODE_ENV:-}" = "production" ]; } && [ -z "$BACKUP_ENCRYPTION_KEY" ]; then
   echo "FATAL: BACKUP_ENCRYPTION_KEY is required when BACKUP_REQUIRE_ENCRYPTION=true or NODE_ENV=production" >&2
   exit 1
+fi
+
+# Destination validation — an unencrypted dump with nowhere to go is not a
+# backup. In production (or when BACKUP_REQUIRE_DESTINATION=true) the S3
+# destination and its credentials must be configured before any work starts.
+if { [ "$BACKUP_REQUIRE_DESTINATION" = "true" ] || [ "${NODE_ENV:-}" = "production" ]; } && [ -z "$S3_BACKUP_BUCKET" ]; then
+  echo "FATAL: S3_BACKUP_BUCKET is required when BACKUP_REQUIRE_DESTINATION=true or NODE_ENV=production — a backup without a verified destination is not a backup" >&2
+  exit 1
+fi
+if [ -n "$S3_BACKUP_BUCKET" ]; then
+  if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
+    echo "FATAL: AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are required when S3_BACKUP_BUCKET is set" >&2
+    exit 1
+  fi
 fi
 
 export PGPASSWORD="$POSTGRES_PASSWORD"
@@ -53,8 +71,6 @@ BASE_NAME="thryftverse_${TIMESTAMP}"
 DUMP_FILE="${BACKUP_DIR}/${BASE_NAME}.dump"
 ENCRYPTED_FILE="${BACKUP_DIR}/${BASE_NAME}.dump.enc"
 CHECKSUM_FILE=""
-
-mkdir -p "$BACKUP_DIR"
 
 send_alert() {
   local message="$1"
@@ -71,12 +87,25 @@ cleanup() {
   local exit_code=$?
   if [ $exit_code -ne 0 ]; then
     send_alert "❌ **Automated DB backup FAILED** for database ${POSTGRES_DB} on ${POSTGRES_HOST}. Exit code: ${exit_code}"
+    # Preserve the local artifact on failure — deleting it would leave zero
+    # recoverable copies when the upload never completed.
+    echo "[$(date -u)] Failure — preserving local artifacts in ${BACKUP_DIR} for operator recovery." >&2
   fi
-  rm -f "$DUMP_FILE" "$CHECKSUM_FILE"
+  rm -f "$CHECKSUM_FILE"
+  # The plaintext dump is only safe to drop once an encrypted artifact exists;
+  # otherwise it IS the artifact and must be kept (even on failure) so an
+  # operator can recover it manually.
+  if [ -n "$BACKUP_ENCRYPTION_KEY" ] && [ -f "$ENCRYPTED_FILE" ]; then
+    rm -f "$DUMP_FILE"
+  fi
   exit $exit_code
 }
 
 trap cleanup EXIT
+
+# Create the scratch dir only after the trap is armed — a mkdir failure here
+# must still page the operator, not exit silently.
+mkdir -p "$BACKUP_DIR"
 
 echo "[$(date -u)] Starting pg_dump of ${POSTGRES_DB} from ${POSTGRES_HOST}:${POSTGRES_PORT}..."
 
@@ -111,6 +140,8 @@ if [ -n "$BACKUP_ENCRYPTION_KEY" ]; then
   echo "[$(date -u)] Encrypted backup: ${ENCRYPTED_FILE}"
 fi
 
+UPLOAD_SUCCEEDED="false"
+
 if [ -n "$S3_BACKUP_BUCKET" ]; then
   S3_KEY="${S3_BACKUP_PREFIX}/$(basename "$UPLOAD_FILE")"
   echo "[$(date -u)] Uploading to s3://${S3_BACKUP_BUCKET}/${S3_KEY}..."
@@ -121,6 +152,7 @@ if [ -n "$S3_BACKUP_BUCKET" ]; then
 
   aws s3 cp "$UPLOAD_FILE" "s3://${S3_BACKUP_BUCKET}/${S3_KEY}" --no-progress --sse aws:kms
   aws s3 cp "$CHECKSUM_FILE" "s3://${S3_BACKUP_BUCKET}/${S3_CHECKSUM_KEY}" --no-progress --sse aws:kms
+  UPLOAD_SUCCEEDED="true"
 
   rm -f "$CHECKSUM_FILE"
   CHECKSUM_FILE=""
@@ -138,11 +170,20 @@ if [ -n "$S3_BACKUP_BUCKET" ]; then
     done
   fi
 else
-  echo "[$(date -u)] S3_BACKUP_BUCKET not set — skipping S3 upload."
+  # No destination configured — this is only permitted outside production
+  # (validated above). The artifact is kept locally; local retention pruning
+  # below still bounds disk usage.
+  echo "[$(date -u)] WARN: S3_BACKUP_BUCKET not set — no remote upload; keeping local artifact ${UPLOAD_FILE}." >&2
 fi
 
 echo "[$(date -u)] Pruning local backups older than ${BACKUP_RETENTION_DAYS} days..."
 find "$BACKUP_DIR" -name "thryftverse_*.dump*" -type f -mtime +${BACKUP_RETENTION_DAYS} -delete || true
 
-rm -f "$UPLOAD_FILE"
+# Only drop the local artifact once a copy is confirmed at the destination.
+# A failed or skipped upload must never remove the only remaining copy.
+if [ "$UPLOAD_SUCCEEDED" = "true" ]; then
+  rm -f "$UPLOAD_FILE"
+else
+  echo "[$(date -u)] Local artifact retained: ${UPLOAD_FILE}"
+fi
 echo "[$(date -u)] Backup complete."

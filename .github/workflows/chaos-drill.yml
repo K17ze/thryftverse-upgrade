@@ -1,0 +1,98 @@
+name: Chaos Drill
+
+# Scheduled reachability probe + operator-driven scenario drills against a
+# RUNNING deployment (the harness asserts post-kill state — the operator runs
+# the printed kill/restore commands on the target infra out-of-band; the
+# script never touches infra itself).
+#
+# Schedule: weekly probe only — a reachability report, always exits 0.
+# Dispatch: pick a scenario. `all` / a named scenario exits non-zero on any
+# failed assertion or skipped credential-gated check (unless allow_skips is
+# explicitly chosen for a reduced drill).
+
+on:
+  schedule:
+    # Weekly Monday 06:00 UTC
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: "probe | all | <scenario name> (see --list)"
+        required: true
+        default: "probe"
+      base_url:
+        description: "Target API base URL"
+        required: true
+        default: "https://api-staging.thryftverse.com"
+      allow_skips:
+        description: "Allow credential-gated checks to skip (reduced drill)"
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chaos-drill
+  cancel-in-progress: false
+
+jobs:
+  drill:
+    name: Chaos drill
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CHAOS_API_BASE_URL: ${{ github.event_name == 'schedule' && 'https://api-staging.thryftverse.com' || inputs.base_url }}
+      CHAOS_BEARER_TOKEN: ${{ secrets.CHAOS_BEARER_TOKEN }}
+      CHAOS_USER_ID: ${{ secrets.CHAOS_USER_ID }}
+      CHAOS_SECURITY_ADMIN_TOKEN: ${{ secrets.CHAOS_SECURITY_ADMIN_TOKEN }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/api/package-lock.json
+
+      - name: Scheduled reachability probe
+        if: github.event_name == 'schedule'
+        working-directory: backend/api
+        run: node scripts/chaos-smoke.mjs --probe --json > chaos-probe.json; cat chaos-probe.json
+
+      - name: Upload probe report
+        if: github.event_name == 'schedule'
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaos-probe-${{ github.run_number }}
+          path: backend/api/chaos-probe.json
+          retention-days: 90
+
+      - name: Print drill plan
+        if: github.event_name == 'workflow_dispatch'
+        working-directory: backend/api
+        run: node scripts/chaos-smoke.mjs --list
+
+      - name: Run scenario assertions
+        if: github.event_name == 'workflow_dispatch'
+        working-directory: backend/api
+        run: |
+          if [ "${{ inputs.scenario }}" = "probe" ]; then
+            node scripts/chaos-smoke.mjs --probe --json > chaos-report.json
+          elif [ "${{ inputs.scenario }}" = "all" ]; then
+            node scripts/chaos-smoke.mjs --all ${{ inputs.allow_skips && '--allow-skips' || '' }} --json > chaos-report.json
+          else
+            node scripts/chaos-smoke.mjs --scenario "${{ inputs.scenario }}" ${{ inputs.allow_skips && '--allow-skips' || '' }} --json > chaos-report.json
+          fi
+          cat chaos-report.json
+
+      - name: Upload drill report
+        if: github.event_name == 'workflow_dispatch' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaos-drill-${{ inputs.scenario }}-${{ github.run_number }}
+          path: backend/api/chaos-report.json
+          retention-days: 90

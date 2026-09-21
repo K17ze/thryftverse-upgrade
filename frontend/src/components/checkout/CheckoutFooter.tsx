@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, FontFamily, Stroke, Elevation } from '../../theme/designTokens';
-import { TypographyV2 } from '../../theme/typography.v2';
+import { TypographyV2, MAX_FONT_SCALE } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { PulsingDot } from './PulsingDot';
 import { haptics } from '../../utils/haptics';
@@ -33,6 +33,16 @@ interface Props {
   showApplePay: boolean;
   showGooglePay: boolean;
   onPay: () => void;
+  /** Tender-specific action for the branded wallet buttons. Required for
+   *  honest tender mapping (FRESH-04): a "Pay with Apple/Google Pay" CTA
+   *  must open the native wallet sheet, never silently run the card path.
+   *  Required whenever a branded button can render — no silent fallback
+   *  to the card handler. */
+  onWalletPay: () => void;
+  /** Disabled state for the wallet CTA — the wallet tender carries no
+   *  saved-card requirement, so it is gated on its own eligibility, not
+   *  `payDisabled`. Defaults to `payDisabled`. */
+  walletPayDisabled?: boolean;
   reducedMotion: boolean;
 }
 
@@ -59,9 +69,13 @@ function CheckoutFooterBase({
   showApplePay,
   showGooglePay,
   onPay,
+  onWalletPay,
+  walletPayDisabled,
   reducedMotion,
 }: Props) {
   const { colors } = useAppTheme();
+  const walletPress = onWalletPay;
+  const walletDisabled = walletPayDisabled ?? payDisabled;
   const insets = useSafeAreaInsets();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -76,44 +90,44 @@ function CheckoutFooterBase({
         accessibilityHint="Open the full cost breakdown and returns policy"
       >
         <View style={styles.compactSummaryRow}>
-          <Text style={styles.compactSummaryLabel} maxFontSizeMultiplier={2}>Item</Text>
-          <Text style={styles.compactSummaryVal} maxFontSizeMultiplier={2}>{itemLabel}</Text>
+          <Text style={styles.compactSummaryLabel} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>Item</Text>
+          <Text style={styles.compactSummaryVal} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>{itemLabel}</Text>
         </View>
         <View style={styles.compactSummaryRow}>
-          <Text style={styles.compactSummaryLabel} maxFontSizeMultiplier={2}>Delivery</Text>
-          <Text style={styles.compactSummaryVal} maxFontSizeMultiplier={2}>{deliveryLabel}</Text>
+          <Text style={styles.compactSummaryLabel} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>Delivery</Text>
+          <Text style={styles.compactSummaryVal} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>{deliveryLabel}</Text>
         </View>
         <View style={styles.compactSummaryRow}>
-          <Text style={styles.compactSummaryLabel} maxFontSizeMultiplier={2}>Buyer protection</Text>
-          <Text style={styles.compactSummaryVal} maxFontSizeMultiplier={2}>{protectionLabel}</Text>
+          <Text style={styles.compactSummaryLabel} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>Buyer protection</Text>
+          <Text style={styles.compactSummaryVal} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>{protectionLabel}</Text>
         </View>
         {verificationLabel ? (
           <View style={styles.compactSummaryRow}>
-            <Text style={styles.compactSummaryLabel} maxFontSizeMultiplier={2}>Verification</Text>
-            <Text style={styles.compactSummaryVal} maxFontSizeMultiplier={2}>{verificationLabel}</Text>
+            <Text style={styles.compactSummaryLabel} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>Verification</Text>
+            <Text style={styles.compactSummaryVal} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>{verificationLabel}</Text>
           </View>
         ) : null}
         {walletAppliedLabel ? (
           <View style={styles.compactSummaryRow}>
-            <Text style={styles.compactSummaryLabel} maxFontSizeMultiplier={2}>Wallet applied</Text>
-            <Text style={styles.compactSummaryVal} maxFontSizeMultiplier={2}>-{walletAppliedLabel}</Text>
+            <Text style={styles.compactSummaryLabel} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>Wallet applied</Text>
+            <Text style={styles.compactSummaryVal} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>-{walletAppliedLabel}</Text>
           </View>
         ) : null}
         <View style={styles.compactSummaryDivider} />
         <View style={styles.compactSummaryTotalRow}>
           <View style={styles.compactSummaryTotalLeft}>
-            <Text style={styles.compactSummaryTotalLabel} maxFontSizeMultiplier={2}>Total</Text>
+            <Text style={styles.compactSummaryTotalLabel} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>Total</Text>
             <Text
               style={styles.compactSummaryTotalValue}
               accessibilityLiveRegion="polite"
               accessibilityLabel={`Total ${totalLabel}`}
-              maxFontSizeMultiplier={2}
+              maxFontSizeMultiplier={MAX_FONT_SCALE.utility}
             >
               {totalLabel}
             </Text>
           </View>
           <View style={styles.breakdownChevron}>
-            <Text style={styles.breakdownChevronText} maxFontSizeMultiplier={2}>View full breakdown</Text>
+            <Text style={styles.breakdownChevronText} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>View full breakdown</Text>
             <Ionicons name="chevron-up" size={16} color={colors.textMuted} importantForAccessibility="no" />
           </View>
         </View>
@@ -123,40 +137,40 @@ function CheckoutFooterBase({
         {/* Apple Pay as primary CTA on iOS when enabled */}
         {showApplePay && (
           <Pressable
-            onPress={() => { haptics.press(); onPay(); }}
+            onPress={() => { haptics.press(); walletPress(); }}
             style={({ pressed }) => [
               styles.walletBtn,
               pressed && styles.payBtnPressed,
-              payDisabled && styles.payBtnDisabled,
+              walletDisabled && styles.payBtnDisabled,
             ]}
-            disabled={payDisabled}
+            disabled={walletDisabled}
             accessibilityRole="button"
             accessibilityLabel={`Pay ${totalLabel} with Apple Pay`}
             accessibilityHint="Complete checkout using Apple Pay"
-            accessibilityState={{ disabled: payDisabled }}
+            accessibilityState={{ disabled: walletDisabled }}
           >
             <Ionicons name="logo-apple" size={22} color={colors.textInverse} importantForAccessibility="no" />
-            <Text style={styles.walletBtnText} maxFontSizeMultiplier={2}>Pay with Apple Pay</Text>
+            <Text style={styles.walletBtnText} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>Pay with Apple Pay</Text>
           </Pressable>
         )}
 
         {/* Google Pay as primary CTA on Android when enabled */}
         {showGooglePay && (
           <Pressable
-            onPress={() => { haptics.press(); onPay(); }}
+            onPress={() => { haptics.press(); walletPress(); }}
             style={({ pressed }) => [
               styles.walletBtn,
               pressed && styles.payBtnPressed,
-              payDisabled && styles.payBtnDisabled,
+              walletDisabled && styles.payBtnDisabled,
             ]}
-            disabled={payDisabled}
+            disabled={walletDisabled}
             accessibilityRole="button"
             accessibilityLabel={`Pay ${totalLabel} with Google Pay`}
             accessibilityHint="Complete checkout using Google Pay"
-            accessibilityState={{ disabled: payDisabled }}
+            accessibilityState={{ disabled: walletDisabled }}
           >
             <Ionicons name="logo-google" size={22} color={colors.textInverse} importantForAccessibility="no" />
-            <Text style={styles.walletBtnText} maxFontSizeMultiplier={2}>Pay with Google Pay</Text>
+            <Text style={styles.walletBtnText} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>Pay with Google Pay</Text>
           </Pressable>
         )}
 
@@ -196,7 +210,7 @@ function CheckoutFooterBase({
               styles.payBtnText,
               walletAvailable && styles.payBtnTextSecondary,
             ]}
-            maxFontSizeMultiplier={2}
+            maxFontSizeMultiplier={MAX_FONT_SCALE.utility}
           >
             {payLabel}
           </Text>

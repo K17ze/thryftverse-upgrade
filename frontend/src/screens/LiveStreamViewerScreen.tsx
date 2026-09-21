@@ -88,6 +88,7 @@ export function LiveStreamViewerScreen() {
     currentLot,
     setCurrentLot,
     viewerMuted,
+    reconnecting,
     retry } = useLiveStreamSession(sessionId, viewerUserId);
 
   // Real video plane — LiveKit room joined with the viewer token the backend
@@ -127,6 +128,7 @@ export function LiveStreamViewerScreen() {
     hasVideoCredentials,
     roomState: liveKit.state,
     hasRemoteVideo,
+    sessionReconnecting: reconnecting,
     t });
 
   // ── Connecting state — skeleton matching the live layout ──

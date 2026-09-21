@@ -20,6 +20,18 @@ export function formatCountryPolicyScope(
   return `${capabilities.effectiveCountryCode} · ${toClusterLabel(capabilities.countryCluster)}`;
 }
 
+/**
+ * Whether the regional capability payload permits `methodType`.
+ *
+ * `capabilities === null/undefined` means the capability fetch did not
+ * produce a verified payload — the method's status is UNVERIFIED, not
+ * allowed. `fallback` decides how an unverified capability resolves:
+ * callers default to `true` (fail-open) because the card rail predates
+ * capabilities and must stay usable when verification is unavailable,
+ * but branded affordances that claim a specific tender (Apple Pay /
+ * Google Pay CTAs) must pass `false` — an unverified capability can
+ * never back a branded promise.
+ */
 export function isPaymentMethodAllowed(
   capabilities: Pick<UserCountryCapabilities, 'payments'> | null | undefined,
   methodType: CapabilityPaymentMethodType,

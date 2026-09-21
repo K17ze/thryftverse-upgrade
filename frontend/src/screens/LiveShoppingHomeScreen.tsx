@@ -11,7 +11,7 @@
  * filter strip is hidden rather than rendered as a dead control.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -27,6 +27,7 @@ import { RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { HorizontalRail } from '../components/HorizontalRail';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { CommerceDetailUnavailableInline } from '../components/commerce/detail';
 import {
   FlagshipScreen,
   FlagshipHeader,
@@ -192,7 +193,16 @@ export default function LiveShoppingHomeScreen() {
   const [remindPendingIds, setRemindPendingIds] = useState<ReadonlySet<string>>(new Set());
   const [remindErrors, setRemindErrors] = useState<Record<string, string>>({});
 
+  // ── Request identity (FRESH-02) ──
+  // Monotonic epoch bumped on every load — mount, pull-to-refresh and
+  // handleRetry can overlap. A stale load's writes must never overwrite a
+  // fresher summary/error, and its finally must not clear the pending
+  // flags while a newer load is still running. Same epoch convention as
+  // useDiscoverySearch/useDiscoveryContent.
+  const loadEpochRef = useRef(0);
+
   const load = useCallback(async (isRefresh = false) => {
+    const epoch = ++loadEpochRef.current;
     if (isRefresh) {
       setRefreshing(true);
     } else {
@@ -201,12 +211,16 @@ export default function LiveShoppingHomeScreen() {
     setError(null);
     try {
       const result = await fetchLiveSessions();
+      if (epoch !== loadEpochRef.current) return;
       setSummary(result);
     } catch (e) {
+      if (epoch !== loadEpochRef.current) return;
       setError(e instanceof Error ? e.message : t('error.loadFailed'));
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (epoch === loadEpochRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [t]);
 
@@ -346,10 +360,14 @@ export default function LiveShoppingHomeScreen() {
     [remindPendingIds, haptic, t],
   );
 
+  // A failed refresh must not blank a populated screen: the last-good
+  // summary stays rendered with an inline freshness notice + retry, and
+  // the full error state only appears when nothing was ever loaded.
   const showLoading = loading && !summary;
-  const showError = !loading && error && !summary;
-  const showEmpty = !loading && !error && summary != null && summary.sessions.length === 0;
-  const showContent = !loading && !error && summary != null && summary.sessions.length > 0;
+  const showError = !loading && !!error && !summary;
+  const showEmpty = summary != null && summary.sessions.length === 0;
+  const showContent = summary != null && summary.sessions.length > 0;
+  const showRefreshError = !!error && summary != null;
 
   return (
     <FlagshipScreen
@@ -376,6 +394,20 @@ export default function LiveShoppingHomeScreen() {
           />
         }
       >
+        {/* ── Refresh failure — the last-good summary stays visible and
+            the error is an inline freshness notice with retry, not a
+            blank body (FRESH-01). ── */}
+        {showRefreshError && (
+          <View style={styles.refreshNotice}>
+            <CommerceDetailUnavailableInline
+              title={t('refreshFailed.title')}
+              body={t('refreshFailed.body')}
+              icon="refresh-outline"
+              onRetry={handleRetry}
+            />
+          </View>
+        )}
+
         {/* ── Category filter — only when the contract carries categories ── */}
         {showContent && categories.length > 1 && (
           <View style={[styles.categoryStrip, { borderBottomColor: colors.border }]}>
@@ -535,6 +567,8 @@ function useStyles() {
         categoryStripContent: {
           paddingHorizontal: Space.xs,
           gap: Space.xs },
+        refreshNotice: {
+          paddingHorizontal: Space.md },
         sectionsWrap: {
           gap: Space.lg,
           paddingTop: Space.md },

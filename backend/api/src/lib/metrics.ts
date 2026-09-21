@@ -108,6 +108,21 @@ const gmvTotal = new Counter({
   registers: [registry],
 });
 
+const searchIndexLagSeconds = new Histogram({
+  name: 'thryftverse_search_index_lag_seconds',
+  help: 'Lag between a listing update (updated_at) and its search-index write landing, by serving backend',
+  labelNames: ['backend'] as const,
+  buckets: [0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 300],
+  registers: [registry],
+});
+
+const searchSyncTotal = new Counter({
+  name: 'thryftverse_search_sync_total',
+  help: 'Search index sync outcomes by operation and result',
+  labelNames: ['op', 'result'] as const,
+  registers: [registry],
+});
+
 const listingsCreatedTotal = new Counter({
   name: 'thryftverse_listings_created_total',
   help: 'Total listings created',
@@ -283,6 +298,21 @@ export function recordOrderCompleted(): void {
 
 export function recordUserSignup(method: string): void {
   userSignupsTotal.inc({ method }, 1);
+}
+
+/**
+ * Observe the lag between a listing's `updated_at` and the moment its
+ * search-index write lands. Feeds the search-freshness alert (R28/R91):
+ * `histogram_quantile(0.95, rate(thryftverse_search_index_lag_seconds_bucket[10m]))`
+ * breaches the freshness SLO when the index trails writes.
+ */
+export function observeSearchIndexLag(backend: string, lagSeconds: number): void {
+  if (!Number.isFinite(lagSeconds) || lagSeconds < 0) return;
+  searchIndexLagSeconds.observe({ backend }, lagSeconds);
+}
+
+export function recordSearchSync(op: 'index' | 'remove', result: 'ok' | 'error'): void {
+  searchSyncTotal.inc({ op, result });
 }
 
 export async function renderMetrics(): Promise<string> {

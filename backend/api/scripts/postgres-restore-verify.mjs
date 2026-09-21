@@ -25,6 +25,10 @@ import { Client } from 'pg';
 //   RESTORE_VERIFY_TABLES   optional comma-separated table list overriding
 //                           the default critical-table probe
 
+// Table names must be the real stored names — the migrations create these
+// unquoted (e.g. CREATE TABLE coOwn_assets), so Postgres folds them to
+// lowercase. Quoting the camelCase form in COUNT(*) would probe a table
+// that does not exist and fail the drill on a perfectly good restore.
 const DEFAULT_VERIFY_TABLES = [
   'users',
   'listings',
@@ -35,10 +39,10 @@ const DEFAULT_VERIFY_TABLES = [
   'payment_intents',
   'payment_webhook_events',
   'listing_checkout_reservations',
-  'coOwn_assets',
-  'coOwn_holdings',
-  'coOwn_orders',
-  'coOwn_trades',
+  'coown_assets',
+  'coown_holdings',
+  'coown_orders',
+  'coown_trades',
   'ledger_entries',
 ];
 
@@ -46,7 +50,9 @@ function run(cmd, args, { env } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, {
       stdio: ['ignore', 'pipe', 'inherit'],
-      shell: process.platform === 'win32',
+      // No shell on any platform: pg_restore/openssl are real executables,
+      // and a cmd.exe pass on Windows would re-interpret '&' and '%' inside
+      // connection URLs (query params, credentials) as shell metacharacters.
       env: env ? { ...process.env, ...env } : process.env,
     });
     let stdout = '';
@@ -122,8 +128,12 @@ async function probeTables(databaseUrl, tables) {
         results.push({ table, present: false });
         continue;
       }
+      // Count via the resolved regclass text — Postgres returns the stored
+      // (case-folded, already-quoted-if-needed) relation reference, so the
+      // probe cannot drift from what actually exists in the restore.
+      const relname = reg.rows[0].reg;
       const count = await client.query(
-        `SELECT COUNT(*)::text AS n FROM "${table.replace(/"/g, '')}"`,
+        `SELECT COUNT(*)::text AS n FROM ${relname}`,
       );
       results.push({ table, present: true, rows: Number(count.rows[0].n) });
     }
@@ -133,20 +143,75 @@ async function probeTables(databaseUrl, tables) {
   }
 }
 
+// Parse a postgres connection URL into the normalized coordinates that
+// identify the actual database a restore would write into. Comparing raw
+// strings or substring-matching the whole URL is unsafe: credentials,
+// query params or a hostname containing "test" can spoof the marker check,
+// and trivially different spellings (default port, percent-encoding) can
+// hide an identical target.
+function parseDatabaseUrl(raw, label) {
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error(`${label} is not a valid connection URL`);
+  }
+  if (url.protocol !== 'postgres:' && url.protocol !== 'postgresql:') {
+    throw new Error(`${label} must be a postgres:// connection URL`);
+  }
+  // Database name: path without the leading slash. Preserve case — Postgres
+  // database names are case-sensitive. decodeURIComponent can throw on a
+  // malformed % escape; fall back to the raw path rather than crash.
+  let db = url.pathname.replace(/^\//, '');
+  try {
+    db = decodeURIComponent(db);
+  } catch {
+    // keep the undecoded form — equality still compares consistently
+  }
+  return {
+    host: url.hostname.toLowerCase(),
+    port: url.port || '5432',
+    db,
+  };
+}
+
 function assertScratchTarget(databaseUrl) {
-  const source = process.env.DATABASE_URL;
   if (!databaseUrl) {
     throw new Error('RESTORE_DATABASE_URL is required — restores only run against a scratch database');
   }
-  if (source && source === databaseUrl) {
-    throw new Error(
-      'RESTORE_DATABASE_URL equals DATABASE_URL — refusing to restore over the source database',
-    );
+  const target = parseDatabaseUrl(databaseUrl, 'RESTORE_DATABASE_URL');
+  if (!target.db) {
+    throw new Error('RESTORE_DATABASE_URL has no database name — refusing to continue');
   }
+  const sourceRaw = process.env.DATABASE_URL;
+  if (sourceRaw) {
+    // DATABASE_URL may be a libpq keyword DSN rather than a URL — in that
+    // case fall back to exact-string equality instead of failing the drill.
+    let sameTarget = sourceRaw === databaseUrl;
+    try {
+      const source = parseDatabaseUrl(sourceRaw, 'DATABASE_URL');
+      sameTarget =
+        sameTarget ||
+        (source.host === target.host &&
+          source.port === target.port &&
+          source.db === target.db);
+    } catch {
+      // unparseable source — the string comparison above is the best we can do
+    }
+    if (sameTarget) {
+      throw new Error(
+        'RESTORE_DATABASE_URL resolves to the same host:port/database as DATABASE_URL — refusing to restore over the source database',
+      );
+    }
+  }
+  // The marker must be on the DATABASE NAME itself — matching the full URL
+  // would let a prod URL pass when 'test'/'staging' appears in credentials,
+  // a query param, or the hostname.
   const scratchMarkers = /(scratch|restore|drill|staging|test)/i;
-  if (!scratchMarkers.test(databaseUrl)) {
+  if (!scratchMarkers.test(target.db)) {
     throw new Error(
-      'RESTORE_DATABASE_URL does not look like a scratch/drill database (expected a name containing scratch, restore, drill, staging or test) — refusing to continue',
+      `RESTORE_DATABASE_URL database name "${target.db}" does not look like a scratch/drill database ` +
+        '(expected a name containing scratch, restore, drill, staging or test) — refusing to continue',
     );
   }
 }

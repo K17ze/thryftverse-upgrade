@@ -3,8 +3,11 @@ import { AppState, Platform } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import {
+  confirmPlatformPayPayment,
   initPaymentSheet,
   PaymentSheetError,
+  PlatformPay,
+  PlatformPayError,
   presentPaymentSheet,
 } from '@stripe/stripe-react-native';
 import { queryKeys } from '../../platform/server/queryKeys';
@@ -255,6 +258,25 @@ export function useCheckoutPaymentFlow({
     return true;
   }, [userId, isOffline, item, boundOrder, boundOrderId, isHydrating, isInteractionLocked, savedAddressId, savedPaymentMethod?.id, postageOption.carrierId, postageOption.quoteId, checkoutCapabilities, savedPaymentMethod?.type, useBalance, walletBalance, postageOption.priceFromGbp, useOnezePayment, onezeBalance, onezeRequiredIze, onezeRequiredEstimateIze, paymentIssue]);
 
+  // --- Platform-pay (Apple Pay / Google Pay) eligibility ---
+  // The wallet tender supplies its own payment credential at confirm time,
+  // so it must NOT be gated on a saved card the way the card rail is.
+  // Address + carrier + a payable order are still required; the 1ZE rail
+  // is a different tender and disables the wallet CTA rather than letting
+  // a branded button silently pay the wrong way.
+  const platformPayEligible = useMemo(() => {
+    if (!userId) return false;
+    if (isOffline) return false;
+    const subtotalGbp = boundOrder ? boundOrder.subtotalGbp : item?.price;
+    if (subtotalGbp == null) return false;
+    if (isHydrating || isInteractionLocked) return false;
+    if (!savedAddressId) return false;
+    if (!postageOption.carrierId || !postageOption.quoteId) return false;
+    if (paymentIssue === 'sold' || paymentIssue === 'seller_unavailable') return false;
+    if (useOnezePayment) return false;
+    return true;
+  }, [userId, isOffline, item, boundOrder, isHydrating, isInteractionLocked, savedAddressId, postageOption.carrierId, postageOption.quoteId, paymentIssue, useOnezePayment]);
+
   // --- Mount / unmount ---
   useEffect(() => {
     isMountedRef.current = true;
@@ -451,9 +473,14 @@ export function useCheckoutPaymentFlow({
   );
 
   // --- Handle Pay ---
-  const handlePay = useCallback(async () => {
+  // `tender` selects the confirmation rail: 'card' presents the Stripe
+  // PaymentSheet; 'platform_pay' confirms the same order's payment intent
+  // through the native Apple Pay / Google Pay sheet. A named tender never
+  // silently falls through to the card path (FRESH-04).
+  const handlePay = useCallback(async (tender: 'card' | 'platform_pay' = 'card') => {
     if (isSubmittingRef.current) return;
-    if (!checkoutEligible) {
+    const tenderEligible = tender === 'platform_pay' ? platformPayEligible : checkoutEligible;
+    if (!tenderEligible) {
       setHasAttemptedPay(true);
       showError('Cannot pay yet', 'Complete address and payment details before paying.');
       return;
@@ -480,17 +507,24 @@ export function useCheckoutPaymentFlow({
     });
     trackFunnelStep('checkout', 'checkout_started', { listing_id: listingId });
 
+    // A wallet tender carries no stored payment method — the credential is
+    // created at confirm time — and cannot split tender with wallet credit.
+    const isPlatformPayTender = tender === 'platform_pay';
+    const boundPaymentMethodId = useOnezePayment || isPlatformPayTender
+      ? undefined
+      : savedPaymentMethod?.id;
+
     const signature = buildOrderSignature({
       buyerId: userId,
       listingId,
       addressId: savedAddressId,
-      paymentMethodId: useOnezePayment ? undefined : savedPaymentMethod?.id,
+      paymentMethodId: boundPaymentMethodId,
       carrierId: postageOption.carrierId ?? undefined,
       quoteId: postageOption.quoteId,
       platformCharge: PLATFORM_CHARGE,
       postageFee: POSTAGE_FEE,
-      walletDebit: useBalance && !boundOrderId ? Math.min(walletBalance, itemPriceGbp + PLATFORM_CHARGE + POSTAGE_FEE) : undefined,
-      paymentGatewayId: useOnezePayment ? 'oneze_internal' : undefined,
+      walletDebit: !isPlatformPayTender && useBalance && !boundOrderId ? Math.min(walletBalance, itemPriceGbp + PLATFORM_CHARGE + POSTAGE_FEE) : undefined,
+      paymentGatewayId: useOnezePayment ? 'oneze_internal' : isPlatformPayTender ? 'stripe_platform_pay' : undefined,
       verificationRequested,
     });
 
@@ -520,7 +554,7 @@ export function useCheckoutPaymentFlow({
         const boundSignature = [
           boundOrderId,
           savedAddressId ?? 'none',
-          useOnezePayment ? 'oneze_internal' : savedPaymentMethod?.id ?? 'none',
+          useOnezePayment ? 'oneze_internal' : isPlatformPayTender ? 'platform_pay' : savedPaymentMethod?.id ?? 'none',
           postageOption.carrierId ?? 'none',
           postageOption.quoteId ?? 'none',
           verificationRequested ? 'verified' : 'none',
@@ -536,13 +570,13 @@ export function useCheckoutPaymentFlow({
             && boundOrder.shippingCarrierId === (postageOption.carrierId ?? null)
             && boundOrder.postageFeeGbp === POSTAGE_FEE
             && (boundOrder.paymentMethodId ?? null)
-              === (useOnezePayment ? null : savedPaymentMethod?.id ?? null)
+              === (boundPaymentMethodId ?? null)
             && (boundOrder.verificationRequested ?? false) === verificationRequested
           );
         if (!alreadyBound) {
           await completeOrderCheckout(boundOrderId, {
             addressId: savedAddressId!,
-            paymentMethodId: useOnezePayment ? undefined : savedPaymentMethod?.id,
+            paymentMethodId: boundPaymentMethodId,
             shippingQuoteId: postageOption.quoteId!,
             shippingCarrierId: postageOption.carrierId!,
             verificationRequested,
@@ -598,7 +632,7 @@ export function useCheckoutPaymentFlow({
           idempotencyKey: orderIdempotencyKeyRef.current,
           shippingQuoteId: postageOption.quoteId!,
           addressId: savedAddressId,
-          paymentMethodId: useOnezePayment ? undefined : savedPaymentMethod?.id,
+          paymentMethodId: boundPaymentMethodId,
           paymentGatewayId: useOnezePayment ? 'oneze_internal' : undefined,
           platformChargeGbp: PLATFORM_CHARGE,
           buyerProtectionFeeGbp: PLATFORM_CHARGE,
@@ -799,6 +833,72 @@ export function useCheckoutPaymentFlow({
 
       const sheet = await createStripeOrderSheet(orderId);
       await configureStripeMobile(sheet.publishableKey);
+
+      // ── Platform-pay tender (Apple Pay / Google Pay) ──
+      // Confirms the order's bound payment intent through the native wallet
+      // sheet — the wallet supplies the credential, so PaymentSheet is never
+      // presented. Cancel and settlement semantics match the card path.
+      if (isPlatformPayTender) {
+        setStage('authenticating');
+        trackFunnelStep('checkout', 'payment_submitted', { order_id: orderId });
+        const walletTotal = itemPriceGbp + PLATFORM_CHARGE + POSTAGE_FEE;
+        const confirmParams: PlatformPay.ConfirmParams = Platform.OS === 'ios'
+          ? {
+              applePay: {
+                merchantCountryCode: sheet.merchantCountryCode,
+                currencyCode: sheet.currency,
+                merchantCapabilities: [PlatformPay.ApplePayMerchantCapability.Supports3DS],
+                cartItems: [
+                  {
+                    paymentType: PlatformPay.PaymentType.Immediate,
+                    label: boundOrder?.listingTitle ?? item?.title ?? 'Order',
+                    amount: itemPriceGbp.toFixed(2),
+                  },
+                  {
+                    paymentType: PlatformPay.PaymentType.Immediate,
+                    label: 'Buyer protection',
+                    amount: PLATFORM_CHARGE.toFixed(2),
+                  },
+                  {
+                    paymentType: PlatformPay.PaymentType.Immediate,
+                    label: 'Delivery',
+                    amount: POSTAGE_FEE.toFixed(2),
+                  },
+                  {
+                    paymentType: PlatformPay.PaymentType.Immediate,
+                    label: sheet.merchantDisplayName,
+                    amount: walletTotal.toFixed(2),
+                  },
+                ],
+              },
+            }
+          : {
+              googlePay: {
+                merchantCountryCode: sheet.merchantCountryCode,
+                currencyCode: sheet.currency,
+                merchantName: sheet.merchantDisplayName,
+                // Smallest currency unit — the sheet displays the same
+                // total the payment intent will charge.
+                amount: Math.round(walletTotal * 100),
+                label: boundOrder?.listingTitle ?? item?.title ?? undefined,
+                testEnv: sheet.publishableKey.startsWith('pk_test_'),
+              },
+            };
+        const { error: walletConfirmError } = await confirmPlatformPayPayment(
+          sheet.paymentIntentClientSecret,
+          confirmParams,
+        );
+        if (walletConfirmError?.code === PlatformPayError.Canceled) {
+          setStage('idle');
+          setOrderError(null);
+          pendingIntentIdRef.current = null;
+          isSubmittingRef.current = false;
+          return;
+        }
+        if (walletConfirmError) {
+          throw new Error(walletConfirmError.message);
+        }
+      } else {
       const { error: sheetInitializationError } = await initPaymentSheet({
         merchantDisplayName: sheet.merchantDisplayName,
         customerId: sheet.customerId,
@@ -838,6 +938,7 @@ export function useCheckoutPaymentFlow({
       }
       if (sheetPresentationError) {
         throw new Error(sheetPresentationError.message);
+      }
       }
 
       if (
@@ -1097,6 +1198,7 @@ export function useCheckoutPaymentFlow({
     }
   }, [
     checkoutEligible,
+    platformPayEligible,
     userId,
     item,
     boundOrderId,
@@ -1121,6 +1223,13 @@ export function useCheckoutPaymentFlow({
     verificationRequested,
     setHasAttemptedPay,
   ]);
+
+  // Named-tender entry point for the Apple Pay / Google Pay buttons — keeps
+  // the branded CTA on the platform-pay rail rather than overloading the
+  // card handler at the call site (FRESH-04).
+  const handlePlatformPay = useCallback(() => {
+    void handlePay('platform_pay');
+  }, [handlePay]);
 
   // --- Manual payment-status check (unknown_outcome recovery, audit F11) ---
   // A single authoritative status fetch — NOT a retry. Blindly re-submitting
@@ -1259,6 +1368,11 @@ export function useCheckoutPaymentFlow({
      *  client estimate for display and eligibility. */
     onezeRequiredIze,
     handlePay,
+    /** The wallet tender (Apple Pay / Google Pay) does not require a saved
+     *  card — separate eligibility so the card rail's saved-method gate does
+     *  not suppress an otherwise valid wallet payment. */
+    platformPayEligible,
+    handlePlatformPay,
     cancelStaleOrder,
     handleCheckPaymentStatus,
     createdOrderIdRef,

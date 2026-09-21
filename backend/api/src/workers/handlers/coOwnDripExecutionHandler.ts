@@ -27,6 +27,15 @@ import type { PoolClient } from 'pg';
 import { db } from '../../db/pool.js';
 import { logger } from '../../lib/logger.js';
 import { appendDomainEvent } from '../../lib/domainOutbox.js';
+import {
+  computeCoOwnSettlementUnits,
+  resolveCoOwnSettlementRateContext,
+} from '../../lib/pricingEngine.js';
+import {
+  creditCoOwnOnezeUnits,
+  debitCoOwnOnezeUnits,
+  getCoOwnSpendableUnits,
+} from '../../lib/coOwnSettlement.js';
 
 export type CoOwnDripExecutionHandlerDeps = {
   /** Uses shared db singleton. */
@@ -73,6 +82,7 @@ export async function processCoOwnDripReinvestment(
   processed: number;
   reinvested: number;
   failed: number;
+  retried: number;
   errors: number;
 }> {
   // Snapshot eligible (enrollment, distribution) pairs outside the per-item
@@ -97,6 +107,7 @@ export async function processCoOwnDripReinvestment(
   const items = workResult.rows;
   let reinvested = 0;
   let failed = 0;
+  let retried = 0;
   let errors = 0;
 
   for (const item of items) {
@@ -104,6 +115,7 @@ export async function processCoOwnDripReinvestment(
       const outcome = await reinvestDistribution(item, reason);
       if (outcome === 'reinvested') reinvested += 1;
       else if (outcome === 'failed') failed += 1;
+      else if (outcome === 'retried') retried += 1;
       // 'skipped' contributes to neither counter.
     } catch (error) {
       errors += 1;
@@ -122,13 +134,31 @@ export async function processCoOwnDripReinvestment(
 
   const processed = items.length;
   logger.info(
-    { processed, reinvested, failed, errors, reason },
+    { processed, reinvested, failed, retried, errors, reason },
     'coOwnDripExecution: pass complete',
   );
-  return { processed, reinvested, failed, errors };
+  return { processed, reinvested, failed, retried, errors };
 }
 
-type ReinvestOutcome = 'reinvested' | 'failed' | 'skipped';
+type ReinvestOutcome = 'reinvested' | 'failed' | 'skipped' | 'retried';
+
+/**
+ * Failure causes that can self-resolve between passes — a paused market
+ * reopens, a first trade establishes a price, the issuer restocks the pool,
+ * the holder sells below the cap. The distribution stays 'settled' and the
+ * next pass retries; reinvest_attempts bounds the loop before the row
+ * dead-letters to 'reinvest_failed'.
+ */
+const RETRYABLE_DISTRIBUTION_FAILURES = new Set([
+  'asset_not_open',
+  'no_market_price',
+  'invalid_market_price',
+  'no_available_units',
+  'holding_cap_reached',
+]);
+
+/** ~24h at the 5-minute worker cadence before a retryable cause dead-letters. */
+const MAX_REINVEST_ATTEMPTS = 288;
 
 /**
  * Reinvest a single distribution inside its own transaction.
@@ -180,30 +210,24 @@ async function reinvestDistribution(
     }
 
     if (!asset.is_open) {
-      await markDistributionFailed(client, item,
-        'asset_not_open',
-      );
+      const outcome = await markDistributionRetryableOrFailed(client, item, 'asset_not_open');
       await client.query('COMMIT');
-      return 'failed';
+      return outcome;
     }
 
     // Current market price: last settled trade, else reference price.
     const priceGbp = await resolveCurrentPriceGbp(client, item.asset_id, asset.unit_price_gbp);
     if (priceGbp === null || priceGbp <= 0) {
-      await markDistributionFailed(client, item,
-        'no_market_price',
-      );
+      const outcome = await markDistributionRetryableOrFailed(client, item, 'no_market_price');
       await client.query('COMMIT');
-      return 'failed';
+      return outcome;
     }
 
     const priceMinor = Math.round(priceGbp * 100);
     if (priceMinor <= 0) {
-      await markDistributionFailed(client, item,
-        'invalid_market_price',
-      );
+      const outcome = await markDistributionRetryableOrFailed(client, item, 'invalid_market_price');
       await client.query('COMMIT');
-      return 'failed';
+      return outcome;
     }
 
     // Whole units only — the holdings schema stores integer units.
@@ -217,17 +241,21 @@ async function reinvestDistribution(
     }
 
     // Cap by available asset units and the per-user holding cap.
-    const holdingResult = await client.query<HoldingRow>(
+    //
+    // Canonical lock order on the co-own money path is asset → wallets →
+    // reservations → holdings, so the holding row is read here WITHOUT a
+    // lock for the headroom estimate; the FOR UPDATE read happens after
+    // the wallet/reservation locks below and re-verifies headroom there.
+    const holdingEstimateResult = await client.query<HoldingRow>(
       `
         SELECT units_owned, avg_entry_price_gbp::text, realized_pnl_gbp::text
         FROM coOwn_holdings
         WHERE user_id = $1 AND asset_id = $2
-        FOR UPDATE
       `,
       [item.user_id, item.asset_id],
     );
-    const holding = holdingResult.rows[0] ?? null;
-    const currentOwned = holding?.units_owned ?? 0;
+    let holding: HoldingRow | null = holdingEstimateResult.rows[0] ?? null;
+    let currentOwned = holding?.units_owned ?? 0;
     const headroom = MAX_HOLDING_UNITS - currentOwned;
     const maxByAvailability = Math.min(unitsToBuy, asset.available_units, headroom);
 
@@ -238,109 +266,216 @@ async function reinvestDistribution(
           : headroom < 1
             ? 'holding_cap_reached'
             : 'insufficient_amount_for_one_unit';
-      await markDistributionFailed(client, item, cause);
+      // 'insufficient_amount_for_one_unit' can never self-resolve (the
+      // distribution amount is fixed) — it stays terminal. Pool/holding
+      // conditions can change between passes and are retried.
+      const outcome = RETRYABLE_DISTRIBUTION_FAILURES.has(cause)
+        ? await markDistributionRetryableOrFailed(client, item, cause)
+        : await markDistributionFailed(client, item, cause).then(() => 'failed' as const);
       await client.query('COMMIT');
-      return 'failed';
+      return outcome;
     }
 
     unitsToBuy = maxByAvailability;
-    const notionalGbp = roundTo(unitsToBuy * priceGbp, 4);
+    let notionalGbp = roundTo(unitsToBuy * priceGbp, 4);
 
-    // P0 fix: Debit the user's wallet BEFORE crediting shares. Without this,
-    // the user receives new units while keeping the distribution cash — a
-    // double-credit / free-share bug. The distribution cash was credited to
-    // the wallet when the distribution settled; DRIP must now spend it.
-    // 1ZE units are milli-GBP (1 GBP = 1000 1ZE units).
+    // FIN-02: the GBP→1ZE conversion goes through the versioned settlement
+    // quote (GBP → USD anchor at par → 1ZE minor units), resolved once per
+    // distribution so both legs agree on pair, rate and rounding — the same
+    // path the order book settles with. The raw ×1000 milli-GBP assumption
+    // was unsound (the wallet is USD-anchored, not GBP-anchored).
     //
-    // P0-1 fix: The issuer (seller) must be credited the same amount, since
-    // they are selling units from the available pool. Without this, the
-    // debited cash vanishes from circulation.
-    const dripDebit1zeUnits = Math.ceil(roundTo(notionalGbp, 4) * 1000);
+    // A missing/invalid FX configuration is NOT a permanent distribution
+    // failure — throwing here rolls the transaction back, leaves the
+    // distribution 'settled', and the next pass retries once the rate is
+    // restored (see the catch path: CO_OWN_FX_RATE_UNAVAILABLE is treated
+    // as retryable).
+    const settlementRate = await resolveCoOwnSettlementRateContext(client);
+    // DRIP has no fee leg: the payer leg rounds UP, the payee leg rounds
+    // DOWN — sub-unit dust is absorbed by the platform, matching the trade
+    // settlement convention.
+    let settlementLegs = computeCoOwnSettlementUnits(settlementRate, {
+      notionalGbp,
+      feeGbp: 0,
+    });
+    let dripDebit1zeUnits = settlementLegs.buyerDebitUnits;
+    let issuerCredit1zeUnits = settlementLegs.sellerCreditUnits;
+    const settlementQuoteMetadata = {
+      quoteVersion: settlementRate.quoteVersion,
+      settlementCurrency: settlementRate.settlementCurrency,
+      anchorCurrency: settlementRate.anchorCurrency,
+      anchorValue: settlementRate.anchorValue,
+      anchorToSettlementRate: settlementRate.anchorToSettlementRate,
+      rateSource: settlementRate.rateSource,
+      rateResolvedAt: settlementRate.rateResolvedAt,
+    };
+
     if (dripDebit1zeUnits > 0) {
-      const walletResult = await client.query<{ id: string; oneze_balance_units: string }>(
-        `SELECT id, oneze_balance_units::text FROM wallets WHERE user_id = $1 FOR UPDATE`,
-        [item.user_id],
+      // Canonical multi-wallet order: BOTH wallets are locked in a single
+      // wallet-id-ordered scan — the same order lockWalletRowsForUpdate /
+      // applyCoOwnTransfer use. Locking the issuer wallet before the user's
+      // wallet+reservations was a different multi-wallet order than the
+      // trade path and could deadlock a DRIP ↔ trade between related
+      // parties.
+      const partyWallets = await client.query<{ id: string; user_id: string }>(
+        `
+          SELECT id, user_id
+          FROM wallets
+          WHERE user_id = ANY($1::text[])
+          ORDER BY id
+          FOR UPDATE
+        `,
+        [[item.user_id, asset.issuer_id]],
       );
-      const wallet = walletResult.rows[0];
-      if (!wallet) {
+      // FIN-06: the issuer (seller of the pool units) MUST have a creditable
+      // wallet BEFORE the buyer is debited. The old path credited the issuer
+      // only `if (issuerWallet)` and committed the buyer debit anyway — an
+      // unbalanced settled trade. Missing counteraccount now marks the
+      // distribution reinvest_failed explicitly; it is never left
+      // half-settled and the failure is visible instead of silent.
+      const issuerWallet = partyWallets.rows.find((row) => row.user_id === asset.issuer_id) ?? null;
+      if (!issuerWallet && issuerCredit1zeUnits > 0) {
+        await markDistributionFailed(client, item, 'issuer_wallet_not_found');
+        await client.query('COMMIT');
+        logger.error(
+          {
+            distributionId: item.distribution_id,
+            assetId: item.asset_id,
+            issuerId: asset.issuer_id,
+            issuerCredit1zeUnits,
+          },
+          'coOwnDripExecution: issuer wallet missing — refusing unbalanced settlement',
+        );
+        return 'failed';
+      }
+
+      // FIN-05: the debit is reservation-aware AND segment-aware —
+      // spendable = gross balance minus other live order reservations, and
+      // the debit drains 'earned' before 'purchased' inside
+      // oneze_wallet_segments via debitCoOwnOnezeUnits. The user wallet is
+      // already locked (no-op re-lock); this adds the reservation rows in
+      // id order — still before the holding lock below.
+      const spendable = await getCoOwnSpendableUnits(client, { userId: item.user_id });
+      if (!spendable) {
         await markDistributionFailed(client, item, 'wallet_not_found');
         await client.query('COMMIT');
         return 'failed';
       }
-      const balanceUnits = Number(wallet.oneze_balance_units);
-      if (balanceUnits < dripDebit1zeUnits) {
-        // P1-1 fix: Insufficient balance — mark as 'retained_cash' so the
-        // distribution is not retried forever. The user keeps the cash (if
-        // it was credited) and can manually reinvest later.
-        await markDistributionRetainedCash(client, item, 'insufficient_balance');
+      if (spendable.spendableUnits < dripDebit1zeUnits) {
+        // Insufficient SPENDABLE balance — mark 'retained_cash' so the
+        // distribution is not retried forever. The receipt carries the
+        // observed ledger evidence (spendable vs required) so the user
+        // notification can state the true state instead of claiming a cash
+        // credit that may not exist (SEP20-FIN-14).
+        await markDistributionRetainedCash(client, item, 'insufficient_balance', {
+          spendableUnits: spendable.spendableUnits,
+          requiredUnits: dripDebit1zeUnits,
+        });
         await client.query('COMMIT');
         logger.warn(
           {
             distributionId: item.distribution_id,
             userId: item.user_id,
-            balanceUnits,
+            spendableUnits: spendable.spendableUnits,
+            reservedForOtherOrdersUnits: spendable.reservedForOtherOrdersUnits,
             dripDebit1zeUnits,
           },
-          'coOwnDripExecution: insufficient wallet balance for DRIP — retaining cash',
+          'coOwnDripExecution: insufficient spendable wallet balance for DRIP — retaining cash',
         );
         return 'failed';
       }
-      const balanceAfter = balanceUnits - dripDebit1zeUnits;
+
+      // Lock the holding row in canonical position — AFTER the wallets and
+      // reservation rows — then re-verify headroom under the lock. The
+      // unlocked estimate above cannot shrink a concurrent buy out of the
+      // cap; this re-check can only reduce the purchase, never grow it.
+      const holdingResult = await client.query<HoldingRow>(
+        `
+          SELECT units_owned, avg_entry_price_gbp::text, realized_pnl_gbp::text
+          FROM coOwn_holdings
+          WHERE user_id = $1 AND asset_id = $2
+          FOR UPDATE
+        `,
+        [item.user_id, item.asset_id],
+      );
+      holding = holdingResult.rows[0] ?? null;
+      currentOwned = holding?.units_owned ?? 0;
+      const lockedHeadroom = MAX_HOLDING_UNITS - currentOwned;
+      const lockedMaxByAvailability = Math.min(unitsToBuy, asset.available_units, lockedHeadroom);
+      if (lockedMaxByAvailability < 1) {
+        // Headroom under the lock is zero — available_units can restock and
+        // the holder can sell below the cap, so this retries until the
+        // attempt ceiling dead-letters it.
+        const lockedCause =
+          asset.available_units < 1 ? 'no_available_units' : 'holding_cap_reached';
+        const outcome = await markDistributionRetryableOrFailed(client, item, lockedCause);
+        await client.query('COMMIT');
+        return outcome;
+      }
+      if (lockedMaxByAvailability !== unitsToBuy) {
+        // Headroom shrank under the estimate — re-derive notional and both
+        // settlement legs so the debit/credit math matches the units
+        // actually purchased.
+        unitsToBuy = lockedMaxByAvailability;
+        notionalGbp = roundTo(unitsToBuy * priceGbp, 4);
+        settlementLegs = computeCoOwnSettlementUnits(settlementRate, {
+          notionalGbp,
+          feeGbp: 0,
+        });
+        dripDebit1zeUnits = settlementLegs.buyerDebitUnits;
+        issuerCredit1zeUnits = settlementLegs.sellerCreditUnits;
+      }
+
       // Deterministic ledger tx id — the distribution row lock serializes
       // execution, and a stable id means a replay can never mint a second
       // debit even if the status transition were bypassed.
       const dripTxId = `coown_drip_${item.distribution_id}`;
-      await client.query(
-        `UPDATE wallets SET oneze_balance_units = $2, version = version + 1, updated_at = NOW() WHERE id = $1`,
-        [wallet.id, balanceAfter],
-      );
-      await client.query(
-        `
-          INSERT INTO wallet_ledger (wallet_id, tx_id, asset, amount, balance_after, kind, ref_type, ref_id, metadata)
-          VALUES ($1, $2, '1ZE', $3, $4, 'CO_OWN_DRIP', 'coOwn_distribution', $5, $6::jsonb)
-        `,
-        [
-          wallet.id,
-          dripTxId,
-          -dripDebit1zeUnits,
-          balanceAfter,
-          item.distribution_id,
-          JSON.stringify({ assetId: item.asset_id, units: unitsToBuy, priceGbp, notionalGbp }),
-        ],
-      );
 
-      // P0-1 fix: Credit the issuer's wallet — they are selling units from
-      // the available pool and must receive payment. Fee is 0 for DRIP, so
-      // the full notional goes to the seller.
-      const issuerWalletResult = await client.query<{ id: string; oneze_balance_units: string }>(
-        `SELECT id, oneze_balance_units::text FROM wallets WHERE user_id = $1 FOR UPDATE`,
-        [asset.issuer_id],
-      );
-      const issuerWallet = issuerWalletResult.rows[0];
-      if (issuerWallet) {
-        const issuerBalanceAfter = Number(issuerWallet.oneze_balance_units) + dripDebit1zeUnits;
-        await client.query(
-          `UPDATE wallets SET oneze_balance_units = $2, version = version + 1, updated_at = NOW() WHERE id = $1`,
-          [issuerWallet.id, issuerBalanceAfter],
-        );
-        await client.query(
-          `
-            INSERT INTO wallet_ledger (wallet_id, tx_id, asset, amount, balance_after, kind, ref_type, ref_id, metadata)
-            VALUES ($1, $2, '1ZE', $3, $4, 'CO_OWN_DRIP', 'coOwn_trade', $5, $6::jsonb)
-          `,
-          [
-            issuerWallet.id,
-            dripTxId,
-            dripDebit1zeUnits,
-            issuerBalanceAfter,
-            item.distribution_id,
-            JSON.stringify({ assetId: item.asset_id, units: unitsToBuy, priceGbp, notionalGbp, buyerId: item.user_id }),
-          ],
-        );
+      // P0 fix: debit the user's wallet BEFORE crediting shares. Without
+      // this, the user receives new units while keeping the distribution
+      // cash — a double-credit / free-share bug. The distribution cash was
+      // credited to the wallet when the distribution settled; DRIP now
+      // spends it through the segment-aware primitive (FIN-05).
+      await debitCoOwnOnezeUnits(client, {
+        userId: item.user_id,
+        txId: dripTxId,
+        amountUnits: dripDebit1zeUnits,
+        kind: 'CO_OWN_DRIP',
+        refType: 'coOwn_distribution',
+        refId: item.distribution_id,
+        metadata: {
+          assetId: item.asset_id,
+          units: unitsToBuy,
+          priceGbp,
+          notionalGbp,
+          ...settlementQuoteMetadata,
+        },
+      });
+
+      // P0-1 fix / FIN-06: credit the issuer's wallet — they are selling
+      // units from the available pool and must receive payment. The credit
+      // throws WALLET_NOT_FOUND if the wallet vanished between the
+      // pre-check and here, rolling the whole distribution leg back rather
+      // than committing an unbalanced trade.
+      if (issuerCredit1zeUnits > 0) {
+        await creditCoOwnOnezeUnits(client, {
+          userId: asset.issuer_id,
+          txId: dripTxId,
+          amountUnits: issuerCredit1zeUnits,
+          kind: 'CO_OWN_DRIP',
+          refType: 'coOwn_trade',
+          refId: item.distribution_id,
+          segment: 'earned',
+          metadata: {
+            assetId: item.asset_id,
+            units: unitsToBuy,
+            priceGbp,
+            notionalGbp,
+            buyerId: item.user_id,
+            ...settlementQuoteMetadata,
+          },
+        });
       }
-      // If issuer wallet doesn't exist, the debit still proceeds — the
-      // issuer may not have a wallet in this system (e.g., external custodian).
-      // The buyer debit is the critical correctness path.
     }
 
     // Record the reinvestment trade. The issuer is the counterparty (selling
@@ -457,7 +592,12 @@ async function reinvestDistribution(
     // Only mark permanent failures — transient errors (serialization,
     // deadlock, lock timeout, connection blips) should be retried by
     // BullMQ, not permanently poisoning the distribution.
-    const isTransient = isTransientPgError(error);
+    // CO_OWN_FX_RATE_UNAVAILABLE is likewise retryable: a missing FX rate
+    // is an environment/config condition, not a bad distribution — leave
+    // it 'settled' so the next pass retries once the rate is restored.
+    const isTransient =
+      isTransientPgError(error) ||
+      (error as { code?: string } | null)?.code === 'CO_OWN_FX_RATE_UNAVAILABLE';
     if (!isTransient) {
       try {
         await markDistributionFailedStandalone(
@@ -527,6 +667,9 @@ async function emitDripReceiptEvent(
     unitPriceGbp?: number;
     notionalGbp?: number;
     cause?: string;
+    /** Ledger evidence for the retained_cash outcome (SEP20-FIN-14). */
+    spendableUnits?: number;
+    requiredUnits?: number;
   } = {},
 ): Promise<void> {
   await appendDomainEvent(queryable, {
@@ -547,9 +690,44 @@ async function emitDripReceiptEvent(
       unitPriceGbp: extra.unitPriceGbp,
       notionalGbp: extra.notionalGbp,
       cause: extra.cause,
+      spendableUnits: extra.spendableUnits,
+      requiredUnits: extra.requiredUnits,
       recordedAt: new Date().toISOString(),
     },
   });
+}
+
+/**
+ * Record a state-dependent failure: bump reinvest_attempts and leave the
+ * distribution 'settled' so the next pass retries. Once the attempt ceiling
+ * is reached the row dead-letters to 'reinvest_failed' with a receipt —
+ * a permanently stuck condition cannot retry forever.
+ */
+async function markDistributionRetryableOrFailed(
+  client: PoolClient,
+  item: DripWorkItem,
+  cause: string,
+): Promise<'retried' | 'failed'> {
+  const bumped = await client.query<{ reinvest_attempts: number }>(
+    `
+      UPDATE coOwn_distributions
+      SET reinvest_attempts = reinvest_attempts + 1,
+          updated_at = NOW()
+      WHERE id = $1
+      RETURNING reinvest_attempts
+    `,
+    [item.distribution_id],
+  );
+  const attempts = bumped.rows[0]?.reinvest_attempts ?? 0;
+  if (attempts >= MAX_REINVEST_ATTEMPTS) {
+    await markDistributionFailed(client, item, `attempts_exhausted:${cause}`);
+    return 'failed';
+  }
+  logger.warn(
+    { distributionId: item.distribution_id, cause, attempts },
+    'coOwnDripExecution: retryable reinvestment condition — will retry next pass',
+  );
+  return 'retried';
 }
 
 /**
@@ -580,23 +758,39 @@ async function markDistributionFailed(
 /**
  * Mark a distribution as failed outside the rolled-back transaction (used when
  * the reinvestment attempt threw and we still want a durable failure marker).
+ *
+ * SEP20-FIN-13: the status transition AND the receipt event append run inside
+ * ONE transaction on a dedicated connection. The previous version issued the
+ * UPDATE and the outbox insert as two separate autocommit statements — a crash
+ * between them left a terminal 'reinvest_failed' distribution with no receipt,
+ * which nothing would ever repair.
  */
 async function markDistributionFailedStandalone(
   item: DripWorkItem,
   cause: string,
 ): Promise<void> {
-  const result = await db.query(
-    `
-      UPDATE coOwn_distributions
-      SET status = 'reinvest_failed',
-          reference = $2,
-          updated_at = NOW()
-      WHERE id = $1 AND status = 'settled'
-    `,
-    [item.distribution_id, `drip_failed:${cause}`.slice(0, 255)],
-  );
-  if (result.rowCount && result.rowCount > 0) {
-    await emitDripReceiptEvent(db, item, 'reinvest_failed', { cause });
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      `
+        UPDATE coOwn_distributions
+        SET status = 'reinvest_failed',
+            reference = $2,
+            updated_at = NOW()
+        WHERE id = $1 AND status = 'settled'
+      `,
+      [item.distribution_id, `drip_failed:${cause}`.slice(0, 255)],
+    );
+    if (result.rowCount && result.rowCount > 0) {
+      await emitDripReceiptEvent(client, item, 'reinvest_failed', { cause });
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
   }
 }
 
@@ -609,6 +803,7 @@ async function markDistributionRetainedCash(
   client: PoolClient,
   item: DripWorkItem,
   cause: string,
+  evidence: { spendableUnits?: number; requiredUnits?: number } = {},
 ): Promise<void> {
   await client.query(
     `
@@ -620,7 +815,7 @@ async function markDistributionRetainedCash(
     `,
     [item.distribution_id, `drip_retained:${cause}`.slice(0, 255)],
   );
-  await emitDripReceiptEvent(client, item, 'retained_cash', { cause });
+  await emitDripReceiptEvent(client, item, 'retained_cash', { cause, ...evidence });
   logger.info(
     { distributionId: item.distribution_id, cause },
     'coOwnDripExecution: distribution retained as cash (not reinvested)',

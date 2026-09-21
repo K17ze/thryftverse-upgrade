@@ -124,27 +124,63 @@ export async function moderateImageAsset(
 }
 
 /**
- * Moderate listing text (title + description) and return the raw result.
+ * The publish-gate action a listing-text {@link ModerationStatus} maps to.
  *
- * The caller is responsible for acting on the status: rejecting creation on
- * `rejected`, flagging for human review on `review`, or proceeding on
- * `approved`. Never throws.
- *
- * @param listingId - The listing identifier (for logging/audit).
- * @param text - The concatenated text to evaluate.
- * @returns A {@link ModerationResult}. Never throws.
+ * - `publish` — `approved`; the write may proceed to a publicly servable
+ *   status.
+ * - `hold` — `review` or `failed`; the listing must land on a non-public
+ *   held state (`risk_pending`) so unreviewed text never reaches a feed,
+ *   search document, or bidding surface (B2 fail-closed).
+ * - `block` — `rejected`; the write is refused outright.
  */
-export async function moderateListingText(
+export type ListingTextGateAction = 'publish' | 'hold' | 'block';
+
+/**
+ * Map a listing-text moderation status to its publish-gate action. Kept as
+ * a single source so the create route, the PATCH route, and any future
+ * caller can never drift on which verdicts are safe to publish.
+ */
+export function listingTextGateAction(
+  status: ModerationStatus,
+): ListingTextGateAction {
+  switch (status) {
+    case 'rejected':
+      return 'block';
+    case 'review':
+    case 'failed':
+      return 'hold';
+    case 'approved':
+    default:
+      return 'publish';
+  }
+}
+
+/**
+ * Total provider evaluations attempted per listing-text gate call. The
+ * first retry absorbs transient provider blips (timeouts, 5xx, rate-limit
+ * windows) without holding the listing; a still-failing provider produces a
+ * durable hold the caller persists, so recovery never depends on the
+ * request staying alive.
+ */
+const LISTING_TEXT_MODERATION_ATTEMPTS = 2;
+const LISTING_TEXT_MODERATION_RETRY_DELAY_MS = 200;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms).unref();
+  });
+}
+
+async function evaluateListingTextOnce(
   listingId: string,
   text: string,
 ): Promise<ModerationResult> {
-  let result: ModerationResult;
   try {
     const provider = createModerationProvider();
-    result = await provider.moderateText(text, buildOptions());
+    return await provider.moderateText(text, buildOptions());
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected moderation error';
-    result = {
+    return {
       status: 'failed',
       confidence: 0,
       labels: [],
@@ -154,7 +190,39 @@ export async function moderateListingText(
       error: message,
     };
   }
+}
+
+/**
+ * Moderate listing text (title + description) and return the raw result.
+ *
+ * The caller is responsible for acting on the status via
+ * {@link listingTextGateAction}: `block` refuses the write, `hold` persists
+ * a non-public held status, `publish` proceeds. `failed` verdicts are
+ * retried once before surfacing — transient provider errors must not pin a
+ * legitimate listing into review, but a persistently failing provider must
+ * never fail open (B2). Never throws.
+ *
+ * @param listingId - The listing identifier (for logging/audit).
+ * @param text - The concatenated text to evaluate.
+ * @returns A {@link ModerationResult}. Never throws.
+ */
+export async function moderateListingText(
+  listingId: string,
+  text: string,
+): Promise<ModerationResult> {
+  let result = await evaluateListingTextOnce(listingId, text);
   logResult('listing_text', listingId, result);
+
+  for (
+    let attempt = 1;
+    result.status === 'failed' && attempt < LISTING_TEXT_MODERATION_ATTEMPTS;
+    attempt += 1
+  ) {
+    await sleep(LISTING_TEXT_MODERATION_RETRY_DELAY_MS);
+    result = await evaluateListingTextOnce(listingId, text);
+    logResult('listing_text_retry', listingId, result);
+  }
+
   return result;
 }
 

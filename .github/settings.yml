@@ -12,12 +12,17 @@ branches:
     protection:
       required_status_checks:
         strict: true
+        # Required check contexts are the check-run names, i.e. each job's
+        # `name:` field — not "Workflow / job-id". The previous entries
+        # ("Frontend CI / typecheck", ...) matched nothing, so branch
+        # protection would have waited on checks that can never report.
         contexts:
-          - "Frontend CI / typecheck"
-          - "Frontend CI / lint"
-          - "Frontend CI / test"
-          - "Backend CI / api"
-          - "Backend CI / key-service"
+          - "TypeScript typecheck"
+          - "Vitest unit tests"
+          - "Design token + animated scroll lint"
+          - "API build, unit, migration, integration"
+          - "Key service build and tests"
+          - "Mobile API contract typecheck"
       enforce_admins: true
       required_pull_request_reviews:
         dismiss_stale_reviews: true
@@ -29,8 +34,8 @@ branches:
       required_status_checks:
         strict: true
         contexts:
-          - "Frontend CI / typecheck"
-          - "Backend CI / api"
+          - "TypeScript typecheck"
+          - "API build, unit, migration, integration"
       enforce_admins: false
       required_pull_request_reviews:
         dismiss_stale_reviews: true

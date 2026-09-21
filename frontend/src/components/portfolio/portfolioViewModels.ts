@@ -138,3 +138,11 @@ export function formatQuoteAge(isoTimestamp: string): string {
 export function formatPositionStatus(p: CoOwnPositionVM): 'open' | 'closed' | 'paused' {
   return p.status ?? (p.isOpen ? 'open' : 'closed');
 }
+
+/** Display label for the position status — single source of truth for
+ *  row cards and the position action sheet (FRESH-05). Matches the
+ *  vocabulary CoOwnPositionCard renders: Active / Paused / Closed. */
+export function formatPositionStatusLabel(p: CoOwnPositionVM): string {
+  const status = formatPositionStatus(p);
+  return status === 'open' ? 'Active' : status === 'paused' ? 'Paused' : 'Closed';
+}

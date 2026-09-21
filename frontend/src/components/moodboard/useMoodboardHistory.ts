@@ -36,7 +36,7 @@ import {
   recordEntry,
   type MoodboardHistoryEntry,
   type MoodboardHistoryState } from './moodboardHistory';
-import type { useMoodboardBoard } from './useMoodboardBoard';
+import type { SubmitBoardOpsOutcome, useMoodboardBoard } from './useMoodboardBoard';
 import type { useMoodboardMutations } from './useMoodboardMutations';
 import type { useMoodboardSelection } from './useMoodboardSelection';
 
@@ -47,7 +47,7 @@ interface UseMoodboardHistoryArgs {
 }
 
 export function useMoodboardHistory({ board, selection, mutations }: UseMoodboardHistoryArgs) {
-  const { moodboard, setMoodboard, setActiveThemeId, submitBoardOps } = board;
+  const { moodboard, setMoodboard, setActiveThemeId, submitBoardOps, reconcileBoard } = board;
 
   const [stacks, setStacks] = useState<MoodboardHistoryState>(EMPTY_HISTORY);
   // Serializes undo/redo so a second press while an inverse is still
@@ -102,10 +102,12 @@ export function useMoodboardHistory({ board, selection, mutations }: UseMoodboar
 
   // Apply one side of an entry: optimistic board update first (mirroring the
   // forward mutations), then the inverse ops through the canonical path.
+  // Returns the submission outcome so the caller only advances the stack
+  // when the inverse actually persisted (applied) or is durable (queued).
   const applyEntry = useCallback(
-    async (entry: MoodboardHistoryEntry, direction: 'undo' | 'redo') => {
+    async (entry: MoodboardHistoryEntry, direction: 'undo' | 'redo'): Promise<SubmitBoardOpsOutcome> => {
       const mb = moodboardRef.current;
-      if (!mb) return;
+      if (!mb) return 'failed';
       const currentOrder = mb.items.map((it) => it.id);
       const ops = opsForEntry(entry, direction, currentOrder);
 
@@ -116,49 +118,77 @@ export function useMoodboardHistory({ board, selection, mutations }: UseMoodboar
       }
       pruneSelection(new Set(next.items.map((it) => it.id)));
 
-      await submitBoardOps(ops);
+      return submitBoardOps(ops);
     },
     [setMoodboard, setActiveThemeId, submitBoardOps, pruneSelection],
   );
+
+  // An inverse that did not fully persist leaves the optimistic board
+  // claiming a state the server never reached (a multi-op inverse may have
+  // persisted only a prefix). Reconcile to the canonical board so the
+  // canvas tells the truth, and keep the entry on its stack — the command
+  // stays recoverable rather than silently consumed.
+  const reconcileAfterFailedInverse = useCallback(async () => {
+    await reconcileBoard();
+  }, [reconcileBoard]);
 
   const undo = useCallback(async () => {
     const entry = stacksRef.current.undo[stacksRef.current.undo.length - 1];
     if (!entry || applyingRef.current) return;
     applyingRef.current = true;
+    let outcome: SubmitBoardOpsOutcome | null = null;
     try {
-      await applyEntry(entry, 'undo');
+      outcome = await applyEntry(entry, 'undo');
     } finally {
       applyingRef.current = false;
     }
-    setStacks((prev) => moveEntry(prev, entry, 'undo'));
-  }, [applyEntry]);
+    if (outcome === 'applied' || outcome === 'queued') {
+      setStacks((prev) => moveEntry(prev, entry, 'undo'));
+    } else {
+      await reconcileAfterFailedInverse();
+    }
+  }, [applyEntry, reconcileAfterFailedInverse]);
 
   const redo = useCallback(async () => {
     const entry = stacksRef.current.redo[stacksRef.current.redo.length - 1];
     if (!entry || applyingRef.current) return;
     applyingRef.current = true;
+    let outcome: SubmitBoardOpsOutcome | null = null;
     try {
-      await applyEntry(entry, 'redo');
+      outcome = await applyEntry(entry, 'redo');
     } finally {
       applyingRef.current = false;
     }
-    setStacks((prev) => moveEntry(prev, entry, 'redo'));
-  }, [applyEntry]);
+    if (outcome === 'applied' || outcome === 'queued') {
+      setStacks((prev) => moveEntry(prev, entry, 'redo'));
+    } else {
+      await reconcileAfterFailedInverse();
+    }
+  }, [applyEntry, reconcileAfterFailedInverse]);
 
   // ── Recording wrappers — capture the inverse from pre-mutation state,
   //    then delegate to the real mutation handlers unchanged. ──
 
   const handlePositionCommit = useCallback(
-    (id: string, position: MoodboardItemPosition) => {
+    async (id: string, position: MoodboardItemPosition) => {
+      // Capture the pre-mutation transform BEFORE delegating — the inverse
+      // is only meaningful against the position the edit started from.
       const item = moodboardRef.current?.items.find((it) => it.id === id);
-      if (item && !positionsEqual(item.position, position)) {
+      const changed = !!item && !positionsEqual(item.position, position);
+      const undoPosition = item ? { ...item.position } : null;
+      // Record the inverse only when the forward edit actually persisted or
+      // is durably queued — same applied/queued rule as the ops path. A
+      // failed transform must not land on the undo stack claiming an edit
+      // the server never accepted (P2).
+      const outcome = await mutationsRef.current.handlePositionCommit(id, position);
+      if (changed && undoPosition && (outcome === 'applied' || outcome === 'queued')) {
         record({
           kind: 'transform',
           itemId: id,
-          undoPosition: { ...item.position },
+          undoPosition,
           redoPosition: { ...position } });
       }
-      return mutationsRef.current.handlePositionCommit(id, position);
+      return outcome;
     },
     [record],
   );
@@ -230,12 +260,15 @@ export function useMoodboardHistory({ board, selection, mutations }: UseMoodboar
   }, [record]);
 
   const handleThemeChange = useCallback(
-    (themeId: string) => {
+    async (themeId: string) => {
       const prior = moodboardRef.current?.theme;
-      if (prior && prior !== themeId) {
+      const outcome = await mutationsRef.current.handleThemeChange(themeId);
+      // History advances only on a persisted/durable theme change — a
+      // failed submit records nothing (P2).
+      if (prior && prior !== themeId && (outcome === 'applied' || outcome === 'queued')) {
         record({ kind: 'theme', undoTheme: prior, redoTheme: themeId });
       }
-      return mutationsRef.current.handleThemeChange(themeId);
+      return outcome;
     },
     [record],
   );

@@ -119,6 +119,10 @@ export function mapEventToPushCategory(eventType: string): NotificationPushCateg
   // Prefix match mirrors the order_/auction_ handling so a future offer_*
   // event type cannot silently fail closed into in-app-only delivery.
   if (eventType.startsWith('offer_')) return 'offers';
+  // Smart Sell acting on the seller's behalf is offer lifecycle — same
+  // preference gate. Mirrors the index.ts copy of this mapper; keep the two
+  // in sync.
+  if (eventType === 'smart_sell_decision') return 'offers';
 
   // Orders and resolution (transactional commerce)
   if (eventType.startsWith('order_')) return 'orderUpdates';
@@ -277,6 +281,9 @@ export function mapEventTypeToChannelId(eventType: string): string {
   if (eventType === 'new_follower' || eventType === 'new_listing_from_followed_seller' || eventType.startsWith('review_') || eventType === 'live_started') return 'social';
   if (eventType === 'price_drop' || eventType === 'saved_search_match' || eventType.startsWith('offer_') || eventType === 'generic' || eventType === 'safety_outcome' || eventType === 'ops_alert' || eventType.startsWith('scheduled_publication_')) return 'news';
   if (eventType === 'resolution_opened' || eventType === 'resolution_status_changed') return 'orders';
+  // Smart Sell decisions ride the orders channel — mirrors the index.ts
+  // copy of this mapper.
+  if (eventType === 'smart_sell_decision') return 'orders';
   return 'default';
 }
 

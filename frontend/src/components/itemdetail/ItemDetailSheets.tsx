@@ -26,7 +26,7 @@ import type {
   ItemDetailOverlayControls,
 } from '../../hooks/itemDetail/useItemDetailOverlays';
 import { Space, FontFamily, Control, IconGrammar } from '../../theme/designTokens';
-import { TypographyV2 } from '../../theme/typography.v2';
+import { TypographyV2, MAX_FONT_SCALE } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 import type { useFormattedPrice } from '../../hooks/useFormattedPrice';
@@ -48,6 +48,10 @@ export interface ItemDetailSheetsProps {
   isSeller: boolean;
   /** currentUser?.username ?? 'You' — forwarded for ListingQA. */
   currentUserName: string;
+  /** Viewer blocked this seller — forwarded to ListingQA so the public
+   *  ask composer is replaced by an honest capability note while READ
+   *  access to existing Q&A is preserved (S20-06). */
+  isSellerBlocked: boolean;
   formatFromFiat: FormatFromFiat;
 
   /** Canonical PDP media — the same ProductMediaItem[] the hero stage
@@ -89,6 +93,7 @@ export function ItemDetailSheets({
   isFav,
   isSeller,
   currentUserName,
+  isSellerBlocked,
   formatFromFiat,
   mediaItems,
   media,
@@ -185,10 +190,10 @@ export function ItemDetailSheets({
       >
         <View style={[styles.purchaseSheetHeader, { borderBottomColor: colors.borderSubtle }]}>
           <View>
-            <Text style={[styles.purchaseSheetTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>
+            <Text style={[styles.purchaseSheetTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={MAX_FONT_SCALE.heading}>
               Costs, delivery & protection
             </Text>
-            <Text style={[styles.purchaseSheetSubtitle, { color: colors.textMuted }]} maxFontSizeMultiplier={2}>
+            <Text style={[styles.purchaseSheetSubtitle, { color: colors.textMuted }]} maxFontSizeMultiplier={MAX_FONT_SCALE.content}>
               Confirmed terms for this listing
             </Text>
           </View>
@@ -280,7 +285,7 @@ export function ItemDetailSheets({
         snapPoint={0.7}
       >
         <View style={[styles.qaSheetHeader, { borderBottomColor: colors.borderSubtle }]}>
-          <Text style={[styles.qaSheetTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>
+          <Text style={[styles.qaSheetTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={MAX_FONT_SCALE.heading}>
             Questions & answers
           </Text>
           <AnimatedPressable
@@ -299,6 +304,7 @@ export function ItemDetailSheets({
           listingId={item.id}
           currentUserName={currentUserName}
           isSeller={isSeller}
+          isSellerBlocked={isSellerBlocked}
         />
       </BottomSheet>
 
@@ -309,7 +315,7 @@ export function ItemDetailSheets({
         snapPoint={0.4}
       >
         <View style={[styles.overflowHeader, { borderColor: colors.border }]}>
-          <Text style={[styles.overflowTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>More actions</Text>
+          <Text style={[styles.overflowTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={MAX_FONT_SCALE.heading}>More actions</Text>
         </View>
         <AnimatedPressable
           style={styles.overflowRow}
@@ -323,7 +329,7 @@ export function ItemDetailSheets({
           accessibilityLabel="Share listing"
         >
           <AppIcon name="share-outline" size={IconSize.md} color="textPrimary" />
-          <Text style={[styles.overflowRowText, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>Share listing</Text>
+          <Text style={[styles.overflowRowText, { color: colors.textPrimary }]} maxFontSizeMultiplier={MAX_FONT_SCALE.content}>Share listing</Text>
         </AnimatedPressable>
         <AnimatedPressable
           style={styles.overflowRow}
@@ -338,7 +344,7 @@ export function ItemDetailSheets({
           accessibilityLabel={isFav ? 'Remove from Saved' : 'Add to Saved'}
         >
           <AppIcon name="heart" focused={isFav} size={IconSize.md} color={isFav ? 'dangerText' : 'textPrimary'} />
-          <Text style={[styles.overflowRowText, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>
+          <Text style={[styles.overflowRowText, { color: colors.textPrimary }]} maxFontSizeMultiplier={MAX_FONT_SCALE.content}>
             {isFav ? 'Remove from Saved' : 'Add to Saved'}
           </Text>
         </AnimatedPressable>
@@ -354,7 +360,7 @@ export function ItemDetailSheets({
           accessibilityLabel="Report this listing"
         >
           <AppIcon name="flag-outline" size={IconSize.md} color="textSecondary" />
-          <Text style={[styles.overflowRowText, { color: colors.textSecondary }]} maxFontSizeMultiplier={2}>Report listing</Text>
+          <Text style={[styles.overflowRowText, { color: colors.textSecondary }]} maxFontSizeMultiplier={MAX_FONT_SCALE.content}>Report listing</Text>
         </AnimatedPressable>
       </BottomSheet>
 
@@ -378,7 +384,7 @@ export function ItemDetailSheets({
       >
         <View style={styles.conditionSheetWrap}>
           <View style={styles.conditionSheetHeader}>
-            <Text style={[styles.conditionSheetTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>
+            <Text style={[styles.conditionSheetTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={MAX_FONT_SCALE.heading}>
               Condition
             </Text>
             <AnimatedPressable
@@ -395,12 +401,12 @@ export function ItemDetailSheets({
           <View style={styles.conditionSheetBody}>
             <View style={[styles.conditionSheetBadge, { backgroundColor: conditionMeta ? `${conditionMeta.color}14` : colors.surfaceAlt }]}>
               <View style={[styles.conditionDot, { backgroundColor: conditionMeta?.color ?? colors.textMuted }]} />
-              <Text style={[styles.conditionSheetBadgeText, { color: conditionMeta?.color ?? colors.textPrimary }]} maxFontSizeMultiplier={2}>
+              <Text style={[styles.conditionSheetBadgeText, { color: conditionMeta?.color ?? colors.textPrimary }]} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
                 {item.condition}
               </Text>
             </View>
             {conditionMeta ? (
-              <Text style={[styles.conditionSheetDefinition, { color: colors.textSecondary }]} maxFontSizeMultiplier={2}>
+              <Text style={[styles.conditionSheetDefinition, { color: colors.textSecondary }]} maxFontSizeMultiplier={MAX_FONT_SCALE.content}>
                 {conditionMeta.definition}
               </Text>
             ) : null}
@@ -411,16 +417,17 @@ export function ItemDetailSheets({
                 hapticFeedback="light"
                 onPress={() => {
                   dismiss.conditionInfo();
-                  // Jump to the last photo (detail/flaw shot per policy)
-                  const evidenceIndex = item.images!.length - 1;
-                  media.openViewer(evidenceIndex);
+                  // Generic gallery entry — the media contract carries no
+                  // condition-photo tag, so no position is presented as
+                  // evidence (FRESH-09).
+                  media.openViewer(0);
                 }}
-                accessibilityLabel="View condition evidence photos"
+                accessibilityLabel="View all item photos"
                 accessibilityRole="button"
               >
                 <AppIcon name="images-outline" size={18} color="brand" />
-                <Text style={[styles.conditionEvidenceJumpText, { color: colors.brand }]} maxFontSizeMultiplier={2}>
-                  View condition photos
+                <Text style={[styles.conditionEvidenceJumpText, { color: colors.brand }]} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
+                  View all photos
                 </Text>
                 <AppIcon name="chevron-forward" size={IconSize.sm} color="brand" />
               </AnimatedPressable>

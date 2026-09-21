@@ -49,10 +49,37 @@ _registry = ModelRegistry()
 _fraud_registry = FraudModelRegistry()
 
 
+# Environment detection — prod deployments set ENV=production (compose) or
+# NODE_ENV=production (platforms that reuse the Node convention). In
+# production the shared-secret tokens below are MANDATORY: silently falling
+# back to the committed dev defaults would leave admin/model endpoints
+# guessable by anyone who has read this repository.
+_DEPLOY_ENV = (
+    os.environ.get("ENV") or os.environ.get("NODE_ENV") or "development"
+).strip().lower()
+_IS_PRODUCTION = _DEPLOY_ENV in {"production", "prod"}
+
+
+def _expected_token(name: str, dev_default: str) -> str | None:
+    """Resolve a shared-secret token. Returns None when the variable is
+    required (production) but absent — callers must fail closed."""
+    value = (os.environ.get(name) or "").strip()
+    if value:
+        return value
+    if _IS_PRODUCTION:
+        return None
+    return dev_default
+
+
 def require_decision_service(
     x_decision_service_token: str | None = Header(default=None),
 ) -> None:
-    expected = os.environ.get("DECISION_SERVICE_TOKEN", "local-decision-service-token")
+    expected = _expected_token("DECISION_SERVICE_TOKEN", "local-decision-service-token")
+    if expected is None:
+        raise HTTPException(
+            status_code=503,
+            detail="DECISION_SERVICE_TOKEN is not configured.",
+        )
     if not x_decision_service_token or not hmac.compare_digest(
         x_decision_service_token,
         expected,
@@ -64,7 +91,12 @@ def require_admin(
     x_admin_service_token: str | None = Header(default=None),
 ) -> None:
     """Admin-only guard for shadow model load/unload operations."""
-    expected = os.environ.get("ADMIN_SERVICE_TOKEN", "local-admin-token")
+    expected = _expected_token("ADMIN_SERVICE_TOKEN", "local-admin-token")
+    if expected is None:
+        raise HTTPException(
+            status_code=503,
+            detail="ADMIN_SERVICE_TOKEN is not configured.",
+        )
     if not x_admin_service_token or not hmac.compare_digest(
         x_admin_service_token,
         expected,

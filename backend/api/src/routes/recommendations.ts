@@ -11,7 +11,9 @@ import {
 } from '../lib/sellerReach.js';
 import {
   hasMediaEmbeddingVectorColumn,
+  mapNeighbourAssetsToListings,
   nearestMediaEmbeddings,
+  resolveServingEmbeddingLineage,
 } from '../lib/mediaEmbeddings.js';
 import { deserialiseEmbedding } from '../workers/handlers/mediaEmbeddingUtils.js';
 
@@ -947,9 +949,17 @@ export function registerRecommendationRoutes({
 
     // item_to_item_ann — pgvector nearest-neighbour retrieval anchored on the
     // media embeddings of listings the user recently signalled interest in.
-    // ANN-only by design: the BYTEA exact scan is a bounded test fallback,
-    // not a per-request serving path, so this source stays silent until
-    // migration 326 provisions embedding_vec.
+    // pgvector-only by design: the BYTEA exact scan is a bounded test
+    // fallback, not a per-request serving path, so this source stays silent
+    // until migration 326 provisions embedding_vec.
+    //
+    // Lineage is explicit end-to-end (audit N2): embeddings produced by
+    // different (model_id, model_version, preprocessing_version, dimensions)
+    // tuples are points in incomparable vector spaces — a "similarity"
+    // computed across them is a fabricated rank. Anchor selection, the
+    // neighbour query, and the anchor decode all pin the serving lineage
+    // resolved once per request; a ready embedding from any other lineage
+    // is skipped, never silently compared cross-space.
     try {
       const anchorListingIds = [...new Set(
         interactionsResult.rows
@@ -957,52 +967,86 @@ export function registerRecommendationRoutes({
           .map((row) => row.listing_id),
       )].slice(0, 6);
       if (anchorListingIds.length > 0 && await hasMediaEmbeddingVectorColumn(db)) {
-        const anchors = await db.query<{ embedding: Buffer }>(
-          `SELECT DISTINCT ON (mb.target_ref_id) me.embedding
-           FROM media_bindings mb
-           JOIN media_embeddings me ON me.media_asset_id = mb.media_asset_id
-           WHERE mb.target_type = 'listing'
-             AND mb.target_ref_id = ANY($1::text[])
-             AND mb.removed_at IS NULL
-             AND me.status = 'ready'
-             AND me.norm > 0
-           ORDER BY mb.target_ref_id, mb.sort_order
-           LIMIT 3`,
-          [anchorListingIds],
-        );
-        const neighbourAssetIds: string[] = [];
-        for (const anchor of anchors.rows) {
-          const nearest = await nearestMediaEmbeddings(db, {
-            queryEmbedding: deserialiseEmbedding(anchor.embedding),
-            limit: 40,
-          });
-          for (const hit of nearest.hits) neighbourAssetIds.push(hit.mediaAssetId);
-        }
-        if (neighbourAssetIds.length > 0) {
-          const similar = await db.query<{ target_ref_id: string }>(
-            `SELECT DISTINCT target_ref_id
-             FROM media_bindings
-             WHERE media_asset_id = ANY($1::text[])
-               AND target_type = 'listing'
-               AND removed_at IS NULL`,
-            [[...new Set(neighbourAssetIds)]],
+        const servingLineage = await resolveServingEmbeddingLineage(db);
+        if (servingLineage) {
+          const anchors = await db.query<{ embedding: Buffer; dimensions: number }>(
+            `SELECT DISTINCT ON (mb.target_ref_id) me.embedding, me.dimensions
+             FROM media_bindings mb
+             JOIN media_embeddings me ON me.media_asset_id = mb.media_asset_id
+             WHERE mb.target_type = 'listing'
+               AND mb.target_ref_id = ANY($1::text[])
+               AND mb.removed_at IS NULL
+               AND me.status = 'ready'
+               AND me.norm > 0
+               AND me.model_id = $2
+               AND me.model_version = $3
+               AND me.preprocessing_version = $4
+               AND me.dimensions = $5
+             ORDER BY mb.target_ref_id, mb.sort_order, me.generated_at DESC
+             LIMIT 3`,
+            [
+              anchorListingIds,
+              servingLineage.modelId,
+              servingLineage.modelVersion,
+              servingLineage.preprocessingVersion,
+              servingLineage.dimensions,
+            ],
           );
-          const anchorSet = new Set(anchorListingIds);
-          const similarIds = similar.rows
-            .map((row) => row.target_ref_id)
-            .filter((id) => !anchorSet.has(id));
-          if (similarIds.length > 0) {
-            // array_position keeps the nearest-neighbour ordering so
-            // source_rank inside this source is the ANN rank.
-            const i2i = await db.query<ListingRow>(
-              candidateListingsSql(
-                'AND l.id = ANY($2::text[])',
-                'array_position($2::text[], l.id)',
-                150,
-              ),
-              [userId, similarIds],
-            );
-            mergeSource(i2i.rows, 'item_to_item_ann');
+          // (asset_id → best cosine distance) preserves ANN rank through
+          // the listing join — the same asset can neighbour several anchors.
+          const neighbourAssets = new Map<string, number>();
+          for (const anchor of anchors.rows) {
+            // Anchor payloads are validated before they seed a query: a
+            // corrupt or cross-space vector is skipped, never ranked.
+            if (anchor.dimensions !== servingLineage.dimensions) {
+              continue;
+            }
+            const queryEmbedding = deserialiseEmbedding(anchor.embedding);
+            if (
+              queryEmbedding.length !== servingLineage.dimensions ||
+              !queryEmbedding.every((value) => Number.isFinite(value))
+            ) {
+              continue;
+            }
+            const nearest = await nearestMediaEmbeddings(db, {
+              queryEmbedding,
+              limit: 40,
+              filter: {
+                modelId: servingLineage.modelId,
+                modelVersion: servingLineage.modelVersion,
+                preprocessingVersion: servingLineage.preprocessingVersion,
+                dimensions: servingLineage.dimensions,
+              },
+            });
+            for (const hit of nearest.hits) {
+              const known = neighbourAssets.get(hit.mediaAssetId);
+              if (known === undefined || hit.distance < known) {
+                neighbourAssets.set(hit.mediaAssetId, hit.distance);
+              }
+            }
+          }
+          if (neighbourAssets.size > 0) {
+            const anchorSet = new Set(anchorListingIds);
+            const similarIds = (
+              await mapNeighbourAssetsToListings(db, neighbourAssets)
+            )
+              .map((row) => row.listingId)
+              .filter((id) => !anchorSet.has(id));
+            if (similarIds.length > 0) {
+              // similarIds arrive ordered by best ANN distance
+              // (mapNeighbourAssetsToListings preserves the ordinality of
+              // the neighbour list), so array_position ordering makes
+              // source_rank inside this source the true ANN rank.
+              const i2i = await db.query<ListingRow>(
+                candidateListingsSql(
+                  'AND l.id = ANY($2::text[])',
+                  'array_position($2::text[], l.id)',
+                  150,
+                ),
+                [userId, similarIds],
+              );
+              mergeSource(i2i.rows, 'item_to_item_ann');
+            }
           }
         }
       }

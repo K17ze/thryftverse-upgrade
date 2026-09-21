@@ -931,7 +931,9 @@ async function connectToStreamFromBackend(streamId: string): Promise<LiveStream 
 
 const LIVE_SESSION_TOPIC_PREFIX = 'live.session:';
 
-function liveSessionTopic(sessionId: string): string {
+/** Realtime topic for a live session — exported so consumers (e.g. the
+ *  viewer session hook) can match resnapshot signals for this topic. */
+export function liveSessionTopic(sessionId: string): string {
   return `${LIVE_SESSION_TOPIC_PREFIX}${sessionId}`;
 }
 

@@ -281,7 +281,8 @@ Backend API extras:
 npm --prefix backend/api run migrate           # apply SQL migrations
 npm --prefix backend/api run migrate:rollback  # roll back last migration
 npm --prefix backend/api run seed              # seed dev data
-npm --prefix backend/api run worker:start      # start background workers
+npm --prefix backend/api run worker:start:dev  # start background workers (tsx, from source)
+# (worker:start runs the compiled dist/workers build — use after `npm run build`, not for local dev)
 npm --prefix backend/api run db:types          # regenerate Kysely DB types
 npm --prefix backend/api run search:sync       # sync listings to Meilisearch
 npm --prefix backend/api run smoke:commerce    # commerce flow smoke

@@ -17,6 +17,7 @@ import {
   type SearchResult as InMemorySearchResult,
   type AutocompleteEntry,
 } from './searchIndex.js';
+import { meilisearchApiKey } from './meilisearchConfig.js';
 import { logger } from './logger.js';
 
 // ── Public Types ─────────────────────────────────────────────────────────────
@@ -215,7 +216,9 @@ export class InMemorySearchAdapter implements SearchAdapter {
  *
  * Required environment variables:
  *   MEILISEARCH_URL   — e.g. http://meilisearch:7700
- *   MEILISEARCH_KEY   — master/search API key (optional for dev instances)
+ *   MEILISEARCH_KEY   — master/search API key (optional for dev instances).
+ *                       MEILISEARCH_API_KEY is accepted as a legacy alias
+ *                       via meilisearchApiKey() (see meilisearchConfig.ts).
  */
 export class MeilisearchSearchAdapter implements SearchAdapter {
   private readonly indexName: string;
@@ -231,9 +234,20 @@ export class MeilisearchSearchAdapter implements SearchAdapter {
    */
   private backendReachable = false;
 
+  /**
+   * Insertion-ordered ids this adapter has mirrored into the process-local
+   * fallback index. The mirror exists so a mid-session Meilisearch outage
+   * serves a coherent corpus instead of an empty/stale index; the cap keeps
+   * the shadow copy bounded on large catalogues (oldest mirrored ids are
+   * evicted first — the fallback is a safety net, not the source of truth).
+   */
+  private static readonly FALLBACK_MIRROR_CAP = 10_000;
+  private readonly fallbackMirroredIds: string[] = [];
+  private readonly fallbackMirroredSet = new Set<string>();
+
   constructor(options?: { url?: string; key?: string; indexName?: string }) {
     this.url = options?.url ?? process.env.MEILISEARCH_URL ?? '';
-    this.key = options?.key ?? process.env.MEILISEARCH_KEY;
+    this.key = options?.key ?? meilisearchApiKey();
     this.indexName = options?.indexName ?? process.env.MEILISEARCH_INDEX ?? 'listings';
     void this.initClient();
   }
@@ -258,13 +272,18 @@ export class MeilisearchSearchAdapter implements SearchAdapter {
     try {
       // Dynamic import so the dependency is optional at runtime.
       const mod = (await import('meilisearch' as string).catch(() => null)) as
-        | { MeiliSearch: new (config: { host: string; apiKey?: string }) => unknown }
+        | {
+            // <0.35 exported `MeiliSearch`; >=0.35 renamed it `Meilisearch`.
+            MeiliSearch?: new (config: { host: string; apiKey?: string }) => unknown;
+            Meilisearch?: new (config: { host: string; apiKey?: string }) => unknown;
+          }
         | null;
-      if (!mod) {
+      const Client = mod?.MeiliSearch ?? mod?.Meilisearch;
+      if (!Client) {
         this.warnDegradedOnce('sdk_unavailable');
         return;
       }
-      this.client = new mod.MeiliSearch({ host: this.url, apiKey: this.key });
+      this.client = new Client({ host: this.url, apiKey: this.key });
       this.backendReachable = true;
     } catch (error) {
       this.client = null;
@@ -297,33 +316,83 @@ export class MeilisearchSearchAdapter implements SearchAdapter {
     return { index: client.index(this.indexName) as never };
   }
 
+  /**
+   * Mirror a write into the bounded process-local fallback. Runs on BOTH
+   * the success and failure paths: on success it keeps the fallback corpus
+   * coherent with the shared index (a later outage then serves real data);
+   * on failure it is the original degrade write. Best-effort — a mirror
+   * failure must never fail the caller's write path.
+   */
+  private async mirrorIndexToFallback(listing: ListingDocument): Promise<void> {
+    try {
+      await this.fallback.index(listing);
+      if (!this.fallbackMirroredSet.has(listing.id)) {
+        this.fallbackMirroredSet.add(listing.id);
+        this.fallbackMirroredIds.push(listing.id);
+      }
+      while (
+        this.fallbackMirroredIds.length > MeilisearchSearchAdapter.FALLBACK_MIRROR_CAP
+      ) {
+        const evictId = this.fallbackMirroredIds.shift()!;
+        this.fallbackMirroredSet.delete(evictId);
+        await this.fallback.remove(evictId);
+      }
+    } catch (error) {
+      logger.warn(
+        { err: error, listingId: listing.id },
+        'search.fallback.mirror_failed — process-local fallback could not mirror an index write',
+      );
+    }
+  }
+
+  private async mirrorRemoveToFallback(id: string): Promise<void> {
+    try {
+      await this.fallback.remove(id);
+      if (this.fallbackMirroredSet.delete(id)) {
+        const position = this.fallbackMirroredIds.indexOf(id);
+        if (position !== -1) {
+          this.fallbackMirroredIds.splice(position, 1);
+        }
+      }
+    } catch (error) {
+      logger.warn(
+        { err: error, listingId: id },
+        'search.fallback.mirror_failed — process-local fallback could not mirror a delete',
+      );
+    }
+  }
+
   async index(listing: ListingDocument): Promise<void> {
     const handle = await this.ensureClient();
     if (!handle) {
-      await this.fallback.index(listing);
+      await this.mirrorIndexToFallback(listing);
       return;
     }
     try {
       await handle.index.addDocuments([listing]);
       this.backendReachable = true;
+      // Successful remote write: keep the fallback coherent so an outage
+      // later in the process lifetime still serves this document.
+      await this.mirrorIndexToFallback(listing);
     } catch {
       this.markBackendDown();
-      await this.fallback.index(listing);
+      await this.mirrorIndexToFallback(listing);
     }
   }
 
   async remove(id: string): Promise<void> {
     const handle = await this.ensureClient();
     if (!handle) {
-      await this.fallback.remove(id);
+      await this.mirrorRemoveToFallback(id);
       return;
     }
     try {
       await handle.index.deleteDocument(id);
       this.backendReachable = true;
+      await this.mirrorRemoveToFallback(id);
     } catch {
       this.markBackendDown();
-      await this.fallback.remove(id);
+      await this.mirrorRemoveToFallback(id);
     }
   }
 
@@ -463,6 +532,27 @@ export class ElasticsearchSearchAdapter implements SearchAdapter {
       embedderConfigured: false,
       searchEngineVersion: 'in-memory-v1 (elasticsearch placeholder)',
     };
+  }
+}
+
+// ── Process-local fallback priming ───────────────────────────────────────────
+
+/**
+ * Write a listing into the shared process-local index directly, bypassing
+ * the configured backend. Used by the startup warm path to prime the
+ * Meilisearch adapter's degraded-mode fallback while the shared backend is
+ * healthy — an outage later in the process lifetime then serves a coherent
+ * corpus instead of only post-boot writes. Never throws: this is a
+ * best-effort safety net, not the serving path.
+ */
+export async function indexIntoLocalFallback(listing: ListingDocument): Promise<void> {
+  try {
+    searchIndex.addListing(toIndexedListing(listing));
+  } catch (error) {
+    logger.warn(
+      { err: error, listingId: listing.id },
+      'search.fallback.prime_failed — process-local fallback could not index a warmup row',
+    );
   }
 }
 

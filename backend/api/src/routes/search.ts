@@ -25,7 +25,14 @@ function deriveServeMode(
   backend: SearchBackend,
   embedderReady: boolean,
   method: RetrievalMeta['method'],
+  degraded?: boolean,
 ): ServeMode {
+  if (degraded) {
+    // A configured shared backend is down and the adapter is serving the
+    // process-local fallback — that is degraded lexical serving, not a
+    // personalization cold start.
+    return 'degraded_lexical';
+  }
   if (backend === 'in_memory' || backend === 'elasticsearch_placeholder') {
     return 'cold_start';
   }
@@ -366,7 +373,13 @@ export function registerSearchRoutes({
       }
     }
 
-    const fetchLimit = excludedSellerIds ? Math.min(limit + offset + 50, 200) : limit;
+    // The item leg always over-fetches: every returned id is re-checked
+    // against live listings before render (index lag can surface
+    // sold/paused/deleted rows, and the index document carries no seller
+    // id), so extra rows keep the page full when the filter drops stale
+    // hits. The adapter is queried from offset 0 and the page is sliced
+    // after filtering.
+    const fetchLimit = Math.min(limit + offset + 50, 200);
 
     const query: SearchQuery = {
       query: q,
@@ -378,7 +391,7 @@ export function registerSearchRoutes({
         maxPrice,
       },
       limit: fetchLimit,
-      offset: excludedSellerIds ? 0 : offset,
+      offset: 0,
     };
 
     // ── Fused 'all' scope ──
@@ -406,7 +419,10 @@ export function registerSearchRoutes({
         // Batch-resolve seller + card fields for the item leg in one query:
         // drops blocked sellers (same policy as scope=items) and attaches
         // the real cover/seller fields the fused tile needs — the index
-        // document carries neither.
+        // document carries neither. The `status = 'active'` predicate is
+        // also the serving-time safety net: the index can lag listing state
+        // (sold/deleted/paused rows linger until the remove write lands),
+        // so an id absent from cardById is dropped, never rendered.
         const cardById = new Map<
           string,
           { sellerId: string; imageUrl: string | null; sellerUsername: string | null }
@@ -421,7 +437,8 @@ export function registerSearchRoutes({
             `SELECT l.id, l.seller_id, l.image_url, u.username AS seller_username
              FROM listings l
              LEFT JOIN users u ON u.id = l.seller_id
-             WHERE l.id = ANY($1::text[])`,
+             WHERE l.id = ANY($1::text[])
+               AND l.status = 'active'`,
             [itemResults.map((r) => r.id)]
           );
           for (const row of cardRows.rows) {
@@ -432,13 +449,13 @@ export function registerSearchRoutes({
             });
           }
         }
-        const visibleItems = (excludedSellerIds
-          ? itemResults.filter((result) => {
-              const sellerId = cardById.get(result.id)?.sellerId;
-              return !sellerId || !excludedSellerIds.has(sellerId);
-            })
-          : itemResults
-        ).slice(0, limit);
+        const visibleItems = itemResults
+          .filter((result) => {
+            const card = cardById.get(result.id);
+            if (!card) return false;
+            return !excludedSellerIds || !excludedSellerIds.has(card.sellerId);
+          })
+          .slice(0, limit);
 
         const fused = fuseScopedHits([
           {
@@ -480,7 +497,7 @@ export function registerSearchRoutes({
           backend: info.backend,
           degraded: info.degraded === true ? true : undefined,
         };
-        const serveMode = deriveServeMode(info.backend, readiness.ready, retrievalMeta.method);
+        const serveMode = deriveServeMode(info.backend, readiness.ready, retrievalMeta.method, info.degraded);
         return {
           ok: true,
           query: q,
@@ -505,21 +522,25 @@ export function registerSearchRoutes({
     try {
       const adapter = createSearchAdapter();
       let results = await adapter.search(query);
-      if (excludedSellerIds && results.length > 0) {
-        // The index document carries no seller id — batch-resolve sellers
-        // for the candidate ids and drop blocked ones.
+      if (results.length > 0) {
+        // Serving-time safety net (same policy as scope=all): the index can
+        // lag listing state — sold/paused/deleted rows linger until the
+        // remove write lands — and the index document carries no seller id,
+        // so every returned id is re-checked against live rows. An id
+        // absent from sellerById is stale: dropped, never rendered.
         const sellerRows = await db.query<{ id: string; seller_id: string }>(
-          `SELECT id, seller_id FROM listings WHERE id = ANY($1::text[])`,
+          `SELECT id, seller_id FROM listings
+           WHERE id = ANY($1::text[]) AND status = 'active'`,
           [results.map((r) => r.id)]
         );
         const sellerById = new Map(sellerRows.rows.map((r) => [r.id, r.seller_id]));
-        results = results
-          .filter((result) => {
-            const sellerId = sellerById.get(result.id);
-            return !sellerId || !excludedSellerIds!.has(sellerId);
-          })
-          .slice(offset, offset + limit);
+        results = results.filter((result) => {
+          const sellerId = sellerById.get(result.id);
+          if (sellerId === undefined) return false;
+          return !excludedSellerIds || !excludedSellerIds.has(sellerId);
+        });
       }
+      results = results.slice(offset, offset + limit);
       const info = adapter.retrievalInfo();
       const readiness = await checkEmbedderReadiness();
       const retrievalMeta: RetrievalMeta = {
@@ -529,7 +550,7 @@ export function registerSearchRoutes({
         backend: info.backend,
         degraded: info.degraded === true ? true : undefined,
       };
-      const serveMode = deriveServeMode(info.backend, readiness.ready, retrievalMeta.method);
+      const serveMode = deriveServeMode(info.backend, readiness.ready, retrievalMeta.method, info.degraded);
       return {
         ok: true,
         query: q,
@@ -562,8 +583,57 @@ export function registerSearchRoutes({
 
     try {
       const adapter = createSearchAdapter();
-      const suggestions = await adapter.autocomplete(q, limit);
-      return { ok: true, query: q, suggestions };
+      // Over-fetch so suggestions backed only by non-public listings can
+      // be dropped without starving the response.
+      const suggestions = await adapter.autocomplete(q, Math.min(limit * 2, 40));
+      let visible = suggestions;
+      if (suggestions.length > 0) {
+        // Serving-time safety net (same visibility policy as the items
+        // legs): suggestion terms are derived from listing
+        // title/description/brand/category/size/condition, and the index
+        // can carry non-public statuses (single-listing sync indexes
+        // draft/paused documents). A suggestion is served only when at
+        // least one ACTIVE listing still corroborates it — anything else
+        // is dropped, never suggested. LIKE wildcards in suggestion text
+        // are escaped so corroboration matches the literal term.
+        const escapeLike = (value: string) =>
+          value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+        const pairs = suggestions.map((entry) => ({
+          entry,
+          escaped: escapeLike(entry.text),
+        }));
+        const corroborated = await db.query<{ text: string }>(
+          `SELECT s.text
+           FROM unnest($1::text[]) AS s(text)
+           WHERE EXISTS (
+             SELECT 1 FROM listings l
+             WHERE l.status = 'active'
+               AND (l.title ILIKE '%' || s.text || '%' ESCAPE '\\'
+                 OR l.description ILIKE '%' || s.text || '%' ESCAPE '\\'
+                 OR l.brand ILIKE '%' || s.text || '%' ESCAPE '\\'
+                 OR l.category ILIKE '%' || s.text || '%' ESCAPE '\\'
+                 OR l.size ILIKE '%' || s.text || '%' ESCAPE '\\'
+                 OR l.condition ILIKE '%' || s.text || '%' ESCAPE '\\')
+           )`,
+          [pairs.map((p) => p.escaped)]
+        );
+        const corroboratedSet = new Set(corroborated.rows.map((r) => r.text));
+        visible = pairs
+          .filter((p) => corroboratedSet.has(p.escaped))
+          .map((p) => p.entry)
+          .slice(0, limit);
+      }
+      const info = adapter.retrievalInfo();
+      const readiness = await checkEmbedderReadiness();
+      const retrievalMeta: RetrievalMeta = {
+        method: 'lexical',
+        embedderConfigured: info.embedderConfigured,
+        searchEngineVersion: info.searchEngineVersion,
+        backend: info.backend,
+        degraded: info.degraded === true ? true : undefined,
+      };
+      const serveMode = deriveServeMode(info.backend, readiness.ready, retrievalMeta.method, info.degraded);
+      return { ok: true, query: q, suggestions: visible, retrievalMeta, serveMode };
     } catch (error) {
       request.log.error({ err: error, query: q }, 'Autocomplete request failed');
       reply.code(500);
@@ -625,8 +695,10 @@ export function registerSearchRoutes({
     const { query, limit, filters } = parsed.data;
     const viewerUserId = request.authUser?.userId ?? null;
 
-    // Same bidirectional block exclusion as lexical search — over-fetch
-    // and filter at read time since blocks aren't indexed.
+    // Same read-time filtering as lexical search — over-fetch and filter
+    // against live rows since neither blocks nor listing status are
+    // trustworthy in the index (single-listing sync can index
+    // draft/paused documents and risk_pending evictions are best-effort).
     let excludedSellerIds: Set<string> | null = null;
     if (viewerUserId) {
       const blockedResult = await db.query<{ other_id: string }>(
@@ -644,25 +716,34 @@ export function registerSearchRoutes({
       const adapter = createSearchAdapter();
       const info = adapter.retrievalInfo();
       const { results, retrievalMeta } = await semanticSearch(query, {
-        limit: excludedSellerIds ? Math.min(limit + 50, 200) : limit,
+        // Always over-fetch: every returned id is re-checked against live
+        // listings below, so extra rows keep the page full when the
+        // filter drops stale or non-public hits.
+        limit: Math.min(limit + 50, 200),
         filters,
       });
       let visibleResults = results;
-      if (excludedSellerIds && results.length > 0) {
+      if (results.length > 0) {
+        // Serving-time safety net (same policy as the lexical /search
+        // items leg): an id absent from sellerById is non-public or gone
+        // — dropped, never rendered. The same lookup carries seller_id
+        // for the bidirectional block exclusion.
         const sellerRows = await db.query<{ id: string; seller_id: string }>(
-          `SELECT id, seller_id FROM listings WHERE id = ANY($1::text[])`,
+          `SELECT id, seller_id FROM listings
+           WHERE id = ANY($1::text[]) AND status = 'active'`,
           [results.map((r) => r.id)]
         );
         const sellerById = new Map(sellerRows.rows.map((r) => [r.id, r.seller_id]));
         visibleResults = results
           .filter((result) => {
             const sellerId = sellerById.get(result.id);
-            return !sellerId || !excludedSellerIds!.has(sellerId);
+            if (sellerId === undefined) return false;
+            return !excludedSellerIds || !excludedSellerIds.has(sellerId);
           })
           .slice(0, limit);
       }
       const readiness = await checkEmbedderReadiness();
-      const serveMode = deriveServeMode(info.backend, readiness.ready, retrievalMeta.method);
+      const serveMode = deriveServeMode(info.backend, readiness.ready, retrievalMeta.method, info.degraded);
       return {
         ok: true,
         query,
@@ -700,7 +781,9 @@ export function registerSearchRoutes({
       // Degrades to in-place when Meilisearch isn't configured.
       const result = await reindexListingsBlueGreen(db);
       if (!result.ok) {
-        reply.code(500);
+        // A held reindex lease is contention, not a server fault — report
+        // 409 so the caller can retry instead of paging on a false 500.
+        reply.code(result.error?.startsWith('reindex_in_progress') ? 409 : 500);
         return { ok: false, error: result.error ?? 'Reindex failed' };
       }
       return {

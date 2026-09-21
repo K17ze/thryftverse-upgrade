@@ -434,16 +434,40 @@ const routesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 
 
 test('auctions.ts settlement binds the order only after a reach check', () => {
   const source = fs.readFileSync(path.join(routesDir, 'auctions.ts'), 'utf8');
+
+  // The order insert + paid transition live in
+  // settleAuctionWinForVerifiedIntent — invoked by the provider webhook,
+  // the winner-pay replay and the payment-status self-heal. The reach gate
+  // must precede the order row write INSIDE that helper so a seller
+  // suspended between intent mint and provider capture cannot settle.
+  const settleHelper = sliceHandler(
+    source,
+    'export async function settleAuctionWinForVerifiedIntent',
+    'export const registerAuctionLifecycleRoutes',
+  );
+  const settleReachGate = settleHelper.indexOf('getSellerReach(client, auction.seller_id)');
+  assert.ok(
+    settleReachGate >= 0,
+    'verified settlement helper does not check seller reach',
+  );
+  const orderInsert = settleHelper.indexOf('INSERT INTO orders');
+  assert.ok(
+    orderInsert >= 0 && settleReachGate < orderInsert,
+    'reach gate must run before the settlement order row is inserted',
+  );
+  const settleGateBlock = settleHelper.slice(settleReachGate, settleReachGate + 900);
+  assert.match(settleGateBlock, /state === 'suspended'/);
+  assert.match(settleGateBlock, /seller_suspended/);
+
+  // The winner-pay route still gates intent MINTING on reach — a suspended
+  // seller must not take money, so no capture may even be created.
   const handler = sliceHandler(
     source,
     "app.post('/auctions/:auctionId/payment'",
-    "app.post('/auctions/:auctionId/second-chance/accept'",
+    "app.get('/auctions/:auctionId/payment-status'",
   );
   const reachGate = handler.indexOf('getSellerReach(client, auction.seller_id)');
   assert.ok(reachGate >= 0, 'auction payment handler does not call getSellerReach');
-  const orderInsert = handler.indexOf('INSERT INTO orders');
-  assert.ok(orderInsert >= 0 && reachGate < orderInsert,
-    'reach gate must run before the settlement order row is inserted');
   const gateBlock = handler.slice(reachGate, reachGate + 900);
   assert.match(gateBlock, /state === 'suspended'/);
   assert.match(gateBlock, /ROLLBACK/);

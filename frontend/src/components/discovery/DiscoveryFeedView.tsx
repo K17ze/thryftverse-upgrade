@@ -3,6 +3,7 @@ import { View, Text, Pressable, ScrollView, RefreshControl } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { useAppTheme } from '../../theme/ThemeContext';
+import { MAX_FONT_SCALE } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
 import { OfflineBanner } from '../OfflineBanner';
 import { MasonrySkeleton } from '../skeletons/MasonrySkeleton';
@@ -15,10 +16,23 @@ import type { DiscoveryFeedUnit } from '../../contracts/discoveryFeedUnit';
 import type { DiscoveryListingSummary } from '../../contracts/DiscoveryListingSummary';
 import type { DynamicSignalChip } from '../../services/algorithmicSignalsService';
 import type { GalleriaCollection, GalleriaEditorial } from '../../services/galleriaApi';
+import type { DiscoveryModuleId } from '../../hooks/discovery/useDiscoveryContent';
 
 // ============================================================================
 // DISCOVERY FEED VIEW — the unified personalised surface
 // ============================================================================
+
+// Per-module failure attribution (FRESH-10): a failed module renders a
+// restrained retry row at its own position — never silently absent, never a
+// generic note over healthy modules. `staleModules` names the content
+// modules; `listingsError` covers the listings sync on a populated feed.
+const MODULE_LABELS: Record<DiscoveryModuleId, string> = {
+  looks: 'Looks',
+  posters: 'Posters',
+  moodboards: 'Moodboards',
+  collections: 'Collections',
+  editorials: 'Editorial',
+};
 
 export function DiscoveryFeedView({
   units,
@@ -39,6 +53,8 @@ export function DiscoveryFeedView({
   onCollectionPress,
   onRefresh,
   staleModules,
+  listingsError,
+  onEditorialPress,
   isRefreshing,
   hasMore,
   isLoadingMore,
@@ -65,9 +81,16 @@ export function DiscoveryFeedView({
   onMoodboardPress: (id: string) => void;
   onCollectionPress: (id: string) => void;
   onRefresh: () => void;
-  /** Modules whose last refresh rejected — their cached content stays
-   *  visible but must be labelled stale, not fresh (F21). */
-  staleModules?: string[];
+  /** Modules whose last refresh rejected, by identity — each renders a
+   *  restrained retry row at its own position (F21/FRESH-10). */
+  staleModules?: DiscoveryModuleId[];
+  /** Last listings-sync failure while the feed stays populated — rendered
+   *  as an inline retry row at the feed position, not a blocking state. */
+  listingsError?: string | null;
+  /** Opens the editorial's real destination (the Galleria surface that owns
+   *  the editorial). When absent the hero renders non-interactive —
+   *  never a fake affordance (FRESH-08). */
+  onEditorialPress?: () => void;
   /** True while the pull-to-refresh gesture's sources are still settling —
    *  keeps the RefreshControl honest (F06). */
   isRefreshing: boolean;
@@ -88,6 +111,37 @@ export function DiscoveryFeedView({
 }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createUnifiedDiscoveryStyles(colors), [colors]);
+
+  // A failed module's inline retry — hairline row, meta copy, brand text
+  // action. Reuses the active-filters row grammar; no new chrome.
+  const renderModuleRetry = (label: string) => (
+    <Pressable
+      key={label}
+      onPress={onRefresh}
+      accessibilityRole="button"
+      accessibilityLabel={`${label} couldn't load. Tap to retry.`}
+      style={({ pressed }) => [styles.activeFiltersRow, { opacity: pressed ? 0.6 : 1 }]}
+    >
+      <Text style={styles.activeFiltersText} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
+        {label} couldn't load
+      </Text>
+      <Text style={styles.clearFiltersText} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
+        Retry
+      </Text>
+    </Pressable>
+  );
+
+  // Feed-positioned modules: looks/posters/moodboards are woven into the
+  // masonry units, and the listings sync feeds the grid body — their retry
+  // rows sit at the top of the feed, where that content would appear.
+  const feedModuleRetryRows = !isOffline ? (
+    <>
+      {(['looks', 'posters', 'moodboards'] as const)
+        .filter((m) => staleModules?.includes(m))
+        .map((m) => renderModuleRetry(MODULE_LABELS[m]))}
+      {listingsError ? renderModuleRetry('Latest items') : null}
+    </>
+  ) : null;
 
   if (showError) {
     return (
@@ -142,22 +196,6 @@ export function DiscoveryFeedView({
     <>
       {isOffline && <OfflineBanner onRetry={onRefresh} />}
 
-      {/* Module-level staleness (F21): partial refresh failures keep their
-          cached sections visible, but the feed must say so — a quiet
-          tappable note, never a blocking error over working content. */}
-      {!isOffline && staleModules && staleModules.length > 0 && (
-        <Pressable
-          onPress={onRefresh}
-          accessibilityRole="button"
-          accessibilityLabel="Some sections couldn't refresh. Tap to retry."
-          style={({ pressed }) => [styles.staleNote, { opacity: pressed ? 0.6 : 1 }]}
-        >
-          <Text style={[styles.staleNoteText, { color: colors.textMuted }]} maxFontSizeMultiplier={2}>
-            Some sections couldn't refresh — tap to retry
-          </Text>
-        </Pressable>
-      )}
-
       {/* Category pills — horizontal scroll, dynamically driven by user algorithm.
           Wrapped in a ScrollView so 8+ pills scroll on narrow screens with a
           partial next pill visible at the edge (paddingRight: Space.md). */}
@@ -190,7 +228,7 @@ export function DiscoveryFeedView({
                     styles.categoryPillText,
                     isSelected && styles.categoryPillTextActive,
                   ]}
-                 maxFontSizeMultiplier={2}>
+                 maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
                   {chip.label}
                 </Text>
               </Pressable>
@@ -200,49 +238,98 @@ export function DiscoveryFeedView({
       </View>
 
       {/* Hero editorial — compact media strip, no decorative chrome.
-          Per 2026 research: hero max 96-120pt on discovery feeds. */}
-      {heroEditorial && heroEditorial.heroImage && (
-        <View style={styles.heroWrap}>
-          <CachedImage
-            uri={heroEditorial.heroImage}
-            style={styles.heroImage}
-            contentFit="cover"
-            priority="high"
-          />
-          <LinearGradient
-            colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.65)']}
-            style={styles.heroGradient}
-          />
-          <View style={styles.heroOverlay} pointerEvents="none">
-            <Text style={styles.heroEyebrow}>EDITORIAL</Text>
-            <Text style={styles.heroTitle} numberOfLines={2} maxFontSizeMultiplier={2}>
-              {heroEditorial.title}
-            </Text>
-            <Text style={styles.heroMeta} numberOfLines={1} maxFontSizeMultiplier={2}>
-              {heroEditorial.author} · {heroEditorial.readTime}
-            </Text>
+          Per 2026 research: hero max 96-120pt on discovery feeds.
+          FRESH-08: the hero is a real navigation target (the Galleria
+          surface that owns the editorial) when a handler is provided;
+          without one it renders non-interactive — no fake affordance.
+          FRESH-10: when the editorials module failed, its position shows a
+          restrained retry row instead of vanishing silently. */}
+      {heroEditorial && heroEditorial.heroImage ? (
+        onEditorialPress ? (
+          <Pressable
+            onPress={onEditorialPress}
+            style={({ pressed }) => [styles.heroWrap, { opacity: pressed ? 0.85 : 1 }]}
+            accessibilityRole="button"
+            accessibilityLabel={heroEditorial.title}
+            accessibilityHint="Opens the editorial in the Galleria"
+          >
+            <CachedImage
+              uri={heroEditorial.heroImage}
+              style={styles.heroImage}
+              contentFit="cover"
+              priority="high"
+            />
+            <LinearGradient
+              colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.65)']}
+              style={styles.heroGradient}
+            />
+            <View style={styles.heroOverlay} pointerEvents="none">
+              <Text style={styles.heroEyebrow}>EDITORIAL</Text>
+              <Text style={styles.heroTitle} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE.heading}>
+                {heroEditorial.title}
+              </Text>
+              <Text style={styles.heroMeta} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
+                {heroEditorial.author} · {heroEditorial.readTime}
+              </Text>
+            </View>
+          </Pressable>
+        ) : (
+          <View style={styles.heroWrap}>
+            <CachedImage
+              uri={heroEditorial.heroImage}
+              style={styles.heroImage}
+              contentFit="cover"
+              priority="high"
+            />
+            <LinearGradient
+              colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.65)']}
+              style={styles.heroGradient}
+            />
+            <View style={styles.heroOverlay} pointerEvents="none">
+              <Text style={styles.heroEyebrow}>EDITORIAL</Text>
+              <Text style={styles.heroTitle} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE.heading}>
+                {heroEditorial.title}
+              </Text>
+              <Text style={styles.heroMeta} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
+                {heroEditorial.author} · {heroEditorial.readTime}
+              </Text>
+            </View>
           </View>
-        </View>
-      )}
+        )
+      ) : null}
+      {/* Stale editorials keep their cached hero on screen — the failure is
+          still attributed at the module's position with an inline retry. */}
+      {!isOffline && staleModules?.includes('editorials')
+        ? renderModuleRetry(MODULE_LABELS.editorials)
+        : null}
 
-      {/* Curated collections rail — horizontal scroll of collection cards */}
-      {collections.length > 0 && (
+      {/* Curated collections rail — horizontal scroll of collection cards.
+          A failed collections module keeps its position: cached cards stay
+          on screen and the retry row attributes the stale refresh inline. */}
+      {collections.length > 0 || (!isOffline && staleModules?.includes('collections')) ? (
         <View style={styles.collectionsSection}>
           <Text style={styles.sectionTitle}>Curated collections</Text>
-          <HorizontalRail
-            contentContainerStyle={styles.railContent}
-            showsHorizontalScrollIndicator={false}
-          >
-            {collections.map((collection) => (
-              <DiscoveryCollectionRailCard
-                key={collection.id}
-                collection={collection}
-                onPress={() => onCollectionPress(collection.id)}
-              />
-            ))}
-          </HorizontalRail>
+          {collections.length > 0 ? (
+            <HorizontalRail
+              contentContainerStyle={styles.railContent}
+              showsHorizontalScrollIndicator={false}
+            >
+              {collections.map((collection) => (
+                <DiscoveryCollectionRailCard
+                  key={collection.id}
+                  collection={collection}
+                  onPress={() => onCollectionPress(collection.id)}
+                />
+              ))}
+            </HorizontalRail>
+          ) : null}
+          {!isOffline && staleModules?.includes('collections')
+            ? renderModuleRetry(MODULE_LABELS.collections)
+            : null}
         </View>
-      )}
+      ) : null}
+
+      {feedModuleRetryRows}
     </>
   );
 

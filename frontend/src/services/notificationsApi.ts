@@ -13,6 +13,9 @@ export type NotificationEventType =
   | 'order_delivered'
   | 'order_refunded'
   | 'order_dispatch_sla_breach'
+  | 'order_delivery_failed'
+  | 'order_parcel_lost'
+  | 'order_parcel_damaged'
   | 'resolution_opened'
   | 'resolution_status_changed'
   | 'review_received'
@@ -54,6 +57,8 @@ export type NotificationEventType =
   | 'support.case_resolved'
   | 'coown_buyout_accepted'
   | 'coown_verification_responded'
+  | 'coown_price_alert_triggered'
+  | 'coown_drip_receipt'
   | 'ops_alert'
   | 'safety_outcome'
   | 'generic';
@@ -470,6 +475,30 @@ export const NotificationEventRegistry: Record<NotificationEventType, Notificati
     aggregationTemplate: orderAggregation,
     objectExtractor: orderObjectExtractor,
   },
+  // Carrier-reported parcel failures while escrow is held — 'important'
+  // rather than 'action': the buyer cannot fix it, but silence would read
+  // as "still on the way". Mirrors the backend registry.
+  order_delivery_failed: {
+    semanticRole: 'commerce',
+    attention: 'important',
+    requiresAction: false,
+    aggregationTemplate: orderAggregation,
+    objectExtractor: orderObjectExtractor,
+  },
+  order_parcel_lost: {
+    semanticRole: 'commerce',
+    attention: 'important',
+    requiresAction: false,
+    aggregationTemplate: orderAggregation,
+    objectExtractor: orderObjectExtractor,
+  },
+  order_parcel_damaged: {
+    semanticRole: 'commerce',
+    attention: 'important',
+    requiresAction: false,
+    aggregationTemplate: orderAggregation,
+    objectExtractor: orderObjectExtractor,
+  },
   resolution_opened: {
     semanticRole: 'system',
     attention: 'action',
@@ -832,6 +861,30 @@ export const NotificationEventRegistry: Record<NotificationEventType, Notificati
     aggregationTemplate: (payload) => {
       const id = payloadString(payload, 'demandId') ?? payloadString(payload, 'assetId');
       return id ? `coown_demand:${id}` : null;
+    },
+    objectExtractor: () => undefined,
+  },
+  // Co-own price alert triggered — the asset's mark crossed the user's
+  // threshold. Per-asset aggregation; mirrors the backend registry.
+  coown_price_alert_triggered: {
+    semanticRole: 'financial',
+    attention: 'important',
+    requiresAction: false,
+    aggregationTemplate: (payload) => {
+      const id = payloadString(payload, 'assetId');
+      return id ? `coown_alert:${id}` : null;
+    },
+    objectExtractor: () => undefined,
+  },
+  // Co-own DRIP receipt — a settled distribution resolved to reinvested,
+  // retained cash, or a failed reinvestment. Mirrors the backend registry.
+  coown_drip_receipt: {
+    semanticRole: 'financial',
+    attention: 'important',
+    requiresAction: false,
+    aggregationTemplate: (payload) => {
+      const id = payloadString(payload, 'assetId');
+      return id ? `coown_drip:${id}` : null;
     },
     objectExtractor: () => undefined,
   },

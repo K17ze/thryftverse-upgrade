@@ -57,6 +57,19 @@ export interface ConflictDetail {
   message: string;
 }
 
+/**
+ * Discriminated outcome of a `submitBoardOps` batch — the history layer
+ * only advances undo/redo stacks on 'applied' or 'queued' (durable intent).
+ * 'conflict'/'forbidden'/'failed' mean the batch did not fully persist and
+ * the caller must reconcile the optimistic update against server truth.
+ */
+export type SubmitBoardOpsOutcome =
+  | 'applied'
+  | 'queued'
+  | 'conflict'
+  | 'forbidden'
+  | 'failed';
+
 export function useMoodboardBoard({ moodboardId }: { moodboardId?: string }) {
   const haptic = useHaptic();
   const { isOffline } = useConnectivity();
@@ -200,10 +213,16 @@ export function useMoodboardBoard({ moodboardId }: { moodboardId?: string }) {
   // pending rows are surfaced honestly through the sync status machine —
   // 'synced' is only reported when the queue is fully drained.
   const drainingRef = useRef(false);
-  const flushOutbox = useCallback(async () => {
-    if (isOffline || drainingRef.current || !isDbAvailable()) return;
+  const flushOutbox = useCallback(async (): Promise<SubmitBoardOpsOutcome> => {
+    if (!isDbAvailable()) return 'failed';
+    // Rows already enqueued are durable intent — whether we are offline or
+    // another drain owns the queue right now, they will be retried.
+    if (isOffline || drainingRef.current) return 'queued';
     drainingRef.current = true;
     try {
+      // True when a drain reported per-row errors; whether that is terminal
+      // depends on what is still pending afterwards (checked below).
+      let sawErrors = false;
       for (;;) {
         const pending = await getMoodboardOutboxPendingCount();
         if (pending === 0) break;
@@ -217,7 +236,7 @@ export function useMoodboardBoard({ moodboardId }: { moodboardId?: string }) {
             currentRevision: boardRevisionRef.current,
             message: 'Another edit changed this board. Your canvas has been updated to the latest version.' });
           haptic.warning();
-          return;
+          return 'conflict';
         }
         if (result.forbidden > 0) {
           setSyncStatus('error');
@@ -225,12 +244,11 @@ export function useMoodboardBoard({ moodboardId }: { moodboardId?: string }) {
             currentRevision: boardRevisionRef.current,
             message: 'You no longer have permission to edit this board. Your unsaved work is preserved locally.' });
           haptic.error();
-          return;
+          return 'forbidden';
         }
         if (result.errors > 0) {
-          setSyncStatus('error');
-          haptic.error();
-          return;
+          sawErrors = true;
+          break;
         }
         // A drain that applied nothing and failed nothing made no progress —
         // stop looping and let the pending check below report honestly.
@@ -238,13 +256,21 @@ export function useMoodboardBoard({ moodboardId }: { moodboardId?: string }) {
       }
       const remaining = await getMoodboardOutboxPendingCount();
       if (remaining > 0) {
-        // Ops are still queued — do not claim success.
+        // Ops are still queued — do not claim success. They are durable and
+        // will flush on the next drain, so 'queued' is the honest outcome.
         setSyncStatus('error');
         haptic.error();
-      } else {
-        setSyncStatus('synced');
-        setTimeout(() => setSyncStatus('idle'), 1500);
+        return 'queued';
       }
+      if (sawErrors) {
+        // Nothing left pending — every queued row was terminally rejected.
+        setSyncStatus('error');
+        haptic.error();
+        return 'failed';
+      }
+      setSyncStatus('synced');
+      setTimeout(() => setSyncStatus('idle'), 1500);
+      return 'applied';
     } finally {
       drainingRef.current = false;
     }
@@ -305,28 +331,44 @@ export function useMoodboardBoard({ moodboardId }: { moodboardId?: string }) {
   // rows flush on reconnect. Without a local DB the ops are submitted
   // online in order, advancing the base revision from each applied
   // response and stopping on conflict/forbidden.
+  //
+  // Returns a SubmitBoardOpsOutcome describing how far the batch got —
+  // 'applied' when every op persisted, 'queued' when the intent is durable
+  // in the outbox, and 'conflict'/'forbidden'/'failed' when it did not
+  // fully persist (possibly a prefix of the ops — the caller must
+  // reconcile rather than trust the optimistic update). Ordering policy:
+  // submissions serialize on the server board revision — a concurrent edit
+  // that lands first surfaces as 'conflict' and reconciles, instead of a
+  // client-side lock that could deadlock the editor.
   const submitBoardOps = useCallback(
-    async (ops: MoodboardQueuedOp[], baseRev?: number) => {
-      if (!moodboard) return;
+    async (ops: MoodboardQueuedOp[], baseRev?: number): Promise<SubmitBoardOpsOutcome> => {
+      if (!moodboard) return 'failed';
       if (ops.length === 0) {
         setSyncStatus('idle');
-        return;
+        return 'applied';
       }
       setSyncStatus('syncing');
       setConflictDetail(null);
       const base = baseRev ?? boardRevisionRef.current;
 
       if (isDbAvailable()) {
-        for (const op of ops) {
-          await enqueueMoodboardOperation({
-            operationId: op.operationId ?? createStableId('op'),
-            boardId: moodboard.id,
-            operation: op.operation,
-            payload: op.payload,
-            baseRev: base });
+        try {
+          for (const op of ops) {
+            await enqueueMoodboardOperation({
+              operationId: op.operationId ?? createStableId('op'),
+              boardId: moodboard.id,
+              operation: op.operation,
+              payload: op.payload,
+              baseRev: base });
+          }
+        } catch {
+          // The intent never reached durable storage — report failure so
+          // callers reconcile instead of trusting the optimistic update.
+          setSyncStatus('error');
+          haptic.error();
+          return 'failed';
         }
-        await flushOutbox();
-        return;
+        return flushOutbox();
       }
 
       let nextBaseRev = base;
@@ -343,13 +385,15 @@ export function useMoodboardBoard({ moodboardId }: { moodboardId?: string }) {
             boardRevisionRef.current = response.revision;
           }
           handleOperationResponse(response);
-          if (response.outcome === 'conflict' || response.outcome === 'forbidden') break;
+          if (response.outcome === 'conflict') return 'conflict';
+          if (response.outcome === 'forbidden') return 'forbidden';
         } catch {
           setSyncStatus('error');
           haptic.error();
-          break;
+          return 'failed';
         }
       }
+      return 'applied';
     },
     [moodboard, haptic, flushOutbox, handleOperationResponse],
   );

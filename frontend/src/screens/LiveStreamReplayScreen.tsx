@@ -17,7 +17,7 @@
  * the stack, keeping the deep-linkable /sessions/:id contract intact.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   StyleSheet,
@@ -190,7 +190,14 @@ export function LiveStreamReplayScreen() {
   const [playbackAttempt, setPlaybackAttempt] = useState(0);
   const [moreReplays, setMoreReplays] = useState<LiveSession[] | null>(null);
 
+  // S20-07: monotonic epoch guards the primary fetch — every load (initial,
+  // session change, retry, refetch) increments it and captures its value;
+  // only the newest request may write state. The effect cleanup bumps it so
+  // a late response can't fire on an unmounted or superseded screen.
+  const loadEpochRef = useRef(0);
+
   const load = useCallback(async () => {
+    const epoch = ++loadEpochRef.current;
     setPhase('loading');
     setPlaybackFailed(false);
     if (!sessionId) {
@@ -201,12 +208,14 @@ export function LiveStreamReplayScreen() {
     }
     try {
       const result = await fetchSessionReplay(sessionId);
+      if (epoch !== loadEpochRef.current) return;
       setReplay(result);
       setPhase('ready');
       if (result?.recordingUrl) {
         track('live_stream_viewed', { stream_id: sessionId });
       }
     } catch {
+      if (epoch !== loadEpochRef.current) return;
       setReplay(null);
       setPhase('error');
     }
@@ -214,6 +223,9 @@ export function LiveStreamReplayScreen() {
 
   useEffect(() => {
     void load();
+    return () => {
+      loadEpochRef.current += 1;
+    };
   }, [load]);
 
   // Secondary surface — other ended sessions for continuous watching. A
@@ -241,12 +253,30 @@ export function LiveStreamReplayScreen() {
     setPlaybackFailed(true);
   }, []);
 
-  const handleRetryPlayback = useCallback(() => {
-    setPlaybackFailed(false);
-    // Remounting the player stage recreates the source cleanly — a replay
-    // retry is a fresh watch attempt, not a resume.
-    setPlaybackAttempt((n) => n + 1);
-  }, []);
+  // A playback failure on a signed recording URL usually means the URL
+  // expired — remounting replays the same dead URL forever. Retry refetches
+  // the replay payload through the same API path for a fresh URL (or an
+  // honest processing/not-found state when the recording is gone).
+  const handleRetryPlayback = useCallback(async () => {
+    if (!sessionId) return;
+    const epoch = ++loadEpochRef.current;
+    try {
+      const fresh = await fetchSessionReplay(sessionId);
+      if (epoch !== loadEpochRef.current) return;
+      // Apply the fresh payload unconditionally — a null (session gone) or
+      // recordingUrl-less (still processing) response must replace the stale
+      // replay so the screen renders the honest state instead of remounting
+      // the expired URL forever.
+      setReplay(fresh);
+      setPlaybackFailed(false);
+      // Remount the player stage — a retry is a fresh watch attempt against
+      // the (possibly refreshed) URL, not a resume of the failed source.
+      setPlaybackAttempt((n) => n + 1);
+    } catch {
+      if (epoch !== loadEpochRef.current) return;
+      // Refetch failed — keep the honest playback-error state and retry.
+    }
+  }, [sessionId]);
 
   const openReplay = useCallback(
     (id: string) => {

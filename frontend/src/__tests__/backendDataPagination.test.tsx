@@ -138,3 +138,73 @@ describe('BackendDataContext — cursor pagination', () => {
     expect(latest.listings.map((l) => l.id)).toEqual(['a']);
   });
 });
+
+describe('BackendDataContext — refresh failure keeps last-good (FRESH-02)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('keeps last-good listings and surfaces the error when a refresh fails', async () => {
+    // Regression: a failed refresh used to setListings([]), blanking cached
+    // listing content app-wide. Now the last-good page stays on screen,
+    // `lastError` carries the failure, and `source` degrades to 'cache'.
+    mockedFetchHomeFeed
+      .mockResolvedValueOnce(feedPage(['a', 'b'], 'cursor-2'))
+      .mockResolvedValueOnce({ ...feedPage([], null), error: 'boom', failed: true });
+
+    await mount();
+    expect(latest.listings.map((l) => l.id)).toEqual(['a', 'b']);
+    expect(latest.source).toBe('api');
+
+    await act(async () => { await latest.refreshListings(); });
+
+    expect(latest.listings.map((l) => l.id)).toEqual(['a', 'b']);
+    expect(latest.lastError).toBe('boom');
+    expect(latest.source).toBe('cache');
+    // Pagination state belongs to the last-good page still on screen.
+    expect(latest.hasMore).toBe(true);
+    expect(latest.isSyncing).toBe(false);
+  });
+
+  it('recovers to a live source when the next refresh succeeds', async () => {
+    mockedFetchHomeFeed
+      .mockResolvedValueOnce(feedPage(['a'], 'cursor-2'))
+      .mockResolvedValueOnce({ ...feedPage([], null), error: 'boom', failed: true })
+      .mockResolvedValueOnce(feedPage(['c'], 'cursor-9'));
+
+    await mount();
+    await act(async () => { await latest.refreshListings(); });
+    expect(latest.listings.map((l) => l.id)).toEqual(['a']);
+    expect(latest.source).toBe('cache');
+
+    await act(async () => { await latest.refreshListings(); });
+    expect(latest.listings.map((l) => l.id)).toEqual(['c']);
+    expect(latest.source).toBe('api');
+    expect(latest.lastError).toBeNull();
+  });
+
+  it('reports the error without a cache source when there is nothing cached', async () => {
+    mockedFetchHomeFeed
+      .mockResolvedValueOnce({ ...feedPage([], null), error: 'boom', failed: true });
+
+    await mount();
+    expect(latest.listings).toEqual([]);
+    expect(latest.lastError).toBe('boom');
+    expect(latest.source).toBe('api');
+  });
+
+  it('still clears listings on a genuinely empty successful page', async () => {
+    // An empty SUCCESS is truthful: the feed really is empty, so the
+    // last-good page must not linger.
+    mockedFetchHomeFeed
+      .mockResolvedValueOnce(feedPage(['a'], 'cursor-2'))
+      .mockResolvedValueOnce(feedPage([], null));
+
+    await mount();
+    await act(async () => { await latest.refreshListings(); });
+
+    expect(latest.listings).toEqual([]);
+    expect(latest.hasMore).toBe(false);
+    expect(latest.source).toBe('api');
+  });
+});

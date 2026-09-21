@@ -48,7 +48,7 @@ import { BuyerProtectionStrip } from '../components/product';
 import { haptics } from '../utils/haptics';
 import { getListingCoverUri } from '../utils/media';
 import { Space, FontFamily } from '../theme/designTokens';
-import { TypographyV2 } from '../theme/typography.v2';
+import { TypographyV2, MAX_FONT_SCALE } from '../theme/typography.v2';
 import { useCheckoutData } from '../hooks/checkout/useCheckoutData';
 import { toIze } from '../utils/currency';
 import { useCheckoutHydration } from '../hooks/checkout/useCheckoutHydration';
@@ -194,6 +194,8 @@ export default function CheckoutScreen() {
     paymentIssue,
     onezeRequiredIze,
     handlePay,
+    platformPayEligible,
+    handlePlatformPay,
     cancelStaleOrder,
     handleCheckPaymentStatus,
     createdOrderIdRef,
@@ -641,9 +643,13 @@ export default function CheckoutScreen() {
   // device check says this device can actually present it (a card in
   // Wallet, Google Pay provisioned). A capability-only "Pay with Apple Pay"
   // CTA on an unprovisioned device is a false promise — gate on both.
+  // The capability check FAILS CLOSED (explicit `false` fallback): when the
+  // capability fetch failed, checkoutCapabilities is null and the branded
+  // tender CTA must not render next to the "could not verify payment
+  // capabilities" banner — an affordance the surface can't back.
   const walletAvailable = !isSubmitting && platformPaySupported && (
-    (Platform.OS === 'ios' && isPaymentMethodAllowed(checkoutCapabilities, 'apple_pay'))
-    || (Platform.OS === 'android' && isPaymentMethodAllowed(checkoutCapabilities, 'google_pay'))
+    (Platform.OS === 'ios' && isPaymentMethodAllowed(checkoutCapabilities, 'apple_pay', false))
+    || (Platform.OS === 'android' && isPaymentMethodAllowed(checkoutCapabilities, 'google_pay', false))
   );
 
   const payLabel = getCheckoutPayLabel({
@@ -946,7 +952,7 @@ export default function CheckoutScreen() {
           />
         ) : null}
 
-        <Text style={[styles.termsText, t.termsText]} maxFontSizeMultiplier={2}>
+        <Text style={[styles.termsText, t.termsText]} maxFontSizeMultiplier={MAX_FONT_SCALE.content}>
           By tapping "Pay", you agree to our Terms of Sale and Privacy Policy.
         </Text>
       </ScrollView>
@@ -964,9 +970,14 @@ export default function CheckoutScreen() {
         payDisabled={!checkoutEligible || isInteractionLocked}
         isSubmitting={isSubmitting}
         walletAvailable={walletAvailable}
-        showApplePay={Platform.OS === 'ios' && isPaymentMethodAllowed(checkoutCapabilities, 'apple_pay') && !isSubmitting}
-        showGooglePay={Platform.OS === 'android' && isPaymentMethodAllowed(checkoutCapabilities, 'google_pay') && !isSubmitting}
+        // Branded tender CTAs fail closed: unverified capabilities (null
+        // after a failed fetch) mean no wallet button — never a promise the
+        // surface can't back (P2).
+        showApplePay={Platform.OS === 'ios' && platformPaySupported && isPaymentMethodAllowed(checkoutCapabilities, 'apple_pay', false) && !isSubmitting}
+        showGooglePay={Platform.OS === 'android' && platformPaySupported && isPaymentMethodAllowed(checkoutCapabilities, 'google_pay', false) && !isSubmitting}
         onPay={handlePay}
+        onWalletPay={handlePlatformPay}
+        walletPayDisabled={!platformPayEligible || isInteractionLocked}
         reducedMotion={reducedMotionEnabled}
       />
 

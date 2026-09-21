@@ -8,38 +8,10 @@
  * service. Falls back to in-memory tracking if Redis is unavailable,
  * so the tracker degrades gracefully without crashing the server.
  *
- * ── Wiring into Fastify onResponse hook ──────────────────────────────
- *
- * To automatically track every request, add this to the Fastify
- * `onResponse` hook in src/index.ts:
- *
- *   import { getSloTracker } from './lib/sloTracker.js';
- *
- *   const sloTracker = getSloTracker();
- *
- *   app.addHook('onResponse', async (request, reply) => {
- *     const service = request.routerPath
- *       ? request.routerPath.split('/')[1] || 'unknown'
- *       : 'unknown';
- *     const success = reply.statusCode < 500;
- *     const latencyMs = reply.elapsedTime;
- *     sloTracker.recordRequest(service, success, latencyMs);
- *   });
- *
- * The service name is derived from the first path segment (e.g. "auth",
- * "listings", "auctions"). Adjust the segmentation logic as needed.
- *
- * ── Exposing the SLO report ──────────────────────────────────────────
- *
- * To expose SLO metrics, add a route in src/index.ts:
- *
- *   import { getSloReport } from './lib/sloTracker.js';
- *
- *   app.get('/metrics/slo', { preHandler: [docsAuthHook] }, async () => {
- *     return getSloReport();
- *   });
- *
- * Gate it behind admin auth in production (same as /metrics).
+ * Wired in src/index.ts: the `onResponse` hook records every completed
+ * request (service = first route segment, e.g. "listings", "payments"),
+ * and routes/health.ts exposes `GET /metrics/slo` behind the same
+ * `docsAuthHook` admin gate as `/metrics`.
  */
 
 import { redis } from './redis.js';

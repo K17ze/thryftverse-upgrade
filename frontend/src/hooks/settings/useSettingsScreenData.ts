@@ -28,18 +28,27 @@ export function useSettingsScreenData(): UseSettingsScreenDataResult {
   const [walletBalance, setWalletBalance] = React.useState<number | null>(null);
   const [walletBalanceFailed, setWalletBalanceFailed] = React.useState(false);
 
-  // Balance truth: a fetch failure leaves walletBalance null and sets the
+  // Balance truth: the snapshot is scoped to the account identity. Any
+  // identity change (sign-out, account switch) clears the previous balance
+  // immediately — a retained hook must never show user A's £-figure as
+  // user B's balance while the new fetch is in flight. A fetch failure or
+  // a malformed/partial snapshot leaves walletBalance null and sets the
   // failed flag — the card renders "Unavailable", never a fabricated £0.
   React.useEffect(() => {
-    if (!currentUser?.id) return;
-    let cancelled = false;
+    setWalletBalance(null);
     setWalletBalanceFailed(false);
-    getWalletSnapshot(currentUser.id)
+    const userId = currentUser?.id;
+    if (!userId) return;
+    let cancelled = false;
+    getWalletSnapshot(userId)
       .then((res) => {
         if (cancelled) return;
-        if (res) {
-          setWalletBalance(res.snapshot?.availableGbp ?? 0);
+        const availableGbp = res?.snapshot?.availableGbp;
+        if (typeof availableGbp === 'number' && Number.isFinite(availableGbp)) {
+          setWalletBalance(availableGbp);
         } else {
+          // Successful response but unusable/missing balance — unavailable,
+          // not zero.
           setWalletBalanceFailed(true);
         }
       })

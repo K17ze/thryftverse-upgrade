@@ -50,7 +50,7 @@ jobs:
         working-directory: frontend
 
   build-and-deploy:
-    name: EAS Build + Update (preview channel)
+    name: EAS Build + Update (preview profile → staging channel)
     needs: pre-build-gates
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -86,9 +86,30 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Publish OTA update to preview channel
+      - name: Verify release configuration (F18)
+        # Fail-closed: staging clients enforce OTA code signing too, so an
+        # unsigned staging update would be rejected on-device.
         working-directory: frontend
-        run: eas update --channel preview --non-interactive --message "staging deploy (${{ github.sha }})"
+        run: npm run check:release-config -- ota
+        env:
+          EXPO_PUBLIC_OTA_CODE_SIGNING_KEY: ${{ secrets.EXPO_OTA_CODE_SIGNING_PRIVATE_KEY || secrets.EXPO_PUBLIC_OTA_CODE_SIGNING_KEY }}
+
+      - name: Materialize OTA signing key
+        env:
+          OTA_CODE_SIGNING_PRIVATE_KEY: ${{ secrets.EXPO_OTA_CODE_SIGNING_PRIVATE_KEY || secrets.EXPO_PUBLIC_OTA_CODE_SIGNING_KEY }}
+        run: |
+          if [ -z "$OTA_CODE_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::OTA signing private key secret is required (EXPO_OTA_CODE_SIGNING_PRIVATE_KEY)."
+            exit 1
+          fi
+          key_path="$RUNNER_TEMP/ota-private-key.pem"
+          printf '%s' "$OTA_CODE_SIGNING_PRIVATE_KEY" > "$key_path"
+          chmod 600 "$key_path"
+          echo "OTA_PRIVATE_KEY_PATH=$key_path" >> "$GITHUB_ENV"
+
+      - name: Publish OTA update to staging channel
+        working-directory: frontend
+        run: eas update --channel staging --non-interactive --private-key-path "$OTA_PRIVATE_KEY_PATH" --message "staging deploy (${{ github.sha }})"
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 

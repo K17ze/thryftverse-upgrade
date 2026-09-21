@@ -15,6 +15,7 @@ import {
 } from '../lib/metrics.js';
 import { assertKeyServiceConnectivity } from '../lib/keyService.js';
 import { assertS3BucketConnectivity } from '../lib/s3.js';
+import { getSloReport } from '../lib/sloTracker.js';
 import { getConfiguredClusters } from '../lib/countryCapabilities.js';
 import { createSearchAdapter } from '../lib/searchAdapter.js';
 
@@ -117,6 +118,11 @@ export const registerHealthRoutes = ({
     reply.header('Content-Type', metricsContentType());
     return renderMetrics();
   });
+
+  // SLO/error-budget report — same admin gate as /metrics.
+  app.get('/metrics/slo', {
+    preHandler: [docsAuthHook],
+  }, async () => getSloReport());
 
   app.get('/health/deep', async (request, reply) => {
     const securityAdminError = ensureSecurityAdminAccess(request, reply);

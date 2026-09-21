@@ -63,6 +63,12 @@ export interface NearestMediaEmbeddingsFilter {
   modelId?: string;
   modelVersion?: string;
   preprocessingVersion?: string;
+  /**
+   * Restrict to a declared dimensionality. Always constrain this to the
+   * query vector's length — embeddings from different dimensionalities are
+   * incomparable vector spaces and must never be ranked together.
+   */
+  dimensions?: number;
   /** Restrict to an explicit candidate set of media assets. */
   mediaAssetIds?: string[];
 }
@@ -91,13 +97,27 @@ export interface NearestMediaEmbeddingsResult {
   hits: NearestMediaEmbeddingHit[];
   /**
    * The method that actually produced `hits`:
-   *   - 'pgvector_ann'     — `embedding_vec <=>` ordering inside Postgres.
-   *   - 'bytea_exact_scan' — in-application cosine scan over decoded BYTEA.
+   *   - 'pgvector_ann'      — `embedding_vec <=>` ordering inside Postgres
+   *                         backed by an HNSW/IVFFlat index.
+   *   - 'pgvector_exact'    — same `embedding_vec <=>` ordering but WITHOUT
+   *                         an ANN index (migration 326 treats index
+   *                         failure as a notice, so a no-index deployment
+   *                         must not claim ANN — the column still answers
+   *                         correct exact scans).
+   *   - 'bytea_exact_scan'  — in-application cosine scan over decoded BYTEA.
    */
-  method: 'pgvector_ann' | 'bytea_exact_scan';
+  method: 'pgvector_ann' | 'pgvector_exact' | 'bytea_exact_scan';
   /** true when the pgvector fast path was unavailable and the degraded scan ran. */
   degraded: boolean;
-  degradedReason?: 'pgvector_not_installed';
+  /**
+   * Why the degraded scan ran:
+   *   - 'pgvector_not_installed' — no `embedding_vec` column on this deploy.
+   *   - 'dimension_mismatch'     — the column exists but is vector(512) and
+   *     the query vector is a different length; the BYTEA path's per-row
+   *     dimensions check enforces comparability instead of letting Postgres
+   *     raise a vector-dimension error.
+   */
+  degradedReason?: 'pgvector_not_installed' | 'dimension_mismatch';
   /** Rows examined by the degraded scan. */
   scannedRows?: number;
   /** true when BYTEA_SCAN_CAP truncated the degraded scan's candidate set. */
@@ -161,6 +181,149 @@ export async function hasMediaEmbeddingVectorColumn(
   }
 }
 
+/**
+ * Probed pgvector capability on this deployment (audit N5). Migration 326
+ * treats ANN-index creation failure as a NOTICE — not a hard failure — so
+ * `embedding_vec` can exist with no HNSW/IVFFlat index behind it. Reporting
+ * 'ann' in that state would be a fabricated capability claim; 'exact' is
+ * the honest label for a column that serves correct-but-unindexed scans.
+ * Fails closed to 'none' on any probe error.
+ */
+export type MediaEmbeddingVectorCapability = 'ann' | 'exact' | 'none';
+
+export async function mediaEmbeddingVectorCapability(
+  db: Queryable,
+): Promise<MediaEmbeddingVectorCapability> {
+  try {
+    const res = await db.query(
+      `SELECT
+         EXISTS (
+           SELECT 1
+           FROM pg_attribute
+           WHERE attrelid = 'public.media_embeddings'::regclass
+             AND attname = 'embedding_vec'
+             AND NOT attisdropped
+         ) AS has_column,
+         EXISTS (
+           SELECT 1
+           FROM pg_indexes
+           WHERE schemaname = 'public'
+             AND tablename = 'media_embeddings'
+             AND indexdef ILIKE '%embedding_vec%'
+             AND (indexdef ILIKE '%USING hnsw%' OR indexdef ILIKE '%USING ivfflat%')
+         ) AS has_ann_index`,
+    );
+    const row = res.rows[0] as
+      | { has_column: boolean; has_ann_index: boolean }
+      | undefined;
+    if (row?.has_column !== true) {
+      return 'none';
+    }
+    return row.has_ann_index === true ? 'ann' : 'exact';
+  } catch {
+    return 'none';
+  }
+}
+
+/**
+ * The serving embedding lineage — the (model_id, model_version,
+ * preprocessing_version, dimensions) tuple that currently holds the most
+ * ready embeddings. Anchors and neighbour queries must agree on ONE lineage:
+ * vectors from different model lineages or dimensionalities are points in
+ * incomparable spaces, and a cross-space "similarity" is a fabricated rank.
+ *
+ * Dominant-by-coverage is deliberate: during a model rollover the new
+ * lineage is mid-backfill, so ranking on the lineage with the most ready
+ * rows keeps serving on the complete corpus until the new model's coverage
+ * overtakes it. `latest_at` breaks ties toward the newest lineage.
+ */
+export interface ServingEmbeddingLineage {
+  modelId: string;
+  modelVersion: string;
+  preprocessingVersion: string;
+  dimensions: number;
+}
+
+export async function resolveServingEmbeddingLineage(
+  db: Queryable,
+): Promise<ServingEmbeddingLineage | null> {
+  try {
+    const res = await db.query(
+      `SELECT
+         model_id, model_version, preprocessing_version, dimensions,
+         COUNT(*)::int AS ready_rows,
+         MAX(generated_at) AS latest_at
+       FROM media_embeddings
+       WHERE status = 'ready' AND norm > 0
+       GROUP BY model_id, model_version, preprocessing_version, dimensions
+       ORDER BY ready_rows DESC, latest_at DESC
+       LIMIT 1`,
+    );
+    const row = res.rows[0] as
+      | {
+          model_id: string;
+          model_version: string;
+          preprocessing_version: string;
+          dimensions: number;
+        }
+      | undefined;
+    if (!row) {
+      return null;
+    }
+    return {
+      modelId: row.model_id,
+      modelVersion: row.model_version,
+      preprocessingVersion: row.preprocessing_version,
+      dimensions: Number(row.dimensions),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Map nearest-neighbour media assets back to their bound listings while
+ * preserving ANN rank (audit N4). `assetDistances` carries the
+ * (media_asset_id → best cosine distance) pairs produced by
+ * `nearestMediaEmbeddings`; the VALUES join keeps each asset's rank and the
+ * GROUP BY aggregates a listing bound to several assets down to its best
+ * distance. Returns listing ids ordered by ascending best distance — the
+ * order the caller must feed to `array_position` for a truthful source_rank.
+ */
+export async function mapNeighbourAssetsToListings(
+  db: Queryable,
+  assetDistances: ReadonlyMap<string, number>,
+  limit?: number,
+): Promise<Array<{ listingId: string; distance: number }>> {
+  if (assetDistances.size === 0) {
+    return [];
+  }
+  const assetIds = [...assetDistances.keys()];
+  const distances = assetIds.map((id) => assetDistances.get(id)!);
+  const cap =
+    limit === undefined ? null : Math.max(1, Math.trunc(limit));
+  const res = await db.query(
+    `SELECT mb.target_ref_id AS listing_id,
+            MIN(n.distance) AS best_distance
+     FROM media_bindings mb
+     JOIN unnest($1::text[], $2::float8[]) WITH ORDINALITY
+       AS n(media_asset_id, distance, ann_rank)
+       ON n.media_asset_id = mb.media_asset_id
+     WHERE mb.target_type = 'listing'
+       AND mb.removed_at IS NULL
+     GROUP BY mb.target_ref_id
+     ORDER BY best_distance ASC, MIN(n.ann_rank) ASC
+     ${cap === null ? '' : 'LIMIT $3'}`,
+    cap === null ? [assetIds, distances] : [assetIds, distances, cap],
+  );
+  return (res.rows as Array<{ listing_id: string; best_distance: number | string }>).map(
+    (row) => ({
+      listingId: row.listing_id,
+      distance: Number(row.best_distance),
+    }),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Nearest-neighbour serving
 // ---------------------------------------------------------------------------
@@ -185,21 +348,29 @@ export async function nearestMediaEmbeddings(
   );
   const filter = query.filter ?? {};
 
-  // A zero or empty query vector has undefined cosine similarity on both
-  // paths (pgvector `<=>` returns NaN for zero-norm vectors; the BYTEA scan
-  // would report all-zero similarity). Return an honest empty result rather
-  // than a meaningless ranking — `method`/`degraded` still report which
-  // path is provisioned on this environment.
-  if (
-    query.queryEmbedding.length === 0 ||
-    computeL2Norm(query.queryEmbedding) === 0
-  ) {
-    const vectorColumn = await hasMediaEmbeddingVectorColumn(db);
+  // A zero, empty, or non-finite query vector has undefined cosine
+  // similarity on both paths (pgvector `<=>` returns NaN for zero-norm
+  // vectors and rejects NaN/Infinity literals; the BYTEA scan would report
+  // all-zero similarity). Return an honest empty result rather than a
+  // meaningless ranking — `method`/`degraded` still report which path is
+  // provisioned on this environment.
+  const queryVectorUsable =
+    query.queryEmbedding.length > 0 &&
+    query.queryEmbedding.every((value) => Number.isFinite(value)) &&
+    computeL2Norm(query.queryEmbedding) > 0;
+  if (!queryVectorUsable) {
+    const capability = await mediaEmbeddingVectorCapability(db);
     return {
       hits: [],
-      method: vectorColumn ? 'pgvector_ann' : 'bytea_exact_scan',
-      degraded: !vectorColumn,
-      degradedReason: vectorColumn ? undefined : 'pgvector_not_installed',
+      method:
+        capability === 'ann'
+          ? 'pgvector_ann'
+          : capability === 'exact'
+            ? 'pgvector_exact'
+            : 'bytea_exact_scan',
+      degraded: capability === 'none',
+      degradedReason:
+        capability === 'none' ? 'pgvector_not_installed' : undefined,
       scannedRows: 0,
       skippedRows: 0,
     };
@@ -221,12 +392,25 @@ export async function nearestMediaEmbeddings(
     args.push(filter.preprocessingVersion);
     conditions.push(`preprocessing_version = $${args.length}`);
   }
+  if (filter.dimensions !== undefined) {
+    args.push(Math.trunc(filter.dimensions));
+    conditions.push(`dimensions = $${args.length}`);
+  }
   if (filter.mediaAssetIds && filter.mediaAssetIds.length > 0) {
     args.push(filter.mediaAssetIds);
     conditions.push(`media_asset_id = ANY($${args.length})`);
   }
 
-  if (await hasMediaEmbeddingVectorColumn(db)) {
+  // The vector(512) column can only serve a 512-dim query — any other
+  // length is a different vector space, so route it to the BYTEA scan where
+  // the per-row dimensions check enforces comparability instead of letting
+  // Postgres raise a dimension-mismatch error.
+  const capability = await mediaEmbeddingVectorCapability(db);
+  const vectorPathUsable =
+    capability !== 'none' &&
+    query.queryEmbedding.length === EMBEDDING_VECTOR_DIMENSIONS;
+
+  if (vectorPathUsable) {
     const vectorParam = args.length + 1;
     const limitParam = args.length + 2;
     const res = await db.query(
@@ -254,7 +438,13 @@ export async function nearestMediaEmbeddings(
         similarity: 1 - distance,
       };
     });
-    return { hits, method: 'pgvector_ann', degraded: false };
+    // Report the probed index capability, not just the column's presence:
+    // 'pgvector_exact' when migration 326's index creation was skipped.
+    return {
+      hits,
+      method: capability === 'ann' ? 'pgvector_ann' : 'pgvector_exact',
+      degraded: false,
+    };
   }
 
   // ── Degraded path: bounded exact scan over decoded BYTEA payloads ──────
@@ -283,8 +473,13 @@ export async function nearestMediaEmbeddings(
       ? row.embedding
       : Buffer.from(row.embedding);
     // A payload that disagrees with its declared dimensions is corrupt —
-    // skip it rather than decode a wrong-length vector.
-    if (buffer.length !== row.dimensions * 4) {
+    // skip it rather than decode a wrong-length vector. Rows whose declared
+    // dimensionality differs from the query vector's are an incomparable
+    // vector space — never score a shared-prefix dot product across spaces.
+    if (
+      row.dimensions !== query.queryEmbedding.length ||
+      buffer.length !== row.dimensions * 4
+    ) {
       skippedRows++;
       continue;
     }
@@ -311,7 +506,8 @@ export async function nearestMediaEmbeddings(
     hits: scored.slice(0, limit),
     method: 'bytea_exact_scan',
     degraded: true,
-    degradedReason: 'pgvector_not_installed',
+    degradedReason:
+      capability === 'none' ? 'pgvector_not_installed' : 'dimension_mismatch',
     scannedRows: res.rows.length,
     scanTruncated: res.rows.length >= BYTEA_SCAN_CAP,
     skippedRows,

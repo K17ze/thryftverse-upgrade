@@ -47,7 +47,7 @@ const loaderSource = [
   "  if (url.includes('/lib/moderation/moderationService')) {",
   '    return {',
   '      format: "module",',
-  "      source: 'export async function moderateListingText(listingId, text) { const g = globalThis; g.__listingModerationCalls = (g.__listingModerationCalls ?? 0) + 1; g.__listingModerationTexts = g.__listingModerationTexts ?? []; g.__listingModerationTexts.push(text); return g.__listingModerationResult ?? { status: \\'approved\\', confidence: 1, labels: [], provider: \\'test\\', modelVersion: \\'test\\', processingTimeMs: 0 }; }',",
+  "      source: 'export async function moderateListingText(listingId, text) { const g = globalThis; g.__listingModerationCalls = (g.__listingModerationCalls ?? 0) + 1; g.__listingModerationTexts = g.__listingModerationTexts ?? []; g.__listingModerationTexts.push(text); return g.__listingModerationResult ?? { status: \\'approved\\', confidence: 1, labels: [], provider: \\'test\\', modelVersion: \\'test\\', processingTimeMs: 0 }; } export function listingTextGateAction(status) { if (status === \\'rejected\\') return \\'block\\'; if (status === \\'review\\' || status === \\'failed\\') return \\'hold\\'; return \\'publish\\'; }',",
   '      shortCircuit: true,',
   '    };',
   '  }',
@@ -468,6 +468,117 @@ test('bulk edits that do not touch text skip moderation entirely', async () => {
 
   assert.equal(result.status, 'applied');
   assert.equal(moderationGlobals.__listingModerationCalls, 0);
+});
+
+// ── Bulk text edits fail closed on review/failed (moderation hold) ───────
+
+function editLockDbWithLiveLot(): ReturnType<typeof createMockDb> {
+  return createMockDb((text) => {
+    if (/FROM listings/.test(text) && /FOR UPDATE/.test(text)) {
+      return rows([
+        {
+          id: 'l1',
+          seller_id: 'seller_1',
+          price_gbp: '10.00',
+          status: 'active',
+          title: 'Vintage jacket',
+          description: 'Gently used vintage jacket',
+        },
+      ]);
+    }
+    if (/UPDATE live_lots/.test(text)) {
+      return rows([{ id: 'lot-1', session_id: 'sess-1', version: 2 }]);
+    }
+    return empty();
+  });
+}
+
+for (const heldStatus of ['review', 'failed'] as const) {
+  test(`bulk edit with a '${heldStatus}' verdict holds a live listing at risk_pending`, async () => {
+    moderationGlobals.__listingModerationResult = {
+      status: heldStatus,
+      labels: [{ name: 'borderline', confidence: 0.5, category: 'other' }],
+    };
+    const db = editLockDbWithLiveLot();
+
+    const result = await applyListingFieldPatch(db as never, {
+      listingId: 'l1',
+      patch: { title: 'Rare vintage jacket — check photos' },
+      actorId: 'seller_1',
+    });
+
+    assert.equal(result.status, 'applied');
+    assert.equal(
+      result.status === 'applied' ? result.newStatus : undefined,
+      'risk_pending',
+      'a held verdict on a live listing must land it at risk_pending',
+    );
+
+    const listingUpdate = db.calls.find((c) => /UPDATE listings SET/.test(c.text));
+    assert.ok(listingUpdate, 'the field patch is still written');
+    assert.ok(
+      /status = \$/.test(listingUpdate!.text),
+      'the UPDATE must rewrite status alongside the field patch',
+    );
+    assert.ok(
+      listingUpdate!.params.includes('risk_pending'),
+      'the patched status value is risk_pending',
+    );
+
+    const lotCancel = db.calls.find(
+      (c) => /UPDATE live_lots/.test(c.text) && /'cancelled'/.test(c.text),
+    );
+    assert.ok(lotCancel, 'non-terminal live lots cancelled on the hold');
+    assert.ok(
+      db.calls.some((c) => /INSERT INTO live_lot_events/.test(c.text)),
+      'lot.cancelled recorded on the engine audit log',
+    );
+  });
+}
+
+test('a held verdict on a non-public listing applies the patch without a status write', async () => {
+  moderationGlobals.__listingModerationResult = {
+    status: 'review',
+    labels: [{ name: 'borderline', confidence: 0.5, category: 'other' }],
+  };
+  const db = createMockDb((text) => {
+    if (/FROM listings/.test(text) && /FOR UPDATE/.test(text)) {
+      return rows([
+        {
+          id: 'l1',
+          seller_id: 'seller_1',
+          price_gbp: '10.00',
+          status: 'paused',
+          title: 'Vintage jacket',
+          description: 'Gently used vintage jacket',
+        },
+      ]);
+    }
+    return empty();
+  });
+
+  const result = await applyListingFieldPatch(db as never, {
+    listingId: 'l1',
+    patch: { description: 'Updated description for the paused listing' },
+    actorId: 'seller_1',
+  });
+
+  assert.equal(result.status, 'applied');
+  assert.equal(
+    result.status === 'applied' ? result.newStatus : undefined,
+    undefined,
+    'a non-public listing is already unservable — no hold write needed',
+  );
+  const listingUpdate = db.calls.find((c) => /UPDATE listings SET/.test(c.text));
+  assert.ok(listingUpdate);
+  assert.ok(
+    !/status = \$/.test(listingUpdate!.text),
+    'no status write on a listing that is not publicly servable',
+  );
+  assert.ok(
+    !db.calls.some((c) => /UPDATE live_lots/.test(c.text)),
+    'no lot churn on a non-public hold',
+  );
 });
 
 // ── Bid path refuses lots on held listings ───────────────────────────────

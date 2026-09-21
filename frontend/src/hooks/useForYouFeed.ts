@@ -45,6 +45,11 @@ interface ForYouFeedState {
   isLoading: boolean;
   isRefreshing: boolean;
   error: string | null;
+  /** Refresh failure on a populated feed — the last-good page stays on
+   *  screen and the surface renders an inline retry note instead of
+   *  swapping the feed for a full error state (FRESH-02). `error` remains
+   *  the initial-load / no-content channel. */
+  refreshError: string | null;
   serveMode: ServeMode | null;
   requestId: string | null;
   sessionId: string;
@@ -128,37 +133,102 @@ export function useForYouFeed(surface: string = 'home'): ForYouFeedState {
   const [isLoading, setIsLoading] = React.useState(false);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [refreshError, setRefreshError] = React.useState<string | null>(null);
 
   const userId = currentUser?.id ?? null;
   const sessionIdRef = React.useRef(generateSessionId());
 
+  // ── Request identity (FRESH-02) ──
+  // Monotonic epoch bumped whenever the feed identity (signed-in user +
+  // surface) changes. Both the initial fetch and pull-to-refresh capture
+  // the epoch that issued them; any async write landing after the epoch
+  // has moved on is discarded, so a slow response from a previous identity
+  // can never clobber the new identity's page or error state.
+  const feedEpochRef = React.useRef(0);
+  // Same-identity serialization (P2): the epoch only guards CROSS-identity
+  // staleness — two overlapping loads for the SAME identity both pass the
+  // epoch check, so whichever resolves last wins and the earlier finally
+  // can clear isRefreshing under the newer request. A second load issued
+  // while one is already in flight for this identity is skipped: the
+  // in-flight response is at least as fresh as what a duplicate would
+  // return, and skipping removes the last-writer-wins window entirely.
+  const inFlightEpochRef = React.useRef<number | null>(null);
+  // Latest committed page, readable inside the stable load callback —
+  // decides whether a refresh failure keeps last-good content (inline
+  // `refreshError`) or is a no-content failure (`error` channel).
+  const pageRef = React.useRef<RecommendationPage | null>(null);
+  React.useEffect(() => {
+    pageRef.current = page;
+  }, [page]);
+
+  // Identity change is the ONLY place the cached page is cleared: the old
+  // page belongs to a different user/surface and must not linger. Declared
+  // before the load effect so the epoch bump lands before the new fetch.
+  React.useEffect(() => {
+    feedEpochRef.current += 1;
+    setPage(null);
+    setError(null);
+    setRefreshError(null);
+    // Any in-flight request is now a dead epoch — its finally is guarded,
+    // so the pending flags are released here instead of leaking.
+    setIsLoading(false);
+    setIsRefreshing(false);
+  }, [userId, surface]);
+
   const loadForYouFeed = React.useCallback(
     async (isRefresh: boolean) => {
+      const epoch = feedEpochRef.current;
       if (!userId) {
         setPage(null);
         setError(null);
+        setRefreshError(null);
         return;
       }
+      // A load for this identity is already in flight — a duplicate would
+      // only reopen the last-writer-wins window. Skip it.
+      if (inFlightEpochRef.current === epoch) return;
+      inFlightEpochRef.current = epoch;
 
       if (isRefresh) {
         setIsRefreshing(true);
+        setRefreshError(null);
       } else {
         setIsLoading(true);
+        setError(null);
       }
-      setError(null);
 
       try {
         const payload = await fetchJson<BackendRecommendationsResponse>(
           `/recommendations/${encodeURIComponent(userId)}?surface=${encodeURIComponent(surface)}&sessionId=${encodeURIComponent(sessionIdRef.current)}`
         );
 
+        // A response that lands after the identity moved on belongs to a
+        // dead request — drop it rather than clobbering the new identity's
+        // state.
+        if (epoch !== feedEpochRef.current) return;
+
         const mapped = mapResponseToPage(payload, sessionIdRef.current, surface);
         setPage(mapped);
+        setError(null);
+        setRefreshError(null);
       } catch (err) {
+        if (epoch !== feedEpochRef.current) return;
         const message = err instanceof Error ? err.message : 'Failed to load recommendations';
-        setError(message);
-        setPage(null);
+        // FRESH-02: a failed refresh on a populated feed keeps the
+        // last-good page on screen — the failure surfaces as a distinct
+        // inline `refreshError`, never a blanked feed. With no cached
+        // content the failure is a no-content error state instead.
+        if (isRefresh && pageRef.current) {
+          setRefreshError(message);
+        } else {
+          setError(message);
+        }
       } finally {
+        // Release the in-flight slot before the epoch check — the slot is
+        // only cleared by the request that holds it, so a dead-epoch
+        // request can never free a newer identity's slot.
+        if (inFlightEpochRef.current === epoch) inFlightEpochRef.current = null;
+        if (epoch !== feedEpochRef.current) return;
         if (isRefresh) {
           setIsRefreshing(false);
         } else {
@@ -217,6 +287,7 @@ export function useForYouFeed(surface: string = 'home'): ForYouFeedState {
     isLoading,
     isRefreshing,
     error,
+    refreshError,
     serveMode: page?.serveMode ?? null,
     requestId: page?.requestId ?? null,
     sessionId: sessionIdRef.current,

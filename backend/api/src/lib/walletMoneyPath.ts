@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import {
   createApiError,
   createRuntimeId,
+  roundTo,
   toJsonString,
   unitsToOnezeAmount,
   ONEZE_UNITS_PER_IZE,
@@ -12,6 +13,12 @@ import {
   resolveCountryPricingQuoteByCurrency,
   resolveInternalFxRate,
 } from './pricingEngine.js';
+import {
+  allocateMoneyByBasisPoints,
+  moneyFromMinor,
+  moneyToMajorDecimal,
+} from './money.js';
+import { verifyMintQuoteMac } from './paymentIntentMetadata.js';
 
 // ─── Canonical wallet balance mutation ───────────────────────────────────────
 // This is THE wallet ledger primitive: it locks the wallet row, applies the
@@ -140,6 +147,209 @@ export async function applyWalletLedgerDelta(
   return nextBalance;
 }
 
+// ─── Reservation-aware spendable 1ZE primitive ─────────────────────────────
+// wallets.oneze_balance_units is the GROSS settled balance. Funds committed
+// to enforceable holds must not be spendable a second time. The canonical
+// hold source today is coown_order_reservations (status 'active'/'placed',
+// unexpired) — the same predicate the position projection uses
+// (index.ts /wallet/1ze/:userId/position). Withdrawals are NOT a hold source:
+// the accept path debits the wallet immediately (kind WITHDRAWAL_RESERVED),
+// so those funds are already out of the gross balance.
+//
+// Lock discipline (matches reservation placement in routes/coOwn.ts and DvP
+// settlement): the wallet row is locked FOR UPDATE first, then matching
+// reservation rows are locked in stable id order. Every caller that debits
+// user funds inside its own transaction should compute spendable through
+// this primitive instead of reading the gross balance.
+
+export interface SpendableOnezeFunds {
+  walletId: string | null;
+  userId: string;
+  /** Settled wallets.oneze_balance_units. */
+  grossUnits: number;
+  /** 1ZE units held by enforceable coown_order_reservations rows. */
+  reservedUnits: number;
+  /** max(0, gross - reserved) — what a new debit may consume. */
+  spendableUnits: number;
+  /** Reservation row ids contributing to reservedUnits (for diagnostics). */
+  reservationIds: string[];
+}
+
+async function loadWalletForUpdateByUserId(
+  client: DbQueryable,
+  userId: string
+): Promise<WalletRow | null> {
+  const result = await client.query<WalletRow>(
+    `
+      SELECT
+        id,
+        user_id,
+        oneze_balance_units,
+        fiat_balance_minor,
+        fiat_currency,
+        version,
+        created_at::text,
+        updated_at::text
+      FROM wallets
+      WHERE user_id = $1
+      LIMIT 1
+      FOR UPDATE
+    `,
+    [userId]
+  );
+
+  return result.rows[0] ?? null;
+}
+
+/**
+ * Lock a set of wallet rows FOR UPDATE in deterministic id order. Callers
+ * that will mutate more than one wallet in one transaction (e.g. a P2P
+ * transfer) must acquire the locks through this helper first so two
+ * opposite-direction transfers cannot deadlock.
+ */
+export async function lockWalletRowsForUpdate(
+  client: DbQueryable,
+  walletIds: readonly string[]
+): Promise<string[]> {
+  const uniqueIds = [...new Set(walletIds)].filter((id) => typeof id === 'string' && id.length > 0);
+  if (uniqueIds.length === 0) {
+    return [];
+  }
+
+  const result = await client.query<{ id: string }>(
+    `
+      SELECT id
+      FROM wallets
+      WHERE id = ANY($1::text[])
+      ORDER BY id
+      FOR UPDATE
+    `,
+    [uniqueIds]
+  );
+
+  return result.rows.map((row) => row.id);
+}
+
+/**
+ * Compute the spendable 1ZE balance for a wallet: settled gross balance minus
+ * all enforceable reservations/holds. Runs entirely on the caller's
+ * transaction with row locks — wallet first, then reservation rows in id
+ * order — so a concurrent reservation placement, expiry, or settlement cannot
+ * change the answer after it is computed.
+ *
+ * Exclusions let a settler ignore the reservation that is being consumed by
+ * the current operation (same convention as coOwn.ts DvP settlement):
+ *   - excludeReservationIds: reservation row ids to skip
+ *   - excludePlacedOrderId: skip reservations whose placed_order_id matches
+ */
+export async function computeSpendableOnezeUnits(
+  client: DbQueryable,
+  input: {
+    userId?: string;
+    walletId?: string;
+    excludeReservationIds?: readonly string[];
+    excludePlacedOrderId?: number | string | null;
+  }
+): Promise<SpendableOnezeFunds> {
+  if (!input.walletId && !input.userId) {
+    throw createApiError('WALLET_LOOKUP_INVALID', 'computeSpendableOnezeUnits requires a walletId or userId');
+  }
+
+  const wallet = input.walletId
+    ? await loadWalletForUpdate(client, input.walletId)
+    : await loadWalletForUpdateByUserId(client, input.userId!);
+
+  const userId = input.userId ?? wallet?.user_id;
+  if (!userId) {
+    throw createApiError('WALLET_NOT_FOUND', 'Wallet not found', {
+      walletId: input.walletId ?? null,
+      userId: input.userId ?? null,
+    });
+  }
+
+  const grossUnits = wallet ? Number(wallet.oneze_balance_units) : 0;
+
+  const excludeReservationIds = new Set(input.excludeReservationIds ?? []);
+  const excludePlacedOrderId =
+    input.excludePlacedOrderId === null || input.excludePlacedOrderId === undefined
+      ? null
+      : String(input.excludePlacedOrderId);
+
+  const reservations = await client.query<{
+    id: string;
+    reserved_units: string;
+    placed_order_id: string | null;
+  }>(
+    `
+      SELECT
+        id,
+        reserved_1ze_units::text AS reserved_units,
+        placed_order_id::text AS placed_order_id
+      FROM coown_order_reservations
+      WHERE user_id = $1
+        AND status IN ('active', 'placed')
+        AND (expires_at IS NULL OR expires_at > NOW())
+      ORDER BY id
+      FOR UPDATE
+    `,
+    [userId]
+  );
+
+  let reservedUnits = 0;
+  const reservationIds: string[] = [];
+  for (const row of reservations.rows) {
+    if (excludeReservationIds.has(row.id)) {
+      continue;
+    }
+    if (excludePlacedOrderId !== null && row.placed_order_id === excludePlacedOrderId) {
+      continue;
+    }
+    reservedUnits += Number(row.reserved_units);
+    reservationIds.push(row.id);
+  }
+
+  return {
+    walletId: wallet?.id ?? null,
+    userId,
+    grossUnits,
+    reservedUnits,
+    spendableUnits: Math.max(0, grossUnits - reservedUnits),
+    reservationIds,
+  };
+}
+
+/**
+ * Assert the wallet can fund a `requiredUnits` debit from spendable funds.
+ * Returns the computed breakdown for callers that want it in the response;
+ * throws WALLET_INSUFFICIENT_BALANCE otherwise.
+ */
+export async function assertSpendableOnezeUnits(
+  client: DbQueryable,
+  input: {
+    userId?: string;
+    walletId?: string;
+    requiredUnits: number;
+    excludeReservationIds?: readonly string[];
+    excludePlacedOrderId?: number | string | null;
+  }
+): Promise<SpendableOnezeFunds> {
+  const funds = await computeSpendableOnezeUnits(client, input);
+
+  if (funds.spendableUnits < input.requiredUnits) {
+    throw createApiError('WALLET_INSUFFICIENT_BALANCE', 'Wallet spendable balance is insufficient for this operation', {
+      walletId: funds.walletId,
+      userId: funds.userId,
+      asset: '1ZE',
+      grossUnits: funds.grossUnits,
+      reservedUnits: funds.reservedUnits,
+      spendableUnits: funds.spendableUnits,
+      requiredUnits: input.requiredUnits,
+    });
+  }
+
+  return funds;
+}
+
 // ─── Wallet idempotency helpers ──────────────────────────────────────────────
 // Shared by every wallet money-mutating route (mint, burn, convert, buy,
 // transfers). The stored request_hash is compared before a replay is served
@@ -220,6 +430,331 @@ export async function saveWalletIdempotentResponse(
       toJsonString(input.responsePayload),
     ]
   );
+}
+
+// ─── Claim-before-mutate idempotency ─────────────────────────────────────────
+// The read-then-write pair above is not race-safe on its own: two concurrent
+// requests with the same absent key can both read "no row", both mutate the
+// wallet, and then one response save loses the ON CONFLICT race — a double
+// spend. The canonical fix claims the key inside the SAME transaction as the
+// mutation:
+//
+//   1. INSERT the idempotency row with a pending marker payload ON CONFLICT
+//      DO NOTHING. Postgres serializes speculative inserts on the unique key:
+//      a concurrent claim blocks until the in-flight row commits or aborts.
+//   2. If we won the insert, run the money mutations, then UPDATE the row
+//      with the real response payload — same transaction, so a crash rolls
+//      back the claim too and a retry starts clean.
+//   3. If we lost the conflict, the winning row is now committed: replay its
+//      stored response when the request hash matches, reject a reused key
+//      with a different payload, and report 409 if a pending marker is ever
+//      observed (only reachable for rows written outside this flow).
+//
+// wallet_idempotency_keys has no status column and the ledger schema must not
+// change — the pending marker lives inside the JSONB response_payload and is
+// never visible once the transaction commits its final payload.
+
+const WALLET_IDEMPOTENCY_CLAIM_FIELD = '__walletIdempotencyClaim';
+const WALLET_IDEMPOTENCY_CLAIM_PENDING = 'in_progress';
+
+export type WalletIdempotencyClaimResult =
+  | { status: 'claimed' }
+  | { status: 'replay'; responsePayload: Record<string, unknown> }
+  | { status: 'in_progress' };
+
+/**
+ * Claim an idempotency key for a wallet mutation. Must be called inside the
+ * mutation's transaction BEFORE any wallet writes. The caller decides:
+ *   - 'claimed'     → proceed with mutations, then completeWalletIdempotencyClaim
+ *   - 'replay'      → return the stored response payload, mutate nothing
+ *   - 'in_progress' → a concurrent/legacy claim is unresolved; return 409
+ */
+export async function claimWalletIdempotencyKey(
+  client: DbQueryable,
+  input: {
+    userId: string;
+    operation: string;
+    idempotencyKey: string;
+    requestHash: string;
+  }
+): Promise<WalletIdempotencyClaimResult> {
+  // Under READ COMMITTED a same-key concurrent claim forces our INSERT to
+  // wait on the winner's transaction. If the winner aborts we still insert
+  // and claim; if it commits we fall through to read the committed row. A
+  // second attempt covers the narrow case where the winner aborted after our
+  // conflict check resolved without inserting (defensive — the loop cannot
+  // spin: each iteration either claims, replays, or throws).
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const claim = await client.query<{ idempotency_key: string }>(
+      `
+        INSERT INTO wallet_idempotency_keys (
+          user_id,
+          operation,
+          idempotency_key,
+          request_hash,
+          response_payload
+        )
+        VALUES ($1, $2, $3, $4, $5::jsonb)
+        ON CONFLICT (user_id, operation, idempotency_key)
+        DO NOTHING
+        RETURNING idempotency_key
+      `,
+      [
+        input.userId,
+        input.operation,
+        input.idempotencyKey,
+        input.requestHash,
+        toJsonString({ [WALLET_IDEMPOTENCY_CLAIM_FIELD]: WALLET_IDEMPOTENCY_CLAIM_PENDING }),
+      ]
+    );
+
+    if (claim.rows[0]) {
+      return { status: 'claimed' };
+    }
+
+    const existing = await client.query<{
+      request_hash: string;
+      response_payload: Record<string, unknown>;
+    }>(
+      `
+        SELECT request_hash, response_payload
+        FROM wallet_idempotency_keys
+        WHERE user_id = $1
+          AND operation = $2
+          AND idempotency_key = $3
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [input.userId, input.operation, input.idempotencyKey]
+    );
+
+    const row = existing.rows[0];
+    if (!row) {
+      // Conflicting in-flight claim aborted between our insert attempt and
+      // the read — loop once to retry the claim.
+      continue;
+    }
+
+    if (row.request_hash !== input.requestHash) {
+      throw createApiError(
+        'IDEMPOTENCY_KEY_REUSED',
+        'Idempotency key was already used with a different request payload'
+      );
+    }
+
+    const payload = row.response_payload;
+    if (
+      payload
+      && typeof payload === 'object'
+      && payload[WALLET_IDEMPOTENCY_CLAIM_FIELD] === WALLET_IDEMPOTENCY_CLAIM_PENDING
+    ) {
+      return { status: 'in_progress' };
+    }
+
+    return { status: 'replay', responsePayload: payload };
+  }
+
+  throw createApiError(
+    'IDEMPOTENCY_CLAIM_FAILED',
+    'Unable to claim idempotency key for this operation',
+    { operation: input.operation }
+  );
+}
+
+/**
+ * Store the real response payload on a previously claimed idempotency row.
+ * Runs inside the same transaction as the mutations, so the response commits
+ * atomically with them.
+ */
+export async function completeWalletIdempotencyClaim(
+  client: DbQueryable,
+  input: {
+    userId: string;
+    operation: string;
+    idempotencyKey: string;
+    requestHash: string;
+    responsePayload: Record<string, unknown>;
+  }
+): Promise<void> {
+  const result = await client.query(
+    `
+      UPDATE wallet_idempotency_keys
+      SET response_payload = $5::jsonb
+      WHERE user_id = $1
+        AND operation = $2
+        AND idempotency_key = $3
+        AND request_hash = $4
+    `,
+    [
+      input.userId,
+      input.operation,
+      input.idempotencyKey,
+      input.requestHash,
+      toJsonString(input.responsePayload),
+    ]
+  );
+
+  if (!result.rowCount) {
+    throw createApiError(
+      'IDEMPOTENCY_CLAIM_LOST',
+      'Idempotency claim row is missing — refusing to commit an unrecorded mutation',
+      { operation: input.operation }
+    );
+  }
+}
+
+// ─── P2P transfer context policy ─────────────────────────────────────────────
+// The /wallet/1ze/transfer context is not a free-text label: each allowed
+// context is a claim that a real domain event authorizes this movement of
+// funds. Arbitrary authenticated users must not be able to mint a privileged
+// context string and bypass commerce/co-own rails, so every privileged
+// context is verified against its source of truth:
+//   - coOwn_trade:      contextId must be a settled coOwn_trades row whose
+//                       buyer/seller are exactly sender/recipient and whose
+//                       buyer leg (ceil((notional + fee) * 1000)) equals the
+//                       transfer amount.
+//   - platform_reward:  system-originated — requires an admin caller. There
+//                       is no reward domain table to cross-check, so caller
+//                       authority IS the enforceable proof.
+// Every privileged context is also single-use: once a committed
+// wallet_ize_transfers row carries the context, the same reference cannot
+// fund a second transfer.
+
+export async function assertP2pTransferContextAuthorized(
+  client: DbQueryable,
+  input: {
+    contextType: string;
+    contextId: string;
+    senderUserId: string;
+    recipientUserId: string;
+    amountUnits: number;
+    callerRole?: string | null;
+  }
+): Promise<void> {
+  switch (input.contextType) {
+    case 'coOwn_trade': {
+      const tradeId = Number(input.contextId);
+      if (!Number.isSafeInteger(tradeId) || tradeId <= 0) {
+        throw createApiError(
+          'P2P_TRANSFER_CONTEXT_NOT_FOUND',
+          'coOwn_trade context must reference a coOwn trade id',
+          { contextType: input.contextType, contextId: input.contextId }
+        );
+      }
+
+      const tradeResult = await client.query<{
+        id: string;
+        buyer_id: string;
+        seller_id: string;
+        notional_gbp: string;
+        fee_gbp: string;
+        settlement_status: string;
+      }>(
+        `
+          SELECT
+            id::text AS id,
+            buyer_id,
+            seller_id,
+            notional_gbp::text,
+            fee_gbp::text,
+            settlement_status
+          FROM coOwn_trades
+          WHERE id = $1
+          LIMIT 1
+        `,
+        [tradeId]
+      );
+
+      const trade = tradeResult.rows[0];
+      if (!trade) {
+        throw createApiError(
+          'P2P_TRANSFER_CONTEXT_NOT_FOUND',
+          'coOwn_trade context references a trade that does not exist',
+          { contextType: input.contextType, contextId: input.contextId }
+        );
+      }
+
+      if (trade.settlement_status !== 'settled') {
+        throw createApiError(
+          'P2P_TRANSFER_CONTEXT_BLOCKED',
+          'coOwn_trade context references a trade that is not settled',
+          { contextId: input.contextId, settlementStatus: trade.settlement_status }
+        );
+      }
+
+      if (trade.buyer_id !== input.senderUserId || trade.seller_id !== input.recipientUserId) {
+        throw createApiError(
+          'P2P_TRANSFER_CONTEXT_BLOCKED',
+          'coOwn_trade context participants do not match the transfer sender/recipient',
+          {
+            contextId: input.contextId,
+            tradeBuyerId: trade.buyer_id,
+            tradeSellerId: trade.seller_id,
+            senderUserId: input.senderUserId,
+            recipientUserId: input.recipientUserId,
+          }
+        );
+      }
+
+      // The buyer leg of a co-own settlement is ceil((notional + fee) * 1000)
+      // 1ZE units — the same convention applyCoOwnTransfer uses for the DvP
+      // debit.
+      const expectedUnits = Math.ceil(
+        roundTo(Number(trade.notional_gbp) + Number(trade.fee_gbp), 4) * 1000
+      );
+      if (input.amountUnits !== expectedUnits) {
+        throw createApiError(
+          'P2P_TRANSFER_CONTEXT_BLOCKED',
+          'coOwn_trade context amount does not match the trade buyer leg',
+          {
+            contextId: input.contextId,
+            expectedUnits,
+            requestedUnits: input.amountUnits,
+          }
+        );
+      }
+      break;
+    }
+
+    case 'platform_reward': {
+      if (input.callerRole !== 'admin') {
+        throw createApiError(
+          'P2P_TRANSFER_CONTEXT_BLOCKED',
+          'platform_reward transfers are system-originated and require administrative authority',
+          { contextType: input.contextType, callerRole: input.callerRole ?? null }
+        );
+      }
+      break;
+    }
+
+    default:
+      throw createApiError(
+        'P2P_TRANSFER_CONTEXT_INVALID',
+        'Unsupported P2P transfer context type',
+        { contextType: input.contextType }
+      );
+  }
+
+  // Single-use: a committed transfer already consumed this context reference.
+  const priorUse = await client.query(
+    `
+      SELECT 1
+      FROM wallet_ize_transfers
+      WHERE status = 'committed'
+        AND metadata->>'contextType' = $1
+        AND metadata->>'contextId' = $2
+      LIMIT 1
+    `,
+    [input.contextType, input.contextId]
+  );
+
+  if (priorUse.rows[0]) {
+    throw createApiError(
+      'P2P_TRANSFER_CONTEXT_BLOCKED',
+      'Transfer context has already been consumed by a committed transfer',
+      { contextType: input.contextType, contextId: input.contextId }
+    );
+  }
 }
 
 // ─── 1ZE unit helpers ────────────────────────────────────────────────────────
@@ -573,6 +1108,14 @@ export function planCommerceOrderRefundRecovery(input: RefundRecoveryInput): Ref
 // — including the locked rate — rides on the payment intent, and the mint
 // operation is materialized here only when a real payment event arrives.
 
+/**
+ * Wallet-topup platform fee applied by the mint quote route
+ * (`POST /wallet/1ze/mint/quote` → `allocateMoneyByBasisPoints(money, 100)`).
+ * The materializer recomputes the expected mint against the SAME fee split —
+ * keep both sides on this constant so the check can never drift apart.
+ */
+export const MINT_QUOTE_TOPUP_FEE_BASIS_POINTS = 100;
+
 export interface MintQuoteIntentMetadata {
   mintOperationId?: string;
   mintQuote?: {
@@ -659,7 +1202,7 @@ export async function materializeMintOperationForPaymentIntent(
   const ratePerGram = Number(quote.ratePerGram);
   const rateLockedAt = typeof quote.rateLockedAt === 'string' ? quote.rateLockedAt : null;
   const rateExpiresAt = typeof quote.rateExpiresAt === 'string' ? quote.rateExpiresAt : null;
-  const fiatAmountMinor = Number(quote.fiatAmountMinor ?? intent.amount_minor ?? NaN);
+  const fiatAmountMinor = Number(quote.fiatAmountMinor ?? NaN);
   const netFiatAmountMinor = Number(quote.netFiatAmountMinor);
   const platformFeeMinor = Number(quote.platformFeeMinor ?? 0);
 
@@ -672,6 +1215,79 @@ export async function materializeMintOperationForPaymentIntent(
     || !Number.isFinite(fiatAmountMinor)
     || !Number.isFinite(netFiatAmountMinor)
   ) {
+    return null;
+  }
+
+  // Metadata provenance: the quote fields gate how much 1ZE a genuine
+  // payment mints, so they must be authenticated, not merely present.
+  // mintQuoteMac is an HMAC over the quote bound to THIS intent + user —
+  // written exclusively by the mint/quote route. A quote without a valid
+  // MAC (forged metadata, transplanted quote, tampered amount) fails closed:
+  // the caller keeps its null-op behaviour and no units are minted.
+  if (
+    !verifyMintQuoteMac(
+      {
+        paymentIntentId: intent.id,
+        userId: intent.user_id,
+        mintOperationId,
+        fiatAmountMinor,
+        netFiatAmountMinor,
+        platformFeeMinor,
+        izeAmountUnits,
+        ratePerGram,
+        rateSource: typeof quote.rateSource === 'string' ? quote.rateSource : '',
+        rateLockedAt,
+        rateExpiresAt,
+      },
+      metadata.mintQuoteMac,
+    )
+  ) {
+    return null;
+  }
+
+  // The quoted gross amount must equal the amount actually captured —
+  // quote.fiatAmountMinor is part of the MAC, but binding it to
+  // intent.amount_minor closes any residual path where a quote valid for a
+  // different amount could be replayed onto this intent.
+  const capturedMinor = Number(intent.amount_minor);
+  if (!Number.isFinite(capturedMinor) || Math.abs(fiatAmountMinor - capturedMinor) > 0) {
+    return null;
+  }
+
+  // Amount authority (review P0): the minted quantity is never taken from
+  // stored metadata. Recompute it from the captured amount through the same
+  // fee split + locked-rate formula the quote route used
+  // (allocateMoneyByBasisPoints → net fiat → netFiat / ratePerGram → units).
+  // A stored quote whose fee/net/units disagree with the recomputation —
+  // forged, transplanted, or produced by a broken writer — fails closed.
+  try {
+    const expectedGross = moneyFromMinor(intent.amount_currency, BigInt(capturedMinor));
+    const expectedAllocation = allocateMoneyByBasisPoints(
+      expectedGross,
+      MINT_QUOTE_TOPUP_FEE_BASIS_POINTS,
+    );
+    const expectedNetFiatMinor = Number(expectedAllocation.net.minorAmount);
+    const expectedPlatformFeeMinor = expectedAllocation.fee
+      ? Number(expectedAllocation.fee.minorAmount)
+      : 0;
+    const expectedIzeAmountUnits = onezeAmountToUnits(
+      Number(
+        (
+          Number(moneyToMajorDecimal(expectedAllocation.net)) / ratePerGram
+        ).toFixed(6),
+      ),
+    );
+
+    if (
+      netFiatAmountMinor !== expectedNetFiatMinor
+      || platformFeeMinor !== expectedPlatformFeeMinor
+      || izeAmountUnits !== expectedIzeAmountUnits
+    ) {
+      return null;
+    }
+  } catch {
+    // Any failure to recompute (unsupported currency, fee consuming the
+    // gross, non-representable unit amount) is a malformed quote — refuse.
     return null;
   }
 

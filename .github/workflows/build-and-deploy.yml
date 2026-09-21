@@ -1,6 +1,9 @@
 name: Build and Deploy
 
 on:
+  # Manual dispatch only. Tag-driven production releases are owned by
+  # release-train.yml — keeping a v* trigger here raced the gated release
+  # train and published unsigned updates alongside it.
   workflow_dispatch:
     inputs:
       message:
@@ -13,12 +16,6 @@ on:
         type: choice
         options:
           - production
-  push:
-    tags:
-      - 'v*'
-    paths:
-      - 'frontend/**'
-      - '.github/workflows/build-and-deploy.yml'
 
 permissions:
   contents: read
@@ -80,9 +77,22 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
+  production-approval-gate:
+    name: Production approval gate
+    needs: build
+    runs-on: ubuntu-latest
+    # Every run of this workflow ends in a production-channel publish, so the
+    # manual approval gate is unconditional — same contract as release-train.
+    environment: production-approval
+    steps:
+      - name: Await manual approval
+        run: |
+          echo "::notice::Staged production rollout requires manual approval."
+          echo "Approve this deployment in the GitHub Actions environment 'production-approval'."
+
   stage-staging:
     name: Stage 0 — Publish to staging channel
-    needs: build
+    needs: [build, production-approval-gate]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: staging
@@ -110,11 +120,33 @@ jobs:
         working-directory: frontend
         run: npm ci --legacy-peer-deps
 
+      - name: Verify release configuration (F18)
+        # Fail-closed: an OTA publish without the signing key produces an
+        # unsigned update — stop here rather than shipping it.
+        working-directory: frontend
+        run: npm run check:release-config -- ota
+        env:
+          EXPO_PUBLIC_OTA_CODE_SIGNING_KEY: ${{ secrets.EXPO_OTA_CODE_SIGNING_PRIVATE_KEY || secrets.EXPO_PUBLIC_OTA_CODE_SIGNING_KEY }}
+
+      - name: Materialize OTA signing key
+        env:
+          OTA_CODE_SIGNING_PRIVATE_KEY: ${{ secrets.EXPO_OTA_CODE_SIGNING_PRIVATE_KEY || secrets.EXPO_PUBLIC_OTA_CODE_SIGNING_KEY }}
+        run: |
+          if [ -z "$OTA_CODE_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::OTA signing private key secret is required (EXPO_OTA_CODE_SIGNING_PRIVATE_KEY) — cannot produce a signed OTA update."
+            exit 1
+          fi
+          key_path="$RUNNER_TEMP/ota-private-key.pem"
+          printf '%s' "$OTA_CODE_SIGNING_PRIVATE_KEY" > "$key_path"
+          chmod 600 "$key_path"
+          echo "OTA_PRIVATE_KEY_PATH=$key_path" >> "$GITHUB_ENV"
+
       - name: Publish to staging channel (100%)
         working-directory: frontend
         run: |
           eas update \
             --channel staging \
+            --private-key-path "$OTA_PRIVATE_KEY_PATH" \
             --message "staging: ${{ inputs.message || github.ref_name }}" \
             --rollout-percentage 100
         env:
@@ -154,11 +186,25 @@ jobs:
         working-directory: frontend
         run: npm ci --legacy-peer-deps
 
+      - name: Materialize OTA signing key
+        env:
+          OTA_CODE_SIGNING_PRIVATE_KEY: ${{ secrets.EXPO_OTA_CODE_SIGNING_PRIVATE_KEY || secrets.EXPO_PUBLIC_OTA_CODE_SIGNING_KEY }}
+        run: |
+          if [ -z "$OTA_CODE_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::OTA signing private key secret is required (EXPO_OTA_CODE_SIGNING_PRIVATE_KEY)."
+            exit 1
+          fi
+          key_path="$RUNNER_TEMP/ota-private-key.pem"
+          printf '%s' "$OTA_CODE_SIGNING_PRIVATE_KEY" > "$key_path"
+          chmod 600 "$key_path"
+          echo "OTA_PRIVATE_KEY_PATH=$key_path" >> "$GITHUB_ENV"
+
       - name: Publish to canary channel (1%)
         working-directory: frontend
         run: |
           eas update \
             --channel canary \
+            --private-key-path "$OTA_PRIVATE_KEY_PATH" \
             --message "canary 1%: ${{ inputs.message || github.ref_name }}" \
             --rollout-percentage 1
         env:
@@ -206,11 +252,25 @@ jobs:
         working-directory: frontend
         run: npm ci --legacy-peer-deps
 
+      - name: Materialize OTA signing key
+        env:
+          OTA_CODE_SIGNING_PRIVATE_KEY: ${{ secrets.EXPO_OTA_CODE_SIGNING_PRIVATE_KEY || secrets.EXPO_PUBLIC_OTA_CODE_SIGNING_KEY }}
+        run: |
+          if [ -z "$OTA_CODE_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::OTA signing private key secret is required (EXPO_OTA_CODE_SIGNING_PRIVATE_KEY)."
+            exit 1
+          fi
+          key_path="$RUNNER_TEMP/ota-private-key.pem"
+          printf '%s' "$OTA_CODE_SIGNING_PRIVATE_KEY" > "$key_path"
+          chmod 600 "$key_path"
+          echo "OTA_PRIVATE_KEY_PATH=$key_path" >> "$GITHUB_ENV"
+
       - name: Publish to canary channel (10%)
         working-directory: frontend
         run: |
           eas update \
             --channel canary \
+            --private-key-path "$OTA_PRIVATE_KEY_PATH" \
             --message "canary 10%: ${{ inputs.message || github.ref_name }}" \
             --rollout-percentage 10
         env:
@@ -258,11 +318,25 @@ jobs:
         working-directory: frontend
         run: npm ci --legacy-peer-deps
 
+      - name: Materialize OTA signing key
+        env:
+          OTA_CODE_SIGNING_PRIVATE_KEY: ${{ secrets.EXPO_OTA_CODE_SIGNING_PRIVATE_KEY || secrets.EXPO_PUBLIC_OTA_CODE_SIGNING_KEY }}
+        run: |
+          if [ -z "$OTA_CODE_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::OTA signing private key secret is required (EXPO_OTA_CODE_SIGNING_PRIVATE_KEY)."
+            exit 1
+          fi
+          key_path="$RUNNER_TEMP/ota-private-key.pem"
+          printf '%s' "$OTA_CODE_SIGNING_PRIVATE_KEY" > "$key_path"
+          chmod 600 "$key_path"
+          echo "OTA_PRIVATE_KEY_PATH=$key_path" >> "$GITHUB_ENV"
+
       - name: Publish to production channel (50%)
         working-directory: frontend
         run: |
           eas update \
             --channel ${{ inputs.target_channel || 'production' }} \
+            --private-key-path "$OTA_PRIVATE_KEY_PATH" \
             --message "production 50%: ${{ inputs.message || github.ref_name }}" \
             --rollout-percentage 50
         env:
@@ -310,11 +384,25 @@ jobs:
         working-directory: frontend
         run: npm ci --legacy-peer-deps
 
+      - name: Materialize OTA signing key
+        env:
+          OTA_CODE_SIGNING_PRIVATE_KEY: ${{ secrets.EXPO_OTA_CODE_SIGNING_PRIVATE_KEY || secrets.EXPO_PUBLIC_OTA_CODE_SIGNING_KEY }}
+        run: |
+          if [ -z "$OTA_CODE_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::OTA signing private key secret is required (EXPO_OTA_CODE_SIGNING_PRIVATE_KEY)."
+            exit 1
+          fi
+          key_path="$RUNNER_TEMP/ota-private-key.pem"
+          printf '%s' "$OTA_CODE_SIGNING_PRIVATE_KEY" > "$key_path"
+          chmod 600 "$key_path"
+          echo "OTA_PRIVATE_KEY_PATH=$key_path" >> "$GITHUB_ENV"
+
       - name: Publish to production channel (100%)
         working-directory: frontend
         run: |
           eas update \
             --channel ${{ inputs.target_channel || 'production' }} \
+            --private-key-path "$OTA_PRIVATE_KEY_PATH" \
             --message "production 100%: ${{ inputs.message || github.ref_name }}" \
             --rollout-percentage 100
         env:

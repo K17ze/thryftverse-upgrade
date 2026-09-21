@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AccessibilityActionEvent,
+  AccessibilityInfo,
   Image,
   LayoutChangeEvent,
   Modal,
@@ -39,6 +41,12 @@ const HANDLE_TOUCH = Control.hit;
  *  whole touch target inside the stage's dispatch bounds (Android only
  *  delivers touches within ancestor bounds). */
 const EDGE_INSET = HANDLE_TOUCH / 2;
+/** Per-adjust step for VoiceOver/TalkBack increment/decrement — 5% of the
+ *  fitted image edge, comfortably above the 4% minimum region size so one
+ *  step always produces a visible, contract-valid change. */
+const ACCESSIBLE_STEP_FRACTION = 0.05;
+/** Standard adjustable actions the crop frame and each handle expose. */
+const ADJUST_ACTIONS = [{ name: 'increment' as const }, { name: 'decrement' as const }];
 
 /** Rect in fitted-image display pixels (origin = top-left of the fitted image). */
 interface DisplayRect {
@@ -222,6 +230,68 @@ export function VisualSearchRegionCropper({ visible, imageUri, region, onConfirm
     applyRect({ x: 0, y: 0, w: f.w, h: f.h });
   }, [applyRect]);
 
+  // ── Screen-reader adjust path (S20-03) ─────────────────────────────────
+  // The frame and each corner handle declare accessibilityRole="adjustable",
+  // so they must honour the standard increment/decrement actions — VoiceOver
+  // swipe up/down and TalkBack's adjust gesture dispatch these, not pan
+  // gestures. Every adjustment reuses the same bounds/min-size clamping as
+  // the drag path and announces the resulting region.
+  const regionValueText = useCallback((r: DisplayRect, f: { w: number; h: number }): string => {
+    const pct = (v: number) => Math.round(v * 100);
+    return t('frame.value', {
+      x: pct(r.x / f.w),
+      y: pct(r.y / f.h),
+      width: pct(r.w / f.w),
+      height: pct(r.h / f.h) });
+  }, [t]);
+
+  const announceRegion = useCallback(() => {
+    const f = fitRef.current;
+    const r = rectRef.current;
+    if (!f || !r) return;
+    if (typeof AccessibilityInfo?.announceForAccessibility === 'function') {
+      AccessibilityInfo.announceForAccessibility(regionValueText(r, f));
+    }
+  }, [regionValueText]);
+
+  // Frame: increment nudges the whole region toward the bottom-right,
+  // decrement toward the top-left — same clamped move as the pan handler.
+  const handleFrameAction = useCallback((e: AccessibilityActionEvent) => {
+    const { actionName } = e.nativeEvent;
+    if (actionName !== 'increment' && actionName !== 'decrement') return;
+    const f = fitRef.current;
+    const start = rectRef.current;
+    if (!f || !start) return;
+    const dir = actionName === 'increment' ? 1 : -1;
+    applyRect({
+      x: clamp(start.x + dir * ACCESSIBLE_STEP_FRACTION * f.w, 0, f.w - start.w),
+      y: clamp(start.y + dir * ACCESSIBLE_STEP_FRACTION * f.h, 0, f.h - start.h),
+      w: start.w,
+      h: start.h });
+    announceRegion();
+  }, [applyRect, announceRegion]);
+
+  // Corner handle: increment pushes that corner outward (the region grows
+  // toward it), decrement pulls it inward (the region shrinks from that
+  // corner) — the opposite corner stays anchored, exactly like the drag.
+  const handleCornerAction = useCallback((corner: Corner, e: AccessibilityActionEvent) => {
+    const { actionName } = e.nativeEvent;
+    if (actionName !== 'increment' && actionName !== 'decrement') return;
+    const f = fitRef.current;
+    const start = rectRef.current;
+    if (!f || !start) return;
+    const dir = actionName === 'increment' ? 1 : -1;
+    const dx = dir * ACCESSIBLE_STEP_FRACTION * f.w * (corner === 'tl' || corner === 'bl' ? -1 : 1);
+    const dy = dir * ACCESSIBLE_STEP_FRACTION * f.h * (corner === 'tl' || corner === 'tr' ? -1 : 1);
+    applyRect(resizeFromCorner(corner, start, dx, dy, f.w, f.h));
+    announceRegion();
+  }, [applyRect, announceRegion]);
+
+  const regionAccessibilityValue = useMemo(() => {
+    if (!rect || !fit) return undefined;
+    return { text: regionValueText(rect, fit) };
+  }, [rect, fit, regionValueText]);
+
   // Convert the display-pixel rect to [0,1] source fractions. A frame
   // covering the whole image resolves to null — nothing is sent, so the
   // backend truthfully reports queryScope 'whole_image'.
@@ -331,7 +401,8 @@ export function VisualSearchRegionCropper({ visible, imageUri, region, onConfirm
               <View pointerEvents="none" style={[styles.cropScrim, { left: 0, top: rect.y, width: rect.x, height: rect.h }]} />
               <View pointerEvents="none" style={[styles.cropScrim, { left: rect.x + rect.w, top: rect.y, right: 0, height: rect.h }]} />
 
-              {/* The frame itself — hairline border, drags to move. */}
+              {/* The frame itself — hairline border, drags to move;
+                  increment/decrement nudge it for screen-reader users. */}
               <View
                 {...moveResponder.panHandlers}
                 style={[styles.cropRect, { left: rect.x, top: rect.y, width: rect.w, height: rect.h }]}
@@ -339,6 +410,9 @@ export function VisualSearchRegionCropper({ visible, imageUri, region, onConfirm
                 accessibilityRole="adjustable"
                 accessibilityLabel={t('frame.areaLabel')}
                 accessibilityHint={t('frame.areaHint')}
+                accessibilityValue={regionAccessibilityValue}
+                accessibilityActions={ADJUST_ACTIONS}
+                onAccessibilityAction={handleFrameAction}
               />
             </View>
           )}
@@ -351,6 +425,9 @@ export function VisualSearchRegionCropper({ visible, imageUri, region, onConfirm
               accessibilityRole="adjustable"
               accessibilityLabel={cornerLabels[corner]}
               accessibilityHint={t('frame.cornerHint')}
+              accessibilityValue={regionAccessibilityValue}
+              accessibilityActions={ADJUST_ACTIONS}
+              onAccessibilityAction={(e) => handleCornerAction(corner, e)}
             >
               <View style={[styles.cropHandleBracket, cornerBracketStyles[corner]]} />
             </View>

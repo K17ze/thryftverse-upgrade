@@ -7,13 +7,16 @@
  * - Stream, current lot, viewer count, chat history + live messages
  * - Seller identity resolution (contract name, else public profile fetch)
  * - Realtime subscriptions: chat, viewer count, bids, lot changes, stream end
+ * - Transport recovery: `reconnecting` flag from client state, canonical
+ *   snapshot refetch when the transport emits a resnapshot signal for the
+ *   session topic (gap too large to replay)
  * - Retry / reconnect
  *
  * Truthful UI (AGENTS §11): every value here comes from the realtime
  * contract only — nothing is fabricated for the viewer surface.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchPublicProfile } from '../../services/profileApi';
 import {
   LiveStream,
@@ -28,7 +31,9 @@ import {
   subscribeToBids,
   subscribeToLotChanges,
   fetchStreamChatHistory,
+  liveSessionTopic,
   type ViewerModerationEventPayload } from '../../services/liveShoppingApi';
+import { useRealtimeSafe } from '../../platform/realtime';
 import { track } from '../../analytics';
 import type { ConnectionState, SellerIdentity } from './types';
 
@@ -44,6 +49,15 @@ export function useLiveStreamSession(sessionId: string, viewerUserId?: string) {
   const [streamEndSummary, setStreamEndSummary] = useState<StreamEndEventPayload | null>(null);
   const [currentLot, setCurrentLot] = useState<LiveLot | null>(null);
   const [reconnectCount, setReconnectCount] = useState(0);
+  // True while the realtime transport is recovering (reconnect backoff or a
+  // resnapshot refetch in flight). Mirrored from the shared client — the
+  // same pattern useCoOwnOrderBookStream uses for isStreaming/hasGap.
+  const [reconnecting, setReconnecting] = useState(false);
+  const realtimeClient = useRealtimeSafe()?.client ?? null;
+  // Epoch guard for resnapshot refetches — a superseded fetch (overlapping
+  // resnapshot signals, or a retry/session switch mid-flight) must never
+  // overwrite newer state.
+  const resnapshotEpochRef = useRef(0);
 
   // ── Connect to stream on mount ──
   useEffect(() => {
@@ -55,6 +69,8 @@ export function useLiveStreamSession(sessionId: string, viewerUserId?: string) {
     let unsubLotLifecycle: (() => void) | null = null;
     let unsubStreamEnd: (() => void) | null = null;
     let unsubModeration: (() => void) | null = null;
+    let unsubTransportState: (() => void) | null = null;
+    let unsubResnapshot: (() => void) | null = null;
 
     (async () => {
       try {
@@ -239,6 +255,64 @@ export function useLiveStreamSession(sessionId: string, viewerUserId?: string) {
             setViewerMuted(event.type === 'viewer_muted');
           }
         });
+
+        // Canonical resnapshot — when the transport drops too many events
+        // on this session's topic to replay (gap overflow), refetch the
+        // session + chat snapshot rather than trusting accumulated deltas.
+        // Epoch-guarded: an older fetch resolving late never overwrites a
+        // newer snapshot.
+        const resnapshot = async () => {
+          const epoch = ++resnapshotEpochRef.current;
+          try {
+            const snapshot = await connectToStream(sessionId);
+            if (cancelled || epoch !== resnapshotEpochRef.current) return;
+            if (!snapshot) {
+              setConnectionState('error');
+              return;
+            }
+            const history = await fetchStreamChatHistory(sessionId);
+            if (cancelled || epoch !== resnapshotEpochRef.current) return;
+            setStream(snapshot);
+            setViewerCount(snapshot.viewerCount);
+            setMessages(history);
+            if (snapshot.status === 'ended') {
+              setConnectionState('ended');
+              return;
+            }
+            if (snapshot.status === 'scheduled') {
+              setConnectionState('scheduled');
+              return;
+            }
+            setCurrentLot(snapshot.lots[snapshot.currentLotIndex] ?? null);
+            setConnectionState('live');
+          } catch {
+            // Keep the last-known state — the subscriptions stay live and
+            // the next resnapshot signal or a manual retry recovers.
+          } finally {
+            if (!cancelled && epoch === resnapshotEpochRef.current) {
+              setReconnecting(false);
+            }
+          }
+        };
+
+        // Transport recovery → the feed is stale until replay or a
+        // resnapshot lands. 'disconnected' is terminal for the client's
+        // backoff, so the flag clears rather than promising a recovery
+        // that is no longer running.
+        unsubTransportState = realtimeClient?.onStateChange((state) => {
+          if (cancelled) return;
+          if (state === 'reconnecting') {
+            setReconnecting(true);
+          } else if (state === 'connected' || state === 'disconnected') {
+            setReconnecting(false);
+          }
+        }) ?? null;
+
+        unsubResnapshot = realtimeClient?.onResnapshot((topic) => {
+          if (cancelled || topic !== liveSessionTopic(sessionId)) return;
+          setReconnecting(true);
+          void resnapshot();
+        }) ?? null;
       } catch {
         if (!cancelled) {
           setConnectionState('error');
@@ -255,11 +329,17 @@ export function useLiveStreamSession(sessionId: string, viewerUserId?: string) {
       unsubLotLifecycle?.();
       unsubStreamEnd?.();
       unsubModeration?.();
+      unsubTransportState?.();
+      unsubResnapshot?.();
       disconnectFromStream(sessionId);
     };
-  }, [sessionId, viewerUserId, reconnectCount]);
+  }, [sessionId, viewerUserId, reconnectCount, realtimeClient]);
 
   const retry = useCallback(() => {
+    // Invalidate any in-flight resnapshot — its writes belong to the
+    // session state this retry is about to discard.
+    resnapshotEpochRef.current += 1;
+    setReconnecting(false);
     setConnectionState('connecting');
     setStream(null);
     setMessages([]);
@@ -279,5 +359,6 @@ export function useLiveStreamSession(sessionId: string, viewerUserId?: string) {
     currentLot,
     setCurrentLot,
     viewerMuted,
+    reconnecting,
     retry };
 }

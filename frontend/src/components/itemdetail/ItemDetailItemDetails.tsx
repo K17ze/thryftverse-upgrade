@@ -9,7 +9,7 @@ import { CategoryEvidence } from '../commerce';
 import { CommerceDetailSection } from '../commerce/detail';
 import { resolveEvidenceGroups } from '../../platform/commerce/categoryEvidence';
 import { Space, FontFamily, Control } from '../../theme/designTokens';
-import { TypographyV2 } from '../../theme/typography.v2';
+import { TypographyV2, MAX_FONT_SCALE } from '../../theme/typography.v2';
 import type { ItemDetailConditionMeta } from '../../hooks/itemDetail/itemDetailDerived';
 
 export interface ItemDetailItemDetailsProps {
@@ -58,9 +58,11 @@ export function ItemDetailItemDetails({
           Condition is the primary judgment fact on a second-hand
           listing. Render the grade plus what the grade means inline —
           the buyer should not have to open a sheet to learn what
-          "Good" means. When the listing carries more than one photo,
-          the trailing photos are the flaw/detail evidence; the jump
-          opens the fullscreen viewer on the last shot. */}
+          "Good" means. The gallery jump below opens the full photo set:
+          the listing media contract carries no per-photo role or
+          condition tag, so position must never be presented as condition
+          evidence — the label stays generic and lands on the first
+          photo, not an arbitrary last shot mislabeled as proof (FRESH-09). */}
       {item.condition ? (
         <View
           style={styles.conditionEvidence}
@@ -68,12 +70,12 @@ export function ItemDetailItemDetails({
         >
           <View style={styles.conditionEvidenceHeader}>
             <View style={[styles.conditionDot, { backgroundColor: conditionMeta?.color ?? colors.textMuted }]} />
-            <Text style={[styles.conditionEvidenceName, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>
+            <Text style={[styles.conditionEvidenceName, { color: colors.textPrimary }]} maxFontSizeMultiplier={MAX_FONT_SCALE.content}>
               {item.condition}
             </Text>
           </View>
           {conditionMeta ? (
-            <Text style={[styles.conditionEvidenceDefinition, { color: colors.textSecondary }]} maxFontSizeMultiplier={2}>
+            <Text style={[styles.conditionEvidenceDefinition, { color: colors.textSecondary }]} maxFontSizeMultiplier={MAX_FONT_SCALE.content}>
               {conditionMeta.definition}
             </Text>
           ) : null}
@@ -83,15 +85,16 @@ export function ItemDetailItemDetails({
               scaleValue={0.98}
               hapticFeedback="light"
               onPress={() => {
-                // Jump to the last photo (detail/flaw shot per policy)
-                onOpenViewer(item.images!.length - 1);
+                // Generic gallery entry — no photo is tagged as condition
+                // evidence, so the viewer opens at the start of the set.
+                onOpenViewer(0);
               }}
-              accessibilityLabel="View condition evidence photos"
+              accessibilityLabel="View all item photos"
               accessibilityRole="button"
             >
               <Ionicons name="images-outline" size={18} color={colors.brand} />
-              <Text style={[styles.conditionEvidenceJumpText, { color: colors.brand }]} maxFontSizeMultiplier={2}>
-                View condition photos
+              <Text style={[styles.conditionEvidenceJumpText, { color: colors.brand }]} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
+                View all photos
               </Text>
               <Ionicons name="chevron-forward" size={16} color={colors.brand} />
             </AnimatedPressable>
@@ -105,7 +108,7 @@ export function ItemDetailItemDetails({
               not touchable, not announced. */}
           <Text
             style={[styles.descriptionText, styles.descriptionMeasure]}
-            maxFontSizeMultiplier={2}
+            maxFontSizeMultiplier={MAX_FONT_SCALE.content}
             onTextLayout={(e) => setMeasuredDescLines(e.nativeEvent.lines.length)}
             pointerEvents="none"
             accessible={false}
@@ -132,7 +135,7 @@ export function ItemDetailItemDetails({
             <Text
               style={[styles.descriptionText, { color: colors.textPrimary }]}
               numberOfLines={descriptionExpanded ? undefined : 3}
-              maxFontSizeMultiplier={2}
+              maxFontSizeMultiplier={MAX_FONT_SCALE.content}
             >
               {item.description}
             </Text>
@@ -159,7 +162,7 @@ export function ItemDetailItemDetails({
               accessibilityRole="button"
               accessibilityState={{ expanded: descriptionExpanded }}
             >
-              <Text style={[styles.descriptionToggle, { color: colors.textSecondary }]} maxFontSizeMultiplier={2}>
+              <Text style={[styles.descriptionToggle, { color: colors.textSecondary }]} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
                 {descriptionExpanded ? 'Show less' : 'Read more'}
               </Text>
             </AnimatedPressable>
@@ -270,7 +273,7 @@ export function ItemDetailItemDetails({
       })()}
 
       {item.createdAt ? (
-        <Text style={[styles.postedDate, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={2}>
+        <Text style={[styles.postedDate, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
           Posted {new Date(item.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
         </Text>
       ) : null}

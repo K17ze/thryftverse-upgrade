@@ -46,6 +46,13 @@ export interface FeedbackAttribution {
 export interface FeedControlResult {
   /** True when at least one durable write reached the backend. */
   persisted: boolean;
+  /**
+   * Why nothing persisted — only present when `persisted` is false.
+   * 'anonymous': no signed-in user, so retry can never succeed; the hide is
+   * session-local and the UI must say so rather than offer a dead retry.
+   * 'unavailable': the write failed (network/server) — a retry may succeed.
+   */
+  failure?: 'anonymous' | 'unavailable';
 }
 
 function getCurrentUserId(): string | null {
@@ -119,7 +126,7 @@ export async function markItemNotInterested(
 ): Promise<FeedControlResult> {
   const userId = getCurrentUserId();
   const interacted = await postRecommendationInteraction(listing.id, 'not_interested', attribution);
-  if (!userId) return { persisted: false };
+  if (!userId) return { persisted: false, failure: 'anonymous' };
   const mutated = await postIntentMutation(userId, {
     idempotencyKey: makeIdempotencyKey('exclude-item', listing.id),
     scope: 'item',
@@ -128,7 +135,9 @@ export async function markItemNotInterested(
     direction: 'exclude',
     source: 'feed_action',
   });
-  return { persisted: interacted || mutated };
+  return interacted || mutated
+    ? { persisted: true }
+    : { persisted: false, failure: 'unavailable' };
 }
 
 /**
@@ -146,7 +155,7 @@ export async function showFewerLikeThis(
 ): Promise<FeedControlResult> {
   const userId = getCurrentUserId();
   const interacted = await postRecommendationInteraction(listing.id, 'show_fewer', attribution);
-  if (!userId) return { persisted: false };
+  if (!userId) return { persisted: false, failure: 'anonymous' };
 
   // The "like this" axis: prefer the category (the facet the category bar
   // already exposes), then brand, then the raw title as last resort.
@@ -166,5 +175,35 @@ export async function showFewerLikeThis(
     direction: 'less',
     source: 'feed_action',
   });
-  return { persisted: interacted || mutated };
+  return interacted || mutated
+    ? { persisted: true }
+    : { persisted: false, failure: 'unavailable' };
+}
+
+/**
+ * Undo a "not interested" — the compensating write for a landed exclusion.
+ *
+ * The intent ledger is append-only and latest-per-(scope, target) wins, so
+ * an item-scope `usual` mutation lifts a previous `exclude` on the same
+ * listing. Honest limit: the logged `not_interested` interaction remains a
+ * historical negative signal (there is no interaction-retraction endpoint),
+ * so callers should treat this as best-effort reversal, not a guarantee the
+ * item is re-served.
+ */
+export async function undoItemNotInterested(
+  listing: DiscoveryListingSummary,
+): Promise<FeedControlResult> {
+  const userId = getCurrentUserId();
+  if (!userId) return { persisted: false, failure: 'anonymous' };
+  const mutated = await postIntentMutation(userId, {
+    idempotencyKey: makeIdempotencyKey('undo-exclude-item', listing.id),
+    scope: 'item',
+    targetId: listing.id,
+    targetLabel: listing.title || listing.id,
+    direction: 'usual',
+    source: 'feed_action',
+  });
+  return mutated
+    ? { persisted: true }
+    : { persisted: false, failure: 'unavailable' };
 }

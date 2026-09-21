@@ -6,6 +6,25 @@ import {
   refundOnezeInternalWalletDebit,
 } from '../lib/walletMoneyPath.js';
 import { evaluateWalletCapability } from '../lib/compliance.js';
+import { applyCoOwnTransfer } from '../lib/coOwnTransfer.js';
+import type { CoOwnSettlementRateContext } from '../lib/pricingEngine.js';
+
+// The R09 fixture uses feeGbp: 0, so the primitive's double-entry fee block
+// is unreachable — these sentinels fail loudly if that ever stops being
+// true. (workerRuntime's implementations are not imported here: that module
+// eagerly connects to Redis at load and would hang the test process. The
+// fee-posting path itself is covered by the ledger invariant tests above.)
+const transferLedgerDeps = {
+  ledgerTablesAvailable: async () => {
+    throw new Error('ledger deps unreachable with feeGbp=0');
+  },
+  ensureLedgerAccount: async () => {
+    throw new Error('ledger deps unreachable with feeGbp=0');
+  },
+  appendLedgerEntry: async () => {
+    throw new Error('ledger deps unreachable with feeGbp=0');
+  },
+};
 
 // ── Production invariant proofs (real PostgreSQL) ──
 //
@@ -798,6 +817,11 @@ describe('Production invariants (real PostgreSQL)', () => {
         [issuerId, assetId],
       );
 
+      // Both parties need real wallets: the primitive settles DvP — buyer
+      // debit + seller credit through the segment-aware wallet path.
+      await createWallet(client, `inv_wal_ca_${suffix()}`, buyerA, 1_000_000n);
+      await createWallet(client, `inv_wal_ci_${suffix()}`, issuerId, 0n);
+
       const assertConserved = async () => {
         const res = await client.query<{ held: string; available: string; total: string }>(
           `SELECT
@@ -815,26 +839,34 @@ describe('Production invariants (real PostgreSQL)', () => {
         );
       };
 
-      // Mirror of applyCoOwnTransfer's holding swap: seller decrement is
-      // guarded by a units_owned >= units predicate; buyer is upserted.
-      const transfer = async (units: number) => {
-        const sellerRes = await client.query(
-          `UPDATE coOwn_holdings
-           SET units_owned = units_owned - $3
-           WHERE user_id = $1 AND asset_id = $2 AND units_owned >= $3`,
-          [issuerId, assetId, units],
-        );
-        if (!sellerRes.rowCount) {
-          throw new Error('CO_OWN_SELLER_UNITS_INSUFFICIENT');
-        }
-        await client.query(
-          `INSERT INTO coOwn_holdings (user_id, asset_id, units_owned, avg_entry_price_gbp, realized_pnl_gbp)
-           VALUES ($1, $2, $3, 4, 0)
-           ON CONFLICT (user_id, asset_id)
-           DO UPDATE SET units_owned = coOwn_holdings.units_owned + EXCLUDED.units_owned`,
-          [buyerA, assetId, units],
-        );
+      // Drive the REAL settlement primitive — not a SQL mirror — so the
+      // invariant tracks whatever the production path actually does. A
+      // synthetic rate context fixes the GBP→1ZE legs deterministically
+      // (1 anchor unit = 1 GBP → 1000 units/£) without depending on seeded
+      // pricing rows.
+      const settlement: CoOwnSettlementRateContext = {
+        quoteVersion: 'invariant_test',
+        settlementCurrency: 'GBP',
+        anchorCurrency: 'USD',
+        anchorValue: 1,
+        anchorToSettlementRate: 1,
+        rateSource: 'invariant_test',
+        rateResolvedAt: new Date().toISOString(),
       };
+      const transfer = (units: number) =>
+        applyCoOwnTransfer(client, transferLedgerDeps, {
+          assetId,
+          buyerId: buyerA,
+          sellerId: issuerId,
+          units,
+          unitPriceGbp: 4,
+          feeGbp: 0,
+          sourceType: 'coOwn_trade',
+          buyOrderId: null,
+          sellOrderId: null,
+          enforceSellerHolding: true,
+          settlement,
+        });
 
       await transfer(5);
       await assertConserved();
@@ -844,7 +876,10 @@ describe('Production invariants (real PostgreSQL)', () => {
       // Seller now holds 8 — a 9-unit transfer must fail inside a savepoint
       // and leave every holding untouched.
       await client.query('SAVEPOINT before_bad_transfer');
-      await assert.rejects(transfer(9), /INSUFFICIENT/);
+      await assert.rejects(transfer(9), (err: unknown) => {
+        assert.equal((err as { code?: string }).code, 'CO_OWN_SELLER_UNITS_INSUFFICIENT');
+        return true;
+      });
       await client.query('ROLLBACK TO SAVEPOINT before_bad_transfer');
       await assertConserved();
 

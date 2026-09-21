@@ -1004,6 +1004,7 @@
       "sold": "SOLD",
       "listingsCount": "{{count}} listings",
       "editOrder": "Edit",
+      "reorderTitle": "Arrange your shop",
       "done": "Done",
       "pin": "Pin to profile",
       "unpin": "Unpin from profile",
@@ -1283,6 +1284,9 @@
       "connecting": "Connecting to stream...",
       "a11yLabel": "Live video"
     },
+    "session": {
+      "reconnecting": "Reconnecting…"
+    },
     "seller": {
       "following": "Following",
       "follow": "Follow"
@@ -1370,6 +1374,10 @@
       "retry": "Retry",
       "subtitle": "Check your connection and try again.",
       "loadFailed": "Failed to load live sessions"
+    },
+    "refreshFailed": {
+      "title": "Couldn't refresh",
+      "body": "Showing the latest sessions we have."
     },
     "empty": {
       "title": "No live sessions right now",
@@ -2050,7 +2058,8 @@
       "cornerTopLeft": "Crop handle, top left",
       "cornerTopRight": "Crop handle, top right",
       "cornerBottomLeft": "Crop handle, bottom left",
-      "cornerBottomRight": "Crop handle, bottom right"
+      "cornerBottomRight": "Crop handle, bottom right",
+      "value": "Crop area {{x}} percent from the left, {{y}} percent from the top, {{width}} percent wide, {{height}} percent tall"
     }
   }
 }

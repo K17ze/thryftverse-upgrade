@@ -59,6 +59,9 @@ export default function MyProfileScreen() {
   const scrollRef = React.useRef<Reanimated.ScrollView>(null);
   useScrollToTop(scrollRef);
   const [activeTab, setActiveTab] = React.useState<MyProfileTab>('listings');
+  // Y offset of the tab-content block inside the scroll view — measured by
+  // StorefrontTabs' onTabContentLayout so the "For sale" stat can scroll to it.
+  const tabContentYRef = React.useRef(0);
 
   const haptic = useHaptic();
   const { formatFromFiat } = useFormattedPrice();
@@ -133,6 +136,19 @@ export default function MyProfileScreen() {
 
   // Parallax scroll for cover
   const { scrollY, scrollHandler } = useMyProfileScroll();
+
+  // "For sale" stat → select the listings tab and scroll it into view.
+  // A stat that only vibrates is a dead affordance (FRESH-06); the tab
+  // rail sits just above the measured content block, so land slightly
+  // above it to keep the rail visible.
+  const handlePressListings = useCallback(() => {
+    haptic.light();
+    setActiveTab('listings');
+    scrollRef.current?.scrollTo({
+      y: Math.max(0, tabContentYRef.current - 64),
+      animated: !reducedMotion,
+    });
+  }, [haptic, reducedMotion]);
 
   const [showPassportModal, setShowPassportModal] = React.useState(false);
   const handleShare = () => {
@@ -266,7 +282,7 @@ export default function MyProfileScreen() {
             onEditProfile={() => navigation.navigate('EditProfile', {})}
             onPressSold={() => { haptic.light(); navigation.navigate('MyOrders'); }}
             onPressFollowers={() => { haptic.light(); navigation.navigate('ConnectionList', { userId: currentUser!.id, mode: 'followers' }); }}
-            onPressListings={() => { haptic.light(); /* listings tab is directly below — no-op scroll target needed */ }}
+            onPressListings={handlePressListings}
           />
 
           {/* Away-mode indicator — shown when holiday mode is enabled */}
@@ -319,6 +335,7 @@ export default function MyProfileScreen() {
           tabs={tabs}
           activeKey={activeTab}
           onTabChange={(key) => setActiveTab(key)}
+          onTabContentLayout={(y) => { tabContentYRef.current = y; }}
           reducedMotion={reducedMotion}
           listings={allOwnedListings}
           reorderMode={isReorderMode}

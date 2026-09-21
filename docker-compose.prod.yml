@@ -150,6 +150,10 @@ services:
 
   # ── MinIO — override for production ──────────────────────────────────
   minio:
+    # Neutralize the "9000:9000"/"9001:9001" host ports from the base file —
+    # object storage is reached over the backend network only. External S3
+    # clients go through the public S3_PUBLIC_ENDPOINT.
+    ports: !reset []
     <<: *default-security
     # MinIO needs writable temp space beyond /tmp
     tmpfs:
@@ -160,20 +164,57 @@ services:
     networks:
       - backend
 
+  # ── MinIO init — one-shot bucket bootstrap (production) ──────────────
+  # The api blocks on service_completed_successfully; without a network
+  # attachment the job sits on the implicit default network and can never
+  # reach minio (backend) — the whole stack would hang at startup.
+  minio-init:
+    logging: *default-logging
+    networks:
+      - backend
+
   # ── Key Service — override for production ────────────────────────────
   key-service:
+    # Neutralize the "4100:4100" host port from the base file — the token
+    # service is internal-only; api/worker reach it over the backend network.
+    ports: !reset []
     <<: *default-security
     mem_limit: 512M
     logging: *default-logging
     networks:
       - backend
 
+  # ── Meilisearch — override for production ────────────────────────────
+  # Without this override the base service lands on the implicit default
+  # network (unreachable from api/worker, which sit on backend+db) and
+  # publishes 7700 to the host with a dev master-key default.
+  meilisearch:
+    # Neutralize the "7700:7700" host port — internal index only.
+    ports: !reset []
+    environment:
+      MEILI_ENV: production
+      # Required — api/worker read the same value via the MEILISEARCH_KEY
+      # fallback chain below, so a single env var keeps both sides in sync.
+      MEILI_MASTER_KEY: ${MEILISEARCH_MASTER_KEY:?MEILISEARCH_MASTER_KEY is required}
+      MEILI_NO_ANALYTICS: "true"
+    <<: *default-security
+    # Meilisearch writes index data to its volume and scratch to /meili_tmp.
+    tmpfs:
+      - /tmp
+      - /meili_tmp
+    mem_limit: 2G
+    logging: *default-logging
+    networks:
+      - backend
+
   # ── API — override for production ────────────────────────────────────
   # Does NOT expose port 4000 to the host — Caddy proxies traffic.
+  # `ports: []` alone would NOT clear the inherited "4000:4000" mapping
+  # (Compose concatenates port sequences on merge); !reset empties it.
   # Background workers are disabled here (RUN_BACKGROUND_WORKERS=false);
   # they run in the separate worker container.
   api:
-    ports: []
+    ports: !reset []
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -185,6 +226,89 @@ services:
       NODE_ENV: production
       RUN_BACKGROUND_WORKERS: "false"
       RUN_API_SERVER: "true"
+      # requiredSecret()s — the base compose file supplies dev defaults
+      # (KEY_SERVICE_*, API_*_TOKEN, DECISION_SERVICE_TOKEN) or empty strings
+      # (PAYMENT_METADATA_HMAC_SECRET) which would silently ship a prod
+      # container with known dev credentials, and unset secrets
+      # (ENCRYPTION_KEY, AUTH_*) which crash the API at boot. Re-declare them
+      # all as required here so `docker compose` fails fast at parse time.
+      KEY_SERVICE_CLIENT_TOKEN: ${KEY_SERVICE_CLIENT_TOKEN:?KEY_SERVICE_CLIENT_TOKEN is required}
+      KEY_SERVICE_ADMIN_TOKEN: ${KEY_SERVICE_ADMIN_TOKEN:?KEY_SERVICE_ADMIN_TOKEN is required}
+      DECISION_SERVICE_TOKEN: ${DECISION_SERVICE_TOKEN:?DECISION_SERVICE_TOKEN is required}
+      API_SECURITY_ADMIN_TOKEN: ${API_SECURITY_ADMIN_TOKEN:?API_SECURITY_ADMIN_TOKEN is required}
+      API_INTERNAL_SERVICE_TOKEN: ${API_INTERNAL_SERVICE_TOKEN:?API_INTERNAL_SERVICE_TOKEN is required}
+      AUTH_ACCESS_TOKEN_SECRET: ${AUTH_ACCESS_TOKEN_SECRET:?AUTH_ACCESS_TOKEN_SECRET is required}
+      AUTH_REFRESH_TOKEN_SECRET: ${AUTH_REFRESH_TOKEN_SECRET:?AUTH_REFRESH_TOKEN_SECRET is required}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
+      PAYMENT_METADATA_HMAC_SECRET: ${PAYMENT_METADATA_HMAC_SECRET:?PAYMENT_METADATA_HMAC_SECRET is required}
+      ONEZE_ATTESTATION_SIGNING_SECRET: ${ONEZE_ATTESTATION_SIGNING_SECRET:?ONEZE_ATTESTATION_SIGNING_SECRET is required}
+      AUTH_EMAIL_FROM: ${AUTH_EMAIL_FROM:?AUTH_EMAIL_FROM is required}
+      # Search — this process serves /search. Canonical var is
+      # MEILISEARCH_KEY; MEILISEARCH_API_KEY is accepted as a legacy alias.
+      # MEILISEARCH_MASTER_KEY is last in the fallback chain so setting only
+      # the server-side name keeps the meilisearch service and the api in
+      # sync (the server requires it when MEILI_ENV=production).
+      MEILISEARCH_URL: ${MEILISEARCH_URL:-http://meilisearch:7700}
+      MEILISEARCH_KEY: ${MEILISEARCH_KEY:-${MEILISEARCH_API_KEY:-${MEILISEARCH_MASTER_KEY:-}}}
+      MEILISEARCH_INDEX: ${MEILISEARCH_INDEX:-listings}
+      # assertProductionReadiness (src/lib/productionReadiness.ts) refuses to
+      # boot a production api without every one of these. The base file either
+      # omits them or ships dev defaults (http://10.0.2.2, minioadmin,
+      # sandbox_kyc_vendor, MEDIA_*=false) that the readiness gate rejects —
+      # re-declare them required so `docker compose` fails at parse time.
+      APP_URL: ${APP_URL:?APP_URL is required}
+      REDIS_CACHE_URL: redis://redis:6379
+      REDIS_QUEUE_URL: redis://redis-queue:6379
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:?S3_PUBLIC_ENDPOINT is required}
+      S3_CDN_BASE_URL: ${S3_CDN_BASE_URL:?S3_CDN_BASE_URL is required}
+      MEDIA_PROCESSING_ENABLED: ${MEDIA_PROCESSING_ENABLED:?MEDIA_PROCESSING_ENABLED is required}
+      MEDIA_PUBLICATION_GATE_ENABLED: ${MEDIA_PUBLICATION_GATE_ENABLED:?MEDIA_PUBLICATION_GATE_ENABLED is required}
+      KYC_DEFAULT_VENDOR: ${KYC_DEFAULT_VENDOR:?KYC_DEFAULT_VENDOR is required}
+      KYC_RETURN_URL: ${KYC_RETURN_URL:?KYC_RETURN_URL is required}
+      KYC_WEBHOOK_SECRET: ${KYC_WEBHOOK_SECRET:?KYC_WEBHOOK_SECRET is required}
+      # Vendor-conditional KYC creds — required only for the chosen
+      # KYC_DEFAULT_VENDOR; pass through so any supported vendor can be used.
+      PERSONA_API_KEY: ${PERSONA_API_KEY:-}
+      PERSONA_TEMPLATE_ID: ${PERSONA_TEMPLATE_ID:-}
+      PERSONA_WEBHOOK_SECRET: ${PERSONA_WEBHOOK_SECRET:-}
+      ONFIDO_API_KEY: ${ONFIDO_API_KEY:-}
+      ONFIDO_WEBHOOK_TOKEN: ${ONFIDO_WEBHOOK_TOKEN:-}
+      ONEZE_FX_SYNC_ENABLED: ${ONEZE_FX_SYNC_ENABLED:?ONEZE_FX_SYNC_ENABLED is required}
+      ONEZE_FX_PROVIDER_URL: ${ONEZE_FX_PROVIDER_URL:?ONEZE_FX_PROVIDER_URL is required}
+      ONEZE_FX_PROVIDER_API_KEY: ${ONEZE_FX_PROVIDER_API_KEY:?ONEZE_FX_PROVIDER_API_KEY is required}
+      MODERATION_PROVIDER: ${MODERATION_PROVIDER:?MODERATION_PROVIDER is required}
+      ALERTING_WEBHOOK_URLS: ${ALERTING_WEBHOOK_URLS:?ALERTING_WEBHOOK_URLS is required}
+      AUTH_EMAIL_PROVIDER: ${AUTH_EMAIL_PROVIDER:-resend}
+      RESEND_API_KEY: ${RESEND_API_KEY:?RESEND_API_KEY is required}
+      # Payment provider pass-throughs — readiness requires at least one
+      # complete set; which vendor is a deployment choice.
+      MOLLIE_API_KEY: ${MOLLIE_API_KEY:-}
+      MOLLIE_WEBHOOK_SECRET: ${MOLLIE_WEBHOOK_SECRET:-}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
+      FLUTTERWAVE_SECRET_KEY: ${FLUTTERWAVE_SECRET_KEY:-}
+      FLUTTERWAVE_WEBHOOK_SECRET: ${FLUTTERWAVE_WEBHOOK_SECRET:-}
+      TAP_SECRET_KEY: ${TAP_SECRET_KEY:-}
+      TAP_WEBHOOK_SECRET: ${TAP_WEBHOOK_SECRET:-}
+      # Shipping provider pass-throughs — readiness requires at least one
+      # complete set (key + base URL + webhook secret, EASYSHIP has no URL).
+      EVRI_API_KEY: ${EVRI_API_KEY:-}
+      EVRI_API_BASE_URL: ${EVRI_API_BASE_URL:-}
+      EVRI_WEBHOOK_SECRET: ${EVRI_WEBHOOK_SECRET:-}
+      DELHIVERY_API_KEY: ${DELHIVERY_API_KEY:-}
+      DELHIVERY_API_BASE_URL: ${DELHIVERY_API_BASE_URL:-}
+      DELHIVERY_WEBHOOK_SECRET: ${DELHIVERY_WEBHOOK_SECRET:-}
+      DHL_API_KEY: ${DHL_API_KEY:-}
+      DHL_API_BASE_URL: ${DHL_API_BASE_URL:-}
+      DHL_WEBHOOK_SECRET: ${DHL_WEBHOOK_SECRET:-}
+      ARAMEX_API_KEY: ${ARAMEX_API_KEY:-}
+      ARAMEX_API_BASE_URL: ${ARAMEX_API_BASE_URL:-}
+      ARAMEX_WEBHOOK_SECRET: ${ARAMEX_WEBHOOK_SECRET:-}
+      EASYSHIP_API_KEY: ${EASYSHIP_API_KEY:-}
+      EASYSHIP_WEBHOOK_SECRET: ${EASYSHIP_WEBHOOK_SECRET:-}
     <<: *default-security
     mem_limit: 2G
     logging: *default-logging
@@ -225,6 +349,14 @@ services:
       REDIS_URL: redis://redis:6379
       REDIS_CACHE_URL: redis://redis:6379
       REDIS_QUEUE_URL: redis://redis-queue:6379
+      # Search — this process runs the scheduled blue/green reindex
+      # (search_indexing queue). Canonical var is MEILISEARCH_KEY;
+      # MEILISEARCH_API_KEY is accepted as a legacy alias by the API.
+      # MEILISEARCH_MASTER_KEY is last in the fallback chain so setting only
+      # the server-side name keeps client and server credentials in sync.
+      MEILISEARCH_URL: ${MEILISEARCH_URL:-http://meilisearch:7700}
+      MEILISEARCH_KEY: ${MEILISEARCH_KEY:-${MEILISEARCH_API_KEY:-${MEILISEARCH_MASTER_KEY:-}}}
+      MEILISEARCH_INDEX: ${MEILISEARCH_INDEX:-listings}
       KEY_SERVICE_URL: http://key-service:4100
       KEY_SERVICE_CLIENT_TOKEN: ${KEY_SERVICE_CLIENT_TOKEN:?KEY_SERVICE_CLIENT_TOKEN is required}
       KEY_SERVICE_ADMIN_TOKEN: ${KEY_SERVICE_ADMIN_TOKEN:?KEY_SERVICE_ADMIN_TOKEN is required}
@@ -245,6 +377,9 @@ services:
       DECISION_SERVICE_TOKEN: ${DECISION_SERVICE_TOKEN:?DECISION_SERVICE_TOKEN is required}
       AUTH_ACCESS_TOKEN_SECRET: ${AUTH_ACCESS_TOKEN_SECRET:?AUTH_ACCESS_TOKEN_SECRET is required}
       AUTH_REFRESH_TOKEN_SECRET: ${AUTH_REFRESH_TOKEN_SECRET:?AUTH_REFRESH_TOKEN_SECRET is required}
+      # requiredSecret()s with no env wiring would crash the worker at boot.
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
+      PAYMENT_METADATA_HMAC_SECRET: ${PAYMENT_METADATA_HMAC_SECRET:?PAYMENT_METADATA_HMAC_SECRET is required}
       AUTH_EMAIL_PROVIDER: ${AUTH_EMAIL_PROVIDER:-resend}
       AUTH_EMAIL_FROM: ${AUTH_EMAIL_FROM:?AUTH_EMAIL_FROM is required}
       RESEND_API_KEY: ${RESEND_API_KEY:?RESEND_API_KEY is required}
@@ -268,6 +403,51 @@ services:
       ONEZE_ATTESTATION_SIGNING_SECRET: ${ONEZE_ATTESTATION_SIGNING_SECRET:?ONEZE_ATTESTATION_SIGNING_SECRET is required}
       SMS_PROVIDER: ${SMS_PROVIDER:-log}
       ALERTING_WEBHOOK_URLS: ${ALERTING_WEBHOOK_URLS:?ALERTING_WEBHOOK_URLS is required}
+      # The worker imports config.ts, so assertProductionReadiness applies
+      # here too — without these the worker crashes at boot in production.
+      APP_URL: ${APP_URL:?APP_URL is required}
+      KYC_DEFAULT_VENDOR: ${KYC_DEFAULT_VENDOR:?KYC_DEFAULT_VENDOR is required}
+      KYC_RETURN_URL: ${KYC_RETURN_URL:?KYC_RETURN_URL is required}
+      KYC_WEBHOOK_SECRET: ${KYC_WEBHOOK_SECRET:?KYC_WEBHOOK_SECRET is required}
+      PERSONA_API_KEY: ${PERSONA_API_KEY:-}
+      PERSONA_TEMPLATE_ID: ${PERSONA_TEMPLATE_ID:-}
+      PERSONA_WEBHOOK_SECRET: ${PERSONA_WEBHOOK_SECRET:-}
+      ONFIDO_API_KEY: ${ONFIDO_API_KEY:-}
+      ONFIDO_WEBHOOK_TOKEN: ${ONFIDO_WEBHOOK_TOKEN:-}
+      ONEZE_FX_SYNC_ENABLED: ${ONEZE_FX_SYNC_ENABLED:?ONEZE_FX_SYNC_ENABLED is required}
+      ONEZE_FX_PROVIDER_URL: ${ONEZE_FX_PROVIDER_URL:?ONEZE_FX_PROVIDER_URL is required}
+      ONEZE_FX_PROVIDER_API_KEY: ${ONEZE_FX_PROVIDER_API_KEY:?ONEZE_FX_PROVIDER_API_KEY is required}
+      MODERATION_PROVIDER: ${MODERATION_PROVIDER:?MODERATION_PROVIDER is required}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
+      MOLLIE_API_KEY: ${MOLLIE_API_KEY:-}
+      MOLLIE_WEBHOOK_SECRET: ${MOLLIE_WEBHOOK_SECRET:-}
+      FLUTTERWAVE_SECRET_KEY: ${FLUTTERWAVE_SECRET_KEY:-}
+      FLUTTERWAVE_WEBHOOK_SECRET: ${FLUTTERWAVE_WEBHOOK_SECRET:-}
+      TAP_SECRET_KEY: ${TAP_SECRET_KEY:-}
+      TAP_WEBHOOK_SECRET: ${TAP_WEBHOOK_SECRET:-}
+      EVRI_API_KEY: ${EVRI_API_KEY:-}
+      EVRI_API_BASE_URL: ${EVRI_API_BASE_URL:-}
+      EVRI_WEBHOOK_SECRET: ${EVRI_WEBHOOK_SECRET:-}
+      DELHIVERY_API_KEY: ${DELHIVERY_API_KEY:-}
+      DELHIVERY_API_BASE_URL: ${DELHIVERY_API_BASE_URL:-}
+      DELHIVERY_WEBHOOK_SECRET: ${DELHIVERY_WEBHOOK_SECRET:-}
+      DHL_API_KEY: ${DHL_API_KEY:-}
+      DHL_API_BASE_URL: ${DHL_API_BASE_URL:-}
+      DHL_WEBHOOK_SECRET: ${DHL_WEBHOOK_SECRET:-}
+      ARAMEX_API_KEY: ${ARAMEX_API_KEY:-}
+      ARAMEX_API_BASE_URL: ${ARAMEX_API_BASE_URL:-}
+      ARAMEX_WEBHOOK_SECRET: ${ARAMEX_WEBHOOK_SECRET:-}
+      EASYSHIP_API_KEY: ${EASYSHIP_API_KEY:-}
+      EASYSHIP_WEBHOOK_SECRET: ${EASYSHIP_WEBHOOK_SECRET:-}
+      # Backup-store inventory for the backup-expiry worker (GDPR erasure
+      # propagation verification — backupExpiryHandler). When unset the
+      # handler refuses to mark manifest entries purged instead of guessing.
+      S3_BACKUP_BUCKET: ${S3_BACKUP_BUCKET:-}
+      S3_BACKUP_PREFIX: ${S3_BACKUP_PREFIX:-db-backups}
+      S3_BACKUP_REGION: ${S3_BACKUP_REGION:-${AWS_REGION:-}}
+      S3_BACKUP_ENDPOINT: ${S3_BACKUP_ENDPOINT:-}
+      S3_BACKUP_ACCESS_KEY_ID: ${S3_BACKUP_ACCESS_KEY_ID:-${AWS_ACCESS_KEY_ID:-}}
+      S3_BACKUP_SECRET_ACCESS_KEY: ${S3_BACKUP_SECRET_ACCESS_KEY:-${AWS_SECRET_ACCESS_KEY:-}}
     command: ["sh", "-c", "npm run worker:start"]
     healthcheck:
       # Check if the node worker process is alive.
@@ -291,6 +471,17 @@ services:
 
   # ── ML Service — override for production ─────────────────────────────
   ml-service:
+    # Neutralize the "8000:8000" host port published by the base compose —
+    # the decision service is reachable only on the internal backend network.
+    # `ports: []` alone would NOT clear the inherited mapping (Compose merges
+    # port sequences); !reset explicitly empties the list.
+    ports: !reset []
+    environment:
+      # ENV=production makes ADMIN_SERVICE_TOKEN / DECISION_SERVICE_TOKEN
+      # mandatory in app/main.py — no dev token defaults in production.
+      ENV: production
+      ADMIN_SERVICE_TOKEN: ${ADMIN_SERVICE_TOKEN:?ADMIN_SERVICE_TOKEN is required}
+      DECISION_SERVICE_TOKEN: ${DECISION_SERVICE_TOKEN:?DECISION_SERVICE_TOKEN is required}
     <<: *default-security
     mem_limit: 1G
     logging: *default-logging
@@ -303,6 +494,9 @@ services:
   # NOTE: read_only is disabled because the container installs packages
   # (postgresql-client, aws-cli, openssl, dcron) at startup. All other
   # hardening (cap_drop, no-new-privileges, pids_limit, mem_limit) applies.
+  # The named volume at /backups is the writable scratch/output dir; the
+  # backup script itself stays mounted read-only and is invoked via `bash`
+  # (installed deliberately below — the alpine image ships only busybox sh).
   backup:
     image: alpine:3.20
     container_name: thryftverse-backup-prod
@@ -311,14 +505,18 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}
       BACKUP_DIR: /backups
       BACKUP_RETENTION_DAYS: "30"
-      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:-}
-      S3_BUCKET: ${S3_BACKUP_BUCKET:-}
-      S3_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
-      S3_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
-      S3_REGION: ${AWS_REGION:-}
+      # Encryption and an upload destination are REQUIRED — an unencrypted
+      # dump or a backup with nowhere to go is a silent data-loss vector.
+      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:?BACKUP_ENCRYPTION_KEY is required}
+      S3_BUCKET: ${S3_BACKUP_BUCKET:?S3_BACKUP_BUCKET is required}
+      S3_BACKUP_PREFIX: ${S3_BACKUP_PREFIX:-db-backups}
+      S3_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?AWS_ACCESS_KEY_ID is required}
+      S3_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?AWS_SECRET_ACCESS_KEY is required}
+      S3_REGION: ${AWS_REGION:?AWS_REGION is required}
       ALERTING_WEBHOOK_URL: ${ALERTING_WEBHOOK_URL:-}
     volumes:
       - ./backend/scripts/automated-backup.sh:/usr/local/bin/backup.sh:ro
@@ -327,9 +525,12 @@ services:
     command:
       - |
         set -e
-        apk add --no-cache postgresql-client aws-cli curl openssl findutils coreutils dcron
+        # bash is installed deliberately — automated-backup.sh has a bash
+        # shebang and uses pipefail; alpine ships only busybox sh.
+        apk add --no-cache postgresql-client aws-cli curl openssl findutils coreutils dcron bash
 
-        chmod +x /usr/local/bin/backup.sh
+        # No chmod here: backup.sh is mounted read-only (chmod would fail
+        # under `set -e` anyway) and is invoked through the interpreter.
 
         # Parse DATABASE_URL into POSTGRES_* vars expected by the backup script
         POSTGRES_HOST="$$(echo "$$DATABASE_URL" | sed -n 's|^.*://[^@]*@\([^:]*\):.*|\1|p')"
@@ -338,15 +539,24 @@ services:
         POSTGRES_PASSWORD="$$(echo "$$DATABASE_URL" | sed -n 's|^.*://[^:]*:\([^@]*\)@.*|\1|p')"
         POSTGRES_DB="$$(echo "$$DATABASE_URL" | sed -n 's|^.*:\([0-9]*\)/\([^?]*\).*|\2|p')"
 
+        # Fail fast on an unparseable DATABASE_URL instead of letting cron
+        # discover empty credentials at 02:00.
+        if [ -z "$$POSTGRES_HOST" ] || [ -z "$$POSTGRES_USER" ] || [ -z "$$POSTGRES_DB" ]; then
+          echo "FATAL: could not parse DATABASE_URL into POSTGRES_* vars" >&2
+          exit 1
+        fi
+
         # Export vars for the backup script
         export POSTGRES_HOST POSTGRES_PORT POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB
         export S3_BACKUP_BUCKET="$$S3_BUCKET"
+        export S3_BACKUP_PREFIX
         export AWS_ACCESS_KEY_ID="$$S3_ACCESS_KEY_ID"
         export AWS_SECRET_ACCESS_KEY="$$S3_SECRET_ACCESS_KEY"
         export AWS_REGION="$$S3_REGION"
 
-        # Write crontab — daily at 02:00 UTC
-        echo "0 2 * * * /usr/local/bin/backup.sh >> /var/log/backup.log 2>&1" > /etc/crontabs/root
+        # Write crontab — daily at 02:00 UTC. The script is invoked through
+        # bash so the read-only mount's exec bit is irrelevant.
+        echo "0 2 * * * bash /usr/local/bin/backup.sh >> /var/log/backup.log 2>&1" > /etc/crontabs/root
 
         echo "[$$(date -u)] Backup sidecar started. Daily backup at 02:00 UTC."
         echo "[$$(date -u)] DATABASE_URL parsed: host=$$POSTGRES_HOST port=$$POSTGRES_PORT db=$$POSTGRES_DB"
@@ -370,7 +580,11 @@ services:
     mem_limit: 512M
     logging: *default-logging
     networks:
+      # db (internal) reaches postgres; backend is the egress-capable network
+      # for apk installs, S3 upload, and the alerting webhook — an internal-only
+      # attachment makes every one of those calls fail.
       - db
+      - backend
 
 # ── Named volumes (production additions) ──────────────────────────────
 volumes:

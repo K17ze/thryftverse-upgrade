@@ -133,12 +133,20 @@ jobs:
           aws s3 ls "s3://$bucket/$prefix/" --page-size 1000 | ForEach-Object {
             $parts = $_ -split '\s+', 4
             $dateStr = "$($parts[0]) $($parts[1])"
+            # `aws s3 ls s3://bucket/prefix/` prints object names RELATIVE to
+            # the listed prefix — the upload above stored them at
+            # "$prefix/<name>", so the prefix must be re-joined here.
+            # Deleting "s3://$bucket/<name>" would target a key that does not
+            # exist (or worse, a same-named object at the bucket root).
             $key = $parts[3]
+            $fullKey = "$prefix/$key"
             try {
               $objDate = [DateTime]::Parse($dateStr)
               if ($objDate -lt (Get-Date).ToUniversalTime().AddDays(-30)) {
-                Write-Host "Deleting expired: $key"
-                aws s3 rm "s3://$bucket/$key" --no-progress
+                Write-Host "Deleting expired: $fullKey"
+                # The restore drill asserts on this exact key construction —
+                # do not strip the prefix again.
+                aws s3 rm "s3://$bucket/$fullKey" --no-progress
               }
             } catch {
               Write-Host "Skipping non-date line: $_"

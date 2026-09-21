@@ -47,17 +47,33 @@ jobs:
           expo-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
+      - name: Materialize OTA signing key
+        # Code-signed projects require --private-key-path on update:rollback.
+        if: inputs.method == 'rollback'
+        env:
+          OTA_CODE_SIGNING_PRIVATE_KEY: ${{ secrets.EXPO_OTA_CODE_SIGNING_PRIVATE_KEY || secrets.EXPO_PUBLIC_OTA_CODE_SIGNING_KEY }}
+        run: |
+          if [ -z "$OTA_CODE_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::OTA signing private key secret is required (EXPO_OTA_CODE_SIGNING_PRIVATE_KEY)."
+            exit 1
+          fi
+          key_path="$RUNNER_TEMP/ota-private-key.pem"
+          printf '%s' "$OTA_CODE_SIGNING_PRIVATE_KEY" > "$key_path"
+          chmod 600 "$key_path"
+          echo "OTA_PRIVATE_KEY_PATH=$key_path" >> "$GITHUB_ENV"
+
       - name: Rollback to embedded bundle
         if: inputs.method == 'rollback'
-        run: eas update:rollback --branch ${{ inputs.channel }}
+        run: eas update:rollback --branch ${{ inputs.channel }} --private-key-path "$OTA_PRIVATE_KEY_PATH"
         env:
           EAS_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
 
       - name: Republish previous update
         if: inputs.method == 'republish'
         run: |
-          echo "::warning::To republish a specific update, find the update group ID at https://expo.dev and run: eas update:republish --group <GROUP_ID> --branch ${{ inputs.channel }}"
-          echo "This workflow requires manual update group ID input. Use the EAS CLI directly."
+          echo "::warning::Republish of a specific update group is owned by the Release Train workflow."
+          echo "Dispatch 'Release Train' with channel=${{ inputs.channel }} and rollback_update_id=<UPDATE_GROUP_ID> —"
+          echo "that path is signed and passes through the production-approval gate."
 
       - name: Notify rollback executed
         if: success()

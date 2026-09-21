@@ -16,6 +16,12 @@
 //   node scripts/chaos-smoke.mjs --scenario redis-down   assert post-kill state
 //   node scripts/chaos-smoke.mjs --all                   assert every scenario
 //   node scripts/chaos-smoke.mjs --scenario X --json     machine-readable report
+//   node scripts/chaos-smoke.mjs --all --allow-skips     credential-gated checks may be skipped
+//
+// Skips are honest non-verification: when a credential-gated check is skipped
+// the scenario verdict is INCOMPLETE and the run exits non-zero — a drill
+// report that never exercised the authenticated paths is not green. Pass
+// --allow-skips only when deliberately running a reduced drill.
 //
 // Env:
 //   CHAOS_API_BASE_URL          default http://localhost:4000
@@ -587,8 +593,15 @@ async function runScenario(ctx, scenario) {
     name: scenario.name,
     title: scenario.title,
     // PASS means "behaved exactly as the code says it should" — including
-    // fail-closed truths. SKIP is honest non-verification, never a pass.
-    verdict: failed.length === 0 ? 'PASS' : 'FAIL',
+    // fail-closed truths. SKIP is honest non-verification, never a pass:
+    // skipped credential-gated checks make the scenario INCOMPLETE (fails
+    // the run) unless --allow-skips was explicitly passed.
+    verdict:
+      failed.length > 0
+        ? 'FAIL'
+        : skipped.length > 0 && !ctx.allowSkips
+          ? 'INCOMPLETE'
+          : 'PASS',
     kill: scenario.kill,
     restore: scenario.restore,
     documentedTruth: scenario.truth,
@@ -647,6 +660,7 @@ async function main() {
     bearerToken: process.env.CHAOS_BEARER_TOKEN ?? null,
     userId: process.env.CHAOS_USER_ID ?? null,
     securityAdminToken: process.env.CHAOS_SECURITY_ADMIN_TOKEN ?? null,
+    allowSkips: args.includes('--allow-skips'),
   };
 
   if (listMode || (!probeMode && !allMode && scenarioIdx < 0)) {
@@ -692,6 +706,7 @@ async function main() {
     ok: true,
     mode: 'scenario',
     baseUrl: ctx.baseUrl,
+    allowSkips: ctx.allowSkips,
     scenarios: [],
     generatedAt: new Date().toISOString(),
   };
@@ -707,12 +722,17 @@ async function main() {
     printHumanReport(report);
   }
 
+  // exitCode (not process.exit): a forced exit while undici keep-alive
+  // sockets are still closing trips a libuv assertion on some platforms —
+  // the report would print but the process would crash instead of exiting
+  // cleanly non-zero. Setting exitCode lets the loop drain and still
+  // yields a non-zero status for the drill gate.
   if (!report.ok) {
-    process.exit(1);
+    process.exitCode = 1;
   }
 }
 
 main().catch((error) => {
   console.error('[chaos:smoke] failed', error);
-  process.exit(1);
+  process.exitCode = 1;
 });

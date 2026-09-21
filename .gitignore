@@ -66,8 +66,13 @@ trash/
 .idea/
 .windsurf/
 
-# EAS Update code signing private keys (generated outside the repo)
-frontend/keys/
+# EAS Update code signing private keys (generated outside the repo).
+# The PUBLIC cert (keys/update-certificate.pem) is required by
+# check:release-config for OTA signature verification and is safe to commit —
+# it can only verify signatures, never create them. Only key material that
+# can sign stays untracked.
+frontend/keys/*
+!frontend/keys/update-certificate.pem
 
 # Bug reports and temp files
 .commit-msg.txt

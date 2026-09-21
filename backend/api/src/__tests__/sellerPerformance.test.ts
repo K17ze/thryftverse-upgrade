@@ -159,22 +159,30 @@ describe('sellerPerformance', () => {
   });
 
   describe('applyVisibilityBoost', () => {
+    // CONTRACT: visibility boosts are DISABLED (Phase 0 contract-truth
+    // repair) — every tier resolves to 1.0 so ranking is never distorted by
+    // unvalidated product policy. Re-enabling tiered multipliers requires
+    // the preconditions documented on VISIBILITY_BOOST in
+    // lib/sellerPerformance.ts (authoritative metrics, a versioned
+    // experiment, new-seller guardrails). These tests pin the disabled
+    // contract; a future experiment must update them deliberately, not
+    // silently.
     test('STANDARD tier has 1.0x boost', async () => {
       const redis = createMockRedis();
       const result = await applyVisibilityBoost(redis, 'listing_1', 'STANDARD');
       assert.equal(result.boost, 1.0);
     });
 
-    test('PERFORMER tier has 1.3x boost', async () => {
+    test('PERFORMER tier has 1.0x boost while boosts are disabled', async () => {
       const redis = createMockRedis();
       const result = await applyVisibilityBoost(redis, 'listing_1', 'PERFORMER');
-      assert.equal(result.boost, 1.3);
+      assert.equal(result.boost, 1.0);
     });
 
-    test('TOP_PERFORMER tier has 1.5x boost', async () => {
+    test('TOP_PERFORMER tier has 1.0x boost while boosts are disabled', async () => {
       const redis = createMockRedis();
       const result = await applyVisibilityBoost(redis, 'listing_1', 'TOP_PERFORMER');
-      assert.equal(result.boost, 1.5);
+      assert.equal(result.boost, 1.0);
     });
   });
 
@@ -281,10 +289,12 @@ describe('sellerPerformance', () => {
   });
 
   describe('VISIBILITY_BOOST', () => {
-    test('boost multipliers are correct', () => {
+    // Boosts are disabled pending a versioned experiment — all tiers are
+    // 1.0. See the DISABLED note on VISIBILITY_BOOST in lib/sellerPerformance.ts.
+    test('boost multipliers are disabled (all tiers 1.0)', () => {
       assert.equal(VISIBILITY_BOOST.STANDARD, 1.0);
-      assert.equal(VISIBILITY_BOOST.PERFORMER, 1.3);
-      assert.equal(VISIBILITY_BOOST.TOP_PERFORMER, 1.5);
+      assert.equal(VISIBILITY_BOOST.PERFORMER, 1.0);
+      assert.equal(VISIBILITY_BOOST.TOP_PERFORMER, 1.0);
     });
   });
 });

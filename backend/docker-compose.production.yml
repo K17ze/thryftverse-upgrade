@@ -299,7 +299,9 @@ services:
       KEY_SERVICE_CLIENT_TOKEN: ${KEY_SERVICE_CLIENT_TOKEN}
       KEY_SERVICE_ADMIN_TOKEN: ${KEY_SERVICE_ADMIN_TOKEN}
       MEILISEARCH_URL: http://meilisearch:7700
-      MEILISEARCH_API_KEY: ${MEILISEARCH_API_KEY}
+      # Falls back to the server-side MEILISEARCH_MASTER_KEY so a single env
+      # var keeps the meilisearch service and its clients in sync.
+      MEILISEARCH_API_KEY: ${MEILISEARCH_API_KEY:-${MEILISEARCH_MASTER_KEY:-}}
       MEILISEARCH_INDEX_PREFIX: ${MEILISEARCH_INDEX_PREFIX:-thryftverse_}
       S3_ENDPOINT: ${S3_ENDPOINT}
       S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT}
@@ -324,6 +326,11 @@ services:
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       API_SECURITY_ADMIN_TOKEN: ${API_SECURITY_ADMIN_TOKEN}
       ADMIN_TOKEN: ${ADMIN_TOKEN}
+      # Required by src/config.ts requiredSecret() — without these the api
+      # crashes at boot in production.
+      API_INTERNAL_SERVICE_TOKEN: ${API_INTERNAL_SERVICE_TOKEN}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      PAYMENT_METADATA_HMAC_SECRET: ${PAYMENT_METADATA_HMAC_SECRET}
       API_RATE_LIMIT_MAX: ${API_RATE_LIMIT_MAX:-140}
       API_RATE_LIMIT_WINDOW: ${API_RATE_LIMIT_WINDOW:-1 minute}
       USER_RATE_LIMIT_MAX: ${USER_RATE_LIMIT_MAX:-200}
@@ -343,12 +350,55 @@ services:
       WISE_API_KEY: ${WISE_API_KEY:-}
       WISE_WEBHOOK_SECRET: ${WISE_WEBHOOK_SECRET:-}
       ONEZE_ATTESTATION_SIGNING_SECRET: ${ONEZE_ATTESTATION_SIGNING_SECRET}
+      # assertProductionReadiness requires the FX sync and provider config —
+      # without these the api refuses to boot in production.
+      ONEZE_FX_SYNC_ENABLED: ${ONEZE_FX_SYNC_ENABLED:-true}
+      ONEZE_FX_PROVIDER_URL: ${ONEZE_FX_PROVIDER_URL}
+      ONEZE_FX_PROVIDER_API_KEY: ${ONEZE_FX_PROVIDER_API_KEY}
+      # KYC — required in production; vendor-conditional creds pass through
+      # so any supported KYC_DEFAULT_VENDOR can be completed via .env.
+      KYC_DEFAULT_VENDOR: ${KYC_DEFAULT_VENDOR}
+      KYC_RETURN_URL: ${KYC_RETURN_URL}
+      KYC_WEBHOOK_SECRET: ${KYC_WEBHOOK_SECRET}
+      PERSONA_API_KEY: ${PERSONA_API_KEY:-}
+      PERSONA_TEMPLATE_ID: ${PERSONA_TEMPLATE_ID:-}
+      PERSONA_WEBHOOK_SECRET: ${PERSONA_WEBHOOK_SECRET:-}
+      ONFIDO_API_KEY: ${ONFIDO_API_KEY:-}
+      ONFIDO_WEBHOOK_TOKEN: ${ONFIDO_WEBHOOK_TOKEN:-}
+      ALERTING_WEBHOOK_URLS: ${ALERTING_WEBHOOK_URLS}
+      # Additional payment provider pass-throughs — readiness requires at
+      # least one complete set; which vendor is a deployment choice.
+      MOLLIE_API_KEY: ${MOLLIE_API_KEY:-}
+      MOLLIE_WEBHOOK_SECRET: ${MOLLIE_WEBHOOK_SECRET:-}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
+      FLUTTERWAVE_SECRET_KEY: ${FLUTTERWAVE_SECRET_KEY:-}
+      FLUTTERWAVE_WEBHOOK_SECRET: ${FLUTTERWAVE_WEBHOOK_SECRET:-}
+      TAP_SECRET_KEY: ${TAP_SECRET_KEY:-}
+      TAP_WEBHOOK_SECRET: ${TAP_WEBHOOK_SECRET:-}
+      # Shipping provider pass-throughs — readiness requires at least one
+      # complete set (key + base URL + webhook secret; EASYSHIP has no URL).
+      EVRI_API_KEY: ${EVRI_API_KEY:-}
+      EVRI_API_BASE_URL: ${EVRI_API_BASE_URL:-}
+      EVRI_WEBHOOK_SECRET: ${EVRI_WEBHOOK_SECRET:-}
+      DELHIVERY_API_KEY: ${DELHIVERY_API_KEY:-}
+      DELHIVERY_API_BASE_URL: ${DELHIVERY_API_BASE_URL:-}
+      DELHIVERY_WEBHOOK_SECRET: ${DELHIVERY_WEBHOOK_SECRET:-}
+      DHL_API_KEY: ${DHL_API_KEY:-}
+      DHL_API_BASE_URL: ${DHL_API_BASE_URL:-}
+      DHL_WEBHOOK_SECRET: ${DHL_WEBHOOK_SECRET:-}
+      ARAMEX_API_KEY: ${ARAMEX_API_KEY:-}
+      ARAMEX_API_BASE_URL: ${ARAMEX_API_BASE_URL:-}
+      ARAMEX_WEBHOOK_SECRET: ${ARAMEX_WEBHOOK_SECRET:-}
+      EASYSHIP_API_KEY: ${EASYSHIP_API_KEY:-}
+      EASYSHIP_WEBHOOK_SECRET: ${EASYSHIP_WEBHOOK_SECRET:-}
       SMS_PROVIDER: ${SMS_PROVIDER:-log}
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
       TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
       TWILIO_MESSAGING_SERVICE_SID: ${TWILIO_MESSAGING_SERVICE_SID:-}
-      MODERATION_PROVIDER: ${MODERATION_PROVIDER:-mock}
+      # No :-mock default — assertProductionReadiness rejects 'mock' in
+      # production; leaving it unset fails fast with a clear message.
+      MODERATION_PROVIDER: ${MODERATION_PROVIDER}
       AWS_REGION: ${AWS_REGION:-}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
@@ -413,7 +463,9 @@ services:
       KEY_SERVICE_CLIENT_TOKEN: ${KEY_SERVICE_CLIENT_TOKEN}
       KEY_SERVICE_ADMIN_TOKEN: ${KEY_SERVICE_ADMIN_TOKEN}
       MEILISEARCH_URL: http://meilisearch:7700
-      MEILISEARCH_API_KEY: ${MEILISEARCH_API_KEY}
+      # Falls back to the server-side MEILISEARCH_MASTER_KEY so a single env
+      # var keeps the meilisearch service and its clients in sync.
+      MEILISEARCH_API_KEY: ${MEILISEARCH_API_KEY:-${MEILISEARCH_MASTER_KEY:-}}
       MEILISEARCH_INDEX_PREFIX: ${MEILISEARCH_INDEX_PREFIX:-thryftverse_}
       S3_ENDPOINT: ${S3_ENDPOINT}
       S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT}
@@ -437,6 +489,11 @@ services:
       AUTH_EMAIL_FROM: ${AUTH_EMAIL_FROM}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       API_SECURITY_ADMIN_TOKEN: ${API_SECURITY_ADMIN_TOKEN}
+      # Required by src/config.ts requiredSecret() — without these the worker
+      # crashes at boot in production.
+      API_INTERNAL_SERVICE_TOKEN: ${API_INTERNAL_SERVICE_TOKEN}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      PAYMENT_METADATA_HMAC_SECRET: ${PAYMENT_METADATA_HMAC_SECRET}
       API_RATE_LIMIT_MAX: ${API_RATE_LIMIT_MAX:-140}
       API_RATE_LIMIT_WINDOW: ${API_RATE_LIMIT_WINDOW:-1 minute}
       LOG_LEVEL: ${LOG_LEVEL:-info}
@@ -454,12 +511,50 @@ services:
       WISE_API_KEY: ${WISE_API_KEY:-}
       WISE_WEBHOOK_SECRET: ${WISE_WEBHOOK_SECRET:-}
       ONEZE_ATTESTATION_SIGNING_SECRET: ${ONEZE_ATTESTATION_SIGNING_SECRET}
+      # The worker imports config.ts, so assertProductionReadiness applies
+      # here too — without these the worker refuses to boot in production.
+      APP_URL: ${APP_URL}
+      ONEZE_FX_SYNC_ENABLED: ${ONEZE_FX_SYNC_ENABLED:-true}
+      ONEZE_FX_PROVIDER_URL: ${ONEZE_FX_PROVIDER_URL}
+      ONEZE_FX_PROVIDER_API_KEY: ${ONEZE_FX_PROVIDER_API_KEY}
+      KYC_DEFAULT_VENDOR: ${KYC_DEFAULT_VENDOR}
+      KYC_RETURN_URL: ${KYC_RETURN_URL}
+      KYC_WEBHOOK_SECRET: ${KYC_WEBHOOK_SECRET}
+      PERSONA_API_KEY: ${PERSONA_API_KEY:-}
+      PERSONA_TEMPLATE_ID: ${PERSONA_TEMPLATE_ID:-}
+      PERSONA_WEBHOOK_SECRET: ${PERSONA_WEBHOOK_SECRET:-}
+      ONFIDO_API_KEY: ${ONFIDO_API_KEY:-}
+      ONFIDO_WEBHOOK_TOKEN: ${ONFIDO_WEBHOOK_TOKEN:-}
+      ALERTING_WEBHOOK_URLS: ${ALERTING_WEBHOOK_URLS}
+      MOLLIE_API_KEY: ${MOLLIE_API_KEY:-}
+      MOLLIE_WEBHOOK_SECRET: ${MOLLIE_WEBHOOK_SECRET:-}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
+      FLUTTERWAVE_SECRET_KEY: ${FLUTTERWAVE_SECRET_KEY:-}
+      FLUTTERWAVE_WEBHOOK_SECRET: ${FLUTTERWAVE_WEBHOOK_SECRET:-}
+      TAP_SECRET_KEY: ${TAP_SECRET_KEY:-}
+      TAP_WEBHOOK_SECRET: ${TAP_WEBHOOK_SECRET:-}
+      EVRI_API_KEY: ${EVRI_API_KEY:-}
+      EVRI_API_BASE_URL: ${EVRI_API_BASE_URL:-}
+      EVRI_WEBHOOK_SECRET: ${EVRI_WEBHOOK_SECRET:-}
+      DELHIVERY_API_KEY: ${DELHIVERY_API_KEY:-}
+      DELHIVERY_API_BASE_URL: ${DELHIVERY_API_BASE_URL:-}
+      DELHIVERY_WEBHOOK_SECRET: ${DELHIVERY_WEBHOOK_SECRET:-}
+      DHL_API_KEY: ${DHL_API_KEY:-}
+      DHL_API_BASE_URL: ${DHL_API_BASE_URL:-}
+      DHL_WEBHOOK_SECRET: ${DHL_WEBHOOK_SECRET:-}
+      ARAMEX_API_KEY: ${ARAMEX_API_KEY:-}
+      ARAMEX_API_BASE_URL: ${ARAMEX_API_BASE_URL:-}
+      ARAMEX_WEBHOOK_SECRET: ${ARAMEX_WEBHOOK_SECRET:-}
+      EASYSHIP_API_KEY: ${EASYSHIP_API_KEY:-}
+      EASYSHIP_WEBHOOK_SECRET: ${EASYSHIP_WEBHOOK_SECRET:-}
       SMS_PROVIDER: ${SMS_PROVIDER:-log}
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
       TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
       TWILIO_MESSAGING_SERVICE_SID: ${TWILIO_MESSAGING_SERVICE_SID:-}
-      MODERATION_PROVIDER: ${MODERATION_PROVIDER:-mock}
+      # No :-mock default — assertProductionReadiness rejects 'mock' in
+      # production; leaving it unset fails fast with a clear message.
+      MODERATION_PROVIDER: ${MODERATION_PROVIDER}
       AWS_REGION: ${AWS_REGION:-}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
@@ -469,6 +564,15 @@ services:
       LIVEKIT_URL: ${LIVEKIT_URL:-}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
+      # Backup-store inventory for the backup-expiry worker (GDPR erasure
+      # propagation verification — backupExpiryHandler). When unset the
+      # handler refuses to mark manifest entries purged instead of guessing.
+      S3_BACKUP_BUCKET: ${S3_BACKUP_BUCKET:-}
+      S3_BACKUP_PREFIX: ${S3_BACKUP_PREFIX:-db-backups}
+      S3_BACKUP_REGION: ${S3_BACKUP_REGION:-${AWS_REGION:-}}
+      S3_BACKUP_ENDPOINT: ${S3_BACKUP_ENDPOINT:-}
+      S3_BACKUP_ACCESS_KEY_ID: ${S3_BACKUP_ACCESS_KEY_ID:-${AWS_ACCESS_KEY_ID:-}}
+      S3_BACKUP_SECRET_ACCESS_KEY: ${S3_BACKUP_SECRET_ACCESS_KEY:-${AWS_SECRET_ACCESS_KEY:-}}
     command: ["sh", "-c", "npm run worker:start"]
     healthcheck:
       # Check if the node worker process is alive.
@@ -530,6 +634,9 @@ services:
   # NOTE: read_only is disabled because the container installs packages
   # (postgresql-client, aws-cli, openssl, dcron) at startup. All other
   # hardening (cap_drop, no-new-privileges, pids_limit, mem_limit) applies.
+  # The named volume at /backups is the writable scratch/output dir; the
+  # backup script itself stays mounted read-only and is invoked via `bash`
+  # (installed deliberately below — the alpine image ships only busybox sh).
   backup:
     image: alpine:3.20
     container_name: thryftverse-backup-prod
@@ -537,14 +644,18 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       BACKUP_DIR: /backups
       BACKUP_RETENTION_DAYS: "30"
-      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:-}
-      S3_BUCKET: ${S3_BACKUP_BUCKET:-}
-      S3_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
-      S3_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
-      S3_REGION: ${AWS_REGION:-}
+      # Encryption and an upload destination are REQUIRED — an unencrypted
+      # dump or a backup with nowhere to go is a silent data-loss vector.
+      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY}
+      S3_BUCKET: ${S3_BACKUP_BUCKET}
+      S3_BACKUP_PREFIX: ${S3_BACKUP_PREFIX:-db-backups}
+      S3_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      S3_REGION: ${AWS_REGION}
       ALERTING_WEBHOOK_URL: ${ALERTING_WEBHOOK_URL:-}
     volumes:
       - ./scripts/automated-backup.sh:/usr/local/bin/backup.sh:ro
@@ -553,9 +664,12 @@ services:
     command:
       - |
         set -e
-        apk add --no-cache postgresql-client aws-cli curl openssl findutils coreutils dcron
+        # bash is installed deliberately — automated-backup.sh has a bash
+        # shebang and uses pipefail; alpine ships only busybox sh.
+        apk add --no-cache postgresql-client aws-cli curl openssl findutils coreutils dcron bash
 
-        chmod +x /usr/local/bin/backup.sh
+        # No chmod here: backup.sh is mounted read-only (chmod would fail
+        # under `set -e` anyway) and is invoked through the interpreter.
 
         # Parse DATABASE_URL into POSTGRES_* vars expected by the backup script
         POSTGRES_HOST="$$(echo "$$DATABASE_URL" | sed -n 's|^.*://[^@]*@\([^:]*\):.*|\1|p')"
@@ -564,15 +678,36 @@ services:
         POSTGRES_PASSWORD="$$(echo "$$DATABASE_URL" | sed -n 's|^.*://[^:]*:\([^@]*\)@.*|\1|p')"
         POSTGRES_DB="$$(echo "$$DATABASE_URL" | sed -n 's|^.*:\([0-9]*\)/\([^?]*\).*|\2|p')"
 
+        # Fail fast on an unparseable DATABASE_URL instead of letting cron
+        # discover empty credentials at 02:00.
+        if [ -z "$$POSTGRES_HOST" ] || [ -z "$$POSTGRES_USER" ] || [ -z "$$POSTGRES_DB" ]; then
+          echo "FATAL: could not parse DATABASE_URL into POSTGRES_* vars" >&2
+          exit 1
+        fi
+
+        # Encryption and destination are mandatory (NODE_ENV=production).
+        # This file uses bare ${VAR} interpolation, so validate here — an
+        # empty value must kill the sidecar at boot, not at 02:00.
+        if [ -z "$$BACKUP_ENCRYPTION_KEY" ]; then
+          echo "FATAL: BACKUP_ENCRYPTION_KEY is required" >&2
+          exit 1
+        fi
+        if [ -z "$$S3_BUCKET" ] || [ -z "$$S3_ACCESS_KEY_ID" ] || [ -z "$$S3_SECRET_ACCESS_KEY" ] || [ -z "$$S3_REGION" ]; then
+          echo "FATAL: S3_BACKUP_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and AWS_REGION are required" >&2
+          exit 1
+        fi
+
         # Export vars for the backup script
         export POSTGRES_HOST POSTGRES_PORT POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB
         export S3_BACKUP_BUCKET="$$S3_BUCKET"
+        export S3_BACKUP_PREFIX
         export AWS_ACCESS_KEY_ID="$$S3_ACCESS_KEY_ID"
         export AWS_SECRET_ACCESS_KEY="$$S3_SECRET_ACCESS_KEY"
         export AWS_REGION="$$S3_REGION"
 
-        # Write crontab — daily at 02:00 UTC
-        echo "0 2 * * * /usr/local/bin/backup.sh >> /var/log/backup.log 2>&1" > /etc/crontabs/root
+        # Write crontab — daily at 02:00 UTC. The script is invoked through
+        # bash so the read-only mount's exec bit is irrelevant.
+        echo "0 2 * * * bash /usr/local/bin/backup.sh >> /var/log/backup.log 2>&1" > /etc/crontabs/root
 
         echo "[$$(date -u)] Backup sidecar started. Daily backup at 02:00 UTC."
         echo "[$$(date -u)] DATABASE_URL parsed: host=$$POSTGRES_HOST port=$$POSTGRES_PORT db=$$POSTGRES_DB"
@@ -602,7 +737,11 @@ services:
     restart: unless-stopped
     logging: *default-logging
     networks:
+      # db (internal) reaches postgres; backend is the egress-capable network
+      # for apk installs, S3 upload, and the alerting webhook — an internal-only
+      # attachment makes every one of those calls fail.
       - db
+      - backend
 
 # ── Named volumes ─────────────────────────────────────────────────────
 volumes:

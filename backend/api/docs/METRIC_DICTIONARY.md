@@ -82,9 +82,11 @@ No in-app (feed) notification metrics exist — only push delivery is counted.
 | Metric | Type | Labels | Emitted at | Meaning | Alert relevance |
 |---|---|---|---|---|---|
 | `thryftverse_background_jobs_total` / `..._duration_seconds` (queue `search_indexing`, job `search_index_sync`) | counter / histogram | `queue`, `job`, `result` | `src/lib/queues.ts:1003-1022` (worker), enqueued `src/lib/queues.ts:1657` (`enqueueSearchIndexSyncJob`) and repeatable `src/lib/queuePriorities.ts:94-99` | Search-index sync job executions only | `result="failed"` = catalogue search staleness |
+| `thryftverse_search_index_lag_seconds` | histogram | `backend` | `src/lib/searchSync.ts` (`syncSingleListing`, after a successful index write) | Lag between a listing's `updated_at` and its index write landing | p95 > 60s/10m → `SearchIndexStale` (grafana-alerts.yml #9) |
+| `thryftverse_search_sync_total` | counter | `op`, `result` | `src/lib/searchSync.ts` (`syncSingleListing`) | Per-listing index/remove outcome | error rate > 5%/10m → `SearchSyncFailing` (#10) |
 
-**No dedicated search metrics exist** — no query-volume, latency, or
-zero-result-rate series for Meilisearch queries. See Coverage gaps.
+Query-volume, query-latency, and zero-result-rate series for Meilisearch
+queries still do not exist — see Coverage gaps.
 
 ## 8. Trust & safety / moderation
 

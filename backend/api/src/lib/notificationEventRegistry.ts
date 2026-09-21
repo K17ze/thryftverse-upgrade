@@ -246,6 +246,32 @@ export const NOTIFICATION_EVENT_REGISTRY: Record<string, NotificationEventMetada
     aggregationTemplate: orderAggregation,
     objectExtractor: getOrderObject,
   },
+  // Carrier-reported parcel failures — emitted by
+  // queueCommerceParcelSettlementNotifications when a parcel is reported
+  // failed/lost/damaged while escrow is still held. 'important' rather than
+  // 'action': the buyer cannot fix it, but silence would read as "still on
+  // the way". Aggregates per order like the rest of the order family.
+  order_delivery_failed: {
+    semanticRole: "commerce",
+    attention: "important",
+    requiresAction: false,
+    aggregationTemplate: orderAggregation,
+    objectExtractor: getOrderObject,
+  },
+  order_parcel_lost: {
+    semanticRole: "commerce",
+    attention: "important",
+    requiresAction: false,
+    aggregationTemplate: orderAggregation,
+    objectExtractor: getOrderObject,
+  },
+  order_parcel_damaged: {
+    semanticRole: "commerce",
+    attention: "important",
+    requiresAction: false,
+    aggregationTemplate: orderAggregation,
+    objectExtractor: getOrderObject,
+  },
 
   // Resolution events
   resolution_opened: {

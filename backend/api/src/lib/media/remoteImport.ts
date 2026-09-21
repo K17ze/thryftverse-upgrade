@@ -17,8 +17,11 @@
  */
 
 import crypto from 'node:crypto';
-import dns from 'node:dns';
 import { logger } from '../logger.js';
+import {
+  fetchPinnedRemoteMedia,
+  type PinnedFetchFailureCode,
+} from '../safeRemoteMediaFetch.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -67,123 +70,13 @@ export interface IngestRemoteMediaResult {
 // ---------------------------------------------------------------------------
 // IP classification
 // ---------------------------------------------------------------------------
+//
+// The canonical blocklist predicates live in the shared SSRF transport
+// (lib/safeRemoteMediaFetch.ts) so every remote-fetch surface classifies
+// addresses identically. Re-exported here for existing importers
+// (routes/bots.ts).
 
-/**
- * Returns true if the IP address is in the 127.0.0.0/8 loopback range or is
- * the IPv6 loopback address ::1.
- */
-export function isLoopbackIp(ip: string): boolean {
-  // IPv6 loopback.
-  if (ip === '::1') {
-    return true;
-  }
-  // IPv4 loopback 127.0.0.0/8.
-  if (ip.includes('.')) {
-    const parts = ip.split('.');
-    const first = parts[0];
-    if (first === '127') {
-      return true;
-    }
-  }
-  // IPv4-mapped IPv6 loopback (::ffff:127.0.0.1).
-  if (ip.startsWith('::ffff:')) {
-    const v4 = ip.slice('::ffff:'.length);
-    return isLoopbackIp(v4);
-  }
-  return false;
-}
-
-/**
- * Returns true if the IP address is in a private/reserved range that must
- * never be reachable from a remote-fetch context.
- *
- * Checked ranges:
- * - 10.0.0.0/8
- * - 172.16.0.0/12
- * - 192.168.0.0/16
- * - 169.254.0.0/16 (link-local, includes 169.254.169.254 cloud metadata)
- * - 224.0.0.0/4 (multicast)
- * - fc00::/7 (IPv6 unique-local)
- * - fe80::/10 (IPv6 link-local)
- */
-export function isPrivateIp(ip: string): boolean {
-  // IPv6 unique-local fc00::/7.
-  if (ip.startsWith('fc') || ip.startsWith('fd')) {
-    return true;
-  }
-  // IPv6 link-local fe80::/10.
-  if (ip.startsWith('fe8') || ip.startsWith('fe9') || ip.startsWith('fea') || ip.startsWith('feb')) {
-    return true;
-  }
-
-  // IPv4-mapped IPv6.
-  if (ip.startsWith('::ffff:')) {
-    const v4 = ip.slice('::ffff:'.length);
-    return isPrivateIp(v4);
-  }
-
-  if (!ip.includes('.')) {
-    return false;
-  }
-
-  const parts = ip.split('.').map((p) => {
-    const n = Number.parseInt(p, 10);
-    return Number.isNaN(n) ? -1 : n;
-  });
-  if (parts.length !== 4 || parts.some((p) => p < 0 || p > 255)) {
-    // Malformed IPv4 — treat as private/dangerous.
-    return true;
-  }
-
-  const [a, b] = parts;
-  const aVal = a ?? -1;
-  const bVal = b ?? -1;
-
-  // 10.0.0.0/8
-  if (aVal === 10) {
-    return true;
-  }
-  // 172.16.0.0/12
-  if (aVal === 172 && bVal >= 16 && bVal <= 31) {
-    return true;
-  }
-  // 192.168.0.0/16
-  if (aVal === 192 && bVal === 168) {
-    return true;
-  }
-  // 169.254.0.0/16 (link-local + cloud metadata 169.254.169.254)
-  if (aVal === 169 && bVal === 254) {
-    return true;
-  }
-  // 224.0.0.0/4 (multicast)
-  if (aVal >= 224 && aVal <= 239) {
-    return true;
-  }
-  // 0.0.0.0/8 (current network)
-  if (aVal === 0) {
-    return true;
-  }
-
-  return false;
-}
-
-/**
- * Returns true if the IP is in any blocked range (loopback, private, link-
- * local, multicast, or cloud-metadata).
- */
-function isBlockedIp(ip: string): boolean {
-  if (isLoopbackIp(ip)) {
-    return true;
-  }
-  if (isPrivateIp(ip)) {
-    return true;
-  }
-  // Explicit cloud-metadata check (redundant with link-local but explicit).
-  if (ip === '169.254.169.254' || ip === '[::ffff:169.254.169.254]') {
-    return true;
-  }
-  return false;
-}
+export { isLoopbackIp, isPrivateIp } from '../safeRemoteMediaFetch.js';
 
 // ---------------------------------------------------------------------------
 // URL validation
@@ -196,8 +89,9 @@ interface ValidatedUrl {
 
 /**
  * Validate that a URL is HTTPS and (optionally) that its host is in the
- * allowlist. Does NOT perform DNS resolution — that happens separately so the
- * caller can cache or audit it.
+ * allowlist. Does NOT perform DNS resolution — DNS validation + connection
+ * pinning is owned by the shared transport so there is no
+ * validate-then-re-resolve TOCTOU window (B3).
  */
 function validateUrlScheme(rawUrl: string, allowedHosts?: string[]): ValidatedUrl {
   let parsed: URL;
@@ -229,30 +123,6 @@ function validateUrlScheme(rawUrl: string, allowedHosts?: string[]): ValidatedUr
   }
 
   return { url: parsed, host };
-}
-
-/**
- * Resolve a hostname via DNS and verify that none of the resolved addresses
- * fall in a blocked range.
- */
-async function resolveAndVerifyHost(host: string): Promise<void> {
-  let addresses: dns.LookupAddress[];
-  try {
-    addresses = await dns.promises.lookup(host, { all: true });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    throw new Error(`SSRF_BLOCKED: DNS resolution failed for ${host}: ${message}`);
-  }
-
-  if (addresses.length === 0) {
-    throw new Error(`SSRF_BLOCKED: no DNS records for ${host}`);
-  }
-
-  for (const addr of addresses) {
-    if (isBlockedIp(addr.address)) {
-      throw new Error(`SSRF_BLOCKED: ${host} resolves to blocked address ${addr.address}`);
-    }
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -541,8 +411,32 @@ export async function validateImageBuffer(
 // ---------------------------------------------------------------------------
 
 /**
+ * Map a shared-transport failure code to this module's error vocabulary.
+ * SSRF policy violations carry the `SSRF_BLOCKED` prefix — the catalogue
+ * import handler quarantines on it without retry. Everything else is a
+ * transport failure (`REMOTE_FETCH_FAILED`) and is retryable.
+ */
+const SSRF_FAILURE_CODES: ReadonlySet<PinnedFetchFailureCode> = new Set([
+  'invalid_url',
+  'blocked_scheme',
+  'host_not_allowed',
+  'url_credentials',
+  'ssrf_blocked',
+  'dns_unresolved',
+  'too_many_redirects',
+  'redirect_without_location',
+]);
+
+/**
  * Fetch a remote media URL with SSRF protections. The response body is
  * streamed into a bounded buffer; redirects are revalidated at every hop.
+ *
+ * Transport is delegated to the shared pinned implementation
+ * (`fetchPinnedRemoteMedia`): DNS is resolved once, blocklist-checked, and
+ * the connection is pinned to the validated address set so a re-resolution
+ * at connect time cannot reopen the SSRF window (B3). A single whole-request
+ * deadline covers DNS, every redirect hop, the header wait AND the body
+ * stream — a mid-body stall aborts and discards the partial buffer (B4).
  *
  * Never logs the full URL — only the host and path.
  */
@@ -551,123 +445,46 @@ export async function fetchRemoteMedia(
 ): Promise<RemoteFetchResult> {
   const { maxBytes, maxRedirects, connectTimeoutMs, readTimeoutMs, allowedHosts } = options;
 
-  let currentUrl = options.url;
-  let redirectCount = 0;
+  // Early scheme/host validation preserves the pre-flight SSRF_BLOCKED error
+  // shape for callers that distinguish it before any network activity.
+  const { url, host } = validateUrlScheme(options.url, allowedHosts);
 
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    const { url, host } = validateUrlScheme(currentUrl, allowedHosts);
+  logger.debug(
+    { host, path: url.pathname },
+    'remoteImport.fetch.start',
+  );
 
-    // DNS check: resolve and verify no blocked addresses.
-    await resolveAndVerifyHost(host);
+  const result = await fetchPinnedRemoteMedia({
+    url: options.url,
+    maxBytes,
+    maxRedirects,
+    // The legacy split budgets collapse into one whole-request deadline:
+    // connect-time + read-time together bound the entire pipeline including
+    // DNS, redirects and body streaming.
+    timeoutMs: connectTimeoutMs + readTimeoutMs,
+    allowHttp: false,
+    allowedHosts,
+    headers: {
+      // Some CDNs require a UA; use a descriptive one.
+      'User-Agent': 'ThryftVerse-Catalog-Importer/1.0',
+      Accept: 'image/*',
+    },
+  });
 
-    logger.debug(
-      { host, path: url.pathname },
-      'remoteImport.fetch.start',
-    );
-
-    const controller = new AbortController();
-    const connectTimer = setTimeout(() => controller.abort(), connectTimeoutMs);
-    const readTimer = setTimeout(() => controller.abort(), readTimeoutMs);
-
-    let response: Response;
-    try {
-      response = await fetch(url, {
-        method: 'GET',
-        redirect: 'manual', // We handle redirects ourselves to revalidate.
-        signal: controller.signal,
-        headers: {
-          // Some CDNs require a UA; use a descriptive one.
-          'User-Agent': 'ThryftVerse-Catalog-Importer/1.0',
-          Accept: 'image/*',
-        },
-      });
-    } catch (err) {
-      clearTimeout(connectTimer);
-      clearTimeout(readTimer);
-      const message = err instanceof Error ? err.message : String(err);
-      throw new Error(`SSRF_BLOCKED: fetch failed for ${host}: ${message}`);
-    }
-    clearTimeout(connectTimer);
-    clearTimeout(readTimer);
-
-    // Handle redirects (3xx) with full revalidation.
-    if (response.status >= 300 && response.status < 400) {
-      const location = response.headers.get('location');
-      if (!location) {
-        throw new Error(`SSRF_BLOCKED: redirect with no Location header from ${host}`);
-      }
-      redirectCount += 1;
-      if (redirectCount > maxRedirects) {
-        throw new Error(`SSRF_BLOCKED: exceeded max redirects (${maxRedirects}) from ${host}`);
-      }
-      // Resolve relative redirects against the current URL.
-      currentUrl = new URL(location, url).toString();
-      continue;
-    }
-
-    if (!response.ok) {
-      throw new Error(`REMOTE_FETCH_FAILED: ${host} returned status ${response.status}`);
-    }
-
-    // Cap content-length if the header is present.
-    const declaredLength = response.headers.get('content-length');
-    if (declaredLength !== null) {
-      const declared = Number.parseInt(declaredLength, 10);
-      if (!Number.isNaN(declared) && declared > maxBytes) {
-        throw new Error(
-          `REMOTE_FETCH_FAILED: ${host} content-length ${declared} exceeds max ${maxBytes}`,
-        );
-      }
-    }
-
-    // Stream into a bounded buffer.
-    const body = response.body;
-    if (!body) {
-      throw new Error(`REMOTE_FETCH_FAILED: ${host} returned no body`);
-    }
-
-    const reader = body.getReader();
-    const chunks: Buffer[] = [];
-    let totalBytes = 0;
-
-    try {
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          break;
-        }
-        if (value) {
-          totalBytes += value.byteLength;
-          if (totalBytes > maxBytes) {
-            await reader.cancel();
-            throw new Error(
-              `REMOTE_FETCH_FAILED: ${host} stream exceeded max ${maxBytes} bytes`,
-            );
-          }
-          chunks.push(Buffer.from(value));
-        }
-      }
-    } finally {
-      reader.releaseLock();
-    }
-
-    const buffer = Buffer.concat(chunks, totalBytes);
-    if (buffer.length === 0) {
-      throw new Error(`REMOTE_FETCH_FAILED: ${host} returned empty body`);
-    }
-
-    const contentType = response.headers.get('content-type') ?? '';
-
-    return {
-      buffer,
-      statusCode: response.status,
-      contentType,
-      contentLength: buffer.length,
-      finalUrl: currentUrl,
-    };
+  if (!result.ok) {
+    const prefix = SSRF_FAILURE_CODES.has(result.code)
+      ? 'SSRF_BLOCKED'
+      : 'REMOTE_FETCH_FAILED';
+    throw new Error(`${prefix}: ${result.message}`);
   }
+
+  return {
+    buffer: result.buffer,
+    statusCode: result.statusCode,
+    contentType: result.contentTypeHeader,
+    contentLength: result.contentLength,
+    finalUrl: result.finalUrl,
+  };
 }
 
 // ---------------------------------------------------------------------------

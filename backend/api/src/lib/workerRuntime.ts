@@ -649,35 +649,63 @@ export async function loadMintOperationById(
 
 // ─── Wallet helpers ────────────────────────────────────────────────────────
 
+const WALLET_ROW_SELECT = `
+  id,
+  user_id,
+  oneze_balance_units,
+  fiat_balance_minor,
+  fiat_currency,
+  version,
+  created_at::text,
+  updated_at::text
+`;
+
 export async function ensureWallet(
   client: DbQueryable,
   userId: string,
   fiatCurrency = DEFAULT_WALLET_FIAT_CURRENCY
 ): Promise<WalletRow> {
-  const result = await client.query<WalletRow>(
-    `
-      INSERT INTO wallets (
-        id,
-        user_id,
-        fiat_currency
-      )
-      VALUES ($1, $2, $3)
-      ON CONFLICT (user_id)
-      DO UPDATE SET user_id = EXCLUDED.user_id
-      RETURNING
-        id,
-        user_id,
-        oneze_balance_units,
-        fiat_balance_minor,
-        fiat_currency,
-        version,
-        created_at::text,
-        updated_at::text
-    `,
-    [createRuntimeId('wal'), userId, fiatCurrency.toUpperCase()]
+  // SELECT ... FOR UPDATE takes the same wallet row lock the old
+  // INSERT ... ON CONFLICT DO UPDATE did — but without writing a dead tuple
+  // on every call (DO UPDATE SET user_id = EXCLUDED.user_id produced a new
+  // row version per invocation, bloating the wallets table on every money
+  // path). Mirrors the canonical implementation in src/index.ts.
+  const existing = await client.query<WalletRow>(
+    `SELECT ${WALLET_ROW_SELECT} FROM wallets WHERE user_id = $1 FOR UPDATE`,
+    [userId]
   );
 
-  const wallet = result.rows[0];
+  let wallet = existing.rows[0];
+  if (!wallet) {
+    const inserted = await client.query<WalletRow>(
+      `
+        INSERT INTO wallets (
+          id,
+          user_id,
+          fiat_currency
+        )
+        VALUES ($1, $2, $3)
+        ON CONFLICT (user_id)
+        DO NOTHING
+        RETURNING ${WALLET_ROW_SELECT}
+      `,
+      [createRuntimeId('wal'), userId, fiatCurrency.toUpperCase()]
+    );
+    wallet = inserted.rows[0];
+    if (!wallet) {
+      // A concurrent insert committed between our SELECT and our speculative
+      // INSERT — re-read the winner's row under the lock.
+      const reloaded = await client.query<WalletRow>(
+        `SELECT ${WALLET_ROW_SELECT} FROM wallets WHERE user_id = $1 FOR UPDATE`,
+        [userId]
+      );
+      wallet = reloaded.rows[0];
+    }
+  }
+
+  if (!wallet) {
+    throw createApiError('WALLET_NOT_FOUND', 'Unable to ensure wallet', { userId });
+  }
 
   const walletLedgerCountResult = await client.query<{ count: string }>(
     `

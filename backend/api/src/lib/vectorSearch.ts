@@ -1,4 +1,5 @@
 import { createSearchAdapter, type SearchResult } from './searchAdapter.js';
+import { meilisearchApiKey } from './meilisearchConfig.js';
 import { logger } from './logger.js';
 import type { RetrievalMeta, RetrievalFallbackReason } from './retrievalMeta.js';
 
@@ -69,7 +70,7 @@ async function getMeiliClient(): Promise<MeiliSearchClient | null> {
     }
     cachedMeiliClient = new Client({
       host: url,
-      apiKey: process.env.MEILISEARCH_KEY,
+      apiKey: meilisearchApiKey(),
     });
     return cachedMeiliClient;
   } catch {
@@ -105,7 +106,7 @@ export async function checkEmbedderReadiness(): Promise<{
     const indexName = process.env.MEILISEARCH_INDEX ?? 'listings';
     const response = await fetch(
       `${process.env.MEILISEARCH_URL}/indexes/${indexName}/settings/embedders`,
-      { headers: { Authorization: `Bearer ${process.env.MEILISEARCH_KEY ?? ''}` } },
+      { headers: { Authorization: `Bearer ${meilisearchApiKey() ?? ''}` } },
     );
     if (!response.ok) {
       const result = { ready: false, embedderNames: [] as string[], reason: `settings_endpoint_${response.status}` as const };
@@ -204,7 +205,13 @@ export async function semanticSearch(
         limit,
         hybrid: { embedder: 'default', semanticRatio: 0.5 },
       };
-      const filter = buildMeiliFilter(options.filters ?? {});
+      // Public-serving predicate: the index can carry non-public statuses
+      // (single-listing sync indexes draft/paused documents), so the
+      // hybrid query is always constrained to the active corpus — the
+      // same predicate the full sync and the route-level re-check apply.
+      // `status` is a configured filterable attribute; it is applied last
+      // so a caller-supplied filter can never widen past it.
+      const filter = buildMeiliFilter({ ...(options.filters ?? {}), status: 'active' });
       if (filter) {
         searchOpts.filter = filter;
       }

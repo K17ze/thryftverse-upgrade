@@ -76,6 +76,13 @@ export interface WebhookVerificationResult {
   verified: boolean;
   reason?: string;
   event?: NormalizedWebhookEvent;
+  /**
+   * True when verification failed because of a transient condition (e.g. the
+   * provider's payment-retrieval API was unreachable). The route must answer
+   * 5xx so the provider redelivers — a retryable failure is never a state
+   * transition and never a payload fallback.
+   */
+  retryable?: boolean;
 }
 
 function providerToGatewayId(provider: ProviderSlug): MoneyGatewayId {
@@ -521,31 +528,147 @@ function normalizeRazorpayEvent(payload: Record<string, unknown>, rawBody: strin
   return normalized;
 }
 
+// ── Mollie fail-closed verification (SEP20-FIN-10) ─────────────────────────
+//
+// Mollie's webhook contract delivers ONLY the payment `id` in the POST body —
+// the status is never transmitted (docs.mollie.com/reference/webhooks). The
+// authoritative status, money and intent linkage therefore come exclusively
+// from GET /payments/{id}. When no webhook signature exists to authenticate
+// the payload, a retrieval failure MUST NOT fall back to caller-supplied
+// fields: an attacker could forge `{ id, status: 'paid' }` and settle orders
+// during a provider outage. Retrieval failure is a retryable rejection — the
+// webhook route answers 5xx so Mollie redelivers.
+
+export class MollieVerificationError extends Error {
+  readonly retryable: boolean;
+  constructor(message: string, retryable: boolean) {
+    super(message);
+    this.name = 'MollieVerificationError';
+    this.retryable = retryable;
+  }
+}
+
+/** Mollie payment ids are `tr_` followed by alphanumeric characters. */
+const MOLLIE_PAYMENT_ID_PATTERN = /^tr_[A-Za-z0-9]+$/;
+
+type MollieRetrievedPayment = {
+  id?: unknown;
+  status?: unknown;
+  metadata?: unknown;
+  amount?: { value?: unknown; currency?: unknown } | null;
+};
+
+/**
+ * Test seam: replaces the live GET /payments/{id} retrieval so tests can
+ * simulate provider success/outage without network access. Production code
+ * always uses the real Mollie client.
+ */
+let molliePaymentRetrieverForTests:
+  | ((paymentId: string) => Promise<MollieRetrievedPayment>)
+  | null = null;
+
+async function retrieveMolliePayment(paymentId: string): Promise<MollieRetrievedPayment> {
+  if (molliePaymentRetrieverForTests) {
+    return molliePaymentRetrieverForTests(paymentId);
+  }
+
+  const { createMollieClient } = await import('@mollie/api-client');
+  const mollie = createMollieClient({ apiKey: config.mollieApiKey as string });
+  return (await mollie.payments.get(paymentId)) as unknown as MollieRetrievedPayment;
+}
+
+export const __testables = {
+  setMolliePaymentRetriever(
+    retriever: ((paymentId: string) => Promise<MollieRetrievedPayment>) | null
+  ): void {
+    molliePaymentRetrieverForTests = retriever;
+  },
+};
+
 async function normalizeMollieEvent(
   payload: Record<string, unknown>,
-  rawBody: string
+  rawBody: string,
+  opts?: { signatureVerified?: boolean; trustedStoredPayload?: boolean }
 ): Promise<NormalizedWebhookEvent> {
   const paymentRef = asString(payload.id);
-  let eventType = asString(payload.event) ?? 'payment.updated';
-  let providerStatus = asString(payload.status);
-  let metadata = asRecord(payload.metadata);
-  let amount: string | number | undefined = asProviderAmount(asRecord(payload.amount).value);
-  let currency: string | undefined = asString(asRecord(payload.amount).currency);
+  // Authenticated callers may legitimately carry richer payloads (new-style
+  // signed webhook events, or a DLQ-stored event that was verified at
+  // receipt). Unsigned callers get NOTHING — only a provider retrieval.
+  const callerPayloadAuthenticated = Boolean(
+    opts?.signatureVerified || opts?.trustedStoredPayload
+  );
 
-  if (paymentRef && config.mollieApiKey) {
-    try {
-      const { createMollieClient } = await import('@mollie/api-client');
-      const mollie = createMollieClient({ apiKey: config.mollieApiKey });
-      const payment = await mollie.payments.get(paymentRef);
-      providerStatus = asString((payment as unknown as { status?: unknown }).status) ?? providerStatus;
-      metadata = asRecord((payment as unknown as { metadata?: unknown }).metadata) || metadata;
-      amount = asProviderAmount((payment as unknown as { amount?: { value?: unknown } }).amount?.value);
-      currency = asString((payment as unknown as { amount?: { currency?: unknown } }).amount?.currency);
-      eventType = `payment.${providerStatus ?? 'updated'}`;
-    } catch {
-      // Keep webhook processing resilient; status will be resolved from payload when API lookup is unavailable.
+  if (config.mollieApiKey) {
+    if (!paymentRef || !MOLLIE_PAYMENT_ID_PATTERN.test(paymentRef)) {
+      // Without a retrievable payment id there is nothing to verify against.
+      // Authenticated payloads may proceed to the payload-derived path below.
+      if (!callerPayloadAuthenticated) {
+        throw new MollieVerificationError(
+          'Mollie webhook payload is missing a valid payment id',
+          false
+        );
+      }
+    } else {
+      try {
+        const payment = await retrieveMolliePayment(paymentRef);
+        if (!payment || typeof payment !== 'object') {
+          throw new Error('empty payment resource');
+        }
+
+        // Status, money and intent linkage derive EXCLUSIVELY from the
+        // retrieved payment — the caller payload is only the trigger.
+        const providerStatus = asString(payment.status);
+        const metadata = asRecord(payment.metadata);
+        const amount = asProviderAmount(asRecord(payment.amount).value);
+        const currency = asString(asRecord(payment.amount).currency);
+        const eventType = `payment.${providerStatus ?? 'updated'}`;
+
+        return {
+          gatewayId: 'mollie_eu',
+          providerEventId: `${eventType}:${paymentRef}`,
+          eventType,
+          providerIntentRef: paymentRef,
+          intentId: asString(metadata.intentId) ?? asString(metadata.intent_id),
+          paymentStatus: statusFromMollieState(providerStatus),
+          ...normalizeEventMoney('mollie', currency?.toUpperCase(), amount),
+          metadata,
+          rawPayload: payload,
+        };
+      } catch (error) {
+        // Unsigned callers fail closed — no payload fallback, retryable so
+        // the provider redelivers after the outage clears. Authenticated
+        // payloads (valid signature / stored event) may still be processed
+        // from the payload itself, which is already proven authentic.
+        if (!callerPayloadAuthenticated) {
+          throw new MollieVerificationError(
+            `Mollie payment retrieval failed: ${(error as Error).message}`,
+            true
+          );
+        }
+      }
     }
   }
+
+  if (!callerPayloadAuthenticated) {
+    // No API key and no authenticated payload — there is no channel through
+    // which this event can be trusted. verifyAndNormalizeWebhook already
+    // rejects this configuration; this guard also covers direct callers.
+    throw new MollieVerificationError(
+      'Mollie webhook cannot be authenticated — no signature and no API key',
+      false
+    );
+  }
+
+  // ── Authenticated payload path ──────────────────────────────────────────
+  // Reached only when the request carried a valid webhook signature (or the
+  // event was verified at receipt and is replaying through the DLQ sweep)
+  // AND provider retrieval was unavailable/not applicable. The payload is
+  // authentic, so payload-derived fields are safe to use.
+  const eventType = asString(payload.event) ?? 'payment.updated';
+  const providerStatus = asString(payload.status);
+  const metadata = asRecord(payload.metadata);
+  const amount: string | number | undefined = asProviderAmount(asRecord(payload.amount).value);
+  const currency: string | undefined = asString(asRecord(payload.amount).currency);
 
   return {
     gatewayId: 'mollie_eu',
@@ -851,6 +974,7 @@ export async function verifyAndNormalizeWebhook(
   }
 
   if (provider === 'mollie') {
+    let signatureVerified = false;
     if (config.mollieWebhookSecret) {
       const ok = verifyHmacSignature(headers, 'x-mollie-signature', config.mollieWebhookSecret, rawBody);
       if (!ok) {
@@ -859,6 +983,7 @@ export async function verifyAndNormalizeWebhook(
           reason: 'Invalid Mollie webhook signature',
         };
       }
+      signatureVerified = true;
     } else if (!config.mollieApiKey) {
       // With neither a webhook secret nor an API key there is no
       // authentication channel at all — the payload status cannot be
@@ -869,10 +994,21 @@ export async function verifyAndNormalizeWebhook(
       };
     }
 
-    return {
-      verified: true,
-      event: await normalizeMollieEvent(payload, rawBody),
-    };
+    try {
+      return {
+        verified: true,
+        event: await normalizeMollieEvent(payload, rawBody, { signatureVerified }),
+      };
+    } catch (error) {
+      // SEP20-FIN-10: unsigned events can only be verified by retrieving the
+      // payment provider-side. A retrieval outage is a RETRYABLE failure —
+      // the caller payload must never substitute for provider truth.
+      return {
+        verified: false,
+        retryable: error instanceof MollieVerificationError ? error.retryable : false,
+        reason: (error as Error).message ?? 'Mollie webhook verification failed',
+      };
+    }
   }
 
   if (provider === 'flutterwave') {
@@ -970,7 +1106,12 @@ export async function normalizeWebhookEvent(
     return normalizeRazorpayEvent(payload, rawBody);
   }
   if (provider === 'mollie') {
-    return await normalizeMollieEvent(payload, rawBody);
+    // The durable outbox row only exists because the event was verified at
+    // receipt, so the stored payload is authenticated — but provider
+    // retrieval still wins whenever an API key is configured. A retrieval
+    // outage throws (retryable): the sweep marks the outbox row failed and
+    // retries with backoff.
+    return await normalizeMollieEvent(payload, rawBody, { trustedStoredPayload: true });
   }
   if (provider === 'flutterwave') {
     return normalizeFlutterwaveEvent(payload, rawBody);

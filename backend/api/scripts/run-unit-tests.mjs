@@ -47,7 +47,11 @@ console.log(`[unit-tests] running ${files.length} node:test files`);
 const testTimeoutMs = process.env.UNIT_TEST_TIMEOUT_MS ?? '180000';
 const result = spawnSync(
   process.execPath,
-  ['--import', 'tsx', '--test', `--test-timeout=${testTimeoutMs}`, ...files.map((rel) => join(srcRoot, rel))],
+  // --test-force-exit terminates lingering handles (e.g. reconnecting ioredis
+  // clients imported transitively by test files) AFTER the run reports — a
+  // manual process.exit() inside an after() hook instead truncates reporting
+  // and exits 0 even when assertions fail.
+  ['--import', 'tsx', '--test', '--test-force-exit', `--test-timeout=${testTimeoutMs}`, ...files.map((rel) => join(srcRoot, rel))],
   { stdio: 'inherit', cwd: apiRoot },
 );
 process.exit(result.status ?? 1);

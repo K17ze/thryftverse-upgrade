@@ -9,7 +9,7 @@ import { OfflineBanner } from '../OfflineBanner';
 import { SyncRetryBanner } from '../SyncRetryBanner';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, FontFamily, Control } from '../../theme/designTokens';
-import { TypographyV2 } from '../../theme/typography.v2';
+import { TypographyV2, MAX_FONT_SCALE } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useHaptic } from '../../hooks/useHaptic';
 import type { DynamicSignalChip } from '../../services/algorithmicSignalsService';
@@ -198,11 +198,11 @@ export function HomeFeedHeader({
                 : `Following feed${followingListingsCount > 0 ? `, ${followingListingsCount} listings` : ''}`}
               accessibilityState={{ selected: isSelected }}
             >
-              <Text style={[styles.feedTabLabel, isSelected && styles.feedTabLabelActive]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
+              <Text style={[styles.feedTabLabel, isSelected && styles.feedTabLabelActive]} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
                 {label}
               </Text>
               {option === 'following' && followingListingsCount > 0 ? (
-                <Text style={[styles.feedTabCount, isSelected && styles.feedTabCountActive]} maxFontSizeMultiplier={1.5}>
+                <Text style={[styles.feedTabCount, isSelected && styles.feedTabCountActive]} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
                   {followingListingsCount}
                 </Text>
               ) : null}
@@ -242,7 +242,7 @@ export function HomeFeedHeader({
               {signal.isPersonalized && signal.kind !== 'all' ? (
                 <View style={[styles.signalDot, active && styles.signalDotActive]} />
               ) : null}
-              <Text style={[styles.signalChipText, active && styles.signalChipTextActive]} maxFontSizeMultiplier={2}>
+              <Text style={[styles.signalChipText, active && styles.signalChipTextActive]} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
                 {signal.label}
               </Text>
             </AnimatedPressable>
@@ -257,10 +257,10 @@ export function HomeFeedHeader({
           generic product grid. */}
       {newHomeFeedEnabled ? (
         <View style={styles.editorialHeader}>
-          <Text style={styles.editorialEyebrow} numberOfLines={1} maxFontSizeMultiplier={2}>
+          <Text style={styles.editorialEyebrow} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
             Fresh today
           </Text>
-          <Text style={styles.editorialTitle} numberOfLines={1} maxFontSizeMultiplier={2}>
+          <Text style={styles.editorialTitle} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE.heading}>
             New listings from sellers you follow
           </Text>
         </View>
@@ -277,9 +277,9 @@ export function HomeFeedHeader({
         <OfflineBanner onRetry={onRetry} />
       ) : hasSyncError ? (
         <SyncRetryBanner
-          // Honest copy: the 'cache'/'offline-cache' source is never set in
-          // this build — on-screen content is the last successfully loaded
-          // page, not a persisted cache (F-home-banner-truth).
+          // Honest copy: a 'cache' source means the last successfully
+          // loaded page is being kept after a failed refresh — it is not
+          // a persisted offline cache (F-home-banner-truth).
           message={feedDataLength > 0
             ? "Couldn't refresh — showing your last loaded items."
             : "Couldn't load the feed."}
@@ -291,7 +291,7 @@ export function HomeFeedHeader({
       ) : forYouIsDegraded ? (
         <View style={styles.degradedRow}>
           <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} accessible={false} />
-          <Text style={styles.degradedText} maxFontSizeMultiplier={1.5}>
+          <Text style={styles.degradedText} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
             Showing baseline listings — personalised feed is temporarily unavailable.
           </Text>
         </View>

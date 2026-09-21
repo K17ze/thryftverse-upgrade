@@ -1,8 +1,12 @@
+import crypto from 'node:crypto';
 import { z } from 'zod';
 import type { Pool, PoolClient } from 'pg';
 import { appendDomainEvent } from './domainOutbox.js';
 import { logger } from './logger.js';
-import { moderateListingText } from './moderation/moderationService.js';
+import {
+  listingTextGateAction,
+  moderateListingText,
+} from './moderation/moderationService.js';
 import {
   validateListingAttributes,
   type AttributeValidationError,
@@ -101,6 +105,10 @@ export type ListingFieldPatchResult =
       listingId: string;
       appliedFields: string[];
       currentStatus: string;
+      /** Status the row landed on when the patch itself moved it — set only
+       *  when a moderation hold flipped a live listing to 'risk_pending'
+       *  mid-edit (same hold the single-PATCH route writes). */
+      newStatus?: string;
       previousPriceGbp?: number;
       newPriceGbp?: number;
       updatedAt?: string;
@@ -161,6 +169,10 @@ export async function applyListingFieldPatch(
   const values: unknown[] = [];
   let idx = 1;
   const appliedFields: string[] = [];
+  // Set when the text-moderation hold flips a live listing to 'risk_pending'
+  // inside this patch — surfaced on the result so the batch receipt reports
+  // the landing status honestly.
+  let moderationHeld = false;
 
   for (const [key, column] of Object.entries(LISTING_EDIT_PATCH_COLUMNS)) {
     const val = patch[key as keyof ListingEditPatch];
@@ -233,13 +245,20 @@ export async function applyListingFieldPatch(
     // Text moderation — the same gate POST /listings and the single-PATCH
     // route apply — whenever the edit rewrites title or description. The
     // merged text (patched fields over the locked current values) is what
-    // gets evaluated: 'rejected' refuses the item, 'review' proceeds with a
-    // flag in the logs. Without this, bulk edit would industrialise
-    // unmoderated copy rewrites (200 items per call).
+    // gets evaluated through the shared listingTextGateAction vocabulary:
+    // 'rejected' refuses the item outright; 'review' and provider 'failed'
+    // hold the listing at 'risk_pending' when it is publicly servable — the
+    // same operator-visible hold the single-edit path writes, including
+    // cancelling non-terminal live lots so nothing stays biddable on a held
+    // listing. Non-public statuses stay as-is: they are already unservable
+    // and the publish gate re-runs this check before any future activation.
+    // Without this, bulk edit would industrialise unmoderated copy rewrites
+    // (200 items per call).
     if (patch.title !== undefined || patch.description !== undefined) {
       const mergedText = `${patch.title ?? current.title ?? ''}\n${patch.description ?? current.description ?? ''}`;
       const textModerationResult = await moderateListingText(listingId, mergedText);
-      if (textModerationResult.status === 'rejected') {
+      const textModerationAction = listingTextGateAction(textModerationResult.status);
+      if (textModerationAction === 'block') {
         await client.query('ROLLBACK');
         return {
           status: 'rejected',
@@ -248,10 +267,52 @@ export async function applyListingFieldPatch(
           currentStatus: current.status,
         };
       }
-      if (textModerationResult.status === 'review') {
+      if (textModerationAction === 'hold') {
+        if (current.status === 'active') {
+          sets.push(`status = $${idx++}`);
+          values.push('risk_pending');
+          moderationHeld = true;
+          // Same invariant as the single-edit hold: a held listing must not
+          // leave live lots biddable — settlement rejects 'risk_pending'.
+          const cancelledLots = await client.query<{
+            id: string;
+            session_id: string;
+            version: number;
+          }>(
+            `UPDATE live_lots
+                SET status = 'cancelled',
+                    version = version + 1,
+                    updated_at = NOW()
+              WHERE listing_id = $1
+                AND status IN ('scheduled', 'open', 'closing', 'passed')
+              RETURNING id, session_id, version`,
+            [listingId],
+          );
+          for (const lot of cancelledLots.rows) {
+            await client.query(
+              `INSERT INTO live_lot_events
+                 (id, lot_id, session_id, event_type, event_version, actor_id, payload)
+               VALUES ($1, $2, $3, 'lot.cancelled', $4, $5, $6::jsonb)`,
+              [
+                crypto.randomUUID(),
+                lot.id,
+                lot.session_id,
+                lot.version,
+                actorId,
+                JSON.stringify({ lotId: lot.id, reason: 'listing_moderation_hold' }),
+              ],
+            );
+          }
+        }
         logger.warn(
-          { listingId, labels: textModerationResult.labels },
-          'listingPatch: listing text edit flagged for human review',
+          {
+            listingId,
+            moderationStatus: textModerationResult.status,
+            moderationError: textModerationResult.error,
+            labels: textModerationResult.labels,
+            heldAtRiskPending: moderationHeld,
+          },
+          'listingPatch: listing text edit returned no clean moderation verdict — holding listing',
         );
       }
     }
@@ -355,6 +416,7 @@ export async function applyListingFieldPatch(
       listingId,
       appliedFields,
       currentStatus: current.status,
+      ...(moderationHeld ? { newStatus: 'risk_pending' } : {}),
       ...(patch.priceGbp !== undefined
         ? { previousPriceGbp: Number(current.price_gbp), newPriceGbp: patch.priceGbp }
         : {}),

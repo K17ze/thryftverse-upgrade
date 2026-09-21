@@ -11,6 +11,7 @@ import {
   refundOnezeInternalWalletDebit,
   saveWalletIdempotentResponse,
 } from '../lib/walletMoneyPath.js';
+import { computeMintQuoteMac } from '../lib/paymentIntentMetadata.js';
 import type { DbQueryable } from '../lib/workerHelpers.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -689,6 +690,16 @@ test('mint operation materializes once from payment intent quote metadata', asyn
   const state = emptyState();
   const { client } = createMoneyPathClient(state);
 
+  const mintQuote = {
+    fiatAmountMinor: 1000,
+    netFiatAmountMinor: 990,
+    platformFeeMinor: 10,
+    izeAmountUnits: 9_900,
+    ratePerGram: 1,
+    rateSource: 'fixed_par:GBP:1ZE',
+    rateLockedAt: '2026-01-01T00:00:00Z',
+    rateExpiresAt: '2026-01-01T00:15:00Z',
+  };
   state.paymentIntents.push({
     id: 'pi_1',
     user_id: 'user_1',
@@ -699,16 +710,13 @@ test('mint operation materializes once from payment intent quote metadata', asyn
     metadata: {
       mintOperationId: 'mintop_1',
       quoteHash: 'hash_1',
-      mintQuote: {
-        fiatAmountMinor: 1000,
-        netFiatAmountMinor: 990,
-        platformFeeMinor: 10,
-        izeAmountUnits: 9_900,
-        ratePerGram: 1,
-        rateSource: 'fixed_par:GBP:1ZE',
-        rateLockedAt: '2026-01-01T00:00:00Z',
-        rateExpiresAt: '2026-01-01T00:15:00Z',
-      },
+      mintQuote,
+      mintQuoteMac: computeMintQuoteMac({
+        paymentIntentId: 'pi_1',
+        userId: 'user_1',
+        mintOperationId: 'mintop_1',
+        ...mintQuote,
+      }),
     },
   });
 
@@ -742,6 +750,203 @@ test('mint operation is not materialized for non-mint intents', async () => {
   });
 
   const result = await materializeMintOperationForPaymentIntent(client, 'pi_order');
+  assert.equal(result, null);
+  assert.equal(state.mintOperations.length, 0);
+});
+
+test('forged mint quote metadata (no valid MAC) never materializes — review P0', async () => {
+  const state = emptyState();
+  const { client } = createMoneyPathClient(state);
+
+  // The attack from review-security P0: a caller-supplied mintQuote on a
+  // genuine wallet_topup intent — pay £1, mint 1e9 units. Without a valid
+  // mintQuoteMac bound to this intent + user, the quote is untrusted and
+  // the materializer fails closed.
+  state.paymentIntents.push({
+    id: 'pi_forged',
+    user_id: 'user_1',
+    channel: 'wallet_topup',
+    amount_gbp: '1',
+    amount_currency: 'GBP',
+    amount_minor: '100',
+    metadata: {
+      mintOperationId: 'mintop_forged',
+      mintQuote: {
+        fiatAmountMinor: 100,
+        netFiatAmountMinor: 99,
+        platformFeeMinor: 1,
+        izeAmountUnits: 1_000_000_000,
+        ratePerGram: 0.000001,
+        rateSource: 'fixed_par:GBP:1ZE',
+        rateLockedAt: '2026-01-01T00:00:00Z',
+        rateExpiresAt: '2026-01-01T00:15:00Z',
+      },
+    },
+  });
+
+  const forged = await materializeMintOperationForPaymentIntent(client, 'pi_forged');
+  assert.equal(forged, null);
+  assert.equal(state.mintOperations.length, 0);
+});
+
+test('a quote MAC bound to a different intent does not transplant', async () => {
+  const state = emptyState();
+  const { client } = createMoneyPathClient(state);
+
+  const mintQuote = {
+    fiatAmountMinor: 1000,
+    netFiatAmountMinor: 990,
+    platformFeeMinor: 10,
+    izeAmountUnits: 9_900,
+    ratePerGram: 1,
+    rateSource: 'fixed_par:GBP:1ZE',
+    rateLockedAt: '2026-01-01T00:00:00Z',
+    rateExpiresAt: '2026-01-01T00:15:00Z',
+  };
+  // MAC is valid — but computed for a DIFFERENT payment intent.
+  state.paymentIntents.push({
+    id: 'pi_2',
+    user_id: 'user_1',
+    channel: 'wallet_topup',
+    amount_gbp: '10',
+    amount_currency: 'GBP',
+    amount_minor: '1000',
+    metadata: {
+      mintOperationId: 'mintop_2',
+      mintQuote,
+      mintQuoteMac: computeMintQuoteMac({
+        paymentIntentId: 'pi_1',
+        userId: 'user_1',
+        mintOperationId: 'mintop_2',
+        ...mintQuote,
+      }),
+    },
+  });
+
+  const result = await materializeMintOperationForPaymentIntent(client, 'pi_2');
+  assert.equal(result, null);
+  assert.equal(state.mintOperations.length, 0);
+});
+
+test('a quote whose fiat amount exceeds the captured amount fails closed', async () => {
+  const state = emptyState();
+  const { client } = createMoneyPathClient(state);
+
+  const mintQuote = {
+    fiatAmountMinor: 1000,
+    netFiatAmountMinor: 990,
+    platformFeeMinor: 10,
+    izeAmountUnits: 9_900,
+    ratePerGram: 1,
+    rateSource: 'fixed_par:GBP:1ZE',
+    rateLockedAt: '2026-01-01T00:00:00Z',
+    rateExpiresAt: '2026-01-01T00:15:00Z',
+  };
+  state.paymentIntents.push({
+    id: 'pi_3',
+    user_id: 'user_1',
+    channel: 'wallet_topup',
+    amount_gbp: '5',
+    amount_currency: 'GBP',
+    amount_minor: '500', // captured £5 — quote claims £10 gross
+    metadata: {
+      mintOperationId: 'mintop_3',
+      mintQuote,
+      mintQuoteMac: computeMintQuoteMac({
+        paymentIntentId: 'pi_3',
+        userId: 'user_1',
+        mintOperationId: 'mintop_3',
+        ...mintQuote,
+      }),
+    },
+  });
+
+  const result = await materializeMintOperationForPaymentIntent(client, 'pi_3');
+  assert.equal(result, null);
+  assert.equal(state.mintOperations.length, 0);
+});
+
+test('a valid-MAC quote whose izeAmountUnits does not recompute is rejected — review P0', async () => {
+  const state = emptyState();
+  const { client } = createMoneyPathClient(state);
+
+  // Stronger than the no-MAC forgery test: this quote carries a VALID mint
+  // quote MAC bound to this intent + user — but the stored izeAmountUnits
+  // (1e9) is not what the captured amount recomputes to. £10 gross → £0.10
+  // fee → £9.90 net → 9.9 1ZE → 9_900 units at ratePerGram 1. The
+  // materializer recomputes from intent.amount_minor and must reject the
+  // divergence even when the MAC authenticates the stored fields.
+  const mintQuote = {
+    fiatAmountMinor: 1000,
+    netFiatAmountMinor: 990,
+    platformFeeMinor: 10,
+    izeAmountUnits: 1_000_000_000,
+    ratePerGram: 1,
+    rateSource: 'fixed_par:GBP:1ZE',
+    rateLockedAt: '2026-01-01T00:00:00Z',
+    rateExpiresAt: '2026-01-01T00:15:00Z',
+  };
+  state.paymentIntents.push({
+    id: 'pi_inflated',
+    user_id: 'user_1',
+    channel: 'wallet_topup',
+    amount_gbp: '10',
+    amount_currency: 'GBP',
+    amount_minor: '1000',
+    metadata: {
+      mintOperationId: 'mintop_inflated',
+      mintQuote,
+      mintQuoteMac: computeMintQuoteMac({
+        paymentIntentId: 'pi_inflated',
+        userId: 'user_1',
+        mintOperationId: 'mintop_inflated',
+        ...mintQuote,
+      }),
+    },
+  });
+
+  const result = await materializeMintOperationForPaymentIntent(client, 'pi_inflated');
+  assert.equal(result, null);
+  assert.equal(state.mintOperations.length, 0);
+});
+
+test('a valid-MAC quote with inconsistent fee/net fields is rejected', async () => {
+  const state = emptyState();
+  const { client } = createMoneyPathClient(state);
+
+  // £10 gross at the 100bps top-up fee is £0.10 fee / £9.90 net — a quote
+  // claiming zero fee / full-net inflates the mint by ~1%. The recompute
+  // checks fee + net + units, not just the headline amount.
+  const mintQuote = {
+    fiatAmountMinor: 1000,
+    netFiatAmountMinor: 1000,
+    platformFeeMinor: 0,
+    izeAmountUnits: 10_000,
+    ratePerGram: 1,
+    rateSource: 'fixed_par:GBP:1ZE',
+    rateLockedAt: '2026-01-01T00:00:00Z',
+    rateExpiresAt: '2026-01-01T00:15:00Z',
+  };
+  state.paymentIntents.push({
+    id: 'pi_nofee',
+    user_id: 'user_1',
+    channel: 'wallet_topup',
+    amount_gbp: '10',
+    amount_currency: 'GBP',
+    amount_minor: '1000',
+    metadata: {
+      mintOperationId: 'mintop_nofee',
+      mintQuote,
+      mintQuoteMac: computeMintQuoteMac({
+        paymentIntentId: 'pi_nofee',
+        userId: 'user_1',
+        mintOperationId: 'mintop_nofee',
+        ...mintQuote,
+      }),
+    },
+  });
+
+  const result = await materializeMintOperationForPaymentIntent(client, 'pi_nofee');
   assert.equal(result, null);
   assert.equal(state.mintOperations.length, 0);
 });

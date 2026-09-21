@@ -62,6 +62,11 @@ export interface HomeFeedResult {
   lookIds: string[];
   source: 'api';
   error?: string;
+  /** True only when the request itself failed (transport/API error caught
+   *  below). A successful response with zero listings reports the soft
+   *  `error` string but is NOT a failure — consumers use this to decide
+   *  whether last-good content should be kept (FRESH-02). */
+  failed?: boolean;
   nextCursor?: string | null;
 }
 
@@ -110,6 +115,7 @@ export async function fetchHomeFeed(
       source: 'api',
       nextCursor: null,
       error: friendlyBackendError(error),
+      failed: true,
     };
   }
 }

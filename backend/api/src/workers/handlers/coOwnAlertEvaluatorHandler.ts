@@ -35,6 +35,13 @@ interface ActiveAlertRow {
   asset_id: string;
   condition: 'above' | 'below';
   target_price_gbp_minor: string;
+  /**
+   * SEP20-FIN-12: monotonic activation counter (migration 331). Carried
+   * into the outbox deduplication key so a re-armed alert's second trigger
+   * is a NEW event instead of colliding with the previous activation's
+   * dedup key.
+   */
+  activation_seq: string | number;
 }
 
 interface PriceRow {
@@ -45,6 +52,14 @@ interface TradePriceRow {
   id: string;
   unit_price_gbp: string;
 }
+
+/**
+ * Max alerts materialized per evaluation pass. Triggered alerts leave the
+ * `triggered_at IS NULL` set, so successive passes drain the backlog in
+ * created_at order — an unbounded snapshot would materialize the whole
+ * active set into memory on every run.
+ */
+const ALERT_EVALUATION_BATCH_LIMIT = 500;
 
 /**
  * Evaluate all active co-own price alerts against the current market price.
@@ -60,13 +75,18 @@ export async function evaluateCoOwnPriceAlerts(
   errors: number;
 }> {
   // Snapshot the active alert set outside the per-alert transactions so a slow
-  // trigger can't hold locks while we enumerate the full batch.
+  // trigger can't hold locks while we enumerate the batch. The snapshot is
+  // bounded: a pass materializes at most ALERT_EVALUATION_BATCH_LIMIT rows —
+  // triggered alerts leave the set (triggered_at is stamped), so successive
+  // passes drain the remainder in created_at order.
   const activeResult = await db.query<ActiveAlertRow>(
     `
-      SELECT id, user_id, asset_id, condition, target_price_gbp_minor::text
+      SELECT id, user_id, asset_id, condition, target_price_gbp_minor::text,
+             activation_seq
       FROM coOwn_price_alerts
       WHERE active = TRUE AND triggered_at IS NULL
       ORDER BY created_at ASC
+      LIMIT ${ALERT_EVALUATION_BATCH_LIMIT}
     `,
   );
 
@@ -109,7 +129,12 @@ export async function evaluateCoOwnPriceAlerts(
 async function fetchCurrentPriceMinor(
   client: PoolClient,
   assetId: string,
-): Promise<{ priceMinor: number; tradeId: string | null } | null> {
+): Promise<{
+  priceMinor: number;
+  tradeId: string | null;
+  /** SEP20-FIN-11: provenance of the mark — disclosed in the notification copy. */
+  markSource: 'trade' | 'reference';
+} | null> {
   const lastTrade = await client.query<TradePriceRow>(
     `
       SELECT id::text, unit_price_gbp::text
@@ -123,9 +148,11 @@ async function fetchCurrentPriceMinor(
 
   let priceGbpStr: string | undefined;
   let tradeId: string | null = null;
+  let markSource: 'trade' | 'reference' = 'reference';
   if (lastTrade.rowCount && lastTrade.rows[0]) {
     priceGbpStr = lastTrade.rows[0].unit_price_gbp;
     tradeId = lastTrade.rows[0].id;
+    markSource = 'trade';
   } else {
     // Fall back to appraisal value first (independent reference), then
     // offering price — matches the portfolio projection mark precedence.
@@ -140,7 +167,7 @@ async function fetchCurrentPriceMinor(
   if (!priceGbpStr) return null;
   const priceGbp = Number(priceGbpStr);
   if (!Number.isFinite(priceGbp) || priceGbp <= 0) return null;
-  return { priceMinor: Math.round(priceGbp * 100), tradeId };
+  return { priceMinor: Math.round(priceGbp * 100), tradeId, markSource };
 }
 
 /**
@@ -159,9 +186,12 @@ async function evaluateAlert(
     await client.query('BEGIN');
 
     // Re-lock the alert so concurrent evaluators don't double-trigger.
-    const locked = await client.query<{ id: string }>(
+    // activation_seq is re-read under the lock: a re-arm between the
+    // snapshot and this transaction must not stamp the new event with the
+    // previous activation's dedup key.
+    const locked = await client.query<{ id: string; activation_seq: string | number }>(
       `
-        SELECT id FROM coOwn_price_alerts
+        SELECT id, activation_seq FROM coOwn_price_alerts
         WHERE id = $1 AND active = TRUE AND triggered_at IS NULL
         FOR UPDATE
       `,
@@ -172,6 +202,7 @@ async function evaluateAlert(
       await client.query('ROLLBACK');
       return false;
     }
+    const activationSeq = Number(locked.rows[0].activation_seq) || 1;
 
     const mark = await fetchCurrentPriceMinor(client, alert.asset_id);
     if (mark === null) {
@@ -205,23 +236,32 @@ async function evaluateAlert(
       [alert.id],
     );
 
+    // SEP20-FIN-12: the deduplication/idempotency keys carry the
+    // activation sequence — exactly-once per activation, so a re-armed
+    // alert emits a fresh event instead of hitting the previous
+    // activation's dedup row (domain_outbox ON CONFLICT returns the old
+    // event and the notification drain dedups on the same key).
     await appendDomainEvent(client, {
       aggregateType: 'coown_price_alert',
       aggregateId: alert.id,
       eventType: 'coown_price_alert_triggered',
-      deduplicationKey: `coown_price_alert:${alert.id}`,
-      idempotencyKey: `coown_price_alert:${alert.id}`,
+      deduplicationKey: `coown_price_alert:${alert.id}:${activationSeq}`,
+      idempotencyKey: `coown_price_alert:${alert.id}:${activationSeq}`,
       actorId: alert.user_id,
       payload: {
         alertId: alert.id,
+        activationSeq,
         userId: alert.user_id,
         assetId: alert.asset_id,
         condition: alert.condition,
         triggerPriceGbpMinor: targetMinor,
         currentPriceGbpMinor: currentMinor,
         // The settled trade that set the triggering price — the
-        // authoritative execution reference for audit and replay.
+        // authoritative execution reference for audit and replay. NULL
+        // when the alert fired off the appraisal/reference mark
+        // (SEP20-FIN-11: legitimately nullable).
         tradeId: mark.tradeId,
+        markSource: mark.markSource,
         reason,
         triggeredAt: new Date().toISOString(),
       },

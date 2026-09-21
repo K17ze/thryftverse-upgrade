@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 const SRC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ROUTE_SRC = readFileSync(path.join(SRC_DIR, 'routes', 'recommendations.ts'), 'utf8');
+const EMB_SRC = readFileSync(path.join(SRC_DIR, 'lib', 'mediaEmbeddings.ts'), 'utf8');
 
 describe('recommendation multi-source retrieval (R19)', () => {
   it('retrieves candidates from multiple named sources', () => {
@@ -54,6 +55,52 @@ describe('recommendation multi-source retrieval (R19)', () => {
       /nearestMediaEmbeddings\(db,/,
       'item_to_item_ann must serve through nearestMediaEmbeddings',
     );
+  });
+
+  it('item_to_item_ann pins a single serving lineage end-to-end (N2)', () => {
+    // Embeddings from different (model, version, preprocessing, dims)
+    // tuples are incomparable vector spaces — anchor selection and the
+    // neighbour query must pin the same resolved lineage.
+    assert.match(
+      ROUTE_SRC,
+      /resolveServingEmbeddingLineage\(db\)/,
+      'the serving lineage must be resolved before anchor selection',
+    );
+    for (const pin of [
+      /me\.model_id = \$2/,
+      /me\.model_version = \$3/,
+      /me\.preprocessing_version = \$4/,
+      /me\.dimensions = \$5/,
+    ]) {
+      assert.match(
+        ROUTE_SRC,
+        pin,
+        'anchor selection must pin the serving lineage tuple',
+      );
+    }
+    assert.match(ROUTE_SRC, /modelId: servingLineage\.modelId/);
+    assert.match(ROUTE_SRC, /dimensions: servingLineage\.dimensions/);
+  });
+
+  it('item_to_item_ann preserves ANN rank through the listing join (N4)', () => {
+    // The neighbour→listing mapping must keep (asset, distance) pairs so
+    // source_rank is the true ANN rank, not arbitrary DISTINCT order.
+    assert.match(
+      ROUTE_SRC,
+      /mapNeighbourAssetsToListings\(db, neighbourAssets\)/,
+      'neighbour assets must map to listings through the rank-preserving join',
+    );
+    assert.match(EMB_SRC, /WITH ORDINALITY/);
+    assert.match(EMB_SRC, /ORDER BY best_distance ASC/);
+    assert.match(ROUTE_SRC, /array_position\(\$2::text\[\], l\.id\)/);
+  });
+
+  it('ANN capability is probed from the index, not the column (N5)', () => {
+    // Column presence alone must never claim ANN — migration 326 treats
+    // index failure as a notice, so the probe checks pg_indexes.
+    assert.match(EMB_SRC, /pg_indexes/);
+    assert.match(EMB_SRC, /has_ann_index/);
+    assert.match(EMB_SRC, /'pgvector_exact'/);
   });
 
   it('records per-candidate lineage on served impressions', () => {

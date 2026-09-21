@@ -128,7 +128,9 @@ export const REACH_LIMITED_MULTIPLIER = 0.3;
  * concurrent enforcement/reversal on the same user).
  */
 export async function getSellerReach(
-  db: Pool | PoolClient,
+  // Structural minimum — any queryable (Pool, PoolClient, or the narrower
+  // DbQueryable the settlement helpers are typed against) satisfies this.
+  db: Pick<PoolClient, 'query'>,
   userId: string,
   options?: { forUpdate?: boolean },
 ): Promise<SellerReachSnapshot | null> {

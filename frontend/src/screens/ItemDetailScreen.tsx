@@ -687,6 +687,7 @@ export default function ItemDetailScreen() {
         isFav={isFav}
         isSeller={(item.sellerId ?? item.seller?.id) === currentUser?.id}
         currentUserName={currentUser?.username ?? 'You'}
+        isSellerBlocked={isSellerBlocked}
         formatFromFiat={formatFromFiat}
         mediaItems={mediaItems}
         media={media}

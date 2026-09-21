@@ -95,6 +95,10 @@ export function useDiscoverySearch(initialQuery?: string) {
   const [searchResults, setSearchResults] = useState<DiscoveryFeedUnit[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  // Append-page failure is a distinct state from initial-load failure: a
+  // failed page-2 on a populated list must surface a failed-page retry in
+  // the footer, not replace the results with an error screen (FRESH-03).
+  const [searchPageError, setSearchPageError] = useState<string | null>(null);
   // Typo-tolerance transparency: true only when the backend reported a
   // retrieval fallback (no exact matches → similar items). Never inferred.
   const [searchUsedFallback, setSearchUsedFallback] = useState(false);
@@ -106,14 +110,28 @@ export function useDiscoverySearch(initialQuery?: string) {
   const [peopleError, setPeopleError] = useState<string | null>(null);
   const [searchScope, setSearchScope] = useState<DiscoverySearchScope>('items');
 
+  // ── Request identity (FRESH-02) ──
+  // Monotonic epoch incremented on every new query/filter/scope/retry run.
+  // Both the debounced initial fetch AND the paginated loadMore capture the
+  // epoch that issued them; any async write is discarded once the epoch has
+  // moved on, so a slow page-2 response from query A can never append into
+  // query B's results or clobber its paging state.
+  const searchEpochRef = useRef(0);
+
   // ── Search debounce ──
   useEffect(() => {
+    // Every effect run is a new request identity — pending initial fetches
+    // and in-flight page fetches from the previous identity are dead.
+    const epoch = ++searchEpochRef.current;
+
     if (!normalizedQuery || normalizedQuery.length < 2) {
       setSearchResults([]);
       setSearchError(null);
+      setSearchPageError(null);
       setSearchUsedFallback(false);
       setSearchPage(1);
       setSearchHasMore(false);
+      setIsSearchingMore(false);
       setPeopleResults([]);
       setPeopleError(null);
       setIsSearching(false);
@@ -127,16 +145,20 @@ export function useDiscoverySearch(initialQuery?: string) {
     // toggling back to Items is instant.
     if (searchScope !== 'items') {
       setIsSearching(false);
+      setIsSearchingMore(false);
+      setSearchPageError(null);
       return;
     }
 
     let cancelled = false;
     setIsSearching(true);
+    setIsSearchingMore(false);
+    setSearchPageError(null);
 
     const timer = setTimeout(() => {
       searchListingsFromApi(normalizedQuery, searchFilters)
         .then((result) => {
-          if (cancelled) return;
+          if (cancelled || epoch !== searchEpochRef.current) return;
           if (result.error) {
             setSearchResults([]);
             setSearchHasMore(false);
@@ -193,18 +215,22 @@ export function useDiscoverySearch(initialQuery?: string) {
             );
           }
         })
-        .finally(() => { if (!cancelled) setIsSearching(false); });
+        .finally(() => {
+          if (!cancelled && epoch === searchEpochRef.current) setIsSearching(false);
+        });
     }, SEARCH_DEBOUNCE_MS);
 
     return () => { cancelled = true; clearTimeout(timer); };
-    // `searchFilters` is memoized — a filter edit re-issues the request and
-    // the `cancelled` flag protects against stale responses overwriting
-    // newer results.
+    // `searchFilters` is memoized — a filter edit re-issues the request.
+    // `cancelled` guards this effect's own writes; the epoch additionally
+    // invalidates any page fetch still in flight from the previous identity.
   }, [normalizedQuery, searchScope, searchRetryCount, searchFilters]);
 
   // ── Search pagination — page-based (the contract supports `page`, not a
   //  cursor). Appends deduped units; an error mid-pagination keeps the
-  //  loaded pages and surfaces the error for retry. ──
+  //  loaded pages and surfaces a failed-page retry, not a full-screen error
+  //  (FRESH-03). The epoch captured here ties every write to the query
+  //  identity that issued the page request (FRESH-02). ──
   const loadMoreSearch = useCallback(() => {
     if (
       normalizedQuery.length < 2 ||
@@ -216,11 +242,16 @@ export function useDiscoverySearch(initialQuery?: string) {
       return;
     }
     const nextPage = searchPage + 1;
+    const epoch = searchEpochRef.current;
     setIsSearchingMore(true);
+    setSearchPageError(null);
     searchListingsFromApi(normalizedQuery, { ...searchFilters, page: nextPage })
       .then((result) => {
+        // A page response that resolves after the query/filter/scope moved
+        // on belongs to a dead identity — drop it entirely.
+        if (epoch !== searchEpochRef.current) return;
         if (result.error) {
-          setSearchError('Couldn’t load more results. Try again.');
+          setSearchPageError('Couldn’t load more results.');
           return;
         }
         setSearchPage(nextPage);
@@ -260,9 +291,12 @@ export function useDiscoverySearch(initialQuery?: string) {
         });
       })
       .catch(() => {
-        setSearchError('Couldn’t load more results. Try again.');
+        if (epoch !== searchEpochRef.current) return;
+        setSearchPageError('Couldn’t load more results.');
       })
-      .finally(() => setIsSearchingMore(false));
+      .finally(() => {
+        if (epoch === searchEpochRef.current) setIsSearchingMore(false);
+      });
   }, [
     normalizedQuery,
     searchScope,
@@ -311,8 +345,16 @@ export function useDiscoverySearch(initialQuery?: string) {
 
   const retrySearch = useCallback(() => {
     setSearchError(null);
+    setSearchPageError(null);
     setSearchRetryCount((c) => c + 1);
   }, []);
+
+  // Re-issues the exact failed page: `searchPage` only advances on a
+  // successful append, so retrying requests the same `page` that failed.
+  const retrySearchPage = useCallback(() => {
+    setSearchPageError(null);
+    loadMoreSearch();
+  }, [loadMoreSearch]);
 
   const retryPeopleSearch = useCallback(() => {
     setPeopleError(null);
@@ -333,6 +375,8 @@ export function useDiscoverySearch(initialQuery?: string) {
     isSearching,
     searchError,
     retrySearch,
+    searchPageError,
+    retrySearchPage,
     searchUsedFallback,
     searchHasMore,
     isSearchingMore,

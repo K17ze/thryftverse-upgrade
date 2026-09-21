@@ -989,31 +989,54 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
   if (event.eventType === 'coown_price_alert_triggered') {
     const payload = z.object({
       alertId: z.string().min(2),
+      // SEP20-FIN-12: which activation fired — scopes notification dedup.
+      activationSeq: z.number().int().positive().optional(),
       userId: z.string().min(2),
       assetId: z.string().min(2),
       condition: z.enum(['above', 'below']),
       triggerPriceGbpMinor: z.number().nonnegative(),
       currentPriceGbpMinor: z.number().nonnegative(),
-      tradeId: z.string().optional(),
+      // SEP20-FIN-11: appraisal/reference-mark alerts legitimately carry
+      // tradeId: null — the old non-nullable schema rejected the event
+      // before delivery and the alert was already marked triggered, so
+      // retries never notified.
+      tradeId: z.string().nullable().optional(),
+      markSource: z.enum(['trade', 'reference']).optional(),
     }).parse(event.payload);
 
     const direction = payload.condition === 'above' ? 'rose above' : 'fell below';
+    // Disclose mark provenance: a settled-trade mark and an appraisal/
+    // reference mark are not the same evidence and the copy must not
+    // pretend they are.
+    const markBasis =
+      payload.markSource === 'reference'
+        ? 'reference/appraisal price'
+        : 'last settled trade';
     await queueUserNotification({
       userId: payload.userId,
       title: 'Price alert triggered',
-      body: `A co-own asset you watch ${direction} ${formatGbpAmount(payload.triggerPriceGbpMinor / 100)} — now at ${formatGbpAmount(payload.currentPriceGbpMinor / 100)}.`,
+      body: `A co-own asset you watch ${direction} ${formatGbpAmount(payload.triggerPriceGbpMinor / 100)} — now at ${formatGbpAmount(payload.currentPriceGbpMinor / 100)} (${markBasis}).`,
       eventType: 'coown_price_alert_triggered',
       payload: {
         event: 'coown_price_alert_triggered',
         alertId: payload.alertId,
+        activationSeq: payload.activationSeq ?? null,
         assetId: payload.assetId,
         condition: payload.condition,
         triggerPriceGbpMinor: payload.triggerPriceGbpMinor,
         currentPriceGbpMinor: payload.currentPriceGbpMinor,
         tradeId: payload.tradeId ?? null,
+        markSource: payload.markSource ?? null,
       },
       route: { screen: 'AssetDetail', params: { assetId: payload.assetId } },
-      idempotencyKey: `coown_price_alert_notif_${payload.alertId}`,
+      // Exactly-once per ACTIVATION: a re-armed alert (higher
+      // activationSeq) must produce a second delivered notification, while
+      // outbox replays of the same trigger still dedup. Legacy events
+      // without activationSeq keep the lifetime key so they cannot
+      // double-notify against an already-delivered row.
+      idempotencyKey: payload.activationSeq != null
+        ? `coown_price_alert_notif_${payload.alertId}_${payload.activationSeq}`
+        : `coown_price_alert_notif_${payload.alertId}`,
       metadata: { outboxEventId: event.id },
     });
     return;
@@ -1033,19 +1056,27 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
       notionalGbp: z.number().nonnegative().optional(),
       amountGbpMinor: z.number().nonnegative().optional(),
       cause: z.string().optional(),
+      // SEP20-FIN-14: ledger evidence the worker observed when it decided
+      // not to reinvest — lets the copy state the true state.
+      spendableUnits: z.number().int().nonnegative().optional(),
+      requiredUnits: z.number().int().nonnegative().optional(),
     }).parse(event.payload);
 
     const title =
       payload.outcome === 'reinvested'
         ? 'Distribution reinvested'
         : payload.outcome === 'retained_cash'
-          ? 'Distribution paid as cash'
+          ? 'Distribution not reinvested'
           : 'Reinvestment could not complete';
+    // SEP20-FIN-14: 'retained_cash' means the reinvestment was skipped —
+    // the worker verified the spendable balance was short and bought no
+    // units. It did NOT verify a cash credit landed anywhere, so the copy
+    // must not claim "paid as cash" or "stays in your balance as cash".
     const body =
       payload.outcome === 'reinvested'
         ? `Your distribution bought ${payload.units ?? 0} unit${payload.units === 1 ? '' : 's'}${payload.unitPriceGbp ? ` at ${formatGbpAmount(payload.unitPriceGbp)}` : ''}.`
         : payload.outcome === 'retained_cash'
-          ? 'Automatic reinvestment was not possible, so your distribution stays in your balance as cash.'
+          ? 'Automatic reinvestment was skipped because your available 1ZE balance was too low at the time it ran. No units were purchased — any cash already in your balance is unchanged.'
           : 'Automatic reinvestment failed. Your distribution was not reinvested — you can reinvest manually.';
 
     await queueUserNotification({
@@ -1060,6 +1091,8 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
         outcome: payload.outcome,
         tradeId: payload.tradeId ?? null,
         cause: payload.cause ?? null,
+        spendableUnits: payload.spendableUnits ?? null,
+        requiredUnits: payload.requiredUnits ?? null,
       },
       route: { screen: 'AssetDetail', params: { assetId: payload.assetId } },
       idempotencyKey: `coown_drip_receipt_${payload.distributionId}`,

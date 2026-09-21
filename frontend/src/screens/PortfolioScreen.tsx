@@ -30,6 +30,7 @@ import { PortfolioTabBar } from '../components/portfolio/PortfolioTabBar';
 import { PortfolioInsightsTab } from '../components/portfolio/PortfolioInsightsTab';
 import { PortfolioPositionsHeader } from '../components/portfolio/PortfolioPositionsHeader';
 import { PortfolioPositionRow } from '../components/portfolio/PortfolioPositionRow';
+import { formatPositionStatusLabel } from '../components/portfolio/portfolioViewModels';
 
 export default function PortfolioScreen() {
   useScreenCaptureProtection();
@@ -209,7 +210,9 @@ export default function PortfolioScreen() {
         unitsOwned={actionSheetAsset?.unitsOwned ?? 0}
         ownershipPct={actionSheetAsset && actionSheetAsset.totalUnits > 0 ? actionSheetAsset.ownershipPct : null}
         currentValueLabel={actionSheetAsset ? formatFromFiat(actionSheetAsset.currentValueGbp, 'GBP') : ''}
-        statusLabel={actionSheetAsset ? (actionSheetAsset.isOpen ? 'Active' : 'Closed') : ''}
+        // FRESH-05: the sheet shares the authoritative status formatter —
+        // a paused position must say Paused here, not collapse to Closed.
+        statusLabel={actionSheetAsset ? formatPositionStatusLabel(actionSheetAsset) : ''}
         actions={actionSheetActions}
       />
     </FlagshipScreen>

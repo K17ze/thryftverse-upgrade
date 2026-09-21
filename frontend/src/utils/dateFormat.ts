@@ -102,6 +102,43 @@ export function formatFullDate(value: string | Date | number, locale: string = D
 }
 
 /**
+ * "15 Sept 2026" — a CIVIL BUSINESS DATE, not an instant.
+ *
+ * Business-date contract: financial date fields such as a distribution's
+ * record date, ex-date and payable date name a calendar day ("the record
+ * date is 15 September"), not a moment in time. The backend transmits them
+ * as UTC-midnight instants ('2026-09-15T00:00:00Z') or bare dates
+ * ('2026-09-15'). Formatting them in the device timezone is a defect — in
+ * America/Chicago that instant renders as the previous day, misstating a
+ * legal/financial deadline.
+ *
+ * This formatter always renders the UTC calendar date: the leading
+ * YYYY-MM-DD date part is authoritative when present, and non-ISO input
+ * falls back to a parsed Date formatted with `timeZone: 'UTC'`. Do NOT use
+ * this for actual instants (message timestamps, "last updated") — those
+ * belong to the local-time formatters above.
+ */
+export function formatBusinessDate(value: string | Date | number, locale: string = DEFAULT_LOCALE): string {
+  let d: Date | null = null;
+  if (typeof value === 'string') {
+    const datePart = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (datePart) {
+      d = new Date(Date.UTC(Number(datePart[1]), Number(datePart[2]) - 1, Number(datePart[3])));
+    }
+  }
+  if (!d) {
+    d = toDate(value);
+  }
+  if (!d) return '';
+  return d.toLocaleDateString(locale, {
+    timeZone: 'UTC',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+/**
  * "12 August 2026" — day + long month + full year.
  * Use for section headers and prominent date labels.
  */
