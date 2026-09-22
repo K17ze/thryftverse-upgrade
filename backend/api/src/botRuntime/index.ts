@@ -527,6 +527,8 @@ export async function executeBotCommand(
       conversationRemaining: number;
       resetsAt: string;
       budgetExceeded: boolean;
+      reservedMicrousd: number;
+      spendKey: string;
     } | null = null;
     try {
       if (install.runtimeMode === 'ai') {
@@ -650,6 +652,15 @@ export async function executeBotCommand(
           errorCode: quotaBlocked
             ? (aiQuota?.budgetExceeded ? 'AI_DAILY_BUDGET_EXCEEDED' : 'AI_HOURLY_QUOTA_EXCEEDED')
             : failed ? 'AI_EXECUTION_FAILED' : null,
+          // Reconcile the admission reservation: settle to the real
+          // provider cost on success, refund on failure. A denied
+          // admission holds no reservation (reservedMicrousd = 0).
+          spendReservation: aiQuota?.allowed
+            ? {
+                reservedMicrousd: aiQuota.reservedMicrousd,
+                spendKey: aiQuota.spendKey,
+              }
+            : null,
           metadata: {
             userRemaining: aiQuota?.userRemaining ?? null,
             conversationRemaining: aiQuota?.conversationRemaining ?? null,

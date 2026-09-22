@@ -12,7 +12,7 @@
  * fabricated content.
  */
 
-import { fetchJson } from '../lib/apiClient';
+import { fetchJson, ApiRequestError } from '../lib/apiClient';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
 
 // ---------------------------------------------------------------------------
@@ -398,6 +398,21 @@ function mapApiAsset(raw: ApiCollectionDetailResponse['items'][number]): Galleri
   };
 }
 
+interface ApiEditorialSingleResponse {
+  editorial: {
+    id: string;
+    title: string;
+    excerpt: string;
+    heroImageUrl: string;
+    authorName: string;
+    authorAvatar: string;
+    publishedAt: string;
+    readTimeMinutes: number;
+    bodyContent: string[];
+    theme: string;
+  };
+}
+
 interface ApiEditorialResponse {
   items: Array<{
     id: string;
@@ -476,6 +491,30 @@ export async function fetchGalleriaEditorials(): Promise<GalleriaEditorial[]> {
       );
     }
     GALLERIA_DEMO_MODE = false;
+    throw err;
+  }
+}
+
+/**
+ * Fetch one published editorial by id — the resolution path for deep links
+ * (`galleria/editorials/:editorialId`). Returns null when the piece does not
+ * exist or is no longer published (404), so callers can render an honest
+ * "no longer available" state; rethrows real request failures so callers can
+ * render error/retry. No mock fallback: a deep link to a missing piece must
+ * never fabricate a substitute article.
+ */
+export async function fetchGalleriaEditorial(id: string): Promise<GalleriaEditorial | null> {
+  try {
+    const data = await fetchJson<ApiEditorialSingleResponse>(
+      `/galleria/editorials/${encodeURIComponent(id)}`,
+    );
+    GALLERIA_DEMO_MODE = false;
+    return mapApiEditorial(data.editorial);
+  } catch (err) {
+    if (err instanceof ApiRequestError && err.status === 404) {
+      GALLERIA_DEMO_MODE = false;
+      return null;
+    }
     throw err;
   }
 }

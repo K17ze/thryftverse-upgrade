@@ -1,5 +1,6 @@
 import unittest
 from datetime import datetime, timedelta, timezone
+from unittest import mock
 
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
@@ -26,6 +27,42 @@ class DecisionBaselineTests(unittest.TestCase):
         payload = health()
         self.assertEqual(payload["capability_level"], "heuristic_baseline")
         self.assertFalse(payload["trained_models"])
+        # The serving champion is the heuristic ranker — report it
+        # explicitly rather than implying capability from shadow state.
+        self.assertEqual(
+            payload["serving_champion_model_id"], "recommendation-heuristic"
+        )
+        self.assertFalse(payload["serving_champion_trained"])
+
+    def test_health_never_reports_a_shadow_as_the_serving_champion(self) -> None:
+        # A loaded shadow challenger only observes — capability_level must
+        # distinguish "shadow_loaded" from a trained model actually serving
+        # ("serving_champion"), and never claim the old "trained_model".
+        import app.main as main_module
+
+        with mock.patch.object(
+            type(main_module._registry),
+            "shadow_loaded",
+            new_callable=mock.PropertyMock,
+            return_value=True,
+        ), mock.patch.object(
+            type(main_module._registry),
+            "shadow_version",
+            new_callable=mock.PropertyMock,
+            return_value="v-shadow-1",
+        ):
+            payload = health()
+            status = main_module.shadow_status()
+
+        self.assertEqual(payload["capability_level"], "shadow_loaded")
+        self.assertNotEqual(payload["capability_level"], "trained_model")
+        self.assertNotEqual(payload["capability_level"], "serving_champion")
+        self.assertFalse(payload["trained_models"])
+        self.assertFalse(payload["serving_champion_trained"])
+        self.assertTrue(payload["shadow_model_loaded"])
+        self.assertEqual(payload["shadow_model_version"], "v-shadow-1")
+        self.assertEqual(status["capability_level"], "shadow_loaded")
+        self.assertFalse(status["serving_champion_trained"])
 
     def test_recommendations_are_labelled_as_heuristic(self) -> None:
         payload = recommendations(

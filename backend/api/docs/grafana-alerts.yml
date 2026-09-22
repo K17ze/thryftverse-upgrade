@@ -204,25 +204,80 @@ groups:
             limit for 5 minutes. Tune MEMORY_LIMIT_BYTES or investigate leaks.
             Note: replace the 1073741824 constant with your real container limit.
 
-      # 9. SearchIndexStale — p95 listing→index lag above 60s for 10m (R28/R91)
+      # 9. SearchIndexStale — p95 listing→index VISIBILITY lag above 60s for
+      #    10m (R28/R91, audit §4.7). Reads only outcome="completed" — the
+      #    write's Meilisearch task confirmed applied. The outcome="submitted"
+      #    series measures task enqueue-ack, NOT visibility, and must never
+      #    be presented as freshness.
       - alert: SearchIndexStale
         expr: |
           histogram_quantile(0.95,
-            sum by (le) (rate(thryftverse_search_index_lag_seconds_bucket[10m])))
+            sum by (le) (rate(thryftverse_search_index_lag_seconds_bucket{outcome="completed"}[10m])))
           > 60
         for: 10m
         labels:
           severity: warning
           team: platform
         annotations:
-          summary: "Search index lag p95 is {{ $value | humanizeDuration }}"
+          summary: "Search index visibility lag p95 is {{ $value | humanizeDuration }}"
           description: >
             The p95 lag between a listing update and its search-index write
-            exceeds 60s for 10 minutes. Catalogue search is serving stale
-            results — check the search_indexing worker queue and the
-            Meilisearch backend health before listings appear unsellable.
+            being CONFIRMED APPLIED (Meilisearch task succeeded) exceeds 60s
+            for 10 minutes. Catalogue search is serving stale results —
+            check the Meilisearch task queue and the search_indexing worker.
+            Note: an empty completed series means writes never confirm — see
+            SearchIndexWriteStalled, which covers that failure shape.
 
-      # 10. SearchSyncFailing — sync error rate above 5% for 10m
+      # 9b. SearchIndexWriteStalled — writes submitted but not completing for
+      #     15m (audit §4.7). A stalled Meilisearch task queue leaves every
+      #     write at outcome="submitted" forever; without this alert the
+      #     submission metric looks healthy while nothing becomes visible.
+      - alert: SearchIndexWriteStalled
+        expr: |
+          (
+            sum(rate(thryftverse_search_sync_total{outcome="submitted"}[15m])) > 0.001
+          )
+          and
+          (
+            sum(rate(thryftverse_search_sync_total{outcome="completed"}[15m]))
+            /
+            clamp_min(sum(rate(thryftverse_search_sync_total{outcome="submitted"}[15m])), 0.001)
+            < 0.5
+          )
+        for: 15m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Search index writes submitted but not completing"
+          description: >
+            Fewer than half of submitted search-index writes have confirmed
+            applied over the last 15 minutes while submissions continue.
+            The Meilisearch task queue is stalled or tasks are failing —
+            check /tasks on the Meilisearch backend and indexer errors.
+
+      # 9c. SearchSyncFallbackActive — writes landing in the process-local
+      #     fallback for 10m. Fallback results are per-replica and diverge
+      #     from the shared index; sustained fallback writes mean the shared
+      #     backend is down even though requests keep succeeding.
+      - alert: SearchSyncFallbackActive
+        expr: |
+          sum(rate(thryftverse_search_sync_total{outcome="fallback"}[10m])) > 0.001
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Search writes falling back to process-local index"
+          description: >
+            Search index writes have been landing in the per-replica
+            in-memory fallback for 10 minutes — the shared Meilisearch
+            backend is unreachable or erroring. Search results diverge
+            across replicas until it recovers; check adapter connectivity.
+
+      # 10. SearchSyncFailing — sync error rate above 5% for 10m. outcome
+      #     "failed" (task confirmed failed/canceled) also lands on
+      #     result="error", so this alert still covers task-level failures.
       - alert: SearchSyncFailing
         expr: |
           (
@@ -240,3 +295,22 @@ groups:
             More than 5% of search index sync operations have failed over the
             last 10 minutes. New/updated listings will not appear in search —
             check adapter connectivity and the search_indexing queue.
+
+      # 11. SearchReindexLeaseLost — a reindex heartbeat observed its lease
+      #     row owned by another holder, or a release matched nothing. Means
+      #     two runs believed they held the lease — inspect for concurrent
+      #     admin/worker reindexes and lease TTL vs. runtime.
+      - alert: SearchReindexLeaseLost
+        expr: |
+          sum(rate(thryftverse_search_reindex_lease_total{outcome=~"heartbeat_lost|release_missed"}[15m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Search reindex lease changed hands unexpectedly"
+          description: >
+            A reindex run observed its durable lease taken over (heartbeat
+            saw a different holder) or its release deleted no row. Check for
+            overlapping admin/scheduled reindexes, heartbeat DB errors, or a
+            lease TTL shorter than the run duration.

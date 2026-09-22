@@ -12,8 +12,7 @@
 import { db as sharedDb } from '../../db/pool.js';
 import type { Pool } from 'pg';
 import {
-  getPendingOutboxEntries,
-  markOutboxDelivering,
+  claimVendorOutboxBatch,
   markOutboxDelivered,
   markOutboxFailed,
   markOutboxSkipped,
@@ -25,10 +24,9 @@ import {
   type VendorClient,
 } from '../../support/vendorClient.js';
 import { logger } from '../../lib/logger.js';
+import type { VendorSyncJobData } from '../../lib/queues.js';
 
-export interface VendorSyncJobData {
-  vendorName: string;
-}
+export type { VendorSyncJobData };
 
 export interface VendorSyncHandlerDeps {
   /** Injectable for tests; defaults to env-configured resolution. */
@@ -38,16 +36,29 @@ export interface VendorSyncHandlerDeps {
 }
 
 const MAX_ATTEMPTS = 5;
+/**
+ * How long a 'delivering' row may sit before it is treated as a crashed
+ * claim and returned to 'pending'. Generous — vendor delivery has a 10s
+ * client timeout, so 10 minutes is far beyond any live delivery while
+ * still bounding crash-stranded rows.
+ */
+const STALE_DELIVERY_LEASE_MS = 10 * 60 * 1000;
 
 /**
  * Processes pending vendor outbox entries for a specific vendor.
  *
  * State transitions per entry:
  *   configured client + delivery success   → 'delivered' + vendor mapping
- *   configured client + transient failure  → 'failed' (retryable, attempts++)
+ *   configured client + transient failure  → 'failed' (retryable)
  *   configured client + permanent failure  → 'skipped' (dead-lettered)
  *   no client configured                   → stays 'pending' — an outbox
  *     entry is never marked delivered when no vendor call actually happened.
+ *
+ * Entries are leased via claimVendorOutboxBatch: concurrent drainers can't
+ * take the same row (FOR UPDATE SKIP LOCKED), `attempts` counts failed
+ * deliveries plus reclaimed stale leases, and a stale 'delivering' row past
+ * the lease returns to 'pending' so a crashed worker cannot strand an
+ * undelivered event.
  */
 export async function processVendorSyncJob(
   job: VendorSyncJobData,
@@ -70,7 +81,10 @@ export async function processVendorSyncJob(
   }
 
   const db = deps?.db ?? sharedDb;
-  const entries = await getPendingOutboxEntries(db, vendorName, 50);
+  const entries = await claimVendorOutboxBatch(db, vendorName, 50, {
+    staleLeaseMs: STALE_DELIVERY_LEASE_MS,
+    maxAttempts: MAX_ATTEMPTS,
+  });
 
   if (entries.length === 0) {
     logger.debug({ vendorName }, '[vendorSyncHandler] no pending outbox entries');
@@ -91,8 +105,6 @@ export async function processVendorSyncJob(
       await markOutboxSkipped(db, entry.id, `exceeded max attempts (${MAX_ATTEMPTS})`);
       continue;
     }
-
-    await markOutboxDelivering(db, entry.id);
 
     try {
       const result = await client.deliver(entry);

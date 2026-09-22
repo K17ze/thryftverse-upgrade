@@ -46,8 +46,10 @@ export interface UseMoodboardImportArgs {
   /** Board the imported items belong to — '' until the board exists. */
   moodboardId: string;
   /** Called after each item lands on the board — receives the placed item
-   *  so callers (board reconcile, undo history) can use it. */
-  onItemAdded?: (item: MoodboardItem | null) => void | Promise<void>;
+   *  so callers (board reconcile, undo history) can use it. The return is
+   *  ignored — `Promise<unknown>` so `board.reconcileBoard` (which reports
+   *  whether the re-fetch succeeded) can be passed directly. */
+  onItemAdded?: (item: MoodboardItem | null) => void | Promise<unknown>;
 }
 
 const MAX_CONCURRENT_IMPORTS = 2;

@@ -104,13 +104,40 @@ def require_admin(
         raise HTTPException(status_code=403, detail="Admin credential required.")
 
 
+def _serving_state(registry: ModelRegistry) -> str:
+    """Honest serving state (audit: "ML health truthful champion capability").
+
+    Three states, reporting what actually answers user traffic:
+      - "heuristic_baseline" — the deterministic heuristic champion serves
+        alone; no trained artifact is loaded.
+      - "shadow_loaded"      — a trained challenger artifact is loaded but
+        only observes/scores in parallel; the heuristic champion still
+        produces every user-facing response.
+      - "serving_champion"   — a trained model is the serving champion.
+        Unreachable while the champion is the heuristic ranker; a loaded
+        shadow must never be reported as this.
+    """
+    if registry.champion.is_trained:
+        return "serving_champion"
+    if registry.shadow_loaded:
+        return "shadow_loaded"
+    return "heuristic_baseline"
+
+
 @app.get("/health")
 def health() -> dict[str, object]:
     return {
         "ok": True,
         "service": "thryftverse-decision-baseline-service",
-        "capability_level": "trained_model" if _registry.shadow_loaded else "heuristic_baseline",
-        "trained_models": _registry.shadow_loaded,
+        # capability_level describes the SERVING state, not the presence of
+        # a loaded artifact — see _serving_state.
+        "capability_level": _serving_state(_registry),
+        "serving_champion_model_id": _registry.champion.model_id,
+        "serving_champion_version": _registry.champion.model_version,
+        "serving_champion_trained": _registry.champion.is_trained,
+        # A trained model is only "serving" when it is the champion. A
+        # loaded shadow is observation-only and does not make this True.
+        "trained_models": _registry.champion.is_trained,
         "shadow_model_loaded": _registry.shadow_loaded,
         "shadow_model_version": _registry.shadow_version,
         "recommendation_policy_version": POLICY_VERSION,
@@ -188,6 +215,9 @@ def shadow_unload(
 @app.get("/shadow/status")
 def shadow_status() -> dict[str, object]:
     return {
+        "capability_level": _serving_state(_registry),
+        "serving_champion_model_id": _registry.champion.model_id,
+        "serving_champion_trained": _registry.champion.is_trained,
         "shadow_model_loaded": _registry.shadow_loaded,
         "shadow_model_version": _registry.shadow_version,
         "champion_policy_version": POLICY_VERSION,

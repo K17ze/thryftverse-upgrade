@@ -102,6 +102,10 @@ export default function CheckoutScreen() {
   const clearSavedPaymentMethod = useStore((state) => state.clearSavedPaymentMethod);
   const upsertConversation = useStore((state) => state.upsertConversation);
 
+  // Measured footer height drives the scroll padding so large-text checkout
+  // (200% dynamic type — S21-01) never hides content behind the sticky
+  // summary/pay column. 0 = not yet measured; falls back to the legacy inset.
+  const [footerHeight, setFooterHeight] = useState(0);
   const [addCardSheetVisible, setAddCardSheetVisible] = useState(false);
   const [paymentSelectorVisible, setPaymentSelectorVisible] = useState(false);
   const [deliverySelectorVisible, setDeliverySelectorVisible] = useState(false);
@@ -739,7 +743,7 @@ export default function CheckoutScreen() {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 300 + insets.bottom }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: (footerHeight > 0 ? footerHeight + Space.md : 300) + insets.bottom }]}
         keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
@@ -979,6 +983,7 @@ export default function CheckoutScreen() {
         onWalletPay={handlePlatformPay}
         walletPayDisabled={!platformPayEligible || isInteractionLocked}
         reducedMotion={reducedMotionEnabled}
+        onHeightChange={setFooterHeight}
       />
 
       {/* Non-blocking progress overlay — keeps checkout visible (§14) */}

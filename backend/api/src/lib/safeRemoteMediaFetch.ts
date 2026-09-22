@@ -448,17 +448,40 @@ interface ResolvedAddress {
 }
 
 /**
+ * Discriminated outcome of {@link resolveValidatedAddresses}. Callers must
+ * distinguish WHY resolution failed (audit S6):
+ *
+ * - `blocked` — the host is an IP literal or resolves to an address inside a
+ *   blocklisted range. This is a POLICY violation (SSRF): permanent, never
+ *   retryable, and the only outcome that may drive a quarantine decision.
+ * - `nxdomain` — a definitive negative DNS answer (ENOTFOUND/ENODATA) or an
+ *   empty answer set: the host does not exist. Permanent, but a source-data
+ *   problem — NOT a policy violation.
+ * - `dns_transient` — the resolver itself failed (EAI_AGAIN, SERVFAIL,
+ *   timeout, refused, unreachable). Retryable; must never be classified as
+ *   an SSRF block or a permanent not-found.
+ */
+export type AddressResolution =
+  | { ok: true; addresses: ResolvedAddress[] }
+  | { ok: false; reason: 'blocked' | 'nxdomain' | 'dns_transient' };
+
+/** DNS error codes that mean "the name does not exist" — permanent. */
+const DNS_NXDOMAIN_CODES: ReadonlySet<string> = new Set([
+  'ENOTFOUND',
+  'ENODATA',
+]);
+
+/**
  * Resolve a hostname, verify that none of the resolved addresses fall in a
  * blocked range, and return the validated address set. IP-literal hosts are
  * checked directly without DNS.
  *
- * Returns the addresses to connect to, or null if the host is unsafe /
- * unresolvable. The returned set is what the connection MUST be pinned to —
- * resolving again at connect time would reopen the DNS-rebinding window
- * (F15): an attacker-controlled record could return a private address on the
- * second lookup.
+ * The returned set is what the connection MUST be pinned to — resolving
+ * again at connect time would reopen the DNS-rebinding window (F15): an
+ * attacker-controlled record could return a private address on the second
+ * lookup.
  */
-async function resolveValidatedAddresses(host: string): Promise<ResolvedAddress[] | null> {
+async function resolveValidatedAddresses(host: string): Promise<AddressResolution> {
   // IP literal (including IPv4-mapped/tunnelled IPv6 and numeric IPv4
   // forms) — canonicalize, then check directly, no DNS lookup needed. The
   // pinned connection lands on the canonical address so e.g. ::ffff:8.8.8.8
@@ -466,20 +489,31 @@ async function resolveValidatedAddresses(host: string): Promise<ResolvedAddress[
   const canonical = canonicalizeRemoteIpLiteral(host);
   if (canonical !== null) {
     return isBlockedIp(canonical)
-      ? null
-      : [{ address: canonical, family: isIP(canonical) }];
+      ? { ok: false, reason: 'blocked' }
+      : { ok: true, addresses: [{ address: canonical, family: isIP(canonical) }] };
   }
 
   // Hostname — resolve via DNS and check all addresses.
   let addresses: { address: string; family: number }[];
   try {
     addresses = await dnsLookup(host, { all: true });
-  } catch {
-    return null;
+  } catch (err) {
+    // Distinguish a definitive negative answer from a resolver outage —
+    // collapsing both into "blocked" permanently quarantined legitimate
+    // media on any transient DNS blip (audit S6).
+    const code =
+      typeof err === 'object' && err !== null && 'code' in err
+        ? String((err as { code?: unknown }).code)
+        : '';
+    return {
+      ok: false,
+      reason: DNS_NXDOMAIN_CODES.has(code) ? 'nxdomain' : 'dns_transient',
+    };
   }
 
   if (addresses.length === 0) {
-    return null;
+    // Successful but empty answer — no A/AAAA records exist for the name.
+    return { ok: false, reason: 'nxdomain' };
   }
 
   const validated: ResolvedAddress[] = [];
@@ -488,12 +522,12 @@ async function resolveValidatedAddresses(host: string): Promise<ResolvedAddress[
     // unusual representation must hit the same blocklist.
     const canonicalAddr = canonicalizeRemoteIpLiteral(addr.address) ?? addr.address;
     if (isBlockedIp(canonicalAddr)) {
-      return null;
+      return { ok: false, reason: 'blocked' };
     }
     validated.push({ address: canonicalAddr, family: isIP(canonicalAddr) || addr.family });
   }
 
-  return validated;
+  return { ok: true, addresses: validated };
 }
 
 /**
@@ -520,8 +554,10 @@ function pinnedAgent(addresses: ResolvedAddress[]): Agent {
 
 /**
  * Machine-readable failure codes for {@link fetchPinnedRemoteMedia}.
- * `ssrf_*` codes are policy violations (never retryable); the rest are
- * transport failures that may be retried by the caller.
+ * `ssrf_*` codes are policy violations (never retryable). `dns_unresolved`
+ * is a permanent negative DNS answer (the host does not exist — a dead
+ * source, not a policy violation). `dns_transient` and the remaining codes
+ * are transport failures that may be retried by the caller.
  */
 export type PinnedFetchFailureCode =
   | 'invalid_url'
@@ -530,6 +566,7 @@ export type PinnedFetchFailureCode =
   | 'url_credentials'
   | 'ssrf_blocked'
   | 'dns_unresolved'
+  | 'dns_transient'
   | 'timeout'
   | 'too_many_redirects'
   | 'redirect_without_location'
@@ -658,20 +695,29 @@ export async function fetchPinnedRemoteMedia(
     // --- DNS / IP validation → validated address set ---
     // The lookup itself draws from the shared deadline: a resolver that
     // stalls past the budget yields a timeout rather than hanging.
-    const addresses = await Promise.race([
+    const resolution = await Promise.race([
       resolveValidatedAddresses(host),
       new Promise<'__timeout'>((resolve) => {
         setTimeout(() => resolve('__timeout'), remainingMs).unref();
       }),
     ]);
-    if (addresses === '__timeout') {
+    if (resolution === '__timeout') {
       return fail('timeout', `DNS resolution exceeded deadline for ${host}`);
     }
-    if (!addresses) {
-      // resolveValidatedAddresses returns null for blocked AND unresolvable
-      // hosts; distinguish for callers by re-checking the literal case.
-      return fail('ssrf_blocked', `${host} resolves to a blocked address or is unresolvable`);
+    if (!resolution.ok) {
+      // Failure reason is discriminated (audit S6): only a genuine policy
+      // violation may surface as ssrf_blocked — a resolver blip or a dead
+      // hostname must never enter the SSRF quarantine path.
+      switch (resolution.reason) {
+        case 'blocked':
+          return fail('ssrf_blocked', `${host} resolves to a blocked address`);
+        case 'nxdomain':
+          return fail('dns_unresolved', `host ${host} does not resolve (NXDOMAIN/ENODATA)`);
+        default:
+          return fail('dns_transient', `transient DNS failure resolving ${host} (retryable)`);
+      }
     }
+    const addresses = resolution.addresses;
 
     remainingMs = deadlineAt - Date.now();
     if (remainingMs <= 0) {

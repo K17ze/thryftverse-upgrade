@@ -19,7 +19,7 @@ import {
   type DbQueryable,
 } from './workerHelpers.js';
 import {
-  assertCoOwnResalePermitted,
+  assertCoOwnLockupPermitted,
   creditCoOwnOnezeUnits,
   debitCoOwnOnezeUnits,
 } from './coOwnSettlement.js';
@@ -182,11 +182,18 @@ export async function applyCoOwnTransfer(
     };
   }
 
-  // FIN-07 backstop: the settlement primitive itself refuses to move units
-  // while the asset lockup is in force, so a resting order placed before a
-  // lockup (or any future caller bypassing the route-level capability check)
-  // cannot settle a transfer.
-  await assertCoOwnResalePermitted(client, input.assetId);
+  // FIN-07 / SEP21-FIN-E backstop: the settlement primitive itself refuses
+  // to settle a SECONDARY resale while the asset lockup is in force, so a
+  // resting order placed before a lockup (or any future caller bypassing
+  // the route-level capability check) cannot settle a transfer. Primary
+  // issuance fills (enforceSellerHolding:false — the counterparty is the
+  // issuer's available_units pool, not a locked holder) are permitted
+  // during lockup per the resolved lockup contract.
+  await assertCoOwnLockupPermitted(
+    client,
+    input.assetId,
+    input.enforceSellerHolding ? 'secondary' : 'primary'
+  );
 
   const notionalGbp = roundTo(units * input.unitPriceGbp, 4);
 

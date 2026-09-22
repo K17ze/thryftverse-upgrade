@@ -127,7 +127,11 @@ When a shadow model is loaded:
 - the user-facing response is always the heuristic champion's ranking
 - shadow scores appear in `diagnostics.shadow_scoring` for offline comparison
 - the health endpoint reports `shadow_model_loaded` and `shadow_model_version`
-- `capability_level` becomes `trained_model` when a shadow is active
+- `capability_level` becomes `shadow_loaded` — a loaded challenger only
+  observes; it is NOT the serving champion, so it is never reported as
+  `serving_champion`/`trained_model` while the heuristic ranker answers
+  traffic. `trained_models` stays `false` until a trained model IS the
+  serving champion.
 
 The shadow model never affects the user-facing response. If it fails to load
 or errors during scoring, the error is logged and the champion continues

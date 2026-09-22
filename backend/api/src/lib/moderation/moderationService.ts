@@ -19,6 +19,102 @@ import {
 } from './index.js';
 import type { MediaAssetStatus } from '../mediaLifecycle.js';
 
+// ---------------------------------------------------------------------------
+// Boot-time provider validation (audit S3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Validate the configured moderation provider deployment. Selecting a real
+ * provider without its credentials previously produced a stack that booted
+ * cleanly and then failed every moderation call — the fail-closed pipeline
+ * held every listing write on `risk_pending` forever (audit S3).
+ *
+ * Rules:
+ * - `sightengine` requires `SIGHTENGINE_API_USER` + `SIGHTENGINE_API_KEY`.
+ * - `rekognition` requires `AWS_REGION` + `AWS_ACCESS_KEY_ID` +
+ *   `AWS_SECRET_ACCESS_KEY` — AND cannot serve as the sole provider:
+ *   Rekognition moderates images only, so listing/profile text moderation
+ *   would fail closed on every write. No `MODERATION_TEXT_PROVIDER`-style
+ *   split config exists in this codebase (verified), so a sole-provider
+ *   rekognition selection is rejected outright.
+ * - `mock`/unset/unknown values produce no errors here — production gating
+ *   of those lives in `createModerationProvider` and
+ *   `assertProductionReadiness`.
+ */
+export function collectModerationProviderConfigErrors(
+  environment: NodeJS.ProcessEnv,
+): string[] {
+  const provider = (environment.MODERATION_PROVIDER ?? '').trim().toLowerCase();
+  const errors: string[] = [];
+
+  if (provider === 'sightengine') {
+    for (const key of ['SIGHTENGINE_API_USER', 'SIGHTENGINE_API_KEY'] as const) {
+      if (!(environment[key] ?? '').trim()) {
+        errors.push(
+          `${key} is required when MODERATION_PROVIDER=sightengine`,
+        );
+      }
+    }
+  } else if (provider === 'rekognition') {
+    for (const key of [
+      'AWS_REGION',
+      'AWS_ACCESS_KEY_ID',
+      'AWS_SECRET_ACCESS_KEY',
+    ] as const) {
+      if (!(environment[key] ?? '').trim()) {
+        errors.push(
+          `${key} is required when MODERATION_PROVIDER=rekognition`,
+        );
+      }
+    }
+    errors.push(
+      'MODERATION_PROVIDER=rekognition cannot be the sole moderation provider: ' +
+        'AWS Rekognition moderates images only and has no text moderation, so ' +
+        'every listing/profile text write would fail closed forever. ' +
+        'Set MODERATION_PROVIDER=sightengine (or add a text-capable provider) ' +
+        'for text moderation.',
+    );
+  } else if (provider !== '' && provider !== 'mock') {
+    // An unrecognised provider silently resolves to the mock factory in
+    // createModerationProvider — a typo would disable moderation entirely.
+    // Surface it at boot in every environment, not just production.
+    errors.push(
+      `MODERATION_PROVIDER='${provider}' is not a supported provider ` +
+        `(expected 'sightengine', 'rekognition', or 'mock' outside production)`,
+    );
+  }
+
+  return errors;
+}
+
+/**
+ * Throw when the configured moderation provider is undeployable. Wired at
+ * module load below so the failure surfaces at service boot — never at
+ * first request.
+ *
+ * @throws {Error} When a real provider is selected without its credentials,
+ *   or the sole provider cannot moderate text.
+ */
+export function assertModerationProviderReady(
+  environment: NodeJS.ProcessEnv = process.env,
+): void {
+  const errors = collectModerationProviderConfigErrors(environment);
+  if (errors.length === 0) {
+    return;
+  }
+  throw new Error(
+    [
+      'Moderation provider configuration is undeployable; refusing to start:',
+      ...errors.map((error) => `- ${error}`),
+    ].join('\n'),
+  );
+}
+
+// Module-load gate: index.ts imports this module during API startup, so an
+// explicitly-selected-but-unconfigured provider kills the process before it
+// serves traffic rather than silently failing closed on every write.
+assertModerationProviderReady();
+
 /**
  * The lifecycle status that a moderation outcome maps to.
  * `review` keeps the asset in `moderation_pending` (no transition).

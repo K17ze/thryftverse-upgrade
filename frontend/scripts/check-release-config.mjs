@@ -12,8 +12,11 @@
  *   node scripts/check-release-config.mjs all      — both (default)
  *
  * Checks:
- *   OTA    — EXPO_PUBLIC_OTA_CODE_SIGNING_KEY env/secret present AND
- *            keys/update-certificate.pem committed.
+ *   OTA    — the OTA code-signing private key is present AND matches the
+ *            committed keys/update-certificate.pem. The preferred secret is
+ *            EXPO_OTA_CODE_SIGNING_PRIVATE_KEY; CI release workflows also
+ *            bridge it into the legacy EXPO_PUBLIC_OTA_CODE_SIGNING_KEY name
+ *            for this checker, so either env var satisfies presence.
  *   SUBMIT — eas.json submit.production fields contain real values, not
  *            literal EAS_* / EXPO_* placeholder names (eas.json does NOT
  *            interpolate environment variables), and any configured file
@@ -22,19 +25,34 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { X509Certificate, createPrivateKey, createPublicKey } from 'node:crypto';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const mode = process.argv[2] ?? 'all';
 const errors = [];
 
+function normalizePem(value) {
+  // EAS/GitHub secrets preserve real newlines; tolerate the common
+  // literal-\n encoding as a fallback so a double-encoded secret is checked
+  // for what it actually is rather than passing on presence alone.
+  return value.includes('-----BEGIN') ? value : value.replace(/\\n/g, '\n');
+}
+
 function checkOta() {
-  const key = process.env.EXPO_PUBLIC_OTA_CODE_SIGNING_KEY;
+  // Preferred: EXPO_OTA_CODE_SIGNING_PRIVATE_KEY. The legacy
+  // EXPO_PUBLIC_OTA_CODE_SIGNING_KEY is still accepted because the release
+  // workflows bridge the private key into it for this step — and for local
+  // runs that only have the legacy secret configured.
+  const key =
+    process.env.EXPO_OTA_CODE_SIGNING_PRIVATE_KEY?.trim() ||
+    process.env.EXPO_PUBLIC_OTA_CODE_SIGNING_KEY?.trim();
   const certPath = join(ROOT, 'keys', 'update-certificate.pem');
-  if (!key || !key.trim()) {
+
+  if (!key) {
     errors.push(
-      'OTA signing: EXPO_PUBLIC_OTA_CODE_SIGNING_KEY is not set. ' +
-        'Create it as an EAS secret: eas secret:create --scope project --name EXPO_PUBLIC_OTA_CODE_SIGNING_KEY --value <private-key>. ' +
-        'Without it, OTA updates ship unsigned.',
+      'OTA signing: no private key configured. Set the EXPO_OTA_CODE_SIGNING_PRIVATE_KEY ' +
+        'EAS/GitHub secret (eas secret:create --scope project --name EXPO_OTA_CODE_SIGNING_PRIVATE_KEY ' +
+        '--value <private-key>). Without it, OTA updates ship unsigned.',
     );
   }
   if (!existsSync(certPath)) {
@@ -43,6 +61,34 @@ function checkOta() {
         'Generate the keypair once: eas update:configure-code-signing --key-output-directory keys ' +
         '(commit update-certificate.pem; never commit private-key.pem).',
     );
+  }
+
+  // Presence alone is not proof: verify the private key actually parses and
+  // its public key matches the committed certificate — a stale or mismatched
+  // pair fails closed here rather than mid-release.
+  if (key && existsSync(certPath)) {
+    try {
+      const privateKey = createPrivateKey(normalizePem(key));
+      const certificate = new X509Certificate(readFileSync(certPath));
+      const fromKey = createPublicKey(privateKey)
+        .export({ format: 'pem', type: 'spki' })
+        .toString();
+      const fromCert = certificate.publicKey
+        .export({ format: 'pem', type: 'spki' })
+        .toString();
+      if (fromKey !== fromCert) {
+        errors.push(
+          'OTA signing: the configured private key does NOT match keys/update-certificate.pem. ' +
+            'Regenerate the pair (eas update:configure-code-signing --key-output-directory keys) ' +
+            'and update the EXPO_OTA_CODE_SIGNING_PRIVATE_KEY secret together.',
+        );
+      }
+    } catch (err) {
+      errors.push(
+        `OTA signing: could not validate the private key against the certificate — ${err.message}. ` +
+          'The secret must contain the PEM private key text itself.',
+      );
+    }
   }
 }
 

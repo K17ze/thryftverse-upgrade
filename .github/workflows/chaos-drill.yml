@@ -79,13 +79,18 @@ jobs:
       - name: Run scenario assertions
         if: github.event_name == 'workflow_dispatch'
         working-directory: backend/api
+        env:
+          SCENARIO: ${{ inputs.scenario }}
+          ALLOW_SKIPS: ${{ inputs.allow_skips }}
         run: |
-          if [ "${{ inputs.scenario }}" = "probe" ]; then
+          skip_flag=""
+          if [ "$ALLOW_SKIPS" = "true" ]; then skip_flag="--allow-skips"; fi
+          if [ "$SCENARIO" = "probe" ]; then
             node scripts/chaos-smoke.mjs --probe --json > chaos-report.json
-          elif [ "${{ inputs.scenario }}" = "all" ]; then
-            node scripts/chaos-smoke.mjs --all ${{ inputs.allow_skips && '--allow-skips' || '' }} --json > chaos-report.json
+          elif [ "$SCENARIO" = "all" ]; then
+            node scripts/chaos-smoke.mjs --all $skip_flag --json > chaos-report.json
           else
-            node scripts/chaos-smoke.mjs --scenario "${{ inputs.scenario }}" ${{ inputs.allow_skips && '--allow-skips' || '' }} --json > chaos-report.json
+            node scripts/chaos-smoke.mjs --scenario "$SCENARIO" $skip_flag --json > chaos-report.json
           fi
           cat chaos-report.json
 

@@ -44,6 +44,13 @@
  * it as `costMinor`/`costCurrency: 'GBP'` and leaves `costUsd` null instead of
  * inventing an exchange rate.
  *
+ * Field contract (audit: "costMinor scale"): `costMinor` is reserved for true
+ * ISO-4217 minor units (cents/pence) of `costCurrency`. Micro-USD ledgers are
+ * reported under `costMicrosUsd` — micros are NOT minor units (1 USD minor =
+ * 10,000 micros), so emitting raw micros as `costMinor` mislabels the scale by
+ * four orders of magnitude. USD domains therefore emit `costUsd` +
+ * `costMicrosUsd` and leave `costMinor` null.
+ *
  * Every query is a time-windowed aggregate (created_at >= window start), so
  * the read is bounded regardless of ledger size.
  */
@@ -99,7 +106,19 @@ export interface DomainCostTelemetry {
   unitKind: CostTelemetryUnitKind;
   /** USD spend in the window; null when the ledger records no USD cost. */
   costUsd: number | null;
-  /** Native minor-unit spend when the ledger is not USD (e.g. GBP pence). */
+  /**
+   * Raw micro-USD spend exactly as the ledger recorded it (1 USD =
+   * 1,000,000 micros). Populated only for USD micros ledgers; null
+   * elsewhere. This is the precision-preserving counterpart of `costUsd` —
+   * it is NOT a minor unit.
+   */
+  costMicrosUsd: number | null;
+  /**
+   * Native minor-unit spend (cents/pence) when the ledger is not USD —
+   * e.g. GBP pence for promotion_charges. Null for USD domains: their
+   * minor-unit equivalent would just be costUsd × 100, and the recorded
+   * precision is already available via costMicrosUsd.
+   */
   costMinor: number | null;
   /** ISO 4217 currency for costMinor; null when the domain has no spend. */
   costCurrency: 'USD' | 'GBP' | null;
@@ -118,6 +137,7 @@ interface DomainAggregate {
   calls: number;
   units: number;
   costUsd: number | null;
+  costMicrosUsd: number | null;
   costMinor: number | null;
   costCurrency: 'USD' | 'GBP' | null;
 }
@@ -172,7 +192,8 @@ function tokenCostSpec(
         calls: toCount(row?.calls),
         units: toCount(row?.units),
         costUsd: microsToUsd(toCount(row?.cost_microusd)),
-        costMinor: toCount(row?.cost_microusd),
+        costMicrosUsd: toCount(row?.cost_microusd),
+        costMinor: null,
         costCurrency: 'USD',
       };
     },
@@ -198,7 +219,14 @@ function eventCountSpec(
         [since],
       );
       const calls = toCount(result.rows[0]?.calls);
-      return { calls, units: calls, costUsd: null, costMinor: null, costCurrency: null };
+      return {
+        calls,
+        units: calls,
+        costUsd: null,
+        costMicrosUsd: null,
+        costMinor: null,
+        costCurrency: null,
+      };
     },
   };
 }
@@ -250,6 +278,7 @@ const DOMAIN_SPECS: readonly DomainSpec[] = [
         calls: toCount(charges.rows[0]?.calls),
         units: toCount(events.rows[0]?.units),
         costUsd: null,
+        costMicrosUsd: null,
         costMinor: toCount(charges.rows[0]?.spend_minor),
         costCurrency: 'GBP',
       };
@@ -273,6 +302,7 @@ const DOMAIN_SPECS: readonly DomainSpec[] = [
         calls: toCount(result.rows[0]?.calls),
         units: toCount(result.rows[0]?.units),
         costUsd: null,
+        costMicrosUsd: null,
         costMinor: null,
         costCurrency: null,
       };
@@ -300,6 +330,7 @@ const DOMAIN_SPECS: readonly DomainSpec[] = [
         calls: toCount(result.rows[0]?.calls),
         units: toCount(result.rows[0]?.units),
         costUsd: null,
+        costMicrosUsd: null,
         costMinor: null,
         costCurrency: null,
       };
@@ -324,6 +355,7 @@ const DOMAIN_SPECS: readonly DomainSpec[] = [
         calls: toCount(result.rows[0]?.calls),
         units: toCount(result.rows[0]?.units),
         costUsd: null,
+        costMicrosUsd: null,
         costMinor: null,
         costCurrency: null,
       };
@@ -369,6 +401,7 @@ export async function getDomainCostTelemetry(
         units: aggregate.units,
         unitKind: spec.unitKind,
         costUsd: aggregate.costUsd,
+        costMicrosUsd: aggregate.costMicrosUsd,
         costMinor: aggregate.costMinor,
         costCurrency: aggregate.costCurrency,
         window: { start: since.toISOString(), end: now.toISOString() },

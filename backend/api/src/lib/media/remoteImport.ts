@@ -412,9 +412,20 @@ export async function validateImageBuffer(
 
 /**
  * Map a shared-transport failure code to this module's error vocabulary.
- * SSRF policy violations carry the `SSRF_BLOCKED` prefix — the catalogue
- * import handler quarantines on it without retry. Everything else is a
- * transport failure (`REMOTE_FETCH_FAILED`) and is retryable.
+ *
+ * Three classes, kept distinct on purpose (audit S6):
+ *
+ * - `SSRF_BLOCKED` — genuine policy violations ONLY (bad scheme, allowlist
+ *   miss, URL credentials, blocked/loopback/private target, redirect
+ *   abuse). The catalogue import handler quarantines on this prefix without
+ *   retry — emitting it for anything else is a misclassification.
+ * - `MEDIA_NOT_FOUND` — `dns_unresolved`: a definitive negative DNS answer
+ *   (NXDOMAIN/ENODATA/empty answer). The source URL is permanently dead,
+ *   but that is a source-data problem, not a policy violation. The worker's
+ *   bounded retry path records the distinct code and converges the row to
+ *   a terminal non-policy failure rather than an SSRF quarantine.
+ * - `REMOTE_FETCH_FAILED` — transient transport failures (`dns_transient`,
+ *   `timeout`, `http_error`, `fetch_failed`, body cap/empty) — retryable.
  */
 const SSRF_FAILURE_CODES: ReadonlySet<PinnedFetchFailureCode> = new Set([
   'invalid_url',
@@ -422,7 +433,6 @@ const SSRF_FAILURE_CODES: ReadonlySet<PinnedFetchFailureCode> = new Set([
   'host_not_allowed',
   'url_credentials',
   'ssrf_blocked',
-  'dns_unresolved',
   'too_many_redirects',
   'redirect_without_location',
 ]);
@@ -472,9 +482,12 @@ export async function fetchRemoteMedia(
   });
 
   if (!result.ok) {
-    const prefix = SSRF_FAILURE_CODES.has(result.code)
-      ? 'SSRF_BLOCKED'
-      : 'REMOTE_FETCH_FAILED';
+    const prefix =
+      result.code === 'dns_unresolved'
+        ? 'MEDIA_NOT_FOUND'
+        : SSRF_FAILURE_CODES.has(result.code)
+          ? 'SSRF_BLOCKED'
+          : 'REMOTE_FETCH_FAILED';
     throw new Error(`${prefix}: ${result.message}`);
   }
 

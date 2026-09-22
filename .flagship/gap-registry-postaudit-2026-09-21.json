@@ -9,7 +9,7 @@
         "SEP20-FIN-10"
       ],
       "severity": "P0-critical",
-      "status": "CLOSED — pending→verified-paid settle on provider-confirmed succeeded only; fail-closed Mollie webhook (tr_* + server GET /payments/{id}, retryable→503 before db.connect); 16/16 tests"
+      "status": "CLOSED \u2014 pending\u2192verified-paid settle on provider-confirmed succeeded only; fail-closed Mollie webhook (tr_* + server GET /payments/{id}, retryable\u2192503 before db.connect); 16/16 tests"
     },
     "pkg-02-wallet-money-path": {
       "findings": [
@@ -18,7 +18,7 @@
         "FIN-08"
       ],
       "severity": "P0-high",
-      "status": "CLOSED — reservation-aware spendable primitive; claim-before-mutate idempotency; privileged-context auth; 9/9 tests"
+      "status": "CLOSED \u2014 reservation-aware spendable primitive; claim-before-mutate idempotency; privileged-context auth; 9/9 tests"
     },
     "pkg-03-coown-economics": {
       "findings": [
@@ -32,7 +32,7 @@
         "SEP20-FIN-14"
       ],
       "severity": "P0-high",
-      "status": "CLOSED — coOwnSettlement segment-aware path, versioned GBP→1ZE quote, issuer-wallet fail, activation_seq dedup; 16/16 tests; migration 331"
+      "status": "CLOSED \u2014 coOwnSettlement segment-aware path, versioned GBP\u21921ZE quote, issuer-wallet fail, activation_seq dedup; 16/16 tests; migration 331"
     },
     "pkg-04-infra-release": {
       "findings": [
@@ -48,7 +48,7 @@
         "B5"
       ],
       "severity": "P1",
-      "status": "CLOSED — restore-verify guard matrix, backup sidecar, ports !reset, meilisearch/minio-init nets, chaos exit-code, readiness envs; runtime-verified matrices"
+      "status": "CLOSED \u2014 restore-verify guard matrix, backup sidecar, ports !reset, meilisearch/minio-init nets, chaos exit-code, readiness envs; runtime-verified matrices"
     },
     "pkg-05-search-vector": {
       "findings": [
@@ -62,7 +62,7 @@
         "items-all-safety"
       ],
       "severity": "P1/P2",
-      "status": "CLOSED — fallback mirroring+priming, ANN rank preserved, capability probe ann/exact, advisory lease, Meilisearch-0.60 export fix; 60/60 tests; migration 330"
+      "status": "CLOSED \u2014 fallback mirroring+priming, ANN rank preserved, capability probe ann/exact, advisory lease, Meilisearch-0.60 export fix; 60/60 tests; migration 330"
     },
     "pkg-06-moderation-import": {
       "findings": [
@@ -72,7 +72,7 @@
         "B4"
       ],
       "severity": "P1",
-      "status": "CLOSED — DNS-pinned fetch, Bytes/S3Object-only Rekognition, gate hold semantics; 25+21 tests"
+      "status": "CLOSED \u2014 DNS-pinned fetch, Bytes/S3Object-only Rekognition, gate hold semantics; 25+21 tests"
     },
     "pkg-07-frontend-discovery": {
       "findings": [
@@ -83,7 +83,7 @@
         "S20-05"
       ],
       "severity": "P0/P1-frontend",
-      "status": "CLOSED — epoch guards, searchPageError+retry, editorial→Galleria, per-module stale retry, honest feed controls; 17/17 tests"
+      "status": "CLOSED \u2014 epoch guards, searchPageError+retry, editorial\u2192Galleria, per-module stale retry, honest feed controls; 17/17 tests"
     },
     "pkg-08-visualsearch-moodboard": {
       "findings": [
@@ -94,7 +94,7 @@
         "S20-07"
       ],
       "severity": "P0/P1-frontend",
-      "status": "CLOSED — provenance honesty, board-op outcome states, a11y actions, replay fresh-URL retry; 10/10 tests"
+      "status": "CLOSED \u2014 provenance honesty, board-op outcome states, a11y actions, replay fresh-URL retry; 10/10 tests"
     },
     "pkg-09-commerce-surfaces": {
       "findings": [
@@ -107,7 +107,7 @@
         "S20-06"
       ],
       "severity": "P0/P1-frontend",
-      "status": "CLOSED — platform-pay device gate, paused status, reorder FlashList modal, hero nav, photo honesty, blocked-seller Q&A; 18/18 tests"
+      "status": "CLOSED \u2014 platform-pay device gate, paused status, reorder FlashList modal, hero nav, photo honesty, blocked-seller Q&A; 18/18 tests"
     },
     "pkg-10-contracts-settings": {
       "findings": [
@@ -119,27 +119,27 @@
         "FRESH-12"
       ],
       "severity": "P1",
-      "status": "CLOSED — 70/70 focused; civil-date fix, registry parity, settings truthfulness, font-scale tiers"
+      "status": "CLOSED \u2014 70/70 focused; civil-date fix, registry parity, settings truthfulness, font-scale tiers"
     }
   },
   "repairs": {
-    "r1": "spendable adoption on all remaining 1ZE debit paths + Q&A/bulk-edit hold gates — CLOSED",
-    "r2": "useForYouFeed + BackendDataContext blank-on-error, staging channel, README — CLOSED",
-    "r3": "review-database P0/P1 — migration 326 freeze, idempotency on all 8 money routes, lock ordering, denied-leak, P2s — CLOSED (117 tests)",
-    "r4": "review-security P1s — auction binding hard rejects, 2nd-chance repricing, ::ffff:/numeric-IP SSRF canon, rekognition preflight; also fixed process.exit test-masking — CLOSED",
-    "r5": "review-frontend P1s — useDiscoveryContent/refreshListings/VisualSearchScreen epochs + moodboard/capability/a11y P2s + MAX_FONT_SCALE — CLOSED (80 tests)",
-    "r6": "review-backend P1s — semantic/autocomplete status='active' re-checks, frontend notification contract — CLOSED (135 tests)",
-    "r7": "mint-quote P0 recompute-and-reject + HMAC, context clobber, risk_pending non-public, syncSingleListing corpus, webhook dedup order, silent catches — CLOSED (194 tests)"
+    "r1": "spendable adoption on all remaining 1ZE debit paths + Q&A/bulk-edit hold gates \u2014 CLOSED",
+    "r2": "useForYouFeed + BackendDataContext blank-on-error, staging channel, README \u2014 CLOSED",
+    "r3": "review-database P0/P1 \u2014 migration 326 freeze, idempotency on all 8 money routes, lock ordering, denied-leak, P2s \u2014 CLOSED (117 tests)",
+    "r4": "review-security P1s \u2014 auction binding hard rejects, 2nd-chance repricing, ::ffff:/numeric-IP SSRF canon, rekognition preflight; also fixed process.exit test-masking \u2014 CLOSED",
+    "r5": "review-frontend P1s \u2014 useDiscoveryContent/refreshListings/VisualSearchScreen epochs + moodboard/capability/a11y P2s + MAX_FONT_SCALE \u2014 CLOSED (80 tests)",
+    "r6": "review-backend P1s \u2014 semantic/autocomplete status='active' re-checks, frontend notification contract \u2014 CLOSED (135 tests)",
+    "r7": "mint-quote P0 recompute-and-reject + HMAC, context clobber, risk_pending non-public, syncSingleListing corpus, webhook dedup order, silent catches \u2014 CLOSED (194 tests)"
   },
   "adversarialReviews": {
     "wave1": {
-      "database": "FAIL→repaired",
-      "security": "FAIL→repaired",
-      "backend": "PASS-WITH-FINDINGS→repaired",
-      "frontend": "PASS-WITH-FINDINGS→repaired"
+      "database": "FAIL\u2192repaired",
+      "security": "FAIL\u2192repaired",
+      "backend": "PASS-WITH-FINDINGS\u2192repaired",
+      "frontend": "PASS-WITH-FINDINGS\u2192repaired"
     },
-    "wave2": "PASS-WITH-FINDINGS — all 3 P0s + 4/5 P1s verified; residual P2P user_id-order lock inversion repaired (canonical wallet-id order), 53/53 wallet tests",
-    "wave3": "PASS-WITH-FINDINGS→repaired — W3-1 /confirm metadata injection (P1) fixed via sanitizePaymentIntentClientMetadata + unshadowable audit source; W3-2 outbox stale-claim reaper + migration 335; W3-3 regression coverage added (9 tests)"
+    "wave2": "PASS-WITH-FINDINGS \u2014 all 3 P0s + 4/5 P1s verified; residual P2P user_id-order lock inversion repaired (canonical wallet-id order), 53/53 wallet tests",
+    "wave3": "PASS-WITH-FINDINGS\u2192repaired \u2014 W3-1 /confirm metadata injection (P1) fixed via sanitizePaymentIntentClientMetadata + unshadowable audit source; W3-2 outbox stale-claim reaper + migration 335; W3-3 regression coverage added (9 tests)"
   },
   "migrations": {
     "330": "bytea codec bigint (covers all envs via CREATE OR REPLACE)",
@@ -150,32 +150,32 @@
     "335": "domain_outbox stale-claim reaper partial idx"
   },
   "repairs_wave3": {
-    "ssrf-reserved-ranges": "CGNAT 100.64/10 + benchmark 198.18/15 + reserved 240/4 added to safeRemoteMediaFetch blocklist — CLOSED (38/38 tests)",
-    "ota-gate-consolidation": "build-and-deploy v* tag trigger removed (was racing release-train, unsigned); production-approval gate added; all 5 publish stages + ota-staged-rollout + staging-deploy + ota-rollback now run check:release-config + sign via --private-key-path; republish routed to gated release-train — CLOSED (YAML validated)",
-    "w3-1-confirm-metadata-injection": "POST /payments/intents/:id/confirm merged raw client payload into payment_intents.metadata, bypassing the server-owned-key sanitizer — forged auctionId/winnerBidderId/initiatedByRole griefed winner-pay + defeated payer_not_winner. Now sanitizes before merge; audit rawPayload source label unshadowable — CLOSED",
-    "w3-2-outbox-stale-claims": "claimDomainOutboxBatch flipped pending→processing with no recovery — crashed workers stranded events forever. Reaper now returns lease-expired processing rows to pending (or dead at attempt ceiling) inside the claim txn; migration 335 adds partial index — CLOSED"
+    "ssrf-reserved-ranges": "CGNAT 100.64/10 + benchmark 198.18/15 + reserved 240/4 added to safeRemoteMediaFetch blocklist \u2014 CLOSED (38/38 tests)",
+    "ota-gate-consolidation": "build-and-deploy v* tag trigger removed (was racing release-train, unsigned); production-approval gate added; all 5 publish stages + ota-staged-rollout + staging-deploy + ota-rollback now run check:release-config + sign via --private-key-path; republish routed to gated release-train \u2014 CLOSED (YAML validated)",
+    "w3-1-confirm-metadata-injection": "POST /payments/intents/:id/confirm merged raw client payload into payment_intents.metadata, bypassing the server-owned-key sanitizer \u2014 forged auctionId/winnerBidderId/initiatedByRole griefed winner-pay + defeated payer_not_winner. Now sanitizes before merge; audit rawPayload source label unshadowable \u2014 CLOSED",
+    "w3-2-outbox-stale-claims": "claimDomainOutboxBatch flipped pending\u2192processing with no recovery \u2014 crashed workers stranded events forever. Reaper now returns lease-expired processing rows to pending (or dead at attempt ceiling) inside the claim txn; migration 335 adds partial index \u2014 CLOSED"
   },
   "deferred": [
     "native/device evidence (no adb on this host)",
     "live DB/provider drills (no docker/psql)",
-    "update-certificate.pem generation (fail-closed until real cert — all publish paths now fail closed without it)",
+    "update-certificate.pem generation (fail-closed until real cert \u2014 all publish paths now fail closed without it)",
     "eas.json submit placeholders (needs real store creds)",
     "per-document reindex calls (perf)",
-    "orphaned captures → reconciliation (no auto-refund yet)",
-    "pre-existing backend failures: 3 stale tests + 1 ioredis hang — verified present at HEAD"
+    "orphaned captures \u2192 reconciliation (no auto-refund yet)",
+    "pre-existing backend failures: 3 stale tests + 1 ioredis hang \u2014 verified present at HEAD"
   ],
   "repairs_freshaudit_2026_09_19": {
-    "scope": "fresh production audit 2026-09-19 @ fdd63b8 (R01-R120 register) — residual closure after 4-agent validation sweep",
+    "scope": "fresh production audit 2026-09-19 @ fdd63b8 (R01-R120 register) \u2014 residual closure after 4-agent validation sweep",
     "closed": [
       "R09: conservation invariant now drives the real applyCoOwnTransfer (extracted to src/lib/coOwnTransfer.ts with injected ledger deps; holding helpers shared). No more SQL mirror.",
-      "Co-Own order schema: bare market removed from public preview/reserve/order schemas — limit | protected_market only; omitted orderType fails closed to protected_market requiring a protection price.",
+      "Co-Own order schema: bare market removed from public preview/reserve/order schemas \u2014 limit | protected_market only; omitted orderType fails closed to protected_market requiring a protection price.",
       "DRIP: state-dependent failures (asset_not_open, no_available_units, no_market_price, holding_cap_reached) keep status=settled and retry with reinvest_attempts ceiling -> reinvest_failed dead-letter; migration 337.",
-      "migration 336: wallet_ledger UNIQUE(wallet_id, tx_id, asset, kind) — replayed identical legs abort.",
+      "migration 336: wallet_ledger UNIQUE(wallet_id, tx_id, asset, kind) \u2014 replayed identical legs abort.",
       "serveMode: degraded adapter (shared backend down -> in-memory fallback) now reports degraded_lexical, not cold_start.",
       "R28/R91: thryftverse_search_index_lag_seconds + thryftverse_search_sync_total emitted in syncSingleListing; SearchIndexStale/SearchSyncFailing alert rules appended to grafana-alerts.yml; METRIC_DICTIONARY updated.",
       "settings.yml: required check contexts fixed to real job names (were Workflow/job-id strings that match nothing).",
       ".gitignore: frontend/keys/* stays ignored but update-certificate.pem (public cert, required by check:release-config) re-included.",
-      "R88: sloTracker wired — onResponse hook records per-service request stats; GET /metrics/slo behind docsAuthHook; added to public route table like /metrics.",
+      "R88: sloTracker wired \u2014 onResponse hook records per-service request stats; GET /metrics/slo behind docsAuthHook; added to public route table like /metrics.",
       "chaos-smoke: npm script chaos:smoke + .github/workflows/chaos-drill.yml (weekly probe, dispatch for scenario drills).",
       "MASVS: frontend/docs/MASVS.md self-assessment with code citations + known gaps.",
       "secret scan: .github/workflows/secret-scan.yml (gitleaks, full history, PR+push).",
@@ -191,7 +191,47 @@
     },
     "not_done_external": [
       "productionInvariants.test.ts requires real Postgres (skips honestly without DATABASE_URL)",
-      "real SPKI pins, OTA private key, store creds — fail-closed posture retained"
+      "real SPKI pins, OTA private key, store creds \u2014 fail-closed posture retained"
     ]
+  },
+  "adversarial_waves": {
+    "sep21_reaudit_wave2": {
+      "reviewers": [
+        "money (subagent_general)",
+        "frontend (subagent_general)",
+        "security/infra (subagent_general)"
+      ],
+      "reports": [
+        ".flagship/reports/adversarial-sep21-money.md",
+        ".flagship/reports/adversarial-sep21-frontend.md",
+        ".flagship/reports/adversarial-sep21-security.md",
+        ".flagship/reports/repair-f3f4-fetchers.md"
+      ],
+      "findings_confirmed": {
+        "MONEY-F1 HIGH": "auction winner intent resolved oneze_internal \u2192 wedged awaiting_payment; fixed by resolving payer public commerce gateway (getAllowedGatewayIds) + explicit gatewayId on the inject; regression assertion added",
+        "MONEY-F2 MED": "cancel-route ABBA (order\u2192seq vs placement asset\u2192seq\u2192order); fixed by allocating market sequence before the order lock",
+        "MONEY-F4 LOW": "reservation top-ups used GBP\u00d71000; fixed to computeCoOwnSettlementUnits with resolved rate context",
+        "SEC-F1 HIGH": "restore guard env-fallback bypass (empty host + PGHOST) \u2192 env-resolved coordinates + multi-host rejection + per-entry source matching",
+        "SEC-F2 MED": "multi-host conninfo defeated equality \u2192 rejected outright",
+        "SEC-F3 HIGH": "composition renderer unpinned user-URL fetches \u2192 all routed through fetchPinnedRemoteMedia with receipt-bound URL allowlist; coverage binds URL not just (layerId,role); gif stillUrl walked",
+        "SEC-F4 MED": "residual fetchers (importerExtractionHandler+IDOR scope, visualSimilarity, mediaEnhancementProvider, bots.ts) \u2192 pinned transport",
+        "SEC-F7 MED": "run-block ${{ }} injection \u2192 env-var indirection across build-and-deploy, ota-staged-rollout, ota-rollback, release-train, chaos-drill, eas-build",
+        "SEC-F8 MED": "backup purge proof forgeable via renamed copies \u2192 snapshot-started-at metadata cross-check (mjs pipeline now stamps it), per-version HEAD for noncurrent, ListMultipartUploads fail-closed",
+        "FE-S21-02 MED": "editorial deep-link resolved only page-1 list \u2192 new GET /galleria/editorials/:id + fetchGalleriaEditorial + screen rewired",
+        "FE-S21-01 LOW": "CheckoutBalanceSection amount truncated at 200% \u2192 numberOfLines removed + MAX_FONT_SCALE.financial",
+        "SEC-F6 LOW": "unknown MODERATION_PROVIDER silently mocked + worker lacked boot gate \u2192 unknown values now error; assertModerationProviderReady imported by workers/index.ts"
+      },
+      "documented_residuals": [
+        "MONEY-F3 LOW: halt/eligibility eval-vs-commit TOCTOU \u2014 point-in-time checks inside tx; closing fully needs serializable or re-check at commit (accepted residual)",
+        "SEC-F5/F9 LOW: Postgres lease cannot fence the external Meilisearch swap (inherent TOCTOU); swap send-time exceptions classified",
+        "metadata-stamping predates existing artifacts \u2014 legacy backups without snapshot-started-at fail closed until aged out",
+        "gif-still receipts must be emitted by the frontend publish walker (contract change)"
+      ],
+      "verification": {
+        "backend_tsc": "clean",
+        "tests": "auction 26/26, auction siblings 107/107, coOwn batch 23+15, backupProof+restoreGuard 24/24 (incl. 7 new), moderation 49/49, compositionRenderer+mediaCoverage 141/141, importer 52/52, frontend s21 17/17",
+        "yaml": "all edited workflows parse"
+      }
+    }
   }
 }

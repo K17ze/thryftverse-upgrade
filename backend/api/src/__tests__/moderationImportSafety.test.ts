@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Buffer } from 'node:buffer';
+import { Readable } from 'node:stream';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -59,13 +60,17 @@ vi.mock('../lib/s3.js', () => ({
 import { config } from '../config.js';
 import {
   RekognitionModerationProvider,
+  __setOwnStoreIoTimeoutMsForTests,
   __setRekognitionSdkForTests,
 } from '../lib/moderation/rekognitionProvider.js';
 import {
+  assertModerationProviderReady,
+  collectModerationProviderConfigErrors,
   listingTextGateAction,
   moderateListingText,
 } from '../lib/moderation/moderationService.js';
 import { fetchRemoteMedia } from '../lib/media/remoteImport.js';
+import { fetchPinnedRemoteMedia } from '../lib/safeRemoteMediaFetch.js';
 
 const PUBLIC_IP = '93.184.216.34';
 
@@ -707,5 +712,315 @@ describe('B4 — whole-request deadline and body cap', () => {
         remoteFetchOptions('https://example.com/stream.png', { maxBytes: 1000 }),
       ),
     ).rejects.toThrow(/REMOTE_FETCH_FAILED: .*exceeded max/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// S3 — moderation provider boot validation (deployment functionality)
+// ---------------------------------------------------------------------------
+
+describe('S3 — moderation provider boot validation', () => {
+  it('sightengine without credentials fails boot validation', () => {
+    const errors = collectModerationProviderConfigErrors({
+      MODERATION_PROVIDER: 'sightengine',
+    });
+    expect(errors.some((e) => e.includes('SIGHTENGINE_API_USER'))).toBe(true);
+    expect(errors.some((e) => e.includes('SIGHTENGINE_API_KEY'))).toBe(true);
+    expect(() =>
+      assertModerationProviderReady({ MODERATION_PROVIDER: 'sightengine' }),
+    ).toThrow(/SIGHTENGINE_API_USER/);
+  });
+
+  it('sightengine with both credentials passes', () => {
+    expect(
+      collectModerationProviderConfigErrors({
+        MODERATION_PROVIDER: 'sightengine',
+        SIGHTENGINE_API_USER: 'user-1',
+        SIGHTENGINE_API_KEY: 'key-1',
+      }),
+    ).toEqual([]);
+  });
+
+  it('rekognition as the sole provider fails boot — it cannot moderate text', () => {
+    const env = {
+      MODERATION_PROVIDER: 'rekognition',
+      AWS_REGION: 'eu-west-1',
+      AWS_ACCESS_KEY_ID: 'AKID',
+      AWS_SECRET_ACCESS_KEY: 'secret',
+    };
+    const errors = collectModerationProviderConfigErrors(env);
+    expect(errors.some((e) => /text/i.test(e))).toBe(true);
+    expect(() => assertModerationProviderReady(env)).toThrow(/text/i);
+  });
+
+  it('rekognition also reports missing AWS credentials', () => {
+    const errors = collectModerationProviderConfigErrors({
+      MODERATION_PROVIDER: 'rekognition',
+    });
+    for (const key of ['AWS_REGION', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']) {
+      expect(errors.some((e) => e.includes(key))).toBe(true);
+    }
+  });
+
+  it('mock and unset providers pass boot validation', () => {
+    expect(collectModerationProviderConfigErrors({})).toEqual([]);
+    expect(
+      collectModerationProviderConfigErrors({ MODERATION_PROVIDER: 'mock' }),
+    ).toEqual([]);
+    expect(() => assertModerationProviderReady({})).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// S4 — own-store S3 byte fallback is bounded and deadlined
+// ---------------------------------------------------------------------------
+
+const MIB = 1024 * 1024;
+
+/** Real stream emitting `chunkCount` fixed-size JPEG-headed buffers. */
+function oversizedJpegStream(chunkCount: number, chunkBytes: number): Readable {
+  const chunk = Buffer.alloc(chunkBytes, 0x41);
+  chunk[0] = 0xff;
+  chunk[1] = 0xd8;
+  let sent = 0;
+  return new Readable({
+    read() {
+      if (sent >= chunkCount) {
+        this.push(null);
+        return;
+      }
+      sent += 1;
+      this.push(chunk);
+    },
+  });
+}
+
+describe('S4 — own-store byte fallback bounds and deadline', () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    fetchSpy = vi.spyOn(globalThis, 'fetch');
+    s3Mock.send.mockReset();
+  });
+
+  afterEach(() => {
+    __setRekognitionSdkForTests(null);
+    __setOwnStoreIoTimeoutMsForTests(null);
+    vi.restoreAllMocks();
+    s3Mock.send.mockReset();
+  });
+
+  const ownUrl = (key: string) =>
+    `${config.s3CdnBaseUrl.replace(/\/+$/, '')}/${config.s3Bucket}/${key}`;
+
+  it('aborts an oversized chunked stream at the 5 MiB cap and destroys the body', async () => {
+    const { calls } = installRekognitionStub({
+      ModerationLabels: [],
+      ModerationModelVersion: 'stub-v1',
+    });
+    const stream = oversizedJpegStream(8, MIB); // 8 MiB delivered in 1 MiB chunks
+    s3Mock.send
+      // HeadObject: type declared but Content-Length missing → byte fallback.
+      .mockResolvedValueOnce({ ContentType: 'image/jpeg' })
+      .mockResolvedValueOnce({ Body: stream });
+
+    const provider = new RekognitionModerationProvider();
+    const result = await provider.moderateImage(ownUrl('listings/huge.jpg'));
+
+    expect(result.status).toBe('review');
+    expect(result.modelVersion).toBe('input-preflight');
+    // The stream is cut mid-read — the whole object is never buffered and
+    // the provider is never invoked.
+    expect(stream.destroyed).toBe(true);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('enforces the cap when Content-Length under-reports the streamed size', async () => {
+    const { calls } = installRekognitionStub({
+      ModerationLabels: [],
+      ModerationModelVersion: 'stub-v1',
+    });
+    const stream = oversizedJpegStream(6, MIB); // 6 MiB real bytes
+    s3Mock.send
+      .mockResolvedValueOnce({ ContentType: 'image/jpeg' })
+      .mockResolvedValueOnce({ Body: stream, ContentLength: 128 }); // lies
+
+    const provider = new RekognitionModerationProvider();
+    const result = await provider.moderateImage(ownUrl('listings/lying-length.jpg'));
+
+    expect(result.status).toBe('review');
+    expect(stream.destroyed).toBe(true);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('a stalled own-store body is abandoned at the I/O deadline', async () => {
+    const { calls } = installRekognitionStub({
+      ModerationLabels: [],
+      ModerationModelVersion: 'stub-v1',
+    });
+    __setOwnStoreIoTimeoutMsForTests(25);
+    const stream = new Readable({
+      read() {
+        // Never pushes — the stream hangs forever without the deadline.
+      },
+    });
+    s3Mock.send
+      .mockResolvedValueOnce({ ContentType: 'image/jpeg' })
+      .mockResolvedValueOnce({ Body: stream });
+
+    const provider = new RekognitionModerationProvider();
+    const result = await provider.moderateImage(ownUrl('listings/stalled.jpg'));
+
+    expect(result.status).toBe('review');
+    expect(stream.destroyed).toBe(true);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('unverifiable metadata + real stream body is read, sniffed, and sent as Bytes', async () => {
+    const { calls } = installRekognitionStub({
+      ModerationLabels: [],
+      ModerationModelVersion: 'stub-v1',
+    });
+    s3Mock.send
+      .mockRejectedValueOnce(new Error('HeadObject unavailable'))
+      .mockResolvedValueOnce({ Body: Readable.from([JPEG_BYTES]) });
+
+    const provider = new RekognitionModerationProvider();
+    const result = await provider.moderateImage(ownUrl('listings/no-meta.jpg'));
+
+    expect(result.status).toBe('approved');
+    expect(calls).toHaveLength(1);
+    const image = calls[0]!.input['Image'] as Record<string, unknown>;
+    expect(image).toHaveProperty('Bytes');
+    expect(image).not.toHaveProperty('S3Object');
+  });
+
+  it('passes an abort signal to own-store HeadObject and GetObject calls', async () => {
+    installRekognitionStub({
+      ModerationLabels: [],
+      ModerationModelVersion: 'stub-v1',
+    });
+    s3Mock.send
+      .mockResolvedValueOnce({ ContentType: 'image/jpeg' })
+      .mockResolvedValueOnce({ Body: Readable.from([JPEG_BYTES]) });
+
+    const provider = new RekognitionModerationProvider();
+    await provider.moderateImage(ownUrl('listings/signalled.jpg'));
+
+    for (const call of s3Mock.send.mock.calls) {
+      const options = call[1] as { abortSignal?: AbortSignal } | undefined;
+      expect(options?.abortSignal).toBeInstanceOf(AbortSignal);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// S6 — DNS failure classification (transient vs permanent vs policy)
+// ---------------------------------------------------------------------------
+
+describe('S6 — DNS failure classification', () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    dnsMock.lookup.mockResolvedValue([{ address: PUBLIC_IP, family: 4 }]);
+    fetchSpy = vi.spyOn(globalThis, 'fetch');
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    dnsMock.lookup.mockReset();
+  });
+
+  it('EAI_AGAIN is a transient transport failure, never SSRF_BLOCKED', async () => {
+    dnsMock.lookup.mockRejectedValue(
+      Object.assign(new Error('getaddrinfo EAI_AGAIN example.com'), {
+        code: 'EAI_AGAIN',
+      }),
+    );
+
+    const pinned = await fetchPinnedRemoteMedia({
+      url: 'https://example.com/img.png',
+    });
+    expect(pinned.ok).toBe(false);
+    if (!pinned.ok) {
+      expect(pinned.code).toBe('dns_transient');
+    }
+
+    await expect(
+      fetchRemoteMedia(remoteFetchOptions('https://example.com/img.png')),
+    ).rejects.toThrow(/REMOTE_FETCH_FAILED/);
+    await expect(
+      fetchRemoteMedia(remoteFetchOptions('https://example.com/img.png')),
+    ).rejects.toThrow(/^(?!.*SSRF_BLOCKED)/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('a transient DNS failure recovers on the retry path', async () => {
+    dnsMock.lookup
+      .mockRejectedValueOnce(
+        Object.assign(new Error('getaddrinfo EAI_AGAIN example.com'), {
+          code: 'EAI_AGAIN',
+        }),
+      )
+      .mockResolvedValue([{ address: PUBLIC_IP, family: 4 }]);
+
+    await expect(
+      fetchRemoteMedia(remoteFetchOptions('https://example.com/img.png')),
+    ).rejects.toThrow(/REMOTE_FETCH_FAILED/);
+
+    fetchSpy.mockResolvedValueOnce(
+      new Response(JPEG_BYTES, {
+        status: 200,
+        headers: { 'content-type': 'image/jpeg' },
+      }),
+    );
+    const result = await fetchRemoteMedia(
+      remoteFetchOptions('https://example.com/img.png'),
+    );
+    expect(result.buffer).toStrictEqual(JPEG_BYTES);
+  });
+
+  it('ENOTFOUND is a permanent not-found, NOT a policy block', async () => {
+    dnsMock.lookup.mockRejectedValue(
+      Object.assign(new Error('getaddrinfo ENOTFOUND missing.example.com'), {
+        code: 'ENOTFOUND',
+      }),
+    );
+
+    const pinned = await fetchPinnedRemoteMedia({
+      url: 'https://missing.example.com/img.png',
+    });
+    expect(pinned.ok).toBe(false);
+    if (!pinned.ok) {
+      expect(pinned.code).toBe('dns_unresolved');
+    }
+
+    // The import worker's quarantine prefix is SSRF_BLOCKED — a dead host
+    // must surface under a distinct classification.
+    await expect(
+      fetchRemoteMedia(remoteFetchOptions('https://missing.example.com/img.png')),
+    ).rejects.toThrow(/MEDIA_NOT_FOUND/);
+    await expect(
+      fetchRemoteMedia(remoteFetchOptions('https://missing.example.com/img.png')),
+    ).rejects.toThrow(/^(?!.*SSRF_BLOCKED)/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('a hostname resolving to a blocked IP is still ssrf_blocked', async () => {
+    dnsMock.lookup.mockResolvedValue([
+      { address: '169.254.169.254', family: 4 },
+    ]);
+
+    const pinned = await fetchPinnedRemoteMedia({
+      url: 'https://internal.example.com/img.png',
+    });
+    expect(pinned.ok).toBe(false);
+    if (!pinned.ok) {
+      expect(pinned.code).toBe('ssrf_blocked');
+    }
+    await expect(
+      fetchRemoteMedia(remoteFetchOptions('https://internal.example.com/img.png')),
+    ).rejects.toThrow(/SSRF_BLOCKED/);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

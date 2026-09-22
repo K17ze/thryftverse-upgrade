@@ -153,7 +153,22 @@ export interface UserCountryCapabilities {
   payments: {
     stableCoinEnabled: boolean;
     methodTypes: CapabilityPaymentMethodType[];
+    /**
+     * Publicly selectable payment gateways per channel. Internal settlement
+     * rails (oneze_internal) are never listed here — they are not external
+     * providers a user picks in a gateway selector; see
+     * internalRailsByChannel.
+     */
     gatewaysByChannel: Record<CapabilityPaymentChannel, CapabilityPaymentGatewayId[]>;
+    /**
+     * Internal settlement rails per channel — valid for server-side routing
+     * and explicit wallet-pay requests (checkout passes
+     * gatewayId='oneze_internal' to pay with the 1ZE balance), but never
+     * advertised as publicly selectable gateways. Recorded separately so
+     * enforcement can keep the internal rail valid without leaking it into
+     * public gateway/capability lists.
+     */
+    internalRailsByChannel: Record<CapabilityPaymentChannel, CapabilityPaymentGatewayId[]>;
   };
   payouts: {
     defaultCurrency: string;
@@ -177,6 +192,28 @@ export interface ResolveCountryCapabilitiesInput {
 
 const POLICY_VERSION = '2026-04-country-capabilities-v1';
 const warnedGatewayFallbacks = new Set<string>();
+
+/**
+ * Gateway IDs that are internal settlement rails, not public payment
+ * gateways. `oneze_internal` is the closed-loop 1ZE ledger rail: marketplace
+ * buyers DO pay through it (checkout passes gatewayId='oneze_internal'
+ * explicitly and the intent settles against the 1ZE wallet), so it must stay
+ * valid in enforcement — but it is not an external provider and must never
+ * appear in publicly advertised gateway/capability lists.
+ */
+const INTERNAL_RAIL_GATEWAYS = new Set<CapabilityPaymentGatewayId>([
+  'oneze_internal',
+]);
+
+function splitPublicAndInternalRails(gateways: CapabilityPaymentGatewayId[]): {
+  publicGateways: CapabilityPaymentGatewayId[];
+  internalRails: CapabilityPaymentGatewayId[];
+} {
+  return {
+    publicGateways: gateways.filter((g) => !INTERNAL_RAIL_GATEWAYS.has(g)),
+    internalRails: gateways.filter((g) => INTERNAL_RAIL_GATEWAYS.has(g)),
+  };
+}
 
 const EUROPE_COUNTRIES = new Set<string>([
   'AL', 'AD', 'AT', 'BA', 'BE', 'BG', 'BY', 'CH', 'CY', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FO',
@@ -715,7 +752,10 @@ export function getConfiguredClusters(): Array<{
 
   return clusters.map((cluster) => {
     const template = CAPABILITY_TEMPLATES[cluster];
-    const configuredGateways = filterToConfiguredGateways(template.gatewaysByChannel.commerce);
+    // Public gateways only — an internal rail (oneze_internal) is not a
+    // selectable payment gateway and must not report as a cluster primary.
+    const { publicGateways } = splitPublicAndInternalRails(template.gatewaysByChannel.commerce);
+    const configuredGateways = filterToConfiguredGateways(publicGateways);
 
     return {
       cluster,
@@ -749,28 +789,40 @@ export function resolveCountryCapabilities(input: ResolveCountryCapabilitiesInpu
     template.payoutSupportedCurrencies.unshift(template.payoutDefaultCurrency);
   }
 
-  const filteredGatewaysByChannel: Record<CapabilityPaymentChannel, CapabilityPaymentGatewayId[]> = {
-    commerce: filterToConfiguredGateways(template.gatewaysByChannel.commerce, {
-      cluster: countryCluster,
-      channel: 'commerce',
-    }),
-    'co-own': filterToConfiguredGateways(template.gatewaysByChannel['co-own'], {
-      cluster: countryCluster,
-      channel: 'co-own',
-    }),
-    wallet_topup: filterToConfiguredGateways(template.gatewaysByChannel.wallet_topup, {
-      cluster: countryCluster,
-      channel: 'wallet_topup',
-    }),
-    wallet_withdrawal: filterToConfiguredGateways(template.gatewaysByChannel.wallet_withdrawal, {
-      cluster: countryCluster,
-      channel: 'wallet_withdrawal',
-    }),
-    oneze_wallet: filterToConfiguredGateways(template.gatewaysByChannel.oneze_wallet ?? ['oneze_internal'], {
-      cluster: countryCluster,
-      channel: 'oneze_wallet',
-    }),
+  // Split each channel's configured gateways into the public list (what a
+  // client may display/select) and internal rails (server-side settlement —
+  // enforced below via countryCapabilityPolicy, never advertised). An
+  // internal-only channel such as oneze_wallet gets an EMPTY public list —
+  // it must not fall back to an external gateway it never declared.
+  const resolveChannelLists = (
+    channel: CapabilityPaymentChannel,
+  ): { publicList: CapabilityPaymentGatewayId[]; internalRails: CapabilityPaymentGatewayId[] } => {
+    const declared = template.gatewaysByChannel[channel] ?? [];
+    const { publicGateways, internalRails } = splitPublicAndInternalRails(declared);
+    const publicList =
+      publicGateways.length > 0
+        ? filterToConfiguredGateways(publicGateways, {
+            cluster: countryCluster,
+            channel,
+          })
+        : [];
+    return { publicList, internalRails };
   };
+
+  const channels: CapabilityPaymentChannel[] = [
+    'commerce',
+    'co-own',
+    'wallet_topup',
+    'wallet_withdrawal',
+    'oneze_wallet',
+  ];
+  const filteredGatewaysByChannel = {} as Record<CapabilityPaymentChannel, CapabilityPaymentGatewayId[]>;
+  const internalRailsByChannel = {} as Record<CapabilityPaymentChannel, CapabilityPaymentGatewayId[]>;
+  for (const channel of channels) {
+    const { publicList, internalRails } = resolveChannelLists(channel);
+    filteredGatewaysByChannel[channel] = publicList;
+    internalRailsByChannel[channel] = internalRails;
+  }
 
   const filteredPayoutGatewayPriority = template.payoutGatewayPriority.filter((gatewayId) =>
     isGatewayConfigured(gatewayId)
@@ -792,6 +844,7 @@ export function resolveCountryCapabilities(input: ResolveCountryCapabilitiesInpu
       stableCoinEnabled: template.stableCoinEnabled,
       methodTypes: template.paymentMethodTypes,
       gatewaysByChannel: filteredGatewaysByChannel,
+      internalRailsByChannel,
     },
     payouts: {
       defaultCurrency: template.payoutDefaultCurrency,

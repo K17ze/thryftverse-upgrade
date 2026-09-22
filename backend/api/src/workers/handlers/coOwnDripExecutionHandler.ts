@@ -32,13 +32,26 @@ import {
   resolveCoOwnSettlementRateContext,
 } from '../../lib/pricingEngine.js';
 import {
+  assertCoOwnLockupPermitted,
   creditCoOwnOnezeUnits,
   debitCoOwnOnezeUnits,
   getCoOwnSpendableUnits,
 } from '../../lib/coOwnSettlement.js';
+import {
+  evaluateCoOwnTradingPolicy,
+  type CoOwnTradingPolicyDeps,
+} from '../../lib/coOwnEligibility.js';
 
 export type CoOwnDripExecutionHandlerDeps = {
   /** Uses shared db singleton. */
+  /**
+   * SEP21-FIN-F: optional injection for the shared pre-settlement trading
+   * policy (halt-flag read, market eligibility, wallet capability).
+   * Production callers omit it — the policy defaults to the real compliance
+   * evaluators and the Redis-backed halt flag. Tests inject in-memory
+   * doubles so no Redis/compliance tables are needed.
+   */
+  tradingPolicy?: CoOwnTradingPolicyDeps;
 };
 
 interface DripWorkItem {
@@ -78,6 +91,7 @@ const MAX_HOLDING_UNITS = 20;
  */
 export async function processCoOwnDripReinvestment(
   reason: 'interval' | 'manual' = 'interval',
+  deps: CoOwnDripExecutionHandlerDeps = {},
 ): Promise<{
   processed: number;
   reinvested: number;
@@ -112,7 +126,7 @@ export async function processCoOwnDripReinvestment(
 
   for (const item of items) {
     try {
-      const outcome = await reinvestDistribution(item, reason);
+      const outcome = await reinvestDistribution(item, reason, deps.tradingPolicy);
       if (outcome === 'reinvested') reinvested += 1;
       else if (outcome === 'failed') failed += 1;
       else if (outcome === 'retried') retried += 1;
@@ -166,6 +180,7 @@ const MAX_REINVEST_ATTEMPTS = 288;
 async function reinvestDistribution(
   item: DripWorkItem,
   reason: 'interval' | 'manual',
+  tradingPolicy?: CoOwnTradingPolicyDeps,
 ): Promise<ReinvestOutcome> {
   const amountMinor = Number(item.amount_gbp_minor);
   if (!Number.isFinite(amountMinor) || amountMinor <= 0) return 'skipped';
@@ -214,6 +229,13 @@ async function reinvestDistribution(
       await client.query('COMMIT');
       return outcome;
     }
+
+    // SEP21-FIN-E: declare the settlement kind explicitly. A DRIP
+    // reinvestment buys from the asset's primary available_units pool —
+    // under the resolved lockup contract (secondary-market resale only) the
+    // guard permits 'drip' even while the window is in force. The call stays
+    // so the policy is applied at the worker entry point rather than assumed.
+    await assertCoOwnLockupPermitted(client, item.asset_id, 'drip');
 
     // Current market price: last settled trade, else reference price.
     const priceGbp = await resolveCurrentPriceGbp(client, item.asset_id, asset.unit_price_gbp);
@@ -278,6 +300,42 @@ async function reinvestDistribution(
 
     unitsToBuy = maxByAvailability;
     let notionalGbp = roundTo(unitsToBuy * priceGbp, 4);
+
+    // SEP21-FIN-F: the SAME pre-settlement trading policy manual order
+    // placement enforces — reconciliation halt, active corporate exit,
+    // market eligibility, wallet settlement capability — evaluated on this
+    // transaction before any wallet/share effect. Denials are
+    // state-dependent (a halt lifts, KYC completes, a suspension clears):
+    // leave the distribution 'settled', bump reinvest_attempts and let the
+    // bounded retry ceiling dead-letter a permanently blocked row. An
+    // announced/executing exit is terminal for the asset, so the
+    // distribution retains cash instead of dead-retrying a closed market.
+    const policyDenial = await evaluateCoOwnTradingPolicy(client, {
+      assetId: item.asset_id,
+      buyerUserId: item.user_id,
+      orderNotionalGbp: notionalGbp,
+      deps: tradingPolicy,
+    });
+    if (policyDenial) {
+      const cause = `policy_${policyDenial.reason}:${policyDenial.code}`;
+      if (policyDenial.reason === 'exit_action_active') {
+        await markDistributionRetainedCash(client, item, cause);
+        await client.query('COMMIT');
+        logger.warn(
+          {
+            distributionId: item.distribution_id,
+            assetId: item.asset_id,
+            userId: item.user_id,
+            policyCode: policyDenial.code,
+          },
+          'coOwnDripExecution: active exit corporate action — retaining distribution cash',
+        );
+        return 'failed';
+      }
+      const outcome = await markDistributionRetryableOrFailed(client, item, cause);
+      await client.query('COMMIT');
+      return outcome;
+    }
 
     // FIN-02: the GBP→1ZE conversion goes through the versioned settlement
     // quote (GBP → USD anchor at par → 1ZE minor units), resolved once per
@@ -595,9 +653,13 @@ async function reinvestDistribution(
     // CO_OWN_FX_RATE_UNAVAILABLE is likewise retryable: a missing FX rate
     // is an environment/config condition, not a bad distribution — leave
     // it 'settled' so the next pass retries once the rate is restored.
+    // CO_OWN_HALT_STATE_UNAVAILABLE (SEP21-FIN-F) is the same shape: a Redis
+    // blip while reading the reconciliation halt flag must not permanently
+    // fail the distribution.
     const isTransient =
       isTransientPgError(error) ||
-      (error as { code?: string } | null)?.code === 'CO_OWN_FX_RATE_UNAVAILABLE';
+      (error as { code?: string } | null)?.code === 'CO_OWN_FX_RATE_UNAVAILABLE' ||
+      (error as { code?: string } | null)?.code === 'CO_OWN_HALT_STATE_UNAVAILABLE';
     if (!isTransient) {
       try {
         await markDistributionFailedStandalone(

@@ -40,36 +40,42 @@ jobs:
       is_production: ${{ steps.set-channel.outputs.is_production }}
     steps:
       - id: set-channel
+        # Inputs and refs are bound through env — never interpolated into
+        # run: — so a crafted ref name or dispatch input cannot inject shell.
+        env:
+          ROLLBACK_UPDATE_ID: ${{ inputs.rollback_update_id }}
+          INPUT_CHANNEL: ${{ inputs.channel }}
+          GIT_REF: ${{ github.ref }}
         run: |
-          if [ -n "${{ inputs.rollback_update_id }}" ]; then
+          if [ -n "$ROLLBACK_UPDATE_ID" ]; then
             echo "is_rollback=true" >> "$GITHUB_OUTPUT"
-            echo "channel=${{ inputs.channel }}" >> "$GITHUB_OUTPUT"
+            echo "channel=$INPUT_CHANNEL" >> "$GITHUB_OUTPUT"
             echo "profile=production" >> "$GITHUB_OUTPUT"
             echo "is_production=true" >> "$GITHUB_OUTPUT"
-          elif [ "${{ inputs.channel }}" != "" ]; then
+          elif [ "$INPUT_CHANNEL" != "" ]; then
             echo "is_rollback=false" >> "$GITHUB_OUTPUT"
-            echo "channel=${{ inputs.channel }}" >> "$GITHUB_OUTPUT"
-            if [ "${{ inputs.channel }}" = "production" ]; then
+            echo "channel=$INPUT_CHANNEL" >> "$GITHUB_OUTPUT"
+            if [ "$INPUT_CHANNEL" = "production" ]; then
               echo "profile=production" >> "$GITHUB_OUTPUT"
               echo "is_production=true" >> "$GITHUB_OUTPUT"
-            elif [ "${{ inputs.channel }}" = "staging" ]; then
+            elif [ "$INPUT_CHANNEL" = "staging" ]; then
               echo "profile=preview" >> "$GITHUB_OUTPUT"
               echo "is_production=false" >> "$GITHUB_OUTPUT"
             else
               echo "profile=development" >> "$GITHUB_OUTPUT"
               echo "is_production=false" >> "$GITHUB_OUTPUT"
             fi
-          elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
+          elif [[ "$GIT_REF" == "refs/heads/develop" ]]; then
             echo "is_rollback=false" >> "$GITHUB_OUTPUT"
             echo "channel=development" >> "$GITHUB_OUTPUT"
             echo "profile=development" >> "$GITHUB_OUTPUT"
             echo "is_production=false" >> "$GITHUB_OUTPUT"
-          elif [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
+          elif [[ "$GIT_REF" == refs/heads/release/* ]]; then
             echo "is_rollback=false" >> "$GITHUB_OUTPUT"
             echo "channel=staging" >> "$GITHUB_OUTPUT"
             echo "profile=preview" >> "$GITHUB_OUTPUT"
             echo "is_production=false" >> "$GITHUB_OUTPUT"
-          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          elif [[ "$GIT_REF" == refs/tags/v* ]]; then
             echo "is_rollback=false" >> "$GITHUB_OUTPUT"
             echo "channel=production" >> "$GITHUB_OUTPUT"
             echo "profile=production" >> "$GITHUB_OUTPUT"
@@ -132,10 +138,11 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
       - name: Build iOS
         working-directory: frontend
-        run: eas build --profile ${{ needs.determine-channel.outputs.profile }} --platform ios --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EAS_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+          BUILD_PROFILE: ${{ needs.determine-channel.outputs.profile }}
+        run: eas build --profile "$BUILD_PROFILE" --platform ios --non-interactive
 
   build-android:
     name: EAS Build Android
@@ -167,10 +174,11 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
       - name: Build Android
         working-directory: frontend
-        run: eas build --profile ${{ needs.determine-channel.outputs.profile }} --platform android --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EAS_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+          BUILD_PROFILE: ${{ needs.determine-channel.outputs.profile }}
+        run: eas build --profile "$BUILD_PROFILE" --platform android --non-interactive
 
   publish-update:
     name: Publish EAS Update
@@ -232,8 +240,9 @@ jobs:
             exit 1
           fi
           key_path="$RUNNER_TEMP/ota-private-key.pem"
-          printf '%s' "$OTA_CODE_SIGNING_PRIVATE_KEY" > "$key_path"
-          chmod 600 "$key_path"
+          # Restrictive permissions from creation (umask 077) — the key never
+          # exists world/group-readable between write and chmod.
+          (umask 077; printf '%s' "$OTA_CODE_SIGNING_PRIVATE_KEY" > "$key_path")
           echo "OTA_PRIVATE_KEY_PATH=$key_path" >> "$GITHUB_ENV"
       - name: Rollback — re-publish previous update
         if: needs.determine-channel.outputs.is_rollback == 'true'
@@ -244,25 +253,34 @@ jobs:
           # carries the update GROUP id; --channel must not be combined with
           # it. The destination stays on the group's existing branch.
           eas update:republish \
-            --group ${{ inputs.rollback_update_id }} \
+            --group "$ROLLBACK_UPDATE_ID" \
             --private-key-path "$OTA_PRIVATE_KEY_PATH" \
-            --message "rollback: re-publishing update ${{ inputs.rollback_update_id }}" \
+            --message "rollback: re-publishing update $ROLLBACK_UPDATE_ID" \
             --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EAS_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+          ROLLBACK_UPDATE_ID: ${{ inputs.rollback_update_id }}
       - name: Publish new update
         if: needs.determine-channel.outputs.is_rollback != 'true'
         working-directory: frontend
         run: |
           eas update \
-            --channel ${{ needs.determine-channel.outputs.channel }} \
+            --channel "$OTA_CHANNEL" \
             --private-key-path "$OTA_PRIVATE_KEY_PATH" \
-            --message "${{ needs.determine-channel.outputs.channel }}: ${{ github.ref_name }} (${{ github.sha }})" \
+            --message "$OTA_CHANNEL: $GIT_REF_NAME ($GIT_SHA)" \
             --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EAS_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+          OTA_CHANNEL: ${{ needs.determine-channel.outputs.channel }}
+          GIT_REF_NAME: ${{ github.ref_name }}
+          GIT_SHA: ${{ github.sha }}
+      - name: Scrub OTA signing key
+        # Key material must not outlive the job — always() so it runs even
+        # when the publish fails or is skipped.
+        if: always()
+        run: rm -f "$RUNNER_TEMP/ota-private-key.pem"
 
   tag-release:
     name: Tag semantic version

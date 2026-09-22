@@ -77,3 +77,25 @@ export function computeL2Norm(vector: number[]): number {
   }
   return Math.sqrt(sumSquares);
 }
+
+/**
+ * The serving status a freshly-written embedding row may take.
+ *
+ * The serving projection (media_embeddings_serving, migrations 181/326)
+ * and every serving query filter on `status = 'ready' AND norm > 0`, so a
+ * row can only be 'ready' when BOTH the encoder claims a real vector AND
+ * the vector has a non-zero L2 norm. A zero-norm vector is unrankable —
+ * cosine similarity is undefined against it — so even if a future real
+ * encoder forgets to set `placeholder`, a zero vector must never reach
+ * 'ready'. This is the write-side guard for the placeholder-isolation
+ * contract.
+ */
+export function embeddingServingStatus(
+  placeholder: boolean,
+  norm: number,
+): 'placeholder' | 'ready' {
+  if (placeholder || !(norm > 0) || !Number.isFinite(norm)) {
+    return 'placeholder';
+  }
+  return 'ready';
+}

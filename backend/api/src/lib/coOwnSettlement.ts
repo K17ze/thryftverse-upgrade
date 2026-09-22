@@ -25,8 +25,12 @@
  * wallet row first, then enforceable reservation rows in id order, matching
  * the documented lock discipline.
  *
- * FIN-07: getCoOwnLockupState/assertCoOwnResalePermitted implement the
- * contractual lockup that was serialized to clients but never enforced.
+ * FIN-07 / SEP21-FIN-E: getCoOwnLockupState/assertCoOwnLockupPermitted
+ * implement the contractual lockup that was serialized to clients but never
+ * enforced. Resolved policy (the stored contract in migration 279 restricts
+ * "secondary-market resale"): a live lockup blocks SECONDARY resales only;
+ * primary issuance buys that draw down the asset's available_units pool —
+ * including DRIP reinvestment purchases — remain permitted.
  */
 import {
   createApiError,
@@ -86,15 +90,34 @@ export async function getCoOwnLockupState(
 }
 
 /**
- * Reject a secondary-market resale while the asset lockup is in force.
- * Called on every seller-enforced trade/transfer entry point (order
- * placement, reserve, and inside the settlement primitive itself as a
- * backstop for resting orders placed before the lockup applied).
+ * What the settlement is doing with the asset's units. The lockup contract
+ * only binds SECONDARY resale; each call site must declare its kind so the
+ * policy is explicit rather than inferred:
+ *   - 'secondary' — a holder→holder resale/transfer (order-book fill, buyout
+ *     acceptance): REJECTED while the lockup is in force.
+ *   - 'primary'   — an issuance buy drawing down the asset's available_units
+ *     pool (the issuer is the counterparty, not a locked holder): permitted.
+ *   - 'drip'      — a DRIP reinvestment purchase, which also draws from the
+ *     primary available_units pool: permitted.
  */
-export async function assertCoOwnResalePermitted(
+export type CoOwnSettlementKind = 'primary' | 'secondary' | 'drip';
+
+/**
+ * Enforce the asset lockup for the declared settlement kind.
+ * Called on every seller-enforced trade/transfer entry point (order
+ * placement, reserve, the DRIP worker, and inside the settlement primitive
+ * itself as a backstop for resting orders placed before the lockup
+ * applied). Only 'secondary' is gated — see CoOwnSettlementKind.
+ */
+export async function assertCoOwnLockupPermitted(
   client: DbQueryable,
-  assetId: string
+  assetId: string,
+  kind: CoOwnSettlementKind
 ): Promise<void> {
+  if (kind !== 'secondary') {
+    return;
+  }
+
   const lockup = await getCoOwnLockupState(client, assetId);
   if (!lockup.locked) {
     return;
@@ -110,6 +133,49 @@ export async function assertCoOwnResalePermitted(
 }
 
 // ─── Wallet loading + reservation-aware availability ────────────────────────
+
+/**
+ * Lock EVERY participating user's wallet row in one canonical
+ * wallet-id-ordered scan (SEP21-FIN-D). The co-own money path's lock order
+ * is asset → wallets → reservations → holdings; a settlement that fills
+ * against multiple counterparties must acquire ALL party wallets before any
+ * reservation/holding row — an earlier actor-only wallet lock cannot be
+ * "re-sorted" by applyCoOwnTransfer and re-introduces the ABBA deadlock two
+ * opposite-direction placements on different assets otherwise hit (40P01).
+ * Returns the locked rows keyed to nothing — callers map user_id themselves.
+ */
+export async function lockCoOwnWalletsForUsers(
+  client: DbQueryable,
+  userIds: readonly string[]
+): Promise<WalletRow[]> {
+  const uniqueUserIds = [...new Set(userIds)].filter(
+    (id) => typeof id === 'string' && id.length > 0
+  );
+  if (uniqueUserIds.length === 0) {
+    return [];
+  }
+
+  const result = await client.query<WalletRow>(
+    `
+      SELECT
+        id,
+        user_id,
+        oneze_balance_units,
+        fiat_balance_minor,
+        fiat_currency,
+        version,
+        created_at::text,
+        updated_at::text
+      FROM wallets
+      WHERE user_id = ANY($1::text[])
+      ORDER BY id
+      FOR UPDATE
+    `,
+    [uniqueUserIds]
+  );
+
+  return result.rows;
+}
 
 export async function lockCoOwnWalletForUser(
   client: DbQueryable,

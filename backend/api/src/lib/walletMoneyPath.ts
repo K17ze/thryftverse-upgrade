@@ -2,7 +2,6 @@ import crypto from 'node:crypto';
 import {
   createApiError,
   createRuntimeId,
-  roundTo,
   toJsonString,
   unitsToOnezeAmount,
   ONEZE_UNITS_PER_IZE,
@@ -609,10 +608,19 @@ export async function completeWalletIdempotencyClaim(
 // funds. Arbitrary authenticated users must not be able to mint a privileged
 // context string and bypass commerce/co-own rails, so every privileged
 // context is verified against its source of truth:
-//   - coOwn_trade:      contextId must be a settled coOwn_trades row whose
-//                       buyer/seller are exactly sender/recipient and whose
-//                       buyer leg (ceil((notional + fee) * 1000)) equals the
-//                       transfer amount.
+//   - coOwn_trade:      NOT transferable. A settled coOwn_trades row is a
+//                       completed delivery-vs-payment: applyCoOwnTransfer
+//                       already moved the buyer→seller wallet legs inside the
+//                       same atomic transaction that wrote the trade, and it
+//                       never inserts a wallet_ize_transfers context record.
+//                       Accepting the trade id here would let the already-paid
+//                       consideration authorize a SECOND payment through the
+//                       public route (SEP21-FIN-B) — and the old parity check
+//                       (ceil((notional_gbp + fee_gbp) * 1000)) priced the
+//                       obsolete GBP×1000 FX instead of the versioned
+//                       settlement quote and credited the gross leg rather
+//                       than the seller-net leg. The context is refused
+//                       unconditionally — fail closed.
 //   - platform_reward:  system-originated — requires an admin caller. There
 //                       is no reward domain table to cross-check, so caller
 //                       authority IS the enforceable proof.
@@ -633,87 +641,15 @@ export async function assertP2pTransferContextAuthorized(
 ): Promise<void> {
   switch (input.contextType) {
     case 'coOwn_trade': {
-      const tradeId = Number(input.contextId);
-      if (!Number.isSafeInteger(tradeId) || tradeId <= 0) {
-        throw createApiError(
-          'P2P_TRANSFER_CONTEXT_NOT_FOUND',
-          'coOwn_trade context must reference a coOwn trade id',
-          { contextType: input.contextType, contextId: input.contextId }
-        );
-      }
-
-      const tradeResult = await client.query<{
-        id: string;
-        buyer_id: string;
-        seller_id: string;
-        notional_gbp: string;
-        fee_gbp: string;
-        settlement_status: string;
-      }>(
-        `
-          SELECT
-            id::text AS id,
-            buyer_id,
-            seller_id,
-            notional_gbp::text,
-            fee_gbp::text,
-            settlement_status
-          FROM coOwn_trades
-          WHERE id = $1
-          LIMIT 1
-        `,
-        [tradeId]
+      // SEP21-FIN-B: a settled DvP trade is not an unpaid obligation — it is
+      // evidence the payment ALREADY happened. The context can never
+      // authorize a wallet movement through the public transfer route,
+      // regardless of participants, amount, or caller role.
+      throw createApiError(
+        'P2P_TRANSFER_CONTEXT_NOT_TRANSFERABLE',
+        'coOwn_trade transfers settle delivery-vs-payment inside the trade itself; a settled trade cannot authorize a P2P payment',
+        { contextType: input.contextType, contextId: input.contextId }
       );
-
-      const trade = tradeResult.rows[0];
-      if (!trade) {
-        throw createApiError(
-          'P2P_TRANSFER_CONTEXT_NOT_FOUND',
-          'coOwn_trade context references a trade that does not exist',
-          { contextType: input.contextType, contextId: input.contextId }
-        );
-      }
-
-      if (trade.settlement_status !== 'settled') {
-        throw createApiError(
-          'P2P_TRANSFER_CONTEXT_BLOCKED',
-          'coOwn_trade context references a trade that is not settled',
-          { contextId: input.contextId, settlementStatus: trade.settlement_status }
-        );
-      }
-
-      if (trade.buyer_id !== input.senderUserId || trade.seller_id !== input.recipientUserId) {
-        throw createApiError(
-          'P2P_TRANSFER_CONTEXT_BLOCKED',
-          'coOwn_trade context participants do not match the transfer sender/recipient',
-          {
-            contextId: input.contextId,
-            tradeBuyerId: trade.buyer_id,
-            tradeSellerId: trade.seller_id,
-            senderUserId: input.senderUserId,
-            recipientUserId: input.recipientUserId,
-          }
-        );
-      }
-
-      // The buyer leg of a co-own settlement is ceil((notional + fee) * 1000)
-      // 1ZE units — the same convention applyCoOwnTransfer uses for the DvP
-      // debit.
-      const expectedUnits = Math.ceil(
-        roundTo(Number(trade.notional_gbp) + Number(trade.fee_gbp), 4) * 1000
-      );
-      if (input.amountUnits !== expectedUnits) {
-        throw createApiError(
-          'P2P_TRANSFER_CONTEXT_BLOCKED',
-          'coOwn_trade context amount does not match the trade buyer leg',
-          {
-            contextId: input.contextId,
-            expectedUnits,
-            requestedUnits: input.amountUnits,
-          }
-        );
-      }
-      break;
     }
 
     case 'platform_reward': {

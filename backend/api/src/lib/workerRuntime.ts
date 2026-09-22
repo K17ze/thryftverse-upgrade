@@ -471,6 +471,22 @@ export async function getLedgerAccountBalance(
   return Number(result.rows[0]?.balance ?? '0');
 }
 
+/**
+ * SEP21-FIN-C compatibility path — ONLY for auction intents minted before
+ * the canonical order binding existed (payment_intents.order_id IS NULL).
+ * Order-bound auction intents never reach this helper: their capture posts
+ * through `postCommerceOrderLedgerEntries` inside settlePaymentIntent().
+ *
+ * Accounting corrections vs the pre-fix version:
+ *  - Currency-correct: every entry posts GBP amounts into GBP accounts.
+ *    The old version credited a seller `ize_wallet` account denominated IZE
+ *    while writing GBP-defaulted entries — an account/entry currency split.
+ *  - Held, not released: escrow retains the seller-net amount until the
+ *    canonical delivery/protection-hold release (releaseCommerceOrderEscrowToSeller
+ *    keys on source_id = orderId, which is why sourceId defaults to the order).
+ *    The old version debited ALL of escrow to the seller at payment time, so a
+ *    refund/dispute before delivery had no held funds to draw on.
+ */
 export async function postAuctionSettlementLedgerEntries(
   client: DbQueryable,
   input: {
@@ -479,6 +495,8 @@ export async function postAuctionSettlementLedgerEntries(
     sellerId: string;
     winningBidGbp: number;
     platformFeeGbp: number;
+    /** Canonical order the capture settled against — ledger sourceId. */
+    orderId?: string;
   }
 ): Promise<void> {
   const winningBidGbp = roundTo(Math.max(0, input.winningBidGbp), 2);
@@ -488,20 +506,15 @@ export async function postAuctionSettlementLedgerEntries(
   }
 
   const sellerNetGbp = roundTo(Math.max(0, winningBidGbp - platformFeeGbp), 2);
-  const sourceId = `auction:${input.auctionId}`;
+  // Keyed by the order when known so refund/release lookups that scan
+  // source_id = orderId reconcile against these legs.
+  const sourceId = input.orderId ?? `auction:${input.auctionId}`;
 
   const buyerSpendAccountId = await ensureLedgerAccount(
     client,
     'user',
     input.buyerId,
     'buyer_spend'
-  );
-  const sellerPayableAccountId = await ensureLedgerAccount(
-    client,
-    'user',
-    input.sellerId,
-    'ize_wallet',
-    'IZE'
   );
   const escrowAccountId = await ensureLedgerAccount(
     client,
@@ -516,18 +529,23 @@ export async function postAuctionSettlementLedgerEntries(
     'platform_revenue'
   );
 
+  // Buyer charge → escrow hold (full winning bid, GBP).
   await appendLedgerEntry(client, {
     accountId: buyerSpendAccountId,
     counterpartyAccountId: escrowAccountId,
     direction: 'debit',
     amountGbp: winningBidGbp,
+    currency: 'GBP',
     sourceType: 'order_payment',
     sourceId,
     lineType: 'auction_buyer_charge',
     metadata: {
       auctionId: input.auctionId,
+      orderId: input.orderId ?? null,
       buyerId: input.buyerId,
       sellerId: input.sellerId,
+      sellerEscrowHeldGbp: sellerNetGbp,
+      releasePolicy: 'parcel_delivery_confirmation',
     },
   });
 
@@ -536,56 +554,36 @@ export async function postAuctionSettlementLedgerEntries(
     counterpartyAccountId: buyerSpendAccountId,
     direction: 'credit',
     amountGbp: winningBidGbp,
+    currency: 'GBP',
     sourceType: 'order_payment',
     sourceId,
     lineType: 'auction_buyer_charge',
     metadata: {
       auctionId: input.auctionId,
+      orderId: input.orderId ?? null,
       buyerId: input.buyerId,
       sellerId: input.sellerId,
+      sellerEscrowHeldGbp: sellerNetGbp,
+      releasePolicy: 'parcel_delivery_confirmation',
     },
   });
 
-  if (sellerNetGbp > 0) {
-    await appendLedgerEntry(client, {
-      accountId: escrowAccountId,
-      counterpartyAccountId: sellerPayableAccountId,
-      direction: 'debit',
-      amountGbp: sellerNetGbp,
-      sourceType: 'order_payment',
-      sourceId,
-      lineType: 'auction_seller_payable_credit',
-      metadata: {
-        auctionId: input.auctionId,
-        sellerId: input.sellerId,
-      },
-    });
-
-    await appendLedgerEntry(client, {
-      accountId: sellerPayableAccountId,
-      counterpartyAccountId: escrowAccountId,
-      direction: 'credit',
-      amountGbp: sellerNetGbp,
-      sourceType: 'order_payment',
-      sourceId,
-      lineType: 'auction_seller_payable_credit',
-      metadata: {
-        auctionId: input.auctionId,
-        sellerId: input.sellerId,
-      },
-    });
-  }
-
+  // Platform charge is recognised at capture (same timing as the canonical
+  // commerce path); the seller-net remainder stays held in escrow until
+  // delivery confirmation releases it to seller_payable (GBP).
   if (platformFeeGbp > 0) {
     await appendLedgerEntry(client, {
       accountId: escrowAccountId,
       counterpartyAccountId: platformRevenueAccountId,
       direction: 'debit',
       amountGbp: platformFeeGbp,
+      currency: 'GBP',
       sourceType: 'order_payment',
       sourceId,
       lineType: 'auction_platform_fee_credit',
       metadata: {
+        auctionId: input.auctionId,
+        orderId: input.orderId ?? null,
         component: 'auction_platform_charge',
       },
     });
@@ -595,10 +593,13 @@ export async function postAuctionSettlementLedgerEntries(
       counterpartyAccountId: escrowAccountId,
       direction: 'credit',
       amountGbp: platformFeeGbp,
+      currency: 'GBP',
       sourceType: 'order_payment',
       sourceId,
       lineType: 'auction_platform_fee_credit',
       metadata: {
+        auctionId: input.auctionId,
+        orderId: input.orderId ?? null,
         component: 'auction_platform_charge',
       },
     });

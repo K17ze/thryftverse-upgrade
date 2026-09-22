@@ -24,6 +24,9 @@ export function getAllowedGatewayIds(
   capabilities: UserCountryCapabilities,
   channel?: CapabilityPaymentChannel
 ): string[] {
+  // Publicly selectable gateways only (feeds /payments/gateways). Internal
+  // settlement rails in internalRailsByChannel are deliberately excluded —
+  // they are valid for routing but are not user-facing gateway choices.
   const gateways = channel
     ? capabilities.payments.gatewaysByChannel[channel]
     : Object.values(capabilities.payments.gatewaysByChannel).flat();
@@ -42,8 +45,30 @@ export function resolveChannelGateway(
     return requested;
   }
 
-  const capabilityDefault = capabilities.payments.gatewaysByChannel[channel]?.[0];
+  // Capability default includes internal rails (they precede public
+  // gateways, matching the template order) so a request with no explicit
+  // gateway keeps its historical default — commerce defaults to the 1ZE
+  // wallet rail (oneze_internal).
+  const capabilityDefault = allowedGatewaysForChannel(capabilities, channel)[0];
   return capabilityDefault ?? fallbackGatewayId;
+}
+
+/**
+ * Enforcement view of a channel's gateways: the publicly selectable list
+ * PLUS that channel's internal settlement rails (e.g. oneze_internal on
+ * commerce — the explicit wallet-pay rail the checkout flow passes as
+ * gatewayId). Internal rails are valid for routing/validation but are kept
+ * out of gatewaysByChannel so public gateway listings never advertise them.
+ * Internal rails come first to preserve the template ordering (commerce
+ * historically lists oneze_internal before external gateways).
+ */
+function allowedGatewaysForChannel(
+  capabilities: UserCountryCapabilities,
+  channel: CapabilityPaymentChannel
+): string[] {
+  const internalRails = capabilities.payments.internalRailsByChannel?.[channel] ?? [];
+  const publicGateways = capabilities.payments.gatewaysByChannel[channel] ?? [];
+  return [...internalRails, ...publicGateways];
 }
 
 export function isGatewayAllowedForChannel(
@@ -51,7 +76,7 @@ export function isGatewayAllowedForChannel(
   channel: CapabilityPaymentChannel,
   gatewayId: string
 ): boolean {
-  const configuredGateways = capabilities.payments.gatewaysByChannel[channel] ?? [];
+  const configuredGateways = allowedGatewaysForChannel(capabilities, channel);
   if (configuredGateways.length === 0) {
     return true;
   }

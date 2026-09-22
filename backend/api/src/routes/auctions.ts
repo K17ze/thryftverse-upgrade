@@ -1,13 +1,18 @@
 import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { publishRealtimeEvent } from '../lib/realtime.js';
-import { ledgerTablesAvailable, type DbQueryable } from '../lib/workerHelpers.js';
+import { createApiError, ledgerTablesAvailable, type DbQueryable } from '../lib/workerHelpers.js';
 import { emitOrderCommerceCard } from '../lib/orderChatCards.js';
 import { postAuctionSettlementLedgerEntries } from '../lib/workerRuntime.js';
 import { advanceSecondChanceOffer } from '../workers/handlers/auctionSweepHandler.js';
 import { getSellerReach } from '../lib/sellerReach.js';
 import { isPostgresUniqueViolation } from '../lib/walletMoneyPath.js';
+import { cancelOrderOnReservationExpiry } from '../lib/commerceCheckoutLifecycle.js';
+
+import { resolveCountryCapabilities } from '../lib/countryCapabilities.js';
+import { getAllowedGatewayIds } from '../lib/countryCapabilityPolicy.js';
 
 // ── Local helpers ──
 
@@ -47,6 +52,12 @@ export type AuctionPaymentIntentInput = {
   money: { currency: string; minorAmount: string };
   idempotencyKey: string;
   instrumentId?: number;
+  /**
+   * The payer's resolved PUBLIC commerce gateway. Auction wins must never
+   * default to an internal settlement rail (oneze_internal parks at
+   * requires_confirmation with no user path to succeeded).
+   */
+  gatewayId?: string;
   metadata: Record<string, unknown>;
 };
 
@@ -127,9 +138,10 @@ export async function settleAuctionWinForVerifiedIntent(
     user_id: string;
     status: string;
     amount_gbp: number | string;
+    order_id: string | null;
     metadata: Record<string, unknown> | null;
   }>(
-    `SELECT id, user_id, status, amount_gbp, metadata
+    `SELECT id, user_id, status, amount_gbp, order_id, metadata
      FROM payment_intents
      WHERE id = $1
      LIMIT 1
@@ -176,9 +188,26 @@ export async function settleAuctionWinForVerifiedIntent(
     return { kind: 'skipped', reason: 'auction_not_found' };
   }
 
+  // Order resolution prefers the intent's canonical binding — orders
+  // created after the first attempt no longer claim orders.auction_id
+  // (the partial unique index allows exactly one claimant), so a retried
+  // winner's order is found via payment_intents.order_id. Fall back to the
+  // auction_id claimant for rows written before the binding existed.
   const resolveExistingOrderId = async (): Promise<string | null> => {
+    if (intent.order_id) {
+      return intent.order_id;
+    }
     const existing = await client.query<{ id: string }>(
-      `SELECT id FROM orders WHERE auction_id = $1 LIMIT 1`,
+      `SELECT o.id
+       FROM orders o
+       LEFT JOIN payment_intents pi ON pi.order_id = o.id
+       WHERE o.auction_id = $1
+          OR pi.metadata->>'auctionId' = $1
+       ORDER BY CASE WHEN o.status = 'paid' THEN 0
+                     WHEN o.status = 'created' THEN 1
+                     ELSE 2 END,
+                o.created_at DESC
+       LIMIT 1`,
       [auctionId],
     );
     return existing.rows[0]?.id ?? null;
@@ -255,6 +284,30 @@ export async function settleAuctionWinForVerifiedIntent(
     return { kind: 'skipped', reason: 'seller_suspended' };
   }
 
+  // ── Canonical order binding (SEP21-FIN-C) ──────────────────────────
+  // Winner-pay mints the order BEFORE the provider intent, and the binding
+  // write sets payment_intents.order_id. The canonical commerce branch of
+  // settlePaymentIntent() then transitions that order 'created' → 'paid'
+  // and posts the escrow-hold ledger inside THIS capture transaction —
+  // which runs before this helper. A bound order that is not 'paid' here
+  // means the canonical transition refused it (dead reservation, orphan
+  // flag) — the captured funds belong to reconciliation, not settlement.
+  let canonicalOrderId: string | null = null;
+  if (intent.order_id) {
+    const boundOrder = await client.query<{ id: string; status: string }>(
+      `SELECT id, status FROM orders WHERE id = $1 LIMIT 1`,
+      [intent.order_id],
+    );
+    const boundStatus = boundOrder.rows[0]?.status ?? null;
+    if (boundStatus !== 'paid') {
+      return {
+        kind: 'skipped',
+        reason: `order_not_payable:${boundStatus ?? 'missing'}`,
+      };
+    }
+    canonicalOrderId = intent.order_id;
+  }
+
   const settledUpdate = await client.query(
     `UPDATE auctions
      SET status = 'settled', settled_at = NOW(), paid_at = NOW(),
@@ -292,25 +345,63 @@ export async function settleAuctionWinForVerifiedIntent(
     [auction.listing_id],
   );
 
-  // Create order record (reuse the Buy Now order pattern). The persisted
-  // order wins on replay — the constructed id must not leak into cards,
-  // notifications or the response when an order already exists.
+  if (canonicalOrderId) {
+    // Order-bound capture: settlePaymentIntent() already transitioned the
+    // order 'created' → 'paid' and posted the escrow-hold ledger through
+    // postCommerceOrderLedgerEntries inside this same transaction.
+    // Seller-net stays held in escrow until
+    // releaseCommerceOrderEscrowToSeller() runs at delivery/protection-hold
+    // release, so a refund or dispute before delivery never races an
+    // already-released payout. No auction-specific ledger legs here.
+    return {
+      kind: 'settled',
+      settlement: {
+        auctionId,
+        listingId: auction.listing_id,
+        orderId: canonicalOrderId,
+        winnerBidderId: auction.winner_bidder_id,
+        sellerId: auction.seller_id,
+        winningBidGbp,
+        platformFeeGbp,
+        alreadySettled: false,
+      },
+    };
+  }
+
+  // ── Legacy fallback (compatibility only) ───────────────────────────
+  // Intents minted before the canonical order binding (order_id IS NULL)
+  // still settle here. Recreate the paid order + post the corrected,
+  // currency-consistent escrow-hold legs so the capture is accounted.
+  // New intents never reach this branch.
+  // The persisted order wins on replay — the constructed id must not leak
+  // into cards, notifications or the response when an order already exists.
   const orderId = `auc-pay-${auctionId}-${intentId.slice(-12)}`;
-  const existingOrder = await client.query<{ id: string }>(
-    `SELECT id FROM orders WHERE auction_id = $1 LIMIT 1`,
+  const auctionOrderClaim = await client.query<{ id: string; status: string }>(
+    `SELECT id, status FROM orders WHERE auction_id = $1 LIMIT 1`,
     [auctionId],
   );
-  if (!existingOrder.rowCount) {
+
+  let effectiveOrderId: string;
+  if (auctionOrderClaim.rows[0]?.status === 'paid') {
+    effectiveOrderId = auctionOrderClaim.rows[0].id;
+  } else {
+    // Another order (a buy-now purchase or a drifted first attempt) may
+    // already claim orders.auction_id — only claim it when free, so this
+    // insert can never trip the partial unique index.
+    const claimAuctionId = auctionOrderClaim.rows[0] ? null : auctionId;
+    const sellerNetGbp = roundTo(Math.max(0, winningBidGbp - platformFeeGbp), 2);
     await client.query(
       `INSERT INTO orders (id, buyer_id, seller_id, listing_id, subtotal_gbp,
          buyer_protection_fee_gbp, total_gbp, status, auction_id, payment_intent_id)
-       VALUES ($1, $2, $3, $4, $5, 0, $5, 'paid', $6, $7)`,
-      [orderId, auction.winner_bidder_id, auction.seller_id, auction.listing_id, winningBidGbp, auctionId, intentId],
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'paid', $8, $9)`,
+      [orderId, auction.winner_bidder_id, auction.seller_id, auction.listing_id, sellerNetGbp, platformFeeGbp, winningBidGbp, claimAuctionId, intentId],
     );
+    effectiveOrderId = orderId;
   }
-  const effectiveOrderId = existingOrder.rows[0]?.id ?? orderId;
 
-  // Post ledger entries now that payment is provider-confirmed.
+  // Post the corrected auction ledger legs — GBP-consistent, escrow-held.
+  // sourceId keys on the order so refund reversals and the canonical
+  // delivery release reconcile against the same source.
   const canPostLedger = await ledgerTablesAvailable(client);
   if (canPostLedger) {
     await postAuctionSettlementLedgerEntries(client, {
@@ -319,6 +410,7 @@ export async function settleAuctionWinForVerifiedIntent(
       sellerId: auction.seller_id,
       winningBidGbp,
       platformFeeGbp,
+      orderId: effectiveOrderId,
     });
   }
 
@@ -368,6 +460,7 @@ const createAuctionPaymentIntent =
           money: input.money,
           idempotencyKey: input.idempotencyKey,
           ...(input.instrumentId ? { instrumentId: input.instrumentId } : {}),
+          ...(input.gatewayId ? { gatewayId: input.gatewayId } : {}),
           metadata: input.metadata,
         },
       });
@@ -729,6 +822,9 @@ app.post('/auctions/:auctionId/payment', async (request, reply) => {
   let auctionSellerId = '';
   let auctionListingId = '';
   let winnerBidderId: string | null = null;
+  // Canonical order bound to the provider capture (SEP21-FIN-C) —
+  // provisioned under the auction lock in Phase A, bound in Phase D.
+  let auctionOrderId: string | null = null;
   try {
     await client.query('BEGIN');
 
@@ -742,9 +838,11 @@ app.post('/auctions/:auctionId/payment', async (request, reply) => {
       cancelled_at: string | null;
       settled_at: string | null;
       paid_at: string | null;
+      payment_deadline_at: string | null;
     }>(
       `SELECT id, seller_id, listing_id, status, winner_bidder_id,
-              current_bid_gbp, cancelled_at, settled_at, paid_at
+              current_bid_gbp, cancelled_at, settled_at, paid_at,
+              payment_deadline_at
        FROM auctions WHERE id = $1 FOR UPDATE`,
       [auctionId],
     );
@@ -774,8 +872,17 @@ app.post('/auctions/:auctionId/payment', async (request, reply) => {
     if (auction.settled_at || auction.status === 'settled' || auction.paid_at) {
       // FIN-09: an already-successful retry replays the authoritative
       // stored result instead of failing on the settled guard.
+      // Retry orders no longer claim orders.auction_id, so resolve via the
+      // intent binding too and prefer the paid row.
       const existingOrder = await client.query<{ id: string }>(
-        `SELECT id FROM orders WHERE auction_id = $1 LIMIT 1`,
+        `SELECT o.id
+         FROM orders o
+         LEFT JOIN payment_intents pi ON pi.order_id = o.id
+         WHERE o.auction_id = $1
+            OR pi.metadata->>'auctionId' = $1
+         ORDER BY CASE WHEN o.status = 'paid' THEN 0 ELSE 1 END,
+                  o.created_at DESC
+         LIMIT 1`,
         [auctionId],
       );
       await client.query('COMMIT');
@@ -846,6 +953,208 @@ app.post('/auctions/:auctionId/payment', async (request, reply) => {
       [auctionId, auction.winner_bidder_id ?? userId],
     );
     latestIntent = intentResult.rows[0] ?? null;
+
+    // ── Phase A2 (SEP21-FIN-C): provision the canonical commerce order ──
+    // The provider intent must capture against a REAL orders row so the
+    // verified settle walks the canonical commerce branch (order
+    // 'created'→'paid' → escrow hold → fulfilment → protection release)
+    // instead of the after-the-fact auction ledger. The order therefore
+    // exists BEFORE the intent is minted, carrying the intended shipping
+    // address, postage and buyer-protection terms, plus the active
+    // 'auction'-source reservation the order status trigger requires for
+    // a 'paid' transition. Everything here runs under the auction
+    // FOR UPDATE lock, so concurrent winner-pay requests serialise on a
+    // single winner, a single reusable order and a single reservation.
+    // Mint only when Phase B won't replay: no stored intent, or a terminal
+    // FAILURE — a 'succeeded' intent self-heals below and must not spawn a
+    // fresh order.
+    const willMintIntent =
+      !latestIntent
+      || latestIntent.status === 'failed'
+      || latestIntent.status === 'cancelled';
+    if (willMintIntent) {
+      const payableBuyerId = winnerBidderId ?? userId;
+
+      // Every order row this auction win has ever produced: the first
+      // attempt's order claims orders.auction_id; retry orders are found
+      // through the intent binding (the partial unique index allows only
+      // one claimant, so retries carry auction_id = NULL).
+      const priorOrders = await client.query<{
+        id: string;
+        buyer_id: string;
+        status: string;
+      }>(
+        `SELECT DISTINCT o.id, o.buyer_id, o.status, o.created_at
+         FROM orders o
+         LEFT JOIN payment_intents pi ON pi.order_id = o.id
+         WHERE o.auction_id = $1
+            OR pi.metadata->>'auctionId' = $1
+         ORDER BY o.created_at ASC`,
+        [auctionId],
+      );
+
+      // A still-'created' order owned by the payable winner is this retry's
+      // order — reuse it instead of stacking dead order rows.
+      const reusableOrder = priorOrders.rows.find(
+        (row) => row.status === 'created' && row.buyer_id === payableBuyerId,
+      );
+
+      // Retire every other order row before writing ours: 'created' orders
+      // go through the guarded cancel path (in-flight intents shield them,
+      // the order trigger cancels their reservation); terminal orders get
+      // any drifted-active reservation cancelled so the listing-level
+      // active-reservation unique index can never block the winner's row.
+      for (const stale of priorOrders.rows) {
+        if (stale.id === reusableOrder?.id) continue;
+        if (stale.status === 'created') {
+          const cancelOutcome = await cancelOrderOnReservationExpiry(client, stale.id);
+          if (cancelOutcome === 'blocked_in_flight') {
+            await client.query('ROLLBACK');
+            reply.code(409);
+            return {
+              ok: false,
+              error: 'A checkout for this listing is still resolving — retry shortly',
+              code: 'ORDER_IN_FLIGHT',
+            };
+          }
+        } else {
+          await client.query(
+            `UPDATE listing_checkout_reservations
+             SET status = 'cancelled', cancelled_at = NOW(), updated_at = NOW()
+             WHERE order_id = $1 AND status = 'active'`,
+            [stale.id],
+          );
+        }
+      }
+
+      // Intended delivery address: the winner's default address if one is
+      // saved — the order thread lets them redirect it post-capture.
+      const defaultAddress = await client.query<{ id: number }>(
+        `SELECT id FROM user_addresses
+         WHERE user_id = $1
+         ORDER BY is_default DESC, updated_at DESC
+         LIMIT 1`,
+        [payableBuyerId],
+      );
+      const intendedAddressId = defaultAddress.rows[0]?.id ?? null;
+
+      // Canonical money split for an auction win: the winning bid IS the
+      // capture total; the platform fee is carved out of it, so the
+      // seller-net remainder is the escrow-held subtotal released at
+      // delivery — identical accounting to postCommerceOrderLedgerEntries.
+      const platformFeeGbp = calculateAuctionPlatformFeeGbp(winningBidGbp);
+      const sellerNetGbp = roundTo(Math.max(0, winningBidGbp - platformFeeGbp), 2);
+      // The reservation/order TTL mirrors the auction payment deadline —
+      // with a floor so a lapsed deadline row can never mint an
+      // instantly-expired reservation.
+      const deadlineMs = auction.payment_deadline_at
+        ? Date.parse(String(auction.payment_deadline_at))
+        : NaN;
+      const reservationTtl =
+        Number.isFinite(deadlineMs) && deadlineMs > Date.now()
+          ? new Date(deadlineMs).toISOString()
+          : new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+
+      if (reusableOrder) {
+        auctionOrderId = reusableOrder.id;
+      } else {
+        auctionOrderId = `auc-ord-${auctionId}-${randomUUID().slice(0, 8)}`;
+        // Claim orders.auction_id only when no prior row holds it — the
+        // partial unique index allows exactly one claimant per auction.
+        const claimsAuctionId = !priorOrders.rows.length ? auctionId : null;
+        const quoteSnapshot = {
+          source: 'auction_win',
+          auctionId,
+          listingId: auctionListingId,
+          winningBidGbp,
+          sellerNetGbp,
+          platformFeeGbp,
+          postageFeeGbp: 0,
+          totalGbp: winningBidGbp,
+          currency: 'GBP',
+          policyVersion: 'auction_win_v1',
+        };
+        await client.query(
+          `INSERT INTO orders (
+             id, buyer_id, seller_id, listing_id,
+             subtotal_gbp, buyer_protection_fee_gbp, postage_fee_gbp, total_gbp,
+             status, auction_id, address_id, payment_method_id,
+             checkout_expires_at, quote_version, quote_snapshot
+           )
+           VALUES ($1, $2, $3, $4, $5, $6, 0, $7,
+                   'created', $8, $9, $10, $11, 'auction_win_v1', $12::jsonb)`,
+          [
+            auctionOrderId,
+            payableBuyerId,
+            auctionSellerId,
+            auctionListingId,
+            sellerNetGbp,
+            platformFeeGbp,
+            winningBidGbp,
+            claimsAuctionId,
+            intendedAddressId,
+            payload.paymentMethodId ?? null,
+            reservationTtl,
+            JSON.stringify(quoteSnapshot),
+          ],
+        );
+        await client.query(
+          `INSERT INTO order_events (
+             order_id, event_type, actor_id, source, deduplication_key, metadata
+           )
+           VALUES ($1, 'order.created', $2, 'auction_win', $3, $4::jsonb)
+           ON CONFLICT (order_id, deduplication_key)
+             WHERE deduplication_key IS NOT NULL
+           DO NOTHING`,
+          [
+            auctionOrderId,
+            userId,
+            `order.created:${auctionOrderId}`,
+            JSON.stringify({ auctionId, winningBidGbp, platformFeeGbp }),
+          ],
+        );
+      }
+
+      // The reservation the order-status trigger requires for
+      // 'created'→'paid'. Upsert by order_id so a reused order whose
+      // reservation drifted is re-armed; a listing-level conflict means a
+      // foreign reservation is live — surface it as a retryable 409.
+      const reservationId = `auc-res-${auctionId}-${randomUUID().slice(0, 8)}`;
+      try {
+        await client.query(
+          `INSERT INTO listing_checkout_reservations (
+             id, offer_id, listing_id, buyer_id, seller_id,
+             order_id, source, status, expires_at
+           )
+           VALUES ($1, NULL, $2, $3, $4, $5, 'auction', 'active', $6)
+           ON CONFLICT (order_id) DO UPDATE
+             SET status = 'active',
+                 expires_at = EXCLUDED.expires_at,
+                 cancelled_at = NULL,
+                 failure_reason = NULL,
+                 updated_at = NOW()`,
+          [
+            reservationId,
+            auctionListingId,
+            payableBuyerId,
+            auctionSellerId,
+            auctionOrderId,
+            reservationTtl,
+          ],
+        );
+      } catch (reservationError) {
+        if (!isPostgresUniqueViolation(reservationError)) {
+          throw reservationError;
+        }
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return {
+          ok: false,
+          error: 'This listing is reserved by another checkout — retry shortly',
+          code: 'LISTING_CHECKOUT_RESERVED',
+        };
+      }
+    }
 
     await client.query('COMMIT');
   } catch (error) {
@@ -927,6 +1236,35 @@ app.post('/auctions/:auctionId/payment', async (request, reply) => {
     ? request.headers.authorization[0] ?? null
     : request.headers.authorization ?? null;
 
+  // Gateway selection: the canonical route defaults a commerce intent with
+  // no explicit gatewayId to the country's first INTERNAL rail
+  // (oneze_internal — the 1ZE wallet rail). That rail creates
+  // requires_confirmation intents that only the order-bound internal settle
+  // path can complete, which the auction sheet flow never invokes — every
+  // winner payment would wedge at awaiting_payment. An auction winner pays
+  // by card, so resolve the payer's first PUBLIC commerce gateway from the
+  // country capability policy and pass it explicitly.
+  const payableUserId = winnerBidderId ?? userId;
+  const payerProfile = await db.query<{
+    country_code: string | null;
+    residency_country_code: string | null;
+  }>(
+    `SELECT country_code, residency_country_code
+     FROM user_compliance_profiles
+     WHERE user_id = $1
+     LIMIT 1`,
+    [payableUserId],
+  );
+  const payerCapabilities = resolveCountryCapabilities({
+    countryCode: payerProfile.rows[0]?.country_code ?? 'GB',
+    residencyCountryCode: payerProfile.rows[0]?.residency_country_code ?? null,
+  });
+  // When no public gateway is configured for the payer's country, fall back
+  // to the canonical route's commerce default — its isGatewayConfigured
+  // check produces the honest 503 for unconfigured regions.
+  const auctionGatewayId =
+    getAllowedGatewayIds(payerCapabilities, 'commerce')[0] ?? 'stripe_americas';
+
   const created = await createAuctionPaymentIntent({
     authorizationHeader,
     money: {
@@ -938,6 +1276,7 @@ app.post('/auctions/:auctionId/payment', async (request, reply) => {
     // reuse the same client key.
     idempotencyKey: `auction-pay:${auctionId}:${payload.idempotencyKey}`,
     instrumentId: payload.paymentMethodId,
+    gatewayId: auctionGatewayId,
     metadata: {
       source: 'auction_win',
       auctionId,
@@ -1006,15 +1345,71 @@ app.post('/auctions/:auctionId/payment', async (request, reply) => {
     paymentMethodId: payload.paymentMethodId ?? null,
   };
 
+  // The binding write carries BOTH the server-owned metadata and the
+  // canonical order link: payment_intents.order_id is what routes the
+  // verified capture through the commerce order branch in
+  // settlePaymentIntent() (order paid → escrow hold → fulfilment →
+  // release). orders.payment_intent_id is bound in the same transaction so
+  // hasInFlightPaymentIntent() shields the order from expiry cancels while
+  // the winner is paying.
+  const bindClient = await db.connect();
   try {
-    await db.query(
+    await bindClient.query('BEGIN');
+    await bindClient.query(
       `UPDATE payment_intents
        SET metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb,
+           order_id = $3,
            updated_at = NOW()
        WHERE id = $1`,
-      [intent.id, JSON.stringify(bindingMetadata)],
+      [intent.id, JSON.stringify(bindingMetadata), auctionOrderId],
     );
+    const orderBind = await bindClient.query(
+      `UPDATE orders
+       SET payment_intent_id = $2, updated_at = NOW()
+       WHERE id = $1 AND status = 'created'`,
+      [auctionOrderId, intent.id],
+    );
+    if (!orderBind.rowCount) {
+      // The order died between Phase A and this write (expiry sweeper,
+      // manual cancel). Retire the freshly-minted intent so it can never
+      // capture against a dead order.
+      await bindClient.query(
+        `UPDATE payment_intents
+         SET status = 'cancelled',
+             failure_code = 'AUCTION_ORDER_NOT_PAYABLE',
+             failure_message = 'Bound auction order left created state before intent binding',
+             updated_at = NOW()
+         WHERE id = $1
+           AND status NOT IN ('succeeded', 'failed', 'cancelled')`,
+        [intent.id],
+      );
+      throw createApiError(
+        'AUCTION_ORDER_NOT_PAYABLE',
+        'The auction order is no longer payable — retry to start a fresh attempt',
+      );
+    }
+    await bindClient.query(
+      `INSERT INTO order_events (
+         order_id, event_type, actor_id, source, deduplication_key, metadata
+       )
+       VALUES ($1, 'payment.required', $2, 'auction_win', $3, $4::jsonb)
+       ON CONFLICT (order_id, deduplication_key)
+         WHERE deduplication_key IS NOT NULL
+       DO NOTHING`,
+      [
+        auctionOrderId,
+        userId,
+        `payment.required:${intent.id}`,
+        JSON.stringify({ auctionId, intentId: intent.id }),
+      ],
+    );
+    await bindClient.query('COMMIT');
   } catch (error) {
+    try {
+      await bindClient.query('ROLLBACK');
+    } catch {
+      // Already aborted.
+    }
     if (!isPostgresUniqueViolation(error)) {
       throw error;
     }
@@ -1065,6 +1460,8 @@ app.post('/auctions/:auctionId/payment', async (request, reply) => {
         status: 'awaiting_payment' as const,
       },
     };
+  } finally {
+    bindClient.release();
   }
 
   // A synchronously-settled gateway (e.g. an internal rail) can return
@@ -1192,7 +1589,16 @@ app.get('/auctions/:auctionId/payment-status', async (request, reply) => {
     const orderRow = settledOrderId
       ? null
       : await client.query<{ id: string }>(
-          `SELECT id FROM orders WHERE auction_id = $1 LIMIT 1`,
+          `SELECT o.id
+           FROM orders o
+           LEFT JOIN payment_intents pi ON pi.order_id = o.id
+           WHERE o.auction_id = $1
+              OR pi.metadata->>'auctionId' = $1
+           ORDER BY CASE WHEN o.status = 'paid' THEN 0
+                         WHEN o.status = 'created' THEN 1
+                         ELSE 2 END,
+                    o.created_at DESC
+           LIMIT 1`,
           [auctionId],
         );
 

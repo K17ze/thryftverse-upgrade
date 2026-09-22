@@ -15,8 +15,11 @@ import {
   evaluateWalletCapability,
 } from '../lib/compliance.js';
 import {
-  lockCoOwnWalletForUser,
+  lockCoOwnWalletsForUsers,
 } from '../lib/coOwnSettlement.js';
+import {
+  evaluateCoOwnTradingPolicy,
+} from '../lib/coOwnEligibility.js';
 import {
   applyCoOwnTransfer,
   getCoOwnHoldingForUpdate,
@@ -122,10 +125,17 @@ function computeMarketStatus(
 //   vote         — cast a governance vote
 //
 // Policy matrix:
-//   pre_market: buy=false, sell=false, cancel=false, buyoutAccept=false, vote=true
+//   pre_market: buy=true,  sell=false, cancel=true,  buyoutAccept=false, vote=true
 //   trading:    buy=true,  sell=true,  cancel=true,  buyoutAccept=true,  vote=true
 //   paused:     buy=false, sell=false, cancel=true,  buyoutAccept=false, vote=true
 //   closed:     buy=false, sell=false, cancel=false, buyoutAccept=true,  vote=true
+//
+// SEP21-FIN-E: 'pre_market' is the offering phase — the SECONDARY market has
+// not opened (sell/buyout stay closed: nobody but the issuer pool holds
+// units), but a buy IS the primary subscription and must be permitted so a
+// normal issuance buy works exactly like the DRIP reinvestment purchase.
+// The place route only fills such a buy from the primary available_units
+// pool — secondary matching stays gated on marketStatus === 'trading'.
 
 export interface CoOwnCapabilities {
   buy: boolean;
@@ -144,6 +154,7 @@ function resolveCoOwnCapabilities(marketStatus: CoOwnMarketStatus): CoOwnCapabil
     case 'closed':
       return { buy: false, sell: false, cancel: false, buyoutAccept: true, vote: true };
     case 'pre_market':
+      return { buy: true, sell: false, cancel: true, buyoutAccept: false, vote: true };
     default:
       return { buy: false, sell: false, cancel: false, buyoutAccept: false, vote: true };
   }
@@ -666,7 +677,15 @@ async function hasActiveExitAction(assetId: string): Promise<boolean> {
 async function resolveCoOwnMarketStatus(
   client: { query: <T = any>(text: string, values?: any[]) => Promise<{ rows: T[]; rowCount?: number }> },
   assetId: string,
-): Promise<{ marketStatus: CoOwnMarketStatus; isOpen: boolean; lockupEndsAt: string | null }> {
+): Promise<{
+  marketStatus: CoOwnMarketStatus;
+  isOpen: boolean;
+  lockupEndsAt: string | null;
+  /** True while the contractual lockup window is still in force. */
+  lockupActive: boolean;
+  /** Remaining primary issuance pool — drives the lockup buy gate. */
+  availableUnits: number;
+}> {
   // FIN-07: the contractual lockup (lockup_end_date, else created_at +
   // lockup_months) is read here in the shared guard — it was previously only
   // serialized to clients and never enforced on execution paths.
@@ -682,7 +701,13 @@ async function resolveCoOwnMarketStatus(
   );
   const asset = assetResult.rows[0];
   if (!asset) {
-    return { marketStatus: 'closed', isOpen: false, lockupEndsAt: null };
+    return {
+      marketStatus: 'closed',
+      isOpen: false,
+      lockupEndsAt: null,
+      lockupActive: false,
+      availableUnits: 0,
+    };
   }
 
   const exitResult = await client.query<{ status: string }>(
@@ -701,15 +726,23 @@ async function resolveCoOwnMarketStatus(
   const rawLockupEnd = asset.effective_lockup_end;
   const lockupEndsAt = rawLockupEnd == null ? null : new Date(rawLockupEnd).toISOString();
   const lockupActive = lockupEndsAt !== null && Date.parse(lockupEndsAt) > Date.now();
-  // A live lockup suspends trading/transfers — the market reads 'paused' so
-  // buy/sell/buyoutAccept capabilities close while cancel stays available
-  // (cancelling a resting order is not a transfer). A terminally closed
-  // market stays closed.
+  // A live lockup suspends SECONDARY resale — the market reads 'paused' so
+  // sell/buyoutAccept capabilities close while cancel stays available
+  // (cancelling a resting order is not a transfer). Primary-pool buys during
+  // an active offering ('pre_market') are governed by the kind-aware lockup
+  // gate in the command endpoints, not this fold. A terminally closed market
+  // stays closed.
   if (lockupActive && marketStatus === 'trading') {
     marketStatus = 'paused';
   }
 
-  return { marketStatus, isOpen: asset.is_open, lockupEndsAt };
+  return {
+    marketStatus,
+    isOpen: asset.is_open,
+    lockupEndsAt,
+    lockupActive,
+    availableUnits: asset.available_units,
+  };
 }
 
 // FIN-07: distinct lockup rejection for command endpoints. While the shared
@@ -3177,12 +3210,19 @@ app.post('/co-own/assets/:assetId/orders/reserve', async (request, reply) => {
 
   // B10: Apply the unified capability policy. The reserve endpoint must reject
   // with the same market-state check used by the preview and place endpoints.
-  const { marketStatus: reserveMarketStatus, lockupEndsAt: reserveLockupEndsAt } =
-    await resolveCoOwnMarketStatus(db, assetId);
-  // FIN-07: a live lockup rejects with a named error, not a generic
-  // capability denial.
+  const {
+    marketStatus: reserveMarketStatus,
+    lockupEndsAt: reserveLockupEndsAt,
+    availableUnits: reserveAvailableUnits,
+  } = await resolveCoOwnMarketStatus(db, assetId);
+  // FIN-07 / SEP21-FIN-E: a live lockup rejects with a named error, not a
+  // generic capability denial — but the lockup binds SECONDARY resale only.
+  // A sell reservation can only ever fund a resale, so it is always refused;
+  // a buy is refused only when the primary pool is empty (a buy that cannot
+  // draw available_units could execute solely as a secondary fill).
   const reserveLockupError = coOwnLockupCapabilityError(reserveLockupEndsAt);
-  if (reserveLockupError) {
+  const reserveBuyDrawsPrimary = payload.side === 'buy' && reserveAvailableUnits > 0;
+  if (reserveLockupError && !reserveBuyDrawsPrimary) {
     reply.code(423);
     return { ok: false, error: reserveLockupError.code, message: reserveLockupError.message };
   }
@@ -3709,11 +3749,21 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
 
     // B10: Apply the unified capability policy. The place endpoint uses the
     // same market-status check as the preview endpoint.
-    const { marketStatus: placeMarketStatus, lockupEndsAt: placeLockupEndsAt } =
-      await resolveCoOwnMarketStatus(client, assetId);
-    // FIN-07: reject lockup-window orders with a named error.
+    const {
+      marketStatus: placeMarketStatus,
+      lockupEndsAt: placeLockupEndsAt,
+      lockupActive: placeLockupActive,
+    } = await resolveCoOwnMarketStatus(client, assetId);
+    // FIN-07 / SEP21-FIN-E: the contractual lockup binds SECONDARY resale
+    // only (migration 279: "date after which secondary-market resale is
+    // permitted"). A sell order is always a resale → refused. A buy is
+    // refused only when the primary pool is empty — while available_units
+    // remain, the buy executes exclusively as a primary issuance purchase
+    // (secondary matching is suppressed below), exactly like a DRIP
+    // reinvestment buy drawing the same pool.
     const placeLockupError = coOwnLockupCapabilityError(placeLockupEndsAt);
-    if (placeLockupError) {
+    const placeBuyDrawsPrimary = payload.side === 'buy' && asset.available_units > 0;
+    if (placeLockupError && !placeBuyDrawsPrimary) {
       await client.query('ROLLBACK');
       reply.code(423);
       return { ok: false, error: placeLockupError.code, message: placeLockupError.message };
@@ -3725,19 +3775,97 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
       return { ok: false, error: placeCapabilityError.code, message: placeCapabilityError.message };
     }
 
+    // SEP21-FIN-E: secondary (holder→holder) matching only runs while the
+    // secondary market is actually open — 'trading' with no lockup in force.
+    // During the offering phase or a lockup, an incoming buy fills solely
+    // from the primary available_units pool; a resting-order match there
+    // would be a secondary resale the contract does not yet permit.
+    const secondaryMatchingOpen = placeMarketStatus === 'trading' && !placeLockupActive;
+
     // FIN-02: resolve the versioned GBP→1ZE settlement rate once for this
     // execution — the reservation check, every fill leg, and the resting
     // reservation top-ups all price at this rate.
     const settlementRate = await resolveCoOwnSettlementRateContext(client);
 
-    // Canonical lock order: the wallet row precedes reservation rows
-    // (computeSpendableOnezeUnits and every spendable caller lock
-    // wallet → reservations in id order). Locking the reservation below
-    // before any wallet lock inverted that order — a concurrent burn/
-    // convert/transfer holding this wallet and wanting the same
-    // reservation rows deadlocked with this placement. A missing wallet
-    // is fine here: buy fills surface WALLET_NOT_FOUND at settlement.
-    await lockCoOwnWalletForUser(client, payload.userId);
+    const referencePriceGbp = Number(asset.unit_price_gbp);
+    const protectionCapGbp =
+      payload.orderType === 'protected_market'
+        ? payload.side === 'buy'
+          ? (payload.maxPriceGbp ?? null)
+          : (payload.minPriceGbp ?? null)
+        : null;
+    const proposedUnitPrice =
+      payload.orderType === 'limit'
+        ? roundTo(payload.limitPriceGbp ?? referencePriceGbp, 4)
+        : payload.orderType === 'protected_market' && protectionCapGbp
+          ? roundTo(protectionCapGbp, 4)
+          : referencePriceGbp;
+    const proposedNotionalGbp = roundTo(Math.max(0, payload.units) * proposedUnitPrice, 4);
+    const proposedFeeGbp = roundTo(proposedNotionalGbp * CO_OWN_TRADE_FEE_RATE, 4);
+    const requiredBuyReservationUnits = payload.side === 'buy'
+      ? computeCoOwnSettlementUnits(settlementRate, {
+          notionalGbp: proposedNotionalGbp,
+          feeGbp: proposedFeeGbp,
+        }).buyerDebitUnits
+      : 0;
+
+    // SEP21-FIN-D: canonical transaction-wide wallet order —
+    // asset (held above) → ALL participating wallets in one wallet-id-ordered
+    // scan → reservations → holdings. Counterparty wallets are discovered
+    // from the resting book BEFORE any wallet lock is taken: an actor-only
+    // wallet lock acquired up front could not be "re-sorted" by
+    // applyCoOwnTransfer, and two opposite-direction placements on different
+    // assets deadlocked (40P01) exactly there. The discovery read is
+    // deliberately UNLOCKED — the asset row lock serializes book inserts,
+    // and cancel/expiry only shrink the matchable set, so the locked wallet
+    // set is always a superset of whatever the FOR UPDATE scan below can
+    // touch. The issuer wallet is included for buys because a primary-pool
+    // fill credits it.
+    const participantUserIds = new Set<string>([payload.userId]);
+    if (payload.side === 'buy') {
+      participantUserIds.add(asset.issuer_id);
+    }
+    if (secondaryMatchingOpen) {
+      const counterpartyResult = await client.query<{ user_id: string }>(
+        `
+          SELECT user_id
+          FROM coOwn_orders
+          WHERE asset_id = $1
+            AND side = $2
+            AND status IN ('open', 'partially_filled')
+            AND (expires_at IS NULL OR expires_at > NOW())
+            AND user_id <> $5
+            AND (
+              $3::numeric IS NULL
+              OR (
+                $4 = 'buy' AND unit_price_gbp <= $3
+              )
+              OR (
+                $4 = 'sell' AND unit_price_gbp >= $3
+              )
+            )
+        `,
+        [
+          assetId,
+          payload.side === 'buy' ? 'sell' : 'buy',
+          payload.orderType === 'limit'
+            ? (payload.limitPriceGbp ?? null)
+            : payload.orderType === 'protected_market'
+              ? (protectionCapGbp ?? null)
+              : null,
+          payload.side,
+          payload.userId,
+        ]
+      );
+      for (const row of counterpartyResult.rows) {
+        participantUserIds.add(row.user_id);
+      }
+    }
+    // Single canonical wallet acquisition — every settlement party in
+    // wallets.id order, before any reservation row is locked. A missing
+    // actor wallet is tolerated here: buy fills surface WALLET_NOT_FOUND at
+    // settlement, same as before.
+    await lockCoOwnWalletsForUsers(client, [...participantUserIds]);
 
     const reservationResult = await client.query<{
       id: string;
@@ -3782,30 +3910,6 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
       };
     }
 
-    const referencePriceGbp = Number(asset.unit_price_gbp);
-    const protectionCapGbp =
-      payload.orderType === 'protected_market'
-        ? payload.side === 'buy'
-          ? (payload.maxPriceGbp ?? null)
-          : (payload.minPriceGbp ?? null)
-        : null;
-    const proposedUnitPrice =
-      payload.orderType === 'limit'
-        ? roundTo(payload.limitPriceGbp ?? referencePriceGbp, 4)
-        : payload.orderType === 'protected_market' && protectionCapGbp
-          ? roundTo(protectionCapGbp, 4)
-          : referencePriceGbp;
-    const proposedNotionalGbp = roundTo(Math.max(0, payload.units) * proposedUnitPrice, 4);
-    const proposedFeeGbp = roundTo(proposedNotionalGbp * CO_OWN_TRADE_FEE_RATE, 4);
-    const proposedTotalGbp = payload.side === 'buy'
-      ? roundTo(proposedNotionalGbp + proposedFeeGbp, 4)
-      : roundTo(proposedNotionalGbp - proposedFeeGbp, 4);
-    const requiredBuyReservationUnits = payload.side === 'buy'
-      ? computeCoOwnSettlementUnits(settlementRate, {
-          notionalGbp: proposedNotionalGbp,
-          feeGbp: proposedFeeGbp,
-        }).buyerDebitUnits
-      : 0;
     const reservationIsInsufficient = payload.side === 'buy'
       ? Number(reservation.reserved_1ze_units) < requiredBuyReservationUnits
       : Number(reservation.reserved_units) < payload.units;
@@ -3819,65 +3923,58 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
       };
     }
 
-    const eligibility = await evaluateMarketEligibility(client, {
-      userId: payload.userId,
-      market: 'co-own',
+    // SEP21-FIN-F: the shared pre-settlement trading policy — the same
+    // reconciliation-halt / active-exit / market-eligibility / wallet
+    // settlement-capability gates the DRIP worker applies — revalidated
+    // inside this transaction before any wallet effect. Halt and exit are
+    // re-checked here because they can flip mid-transaction (the halt flag
+    // lives in Redis; the earlier lifecycle gate already covered the common
+    // case).
+    const tradingPolicyDenial = await evaluateCoOwnTradingPolicy(client, {
+      assetId,
+      buyerUserId: payload.userId,
       orderNotionalGbp: proposedNotionalGbp,
+      deps: { getHaltState: getOnezeMintBurnHaltState },
     });
-
-    if (!eligibility.allowed) {
+    if (tradingPolicyDenial) {
       await client.query('ROLLBACK');
 
-      await appendComplianceAuditSafe(request, {
-        eventType: 'co-own.order.blocked.eligibility',
-        subjectUserId: payload.userId,
-        payload: {
-          assetId,
-          side: payload.side,
-          units: payload.units,
-          orderType: payload.orderType,
-          orderNotionalGbp: proposedNotionalGbp,
-          code: eligibility.code,
-          message: eligibility.message,
-        },
-      });
+      if (tradingPolicyDenial.reason === 'market_ineligible') {
+        await appendComplianceAuditSafe(request, {
+          eventType: 'co-own.order.blocked.eligibility',
+          subjectUserId: payload.userId,
+          payload: {
+            assetId,
+            side: payload.side,
+            units: payload.units,
+            orderType: payload.orderType,
+            orderNotionalGbp: proposedNotionalGbp,
+            code: tradingPolicyDenial.code,
+            message: tradingPolicyDenial.message,
+          },
+        });
+      } else if (tradingPolicyDenial.reason === 'wallet_capability') {
+        await appendComplianceAuditSafe(request, {
+          eventType: 'co-own.order.blocked.wallet_capability',
+          subjectUserId: payload.userId,
+          payload: {
+            assetId,
+            side: payload.side,
+            units: payload.units,
+            orderType: payload.orderType,
+            orderNotionalGbp: proposedNotionalGbp,
+            capability: 'settlement',
+            code: tradingPolicyDenial.code,
+            reason: tradingPolicyDenial.message,
+          },
+        });
+      }
 
-      reply.code(403);
+      reply.code(tradingPolicyDenial.statusCode);
       return {
         ok: false,
-        error: eligibility.message,
-        code: eligibility.code,
-      };
-    }
-
-    const settlementCapability = await evaluateWalletCapability(client, payload.userId, 'settlement', {
-      amountUsd: proposedNotionalGbp,
-      currency: 'GBP',
-      market: 'co-own',
-    });
-    if (!settlementCapability.allowed) {
-      await client.query('ROLLBACK');
-
-      await appendComplianceAuditSafe(request, {
-        eventType: 'co-own.order.blocked.wallet_capability',
-        subjectUserId: payload.userId,
-        payload: {
-          assetId,
-          side: payload.side,
-          units: payload.units,
-          orderType: payload.orderType,
-          orderNotionalGbp: proposedNotionalGbp,
-          capability: 'settlement',
-          code: settlementCapability.code,
-          reason: settlementCapability.reason,
-        },
-      });
-
-      reply.code(403);
-      return {
-        ok: false,
-        error: settlementCapability.reason ?? 'Wallet capability check failed',
-        code: settlementCapability.code,
+        error: tradingPolicyDenial.message,
+        code: tradingPolicyDenial.code,
       };
     }
 
@@ -4062,7 +4159,13 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
       );
     }
 
-    const restingOrders = await client.query<{
+    // SEP21-FIN-E: when the secondary market is not open (offering phase or
+    // an active lockup), the resting book is not scanned and no secondary
+    // fill can settle — the incoming order can only draw the primary pool
+    // below. applyCoOwnTransfer's kind-aware lockup backstop is the second
+    // line of defense for anything that still slips through.
+    const restingOrders = secondaryMatchingOpen
+      ? await client.query<{
       id: number;
       user_id: string;
       side: 'buy' | 'sell';
@@ -4120,7 +4223,8 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
         payload.side,
         payload.userId,
       ]
-    );
+    )
+    : { rows: [] as never[], rowCount: 0 };
 
     for (const resting of restingOrders.rows) {
       if (remainingUnits <= 0) {
@@ -4213,8 +4317,16 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
         ]
       );
 
+      // Reserve top-ups use the same versioned GBP→1ZE quote as settlement —
+      // a flat GBP×1000 assumes £1=1ZE and under-reserves whenever GBP≠USD.
       const restingReserve1zeUnits = resting.side === 'buy'
-        ? Math.ceil(roundTo(restingRemainingAfter * Number(resting.unit_price_gbp) * (1 + CO_OWN_TRADE_FEE_RATE), 4) * 1000)
+        ? computeCoOwnSettlementUnits(settlementRate, {
+            notionalGbp: roundTo(restingRemainingAfter * Number(resting.unit_price_gbp), 4),
+            feeGbp: roundTo(
+              restingRemainingAfter * Number(resting.unit_price_gbp) * CO_OWN_TRADE_FEE_RATE,
+              4,
+            ),
+          }).buyerDebitUnits
         : 0;
       const restingReserveUnits = resting.side === 'sell' ? Math.max(0, restingRemainingAfter) : 0;
       await client.query(
@@ -4313,8 +4425,15 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
       [incomingOrderId, persistedRemainingUnits, filledUnits, tradedFeeGbp, orderTotalGbp, orderStatus]
     );
 
+    // Same versioned quote as above — never GBP×1000.
     const incomingReserve1zeUnits = payload.side === 'buy'
-      ? Math.ceil(roundTo(persistedRemainingUnits * orderPriceGbp * (1 + CO_OWN_TRADE_FEE_RATE), 4) * 1000)
+      ? computeCoOwnSettlementUnits(settlementRate, {
+          notionalGbp: roundTo(persistedRemainingUnits * orderPriceGbp, 4),
+          feeGbp: roundTo(
+            persistedRemainingUnits * orderPriceGbp * CO_OWN_TRADE_FEE_RATE,
+            4,
+          ),
+        }).buyerDebitUnits
       : 0;
     const incomingReserveUnits = payload.side === 'sell' ? persistedRemainingUnits : 0;
     await client.query(
@@ -4780,6 +4899,14 @@ app.post('/co-own/assets/:assetId/orders/:orderId/cancel', async (request, reply
   const client = await db.connect();
   try {
     await client.query('BEGIN');
+    // Lock-order discipline (FIN-D): order placement takes asset → market
+    // sequence → order rows. The cancel path must not take the order lock
+    // before the sequence — holding order while waiting on the sequence
+    // (which a matching placement holds) is an ABBA deadlock (40P01).
+    // Allocating first burns a sequence number on the early exits below;
+    // market sequences tolerate gaps.
+    const cancelMarketSeq = await allocateMarketSequence(client, assetId);
+
     const orderResult = await client.query<{
       id: number;
       user_id: string;
@@ -4819,8 +4946,6 @@ app.post('/co-own/assets/:assetId/orders/:orderId/cancel', async (request, reply
       reply.code(423);
       return { ok: false, error: cancelCapabilityError.code, message: cancelCapabilityError.message };
     }
-
-    const cancelMarketSeq = await allocateMarketSequence(client, assetId);
 
     await client.query(
       `

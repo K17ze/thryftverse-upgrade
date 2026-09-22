@@ -477,6 +477,10 @@ export default function AppNavigator() {
       {/* Galleria collection detail — accessible from HomeStack and GalleriaScreen */}
       <Stack.Screen name="GalleriaCollectionDetail" getComponent={() => require('../screens/GalleriaCollectionDetailScreen').default} />
 
+      {/* Editorial article reader — the real destination behind editorial
+          teasers on UnifiedDiscovery and the Galleria (S21-02). */}
+      <Stack.Screen name="GalleriaEditorial" getComponent={() => require('../screens/GalleriaEditorialScreen').default} />
+
       {/* ── Discovery & Editorial ── (galleria, algorithm, moodboards, explore, AI search) */}
       <Stack.Screen name="UnifiedDiscovery" getComponent={() => require('../screens/UnifiedDiscoveryScreen').default} options={{ headerShown: false }} />
       <Stack.Screen name="Galleria" getComponent={() => require('../screens/GalleriaScreen').default} />

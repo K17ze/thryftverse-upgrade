@@ -37,7 +37,7 @@ const { processCoOwnDripReinvestment } = await import(
   '../workers/handlers/coOwnDripExecutionHandler.js'
 );
 const { db } = await import('../db/pool.js');
-const { debitCoOwnOnezeUnits, creditCoOwnOnezeUnits } = await import(
+const { debitCoOwnOnezeUnits, creditCoOwnOnezeUnits, assertCoOwnLockupPermitted } = await import(
   '../lib/coOwnSettlement.js'
 );
 const { computeCoOwnSettlementUnits } = await import('../lib/pricingEngine.js');
@@ -140,6 +140,7 @@ interface State {
   }>;
   distributions: DistributionRow[];
   dripEnrollments: Array<{ user_id: string; asset_id: string; enrolled: boolean }>;
+  corporateActions: Array<{ asset_id: string; action_type: string; status: string }>;
   assets: AssetRow[];
   holdings: HoldingRow[];
   trades: TradeRow[];
@@ -278,7 +279,38 @@ function createFakeDb(initial: State, hooks: FakeHooks = {}) {
       return { rows: [], rowCount: 1 };
     }
 
+    // ── Corporate actions (SEP21-FIN-F exit check in the shared policy) ──
+    if (sql.includes('FROM coown_corporate_actions')) {
+      const rows = (state.corporateActions ?? [])
+        .filter(
+          (c) =>
+            c.asset_id === values![0]
+            && c.action_type === 'exit'
+            && (c.status === 'announced' || c.status === 'executing'),
+        )
+        .map((c) => ({ status: c.status }));
+      return { rows: rows as T[], rowCount: rows.length };
+    }
+
     // ── Assets ──
+    // Lockup state read (getCoOwnLockupState) — effective end is the stored
+    // lockup_end_date, else created_at + lockup_months.
+    if (sql.includes('FROM coOwn_assets') && sql.includes('effective_lockup_end')) {
+      const asset = state.assets.find((a) => a.id === values![0]);
+      if (!asset) return { rows: [] as T[], rowCount: 0 };
+      const end = asset.lockup_end_date ?? (asset.lockup_months != null
+        ? new Date(
+            Date.parse(asset.created_at) + asset.lockup_months * 30 * 24 * 3600 * 1000,
+          ).toISOString()
+        : null);
+      return {
+        rows: [{
+          effective_lockup_end: end,
+          locked: end != null && Date.parse(end) > Date.now(),
+        }] as T[],
+        rowCount: 1,
+      };
+    }
     if (sql.startsWith('SELECT id, issuer_id, total_units, available_units') && sql.includes('FOR UPDATE')) {
       const asset = state.assets.find((a) => a.id === values![0]);
       return {
@@ -595,6 +627,7 @@ function baseState(overrides: Partial<State> = {}): State {
     reservations: [],
     distributions: [],
     dripEnrollments: [],
+    corporateActions: [],
     assets: [],
     holdings: [],
     trades: [],
@@ -617,6 +650,26 @@ const ASSET: AssetRow = {
   lockup_end_date: null,
   lockup_months: null,
 };
+
+/**
+ * SEP21-FIN-F: DRIP now evaluates the shared trading policy (halt, exit,
+ * market eligibility, wallet capability). Tests inject a permissive policy
+ * by default; individual tests override parts of it to exercise denials.
+ */
+const DRIP_POLICY_ALLOW = {
+  tradingPolicy: {
+    getHaltState: async () => ({ halted: false }),
+    evaluateMarketEligibility: async () => ({
+      allowed: true,
+      code: 'ELIGIBLE',
+      message: 'eligible',
+    }),
+    evaluateWalletCapability: async () => ({
+      allowed: true,
+      code: 'CAPABLE',
+    }),
+  },
+} as const;
 
 const DIST: DistributionRow = {
   id: 'dist_1',
@@ -643,7 +696,7 @@ test('DRIP settles through the versioned GBP→1ZE quote, segment-aware, balance
   }));
   const restore = patchPool(fake);
   try {
-    const result = await processCoOwnDripReinvestment('manual');
+    const result = await processCoOwnDripReinvestment('manual', DRIP_POLICY_ALLOW);
     assert.equal(result.reinvested, 1, JSON.stringify(result));
 
     // FIN-02: £10 notional at USD→GBP 0.8 → 10 × 1250 = 12,500 units —
@@ -706,7 +759,7 @@ test('FIN-06: missing issuer wallet fails honestly — no unbalanced settled sta
   }));
   const restore = patchPool(fake);
   try {
-    const result = await processCoOwnDripReinvestment('manual');
+    const result = await processCoOwnDripReinvestment('manual', DRIP_POLICY_ALLOW);
     assert.equal(result.failed, 1, JSON.stringify(result));
     assert.equal(result.reinvested, 0);
 
@@ -756,7 +809,7 @@ test('FIN-05: retained-cash decision is reservation-aware — reserved funds are
   }));
   const restore = patchPool(fake);
   try {
-    const result = await processCoOwnDripReinvestment('manual');
+    const result = await processCoOwnDripReinvestment('manual', DRIP_POLICY_ALLOW);
     assert.equal(result.failed, 1, JSON.stringify(result));
 
     const dist = fake.committed.distributions[0];
@@ -794,7 +847,7 @@ test('SEP20-FIN-13: fault between status UPDATE and receipt append rolls back at
   });
   const restore = patchPool(failing);
   try {
-    const first = await processCoOwnDripReinvestment('manual');
+    const first = await processCoOwnDripReinvestment('manual', DRIP_POLICY_ALLOW);
     assert.equal(first.errors, 1, JSON.stringify(first));
 
     // BOTH writes rolled back: the old code autocommitted the UPDATE first,
@@ -815,7 +868,7 @@ test('SEP20-FIN-13: fault between status UPDATE and receipt append rolls back at
   const healthy = createFakeDb(state);
   const restore2 = patchPool(healthy);
   try {
-    const second = await processCoOwnDripReinvestment('manual');
+    const second = await processCoOwnDripReinvestment('manual', DRIP_POLICY_ALLOW);
     assert.equal(second.reinvested, 1, JSON.stringify(second));
     assert.equal(healthy.committed.distributions[0].status, 'reinvested');
     assert.equal(healthy.committed.trades.length, 1);
@@ -936,7 +989,7 @@ test('state-dependent failure (asset closed) stays settled and retries — no de
   const restore = patchPool(fake);
   try {
     // Pass 1: market closed → retried, distribution stays 'settled'.
-    const first = await processCoOwnDripReinvestment('manual');
+    const first = await processCoOwnDripReinvestment('manual', DRIP_POLICY_ALLOW);
     assert.equal(first.retried, 1, JSON.stringify(first));
     assert.equal(first.failed, 0);
     const dist = fake.committed.distributions[0];
@@ -951,7 +1004,7 @@ test('state-dependent failure (asset closed) stays settled and retries — no de
 
     // Market reopens → pass 2 reinvests the SAME distribution.
     fake.committed.assets[0].is_open = true;
-    const second = await processCoOwnDripReinvestment('manual');
+    const second = await processCoOwnDripReinvestment('manual', DRIP_POLICY_ALLOW);
     assert.equal(second.reinvested, 1, JSON.stringify(second));
     assert.equal(fake.committed.distributions[0].status, 'reinvested');
     assert.equal(fake.committed.trades.length, 1);
@@ -974,7 +1027,7 @@ test('retryable cause dead-letters at the attempt ceiling with a receipt', async
   }));
   const restore = patchPool(fake);
   try {
-    const result = await processCoOwnDripReinvestment('manual');
+    const result = await processCoOwnDripReinvestment('manual', DRIP_POLICY_ALLOW);
     assert.equal(result.failed, 1, JSON.stringify(result));
     assert.equal(result.retried, 0);
     const dist = fake.committed.distributions[0];
@@ -1002,7 +1055,7 @@ test('terminal cause (amount too small for one unit) still fails immediately', a
   }));
   const restore = patchPool(fake);
   try {
-    const result = await processCoOwnDripReinvestment('manual');
+    const result = await processCoOwnDripReinvestment('manual', DRIP_POLICY_ALLOW);
     assert.equal(result.failed, 1, JSON.stringify(result));
     assert.equal(result.retried, 0, 'terminal cause must not consume retry budget');
     assert.equal(fake.committed.distributions[0].status, 'reinvest_failed');
@@ -1010,6 +1063,220 @@ test('terminal cause (amount too small for one unit) still fails immediately', a
       String(fake.committed.distributions[0].reference),
       /insufficient_amount_for_one_unit/,
     );
+  } finally {
+    restore();
+  }
+});
+
+// ─── SEP21-FIN-E: kind-aware lockup semantics ──────────────────────────────
+
+test('SEP21-FIN-E: lockup gates secondary resale only — primary/drip kinds pass', async () => {
+  const futureLockup = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString();
+  const fake = createFakeDb(baseState({
+    assets: [{ ...ASSET, lockup_end_date: futureLockup }],
+  }));
+  const client = { query: fake.query, release() {} };
+
+  // A holder→holder resale is refused with the named lockup error.
+  await assert.rejects(
+    assertCoOwnLockupPermitted(client as never, 'asset_1', 'secondary'),
+    (err: unknown) => (err as { code?: string }).code === 'CO_OWN_LOCKUP_ACTIVE',
+  );
+
+  // Primary issuance and DRIP reinvestment draw the available_units pool —
+  // the resolved lockup contract permits both during the window.
+  await assertCoOwnLockupPermitted(client as never, 'asset_1', 'primary');
+  await assertCoOwnLockupPermitted(client as never, 'asset_1', 'drip');
+});
+
+test('SEP21-FIN-E: expired lockup reopens secondary resale', async () => {
+  const pastLockup = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+  const fake = createFakeDb(baseState({
+    assets: [{ ...ASSET, lockup_end_date: pastLockup }],
+  }));
+  const client = { query: fake.query, release() {} };
+  await assertCoOwnLockupPermitted(client as never, 'asset_1', 'secondary');
+});
+
+test('SEP21-FIN-E: DRIP reinvests from the primary pool during an active lockup', async () => {
+  const futureLockup = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString();
+  const fake = createFakeDb(baseState({
+    dripEnrollments: [{ user_id: 'buyer_1', asset_id: 'asset_1', enrolled: true }],
+    distributions: [{ ...DIST }],
+    assets: [{ ...ASSET, lockup_end_date: futureLockup }],
+    wallets: [walletRow('buyer_1', 20_000), walletRow('issuer_1', 0)],
+    segments: [
+      segmentRow('wal_buyer_1', 15_000, 5_000),
+      segmentRow('wal_issuer_1', 0, 0),
+    ],
+  }));
+  const restore = patchPool(fake);
+  try {
+    // The old policy paused everything (or bypassed it entirely for DRIP);
+    // the resolved contract permits the primary-pool purchase.
+    const result = await processCoOwnDripReinvestment('manual', DRIP_POLICY_ALLOW);
+    assert.equal(result.reinvested, 1, JSON.stringify(result));
+    assert.equal(fake.committed.distributions[0].status, 'reinvested');
+    assert.equal(fake.committed.trades.length, 1);
+  } finally {
+    restore();
+  }
+});
+
+// ─── SEP21-FIN-F: DRIP applies the manual-placement trading policy ─────────
+
+test('SEP21-FIN-F: reconciliation halt blocks DRIP as a retryable denial, then reinvests after unhalt', async () => {
+  let halted = true;
+  const policy = {
+    tradingPolicy: {
+      ...DRIP_POLICY_ALLOW.tradingPolicy,
+      getHaltState: async () => ({ halted }),
+    },
+  };
+  const fake = createFakeDb(baseState({
+    dripEnrollments: [{ user_id: 'buyer_1', asset_id: 'asset_1', enrolled: true }],
+    distributions: [{ ...DIST, reinvest_attempts: 0 }],
+    assets: [{ ...ASSET }],
+    wallets: [walletRow('buyer_1', 20_000), walletRow('issuer_1', 0)],
+    segments: [
+      segmentRow('wal_buyer_1', 15_000, 5_000),
+      segmentRow('wal_issuer_1', 0, 0),
+    ],
+  }));
+  const restore = patchPool(fake);
+  try {
+    // Pass 1 while halted: retried — the distribution stays 'settled', the
+    // attempt counter advances, and NO wallet/share effect commits.
+    const first = await processCoOwnDripReinvestment('manual', policy);
+    assert.equal(first.retried, 1, JSON.stringify(first));
+    assert.equal(first.reinvested, 0);
+    assert.equal(first.failed, 0);
+    const dist = fake.committed.distributions[0];
+    assert.equal(dist.status, 'settled', 'halt must not dead-letter the distribution');
+    assert.equal(dist.reinvest_attempts, 1);
+    assert.equal(fake.committed.trades.length, 0);
+    assert.equal(fake.committed.ledger.length, 0, 'no debit may be posted while halted');
+    assert.equal(
+      Number(fake.committed.wallets.find((w) => w.user_id === 'buyer_1')!.oneze_balance_units),
+      20_000,
+    );
+
+    // The halt lifts → the SAME distribution reinvests exactly once.
+    halted = false;
+    const second = await processCoOwnDripReinvestment('manual', policy);
+    assert.equal(second.reinvested, 1, JSON.stringify(second));
+    assert.equal(fake.committed.distributions[0].status, 'reinvested');
+    assert.equal(fake.committed.trades.length, 1);
+
+    // A third pass finds nothing to do — no double reinvestment.
+    const third = await processCoOwnDripReinvestment('manual', policy);
+    assert.equal(third.processed, 0);
+    assert.equal(fake.committed.trades.length, 1);
+  } finally {
+    restore();
+  }
+});
+
+test('SEP21-FIN-F: active exit corporate action retains the distribution cash — no trade', async () => {
+  const fake = createFakeDb(baseState({
+    dripEnrollments: [{ user_id: 'buyer_1', asset_id: 'asset_1', enrolled: true }],
+    distributions: [{ ...DIST, reinvest_attempts: 0 }],
+    corporateActions: [{ asset_id: 'asset_1', action_type: 'exit', status: 'announced' }],
+    assets: [{ ...ASSET }],
+    wallets: [walletRow('buyer_1', 20_000), walletRow('issuer_1', 0)],
+    segments: [
+      segmentRow('wal_buyer_1', 15_000, 5_000),
+      segmentRow('wal_issuer_1', 0, 0),
+    ],
+  }));
+  const restore = patchPool(fake);
+  try {
+    const result = await processCoOwnDripReinvestment('manual', DRIP_POLICY_ALLOW);
+    assert.equal(result.failed, 1, JSON.stringify(result));
+    assert.equal(result.reinvested, 0);
+
+    const dist = fake.committed.distributions[0];
+    assert.equal(dist.status, 'retained_cash');
+    assert.match(String(dist.reference), /policy_exit_action_active/);
+    // No wallet/share effect at all.
+    assert.equal(fake.committed.trades.length, 0);
+    assert.equal(fake.committed.ledger.length, 0);
+    assert.equal(
+      Number(fake.committed.wallets.find((w) => w.user_id === 'buyer_1')!.oneze_balance_units),
+      20_000,
+    );
+    const receipt = fake.committed.outbox.find((o) => o.event_type === 'coown_drip_receipt');
+    assert.ok(receipt, 'retained-cash receipt missing');
+    assert.equal(receipt!.payload.outcome, 'retained_cash');
+  } finally {
+    restore();
+  }
+});
+
+test('SEP21-FIN-F: market ineligibility blocks DRIP as a retryable denial', async () => {
+  const fake = createFakeDb(baseState({
+    dripEnrollments: [{ user_id: 'buyer_1', asset_id: 'asset_1', enrolled: true }],
+    distributions: [{ ...DIST, reinvest_attempts: 0 }],
+    assets: [{ ...ASSET }],
+    wallets: [walletRow('buyer_1', 20_000), walletRow('issuer_1', 0)],
+    segments: [
+      segmentRow('wal_buyer_1', 15_000, 5_000),
+      segmentRow('wal_issuer_1', 0, 0),
+    ],
+  }));
+  const restore = patchPool(fake);
+  try {
+    const result = await processCoOwnDripReinvestment('manual', {
+      tradingPolicy: {
+        ...DRIP_POLICY_ALLOW.tradingPolicy,
+        evaluateMarketEligibility: async () => ({
+          allowed: false,
+          code: 'KYC_REQUIRED',
+          message: 'Complete identity verification before trading.',
+        }),
+      },
+    });
+    assert.equal(result.retried, 1, JSON.stringify(result));
+    assert.equal(result.reinvested, 0);
+    const dist = fake.committed.distributions[0];
+    assert.equal(dist.status, 'settled');
+    assert.equal(dist.reinvest_attempts, 1);
+    assert.equal(fake.committed.trades.length, 0);
+    assert.equal(fake.committed.ledger.length, 0);
+  } finally {
+    restore();
+  }
+});
+
+test('SEP21-FIN-F: wallet settlement capability denial blocks DRIP as a retryable denial', async () => {
+  const fake = createFakeDb(baseState({
+    dripEnrollments: [{ user_id: 'buyer_1', asset_id: 'asset_1', enrolled: true }],
+    distributions: [{ ...DIST, reinvest_attempts: 0 }],
+    assets: [{ ...ASSET }],
+    wallets: [walletRow('buyer_1', 20_000), walletRow('issuer_1', 0)],
+    segments: [
+      segmentRow('wal_buyer_1', 15_000, 5_000),
+      segmentRow('wal_issuer_1', 0, 0),
+    ],
+  }));
+  const restore = patchPool(fake);
+  try {
+    const result = await processCoOwnDripReinvestment('manual', {
+      tradingPolicy: {
+        ...DRIP_POLICY_ALLOW.tradingPolicy,
+        evaluateWalletCapability: async () => ({
+          allowed: false,
+          code: 'WALLET_CAPABILITY_RESTRICTED',
+          reason: 'Account restricted pending compliance review.',
+        }),
+      },
+    });
+    assert.equal(result.retried, 1, JSON.stringify(result));
+    const dist = fake.committed.distributions[0];
+    assert.equal(dist.status, 'settled');
+    assert.equal(dist.reinvest_attempts, 1);
+    assert.equal(fake.committed.trades.length, 0);
+    assert.equal(fake.committed.ledger.length, 0);
   } finally {
     restore();
   }

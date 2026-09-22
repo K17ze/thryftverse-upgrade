@@ -110,16 +110,30 @@ const gmvTotal = new Counter({
 
 const searchIndexLagSeconds = new Histogram({
   name: 'thryftverse_search_index_lag_seconds',
-  help: 'Lag between a listing update (updated_at) and its search-index write landing, by serving backend',
-  labelNames: ['backend'] as const,
+  help: 'Lag between a listing update (updated_at) and its search-index write reaching the labelled stage. outcome="submitted" measures enqueue-acknowledgement only (NOT visibility); outcome="completed" measures confirmed-applied lag; outcome="fallback" measures process-local fallback writes',
+  labelNames: ['backend', 'outcome'] as const,
   buckets: [0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 300],
   registers: [registry],
 });
 
 const searchSyncTotal = new Counter({
   name: 'thryftverse_search_sync_total',
-  help: 'Search index sync outcomes by operation and result',
-  labelNames: ['op', 'result'] as const,
+  help: 'Search index sync outcomes by operation and result. The outcome label distinguishes submitted (enqueue-ack), completed (task confirmed applied), failed, and fallback (process-local index write after remote failure)',
+  labelNames: ['op', 'result', 'outcome'] as const,
+  registers: [registry],
+});
+
+const searchReindexLeaseTotal = new Counter({
+  name: 'thryftverse_search_reindex_lease_total',
+  help: 'Global search-reindex lease lifecycle outcomes. The lease is a durable fenced row in Postgres (migration 338) — safe through PgBouncer transaction pooling, unlike session advisory locks',
+  labelNames: ['outcome'] as const,
+  registers: [registry],
+});
+
+const aiSpendReservationsTotal = new Counter({
+  name: 'thryftverse_ai_spend_reservations_total',
+  help: 'AI daily-budget spend reservation lifecycle. action="reserved" counts admissions that took a reservation, "budget_blocked" admissions denied by the daily cap, "settled" completions that topped up to the real cost, "refunded" reservations returned on failure/under-estimate',
+  labelNames: ['action'] as const,
   registers: [registry],
 });
 
@@ -288,6 +302,12 @@ export function recordGmv(amountGbp: number): void {
   gmvTotal.inc(Math.max(0, amountGbp));
 }
 
+export function recordAiSpendReservation(
+  action: 'reserved' | 'budget_blocked' | 'settled' | 'refunded',
+): void {
+  aiSpendReservationsTotal.inc({ action });
+}
+
 export function recordListingCreated(): void {
   listingsCreatedTotal.inc(1);
 }
@@ -301,18 +321,60 @@ export function recordUserSignup(method: string): void {
 }
 
 /**
- * Observe the lag between a listing's `updated_at` and the moment its
- * search-index write lands. Feeds the search-freshness alert (R28/R91):
- * `histogram_quantile(0.95, rate(thryftverse_search_index_lag_seconds_bucket[10m]))`
- * breaches the freshness SLO when the index trails writes.
+ * Outcome of a single search-index write, honestly classified (audit §4.7):
+ *   submitted — the shared backend accepted the write (a Meilisearch task was
+ *     enqueued). Acknowledgement is NOT visibility: the document is not
+ *     searchable until the task completes.
+ *   completed — the write's Meilisearch task was confirmed `succeeded`; only
+ *     this outcome implies the document is actually served by the index.
+ *   failed    — the write threw, or its task definitively failed/canceled.
+ *   fallback  — the write landed in the process-local index because the
+ *     shared backend was unavailable (per-replica, not the shared corpus).
  */
-export function observeSearchIndexLag(backend: string, lagSeconds: number): void {
+export type SearchSyncOutcome = 'submitted' | 'completed' | 'failed' | 'fallback';
+
+/**
+ * Observe the lag between a listing's `updated_at` and the moment its
+ * search-index write reaches the labelled stage. `outcome="submitted"` is
+ * submission lag (task enqueue ack); `outcome="completed"` is the true
+ * visibility lag the freshness alert reads. The series name is unchanged so
+ * existing dashboards keep working — the new `outcome` label disaggregates
+ * the honest signal (R28/R91, audit §4.7).
+ */
+export function observeSearchIndexLag(
+  backend: string,
+  lagSeconds: number,
+  outcome: 'submitted' | 'completed' | 'fallback' = 'submitted',
+): void {
   if (!Number.isFinite(lagSeconds) || lagSeconds < 0) return;
-  searchIndexLagSeconds.observe({ backend }, lagSeconds);
+  searchIndexLagSeconds.observe({ backend, outcome }, lagSeconds);
 }
 
-export function recordSearchSync(op: 'index' | 'remove', result: 'ok' | 'error'): void {
-  searchSyncTotal.inc({ op, result });
+export function recordSearchSync(
+  op: 'index' | 'remove',
+  result: 'ok' | 'error',
+  outcome: SearchSyncOutcome = result === 'error' ? 'failed' : 'submitted',
+): void {
+  searchSyncTotal.inc({ op, result, outcome });
+}
+
+/**
+ * Record a global-reindex lease lifecycle event. `contended` means a second
+ * caller skipped its run because a live lease exists — expected under
+ * overlap, not an error. `heartbeat_lost`/`release_missed` mean the lease
+ * row changed hands underneath this process — investigate.
+ */
+export function recordSearchReindexLease(
+  outcome:
+    | 'acquired'
+    | 'contended'
+    | 'acquire_error'
+    | 'heartbeat_lost'
+    | 'released'
+    | 'release_missed'
+    | 'release_error',
+): void {
+  searchReindexLeaseTotal.inc({ outcome });
 }
 
 export async function renderMetrics(): Promise<string> {

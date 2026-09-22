@@ -254,6 +254,67 @@ const REKOGNITION_SUPPORTED_MIME: ReadonlySet<string> = new Set([
 const IMAGE_FETCH_TIMEOUT_MS = 15_000;
 
 /**
+ * Mutable copy of {@link IMAGE_FETCH_TIMEOUT_MS} applied to own-store S3
+ * Head/Get/body operations. Tests shrink it via
+ * {@link __setOwnStoreIoTimeoutMsForTests} to exercise the stalled-stream
+ * path without a 15-second wait.
+ */
+let ownStoreIoTimeoutMs = IMAGE_FETCH_TIMEOUT_MS;
+
+/**
+ * Test seam — overrides the own-store S3 I/O deadline. Pass `null` to
+ * restore {@link IMAGE_FETCH_TIMEOUT_MS}. Production code never calls this.
+ *
+ * @internal
+ */
+export function __setOwnStoreIoTimeoutMsForTests(ms: number | null): void {
+  ownStoreIoTimeoutMs = ms ?? IMAGE_FETCH_TIMEOUT_MS;
+}
+
+/**
+ * A deadline for one own-store S3 operation (Head, Get, or body stream).
+ * `aborted` rejects the moment the AbortController fires, so callers can
+ * `Promise.race` it against any SDK/stream promise — including stubs that
+ * ignore the abort signal.
+ */
+function ownStoreDeadline(timeoutMs: number): {
+  signal: AbortSignal;
+  aborted: Promise<never>;
+  done: () => void;
+} {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const aborted = new Promise<never>((_, reject) => {
+    controller.signal.addEventListener(
+      'abort',
+      () => {
+        reject(
+          new Error(`own-store S3 read exceeded deadline (${timeoutMs}ms)`),
+        );
+      },
+      { once: true },
+    );
+  });
+  return {
+    signal: controller.signal,
+    aborted,
+    done: () => clearTimeout(timer),
+  };
+}
+
+/** Best-effort teardown of an S3 response body on every exit path. */
+function destroyS3Body(body: unknown): void {
+  const destroy = (body as { destroy?: unknown } | null)?.destroy;
+  if (typeof destroy === 'function') {
+    try {
+      (destroy as () => void).call(body);
+    } catch {
+      // Destroy must never throw into the classified-result path.
+    }
+  }
+}
+
+/**
  * A `review` result produced by input preflight — classified, not a
  * provider error, so callers route the asset to human review rather than
  * scheduling a pointless provider retry.
@@ -325,7 +386,10 @@ function resolveOwnS3Object(imageUrl: string): { bucket: string; key: string } |
 
 /** Minimal structural subset of the S3 client used for preflight/fallback. */
 interface S3Like {
-  send(command: unknown): Promise<unknown>;
+  send(
+    command: unknown,
+    options?: { abortSignal?: AbortSignal },
+  ): Promise<unknown>;
 }
 
 async function loadInternalS3(): Promise<S3Like | null> {
@@ -360,14 +424,20 @@ async function preflightS3Object(
   if (!s3) {
     return 'fetch_bytes';
   }
+  // The Head call carries the documented I/O deadline (audit S4): a stalled
+  // own-store request must not hold the moderation operation indefinitely.
+  const deadline = ownStoreDeadline(ownStoreIoTimeoutMs);
   try {
     const specifier = '@aws-sdk/client-s3';
     const { HeadObjectCommand } = (await import(specifier)) as {
       HeadObjectCommand: new (input: { Bucket: string; Key: string }) => unknown;
     };
-    const head = (await s3.send(
-      new HeadObjectCommand({ Bucket: bucket, Key: key }),
-    )) as S3HeadOutput;
+    const head = (await Promise.race([
+      s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }), {
+        abortSignal: deadline.signal,
+      }),
+      deadline.aborted,
+    ])) as S3HeadOutput;
     if (
       typeof head.ContentLength === 'number'
       && head.ContentLength > MAX_REKOGNITION_IMAGE_BYTES
@@ -390,6 +460,8 @@ async function preflightS3Object(
     return null;
   } catch {
     return 'fetch_bytes';
+  } finally {
+    deadline.done();
   }
 }
 
@@ -397,6 +469,12 @@ async function preflightS3Object(
  * Read an own-store object body into a bounded buffer. Used as a fallback
  * when Rekognition cannot consume `Image.S3Object` (e.g. the media store is
  * an S3-compatible service Rekognition has no network path to).
+ *
+ * Boundedness (audit S4): the GetObject call carries an abort deadline, and
+ * stream-like bodies are consumed chunk-by-chunk — the byte counter trips
+ * the cap and destroys the body BEFORE the full object is buffered, so a
+ * misleading or absent Content-Length cannot exhaust memory. A stall at any
+ * stage (send or mid-body) is escaped by the shared deadline race.
  */
 async function readOwnObjectBytes(
   bucket: string,
@@ -406,39 +484,95 @@ async function readOwnObjectBytes(
   if (!s3) {
     return null;
   }
+  const deadline = ownStoreDeadline(ownStoreIoTimeoutMs);
+  let body:
+    | (AsyncIterable<Uint8Array> & { destroy?: () => void })
+    | { transformToByteArray?: () => Promise<Uint8Array> }
+    | undefined;
   try {
     const specifier = '@aws-sdk/client-s3';
     const { GetObjectCommand } = (await import(specifier)) as {
       GetObjectCommand: new (input: { Bucket: string; Key: string }) => unknown;
     };
-    const output = (await s3.send(
-      new GetObjectCommand({ Bucket: bucket, Key: key }),
-    )) as { Body?: AsyncIterable<Uint8Array> | { transformToByteArray?: () => Promise<Uint8Array> } };
-    const body = output.Body;
+    const output = (await Promise.race([
+      s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }), {
+        abortSignal: deadline.signal,
+      }),
+      deadline.aborted,
+    ])) as {
+      Body?: typeof body;
+      ContentLength?: number;
+    };
+    body = output.Body;
     if (!body) {
       return null;
     }
-    // SDK v3 node runtime exposes transformToByteArray; fall back to manual
-    // iteration for stream-like bodies.
+    // Declared length is advisory only — the stream may exceed it, so the
+    // streaming counter below is the authoritative bound either way.
+    if (
+      typeof output.ContentLength === 'number'
+      && output.ContentLength > MAX_REKOGNITION_IMAGE_BYTES
+    ) {
+      return null;
+    }
+    if (typeof (body as AsyncIterable<Uint8Array>)[Symbol.asyncIterator] === 'function') {
+      // Incremental consume with manual iteration: every `next()` races the
+      // deadline so a stalled stream cannot outlive the budget even when the
+      // transport ignores the abort signal.
+      const iterable = body as AsyncIterable<Uint8Array>;
+      const iterator = iterable[Symbol.asyncIterator]();
+      const chunks: Buffer[] = [];
+      let total = 0;
+      try {
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const { done, value } = await Promise.race([
+            iterator.next(),
+            deadline.aborted,
+          ]);
+          if (done) {
+            break;
+          }
+          if (value) {
+            total += value.byteLength;
+            if (total > MAX_REKOGNITION_IMAGE_BYTES) {
+              return null;
+            }
+            chunks.push(Buffer.from(value));
+          }
+        }
+      } finally {
+        // Destroy the body FIRST — a pending `next()` on a stalled stream
+        // only settles once the stream is torn down, so awaiting
+        // `iterator.return()` before destroy would deadlock.
+        destroyS3Body(body);
+        try {
+          await iterator.return?.();
+        } catch {
+          // Teardown must never mask the classified outcome.
+        }
+      }
+      return Buffer.concat(chunks, total);
+    }
+    // Non-stream SDK stub surface (transformToByteArray only): it buffers
+    // internally, so the cap is applied after the fact — acceptable only as
+    // a compatibility path; the real Node SDK body is always a Readable.
     if (typeof (body as { transformToByteArray?: unknown }).transformToByteArray === 'function') {
-      const bytes = await (body as { transformToByteArray: () => Promise<Uint8Array> }).transformToByteArray();
+      const bytes = await Promise.race([
+        (body as { transformToByteArray: () => Promise<Uint8Array> }).transformToByteArray(),
+        deadline.aborted,
+      ]);
       if (bytes.byteLength > MAX_REKOGNITION_IMAGE_BYTES) {
         return null;
       }
       return Buffer.from(bytes);
     }
-    const chunks: Buffer[] = [];
-    let total = 0;
-    for await (const chunk of body as AsyncIterable<Uint8Array>) {
-      total += chunk.byteLength;
-      if (total > MAX_REKOGNITION_IMAGE_BYTES) {
-        return null;
-      }
-      chunks.push(Buffer.from(chunk));
-    }
-    return Buffer.concat(chunks, total);
+    return null;
   } catch {
     return null;
+  } finally {
+    destroyS3Body(body);
+    deadline.done();
   }
 }
 

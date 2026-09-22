@@ -4,11 +4,8 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   confirmPlatformPayPayment,
-  initPaymentSheet,
-  PaymentSheetError,
   PlatformPay,
   PlatformPayError,
-  presentPaymentSheet,
 } from '@stripe/stripe-react-native';
 import { queryKeys } from '../../platform/server/queryKeys';
 import { useBackendData } from '../../context/BackendDataContext';
@@ -38,8 +35,8 @@ import { calculatePlatformChargeGbp } from '../../utils/currencyAuthoringFlows';
 import { createStableId } from '../../utils/createStableId';
 import {
   configureStripeMobile,
-  getStripeReturnUrl,
 } from '../../platform/payments/stripeMobile';
+import { presentStripePaymentSheet } from '../../services/paymentSheetFlow';
 import { track, trackFunnelStep } from '../../analytics';
 import { haptics } from '../../utils/haptics';
 import type { Listing } from '../../domain';
@@ -899,45 +896,23 @@ export function useCheckoutPaymentFlow({
           throw new Error(walletConfirmError.message);
         }
       } else {
-      const { error: sheetInitializationError } = await initPaymentSheet({
-        merchantDisplayName: sheet.merchantDisplayName,
-        customerId: sheet.customerId,
-        customerSessionClientSecret: sheet.customerSessionClientSecret,
-        paymentIntentClientSecret: sheet.paymentIntentClientSecret,
-        returnURL: getStripeReturnUrl(),
-        allowsDelayedPaymentMethods: false,
-        applePay:
-          sheet.applePayEnabled && Platform.OS === 'ios'
-            ? { merchantCountryCode: sheet.merchantCountryCode }
-            : undefined,
-        googlePay:
-          sheet.googlePayEnabled && Platform.OS === 'android'
-            ? {
-                merchantCountryCode: sheet.merchantCountryCode,
-                currencyCode: sheet.currency,
-                testEnv: sheet.publishableKey.startsWith('pk_test_'),
-              }
-            : undefined,
+      // Shared PaymentSheet orchestration (services/paymentSheetFlow) —
+      // identical init/present semantics for checkout and auction wins.
+      const sheetOutcome = await presentStripePaymentSheet(sheet, {
+        onSheetPresenting: () => {
+          // Set authenticating stage — the PaymentSheet may trigger 3DS/SCA
+          // challenge during presentation. This stage makes the authentication
+          // step visible to the user (audit 09: canonical payment state).
+          setStage('authenticating');
+          trackFunnelStep('checkout', 'payment_submitted', { order_id: orderId });
+        },
       });
-      if (sheetInitializationError) {
-        throw new Error(sheetInitializationError.message);
-      }
-
-      // Set authenticating stage — the PaymentSheet may trigger 3DS/SCA
-      // challenge during presentation. This stage makes the authentication
-      // step visible to the user (audit 09: canonical payment state).
-      setStage('authenticating');
-      trackFunnelStep('checkout', 'payment_submitted', { order_id: orderId });
-      const { error: sheetPresentationError } = await presentPaymentSheet();
-      if (sheetPresentationError?.code === PaymentSheetError.Canceled) {
+      if (sheetOutcome === 'cancelled') {
         setStage('idle');
         setOrderError(null);
         pendingIntentIdRef.current = null;
         isSubmittingRef.current = false;
         return;
-      }
-      if (sheetPresentationError) {
-        throw new Error(sheetPresentationError.message);
       }
       }
 

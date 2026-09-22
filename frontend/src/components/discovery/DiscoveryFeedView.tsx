@@ -87,10 +87,10 @@ export function DiscoveryFeedView({
   /** Last listings-sync failure while the feed stays populated — rendered
    *  as an inline retry row at the feed position, not a blocking state. */
   listingsError?: string | null;
-  /** Opens the editorial's real destination (the Galleria surface that owns
-   *  the editorial). When absent the hero renders non-interactive —
-   *  never a fake affordance (FRESH-08). */
-  onEditorialPress?: () => void;
+  /** Opens the editorial's readable destination (the GalleriaEditorial
+   *  article screen, addressed by the piece's own ID — S21-02). When absent
+   *  the hero renders non-interactive — never a fake affordance (FRESH-08). */
+  onEditorialPress?: (editorial: GalleriaEditorial) => void;
   /** True while the pull-to-refresh gesture's sources are still settling —
    *  keeps the RefreshControl honest (F06). */
   isRefreshing: boolean;
@@ -239,19 +239,19 @@ export function DiscoveryFeedView({
 
       {/* Hero editorial — compact media strip, no decorative chrome.
           Per 2026 research: hero max 96-120pt on discovery feeds.
-          FRESH-08: the hero is a real navigation target (the Galleria
-          surface that owns the editorial) when a handler is provided;
-          without one it renders non-interactive — no fake affordance.
+          FRESH-08 + S21-02: the hero navigates to the piece's own article
+          screen (ID-bound) when a handler is provided; without one it
+          renders non-interactive — no fake affordance.
           FRESH-10: when the editorials module failed, its position shows a
           restrained retry row instead of vanishing silently. */}
       {heroEditorial && heroEditorial.heroImage ? (
         onEditorialPress ? (
           <Pressable
-            onPress={onEditorialPress}
+            onPress={() => onEditorialPress(heroEditorial)}
             style={({ pressed }) => [styles.heroWrap, { opacity: pressed ? 0.85 : 1 }]}
             accessibilityRole="button"
             accessibilityLabel={heroEditorial.title}
-            accessibilityHint="Opens the editorial in the Galleria"
+            accessibilityHint="Read the full story"
           >
             <CachedImage
               uri={heroEditorial.heroImage}

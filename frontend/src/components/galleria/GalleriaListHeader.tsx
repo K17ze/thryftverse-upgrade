@@ -30,7 +30,8 @@ export function GalleriaListHeader({
   railCollections,
   hasFeaturedAssets,
   reducedMotion,
-  onCollectionPress }: {
+  onCollectionPress,
+  onEditorialPress }: {
   loading: boolean;
   heroEditorial: GalleriaEditorial | null;
   collections: GalleriaCollection[];
@@ -39,6 +40,9 @@ export function GalleriaListHeader({
   hasFeaturedAssets: boolean;
   reducedMotion: boolean;
   onCollectionPress: (collection: GalleriaCollection) => void;
+  /** Opens the piece's article screen (S21-02). Optional — the hero stays
+   *  a non-interactive image when no reader destination is wired. */
+  onEditorialPress?: (editorial: GalleriaEditorial) => void;
 }) {
   const styles = useGalleriaStyles();
   const { t } = useAppTranslation('galleria');
@@ -59,6 +63,7 @@ export function GalleriaListHeader({
       ) : heroEditorial ? (
         <GalleriaHeroEditorialCard
           editorial={heroEditorial}
+          onPress={onEditorialPress ? () => onEditorialPress(heroEditorial) : undefined}
         />
       ) : null}
 

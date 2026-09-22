@@ -14,6 +14,7 @@ import {
   mapNeighbourAssetsToListings,
   nearestMediaEmbeddings,
   resolveServingEmbeddingLineage,
+  type NearestMediaEmbeddingsResult,
 } from '../lib/mediaEmbeddings.js';
 import { deserialiseEmbedding } from '../workers/handlers/mediaEmbeddingUtils.js';
 
@@ -29,6 +30,46 @@ const POSITIVE_ANCHOR_ACTIONS = new Set<InteractionAction>([
 // Upper bound on the merged multi-source pool — keeps the decision-service
 // payload bounded even when every auxiliary source returns at cap.
 const MERGED_CANDIDATE_POOL_CAP = 800;
+
+// ── Honest item-to-item source labels (audit S5) ──────────────────────────
+// The tag stamped on impressions (`candidate_source`) and reported in
+// `diagnostics.retrieval_sources` must be the retrieval method that actually
+// produced the hits. lib/mediaEmbeddings.ts reports 'pgvector_ann' only when
+// an HNSW/IVFFlat index exists; an unindexed `embedding_vec` scan is
+// 'pgvector_exact' and the bounded in-application BYTEA scan is
+// 'bytea_exact_scan'. Neither must ever masquerade as ANN.
+type MediaEmbeddingRetrievalMethod = NearestMediaEmbeddingsResult['method'];
+
+const ITEM_TO_ITEM_SOURCE_BY_METHOD: Record<MediaEmbeddingRetrievalMethod, string> = {
+  pgvector_ann: 'item_to_item_ann',
+  pgvector_exact: 'item_to_item_exact',
+  bytea_exact_scan: 'item_to_item_fallback',
+};
+
+// Capability order for mixed-method anchor fan-out. Capability is probed per
+// call so all anchors normally share one method, but if they ever diverge the
+// merged lineage reports the weakest method that actually ran — never the
+// strongest.
+const RETRIEVAL_METHOD_SEVERITY: readonly MediaEmbeddingRetrievalMethod[] = [
+  'pgvector_ann',
+  'pgvector_exact',
+  'bytea_exact_scan',
+];
+
+export function itemToItemSourceLabel(
+  methods: Iterable<MediaEmbeddingRetrievalMethod>,
+): string {
+  let weakest: MediaEmbeddingRetrievalMethod = 'pgvector_ann';
+  for (const method of methods) {
+    if (
+      RETRIEVAL_METHOD_SEVERITY.indexOf(method) >
+      RETRIEVAL_METHOD_SEVERITY.indexOf(weakest)
+    ) {
+      weakest = method;
+    }
+  }
+  return ITEM_TO_ITEM_SOURCE_BY_METHOD[weakest];
+}
 
 const POLICY_VERSION = 'recommendation-heuristic-v2.0';
 const FALLBACK_POLICY_VERSION = 'recommendation-fallback-v2.0';
@@ -854,6 +895,12 @@ export function registerRecommendationRoutes({
     let topicDirectives: { label: string; band: DirectiveBand }[] = [];
     const excludedListingIds = new Set<string>();
     const excludedSellerIds = new Set<string>();
+    // Latest item-scope mutation per listing — the authoritative reversal
+    // record for interaction-derived suppression (S21-03, see below).
+    const latestItemMutation = new Map<
+      string,
+      { direction: string; createdAtMs: number }
+    >();
 
     try {
       const bandRows = await db.query<{ topic_label: string; influence_band: string }>(
@@ -879,10 +926,11 @@ export function registerRecommendationRoutes({
         target_id: string;
         target_label: string;
         direction: string;
+        created_at: string;
       }>(
-        `SELECT scope, target_id, target_label, direction
+        `SELECT scope, target_id, target_label, direction, created_at
          FROM (
-           SELECT scope, target_id, target_label, direction,
+           SELECT scope, target_id, target_label, direction, created_at::text,
                   ROW_NUMBER() OVER (
                     PARTITION BY scope, target_id ORDER BY mutation_id DESC
                   ) AS rn
@@ -895,6 +943,12 @@ export function registerRecommendationRoutes({
         [userId],
       );
       for (const row of mutationRows.rows) {
+        if (row.scope === 'item') {
+          latestItemMutation.set(row.target_id, {
+            direction: row.direction,
+            createdAtMs: Date.parse(row.created_at),
+          });
+        }
         if (row.direction === 'exclude' || row.direction === 'remove') {
           if (row.scope === 'item') excludedListingIds.add(row.target_id);
           else if (row.scope === 'seller') excludedSellerIds.add(row.target_id);
@@ -915,8 +969,43 @@ export function registerRecommendationRoutes({
 
     // Item-level negative feedback from the interaction stream suppresses the
     // listing immediately — it must not wait on a ledger projection.
+    //
+    // Reversal semantics (S21-03): the suppression is derived state and the
+    // intent ledger is authoritative for the user's current item intent. The
+    // mutate route already retracts committed `not_interested` rows in the
+    // same transaction as a restore mutation; this read-side check is the
+    // ordering backstop for a hide write that commits AFTER the restore — an
+    // item stays suppressed only while its newest hide event is newer than
+    // the newest restore mutation.
+    //
+    //   - A restore ('usual'/'add') supersedes suppression only when its
+    //     mutation timestamp is >= the newest hide's. Both columns default
+    //     to NOW() (transaction start), so an undo committed while the hide
+    //     write was still in flight still wins — the in-flight interaction
+    //     carries an earlier transaction-start clock — and ties resolve to
+    //     the reversal.
+    //   - 'less'/'more' are ranking adjustments, not restores — they never
+    //     lift a hide.
+    //   - 'report_content' is a trust-and-safety record, not feed taste: it
+    //     suppresses unconditionally and is never retracted by an item-intent
+    //     mutation.
+    const hideAssessedListingIds = new Set<string>();
     for (const row of interactionsResult.rows) {
-      if (row.action === 'not_interested' || row.action === 'report_content') {
+      if (row.action === 'report_content') {
+        excludedListingIds.add(row.listing_id);
+        continue;
+      }
+      if (row.action !== 'not_interested') continue;
+      // Interactions arrive newest-first; only the latest hide event per
+      // listing competes with the listing's latest intent mutation.
+      if (hideAssessedListingIds.has(row.listing_id)) continue;
+      hideAssessedListingIds.add(row.listing_id);
+      const mutation = latestItemMutation.get(row.listing_id);
+      const superseded =
+        mutation !== undefined &&
+        (mutation.direction === 'usual' || mutation.direction === 'add') &&
+        mutation.createdAtMs >= Date.parse(row.created_at);
+      if (!superseded) {
         excludedListingIds.add(row.listing_id);
       }
     }
@@ -947,11 +1036,15 @@ export function registerRecommendationRoutes({
       sourceContributions[source] = contributed;
     };
 
-    // item_to_item_ann — pgvector nearest-neighbour retrieval anchored on the
+    // item_to_item — pgvector nearest-neighbour retrieval anchored on the
     // media embeddings of listings the user recently signalled interest in.
-    // pgvector-only by design: the BYTEA exact scan is a bounded test
-    // fallback, not a per-request serving path, so this source stays silent
-    // until migration 326 provisions embedding_vec.
+    // Entered only when migration 326 provisioned embedding_vec; the helper
+    // may still serve through an unindexed exact scan ('pgvector_exact') or —
+    // when the serving lineage is not the vector(512) space — the bounded
+    // BYTEA scan ('bytea_exact_scan'). The source tag and diagnostics carry
+    // the method that actually ran (S5): item_to_item_ann /
+    // item_to_item_exact / item_to_item_fallback — exact and fallback results
+    // are never reported as ANN.
     //
     // Lineage is explicit end-to-end (audit N2): embeddings produced by
     // different (model_id, model_version, preprocessing_version, dimensions)
@@ -960,6 +1053,7 @@ export function registerRecommendationRoutes({
     // neighbour query, and the anchor decode all pin the serving lineage
     // resolved once per request; a ready embedding from any other lineage
     // is skipped, never silently compared cross-space.
+    let itemToItemRetrieval: Record<string, unknown> | null = null;
     try {
       const anchorListingIds = [...new Set(
         interactionsResult.rows
@@ -992,9 +1086,12 @@ export function registerRecommendationRoutes({
               servingLineage.dimensions,
             ],
           );
-          // (asset_id → best cosine distance) preserves ANN rank through
-          // the listing join — the same asset can neighbour several anchors.
+          // (asset_id → best cosine distance) preserves neighbour rank
+          // through the listing join — the same asset can neighbour several
+          // anchors.
           const neighbourAssets = new Map<string, number>();
+          const retrievalMethods = new Set<MediaEmbeddingRetrievalMethod>();
+          const degradedReasons = new Set<string>();
           for (const anchor of anchors.rows) {
             // Anchor payloads are validated before they seed a query: a
             // corrupt or cross-space vector is skipped, never ranked.
@@ -1018,12 +1115,31 @@ export function registerRecommendationRoutes({
                 dimensions: servingLineage.dimensions,
               },
             });
+            retrievalMethods.add(nearest.method);
+            if (nearest.degradedReason) {
+              degradedReasons.add(nearest.degradedReason);
+            }
             for (const hit of nearest.hits) {
               const known = neighbourAssets.get(hit.mediaAssetId);
               if (known === undefined || hit.distance < known) {
                 neighbourAssets.set(hit.mediaAssetId, hit.distance);
               }
             }
+          }
+          if (retrievalMethods.size > 0) {
+            // Honest retrieval telemetry (S5): report the method(s) the
+            // helper actually used, never an assumed ANN path. The index
+            // probe behind 'pgvector_ann' proves an ANN index exists on the
+            // column — i.e. ANN-capable — not that the planner chose it for
+            // this query, so the diagnostic language stays at
+            // "method reported by the retrieval helper".
+            itemToItemRetrieval = {
+              methods: [...retrievalMethods].sort(),
+              source_label: itemToItemSourceLabel(retrievalMethods),
+              ...(degradedReasons.size > 0
+                ? { degraded_reasons: [...degradedReasons].sort() }
+                : {}),
+            };
           }
           if (neighbourAssets.size > 0) {
             const anchorSet = new Set(anchorListingIds);
@@ -1033,10 +1149,10 @@ export function registerRecommendationRoutes({
               .map((row) => row.listingId)
               .filter((id) => !anchorSet.has(id));
             if (similarIds.length > 0) {
-              // similarIds arrive ordered by best ANN distance
+              // similarIds arrive ordered by best neighbour distance
               // (mapNeighbourAssetsToListings preserves the ordinality of
               // the neighbour list), so array_position ordering makes
-              // source_rank inside this source the true ANN rank.
+              // source_rank inside this source the true retrieval rank.
               const i2i = await db.query<ListingRow>(
                 candidateListingsSql(
                   'AND l.id = ANY($2::text[])',
@@ -1045,13 +1161,13 @@ export function registerRecommendationRoutes({
                 ),
                 [userId, similarIds],
               );
-              mergeSource(i2i.rows, 'item_to_item_ann');
+              mergeSource(i2i.rows, itemToItemSourceLabel(retrievalMethods));
             }
           }
         }
       }
     } catch (error) {
-      request.log.warn({ err: error, userId }, 'item_to_item_ann retrieval failed');
+      request.log.warn({ err: error, userId }, 'item_to_item retrieval failed');
     }
 
     // user_affinity — listings matching the user's "show more like this"
@@ -1353,6 +1469,9 @@ export function registerRecommendationRoutes({
     // Retrieval-source mix actually contributing candidates this request —
     // the honest audit trail for "which source is doing the work" (R19).
     result.decision.diagnostics.retrieval_sources = sourceContributions;
+    if (itemToItemRetrieval) {
+      result.decision.diagnostics.item_to_item_retrieval = itemToItemRetrieval;
+    }
     const retrievalVersion =
       Object.values(sourceContributions).filter((count) => count > 0).length > 1
         ? 'v2_multi_source'

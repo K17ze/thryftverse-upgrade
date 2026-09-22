@@ -24,6 +24,12 @@ on:
 permissions:
   contents: read
 
+# One rollback per channel at a time — overlapping rollbacks on the same
+# channel can interleave branch state.
+concurrency:
+  group: ota-rollback-${{ inputs.channel }}
+  cancel-in-progress: false
+
 jobs:
   rollback:
     name: OTA Rollback (${{ inputs.method }})
@@ -58,31 +64,49 @@ jobs:
             exit 1
           fi
           key_path="$RUNNER_TEMP/ota-private-key.pem"
-          printf '%s' "$OTA_CODE_SIGNING_PRIVATE_KEY" > "$key_path"
-          chmod 600 "$key_path"
+          # Restrictive permissions from creation (umask 077), not a chmod
+          # after the fact — the key never exists world/group-readable.
+          (umask 077; printf '%s' "$OTA_CODE_SIGNING_PRIVATE_KEY" > "$key_path")
           echo "OTA_PRIVATE_KEY_PATH=$key_path" >> "$GITHUB_ENV"
 
       - name: Rollback to embedded bundle
         if: inputs.method == 'rollback'
-        run: eas update:rollback --branch ${{ inputs.channel }} --private-key-path "$OTA_PRIVATE_KEY_PATH"
         env:
           EAS_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+          OTA_CHANNEL: ${{ inputs.channel }}
+        run: eas update:rollback --branch "$OTA_CHANNEL" --private-key-path "$OTA_PRIVATE_KEY_PATH"
 
       - name: Republish previous update
         if: inputs.method == 'republish'
+        env:
+          OTA_CHANNEL: ${{ inputs.channel }}
         run: |
-          echo "::warning::Republish of a specific update group is owned by the Release Train workflow."
-          echo "Dispatch 'Release Train' with channel=${{ inputs.channel }} and rollback_update_id=<UPDATE_GROUP_ID> —"
-          echo "that path is signed and passes through the production-approval gate."
+          # Republish of a specific update group is owned by the Release
+          # Train workflow (signed, and gated by production approval). This
+          # workflow cannot perform it — fail loudly instead of reporting a
+          # rollback that never happened.
+          echo "::error::Republish is not executed by this workflow. Dispatch 'Release Train' with channel=$OTA_CHANNEL and rollback_update_id=<UPDATE_GROUP_ID> — that path is signed and passes through the production-approval gate."
+          exit 1
 
       - name: Notify rollback executed
-        if: success()
+        if: success() && inputs.method == 'rollback'
+        env:
+          OTA_CHANNEL: ${{ inputs.channel }}
         run: |
-          echo "::notice::OTA rollback (${{ inputs.method }}) executed on ${{ inputs.channel }} channel."
+          echo "::notice::OTA rollback (rollback to embedded bundle) executed on $OTA_CHANNEL channel."
+
+      - name: Scrub OTA signing key
+        # Key material must not outlive the job — always() so it runs even
+        # when the rollback step fails or is skipped.
+        if: always()
+        run: rm -f "$RUNNER_TEMP/ota-private-key.pem"
 
       - name: Failure notification
         if: failure()
+        env:
+          OTA_CHANNEL: ${{ inputs.channel }}
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERTING_WEBHOOK_URL }}
         run: |
           curl -X POST -H "Content-Type: application/json" \
-            -d "{\"content\":\"OTA rollback FAILED on channel ${{ inputs.channel }}\"}" \
-            ${{ secrets.ALERTING_WEBHOOK_URL }} || true
+            -d "{\"content\":\"OTA rollback FAILED on channel $OTA_CHANNEL\"}" \
+            "$ALERT_WEBHOOK_URL" || true

@@ -181,6 +181,7 @@ import {
   enqueueSellerTrustRecomputeJob,
   enqueueFeedbackEvaluationJob,
   enqueueSearchIndexSyncJob,
+  enqueueVendorSyncJob,
   startBackgroundWorkers,
 } from './lib/queues.js';
 import {
@@ -346,10 +347,12 @@ import {
   processSellerTrustRecompute,
   processAutoFeedbackSweep,
   processDomainOutboxBatch,
+  processVendorSyncJob,
   reconcileMediaIngestJobs,
   expireStaleMultipartSessions,
   sweepOrphanedUploadIntents,
 } from './workers/handlers/index.js';
+import { SUPPORT_VENDOR_NAMES } from './support/vendorAdapter.js';
 import {
   evaluatePriceAlertsForListing,
   registerPriceAlertRoutes,
@@ -7470,6 +7473,24 @@ async function settlePaymentIntent(
         UPDATE orders
         SET status = 'paid', updated_at = NOW()
         WHERE id = $1 AND status = 'created'
+          -- SEP21-FIN-C: auction-win orders MUST carry an active
+          -- listing_checkout_reservations row (the reconcile trigger needs
+          -- it to convert reservation + mark the listing sold). Guarding
+          -- here routes a reservation-less auction order into the orphan
+          -- branch below instead of aborting the settlement transaction on
+          -- the trigger's LISTING_CHECKOUT_RESERVATION_MISSING raise.
+          AND (
+            EXISTS (
+              SELECT 1
+              FROM listing_checkout_reservations lcr
+              WHERE lcr.order_id = orders.id
+                AND lcr.status = 'active'
+            )
+            OR (
+              orders.auction_id IS NULL
+              AND COALESCE(orders.quote_snapshot->>'source', '') <> 'auction_win'
+            )
+          )
         RETURNING
           id,
           buyer_id,
@@ -10217,6 +10238,42 @@ function stopDomainOutboxScheduler(): void {
   }
   clearInterval(domainOutboxTimer);
   domainOutboxTimer = null;
+}
+
+let vendorSyncTimer: NodeJS.Timeout | null = null;
+
+/**
+ * Periodic support_vendor_outbox drain. The vendorSync handler claims rows
+ * atomically (FOR UPDATE SKIP LOCKED) and reclaims stale 'delivering'
+ * leases, so overlapping schedulers (API + standalone worker during deploy
+ * overlap) are safe. No producer call sites exist yet — this scheduler is
+ * the drain backstop for when the first real event source lands; producers
+ * should also kick enqueueVendorSyncJob after enqueueVendorEvent for
+ * low-latency delivery.
+ */
+function startVendorSyncScheduler(): void {
+  if (vendorSyncTimer) {
+    return;
+  }
+
+  const enqueueDrain = () => {
+    for (const vendorName of SUPPORT_VENDOR_NAMES) {
+      void enqueueVendorSyncJob(vendorName).catch((error) => {
+        app.log.error({ err: error, vendorName }, 'Failed scheduling vendor sync drain');
+      });
+    }
+  };
+
+  vendorSyncTimer = setInterval(enqueueDrain, 30_000);
+  vendorSyncTimer.unref?.();
+}
+
+function stopVendorSyncScheduler(): void {
+  if (!vendorSyncTimer) {
+    return;
+  }
+  clearInterval(vendorSyncTimer);
+  vendorSyncTimer = null;
 }
 
 let retentionSweepTimer: NodeJS.Timeout | null = null;
@@ -39299,6 +39356,9 @@ const start = async () => {
           const { processAgentRun } = await import('./botRuntime/index.js');
           await processAgentRun(db, runId);
         },
+        handleVendorSyncJob: async ({ vendorName }) => {
+          await processVendorSyncJob({ vendorName });
+        },
       });
     } else {
       app.log.info('[api] background workers disabled â€” running in separate container');
@@ -39310,6 +39370,7 @@ const start = async () => {
     startCoOwnAlertEvaluatorScheduler();
     startCoOwnDripExecutionScheduler();
     startDomainOutboxScheduler();
+    startVendorSyncScheduler();
     startRetentionSweepScheduler();
     startAnalyticsAggregationScheduler();
     startSellerTrustRecomputeScheduler();
@@ -41282,6 +41343,7 @@ const shutdown = async () => {
   stopCoOwnAlertEvaluatorScheduler();
   stopCoOwnDripExecutionScheduler();
   stopDomainOutboxScheduler();
+  stopVendorSyncScheduler();
   stopRetentionSweepScheduler();
   stopAnalyticsAggregationScheduler();
   stopSellerTrustRecomputeScheduler();

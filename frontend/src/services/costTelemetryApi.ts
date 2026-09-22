@@ -36,7 +36,15 @@ export interface DomainCostTelemetry {
   unitKind: CostTelemetryUnitKind;
   /** USD spend; null when the domain's ledger records no USD cost. */
   costUsd: number | null;
-  /** Native minor-unit spend for non-USD ledgers (GBP pence = promotions). */
+  /**
+   * Raw micro-USD spend for USD micros ledgers (1 USD = 1e6 micros) —
+   * the precision-preserving counterpart of costUsd, NOT a minor unit.
+   */
+  costMicrosUsd: number | null;
+  /**
+   * Native ISO-4217 minor-unit spend for non-USD ledgers (GBP pence =
+   * promotions). Null on USD domains — their raw precision is costMicrosUsd.
+   */
   costMinor: number | null;
   costCurrency: 'USD' | 'GBP' | null;
   window: { start: string; end: string };

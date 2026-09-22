@@ -137,16 +137,23 @@ describe('getDomainCostTelemetry', () => {
     assert.equal(chatAgents.units, 4200);
     assert.equal(chatAgents.unitKind, 'tokens');
     assert.equal(chatAgents.costUsd, 2.5);
+    // Micro-USD is reported under costMicrosUsd — micros are NOT minor
+    // units, so costMinor stays null for USD ledgers (audit costMinor fix).
+    assert.equal(chatAgents.costMicrosUsd, 2_500_000);
+    assert.equal(chatAgents.costMinor, null);
     assert.equal(chatAgents.costCurrency, 'USD');
 
     const support = byDomain.get('support_agent')!;
     assert.equal(support.costUsd, 0.5);
+    assert.equal(support.costMicrosUsd, 500_000);
+    assert.equal(support.costMinor, null);
 
     const promotions = byDomain.get('promotions')!;
     assert.equal(promotions.calls, 2);
     assert.equal(promotions.units, 130);
     assert.equal(promotions.costUsd, null); // no FX source — never fabricated
-    assert.equal(promotions.costMinor, 7500);
+    assert.equal(promotions.costMicrosUsd, null);
+    assert.equal(promotions.costMinor, 7500); // true minor units: GBP pence
     assert.equal(promotions.costCurrency, 'GBP');
 
     const fraud = byDomain.get('fraud_scoring')!;

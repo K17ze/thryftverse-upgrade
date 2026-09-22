@@ -19,6 +19,7 @@
  *   "outcome_unknown" state semantics in the domain job table.
  */
 import { config } from '../config.js';
+import { fetchPinnedRemoteMedia } from './safeRemoteMediaFetch.js';
 
 // ── Domain operation spec (shared with the route layer) ────────────────────
 // The route layer passes domain operation types; the adapter translates them
@@ -330,22 +331,27 @@ export class PhotoroomProvider implements MediaEnhancementProvider {
   }
 
   // ── Result validation ──────────────────────────────────────────────────
-  // HEAD the result URL and confirm the content-type is an image before
+  // Fetch the result URL and confirm the content is an image before
   // accepting it as a candidate asset. This prevents a malformed or
   // adversarial provider response (e.g. an HTML error page) from being
   // stored as a media derivation.
+  //
+  // Security: the provider-controlled result URL is fetched through the
+  // shared pinned transport (`fetchPinnedRemoteMedia`) — DNS is resolved
+  // once, blocklist-checked, and the connection pinned to the validated
+  // address set; redirects are revalidated per hop; the body streams into
+  // a bounded buffer. The previous HEAD request was unpinned and trusted
+  // the Content-Type header alone; the pinned GET additionally sniffs the
+  // payload's magic bytes.
 
   private async validateResultIsImage(url: string): Promise<boolean> {
-    try {
-      const response = await withTimeout(
-        fetch(url, { method: 'HEAD' }),
-        this.timeoutMs,
-      );
-      const contentType = response.headers.get('content-type');
-      return response.ok && isImageContentType(contentType);
-    } catch {
-      return false;
-    }
+    const result = await fetchPinnedRemoteMedia({
+      url,
+      timeoutMs: this.timeoutMs,
+    });
+    if (!result.ok) return false;
+    return isImageContentType(result.contentTypeHeader)
+      || result.sniffedContentType !== null;
   }
 
   // ── EXIF GPS stripping ─────────────────────────────────────────────────
@@ -360,15 +366,23 @@ export class PhotoroomProvider implements MediaEnhancementProvider {
 
   private async stripExifGps(sourceUrl: string): Promise<string> {
     try {
-      const response = await withTimeout(
-        fetch(sourceUrl, { method: 'GET' }),
-        this.timeoutMs,
-      );
-      if (!response.ok) {
-        throw new Error(`SOURCE_FETCH_FAILED:${response.status}`);
+      // Pinned transport: DNS-validated + connection-pinned fetch so a
+      // rebinding cannot redirect the source read (SSRF hardening).
+      const result = await fetchPinnedRemoteMedia({
+        url: sourceUrl,
+        timeoutMs: this.timeoutMs,
+      });
+      if (!result.ok) {
+        throw new Error(
+          result.code === 'timeout'
+            ? `TIMEOUT_AFTER_${this.timeoutMs}ms`
+            : `SOURCE_FETCH_FAILED:${result.statusCode ?? result.code}`,
+        );
       }
-      const contentType = response.headers.get('content-type');
-      if (!isImageContentType(contentType)) {
+      if (
+        !isImageContentType(result.contentTypeHeader)
+        && result.sniffedContentType === null
+      ) {
         throw new Error('SOURCE_NOT_IMAGE');
       }
     } catch (err) {

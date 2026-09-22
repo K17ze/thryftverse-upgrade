@@ -4,9 +4,14 @@
  * Default SLO: 99.9% availability (43.2 minutes downtime per 30-day month).
  * Error budget: 0.1% of requests can fail before the budget is exhausted.
  *
- * Uses Redis for a sliding 30-day window of request/error counts per
- * service. Falls back to in-memory tracking if Redis is unavailable,
- * so the tracker degrades gracefully without crashing the server.
+ * Uses Redis for a rolling 30-day window of request/error counts per
+ * service. Counts are written into per-day bucket keys
+ * (`slo:<service>:<YYYY-MM-DD>:total|errors|latency_sum`, UTC) that each
+ * expire after the window — reads sum the trailing 30 day-buckets, so a
+ * continuously-hit service reports a true rolling window instead of a
+ * lifetime total whose TTL renews on every request. Falls back to in-memory
+ * tracking if Redis is unavailable, so the tracker degrades gracefully
+ * without crashing the server.
  *
  * Wired in src/index.ts: the `onResponse` hook records every completed
  * request (service = first route segment, e.g. "listings", "payments"),
@@ -21,6 +26,19 @@ const DEFAULT_SLO = 99.9;
 const WINDOW_DAYS = 30;
 const WINDOW_SECONDS = WINDOW_DAYS * 24 * 60 * 60;
 const REDIS_KEY_PREFIX = 'slo:';
+const DAY_KEY_SUFFIX = /^(.+):(\d{4}-\d{2}-\d{2}):(total|errors|latency_sum)$/;
+
+function utcDay(offsetDays = 0): string {
+  return new Date(Date.now() - offsetDays * 86_400_000).toISOString().slice(0, 10);
+}
+
+function trailingWindowDays(count: number): string[] {
+  const days: string[] = [];
+  for (let i = 0; i < count; i++) {
+    days.push(utcDay(i));
+  }
+  return days;
+}
 
 interface ServiceStats {
   totalRequests: number;
@@ -88,19 +106,25 @@ class SloTracker {
 
   private async recordRedis(service: string, success: boolean, latencyMs: number): Promise<void> {
     try {
-      const totalKey = `${REDIS_KEY_PREFIX}${service}:total`;
-      const errorKey = `${REDIS_KEY_PREFIX}${service}:errors`;
-      const latencyKey = `${REDIS_KEY_PREFIX}${service}:latency_sum`;
+      // Per-day bucket keys. The bucket TTL is garbage collection only —
+      // the rolling window is defined by which day-buckets are READ, so a
+      // renewed TTL on a hot service merely keeps the day's bucket alive a
+      // little longer; it can never inflate the reported window.
+      const day = utcDay();
+      const totalKey = `${REDIS_KEY_PREFIX}${service}:${day}:total`;
+      const errorKey = `${REDIS_KEY_PREFIX}${service}:${day}:errors`;
+      const latencyKey = `${REDIS_KEY_PREFIX}${service}:${day}:latency_sum`;
 
       const pipeline = redis.multi();
+      const bucketTtl = this.windowSeconds + 24 * 60 * 60;
       pipeline.incr(totalKey);
-      pipeline.expire(totalKey, this.windowSeconds);
+      pipeline.expire(totalKey, bucketTtl);
       if (!success) {
         pipeline.incr(errorKey);
-        pipeline.expire(errorKey, this.windowSeconds);
+        pipeline.expire(errorKey, bucketTtl);
       }
       pipeline.incrby(latencyKey, Math.round(latencyMs));
-      pipeline.expire(latencyKey, this.windowSeconds);
+      pipeline.expire(latencyKey, bucketTtl);
       await pipeline.exec();
     } catch (error) {
       logger.warn(
@@ -185,16 +209,20 @@ class SloTracker {
   private async getServiceStats(service: string): Promise<ServiceStats> {
     if (this.redisAvailable) {
       try {
-        const totalKey = `${REDIS_KEY_PREFIX}${service}:total`;
-        const errorKey = `${REDIS_KEY_PREFIX}${service}:errors`;
-
-        const [totalResult, errorResult] = await Promise.all([
-          redis.get(totalKey),
-          redis.get(errorKey),
+        // Sum the trailing day-buckets covering the rolling window.
+        const days = trailingWindowDays(Math.max(1, Math.ceil(this.windowSeconds / 86_400)));
+        const keys = days.flatMap((day) => [
+          `${REDIS_KEY_PREFIX}${service}:${day}:total`,
+          `${REDIS_KEY_PREFIX}${service}:${day}:errors`,
         ]);
+        const values = await redis.mget(...keys);
 
-        const totalRequests = Number(totalResult) || 0;
-        const errorCount = Number(errorResult) || 0;
+        let totalRequests = 0;
+        let errorCount = 0;
+        for (let i = 0; i < days.length; i++) {
+          totalRequests += Number(values[i * 2]) || 0;
+          errorCount += Number(values[i * 2 + 1]) || 0;
+        }
 
         return this.computeStats(totalRequests, errorCount);
       } catch (error) {
@@ -220,8 +248,12 @@ class SloTracker {
       try {
         const keys = await redis.keys(`${REDIS_KEY_PREFIX}*:total`);
         for (const key of keys) {
-          const service = key.replace(`${REDIS_KEY_PREFIX}`, '').replace(':total', '');
-          services.add(service);
+          // Bucket keys are slo:<service>:<YYYY-MM-DD>:total; also accept a
+          // legacy non-bucketed slo:<service>:total so in-flight counters
+          // from an older deploy still resolve to their service name.
+          const suffix = key.slice(REDIS_KEY_PREFIX.length);
+          const bucketMatch = DAY_KEY_SUFFIX.exec(suffix);
+          services.add(bucketMatch ? bucketMatch[1] : suffix.replace(/:total$/, ''));
         }
       } catch (error) {
         logger.warn(

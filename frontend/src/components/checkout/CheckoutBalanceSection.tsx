@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, FontFamily, Radius, Stroke, Control } from '../../theme/designTokens';
-import { TypographyV2 } from '../../theme/typography.v2';
+import { TypographyV2, MAX_FONT_SCALE } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 
 interface Props {
@@ -43,7 +43,7 @@ function CheckoutBalanceSectionBase({ visible, useBalance, balanceLabel, savings
             </View>
             <View style={styles.balanceTextCol}>
               <Text style={styles.balanceLabel} maxFontSizeMultiplier={2}>Use wallet balance</Text>
-              <Text style={styles.balanceAmount} numberOfLines={1} maxFontSizeMultiplier={2} accessibilityLabel={`${balanceLabel} available`}>
+              <Text style={styles.balanceAmount} maxFontSizeMultiplier={MAX_FONT_SCALE.financial} accessibilityLabel={`${balanceLabel} available`}>
                 {balanceLabel} available
               </Text>
             </View>

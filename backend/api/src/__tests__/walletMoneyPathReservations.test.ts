@@ -22,9 +22,10 @@ import type { DbQueryable } from '../lib/workerHelpers.js';
 //   (b) FIN-03 — spendable = gross − enforceable coown_order_reservations;
 //       reserved funds cannot be debited a second time.
 //   (c) a recycled idempotency key carrying a different payload is rejected.
-//   (d) FIN-08 — privileged transfer contexts (coOwn_trade, platform_reward)
-//       require a real domain event / caller authority; forged or mismatched
-//       contexts are rejected.
+//   (d) FIN-08 / SEP21-FIN-B — privileged transfer contexts require a real
+//       domain event / caller authority; coOwn_trade is NOT transferable at
+//       all (a settled DvP trade is already paid, not a payment obligation),
+//       and forged or mismatched contexts are rejected.
 //
 // The fake DB below models just enough Postgres READ COMMITTED behavior to
 // exercise the claim-before-mutate contract honestly:
@@ -899,8 +900,10 @@ test('platform_reward context requires administrative authority', async () => {
   });
 });
 
-test('coOwn_trade context must reference a real settled trade with matching participants and amount', async () => {
+test('SEP21-FIN-B: a settled coOwn_trade cannot authorize a P2P payment — rejected before any debit', async () => {
   const state = emptyState();
+  seedWallet(state, 'wal_a', 'user_a', 50_000);
+  seedWallet(state, 'wal_b', 'user_b', 0);
   state.trades.push({
     id: 42,
     buyer_id: 'user_a',
@@ -912,72 +915,66 @@ test('coOwn_trade context must reference a real settled trade with matching part
   const db = createFakeDb(state);
   const { client } = db.begin();
 
-  // buyer leg = ceil((10.0 + 0.3) * 1000) = 10_300 units
-  const validInput = {
+  // A REAL settled trade, exact participants, the old-parity buyer-leg
+  // amount — and even an admin caller — all fail closed: the trade's
+  // consideration already moved delivery-vs-payment inside
+  // applyCoOwnTransfer, so the trade id is not a payable obligation.
+  const settledTradeInput = {
     contextType: 'coOwn_trade',
     contextId: '42',
     senderUserId: 'user_a',
     recipientUserId: 'user_b',
     amountUnits: 10_300,
-    callerRole: 'user',
   };
 
-  await assertP2pTransferContextAuthorized(client, validInput);
+  for (const callerRole of ['user', 'admin'] as const) {
+    await assert.rejects(
+      assertP2pTransferContextAuthorized(client, {
+        ...settledTradeInput,
+        callerRole,
+      }),
+      (err: unknown) =>
+        (err as { code?: string }).code === 'P2P_TRANSFER_CONTEXT_NOT_TRANSFERABLE',
+      `callerRole=${callerRole} must be refused`
+    );
+  }
 
-  await assert.rejects(
-    assertP2pTransferContextAuthorized(client, {
-      ...validInput,
-      contextId: '9999',
-    }),
-    (err: unknown) =>
-      (err as { code?: string }).code === 'P2P_TRANSFER_CONTEXT_NOT_FOUND'
-  );
+  // Nonexistent and mismatched references get the same refusal — the
+  // context is never inspected for a payable obligation anymore.
+  for (const contextId of ['9999', 'not-a-trade']) {
+    await assert.rejects(
+      assertP2pTransferContextAuthorized(client, {
+        ...settledTradeInput,
+        contextId,
+        callerRole: 'user',
+      }),
+      (err: unknown) =>
+        (err as { code?: string }).code === 'P2P_TRANSFER_CONTEXT_NOT_TRANSFERABLE'
+    );
+  }
 
-  await assert.rejects(
-    assertP2pTransferContextAuthorized(client, {
-      ...validInput,
-      recipientUserId: 'user_c',
-    }),
-    (err: unknown) =>
-      (err as { code?: string }).code === 'P2P_TRANSFER_CONTEXT_BLOCKED'
-  );
-
-  await assert.rejects(
-    assertP2pTransferContextAuthorized(client, {
-      ...validInput,
-      amountUnits: 5_000,
-    }),
-    (err: unknown) =>
-      (err as { code?: string }).code === 'P2P_TRANSFER_CONTEXT_BLOCKED'
-  );
+  // The refusal happens before any wallet effect: no ledger rows exist.
+  assert.equal(db.committed.ledger.length, 0, 'no debit may be posted');
 });
 
 test('a privileged context reference is single-use once a transfer commits', async () => {
   const state = emptyState();
-  state.trades.push({
-    id: 42,
-    buyer_id: 'user_a',
-    seller_id: 'user_b',
-    notional_gbp: '10.0000',
-    fee_gbp: '0.3000',
-    settlement_status: 'settled',
-  });
   state.izeTransfers.push({
     id: 'ize_transfer_prev',
     status: 'committed',
-    metadata: { contextType: 'coOwn_trade', contextId: '42' },
+    metadata: { contextType: 'platform_reward', contextId: 'reward_batch_9' },
   });
   const db = createFakeDb(state);
   const { client } = db.begin();
 
   await assert.rejects(
     assertP2pTransferContextAuthorized(client, {
-      contextType: 'coOwn_trade',
-      contextId: '42',
-      senderUserId: 'user_a',
-      recipientUserId: 'user_b',
-      amountUnits: 10_300,
-      callerRole: 'user',
+      contextType: 'platform_reward',
+      contextId: 'reward_batch_9',
+      senderUserId: 'user_platform',
+      recipientUserId: 'user_a',
+      amountUnits: 500,
+      callerRole: 'admin',
     }),
     (err: unknown) =>
       (err as { code?: string }).code === 'P2P_TRANSFER_CONTEXT_BLOCKED'

@@ -44,6 +44,10 @@ interface Props {
    *  `payDisabled`. Defaults to `payDisabled`. */
   walletPayDisabled?: boolean;
   reducedMotion: boolean;
+  /** Reports the rendered footer height so the parent scroll surface can
+   *  pad its content to match. At 200% dynamic type the footer grows —
+   *  a fixed bottom inset would clip the last content rows (S21-01). */
+  onHeightChange?: (height: number) => void;
 }
 
 // Sticky compact order summary + Pay footer.
@@ -72,6 +76,7 @@ function CheckoutFooterBase({
   onWalletPay,
   walletPayDisabled,
   reducedMotion,
+  onHeightChange,
 }: Props) {
   const { colors } = useAppTheme();
   const walletPress = onWalletPay;
@@ -80,7 +85,10 @@ function CheckoutFooterBase({
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   return (
-    <View style={[styles.footer, { paddingBottom: insets.bottom > 0 ? insets.bottom : Space.md }]}>
+    <View
+      style={[styles.footer, { paddingBottom: insets.bottom > 0 ? insets.bottom : Space.md }]}
+      onLayout={(e) => onHeightChange?.(e.nativeEvent.layout.height)}
+    >
       {/* Compact cost breakdown — inline above the CTA (2026 checkout UX) */}
       <Pressable
         style={styles.compactSummary}
@@ -90,44 +98,44 @@ function CheckoutFooterBase({
         accessibilityHint="Open the full cost breakdown and returns policy"
       >
         <View style={styles.compactSummaryRow}>
-          <Text style={styles.compactSummaryLabel} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>Item</Text>
-          <Text style={styles.compactSummaryVal} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>{itemLabel}</Text>
+          <Text style={styles.compactSummaryLabel} maxFontSizeMultiplier={MAX_FONT_SCALE.financial}>Item</Text>
+          <Text style={styles.compactSummaryVal} maxFontSizeMultiplier={MAX_FONT_SCALE.financial}>{itemLabel}</Text>
         </View>
         <View style={styles.compactSummaryRow}>
-          <Text style={styles.compactSummaryLabel} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>Delivery</Text>
-          <Text style={styles.compactSummaryVal} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>{deliveryLabel}</Text>
+          <Text style={styles.compactSummaryLabel} maxFontSizeMultiplier={MAX_FONT_SCALE.financial}>Delivery</Text>
+          <Text style={styles.compactSummaryVal} maxFontSizeMultiplier={MAX_FONT_SCALE.financial}>{deliveryLabel}</Text>
         </View>
         <View style={styles.compactSummaryRow}>
-          <Text style={styles.compactSummaryLabel} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>Buyer protection</Text>
-          <Text style={styles.compactSummaryVal} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>{protectionLabel}</Text>
+          <Text style={styles.compactSummaryLabel} maxFontSizeMultiplier={MAX_FONT_SCALE.financial}>Buyer protection</Text>
+          <Text style={styles.compactSummaryVal} maxFontSizeMultiplier={MAX_FONT_SCALE.financial}>{protectionLabel}</Text>
         </View>
         {verificationLabel ? (
           <View style={styles.compactSummaryRow}>
-            <Text style={styles.compactSummaryLabel} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>Verification</Text>
-            <Text style={styles.compactSummaryVal} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>{verificationLabel}</Text>
+            <Text style={styles.compactSummaryLabel} maxFontSizeMultiplier={MAX_FONT_SCALE.financial}>Verification</Text>
+            <Text style={styles.compactSummaryVal} maxFontSizeMultiplier={MAX_FONT_SCALE.financial}>{verificationLabel}</Text>
           </View>
         ) : null}
         {walletAppliedLabel ? (
           <View style={styles.compactSummaryRow}>
-            <Text style={styles.compactSummaryLabel} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>Wallet applied</Text>
-            <Text style={styles.compactSummaryVal} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>-{walletAppliedLabel}</Text>
+            <Text style={styles.compactSummaryLabel} maxFontSizeMultiplier={MAX_FONT_SCALE.financial}>Wallet applied</Text>
+            <Text style={styles.compactSummaryVal} maxFontSizeMultiplier={MAX_FONT_SCALE.financial}>-{walletAppliedLabel}</Text>
           </View>
         ) : null}
         <View style={styles.compactSummaryDivider} />
         <View style={styles.compactSummaryTotalRow}>
           <View style={styles.compactSummaryTotalLeft}>
-            <Text style={styles.compactSummaryTotalLabel} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>Total</Text>
+            <Text style={styles.compactSummaryTotalLabel} maxFontSizeMultiplier={MAX_FONT_SCALE.financial}>Total</Text>
             <Text
               style={styles.compactSummaryTotalValue}
               accessibilityLiveRegion="polite"
               accessibilityLabel={`Total ${totalLabel}`}
-              maxFontSizeMultiplier={MAX_FONT_SCALE.utility}
+              maxFontSizeMultiplier={MAX_FONT_SCALE.financial}
             >
               {totalLabel}
             </Text>
           </View>
           <View style={styles.breakdownChevron}>
-            <Text style={styles.breakdownChevronText} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>View full breakdown</Text>
+            <Text style={styles.breakdownChevronText} maxFontSizeMultiplier={MAX_FONT_SCALE.financial}>View full breakdown</Text>
             <Ionicons name="chevron-up" size={16} color={colors.textMuted} importantForAccessibility="no" />
           </View>
         </View>
@@ -150,7 +158,7 @@ function CheckoutFooterBase({
             accessibilityState={{ disabled: walletDisabled }}
           >
             <Ionicons name="logo-apple" size={22} color={colors.textInverse} importantForAccessibility="no" />
-            <Text style={styles.walletBtnText} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>Pay with Apple Pay</Text>
+            <Text style={styles.walletBtnText} maxFontSizeMultiplier={MAX_FONT_SCALE.financial}>Pay with Apple Pay</Text>
           </Pressable>
         )}
 
@@ -170,7 +178,7 @@ function CheckoutFooterBase({
             accessibilityState={{ disabled: walletDisabled }}
           >
             <Ionicons name="logo-google" size={22} color={colors.textInverse} importantForAccessibility="no" />
-            <Text style={styles.walletBtnText} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>Pay with Google Pay</Text>
+            <Text style={styles.walletBtnText} maxFontSizeMultiplier={MAX_FONT_SCALE.financial}>Pay with Google Pay</Text>
           </Pressable>
         )}
 
@@ -210,7 +218,7 @@ function CheckoutFooterBase({
               styles.payBtnText,
               walletAvailable && styles.payBtnTextSecondary,
             ]}
-            maxFontSizeMultiplier={MAX_FONT_SCALE.utility}
+            maxFontSizeMultiplier={MAX_FONT_SCALE.financial}
           >
             {payLabel}
           </Text>
@@ -244,9 +252,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: Space.sm,
     paddingVertical: Space.xs + 1,
   },
   compactSummaryLabel: {
+    flexShrink: 1,
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,
@@ -254,6 +264,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.textSecondary,
   },
   compactSummaryVal: {
+    flexShrink: 1,
+    textAlign: 'right',
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.medium,
@@ -269,11 +281,15 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: Space.sm,
     paddingVertical: Space.xs,
   },
   compactSummaryTotalLeft: {
     flexDirection: 'row',
     alignItems: 'baseline',
+    flexShrink: 1,
+    flexWrap: 'wrap',
     gap: Space.sm,
   },
   compactSummaryTotalLabel: {
@@ -294,9 +310,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   breakdownChevron: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 1,
     gap: Space.xs,
   },
   breakdownChevronText: {
+    flexShrink: 1,
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.regular,
     color: colors.textMuted,
@@ -328,11 +346,17 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.xs + 2,
-    height: 56,
+    // minHeight, not height — at 200% dynamic type the label wraps and the
+    // button grows rather than clipping its own text (S21-01).
+    minHeight: 56,
+    paddingVertical: Space.md + 2,
+    paddingHorizontal: Space.lg,
     borderRadius: RadiusRoleValue.pillAvatar,
     backgroundColor: colors.textPrimary,
   },
   walletBtnText: {
+    flexShrink: 1,
+    textAlign: 'center',
     fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.semibold,
     color: colors.textInverse,
@@ -345,6 +369,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     transform: [{ scale: 0.97 }],
   },
   payBtnText: {
+    flexShrink: 1,
+    textAlign: 'center',
     fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.semibold,
     fontVariant: ['tabular-nums'],

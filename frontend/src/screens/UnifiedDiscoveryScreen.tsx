@@ -46,6 +46,7 @@ import {
   createUnifiedDiscoveryStyles } from '../components/discovery';
 import type { DiscoveryFeedUnit } from '../contracts/discoveryFeedUnit';
 import type { DiscoveryListingSummary } from '../contracts/DiscoveryListingSummary';
+import type { GalleriaEditorial } from '../services/galleriaApi';
 import { openProductDetail } from '../platform/product/openProductDetail';
 import { AppIcon } from '../components/common/AppIcon';
 import { IconSize } from '../theme/iconTokens';
@@ -130,6 +131,11 @@ type FeedbackNotice = {
   attribution: FeedbackAttribution;
   action: 'not_interested' | 'show_fewer';
   status: 'queued' | 'saving' | 'saved' | 'session' | 'failed';
+  /** Account that made the choice, captured at action time (S21-03). The
+   *  delayed write binds to this identity — if the session signs out or
+   *  switches inside the undo window, the service drops the write rather
+   *  than attributing it to the now-current account. */
+  actorUserId: string | null;
 };
 
 // Grace window during which "Undo" cancels the pending durable write.
@@ -275,7 +281,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
   // Apply a settled write result to the notice for this listing — a stale
   // resolution can never overwrite a newer notice.
   const settleFeedbackNotice = useCallback(
-    (notice: FeedbackNotice, persisted: boolean, failure?: 'anonymous' | 'unavailable') => {
+    (notice: FeedbackNotice, persisted: boolean, failure?: 'anonymous' | 'unavailable' | 'identity_changed') => {
       if (!mountedRef.current) return;
       if (persisted) {
         setFeedbackNotice((prev) =>
@@ -283,6 +289,16 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
             ? { ...prev, status: 'saved' }
             : prev);
         scheduleNoticeDismiss(notice.listing.id, NOTICE_DISMISS_MS);
+        return;
+      }
+      // Identity changed mid-window (logout / account switch): the write
+      // was dropped rather than misattributed — the previous account's
+      // outcome does not belong on the new account's screen.
+      if (failure === 'identity_changed') {
+        setFeedbackNotice((prev) =>
+          prev && prev.listing.id === notice.listing.id && prev.action === notice.action
+            ? null
+            : prev);
         return;
       }
       const status = failure === 'anonymous' ? 'session' : 'failed';
@@ -305,10 +321,16 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
         prev && prev.listing.id === listingId && prev.status === 'queued'
           ? { ...prev, status: 'saving' }
           : prev);
-      void markItemNotInterested(notice.listing, notice.attribution).then((result) => {
+      void markItemNotInterested(
+        notice.listing,
+        notice.attribution,
+        { userId: notice.actorUserId },
+      ).then((result) => {
         if (undoneHideIdsRef.current.has(listingId)) {
           // Undo raced the in-flight write — lift the exclusion if it landed.
-          if (result.persisted) void undoItemNotInterested(notice.listing);
+          if (result.persisted) {
+            void undoItemNotInterested(notice.listing, { userId: notice.actorUserId });
+          }
           return;
         }
         settleFeedbackNotice(notice, result.persisted, result.failure);
@@ -355,11 +377,13 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
     setFeedbackNotice(retrying);
     clearNoticeTimer();
     const write = notice.action === 'not_interested'
-      ? markItemNotInterested(notice.listing, notice.attribution)
-      : showFewerLikeThis(notice.listing, notice.attribution);
+      ? markItemNotInterested(notice.listing, notice.attribution, { userId: notice.actorUserId })
+      : showFewerLikeThis(notice.listing, notice.attribution, { userId: notice.actorUserId });
     void write.then((result) => {
       if (notice.action === 'not_interested' && undoneHideIdsRef.current.has(notice.listing.id)) {
-        if (result.persisted) void undoItemNotInterested(notice.listing);
+        if (result.persisted) {
+          void undoItemNotInterested(notice.listing, { userId: notice.actorUserId });
+        }
         return;
       }
       if (result.persisted && notice.action === 'show_fewer') {
@@ -381,7 +405,13 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
       for (const [listingId, pending] of pendingHides) {
         clearTimeout(pending.timer);
         if (!undoneIds.has(listingId)) {
-          void markItemNotInterested(pending.notice.listing, pending.notice.attribution);
+          // Flush under the identity captured at hide-time — never the
+          // account that happens to be signed in at unmount (S21-03).
+          void markItemNotInterested(
+            pending.notice.listing,
+            pending.notice.attribution,
+            { userId: pending.notice.actorUserId },
+          );
         }
       }
       pendingHides.clear();
@@ -400,7 +430,8 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
       listing: target,
       attribution: feedbackAttribution(target),
       action: 'not_interested',
-      status: 'queued' };
+      status: 'queued',
+      actorUserId: useStore.getState().currentUser?.id ?? null };
     pendingHidesRef.current.set(target.id, {
       notice,
       timer: setTimeout(() => {
@@ -419,8 +450,9 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
       listing: target,
       attribution: feedbackAttribution(target),
       action: 'show_fewer',
-      status: 'saving' };
-    void showFewerLikeThis(target, notice.attribution).then((result) => {
+      status: 'saving',
+      actorUserId: useStore.getState().currentUser?.id ?? null };
+    void showFewerLikeThis(target, notice.attribution, { userId: notice.actorUserId }).then((result) => {
       if (result.persisted) {
         // The mutation bumps the intent epoch; refetch so the down-ranking
         // is visible rather than only applying on the next cold load.
@@ -477,13 +509,12 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
     );
   }, [search.isSearchingMode, searchFeedUnits, feed.feedUnits, hiddenListingIds]);
 
-  // ── Hero editorial → the Galleria surface that owns it (FRESH-08). The
-  //  GalleriaEditorial model carries no per-item deep link, so the honest
-  //  destination is the editorial's home surface, where the same piece is
-  //  presented in full. ──
-  const handleEditorialPress = useCallback(() => {
+  // ── Hero editorial → the piece's own article screen (FRESH-08, S21-02).
+  //  The editorial record carries a stable ID and full body content, so the
+  //  tap lands on the named story — not another teaser. ──
+  const handleEditorialPress = useCallback((editorial: GalleriaEditorial) => {
     haptic.selection();
-    navigation.navigate('Galleria');
+    navigation.navigate('GalleriaEditorial', { editorialId: editorial.id });
   }, [haptic, navigation]);
 
   // ── Hero editorial (first one) ──

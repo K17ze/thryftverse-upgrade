@@ -539,6 +539,9 @@ export type RootStackParamList = {
   // Galleria — editorial discovery surface for Co-Own assets & curated collections
   Galleria: undefined;
   GalleriaCollectionDetail: { collectionId: string };
+  // Full editorial article reader — resolves the piece by ID and renders
+  // its body (S21-02). Missing/unpublished IDs get an honest recovery state.
+  GalleriaEditorial: { editorialId: string };
   // Algorithm transparency — "Your Algorithm" dashboard
   YourAlgorithm: undefined;
   // AI photo enhancement — Photoroom-equivalent editing surface
@@ -721,6 +724,7 @@ export const ROOT_STACK_ROUTES = [
   'KYCVerification',
   'Galleria',
   'GalleriaCollectionDetail',
+  'GalleriaEditorial',
   'UnifiedDiscovery',
   'YourAlgorithm',
   'AIPhotoEnhancement',

@@ -279,6 +279,18 @@ services:
       ONEZE_FX_PROVIDER_URL: ${ONEZE_FX_PROVIDER_URL:?ONEZE_FX_PROVIDER_URL is required}
       ONEZE_FX_PROVIDER_API_KEY: ${ONEZE_FX_PROVIDER_API_KEY:?ONEZE_FX_PROVIDER_API_KEY is required}
       MODERATION_PROVIDER: ${MODERATION_PROVIDER:?MODERATION_PROVIDER is required}
+      # Moderation provider credentials — conditional pass-throughs (same
+      # convention as payment/shipping vendors): which set is required
+      # depends on MODERATION_PROVIDER, and boot-time validation in
+      # moderationService.ts fails fast when the selected provider's creds
+      # are absent. sightengine → SIGHTENGINE_API_USER + SIGHTENGINE_API_KEY;
+      # rekognition → AWS_* trio (and is image-only — rejected as the sole
+      # provider since text moderation needs a text-capable provider).
+      SIGHTENGINE_API_USER: ${SIGHTENGINE_API_USER:-}
+      SIGHTENGINE_API_KEY: ${SIGHTENGINE_API_KEY:-}
+      AWS_REGION: ${AWS_REGION:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       ALERTING_WEBHOOK_URLS: ${ALERTING_WEBHOOK_URLS:?ALERTING_WEBHOOK_URLS is required}
       AUTH_EMAIL_PROVIDER: ${AUTH_EMAIL_PROVIDER:-resend}
       RESEND_API_KEY: ${RESEND_API_KEY:?RESEND_API_KEY is required}
@@ -418,6 +430,15 @@ services:
       ONEZE_FX_PROVIDER_URL: ${ONEZE_FX_PROVIDER_URL:?ONEZE_FX_PROVIDER_URL is required}
       ONEZE_FX_PROVIDER_API_KEY: ${ONEZE_FX_PROVIDER_API_KEY:?ONEZE_FX_PROVIDER_API_KEY is required}
       MODERATION_PROVIDER: ${MODERATION_PROVIDER:?MODERATION_PROVIDER is required}
+      # Moderation provider credentials — conditional pass-throughs; boot
+      # validation (moderationService.ts) fails fast when the selected
+      # provider's creds are absent. rekognition is image-only and rejected
+      # as the sole provider (text moderation needs a text-capable provider).
+      SIGHTENGINE_API_USER: ${SIGHTENGINE_API_USER:-}
+      SIGHTENGINE_API_KEY: ${SIGHTENGINE_API_KEY:-}
+      AWS_REGION: ${AWS_REGION:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
       MOLLIE_API_KEY: ${MOLLIE_API_KEY:-}
       MOLLIE_WEBHOOK_SECRET: ${MOLLIE_WEBHOOK_SECRET:-}

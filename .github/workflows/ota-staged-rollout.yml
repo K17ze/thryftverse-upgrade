@@ -87,29 +87,42 @@ jobs:
             exit 1
           fi
           key_path="$RUNNER_TEMP/ota-private-key.pem"
-          printf '%s' "$OTA_CODE_SIGNING_PRIVATE_KEY" > "$key_path"
-          chmod 600 "$key_path"
+          # Restrictive permissions from creation (umask 077) — the key never
+          # exists world/group-readable between write and chmod.
+          (umask 077; printf '%s' "$OTA_CODE_SIGNING_PRIVATE_KEY" > "$key_path")
           echo "OTA_PRIVATE_KEY_PATH=$key_path" >> "$GITHUB_ENV"
 
       - name: Publish EAS Update (${{ inputs.rollout_percentage }}%)
         working-directory: frontend
         run: |
           eas update \
-            --channel ${{ inputs.channel }} \
+            --channel "$OTA_CHANNEL" \
             --private-key-path "$OTA_PRIVATE_KEY_PATH" \
-            --message "${{ inputs.message }}" \
-            --rollout-percentage ${{ inputs.rollout_percentage }}
+            --message "$OTA_MESSAGE" \
+            --rollout-percentage "$ROLLOUT_PERCENTAGE"
         env:
           EAS_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+          OTA_CHANNEL: ${{ inputs.channel }}
+          OTA_MESSAGE: ${{ inputs.message }}
+          ROLLOUT_PERCENTAGE: ${{ inputs.rollout_percentage }}
 
       - name: Notify rollout published
         if: success()
+        env:
+          OTA_CHANNEL: ${{ inputs.channel }}
+          ROLLOUT_PERCENTAGE: ${{ inputs.rollout_percentage }}
         run: |
-          echo "::notice::OTA update published to ${{ inputs.channel }} at ${{ inputs.rollout_percentage }}% rollout. Monitor EAS Observe before progressing."
+          echo "::notice::OTA update published to $OTA_CHANNEL at $ROLLOUT_PERCENTAGE% rollout. Monitor EAS Observe before progressing."
+
+      - name: Scrub OTA signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/ota-private-key.pem"
 
       - name: Failure notification
         if: failure()
+        env:
+          OTA_CHANNEL: ${{ inputs.channel }}
         run: |
           curl -X POST -H "Content-Type: application/json" \
-            -d "{\"content\":\"OTA staged rollout FAILED for channel ${{ inputs.channel }}\"}" \
-            ${{ secrets.ALERTING_WEBHOOK_URL }} || true
+            -d "{\"content\":\"OTA staged rollout FAILED for channel $OTA_CHANNEL\"}" \
+            "${{ secrets.ALERTING_WEBHOOK_URL }}" || true

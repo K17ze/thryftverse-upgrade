@@ -15,7 +15,20 @@ import { Buffer } from 'node:buffer';
 // `node:fs/promises` is mocked so no real temp files are created: writeFile
 // is a no-op, readFile returns a synthetic MP4 buffer, and rm is a no-op.
 //
+// `node:dns/promises` is mocked because source fetches now run through the
+// pinned SSRF transport (fetchPinnedRemoteMedia), which resolves and
+// blocklist-checks the hostname before connecting. The mock resolves every
+// test host to a public, non-blocked IP.
+//
 // `globalThis.fetch` is spied per-test to supply the source video buffer.
+
+const dnsMock = vi.hoisted(() => ({
+  lookup: vi.fn(),
+}));
+
+vi.mock('node:dns/promises', () => ({
+  lookup: dnsMock.lookup,
+}));
 
 const ffmpegMock = vi.hoisted(() => ({
   runFfmpeg: vi.fn(),
@@ -305,6 +318,10 @@ describe('renderComposition — video path', () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    // Pinned transport: every test hostname resolves to a public IP so the
+    // blocklist check passes and the fetch spy supplies the body.
+    dnsMock.lookup.mockReset();
+    dnsMock.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
     fetchSpy = vi.spyOn(globalThis, 'fetch');
     ffmpegMock.runFfmpeg.mockReset();
     ffprobeMock.probeMedia.mockReset();
@@ -609,6 +626,10 @@ describe('renderComposition — audio edits', () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    // Pinned transport: every test hostname resolves to a public IP so the
+    // blocklist check passes and the fetch spy supplies the body.
+    dnsMock.lookup.mockReset();
+    dnsMock.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
     fetchSpy = vi.spyOn(globalThis, 'fetch');
     ffmpegMock.runFfmpeg.mockReset();
     ffprobeMock.probeMedia.mockReset();
@@ -675,6 +696,10 @@ describe('renderComposition — advanced video edits', () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    // Pinned transport: every test hostname resolves to a public IP so the
+    // blocklist check passes and the fetch spy supplies the body.
+    dnsMock.lookup.mockReset();
+    dnsMock.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
     fetchSpy = vi.spyOn(globalThis, 'fetch');
     ffmpegMock.runFfmpeg.mockReset();
     ffprobeMock.probeMedia.mockReset();
@@ -776,6 +801,10 @@ describe('renderComposition — timed overlays', () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    // Pinned transport: every test hostname resolves to a public IP so the
+    // blocklist check passes and the fetch spy supplies the body.
+    dnsMock.lookup.mockReset();
+    dnsMock.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
     fetchSpy = vi.spyOn(globalThis, 'fetch');
     ffmpegMock.runFfmpeg.mockReset();
     ffprobeMock.probeMedia.mockReset();
@@ -1043,6 +1072,10 @@ describe('renderComposition — keyframed layers', () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    // Pinned transport: every test hostname resolves to a public IP so the
+    // blocklist check passes and the fetch spy supplies the body.
+    dnsMock.lookup.mockReset();
+    dnsMock.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
     fetchSpy = vi.spyOn(globalThis, 'fetch');
     ffmpegMock.runFfmpeg.mockReset();
     ffprobeMock.probeMedia.mockReset();
@@ -1188,6 +1221,10 @@ describe('renderComposition — streamed transcode upload', () => {
   };
 
   beforeEach(() => {
+    // Pinned transport: every test hostname resolves to a public IP so the
+    // blocklist check passes and the fetch spy supplies the body.
+    dnsMock.lookup.mockReset();
+    dnsMock.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
     fetchSpy = vi.spyOn(globalThis, 'fetch');
     ffmpegMock.runFfmpeg.mockReset();
     ffmpegMock.runFfmpegStreaming.mockReset();

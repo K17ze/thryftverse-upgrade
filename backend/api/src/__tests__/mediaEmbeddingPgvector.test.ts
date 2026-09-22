@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -167,8 +167,11 @@ describe('mediaEmbeddingVectorCapability (audit N5)', () => {
 describe('resolveServingEmbeddingLineage (audit N2)', () => {
   it('returns the dominant ready lineage tuple', async () => {
     const { db, queries } = fakeDb((sql) => {
-      assert.match(sql, /GROUP BY model_id, model_version, preprocessing_version, dimensions/);
-      assert.match(sql, /status = 'ready' AND norm > 0/);
+      assert.match(
+        sql,
+        /GROUP BY me\.model_id, me\.model_version, me\.preprocessing_version, me\.dimensions, ma\.status/,
+      );
+      assert.match(sql, /me\.status = 'ready' AND me\.norm > 0/);
       return [
         {
           model_id: 'siglip2-so400m',
@@ -186,6 +189,30 @@ describe('resolveServingEmbeddingLineage (audit N2)', () => {
       dimensions: 512,
     });
     assert.equal(queries.length, 1);
+  });
+
+  it('consults model_artifacts: blocked/retired excluded, active outranks coverage', async () => {
+    // Governance is enforced in SQL (the registry join + ordering), so the
+    // contract is pinned on the emitted statement: a blocked or retired
+    // artifact must never reach the GROUP BY, and an 'active' artifact must
+    // rank ahead of higher-coverage unapproved lineages.
+    const { db, queries } = fakeDb(() => []);
+    await resolveServingEmbeddingLineage(db);
+    const sql = queries[0].sql;
+
+    // Registry join keyed on the full artifact identity.
+    assert.match(sql, /LEFT JOIN model_artifacts ma/);
+    assert.match(sql, /ma\.model_id = me\.model_id/);
+    assert.match(sql, /ma\.model_version = me\.model_version/);
+    assert.match(sql, /ma\.preprocessing_version = me\.preprocessing_version/);
+    // Hard exclusion: held/superseded models never serve even with the
+    // highest coverage.
+    assert.match(sql, /ma\.status NOT IN \('blocked', 'retired'\)/);
+    // Promoted champion wins over unapproved coverage leaders.
+    assert.match(
+      sql,
+      /ORDER BY\s+CASE WHEN ma\.status = 'active' THEN 0 ELSE 1 END,\s+ready_rows DESC,\s+latest_at DESC/,
+    );
   });
 
   it('returns null when no lineage is ready and fails closed on error', async () => {
@@ -591,6 +618,82 @@ describe('migration 326/330 BYTEA codec — bigint-safe decode (audit N1)', () =
         `index ${i}: ${decoded[i]} !== ${vector[i]}`,
       );
     }
+  });
+});
+
+// Audit Appendix D blocker 1 / section 4.3: on a populated pre-326 database
+// with pgvector installed, 326's backfill evaluates the int4-overflowing
+// codec and aborts BEFORE the runner ever reaches 330 — an additive fix at
+// 330 alone cannot rescue that path. Because 326's committed bytes are
+// checksum-pinned, the remediation is a NEW migration whose filename sorts
+// lexically between '325_' and '326_': '325b_' ('_' 0x5F < 'b' 0x62 at
+// position 3; '5' < '6' at position 2). It installs the corrected codec and
+// runs 326's exact backfill predicate first, so 326's own backfill matches
+// zero rows and never evaluates the overflowing expression.
+describe('migration 325b (static contract — pre-326 corrected prefill)', () => {
+  const PRE_FILL = '325b_media_embeddings_pgvector_prefill.sql';
+  const up325b = readFileSync(
+    path.join(MIGRATIONS_DIR, PRE_FILL),
+    'utf8',
+  );
+  const down325b = readFileSync(
+    path.join(MIGRATIONS_DIR, '325b_media_embeddings_pgvector_prefill_down.sql'),
+    'utf8',
+  );
+
+  it('sorts strictly between 325 and 326 so it runs BEFORE 326', () => {
+    assert.ok(
+      PRE_FILL > '325_order_parcel_events_lost_damaged.sql',
+      `${PRE_FILL} must sort after the 325_* migrations`,
+    );
+    assert.ok(
+      PRE_FILL < '326_media_embeddings_pgvector.sql',
+      `${PRE_FILL} must sort before 326`,
+    );
+    // The runner also applies the same ordering over the real directory.
+    const sorted = readdirSync(MIGRATIONS_DIR)
+      .filter((f) => f.endsWith('.sql') && !f.endsWith('_down.sql'))
+      .sort();
+    assert.ok(
+      sorted.indexOf(PRE_FILL) > sorted.indexOf('325_order_parcel_events_lost_damaged.sql'),
+    );
+    assert.ok(
+      sorted.indexOf(PRE_FILL) < sorted.indexOf('326_media_embeddings_pgvector.sql'),
+    );
+  });
+
+  it('uses the same pg_available_extensions feature gate as 326', () => {
+    assert.match(up325b, /pg_available_extensions/);
+    assert.match(up325b, /CREATE EXTENSION IF NOT EXISTS vector/);
+    assert.match(up325b, /no-op by design/);
+  });
+
+  it('installs the bigint-promoted codec (the 330 expression shape)', () => {
+    assert.match(up325b, /CREATE OR REPLACE FUNCTION _media_embeddings_bytea_le_to_float4/);
+    assert.match(up325b, /get_byte\(p_embedding, v_i \* 4 \+ 3\)::bigint \* 16777216/);
+    assert.match(up325b, /get_byte\(p_embedding, v_i \* 4 \+ 2\)::bigint \* 65536/);
+    // And must NOT contain the pre-fix int4 term anywhere in its own codec.
+    assert.doesNotMatch(up325b, /get_byte\(p_embedding, v_i \* 4 \+ 3\) \* 16777216/);
+  });
+
+  it('runs the same backfill predicate as 326 so 326 finds zero rows', () => {
+    assert.match(up325b, /ADD COLUMN IF NOT EXISTS embedding_vec vector\(512\)/);
+    assert.match(up325b, /WHERE embedding_vec IS NULL/);
+    assert.match(up325b, /dimensions = 512/);
+    assert.match(up325b, /octet_length\(embedding\) = dimensions \* 4/);
+  });
+
+  it('is fully idempotent — safe on databases that already applied 326', () => {
+    assert.match(up325b, /IF NOT EXISTS/);
+    assert.match(up325b, /CREATE OR REPLACE FUNCTION/);
+    assert.match(up325b, /embedding_vec IS NULL/);
+    // no unconditional DDL that would fail on re-run
+    assert.doesNotMatch(up325b, /ADD COLUMN embedding_vec(?!.*IF NOT EXISTS)/);
+  });
+
+  it('down file exists and is a deliberate no-op (owned by the 326/330 lifecycle)', () => {
+    assert.match(down325b, /no-op/);
+    assert.doesNotMatch(down325b, /DROP COLUMN|DROP FUNCTION/);
   });
 });
 

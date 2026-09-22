@@ -103,8 +103,9 @@ jobs:
             exit 1
           fi
           key_path="$RUNNER_TEMP/ota-private-key.pem"
-          printf '%s' "$OTA_CODE_SIGNING_PRIVATE_KEY" > "$key_path"
-          chmod 600 "$key_path"
+          # Restrictive permissions from creation (umask 077) — the key never
+          # exists world/group-readable between write and chmod.
+          (umask 077; printf '%s' "$OTA_CODE_SIGNING_PRIVATE_KEY" > "$key_path")
           echo "OTA_PRIVATE_KEY_PATH=$key_path" >> "$GITHUB_ENV"
 
       - name: Publish OTA update to staging channel
@@ -112,6 +113,10 @@ jobs:
         run: eas update --channel staging --non-interactive --private-key-path "$OTA_PRIVATE_KEY_PATH" --message "staging deploy (${{ github.sha }})"
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Scrub OTA signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/ota-private-key.pem"
 
   post-deploy-smoke:
     name: Post-deploy smoke tests (staging)

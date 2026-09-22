@@ -236,6 +236,20 @@ export async function mediaEmbeddingVectorCapability(
  * lineage is mid-backfill, so ranking on the lineage with the most ready
  * rows keeps serving on the complete corpus until the new model's coverage
  * overtakes it. `latest_at` breaks ties toward the newest lineage.
+ *
+ * Promotion governance (audit: model_artifacts is the promotion registry —
+ * migration 144): coverage alone must never elect the serving lineage.
+ *   - A lineage whose registry row is 'blocked' or 'retired' is excluded
+ *     outright — its embeddings exist on disk but the model is held or
+ *     superseded, so serving it would be an unapproved capability.
+ *   - A lineage backed by an 'active' registry row is the promoted
+ *     champion and outranks every unapproved lineage regardless of
+ *     coverage — a mid-backfill promoted model wins over a larger but
+ *     never-approved one.
+ *   - 'candidate'/'shadow' artifacts and lineages with no registry row
+ *     are ungoverned: eligible, but strictly below a promoted champion.
+ * The join includes preprocessing_version so a promotion of one
+ * preprocessing pipeline cannot bless embeddings produced by another.
  */
 export interface ServingEmbeddingLineage {
   modelId: string;
@@ -250,13 +264,26 @@ export async function resolveServingEmbeddingLineage(
   try {
     const res = await db.query(
       `SELECT
-         model_id, model_version, preprocessing_version, dimensions,
+         me.model_id, me.model_version, me.preprocessing_version, me.dimensions,
          COUNT(*)::int AS ready_rows,
-         MAX(generated_at) AS latest_at
-       FROM media_embeddings
-       WHERE status = 'ready' AND norm > 0
-       GROUP BY model_id, model_version, preprocessing_version, dimensions
-       ORDER BY ready_rows DESC, latest_at DESC
+         MAX(me.generated_at) AS latest_at
+       FROM media_embeddings me
+       LEFT JOIN model_artifacts ma
+         ON ma.model_id = me.model_id
+        AND ma.model_version = me.model_version
+        AND ma.preprocessing_version = me.preprocessing_version
+        -- Scope governance to the task these embeddings serve: an
+        -- artifact registered for a different task (fraud_scoring etc.)
+        -- under a colliding model_id must neither promote nor block a
+        -- visual-search lineage.
+        AND ma.task = 'visual_search'
+       WHERE me.status = 'ready' AND me.norm > 0
+         AND (ma.status IS NULL OR ma.status NOT IN ('blocked', 'retired'))
+       GROUP BY me.model_id, me.model_version, me.preprocessing_version, me.dimensions, ma.status
+       ORDER BY
+         CASE WHEN ma.status = 'active' THEN 0 ELSE 1 END,
+         ready_rows DESC,
+         latest_at DESC
        LIMIT 1`,
     );
     const row = res.rows[0] as

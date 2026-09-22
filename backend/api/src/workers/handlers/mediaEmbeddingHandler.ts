@@ -53,6 +53,7 @@ import {
 } from '../../lib/mediaEmbeddings.js';
 import {
   computeL2Norm,
+  embeddingServingStatus,
   embeddingToVectorLiteral,
   serialiseEmbedding,
 } from './mediaEmbeddingUtils.js';
@@ -60,7 +61,7 @@ import {
 // Re-exported for callers / tests. The pure helpers live in
 // mediaEmbeddingUtils.ts so they can be unit-tested without importing
 // this handler (which pulls in `sharp` and the DB pool).
-export { computeL2Norm, serialiseEmbedding } from './mediaEmbeddingUtils.js';
+export { computeL2Norm, embeddingServingStatus, serialiseEmbedding } from './mediaEmbeddingUtils.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -304,7 +305,26 @@ export async function processMediaEmbeddingJob(
   // ── 6. Serialise and store ───────────────────────────────────────────
   const embeddingBytes = serialiseEmbedding(embeddingResult.vector);
   const norm = computeL2Norm(embeddingResult.vector);
-  const embeddingStatus: 'placeholder' | 'ready' = embeddingResult.placeholder ? 'placeholder' : 'ready';
+  // Serving-view guard: the view and every serving query filter on
+  // status='ready' AND norm>0. A placeholder or zero-norm vector must
+  // never be 'ready' — it is an unrankable point at the origin of the
+  // embedding space. embeddingServingStatus enforces both conditions so a
+  // future real encoder that forgets the placeholder flag still cannot
+  // leak a zero vector into serving.
+  const embeddingStatus = embeddingServingStatus(embeddingResult.placeholder, norm);
+  if (!embeddingResult.placeholder && embeddingStatus === 'placeholder') {
+    logger.warn(
+      { mediaAssetId, modelId, modelVersion, norm },
+      'mediaEmbedding.zero_norm_forced_placeholder',
+    );
+  }
+  if (embeddingStatus === 'placeholder') {
+    embeddingResult.qualityFlags = {
+      ...embeddingResult.qualityFlags,
+      placeholder: true,
+      zero_norm: norm <= 0,
+    };
+  }
 
   // Dual-write: when migration 326 has provisioned the pgvector column AND
   // this vector fits vector(512), populate embedding_vec alongside the BYTEA

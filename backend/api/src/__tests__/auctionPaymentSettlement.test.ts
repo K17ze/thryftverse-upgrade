@@ -93,10 +93,12 @@ function makeRouteDb(opts: {
   bindConflictOnce?: boolean;
 }) {
   const statements: string[] = [];
+  const calls: { sql: string; params: unknown[] }[] = [];
   let bindConflictArmed = opts.bindConflictOnce === true;
-  const query = async (sql: string) => {
+  const query = async (sql: string, params?: unknown[]) => {
     const normalized = sql.replace(/\s+/g, ' ').trim();
     statements.push(normalized);
+    calls.push({ sql: normalized, params: params ?? [] });
     // The post-mint server-side binding write — simulate losing the
     // concurrent-mint race on the live-intent unique index.
     if (
@@ -152,7 +154,7 @@ function makeRouteDb(opts: {
     },
     query,
   } as unknown as Pool;
-  return { db, statements };
+  return { db, statements, calls };
 }
 
 function makeRequest(overrides: Record<string, unknown> = {}) {
@@ -170,7 +172,7 @@ function makeRequest(overrides: Record<string, unknown> = {}) {
 
 test('winner pay mints a provider intent and returns pending — no settle without verified capture', async () => {
   const { app, handlers } = createRouteHarness();
-  const { db, statements } = makeRouteDb({ auction: { ...AUCTION } });
+  const { db, statements, calls } = makeRouteDb({ auction: { ...AUCTION } });
   let capturedInput: Record<string, unknown> | null = null;
 
   registerAuctionLifecycleRoutes({
@@ -211,6 +213,13 @@ test('winner pay mints a provider intent and returns pending — no settle witho
   assert.ok(capturedInput);
   const money = (capturedInput as { money: { currency: string; minorAmount: string } }).money;
   assert.equal(money.currency, 'GBP');
+  // The intent must ride a PUBLIC gateway — with no explicit gatewayId the
+  // canonical route defaults commerce to the oneze_internal rail, which can
+  // never reach 'succeeded' for a card-sheet payment (wedges at
+  // awaiting_payment forever).
+  const gatewayId = (capturedInput as { gatewayId?: string }).gatewayId;
+  assert.ok(gatewayId, 'expected an explicit gatewayId on the intent input');
+  assert.notEqual(gatewayId, 'oneze_internal');
   assert.equal(money.minorAmount, '5000');
   assert.equal(
     (capturedInput as { idempotencyKey: string }).idempotencyKey,
@@ -230,9 +239,44 @@ test('winner pay mints a provider intent and returns pending — no settle witho
     'auction must not settle before verified provider capture',
   );
   assert.equal(
-    statements.some((sql) => sql.startsWith('INSERT INTO orders')),
+    statements.some(
+      (sql) => sql.startsWith('INSERT INTO orders') && sql.includes("'paid'"),
+    ),
     false,
-    'no paid order may be inserted before verified provider capture',
+    'no PAID order may be inserted before verified provider capture',
+  );
+
+  // SEP21-FIN-C: the canonical pending order IS provisioned before the
+  // mint — 'created' status, winner's address terms, auction-source
+  // reservation — and the intent binding write carries its order_id so the
+  // verified capture settles through the canonical commerce branch.
+  const orderInsert = calls.find((c) => c.sql.startsWith('INSERT INTO orders'));
+  assert.ok(orderInsert, 'a pending canonical order must exist before mint');
+  assert.ok(orderInsert.sql.includes("'created'"));
+  assert.equal(orderInsert.params[1], 'winner_1'); // buyer_id
+  assert.equal(orderInsert.params[2], 'seller_1'); // seller_id
+  assert.equal(orderInsert.params[4], 48.5); // subtotal = winning bid − 3% fee
+  assert.equal(orderInsert.params[5], 1.5); // buyer_protection_fee_gbp
+  assert.equal(orderInsert.params[6], 50); // total_gbp = winning bid
+  assert.equal(orderInsert.params[7], 'auc_1'); // claims orders.auction_id
+  assert.ok(
+    statements.some(
+      (sql) =>
+        sql.includes('listing_checkout_reservations') && sql.includes("'auction'"),
+    ),
+    'an auction-source reservation must arm the created→paid transition',
+  );
+  const bindUpdate = calls.find(
+    (c) =>
+      c.sql.startsWith('UPDATE payment_intents') && c.sql.includes('order_id'),
+  );
+  assert.ok(bindUpdate, 'the intent binding write must carry order_id');
+  assert.ok(
+    statements.some(
+      (sql) =>
+        sql.startsWith('UPDATE orders') && sql.includes('payment_intent_id'),
+    ),
+    'the order must be back-bound to the minted intent',
   );
 });
 
@@ -341,12 +385,17 @@ function makeSettlementClient(state: {
   auction: Record<string, unknown> | null;
   order?: Record<string, unknown> | null;
   reachState?: string | null;
+  /** When true, ledger_tables exist and account/entry inserts are served. */
+  ledgerEnabled?: boolean;
 }) {
   const statements: string[] = [];
+  const calls: { sql: string; params: unknown[] }[] = [];
+  let accountSeq = 0;
   const client = {
-    async query(sql: string) {
+    async query(sql: string, params?: unknown[]) {
       const normalized = sql.replace(/\s+/g, ' ').trim();
       statements.push(normalized);
+      calls.push({ sql: normalized, params: params ?? [] });
       if (normalized.startsWith('UPDATE auctions')) {
         if (state.auction && !state.auction.paid_at && !state.auction.settled_at) {
           state.auction.paid_at = new Date().toISOString();
@@ -360,7 +409,13 @@ function makeSettlementClient(state: {
         return { rowCount: 1, rows: [] };
       }
       if (normalized.startsWith('INSERT INTO orders')) {
-        state.order = { id: 'auc-pay-auc_1-pi_1' };
+        state.order = { id: 'auc-pay-auc_1-pi_1', status: 'paid' };
+        return { rowCount: 1, rows: [] };
+      }
+      if (normalized.startsWith('INSERT INTO ledger_accounts')) {
+        return { rowCount: 1, rows: [{ id: ++accountSeq }] };
+      }
+      if (normalized.startsWith('INSERT INTO ledger_entries')) {
         return { rowCount: 1, rows: [] };
       }
       if (normalized.includes('FROM payment_intents')) {
@@ -385,13 +440,13 @@ function makeSettlementClient(state: {
         };
       }
       if (normalized.includes('to_regclass')) {
-        return { rowCount: 1, rows: [{ exists: false }] };
+        return { rowCount: 1, rows: [{ exists: state.ledgerEnabled === true }] };
       }
       return { rowCount: 1, rows: [] };
     },
     release() {},
   };
-  return { client, statements };
+  return { client, statements, calls };
 }
 
 const SUCCEEDED_INTENT = {
@@ -855,4 +910,231 @@ test('second-chance accept reprices current_bid_gbp to the accepting bid', async
     'the accepting bidder must be charged THEIR bid, not the flaked winner’s',
   );
   assert.ok(update!.includes('winner_bidder_id'));
+});
+
+// ── SEP21-FIN-C — canonical order-bound settlement ─────────────────────
+// New winner-pay provisions the pending commerce order + auction-source
+// reservation BEFORE minting and binds payment_intents.order_id post-mint,
+// so the verified capture walks the canonical commerce branch in
+// settlePaymentIntent() (order paid → escrow hold → fulfilment → release).
+// The auction helper then resolves the bound paid order and writes NO
+// auction-specific ledger legs. Only pre-binding intents (order_id IS NULL)
+// still take the compatibility path — now currency-correct and escrow-held.
+
+test('bound-order capture settles via the canonical order — no auction ledger legs, no order insert', async () => {
+  const state = {
+    // The intent carries the canonical order binding written post-mint;
+    // settlePaymentIntent() already transitioned it to 'paid' inside the
+    // same capture transaction before this helper runs.
+    intent: { ...SUCCEEDED_INTENT, order_id: 'ord_win_1' },
+    auction: { ...AUCTION },
+    order: { id: 'ord_win_1', status: 'paid' },
+    ledgerEnabled: true,
+  };
+  const { client, statements } = makeSettlementClient(state);
+
+  const result = await settleAuctionWinForVerifiedIntent(client as any, 'pi_1');
+  assert.equal(result.kind, 'settled');
+  assert.equal(result.kind === 'settled' && result.settlement.orderId, 'ord_win_1');
+  assert.ok(statements.some((sql) => sql.includes("SET status = 'settled'")));
+  assert.equal(
+    statements.some((sql) => sql.startsWith('INSERT INTO orders')),
+    false,
+    'the canonical order already exists and is paid — no after-the-fact insert',
+  );
+  assert.equal(
+    statements.some((sql) => sql.startsWith('INSERT INTO ledger_accounts')),
+    false,
+    'order-bound capture must not post auction-specific ledger accounts',
+  );
+  assert.equal(
+    statements.some((sql) => sql.startsWith('INSERT INTO ledger_entries')),
+    false,
+    'the escrow-hold ledger was already posted by the canonical commerce branch',
+  );
+});
+
+test('bound order that is not paid refuses settlement — captured funds left for reconciliation', async () => {
+  const state = {
+    intent: { ...SUCCEEDED_INTENT, order_id: 'ord_win_1' },
+    auction: { ...AUCTION },
+    order: { id: 'ord_win_1', status: 'created' },
+  };
+  const { client, statements } = makeSettlementClient(state);
+
+  const result = await settleAuctionWinForVerifiedIntent(client as any, 'pi_1');
+  assert.equal(result.kind, 'skipped');
+  assert.equal(
+    result.kind === 'skipped' && result.reason,
+    'order_not_payable:created',
+  );
+  assert.equal(
+    statements.some((sql) => sql.startsWith('UPDATE auctions')),
+    false,
+    'an unpaid bound order means the capture is orphaned — never settled',
+  );
+});
+
+test('legacy unbound capture posts currency-consistent, escrow-held ledger legs', async () => {
+  const state = {
+    // order_id IS NULL — an intent minted before the canonical binding.
+    intent: { ...SUCCEEDED_INTENT },
+    auction: { ...AUCTION },
+    order: null as Record<string, unknown> | null,
+    ledgerEnabled: true,
+  };
+  const { client, calls } = makeSettlementClient(state);
+
+  const result = await settleAuctionWinForVerifiedIntent(client as any, 'pi_1');
+  assert.equal(result.kind, 'settled');
+
+  const accountCalls = calls.filter((c) => c.sql.startsWith('INSERT INTO ledger_accounts'));
+  const entryCalls = calls.filter((c) => c.sql.startsWith('INSERT INTO ledger_entries'));
+  assert.ok(accountCalls.length > 0, 'ledger accounts must be ensured');
+  assert.ok(entryCalls.length > 0, 'ledger entries must be posted');
+
+  // Currency consistency: the seller is never parked on an ize_wallet
+  // account, and every account and entry posts in GBP — the pre-fix helper
+  // created an IZE-denominated account while writing GBP-defaulted entries.
+  assert.equal(
+    accountCalls.some((c) => c.params[2] === 'ize_wallet'),
+    false,
+    'no seller ize_wallet account may be touched by auction settlement',
+  );
+  for (const c of accountCalls) {
+    assert.equal(c.params[3], 'GBP', `ledger account ${c.params[2]} must be GBP`);
+  }
+  for (const c of entryCalls) {
+    assert.equal(c.params[5], 'GBP', 'every ledger entry must post GBP');
+  }
+
+  // Escrow holds the seller-net: the helper posts buyer→escrow and the
+  // platform-fee carve-out only. There is no seller-payable leg at capture
+  // — seller funds become payable exclusively through the canonical
+  // delivery/protection-hold release, so a refund or dispute before
+  // delivery can never race already-released money.
+  assert.equal(
+    entryCalls.some((c) => String(c.params[12]).includes('seller_payable')),
+    false,
+    'seller-net must stay held in escrow until the delivery release',
+  );
+  assert.ok(
+    entryCalls.some((c) => c.params[12] === 'auction_buyer_charge'),
+    'the winning bid must move buyer → escrow',
+  );
+  assert.ok(
+    entryCalls.some((c) => c.params[12] === 'auction_platform_fee_credit'),
+    'the platform fee carve-out posts at capture',
+  );
+  // sourceId keys on the settled order so refund reversals and the
+  // delivery release reconcile against the same source.
+  assert.ok(
+    entryCalls.every((c) => c.params[11] === 'auc-pay-auc_1-pi_1'),
+    'ledger legs must key on the order id',
+  );
+});
+
+test('retry after a terminal attempt reuses the pending order and re-arms its reservation', async () => {
+  const { app, handlers } = createRouteHarness();
+  const { db, statements, calls } = makeRouteDb({
+    auction: { ...AUCTION },
+    latestIntent: {
+      id: 'pi_dead',
+      user_id: 'winner_1',
+      status: 'failed',
+      gateway_id: 'stripe_americas',
+      client_secret: null,
+      next_action_url: null,
+      provider_status: 'canceled',
+      failure_code: 'card_declined',
+      failure_message: 'declined',
+    },
+    // The first attempt's pending order survived (intent failure did not
+    // cancel it in this fixture) — the retry must reuse it rather than
+    // stacking a second order row.
+    orders: [{ id: 'ord_retry', buyer_id: 'winner_1', status: 'created' }],
+  });
+
+  registerAuctionLifecycleRoutes({
+    app,
+    db,
+    queueUserNotification: async () => 'notif_1',
+    createAuctionPaymentIntent: async () => ({
+      statusCode: 200,
+      body: { ok: true, intent: { id: 'pi_new', status: 'requires_confirmation' } },
+    }),
+    onAuctionSettled: async () => {},
+  });
+
+  const handler = handlers.get('POST /auctions/:auctionId/payment');
+  assert.ok(handler);
+  const result = await handler(
+    makeRequest({ body: { idempotencyKey: 'pay-key-2' } }),
+    createReply(),
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.paymentStatus, 'pending');
+  assert.equal(
+    statements.some((sql) => sql.startsWith('INSERT INTO orders')),
+    false,
+    'a live pending order is reused — never duplicated',
+  );
+
+  // The reservation is re-armed for the reused order (order_id upsert).
+  const resUpsert = calls.find(
+    (c) => c.sql.startsWith('INSERT INTO listing_checkout_reservations'),
+  );
+  assert.ok(resUpsert, 'the auction reservation must be (re)armed');
+  assert.equal(resUpsert.params[4], 'ord_retry');
+
+  // The freshly-minted intent binds to the reused order.
+  const bind = calls.find(
+    (c) => c.sql.startsWith('UPDATE payment_intents') && c.sql.includes('order_id'),
+  );
+  assert.ok(bind);
+  assert.equal(bind.params[2], 'ord_retry');
+});
+
+test('a second order does not claim orders.auction_id when a prior order holds it', async () => {
+  const { app, handlers } = createRouteHarness();
+  const { db, calls } = makeRouteDb({
+    auction: { ...AUCTION },
+    // A cancelled first-attempt order still claims the partial unique
+    // index slot — the retry order must insert with auction_id NULL.
+    orders: [{ id: 'ord_dead', buyer_id: 'winner_1', status: 'cancelled' }],
+  });
+
+  registerAuctionLifecycleRoutes({
+    app,
+    db,
+    queueUserNotification: async () => 'notif_1',
+    createAuctionPaymentIntent: async () => ({
+      statusCode: 200,
+      body: { ok: true, intent: { id: 'pi_new', status: 'requires_confirmation' } },
+    }),
+    onAuctionSettled: async () => {},
+  });
+
+  const handler = handlers.get('POST /auctions/:auctionId/payment');
+  assert.ok(handler);
+  const result = await handler(makeRequest(), createReply());
+  assert.equal(result.ok, true);
+
+  const orderInsert = calls.find((c) => c.sql.startsWith('INSERT INTO orders'));
+  assert.ok(orderInsert);
+  assert.equal(
+    orderInsert.params[7],
+    null,
+    'the retry order must not double-claim orders.auction_id',
+  );
+
+  // The dead order's drifted reservation is retired so the winner's
+  // reservation upsert can never hit the listing-level unique index.
+  const retired = calls.find(
+    (c) =>
+      c.sql.startsWith('UPDATE listing_checkout_reservations')
+      && c.sql.includes("'cancelled'"),
+  );
+  assert.ok(retired, 'stale reservations on terminal orders must be retired');
 });

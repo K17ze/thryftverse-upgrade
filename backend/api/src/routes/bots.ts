@@ -11,6 +11,7 @@ import {
 } from '../botRuntime/openaiAgent.js';
 import { encryptApiKey, decryptApiKey, maskApiKey } from '../lib/messageEncryption.js';
 import { isLoopbackIp, isPrivateIp } from '../lib/media/remoteImport.js';
+import { fetchPinnedRemoteMedia } from '../lib/safeRemoteMediaFetch.js';
 
 type BotsRouteDependencies = {
   app: FastifyInstance;
@@ -214,20 +215,33 @@ async function verifyProviderKey(
   }
 
   try {
-    const response = await fetch(`${endpoint}/models`, {
-      headers,
-      signal: AbortSignal.timeout(10_000),
+    // The custom-provider URL was DNS-validated above, but validation alone
+    // leaves a TOCTOU window — a rebound DNS answer could redirect the
+    // API-key-bearing request. The pinned transport re-validates and pins
+    // the connection to the blocklist-checked address set (F15/B3).
+    const result = await fetchPinnedRemoteMedia({
+      url: `${endpoint}/models`,
+      // HTTPS-only — mirrors assertSafeCustomProviderBaseUrl and the
+      // hardcoded provider endpoints.
+      allowHttp: false,
+      timeoutMs: 10_000,
+      headers: {
+        'User-Agent': 'ThryftVerse-Provider-Verify/1.0',
+        Accept: 'application/json',
+        ...headers,
+      },
     });
-    if (response.ok) {
-      const payload = (await response.json()) as unknown;
+    if (result.ok) {
+      const payload = JSON.parse(result.buffer.toString('utf8')) as unknown;
       const models = extractModelIds(payload);
       return { healthy: true, models, error: null };
     }
-    const errorText = await response.text().catch(() => '');
     return {
       healthy: false,
       models: [],
-      error: `Provider returned ${response.status}: ${errorText.slice(0, 200) || response.statusText}`,
+      error: result.code === 'http_error' && result.statusCode !== undefined
+        ? `Provider returned ${result.statusCode}: ${result.message}`
+        : result.message,
     };
   } catch (error) {
     return {
@@ -1693,6 +1707,11 @@ export const registerBotsRoutes = ({
             totalTokens: Number(providerUsage.totalTokens) || 0,
           }
           : undefined,
+        // Settle the admission reservation against the real provider cost.
+        spendReservation: {
+          reservedMicrousd: aiQuota.reservedMicrousd,
+          spendKey: aiQuota.spendKey,
+        },
         metadata: { playground: true, confidence: result.confidence ?? null },
       }, redis);
 
@@ -1718,8 +1737,13 @@ export const registerBotsRoutes = ({
         model: 'unconfigured',
         status: 'failed',
         errorCode: 'AI_EXECUTION_FAILED',
+        // Refund the admission reservation — a failed run is not billable.
+        spendReservation: {
+          reservedMicrousd: aiQuota.reservedMicrousd,
+          spendKey: aiQuota.spendKey,
+        },
         metadata: { playground: true },
-      }).catch(() => {});
+      }, redis).catch(() => {});
       throw createApiError('AGENT_EXECUTION_FAILED', errorMessage);
     }
   });

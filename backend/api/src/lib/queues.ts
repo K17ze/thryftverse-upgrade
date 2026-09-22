@@ -217,6 +217,19 @@ export interface SearchIndexSyncJobData {
   reason: 'scheduled' | 'manual';
 }
 
+// ---------------------------------------------------------------------------
+// Vendor support-sync queue slot (infra_ops job name 'vendor_sync'). Drains
+// support_vendor_outbox rows for one vendor — the outbox claim inside the
+// handler owns the lease/reclaim semantics, so overlapping drains are safe.
+// Producers enqueue vendor events via enqueueVendorEvent (support/
+// vendorAdapter.ts) and may kick an immediate drain with
+// enqueueVendorSyncJob; the periodic scheduler is the backstop.
+// ---------------------------------------------------------------------------
+
+export interface VendorSyncJobData {
+  vendorName: string;
+}
+
 type CatalogImportJobData =
   | CatalogImportDiscoveryJobData
   | CatalogImportHydrationJobData
@@ -246,7 +259,8 @@ type InfraJobData =
   | FeedbackEvaluationJobData
   | MediaIngestReconcileJobData
   | MultipartSessionSweepJobData
-  | OrphanUploadIntentSweepJobData;
+  | OrphanUploadIntentSweepJobData
+  | VendorSyncJobData;
 
 interface QueueHandlers {
   handlePushJob: (job: PushJobData) => Promise<void>;
@@ -282,6 +296,11 @@ interface QueueHandlers {
   handleCatalogImportRetentionJob: (job: CatalogImportRetentionJobData) => Promise<void>;
   handleCatalogImportReconcileJob: (job: CatalogImportReconcileJobData) => Promise<void>;
   handleAgentRunJob: (job: AgentRunJobData) => Promise<void>;
+  // Optional so the API's inline worker set compiles without redeclaring
+  // it — the worker falls back to the real handler via dynamic import
+  // (same pattern as the search-indexing handler) so the vendor_sync job
+  // drains in both run modes.
+  handleVendorSyncJob?: (job: VendorSyncJobData) => Promise<void>;
   // Optional so the API process can start its inline worker set without
   // redeclaring it — the worker falls back to the real handler via dynamic
   // import (same pattern as the agent-run handler in index.ts) so the
@@ -618,6 +637,10 @@ export function startBackgroundWorkers(
             await handlers.handleMultipartSessionSweepJob(job.data as MultipartSessionSweepJobData);
           } else if (job.name === 'orphan_upload_intent_sweep') {
             await handlers.handleOrphanUploadIntentSweepJob(job.data as OrphanUploadIntentSweepJobData);
+          } else if (job.name === 'vendor_sync') {
+            const handleVendorSync = handlers.handleVendorSyncJob
+              ?? (await import('../workers/handlers/vendorSyncHandler.js')).processVendorSyncJob;
+            await handleVendorSync(job.data as VendorSyncJobData);
           }
 
           const durationMs = Date.now() - jobStart;
@@ -1667,6 +1690,34 @@ export async function enqueueSearchIndexSyncJob(
       // Bound failed-record retention — a retained failure must not
       // suppress the rest of the bucket's reindex (same hazard as
       // seller_trust_recompute / feedback_evaluation).
+      removeOnFail: { age: 5 * 60, count: 100 },
+    },
+  );
+}
+
+/**
+ * Enqueue a vendor outbox drain for one vendor. Producers that write
+ * support_vendor_outbox rows (enqueueVendorEvent) should call this after
+ * enqueueing for low-latency delivery; the periodic scheduler is the
+ * backstop for crash recovery and lease reclaim.
+ */
+export async function enqueueVendorSyncJob(vendorName: string): Promise<void> {
+  // 30s bucket: overlapping schedulers and producer kicks collapse into a
+  // single drain run; the outbox claim remains the real arbiter.
+  const timeBucket = Math.floor(Date.now() / 30_000);
+  await infraQueue.add(
+    'vendor_sync',
+    { vendorName },
+    {
+      jobId: `vendor_sync_${vendorName}_${timeBucket}`,
+      attempts: 3,
+      backoff: {
+        type: 'exponential',
+        delay: 5_000,
+      },
+      removeOnComplete: true,
+      // Bound failed-record retention so a failed drain doesn't suppress
+      // the rest of the bucket (same hazard as the sweep enqueues).
       removeOnFail: { age: 5 * 60, count: 100 },
     },
   );

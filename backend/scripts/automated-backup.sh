@@ -92,14 +92,23 @@ cleanup() {
     echo "[$(date -u)] Failure — preserving local artifacts in ${BACKUP_DIR} for operator recovery." >&2
   fi
   rm -f "$CHECKSUM_FILE"
-  # The plaintext dump is only safe to drop once an encrypted artifact exists;
-  # otherwise it IS the artifact and must be kept (even on failure) so an
-  # operator can recover it manually.
-  if [ -n "$BACKUP_ENCRYPTION_KEY" ] && [ -f "$ENCRYPTED_FILE" ]; then
-    rm -f "$DUMP_FILE"
+  # The plaintext dump may only be dropped once a copy is VERIFIED at the
+  # destination — a local encrypted artifact proves nothing about the remote
+  # copy, so mere existence of $ENCRYPTED_FILE is not sufficient. When no
+  # remote destination is configured (non-production only), the encrypted
+  # artifact IS the backup and the plaintext must not linger on disk.
+  if [ -n "$BACKUP_ENCRYPTION_KEY" ] && [ -f "$DUMP_FILE" ]; then
+    if [ "$UPLOAD_VERIFIED" = "true" ] || [ -z "$S3_BACKUP_BUCKET" ]; then
+      rm -f "$DUMP_FILE"
+    fi
   fi
   exit $exit_code
 }
+
+# Upload verification state — read by the cleanup trap. Only a VERIFIED
+# remote copy (head-object byte-length match, not local file existence)
+# licenses deletion of the local plaintext dump.
+UPLOAD_VERIFIED="false"
 
 trap cleanup EXIT
 
@@ -135,12 +144,11 @@ if [ -n "$BACKUP_ENCRYPTION_KEY" ]; then
     -out "$ENCRYPTED_FILE" \
     -pass env:BACKUP_ENCRYPTION_KEY
 
-  rm -f "$DUMP_FILE"
+  # Plaintext is retained until the remote copy is VERIFIED (or proven
+  # unnecessary) — see cleanup(). The encrypted artifact is what uploads.
   UPLOAD_FILE="$ENCRYPTED_FILE"
   echo "[$(date -u)] Encrypted backup: ${ENCRYPTED_FILE}"
 fi
-
-UPLOAD_SUCCEEDED="false"
 
 if [ -n "$S3_BACKUP_BUCKET" ]; then
   S3_KEY="${S3_BACKUP_PREFIX}/$(basename "$UPLOAD_FILE")"
@@ -150,9 +158,26 @@ if [ -n "$S3_BACKUP_BUCKET" ]; then
   sha256sum "$UPLOAD_FILE" | awk '{print $1}' > "$CHECKSUM_FILE"
   S3_CHECKSUM_KEY="${S3_BACKUP_PREFIX}/$(basename "$CHECKSUM_FILE")"
 
-  aws s3 cp "$UPLOAD_FILE" "s3://${S3_BACKUP_BUCKET}/${S3_KEY}" --no-progress --sse aws:kms
+  # The snapshot-started-at metadata records the pg_dump START time — the
+  # content boundary erasure verification compares against erased_at.
+  aws s3 cp "$UPLOAD_FILE" "s3://${S3_BACKUP_BUCKET}/${S3_KEY}" --no-progress --sse aws:kms \
+    --metadata "snapshot-started-at=${TIMESTAMP}"
+
+  # Verify the object actually landed: head-object must succeed AND report
+  # the same byte length as the local artifact. A completed `aws s3 cp`
+  # already implies success under set -e; this catches silent short-writes
+  # and incompatible-but-200 responses from S3-compatible endpoints.
+  LOCAL_SIZE=$(stat -c%s "$UPLOAD_FILE" 2>/dev/null || stat -f%z "$UPLOAD_FILE" 2>/dev/null || wc -c < "$UPLOAD_FILE" | tr -d ' ')
+  REMOTE_SIZE=$(aws s3api head-object --bucket "$S3_BACKUP_BUCKET" --key "$S3_KEY" --query ContentLength --output text)
+  if [ "$REMOTE_SIZE" != "$LOCAL_SIZE" ]; then
+    echo "FATAL: upload verification failed for s3://${S3_BACKUP_BUCKET}/${S3_KEY} — remote size ${REMOTE_SIZE} != local size ${LOCAL_SIZE}" >&2
+    exit 1
+  fi
+
   aws s3 cp "$CHECKSUM_FILE" "s3://${S3_BACKUP_BUCKET}/${S3_CHECKSUM_KEY}" --no-progress --sse aws:kms
-  UPLOAD_SUCCEEDED="true"
+  aws s3api head-object --bucket "$S3_BACKUP_BUCKET" --key "$S3_CHECKSUM_KEY" --query ContentLength --output text > /dev/null
+  UPLOAD_VERIFIED="true"
+  echo "[$(date -u)] Upload verified: s3://${S3_BACKUP_BUCKET}/${S3_KEY} (${LOCAL_SIZE} bytes)"
 
   rm -f "$CHECKSUM_FILE"
   CHECKSUM_FILE=""
@@ -179,9 +204,9 @@ fi
 echo "[$(date -u)] Pruning local backups older than ${BACKUP_RETENTION_DAYS} days..."
 find "$BACKUP_DIR" -name "thryftverse_*.dump*" -type f -mtime +${BACKUP_RETENTION_DAYS} -delete || true
 
-# Only drop the local artifact once a copy is confirmed at the destination.
+# Only drop the local artifact once a copy is VERIFIED at the destination.
 # A failed or skipped upload must never remove the only remaining copy.
-if [ "$UPLOAD_SUCCEEDED" = "true" ]; then
+if [ "$UPLOAD_VERIFIED" = "true" ]; then
   rm -f "$UPLOAD_FILE"
 else
   echo "[$(date -u)] Local artifact retained: ${UPLOAD_FILE}"

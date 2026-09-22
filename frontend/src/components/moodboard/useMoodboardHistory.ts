@@ -123,29 +123,35 @@ export function useMoodboardHistory({ board, selection, mutations }: UseMoodboar
     [setMoodboard, setActiveThemeId, submitBoardOps, pruneSelection],
   );
 
-  // An inverse that did not fully persist leaves the optimistic board
-  // claiming a state the server never reached (a multi-op inverse may have
-  // persisted only a prefix). Reconcile to the canonical board so the
-  // canvas tells the truth, and keep the entry on its stack — the command
-  // stays recoverable rather than silently consumed.
-  const reconcileAfterFailedInverse = useCallback(async () => {
-    await reconcileBoard();
+  // An inverse that did not fully persist — or persisted but could not be
+  // verified ('unreconciled') — leaves the optimistic board claiming a
+  // state the server may not have reached. Reconcile to the canonical
+  // board so the canvas tells the truth, and keep the entry on its stack —
+  // the command stays recoverable rather than silently consumed. When the
+  // reconcile fetch itself fails, reconcileBoard flags the unverified
+  // state via the sync status machine; this resolves false so callers can
+  // assert it.
+  const reconcileAfterFailedInverse = useCallback(async (): Promise<boolean> => {
+    return reconcileBoard();
   }, [reconcileBoard]);
 
   const undo = useCallback(async () => {
     const entry = stacksRef.current.undo[stacksRef.current.undo.length - 1];
     if (!entry || applyingRef.current) return;
     applyingRef.current = true;
-    let outcome: SubmitBoardOpsOutcome | null = null;
+    // The lock covers mutation AND the failed-inverse reconcile (S21-04):
+    // a second undo/redo must not interleave between the failed command's
+    // cleanup and the canonical re-fetch, or its optimistic write would be
+    // silently overwritten by the late reconcile response.
     try {
-      outcome = await applyEntry(entry, 'undo');
+      const outcome = await applyEntry(entry, 'undo');
+      if (outcome === 'applied' || outcome === 'queued') {
+        setStacks((prev) => moveEntry(prev, entry, 'undo'));
+      } else {
+        await reconcileAfterFailedInverse();
+      }
     } finally {
       applyingRef.current = false;
-    }
-    if (outcome === 'applied' || outcome === 'queued') {
-      setStacks((prev) => moveEntry(prev, entry, 'undo'));
-    } else {
-      await reconcileAfterFailedInverse();
     }
   }, [applyEntry, reconcileAfterFailedInverse]);
 
@@ -153,16 +159,16 @@ export function useMoodboardHistory({ board, selection, mutations }: UseMoodboar
     const entry = stacksRef.current.redo[stacksRef.current.redo.length - 1];
     if (!entry || applyingRef.current) return;
     applyingRef.current = true;
-    let outcome: SubmitBoardOpsOutcome | null = null;
+    // Same ordering guarantee as undo — the lock spans the reconcile window.
     try {
-      outcome = await applyEntry(entry, 'redo');
+      const outcome = await applyEntry(entry, 'redo');
+      if (outcome === 'applied' || outcome === 'queued') {
+        setStacks((prev) => moveEntry(prev, entry, 'redo'));
+      } else {
+        await reconcileAfterFailedInverse();
+      }
     } finally {
       applyingRef.current = false;
-    }
-    if (outcome === 'applied' || outcome === 'queued') {
-      setStacks((prev) => moveEntry(prev, entry, 'redo'));
-    } else {
-      await reconcileAfterFailedInverse();
     }
   }, [applyEntry, reconcileAfterFailedInverse]);
 

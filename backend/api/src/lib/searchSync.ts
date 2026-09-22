@@ -1,12 +1,18 @@
-import type { Pool, PoolClient, QueryResult } from 'pg';
+import { randomUUID } from 'node:crypto';
+import type { Pool, QueryResult } from 'pg';
 import { logger } from './logger.js';
-import { observeSearchIndexLag, recordSearchSync } from './metrics.js';
+import {
+  observeSearchIndexLag,
+  recordSearchReindexLease,
+  recordSearchSync,
+} from './metrics.js';
 import {
   createSearchAdapter,
   indexIntoLocalFallback,
   MeilisearchSearchAdapter,
   type ListingDocument,
   type SearchAdapter,
+  type SearchIndexWriteResult,
 } from './searchAdapter.js';
 import {
   MEILISEARCH_INDEX_NAME,
@@ -319,8 +325,9 @@ export async function syncSingleListing(
     );
 
     if (!result.rowCount) {
-      await adapter.remove(listingId);
-      recordSearchSync('remove', 'ok');
+      const write = await adapter.remove(listingId);
+      recordSearchSync('remove', 'ok', write.outcome === 'remote' ? 'submitted' : 'fallback');
+      confirmIndexWrite({ op: 'remove', adapter, write, listingId });
       return;
     }
 
@@ -332,25 +339,34 @@ export async function syncSingleListing(
     // document in the index would diverge from the corpus the serving
     // layer's status='active' re-check assumes.
     if (row.status !== 'active') {
-      await adapter.remove(listingId);
-      recordSearchSync('remove', 'ok');
+      const write = await adapter.remove(listingId);
+      recordSearchSync('remove', 'ok', write.outcome === 'remote' ? 'submitted' : 'fallback');
+      confirmIndexWrite({ op: 'remove', adapter, write, listingId });
       return;
     }
 
-    await adapter.index(rowToDocument(row));
-    recordSearchSync('index', 'ok');
-    // Freshness signal (R28/R91): lag between the row's last mutation and
-    // the index write landing. Feeds thryftverse_search_index_lag_seconds —
-    // the freshness alert reads the p95 of this histogram.
+    const write = await adapter.index(rowToDocument(row));
+    const backend = adapter.retrievalInfo().backend;
+    // Audit §4.7: adapter.index() resolving means the write was SUBMITTED
+    // (Meilisearch enqueued a task) or FELL BACK to the process-local index
+    // — neither is "the document is searchable". Record the honest outcome;
+    // confirmIndexWrite separately records outcome="completed" (and the true
+    // visibility lag) once the task is confirmed applied.
+    const submittedOutcome = write.outcome === 'remote' ? 'submitted' : 'fallback';
+    recordSearchSync('index', 'ok', submittedOutcome);
     if (row.updated_at) {
       const lagMs = Date.now() - new Date(row.updated_at).getTime();
-      observeSearchIndexLag(
-        adapter.retrievalInfo().backend,
-        lagMs / 1000,
+      observeSearchIndexLag(backend, lagMs / 1000, submittedOutcome);
+    }
+    if (write.outcome === 'remote' && write.taskUid !== undefined) {
+      logger.debug(
+        { listingId, taskUid: write.taskUid, backend },
+        'search.index.write_submitted — Meilisearch task enqueued (not yet visible)',
       );
     }
+    confirmIndexWrite({ op: 'index', adapter, write, listingId, updatedAt: row.updated_at });
   } catch (error) {
-    recordSearchSync('index', 'error');
+    recordSearchSync('index', 'error', 'failed');
     logger.error(
       { err: error, listingId },
       'Failed to sync single listing to search index',
@@ -451,15 +467,30 @@ const INDEX_SETTLE_STABLE_POLLS = 2;
  */
 const SOURCE_COUNT_DRIFT_RATIO = 0.05;
 const SOURCE_COUNT_DRIFT_FLOOR = 5;
-/** Cap on post-swap catch-up rows changed during the sync window. */
-const CATCH_UP_BATCH_LIMIT = 1000;
+/** Rows per keyset page during post-swap catch-up replay. */
+const CATCH_UP_BATCH_SIZE = 500;
 /**
- * Session-level advisory-lock key serialising search reindex runs across
- * processes (admin route + hourly worker + manual script). Distinct from
- * the migration runner's lock pair — never reuse those constants.
+ * Hard bound on catch-up pages (500 × 500 = 250k changed rows per sync
+ * window). Hitting it means the change window is pathologically large; the
+ * run reports `catchUpComplete: false` and logs an error instead of the old
+ * behaviour — a silent 1000-row cap that left the freshly-swapped index
+ * incomplete (audit: catch-up must converge, not truncate).
  */
-const REINDEX_LOCK_KEY_A = 20260823;
-const REINDEX_LOCK_KEY_B = 7;
+const CATCH_UP_MAX_BATCHES = 500;
+/**
+ * Durable fenced lease serialising search reindex runs across processes
+ * (admin route + hourly worker + manual script). Row-backed — correct
+ * through PgBouncer TRANSACTION pooling, unlike the previous session
+ * advisory lock (audit S2): every lease statement below is a single atomic
+ * transaction, so no server-session affinity is ever required. A crashed
+ * holder's lease self-recovers via `expires_at`; the monotonically
+ * increasing `fence` makes takeovers detectable so a stale holder can
+ * neither renew nor release a lease it no longer owns.
+ * Table created by migration 338_search_reindex_lease.sql.
+ */
+const REINDEX_LEASE_NAME = 'search_reindex_global';
+const REINDEX_LEASE_TTL_MS = 5 * 60_000;
+const REINDEX_LEASE_HEARTBEAT_MS = 30_000;
 
 export interface BlueGreenReindexResult {
   ok: boolean;
@@ -497,6 +528,13 @@ export interface BlueGreenReindexResult {
   verificationError?: string;
   /** Rows re-indexed/removed after the swap to close the sync window. */
   catchUpSynced?: number;
+  /**
+   * False when the post-swap catch-up stopped before walking the full change
+   * window (query failure or the batch safety bound). Absent/true means the
+   * replay converged; false means residual drift remains — an honest signal,
+   * never a silent truncation.
+   */
+  catchUpComplete?: boolean;
   /** Older `<live>_v*` indexes deleted by the keep-last-N prune. */
   prunedIndexes?: string[];
   /** Fatal error message when the reindex itself failed. */
@@ -505,6 +543,90 @@ export interface BlueGreenReindexResult {
 
 const escapeRegExp = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// ── Durable fenced reindex lease ────────────────────────────────────────────
+// Correctness under PgBouncer transaction pooling (audit S2): every statement
+// below is a single self-contained query — under transaction pooling each one
+// is its own transaction on whichever backend PgBouncer assigns, so the lease
+// never depends on server-session affinity. Mutual exclusion comes from the
+// PRIMARY KEY + the conditional ON CONFLICT update; expiry comes from
+// `expires_at`; fencing from the monotonically increasing `fence` counter.
+
+/**
+ * Atomically acquire the global reindex lease: insert the row, or take it
+ * over only when the existing lease has expired or is already ours (a retried
+ * acquire by the same holder token). Returns the fencing token on success;
+ * `acquired: false` means a live lease is held by someone else.
+ */
+async function acquireReindexLease(
+  dbPool: Pool,
+  holder: string,
+  ttlMs: number,
+): Promise<{ acquired: true; fence: number } | { acquired: false }> {
+  const result = await dbPool.query<{ fence: string | number }>(
+    `
+      -- clock_timestamp() (wall clock), not now() (transaction start): lease
+      -- boundaries must stay correct even if a caller ever wraps this
+      -- statement in a longer transaction.
+      INSERT INTO search_reindex_lease (name, holder, fence, acquired_at, expires_at)
+      VALUES ($1, $2, 1, clock_timestamp(), clock_timestamp() + ($3::double precision * INTERVAL '1 millisecond'))
+      ON CONFLICT (name) DO UPDATE
+        SET holder = EXCLUDED.holder,
+            fence = search_reindex_lease.fence + 1,
+            acquired_at = clock_timestamp(),
+            expires_at = clock_timestamp() + ($3::double precision * INTERVAL '1 millisecond')
+        WHERE search_reindex_lease.expires_at < clock_timestamp()
+           OR search_reindex_lease.holder = $2
+      RETURNING fence
+    `,
+    [REINDEX_LEASE_NAME, holder, ttlMs],
+  );
+  if (!result.rowCount) {
+    return { acquired: false };
+  }
+  return { acquired: true, fence: Number(result.rows[0].fence) };
+}
+
+/**
+ * Renew the lease's expiry — only while this process still owns the exact
+ * holder+fence it acquired. `false` means the row is gone or has been taken
+ * over by a newer holder after our lease expired: the lease is LOST and the
+ * run must not reach the swap.
+ */
+async function renewReindexLease(
+  dbPool: Pool,
+  holder: string,
+  fence: number,
+  ttlMs: number,
+): Promise<boolean> {
+  const result = await dbPool.query(
+    `
+      UPDATE search_reindex_lease
+         SET expires_at = clock_timestamp() + ($4::double precision * INTERVAL '1 millisecond')
+       WHERE name = $1 AND holder = $2 AND fence = $3
+    `,
+    [REINDEX_LEASE_NAME, holder, fence, ttlMs],
+  );
+  return result.rowCount === 1;
+}
+
+/**
+ * Honestly release the lease — the holder+fence guard makes the DELETE a
+ * no-op when the lease already expired and changed hands, so a stale holder
+ * can never delete someone else's live lease. `false` = row absent or owned
+ * by a newer holder (already recovered via expiry).
+ */
+async function releaseReindexLease(
+  dbPool: Pool,
+  holder: string,
+  fence: number,
+): Promise<boolean> {
+  const result = await dbPool.query(
+    `DELETE FROM search_reindex_lease WHERE name = $1 AND holder = $2 AND fence = $3`,
+    [REINDEX_LEASE_NAME, holder, fence],
+  );
+  return result.rowCount === 1;
+}
 
 /**
  * Read a Meilisearch task's current status once. Returns the status string
@@ -528,6 +650,90 @@ async function fetchMeiliTaskStatus(
   } catch {
     return null;
   }
+}
+
+/**
+ * Bounded wait when confirming a submitted index task. Confirmation is
+ * detached from the write path (fire-and-forget telemetry), so this budget
+ * never adds latency to a request — it only bounds how long we poll before
+ * leaving the outcome at 'submitted'.
+ */
+const INDEX_TASK_CONFIRM_TIMEOUT_MS = 10_000;
+const INDEX_TASK_CONFIRM_INTERVAL_MS = 250;
+
+/**
+ * Confirm that a remotely-submitted index write was actually APPLIED
+ * (audit §4.7). Meilisearch resolves `addDocuments`/`deleteDocument` at task
+ * submission; this polls the task and only then records outcome="completed"
+ * plus the true visibility lag on thryftverse_search_index_lag_seconds. A
+ * definitively failed/canceled task records outcome="failed"; a task that is
+ * still pending or unreachable when the budget ends stays 'submitted' — the
+ * stalled-queue alert (submitted ≫ completed) then carries the signal.
+ *
+ * Detached by design: callers fire-and-forget so confirmation never blocks
+ * a request path. Never throws.
+ */
+function confirmIndexWrite(args: {
+  op: 'index' | 'remove';
+  adapter: SearchAdapter;
+  write: SearchIndexWriteResult;
+  listingId: string;
+  updatedAt?: string;
+}): void {
+  const { op, adapter, write, listingId, updatedAt } = args;
+  const taskUid = write.taskUid;
+  if (write.outcome !== 'remote' || taskUid === undefined) {
+    return;
+  }
+  const url = process.env.MEILISEARCH_URL;
+  if (!url) {
+    return;
+  }
+  const apiKey = meilisearchApiKey();
+  const backend = adapter.retrievalInfo().backend;
+  const observeCompletedLag = (): void => {
+    if (!updatedAt) return;
+    const lagMs = Date.now() - new Date(updatedAt).getTime();
+    observeSearchIndexLag(backend, lagMs / 1000, 'completed');
+  };
+  void (async () => {
+    try {
+      await pollMeilisearchTask(
+        url,
+        apiKey,
+        taskUid,
+        INDEX_TASK_CONFIRM_TIMEOUT_MS,
+        INDEX_TASK_CONFIRM_INTERVAL_MS,
+      );
+      recordSearchSync(op, 'ok', 'completed');
+      observeCompletedLag();
+    } catch (pollError) {
+      // A poll failure is NOT proof the task failed — re-read the task once
+      // so a timed-out poll on an eventually-succeeded task still records
+      // 'completed', and only a terminal state records 'failed'.
+      const status = await fetchMeiliTaskStatus(url, apiKey, taskUid);
+      if (status === 'succeeded') {
+        recordSearchSync(op, 'ok', 'completed');
+        observeCompletedLag();
+      } else if (status === 'failed' || status === 'canceled') {
+        recordSearchSync(op, 'error', 'failed');
+        logger.warn(
+          { listingId, taskUid, status },
+          'search.index.write_failed — Meilisearch task ended without applying the write',
+        );
+      } else {
+        logger.warn(
+          { err: pollError, listingId, taskUid, status },
+          'search.index.write_unconfirmed — task still pending or unreachable; submitted outcome stands',
+        );
+      }
+    }
+  })().catch((error) => {
+    logger.warn(
+      { err: error, listingId, taskUid },
+      'search.index.confirm_failed — task confirmation errored; submitted outcome stands',
+    );
+  });
 }
 
 async function countActiveListings(dbPool: Pool): Promise<number> {
@@ -659,52 +865,93 @@ async function ensureLiveIndexExists(
  * replay — that residual drift is repaired by the next incremental remove
  * or the next reindex.
  */
-async function syncListingsChangedSince(
+export interface CatchUpSyncResult {
+  /** Rows re-indexed/removed during the replay. */
+  touched: number;
+  /**
+   * True when pagination walked the change window to convergence (a short
+   * final page). False means the replay stopped early — query failure or the
+   * CATCH_UP_MAX_BATCHES safety bound — and residual drift remains for the
+   * next sync to repair.
+   */
+  complete: boolean;
+}
+
+/**
+ * Exported for focused tests — internal to the blue/green flow.
+ */
+export async function syncListingsChangedSince(
   dbPool: Pool,
   since: string,
-): Promise<number> {
+): Promise<CatchUpSyncResult> {
   const adapter = createSearchAdapter();
   let touched = 0;
+  let batches = 0;
+  // Keyset pagination over (updated_at, id): the cursor starts at the sync
+  // watermark and advances to each page's last row. Rows are ordered by
+  // (updated_at, id) so `>` on the pair is exactly "rows not yet replayed" —
+  // a large change window is walked in bounded batches until a short page
+  // signals convergence, rather than silently capped at one query.
+  let cursorUpdatedAt: string = since;
+  let cursorId = '';
   try {
-    const result = await dbPool.query<ListingRow>(
-      `
-        SELECT
-          id, title, description, price_gbp::text, status,
-          category, brand, size, condition, created_at::text
-        FROM listings
-        WHERE updated_at > $1
-        ORDER BY updated_at, id
-        LIMIT $2
-      `,
-      [since, CATCH_UP_BATCH_LIMIT],
-    );
-    for (const row of result.rows) {
-      try {
-        if (row.status === 'active') {
-          await adapter.index(rowToDocument(row));
-        } else {
-          await adapter.remove(row.id);
-        }
-        touched += 1;
-      } catch (error) {
-        logger.error(
-          { err: error, listingId: row.id },
-          'Failed to replay listing write during post-swap catch-up',
-        );
-      }
-    }
-    if (result.rowCount === CATCH_UP_BATCH_LIMIT) {
-      logger.warn(
-        { since, limit: CATCH_UP_BATCH_LIMIT },
-        'Post-swap catch-up hit its row cap — residual drift repairs on the next sync',
+    while (true) {
+      const result = await dbPool.query<ListingRow>(
+        `
+          SELECT
+            id, title, description, price_gbp::text, status,
+            category, brand, size, condition, created_at::text,
+            updated_at::text
+          FROM listings
+          WHERE (updated_at, id) > ($1::timestamptz, $2::text)
+          ORDER BY updated_at, id
+          LIMIT $3
+        `,
+        [cursorUpdatedAt, cursorId, CATCH_UP_BATCH_SIZE],
       );
+      if (!result.rowCount || result.rowCount === 0) {
+        return { touched, complete: true };
+      }
+      batches += 1;
+      for (const row of result.rows) {
+        try {
+          if (row.status === 'active') {
+            await adapter.index(rowToDocument(row));
+          } else {
+            await adapter.remove(row.id);
+          }
+          touched += 1;
+        } catch (error) {
+          logger.error(
+            { err: error, listingId: row.id },
+            'Failed to replay listing write during post-swap catch-up',
+          );
+        }
+      }
+      const last = result.rows[result.rows.length - 1];
+      cursorUpdatedAt = last.updated_at ?? cursorUpdatedAt;
+      cursorId = last.id;
+      if (result.rowCount < CATCH_UP_BATCH_SIZE) {
+        return { touched, complete: true };
+      }
+      logger.info(
+        { since, batches, touched },
+        'Post-swap catch-up page complete — continuing through change window',
+      );
+      if (batches >= CATCH_UP_MAX_BATCHES) {
+        logger.error(
+          { since, batches, touched, maxBatches: CATCH_UP_MAX_BATCHES },
+          'Post-swap catch-up hit its batch safety bound — the change window did NOT converge; residual drift repairs on the next sync',
+        );
+        return { touched, complete: false };
+      }
     }
   } catch (error) {
     // The swap already succeeded — a failed catch-up is drift, not
     // corruption. Log loudly; the next sync or incremental write repairs.
-    logger.error({ err: error, since }, 'Post-swap catch-up query failed');
+    logger.error({ err: error, since, batches, touched }, 'Post-swap catch-up query failed');
+    return { touched, complete: false };
   }
-  return touched;
 }
 
 /**
@@ -766,12 +1013,17 @@ async function pruneVersionedIndexes(
  * `mode: 'in_place'` — there is no shared index to version in that
  * deployment.
  *
- * Concurrency: a Postgres advisory lock (REINDEX_LOCK_*) serialises every
- * caller — the admin POST /search/reindex route, the hourly BullMQ worker
- * job, and any manual script all land here, and two concurrent blue/green
- * runs would swap-stomp each other (the loser's staged index could repoint
- * the live name after the winner's). The lock is DB-scoped so it holds
- * across replicas and the separate worker process.
+ * Concurrency: a durable fenced lease (search_reindex_lease, migration 338)
+ * serialises every caller — the admin POST /search/reindex route, the hourly
+ * BullMQ worker job, and any manual script all land here, and two concurrent
+ * blue/green runs would swap-stomp each other (the loser's staged index could
+ * repoint the live name after the winner's). The lease is a plain table row
+ * mutated by single atomic statements, so it is correct through PgBouncer
+ * TRANSACTION pooling — unlike session advisory locks, which PgBouncer
+ * lists as incompatible with that mode (audit S2). A crashed holder's lease
+ * self-recovers via expires_at; heartbeats keep a healthy holder's lease
+ * alive, and the pre-swap freshness check aborts any run whose lease has
+ * lapsed or been taken over before it can repoint the live index.
  */
 export async function reindexListingsBlueGreen(
   dbPool: Pool,
@@ -779,6 +1031,10 @@ export async function reindexListingsBlueGreen(
     pollIntervalMs?: number;
     settleTimeoutMs?: number;
     keepVersions?: number;
+    /** Lease TTL; renewed by heartbeat while the run is alive. */
+    leaseTtlMs?: number;
+    /** Renewal cadence — must stay well below leaseTtlMs. */
+    leaseHeartbeatMs?: number;
   },
 ): Promise<BlueGreenReindexResult> {
   const liveIndex = MEILISEARCH_INDEX_NAME;
@@ -787,64 +1043,118 @@ export async function reindexListingsBlueGreen(
   const pollIntervalMs = options?.pollIntervalMs ?? 500;
   const settleTimeoutMs = options?.settleTimeoutMs ?? INDEX_SETTLE_TIMEOUT_MS;
   const keepVersions = options?.keepVersions ?? VERSIONED_INDEX_KEEP_LAST;
+  const leaseTtlMs = options?.leaseTtlMs ?? REINDEX_LEASE_TTL_MS;
+  const leaseHeartbeatMs = Math.min(
+    options?.leaseHeartbeatMs ?? REINDEX_LEASE_HEARTBEAT_MS,
+    // A heartbeat at/above the TTL can never keep the lease alive.
+    Math.floor(leaseTtlMs / 2),
+  );
 
-  // Acquire the cross-process reindex lease. A dedicated pool client holds
-  // the session-level lock for the whole run; a second concurrent caller
-  // fails fast with `reindex_in_progress` instead of racing the swap.
-  // connect() runs inside the result contract — a pool acquisition failure
-  // must return BlueGreenReindexResult, not propagate as an exception.
-  let lockClient: PoolClient;
+  const failedResult = (error: string): BlueGreenReindexResult => ({
+    ok: false,
+    mode: meiliUrl ? 'blue_green' : 'in_place',
+    swapped: false,
+    liveIndex,
+    synced: 0,
+    failed: 0,
+    total: 0,
+    error,
+  });
+
+  // Acquire the cross-process lease with one atomic statement — under
+  // transaction pooling the query is its own transaction, so no session
+  // affinity is needed. holder is unique per ATTEMPT (pid + uuid) so a
+  // contended acquire can never be mistaken for our own row. Acquisition
+  // failure skips the run honestly — never proceed unprotected.
+  const holder = `pid${process.pid}-${randomUUID()}`;
+  let fence: number;
   try {
-    lockClient = await dbPool.connect();
+    const acquisition = await acquireReindexLease(dbPool, holder, leaseTtlMs);
+    if (!acquisition.acquired) {
+      recordSearchReindexLease('contended');
+      logger.info(
+        { holder, lease: REINDEX_LEASE_NAME },
+        'Search reindex skipped — a live lease is held by another run',
+      );
+      return failedResult(
+        'reindex_in_progress — another reindex holds the lease',
+      );
+    }
+    fence = acquisition.fence;
+    recordSearchReindexLease('acquired');
   } catch (error) {
-    logger.error({ err: error }, 'Search reindex lock client acquisition failed');
-    return {
-      ok: false,
-      mode: meiliUrl ? 'blue_green' : 'in_place',
-      swapped: false,
-      liveIndex,
-      synced: 0,
-      failed: 0,
-      total: 0,
-      error:
-        'reindex_lock_unavailable — could not acquire a database connection for the reindex advisory lock',
-    };
-  }
-  let lockHeld = false;
-  try {
-    const lock = await lockClient.query<{ acquired: boolean }>(
-      'SELECT pg_try_advisory_lock($1, $2) AS acquired',
-      [REINDEX_LOCK_KEY_A, REINDEX_LOCK_KEY_B],
+    recordSearchReindexLease('acquire_error');
+    logger.error(
+      { err: error, holder, lease: REINDEX_LEASE_NAME },
+      'Search reindex lease acquisition failed — refusing to run unprotected',
     );
-    lockHeld = lock.rows[0]?.acquired === true;
-  } catch (error) {
-    lockClient.release();
-    logger.error({ err: error }, 'Search reindex lock acquisition failed');
-    return {
-      ok: false,
-      mode: meiliUrl ? 'blue_green' : 'in_place',
-      swapped: false,
-      liveIndex,
-      synced: 0,
-      failed: 0,
-      total: 0,
-      error:
-        'reindex_lock_unavailable — could not acquire the reindex advisory lock (database error)',
-    };
+    return failedResult(
+      'reindex_lock_unavailable — could not acquire the durable reindex lease (database error; is migration 338 applied?)',
+    );
   }
-  if (!lockHeld) {
-    lockClient.release();
-    return {
-      ok: false,
-      mode: meiliUrl ? 'blue_green' : 'in_place',
-      swapped: false,
-      liveIndex,
-      synced: 0,
-      failed: 0,
-      total: 0,
-      error: 'reindex_in_progress — another reindex holds the lease',
-    };
-  }
+
+  // Lease state shared with the heartbeat. `lastConfirmedAt` is the last
+  // moment the database confirmed this holder+fence still owns the row —
+  // the pre-swap check requires it to be inside the TTL, so a run whose
+  // heartbeats have silently failed cannot swap after its lease expired.
+  const leaseState = {
+    fence,
+    lastConfirmedAt: Date.now(),
+    lost: false,
+  };
+  const heartbeat = setInterval(() => {
+    void (async () => {
+      try {
+        const renewed = await renewReindexLease(
+          dbPool,
+          holder,
+          leaseState.fence,
+          leaseTtlMs,
+        );
+        if (renewed) {
+          leaseState.lastConfirmedAt = Date.now();
+        } else {
+          // rowCount 0: the row is gone or owned by a newer holder — our
+          // lease expired and was taken over. This is definitive loss.
+          leaseState.lost = true;
+          recordSearchReindexLease('heartbeat_lost');
+          logger.error(
+            { holder, fence: leaseState.fence, lease: REINDEX_LEASE_NAME },
+            'Search reindex lease lost — another holder owns the row; the run will abort before swapping',
+          );
+        }
+      } catch (error) {
+        // Transient DB error: the lease MAY still be ours. Do not declare
+        // loss — the pre-swap freshness check (lastConfirmedAt within TTL)
+        // decides whether it is still safe to repoint the live index.
+        logger.warn(
+          { err: error, holder, fence: leaseState.fence },
+          'Search reindex lease heartbeat failed — will retry on the next tick',
+        );
+      }
+    })();
+  }, leaseHeartbeatMs);
+  heartbeat.unref?.();
+
+  /**
+   * Prove the lease is still ours before irreversible steps (the swap).
+   * Two independent failure shapes abort the run: definitive loss (a
+   * heartbeat saw the row owned by someone else) and unconfirmed ownership
+   * (heartbeats have failed long enough that our expires_at may have
+   * lapsed, letting a competitor legitimately take over).
+   */
+  const assertLeaseHeld = (): void => {
+    if (leaseState.lost) {
+      throw new Error(
+        'reindex_lease_lost — the reindex lease was taken over by another holder; aborting before the swap',
+      );
+    }
+    if (Date.now() - leaseState.lastConfirmedAt >= leaseTtlMs) {
+      throw new Error(
+        'reindex_lease_unconfirmed — lease renewal has not been confirmed within its TTL; aborting before the swap',
+      );
+    }
+  };
 
   try {
     return await reindexListingsBlueGreenLocked(dbPool, {
@@ -854,23 +1164,31 @@ export async function reindexListingsBlueGreen(
       pollIntervalMs,
       settleTimeoutMs,
       keepVersions,
+      assertLeaseHeld,
     });
   } finally {
-    let unlockError: Error | undefined;
+    clearInterval(heartbeat);
+    // Honest release: DELETE only lands while this holder+fence still owns
+    // the row. A 0-row delete means the lease already expired and was taken
+    // over — expiry is the recovery path, so this is a warning, not a retry.
     try {
-      await lockClient.query(
-        'SELECT pg_advisory_unlock($1, $2)',
-        [REINDEX_LOCK_KEY_A, REINDEX_LOCK_KEY_B],
-      );
+      const released = await releaseReindexLease(dbPool, holder, leaseState.fence);
+      if (released) {
+        recordSearchReindexLease('released');
+      } else {
+        recordSearchReindexLease('release_missed');
+        logger.warn(
+          { holder, fence: leaseState.fence, lease: REINDEX_LEASE_NAME },
+          'Search reindex lease release deleted no row — lease already expired or changed hands',
+        );
+      }
     } catch (error) {
-      unlockError = error instanceof Error ? error : new Error(String(error));
-      logger.warn({ err: error }, 'Search reindex lock release failed');
+      recordSearchReindexLease('release_error');
+      logger.warn(
+        { err: error, holder, fence: leaseState.fence },
+        'Search reindex lease release failed — the row self-recovers at expiry',
+      );
     }
-    // release(err) DESTROYS the client instead of returning it to the pool:
-    // when the unlock failed the session may still hold the advisory lock,
-    // and pooling it would report reindex_in_progress to every subsequent
-    // caller until the connection died.
-    lockClient.release(unlockError);
   }
 }
 
@@ -883,6 +1201,12 @@ async function reindexListingsBlueGreenLocked(
     pollIntervalMs: number;
     settleTimeoutMs: number;
     keepVersions: number;
+    /**
+     * Throws when the durable reindex lease is no longer provably ours.
+     * Called before every irreversible step so a run whose lease lapsed or
+     * was taken over can never repoint the live index (audit S2).
+     */
+    assertLeaseHeld: () => void;
   },
 ): Promise<BlueGreenReindexResult> {
   const {
@@ -892,6 +1216,7 @@ async function reindexListingsBlueGreenLocked(
     pollIntervalMs,
     settleTimeoutMs,
     keepVersions,
+    assertLeaseHeld,
   } = ctx;
 
   if (!meiliUrl) {
@@ -1016,6 +1341,9 @@ async function reindexListingsBlueGreenLocked(
 
     // 6. Atomic repoint: 'listings' now serves the staged index; the
     //    staged name holds the previous live snapshot (rollback = swap back).
+    //    The lease must still be provably ours — this is the irreversible
+    //    step a stale/duplicate run must never reach.
+    assertLeaseHeld();
     const swapTask = await client.swapIndexes([
       { indexes: [liveIndex, stagedIndex] },
     ]);
@@ -1061,8 +1389,18 @@ async function reindexListingsBlueGreenLocked(
     }
 
     // 7. Replay rows that changed during the sync window so incremental
-    //    writes landing on the pre-swap live index are not lost.
-    const catchUpSynced = await syncListingsChangedSince(dbPool, syncStartedAt);
+    //    writes landing on the pre-swap live index are not lost. Pages the
+    //    full change window to convergence — a run that lost its lease does
+    //    not replay into an index a competitor may have just swapped.
+    assertLeaseHeld();
+    const catchUp = await syncListingsChangedSince(dbPool, syncStartedAt);
+    const catchUpSynced = catchUp.touched;
+    if (!catchUp.complete) {
+      logger.error(
+        { stagedIndex, liveIndex, catchUpSynced },
+        'Post-swap catch-up did NOT converge — residual drift repairs on the next sync',
+      );
+    }
 
     // 8. Keep the last N versioned indexes (the newest is the just-swapped
     //    live snapshot); delete anything older.
@@ -1101,6 +1439,7 @@ async function reindexListingsBlueGreenLocked(
       stagedDocuments,
       verified: true,
       catchUpSynced,
+      catchUpComplete: catchUp.complete,
       prunedIndexes,
     };
   } catch (error) {

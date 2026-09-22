@@ -125,6 +125,7 @@ export const linking: LinkingOptions<RootStackParamList> = {
 
       // Discovery (root stack — cross-tab)
       UnifiedDiscovery: 'search',
+      GalleriaEditorial: 'galleria/editorials/:editorialId',
 
       // Settings & account (root stack — cross-tab)
       EditProfile: 'me/edit',

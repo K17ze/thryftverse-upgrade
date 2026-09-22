@@ -405,6 +405,10 @@ interface MediaReference {
  *             thumbnailUri (→ thumbnailFinalizationId / thumbnailMediaAssetId)
  *  - product: snapshotImageUrl (→ snapshotMediaFinalizationId / snapshotMediaAssetId)
  *  - look:    snapshotImageUrl (→ snapshotMediaFinalizationId / snapshotMediaAssetId)
+ *  - gif:     stillUrl (→ stillFinalizationId / stillMediaAssetId) —
+ *             the still frame the server renderer burns for the sticker.
+ *  - any:     maskRef (→ maskFinalizationId / maskMediaAssetId)
+ *  - canvas:  background.value (→ mediaFinalizationId / mediaAssetId)
  *
  * Non-media layers (text, mention, vote, quiz, etc.) produce no references.
  */
@@ -504,6 +508,21 @@ function extractMediaReferences(doc: unknown): MediaReference[] {
             mediaAssetId: typeof p['snapshotMediaAssetId'] === 'string' ? p['snapshotMediaAssetId'] : undefined,
           });
         }
+      } else if (layerType === 'gif') {
+        // GIF still image — the frame the server renderer burns for an
+        // animated sticker. It is a remote URL fetched during render, so it
+        // must carry a receipt binding like every other media path; an
+        // unbound stillUrl is refused at fetch time AND fails coverage here.
+        if (typeof p['stillUrl'] === 'string' || p['stillFinalizationId'] !== undefined || p['stillMediaAssetId'] !== undefined) {
+          refs.push({
+            layerId,
+            field: 'stillUrl',
+            role: 'gif-still',
+            uri: typeof p['stillUrl'] === 'string' ? p['stillUrl'] : undefined,
+            finalizationId: typeof p['stillFinalizationId'] === 'string' ? p['stillFinalizationId'] : undefined,
+            mediaAssetId: typeof p['stillMediaAssetId'] === 'string' ? p['stillMediaAssetId'] : undefined,
+          });
+        }
       }
     }
   }
@@ -536,6 +555,11 @@ interface MediaCoverageResult {
  *     receipt — the client is claiming media that doesn't exist).
  *  3. A media path has a raw URL but no finalizationId in the document
  *     payload (the document itself lacks the receipt binding).
+ *  4. A media path's URL does not match the bound receipt's suppliedUrl —
+ *     coverage keyed on (layerId, role) alone let a document keep an
+ *     arbitrary remote URL under a valid receipt, and the pre-transaction
+ *     render fetched the document URL rather than the receipted one
+ *     (authenticated SSRF / media substitution).
  */
 function validateMediaCoverage(
   docReferences: MediaReference[],
@@ -585,12 +609,29 @@ function validateMediaCoverage(
 
     // Check 1: media path exists in the document but no expectedMedia entry.
     const key = `${ref.layerId}::${ref.role}`;
-    if (!expectedByKey.has(key)) {
+    const expected = expectedByKey.get(key);
+    if (!expected) {
       errors.push({
         layerId: ref.layerId,
         field: ref.field,
         code: 'MEDIA_RECEIPT_MISSING',
         message: `Layer ${ref.layerId} (${ref.field}) has no matching expectedMedia entry — receipt is missing`,
+      });
+      continue;
+    }
+
+    // Check 4: the document's URL must be exactly the receipt-bound URL for
+    // this (layerId, role) binding. verifyMediaReceipt proves suppliedUrl
+    // equals the finalized upload's public/canonical URL, so a divergent
+    // document URL is a substitution attempt — and the renderer refuses to
+    // fetch any URL outside the receipt set, so this also keeps coverage
+    // and render-time enforcement in lockstep.
+    if (ref.uri !== undefined && ref.uri !== expected.suppliedUrl) {
+      errors.push({
+        layerId: ref.layerId,
+        field: ref.field,
+        code: 'MEDIA_URL_MISMATCH',
+        message: `Layer ${ref.layerId} (${ref.field}) URL does not match the receipted media URL for this binding`,
       });
     }
   }
@@ -662,6 +703,12 @@ interface RenderCompositionMediaResult {
  * a render failure sets `renderFailed: true, nonTrivial: true` so the
  * caller can abort the publication instead of silently publishing the
  * unedited source.
+ *
+ * `allowedSourceUrls` is the set of receipt-bound URLs (`expectedMedia[]
+ * .suppliedUrl`) the renderer may fetch — a document URL with no matching
+ * receipt is refused rather than fetched unpinned (SSRF hardening; the
+ * transaction later proves each suppliedUrl equals a finalized upload's
+ * public/canonical URL).
  */
 async function renderCompositionMedia(
   documentId: string,
@@ -669,6 +716,7 @@ async function renderCompositionMedia(
   primarySuppliedUrl: string,
   primaryMediaType: 'image' | 'video',
   pageIndex?: number,
+  allowedSourceUrls?: ReadonlySet<string>,
 ): Promise<RenderCompositionMediaResult> {
   const nonTrivial = isCompositionNonTrivial(compositionDocument);
   if (!compositionDocument || !nonTrivial) {
@@ -687,6 +735,7 @@ async function renderCompositionMedia(
       primarySuppliedUrl,
       {
         ...(pageIndex !== undefined ? { pageIndex } : {}),
+        ...(allowedSourceUrls !== undefined ? { allowedSourceUrls } : {}),
         streamOutput: primaryMediaType === 'video'
           ? { objectKey, contentType: 'video/mp4', cacheControl }
           : undefined,
@@ -850,16 +899,20 @@ async function renderPosterFrameCompositions(
   const pages = parseCompositionPagesForMedia(compositionDocument);
   if (pages.length === 0) return { renders: result, posters, downloads, renderFailed, nonTrivial };
 
-  // Index expected media by (layerId, role) for O(1) lookup.
+  // Index expected media by (layerId, role) for O(1) lookup, and collect
+  // the full set of receipt-bound URLs — every fetch the renderer performs
+  // must resolve to one of these or it is refused (SSRF hardening).
   const expectedByKey = new Map<
     string,
     { mediaType: 'image' | 'video'; suppliedUrl: string }
   >();
+  const receiptBoundUrls = new Set<string>();
   for (const e of expectedMedia) {
     expectedByKey.set(`${e.layerId}::${e.role}`, {
       mediaType: e.mediaType,
       suppliedUrl: e.suppliedUrl,
     });
+    receiptBoundUrls.add(e.suppliedUrl);
   }
 
   const tasks = pages.map(async (page, pageIndex) => {
@@ -883,6 +936,7 @@ async function renderPosterFrameCompositions(
         expected.suppliedUrl,
         expected.mediaType,
         pageIndex,
+        receiptBoundUrls,
       );
       return {
         pageIndex,
@@ -1338,12 +1392,18 @@ export async function publishCreatorDocumentTransaction(
   const primaryExpected = command.expectedMedia.find(
     (e) => e.role === 'primary',
   );
+  // The set of receipt-bound URLs the renderer may fetch. A document URL
+  // outside this set is refused at fetch time — the render never fetches an
+  // unreceipted URL, pinned or otherwise.
+  const receiptBoundUrls = new Set(command.expectedMedia.map((e) => e.suppliedUrl));
   const compositionRender = command.destination === 'look' && primaryExpected
     ? await renderCompositionMedia(
         documentId,
         command.compositionDocument,
         primaryExpected.suppliedUrl,
         primaryExpected.mediaType,
+        undefined,
+        receiptBoundUrls,
       )
     : { renderedUrl: null as string | null };
 
@@ -1580,18 +1640,13 @@ export async function publishCreatorDocumentTransaction(
     const compositionMediaRefs = command.compositionDocument
       ? extractMediaReferences(command.compositionDocument)
       : [];
-    // Union by (layerId, role) — the compositionDocument may carry
-    // additional layers not yet persisted, and the stored document is
-    // the authoritative locked state.
-    const allMediaRefs = new Map<string, MediaReference>();
-    for (const ref of [...docMediaRefs, ...compositionMediaRefs]) {
-      const key = `${ref.layerId}::${ref.role}`;
-      if (!allMediaRefs.has(key)) {
-        allMediaRefs.set(key, ref);
-      }
-    }
+    // Both sources contribute refs and every ref is validated
+    // independently — NOT collapsed by (layerId, role). A compositionDocument
+    // URL that diverges from the stored document's ref at the same key must
+    // surface as a mismatch, not hide behind the stored ref; the unused-
+    // receipt check is unaffected because key presence is what it tests.
     const coverageResult = validateMediaCoverage(
-      [...allMediaRefs.values()],
+      [...docMediaRefs, ...compositionMediaRefs],
       command.expectedMedia,
     );
     if (!coverageResult.ok) {
@@ -1953,4 +2008,4 @@ export async function publishCreatorDocumentTransaction(
 }
 
 /** Test seam — internal render helpers. Not part of the public API. */
-export const __testables = { renderCompositionMedia, renderPosterFrameCompositions, videoPageRenderPath };
+export const __testables = { renderCompositionMedia, renderPosterFrameCompositions, videoPageRenderPath, extractMediaReferences, validateMediaCoverage };

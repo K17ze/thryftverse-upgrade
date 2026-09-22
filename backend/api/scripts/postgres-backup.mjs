@@ -76,14 +76,22 @@ async function encryptBackup({ inputPath, outputPath, encryptionKey }) {
   });
 }
 
-async function uploadToS3({ filePath, bucket, prefix }) {
+async function uploadToS3({ filePath, bucket, prefix, snapshotStartedAt }) {
   const fileName = path.basename(filePath);
   const key = `${prefix}/${fileName}`;
+
+  // Stamp the snapshot-start boundary as object metadata so the purge-proof
+  // inventory can cross-check provenance — a copied/renamed artifact whose
+  // key timestamp disagrees with its metadata is not evidence of purge.
+  const metadataArgs = snapshotStartedAt
+    ? ['--metadata', `snapshot-started-at=${snapshotStartedAt}`]
+    : [];
 
   await new Promise((resolve, reject) => {
     const child = spawn('aws', [
       's3', 'cp', filePath, `s3://${bucket}/${key}`,
       '--no-progress', '--sse', 'aws:kms',
+      ...metadataArgs,
     ], {
       stdio: 'inherit',
       shell: process.platform === 'win32',
@@ -188,7 +196,8 @@ async function main() {
 
   await mkdir(backupDir, { recursive: true });
 
-  const fileName = `thryftverse_${timestampForFile(new Date())}.dump`;
+  const snapshotTimestamp = timestampForFile(new Date());
+  const fileName = `thryftverse_${snapshotTimestamp}.dump`;
   const outputPath = path.join(backupDir, fileName);
 
   await runPgDump({ databaseUrl, outputPath });
@@ -205,7 +214,7 @@ async function main() {
   const s3Bucket = process.env.S3_BACKUP_BUCKET;
   if (s3Bucket) {
     const s3Prefix = process.env.S3_BACKUP_PREFIX || 'db-backups';
-    await uploadToS3({ filePath: backupFile, bucket: s3Bucket, prefix: s3Prefix });
+    await uploadToS3({ filePath: backupFile, bucket: s3Bucket, prefix: s3Prefix, snapshotStartedAt: snapshotTimestamp });
   }
 
   const removed = await cleanupOldBackups({ backupDir, retentionDays });

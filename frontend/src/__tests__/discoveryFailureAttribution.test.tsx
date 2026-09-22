@@ -709,4 +709,61 @@ describe('UnifiedDiscoveryScreen — feed-control persistence (S20-05)', () => {
     act(() => renderer.unmount());
     expect(h.markItemNotInterested).toHaveBeenCalledTimes(1);
   });
+
+  // ── S21-03: queued writes are bound to the action-time identity ──
+  it('binds the delayed hide write to the account captured at hide-time', async () => {
+    const renderer = await mountScreen();
+    hideFromFeedControls(renderer);
+
+    // The account switches inside the undo window — the queued job must
+    // still present the ORIGINAL identity to the service, never re-resolve
+    // whoever is signed in when the timer fires.
+    h.storeState.currentUser = { id: 'u2' };
+    await act(async () => { vi.advanceTimersByTime(4000); });
+    await act(async () => {});
+
+    expect(h.markItemNotInterested).toHaveBeenCalledTimes(1);
+    expect(h.markItemNotInterested.mock.calls[0][2]).toEqual({ userId: 'u1' });
+
+    h.storeState.currentUser = { id: 'u1' };
+    act(() => renderer.unmount());
+  });
+
+  it('the unmount flush also submits under the captured identity', async () => {
+    const renderer = await mountScreen();
+    hideFromFeedControls(renderer);
+    h.storeState.currentUser = { id: 'u2' };
+
+    act(() => renderer.unmount());
+    expect(h.markItemNotInterested).toHaveBeenCalledTimes(1);
+    expect(h.markItemNotInterested.mock.calls[0][2]).toEqual({ userId: 'u1' });
+    h.storeState.currentUser = { id: 'u1' };
+  });
+});
+
+// ============================================================================
+// S21-02 — the editorial hero navigates to the piece's own article screen
+// ============================================================================
+describe('UnifiedDiscoveryScreen — editorial destination identity (S21-02)', () => {
+  const nav = { navigate: vi.fn(), goBack: vi.fn(), dispatch: vi.fn() } as any;
+  const route = { key: 'k', name: 'UnifiedDiscovery', params: {} } as any;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    h.feed.feedUnits = [listingUnit('x1')];
+    h.content.editorials = [editorial];
+    h.storeState.currentUser = { id: 'u1' };
+  });
+
+  it('navigates to GalleriaEditorial with the piece ID — not a generic section push', async () => {
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(<UnifiedDiscoveryScreen navigation={nav} route={route} />);
+    });
+
+    act(() => { h.feedViewProps.current.onEditorialPress(editorial); });
+    expect(nav.navigate).toHaveBeenCalledWith('GalleriaEditorial', { editorialId: 'e1' });
+
+    act(() => renderer.unmount());
+  });
 });

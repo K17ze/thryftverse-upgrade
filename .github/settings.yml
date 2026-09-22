@@ -13,16 +13,45 @@ branches:
       required_status_checks:
         strict: true
         # Required check contexts are the check-run names, i.e. each job's
-        # `name:` field — not "Workflow / job-id". The previous entries
-        # ("Frontend CI / typecheck", ...) matched nothing, so branch
-        # protection would have waited on checks that can never report.
+        # `name:` field — not "Workflow / job-id". Reconciled against the
+        # actual job names in frontend-ci.yml, backend-ci.yml, ci-gates.yml
+        # and secret-scan.yml. Deliberately excluded: "Surface density check"
+        # and "Maestro E2E" (both continue-on-error/report-only, and Maestro
+        # only runs on push to main so it can never satisfy a PR gate), and
+        # dispatch-only release/deploy jobs that do not run on pull requests.
         contexts:
+          # frontend-ci.yml
           - "TypeScript typecheck"
           - "Vitest unit tests"
           - "Design token + animated scroll lint"
+          - "Phase verification suite"
+          - "Expo doctor health check"
+          - "Maestro flow YAML validation"
+          - "MockData import boundary"
+          - "Production environment validation"
+          - "Production residue check (all PRs)"
+          - "Migration prefix check"
+          # backend-ci.yml
           - "API build, unit, migration, integration"
           - "Key service build and tests"
           - "Mobile API contract typecheck"
+          - "Decision baseline tests"
+          # ci-gates.yml
+          - "Frontend TypeScript"
+          - "Backend TypeScript"
+          - "ESLint"
+          - "Bundle size check"
+          - "Visual release gates"
+          - "Production residue check"
+          - "SSL pin validation"
+          - "Design token lint"
+          - "Animated scroll check"
+          - "Mock data boundary"
+          - "Frontend unit tests"
+          - "SBOM generation"
+          - "Support agent eval suite"
+          # secret-scan.yml — full-history Gitleaks gate on every PR
+          - "Gitleaks secret scan"
       enforce_admins: true
       required_pull_request_reviews:
         dismiss_stale_reviews: true
@@ -36,6 +65,7 @@ branches:
         contexts:
           - "TypeScript typecheck"
           - "API build, unit, migration, integration"
+          - "Gitleaks secret scan"
       enforce_admins: false
       required_pull_request_reviews:
         dismiss_stale_reviews: true

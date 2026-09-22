@@ -26,6 +26,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
 import { logger } from '../logger.js';
+import { fetchPinnedRemoteMedia } from '../safeRemoteMediaFetch.js';
 import { runFfmpeg, runFfmpegStreaming } from './ffmpeg.js';
 import { StreamingMultipartUpload } from './streamingUpload.js';
 import { probeMedia } from './ffprobe.js';
@@ -82,6 +83,16 @@ export interface RenderCompositionOptions {
     contentType: string;
     cacheControl?: string;
   };
+  /**
+   * Receipt-bound remote URLs the renderer may fetch. Every remote URL the
+   * document references — primary/secondary mediaUri, maskRef, gif stillUrl,
+   * canvas image background — must appear in this set or the fetch is
+   * REFUSED (never fetched unpinned). The publication flow builds the set
+   * from `expectedMedia[].suppliedUrl`, which the transaction later proves
+   * equals a finalized upload's public/canonical URL (P0.6 coverage). When
+   * omitted the set defaults to `{ sourceMediaUrl }` — fail closed.
+   */
+  allowedSourceUrls?: ReadonlySet<string>;
 }
 
 // ── Defensive document types ───────────────────────────────────────────
@@ -182,6 +193,23 @@ const OUTPUT_QUALITY = 90;
  * the publication fails closed (non-trivial edits never publish raw).
  */
 const VIDEO_RENDER_TIMEOUT_MS = 40_000;
+
+/**
+ * Per-source fetch bounds. Image sources (layer media, masks, gif stills,
+ * canvas backgrounds) cap at the S3 image-upload ceiling; the primary
+ * video source caps at the video-upload ceiling (S3_MAX_*_UPLOAD_BYTES
+ * ranges in config.ts). The previous fetch was unbounded and followed
+ * redirects without revalidation — the pinned transport streams into a
+ * bounded buffer and aborts on overflow.
+ */
+const SOURCE_IMAGE_MAX_BYTES = 100 * 1024 * 1024;
+const SOURCE_VIDEO_MAX_BYTES = 500 * 1024 * 1024;
+/**
+ * Whole-request deadline for a single source fetch — DNS validation,
+ * redirect hops, the header wait and body streaming all share this budget.
+ * The previous fetch had no timeout at all.
+ */
+const SOURCE_FETCH_TIMEOUT_MS = 30_000;
 
 // ── Filter preset color matrices ───────────────────────────────────────
 // IMPORTANT: These 10 flagship filter ColorMatrix definitions are EXACT
@@ -681,13 +709,41 @@ export function getVideoRenderPath(doc: unknown): 'trivial' | 'remux' | 'transco
 
 // ── Source fetching ────────────────────────────────────────────────────
 
-async function fetchSourceBuffer(url: string): Promise<Buffer> {
-  const response = await fetch(url, { redirect: 'follow' });
-  if (!response.ok) {
-    throw new Error(`fetch failed: HTTP ${response.status}`);
+/**
+ * Fetch a remote source through the shared pinned transport
+ * (`fetchPinnedRemoteMedia`): DNS is resolved once, blocklist-checked, and
+ * the connection is pinned to the validated address set so re-resolution
+ * at connect time cannot reopen the SSRF window. Redirects are revalidated
+ * at every hop and one deadline covers the whole pipeline.
+ *
+ * Every URL must additionally be receipt-bound: `allowedUrls` carries the
+ * caller's pinned media receipts (`expectedMedia[].suppliedUrl`). A
+ * document URL with no matching receipt is REFUSED — it is never fetched,
+ * pinned or otherwise. This closes the gap where document fields
+ * (`maskRef`, secondary `mediaUri`, gif `stillUrl`, image `background`)
+ * were fetched unpinned and unbound from upload evidence.
+ */
+async function fetchSourceBuffer(
+  url: string,
+  allowedUrls: ReadonlySet<string>,
+  maxBytes: number = SOURCE_IMAGE_MAX_BYTES,
+): Promise<Buffer> {
+  if (!allowedUrls.has(url)) {
+    throw new Error('fetch refused: document URL has no matching media receipt');
   }
-  const arrayBuffer = await response.arrayBuffer();
-  return Buffer.from(arrayBuffer);
+  const result = await fetchPinnedRemoteMedia({
+    url,
+    maxBytes,
+    timeoutMs: SOURCE_FETCH_TIMEOUT_MS,
+  });
+  if (!result.ok) {
+    throw new Error(
+      result.statusCode !== undefined
+        ? `fetch failed: HTTP ${result.statusCode}`
+        : `fetch failed: ${result.code} (${result.message})`,
+    );
+  }
+  return result.buffer;
 }
 
 // ── Focal-point crop ───────────────────────────────────────────────────
@@ -1153,6 +1209,7 @@ async function renderMediaLayer(
   canvasWidth: number,
   canvasHeight: number,
   sourceUrl: string,
+  allowedUrls: ReadonlySet<string>,
 ): Promise<{ buffer: Buffer; width: number; height: number } | null> {
   const mediaType = str(layer.payload['mediaType'], 'image');
   if (mediaType === 'video') return null;
@@ -1162,7 +1219,7 @@ async function renderMediaLayer(
 
   let sourceBuffer: Buffer;
   try {
-    sourceBuffer = await fetchSourceBuffer(sourceUrl);
+    sourceBuffer = await fetchSourceBuffer(sourceUrl, allowedUrls);
   } catch (error) {
     logger.warn({ sourceUrl, error: String(error) }, '[compositionRenderer] media fetch failed');
     return null;
@@ -1225,7 +1282,7 @@ async function renderMediaLayer(
   // mask's alpha — same op as the Skia DstIn used by the preview.
   if (layer.maskRef) {
     try {
-      const maskBuffer = await fetchSourceBuffer(layer.maskRef);
+      const maskBuffer = await fetchSourceBuffer(layer.maskRef, allowedUrls);
       const mask = await sharp(maskBuffer, { failOn: 'none' })
         .resize(layerW, layerH, { fit: 'fill' })
         .ensureAlpha()
@@ -2025,6 +2082,7 @@ async function renderVideoComposition(
   onProgress?: (fraction: number) => void,
   canvasBackgroundColor = '#1a1a1a',
   streamOutput?: RenderCompositionOptions['streamOutput'],
+  allowedUrls: ReadonlySet<string> = new Set([sourceUrl]),
 ): Promise<RenderedComposition | null> {
   const trimStartMs = num(layer.payload['trimStartMs'], 0);
   const trimEndMs = num(layer.payload['trimEndMs'], 0);
@@ -2069,7 +2127,7 @@ async function renderVideoComposition(
     // Download the source video to a temp file.
     let sourceBuffer: Buffer;
     try {
-      sourceBuffer = await fetchSourceBuffer(sourceUrl);
+      sourceBuffer = await fetchSourceBuffer(sourceUrl, allowedUrls, SOURCE_VIDEO_MAX_BYTES);
     } catch (error) {
       logger.warn({ sourceUrl, error: String(error) }, '[compositionRenderer] video source fetch failed');
       return null;
@@ -2716,6 +2774,16 @@ export async function renderComposition(
     return null;
   }
 
+  // Receipt allowlist: only URLs bound to a pinned media receipt may be
+  // fetched. `sourceMediaUrl` is the caller-verified primary receipt URL and
+  // is always permitted; every other document URL (secondary mediaUri,
+  // maskRef, gif stillUrl, image background) must appear in the caller's
+  // receipt set or fetchSourceBuffer refuses it outright.
+  const allowedUrls: ReadonlySet<string> = new Set([
+    ...(options?.allowedSourceUrls ?? []),
+    sourceMediaUrl,
+  ]);
+
   // Determine whether the primary media is a video — if so, burn authored
   // trim/speed edits AND text/sticker overlays into an MP4 via FFmpeg. Any
   // failure inside the video renderer returns null so the caller falls
@@ -2742,6 +2810,7 @@ export async function renderComposition(
       options?.onProgress,
       bgColor,
       options?.streamOutput,
+      allowedUrls,
     );
   }
 
@@ -2754,7 +2823,7 @@ export async function renderComposition(
     const canvasBg = doc.canvas.background;
     if (canvasBg.type === 'image' && /^https?:\/\//.test(canvasBg.value ?? '')) {
       try {
-        const bgBuffer = await fetchSourceBuffer(canvasBg.value);
+        const bgBuffer = await fetchSourceBuffer(canvasBg.value, allowedUrls);
         let bgImage = sharp(bgBuffer, { failOn: 'none' })
           .resize(canvasWidth, canvasHeight, { fit: 'cover' });
         const blurSigma = Number(canvasBg.imageBlur ?? 0);
@@ -2796,7 +2865,7 @@ export async function renderComposition(
             ? sourceMediaUrl
             : str(layer.payload['mediaUri'], '');
           if (!url) continue;
-          const rendered = await renderMediaLayer(layer, canvasWidth, canvasHeight, url);
+          const rendered = await renderMediaLayer(layer, canvasWidth, canvasHeight, url, allowedUrls);
           if (rendered) {
             composites.push(await compositeEntryForLayer(rendered.buffer, layer, canvasWidth, canvasHeight));
           }
@@ -2809,7 +2878,7 @@ export async function renderComposition(
         } else if (layer.type === 'gif') {
           const stillUrl = str(layer.payload['stillUrl'], '');
           if (stillUrl) {
-            const rendered = await renderMediaLayer(layer, canvasWidth, canvasHeight, stillUrl);
+            const rendered = await renderMediaLayer(layer, canvasWidth, canvasHeight, stillUrl, allowedUrls);
             if (rendered) {
               composites.push(await compositeEntryForLayer(rendered.buffer, layer, canvasWidth, canvasHeight));
             }

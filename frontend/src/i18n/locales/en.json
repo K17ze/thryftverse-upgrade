@@ -1147,6 +1147,7 @@
       "openPosterStudio": "Open Poster Studio",
       "posterStudioHint": "Create posters, looks, and moodboard collages",
       "editorial": "Editorial: {{title}}",
+      "editorialHint": "Read the full story",
       "collection": "Collection: {{title}}",
       "collectionHint": "Opens the collection detail",
       "featuredCollection": "Featured collection: {{title}}",

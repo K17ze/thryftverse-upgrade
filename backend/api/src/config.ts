@@ -335,6 +335,18 @@ export const config = {
    * silently treated as infinite.
    */
   aiDailyBudgetMicrousd: asNumber(process.env.AI_DAILY_BUDGET_MICROUSD, 0),
+  /**
+   * Micro-USD reserved against the daily budget at admission time, per
+   * admitted request (audit: concurrent-burst overshoot). The reservation
+   * is taken atomically inside the quota Lua script, then reconciled
+   * against the real provider cost when the usage event is recorded —
+   * overshoot is bounded by (actual − reservation) per in-flight request
+   * rather than by the full cost of every concurrent request.
+   * 0 = derive from the configured pricing rates (a nominal input-token
+   * estimate + OPENAI_AGENT_MAX_OUTPUT_TOKENS). Explicitly set this when
+   * real workloads are consistently larger than the derived estimate.
+   */
+  aiSpendReservationMicrousd: asNumber(process.env.AI_SPEND_RESERVATION_MICROUSD, 0),
   apiSecurityAdminToken: requiredSecret('API_SECURITY_ADMIN_TOKEN', 'local-security-admin-token'),
   apiInternalServiceToken: requiredSecret('API_INTERNAL_SERVICE_TOKEN', 'local-internal-service-token'),
   apiEnableMockWebhooks: asBoolean(process.env.API_ENABLE_MOCK_WEBHOOKS, false),

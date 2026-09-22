@@ -200,6 +200,18 @@ services:
       S3_FORCE_PATH_STYLE: "true"
       MEDIA_PROCESSING_ENABLED: ${MEDIA_PROCESSING_ENABLED:-false}
       MEDIA_PUBLICATION_GATE_ENABLED: ${MEDIA_PUBLICATION_GATE_ENABLED:-false}
+      # Moderation provider selection + credentials. Dev defaults to the
+      # always-approve mock. To exercise a real provider locally set
+      # MODERATION_PROVIDER=sightengine with SIGHTENGINE_API_USER/_KEY, or
+      # rekognition with the AWS_* trio — note rekognition moderates images
+      # only and is rejected at boot as the sole provider (text moderation
+      # requires a text-capable provider; see moderationService.ts).
+      MODERATION_PROVIDER: ${MODERATION_PROVIDER:-mock}
+      SIGHTENGINE_API_USER: ${SIGHTENGINE_API_USER:-}
+      SIGHTENGINE_API_KEY: ${SIGHTENGINE_API_KEY:-}
+      AWS_REGION: ${AWS_REGION:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       ML_SERVICE_URL: http://ml-service:8000
       DECISION_SERVICE_TIMEOUT_MS: 2500
       DECISION_SERVICE_TOKEN: ${DECISION_SERVICE_TOKEN:-local-decision-service-token}

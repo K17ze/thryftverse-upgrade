@@ -24,6 +24,7 @@
  */
 
 import sharp, { type Sharp } from 'sharp';
+import { fetchPinnedRemoteMedia } from './safeRemoteMediaFetch.js';
 
 /** Visual feature vector extracted from a single image. */
 export interface ImageFeatures {
@@ -267,22 +268,20 @@ function aspectAgreement(a: number, b: number): number {
 /**
  * Fetch an image buffer from a URL with a bounded timeout.
  * Returns null on any failure so callers can skip the candidate.
+ *
+ * Security: delegates to `fetchPinnedRemoteMedia` — DNS is resolved once,
+ * blocklist-checked, and the connection is pinned to the validated address
+ * set so a re-resolution at connect time cannot redirect the request
+ * (DNS-rebinding TOCTOU). Redirects are revalidated per hop and the body
+ * streams into a bounded buffer. The previous implementation called
+ * `fetch(url, { redirect: 'follow' })` directly — an unpinned SSRF vector.
  */
 export async function fetchImageBuffer(url: string): Promise<Buffer | null> {
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-    const response = await fetch(url, {
-      signal: controller.signal,
-      redirect: 'follow',
-    });
-    clearTimeout(timer);
-    if (!response.ok) return null;
-    const arrayBuffer = await response.arrayBuffer();
-    return Buffer.from(arrayBuffer);
-  } catch {
-    return null;
-  }
+  const result = await fetchPinnedRemoteMedia({
+    url,
+    timeoutMs: FETCH_TIMEOUT_MS,
+  });
+  return result.ok ? result.buffer : null;
 }
 
 /**

@@ -57,9 +57,27 @@ export interface RetrievalInfo {
   searchEngineVersion?: string;
 }
 
+/**
+ * Where a write actually landed (audit §4.7 — a resolved `index()` call is
+ * not proof of visibility):
+ *   'remote' — the shared backend accepted the write. For Meilisearch this is
+ *     a TASK SUBMISSION (addDocuments resolves when the task is enqueued, not
+ *     applied); `taskUid` identifies the pending task so callers can confirm
+ *     application via the tasks endpoint.
+ *   'local'  — the write went to the process-local index: either that IS the
+ *     configured backend (in-memory / placeholder) or the remote write failed
+ *     and the degraded fallback absorbed it. A 'local' write is not visible
+ *     to other replicas or to the shared index.
+ */
+export interface SearchIndexWriteResult {
+  outcome: 'remote' | 'local';
+  /** Meilisearch taskUid for 'remote' writes, when the SDK returned one. */
+  taskUid?: number;
+}
+
 export interface SearchAdapter {
-  index(listing: ListingDocument): Promise<void>;
-  remove(id: string): Promise<void>;
+  index(listing: ListingDocument): Promise<SearchIndexWriteResult>;
+  remove(id: string): Promise<SearchIndexWriteResult>;
   search(query: SearchQuery): Promise<SearchResult[]>;
   autocomplete(prefix: string, limit?: number): Promise<AutocompleteEntry[]>;
   health(): Promise<boolean>;
@@ -162,13 +180,21 @@ function fromInMemoryResult(result: InMemorySearchResult): SearchResult {
  * SearchAdapter interface. Used in development and as a fallback when
  * no external search backend is configured.
  */
+/** Extract the taskUid from a Meilisearch write-task response, when present. */
+function writeTaskUid(result: unknown): number | undefined {
+  const uid = (result as { taskUid?: unknown } | null)?.taskUid;
+  return typeof uid === 'number' ? uid : undefined;
+}
+
 export class InMemorySearchAdapter implements SearchAdapter {
-  async index(listing: ListingDocument): Promise<void> {
+  async index(listing: ListingDocument): Promise<SearchIndexWriteResult> {
     searchIndex.addListing(toIndexedListing(listing));
+    return { outcome: 'local' };
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string): Promise<SearchIndexWriteResult> {
     searchIndex.removeListing(id);
+    return { outcome: 'local' };
   }
 
   async search(query: SearchQuery): Promise<SearchResult[]> {
@@ -362,37 +388,44 @@ export class MeilisearchSearchAdapter implements SearchAdapter {
     }
   }
 
-  async index(listing: ListingDocument): Promise<void> {
+  async index(listing: ListingDocument): Promise<SearchIndexWriteResult> {
     const handle = await this.ensureClient();
     if (!handle) {
       await this.mirrorIndexToFallback(listing);
-      return;
+      return { outcome: 'local' };
     }
     try {
-      await handle.index.addDocuments([listing]);
+      const task = await handle.index.addDocuments([listing]);
       this.backendReachable = true;
       // Successful remote write: keep the fallback coherent so an outage
       // later in the process lifetime still serves this document.
       await this.mirrorIndexToFallback(listing);
+      // addDocuments resolves at TASK SUBMISSION — the document is not yet
+      // searchable. Propagate the taskUid so callers can confirm completion
+      // and measure true visibility lag instead of submission lag.
+      return { outcome: 'remote', taskUid: writeTaskUid(task) };
     } catch {
       this.markBackendDown();
       await this.mirrorIndexToFallback(listing);
+      return { outcome: 'local' };
     }
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string): Promise<SearchIndexWriteResult> {
     const handle = await this.ensureClient();
     if (!handle) {
       await this.mirrorRemoveToFallback(id);
-      return;
+      return { outcome: 'local' };
     }
     try {
-      await handle.index.deleteDocument(id);
+      const task = await handle.index.deleteDocument(id);
       this.backendReachable = true;
       await this.mirrorRemoveToFallback(id);
+      return { outcome: 'remote', taskUid: writeTaskUid(task) };
     } catch {
       this.markBackendDown();
       await this.mirrorRemoveToFallback(id);
+      return { outcome: 'local' };
     }
   }
 
@@ -504,12 +537,12 @@ export class MeilisearchSearchAdapter implements SearchAdapter {
 export class ElasticsearchSearchAdapter implements SearchAdapter {
   private fallback = new InMemorySearchAdapter();
 
-  async index(listing: ListingDocument): Promise<void> {
-    await this.fallback.index(listing);
+  async index(listing: ListingDocument): Promise<SearchIndexWriteResult> {
+    return this.fallback.index(listing);
   }
 
-  async remove(id: string): Promise<void> {
-    await this.fallback.remove(id);
+  async remove(id: string): Promise<SearchIndexWriteResult> {
+    return this.fallback.remove(id);
   }
 
   async search(query: SearchQuery): Promise<SearchResult[]> {
