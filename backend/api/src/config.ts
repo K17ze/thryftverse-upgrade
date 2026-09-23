@@ -575,12 +575,20 @@ export const config = {
   coOwnAlertEvaluatorIntervalMs: asNumber(process.env.COOWN_ALERT_EVALUATOR_INTERVAL_MS, 60_000),
   coOwnDripExecutionIntervalMs: asNumber(process.env.COOWN_DRIP_EXECUTION_INTERVAL_MS, 300_000),
   onezeReconcileIntervalMs: asNumber(process.env.ONEZE_RECONCILE_INTERVAL_MS, 60 * 60 * 1000),
-  onezeFxSyncEnabled: asBoolean(process.env.ONEZE_FX_SYNC_ENABLED, false),
-  onezeFxSyncIntervalMs: asNumber(process.env.ONEZE_FX_SYNC_INTERVAL_MS, 24 * 60 * 60 * 1000),
+  onezeFxSyncEnabled: asBoolean(process.env.ONEZE_FX_SYNC_ENABLED, true),
+  onezeFxSyncIntervalMs: asNumber(process.env.ONEZE_FX_SYNC_INTERVAL_MS, 300_000),
   onezeFxProviderUrl:
     process.env.ONEZE_FX_PROVIDER_URL?.trim() || 'https://api.exchangerate.host/latest',
   onezeFxProviderApiKey: process.env.ONEZE_FX_PROVIDER_API_KEY?.trim() || null,
   onezeFxProviderBaseCurrency: process.env.ONEZE_FX_PROVIDER_BASE_CURRENCY?.trim().toUpperCase() || 'USD',
+  fxQuoteTtlSeconds: asNumber(process.env.FX_QUOTE_TTL_SECONDS, 60),
+  fxSpreadBps: asNumber(process.env.FX_SPREAD_BPS, 50),
+  /**
+   * Escape hatch for quote creation while the provider feed is degraded:
+   * when true, createFxQuote persists quotes resolved from stale rates
+   * (flagged rate_stale) instead of rejecting them with FX_RATE_STALE/503.
+   */
+  fxAllowStaleQuotes: asBoolean(process.env.FX_ALLOW_STALE_QUOTES, false),
   onezeAutoAdjustEnabled: asBoolean(process.env.ONEZE_AUTO_ADJUST_ENABLED, false),
   onezeAutoAdjustIntervalMs: asNumber(process.env.ONEZE_AUTO_ADJUST_INTERVAL_MS, 60 * 60 * 1000),
   onezeAutoAdjustStepBps: asNumber(process.env.ONEZE_AUTO_ADJUST_STEP_BPS, 50),

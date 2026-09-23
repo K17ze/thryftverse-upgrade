@@ -1100,7 +1100,14 @@
       "errorApproveTitle": "Impossible d'approuver",
       "errorApproveMessage": "La demande n'a pas pu être approuvée.",
       "errorRejectTitle": "Impossible de refuser",
-      "errorRejectMessage": "La demande n'a pas pu être refusée."
+      "errorRejectMessage": "La demande n'a pas pu être refusée.",
+      "status": {
+        "pending": "En attente",
+        "approved": "Approuvée",
+        "rejected": "Rejetée",
+        "expired": "Expirée",
+        "superseded": "Remplacée"
+      }
     },
     "cancel": {
       "cancelling": "Annulation…",
@@ -1126,6 +1133,29 @@
     },
     "tokens": {
       "usage": "{{input}} entrée · {{output}} sortie"
+    },
+    "trace": {
+      "toggle": "Voir les détails de l'exécution pour {{botName}}",
+      "loadError": "Impossible de charger la trace",
+      "retry": "Réessayer",
+      "empty": "Aucune étape enregistrée pour cette exécution",
+      "approvalLine": "{{tool}} · {{status}}",
+      "status": {
+        "pending": "En attente",
+        "running": "En cours",
+        "succeeded": "Réussi",
+        "failed": "Échoué",
+        "skipped": "Ignoré"
+      },
+      "step": {
+        "modelCall": "Appel du modèle",
+        "toolCall": "Appel d'outil",
+        "retrieval": "Rappel de mémoire",
+        "guardrail": "Garde-fou",
+        "approval": "Approbation",
+        "retry": "Nouvelle tentative",
+        "handoff": "Transfert"
+      }
     }
   },
   "liveStreamViewer": {
@@ -1362,7 +1392,7 @@
       "noSessionsRunning": "Aucune session d'agent en cours",
       "sessionsRunning": "{{count}} session(s) d'agent en cours",
       "activity": "Activité des agents",
-      "activitySub": "Journal local des actions et approbations des agents"
+      "activitySub": "Journal serveur des exécutions et approbations d'agents"
     },
     "connect": {
       "cancel": "Annuler",

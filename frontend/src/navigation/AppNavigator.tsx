@@ -361,12 +361,14 @@ export default function AppNavigator() {
       <Stack.Screen name="NotificationPreferences" getComponent={() => require('../screens/NotificationPreferencesScreen').default} />
       <Stack.Screen name="AIAgentIntegration" getComponent={() => require('../screens/AIAgentIntegrationScreen').default} />
       <Stack.Screen name="AgentLedger" getComponent={() => require('../screens/AgentLedgerScreen').default} />
+      <Stack.Screen name="AgentMemory" getComponent={() => require('../screens/AgentMemoryScreen').default} />
 
       {/* ── Wallet & Payments ── */}
       <Stack.Screen name="Wallet" getComponent={withScreenErrorBoundary(() => require('../screens/WalletScreen').default, 'Wallet')} />
       {/* Wallet V3 — focused money-movement destinations */}
       <Stack.Screen name="SellerEarnings" getComponent={() => require('../screens/SellerEarningsScreen').default} />
       <Stack.Screen name="WalletConvert" getComponent={() => require('../screens/WalletConvertScreen').default} />
+      <Stack.Screen name="WalletExchange" getComponent={() => require('../screens/WalletExchangeScreen').default} />
       <Stack.Screen name="WalletHistory" getComponent={() => require('../screens/WalletHistoryScreen').default} />
       <Stack.Screen name="MyOrders" getComponent={() => require('../screens/MyOrdersScreen').default} />
 

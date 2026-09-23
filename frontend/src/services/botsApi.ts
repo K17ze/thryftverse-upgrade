@@ -18,6 +18,7 @@ interface ApiBotPayload {
   createdAt?: string;
   updatedAt?: string;
   agentConfig?: ChatAgentConfig | null;
+  providerConnectionId?: string | null;
   runtimeReady?: boolean;
   runtimeReadinessReason?: string | null;
 }
@@ -38,6 +39,7 @@ function mapApiBotToChatBot(item: ApiBotPayload): ChatBot {
     icon: item.icon ?? undefined,
     ownerId: item.ownerId ?? undefined,
     agentConfig: item.agentConfig ?? undefined,
+    providerConnectionId: item.providerConnectionId ?? null,
     runtimeReady: item.runtimeReady ?? item.runtimeMode !== 'ai',
     runtimeReadinessReason: item.runtimeReadinessReason ?? undefined,
   };
@@ -80,6 +82,7 @@ export async function createCustomBotOnApi(input: {
   icon?: string;
   isDraft?: boolean;
   agentConfig?: ChatAgentConfig;
+  providerConnectionId?: string | null;
 }): Promise<{ id: string; slug: string; name: string; type: string; status: string; runtimeMode: string; isDraft: boolean }> {
   const payload = await fetchJson<{
     ok: true;
@@ -112,6 +115,7 @@ export async function updateCustomBotOnApi(
     status: string;
     runtimeMode: string;
     agentConfig: ChatAgentConfig;
+    providerConnectionId: string | null;
   }>
 ): Promise<void> {
   await fetchJson<{ ok: true }>(`/bots/${encodeURIComponent(botId)}`, {
@@ -451,4 +455,72 @@ export async function fetchRunTraceFromApi(runId: string): Promise<{
   approvals: RunTraceApproval[];
 }> {
   return fetchJson(`/agent-runs/${encodeURIComponent(runId)}/trace`);
+}
+
+// ---------------------------------------------------------------------------
+// Agent memory (Phase 7)
+//
+// Per-user long-term memory. The owner can inspect every stored memory,
+// retract individual records, clear everything, and toggle memory or
+// extraction off entirely. These mirror the /agent-memory endpoints —
+// all scoped to the authenticated caller on the server.
+// ---------------------------------------------------------------------------
+
+export type AgentMemoryKind = 'preference' | 'fact' | 'directive' | 'episodic_summary';
+export type AgentMemoryStatus = 'active' | 'retracted' | 'expired';
+
+export interface AgentMemoryInfo {
+  id: string;
+  botId: string | null;
+  kind: AgentMemoryKind;
+  content: string;
+  status: AgentMemoryStatus;
+  confidence: number;
+  sourceType: 'conversation' | 'tool_result' | 'explicit' | 'extraction';
+  sourceConversationId: string | null;
+  useCount: number;
+  lastUsedAt: string | null;
+  createdAt: string;
+  validFrom: string;
+  validTo: string | null;
+}
+
+export interface AgentMemorySettingsInfo {
+  memoryEnabled: boolean;
+  extractionEnabled: boolean;
+}
+
+export async function fetchAgentMemoryFromApi(botId?: string): Promise<{
+  settings: AgentMemorySettingsInfo;
+  memories: AgentMemoryInfo[];
+}> {
+  const suffix = botId ? `?botId=${encodeURIComponent(botId)}` : '';
+  const payload = await fetchJson<{ ok: true; settings: AgentMemorySettingsInfo; memories: AgentMemoryInfo[] }>(
+    `/agent-memory${suffix}`
+  );
+  return { settings: payload.settings, memories: payload.memories };
+}
+
+export async function updateAgentMemorySettingsFromApi(
+  patch: Partial<AgentMemorySettingsInfo>
+): Promise<AgentMemorySettingsInfo> {
+  const payload = await fetchJson<{ ok: true; settings: AgentMemorySettingsInfo }>('/agent-memory/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  return payload.settings;
+}
+
+export async function retractAgentMemoryFromApi(memoryId: string): Promise<void> {
+  await fetchJson(`/agent-memory/${encodeURIComponent(memoryId)}`, { method: 'DELETE' });
+}
+
+export async function clearAgentMemoriesFromApi(botId?: string): Promise<number> {
+  const payload = await fetchJson<{ ok: true; cleared: number }>('/agent-memory/clear', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(botId ? { botId } : {}),
+  });
+  return payload.cleared;
 }

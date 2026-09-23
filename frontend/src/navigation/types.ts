@@ -219,6 +219,8 @@ export type RootStackParamList = {
   // Wallet V3 — focused money-movement destinations (spec 17)
   SellerEarnings: undefined;
   WalletConvert: undefined;
+  // Fiat↔fiat currency exchange across wallet pockets (multi-currency FX)
+  WalletExchange: undefined;
   WalletHistory: undefined;
   /**
    * Orders ledger — optional deep-link scope. `tab` selects the rail
@@ -562,6 +564,8 @@ export type RootStackParamList = {
   AIAgentIntegration: undefined;
   // Agent activity ledger — transparent record of agent actions and approvals
   AgentLedger: undefined;
+  // Agent memory — inspect, forget and disable what agents remember
+  AgentMemory: undefined;
 };
 
 export const ROOT_STACK_ROUTES = [
@@ -616,6 +620,7 @@ export const ROOT_STACK_ROUTES = [
   'Wallet',
   'SellerEarnings',
   'WalletConvert',
+  'WalletExchange',
   'WalletHistory',
   'MyOrders',
   'Personalisation',
@@ -737,6 +742,7 @@ export const ROOT_STACK_ROUTES = [
   'NotificationPreferences',
   'AIAgentIntegration',
   'AgentLedger',
+  'AgentMemory',
 ] as const;
 
 export type RootStackRouteName = typeof ROOT_STACK_ROUTES[number];

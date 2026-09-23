@@ -50,6 +50,11 @@ export async function performUserErasure(
   await client.query('DELETE FROM recommendation_feedback WHERE user_id = $1', [userId]);
   await client.query('DELETE FROM notification_devices WHERE user_id = $1', [userId]);
 
+  // Agent memory (migration 339): erasure anonymizes the users row rather
+  // than deleting it, so the FK cascade never fires — delete explicitly.
+  await client.query('DELETE FROM agent_memories WHERE user_id = $1', [userId]);
+  await client.query('DELETE FROM agent_memory_settings WHERE user_id = $1', [userId]);
+
   await client.query(
     `
       UPDATE notification_events

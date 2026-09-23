@@ -4,6 +4,8 @@
 > **Last updated:** August 2026
 > **Stack:** Node.js API (Fastify) · Key Service (Node.js) · ML Service (Python/FastAPI) · PostgreSQL · Redis · S3-compatible object storage · Expo React Native mobile app
 > **Resilience posture:** This guide now covers both *how to deploy* (§§1–18) and *how to deploy so no single government or entity can seize, block, or compel the entire platform* (§§19–25). The latter is the "Telegram playbook" — studied, adapted, and honestly assessed for what it can and cannot achieve.
+>
+> **Companion research folder:** [`docs/deployment/`](./docs/deployment/) contains the supporting evidence base — deep case studies on Telegram/Signal/Proton/Session backend sovereignty ([02](docs/deployment/02-backend-sovereignty-research.md)), Exness/FXCM/Niyo cross-border payment layering ([03](docs/deployment/03-payment-jurisdictions-research.md)), the applied ThryftVerse blueprint ([04](docs/deployment/04-thryftverse-blueprint.md)), consolidated threat model ([05](docs/deployment/05-threat-model.md)), and the source ledger ([06](docs/deployment/06-research-ledger.md)).
 
 ---
 

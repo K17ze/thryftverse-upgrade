@@ -434,6 +434,33 @@ export function statusCodeForApiError(code: string): number {
     return 409;
   }
 
+  // ── Wallet exchange (fxWallet / fxEngine) ──
+  // Explicit mappings — several of these would otherwise fall through to
+  // the 409 default and report the wrong semantics to the client.
+  if (code === 'FX_RATE_UNAVAILABLE' || code === 'FX_RATE_STALE') {
+    return 503;
+  }
+
+  if (code === 'WALLET_CAPABILITY_DENIED') {
+    return 403;
+  }
+
+  if (code === 'BENEFICIARY_NOT_FOUND' || code === 'TRANSFER_NOT_FOUND' || code === 'FX_QUOTE_NOT_FOUND') {
+    return 404;
+  }
+
+  if (code === 'FX_QUOTE_EXPIRED') {
+    return 410;
+  }
+
+  if (code === 'FX_SAME_CURRENCY' || code === 'TRANSFER_CURRENCY_MISMATCH' || code === 'TRANSFER_AMOUNT_REQUIRED') {
+    return 400;
+  }
+
+  if (code === 'TRANSFER_STATE_INVALID') {
+    return 409;
+  }
+
   if (code === 'NOTIFICATION_ACCESS_DENIED') {
     return 403;
   }

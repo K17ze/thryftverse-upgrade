@@ -230,6 +230,18 @@ export interface VendorSyncJobData {
   vendorName: string;
 }
 
+// ---------------------------------------------------------------------------
+// Support agent turn queue — one job per customer message in an `ai_active`
+// support conversation. The handler loads the conversation, classifies
+// intent/risk, and either generates a cited AI reply or hands off to a human.
+// Producers enqueue from POST /support/conversations/:id/messages.
+// ---------------------------------------------------------------------------
+
+export interface SupportAgentTurnJobData {
+  conversationId: string;
+  customerMessageId: string;
+}
+
 type CatalogImportJobData =
   | CatalogImportDiscoveryJobData
   | CatalogImportHydrationJobData
@@ -298,6 +310,11 @@ interface QueueHandlers {
   handleAgentRunJob: (job: AgentRunJobData) => Promise<void>;
   // Optional so the API's inline worker set compiles without redeclaring
   // it — the worker falls back to the real handler via dynamic import
+  // (same pattern as the search-indexing handler) so the support_agent_turns
+  // queue drains in both run modes.
+  handleSupportAgentTurnJob?: (job: SupportAgentTurnJobData) => Promise<void>;
+  // Optional so the API's inline worker set compiles without redeclaring
+  // it — the worker falls back to the real handler via dynamic import
   // (same pattern as the search-indexing handler) so the vendor_sync job
   // drains in both run modes.
   handleVendorSyncJob?: (job: VendorSyncJobData) => Promise<void>;
@@ -363,6 +380,8 @@ const IMPORTER_EXTRACTION_QUEUE_NAME = 'importer_extraction';
 const SEARCH_INDEXING_QUEUE_NAME = 'search_indexing';
 export const AGENT_RUN_QUEUE_NAME = 'agent-runs';
 export const AGENT_RUN_DLQ_NAME = 'agent-runs-dlq';
+export const SUPPORT_AGENT_TURN_QUEUE_NAME = 'support_agent_turns';
+const SUPPORT_AGENT_TURN_DLQ_NAME = `${SUPPORT_AGENT_TURN_QUEUE_NAME}-dlq`;
 const PUSH_DLQ_NAME = `${PUSH_QUEUE_NAME}-dlq`;
 const INFRA_DLQ_NAME = `${INFRA_QUEUE_NAME}-dlq`;
 const MEDIA_INGEST_DLQ_NAME = `${MEDIA_INGEST_QUEUE_NAME}-dlq`;
@@ -382,6 +401,7 @@ export const QUEUE_DLQ_MAP: Record<string, string> = {
   [IMPORTER_EXTRACTION_QUEUE_NAME]: IMPORTER_EXTRACTION_DLQ_NAME,
   [SEARCH_INDEXING_QUEUE_NAME]: SEARCH_INDEXING_DLQ_NAME,
   [AGENT_RUN_QUEUE_NAME]: AGENT_RUN_DLQ_NAME,
+  [SUPPORT_AGENT_TURN_QUEUE_NAME]: SUPPORT_AGENT_TURN_DLQ_NAME,
 };
 
 const pushQueue = new Queue<PushJobData>(PUSH_QUEUE_NAME, {
@@ -462,6 +482,20 @@ export const agentRunDlq = new Queue<AgentRunJobData>(AGENT_RUN_DLQ_NAME, {
   connection: queueConnection,
 });
 
+export const supportAgentTurnQueue = new Queue<SupportAgentTurnJobData>(SUPPORT_AGENT_TURN_QUEUE_NAME, {
+  connection: queueConnection,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 2_000 },
+    removeOnComplete: { count: 500 },
+    removeOnFail: { count: 1_000 },
+  },
+});
+
+export const supportAgentTurnDlq = new Queue<SupportAgentTurnJobData>(SUPPORT_AGENT_TURN_DLQ_NAME, {
+  connection: queueConnection,
+});
+
 export const dlqQueues: Record<string, Queue> = {
   [PUSH_DLQ_NAME]: pushDlq,
   [INFRA_DLQ_NAME]: infraDlq,
@@ -472,6 +506,7 @@ export const dlqQueues: Record<string, Queue> = {
   [IMPORTER_EXTRACTION_DLQ_NAME]: importerExtractionDlq,
   [SEARCH_INDEXING_DLQ_NAME]: searchIndexingDlq,
   [AGENT_RUN_DLQ_NAME]: agentRunDlq,
+  [SUPPORT_AGENT_TURN_DLQ_NAME]: supportAgentTurnDlq,
 };
 
 export const mainQueues: Record<string, Queue> = {
@@ -484,6 +519,7 @@ export const mainQueues: Record<string, Queue> = {
   [IMPORTER_EXTRACTION_QUEUE_NAME]: importerExtractionQueue,
   [SEARCH_INDEXING_QUEUE_NAME]: searchIndexingQueue,
   [AGENT_RUN_QUEUE_NAME]: agentRunQueue,
+  [SUPPORT_AGENT_TURN_QUEUE_NAME]: supportAgentTurnQueue,
 };
 
 function moveToDlq(
@@ -528,6 +564,7 @@ let mediaEmbeddingWorker: Worker<MediaEmbeddingJobData> | null = null;
 let moderationTriageWorker: Worker<ModerationTriageJobData> | null = null;
 let importerExtractionWorker: Worker<ImporterExtractionJobData> | null = null;
 let agentRunWorker: Worker<AgentRunJobData> | null = null;
+let supportAgentTurnWorker: Worker<SupportAgentTurnJobData> | null = null;
 let searchIndexingWorker: Worker<SearchIndexSyncJobData> | null = null;
 
 export function startBackgroundWorkers(
@@ -1003,6 +1040,59 @@ export function startBackgroundWorkers(
     agentRunWorker.on('failed', (job, err) => {
       if (job) {
         moveToDlq(agentRunDlq, AGENT_RUN_QUEUE_NAME, job, err);
+      }
+    });
+  }
+
+  if (!supportAgentTurnWorker) {
+    supportAgentTurnWorker = new Worker<SupportAgentTurnJobData>(
+      SUPPORT_AGENT_TURN_QUEUE_NAME,
+      async (job) => {
+        const jobStart = Date.now();
+        logJobEvent('info', { queue: SUPPORT_AGENT_TURN_QUEUE_NAME, job: job.name, jobId: job.id }, 'background_job_started');
+        try {
+          const handleSupportAgentTurn = handlers.handleSupportAgentTurnJob
+            ?? (await import('../workers/handlers/supportAgentTurnHandler.js')).processSupportAgentTurnJob;
+          await handleSupportAgentTurn(job.data);
+          const durationMs = Date.now() - jobStart;
+          recordBackgroundJob({
+            queue: SUPPORT_AGENT_TURN_QUEUE_NAME,
+            job: job.name,
+            result: 'completed',
+          });
+          recordBackgroundJobDuration({
+            queue: SUPPORT_AGENT_TURN_QUEUE_NAME,
+            job: job.name,
+            durationSeconds: durationMs / 1000,
+          });
+          logJobEvent('info', { queue: SUPPORT_AGENT_TURN_QUEUE_NAME, job: job.name, jobId: job.id, durationMs }, 'background_job_completed');
+        } catch (error) {
+          const durationMs = Date.now() - jobStart;
+          recordBackgroundJob({
+            queue: SUPPORT_AGENT_TURN_QUEUE_NAME,
+            job: job.name,
+            result: 'failed',
+          });
+          recordBackgroundJobDuration({
+            queue: SUPPORT_AGENT_TURN_QUEUE_NAME,
+            job: job.name,
+            durationSeconds: durationMs / 1000,
+          });
+          logJobEvent('error', { queue: SUPPORT_AGENT_TURN_QUEUE_NAME, job: job.name, jobId: job.id, durationMs, err: error }, 'background_job_failed');
+          throw error;
+        }
+      },
+      {
+        connection: workerConnection,
+        concurrency: 4,
+      }
+    );
+    supportAgentTurnWorker.on('error', (err) => {
+      logJobEvent('warn', { err: err.message }, 'supportAgentTurnWorker error');
+    });
+    supportAgentTurnWorker.on('failed', (job, err) => {
+      if (job) {
+        moveToDlq(supportAgentTurnDlq, SUPPORT_AGENT_TURN_QUEUE_NAME, job, err);
       }
     });
   }
@@ -1754,6 +1844,10 @@ export async function closeBackgroundQueues(): Promise<void> {
     importerExtractionWorker = null;
   }
 
+  if (supportAgentTurnWorker) {
+    await supportAgentTurnWorker.close();
+    supportAgentTurnWorker = null;
+  }
   if (agentRunWorker) {
     await agentRunWorker.close();
     agentRunWorker = null;
@@ -1771,6 +1865,7 @@ export async function closeBackgroundQueues(): Promise<void> {
   await moderationTriageQueue.close();
   await importerExtractionQueue.close();
   await agentRunQueue.close();
+  await supportAgentTurnQueue.close();
   await searchIndexingQueue.close();
   await pushDlq.close();
   await infraDlq.close();
@@ -1779,6 +1874,7 @@ export async function closeBackgroundQueues(): Promise<void> {
   await moderationTriageDlq.close();
   await importerExtractionDlq.close();
   await agentRunDlq.close();
+  await supportAgentTurnDlq.close();
   await searchIndexingDlq.close();
   await workerConnection.quit();
   await queueConnection.quit();

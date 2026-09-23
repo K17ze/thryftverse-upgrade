@@ -1100,7 +1100,14 @@
       "errorApproveTitle": "承認できませんでした",
       "errorApproveMessage": "リクエストを承認できませんでした。",
       "errorRejectTitle": "拒否できませんでした",
-      "errorRejectMessage": "リクエストを拒否できませんでした。"
+      "errorRejectMessage": "リクエストを拒否できませんでした。",
+      "status": {
+        "pending": "保留中",
+        "approved": "承認済み",
+        "rejected": "却下",
+        "expired": "期限切れ",
+        "superseded": "置き換え済み"
+      }
     },
     "cancel": {
       "cancelling": "キャンセル中…",
@@ -1126,6 +1133,29 @@
     },
     "tokens": {
       "usage": "{{input}}入力 · {{output}}出力"
+    },
+    "trace": {
+      "toggle": "{{botName}} の実行詳細を表示",
+      "loadError": "トレースを読み込めませんでした",
+      "retry": "再試行",
+      "empty": "この実行のステップは記録されていません",
+      "approvalLine": "{{tool}} · {{status}}",
+      "status": {
+        "pending": "保留中",
+        "running": "実行中",
+        "succeeded": "成功",
+        "failed": "失敗",
+        "skipped": "スキップ"
+      },
+      "step": {
+        "modelCall": "モデル呼び出し",
+        "toolCall": "ツール呼び出し",
+        "retrieval": "メモリ参照",
+        "guardrail": "ガードレール",
+        "approval": "承認",
+        "retry": "再試行",
+        "handoff": "引き継ぎ"
+      }
     }
   },
   "liveStreamViewer": {
@@ -1362,7 +1392,7 @@
       "noSessionsRunning": "実行中のエージェントセッションはありません",
       "sessionsRunning": "{{count}}件のエージェントセッションが実行中",
       "activity": "エージェントアクティビティ",
-      "activitySub": "エージェントのアクションと承認のローカルログ"
+      "activitySub": "サーバー上のエージェント実行と承認の記録"
     },
     "connect": {
       "cancel": "キャンセル",

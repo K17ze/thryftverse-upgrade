@@ -2592,6 +2592,7 @@ export const useStore = create<StoreState>()(
       icon: bot.icon,
       isDraft: bot.isDraft,
       agentConfig: bot.agentConfig,
+      providerConnectionId: bot.providerConnectionId ?? undefined,
     });
 
     const newBot: ChatBot = {
@@ -2623,6 +2624,9 @@ export const useStore = create<StoreState>()(
       status: updates.status,
       runtimeMode: updates.runtimeMode,
       agentConfig: updates.agentConfig,
+      ...(updates.providerConnectionId !== undefined
+        ? { providerConnectionId: updates.providerConnectionId }
+        : {}),
     });
 
     set((state) => ({

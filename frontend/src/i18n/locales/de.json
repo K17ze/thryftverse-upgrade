@@ -1100,7 +1100,14 @@
       "errorApproveTitle": "Freigabe nicht möglich",
       "errorApproveMessage": "Die Anfrage konnte nicht freigegeben werden.",
       "errorRejectTitle": "Ablehnung nicht möglich",
-      "errorRejectMessage": "Die Anfrage konnte nicht abgelehnt werden."
+      "errorRejectMessage": "Die Anfrage konnte nicht abgelehnt werden.",
+      "status": {
+        "pending": "Ausstehend",
+        "approved": "Genehmigt",
+        "rejected": "Abgelehnt",
+        "expired": "Abgelaufen",
+        "superseded": "Ersetzt"
+      }
     },
     "cancel": {
       "cancelling": "Wird abgebrochen…",
@@ -1126,6 +1133,29 @@
     },
     "tokens": {
       "usage": "{{input}} rein · {{output}} raus"
+    },
+    "trace": {
+      "toggle": "Laufdetails für {{botName}} anzeigen",
+      "loadError": "Der Ablauf konnte nicht geladen werden",
+      "retry": "Erneut versuchen",
+      "empty": "Für diesen Lauf wurden keine Schritte aufgezeichnet",
+      "approvalLine": "{{tool}} · {{status}}",
+      "status": {
+        "pending": "Ausstehend",
+        "running": "Läuft",
+        "succeeded": "Erfolgreich",
+        "failed": "Fehlgeschlagen",
+        "skipped": "Übersprungen"
+      },
+      "step": {
+        "modelCall": "Modellaufruf",
+        "toolCall": "Werkzeugaufruf",
+        "retrieval": "Gedächtnisabfrage",
+        "guardrail": "Schutzregel",
+        "approval": "Genehmigung",
+        "retry": "Wiederholung",
+        "handoff": "Übergabe"
+      }
     }
   },
   "liveStreamViewer": {
@@ -1362,7 +1392,7 @@
       "noSessionsRunning": "Keine Agent-Sitzungen aktiv",
       "sessionsRunning": "{{count}} Agent-Sitzung(en) aktiv",
       "activity": "Agent-Aktivität",
-      "activitySub": "Lokales Protokoll von Agent-Aktionen und Freigaben"
+      "activitySub": "Serverprotokoll der Agentenläufe und Genehmigungen"
     },
     "connect": {
       "cancel": "Abbrechen",

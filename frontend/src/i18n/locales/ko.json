@@ -1100,7 +1100,14 @@
       "errorApproveTitle": "승인할 수 없습니다",
       "errorApproveMessage": "요청을 승인할 수 없습니다.",
       "errorRejectTitle": "거절할 수 없습니다",
-      "errorRejectMessage": "요청을 거절할 수 없습니다."
+      "errorRejectMessage": "요청을 거절할 수 없습니다.",
+      "status": {
+        "pending": "대기 중",
+        "approved": "승인됨",
+        "rejected": "거절됨",
+        "expired": "만료됨",
+        "superseded": "대체됨"
+      }
     },
     "cancel": {
       "cancelling": "취소 중…",
@@ -1126,6 +1133,29 @@
     },
     "tokens": {
       "usage": "입력 {{input}} · 출력 {{output}}"
+    },
+    "trace": {
+      "toggle": "{{botName}} 실행 상세 보기",
+      "loadError": "실행 추적을 불러오지 못했습니다",
+      "retry": "다시 시도",
+      "empty": "이 실행에 기록된 단계가 없습니다",
+      "approvalLine": "{{tool}} · {{status}}",
+      "status": {
+        "pending": "대기 중",
+        "running": "실행 중",
+        "succeeded": "성공",
+        "failed": "실패",
+        "skipped": "건너뜀"
+      },
+      "step": {
+        "modelCall": "모델 호출",
+        "toolCall": "도구 호출",
+        "retrieval": "메모리 회수",
+        "guardrail": "가드레일",
+        "approval": "승인",
+        "retry": "재시도",
+        "handoff": "인계"
+      }
     }
   },
   "liveStreamViewer": {
@@ -1362,7 +1392,7 @@
       "noSessionsRunning": "실행 중인 에이전트 세션이 없습니다",
       "sessionsRunning": "{{count}}개 에이전트 세션 실행 중",
       "activity": "에이전트 활동",
-      "activitySub": "에이전트 작업 및 승인의 로컬 로그"
+      "activitySub": "서버에 기록된 에이전트 실행 및 승인"
     },
     "connect": {
       "cancel": "취소",

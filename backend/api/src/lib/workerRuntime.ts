@@ -51,6 +51,12 @@ import {
   roundTo,
   toJsonString,
 } from './workerHelpers.js';
+import { applyWalletLedgerDelta } from './walletMoneyPath.js';
+
+// Canonical wallet mutation lives in walletMoneyPath.ts (multi-currency
+// pockets + wallet_ledger.currency stamping). Re-exported here so worker
+// handlers keep importing a single worker-runtime module.
+export { applyWalletLedgerDelta };
 
 /**
  * Logger used by the copied helpers in place of the Fastify `app.log`.
@@ -760,125 +766,7 @@ export async function ensureWallet(
   return syncedResult.rows[0] ?? wallet;
 }
 
-async function loadWalletForUpdate(client: DbQueryable, walletId: string): Promise<WalletRow> {
-  const result = await client.query<WalletRow>(
-    `
-      SELECT
-        id,
-        user_id,
-        oneze_balance_units,
-        fiat_balance_minor,
-        fiat_currency,
-        version,
-        created_at::text,
-        updated_at::text
-      FROM wallets
-      WHERE id = $1
-      LIMIT 1
-      FOR UPDATE
-    `,
-    [walletId]
-  );
 
-  const wallet = result.rows[0];
-  if (!wallet) {
-    throw createApiError('WALLET_NOT_FOUND', 'Wallet not found', { walletId });
-  }
-
-  return wallet;
-}
-
-export async function applyWalletLedgerDelta(
-  client: DbQueryable,
-  input: {
-    walletId: string;
-    txId: string;
-    asset: '1ZE' | 'FIAT';
-    amount: number;
-    kind: string;
-    refType?: string;
-    refId?: string;
-    anchorValueInInr?: number;
-    metadata?: Record<string, unknown>;
-  }
-): Promise<number> {
-  if (!Number.isSafeInteger(input.amount)) {
-    throw createApiError('WALLET_AMOUNT_INVALID', 'Wallet ledger amount must be an integer unit');
-  }
-
-  const wallet = await loadWalletForUpdate(client, input.walletId);
-  const currentBalance = Number(
-    input.asset === '1ZE' ? wallet.oneze_balance_units : wallet.fiat_balance_minor
-  );
-  const nextBalance = currentBalance + input.amount;
-
-  if (nextBalance < 0) {
-    throw createApiError('WALLET_INSUFFICIENT_BALANCE', 'Wallet balance is insufficient for this operation', {
-      walletId: input.walletId,
-      asset: input.asset,
-      currentBalance,
-      attemptedDelta: input.amount,
-    });
-  }
-
-  if (input.asset === '1ZE') {
-    await client.query(
-      `
-        UPDATE wallets
-        SET
-          oneze_balance_units = $2,
-          version = version + 1,
-          updated_at = NOW()
-        WHERE id = $1
-      `,
-      [input.walletId, nextBalance]
-    );
-  } else {
-    await client.query(
-      `
-        UPDATE wallets
-        SET
-          fiat_balance_minor = $2,
-          version = version + 1,
-          updated_at = NOW()
-        WHERE id = $1
-      `,
-      [input.walletId, nextBalance]
-    );
-  }
-
-  await client.query(
-    `
-      INSERT INTO wallet_ledger (
-        wallet_id,
-        tx_id,
-        asset,
-        amount,
-        balance_after,
-        kind,
-        ref_type,
-        ref_id,
-        anchor_value_in_inr,
-        metadata
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
-    `,
-    [
-      input.walletId,
-      input.txId,
-      input.asset,
-      input.amount,
-      nextBalance,
-      input.kind,
-      input.refType ?? null,
-      input.refId ?? null,
-      input.anchorValueInInr ?? null,
-      toJsonString(input.metadata ?? {}),
-    ]
-  );
-
-  return nextBalance;
-}
 
 async function ensureWalletSegments(client: DbQueryable, wallet: WalletRow): Promise<WalletSegmentRow> {
   const seededPurchasedUnits = Math.max(0, Number(wallet.oneze_balance_units));

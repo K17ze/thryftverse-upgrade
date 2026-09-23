@@ -1194,7 +1194,14 @@
       "errorApproveTitle": "Could not approve",
       "errorApproveMessage": "The request could not be approved.",
       "errorRejectTitle": "Could not reject",
-      "errorRejectMessage": "The request could not be rejected."
+      "errorRejectMessage": "The request could not be rejected.",
+      "status": {
+        "pending": "Pending",
+        "approved": "Approved",
+        "rejected": "Rejected",
+        "expired": "Expired",
+        "superseded": "Superseded"
+      }
     },
     "cancel": {
       "cancelling": "Cancelling…",
@@ -1220,6 +1227,29 @@
     },
     "tokens": {
       "usage": "{{input}} in · {{output}} out"
+    },
+    "trace": {
+      "toggle": "View run details for {{botName}}",
+      "loadError": "Couldn't load the run trace",
+      "retry": "Retry",
+      "empty": "No steps recorded for this run",
+      "approvalLine": "{{tool}} · {{status}}",
+      "status": {
+        "pending": "Pending",
+        "running": "Running",
+        "succeeded": "Succeeded",
+        "failed": "Failed",
+        "skipped": "Skipped"
+      },
+      "step": {
+        "modelCall": "Model call",
+        "toolCall": "Tool call",
+        "retrieval": "Memory recall",
+        "guardrail": "Guardrail",
+        "approval": "Approval",
+        "retry": "Retry",
+        "handoff": "Handoff"
+      }
     }
   },
   "liveStreamViewer": {
@@ -1529,7 +1559,7 @@
       "noSessionsRunning": "No agent sessions running",
       "sessionsRunning": "{{count}} agent session(s) running",
       "activity": "Agent activity",
-      "activitySub": "Local log of agent actions and approvals"
+      "activitySub": "Server record of agent runs and approvals"
     },
     "connect": {
       "cancel": "Cancel",
@@ -2061,6 +2091,75 @@
       "cornerBottomLeft": "Crop handle, bottom left",
       "cornerBottomRight": "Crop handle, bottom right",
       "value": "Crop area {{x}} percent from the left, {{y}} percent from the top, {{width}} percent wide, {{height}} percent tall"
+    }
+  },
+  "walletFx": {
+    "title": "Exchange",
+    "balancesTitle": "Currency balances",
+    "balancesExchange": "Exchange",
+    "balancesError": "Couldn't load currency balances.",
+    "retry": "Retry",
+    "youSend": "You send",
+    "youReceive": "You receive",
+    "availableBalance": "Available {{currency}} balance",
+    "available": "Available: {{amount}}",
+    "insufficient": "This amount exceeds your {{currency}} balance.",
+    "amountPlaceholder": "0.00",
+    "fetchingQuote": "Fetching live quote…",
+    "quoteFailed": "Couldn't fetch quote.",
+    "fee": "Fee ({{bps}} bps)",
+    "rateLabel": "Rate",
+    "rateAsOf": "Rate as of",
+    "referenceRateAsOf": "Reference rate as of",
+    "valid": "Valid {{time}}",
+    "expired": "Expired",
+    "refresh": "Refresh",
+    "swap": "Swap currencies",
+    "swapHint": "Swaps the send and receive currencies",
+    "reviewTitle": "Exchange summary",
+    "reviewHint": "Your {{source}} pocket is debited and your {{target}} pocket credited instantly at the locked rate.",
+    "ctaReview": "Review exchange",
+    "ctaConfirm": "Confirm",
+    "ctaBack": "Back to edit",
+    "ctaDone": "Done",
+    "authTitle": "Authenticate to continue",
+    "authWaiting": "Waiting for biometric verification…",
+    "authBody": "Verify with Face ID, Touch ID, or fingerprint to authorise this exchange.",
+    "authReason": "Authenticate to exchange currency",
+    "authRetry": "Authenticate",
+    "authCancel": "Cancel",
+    "executingTitle": "Exchanging…",
+    "executingBody": "Debiting {{source}} and crediting your {{target}} balance.",
+    "receiptTitle": "Exchange complete",
+    "receiptBody": "Exchanged {{sent}} to {{received}}",
+    "receiptSent": "You sent",
+    "receiptReceived": "You received",
+    "receiptRate": "Rate",
+    "receiptFee": "Fee",
+    "receiptTx": "Transaction",
+    "receiptTimestamp": "Timestamp",
+    "errorTitle": "Exchange failed",
+    "errorTryAgain": "Try again",
+    "errorCancel": "Cancel",
+    "errorGeneric": "Unable to exchange right now.",
+    "errorDropped": "The connection dropped while exchanging. Try again — the same request will resume safely, or check your wallet history.",
+    "errorBalanceLoad": "We could not load your currency balances.",
+    "quoteExpiredInline": "Quote expired — fetching a fresh rate.",
+    "signInRequired": "Sign in to exchange currencies.",
+    "stepAmount": "Amount",
+    "stepReview": "Review",
+    "stepAuth": "Auth",
+    "stepDone": "Done",
+    "a11y": {
+      "exchangeHint": "Opens the currency exchange screen",
+      "currencyFrom": "Send currency",
+      "currencyTo": "Receive currency",
+      "selectCurrency": "Select {{currency}}",
+      "amountInput": "Amount in {{currency}}",
+      "retryQuote": "Retry quote fetch",
+      "refreshRate": "Refresh exchange rate",
+      "retryAuth": "Retry biometric authentication",
+      "cancelAuth": "Cancel authentication"
     }
   }
 }

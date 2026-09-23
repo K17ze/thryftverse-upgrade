@@ -951,6 +951,7 @@ export const registerBotsRoutes = ({
       permissions: unknown;
       icon: string | null;
       agent_config: unknown;
+      provider_connection_id: string | null;
       created_at: string;
       updated_at: string;
     }>(
@@ -958,7 +959,7 @@ export const registerBotsRoutes = ({
       SELECT
         id, slug, name, description, command_hint, category,
         type, status, runtime_mode, is_draft, permissions, icon, agent_config,
-        created_at, updated_at
+        provider_connection_id, created_at, updated_at
       FROM chat_bots
       WHERE type = 'custom' AND owner_id = $1
       ORDER BY created_at DESC
@@ -982,6 +983,7 @@ export const registerBotsRoutes = ({
         permissions: row.permissions,
         icon: row.icon,
         agentConfig: row.runtime_mode === 'ai' ? normalizeAgentConfig(row.agent_config) : null,
+        providerConnectionId: row.provider_connection_id,
         ...botRuntimeReadiness(row.runtime_mode),
         createdAt: row.created_at,
         updatedAt: row.updated_at,
@@ -1012,6 +1014,7 @@ export const registerBotsRoutes = ({
       icon: string | null;
       owner_id: string | null;
       agent_config: unknown;
+      provider_connection_id: string | null;
       created_at: string;
       updated_at: string;
     }>(
@@ -1019,7 +1022,7 @@ export const registerBotsRoutes = ({
       SELECT
         id, slug, name, description, command_hint, category,
         type, status, runtime_mode, is_draft, permissions, icon, owner_id, agent_config,
-        created_at, updated_at
+        provider_connection_id, created_at, updated_at
       FROM chat_bots
       WHERE id = $1
       LIMIT 1
@@ -1053,6 +1056,7 @@ export const registerBotsRoutes = ({
         permissions: bot.permissions,
         icon: bot.icon,
         ownerId: bot.owner_id,
+        providerConnectionId: bot.provider_connection_id,
         agentConfig: bot.runtime_mode === 'ai'
           ? (bot.type === 'system' ? publicAgentConfig(bot.agent_config) : normalizeAgentConfig(bot.agent_config))
           : null,
@@ -1079,9 +1083,26 @@ export const registerBotsRoutes = ({
       icon: z.string().trim().max(120).optional(),
       isDraft: z.boolean().default(false),
       agentConfig: agentConfigSchema.optional(),
+      // BYOK binding — the connection must be owned by the caller.
+      providerConnectionId: z.string().trim().min(2).max(120).optional(),
     });
 
     const payload = bodySchema.parse(request.body);
+    if (payload.providerConnectionId) {
+      const conn = await db.query<{ owner_id: string; is_active: boolean }>(
+        `SELECT owner_id, is_active FROM provider_connections WHERE id = $1 LIMIT 1`,
+        [payload.providerConnectionId]
+      );
+      if (!conn.rowCount) {
+        throw createApiError('NOT_FOUND', 'Provider connection not found', { providerConnectionId: payload.providerConnectionId });
+      }
+      if (conn.rows[0].owner_id !== userId) {
+        throw createApiError('FORBIDDEN_USER_CONTEXT', 'Only the connection owner can bind it to a bot');
+      }
+      if (!conn.rows[0].is_active) {
+        throw createApiError('CHAT_BOT_INVALID', 'Provider connection is revoked or inactive');
+      }
+    }
     const botId = createRuntimeId('bot');
     const slug = payload.slug ?? botId;
     const normalizedAgentConfig = normalizeAgentConfig(payload.agentConfig);
@@ -1096,9 +1117,10 @@ export const registerBotsRoutes = ({
       `
       INSERT INTO chat_bots (
         id, slug, name, description, command_hint, category,
-        type, status, runtime_mode, is_draft, permissions, icon, owner_id, agent_config
+        type, status, runtime_mode, is_draft, permissions, icon, owner_id, agent_config,
+        provider_connection_id
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
     `,
       [
         botId,
@@ -1115,6 +1137,7 @@ export const registerBotsRoutes = ({
         payload.icon ?? null,
         userId,
         toJsonString(normalizedAgentConfig),
+        payload.providerConnectionId ?? null,
       ]
     );
 
@@ -1164,6 +1187,8 @@ export const registerBotsRoutes = ({
       status: z.enum(['available', 'local-only', 'backend-required', 'disabled']).optional(),
       runtimeMode: z.enum(['local', 'config-only', 'backend', 'ai']).optional(),
       agentConfig: agentConfigSchema.optional(),
+      // BYOK binding — null unbinds (reverts to the platform key).
+      providerConnectionId: z.string().trim().min(2).max(120).nullable().optional(),
     });
 
     const { botId } = paramsSchema.parse(request.params);
@@ -1188,6 +1213,25 @@ export const registerBotsRoutes = ({
     const bot = existing.rows[0];
     if (bot.type !== 'custom' || bot.owner_id !== userId) {
       throw createApiError('FORBIDDEN_USER_CONTEXT', 'Only the bot owner can update this bot');
+    }
+
+    // A provider connection may only be bound to a bot by its owner — the
+    // connection is the owner's credential vault entry, so cross-owner
+    // binding would spend someone else's quota and leak their key scope.
+    if (payload.providerConnectionId != null) {
+      const conn = await db.query<{ owner_id: string; is_active: boolean }>(
+        `SELECT owner_id, is_active FROM provider_connections WHERE id = $1 LIMIT 1`,
+        [payload.providerConnectionId]
+      );
+      if (!conn.rowCount) {
+        throw createApiError('NOT_FOUND', 'Provider connection not found', { providerConnectionId: payload.providerConnectionId });
+      }
+      if (conn.rows[0].owner_id !== userId) {
+        throw createApiError('FORBIDDEN_USER_CONTEXT', 'Only the connection owner can bind it to a bot');
+      }
+      if (!conn.rows[0].is_active) {
+        throw createApiError('CHAT_BOT_INVALID', 'Provider connection is revoked or inactive');
+      }
     }
 
     const nextConfig = normalizeAgentConfig(payload.agentConfig ?? bot.agent_config);
@@ -1240,6 +1284,10 @@ export const registerBotsRoutes = ({
     if (payload.runtimeMode !== undefined) {
       updates.push(`runtime_mode = $${paramIndex++}`);
       values.push(payload.runtimeMode);
+    }
+    if (payload.providerConnectionId !== undefined) {
+      updates.push(`provider_connection_id = $${paramIndex++}`);
+      values.push(payload.providerConnectionId);
     }
     if (payload.agentConfig !== undefined) {
       updates.push(`agent_config = $${paramIndex++}`);
@@ -1464,12 +1512,13 @@ export const registerBotsRoutes = ({
     );
 
     // Resume the run: reset it to 'queued' so the worker re-executes —
-    // processToolCalls honors this approval for the same tool. Only a run
-    // that finished waiting (succeeded) is resumed; a failed/cancelled run
-    // stays terminal.
+    // the policy engine honours this approval for the same tool+args.
+    // 'waiting_for_approval' is the normal parked state; 'succeeded' is
+    // kept for runs written before the waiting state existed. A
+    // failed/cancelled run stays terminal.
     const resumed = await db.query<{ id: string }>(
       `UPDATE agent_runs SET status = 'queued', completed_at = NULL
-       WHERE id = $1 AND status = 'succeeded'
+       WHERE id = $1 AND status IN ('waiting_for_approval', 'succeeded')
        RETURNING id`,
       [existing.rows[0].run_id],
     );
@@ -1550,6 +1599,28 @@ export const registerBotsRoutes = ({
        SELECT $1, bot_id, $2, 'tool_rejected', $3 FROM agent_approval_requests WHERE id = $4`,
       [createRuntimeId('baev'), userId, toJsonString({ approvalId: id, reason: payload.reason ?? null }), id]
     );
+
+    // Resume so the agent acknowledges the rejection instead of leaving
+    // the conversation on "waiting". The policy engine treats a rejected
+    // call shape as denied, so the re-run cannot loop the same approval.
+    const resumeInfo = await db.query<{ id: string; bot_id: string; conversation_id: string; actor_user_id: string }>(
+      `UPDATE agent_runs SET status = 'queued', completed_at = NULL
+       WHERE id = $1 AND status = 'waiting_for_approval'
+       RETURNING id, bot_id, conversation_id, actor_user_id`,
+      [existing.rows[0].run_id],
+    );
+    if (resumeInfo.rowCount) {
+      const { agentRunQueue } = await import('../lib/queues.js');
+      const r = resumeInfo.rows[0];
+      await agentRunQueue.add('agent-run', {
+        runId: r.id,
+        botId: r.bot_id,
+        conversationId: r.conversation_id,
+        actorUserId: r.actor_user_id,
+        triggerMessageId: null,
+        messageText: '',
+      });
+    }
 
     return { ok: true, approvalId: id, status: 'rejected' };
   });
@@ -1816,5 +1887,128 @@ export const registerBotsRoutes = ({
         createdAt: row.created_at,
       })),
     };
+  });
+
+  // ── Agent memory controls ─────────────────────────────────────────────
+  //
+  // Per-user long-term memory (migration 339). The owner can inspect every
+  // stored memory, retract individual records, clear everything, and toggle
+  // memory/extraction off entirely — the ChatGPT-standard control surface.
+  // Every query is scoped to request.authUser.userId; there is no path by
+  // which one user can read or mutate another user's memories.
+
+  /**
+   * GET /agent-memory — settings + active memories for the caller.
+   * Optional ?botId= scopes the list to one agent's memories plus
+   * user-scope (bot_id IS NULL) records — the same scope an agent sees.
+   */
+  app.get('/agent-memory', async (request: FastifyRequest) => {
+    if (!request.authUser) throw createApiError('UNAUTHORIZED', 'Unauthorized');
+    const querySchema = z.object({
+      botId: z.string().min(2).max(120).optional(),
+      status: z.enum(['active', 'retracted', 'expired']).optional(),
+      limit: z.coerce.number().int().min(1).max(200).optional(),
+    }).default({});
+    const query = querySchema.parse(request.query ?? {});
+    const userId = request.authUser.userId;
+
+    const { getAgentMemorySettings, listAgentMemories } = await import('../lib/agentMemory.js');
+    const [settings, memories] = await Promise.all([
+      getAgentMemorySettings(db, userId),
+      listAgentMemories(db, userId, {
+        botId: query.botId,
+        status: query.status ?? 'active',
+        limit: query.limit ?? 100,
+      }),
+    ]);
+
+    return {
+      ok: true,
+      settings,
+      memories: memories.map((m) => ({
+        id: m.id,
+        botId: m.botId,
+        kind: m.kind,
+        content: m.content,
+        status: m.status,
+        confidence: m.confidence,
+        sourceType: m.sourceType,
+        sourceConversationId: m.sourceConversationId,
+        useCount: m.useCount,
+        lastUsedAt: m.lastUsedAt,
+        createdAt: m.createdAt,
+        validFrom: m.validFrom,
+        validTo: m.validTo,
+      })),
+    };
+  });
+
+  /**
+   * PUT /agent-memory/settings — toggle memory and/or extraction.
+   * Disabling memory stops recall AND extraction immediately.
+   */
+  app.put('/agent-memory/settings', async (request: FastifyRequest) => {
+    if (!request.authUser) throw createApiError('UNAUTHORIZED', 'Unauthorized');
+    const bodySchema = z.object({
+      memoryEnabled: z.boolean().optional(),
+      extractionEnabled: z.boolean().optional(),
+    }).refine((v) => v.memoryEnabled !== undefined || v.extractionEnabled !== undefined, {
+      message: 'At least one setting must be provided',
+    });
+    const body = bodySchema.parse(request.body ?? {});
+    const userId = request.authUser.userId;
+
+    const { upsertAgentMemorySettings } = await import('../lib/agentMemory.js');
+    const settings = await upsertAgentMemorySettings(db, userId, body);
+
+    await db.query(
+      `INSERT INTO chat_bot_audit_events (id, bot_id, conversation_id, actor_user_id, event_type, metadata)
+       VALUES ($1, NULL, NULL, $2, 'memory_settings_updated', $3::jsonb)`,
+      [createRuntimeId('baev'), userId, toJsonString({ settings })],
+    ).catch(() => undefined);
+
+    return { ok: true, settings };
+  });
+
+  /**
+   * DELETE /agent-memory/:memoryId — retract one memory. Retracted rows
+   * are retained for audit but are never recalled into prompts.
+   */
+  app.delete('/agent-memory/:memoryId', async (request: FastifyRequest) => {
+    if (!request.authUser) throw createApiError('UNAUTHORIZED', 'Unauthorized');
+    const paramsSchema = z.object({ memoryId: z.string().min(2).max(120) });
+    const { memoryId } = paramsSchema.parse(request.params);
+    const userId = request.authUser.userId;
+
+    const { retractAgentMemory } = await import('../lib/agentMemory.js');
+    const done = await retractAgentMemory(db, userId, memoryId);
+    if (!done) {
+      throw createApiError('NOT_FOUND', 'Memory not found or already retracted', { memoryId });
+    }
+    return { ok: true, memoryId, status: 'retracted' };
+  });
+
+  /**
+   * POST /agent-memory/clear — retract every active memory for the caller,
+   * optionally scoped to one bot. Returns the affected count.
+   */
+  app.post('/agent-memory/clear', async (request: FastifyRequest) => {
+    if (!request.authUser) throw createApiError('UNAUTHORIZED', 'Unauthorized');
+    const bodySchema = z.object({
+      botId: z.string().min(2).max(120).optional(),
+    }).default({});
+    const body = bodySchema.parse(request.body ?? {});
+    const userId = request.authUser.userId;
+
+    const { clearAgentMemories } = await import('../lib/agentMemory.js');
+    const cleared = await clearAgentMemories(db, userId, body.botId);
+
+    await db.query(
+      `INSERT INTO chat_bot_audit_events (id, bot_id, conversation_id, actor_user_id, event_type, metadata)
+       VALUES ($1, NULL, NULL, $2, 'memory_cleared', $3::jsonb)`,
+      [createRuntimeId('baev'), userId, toJsonString({ cleared, botId: body.botId ?? null })],
+    ).catch(() => undefined);
+
+    return { ok: true, cleared };
   });
 };

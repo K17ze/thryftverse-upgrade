@@ -21,6 +21,10 @@ export interface BotRuntimeContext {
   agentConfig: AgentConfig | null;
   conversationHistory: AgentConversationTurn[];
   runtimeData: BotRuntimeData;
+  /** Durable agent_runs id when invoked via the run worker — used for
+   *  memory provenance and approval checkpoints. Undefined for direct
+   *  (non-run) invocations. */
+  runId?: string;
 }
 
 export interface BotHandlerResult {

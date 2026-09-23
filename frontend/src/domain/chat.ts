@@ -34,6 +34,8 @@ export interface ChatBot {
   icon?: string;
   /** Server-owned AI behavior contract. Present for AI agents. */
   agentConfig?: ChatAgentConfig;
+  /** BYOK: bound provider_connection id. Null/undefined = platform key. */
+  providerConnectionId?: string | null;
   /** True only when this environment can execute the selected runtime. */
   runtimeReady?: boolean;
   runtimeReadinessReason?: string;

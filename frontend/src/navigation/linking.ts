@@ -172,6 +172,7 @@ export const linking: LinkingOptions<RootStackParamList> = {
       SellerEarnings: 'wallet/earnings',
       WalletHistory: 'wallet/history',
       WalletConvert: 'wallet/convert',
+      WalletExchange: 'wallet/exchange',
       AddBankAccount: 'wallet/bank-account',
 
       // Agent ledger — transparent record of agent actions and approvals

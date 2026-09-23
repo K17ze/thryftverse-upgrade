@@ -1100,7 +1100,14 @@
       "errorApproveTitle": "Onaylanamadı",
       "errorApproveMessage": "İstek onaylanamadı.",
       "errorRejectTitle": "Reddedilemedi",
-      "errorRejectMessage": "İstek reddedilemedi."
+      "errorRejectMessage": "İstek reddedilemedi.",
+      "status": {
+        "pending": "Bekliyor",
+        "approved": "Onaylandı",
+        "rejected": "Reddedildi",
+        "expired": "Süresi doldu",
+        "superseded": "Geçersiz kılındı"
+      }
     },
     "cancel": {
       "cancelling": "İptal ediliyor…",
@@ -1126,6 +1133,29 @@
     },
     "tokens": {
       "usage": "{{input}} giriş · {{output}} çıkış"
+    },
+    "trace": {
+      "toggle": "{{botName}} için çalıştırma ayrıntılarını gör",
+      "loadError": "Çalıştırma izi yüklenemedi",
+      "retry": "Tekrar dene",
+      "empty": "Bu çalıştırma için kaydedilmiş adım yok",
+      "approvalLine": "{{tool}} · {{status}}",
+      "status": {
+        "pending": "Bekliyor",
+        "running": "Çalışıyor",
+        "succeeded": "Başarılı",
+        "failed": "Başarısız",
+        "skipped": "Atlandı"
+      },
+      "step": {
+        "modelCall": "Model çağrısı",
+        "toolCall": "Araç çağrısı",
+        "retrieval": "Bellek çağırma",
+        "guardrail": "Koruma",
+        "approval": "Onay",
+        "retry": "Yeniden deneme",
+        "handoff": "Devir"
+      }
     }
   },
   "liveStreamViewer": {
@@ -1362,7 +1392,7 @@
       "noSessionsRunning": "Çalışan ajan oturumu yok",
       "sessionsRunning": "{{count}} ajan oturumu çalışıyor",
       "activity": "Ajan etkinliği",
-      "activitySub": "Ajan eylemlerinin ve onaylarının yerel günlüğü"
+      "activitySub": "Aracı çalıştırmalarının ve onaylarının sunucu kaydı"
     },
     "connect": {
       "cancel": "İptal",

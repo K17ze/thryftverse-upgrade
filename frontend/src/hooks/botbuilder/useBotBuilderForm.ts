@@ -13,7 +13,8 @@ import {
   type ResponseLength,
   type Tone,
   type TriggerMode } from '../../platform/agents/agentDefinition';
-import { fetchBotByIdFromApi, validateBotFromApi } from '../../services/botsApi';
+import { fetchBotByIdFromApi, fetchConnectionsFromApi, validateBotFromApi } from '../../services/botsApi';
+import type { ProviderConnectionInfo } from '../../services/botsApi';
 import { useConnectivity } from '../useConnectivity';
 import {
   ACTIVE_CAPABILITIES,
@@ -64,6 +65,26 @@ export function useBotBuilderForm({
   const [modelId, setModelId] = useState<ChatAgentConfig['model']>(
     legacyConfig?.model ?? 'gpt-5.6-terra'
   );
+  // BYOK binding — null means the platform key. The server validates
+  // ownership + provider compatibility on save.
+  const [providerConnectionId, setProviderConnectionId] = useState<string | null>(
+    existingBot?.providerConnectionId ?? null
+  );
+  const [providerConnections, setProviderConnections] = useState<ProviderConnectionInfo[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetchConnectionsFromApi()
+      .then((items) => {
+        if (!cancelled) setProviderConnections(items);
+      })
+      .catch(() => {
+        // BYOK picker simply shows only the platform default on failure —
+        // the form remains fully usable without it.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Progressive disclosure — step collapse states.
   // Step 1 (Purpose) is always visible. Steps 2–4 are collapsible.
@@ -139,6 +160,7 @@ export function useBotBuilderForm({
       setStarterTwo(config?.starterPrompts[1] ?? '');
       setReasoningEffort(config?.reasoningEffort ?? 'medium');
       setModelId(config?.model ?? 'gpt-5.6-terra');
+      setProviderConnectionId(bot.providerConnectionId ?? null);
       const grants = buildInitialCapabilityGrants(bot.category as AgentCategory);
       const enabled = new Set(bot.permissions);
       setCapabilityGrants(grants.map((g) => ({ ...g, enabled: enabled.has(g.capability) })));
@@ -272,6 +294,7 @@ export function useBotBuilderForm({
         def.capabilityGrants.filter((g) => g.enabled && ACTIVE_CAPABILITIES.has(g.capability))
       ),
       isDraft: def.isDraft,
+      providerConnectionId,
       agentConfig };
   };
 
@@ -387,6 +410,9 @@ export function useBotBuilderForm({
     // step 4 — model & permissions
     modelId,
     setModelId,
+    providerConnectionId,
+    setProviderConnectionId,
+    providerConnections,
     conversationContext,
     setConversationContext,
     maxTurns,

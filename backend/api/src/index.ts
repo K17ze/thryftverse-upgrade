@@ -291,6 +291,8 @@ import {
 import { registerHealthRoutes } from './routes/health.js';
 import { registerSecurityRoutes } from './routes/security.js';
 import { registerAuthRoutes } from './routes/auth.js';
+import { registerFxWalletRoutes } from './routes/fxWallet.js';
+import { expireStaleFxQuotes } from './lib/fxEngine.js';
 import { registerCollectionRoutes } from './routes/collections.js';
 import { registerSearchRoutes } from './routes/search.js';
 import { registerUserRoutes } from './routes/users.js';
@@ -3205,7 +3207,8 @@ const WALLET_ROW_SELECT = `
 async function ensureWallet(
   client: DbQueryable,
   userId: string,
-  fiatCurrency = DEFAULT_WALLET_FIAT_CURRENCY
+  fiatCurrency = DEFAULT_WALLET_FIAT_CURRENCY,
+  lock = true
 ): Promise<WalletRow> {
   // SELECT ... FOR UPDATE takes the same wallet row lock the old
   // INSERT ... ON CONFLICT DO UPDATE did — but without writing a dead tuple
@@ -3214,8 +3217,14 @@ async function ensureWallet(
   // path). Callers that need deterministic multi-wallet lock order (e.g.
   // the transfer route) sequence these calls by user id and then re-lock in
   // canonical wallet-id order via lockWalletRowsForUpdate.
+  //
+  // `lock = false` performs the same ensure-without-the-lock for callers
+  // that must NOT hold the wallet row while they go on to lock a different
+  // resource first (the FX engine's canonical order is quote → wallet →
+  // sorted pockets — see routes/fxWallet.ts).
+  const rowLock = lock ? ' FOR UPDATE' : '';
   const existing = await client.query<WalletRow>(
-    `SELECT ${WALLET_ROW_SELECT} FROM wallets WHERE user_id = $1 FOR UPDATE`,
+    `SELECT ${WALLET_ROW_SELECT} FROM wallets WHERE user_id = $1${rowLock}`,
     [userId]
   );
 
@@ -3240,7 +3249,7 @@ async function ensureWallet(
       // A concurrent insert committed between our SELECT and our speculative
       // INSERT — re-read the winner's row under the lock.
       const reloaded = await client.query<WalletRow>(
-        `SELECT ${WALLET_ROW_SELECT} FROM wallets WHERE user_id = $1 FOR UPDATE`,
+        `SELECT ${WALLET_ROW_SELECT} FROM wallets WHERE user_id = $1${rowLock}`,
         [userId]
       );
       wallet = reloaded.rows[0];
@@ -3963,11 +3972,24 @@ async function resolveOnezeFiatFxRate(
   currency: string,
   options?: { forceRefresh?: boolean }
 ): Promise<{ rate: number; source: string; observedAt: string }> {
-  void options;
+  if (options?.forceRefresh) {
+    // On-demand refresh: pull the latest provider rates before resolving the
+    // quote. A provider outage must never block a quote — fall back to the
+    // stored internal rate on failure.
+    try {
+      await syncOnezeInternalFxRatesFromProvider('on_demand');
+    } catch (error) {
+      app.log.error({ err: error, currency }, 'oneze_fx_on_demand_refresh_failed');
+    }
+  }
+
   const quote = await resolveCountryPricingQuoteByCurrency(client, currency);
+  // Return the gross mid rate, NOT netRedemption: the withdrawal quote caller
+  // itemizes platform fee, corridor spread, and network fee itself, so a
+  // net-of-fee rate here would double-charge the withdraw fee.
   return {
-    rate: quote.netRedemption,
-    source: `internal_pricing:${quote.countryCode}:withdraw`,
+    rate: quote.fxRate,
+    source: `internal_pricing:${quote.countryCode}:gross`,
     observedAt: new Date().toISOString(),
   };
 }
@@ -10913,7 +10935,7 @@ let opsAlertingTimer: NodeJS.Timeout | null = null;
 let platformRevenueSweepTimer: NodeJS.Timeout | null = null;
 
 type PlatformRevenueSweepReason = 'startup' | 'interval' | 'manual';
-type OnezeFxSyncReason = 'startup' | 'interval' | 'manual';
+type OnezeFxSyncReason = 'startup' | 'interval' | 'manual' | 'on_demand';
 type OnezeAutoAdjustReason = 'startup' | 'interval' | 'manual';
 type PlatformRevenueSweepGateway = 'wise' | 'wise_global';
 
@@ -11170,39 +11192,66 @@ async function syncOnezeInternalFxRatesFromProvider(
   baseCurrency: string;
   quotedCurrencies: number;
   updatedPairs: number;
+  skippedConcurrentSync?: boolean;
+  expiredQuotes: number;
   fetchedAt: string;
 }> {
   if (!(await onezePricingTablesAvailable(db))) {
     throw new Error('1ze controlled pricing tables are unavailable. Run migrations first.');
   }
 
+  const configuredBaseCurrency = config.onezeFxProviderBaseCurrency.trim().toUpperCase();
+  const baseCurrency = configuredBaseCurrency.length === 3 ? configuredBaseCurrency : 'USD';
+
+  // Currency enumeration is read-only — run it on the pool so the provider
+  // HTTP fetch below never holds a pooled transaction open (~10s network
+  // call inside BEGIN would pin a connection and invite lock waits).
+  const activeCurrencies = await listActiveOnezePricingCurrencies(db);
+  // Quote universe = active pricing-profile currencies ∪ the ENABLED rows of
+  // the ISO-4217 registry. money_currency_registry (migration 079) is the DB
+  // projection of the CURRENCY_EXPONENTS registry in lib/money.ts — same
+  // codes, same registry version — so the sync covers every supported
+  // currency without waiting for a pricing profile to be activated. Rows an
+  // operator disabled are honoured, not silently re-quoted.
+  const registryCurrencies = await db.query<{ currency_code: string }>(
+    `SELECT currency_code FROM money_currency_registry WHERE enabled = TRUE`
+  );
+  const quoteCurrencies = Array.from(
+    new Set(
+      [...activeCurrencies, ...registryCurrencies.rows.map((row) => row.currency_code)]
+        .map((currency) => currency.trim().toUpperCase())
+        .filter((currency) => currency.length === 3 && currency !== baseCurrency)
+    )
+  );
+
+  // Provider fetch BEFORE BEGIN — see above.
+  const rates = quoteCurrencies.length > 0
+    ? await fetchOnezeFxProviderRates(baseCurrency, quoteCurrencies)
+    : {};
+
   const client = await db.connect();
   try {
     await client.query('BEGIN');
 
-    const configuredBaseCurrency = config.onezeFxProviderBaseCurrency.trim().toUpperCase();
-    const baseCurrency = configuredBaseCurrency.length === 3 ? configuredBaseCurrency : 'USD';
-
-    const activeCurrencies = await listActiveOnezePricingCurrencies(client);
-    const quoteCurrencies = Array.from(
-      new Set(
-        activeCurrencies
-          .map((currency) => currency.trim().toUpperCase())
-          .filter((currency) => currency !== baseCurrency)
-      )
+    // Multi-replica deploys fire this job on every instance — the advisory
+    // xact lock makes the tick single-writer per database. A replica that
+    // loses the race skips this run entirely (the winner's writes commit
+    // atomically with the lock release).
+    const lockResult = await client.query<{ acquired: boolean }>(
+      `SELECT pg_try_advisory_xact_lock(hashtext('oneze_fx_sync')) AS acquired`
     );
-
-    if (quoteCurrencies.length === 0) {
-      await client.query('COMMIT');
+    if (!lockResult.rows[0]?.acquired) {
+      await client.query('ROLLBACK');
       return {
         baseCurrency,
-        quotedCurrencies: 0,
+        quotedCurrencies: quoteCurrencies.length,
         updatedPairs: 0,
+        skippedConcurrentSync: true,
+        expiredQuotes: 0,
         fetchedAt: new Date().toISOString(),
       };
     }
 
-    const rates = await fetchOnezeFxProviderRates(baseCurrency, quoteCurrencies);
     let updatedPairs = 0;
 
     for (const quoteCurrency of quoteCurrencies) {
@@ -11235,8 +11284,29 @@ async function syncOnezeInternalFxRatesFromProvider(
         },
       });
 
+      // Tick history — feeds rate history and the fxEngine primary store
+      // (fx_rates is checked before oneze_internal_fx_rates).
+      await client.query(
+        `
+          INSERT INTO fx_rates (base, quote, rate, source, observed_at)
+          VALUES ($1, $2, $3, 'external_fx_provider', NOW())
+        `,
+        [baseCurrency, quoteCurrency, directRate]
+      );
+      await client.query(
+        `
+          INSERT INTO fx_rates (base, quote, rate, source, observed_at)
+          VALUES ($1, $2, $3, 'external_fx_provider', NOW())
+        `,
+        [quoteCurrency, baseCurrency, inverseRate]
+      );
+
       updatedPairs += 2;
     }
+
+    // Same job tick: sweep lapsed open quotes to 'expired' inside this tx so
+    // rate freshness and quote liveness stay on one schedule.
+    const expiredQuoteIds = await expireStaleFxQuotes(client);
 
     await client.query('COMMIT');
 
@@ -11244,6 +11314,7 @@ async function syncOnezeInternalFxRatesFromProvider(
       baseCurrency,
       quotedCurrencies: quoteCurrencies.length,
       updatedPairs,
+      expiredQuotes: expiredQuoteIds.length,
       fetchedAt: new Date().toISOString(),
     };
   } catch (error) {
@@ -13576,6 +13647,17 @@ type ProfileUserRow = {
 
 // â”€â”€ Auth routes (extracted to routes/auth.ts) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 registerAuthRoutes({ app, db, redis, fraudShadowService, ipReputationProvider });
+// The FX wallet routes share the 1ze reconciliation halt kill switch;
+// assertOnezeMintBurnNotHalted reads the flag from Redis, so it needs no
+// client despite the dep's (client) => Promise<void> shape.
+registerFxWalletRoutes({
+  app,
+  db,
+  resolveAuthenticatedUserId,
+  ensureWallet,
+  assertFxOperationsNotHalted: assertOnezeMintBurnNotHalted,
+  evaluateWalletCapability,
+});
 
 function normalizeAuthRole(role: string | null | undefined): AuthRole {
   if (role === 'seller' || role === 'moderator' || role === 'admin') {
@@ -22223,6 +22305,7 @@ app.post('/wallet/1ze/burn', async (request, reply) => {
           walletId: burnWallet.id,
           txId: walletTxId,
           asset: 'FIAT',
+          fiatCurrency,
           amount: -feeAmountMinor,
           kind: 'FEE',
           refType: 'platform_fx_fee',
@@ -22567,6 +22650,7 @@ app.post('/wallet/convert-1ze-to-fiat', async (request, reply) => {
         walletId: wallet.id,
         txId,
         asset: 'FIAT',
+        fiatCurrency,
         amount: -feeAmountMinor,
         kind: 'FEE',
         refType: 'platform_fx_fee',
@@ -22611,6 +22695,7 @@ app.post('/wallet/convert-1ze-to-fiat', async (request, reply) => {
       walletId: wallet.id,
       txId,
       asset: 'FIAT',
+      fiatCurrency,
       amount: netFiatAmountMinor,
       kind: 'CONVERT_FROM_1ZE',
       refType: '1ze_conversion',
@@ -22820,6 +22905,7 @@ app.post('/wallet/buy-1ze', async (request, reply) => {
       walletId: wallet.id,
       txId,
       asset: 'FIAT',
+      fiatCurrency,
       amount: -fiatAmountMinor,
       kind: 'BUY_1ZE',
       refType: '1ze_purchase',

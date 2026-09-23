@@ -54,6 +54,92 @@ async function loadWalletForUpdate(client: DbQueryable, walletId: string): Promi
   return wallet;
 }
 
+function normalizePocketCurrency(currency: string): string {
+  const normalized = currency.trim().toUpperCase();
+  if (!/^[A-Z0-9]{3}$/.test(normalized)) {
+    throw createApiError('WALLET_CURRENCY_INVALID', 'Currency must be a three-character code', {
+      currency,
+    });
+  }
+  return normalized;
+}
+
+/**
+ * Lock the per-currency pocket row for a wallet that is ALREADY locked FOR
+ * UPDATE. Deadlock-safe order, held by every writer in this module:
+ *   1. wallets row FOR UPDATE (loadWalletForUpdate / lockWalletRowsForUpdate)
+ *   2. wallet_currency_balances row(s) FOR UPDATE — this function, or the
+ *      batched lockCurrencyBalanceRowsForUpdate which locks in sorted order.
+ * No code path may take a pocket lock before the wallet lock.
+ *
+ * Missing pockets are seeded first (INSERT ... ON CONFLICT DO NOTHING, then
+ * SELECT FOR UPDATE — the insert itself takes no row lock worth ordering).
+ * The pocket matching the wallet's legacy fiat_currency seeds from
+ * wallets.fiat_balance_minor so balances recorded before the multi-currency
+ * table existed remain correct; every other currency starts at 0.
+ */
+async function lockCurrencyPocketForUpdate(
+  client: DbQueryable,
+  wallet: WalletRow,
+  currency: string
+): Promise<{ currency: string; balanceMinor: number }> {
+  const normalized = normalizePocketCurrency(currency);
+  const legacyCurrency = wallet.fiat_currency.trim().toUpperCase();
+  const seedMinor = normalized === legacyCurrency ? Number(wallet.fiat_balance_minor) : 0;
+
+  await client.query(
+    `
+      INSERT INTO wallet_currency_balances (
+        wallet_id,
+        currency,
+        balance_minor,
+        version,
+        created_at,
+        updated_at
+      )
+      VALUES ($1, $2, $3, 0, NOW(), NOW())
+      ON CONFLICT (wallet_id, currency) DO NOTHING
+    `,
+    [wallet.id, normalized, seedMinor]
+  );
+
+  const result = await client.query<{ balance_minor: string }>(
+    `
+      SELECT balance_minor::text AS balance_minor
+      FROM wallet_currency_balances
+      WHERE wallet_id = $1
+        AND currency = $2
+      LIMIT 1
+      FOR UPDATE
+    `,
+    [wallet.id, normalized]
+  );
+
+  return {
+    currency: normalized,
+    balanceMinor: Number(result.rows[0]?.balance_minor ?? seedMinor),
+  };
+}
+
+/**
+ * Canonical wallet balance mutation for both the 1ZE bucket and every fiat
+ * currency pocket.
+ *
+ * FIAT legs resolve their pocket currency from `fiatCurrency` (defaulting to
+ * the wallet's legacy fiat_currency so existing callers are unchanged), then:
+ *   - upsert + lock wallet_currency_balances(wallet_id, currency) and apply
+ *     the delta with the same negative-balance guard, computed from the
+ *     pocket row (the authoritative balance for that currency);
+ *   - when the resolved currency IS the legacy fiat_currency, mirror the new
+ *     balance into wallets.fiat_balance_minor exactly as before — every
+ *     pre-multi-currency caller keeps working untouched;
+ *   - when it differs, wallets.fiat_balance_minor is NOT touched — only the
+ *     pocket row and the ledger leg move.
+ *
+ * The wallet_ledger leg always stamps `currency` ('1ZE' for token legs, the
+ * resolved code for fiat legs) and `balance_after` reflects the pocket the
+ * leg moved.
+ */
 export async function applyWalletLedgerDelta(
   client: DbQueryable,
   input: {
@@ -66,6 +152,8 @@ export async function applyWalletLedgerDelta(
     refId?: string;
     anchorValueInInr?: number;
     metadata?: Record<string, unknown>;
+    /** FIAT legs only — the pocket currency. Defaults to wallets.fiat_currency. */
+    fiatCurrency?: string;
   }
 ): Promise<number> {
   if (!Number.isSafeInteger(input.amount)) {
@@ -73,21 +161,23 @@ export async function applyWalletLedgerDelta(
   }
 
   const wallet = await loadWalletForUpdate(client, input.walletId);
-  const currentBalance = Number(
-    input.asset === '1ZE' ? wallet.oneze_balance_units : wallet.fiat_balance_minor
-  );
-  const nextBalance = currentBalance + input.amount;
 
-  if (nextBalance < 0) {
-    throw createApiError('WALLET_INSUFFICIENT_BALANCE', 'Wallet balance is insufficient for this operation', {
-      walletId: input.walletId,
-      asset: input.asset,
-      currentBalance,
-      attemptedDelta: input.amount,
-    });
-  }
+  let nextBalance: number;
+  let ledgerCurrency: string;
 
   if (input.asset === '1ZE') {
+    const currentBalance = Number(wallet.oneze_balance_units);
+    nextBalance = currentBalance + input.amount;
+
+    if (nextBalance < 0) {
+      throw createApiError('WALLET_INSUFFICIENT_BALANCE', 'Wallet balance is insufficient for this operation', {
+        walletId: input.walletId,
+        asset: input.asset,
+        currentBalance,
+        attemptedDelta: input.amount,
+      });
+    }
+
     await client.query(
       `
         UPDATE wallets
@@ -99,18 +189,52 @@ export async function applyWalletLedgerDelta(
       `,
       [input.walletId, nextBalance]
     );
+    ledgerCurrency = '1ZE';
   } else {
+    const resolvedCurrency = normalizePocketCurrency(input.fiatCurrency ?? wallet.fiat_currency);
+    const pocket = await lockCurrencyPocketForUpdate(client, wallet, resolvedCurrency);
+    nextBalance = pocket.balanceMinor + input.amount;
+
+    if (nextBalance < 0) {
+      throw createApiError('WALLET_INSUFFICIENT_BALANCE', 'Wallet balance is insufficient for this operation', {
+        walletId: input.walletId,
+        asset: input.asset,
+        currency: pocket.currency,
+        currentBalance: pocket.balanceMinor,
+        attemptedDelta: input.amount,
+      });
+    }
+
     await client.query(
       `
-        UPDATE wallets
+        UPDATE wallet_currency_balances
         SET
-          fiat_balance_minor = $2,
+          balance_minor = $3,
           version = version + 1,
           updated_at = NOW()
-        WHERE id = $1
+        WHERE wallet_id = $1
+          AND currency = $2
       `,
-      [input.walletId, nextBalance]
+      [input.walletId, pocket.currency, nextBalance]
     );
+
+    // Legacy mirror: the single-fiat bucket on wallets stays the
+    // compatibility view of ITS OWN currency only. Foreign pockets leave it
+    // untouched.
+    if (pocket.currency === wallet.fiat_currency.trim().toUpperCase()) {
+      await client.query(
+        `
+          UPDATE wallets
+          SET
+            fiat_balance_minor = $2,
+            version = version + 1,
+            updated_at = NOW()
+          WHERE id = $1
+        `,
+        [input.walletId, nextBalance]
+      );
+    }
+    ledgerCurrency = pocket.currency;
   }
 
   await client.query(
@@ -125,9 +249,10 @@ export async function applyWalletLedgerDelta(
         ref_type,
         ref_id,
         anchor_value_in_inr,
-        metadata
+        metadata,
+        currency
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11)
     `,
     [
       input.walletId,
@@ -140,6 +265,7 @@ export async function applyWalletLedgerDelta(
       input.refId ?? null,
       input.anchorValueInInr ?? null,
       toJsonString(input.metadata ?? {}),
+      ledgerCurrency,
     ]
   );
 
@@ -343,6 +469,254 @@ export async function assertSpendableOnezeUnits(
       reservedUnits: funds.reservedUnits,
       spendableUnits: funds.spendableUnits,
       requiredUnits: input.requiredUnits,
+    });
+  }
+
+  return funds;
+}
+
+// ─── Multi-currency fiat pockets ─────────────────────────────────────────────
+// wallet_currency_balances holds one row per (wallet_id, currency); the
+// legacy wallets.fiat_balance_minor remains the compatibility mirror for the
+// wallet's own fiat_currency only (see applyWalletLedgerDelta).
+//
+// Lock discipline is identical to the 1ZE spendable primitive: the wallets
+// row is locked FOR UPDATE first, then pocket rows — so a concurrent
+// mutation serialized on the wallet lock cannot move the answer after it is
+// computed. Every mutation of a pocket must go through
+// applyWalletLedgerDelta (or lock the rows via lockCurrencyBalanceRowsForUpdate
+// before mutating) so this order can never invert.
+
+export interface WalletCurrencyBalance {
+  walletId: string;
+  currency: string;
+  balanceMinor: number;
+  version: number;
+}
+
+/**
+ * Read one currency pocket. With `lock: true` the wallets row is locked FOR
+ * UPDATE first (deadlock-safe order), then the pocket row FOR UPDATE —
+ * intended for callers about to debit the pocket inside their transaction.
+ * Returns null when the wallet or the pocket does not exist.
+ */
+export async function getCurrencyBalance(
+  client: DbQueryable,
+  walletId: string,
+  currency: string,
+  options?: { lock?: boolean }
+): Promise<WalletCurrencyBalance | null> {
+  const normalized = normalizePocketCurrency(currency);
+
+  if (options?.lock) {
+    const wallet = await client.query<{ id: string }>(
+      `SELECT id FROM wallets WHERE id = $1 LIMIT 1 FOR UPDATE`,
+      [walletId]
+    );
+    if (!wallet.rows[0]) {
+      return null;
+    }
+  }
+
+  const result = await client.query<{ balance_minor: string; version: string }>(
+    `
+      SELECT balance_minor::text AS balance_minor, version::text AS version
+      FROM wallet_currency_balances
+      WHERE wallet_id = $1
+        AND currency = $2
+      LIMIT 1
+      ${options?.lock ? 'FOR UPDATE' : ''}
+    `,
+    [walletId, normalized]
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    return null;
+  }
+
+  return {
+    walletId,
+    currency: normalized,
+    balanceMinor: Number(row.balance_minor),
+    version: Number(row.version),
+  };
+}
+
+/**
+ * Seed-if-missing then lock several currency pockets in one deterministic
+ * order: wallets row FOR UPDATE first (inside loadWalletForUpdate), then
+ * pocket rows FOR UPDATE in sorted currency order via a single locked read.
+ * Callers mutating more than one pocket in one transaction (e.g. an FX
+ * conversion debiting one currency and crediting another) acquire their
+ * locks through this helper so opposite-order mutations cannot deadlock.
+ * Returns the locked balances keyed by currency.
+ */
+export async function lockCurrencyBalanceRowsForUpdate(
+  client: DbQueryable,
+  walletId: string,
+  currencies: readonly string[]
+): Promise<Map<string, number>> {
+  const wallet = await loadWalletForUpdate(client, walletId);
+  const normalized = [...new Set(currencies.map((c) => normalizePocketCurrency(c)))].sort();
+  const balances = new Map<string, number>();
+  if (normalized.length === 0) {
+    return balances;
+  }
+
+  for (const currency of normalized) {
+    const seedMinor =
+      currency === wallet.fiat_currency.trim().toUpperCase()
+        ? Number(wallet.fiat_balance_minor)
+        : 0;
+    await client.query(
+      `
+        INSERT INTO wallet_currency_balances (
+          wallet_id,
+          currency,
+          balance_minor,
+          version,
+          created_at,
+          updated_at
+        )
+        VALUES ($1, $2, $3, 0, NOW(), NOW())
+        ON CONFLICT (wallet_id, currency) DO NOTHING
+      `,
+      [wallet.id, currency, seedMinor]
+    );
+  }
+
+  const result = await client.query<{ currency: string; balance_minor: string }>(
+    `
+      SELECT currency, balance_minor::text AS balance_minor
+      FROM wallet_currency_balances
+      WHERE wallet_id = $1
+        AND currency = ANY($2::char(3)[])
+      ORDER BY currency
+      FOR UPDATE
+    `,
+    [wallet.id, normalized]
+  );
+
+  for (const row of result.rows) {
+    balances.set(row.currency, Number(row.balance_minor));
+  }
+  return balances;
+}
+
+export interface SpendableFiatFunds {
+  walletId: string | null;
+  userId: string;
+  currency: string;
+  /** Settled wallet_currency_balances.balance_minor (or the legacy mirror). */
+  grossMinor: number;
+  /**
+   * Minor units committed to enforceable holds. No fiat hold sources exist
+   * yet — this is the extension point: subtract future hold tables here and
+   * surface contributing ids in holdSources, mirroring reservedUnits /
+   * reservationIds on SpendableOnezeFunds.
+   */
+  heldMinor: number;
+  /** max(0, gross - held) — what a new debit may consume. */
+  spendableMinor: number;
+  /** Hold-source row ids contributing to heldMinor (for diagnostics). */
+  holdSources: string[];
+}
+
+/**
+ * Spendable balance of one fiat currency pocket: gross minus enforceable
+ * holds (none exist yet, so spendable = gross). Lock order matches
+ * computeSpendableOnezeUnits — wallet row FOR UPDATE, then the pocket row —
+ * so callers that debit inside their own transaction get a stable answer.
+ *
+ * When the requested currency is the wallet's legacy fiat_currency and no
+ * pocket row exists yet (pre-backfill), the legacy wallets.fiat_balance_minor
+ * is the effective gross — same lazy-seed semantics as the mutation path.
+ */
+export async function computeSpendableFiatMinor(
+  client: DbQueryable,
+  input: {
+    userId?: string;
+    walletId?: string;
+    currency: string;
+  }
+): Promise<SpendableFiatFunds> {
+  if (!input.walletId && !input.userId) {
+    throw createApiError('WALLET_LOOKUP_INVALID', 'computeSpendableFiatMinor requires a walletId or userId');
+  }
+
+  const wallet = input.walletId
+    ? await loadWalletForUpdate(client, input.walletId)
+    : await loadWalletForUpdateByUserId(client, input.userId!);
+
+  const userId = input.userId ?? wallet?.user_id;
+  if (!userId) {
+    throw createApiError('WALLET_NOT_FOUND', 'Wallet not found', {
+      walletId: input.walletId ?? null,
+      userId: input.userId ?? null,
+    });
+  }
+
+  const currency = normalizePocketCurrency(input.currency);
+  const legacyCurrency = wallet?.fiat_currency.trim().toUpperCase();
+
+  const pocket = await client.query<{ balance_minor: string }>(
+    `
+      SELECT balance_minor::text AS balance_minor
+      FROM wallet_currency_balances
+      WHERE wallet_id = $1
+        AND currency = $2
+      LIMIT 1
+      FOR UPDATE
+    `,
+    [wallet?.id ?? input.walletId ?? null, currency]
+  );
+
+  const grossMinor = pocket.rows[0]
+    ? Number(pocket.rows[0].balance_minor)
+    : wallet && currency === legacyCurrency
+      ? Number(wallet.fiat_balance_minor)
+      : 0;
+
+  // Future fiat hold sources (reservations, pending transfers) subtract here.
+  const heldMinor = 0;
+
+  return {
+    walletId: wallet?.id ?? null,
+    userId,
+    currency,
+    grossMinor,
+    heldMinor,
+    spendableMinor: Math.max(0, grossMinor - heldMinor),
+    holdSources: [],
+  };
+}
+
+/**
+ * Assert the wallet can fund a `requiredMinor` debit from the currency
+ * pocket's spendable funds. Mirrors assertSpendableOnezeUnits.
+ */
+export async function assertSpendableFiatMinor(
+  client: DbQueryable,
+  input: {
+    userId?: string;
+    walletId?: string;
+    currency: string;
+    requiredMinor: number;
+  }
+): Promise<SpendableFiatFunds> {
+  const funds = await computeSpendableFiatMinor(client, input);
+
+  if (funds.spendableMinor < input.requiredMinor) {
+    throw createApiError('WALLET_INSUFFICIENT_BALANCE', 'Wallet spendable balance is insufficient for this operation', {
+      walletId: funds.walletId,
+      userId: funds.userId,
+      asset: 'FIAT',
+      currency: funds.currency,
+      grossMinor: funds.grossMinor,
+      heldMinor: funds.heldMinor,
+      spendableMinor: funds.spendableMinor,
+      requiredMinor: input.requiredMinor,
     });
   }
 

@@ -1,8 +1,9 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { logger } from '../lib/logger.js';
 import { resolveMessageBody } from '../lib/messageEncryption.js';
 import { AI_RATE_LIMITS, computeRetryDelayMs } from '../lib/aiTruth.js';
+import { calculateAiCostMicrousd, type AiProviderUsage } from '../lib/aiUsage.js';
 import type { SupportKnowledgeSearchResult } from './contracts.js';
 import type { RoutingResult } from './routingService.js';
 import { routeMessage } from './routingService.js';
@@ -159,11 +160,34 @@ function buildSystemPrompt(
   return parts.join('\n\n');
 }
 
+function extractResponseUsage(payload: unknown): AiProviderUsage {
+  const zero = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+  if (!payload || typeof payload !== 'object') return zero;
+  const usage = (payload as Record<string, unknown>).usage;
+  if (!usage || typeof usage !== 'object') return zero;
+  const record = usage as Record<string, unknown>;
+  const asInt = (v: unknown) =>
+    typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.trunc(v) : 0;
+  const inputTokens = asInt(record.input_tokens);
+  const outputTokens = asInt(record.output_tokens);
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens: Math.max(asInt(record.total_tokens), inputTokens + outputTokens),
+  };
+}
+
+interface ProviderTurnResult {
+  text: string;
+  usage: AiProviderUsage;
+  providerRequestId: string | null;
+}
+
 async function callOpenAIResponses(
   systemPrompt: string,
   customerMessage: string,
   userId: string,
-): Promise<string> {
+): Promise<ProviderTurnResult> {
   if (!runtimeConfig.apiKey) {
     throw new Error('AI provider is not configured');
   }
@@ -212,7 +236,13 @@ async function callOpenAIResponses(
         if (!text) {
           throw new Error('AI provider returned an empty response');
         }
-        return text;
+        const payloadRecord = payload as Record<string, unknown>;
+        return {
+          text,
+          usage: extractResponseUsage(payload),
+          providerRequestId:
+            typeof payloadRecord.id === 'string' ? payloadRecord.id : null,
+        };
       }
 
       const retryable =
@@ -263,6 +293,75 @@ function validateCitations(
   );
 }
 
+/**
+ * Persists a `support_agent_runs` trace row — the metering/cost surface for
+ * support turns (costTelemetry reads tokens + cost_micros from this table;
+ * retention and erasure already cover it). Best-effort: a metering failure
+ * must never break the customer-facing turn, so errors are logged and
+ * swallowed.
+ */
+async function recordSupportAgentRun(
+  db: Pool,
+  input: {
+    conversationId: string;
+    messageId: string;
+    usage: AiProviderUsage;
+    latencyMs: number;
+    providerRequestId: string | null;
+    knowledgeResults: SupportKnowledgeSearchResult[];
+    validatorOutcomes: Record<string, unknown>[];
+    toolCalls?: unknown[];
+    toolResults?: unknown[];
+  },
+): Promise<void> {
+  try {
+    await db.query(
+      `
+        INSERT INTO support_agent_runs (
+          id, conversation_id, message_id,
+          agent_version, model_provider, model_snapshot,
+          policy_version_ids, knowledge_version_ids,
+          tool_calls, tool_results, validator_outcomes,
+          input_tokens, output_tokens, total_tokens,
+          latency_ms, cost_micros
+        )
+        VALUES ($1, $2, $3, $4, 'openai', $5, '[]'::jsonb, $6::jsonb,
+                $7::jsonb, $8::jsonb, $9::jsonb,
+                $10, $11, $12, $13, $14)
+      `,
+      [
+        `srun_${randomUUID()}`,
+        input.conversationId,
+        input.messageId,
+        'support-agent/v1',
+        runtimeConfig.defaultModel,
+        JSON.stringify(
+          input.knowledgeResults
+            .map((r) => r.articleVersionId)
+            .filter((v): v is string => typeof v === 'string' && v.length > 0),
+        ),
+        JSON.stringify(input.toolCalls ?? []),
+        JSON.stringify(input.toolResults ?? []),
+        JSON.stringify(input.validatorOutcomes),
+        input.usage.inputTokens,
+        input.usage.outputTokens,
+        input.usage.totalTokens,
+        Math.max(0, Math.round(input.latencyMs)),
+        calculateAiCostMicrousd(input.usage),
+      ],
+    );
+  } catch (err) {
+    logger.error(
+      {
+        conversationId: input.conversationId,
+        messageId: input.messageId,
+        err: err instanceof Error ? err.message : String(err),
+      },
+      '[supportAgentTurn] failed to record support_agent_runs row',
+    );
+  }
+}
+
 async function projectExtendedContext(
   db: Pool,
   contextKind: string,
@@ -301,6 +400,12 @@ export async function processSupportTurn(
   conversationId: string,
   customerMessageId: string,
 ): Promise<AgentTurnResult> {
+  const turnStartedAt = Date.now();
+  const emptyUsage: AiProviderUsage = {
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+  };
   const emptyResult: AgentTurnResult = {
     conversationId,
     messageId: null,
@@ -400,7 +505,7 @@ export async function processSupportTurn(
 
     await updateOwnershipState(db, conversationId, 'human_queued');
 
-    await appendMessage(
+    const handoffNotice = await appendMessage(
       db,
       conversationId,
       null,
@@ -409,6 +514,18 @@ export async function processSupportTurn(
     );
 
     evidenceSignals.push('mandatory_handoff_triggered');
+
+    await recordSupportAgentRun(db, {
+      conversationId,
+      messageId: handoffNotice.id,
+      usage: emptyUsage,
+      latencyMs: Date.now() - turnStartedAt,
+      providerRequestId: null,
+      knowledgeResults: [],
+      validatorOutcomes: [
+        { validator: 'risk_routing', passed: true, outcome: 'mandatory_handoff' },
+      ],
+    });
 
     logger.info(
       { conversationId, handoffId: handoff.id, reason: routing.handoffReason },
@@ -472,9 +589,9 @@ export async function processSupportTurn(
   );
 
   // 9. Call OpenAI Responses API.
-  let responseText: string;
+  let providerTurn: ProviderTurnResult;
   try {
-    responseText = await callOpenAIResponses(
+    providerTurn = await callOpenAIResponses(
       systemPrompt,
       customerMessage.body,
       conversation.userId,
@@ -496,6 +613,22 @@ export async function processSupportTurn(
     // Transition to human queue on AI failure.
     await updateOwnershipState(db, conversationId, 'human_queued');
 
+    await recordSupportAgentRun(db, {
+      conversationId,
+      messageId: fallbackMessage.id,
+      usage: emptyUsage,
+      latencyMs: Date.now() - turnStartedAt,
+      providerRequestId: null,
+      knowledgeResults,
+      validatorOutcomes: [
+        {
+          validator: 'provider_call',
+          passed: false,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      ],
+    });
+
     return {
       conversationId,
       messageId: fallbackMessage.id,
@@ -508,6 +641,7 @@ export async function processSupportTurn(
   }
 
   // 10. Validate the response has supporting citations for policy claims.
+  const responseText = providerTurn.text;
   const citationsValid = validateCitations(responseText, knowledgeResults);
   if (!citationsValid) {
     evidenceSignals.push('citation_validation_failed');
@@ -534,6 +668,18 @@ export async function processSupportTurn(
       citationValidationPassed: citationsValid,
     },
   );
+
+  await recordSupportAgentRun(db, {
+    conversationId,
+    messageId: aiMessage.id,
+    usage: providerTurn.usage,
+    latencyMs: Date.now() - turnStartedAt,
+    providerRequestId: providerTurn.providerRequestId,
+    knowledgeResults,
+    validatorOutcomes: [
+      { validator: 'citation_check', passed: citationsValid },
+    ],
+  });
 
   if (contextProjection) {
     const status = (contextProjection as Record<string, unknown>).status;

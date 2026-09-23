@@ -43,6 +43,7 @@ declare module 'i18next' {
       stateCopy: (typeof flattenedResources)['stateCopy'];
       creator: (typeof flattenedResources)['creator'];
       visualSearch: (typeof flattenedResources)['visualSearch'];
+      walletFx: (typeof flattenedResources)['walletFx'];
     };
   }
 }

@@ -1,7 +1,14 @@
 import { createHash, randomBytes } from 'node:crypto';
+import type { Pool } from 'pg';
+import { withActorContext } from '../db/pool.js';
 import type { BotRuntimeContext, BotHandlerResult, AgentStreamChunkHandler } from './types.js';
 import { AI_RATE_LIMITS, computeRetryDelayMs } from '../lib/aiTruth.js';
 import { canonicalizeJson } from '../lib/canonicalJson.js';
+import { executeAgentTool } from './toolExecutors.js';
+import {
+  recallAgentMemories,
+  formatMemoriesForPrompt,
+} from '../lib/agentMemory.js';
 import {
   loadEnabledTools,
   loadToolBindings,
@@ -14,6 +21,13 @@ import {
 
 /** Minimal queryable — a Pool or a PoolClient both satisfy this. */
 type AgentDb = ToolRegistryDb;
+
+/**
+ * Hard cap on tool-call rounds per run. A model that keeps proposing tools
+ * past this point gets an honest "ran out of steps" reply rather than an
+ * unbounded loop that spends quota.
+ */
+const MAX_TOOL_ROUNDS = 4;
 
 const runtimeConfig = {
   apiKey: process.env.OPENAI_API_KEY?.trim() || null,
@@ -270,6 +284,63 @@ function buildRequestBody(
 // call_id. The server policy engine decides whether to allow, require
 // approval, or deny each proposed call.
 
+// ── Run-step instrumentation ───────────────────────────────────────────
+//
+// agent_run_steps (migration 224) is the durable trace surface: one row per
+// model call, tool call, retrieval and approval within a run. Step numbers
+// continue from the existing MAX so a resumed run appends rather than
+// colliding on UNIQUE(run_id, step_number). Writes are best-effort — a
+// trace failure must never fail the user's reply.
+
+interface RunRecorder {
+  record(
+    stepType: 'model_call' | 'tool_call' | 'retrieval' | 'guardrail' | 'approval' | 'retry' | 'handoff',
+    status: 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped',
+    inputSummary: string | null,
+    outputSummary: string | null,
+    metadata?: Record<string, unknown>,
+  ): Promise<void>;
+}
+
+async function createRunRecorder(db: AgentDb | undefined, runId: string | undefined): Promise<RunRecorder> {
+  let next = 1;
+  if (db && runId) {
+    try {
+      const res = await db.query<{ n: string | number }>(
+        `SELECT COALESCE(MAX(step_number), 0) + 1 AS n FROM agent_run_steps WHERE run_id = $1`,
+        [runId],
+      );
+      next = Number(res.rows[0]?.n) || 1;
+    } catch {
+      next = 1;
+    }
+  }
+  return {
+    async record(stepType, status, inputSummary, outputSummary, metadata = {}) {
+      if (!db || !runId) return;
+      const stepNumber = next++;
+      try {
+        await db.query(
+          `INSERT INTO agent_run_steps (id, run_id, step_number, step_type, status, input_summary, output_summary, metadata)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)`,
+          [
+            `step_${runId}_${stepNumber}`,
+            runId,
+            stepNumber,
+            stepType,
+            status,
+            inputSummary ? inputSummary.slice(0, 400) : null,
+            outputSummary ? outputSummary.slice(0, 400) : null,
+            JSON.stringify(metadata),
+          ],
+        );
+      } catch {
+        // Trace writes are observability, not control flow.
+      }
+    },
+  };
+}
+
 interface ProposedToolCall {
   callId: string;
   name: string;
@@ -309,35 +380,27 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Process proposed tool calls through the policy engine. Returns a
- * BotHandlerResult describing the outcome. When a tool call requires
- * approval and both `db` and `runId` are available, a durable approval
- * request row is created so the run can be resumed after the user decides.
+ * Resolve proposed tool calls through the policy engine and EXECUTE the
+ * allowed ones. Returns either a set of function_call_output items to feed
+ * back to the model, or a waiting state when any call requires approval.
+ * When approval is required, nothing in the batch executes — the whole
+ * batch is re-proposed on resume so a human decision precedes every
+ * consequential action.
  */
-async function processToolCalls(
+async function resolveToolCalls(
   ctx: BotRuntimeContext,
   toolCalls: ProposedToolCall[],
   tools: ToolDefinition[],
   bindings: ToolBinding[],
-  payload: unknown,
-  attempt: number,
-  startedAtMs: number,
-  db?: AgentDb,
-  runId?: string,
-): Promise<BotHandlerResult> {
+  db: AgentDb | undefined,
+  runId: string | undefined,
+  recorder: RunRecorder,
+): Promise<
+  | { waiting: true; pendingApprovals: string[] }
+  | { waiting: false; outputs: Array<{ type: 'function_call_output'; call_id: string; output: string }>; executedTools: string[]; deniedTools: string[] }
+> {
   const bindingMap = new Map(bindings.map((b) => [b.toolName, b]));
   const toolMap = new Map(tools.map((t) => [t.name, t]));
-  const providerUsage = extractProviderUsage(payload);
-  const responseRecord = payload && typeof payload === 'object'
-    ? payload as Record<string, unknown>
-    : {};
-
-  const approvedCalls: string[] = [];
-  const deniedCalls: string[] = [];
-  const pendingApprovals: string[] = [];
-  // Effective arguments per allowed call — an approver's edited_arguments
-  // win over the model's proposed arguments.
-  const effectiveArgumentsByCall = new Map<string, Record<string, unknown>>();
 
   // Prior human approvals for this run — an approved request lets the
   // matching tool call proceed when the run resumes after the user's
@@ -346,27 +409,34 @@ async function processToolCalls(
   // shares the tool name. A row matches either its original proposed
   // arguments or its edited_arguments (the approver's amended call).
   const approvedArguments = new Map<string, Record<string, unknown>>();
+  const rejectedCalls = new Set<string>();
   if (db && runId) {
     const priorApprovals = await db.query<{
       tool_name: string;
       tool_arguments: unknown;
       edited_arguments: unknown;
+      status: string;
     }>(
-      `SELECT tool_name, tool_arguments, edited_arguments FROM agent_approval_requests
-       WHERE run_id = $1 AND status = 'approved'
-         AND (expires_at IS NULL OR expires_at > NOW())`,
+      `SELECT tool_name, tool_arguments, edited_arguments, status FROM agent_approval_requests
+       WHERE run_id = $1 AND status IN ('approved', 'rejected')
+         AND (expires_at IS NULL OR expires_at > NOW() OR status = 'rejected')`,
       [runId],
     );
     for (const row of priorApprovals.rows) {
+      const proposedKey = `${row.tool_name}:${canonicalizeJson(row.tool_arguments ?? {})}`;
+      if (row.status === 'rejected') {
+        // A decided rejection is terminal for that call shape — without
+        // this gate a resumed run re-proposes the same call, policy asks
+        // again, and the user is trapped in an approve/reject loop.
+        rejectedCalls.add(proposedKey);
+        continue;
+      }
       const effective = isPlainObject(row.edited_arguments)
         ? row.edited_arguments
         : isPlainObject(row.tool_arguments)
           ? row.tool_arguments
           : {};
-      approvedArguments.set(
-        `${row.tool_name}:${canonicalizeJson(row.tool_arguments ?? {})}`,
-        effective,
-      );
+      approvedArguments.set(proposedKey, effective);
       if (isPlainObject(row.edited_arguments)) {
         approvedArguments.set(
           `${row.tool_name}:${canonicalizeJson(row.edited_arguments)}`,
@@ -376,17 +446,39 @@ async function processToolCalls(
     }
   }
 
+  const outputs: Array<{ type: 'function_call_output'; call_id: string; output: string }> = [];
+  const executedTools: string[] = [];
+  const deniedTools: string[] = [];
+  const pendingApprovals: string[] = [];
+
   for (const call of toolCalls) {
     const tool = toolMap.get(call.name);
     if (!tool) {
-      deniedCalls.push(`${call.name} (unknown tool)`);
+      deniedTools.push(`${call.name} (unknown tool)`);
+      outputs.push({
+        type: 'function_call_output',
+        call_id: call.callId,
+        output: JSON.stringify({ error: `unknown tool '${call.name}'` }),
+      });
       continue;
     }
 
     const proposedArgs = parseToolArguments(call.arguments);
-    const priorApproval = approvedArguments.get(
-      `${call.name}:${canonicalizeJson(proposedArgs)}`,
-    );
+    const callKey = `${call.name}:${canonicalizeJson(proposedArgs)}`;
+
+    if (rejectedCalls.has(callKey)) {
+      deniedTools.push(`${call.name} (rejected by user)`);
+      outputs.push({
+        type: 'function_call_output',
+        call_id: call.callId,
+        output: JSON.stringify({
+          error: 'the user rejected this action — do not retry it in this run',
+        }),
+      });
+      continue;
+    }
+
+    const priorApproval = approvedArguments.get(callKey);
     // The effective call is what the human approved — edited arguments
     // replace the model's proposal when the approver amended them.
     const effectiveArgs = priorApproval ?? proposedArgs;
@@ -399,99 +491,142 @@ async function processToolCalls(
       priorApproval !== undefined,
     );
 
-    if (decision.decision === 'allow') {
-      approvedCalls.push(call.name);
-      effectiveArgumentsByCall.set(call.callId, effectiveArgs);
-      // Phase 5: tool execution is minimal — actual execution is Phase 6.
-      // We log the call (with its effective arguments) but return a
-      // placeholder result.
-    } else if (decision.decision === 'require_approval') {
-      pendingApprovals.push(call.name);
-
-      // Create a durable approval request when we have db + runId.
-      if (db && runId) {
-        try {
-          const approvalId = `apr_${randomBytes(12).toString('hex')}`;
-          const continuationToken = createHash('sha256')
-            .update(`${runId}:${call.callId}:${call.name}`)
-            .digest('hex');
-          const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
-
-          await db.query(
-            `INSERT INTO agent_approval_requests
-               (id, run_id, bot_id, conversation_id, actor_user_id, tool_name, tool_arguments, continuation_token, status, expires_at, metadata)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10)`,
-            [
-              approvalId,
-              runId,
-              ctx.botId,
-              ctx.conversationId,
-              ctx.actorUserId,
-              call.name,
-              JSON.stringify(parseToolArguments(call.arguments)),
-              continuationToken,
-              expiresAt,
-              JSON.stringify({ callId: call.callId, reason: decision.reason }),
-            ],
-          );
-        } catch {
-          // Approval persistence is best-effort in this phase; the
-          // waiting result is still returned so the caller can react.
-        }
+    if (decision.decision === 'require_approval') {
+      // An approval checkpoint only exists if the row persists — a run
+      // that claims to be waiting without a durable approval is a lie the
+      // user can never resolve. Failure to persist is therefore a hard
+      // denial for this call, not a waiting state.
+      if (!db || !runId) {
+        deniedTools.push(`${call.name} (approval required but no durable run context)`);
+        outputs.push({
+          type: 'function_call_output',
+          call_id: call.callId,
+          output: JSON.stringify({
+            error: `${call.name} requires human approval, which is unavailable in this context`,
+          }),
+        });
+        continue;
       }
-    } else {
-      deniedCalls.push(`${call.name} (${decision.reason})`);
+
+      try {
+        const approvalId = `apr_${randomBytes(12).toString('hex')}`;
+        const continuationToken = createHash('sha256')
+          .update(`${runId}:${call.callId}:${call.name}`)
+          .digest('hex');
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
+
+        await db.query(
+          `INSERT INTO agent_approval_requests
+             (id, run_id, bot_id, conversation_id, actor_user_id, tool_name, tool_arguments, continuation_token, status, expires_at, metadata)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10)`,
+          [
+            approvalId,
+            runId,
+            ctx.botId,
+            ctx.conversationId,
+            ctx.actorUserId,
+            call.name,
+            JSON.stringify(proposedArgs),
+            continuationToken,
+            expiresAt,
+            JSON.stringify({ callId: call.callId, reason: decision.reason }),
+          ],
+        );
+        pendingApprovals.push(call.name);
+        await recorder.record(
+          'approval',
+          'pending',
+          `${call.name} ${JSON.stringify(proposedArgs).slice(0, 200)}`,
+          `approval ${approvalId}`,
+          { approvalId, reason: decision.reason },
+        );
+      } catch (approvalError) {
+        deniedTools.push(`${call.name} (approval persistence failed)`);
+        outputs.push({
+          type: 'function_call_output',
+          call_id: call.callId,
+          output: JSON.stringify({
+            error: `${call.name} requires approval but the checkpoint could not be recorded`,
+          }),
+        });
+        await recorder.record(
+          'approval',
+          'failed',
+          call.name,
+          approvalError instanceof Error ? approvalError.message.slice(0, 200) : 'persistence failed',
+        );
+      }
+      continue;
     }
-  }
 
-  // If any tool calls require approval, return a waiting result.
-  if (pendingApprovals.length > 0) {
-    const text = `${ctx.botName}: I need approval before I can proceed with: ${pendingApprovals.join(', ')}. A human reviewer will need to approve this action.`;
-    return {
-      text,
-      shouldReply: true,
-      confidence: 1.0,
-      explanation: `Agent proposed tool call(s) requiring approval: ${pendingApprovals.join(', ')}. The run is paused pending human decision.`,
-      needsHumanReview: true,
-      metadata: {
-        agentRuntime: 'openai-responses',
-        model: typeof responseRecord.model === 'string'
-          ? responseRecord.model
-          : ctx.agentConfig!.model,
-        providerRequestId: typeof responseRecord.id === 'string'
-          ? responseRecord.id
-          : null,
-        providerUsage,
-        providerLatencyMs: Date.now() - startedAtMs,
-        attempt,
-        toolCalls: toolCalls.map((c) => ({ name: c.name, callId: c.callId })),
-        pendingApprovals,
-        waitingForApproval: true,
-        runId: runId ?? null,
-      },
-    };
-  }
+    if (decision.decision === 'deny') {
+      deniedTools.push(`${call.name} (${decision.reason})`);
+      outputs.push({
+        type: 'function_call_output',
+        call_id: call.callId,
+        output: JSON.stringify({ error: `denied: ${decision.reason}` }),
+      });
+      continue;
+    }
 
-  // All tool calls were either allowed or denied. Return a summary.
-  const parts: string[] = [];
-  if (approvedCalls.length > 0) {
-    parts.push(
-      `I can help with that — the following action(s) are allowed: ${approvedCalls.join(', ')}. ` +
-      'They have not been run; action execution is not available yet.',
+    // Allowed — execute for real.
+    const result = db
+      ? await executeAgentTool(db, ctx, call.name, effectiveArgs)
+      : failResult('tool execution requires a database context');
+    executedTools.push(call.name);
+    outputs.push({
+      type: 'function_call_output',
+      call_id: call.callId,
+      output: result.output,
+    });
+    await recorder.record(
+      'tool_call',
+      result.success ? 'succeeded' : 'failed',
+      `${call.name} ${JSON.stringify(effectiveArgs).slice(0, 200)}`,
+      result.output.slice(0, 380),
     );
   }
-  if (deniedCalls.length > 0) {
-    parts.push(`I wasn't able to proceed with: ${deniedCalls.join(', ')}.`);
-  }
-  const text = parts.length > 0
-    ? `${ctx.botName}: ${parts.join(' ')}`
-    : `${ctx.botName}: I received a tool request but could not process it.`;
 
+  if (pendingApprovals.length > 0) {
+    return { waiting: true, pendingApprovals };
+  }
+  return { waiting: false, outputs, executedTools, deniedTools };
+}
+
+function failResult(message: string): { success: boolean; output: string } {
+  return { success: false, output: JSON.stringify({ error: message }) };
+}
+
+/** The response's raw function_call items — replayed into the next input. */
+function extractFunctionCallItems(payload: unknown): unknown[] {
+  if (!payload || typeof payload !== 'object') return [];
+  const output = (payload as Record<string, unknown>).output;
+  if (!Array.isArray(output)) return [];
+  return output.filter(
+    (item) => item && typeof item === 'object' && (item as Record<string, unknown>).type === 'function_call',
+  );
+}
+
+function buildWaitingForApprovalResult(
+  ctx: BotRuntimeContext,
+  payload: unknown,
+  toolCalls: ProposedToolCall[],
+  pendingApprovals: string[],
+  attempt: number,
+  startedAtMs: number,
+  runId: string | undefined,
+): BotHandlerResult {
+  const providerUsage = extractProviderUsage(payload);
+  const responseRecord = payload && typeof payload === 'object'
+    ? payload as Record<string, unknown>
+    : {};
+  const text = `${ctx.botName}: I need approval before I can proceed with: ${pendingApprovals.join(', ')}. A human reviewer will need to approve this action.`;
   return {
     text,
     shouldReply: true,
-    confidence: 0.8,
-    explanation: `Agent proposed tool call(s). Allowed: [${approvedCalls.join(', ')}]. Denied: [${deniedCalls.join(', ')}]. Tool execution is not yet implemented — this is a placeholder result.`,
+    confidence: 1.0,
+    explanation: `Agent proposed tool call(s) requiring approval: ${pendingApprovals.join(', ')}. The run is paused pending human decision.`,
+    needsHumanReview: true,
     metadata: {
       agentRuntime: 'openai-responses',
       model: typeof responseRecord.model === 'string'
@@ -503,15 +638,10 @@ async function processToolCalls(
       providerUsage,
       providerLatencyMs: Date.now() - startedAtMs,
       attempt,
-      toolCalls: toolCalls.map((c) => ({
-        name: c.name,
-        callId: c.callId,
-        // The args that would be executed — the approver's edited_arguments
-        // when they amended the proposal, else the model's proposal.
-        effectiveArguments: effectiveArgumentsByCall.get(c.callId) ?? null,
-      })),
-      approvedTools: approvedCalls,
-      deniedTools: deniedCalls,
+      toolCalls: toolCalls.map((c) => ({ name: c.name, callId: c.callId })),
+      pendingApprovals,
+      waitingForApproval: true,
+      runId: runId ?? null,
     },
   };
 }
@@ -582,6 +712,219 @@ function buildSuccessResult(
   };
 }
 
+/**
+ * Recall the actor's agent memories and format them as context. Returns ''
+ * when memory is disabled, empty, or unavailable — never throws, since a
+ * memory failure must not block the user's reply.
+ */
+async function recallMemoryBlock(
+  ctx: BotRuntimeContext,
+  db: AgentDb | undefined,
+  connectionCredential: { apiKey: string; baseUrl: string } | undefined,
+  recorder: RunRecorder,
+): Promise<string> {
+  if (!db) return '';
+  try {
+    // Actor-scoped transaction when handed the shared Pool — memory reads
+    // carry app.current_user_id so RLS applies once enforcement is enabled.
+    const result = typeof (db as Pool).connect === 'function'
+      ? await withActorContext(db as Pool, ctx.actorUserId, (client) =>
+          recallAgentMemories(client, {
+            userId: ctx.actorUserId,
+            botId: ctx.botId,
+            queryText: ctx.messageText,
+            limit: 8,
+            credential: connectionCredential,
+          }),
+        )
+      : await recallAgentMemories(db, {
+          userId: ctx.actorUserId,
+          botId: ctx.botId,
+          queryText: ctx.messageText,
+          limit: 8,
+          credential: connectionCredential,
+        });
+    if (result.memories.length === 0) return '';
+    await recorder.record(
+      'retrieval',
+      'succeeded',
+      ctx.messageText.slice(0, 200),
+      `${result.memories.length} memories (${result.method})`,
+      { method: result.method, count: result.memories.length },
+    );
+    return `\n\n${formatMemoriesForPrompt(result.memories)}`;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * One non-streaming model round: POST /responses with retry/backoff.
+ * Returns the parsed payload and attempt count; throws after exhausting
+ * retries. Extracted so the tool loop can issue subsequent rounds without
+ * duplicating the retry machinery.
+ */
+async function requestAgentResponse(
+  ctx: BotRuntimeContext,
+  instructions: string,
+  input: unknown[],
+  toolsPayload: Record<string, unknown>,
+  effectiveApiKey: string,
+  effectiveBaseUrl: string,
+): Promise<{ payload: unknown; attempt: number }> {
+  const maxRetries = AI_RATE_LIMITS.maxRetries;
+  const body = buildRequestBody(ctx, instructions, input, false, toolsPayload);
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), runtimeConfig.timeoutMs);
+    try {
+      const response = await fetch(`${effectiveBaseUrl}/responses`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${effectiveApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body,
+        signal: controller.signal,
+      });
+
+      if (response.ok) {
+        const payload = (await response.json()) as unknown;
+        return { payload, attempt };
+      }
+
+      // 429 and 5xx are retried. Other 4xx are not — they will not
+      // succeed on retry and retrying wastes the user's time.
+      const retryable =
+        response.status === 429 || (response.status >= 500 && response.status < 600);
+      lastError = new Error(`AI provider returned ${response.status}`);
+      if (!retryable || attempt === maxRetries) {
+        throw lastError;
+      }
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      if (attempt === maxRetries) {
+        throw lastError;
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+    await new Promise((r) => setTimeout(r, computeRetryDelayMs(attempt)));
+  }
+
+  throw lastError ?? new Error('AI provider request failed after retries');
+}
+
+/**
+ * Shared tool-round continuation: given a response payload containing
+ * function_call items, resolve policy → execute allowed calls → feed the
+ * outputs back → keep going until the model produces text, an approval
+ * gate fires, or the round cap is hit. Used by both the buffered and the
+ * streaming entry points (tool rounds are never streamed).
+ */
+async function continueToolRounds(
+  ctx: BotRuntimeContext,
+  instructions: string,
+  input: unknown[],
+  firstPayload: unknown,
+  firstToolCalls: ProposedToolCall[],
+  tools: ToolDefinition[],
+  bindings: ToolBinding[],
+  effectiveApiKey: string,
+  effectiveBaseUrl: string,
+  attemptBase: number,
+  startedAtMs: number,
+  db: AgentDb | undefined,
+  runId: string | undefined,
+  recorder: RunRecorder,
+): Promise<BotHandlerResult> {
+  let payload = firstPayload;
+  let toolCalls = firstToolCalls;
+  let attempt = attemptBase;
+  let round = 0;
+
+  // Accumulate provider usage across rounds — per-round numbers would
+  // under-report the true cost of a multi-tool run.
+  const totalUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+  const addUsage = (p: unknown) => {
+    const u = extractProviderUsage(p);
+    totalUsage.inputTokens += u.inputTokens;
+    totalUsage.outputTokens += u.outputTokens;
+    totalUsage.totalTokens += u.totalTokens;
+  };
+  addUsage(payload);
+
+  for (;;) {
+    const resolved = await resolveToolCalls(
+      ctx, toolCalls, tools, bindings, db, runId, recorder,
+    );
+    if (resolved.waiting) {
+      return buildWaitingForApprovalResult(
+        ctx, payload, toolCalls, resolved.pendingApprovals, attempt, startedAtMs, runId,
+      );
+    }
+
+    round += 1;
+    if (round > MAX_TOOL_ROUNDS) {
+      return {
+        text: `${ctx.botName}: I started working on that but ran out of action steps before finishing. Please try a narrower request.`,
+        shouldReply: true,
+        confidence: 0.6,
+        explanation: `Agent hit the tool-round cap (${MAX_TOOL_ROUNDS}) without converging on a final response.`,
+        metadata: {
+          agentRuntime: 'openai-responses',
+          toolRoundCapReached: true,
+          executedTools: resolved.executedTools,
+          deniedTools: resolved.deniedTools,
+          providerUsage: totalUsage,
+          runId: runId ?? null,
+        },
+      };
+    }
+
+    // Feed the model the replayed function_call items plus our outputs.
+    const nextInput = [
+      ...input,
+      ...extractFunctionCallItems(payload),
+      ...resolved.outputs,
+    ];
+    input = nextInput;
+
+    const next = await requestAgentResponse(
+      ctx, instructions, input, { tools: toolsToOpenAIFormat(tools) },
+      effectiveApiKey, effectiveBaseUrl,
+    );
+    payload = next.payload;
+    attempt += next.attempt;
+    addUsage(payload);
+    await recorder.record(
+      'model_call',
+      'succeeded',
+      `tool round ${round}`,
+      `${resolved.executedTools.length} executed, ${resolved.deniedTools.length} denied`,
+      { round, toolCalls: toolCalls.map((c) => c.name) },
+    );
+
+    toolCalls = extractToolCalls(payload);
+    if (toolCalls.length === 0) {
+      const text = extractResponseText(payload);
+      if (!text) {
+        throw new Error('AI provider returned an empty response after tool rounds');
+      }
+      const result = buildSuccessResult(ctx, text, payload, attempt, startedAtMs);
+      if (result.metadata) {
+        result.metadata.providerUsage = totalUsage;
+        result.metadata.toolRounds = round;
+        result.metadata.executedTools = resolved.executedTools;
+        result.metadata.deniedTools = resolved.deniedTools;
+      }
+      return result;
+    }
+  }
+}
+
 export async function executeOpenAiAgent(
   ctx: BotRuntimeContext,
   connectionCredential?: { apiKey: string; baseUrl: string },
@@ -597,8 +940,14 @@ export async function executeOpenAiAgent(
     throw new Error('AI provider is not configured');
   }
 
-  const instructions = buildAgentInstructions(ctx);
-  const input = buildAgentInput(ctx);
+  const startedAtMs = Date.now();
+  const recorder = await createRunRecorder(db, runId);
+
+  // Memory recall happens before instruction assembly so remembered context
+  // is part of the system-level frame, ranked below the live message.
+  const memoryBlock = await recallMemoryBlock(ctx, db, connectionCredential, recorder);
+  const instructions = buildAgentInstructions(ctx) + memoryBlock;
+  let input = buildAgentInput(ctx);
 
   // Load tools and bindings from the registry when a db pool is available.
   // Without db, the agent operates in text-only mode (no tools sent).
@@ -618,72 +967,32 @@ export async function executeOpenAiAgent(
     ? { tools: toolsToOpenAIFormat(tools) }
     : {};
 
-  // P0-9: Retry with exponential backoff + jitter for transient provider
-  // failures. 429 (rate-limit) and 5xx are retried; 4xx (auth, bad
-  // request) are not retried because they will not succeed on retry.
-  const maxRetries = AI_RATE_LIMITS.maxRetries;
-  const body = buildRequestBody(ctx, instructions, input, false, toolsPayload);
+  const { payload, attempt } = await requestAgentResponse(
+    ctx, instructions, input, toolsPayload, effectiveApiKey, effectiveBaseUrl,
+  );
+  await recorder.record(
+    'model_call',
+    'succeeded',
+    ctx.messageText.slice(0, 200),
+    null,
+    { round: 0, toolsOffered: tools.map((t) => t.name) },
+  );
 
-  let lastError: Error | null = null;
-  const startedAtMs = Date.now();
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), runtimeConfig.timeoutMs);
-    try {
-      const response = await fetch(`${effectiveBaseUrl}/responses`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${effectiveApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body,
-        signal: controller.signal,
-      });
-
-      if (response.ok) {
-        const payload = (await response.json()) as unknown;
-
-        // Check for tool calls before extracting text. When the model
-        // proposes tool calls, the response may have no output_text —
-        // the output array contains function_call items instead.
-        const toolCalls = extractToolCalls(payload);
-        if (toolCalls.length > 0 && tools.length > 0) {
-          return processToolCalls(
-            ctx, toolCalls, tools, bindings, payload, attempt, startedAtMs, db, runId,
-          );
-        }
-
-        const text = extractResponseText(payload);
-        if (!text) {
-          throw new Error('AI provider returned an empty response');
-        }
-        return buildSuccessResult(ctx, text, payload, attempt, startedAtMs);
-      }
-
-      // 429 and 5xx are retried. Other 4xx are not — they will not
-      // succeed on retry and retrying wastes the user's time.
-      const retryable =
-        response.status === 429 || (response.status >= 500 && response.status < 600);
-      lastError = new Error(`AI provider returned ${response.status}`);
-      if (!retryable || attempt === maxRetries) {
-        throw lastError;
-      }
-      // Fall through to backoff below.
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-      // Network errors and aborts are retried unless this was the last
-      // attempt.
-      if (attempt === maxRetries) {
-        throw lastError;
-      }
-    } finally {
-      clearTimeout(timeout);
-    }
-    // Exponential backoff with jitter before the next attempt.
-    await new Promise((r) => setTimeout(r, computeRetryDelayMs(attempt)));
+  // When the model proposes tool calls, run the multi-round loop: policy
+  // gate → execute → feed outputs back → next round.
+  const toolCalls = tools.length > 0 ? extractToolCalls(payload) : [];
+  if (toolCalls.length > 0) {
+    return continueToolRounds(
+      ctx, instructions, input, payload, toolCalls, tools, bindings,
+      effectiveApiKey, effectiveBaseUrl, attempt, startedAtMs, db, runId, recorder,
+    );
   }
 
-  throw lastError ?? new Error('AI provider request failed after retries');
+  const text = extractResponseText(payload);
+  if (!text) {
+    throw new Error('AI provider returned an empty response');
+  }
+  return buildSuccessResult(ctx, text, payload, attempt, startedAtMs);
 }
 
 // ── Streaming support ─────────────────────────────────────────────────
@@ -768,7 +1077,10 @@ export async function streamOpenAiAgent(
     throw new Error('AI provider is not configured');
   }
 
-  const instructions = buildAgentInstructions(ctx);
+  const startedAtMsStream = Date.now();
+  const recorder = await createRunRecorder(db, runId);
+  const memoryBlock = await recallMemoryBlock(ctx, db, connectionCredential, recorder);
+  const instructions = buildAgentInstructions(ctx) + memoryBlock;
   const input = buildAgentInput(ctx);
 
   // Load tools and bindings from the registry when a db pool is available.
@@ -792,7 +1104,6 @@ export async function streamOpenAiAgent(
 
   const maxRetries = AI_RATE_LIMITS.maxRetries;
   let lastError: Error | null = null;
-  const startedAtMs = Date.now();
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const controller = new AbortController();
@@ -829,10 +1140,12 @@ export async function streamOpenAiAgent(
         }
 
         // Check for tool calls in the final payload before requiring text.
+        // Tool rounds are not streamed — the buffered loop takes over.
         const toolCalls = extractToolCalls(finalPayload);
         if (toolCalls.length > 0 && tools.length > 0) {
-          return processToolCalls(
-            ctx, toolCalls, tools, bindings, finalPayload, attempt, startedAtMs, db, runId,
+          return continueToolRounds(
+            ctx, instructions, input, finalPayload, toolCalls, tools, bindings,
+            effectiveApiKey, effectiveBaseUrl, attempt, startedAtMsStream, db, runId, recorder,
           );
         }
 
@@ -845,7 +1158,7 @@ export async function streamOpenAiAgent(
         // for confidence/usage extraction. Otherwise build a minimal
         // payload from the assembled text.
         const payload = finalPayload ?? { output_text: text, status: 'completed' };
-        return buildSuccessResult(ctx, text, payload, attempt, startedAtMs);
+        return buildSuccessResult(ctx, text, payload, attempt, startedAtMsStream);
       }
 
       const retryable =

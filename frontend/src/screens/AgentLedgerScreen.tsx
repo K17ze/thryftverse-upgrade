@@ -38,7 +38,8 @@ import { IconSize, type IoniconsGlyphName } from '../theme/iconTokens';
 import { useStore } from '../store/useStore';
 import { useShallow } from 'zustand/react/shallow';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
-import type { AgentRunInfo, ApprovalRequestInfo } from '../services/botsApi';
+import type { AgentRunInfo, ApprovalRequestInfo, RunTraceStep, RunTraceApproval } from '../services/botsApi';
+import { fetchRunTraceFromApi } from '../services/botsApi';
 import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AgentLedger'>;
@@ -88,6 +89,43 @@ const TRIGGER_ICON: Record<string, IoniconsGlyphName> = {
 
 const CANCELLABLE: ReadonlySet<RunStatus> = new Set(['queued', 'running']);
 
+type StepType = 'model_call' | 'tool_call' | 'retrieval' | 'guardrail' | 'approval' | 'retry' | 'handoff';
+
+const STEP_ICON: Record<string, IoniconsGlyphName> = {
+  model_call: 'hardware-chip-outline',
+  tool_call: 'construct-outline',
+  retrieval: 'albums-outline',
+  guardrail: 'shield-outline',
+  approval: 'checkmark-circle-outline',
+  retry: 'refresh-outline',
+  handoff: 'swap-horizontal-outline',
+};
+
+const STEP_LABEL_KEY: Record<string, string> = {
+  model_call: 'trace.step.modelCall',
+  tool_call: 'trace.step.toolCall',
+  retrieval: 'trace.step.retrieval',
+  guardrail: 'trace.step.guardrail',
+  approval: 'trace.step.approval',
+  retry: 'trace.step.retry',
+  handoff: 'trace.step.handoff',
+};
+
+const STEP_STATUS_COLOR_KEY: Record<string, 'successText' | 'dangerText' | 'brand' | 'textMuted'> = {
+  succeeded: 'successText',
+  failed: 'dangerText',
+  running: 'brand',
+  pending: 'textMuted',
+  skipped: 'textMuted',
+};
+
+interface TraceState {
+  status: 'loading' | 'ready' | 'error';
+  steps: RunTraceStep[];
+  approvals: RunTraceApproval[];
+  error?: string;
+}
+
 export default function AgentLedgerScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
@@ -118,6 +156,8 @@ export default function AgentLedgerScreen({ navigation }: Props) {
     variant?: 'default' | 'danger';
     onConfirm: () => void;
   }>({ visible: false, title: '', message: '', onConfirm: () => {} });
+  const [expandedRunId, setExpandedRunId] = React.useState<string | null>(null);
+  const [traces, setTraces] = React.useState<Record<string, TraceState>>({});
 
   const botNameById = React.useMemo(() => {
     const map = new Map<string, string>();
@@ -221,6 +261,38 @@ export default function AgentLedgerScreen({ navigation }: Props) {
       .finally(() => setRejectingId(null));
   };
 
+  const loadTrace = React.useCallback(async (runId: string) => {
+    setTraces((prev) => ({ ...prev, [runId]: { status: 'loading', steps: [], approvals: [] } }));
+    try {
+      const payload = await fetchRunTraceFromApi(runId);
+      setTraces((prev) => ({
+        ...prev,
+        [runId]: { status: 'ready', steps: payload.steps, approvals: payload.approvals },
+      }));
+    } catch (e) {
+      setTraces((prev) => ({
+        ...prev,
+        [runId]: {
+          status: 'error',
+          steps: [],
+          approvals: [],
+          error: e instanceof Error ? e.message : undefined,
+        },
+      }));
+    }
+  }, []);
+
+  const handleToggleRun = (run: AgentRunInfo) => {
+    haptic.selection();
+    setExpandedRunId((current) => {
+      const next = current === run.id ? null : run.id;
+      if (next && !traces[next]) {
+        void loadTrace(next);
+      }
+      return next;
+    });
+  };
+
   const formatToolArguments = (toolName: string, args: Record<string, unknown>): string => {
     switch (toolName) {
       case 'draft_reply': {
@@ -293,6 +365,97 @@ export default function AgentLedgerScreen({ navigation }: Props) {
   };
 
   const statusColor = (status: RunStatus): string => colors[STATUS_COLOR_KEY[status]];
+
+  const renderTrace = (run: AgentRunInfo): React.ReactNode => {
+    const trace = traces[run.id];
+    if (!trace || trace.status === 'loading') {
+      return (
+        <View style={styles.traceWrap}>
+          <SkeletonBlock width={160} height={11} />
+          <SkeletonBlock width={200} height={11} style={{ marginTop: Space.xs }} />
+        </View>
+      );
+    }
+    if (trace.status === 'error') {
+      return (
+        <View style={styles.traceWrap}>
+          <Text style={[styles.traceErrorText, { color: colors.dangerText }]}>
+            {t('trace.loadError')}
+          </Text>
+          <Pressable
+            onPress={() => void loadTrace(run.id)}
+            accessibilityRole="button"
+            accessibilityLabel={t('trace.retry')}
+            hitSlop={8}
+            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1, marginTop: Space.xs / 2 })}
+          >
+            <Text style={[styles.traceRetryText, { color: colors.brand }]}>{t('trace.retry')}</Text>
+          </Pressable>
+        </View>
+      );
+    }
+    if (trace.steps.length === 0 && trace.approvals.length === 0) {
+      return (
+        <View style={styles.traceWrap}>
+          <Text style={[styles.traceEmptyText, { color: colors.textMuted }]}>
+            {t('trace.empty')}
+          </Text>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.traceWrap}>
+        {trace.steps.map((step, i) => {
+          const stepStatusColor = colors[STEP_STATUS_COLOR_KEY[step.status] ?? 'textMuted'];
+          const stepLabel = STEP_LABEL_KEY[step.stepType] ? t(STEP_LABEL_KEY[step.stepType]) : step.stepType;
+          const detail = step.outputSummary ?? step.errorMessage;
+          return (
+            <View key={step.id} style={[styles.traceStep, i > 0 && { marginTop: Space.xs }]}>
+              <AppIcon
+                name={STEP_ICON[step.stepType] ?? 'ellipse-outline'}
+                size={IconSize.xs}
+                color="textMuted"
+                opticalCenter
+                accessible={false}
+              />
+              <View style={styles.traceStepBody}>
+                <View style={styles.traceStepHeader}>
+                  <Text style={[styles.traceStepLabel, { color: colors.textSecondary }]} numberOfLines={1}>
+                    {stepLabel}
+                  </Text>
+                  <Text style={[styles.traceStepMeta, { color: stepStatusColor }]}>
+                    {String(t(`trace.status.${step.status}`))}
+                  </Text>
+                  {step.durationMs != null ? (
+                    <Text style={[styles.traceStepMeta, { color: colors.textMuted }]}>
+                      {step.durationMs < 1000 ? `${step.durationMs}ms` : `${(step.durationMs / 1000).toFixed(1)}s`}
+                    </Text>
+                  ) : null}
+                </View>
+                {detail ? (
+                  <Text style={[styles.traceStepDetail, { color: colors.textMuted }]} numberOfLines={3}>
+                    {detail}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+          );
+        })}
+        {trace.approvals.length > 0 ? (
+          <View style={styles.traceApprovals}>
+            {trace.approvals.map((approval) => (
+              <Text key={approval.id} style={[styles.traceStepDetail, { color: colors.textMuted }]} numberOfLines={2}>
+                {t('trace.approvalLine', {
+                  tool: approval.toolName,
+                  status: t(`approvals.status.${approval.status}`),
+                })}
+              </Text>
+            ))}
+          </View>
+        ) : null}
+      </View>
+    );
+  };
 
   // --- Loading skeleton ---
   if (loading) {
@@ -531,14 +694,19 @@ export default function AgentLedgerScreen({ navigation }: Props) {
             const duration = formatDuration(run.startedAt, run.completedAt);
             const canCancel = CANCELLABLE.has(run.status);
             const triggerIcon = TRIGGER_ICON[run.triggerType] ?? 'play';
+            const isExpanded = expandedRunId === run.id;
             return (
               <View
                 key={run.id}
-                style={[
-                  styles.row,
-                  !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth },
-                ]}
+                style={!isLast ? { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth } : undefined}
               >
+                <Pressable
+                  onPress={() => handleToggleRun(run)}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: isExpanded }}
+                  accessibilityLabel={t('trace.toggle', { botName: name })}
+                  style={({ pressed }) => [styles.row, { opacity: pressed ? 0.85 : 1 }]}
+                >
                 <View style={[styles.triggerIcon, { backgroundColor: colors.surfaceAlt }]}>
                   <AppIcon name={triggerIcon} size={IconSize.sm} color="textPrimary" opticalCenter accessible={false} />
                 </View>
@@ -550,6 +718,13 @@ export default function AgentLedgerScreen({ navigation }: Props) {
                     <Text style={[styles.timeText, { color: colors.textMuted }]}>
                       {formatDate(run.createdAt)}
                     </Text>
+                    <AppIcon
+                      name={isExpanded ? 'chevron-down' : 'chevron-forward'}
+                      size={IconSize.xs}
+                      color="textMuted"
+                      opticalCenter
+                      accessible={false}
+                    />
                   </View>
 
                   <View style={styles.metaLine}>
@@ -600,6 +775,8 @@ export default function AgentLedgerScreen({ navigation }: Props) {
                     </Pressable>
                   ) : null}
                 </View>
+                </Pressable>
+                {isExpanded ? renderTrace(run) : null}
               </View>
             );
           })}
@@ -786,7 +963,69 @@ function createStyles(colors: ThemeColors) {
       fontFamily: TypographyV2.bodyStrong.fontFamily,
       letterSpacing: TypographyV2.body.letterSpacing,
     },
-    // Empty / error state
+    // Run trace (expanded row detail)
+    traceWrap: {
+      paddingHorizontal: Space.md,
+      paddingLeft: Space.md + Control.chrome + Space.sm,
+      paddingBottom: Space.md,
+      gap: Space.xs / 2,
+    },
+    traceStep: {
+      flexDirection: 'row',
+      gap: Space.xs,
+      alignItems: 'flex-start',
+    },
+    traceStepBody: {
+      flex: 1,
+      minWidth: 0,
+    },
+    traceStepHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+    },
+    traceStepLabel: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      flex: 1,
+      minWidth: 0,
+    },
+    traceStepMeta: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      flexShrink: 0,
+    },
+    traceStepDetail: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
+      marginTop: 1,
+    },
+    traceApprovals: {
+      marginTop: Space.xs,
+      paddingTop: Space.xs,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+      gap: Space.xs / 2,
+    },
+    traceErrorText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+    },
+    traceRetryText: {
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+    },
+    traceEmptyText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+    },
     // Empty / error state
     stateWrap: {
       alignItems: 'center',
