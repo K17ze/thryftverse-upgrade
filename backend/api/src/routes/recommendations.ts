@@ -99,12 +99,19 @@ type ListingRow = {
   title: string;
   description: string;
   category: string | null;
+  subcategory: string | null;
   brand: string | null;
   size: string | null;
   condition: string | null;
   price_gbp: string;
+  original_price_gbp: string | null;
   image_url: string | null;
+  status: string;
   created_at: string;
+  /** Primary listing_images geometry — NULL on pre-055 schemas or when the
+   *  listing has no attached image row. */
+  media_width: number | null;
+  media_height: number | null;
   interaction_count: string;
   seller_rating: string | null;
   seller_response_hours: string | null;
@@ -376,6 +383,54 @@ function fallbackDecision(
 }
 
 /**
+ * Serializes a candidate `ListingRow` into the camelCase listing contract
+ * the frontend `mapBackendListingToListing` consumes. The route previously
+ * returned the raw snake_case row, which the mapper reads as entirely
+ * absent fields — `priceGbp`, `sellerId` and `createdAt` all mapped to null,
+ * so `isDisplayReadyListing` dropped every For-You item client-side and the
+ * personalized feed silently fell back to generic listings.
+ *
+ * Only fields the row actually carries are projected — absent commercial
+ * facts stay absent rather than being fabricated. `mediaAspectRatio`
+ * follows the feed-route convention of width/height and is emitted only
+ * when both geometry dimensions are known.
+ */
+function toApiListing(row: ListingRow) {
+  const mediaAspectRatio =
+    row.media_width != null && row.media_height != null && row.media_height > 0
+      ? row.media_width / row.media_height
+      : null;
+  return {
+    id: row.id,
+    sellerId: row.seller_id,
+    title: row.title,
+    description: row.description,
+    category: row.category,
+    subcategory: row.subcategory,
+    brand: row.brand,
+    size: row.size,
+    condition: row.condition,
+    priceGbp: Number(row.price_gbp),
+    originalPriceGbp:
+      row.original_price_gbp == null ? null : Number(row.original_price_gbp),
+    imageUrl: row.image_url,
+    mediaAspectRatio,
+    mediaWidth: row.media_width,
+    mediaHeight: row.media_height,
+    status: row.status,
+    createdAt: row.created_at,
+    seller: {
+      id: row.seller_id,
+      rating: row.seller_rating == null ? null : Number(row.seller_rating),
+      responseHours:
+        row.seller_response_hours == null
+          ? null
+          : Number(row.seller_response_hours),
+    },
+  };
+}
+
+/**
  * Candidate-pool SQL shared by every retrieval source (R19). All sources
  * apply the identical safety predicates — active status, own-listing
  * exclusion, seller reach exclusion — and differ only in extra predicate,
@@ -429,14 +484,29 @@ function candidateListingsSql(
      GROUP BY seller_id
    )
    SELECT
-     l.id, l.seller_id, l.title, l.description, l.category, l.brand,
-     l.size, l.condition, l.price_gbp::text, l.image_url,
+     l.id, l.seller_id, l.title, l.description, l.category, l.subcategory,
+     l.brand, l.size, l.condition, l.price_gbp::text,
+     l.original_price_gbp::text, l.image_url, l.status,
      l.created_at::text,
+     pi.media_width, pi.media_height,
      COALESCE(ic.interaction_count, '0') AS interaction_count,
      sr.seller_rating,
      srt.seller_response_hours,
      COALESCE(reach_u.reach_state, 'normal') AS seller_reach_state
    FROM listings l
+   -- Primary-image geometry for the masonry feed: the wire payload carries
+   -- mediaWidth/mediaHeight/mediaAspectRatio so the client can reserve cell
+   -- space before media loads. to_jsonb reads keep this query valid on
+   -- pre-055 schemas (columns project as NULL instead of erroring).
+   LEFT JOIN LATERAL (
+     SELECT
+       NULLIF(to_jsonb(li) ->> 'media_width', '')::integer AS media_width,
+       NULLIF(to_jsonb(li) ->> 'media_height', '')::integer AS media_height
+     FROM listing_images li
+     WHERE li.listing_id = l.id
+     ORDER BY li.sort_order ASC, li.created_at, li.id
+     LIMIT 1
+   ) pi ON true
    ${reachJoinSql('reach_u', 'l.seller_id')}
    LEFT JOIN interaction_counts ic ON ic.listing_id = l.id
    LEFT JOIN seller_ratings sr ON sr.seller_id = l.seller_id
@@ -1505,7 +1575,7 @@ export function registerRecommendationRoutes({
             position: recommendation.position,
             reasonCodes: recommendation.reason_codes,
             componentScores: recommendation.component_scores,
-            listing,
+            listing: toApiListing(listing),
           }]
         : [];
     });

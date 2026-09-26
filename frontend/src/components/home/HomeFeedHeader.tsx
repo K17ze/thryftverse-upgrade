@@ -227,11 +227,7 @@ export function HomeFeedHeader({
           return (
             <AnimatedPressable
               key={`signal-${signal.id}-${signal.filterKey}`}
-              style={[
-                styles.signalChip,
-                active && styles.signalChipActive,
-                signal.isPersonalized && !active && styles.signalChipPersonalized,
-              ]}
+              style={[styles.signalChip, active && styles.signalChipActive]}
               onPress={() => onSelectSignal(signal)}
               activeOpacity={0.85}
               hitSlop={8}
@@ -444,17 +440,18 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.xs,
     alignItems: 'center' },
   signalChip: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
+    // Compact explore-chip grammar — same as the upgraded UnifiedDiscovery
+    // and DiscoverScene category chips: ~28pt chrome, hairline outline,
+    // dark fill ONLY for the selected chip; personalisation via the brand
+    // dot, never a second fill.
+    paddingHorizontal: Space.smMd,
+    paddingVertical: 6,
     borderRadius: RadiusRoleValue.pillAvatar,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5 },
-  signalChipPersonalized: {
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.surfaceAlt },
   signalChipActive: {
     backgroundColor: colors.textPrimary,
     borderColor: colors.textPrimary },
@@ -466,10 +463,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   signalDotActive: {
     backgroundColor: colors.background },
   signalChipText: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
+    fontSize: TypographyV2.caption.size,
+    lineHeight: TypographyV2.caption.lineHeight,
     fontFamily: FontFamily.medium,
-    color: colors.textSecondary },
+    color: colors.textSecondary,
+    letterSpacing: TypographyV2.caption.letterSpacing },
   signalChipTextActive: {
     color: colors.background },
   // New home feed editorial header

@@ -9,6 +9,7 @@ import { OfflineBanner } from '../OfflineBanner';
 import { MasonrySkeleton } from '../skeletons/MasonrySkeleton';
 import { FlagshipState } from '../flagship';
 import { PinterestMasonryGrid } from '../discover/PinterestMasonryGrid';
+import { DISCOVERY_FEED_COLUMNS } from '../../utils/discoveryFeedAssembly';
 import { HorizontalRail } from '../HorizontalRail';
 import { DiscoveryCollectionRailCard } from './DiscoveryCollectionRailCard';
 import { createUnifiedDiscoveryStyles } from './unifiedDiscoveryStyles';
@@ -188,12 +189,41 @@ export function DiscoveryFeedView({
     );
   }
 
-  // Build the header component for the masonry grid:
-  // category pills + hero editorial (compact) + collections rail
-  // Per 2026 research: product media should own the first viewport.
-  // Greeting removed — not needed on a search-first surface.
-  const listHeader = (
+  // Hero editorial media — one element shared by the interactive and
+  // non-interactive wrappers below so the two paths can never drift.
+  const heroMedia = heroEditorial && heroEditorial.heroImage ? (
     <>
+      <CachedImage
+        uri={heroEditorial.heroImage}
+        style={styles.heroImage}
+        contentFit="cover"
+        priority="high"
+      />
+      <LinearGradient
+        colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.65)']}
+        style={styles.heroGradient}
+        pointerEvents="none"
+      />
+      <View style={styles.heroOverlay} pointerEvents="none">
+        <Text style={styles.heroTitle} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE.heading}>
+          {heroEditorial.title}
+        </Text>
+        <Text style={styles.heroMeta} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
+          {heroEditorial.author} · {heroEditorial.readTime}
+        </Text>
+      </View>
+    </>
+  ) : null;
+
+  // Header composition for the masonry grid — media-dominant, near-
+  // chromeless (Pinterest/Depop explore grammar):
+  //   chips → hero editorial (edge-to-edge media) → collections rail → feed
+  // `headerBleed` opts the whole stack out of the grid's content inset, so
+  // the hero reaches the screen edge while Space.md content padding keeps
+  // the first chip / rail card / retry row on the same 16pt gutter as the
+  // tiles. No greeting, no duplicated headings — the media is the label.
+  const listHeader = (
+    <View style={styles.headerBleed}>
       {isOffline && <OfflineBanner onRetry={onRefresh} />}
 
       {/* Category pills — horizontal scroll, dynamically driven by user algorithm.
@@ -214,7 +244,6 @@ export function DiscoveryFeedView({
                 style={[
                   styles.categoryPill,
                   isSelected && styles.categoryPillActive,
-                  chip.isPersonalized && !isSelected && styles.categoryPillPersonalized,
                 ]}
                 accessibilityRole="button"
                 accessibilityLabel={`Filter by ${chip.label}${chip.isPersonalized ? ', personalized' : ''}`}
@@ -237,8 +266,8 @@ export function DiscoveryFeedView({
         </ScrollView>
       </View>
 
-      {/* Hero editorial — compact media strip, no decorative chrome.
-          Per 2026 research: hero max 96-120pt on discovery feeds.
+      {/* Hero editorial — editorial media, not a banner card: edge-to-edge
+          bleed at a 3:2 crop with the title and byline set over a scrim.
           FRESH-08 + S21-02: the hero navigates to the piece's own article
           screen (ID-bound) when a handler is provided; without one it
           renders non-interactive — no fake affordance.
@@ -253,47 +282,11 @@ export function DiscoveryFeedView({
             accessibilityLabel={heroEditorial.title}
             accessibilityHint="Read the full story"
           >
-            <CachedImage
-              uri={heroEditorial.heroImage}
-              style={styles.heroImage}
-              contentFit="cover"
-              priority="high"
-            />
-            <LinearGradient
-              colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.65)']}
-              style={styles.heroGradient}
-            />
-            <View style={styles.heroOverlay} pointerEvents="none">
-              <Text style={styles.heroEyebrow}>EDITORIAL</Text>
-              <Text style={styles.heroTitle} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE.heading}>
-                {heroEditorial.title}
-              </Text>
-              <Text style={styles.heroMeta} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
-                {heroEditorial.author} · {heroEditorial.readTime}
-              </Text>
-            </View>
+            {heroMedia}
           </Pressable>
         ) : (
           <View style={styles.heroWrap}>
-            <CachedImage
-              uri={heroEditorial.heroImage}
-              style={styles.heroImage}
-              contentFit="cover"
-              priority="high"
-            />
-            <LinearGradient
-              colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.65)']}
-              style={styles.heroGradient}
-            />
-            <View style={styles.heroOverlay} pointerEvents="none">
-              <Text style={styles.heroEyebrow}>EDITORIAL</Text>
-              <Text style={styles.heroTitle} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE.heading}>
-                {heroEditorial.title}
-              </Text>
-              <Text style={styles.heroMeta} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
-                {heroEditorial.author} · {heroEditorial.readTime}
-              </Text>
-            </View>
+            {heroMedia}
           </View>
         )
       ) : null}
@@ -303,12 +296,16 @@ export function DiscoveryFeedView({
         ? renderModuleRetry(MODULE_LABELS.editorials)
         : null}
 
-      {/* Curated collections rail — horizontal scroll of collection cards.
-          A failed collections module keeps its position: cached cards stay
-          on screen and the retry row attributes the stale refresh inline. */}
+      {/* Curated collections rail — one quiet header marks the content-type
+          change; the cards already carry theme + title + curator, so nothing
+          else is labelled. A failed collections module keeps its position:
+          cached cards stay on screen and the retry row attributes the stale
+          refresh inline. */}
       {collections.length > 0 || (!isOffline && staleModules?.includes('collections')) ? (
         <View style={styles.collectionsSection}>
-          <Text style={styles.sectionTitle}>Curated collections</Text>
+          <Text style={styles.sectionTitle} maxFontSizeMultiplier={MAX_FONT_SCALE.heading}>
+            Curated collections
+          </Text>
           {collections.length > 0 ? (
             <HorizontalRail
               contentContainerStyle={styles.railContent}
@@ -330,7 +327,10 @@ export function DiscoveryFeedView({
       ) : null}
 
       {feedModuleRetryRows}
-    </>
+
+      {/* Space between the last header module and the first tiles. */}
+      <View style={styles.feedStartSpace} />
+    </View>
   );
 
   // Loading skeleton — use the shared MasonrySkeleton so the loading frame
@@ -339,7 +339,7 @@ export function DiscoveryFeedView({
   if (isLoading) {
     return (
       <View style={styles.skeletonWrap}>
-        <MasonrySkeleton numColumns={3} itemCount={9} />
+        <MasonrySkeleton numColumns={DISCOVERY_FEED_COLUMNS} itemCount={6} />
       </View>
     );
   }
@@ -351,7 +351,7 @@ export function DiscoveryFeedView({
       onLookPress={onLookPress}
       onPosterPress={onPosterPress}
       onMoodboardPress={onMoodboardPress}
-      numColumns={3}
+      numColumns={DISCOVERY_FEED_COLUMNS}
       isLoading={isLoading}
       hasMore={hasMore}
       isLoadingMore={isLoadingMore}

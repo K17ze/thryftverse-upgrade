@@ -29,12 +29,14 @@ import { TypographyV2 } from '../../theme/typography.v2';
 import { typographyV2Style } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-import { resolveListingMediaAspectRatio } from '../../utils/listingMediaGeometry';
+import { resolveServerListingMediaAspectRatio } from '../../utils/listingMediaGeometry';
+import { recordMeasuredMediaRatio, useMeasuredMediaRatio } from '../../utils/measuredMediaRatio';
 import { getListingCoverUri } from '../../utils/media';
 import { resolveCachedImageSourceUri } from '../CachedImage';
 import type { ListingMediaRecord } from '../../contracts/listingMedia';
 import { preloadCriticalImages } from '../../utils/imagePreloader';
 import { MasonrySkeleton } from '../skeletons/MasonrySkeleton';
+import { DISCOVERY_GRID_PADDING } from '../discovery/unifiedDiscoveryStyles';
 import { PremiumSkeletonTile } from './PremiumSkeletonTile';
 import { EmptyState } from '../EmptyState';
 
@@ -272,8 +274,15 @@ export function PinterestMasonryGrid({
   isLoadingMore = false,
   hasMore = true,
   numColumns = 2,
-  gap = Space.sm,
-  horizontalPadding = Space.md,
+  // Pinterest/Depop gutter: ~6pt between columns. Tight enough that the
+  // media reads as a continuous canvas; wide enough that tiles stay
+  // separable at a glance.
+  gap = Space.xs + 2,
+  // Pinterest/Depop edge margin: ~8pt from screen edge to tile visual edge
+  // (container inset 5 + cell padding 3) — the media nearly touches the
+  // screen edge. DISCOVERY_GRID_PADDING is the single source of truth so
+  // consumers' rails land on the same line.
+  horizontalPadding = DISCOVERY_GRID_PADDING,
   testIDPrefix,
   firstItemTestID,
   refreshControl,
@@ -381,7 +390,11 @@ export function PinterestMasonryGrid({
             item={item}
             onPress={() => handleListingPress(item)}
             onLongPress={onListingLongPress ? () => onListingLongPress(mapListingToDiscoverySummary(item)) : undefined}
-            aspectRatio={resolveListingMediaAspectRatio(item)}
+            // Pass only server-truth geometry. When the row carries none,
+            // undefined lets the tile's measured-geometry feedback resolve
+            // the real ratio — `resolveListingMediaAspectRatio(item)` stays
+            // the terminal 3:4 fallback inside the tile.
+            aspectRatio={resolveServerListingMediaAspectRatio(item) ?? undefined}
             downscaleWidth={colWidth}
             testID={index === 0 ? (firstItemTestID ?? (testIDPrefix ? `${testIDPrefix}-first` : undefined)) : undefined}
             isSaved={isItemSaved?.(item.id)}
@@ -529,7 +542,11 @@ function renderUnit(
             item={u.listing}
             onPress={() => ctx.onListingPress(u.listing)}
             onLongPress={ctx.onListingLongPress ? () => ctx.onListingLongPress!(u.listing) : undefined}
-            aspectRatio={u.aspectRatio}
+            // u.aspectRatio is the assembly-time reservation (server truth
+            // or the 3:4 standard). Pass only the server-resolved value so
+            // rows without geometry pick up the session-measured ratio
+            // inside the tile instead of freezing on the fallback.
+            aspectRatio={resolveServerListingMediaAspectRatio(u.listing) ?? undefined}
             // Hero (full-width) units request a wider derivative; single-
             // column units request the column width.
             downscaleWidth={isHero ? ctx.colWidth * ctx.numColumns + ctx.gap : ctx.colWidth}
@@ -564,7 +581,9 @@ function renderUnit(
     case 'moodboard': {
       const u = unit as MoodboardFeedUnit;
       return (
-        <View style={{ paddingHorizontal: ctx.gap / 2, paddingBottom: Space.md }}>
+        // Same vertical rhythm as every other unit — the grid gutter owns
+        // inter-row spacing, not per-unit padding.
+        <View style={{ paddingHorizontal: ctx.gap / 2, paddingBottom: ctx.gap }}>
           <MoodboardDiscoveryTile unit={u} onPress={ctx.onMoodboardPress} />
         </View>
       );
@@ -588,8 +607,19 @@ function LookDiscoveryTile({
   const { colors } = useAppTheme();
   const creator = unit.look.creator.username ?? 'creator';
   const creatorVerified = unit.look.creator.verified === true;
+  // Assembly reserves a flat 4:5 for look covers; the session-measured
+  // ratio refines the frame to the cover's real decoded geometry on first
+  // load, so creator media staggers under the same truth rules as listings.
+  const measuredRatio = useMeasuredMediaRatio(unit.id);
+  const ratio = measuredRatio ?? unit.aspectRatio;
+  const handleCoverLoad = useCallback(
+    (event: { source?: { width?: number; height?: number } }) => {
+      recordMeasuredMediaRatio(unit.id, event?.source?.width, event?.source?.height);
+    },
+    [unit.id],
+  );
   const tile = (
-    <View style={{ aspectRatio: unit.aspectRatio, borderRadius: Radius.lg, overflow: 'hidden', backgroundColor: colors.surfaceAlt }}>
+    <View style={{ aspectRatio: ratio, borderRadius: Radius.lg, overflow: 'hidden', backgroundColor: colors.surfaceAlt }}>
         <ExpoImage
           source={{ uri: unit.coverImageUri }}
           style={StyleSheet.absoluteFill}
@@ -597,6 +627,7 @@ function LookDiscoveryTile({
           cachePolicy="memory-disk"
           recyclingKey={unit.id}
           transition={160}
+          onLoad={handleCoverLoad}
         />
         <LinearGradient
           colors={['transparent', 'rgba(0,0,0,0.6)']}
@@ -663,8 +694,18 @@ function PosterDiscoveryTile({
   const { colors } = useAppTheme();
   const creator = unit.story.creator.username ?? 'creator';
   const creatorVerified = unit.story.creator.isVerified === true;
+  // Same measured-geometry feedback as look/listing covers: 9:16 is the
+  // authored reservation; the decoded cover ratio refines it honestly.
+  const measuredRatio = useMeasuredMediaRatio(unit.id);
+  const ratio = measuredRatio ?? unit.aspectRatio;
+  const handleCoverLoad = useCallback(
+    (event: { source?: { width?: number; height?: number } }) => {
+      recordMeasuredMediaRatio(unit.id, event?.source?.width, event?.source?.height);
+    },
+    [unit.id],
+  );
   const tile = (
-    <View style={{ aspectRatio: unit.aspectRatio, borderRadius: Radius.lg, overflow: 'hidden', backgroundColor: colors.surfaceAlt }}>
+    <View style={{ aspectRatio: ratio, borderRadius: Radius.lg, overflow: 'hidden', backgroundColor: colors.surfaceAlt }}>
         <ExpoImage
           source={{ uri: unit.coverUri }}
           style={StyleSheet.absoluteFill}
@@ -672,6 +713,7 @@ function PosterDiscoveryTile({
           cachePolicy="memory-disk"
           recyclingKey={unit.id}
           transition={160}
+          onLoad={handleCoverLoad}
         />
         <LinearGradient
           colors={['transparent', 'rgba(0,0,0,0.6)']}
@@ -728,6 +770,9 @@ function MoodboardDiscoveryTile({
   const imageUris = [unit.coverUri, ...unit.moodboard.items.map((item) => item.imageUri)]
     .filter((uri, index, all) => uri.trim().length > 0 && all.indexOf(uri) === index)
     .slice(0, 3);
+  // No measured-geometry feedback here: the frame is an authored 16:10
+  // full-width collage of up to three images — no single decoded asset
+  // describes its shape, so the authored reservation stays the truth.
   const tile = (
     <View style={{ aspectRatio: unit.aspectRatio, borderRadius: Radius.lg, overflow: 'hidden', backgroundColor: colors.surfaceAlt, flexDirection: 'row', gap: 2 }}>
         <ExpoImage

@@ -70,16 +70,21 @@ export function GlobalUploadIndicator() {
   const fillStyle = useAnimatedStyle(() => ({
     width: `${Math.round(width.value * 1000) / 10}%` }));
 
+  // The opacity gate lives on the OUTER track, not the fill: the track
+  // paints a full-width `surfaceAlt` band, so gating only the fill left a
+  // permanent 3px hairline under the status bar on every screen.
   return (
-    <View
+    <Animated.View
       pointerEvents="none"
-      style={[styles.track, { top: insets.top, backgroundColor: colors.surfaceAlt }]}
+      style={[styles.track, { top: insets.top, backgroundColor: colors.surfaceAlt }, barStyle]}
       accessibilityRole="progressbar"
       accessibilityLabel={isOffline ? 'Upload waiting for connection' : 'Upload progress'}
       accessibilityHint="Upload continues in the background"
       accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }}
+      accessibilityElementsHidden={!active}
+      importantForAccessibility={active ? 'yes' : 'no-hide-descendants'}
     >
-      <Animated.View style={[styles.barClip, barStyle]}>
+      <View style={styles.barClip}>
         <Animated.View
           style={[
             styles.fill,
@@ -87,8 +92,8 @@ export function GlobalUploadIndicator() {
             fillStyle,
           ]}
         />
-      </Animated.View>
-    </View>
+      </View>
+    </Animated.View>
   );
 }
 

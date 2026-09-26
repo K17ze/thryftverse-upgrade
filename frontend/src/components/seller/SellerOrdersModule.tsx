@@ -1,12 +1,14 @@
 /**
- * SellerOrdersModule — Orders pillar of the Seller Hub overview.
+ * SellerOrdersModule — the action radar of the Seller Hub.
  *
  * Composition (flat canvas, no card chrome — the thumbnail image IS the surface):
- *   1. Section header — semantic glyph + "Orders" + pending-to-ship count + "View all".
+ *   1. Section header — "Orders" + "View all". The triage line under it
+ *      states the seller's next action once: ship count + money at stake.
  *   2. Media rail — horizontal rail of real selling orders (104dp thumbnails,
  *      price, status) with SLA chips computed from shipByDate.
  *   3. Flat task rows — hairline-separated non-order tasks (offers, listing
- *      issues, catalogue, payout holds) with SLA due labels.
+ *      issues, catalogue, payout holds) with SLA due labels. No icon
+ *      circles: the due label and title weight carry the urgency.
  *   4. Honest empty state — "All clear", qualified when sources are stale.
  *
  * Per Design.md + AGENTS.md anti-AI policy: no spinners (skeleton rail while
@@ -21,8 +23,8 @@ import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppIcon } from '../common/AppIcon';
 import { CachedImage } from '../CachedImage';
-import { IconSize, type IconConcept, type SemanticIconName } from '../../theme/iconTokens';
-import type { SellerHubTask, SellerHubTaskType } from '../../services/sellerHubApi';
+import { IconSize } from '../../theme/iconTokens';
+import type { SellerHubTask } from '../../services/sellerHubApi';
 
 export interface SellerOrderPreview {
   id: string;
@@ -51,15 +53,6 @@ export interface SellerOrdersModuleProps {
   onNavigateToTask: (task: SellerHubTask) => void;
   onViewAllOrders: () => void;
 }
-
-const TASK_ICON: Record<SellerHubTaskType, { concept?: IconConcept; name?: SemanticIconName }> = {
-  ship_order: { concept: 'package' },
-  respond_offer: { concept: 'chat' },
-  listing_issue: { concept: 'edit' },
-  catalogue_awaiting: { name: 'download' },
-  verification_demand: { concept: 'shield' },
-  payout_hold: { concept: 'wallet' },
-};
 
 interface OrderSla {
   label: string;
@@ -151,15 +144,10 @@ export const SellerOrdersModule: React.FC<SellerOrdersModuleProps> = ({
 
   return (
     <View style={styles.container}>
-      {/* ── Section header ── */}
+      {/* ── Section header — title + View all; the triage line below
+             states ship count and money at stake exactly once. ── */}
       <View style={styles.headerRow}>
-        <View style={styles.headerLead}>
-          <AppIcon concept="package" size={IconSize.xs} color="textSecondary" accessible={false} />
-          <Text style={styles.sectionTitle}>Orders</Text>
-          {pendingOrdersCount > 0 ? (
-            <Text style={styles.pendingCount}>{pendingOrdersCount} to ship</Text>
-          ) : null}
-        </View>
+        <Text style={styles.sectionTitle}>Orders</Text>
         <AnimatedPressable
           onPress={onViewAllOrders}
           activeOpacity={0.7}
@@ -173,7 +161,6 @@ export const SellerOrdersModule: React.FC<SellerOrdersModuleProps> = ({
         </AnimatedPressable>
       </View>
 
-      {/* ── Triage summary — the seller's next action, stated once ── */}
       {(pendingOrdersCount > 0 || atStakeGbp > 0) && (
         <Text style={styles.triageLine} accessibilityRole="text">
           {pendingOrdersCount > 0 ? (
@@ -274,17 +261,12 @@ export const SellerOrdersModule: React.FC<SellerOrdersModuleProps> = ({
 
       {/* ── Orders-only empty state ── */}
       {ordersEmpty ? (
-        <View style={styles.clearRow}>
-          <View style={[styles.taskIconWrap, { backgroundColor: colors.surfaceAlt }]}>
-            <AppIcon concept="package" size={IconSize.xs} color="textMuted" accessible={false} />
-          </View>
-          <View style={styles.taskInfo}>
-            <Text style={styles.clearTitle}>No orders yet</Text>
-          </View>
+        <View style={styles.emptyRow}>
+          <Text style={styles.emptyTitle}>No orders yet</Text>
         </View>
       ) : null}
 
-      {/* ── Flat task rows ── */}
+      {/* ── Flat task rows — hairline separated, no icon chrome ── */}
       {visibleTasks.length > 0 ? (
         <View style={styles.taskList}>
           {visibleTasks.map((task) => {
@@ -306,15 +288,6 @@ export const SellerOrdersModule: React.FC<SellerOrdersModuleProps> = ({
                 accessibilityRole="button"
                 accessibilityLabel={`${taskTitle(task)}${dueLabel ? `, ${dueLabel}` : ''}`}
               >
-                <View style={styles.taskIconWrap}>
-                  <AppIcon
-                    concept={TASK_ICON[task.type].concept}
-                    name={TASK_ICON[task.type].name}
-                    size={IconSize.xs}
-                    color={critical ? 'dangerText' : 'brand'}
-                    accessible={false}
-                  />
-                </View>
                 <View style={styles.taskInfo}>
                   <Text style={[styles.taskTitle, { color: critical ? colors.dangerText : colors.textPrimary }]}>
                     {taskTitle(task)}
@@ -336,15 +309,10 @@ export const SellerOrdersModule: React.FC<SellerOrdersModuleProps> = ({
       ) : showClearRow ? (
         /* ── Clear state — honest, and qualified when sources are stale ── */
         <View style={styles.clearRow}>
-          <View style={[styles.taskIconWrap, { backgroundColor: colors.successSubtle }]}>
-            <AppIcon concept="check" size={IconSize.xs} color="successText" accessible={false} />
-          </View>
-          <View style={styles.taskInfo}>
-            <Text style={styles.clearTitle}>All clear</Text>
-            <Text style={styles.clearSub}>
-              {tasksStale ? 'Status may be out of date — pull to refresh' : 'Nothing waiting on you'}
-            </Text>
-          </View>
+          <Text style={styles.clearTitle}>All clear</Text>
+          <Text style={styles.clearSub} numberOfLines={1}>
+            {tasksStale ? 'Status may be out of date — pull to refresh' : 'Nothing waiting on you'}
+          </Text>
         </View>
       ) : null}
     </View>
@@ -363,13 +331,7 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: Space.md,
-      marginBottom: Space.xs,
-    },
-    headerLead: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
+      marginBottom: Space.xxs,
     },
     sectionTitle: {
       fontSize: TypographyV2.sectionTitle.size,
@@ -377,13 +339,6 @@ function createStyles(colors: ThemeColors) {
       fontFamily: FontFamily.bold,
       letterSpacing: TypographyV2.sectionTitle.letterSpacing,
       color: colors.textPrimary,
-    },
-    pendingCount: {
-      fontSize: TypographyV2.meta.size,
-      lineHeight: TypographyV2.meta.lineHeight,
-      fontFamily: FontFamily.semibold,
-      fontVariant: ['tabular-nums'],
-      color: colors.dangerText,
     },
     viewAllHit: {
       minHeight: Control.hit,
@@ -398,7 +353,7 @@ function createStyles(colors: ThemeColors) {
     },
     triageLine: {
       paddingHorizontal: Space.md,
-      marginTop: Space.xxs,
+      marginBottom: Space.xs,
       fontSize: TypographyV2.meta.size,
       lineHeight: TypographyV2.meta.lineHeight,
       fontFamily: FontFamily.semibold,
@@ -485,14 +440,6 @@ function createStyles(colors: ThemeColors) {
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.borderSubtle,
     },
-    taskIconWrap: {
-      width: 30,
-      height: 30,
-      borderRadius: Radius.full,
-      backgroundColor: colors.surfaceAlt,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
     taskInfo: {
       flex: 1,
       gap: 1,
@@ -516,10 +463,10 @@ function createStyles(colors: ThemeColors) {
       fontVariant: ['tabular-nums'],
     },
 
-    // ── Clear state ──
+    // ── Clear + empty states — plain typographic rows ──
     clearRow: {
       flexDirection: 'row',
-      alignItems: 'center',
+      alignItems: 'baseline',
       gap: Space.sm,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
@@ -532,11 +479,24 @@ function createStyles(colors: ThemeColors) {
       color: colors.textPrimary,
     },
     clearSub: {
+      flex: 1,
       fontSize: TypographyV2.meta.size,
       lineHeight: TypographyV2.meta.lineHeight,
       fontFamily: FontFamily.regular,
       letterSpacing: TypographyV2.meta.letterSpacing,
       color: colors.textMuted,
+    },
+    emptyRow: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+      minHeight: Control.hit,
+      justifyContent: 'center',
+    },
+    emptyTitle: {
+      fontSize: TypographyV2.caption.size,
+      lineHeight: TypographyV2.caption.lineHeight,
+      fontFamily: FontFamily.regular,
+      color: colors.textSecondary,
     },
 
     // ── Skeletons — media-shaped, no spinners ──

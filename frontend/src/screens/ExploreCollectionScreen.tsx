@@ -12,7 +12,7 @@ import { useBackendData } from '../context/BackendDataContext';
 import { useStore } from '../store/useStore';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
 import { Space, Radius } from '../theme/designTokens';
-import { TypographyV2 } from '../theme/typography.v2';
+import { TypographyV2, MAX_FONT_SCALE } from '../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useSignupWall } from '../hooks/useSignupWall';
@@ -20,6 +20,7 @@ import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModa
 import { EmptyState } from '../components/EmptyState';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SkeletonLoader } from '../components/SkeletonLoader';
+import { DISCOVERY_GRID_INSET, DISCOVERY_GRID_PADDING } from '../components/discovery/unifiedDiscoveryStyles';
 import { fetchFilteredListings } from '../services/listingsApi';
 import { mapListingToDiscoverySummary } from '../contracts/DiscoveryListingSummary';
 import type { Listing } from '../domain';
@@ -155,13 +156,16 @@ export default function ExploreCollectionScreen() {
     [savedProducts],
   );
 
+  // Quiet meta line — the header owns the title, so the content header only
+  // carries what the title can't: optional context + the honest count. One
+  // line, meta scale, aligned to the tile gutter via the bleed margin.
   const listHeader = useMemo(
     () => (
       <View style={styles.headerInfo}>
-        {subtitle ? (
-          <Text style={styles.headerSubtitle}>{subtitle}</Text>
-        ) : null}
-        <Text style={styles.headerCount}>{filteredListings.length} items</Text>
+        <Text style={styles.headerMeta} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
+          {subtitle ? `${subtitle} · ` : ''}
+          {filteredListings.length} items
+        </Text>
       </View>
     ),
     [subtitle, filteredListings.length, styles],
@@ -174,14 +178,19 @@ export default function ExploreCollectionScreen() {
         contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
         header={<FlagshipHeader title={title} onBack={() => navigation.goBack()} />}
       >
+        {/* Loading frame mirrors the 2-column masonry rhythm — varied tile
+            heights, one text line, same gutter — so there is no
+            loading→final geometry shift (AGENTS.md §14). */}
         <View style={styles.loadingWrap}>
-          <SkeletonLoader width={120} height={18} borderRadius={Radius.md} style={{ marginBottom: Space.md }} />
           <View style={styles.loadingGrid}>
-            {Array.from({ length: 4 }).map((_, i) => (
-              <View key={i} style={styles.loadingCard}>
-                <SkeletonLoader width="100%" height={180} borderRadius={Radius.md} />
-                <SkeletonLoader width="60%" height={14} borderRadius={Radius.sm} style={{ marginTop: Space.sm }} />
-                <SkeletonLoader width="40%" height={14} borderRadius={Radius.sm} style={{ marginTop: Space.xs }} />
+            {[0, 1].map((col) => (
+              <View key={col} style={styles.loadingColumn}>
+                {SKELETON_HEIGHTS.filter((_, i) => i % 2 === col).map((height, i) => (
+                  <View key={i} style={styles.loadingCard}>
+                    <SkeletonLoader width="100%" height={height} borderRadius={Radius.lg} />
+                    <SkeletonLoader width="60%" height={12} borderRadius={Radius.sm} style={{ marginTop: Space.sm }} />
+                  </View>
+                ))}
               </View>
             ))}
           </View>
@@ -238,30 +247,38 @@ export default function ExploreCollectionScreen() {
   );
 }
 
+// Matches PinterestMasonryGrid's default gap so the loading frame and the
+// meta line land on the same geometry as the rendered tiles.
+const GRID_GAP = Space.xs + 2;
+
+// Varied tile heights — the loading frame mirrors the masonry rhythm rather
+// than a uniform catalogue grid (AGENTS.md §14).
+const SKELETON_HEIGHTS = [196, 236, 172, 216, 184, 228];
+
 function createStyles(colors: ThemeColors, screenWidth: number) {
   return StyleSheet.create({
     headerInfo: {
-      paddingHorizontal: Space.md,
-      paddingBottom: Space.sm,
-      gap: Space.xs },
-    headerSubtitle: {
+      // Bleed out of the grid's content inset, then re-apply the tile
+      // gutter as padding so the meta line aligns with the tiles.
+      marginHorizontal: -DISCOVERY_GRID_INSET,
+      paddingHorizontal: DISCOVERY_GRID_PADDING,
+      paddingTop: Space.xs,
+      paddingBottom: Space.sm },
+    headerMeta: {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
       color: colors.textMuted },
-    headerCount: {
-      fontSize: TypographyV2.meta.size,
-      fontFamily: TypographyV2.meta.fontFamily,
-      color: colors.textSecondary },
     loadingWrap: {
       flex: 1,
       paddingHorizontal: Space.md,
       paddingTop: Space.md },
     loadingGrid: {
       flexDirection: 'row',
-      flexWrap: 'wrap',
-      justifyContent: 'space-between',
-      gap: Space.sm },
+      gap: GRID_GAP },
+    loadingColumn: {
+      width: (screenWidth - Space.md * 2 - GRID_GAP) / 2 },
     loadingCard: {
-      width: (screenWidth - Space.md * 2 - Space.sm) / 2,
-      marginBottom: Space.md } });
+      marginBottom: Space.sm } });
 }

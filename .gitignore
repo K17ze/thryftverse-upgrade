@@ -104,3 +104,9 @@ output/
 
 # Nested duplicate directory
 thryftverse-upgrade/
+
+# Web scratch and QA artifacts
+web/qa-scratch/
+web/qa-shots/
+web/.next/
+web/*.tsbuildinfo

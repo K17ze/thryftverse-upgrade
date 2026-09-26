@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { SellerTrustSummary, VerificationTier } from '../../platform/product';
 import { VERIFICATION_TIERS } from '../../platform/product';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius } from '../../theme/designTokens';
+import { Space, Typography } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
@@ -94,10 +94,14 @@ interface MyProfileIdentityHeroProps {
   website?: string | null;
   memberSince?: string;
   listingCount?: number;
-  lookCount?: number;
   sellerTrust?: SellerTrustSummary | null;
   soldCount?: number;
   followerCount?: number;
+  followingCount?: number;
+  /** Average seller rating (e.g. 4.8) — rendered as the tappable review
+   *  seam beside the avatar. Omit/null when there is nothing to show. */
+  rating?: number | null;
+  reviewCount?: number;
   /** Seller response time label (e.g. "within 2h") — surfaced in the trust
    *  line so the most important marketplace trust signal is visible in the
    *  first viewport, not buried in the About tab. */
@@ -107,10 +111,32 @@ interface MyProfileIdentityHeroProps {
   onEditProfile: () => void;
   onPressSold?: () => void;
   onPressFollowers?: () => void;
+  onPressFollowing?: () => void;
   /** Taps the "For sale" stat — scrolls to / focuses the listings tab. */
   onPressListings?: () => void;
+  /** Taps the rating seam — scrolls to / focuses the reviews tab. */
+  onPressRating?: () => void;
 }
 
+/**
+ * Owner identity hero — Depop/Vinted pattern.
+ *
+ * Composition:
+ *   seam row:  avatar (left, overlapping cover) + identity column (right):
+ *              name + verification + quiet edit glyph, @handle
+ *   stats:     one inline line — social proof only
+ *              "1.2k followers · 56 following"
+ *   bio:       plain linkified text — the dominant content block
+ *   meta:      Replies within 2h · London · Joined June 2026
+ *
+ * Marketplace stats (for sale, sold, rating, review count) are deliberately
+ * absent from the hero — the listings tab and the review surface carry them.
+ * The hero leads with identity and gives the bio the room.
+ *
+ * The avatar and name share the first band so identity dominates; counts,
+ * trust and links recede. The edit affordance is a 20pt glyph on the name
+ * row — never a row of its own.
+ */
 export function MyProfileIdentityHero({
   avatarUri,
   displayName,
@@ -119,16 +145,14 @@ export function MyProfileIdentityHero({
   location,
   website,
   memberSince,
-  listingCount = 0,
   sellerTrust,
-  soldCount,
   followerCount = 0,
+  followingCount = 0,
   responseTimeLabel,
   followCountsStatus = 'loaded',
   onEditProfile,
-  onPressSold,
   onPressFollowers,
-  onPressListings }: MyProfileIdentityHeroProps) {
+  onPressFollowing }: MyProfileIdentityHeroProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -136,19 +160,25 @@ export function MyProfileIdentityHero({
   // Email verification is never used as a proxy for seller/identity verification.
   const verificationTier: VerificationTier | null =
     sellerTrust?.verificationTier ?? (sellerTrust?.verified === true ? 'seller' : null);
-  const completedSales = sellerTrust?.completedSales ?? soldCount ?? 0;
 
   // Follow-count display: show a muted dash while loading or on error so a
   // real zero is distinguishable from an unknown count (M2 — truthful UI).
   const countsUnknown = followCountsStatus === 'loading' || followCountsStatus === 'error';
-  const followerDisplay = countsUnknown ? '—' : formatCompactCount(followerCount);
-  const followerA11y = countsUnknown
-    ? 'Followers count loading'
-    : `${formatFullCount(followerCount)} followers`;
+
+  // Marketplace meta — one compact line. Response time leads (a top-3
+  // conversion signal per Depop/Grailed research); location and tenure
+  // follow.
+  const metaLine = React.useMemo(() => {
+    const parts: string[] = [];
+    if (responseTimeLabel) parts.push(`Replies ${responseTimeLabel}`);
+    if (location) parts.push(location);
+    if (memberSince) parts.push(`Joined ${memberSince}`);
+    return parts.join(' · ');
+  }, [responseTimeLabel, location, memberSince]);
 
   return (
     <View style={styles.heroRoot}>
-      {/* ── Seam row: avatar (left, overlapping cover) + 3 stats (right) ── */}
+      {/* Avatar — absolutely positioned at the cover/canvas seam */}
       <View style={styles.avatarAbsolute}>
         {avatarUri ? (
           <CachedImage
@@ -164,109 +194,82 @@ export function MyProfileIdentityHero({
         )}
       </View>
 
-      {/* Identity canvas — paddingTop reserves avatar space */}
       <View style={styles.identityCanvas}>
-        {/* ── Seam row — avatar (left) + storefront stats (right) ──
-            For sale · Sold · Followers — the storefront triad, matching the
-            public ProfileHero. "Following" is a social metric and drops out;
-            the marketplace proof (inventory + sales) leads. */}
+        {/* ── Seam row — avatar (left) + identity (right) ──
+            Name, @handle and the review seam sit beside the avatar so the
+            first band reads as identity, not instrumentation. */}
         <View style={styles.seamRow}>
           <View style={styles.seamSpacer} />
-          <View style={styles.seamStats}>
-            <ProfileStat
-              value={countsUnknown ? '—' : formatCompactCount(listingCount)}
-              label="For sale"
-              styles={styles}
-              onPress={onPressListings}
-              a11yLabel={countsUnknown ? 'Listings count loading' : `${formatFullCount(listingCount)} for sale`}
-            />
-            <View style={styles.seamStatDivider} />
-            <ProfileStat
-              value={countsUnknown ? '—' : formatCompactCount(completedSales)}
-              label="Sold"
-              styles={styles}
-              onPress={onPressSold}
-              a11yLabel={countsUnknown ? 'Sold count loading' : `${formatFullCount(completedSales)} sold`}
-            />
-            <View style={styles.seamStatDivider} />
-            <ProfileStat
-              value={followerDisplay}
-              label="Followers"
-              styles={styles}
-              onPress={onPressFollowers}
-              a11yLabel={followerA11y}
-            />
+          <View style={styles.identityColumn}>
+            <View style={styles.displayNameRow}>
+              <Text style={styles.displayName} numberOfLines={1}>
+                {displayName}
+              </Text>
+              {verificationTier ? (
+                <Ionicons
+                  name={
+                    VERIFICATION_TIERS[verificationTier]
+                      .icon as keyof typeof Ionicons.glyphMap
+                  }
+                  size={17}
+                  color={
+                    VERIFICATION_TIERS[verificationTier].color === 'brand'
+                      ? colors.brand
+                      : colors.successText
+                  }
+                  accessibilityLabel={VERIFICATION_TIERS[verificationTier].label}
+                />
+              ) : null}
+              {/* Edit — a transparent 44pt target showing only the glyph.
+                  Never a list row, never a filled button. */}
+              <AnimatedPressable
+                style={styles.editHit}
+                onPress={onEditProfile}
+                activeOpacity={0.7}
+                scaleValue={0.96}
+                hapticFeedback="light"
+                accessibilityLabel="Edit profile and storefront"
+                accessibilityRole="button"
+              >
+                <Ionicons name="create-outline" size={20} color={colors.textSecondary} />
+              </AnimatedPressable>
+            </View>
+            <Text style={styles.username} numberOfLines={1}>
+              @{username}
+            </Text>
           </View>
         </View>
 
-        {/* Identity — full-width, left-aligned */}
-        <View style={styles.displayNameRow}>
-          <Text style={styles.displayName} numberOfLines={1}>
-            {displayName}
-          </Text>
-          {verificationTier ? (
-            <Ionicons
-              name={
-                VERIFICATION_TIERS[verificationTier]
-                  .icon as keyof typeof Ionicons.glyphMap
-              }
-              size={17}
-              color={
-                VERIFICATION_TIERS[verificationTier].color === 'brand'
-                  ? colors.brand
-                  : colors.successText
-              }
-              accessibilityLabel={VERIFICATION_TIERS[verificationTier].label}
-            />
-          ) : null}
+        {/* ── Social proof — one inline run: followers · following.
+            Marketplace stats (for sale, sold, rating) are deliberately
+            absent here — the listings tab and review surface carry them;
+            the hero leads with identity and the bio gets the room. */}
+        <View style={styles.statsLine}>
+          <StatLink
+            value={countsUnknown ? '—' : formatCompactCount(followerCount)}
+            word="followers"
+            styles={styles}
+            onPress={onPressFollowers}
+            a11yLabel={countsUnknown ? 'Followers count loading' : `${formatFullCount(followerCount)} followers`}
+          />
+          <Text style={styles.statDot} accessible={false}>·</Text>
+          <StatLink
+            value={countsUnknown ? '—' : formatCompactCount(followingCount)}
+            word="following"
+            styles={styles}
+            onPress={onPressFollowing}
+            a11yLabel={countsUnknown ? 'Following count loading' : `${formatFullCount(followingCount)} following`}
+          />
         </View>
-        <Text style={styles.username} numberOfLines={1}>
-          @{username}
-        </Text>
 
         {bio ? <BioText bio={bio} style={styles.bio} linkStyle={styles.bioLink} seeMoreStyle={styles.bioSeeMore} /> : null}
 
-        {/* Edit — a single quiet settings row, not the IG twin-pill pair.
-            Share already lives in the cover chrome (top-right icon), so the
-            hero carries only the action that isn't duplicated elsewhere. */}
-        <AnimatedPressable
-          style={styles.editRow}
-          onPress={onEditProfile}
-          activeOpacity={0.7}
-          scaleValue={0.99}
-          hapticFeedback="light"
-          accessibilityLabel="Edit profile and storefront"
-          accessibilityRole="button"
-        >
-          <Text style={styles.editRowText}>Edit profile</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-        </AnimatedPressable>
-
-        {/* Trust header — marketplace meta row (sold, response time) + joined
-            caption on a separate, less prominent line. Response time is
-            surfaced here (not buried in About) because Depop/Grailed 2026
-            research shows it is a top-3 conversion signal for marketplace
-            profiles. */}
-        {(completedSales > 0 || memberSince || responseTimeLabel) ? (
-          <View style={styles.trustBlock}>
-            {completedSales > 0 || responseTimeLabel ? (
-              <View style={styles.trustMetaRow}>
-                {completedSales > 0 ? (
-                  <Text style={styles.trustSold}>{completedSales} sold</Text>
-                ) : null}
-                {completedSales > 0 && responseTimeLabel ? <Text style={styles.trustDot}> · </Text> : null}
-                {responseTimeLabel ? (
-                  <Text style={styles.trustResponse}>Replies {responseTimeLabel}</Text>
-                ) : null}
-              </View>
-            ) : null}
-            {/* Joined — less prominent caption on its own line, no dot separator */}
-            {memberSince ? <Text style={styles.trustJoined}>Joined {memberSince}</Text> : null}
-          </View>
-        ) : null}
-
-        {location ? (
-          <Text style={styles.contextLine} numberOfLines={1}>{location}</Text>
+        {/* Marketplace meta — a single muted line. Sold is not restated
+            (the tappable sold stat already carries it and routes to
+            MyOrders); response time stays surfaced here rather than being
+            buried in the About tab. */}
+        {metaLine ? (
+          <Text style={styles.metaLine} numberOfLines={1}>{metaLine}</Text>
         ) : null}
 
         {/* Website — tappable link, matches ProfileHero */}
@@ -289,31 +292,37 @@ export function MyProfileIdentityHero({
   );
 }
 
-function ProfileStat({ value, label, styles, onPress, a11yLabel }: {
+/** Inline stat segment — bold compact number + muted lowercase word.
+ *  The number carries the information; the word just disambiguates it. */
+function StatLink({ value, word, styles, onPress, a11yLabel }: {
   value: string;
-  label: string;
+  word: string;
   styles: ReturnType<typeof createStyles>;
   onPress?: () => void;
   a11yLabel?: string;
 }) {
+  const inner = (
+    <Text numberOfLines={1}>
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statWord}>{' '}{word}</Text>
+    </Text>
+  );
   if (onPress) {
     return (
       <Pressable
-        style={({ pressed }) => [styles.seamStat, pressed && { opacity: 0.55 }]}
+        style={({ pressed }) => [styles.statLink, pressed && { opacity: 0.55 }]}
         onPress={onPress}
         accessibilityRole="button"
-        accessibilityLabel={a11yLabel ?? value}
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        accessibilityLabel={a11yLabel ?? `${value} ${word}`}
+        hitSlop={{ top: 12, bottom: 12, left: 6, right: 6 }}
       >
-        <Text style={styles.seamStatValue} numberOfLines={1}>{value}</Text>
-        <Text style={styles.seamStatLabel} numberOfLines={1}>{label}</Text>
+        {inner}
       </Pressable>
     );
   }
   return (
-    <View style={styles.seamStat} accessible accessibilityLabel={a11yLabel ?? value}>
-      <Text style={styles.seamStatValue} numberOfLines={1}>{value}</Text>
-      <Text style={styles.seamStatLabel} numberOfLines={1}>{label}</Text>
+    <View style={styles.statLink} accessible accessibilityLabel={a11yLabel ?? `${value} ${word}`}>
+      {inner}
     </View>
   );
 }
@@ -340,48 +349,23 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceAlt },
-  // Identity canvas — no top padding; seamRow reserves avatar overlap space
   identityCanvas: {
     paddingHorizontal: Space.md,
-    paddingTop: 0,
     paddingBottom: Space.sm },
 
-  // Seam row — begins immediately at canvas boundary, reserves avatar overlap height
+  // Seam row — reserves avatar overlap height on the left; the identity
+  // column fills the right. The row grows to fit name + handle + rating.
   seamRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: AVATAR_OVERLAP + Space.sm,
+    alignItems: 'flex-start',
+    minHeight: AVATAR_OVERLAP + Space.xs,
     marginBottom: Space.xs },
   seamSpacer: {
     width: AVATAR_SIZE + Space.sm },
-  seamStats: {
+  identityColumn: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around' },
-  seamStat: {
-    flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Space.xs },
-  seamStatValue: {
-    fontSize: TypographyV2.sectionTitle.size,
-    fontFamily: TypographyV2.sectionTitle.fontFamily,
-    color: colors.textPrimary,
-    letterSpacing: -0.3,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
-  seamStatLabel: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textMuted,
-    marginTop: 1,
-    letterSpacing: TypographyV2.meta.letterSpacing },
-  seamStatDivider: {
-    width: StyleSheet.hairlineWidth,
-    height: Space.lg,
-    backgroundColor: colors.borderSubtle },
-
-  // Identity — full-width, left-aligned
+    paddingTop: 2 },
   displayNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -398,7 +382,32 @@ function createStyles(colors: ThemeColors) {
     color: colors.textSecondary,
     fontFamily: Typography.family.regular,
     fontSize: TypographyV2.body.size,
+    marginBottom: 2 },
+
+  // Stats line — inline numbers with muted words, hairline-free.
+  statsLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginTop: Space.xs,
     marginBottom: Space.xs },
+  statLink: {
+    paddingVertical: 2 },
+  statValue: {
+    color: colors.textPrimary,
+    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
+  statWord: {
+    color: colors.textMuted,
+    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size },
+  statDot: {
+    color: colors.textMuted,
+    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    marginHorizontal: Space.xs },
+
   bio: {
     color: colors.textPrimary,
     fontFamily: Typography.family.regular,
@@ -411,7 +420,8 @@ function createStyles(colors: ThemeColors) {
   bioSeeMore: {
     color: colors.textSecondary,
     fontFamily: Typography.family.semibold },
-  contextLine: {
+  // Marketplace meta — one compact muted line under the bio
+  metaLine: {
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
     fontSize: TypographyV2.meta.size,
@@ -424,49 +434,12 @@ function createStyles(colors: ThemeColors) {
     fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary },
 
-  // Trust header — marketplace meta row + joined caption on separate lines
-  trustBlock: {
-    paddingVertical: 2,
-    marginBottom: Space.xs },
-  trustMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 3 },
-  trustSold: {
-    fontSize: TypographyV2.numericMeta.size,
-    fontFamily: TypographyV2.numericMeta.fontFamily,
-    color: colors.textPrimary,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
-  trustJoined: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textMuted,
-    marginTop: 2 },
-  trustResponse: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textMuted },
-  trustDot: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textMuted },
-
-  // Edit — a single quiet settings row: hairline top border, label left,
-  // chevron right. 44pt+ row, no filled container.
-  editRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 48,
-    paddingVertical: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle,
-    marginTop: Space.xs },
-  editRowText: {
-    color: colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-    fontSize: TypographyV2.bodyStrong.size },
+  // Edit — transparent trailing affordance pinned to the end of the name
+  // row. The 44pt target comes from AnimatedPressable's default hitSlop;
+  // the visible shape is only the glyph (no filled container).
+  editHit: {
+    marginLeft: 'auto',
+    paddingLeft: Space.sm },
 
 });
 }

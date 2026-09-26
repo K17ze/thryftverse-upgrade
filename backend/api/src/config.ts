@@ -309,6 +309,7 @@ export const config = {
   authExposeDevelopmentArtifacts: asBoolean(process.env.AUTH_EXPOSE_DEVELOPMENT_ARTIFACTS, false),
   authEmailFrom: process.env.AUTH_EMAIL_FROM?.trim() || null,
   resendApiKey: process.env.RESEND_API_KEY?.trim() || null,
+  brevoApiKey: process.env.BREVO_API_KEY?.trim() || null,
   openAiApiKey: process.env.OPENAI_API_KEY?.trim() || null,
   openAiBaseUrl: process.env.OPENAI_BASE_URL?.trim() || 'https://api.openai.com/v1',
   openAiAgentDefaultModel: process.env.OPENAI_AGENT_DEFAULT_MODEL?.trim() || 'gpt-5.6-terra',

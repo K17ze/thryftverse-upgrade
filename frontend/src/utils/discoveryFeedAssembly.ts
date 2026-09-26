@@ -50,6 +50,14 @@ const HERO_ASPECT_THRESHOLD = 1.2;
  */
 const HERO_MIN_GAP = 8;
 
+/**
+ * Canonical column count for the discovery feed. The assembler's span
+ * decisions (full-width heroes, editorial breaks) are authored against this
+ * value — the renderer MUST use the same count or heroes demote to
+ * fractional-width orphans. Depop/Pinterest phone density is 2.
+ */
+export const DISCOVERY_FEED_COLUMNS = 2;
+
 export interface DiscoverySupplementalContent {
   /** Published, server-ranked Looks. */
   looks?: LookApiItem[];

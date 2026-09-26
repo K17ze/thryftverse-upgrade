@@ -50,12 +50,17 @@ type ListingRow = {
   title: string;
   description: string;
   category: string | null;
+  subcategory: string | null;
   brand: string | null;
   size: string | null;
   condition: string | null;
   price_gbp: string;
+  original_price_gbp: string | null;
   image_url: string | null;
+  status: string;
   created_at: string;
+  media_width: number | null;
+  media_height: number | null;
   interaction_count: string;
   seller_rating: string | null;
   seller_response_hours: string | null;
@@ -100,12 +105,17 @@ function listing(id: string, overrides: Partial<ListingRow> = {}): ListingRow {
     title: `Listing ${id}`,
     description: 'A sufficiently long description for quality scoring purposes.',
     category: 'shoes',
+    subcategory: null,
     brand: 'brandx',
     size: 'M',
     condition: 'good',
     price_gbp: '42.00',
+    original_price_gbp: null,
     image_url: `https://img.example/${id}.jpg`,
+    status: 'active',
     created_at: '2026-09-01T00:00:00.000Z',
+    media_width: 800,
+    media_height: 1000,
     interaction_count: '5',
     seller_rating: null,
     seller_response_hours: null,
@@ -239,7 +249,7 @@ async function serve(app: FastifyInstance) {
   });
   expect(response.statusCode).toBe(200);
   return response.json() as {
-    items: { listing: { id: string } }[];
+    items: { listing: { id: string } & Record<string, unknown> }[];
     decision: { diagnostics: Record<string, unknown> };
   };
 }
@@ -393,6 +403,59 @@ describe('S21-03 — not_interested suppression is reversible', () => {
     });
     const body = await serve(await buildApp(state));
     expect(body.items.map((item) => item.listing.id)).not.toContain('reported_1');
+  });
+});
+
+describe('wire contract — items[].listing is serialized to the camelCase API shape', () => {
+  // The client maps every served listing through mapBackendListingToListing,
+  // which reads camelCase keys only. A raw snake_case ListingRow used to be
+  // returned verbatim: priceGbp/sellerId/createdAt mapped to null and
+  // isDisplayReadyListing dropped every For-You item, so these assertions
+  // pin both halves of the contract — camelCase present, snake_case absent.
+  it('serves camelCase listing fields and no raw row keys', async () => {
+    const state = makeState({ listings: [listing('wire_1')] });
+    const body = await serve(await buildApp(state));
+    const served = body.items.find((item) => item.listing.id === 'wire_1');
+    expect(served).toBeDefined();
+    const servedListing = served!.listing;
+
+    expect(servedListing.sellerId).toBe('seller_wire_1');
+    expect(servedListing.priceGbp).toBe(42);
+    expect(servedListing.imageUrl).toBe('https://img.example/wire_1.jpg');
+    expect(servedListing.createdAt).toBe('2026-09-01T00:00:00.000Z');
+    expect(servedListing.status).toBe('active');
+    expect(servedListing.seller).toEqual({
+      id: 'seller_wire_1',
+      rating: null,
+      responseHours: null,
+    });
+
+    // Raw ListingRow keys must not leak onto the wire.
+    expect(servedListing).not.toHaveProperty('image_url');
+    expect(servedListing).not.toHaveProperty('price_gbp');
+    expect(servedListing).not.toHaveProperty('seller_id');
+    expect(servedListing).not.toHaveProperty('created_at');
+  });
+
+  it('projects primary-image geometry for the masonry grid', async () => {
+    const state = makeState({ listings: [listing('wire_2')] });
+    const body = await serve(await buildApp(state));
+    const served = body.items.find((item) => item.listing.id === 'wire_2');
+    expect(served).toBeDefined();
+    expect(served!.listing.mediaWidth).toBe(800);
+    expect(served!.listing.mediaHeight).toBe(1000);
+    expect(served!.listing.mediaAspectRatio).toBe(0.8);
+  });
+
+  it('omits mediaAspectRatio when image geometry is unknown', async () => {
+    const state = makeState({
+      listings: [listing('wire_3', { media_width: null, media_height: null })],
+    });
+    const body = await serve(await buildApp(state));
+    const served = body.items.find((item) => item.listing.id === 'wire_3');
+    expect(served).toBeDefined();
+    expect(served!.listing.mediaWidth).toBeNull();
+    expect(served!.listing.mediaAspectRatio).toBeNull();
   });
 });
 

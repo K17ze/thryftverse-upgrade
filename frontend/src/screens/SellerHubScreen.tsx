@@ -31,7 +31,6 @@ import { track } from '../analytics';
 // Domain modules, one per pillar.
 import { SellerPillarTiles } from '../components/seller/SellerPillarTiles';
 import { SellerExecutiveHero } from '../components/seller/SellerExecutiveHero';
-import { SellerTrustStrip } from '../components/seller/SellerTrustStrip';
 import { SellerOrdersModule } from '../components/seller/SellerOrdersModule';
 import { SellerAnalyticsModule, type SellerSparklinePoint } from '../components/seller/SellerAnalyticsModule';
 import { SellerClosetModule } from '../components/seller/SellerClosetModule';
@@ -230,7 +229,7 @@ export default function SellerHubScreen() {
     );
   }
 
-  const { topTask, tasks, money, inventory, businessPulse, freshness, trust, opportunities, away } =
+  const { tasks, money, inventory, businessPulse, freshness, opportunities, away } =
     overview;
   const { pendingOrdersCount, atStakeGbp } = summarizeTriage(tasks);
   const tasksStale = ['orders', 'offers', 'payout_holds', 'catalog_imports', 'verification_demands'].some(
@@ -267,9 +266,48 @@ export default function SellerHubScreen() {
           pendingOrdersCount={pendingOrdersCount}
         />
 
-        {/* Zone 1 · The work — orders to dispatch (media rail with SLA
-            chips), then the flat task queue (offers, listing issues,
-            payout holds, imports). Failed fetch → inline retry. */}
+        {/* The money — the one dominant element: payout hero number, a
+            hairline row of sub-metrics (escrow / next payout / listed
+            value), then the net-sales + traffic sparkline beat. One
+            financial block, flat canvas, no card chrome. */}
+        <SellerExecutiveHero
+          money={money}
+          listedValueGbp={inventory.listedValueGbp}
+          formatMoney={formatGbp}
+          onOpenWallet={handleOpenWallet}
+        />
+
+        {/* Launchpad — the four deep destinations directly under the money
+            block, where a seller reaches them without scrolling. Wallet +
+            Orders lead (daily operational); Analytics + Closet trail. */}
+        <SellerPillarTiles
+          pendingOrdersCount={pendingOrdersCount}
+          walletBalanceLabel={money ? formatGbp(money.availableGbp) : undefined}
+          onOpenWallet={handleOpenWallet}
+          onOpenOrders={handleViewAllOrders}
+          onOpenAnalytics={handleNavigateToAnalytics}
+          onOpenCloset={handleNavigateToCloset}
+        />
+
+        {dailyPointsStatus === 'failed' && (
+          <SyncRetryBanner message="Couldn't load store views." onRetry={() => void loadDailyPoints()}
+            telemetryContext="seller_hub_views" containerStyle={styles.resourceErrorBanner} />
+        )}
+        <SellerAnalyticsModule
+          netSalesGbp={businessPulse?.netSalesGbp ?? null}
+          trendPct={businessPulse?.netSalesPrevPeriodPct ?? null}
+          orders30d={businessPulse?.orders ?? null}
+          completeness={businessPulse?.completeness ?? null}
+          sparkline={sparkline}
+          isSparklineLoading={dailyPointsStatus === 'loading' && dailyPoints === null}
+          isSparklineFailed={dailyPointsStatus === 'failed'}
+          formatMoney={formatGbp}
+          onPress={handleNavigateToAnalytics}
+        />
+
+        {/* The work — orders to dispatch (media rail with SLA chips),
+            then the flat task queue (offers, listing issues, payout
+            holds, imports). Failed fetch → inline retry. */}
         {sellingOrdersStatus === 'failed' && (
           <SyncRetryBanner message="Couldn't load orders." onRetry={() => void loadOrders()}
             telemetryContext="seller_hub_orders" containerStyle={styles.resourceErrorBanner} />
@@ -290,32 +328,6 @@ export default function SellerHubScreen() {
           onViewAllOrders={handleViewAllOrders}
         />
 
-        {/* Zone 2 · The money — liquidity posture once the work is clear. */}
-        <SellerExecutiveHero
-          money={money}
-          formatMoney={formatGbp}
-          onOpenWallet={handleOpenWallet}
-        />
-
-        {/* Evidenced reputation — quiet row under the money panel;
-            renders only when the backend owns a trust row. */}
-        <SellerTrustStrip
-          trust={trust ?? null}
-          stale={freshness.trust?.state !== 'fresh'}
-          awayActive={away?.active === true}
-        />
-
-        {/* Zone 3 · Destinations — quick-access grid demoted below the
-            work and the money: Wallet / Orders / Analytics / Closet. */}
-        <SellerPillarTiles
-          pendingOrdersCount={pendingOrdersCount}
-          walletBalanceLabel={money ? formatGbp(money.availableGbp) : undefined}
-          onOpenWallet={handleOpenWallet}
-          onOpenOrders={handleViewAllOrders}
-          onOpenAnalytics={handleNavigateToAnalytics}
-          onOpenCloset={handleNavigateToCloset}
-        />
-
         {/* Catalog: the seller's live listings rail. */}
         {ownListingsStatus === 'failed' && (
           <SyncRetryBanner message="Couldn't load your listings." onRetry={() => void loadOwnListings()}
@@ -323,7 +335,6 @@ export default function SellerHubScreen() {
         )}
         <SellerListingsModule
           activeCount={inventory.active}
-          listedValueLabel={inventory.listedValueGbp > 0 ? `${formatGbp(inventory.listedValueGbp)} listed` : null}
           items={listingRailItems}
           onViewAll={handleNavigateToListings}
           onItemPress={handleOpenItem}
@@ -331,25 +342,8 @@ export default function SellerHubScreen() {
           isFailed={ownListingsStatus === 'failed'}
         />
 
-        {/* Performance: net sales, trend, traffic sparkline. */}
-        {dailyPointsStatus === 'failed' && (
-          <SyncRetryBanner message="Couldn't load store views." onRetry={() => void loadDailyPoints()}
-            telemetryContext="seller_hub_views" containerStyle={styles.resourceErrorBanner} />
-        )}
-        <SellerAnalyticsModule
-          netSalesGbp={businessPulse?.netSalesGbp ?? null}
-          trendPct={businessPulse?.netSalesPrevPeriodPct ?? null}
-          orders30d={businessPulse?.orders ?? null}
-          completeness={businessPulse?.completeness ?? null}
-          sparkline={sparkline}
-          isSparklineLoading={dailyPointsStatus === 'loading' && dailyPoints === null}
-          isSparklineFailed={dailyPointsStatus === 'failed'}
-          formatMoney={formatGbp}
-          onPress={handleNavigateToAnalytics}
-        />
-
         {/* Standards — the seller's program tier and real defects, with an
-            appeal entry point. Sits with performance, after analytics. */}
+            appeal entry point. One status line; never re-expanded. */}
         {standardsStatus === 'failed' && (
           <SyncRetryBanner message="Couldn't load seller standards." onRetry={() => void loadStandards()}
             telemetryContext="seller_hub_standards" containerStyle={styles.resourceErrorBanner} />
@@ -371,14 +365,15 @@ export default function SellerHubScreen() {
           isLoading={false}
         />
 
-        {/* Zone 4 · Growth — near-winners (views without sales); null
-            or empty renders nothing. Sits last. */}
+        {/* Growth — near-winners (views without sales); null
+            or empty renders nothing. */}
         <SellerOpportunitiesModule
           opportunities={opportunities ?? null}
           formatMoney={formatGbp}
           onItemPress={handleOpenItem}
           onViewAll={handleNavigateToListings}
         />
+
       </ScrollView>
 
       {/* Sticky bottom dock: primary action pinned outside the scroll. */}

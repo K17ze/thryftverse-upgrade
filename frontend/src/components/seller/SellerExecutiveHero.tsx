@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, FontFamily, Control } from '../../theme/designTokens';
+import { Space, FontFamily, Control } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { Motion } from '../../theme/motionTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -12,6 +12,8 @@ import type { SellerHubOverview } from '../../services/sellerHubApi';
 
 export interface SellerExecutiveHeroProps {
   money?: SellerHubOverview['money'] | null;
+  /** Total value of the seller's live catalogue — the third sub-metric. */
+  listedValueGbp?: number | null;
   formatMoney: (value: number | null | undefined) => string;
   onOpenWallet: () => void;
 }
@@ -26,8 +28,19 @@ function formatPayoutDate(iso: string): string | null {
   });
 }
 
+/**
+ * SellerExecutiveHero — the dominant element of the hub: the payout the
+ * seller can touch right now, at price-hero scale on flat canvas. No card
+ * chrome — the number carries the weight (Vinted/Depop balance pattern).
+ *
+ * Beneath it, one hairline row of sub-metrics answers "what's the rest of
+ * the money doing": escrow in flight, the next payout date, and the value
+ * sitting live in the catalogue. Each is a verbatim backend figure — a
+ * null renders '—' in place, never a fabricated zero.
+ */
 export const SellerExecutiveHero: React.FC<SellerExecutiveHeroProps> = ({
   money,
+  listedValueGbp,
   formatMoney,
   onOpenWallet,
 }) => {
@@ -39,84 +52,74 @@ export const SellerExecutiveHero: React.FC<SellerExecutiveHeroProps> = ({
   const heldGbp = money?.heldGbp ?? 0;
   const nextPayoutLabel = money?.nextPayoutAt ? formatPayoutDate(money.nextPayoutAt) : null;
 
+  const subMetrics: { key: string; label: string; value: string }[] = [
+    {
+      key: 'escrow',
+      label: 'In escrow',
+      value: processingGbp != null ? formatMoney(processingGbp) : '—',
+    },
+  ];
+  if (nextPayoutLabel) {
+    subMetrics.push({ key: 'payout', label: 'Next payout', value: nextPayoutLabel });
+  }
+  if (listedValueGbp != null && listedValueGbp > 0) {
+    subMetrics.push({ key: 'listed', label: 'Listed', value: formatMoney(listedValueGbp) });
+  }
+
   return (
     <View style={styles.container}>
-      {/* Liquidity panel — the one dominant surface above the fold */}
-      <View style={[styles.moneyPanel, { borderColor: colors.border, backgroundColor: colors.surfaceElevated }]}>
-        <View style={styles.availableSection}>
-          <View style={styles.availableHeaderRow}>
-            <View style={styles.availableLabelWrap}>
-              <View style={[styles.statusDot, { backgroundColor: colors.success }]} />
-              <Text style={[styles.availableLabel, { color: colors.textSecondary }]}>
-                Available payout
+      <View style={styles.labelRow}>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>Available payout</Text>
+        <AnimatedPressable
+          style={styles.transferHit}
+          onPress={onOpenWallet}
+          activeOpacity={0.7}
+          scaleValue={0.97}
+          hapticFeedback="light"
+          accessibilityRole="button"
+          accessibilityLabel="Withdraw funds in wallet"
+        >
+          <Text style={[styles.transferText, { color: colors.brand }]}>Transfer</Text>
+          <AppIcon concept="forward" size={IconSize.xs} color="brand" opticalCenter accessible={false} />
+        </AnimatedPressable>
+      </View>
+
+      {availableGbp != null ? (
+        <AnimatedNumber
+          value={availableGbp}
+          format={formatMoney}
+          duration={Motion.duration.slow}
+          animateOnMount={false}
+          style={[styles.heroValue, { color: colors.textPrimary }]}
+        />
+      ) : (
+        <Text style={[styles.heroValue, { color: colors.textMuted }]}>—</Text>
+      )}
+
+      {/* Rolling reserve safeguard — only when money is actually held */}
+      {heldGbp > 0 && (
+        <Text style={[styles.reserveLine, { color: colors.textMuted }]}>
+          {formatMoney(heldGbp)} in rolling reserve
+        </Text>
+      )}
+
+      {/* Sub-metrics — one hairline row, label over tabular figure */}
+      <View style={[styles.subRow, { borderTopColor: colors.borderSubtle }]}>
+        {subMetrics.map((metric, index) => (
+          <React.Fragment key={metric.key}>
+            {index > 0 && (
+              <View style={[styles.subDivider, { backgroundColor: colors.borderSubtle }]} />
+            )}
+            <View style={styles.subCell}>
+              <Text style={[styles.subLabel, { color: colors.textMuted }]} numberOfLines={1}>
+                {metric.label}
+              </Text>
+              <Text style={[styles.subValue, { color: colors.textPrimary }]} numberOfLines={1}>
+                {metric.value}
               </Text>
             </View>
-            <AnimatedPressable
-              style={[styles.transferBtn, { backgroundColor: colors.brand }]}
-              onPress={onOpenWallet}
-              activeOpacity={0.8}
-              scaleValue={0.97}
-              hapticFeedback="light"
-              accessibilityRole="button"
-              accessibilityLabel="Withdraw funds in wallet"
-            >
-              <Text style={[styles.transferBtnText, { color: colors.textInverse }]}>Transfer</Text>
-              <AppIcon concept="forward" size={IconSize.xs} color="textInverse" opticalCenter accessible={false} />
-            </AnimatedPressable>
-          </View>
-
-          {availableGbp != null ? (
-            <AnimatedNumber
-              value={availableGbp}
-              format={formatMoney}
-              duration={Motion.duration.slow}
-              animateOnMount={false}
-              style={[styles.availableHeroValue, { color: colors.textPrimary }]}
-            />
-          ) : (
-            <Text style={[styles.availableHeroValue, { color: colors.textMuted }]}>—</Text>
-          )}
-        </View>
-
-        <View style={[styles.cardDivider, { backgroundColor: colors.border }]} />
-
-        {/* Liquidity split — escrow now, payout next */}
-        <View style={styles.splitRow}>
-          <View style={styles.splitCol}>
-            <View style={styles.metricLabelRow}>
-              <AppIcon concept="shield" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
-              <Text style={[styles.splitLabel, { color: colors.textSecondary }]}>In escrow</Text>
-            </View>
-            <Text style={[styles.splitValue, { color: colors.textPrimary }]}>
-              {processingGbp != null ? formatMoney(processingGbp) : '—'}
-            </Text>
-          </View>
-
-          {nextPayoutLabel && (
-            <>
-              <View style={[styles.verticalDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.splitCol}>
-                <View style={styles.metricLabelRow}>
-                  <AppIcon concept="pending" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
-                  <Text style={[styles.splitLabel, { color: colors.textSecondary }]}>Next payout</Text>
-                </View>
-                <Text style={[styles.splitValue, { color: colors.textPrimary }]}>
-                  {nextPayoutLabel}
-                </Text>
-              </View>
-            </>
-          )}
-        </View>
-
-        {/* Rolling reserve safeguard — only when money is actually held */}
-        {heldGbp > 0 && (
-          <View style={[styles.safeguardFooter, { borderTopColor: colors.borderSubtle }]}>
-            <AppIcon concept="lock" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
-            <Text style={[styles.safeguardText, { color: colors.textMuted }]}>
-              {formatMoney(heldGbp)} in rolling reserve
-            </Text>
-          </View>
-        )}
+          </React.Fragment>
+        ))}
       </View>
     </View>
   );
@@ -126,101 +129,75 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
       paddingHorizontal: Space.md,
-      paddingTop: Space.md,
+      paddingTop: Space.lg,
     },
-    moneyPanel: {
-      borderRadius: Radius.xl,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
-    },
-    availableSection: {
-      gap: Space.xs,
-    },
-    availableHeaderRow: {
+    labelRow: {
       flexDirection: 'row',
+      alignItems: 'center',
       justifyContent: 'space-between',
-      alignItems: 'center',
     },
-    availableLabelWrap: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-    },
-    statusDot: {
-      width: 7,
-      height: 7,
-      borderRadius: Radius.full,
-    },
-    availableLabel: {
+    label: {
       fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
       fontFamily: FontFamily.semibold,
       letterSpacing: TypographyV2.meta.letterSpacing,
     },
-    transferBtn: {
+    transferHit: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      borderRadius: Radius.full,
+      gap: Space.xxs,
       minHeight: Control.hit,
+      paddingLeft: Space.sm,
     },
-    transferBtnText: {
+    transferText: {
       fontSize: TypographyV2.caption.size,
-      fontFamily: FontFamily.bold,
-      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.caption.lineHeight,
+      fontFamily: FontFamily.semibold,
+      letterSpacing: TypographyV2.caption.letterSpacing,
     },
-    availableHeroValue: {
+    heroValue: {
+      marginTop: Space.xxs,
       fontSize: TypographyV2.priceHero.size,
       fontFamily: FontFamily.bold,
       lineHeight: TypographyV2.priceHero.lineHeight,
       letterSpacing: TypographyV2.priceHero.letterSpacing,
       fontVariant: ['tabular-nums'],
     },
-    cardDivider: {
-      height: StyleSheet.hairlineWidth,
-      marginVertical: Space.md,
+    reserveLine: {
+      marginTop: Space.xxs,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: FontFamily.regular,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      fontVariant: ['tabular-nums'],
     },
-    splitRow: {
+    subRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
+      marginTop: Space.md,
+      paddingTop: Space.smMd,
+      borderTopWidth: StyleSheet.hairlineWidth,
     },
-    splitCol: {
+    subCell: {
       flex: 1,
       gap: Space.xxs,
     },
-    verticalDivider: {
+    subDivider: {
       width: StyleSheet.hairlineWidth,
-      height: '100%',
-      marginHorizontal: Space.md,
+      alignSelf: 'stretch',
+      marginHorizontal: Space.smMd,
     },
-    metricLabelRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-    },
-    splitLabel: {
-      fontSize: TypographyV2.caption.size,
+    subLabel: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
       fontFamily: FontFamily.medium,
+      letterSpacing: TypographyV2.meta.letterSpacing,
     },
-    splitValue: {
+    subValue: {
       fontSize: TypographyV2.numericMeta.size,
       lineHeight: TypographyV2.numericMeta.lineHeight,
       fontFamily: FontFamily.semibold,
       fontVariant: ['tabular-nums'],
-      marginTop: Space.xxs,
-    },
-    safeguardFooter: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-      paddingTop: Space.sm,
-      marginTop: Space.sm,
-      borderTopWidth: StyleSheet.hairlineWidth,
-    },
-    safeguardText: {
-      fontSize: TypographyV2.meta.size,
-      fontFamily: FontFamily.regular,
     },
   });
 }

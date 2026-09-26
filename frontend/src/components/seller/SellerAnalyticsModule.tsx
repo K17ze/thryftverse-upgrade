@@ -1,9 +1,10 @@
 /**
- * SellerAnalyticsModule — the Analytics pillar of the Seller Hub overview.
+ * SellerAnalyticsModule — the second story of the hub's financial block.
  *
- * A flat, typographically-structured module: header row, 30-day net sales
- * with order metadata and period trend, and a real sparkline of daily
- * store views (traffic). The whole module is a single pressable that opens
+ * No section header: it sits directly under the payout hero as the
+ * "how business is moving" beat — one quiet label ("Net sales · 30 days"),
+ * a subordinate figure with its period trend, and a flat sparkline of
+ * daily store views. The whole block is a single pressable that opens
  * the full analytics screen.
  *
  * Truth rules: null data renders an em dash or the element is omitted —
@@ -113,27 +114,25 @@ export const SellerAnalyticsModule: React.FC<SellerAnalyticsModuleProps> = ({
       }${orders30d != null ? `, ${orders30d} order${orders30d === 1 ? '' : 's'}` : ''}, open full analytics`}
       accessibilityHint="Opens the full analytics screen"
     >
-      <View style={styles.headerRow}>
-        <AppIcon concept="trending" size={IconSize.xs} color="textSecondary" opticalCenter accessible={false} />
-        <Text style={[styles.title, { color: colors.textPrimary }]}>Analytics</Text>
+      <View style={styles.labelRow}>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>Net sales · 30 days</Text>
         <AppIcon concept="forward" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
       </View>
 
       <View style={styles.metricsRow}>
-        <View style={styles.netSalesCol}>
-          <Text
-            style={[styles.netSales, { color: netSalesGbp == null ? colors.textMuted : colors.textPrimary }]}
-          >
-            {netSalesGbp == null ? '—' : formatMoney(netSalesGbp)}
-          </Text>
-          {metaLine !== '' && (
-            <Text style={[styles.meta, { color: colors.textMuted }]}>{metaLine}</Text>
-          )}
-        </View>
+        <Text
+          style={[styles.netSales, { color: netSalesGbp == null ? colors.textMuted : colors.textPrimary }]}
+        >
+          {netSalesGbp == null ? '—' : formatMoney(netSalesGbp)}
+        </Text>
         {trend && (
           <Text style={[styles.trend, { color: trendColor }]}>{trend.text}</Text>
         )}
       </View>
+
+      {metaLine !== '' && (
+        <Text style={[styles.meta, { color: colors.textMuted }]}>{metaLine}</Text>
+      )}
 
       {isSparklineLoading ? (
         <LineChart
@@ -175,27 +174,22 @@ function createStyles(colors: ThemeColors) {
       marginHorizontal: Space.md,
       minHeight: Control.hit,
     },
-    headerRow: {
+    labelRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm,
+      justifyContent: 'space-between',
     },
-    title: {
-      flex: 1,
-      fontSize: TypographyV2.sectionTitle.size,
-      lineHeight: TypographyV2.sectionTitle.lineHeight,
-      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
-      fontFamily: FontFamily.bold,
+    label: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: FontFamily.semibold,
+      letterSpacing: TypographyV2.meta.letterSpacing,
     },
     metricsRow: {
       flexDirection: 'row',
-      alignItems: 'flex-end',
+      alignItems: 'baseline',
       justifyContent: 'space-between',
-      marginTop: Space.sm,
-    },
-    netSalesCol: {
-      flex: 1,
-      gap: Space.xxs,
+      marginTop: Space.xxs,
     },
     netSales: {
       fontSize: TypographyV2.priceList.size,
@@ -205,6 +199,7 @@ function createStyles(colors: ThemeColors) {
       fontVariant: ['tabular-nums'],
     },
     meta: {
+      marginTop: Space.xxs,
       fontSize: TypographyV2.meta.size,
       lineHeight: TypographyV2.meta.lineHeight,
       letterSpacing: TypographyV2.meta.letterSpacing,

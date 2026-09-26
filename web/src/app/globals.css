@@ -1,0 +1,645 @@
+@import "tailwindcss";
+
+/* ============================================================================
+   ThryftVerse Web — design tokens (1:1 port of mobile colors.ts/designTokens.ts)
+   Dark is the flagship theme; [data-theme="light"] overrides.
+   ============================================================================ */
+
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #0A0A0A;
+  --surface: #141414;
+  --surface-alt: #1C1C1C;
+  --surface-raised: #1F1F1F;
+  --surface-elevated: #242424;
+  --brand: #F4F0E8;
+  --brand-pressed: #D8D0C3;
+  --brand-subtle: rgba(244, 240, 232, 0.08);
+  --brand-border: rgba(244, 240, 232, 0.20);
+  --text-primary: #FFFFFF;
+  --text-secondary: #A3A3A3;
+  --text-muted: #888888;
+  --text-inverse: #000000;
+  --border: #262626;
+  --border-subtle: #1E1E1E;
+  --danger: #9b0202;
+  --danger-subtle: rgba(155, 2, 2, 0.10);
+  --danger-text: #EF6461;
+  --danger-border: rgba(155, 2, 2, 0.20);
+  --success: #215634;
+  --success-subtle: rgba(33, 86, 52, 0.10);
+  --success-text: #4BB377;
+  --success-border: rgba(33, 86, 52, 0.20);
+  --warning: #D49454;
+  --warning-subtle: rgba(212, 148, 84, 0.12);
+  --warning-text: #D49454;
+  --warning-border: rgba(212, 148, 84, 0.25);
+  --rating-star: #D49454;
+  --coown-up: #8ED1A7;
+  --coown-down: #FF9B9B;
+  --coown-up-subtle: rgba(142, 209, 167, 0.16);
+  --coown-down-subtle: rgba(255, 155, 155, 0.16);
+  --social: #9A6B7A;
+  --discovery: #B85566;
+  --discovery-subtle: rgba(184, 85, 102, 0.12);
+  --commerce-trust: #4A7AC4;
+  --commerce-trust-subtle: rgba(74, 122, 196, 0.10);
+  --commerce-trust-border: rgba(74, 122, 196, 0.20);
+  --antique-gold: #C9A46A;
+  --scrim-text-primary: #FFFFFF;
+  --scrim-text-secondary: rgba(255, 255, 255, 0.88);
+  --scrim-text-tertiary: rgba(255, 255, 255, 0.40);
+  --media-overlay-text: #FFFFFF;
+  --media-overlay-text-muted: rgba(255, 255, 255, 0.7);
+  --media-overlay-scrim: rgba(0, 0, 0, 0.6);
+  --media-outline: rgba(255, 255, 255, 0.08);
+  --overlay: rgba(0, 0, 0, 0.66);
+  --input: #1A1A1A;
+  --input-text: #FFFFFF;
+  --row: #141414;
+  --row-pressed: #1A1A1A;
+  --header: #0A0A0A;
+  --shadow-color: #000000;
+
+  --elev-subtle: 0 1px 6px rgba(0, 0, 0, 0.24);
+  --elev-card: 0 2px 10px rgba(0, 0, 0, 0.28);
+  --elev-floating: 0 4px 14px rgba(0, 0, 0, 0.36);
+  --elev-modal: 0 8px 22px rgba(0, 0, 0, 0.48);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --background: #FFFFFF;
+  --surface: #F5F5F5;
+  --surface-alt: #EFEFEF;
+  --surface-raised: #F8F8F8;
+  --surface-elevated: #FFFFFF;
+  --brand: #111111;
+  --brand-pressed: #333333;
+  --brand-subtle: rgba(17, 17, 17, 0.06);
+  --brand-border: rgba(17, 17, 17, 0.16);
+  --text-primary: #000000;
+  --text-secondary: #666666;
+  --text-muted: #6C6C6C;
+  --text-inverse: #FFFFFF;
+  --border: #E5E5E5;
+  --border-subtle: #F0F0F0;
+  --danger: #9b0202;
+  --danger-subtle: rgba(155, 2, 2, 0.08);
+  --danger-text: #9b0202;
+  --danger-border: rgba(155, 2, 2, 0.16);
+  --success: #215634;
+  --success-subtle: rgba(33, 86, 52, 0.08);
+  --success-text: #215634;
+  --success-border: rgba(33, 86, 52, 0.16);
+  --warning: #C47A2E;
+  --warning-subtle: rgba(196, 122, 46, 0.10);
+  --warning-text: #8F5A10;
+  --warning-border: rgba(196, 122, 46, 0.20);
+  --rating-star: #C47A2E;
+  --coown-up: #1C5631;
+  --coown-down: #5F1616;
+  --coown-up-subtle: rgba(28, 86, 49, 0.10);
+  --coown-down-subtle: rgba(95, 22, 22, 0.10);
+  --social: #6B3245;
+  --discovery: #7B0E1E;
+  --discovery-subtle: rgba(123, 14, 30, 0.10);
+  --commerce-trust: #06489A;
+  --commerce-trust-subtle: rgba(6, 72, 154, 0.08);
+  --commerce-trust-border: rgba(6, 72, 154, 0.16);
+  --antique-gold: #C9A46A;
+  --scrim-text-primary: #FFFFFF;
+  --scrim-text-secondary: rgba(255, 255, 255, 0.88);
+  --scrim-text-tertiary: rgba(255, 255, 255, 0.40);
+  --media-overlay-text: #FFFFFF;
+  --media-overlay-text-muted: rgba(255, 255, 255, 0.7);
+  --media-overlay-scrim: rgba(0, 0, 0, 0.6);
+  --media-outline: rgba(0, 0, 0, 0.07);
+  --overlay: rgba(0, 0, 0, 0.44);
+  --input: #FFFFFF;
+  --input-text: #000000;
+  --row: #F5F5F5;
+  --row-pressed: #EBEBEB;
+  --header: #FFFFFF;
+  --shadow-color: #000000;
+
+  --elev-subtle: 0 1px 6px rgba(0, 0, 0, 0.04);
+  --elev-card: 0 2px 10px rgba(0, 0, 0, 0.06);
+  --elev-floating: 0 4px 14px rgba(0, 0, 0, 0.10);
+  --elev-modal: 0 8px 22px rgba(0, 0, 0, 0.16);
+}
+
+/* ============================================================================
+   Tailwind v4 theme mapping
+   ============================================================================ */
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-alt: var(--surface-alt);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-brand: var(--brand);
+  --color-brand-pressed: var(--brand-pressed);
+  --color-brand-subtle: var(--brand-subtle);
+  --color-brand-border: var(--brand-border);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-inverse: var(--text-inverse);
+  --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
+  --color-danger: var(--danger);
+  --color-danger-subtle: var(--danger-subtle);
+  --color-danger-text: var(--danger-text);
+  --color-danger-border: var(--danger-border);
+  --color-success: var(--success);
+  --color-success-subtle: var(--success-subtle);
+  --color-success-text: var(--success-text);
+  --color-success-border: var(--success-border);
+  --color-warning: var(--warning);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-warning-text: var(--warning-text);
+  --color-warning-border: var(--warning-border);
+  --color-rating-star: var(--rating-star);
+  --color-coown-up: var(--coown-up);
+  --color-coown-down: var(--coown-down);
+  --color-coown-up-subtle: var(--coown-up-subtle);
+  --color-coown-down-subtle: var(--coown-down-subtle);
+  --color-social: var(--social);
+  --color-discovery: var(--discovery);
+  --color-discovery-subtle: var(--discovery-subtle);
+  --color-commerce-trust: var(--commerce-trust);
+  --color-commerce-trust-subtle: var(--commerce-trust-subtle);
+  --color-commerce-trust-border: var(--commerce-trust-border);
+  --color-antique-gold: var(--antique-gold);
+  --color-scrim-text-primary: var(--scrim-text-primary);
+  --color-scrim-text-secondary: var(--scrim-text-secondary);
+  --color-scrim-text-tertiary: var(--scrim-text-tertiary);
+  --color-media-overlay-text: var(--media-overlay-text);
+  --color-media-overlay-text-muted: var(--media-overlay-text-muted);
+  --color-media-overlay-scrim: var(--media-overlay-scrim);
+  --color-overlay: var(--overlay);
+  --color-input: var(--input);
+  --color-input-text: var(--input-text);
+  --color-row: var(--row);
+  --color-row-pressed: var(--row-pressed);
+  --color-header: var(--header);
+
+  /* NOTE: no named --spacing-* tokens — they shadow Tailwind's named
+     max-w/container scale (max-w-xl resolved to --spacing-xl = 32px).
+     Use numeric spacing utilities (4px grid). */
+
+  /* Radius grammar — mirrors Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-chat: 20px;
+  --radius-xxl: 24px;
+  --radius-sheet: 20px;
+  --radius-rail: 18px;
+
+  /* Type scale — mirrors mobile TypographyV2: size / line-height / weight /
+     letter-spacing are all part of the role. Tracking is the perceptual
+     half of the scale — display roles tighten, microtype opens. */
+  --text-micro: 10px;
+  --text-micro--line-height: 14px;
+  --text-micro--letter-spacing: 0.2px;
+  --text-micro--font-weight: 500;
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
+  --text-caption--letter-spacing: 0.1px;
+  --text-meta: 11px;
+  --text-meta--line-height: 14px;
+  --text-meta--letter-spacing: 0.15px;
+  --text-meta--font-weight: 500;
+  --text-label: 11px;
+  --text-label--line-height: 14px;
+  --text-label--letter-spacing: 0.5px;
+  --text-label--font-weight: 600;
+  --text-body: 14px;
+  --text-body--line-height: 20px;
+  --text-body--letter-spacing: -0.2px;
+  --text-body-emphasis: 15px;
+  --text-body-emphasis--line-height: 21px;
+  --text-body-emphasis--letter-spacing: 0px;
+  --text-body-large: 16px;
+  --text-body-large--line-height: 22px;
+  --text-body-large--letter-spacing: -0.2px;
+  --text-caption-elevated: 13px;
+  --text-caption-elevated--line-height: 18px;
+  --text-caption-elevated--letter-spacing: 0px;
+  --text-caption-elevated--font-weight: 500;
+  --text-numeric-meta: 13px;
+  --text-numeric-meta--line-height: 18px;
+  --text-numeric-meta--letter-spacing: 0px;
+  --text-numeric-meta--font-weight: 600;
+  --text-section-title: 17px;
+  --text-section-title--line-height: 24px;
+  --text-section-title--letter-spacing: -0.4px;
+  --text-section-title--font-weight: 600;
+  --text-item-title: 18px;
+  --text-item-title--line-height: 24px;
+  --text-item-title--letter-spacing: -0.3px;
+  --text-item-title--font-weight: 600;
+  --text-price-list: 20px;
+  --text-price-list--line-height: 24px;
+  --text-price-list--letter-spacing: -0.3px;
+  --text-price-list--font-weight: 700;
+  --text-screen-title: 24px;
+  --text-screen-title--line-height: 32px;
+  --text-screen-title--letter-spacing: -0.6px;
+  --text-screen-title--font-weight: 700;
+  --text-price-hero: 28px;
+  --text-price-hero--line-height: 32px;
+  --text-price-hero--letter-spacing: -0.5px;
+  --text-price-hero--font-weight: 700;
+  --text-hero: 28px;
+  --text-hero--line-height: 34px;
+  --text-hero--letter-spacing: -0.5px;
+  --text-hero--font-weight: 700;
+  --text-display: 32px;
+  --text-display--line-height: 38px;
+  --text-display--letter-spacing: -0.5px;
+  --text-display--font-weight: 700;
+  --text-display-large: 40px;
+  --text-display-large--line-height: 48px;
+  --text-display-large--letter-spacing: -0.6px;
+  --text-display-large--font-weight: 700;
+  /* Editorial serif roles — Playfair, used sparingly (asset/lot titles,
+     editorial module headers), mirrors mobile editorialDisplay/Title. */
+  --text-editorial-display: 28px;
+  --text-editorial-display--line-height: 36px;
+  --text-editorial-display--letter-spacing: -0.3px;
+  --text-editorial-display--font-weight: 700;
+  --text-editorial-title: 20px;
+  --text-editorial-title--line-height: 28px;
+  --text-editorial-title--letter-spacing: -0.2px;
+  --text-editorial-title--font-weight: 400;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-playfair), Georgia, serif;
+
+  --shadow-subtle: var(--elev-subtle);
+  --shadow-card: var(--elev-card);
+  --shadow-floating: var(--elev-floating);
+  --shadow-modal: var(--elev-modal);
+
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.05, 0.7, 0.1, 1);
+}
+
+/* ============================================================================
+   Base
+   ============================================================================ */
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background: var(--background);
+  color: var(--text-primary);
+  /* Literal stack — next/font defines --font-inter on <body>; var(--font-sans)
+     is not emitted unless a font-sans utility exists, so it must not be
+     referenced here (it silently falls back to the system stack). */
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 20px;
+  letter-spacing: -0.2px;
+  overscroll-behavior-y: none;
+  /* Clip residual horizontal bleed (fixed bars measure against the
+     containing block, so a stray wide child would otherwise drag the
+     page a few px sideways). `clip` — not `hidden` — keeps position:
+     sticky intact because it doesn't create a scroll container. */
+  overflow-x: clip;
+}
+
+::selection {
+  background: var(--brand-subtle);
+  color: var(--text-primary);
+}
+
+/* Thin, theme-aware scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Focus ring — 2px emphasis stroke, keyboard only */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Press feedback — charter range 0.97–0.985, transform only (no layout shift) */
+.pressable {
+  transition: transform 120ms var(--ease-standard), opacity 120ms var(--ease-standard),
+    background-color 120ms var(--ease-standard), color 120ms var(--ease-standard),
+    border-color 120ms var(--ease-standard);
+}
+.pressable:active {
+  transform: scale(0.975);
+}
+
+/* Utility: tabular numerals for prices/financial values (Inter tnum) */
+.tnum {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+/* Canonical role refinements the theme tokens can't express — mobile
+   TypographyV2: label is the only uppercase role; price/numeric roles
+   always use tabular figures; editorial roles are Playfair. */
+.text-label {
+  text-transform: uppercase;
+}
+.text-price-list,
+.text-price-hero,
+.text-numeric-meta {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+.text-editorial-display,
+.text-editorial-title {
+  font-family: var(--font-playfair), Georgia, serif;
+}
+
+/* Hairline separator */
+.hairline {
+  border-color: var(--border-subtle);
+}
+
+/* Text-shadow scrim for glyphs over media (mirrors mobile actionGlyph) */
+.glyph-scrim {
+  text-shadow: 0 1px 4px var(--shadow-color);
+}
+.drop-scrim {
+  filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.6));
+}
+
+/* Skeleton shimmer — subtle, restrained */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+.skeleton {
+  background: linear-gradient(
+    100deg,
+    var(--surface-alt) 40%,
+    var(--surface-raised) 50%,
+    var(--surface-alt) 60%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s var(--ease-standard) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+  .pressable:active {
+    transform: none;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Image fade-in on load (CachedImage transition=300 equivalent) */
+.img-fade {
+  transition: opacity 300ms var(--ease-standard);
+}
+
+/* Media hairline — keeps image edges crisp against surfaces in both themes */
+.appimg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--media-outline);
+  pointer-events: none;
+}
+
+/* Balanced headings — avoids ragged single-word last lines on editorial type */
+h1,
+h2 {
+  text-wrap: balance;
+}
+
+/* Hide scrollbar utility for horizontal rails */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Line clamp helpers (Tailwind has line-clamp but keep explicit budget) */
+.clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Elevation order — the classes used across the shell. z-index is not a
+   theme namespace in Tailwind v4, so these are explicit utilities. */
+@utility z-elevated {
+  z-index: 10;
+}
+@utility z-sticky {
+  z-index: 20;
+}
+@utility z-dropdown {
+  z-index: 30;
+}
+@utility z-overlay {
+  z-index: 40;
+}
+@utility z-modal {
+  z-index: 50;
+}
+@utility z-toast {
+  z-index: 60;
+}
+
+/* ============================================================================
+   Motion grammar — additive utilities (mirrors frontend/src/theme/motionTokens.ts
+   tiers: micro ~120ms / deliberate ~200–280ms; ease-out entries, ease-in exits).
+   Opt-in only — apply to single entering surfaces, never cascade across lists.
+   Everything here collapses to instant under prefers-reduced-motion (block at
+   the end of this file).
+   ============================================================================ */
+
+/* Pressable — extend property coverage with `filter` (hover dim/brighten).
+   Declared separately so the base rule remains the source for timing/easing;
+   this only widens the transitioned property list. */
+.pressable {
+  transition-property: transform, opacity, background-color, color, border-color,
+    filter;
+}
+
+/* Quiet link — secondary text resolving to primary on hover, micro tier. */
+@utility link-quiet {
+  color: var(--text-secondary);
+  transition: color 120ms var(--ease-standard);
+}
+.link-quiet:hover {
+  color: var(--text-primary);
+}
+
+/* fade-up — reusable opt-in mount transition (opacity 0→1, 4px rise). */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@utility fade-up {
+  animation: fade-up 200ms var(--ease-standard) both;
+}
+
+/* fade-in — opacity-only entrance for scrims/overlays. */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@utility fade-in {
+  animation: fade-in 200ms var(--ease-standard) both;
+}
+
+/* sheet-enter — 8px rise + fade, deliberate tier. Applied to the sheet
+   container in Sheet.tsx (and its scrim via fade-in). */
+@keyframes sheet-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@utility sheet-enter {
+  animation: sheet-enter 200ms var(--ease-standard) both;
+}
+
+/* Toast — enter rises into place (200ms); exit settles out, ease-in (160ms). */
+@keyframes toast-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes toast-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+@utility toast-enter {
+  animation: toast-enter 200ms var(--ease-standard) both;
+}
+@utility toast-exit {
+  animation: toast-exit 160ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+/* Interactive media — opt-in hover zoom inside a `group` container.
+   3% scale over 300ms: perceptible, never playful. Apply to the media
+   element; the parent carries `group` + overflow-hidden. */
+@utility media-zoom {
+  transition: transform 300ms var(--ease-standard);
+}
+.group:hover .media-zoom {
+  transform: scale(1.03);
+}
+
+/* Quick actions on media — hidden until hover/focus-within on hover-capable
+   devices, always visible on touch (hover: none). Capability-gated, not
+   width-gated. pointer-events gate keeps the hidden cluster from swallowing
+   clicks meant for the stretched link underneath. Pair with
+   `transition-opacity` (reduced-motion squashes it globally). */
+@media (hover: hover) {
+  .quick-actions {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .group:hover .quick-actions,
+  .group:focus-within .quick-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/* Reduced motion — new utilities collapse to instant, matching the global
+   squash above. `animation: none` also skips the `both` fill entirely. */
+@media (prefers-reduced-motion: reduce) {
+  .fade-up,
+  .fade-in,
+  .sheet-enter,
+  .toast-enter,
+  .toast-exit {
+    animation: none;
+  }
+  .media-zoom {
+    transition: none;
+  }
+  .group:hover .media-zoom {
+    transform: none;
+  }
+}

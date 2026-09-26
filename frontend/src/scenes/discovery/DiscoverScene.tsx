@@ -17,6 +17,7 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useTaxonomy } from '../../context/TaxonomyContext';
 import { Space, Radius, FontFamily, Control } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
+import { DISCOVERY_GRID_INSET, DISCOVERY_GRID_PADDING } from '../../components/discovery/unifiedDiscoveryStyles';
 import { RefreshIndicator } from '../../components/RefreshIndicator';
 import { EmptyState } from '../../components/EmptyState';
 import { OfflineBanner } from '../../components/OfflineBanner';
@@ -96,11 +97,7 @@ function DiscoverCategoryBar({ activeCategory, categories, onSelect }: DiscoverC
           return (
             <Pressable
               key={`cat-${idx}-${category.id}`}
-              style={[
-                styles.pill,
-                isActive && styles.pillActive,
-                category.isPersonalized && !isActive && styles.pillPersonalized,
-              ]}
+              style={[styles.pill, isActive && styles.pillActive]}
               onPress={() => onSelect(category.id)}
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
@@ -126,10 +123,11 @@ function DiscoverCategoryBar({ activeCategory, categories, onSelect }: DiscoverC
 function createCategoryBarStyles(colors: ThemeColors) {
   return StyleSheet.create({
     bar: {
+      marginHorizontal: -DISCOVERY_GRID_INSET,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.borderSubtle },
     scrollContent: {
-      paddingHorizontal: Space.md,
+      paddingHorizontal: DISCOVERY_GRID_PADDING,
       paddingVertical: Space.sm,
       gap: Space.xs,
       alignItems: 'center',
@@ -137,12 +135,12 @@ function createCategoryBarStyles(colors: ThemeColors) {
       // (Design.md: 44pt interaction band with 32–36pt visible chrome).
       minHeight: 44 },
     pill: {
-      // Canonical discovery-chip grammar — hairline-outlined full-radius
-      // pill, same as UnifiedDiscovery + Home signal rails. 36pt visible
-      // chrome inside a 44pt interaction band (Design.md).
-      minHeight: 36,
-      paddingVertical: Space.sm,
-      paddingHorizontal: Space.md,
+      // Compact explore-chip grammar — same as UnifiedDiscovery's upgraded
+      // category chips: ~28pt chrome inside a 44pt band, hairline outline,
+      // dark fill ONLY for the selected chip. Personalisation is carried by
+      // the brand dot, never a second fill.
+      paddingVertical: 6,
+      paddingHorizontal: Space.smMd,
       borderRadius: Radius.full,
       backgroundColor: 'transparent',
       borderWidth: StyleSheet.hairlineWidth,
@@ -150,9 +148,6 @@ function createCategoryBarStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 5 },
-    pillPersonalized: {
-      borderColor: colors.border,
-      backgroundColor: colors.surfaceAlt },
     pillActive: {
       backgroundColor: colors.textPrimary,
       borderColor: colors.textPrimary },
@@ -164,11 +159,11 @@ function createCategoryBarStyles(colors: ThemeColors) {
     pillDotActive: {
       backgroundColor: colors.background },
     pillText: {
-      fontSize: TypographyV2.meta.size,
-      lineHeight: TypographyV2.meta.lineHeight,
+      fontSize: TypographyV2.caption.size,
+      lineHeight: TypographyV2.caption.lineHeight,
       fontFamily: FontFamily.medium,
       color: colors.textSecondary,
-      letterSpacing: TypographyV2.meta.letterSpacing },
+      letterSpacing: TypographyV2.caption.letterSpacing },
     pillTextActive: {
       color: colors.textInverse } });
 }

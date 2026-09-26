@@ -20,12 +20,13 @@ import type { Listing } from '../domain';
 import { isVideoUri, getCategoryFocalPoint, FACE_FOCAL_POINT, getListingCoverUri } from '../utils/media';
 import { StaggeredItem } from './StaggeredGridEntrance';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { resolveListingMediaAspectRatio } from '../utils/listingMediaGeometry';
+import { DEFAULT_LISTING_MEDIA_ASPECT_RATIO, resolveListingMediaAspectRatio, resolveServerListingMediaAspectRatio } from '../utils/listingMediaGeometry';
+import { recordMeasuredMediaRatio, useMeasuredMediaRatio } from '../utils/measuredMediaRatio';
 import { useRenderTrace } from '../performance/renderTrace';
 import { SustainabilityBadge } from './product/SustainabilityBadge';
 import type { DiscoveryListingSummary } from '../contracts/DiscoveryListingSummary';
 
-import { Space, Radius, Control, AvatarSize } from '../theme/designTokens';
+import { Space, Radius, Control, AvatarSize, FontFamily } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { synthesizeListingIdentity } from '../services/listingMapper';
 import { recordPromotionClick } from '../services/promotionsApi';
@@ -604,7 +605,28 @@ function ProductDiscoveryTileBase({
   const haptic = useHaptic();
   const tileStyles = React.useMemo(() => createTileStyles(colors), [colors]);
   useRenderTrace('ProductDiscoveryTile', { itemId: item.id, isSaved, aspectRatio });
-  const ratio = aspectRatio ?? resolveListingMediaAspectRatio(item);
+  // Geometry truth order: explicit caller reservation → server geometry →
+  // session-measured decoded pixels → the honest 3:4 portrait standard.
+  // Server-provided dims (top-level fields or the media[] record) are real
+  // API truth; when a feed row carries none (e.g. the /recommendations
+  // For-You feed does not join listing_images), the measured-geometry
+  // feedback cache supplies the real ratio after first decode — the
+  // Pinterest pattern that turns a uniform grid into a true masonry
+  // stagger.
+  const serverRatio = resolveServerListingMediaAspectRatio(item);
+  const measuredRatio = useMeasuredMediaRatio(
+    aspectRatio == null && serverRatio == null ? item.id : null,
+  );
+  const ratio = aspectRatio ?? serverRatio ?? measuredRatio ?? DEFAULT_LISTING_MEDIA_ASPECT_RATIO;
+  // Report the decoded pixel geometry only when the row carried no server
+  // truth — measurements never override the API, and each id records once.
+  const handleMediaLoad = useCallback(
+    (event: { source: { width: number; height: number } }) => {
+      if (serverRatio != null) return;
+      recordMeasuredMediaRatio(item.id, event.source.width, event.source.height);
+    },
+    [serverRatio, item.id],
+  );
   // Truthful price: the tile never fabricates £0. A null price (e.g. a
   // search result whose index row carries no price) renders no price line;
   // the accessibility label states the honest state.
@@ -691,9 +713,17 @@ function ProductDiscoveryTileBase({
             derivatives={primaryMedia?.derivatives}
             downscaleWidth={downscaleWidth}
             priority="high"
+            onLoad={handleMediaLoad}
           />
         ) : (
-          <ImageEmptyGraphic icon="shirt-outline" style={StyleSheet.absoluteFill} />
+          // Missing media — a quiet tonal block with a single muted glyph.
+          // The full ImageEmptyGraphic treatment (gradient, stripes, icon
+          // ring, label pill) reads as chrome at tile scale; Depop's
+          // missing-media state is a plain tonal cell, and the media
+          // frame + radius already carry the shape.
+          <View style={[StyleSheet.absoluteFill, tileStyles.mediaEmpty]}>
+            <Ionicons name="shirt-outline" size={18} color={colors.textMuted} />
+          </View>
         )}
         {conditionBadge ? (
           <View style={[tileStyles.conditionBadge, { backgroundColor: conditionBadge.bg }]}>
@@ -722,6 +752,10 @@ function ProductDiscoveryTileBase({
           </Pressable>
         ) : null}
       </View>
+      {/* Metadata hangs off the media's bottom edge, Depop-style: the price
+          leads (it's the actionable signal on a marketplace tile), the title
+          follows as a quiet single-line label. No eyebrow stack, no seller
+          row, no badge cascade — media + price + name is the whole budget. */}
       <View style={tileStyles.info}>
         {/* Paid-placement disclosure — server-stamped only. Rendered
             verbatim from `item.disclosure`; the tile never infers
@@ -729,10 +763,10 @@ function ProductDiscoveryTileBase({
         {item.disclosure ? (
           <Text style={tileStyles.disclosureLabel}>{item.disclosure}</Text>
         ) : null}
-        <Text style={tileStyles.title} numberOfLines={1}>{item.title}</Text>
         {priceLabel ? (
           <Text style={tileStyles.price}>{priceLabel}</Text>
         ) : null}
+        <Text style={tileStyles.title} numberOfLines={1}>{item.title}</Text>
       </View>
     </AnimatedPressable>
   );
@@ -747,6 +781,12 @@ const createTileStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => S
     position: 'relative',
     overflow: 'hidden',
     borderRadius: Radius.lg },
+  // Quiet missing-media state — flat tonal block (surfaceAlt comes from the
+  // parent media frame) with a single muted glyph. No gradient, stripes,
+  // or icon ring: chrome-free per the tile's restraint budget.
+  mediaEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center' },
   conditionBadge: {
     position: 'absolute',
     bottom: Space.xs,
@@ -784,9 +824,9 @@ const createTileStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => S
     textShadowOffset: GLYPH_TEXT_SHADOW_OFFSET,
     textShadowRadius: 3 },
   info: {
-    paddingTop: Space.xs,
+    paddingTop: Space.xs + 2,
     paddingHorizontal: Space.xxs,
-    gap: 0 },
+    gap: 1 },
   // Paid-placement disclosure — quiet text-only label above the title.
   // Server-stamped verbatim; subtle muted ink, no pill, no icon chrome.
   disclosureLabel: {
@@ -804,12 +844,13 @@ const createTileStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => S
     fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
     letterSpacing: TypographyV2.meta.letterSpacing },
-  // Price — body size, bold, primary. The price is the actionable metadata
-  // for a marketplace tile; it carries more weight than the title.
+  // Price — body size, semibold, primary. It leads the metadata block
+  // (Depop order: price then name) and is the one element allowed to
+  // carry real weight under the media.
   price: {
     fontSize: TypographyV2.body.size,
     lineHeight: TypographyV2.body.lineHeight,
-    fontFamily: TypographyV2.body.fontFamily,
+    fontFamily: FontFamily.semibold,
     color: colors.textPrimary,
     letterSpacing: TypographyV2.body.letterSpacing,
     fontVariant: ['tabular-nums'] } });

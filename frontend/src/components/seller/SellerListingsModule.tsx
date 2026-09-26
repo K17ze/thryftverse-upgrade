@@ -4,14 +4,10 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, FontFamily, Control } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { AppIcon } from '../common/AppIcon';
 import { SellerThumbRail, type SellerThumbRailItem } from './SellerThumbRail';
-import { IconSize } from '../../theme/iconTokens';
 
 export interface SellerListingsModuleProps {
   activeCount: number;
-  /** Preformatted listed value, e.g. "£4,373.00 listed". Null → not rendered. */
-  listedValueLabel: string | null;
   items: SellerThumbRailItem[];
   onViewAll: () => void;
   onItemPress: (id: string) => void;
@@ -22,12 +18,13 @@ export interface SellerListingsModuleProps {
 
 /**
  * SellerListingsModule — active-listings rail on the Seller Hub overview.
- * Shares the exact header grammar, View all control and honest empty-row
- * treatment with SellerClosetModule — one system, two sections.
+ * Plain typographic header ("Listings · N active" + View all) and an
+ * honest empty row — shares the exact grammar with SellerClosetModule.
+ * Listed value moved into the financial block's sub-metrics — it answers
+ * the money question there, not here.
  */
 export const SellerListingsModule: React.FC<SellerListingsModuleProps> = ({
   activeCount,
-  listedValueLabel,
   items,
   onViewAll,
   onItemPress,
@@ -37,41 +34,26 @@ export const SellerListingsModule: React.FC<SellerListingsModuleProps> = ({
   const { colors } = useAppTheme();
   const styles = createStyles(colors);
   const hasItems = items.length > 0;
-  const showListedValue = listedValueLabel != null && hasItems;
   const showSkeleton = isLoading && !hasItems;
 
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
         <View style={styles.titleWrap}>
-          <AppIcon
-            concept="tag"
-            size={IconSize.xs}
-            color="textSecondary"
-            opticalCenter
-            accessible={false}
-          />
           <Text style={styles.sectionTitle}>Listings</Text>
           <Text style={styles.countCaption}>{activeCount} active</Text>
         </View>
-        <View style={styles.headerActions}>
-          {showListedValue ? (
-            <Text style={styles.listedValue} numberOfLines={1}>
-              {listedValueLabel}
-            </Text>
-          ) : null}
-          <AnimatedPressable
-            onPress={onViewAll}
-            activeOpacity={0.7}
-            scaleValue={0.97}
-            hapticFeedback="light"
-            accessibilityRole="button"
-            accessibilityLabel="View all listings"
-            style={styles.viewAllHit}
-          >
-            <Text style={styles.viewAllText}>View all</Text>
-          </AnimatedPressable>
-        </View>
+        <AnimatedPressable
+          onPress={onViewAll}
+          activeOpacity={0.7}
+          scaleValue={0.97}
+          hapticFeedback="light"
+          accessibilityRole="button"
+          accessibilityLabel="View all listings"
+          style={styles.viewAllHit}
+        >
+          <Text style={styles.viewAllText}>View all</Text>
+        </AnimatedPressable>
       </View>
 
       {hasItems ? (
@@ -88,13 +70,6 @@ export const SellerListingsModule: React.FC<SellerListingsModuleProps> = ({
         </ScrollView>
       ) : isFailed ? null : (
         <View style={styles.emptyRow}>
-          <AppIcon
-            concept="tag"
-            size={IconSize.sm}
-            color="textMuted"
-            opticalCenter
-            accessible={false}
-          />
           <Text style={styles.emptyText}>Nothing listed yet</Text>
         </View>
       )}
@@ -109,13 +84,14 @@ function createStyles(colors: ThemeColors) {
     },
     headerRow: {
       flexDirection: 'row',
-      alignItems: 'center',
+      alignItems: 'baseline',
       justifyContent: 'space-between',
       marginHorizontal: Space.md,
+      marginBottom: Space.xxs,
     },
     titleWrap: {
       flexDirection: 'row',
-      alignItems: 'center',
+      alignItems: 'baseline',
       gap: Space.sm,
       flexShrink: 1,
     },
@@ -129,18 +105,7 @@ function createStyles(colors: ThemeColors) {
       fontSize: TypographyV2.caption.size,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,
-    },
-    headerActions: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-    },
-    listedValue: {
-      fontSize: TypographyV2.meta.size,
-      lineHeight: TypographyV2.meta.lineHeight,
-      fontFamily: FontFamily.semibold,
       fontVariant: ['tabular-nums'],
-      color: colors.textSecondary,
     },
     viewAllHit: {
       minHeight: Control.hit,
@@ -152,10 +117,8 @@ function createStyles(colors: ThemeColors) {
       color: colors.brand,
     },
     emptyRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
       minHeight: Control.hit,
+      justifyContent: 'center',
       marginHorizontal: Space.md,
     },
     emptyText: {

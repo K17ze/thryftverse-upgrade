@@ -1,11 +1,12 @@
 import React from 'react';
-import { View, Text, ScrollView } from 'react-native';
+import { View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { AppButton } from '../ui/AppButton';
+import { AnimatedPressable } from '../AnimatedPressable';
 import { useSettingsPreferences } from '../../context/SettingsPreferencesContext';
 import { useToast } from '../../context/ToastContext';
 import { FilterSection } from './FilterSection';
+import { FilterOptionRow } from './FilterOptionRow';
 import { createFilterStyles } from './filterStyles';
 
 interface Props {
@@ -17,13 +18,34 @@ interface Props {
   onToggleSize: (size: string) => void;
 }
 
-// Size section — saved "My sizes" rail, wrapping chip cloud with long-press
-// to save/remove a size, and a save-selection affordance.
+// Size section — a two-column grid of quiet cells. Snapshot sizes and saved
+// "My sizes" share the one grid (saved sizes carry a small star and stay
+// selectable even when absent from the snapshot); long-press still saves or
+// removes a size from the profile, and a quiet text action saves the whole
+// current selection.
 function FilterSizeSectionBase({ expanded, onToggle, sizeOptions, selectedSizes, onToggleSize }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createFilterStyles(colors), [colors]);
   const { mySizes, setMySizes, toggleMySize } = useSettingsPreferences();
   const { show } = useToast();
+
+  // One grid, one vocabulary — saved sizes absent from the snapshot append
+  // after the snapshot values so nothing selectable disappears.
+  const sizeChoices = React.useMemo(() => {
+    const extras = mySizes.filter((size) => !sizeOptions.includes(size));
+    return [...sizeOptions, ...extras];
+  }, [sizeOptions, mySizes]);
+
+  const gridRows = React.useMemo(() => {
+    const rows: string[][] = [];
+    for (let i = 0; i < sizeChoices.length; i += 2) {
+      rows.push(sizeChoices.slice(i, i + 2));
+    }
+    return rows;
+  }, [sizeChoices]);
+
+  const allSelectedSaved =
+    selectedSizes.length > 0 && selectedSizes.every((size) => mySizes.includes(size));
 
   return (
     <FilterSection
@@ -33,82 +55,79 @@ function FilterSizeSectionBase({ expanded, onToggle, sizeOptions, selectedSizes,
       onToggle={onToggle}
       count={selectedSizes.length}
     >
-      {/* My Sizes — saved size profile for quick application */}
-      {mySizes.length > 0 ? (
-        <View style={styles.mySizesRow}>
-          <Text style={styles.mySizesLabel}>My sizes:</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.mySizesScroll}>
-            {mySizes.map(s => {
-              const isActive = selectedSizes.includes(s);
-              return (
-                <AppButton
-                  key={s}
-                  title={s}
-                  variant="secondary"
-                  size="sm"
-                  style={[styles.chip, styles.sizeChip, styles.mySizeChip, isActive && styles.chipActive]}
-                  titleStyle={[styles.chipText, isActive && styles.chipTextActive]}
-                  onPress={() => onToggleSize(s)}
-                  accessibilityLabel={`Toggle your saved size ${s}`}
-                />
-              );
-            })}
-          </ScrollView>
+      {gridRows.length > 0 ? (
+        <View style={styles.optionList}>
+          {gridRows.map((row, rowIndex) => (
+            <View
+              key={row.join('|')}
+              style={[styles.optionGridRow, rowIndex < gridRows.length - 1 && styles.optionDivider]}
+            >
+              {row.map((size, colIndex) => {
+                const isActive = selectedSizes.includes(size);
+                const isMySize = mySizes.includes(size);
+                return (
+                  <FilterOptionRow
+                    key={size}
+                    layout="cell"
+                    role="checkbox"
+                    label={size}
+                    selected={isActive}
+                    showDivider={false}
+                    showLeadingDivider={colIndex === 1}
+                    marker={
+                      isMySize ? (
+                        <Ionicons name="star" size={11} color={colors.brand} aria-hidden={true} />
+                      ) : undefined
+                    }
+                    onPress={() => onToggleSize(size)}
+                    onLongPress={() => {
+                      toggleMySize(size);
+                      show(
+                        isMySize ? `Removed ${size} from your sizes` : `Saved ${size} to your sizes`,
+                        'success'
+                      );
+                    }}
+                    accessibilityLabel={`${size}. Long press to ${isMySize ? 'remove from' : 'save to'} your sizes`}
+                  />
+                );
+              })}
+              {/* Keep the grid rectangular when the last row is short. */}
+              {row.length === 1 ? <View style={styles.optionCell} /> : null}
+            </View>
+          ))}
         </View>
-      ) : null}
+      ) : (
+        <Text style={styles.emptySectionText}>No sizes in this category yet.</Text>
+      )}
 
-      <View style={styles.wrapContainer}>
-        {sizeOptions.length > 0 ? (
-          sizeOptions.map(s => {
-            const isActive = selectedSizes.includes(s);
-            const isMySize = mySizes.includes(s);
-            return (
-              <AppButton
-                key={s}
-                title={s}
-                icon={isMySize ? <Ionicons name="star" size={12} color={colors.brand} aria-hidden={true} /> : undefined}
-                variant="secondary"
-                size="sm"
-                style={[styles.chip, styles.sizeChip, isActive && styles.chipActive, isMySize && styles.mySizeMarkedChip]}
-                titleStyle={[styles.chipText, isActive && styles.chipTextActive]}
-                onPress={() => onToggleSize(s)}
-                onLongPress={() => {
-                  toggleMySize(s);
-                  show(
-                    mySizes.includes(s) ? `Removed ${s} from your sizes` : `Saved ${s} to your sizes`,
-                    'success'
-                  );
-                }}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: isActive }}
-                accessibilityLabel={`${s}. Long press to ${isMySize ? 'remove from' : 'save to'} your sizes`}
-              />
-            );
-          })
-        ) : (
-          <Text style={styles.emptySectionText}>No sizes in this category yet.</Text>
-        )}
-      </View>
-
-      {/* Save current sizes as my sizes */}
+      {/* Save current sizes as my sizes — quiet text action, not a button. */}
       {selectedSizes.length > 0 ? (
-        <View style={styles.saveSizesRow}>
-          <AppButton
-            title={selectedSizes.every(s => mySizes.includes(s)) ? 'All saved' : 'Save as my sizes'}
-            icon={selectedSizes.every(s => mySizes.includes(s)) ? <Ionicons name="checkmark-circle" size={16} color={colors.brand} aria-hidden={true} /> : undefined}
-            variant="secondary"
-            size="sm"
-            style={styles.saveSizesBtn}
-            titleStyle={styles.saveSizesBtnText}
+        allSelectedSaved ? (
+          <View style={styles.optionQuietAction} accessibilityRole="text">
+            <Ionicons name="checkmark-circle" size={14} color={colors.textMuted} aria-hidden={true} />
+            <Text style={[styles.optionQuietActionText, { color: colors.textMuted }]}>
+              Saved to your sizes
+            </Text>
+          </View>
+        ) : (
+          <AnimatedPressable
+            style={styles.optionQuietAction}
+            disableAnimation
+            activeOpacity={0.6}
+            hapticFeedback="light"
             onPress={() => {
               // Merge current selection into my sizes
               const merged = [...new Set([...mySizes, ...selectedSizes])];
               setMySizes(merged);
               show(`Saved ${selectedSizes.length} size${selectedSizes.length === 1 ? '' : 's'} to your profile`, 'success');
             }}
+            accessibilityRole="button"
             accessibilityLabel="Save current size selection to your profile"
-          />
-        </View>
+          >
+            <Ionicons name="bookmark-outline" size={14} color={colors.brand} aria-hidden={true} />
+            <Text style={styles.optionQuietActionText}>Save as my sizes</Text>
+          </AnimatedPressable>
+        )
       ) : null}
     </FilterSection>
   );

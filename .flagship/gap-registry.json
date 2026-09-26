@@ -1,774 +1,807 @@
 {
- "campaign": "thryftverse-micro-upgrade-wave",
- "date": "2026-09-18",
- "branch": "feat/product-detail-contract-media-device-closure",
- "findings": [
-  {
-   "id": "GAP-CHART-SWITCHER",
-   "department": "coown / asset detail / price chart",
-   "severity": "P1",
-   "evidence": "frontend/src/components/coown/CoOwnCandleChart.tsx \u2014 chart-type control exists but was a generic `options-outline` gear icon that opened a hidden popover menu (Line/Candlestick/Area). Undiscoverable in first scan; glyph did not communicate chart type.",
-   "competitorEvidence": "TradingView mobile: chart-type icon in a visible toolbar shows the CURRENT chart glyph. Binance: inline icon row above chart. Coinbase Advanced: segmented line/candles control. Questrade Edge / TradeRevolution mobile: Line/Candle/Area toolbar switcher is the standard mobile set.",
-   "rootCause": "Switcher designed as settings affordance; user expects a visible segmented control per broker convention.",
-   "fix": "Replaced gear+popover with ChartTypeSegments \u2014 one bordered group with hairline dividers, custom SVG glyphs (line polyline, two-candle OHLC, area fill), active = brandSubtle fill + brand glyph, inactive = textSecondary. tablist/tab a11y + selection haptics.",
-   "acceptance": "Chart type control visible in header row without opening a menu; type switches on single tap; a11y labels per segment; tests green.",
-   "status": "done",
-   "verified": "tsc --noEmit clean; 9-suite vitest batch green (269 tests)"
-  },
-  {
-   "id": "GAP-ORDERBOOK-TERMINAL",
-   "department": "coown / asset detail / market tab",
-   "severity": "P1",
-   "evidence": "CoOwnOrderBook.tsx \u2014 depth bars rendered at ~4-6% effective opacity and were per-level-size scaled (no classic cumulative fan); no bid/ask imbalance signal; card title 'Market depth' mislabelled the ladder tab; embedded book could blend into canvas.",
-   "competitorEvidence": "Binance: dedicated book panel, red ask/green bid rows with visible cumulative depth fills, spread band, B/S imbalance %. Kraken/Coinbase Advanced share the grammar.",
-   "rootCause": "Depth fills under-powered; panel chrome too weak to read as a dedicated terminal box.",
-   "fix": "Cumulative-fan depth bars (cumulative/maxCumulative, mirrored anchors: bids left / asks right) at full token strength; semantic coownUp/coownDown prices; recessed spread band (surface inside the surfaceAlt card); B/S imbalance strip with percentage labels + a11y summary; card retitled 'Order book' with Book|Depth|Trades tabs on surfaceAlt + full-strength border; dead maxSize/isEdge removed.",
-   "acceptance": "Bid/ask sides read green/red at glance; depth fan visible; dedicated panel boundary obvious in both themes; tape tab a11y labels preserved.",
-   "status": "done",
-   "verified": "tsc --noEmit clean; orderBookDepth + runtime suites green"
-  },
-  {
-   "id": "GAP-EDITGROUP-SCAFFOLD",
-   "department": "chat / group details & edit",
-   "severity": "P1",
-   "evidence": "EditGroupMediaSection \u2014 centred avatar with stacked 'Change photo'/'Remove photo'/'Change cover'/'Remove' text actions under a 200px cover block read as assembled scaffold (symmetry-by-default, duplicate affordances). The media sheet already offers change/remove; the text actions duplicated it.",
-   "competitorEvidence": "WhatsApp/Telegram/Discord group edit: media object is the tap target (camera badge); action sheet owns camera/gallery/remove. No redundant text buttons.",
-   "rootCause": "Duplicate action chrome instead of single clear affordances.",
-   "fix": "Removed both text-action stacks + dead props/styles/imports; avatar now straddles the cover's bottom edge (-64 margin netting ~40px overlap) with a 4px background ring \u2014 the authored identity-stack composition. Media sheet owns Camera/Gallery/presets/Remove. GroupInfoHero got the same ring for parity + meta-line restraint (no brand-bold count) + singular/plural member/agent counts.",
-   "acceptance": "One edit affordance per media object; remove lives in media sheet; no visual duplication; overlap reads as intentional layering.",
-   "status": "done",
-   "verified": "tsc --noEmit clean; groupChatInfoParity suite green"
-  },
-  {
-   "id": "GAP-TRADETICKET-DIRECTION",
-   "department": "coown / trade ticket",
-   "severity": "P1",
-   "evidence": "TradeScreen buy/sell selector was a neutral AppSegmentControl (surfaceAlt track, surface indicator, no direction colour) and the 'Review order' CTA was neutral brand \u2014 the only surface in the terminal with no green/red grammar.",
-   "competitorEvidence": "Binance/Coinbase Advanced/Kraken tickets: buy segment green, sell segment red, direction-coloured submit CTA \u2014 the strongest convention in mobile trading for money-direction safety.",
-   "rootCause": "Generic segment primitive used without direction semantics.",
-   "fix": "AppSegmentControl extended with per-option activeBackgroundColor (spring indicator now cross-fades colour via shared value + withTiming) and activeTextColor. TradeScreen maps buy\u2192coownUpSubtle/coownUp, sell\u2192coownDownSubtle/coownDown. CTA retitled 'Review buy/sell order' and direction-tinted (coownUp/coownDown fill, colors.background text \u2014 reads on both light-pastel dark tokens and deep light tokens).",
-   "acceptance": "Direction legible at a glance on the ticket; not colour-only (labels explicit); animated indicator transitions colour.",
-   "status": "done",
-   "verified": "tsc --noEmit clean; coown contract suites green"
-  },
-  {
-   "id": "GAP-ORDERHISTORY-DIRECTION",
-   "department": "coown / activity & ledger",
-   "severity": "P2",
-   "evidence": "OrderHistoryRow marked buy/sell with wallet/cash icons in brand/textSecondary \u2014 no direction grammar at all; SyndicateOrderHistoryScreen Buy/Sell filter tabs selected in neutral textPrimary; MarketLedgerScreen rows had no side accent.",
-   "competitorEvidence": "Kraken order history: green up-arrow buy / red down-arrow sell. Binance: coloured Buy/Sell text tags.",
-   "rootCause": "Side semantics never carried into history surfaces.",
-   "fix": "OrderHistoryRow: arrow-up/arrow-down direction glyphs + coownUp/coownDown side colours + semibold direction-coloured side word in the meta line (word stays explicit \u2014 not colour-only). Filter tabs: buy selects in coownUp, sell in coownDown, All neutral. MarketActivityRow gained optional titleColor; MarketLedgerScreen passes direction accent for buy/sell rows (auction rows neutral).",
-   "acceptance": "Buy/sell readable by colour + glyph + word across book, ticket, history and ledger \u2014 one consistent grammar.",
-   "status": "done",
-   "verified": "tsc --noEmit clean; 7-suite coown batch green (115 tests)"
-  },
-  {
-   "id": "GAP-CREATEGROUP-MEDIA",
-   "department": "chat / create group / details stage",
-   "severity": "P1",
-   "evidence": "GroupDetailsStage \u2014 flat cover\u2192avatar vertical stack with TWO different remove affordances (X badge on cover, danger-text link under avatar) while GroupMediaSourceSheet received no canRemove/onRemove. Same scaffold pattern as EditGroup.",
-   "competitorEvidence": "WhatsApp/Telegram group creation: cover+avatar overlap composition, media object is the tap target, removal lives in the source sheet.",
-   "rootCause": "Duplicate remove paths and disconnected media composition.",
-   "fix": "Cover/avatar now overlap with background ring (same grammar as EditGroup); both inline remove controls deleted; sheet receives canRemove/onRemove so removal is centralized; dead styles removed from createGroupChatStyles.",
-   "acceptance": "One edit affordance per media object; remove only in sheet; overlap composition matches EditGroup/GroupInfoHero.",
-   "status": "done",
-   "verified": "tsc --noEmit clean; groupChatInfoParity + coownAssetDetailRuntime suites green"
-  },
-  {
-   "id": "GAP-CONFIRM-CTA-DIRECTION",
-   "department": "coown / trade confirm",
-   "severity": "P1",
-   "evidence": "TradeConfirmScreen \u2014 the final commit action (HoldToSubmitButton) rendered neutral colors.brand for both buy and sell. Every upstream surface had direction color; the last, highest-stakes action did not.",
-   "competitorEvidence": "Binance/Coinbase Advanced confirm sheet: direction-colored commit button \u2014 a money action is never color-ambiguous at the commit step.",
-   "rootCause": "HoldToSubmitButton had no accent override; direction grammar stopped one step short of commit.",
-   "fix": "HoldToSubmitButton gained optional accentColor (default colors.brand \u2014 all other callers unchanged); TradeConfirmScreen passes coownUp/coownDown by side. Receipt side pill was already direction-tinted.",
-   "acceptance": "Buy commit is green, sell commit is red; disabled/expired states unchanged; a11y label still carries explicit direction word.",
-   "status": "done",
-   "verified": "tsc --noEmit clean; tradeSubmitFlows + orderLifecycleContracts suites green"
-  },
-  {
-   "id": "GAP-POSITIONACTIONS-DIRECTION",
-   "department": "coown / portfolio position card",
-   "severity": "P2",
-   "evidence": "CoOwnPositionCard 'Buy more'/'Sell' action buttons were neutral (background fill, border, textPrimary) \u2014 the only remaining direction-less money actions in the terminal.",
-   "competitorEvidence": "Kalshi/Binance position rows: direction-tinted secondary actions \u2014 subtle fill + direction label, not solid fills (repeated rows stay quiet).",
-   "rootCause": "Direction grammar never applied to position-level actions.",
-   "fix": "Buy more: coownUpSubtle fill + coownUpBorder hairline + coownUp label. Sell: coownDownSubtle fill + coownDownBorder + coownDown label. Disabled/no-sellable states fall back to neutral border + textMuted label.",
-   "acceptance": "Direction readable on secondary actions without shouting; disabled states stay honest; 44pt targets preserved.",
-   "status": "done",
-   "verified": "tsc --noEmit clean; coownAssetDetailRuntime suite green (60 tests)"
-  },
-  {
-   "id": "GAP-ORDERRECEIPT-DOCUMENT",
-   "department": "orders / order receipt",
-   "severity": "P1",
-   "evidence": "frontend/src/screens/OrderReceiptScreen.tsx \u2014 total and status had no typographic rank (same body size as labels), real delivery facts (destination/service/carrier/ETA/ship-by/delivered date) existed on the contract but were unrendered, refresh control was absent, duplicate section heading, dead ActivityIndicator/t imports.",
-   "fix": "Status stamp (dot + semantic tone), headline-rank total with hairline fee separator, delivery section renders whenever any real delivery fact exists, contextual next-step copy, refresh wired to refetch, dead imports removed.",
-   "status": "done",
-   "verified": "tsc clean; targeted vitest green"
-  },
-  {
-   "id": "GAP-INBOX-UNWIRED-CAPABILITY",
-   "department": "inbox / realtime",
-   "severity": "P1",
-   "evidence": "InboxConversationRow shipped with TypingDots, commerceStatusLabel/Tone, contextThumbUri, deliveryStatus props \u2014 but InboxRow never passed them. chat.typing.update events arrived on already-subscribed conversation topics and were dropped. Request rows showed literal placeholder \"About a listing\".",
-   "fix": "realtimeClient.ts: module-level conversation\u2192typing map + useInboxTypingEvents (reuses useInboxMessageEvent topic set, zero extra subscriptions, self-filter, 4s auto-clear, empty-map pruning) + useConversationTyping via useSyncExternalStore. InboxRow: isTyping, deriveInboxCommerceBadge(conversation.context), contextThumbUri from context.listing.imageUrl, real listing title via useBackendData for request rows.",
-   "status": "done",
-   "verified": "tsc clean; new inboxCommerceBadge.test.ts (6 tests) green; 108-test batch green"
-  },
-  {
-   "id": "GAP-ORDERROW-SKELETON-GEOMETRY",
-   "department": "orders / my orders",
-   "severity": "P2",
-   "evidence": "OrderRowSkeleton rendered 64x64 thumb + 3 text lines + generic 56x24 block while real OrderLedgerRow is 80x100 media + status pill + meta line \u2014 visible geometry snap on load.",
-   "fix": "Skeleton now mirrors real geometry: 80x100 Radius.md media, title line, meta row with 64x22 pill + context line, chevron stub.",
-   "status": "done",
-   "verified": "tsc clean; seller-net row item skipped \u2014 Order contract carries no net/payout field, deriving it client-side would fabricate money data"
-  },
-  {
-   "id": "GAP-CHATTOPBAR-DM-IDENTITY",
-   "department": "chat / top bar",
-   "severity": "P2",
-   "evidence": "ChatTopBar gave group placeholders a deterministic colorForId tint but DM placeholders fell back to flat surfaceAlt \u2014 same user reads a different identity color in inbox vs thread header.",
-   "fix": "groupId prop generalized to avatarSeedId; ChatScreen passes resolvedPartnerId for DMs, GroupChatScreen passes groupId \u2014 deterministic color + inverse initials for both variants.",
-   "status": "done",
-   "verified": "tsc clean"
-  },
-  {
-   "id": "GAP-ITEMDETAIL-DUP-HEADING",
-   "department": "item detail / price market",
-   "severity": "P2",
-   "evidence": "ItemDetailPriceMarket disclosure row already names the section; the expanded CommerceDetailSection carried a dead required label prop (\"Price history & market\") \u2014 duplicated-heading risk and dead API weight. Same dead label in ItemDetailBuyingSection.",
-   "fix": "CommerceDetailSection.label made optional; header renders only when label/trailing present; dead labels dropped at both call sites.",
-   "status": "done",
-   "verified": "tsc clean; commerceDetailRuntime tests green"
-  },
-  {
-   "id": "AUDIT-F06-DISCOVERY-CONTRACT",
-   "department": "discovery / unified screen",
-   "severity": "P1",
-   "evidence": "Audit F06 confirmed: UnifiedDiscoveryScreen hardcoded hasMore={false} and refresh called discovery.load() without reaching PinterestMasonryGrid's RefreshControl \u2014 pagination and pull-down contracts existed but were unwired.",
-   "fix": "UnifiedDiscoveryScreen: refreshing state + RefreshControl wired to discovery.load; feed.hasMore/isLoadingMore/onEndReached threaded through DiscoveryFeedView to the grid.",
-   "status": "done",
-   "verified": "tsc clean; discoveryRuntime tests green"
-  },
-  {
-   "id": "AUDIT-F07-SETTINGS-BALANCE-HONESTY",
-   "department": "settings / wallet balance card",
-   "severity": "P0",
-   "evidence": "Audit F07 confirmed: useSettingsScreenData set walletBalance=0 on query failure and SettingsBalanceCard rendered ?? 0 \u2014 a failed/loading balance displayed and announced as literal \u00a30.00.",
-   "fix": "walletBalanceFailed flag added; card renders em-dash while loading, 'Unavailable' + retry hint on failure, formatted GBP only for a real number; a11y label matches.",
-   "status": "done",
-   "verified": "tsc clean"
-  },
-  {
-   "id": "AUDIT-F08-STATUS-TEXT-CONTRAST",
-   "department": "design system / semantic tokens",
-   "severity": "P1",
-   "evidence": "Audit F08 confirmed: danger/success/warning served as both deep fills (paired with onX text) and text/icon foregrounds \u2014 warning ~2.1:1, danger ~3.8:1 on dark surfaces.",
-   "fix": "New dangerText/successText/warningText tokens in both palettes. 923 foreground usages migrated; fill contexts (backgroundColor/fill/bar/borderColor) untouched. ThemeColors typing extended.",
-   "status": "done",
-   "verified": "tsc clean; 216-test migrated-component batch green"
-  },
-  {
-   "id": "AUDIT-F09-F10-PORTFOLIO-SEMANTICS",
-   "department": "portfolio / performers + status",
-   "severity": "P1",
-   "evidence": "Audit F09/F10 confirmed: 'best' performer painted green-up even at -5% (direction from rank not return); formatPositionStatus inferred Open/Closed from isOpen+availableUnits \u2014 paused/closed mislabeled.",
-   "fix": "Direction from signed percentReturn; formatPositionStatus uses authoritative VM p.status.",
-   "status": "done",
-   "verified": "productionAuditWave.test.ts (6 tests) green"
-  },
-  {
-   "id": "AUDIT-F11-AGENT-HEALTH-SEMANTICS",
-   "department": "agents / status overview",
-   "severity": "P2",
-   "evidence": "Audit F11 confirmed: single ternary colored all connection states \u2014 agents-with-zero-connections looked identical to a hard outage; no degraded semantics.",
-   "fix": "Distinct states: none/neutral, no-agents-with-connections/warning, agents-zero-connections/warning+subtitle, healthy/success, degraded/danger. New i18n keys (en + per-key fallback).",
-   "status": "done",
-   "verified": "tsc clean; agentsToken.test green"
-  },
-  {
-   "id": "AUDIT-F12-COOWN-A11Y-GEOMETRY",
-   "department": "coown / order book + prospectus",
-   "severity": "P1",
-   "evidence": "Audit F12 confirmed: order-book values clipped at numberOfLines={1} inside fixed 104pt rails at large text sizes.",
-   "fix": "Values/headers wrap to 2 lines inside fixed rails; prospectus numeric cells fontScale-capped 1.2-1.3 + 2-line wrap.",
-   "status": "done",
-   "verified": "tsc clean; productDetailFlagshipReconstruction spec updated"
-  },
-  {
-   "id": "AUDIT-F13-DESCRIPTION-EXPANSION",
-   "department": "item detail / description",
-   "severity": "P2",
-   "evidence": "Audit F13 confirmed: expansion gated on char count >120 while truncation is numberOfLines={3} \u2014 dead 'Read more' on short wrapping text, hidden content on long non-wrapping text.",
-   "fix": "Hidden full-measure Text reports rendered lines via onTextLayout; expansion gates on real overflow.",
-   "status": "done",
-   "verified": "tsc clean"
-  },
-  {
-   "id": "AUDIT-F14-SESSION-TERMINATION",
-   "department": "platform / auth + query cache",
-   "severity": "P0",
-   "evidence": "Audit F14 confirmed: store.logout() never touched queryClient \u2014 private caches survived account switch; prefix-only purge missed keys.",
-   "fix": "clearUserScopedQueryCache now cancelQueries + queryClient.clear() fail-closed; logout() owns the purge.",
-   "status": "done",
-   "verified": "platformRuntime.test.ts (19) + productionAuditWave.test.ts (6) green"
-  },
-  {
-   "id": "AUDIT-F19-FIXTURE-FAIL-CLOSED",
-   "department": "platform / runtime flags",
-   "severity": "P0",
-   "evidence": "Audit F19 confirmed: EXPO_PUBLIC_MOCK_MODE=fixture-design resolved regardless of __DEV__ \u2014 misconfigured prod build renders mock data.",
-   "fix": "resolveMockMode fails closed: fixture/integration only when __DEV__; production always resolves 'production'.",
-   "status": "done",
-   "verified": "runtimeFlagsFailClosed.test.ts (3 tests) green"
-  },
-  {
-   "id": "AUDIT-F03-MIGRATION-CHECKER",
-   "department": "backend / migration tooling",
-   "severity": "P2",
-   "evidence": "Audit F03 confirmed: checker grouped all .sql by prefix \u2014 every valid NNN_x.sql + NNN_x_down.sql pair flagged duplicate (32 rollback files exist).",
-   "fix": "Forward vs _down.sql partitioned; duplicate detection on forward only; orphan rollback warned.",
-   "status": "done",
-   "verified": "checker exits 0; warnings only for known pre-existing dup prefixes 289/302"
-  },
-  {
-   "id": "AUDIT-F20-F21-DISCOVERY-PROFILE",
-   "department": "discovery / profile perf + freshness",
-   "severity": "P2",
-   "evidence": "Audit F20: profile closet rendered unbounded masonry in nested scroll. F21: module failures folded into empty rows \u2014 partial outage masqueraded as empty discovery.",
-   "fix": "ClosetGrid caps preview at 12 (View-all -> MyListings); reorder mode keeps full list. staleModules tracked -> quiet 'pull to retry' note in feed header.",
-   "status": "done",
-   "verified": "tsc clean; discoveryRuntime tests green"
-  },
-  {
-   "id": "AUDIT-F15-SSRF-REBINDING",
-   "department": "backend / media import security",
-   "severity": "P0",
-   "evidence": "safeRemoteMediaFetch validated DNS then called fetch() on the hostname \u2014 a DNS-rebinding TOCTOU window let a second resolution land on a blocked address; no timeout bound request duration.",
-   "fix": "resolveValidatedAddresses() returns the validated set; a per-hop undici Agent overrides connect.lookup so the TCP connection is pinned to validated addresses only (SNI/Host unchanged). AbortSignal.timeout(remainingMs) bounds DNS+redirects+streaming under one 15s deadline (timeoutMs option). IPv6 URL.hostname brackets stripped so literals skip DNS.",
-   "status": "done",
-   "verified": "safeRemoteMediaFetch.test.ts 21/21 green incl. new pinning, rebinding-redirect and timeout tests; tsc --noEmit clean"
-  },
-  {
-   "id": "AUDIT-F02-RESIDUE-GATE",
-   "department": "frontend / release gates",
-   "severity": "P1",
-   "evidence": "check-production-residue.mjs exited 1 with 7 false positives: GALLERIA_DEMO_MODE=true inside ENABLE_RUNTIME_MOCKS branches and honest isDemo labels on degraded catch paths.",
-   "fix": "Added enclosingGateKind(): upward brace-scan evaluating every enclosing block opener with statement-boundary context \u2014 gate tokens (ENABLE_RUNTIME_MOCKS/__DEV__) suppress demo-mode/is-demo literals; catch suppresses is-demo labels only (bare-catch DEMO_MODE=true still rejected as fabrication).",
-   "status": "done",
-   "verified": "check:residue exits 0 (was 7 errors); productionResidueGate.test.ts 10/10 green pinning allowed + rejected shapes"
-  },
-  {
-   "id": "AUDIT-F04-TEST-SEPARATION",
-   "department": "backend / test infrastructure",
-   "severity": "P1",
-   "evidence": "npm test ran node --test over src/**/*.test.ts including 13 vitest-dialect files (failing); vitest.config include list had drifted 4 files stale.",
-   "fix": "scripts/run-unit-tests.mjs classifies every .test.ts by framework import \u2014 node:test files run under node --test (88 files), vitest files run via test:vitest (13 files). vitest.config.ts derives its include dynamically from the same classifier. Added test:vitest + test:all scripts.",
-   "status": "done",
-   "verified": "vitest run: 13 files / 257 tests green; unit runner collects exactly the 88 node:test files"
-  },
-  {
-   "id": "AUDIT-F16-VENDOR-SYNC-HONESTY",
-   "department": "backend / support vendor outbox",
-   "severity": "P1",
-   "evidence": "vendorSyncHandler marked every outbox entry delivered around a stub log line \u2014 no vendor call existed, so failed/unconfigured sync was reported as delivered.",
-   "fix": "New vendorClient.ts: resolveVendorClient() requires SUPPORT_VENDOR_<NAME>_API_URL+TOKEN (https or localhost) else null \u2192 entries stay pending. HttpVendorClient delivers with idempotency key + 10s timeout; 4xx\u2192VendorPermanentError\u2192skipped (dead-letter via new markOutboxSkipped), 5xx/429/network\u2192failed retryable; >5 attempts\u2192skipped. Handler takes injectable client/db for tests.",
-   "status": "done",
-   "verified": "vendorSyncHandler.test.ts 6/6 green covering unconfigured/success/retryable/permanent/max-attempts/idempotent; tsc clean"
-  },
-  {
-   "id": "AUDIT-F18-EAS-OTA-SIGNING",
-   "department": "release / EAS submit + OTA",
-   "severity": "P1",
-   "evidence": "eas.json submit.production used literal EAS_* placeholder strings (no env interpolation exists in eas.json); OTA signing conditional \u2014 production could ship unsigned; release-train publish steps never passed the signing key; keys/ dir absent.",
-   "fix": "app.config.js fail-closed: production profile without EXPO_PUBLIC_OTA_CODE_SIGNING_KEY throws; signing enabled but keys/update-certificate.pem missing throws; preview warns. New check-release-config.mjs (ota|submit|all modes) wired as check:release-config and as a gate step in release-train.yml; signing key secret now passed to eas update steps.",
-   "status": "done",
-   "verified": "gate exits 1 listing each placeholder/missing file; app.config throws for unsigned production build, passes dev"
-  },
-  {
-   "id": "AUDIT-F05-DEPENDENCY-TRIAGE",
-   "department": "dependencies / supply chain",
-   "severity": "P1",
-   "evidence": "Audit: 28 frontend + 3 backend advisories incl. runtime-reachable fastify (schema-validation bypass, X-Forwarded-* spoofing) and fast-uri SSRF chain.",
-   "fix": "npm audit fix both packages: backend fastify 5.8.x\u21925.12.5 (both advisories covered), fast-uri + js-yaml resolved \u2014 backend 5\u21922 low. Frontend 39\u219220: xmldom, browserslist, vitest-mocker, decode-uri-component resolved. Remaining are dev/build-chain only (reg-suit adm-zip+tmp, expo config-plugins/xcode uuid, @simplewebauthn breaking-14 upgrade \u2014 mitigated: passkeyService uses attestationType none so attestation-chain path is not the boundary). AppNavigator getRootState() now null-checked for @react-navigation 7.3.16.",
-   "status": "done",
-   "verified": "npm audit: backend 2 low (esbuild dev, simplewebauthn breaking-upgrade deferred w/ mitigation); frontend 20 dev-chain; tsc clean both sides"
-  },
-  {
-   "id": "AUDIT-F01-VISUAL-EVIDENCE",
-   "department": "release / visual certification",
-   "severity": "P1",
-   "evidence": "Golden-parity contract machinery exists (dimension checks, exit codes, mandatory-route list) but no native screenshot baselines have been captured \u2014 requires device capture runs. (blocked: no native device/simulator in this environment)",
-   "fix": "Deferred: baseline capture requires a scheduled device-run session on POCO M2 Pro (63b57c28).",
-   "status": "blocked",
-   "verified": "machinery verified; baselines absent"
-  },
-  {
-   "id": "AUDIT-F17-AI-LEARNED-MODEL",
-   "department": "AI / model capability",
-   "severity": "P2",
-   "evidence": "AI infrastructure is ahead of model implementation: placeholders are honestly labeled and visual search does not rank on embeddings, but no learned model/evaluation exists.",
-   "fix": "Deferred by design \u2014 requires model selection, training data and an eval harness. Meilisearch Meilisearch-export bug fixed meanwhile (hybrid path now actually engages instead of silently degrading to lexical).",
-   "status": "open",
-   "verified": "vectorSearch getMeiliClient fixed (MeiliSearch\u2192Meilisearch export rename); 5 readiness tests green"
-  },
-  {
-   "id": "AUDIT-F22-ARCHITECTURE-SCALE",
-   "department": "architecture / enforcement",
-   "severity": "P2",
-   "evidence": "backend/api/src/index.ts ~40k lines; PosterViewerScreen 1.7k, SellScreen 1.5k \u2014 structural debt exceeds current enforcement.",
-   "fix": "Deferred \u2014 staged decomposition plan needed; not a quick fix.",
-   "status": "open",
-   "verified": "re-measured during F-verification; unchanged"
-  },
-  {
-   "id": "DEVICE-UX-01-OFFER-SLIDER",
-   "status": "done",
-   "area": "commerce/offer",
-   "severity": "P1",
-   "evidence": "PanResponder stale closure (trackWidth=0 while sheet hidden) \u2014 ref metrics + 44pt wrap responder + tap-to-seek; device-verified both directions",
-   "date": "2026-09-19"
-  },
-  {
-   "id": "DEVICE-UX-02-PRICE-FILTER-1ZE",
-   "status": "done",
-   "area": "filters",
-   "severity": "P2",
-   "evidence": "displayMode:fiat at 5 call sites; sheet shows fiat-only labels on-device",
-   "date": "2026-09-19"
-  },
-  {
-   "id": "DEVICE-UX-03-DUP-SELLER-ROW",
-   "status": "done",
-   "area": "itemdetail",
-   "severity": "P2",
-   "evidence": "Display-only seller identity removed from CommerceTrustDossier; single navigable SellerInfoCard; device-verified",
-   "date": "2026-09-19"
-  },
-  {
-   "id": "DEVICE-UX-04-IMAGE-SWIPE",
-   "status": "done",
-   "area": "media",
-   "severity": "P1",
-   "evidence": "pointerEvents=none on stage overlays; fullscreen pan gated to isZoomed + vertical-only dismiss; device-verified pager+fullscreen+dismiss",
-   "date": "2026-09-19"
-  },
-  {
-   "id": "DEVICE-UX-05-DEPT-INCONSISTENCY",
-   "status": "done",
-   "area": "discovery",
-   "severity": "P2",
-   "evidence": "Three chip impls unified \u2014 HomeFeedHeader signalChip now matches categoryPill grammar exactly",
-   "date": "2026-09-19"
-  },
-  {
-   "id": "DEVICE-UX-06-PROFILE-500",
-   "status": "done",
-   "area": "backend/users",
-   "severity": "P0",
-   "evidence": "Migration 319 DSA trader-disclosure columns; /users/seed_u1|u2/profile 200; profile renders on-device",
-   "date": "2026-09-19"
-  },
-  {
-   "id": "DEVICE-UX-07-ORDERBOOK-BAND",
-   "status": "done",
-   "area": "coown",
-   "severity": "P2",
-   "evidence": "Bid(green)|spread|ask(red) band continuing depth-bar axis + tick-rule last-trade coloring (Polymarket grammar)",
-   "date": "2026-09-19"
-  },
-  {
-   "id": "DEVICE-UX-08-PROFILE-HERO",
-   "status": "done",
-   "area": "profile",
-   "severity": "P2",
-   "evidence": "Big Edit/Share pair (52pt), bio budget 125\u2192200 chars / 4 lines; device-verified",
-   "date": "2026-09-19"
-  },
-  {
-   "id": "DEVICE-UX-09-CONDITION-BADGES",
-   "status": "done",
-   "area": "cards",
-   "severity": "P2",
-   "evidence": "Removed from product/discovery cards; retained in item detail + a11y; device-verified",
-   "date": "2026-09-19"
-  },
-  {
-   "id": "DEVICE-UX-10-GRID-DENSITY",
-   "status": "done",
-   "area": "discovery",
-   "severity": "P2",
-   "evidence": "3-col masonry on Discover/Looks/Category/VisualSearch/SearchResults; browse compact default",
-   "date": "2026-09-19"
-  },
-  {
-   "id": "BACKEND-01-FEED-HOME-42P18",
-   "status": "done",
-   "area": "backend/feed",
-   "severity": "P0",
-   "evidence": "Shared cursorParams left unreferenced  in posters/looks for signed-in users; per-query params; /feed/home 200 + populated feed",
-   "date": "2026-09-19"
-  },
-  {
-   "id": "BACKEND-02-FEED-FOLLOWING-AMBIG",
-   "status": "done",
-   "area": "backend/feed",
-   "severity": "P1",
-   "evidence": "Unqualified created_at over user_follows join; per-alias clauses",
-   "date": "2026-09-19"
-  },
-  {
-   "id": "BACKEND-03-MEDIA-CHECK-VIOLATION",
-   "status": "done",
-   "area": "backend/media",
-   "severity": "P1",
-   "evidence": "deadLetterIngestJob wrote processing_failed to processing_status (enum: pending/processing/completed/failed); -> failed; deployed",
-   "date": "2026-09-19"
-  },
-  {
-   "id": "BACKEND-04-S3-ENDPOINT-TOPOLOGY",
-   "status": "done",
-   "area": "infra/compose",
-   "severity": "P1",
-   "evidence": "S3_ENDPOINT localhost:9000 resolved to container itself; -> http://minio:9000; attestation reachable (200)",
-   "date": "2026-09-19"
-  },
-  {
-   "id": "BACKEND-05-RECS-CONVERSATIONS",
-   "status": "done",
-   "area": "backend/recommendations",
-   "severity": "P0",
-   "evidence": "Joined nonexistent conversations; -> chat_conversations + seller via item_id->listings.seller_id",
-   "date": "2026-09-18"
-  },
-  {
-   "id": "BACKEND-06-MIGRATION-306-UUID",
-   "status": "done",
-   "area": "backend/migrations",
-   "severity": "P0",
-   "evidence": "uuid FKs vs text schema since 001; -> text; API no longer crash-loops",
-   "date": "2026-09-18"
-  },
-  {
-   "id": "AUDIT-0919-PAGINATION-STORM",
-   "status": "done",
-   "area": "frontend/context/BackendDataContext",
-   "severity": "P1",
-   "evidence": "loadMoreListings: empty page left cursor set while hasMore=false -> onEndReached refetched the same cursor forever; thrown fetch could stick isLoadingMore. Guard now includes !hasMore, cursor clears on empty pages, try/catch/finally guarantees reset.",
-   "date": "2026-09-19",
-   "regression": "frontend/src/__tests__/backendDataPagination.test.tsx (4 tests)"
-  },
-  {
-   "id": "AUDIT-0919-HOME-FEED-BLANKING",
-   "status": "done",
-   "area": "frontend/screens/HomeScreen",
-   "severity": "P1",
-   "evidence": "isSyncing alone collapsed a populated feed into skeleton on every 55s background poll / app-resume sync. Skeleton now gated on genuinely empty feeds. Dead pagination onEndReached + Loading-more footer removed: rendered feeds (ForYou page, Following) are complete lists; the listings-store cursor fetched data nothing renders.",
-   "date": "2026-09-19"
-  },
-  {
-   "id": "AUDIT-0919-HOME-SOURCE-LIE",
-   "status": "done",
-   "area": "frontend/components/home/HomeFeedHeader",
-   "severity": "P2",
-   "evidence": "Copy implied cache/offline sources were active though BackendDataContext only ever sets api|fixture. Dead getBackendSyncStatus/feedStatus removed; labels now describe real sources only.",
-   "date": "2026-09-19"
-  },
-  {
-   "id": "AUDIT-0919-FEED-DEDUP",
-   "status": "done",
-   "area": "frontend/utils/discoveryFeedAssembly + HomeScreen",
-   "severity": "P1",
-   "evidence": "Mixed recommendation/cursor sources could serve the same listing id twice in one grid. Within-page dedupe added to assembleDiscoveryFeed and both Home feed memo transforms.",
-   "date": "2026-09-19",
-   "regression": "frontend/src/__tests__/discoveryFeedDedup.test.ts (3 tests)"
-  },
-  {
-   "id": "AUDIT-0919-CHAT-SCROLL-ANCHOR",
-   "status": "done",
-   "area": "frontend/hooks/chat/useConversationMessages",
-   "severity": "P1",
-   "evidence": "Every incoming message called scheduleScrollToEnd \u2014 a user reading history was yanked to bottom. Scroll now only when at-bottom or own echo; decision extracted to utils/chatScrollAnchor.ts.",
-   "date": "2026-09-19",
-   "regression": "chatRuntimeBehaviour.test.ts shouldAutoScrollOnIncomingMessage (3 tests)"
-  },
-  {
-   "id": "AUDIT-0919-DISCOVERY-FEED-CONTROLS",
-   "status": "done",
-   "area": "frontend/screens/UnifiedDiscoveryScreen",
-   "severity": "P1",
-   "evidence": "Long-press feed controls (Not interested / Show less / Why am I seeing this) existed on DiscoverScene but were never wired on UnifiedDiscoveryScreen \u2014 the shipped discovery surface. Prop chain added through DiscoveryFeedView to the masonry grid; attribution-aware feedback + FeedExplanationSheet wired with real serve context.",
-   "date": "2026-09-19"
-  },
-  {
-   "id": "AUDIT-0919-SEARCH-AUTOFOCUS",
-   "status": "done",
-   "area": "frontend/screens/SearchScreen",
-   "severity": "P2",
-   "evidence": "Dedicated search screen did not autofocus the input \u2014 keyboard never opened on the one surface whose sole job is query entry. autoFocus added (deliberately not on the discovery feed input).",
-   "date": "2026-09-19"
-  },
-  {
-   "id": "AUDIT-0919-BLOCKED-SELLER-PDP",
-   "status": "done",
-   "area": "frontend/screens/ItemDetailScreen + CommerceActionDock + ItemDetailSellerSection",
-   "severity": "P1",
-   "evidence": "PDP rendered live Buy/Offer/Enquire/Message/Follow CTAs for viewer-blocked sellers \u2014 every path fails server-side. isSellerBlocked derived once in the screen; dock renders a Blocked state, seller row loses Message/Follow, Ask-the-seller row gated, more-from-seller rail and bundle upsell suppressed.",
-   "date": "2026-09-19",
-   "regression": "commerceDetailRuntime.test.tsx CommerceActionDock blocked gate (2 tests)"
-  },
-  {
-   "id": "AUDIT-0919-DOC-MIME-MISLABEL",
-   "status": "done",
-   "area": "frontend/services/mediaUpload + chat document send",
-   "severity": "P1",
-   "evidence": "sendDocumentMessage used the string upload overload: extension inference had no document branch so a .pdf was presigned as image/jpeg. MediaUploadOptions now accepts contentType/fileName; doc send passes DocumentPicker mimeType+name; pdf added to inference map.",
-   "date": "2026-09-19"
-  },
-  {
-   "id": "AUDIT-0919-TRADE-STEPUP",
-   "status": "done",
-   "area": "frontend/screens/TradeConfirmScreen",
-   "severity": "P1",
-   "evidence": "Co-Own order commit had no step-up auth while Wallet/Payments/Withdraw/Convert all gate with biometrics. handleConfirm now requires biometricGate.authenticate when the user enabled biometric protection and hardware is enrolled; hold-to-submit remains the baseline otherwise.",
-   "date": "2026-09-19"
-  },
-  {
-   "id": "AUDIT-0919-ACCOUNT-DELETION",
-   "status": "done",
-   "area": "frontend/screens/DeleteAccountScreen + backend",
-   "severity": "P0",
-   "evidence": "VERIFIED ALREADY COMPLETE: password + confirm-text + TOTP + biometric gate + 409 blocker translation + session logout + user-scoped query purge. Backend upload allowlist verified strict (image/video/audio/pdf only).",
-   "date": "2026-09-19"
-  },
-  {
-   "id": "AUDIT-0919-EXTERNAL-EVIDENCE-GAPS",
-   "status": "blocked",
-   "area": "ops/release/backend-runtime",
-   "severity": "P0",
-   "evidence": "Not fixable from this environment: GitHub branch protection + required checks; backend unit/integration runtime evidence; worker/reconciliation proof; native device visual+a11y capture; real EAS production secrets; scale/failure drills; legal/regulatory sign-off for fractional ownership. Source-code fixes cannot substitute for operational proof.",
-   "date": "2026-09-19"
-  },
-  {
-   "id": "SEP21-FIN-A",
-   "status": "source_fixed",
-   "area": "payments/auction",
-   "severity": "P1",
-   "evidence": "Auction Pay creates Stripe intent but never presents PaymentSheet or confirms; intent stalls requires_payment_method. useAuctionDetail.ts:490-533, checkoutPaymentIntent.ts:18-65, index.ts:6578-6597.",
-   "date": "2026-09-21",
-   "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
-   "resolved_date": "2026-09-21"
-  },
-  {
-   "id": "SEP21-FIN-B",
-   "status": "source_fixed",
-   "area": "financial/coown",
-   "severity": "P1",
-   "evidence": "assertP2pTransferContextAuthorized accepts settled coOwn_trade as authorization for a second P2P payment; obsolete GBP*1000 FX; gross recipient credit. walletMoneyPath.ts:610-755.",
-   "date": "2026-09-21",
-   "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
-   "resolved_date": "2026-09-21"
-  },
-  {
-   "id": "SEP21-FIN-C",
-   "status": "source_fixed",
-   "area": "financial/auction",
-   "severity": "P1",
-   "evidence": "Auction intent lacks orderId -> canonical escrow branch skipped; legacy ledger posts GBP entries to IZE account and clears escrow instantly. auctions.ts:356-375, workerRuntime.ts:474-605.",
-   "date": "2026-09-21",
-   "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
-   "resolved_date": "2026-09-21"
-  },
-  {
-   "id": "SEP21-FIN-D",
-   "status": "source_fixed",
-   "area": "financial/coown",
-   "severity": "P2",
-   "evidence": "Actor wallet locked at coOwn.ts:3733-3740 before applyCoOwnTransfer sorted lock -> ABBA deadlock on opposite-direction trades across assets.",
-   "date": "2026-09-21",
-   "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
-   "resolved_date": "2026-09-21"
-  },
-  {
-   "id": "SEP21-FIN-E",
-   "status": "source_fixed",
-   "area": "financial/coown",
-   "severity": "P2",
-   "evidence": "Lockup policy contradictory: all order sides blocked, resale asserted on primary issuance, DRIP bypasses entirely. Contract = secondary resale restriction.",
-   "date": "2026-09-21",
-   "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
-   "resolved_date": "2026-09-21"
-  },
-  {
-   "id": "SEP21-FIN-F",
-   "status": "source_fixed",
-   "area": "financial/coown",
-   "severity": "P1",
-   "evidence": "DRIP bypasses reconciliation halt, active exit, market eligibility and capability checks that manual placement enforces.",
-   "date": "2026-09-21",
-   "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
-   "resolved_date": "2026-09-21"
-  },
-  {
-   "id": "SEP21-S1",
-   "status": "source_fixed",
-   "area": "db/migrations",
-   "severity": "P1",
-   "evidence": "Migration 326 int4 overflow aborts populated pre-326 upgrades before 330 repair can run; checksum-freeze prevents editing 326. Fix: 325b prefill migration.",
-   "date": "2026-09-21",
-   "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
-   "resolved_date": "2026-09-21"
-  },
-  {
-   "id": "SEP21-S2",
-   "status": "source_fixed",
-   "area": "search/platform",
-   "severity": "P1",
-   "evidence": "Session advisory lock via dbPool incompatible with PgBouncer transaction pooling. searchSync.ts:791-873. Fix: durable fenced lease table (mig 338).",
-   "date": "2026-09-21",
-   "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
-   "resolved_date": "2026-09-21"
-  },
-  {
-   "id": "SEP21-S3",
-   "status": "source_fixed",
-   "area": "moderation/deploy",
-   "severity": "P1",
-   "evidence": "Compose forwards MODERATION_PROVIDER but not SIGHTENGINE/AWS creds -> every listing held risk_pending; rekognition text unsupported.",
-   "date": "2026-09-21",
-   "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
-   "resolved_date": "2026-09-21"
-  },
-  {
-   "id": "SEP21-S4",
-   "status": "source_fixed",
-   "area": "moderation/media",
-   "severity": "P2",
-   "evidence": "Rekognition own-object transformToByteArray before size check, no abort deadline on Head/Get. rekognitionProvider.ts:401-439.",
-   "date": "2026-09-21",
-   "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
-   "resolved_date": "2026-09-21"
-  },
-  {
-   "id": "SEP21-S5",
-   "status": "source_fixed",
-   "area": "search/recommendations",
-   "severity": "P2",
-   "evidence": "recommendations.ts:1048 unconditionally tags item_to_item_ann regardless of actual retrieval method (exact/bytea fallback).",
-   "date": "2026-09-21",
-   "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
-   "resolved_date": "2026-09-21"
-  },
-  {
-   "id": "SEP21-S6",
-   "status": "source_fixed",
-   "area": "media/import",
-   "severity": "P2",
-   "evidence": "Transient DNS failure classified ssrf_blocked -> permanent quarantine. safeRemoteMediaFetch.ts:475-479, remoteImport.ts:418-430.",
-   "date": "2026-09-21",
-   "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
-   "resolved_date": "2026-09-21"
-  },
-  {
-   "id": "SEP21-47",
-   "status": "source_fixed",
-   "area": "search/observability",
-   "severity": "P2",
-   "evidence": "search lag metric measures task submission not visibility; outcome labels needed (submitted/completed/failed/fallback). searchSync.ts:340-351.",
-   "date": "2026-09-21",
-   "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
-   "resolved_date": "2026-09-21"
-  },
-  {
-   "id": "SEP21-48",
-   "status": "source_fixed",
-   "area": "privacy/backup",
-   "severity": "P1",
-   "evidence": "Erasure proof uses LastModified<=erased_at; snapshot-start vs upload-time gap and noncurrent versions allow false purge. backupExpiryHandler.ts:214-220.",
-   "date": "2026-09-21",
-   "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
-   "resolved_date": "2026-09-21"
-  },
-  {
-   "id": "SEP21-410",
-   "status": "source_fixed",
-   "area": "recovery/restore",
-   "severity": "P1",
-   "evidence": "Restore guard accepts ?host= query override defeating authority check. postgres-restore-verify.mjs:152-216.",
-   "date": "2026-09-21",
-   "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
-   "resolved_date": "2026-09-21"
-  },
-  {
-   "id": "SEP21-S21-01",
-   "status": "source_fixed",
-   "area": "frontend/a11y",
-   "severity": "P1",
-   "evidence": "Checkout money/action text capped at 1.3 (was 2). typography.v2.ts:271-292, CheckoutFooter.tsx:93-213.",
-   "date": "2026-09-21",
-   "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
-   "resolved_date": "2026-09-21"
-  },
-  {
-   "id": "SEP21-S21-02",
-   "status": "source_fixed",
-   "area": "frontend/editorial",
-   "severity": "P2",
-   "evidence": "Editorial hero navigates to Galleria without article identity; teaser leads to teaser. UnifiedDiscoveryScreen.tsx:480-486.",
-   "date": "2026-09-21",
-   "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
-   "resolved_date": "2026-09-21"
-  },
-  {
-   "id": "SEP21-S21-03",
-   "status": "source_fixed",
-   "area": "frontend+backend/discovery",
-   "severity": "P2",
-   "evidence": "Late Undo never retracts not_interested exclusion (recommendations.ts:916-920); pendingHides lack captured user identity.",
-   "date": "2026-09-21",
-   "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
-   "resolved_date": "2026-09-21"
-  },
-  {
-   "id": "SEP21-S21-04",
-   "status": "source_fixed",
-   "area": "frontend/moodboard",
-   "severity": "P1",
-   "evidence": "Op-by-op enqueue can leave durable prefix after failed batch; history lock releases before reconcile. useMoodboardBoard.ts:351-370, useMoodboardHistory.ts:140-152.",
-   "date": "2026-09-21",
-   "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
-   "resolved_date": "2026-09-21"
-  },
-  {
-   "id": "SEP21-S21-05",
-   "status": "source_fixed",
-   "area": "frontend/settings",
-   "severity": "P2",
-   "evidence": "Settings snapshot only loads on user id change; no focus/mutation refresh; one stale render possible. useSettingsScreenData.ts:33-57.",
-   "date": "2026-09-21",
-   "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
-   "resolved_date": "2026-09-21"
-  },
-  {
-   "id": "SEP21-OPS",
-   "status": "source_fixed",
-   "area": "ops/release",
-   "severity": "P2",
-   "evidence": "ota-rollback republish reports success without acting; SLO TTL-renewing counters not true rolling window; settings.yml missing contexts; check-release-config stale var name; infraOps test unawaited promise; country-policy oneze_internal contract drift; vendor delivery unwired; aiUsage soft budget; costMinor units; ml health shadow-vs-champion; model promotion gating; catch-up 1000 cap; weaker fetchers unconsolidated.",
-   "date": "2026-09-21",
-   "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
-   "resolved_date": "2026-09-21"
-  },
-  {
-   "id": "SEP21-EXTERNAL",
-   "status": "blocked",
-   "area": "ops/evidence",
-   "severity": "P0",
-   "evidence": "Cannot run on this host: real Postgres upgrade matrix (pre-326 populated, applied-326, clean), PgBouncer reindex race, provider sandbox payment/refund, native device captures for goldens, signed OTA device proof, backup restore drill.",
-   "date": "2026-09-21"
+  "campaign": "thryftverse-micro-upgrade-wave",
+  "date": "2026-09-18",
+  "branch": "feat/product-detail-contract-media-device-closure",
+  "findings": [
+    {
+      "id": "GAP-CHART-SWITCHER",
+      "department": "coown / asset detail / price chart",
+      "severity": "P1",
+      "evidence": "frontend/src/components/coown/CoOwnCandleChart.tsx \u2014 chart-type control exists but was a generic `options-outline` gear icon that opened a hidden popover menu (Line/Candlestick/Area). Undiscoverable in first scan; glyph did not communicate chart type.",
+      "competitorEvidence": "TradingView mobile: chart-type icon in a visible toolbar shows the CURRENT chart glyph. Binance: inline icon row above chart. Coinbase Advanced: segmented line/candles control. Questrade Edge / TradeRevolution mobile: Line/Candle/Area toolbar switcher is the standard mobile set.",
+      "rootCause": "Switcher designed as settings affordance; user expects a visible segmented control per broker convention.",
+      "fix": "Replaced gear+popover with ChartTypeSegments \u2014 one bordered group with hairline dividers, custom SVG glyphs (line polyline, two-candle OHLC, area fill), active = brandSubtle fill + brand glyph, inactive = textSecondary. tablist/tab a11y + selection haptics.",
+      "acceptance": "Chart type control visible in header row without opening a menu; type switches on single tap; a11y labels per segment; tests green.",
+      "status": "done",
+      "verified": "tsc --noEmit clean; 9-suite vitest batch green (269 tests)"
+    },
+    {
+      "id": "GAP-ORDERBOOK-TERMINAL",
+      "department": "coown / asset detail / market tab",
+      "severity": "P1",
+      "evidence": "CoOwnOrderBook.tsx \u2014 depth bars rendered at ~4-6% effective opacity and were per-level-size scaled (no classic cumulative fan); no bid/ask imbalance signal; card title 'Market depth' mislabelled the ladder tab; embedded book could blend into canvas.",
+      "competitorEvidence": "Binance: dedicated book panel, red ask/green bid rows with visible cumulative depth fills, spread band, B/S imbalance %. Kraken/Coinbase Advanced share the grammar.",
+      "rootCause": "Depth fills under-powered; panel chrome too weak to read as a dedicated terminal box.",
+      "fix": "Cumulative-fan depth bars (cumulative/maxCumulative, mirrored anchors: bids left / asks right) at full token strength; semantic coownUp/coownDown prices; recessed spread band (surface inside the surfaceAlt card); B/S imbalance strip with percentage labels + a11y summary; card retitled 'Order book' with Book|Depth|Trades tabs on surfaceAlt + full-strength border; dead maxSize/isEdge removed.",
+      "acceptance": "Bid/ask sides read green/red at glance; depth fan visible; dedicated panel boundary obvious in both themes; tape tab a11y labels preserved.",
+      "status": "done",
+      "verified": "tsc --noEmit clean; orderBookDepth + runtime suites green"
+    },
+    {
+      "id": "GAP-EDITGROUP-SCAFFOLD",
+      "department": "chat / group details & edit",
+      "severity": "P1",
+      "evidence": "EditGroupMediaSection \u2014 centred avatar with stacked 'Change photo'/'Remove photo'/'Change cover'/'Remove' text actions under a 200px cover block read as assembled scaffold (symmetry-by-default, duplicate affordances). The media sheet already offers change/remove; the text actions duplicated it.",
+      "competitorEvidence": "WhatsApp/Telegram/Discord group edit: media object is the tap target (camera badge); action sheet owns camera/gallery/remove. No redundant text buttons.",
+      "rootCause": "Duplicate action chrome instead of single clear affordances.",
+      "fix": "Removed both text-action stacks + dead props/styles/imports; avatar now straddles the cover's bottom edge (-64 margin netting ~40px overlap) with a 4px background ring \u2014 the authored identity-stack composition. Media sheet owns Camera/Gallery/presets/Remove. GroupInfoHero got the same ring for parity + meta-line restraint (no brand-bold count) + singular/plural member/agent counts.",
+      "acceptance": "One edit affordance per media object; remove lives in media sheet; no visual duplication; overlap reads as intentional layering.",
+      "status": "done",
+      "verified": "tsc --noEmit clean; groupChatInfoParity suite green"
+    },
+    {
+      "id": "GAP-TRADETICKET-DIRECTION",
+      "department": "coown / trade ticket",
+      "severity": "P1",
+      "evidence": "TradeScreen buy/sell selector was a neutral AppSegmentControl (surfaceAlt track, surface indicator, no direction colour) and the 'Review order' CTA was neutral brand \u2014 the only surface in the terminal with no green/red grammar.",
+      "competitorEvidence": "Binance/Coinbase Advanced/Kraken tickets: buy segment green, sell segment red, direction-coloured submit CTA \u2014 the strongest convention in mobile trading for money-direction safety.",
+      "rootCause": "Generic segment primitive used without direction semantics.",
+      "fix": "AppSegmentControl extended with per-option activeBackgroundColor (spring indicator now cross-fades colour via shared value + withTiming) and activeTextColor. TradeScreen maps buy\u2192coownUpSubtle/coownUp, sell\u2192coownDownSubtle/coownDown. CTA retitled 'Review buy/sell order' and direction-tinted (coownUp/coownDown fill, colors.background text \u2014 reads on both light-pastel dark tokens and deep light tokens).",
+      "acceptance": "Direction legible at a glance on the ticket; not colour-only (labels explicit); animated indicator transitions colour.",
+      "status": "done",
+      "verified": "tsc --noEmit clean; coown contract suites green"
+    },
+    {
+      "id": "GAP-ORDERHISTORY-DIRECTION",
+      "department": "coown / activity & ledger",
+      "severity": "P2",
+      "evidence": "OrderHistoryRow marked buy/sell with wallet/cash icons in brand/textSecondary \u2014 no direction grammar at all; SyndicateOrderHistoryScreen Buy/Sell filter tabs selected in neutral textPrimary; MarketLedgerScreen rows had no side accent.",
+      "competitorEvidence": "Kraken order history: green up-arrow buy / red down-arrow sell. Binance: coloured Buy/Sell text tags.",
+      "rootCause": "Side semantics never carried into history surfaces.",
+      "fix": "OrderHistoryRow: arrow-up/arrow-down direction glyphs + coownUp/coownDown side colours + semibold direction-coloured side word in the meta line (word stays explicit \u2014 not colour-only). Filter tabs: buy selects in coownUp, sell in coownDown, All neutral. MarketActivityRow gained optional titleColor; MarketLedgerScreen passes direction accent for buy/sell rows (auction rows neutral).",
+      "acceptance": "Buy/sell readable by colour + glyph + word across book, ticket, history and ledger \u2014 one consistent grammar.",
+      "status": "done",
+      "verified": "tsc --noEmit clean; 7-suite coown batch green (115 tests)"
+    },
+    {
+      "id": "GAP-CREATEGROUP-MEDIA",
+      "department": "chat / create group / details stage",
+      "severity": "P1",
+      "evidence": "GroupDetailsStage \u2014 flat cover\u2192avatar vertical stack with TWO different remove affordances (X badge on cover, danger-text link under avatar) while GroupMediaSourceSheet received no canRemove/onRemove. Same scaffold pattern as EditGroup.",
+      "competitorEvidence": "WhatsApp/Telegram group creation: cover+avatar overlap composition, media object is the tap target, removal lives in the source sheet.",
+      "rootCause": "Duplicate remove paths and disconnected media composition.",
+      "fix": "Cover/avatar now overlap with background ring (same grammar as EditGroup); both inline remove controls deleted; sheet receives canRemove/onRemove so removal is centralized; dead styles removed from createGroupChatStyles.",
+      "acceptance": "One edit affordance per media object; remove only in sheet; overlap composition matches EditGroup/GroupInfoHero.",
+      "status": "done",
+      "verified": "tsc --noEmit clean; groupChatInfoParity + coownAssetDetailRuntime suites green"
+    },
+    {
+      "id": "GAP-CONFIRM-CTA-DIRECTION",
+      "department": "coown / trade confirm",
+      "severity": "P1",
+      "evidence": "TradeConfirmScreen \u2014 the final commit action (HoldToSubmitButton) rendered neutral colors.brand for both buy and sell. Every upstream surface had direction color; the last, highest-stakes action did not.",
+      "competitorEvidence": "Binance/Coinbase Advanced confirm sheet: direction-colored commit button \u2014 a money action is never color-ambiguous at the commit step.",
+      "rootCause": "HoldToSubmitButton had no accent override; direction grammar stopped one step short of commit.",
+      "fix": "HoldToSubmitButton gained optional accentColor (default colors.brand \u2014 all other callers unchanged); TradeConfirmScreen passes coownUp/coownDown by side. Receipt side pill was already direction-tinted.",
+      "acceptance": "Buy commit is green, sell commit is red; disabled/expired states unchanged; a11y label still carries explicit direction word.",
+      "status": "done",
+      "verified": "tsc --noEmit clean; tradeSubmitFlows + orderLifecycleContracts suites green"
+    },
+    {
+      "id": "GAP-POSITIONACTIONS-DIRECTION",
+      "department": "coown / portfolio position card",
+      "severity": "P2",
+      "evidence": "CoOwnPositionCard 'Buy more'/'Sell' action buttons were neutral (background fill, border, textPrimary) \u2014 the only remaining direction-less money actions in the terminal.",
+      "competitorEvidence": "Kalshi/Binance position rows: direction-tinted secondary actions \u2014 subtle fill + direction label, not solid fills (repeated rows stay quiet).",
+      "rootCause": "Direction grammar never applied to position-level actions.",
+      "fix": "Buy more: coownUpSubtle fill + coownUpBorder hairline + coownUp label. Sell: coownDownSubtle fill + coownDownBorder + coownDown label. Disabled/no-sellable states fall back to neutral border + textMuted label.",
+      "acceptance": "Direction readable on secondary actions without shouting; disabled states stay honest; 44pt targets preserved.",
+      "status": "done",
+      "verified": "tsc --noEmit clean; coownAssetDetailRuntime suite green (60 tests)"
+    },
+    {
+      "id": "GAP-ORDERRECEIPT-DOCUMENT",
+      "department": "orders / order receipt",
+      "severity": "P1",
+      "evidence": "frontend/src/screens/OrderReceiptScreen.tsx \u2014 total and status had no typographic rank (same body size as labels), real delivery facts (destination/service/carrier/ETA/ship-by/delivered date) existed on the contract but were unrendered, refresh control was absent, duplicate section heading, dead ActivityIndicator/t imports.",
+      "fix": "Status stamp (dot + semantic tone), headline-rank total with hairline fee separator, delivery section renders whenever any real delivery fact exists, contextual next-step copy, refresh wired to refetch, dead imports removed.",
+      "status": "done",
+      "verified": "tsc clean; targeted vitest green"
+    },
+    {
+      "id": "GAP-INBOX-UNWIRED-CAPABILITY",
+      "department": "inbox / realtime",
+      "severity": "P1",
+      "evidence": "InboxConversationRow shipped with TypingDots, commerceStatusLabel/Tone, contextThumbUri, deliveryStatus props \u2014 but InboxRow never passed them. chat.typing.update events arrived on already-subscribed conversation topics and were dropped. Request rows showed literal placeholder \"About a listing\".",
+      "fix": "realtimeClient.ts: module-level conversation\u2192typing map + useInboxTypingEvents (reuses useInboxMessageEvent topic set, zero extra subscriptions, self-filter, 4s auto-clear, empty-map pruning) + useConversationTyping via useSyncExternalStore. InboxRow: isTyping, deriveInboxCommerceBadge(conversation.context), contextThumbUri from context.listing.imageUrl, real listing title via useBackendData for request rows.",
+      "status": "done",
+      "verified": "tsc clean; new inboxCommerceBadge.test.ts (6 tests) green; 108-test batch green"
+    },
+    {
+      "id": "GAP-ORDERROW-SKELETON-GEOMETRY",
+      "department": "orders / my orders",
+      "severity": "P2",
+      "evidence": "OrderRowSkeleton rendered 64x64 thumb + 3 text lines + generic 56x24 block while real OrderLedgerRow is 80x100 media + status pill + meta line \u2014 visible geometry snap on load.",
+      "fix": "Skeleton now mirrors real geometry: 80x100 Radius.md media, title line, meta row with 64x22 pill + context line, chevron stub.",
+      "status": "done",
+      "verified": "tsc clean; seller-net row item skipped \u2014 Order contract carries no net/payout field, deriving it client-side would fabricate money data"
+    },
+    {
+      "id": "GAP-CHATTOPBAR-DM-IDENTITY",
+      "department": "chat / top bar",
+      "severity": "P2",
+      "evidence": "ChatTopBar gave group placeholders a deterministic colorForId tint but DM placeholders fell back to flat surfaceAlt \u2014 same user reads a different identity color in inbox vs thread header.",
+      "fix": "groupId prop generalized to avatarSeedId; ChatScreen passes resolvedPartnerId for DMs, GroupChatScreen passes groupId \u2014 deterministic color + inverse initials for both variants.",
+      "status": "done",
+      "verified": "tsc clean"
+    },
+    {
+      "id": "GAP-ITEMDETAIL-DUP-HEADING",
+      "department": "item detail / price market",
+      "severity": "P2",
+      "evidence": "ItemDetailPriceMarket disclosure row already names the section; the expanded CommerceDetailSection carried a dead required label prop (\"Price history & market\") \u2014 duplicated-heading risk and dead API weight. Same dead label in ItemDetailBuyingSection.",
+      "fix": "CommerceDetailSection.label made optional; header renders only when label/trailing present; dead labels dropped at both call sites.",
+      "status": "done",
+      "verified": "tsc clean; commerceDetailRuntime tests green"
+    },
+    {
+      "id": "AUDIT-F06-DISCOVERY-CONTRACT",
+      "department": "discovery / unified screen",
+      "severity": "P1",
+      "evidence": "Audit F06 confirmed: UnifiedDiscoveryScreen hardcoded hasMore={false} and refresh called discovery.load() without reaching PinterestMasonryGrid's RefreshControl \u2014 pagination and pull-down contracts existed but were unwired.",
+      "fix": "UnifiedDiscoveryScreen: refreshing state + RefreshControl wired to discovery.load; feed.hasMore/isLoadingMore/onEndReached threaded through DiscoveryFeedView to the grid.",
+      "status": "done",
+      "verified": "tsc clean; discoveryRuntime tests green"
+    },
+    {
+      "id": "AUDIT-F07-SETTINGS-BALANCE-HONESTY",
+      "department": "settings / wallet balance card",
+      "severity": "P0",
+      "evidence": "Audit F07 confirmed: useSettingsScreenData set walletBalance=0 on query failure and SettingsBalanceCard rendered ?? 0 \u2014 a failed/loading balance displayed and announced as literal \u00a30.00.",
+      "fix": "walletBalanceFailed flag added; card renders em-dash while loading, 'Unavailable' + retry hint on failure, formatted GBP only for a real number; a11y label matches.",
+      "status": "done",
+      "verified": "tsc clean"
+    },
+    {
+      "id": "AUDIT-F08-STATUS-TEXT-CONTRAST",
+      "department": "design system / semantic tokens",
+      "severity": "P1",
+      "evidence": "Audit F08 confirmed: danger/success/warning served as both deep fills (paired with onX text) and text/icon foregrounds \u2014 warning ~2.1:1, danger ~3.8:1 on dark surfaces.",
+      "fix": "New dangerText/successText/warningText tokens in both palettes. 923 foreground usages migrated; fill contexts (backgroundColor/fill/bar/borderColor) untouched. ThemeColors typing extended.",
+      "status": "done",
+      "verified": "tsc clean; 216-test migrated-component batch green"
+    },
+    {
+      "id": "AUDIT-F09-F10-PORTFOLIO-SEMANTICS",
+      "department": "portfolio / performers + status",
+      "severity": "P1",
+      "evidence": "Audit F09/F10 confirmed: 'best' performer painted green-up even at -5% (direction from rank not return); formatPositionStatus inferred Open/Closed from isOpen+availableUnits \u2014 paused/closed mislabeled.",
+      "fix": "Direction from signed percentReturn; formatPositionStatus uses authoritative VM p.status.",
+      "status": "done",
+      "verified": "productionAuditWave.test.ts (6 tests) green"
+    },
+    {
+      "id": "AUDIT-F11-AGENT-HEALTH-SEMANTICS",
+      "department": "agents / status overview",
+      "severity": "P2",
+      "evidence": "Audit F11 confirmed: single ternary colored all connection states \u2014 agents-with-zero-connections looked identical to a hard outage; no degraded semantics.",
+      "fix": "Distinct states: none/neutral, no-agents-with-connections/warning, agents-zero-connections/warning+subtitle, healthy/success, degraded/danger. New i18n keys (en + per-key fallback).",
+      "status": "done",
+      "verified": "tsc clean; agentsToken.test green"
+    },
+    {
+      "id": "AUDIT-F12-COOWN-A11Y-GEOMETRY",
+      "department": "coown / order book + prospectus",
+      "severity": "P1",
+      "evidence": "Audit F12 confirmed: order-book values clipped at numberOfLines={1} inside fixed 104pt rails at large text sizes.",
+      "fix": "Values/headers wrap to 2 lines inside fixed rails; prospectus numeric cells fontScale-capped 1.2-1.3 + 2-line wrap.",
+      "status": "done",
+      "verified": "tsc clean; productDetailFlagshipReconstruction spec updated"
+    },
+    {
+      "id": "AUDIT-F13-DESCRIPTION-EXPANSION",
+      "department": "item detail / description",
+      "severity": "P2",
+      "evidence": "Audit F13 confirmed: expansion gated on char count >120 while truncation is numberOfLines={3} \u2014 dead 'Read more' on short wrapping text, hidden content on long non-wrapping text.",
+      "fix": "Hidden full-measure Text reports rendered lines via onTextLayout; expansion gates on real overflow.",
+      "status": "done",
+      "verified": "tsc clean"
+    },
+    {
+      "id": "AUDIT-F14-SESSION-TERMINATION",
+      "department": "platform / auth + query cache",
+      "severity": "P0",
+      "evidence": "Audit F14 confirmed: store.logout() never touched queryClient \u2014 private caches survived account switch; prefix-only purge missed keys.",
+      "fix": "clearUserScopedQueryCache now cancelQueries + queryClient.clear() fail-closed; logout() owns the purge.",
+      "status": "done",
+      "verified": "platformRuntime.test.ts (19) + productionAuditWave.test.ts (6) green"
+    },
+    {
+      "id": "AUDIT-F19-FIXTURE-FAIL-CLOSED",
+      "department": "platform / runtime flags",
+      "severity": "P0",
+      "evidence": "Audit F19 confirmed: EXPO_PUBLIC_MOCK_MODE=fixture-design resolved regardless of __DEV__ \u2014 misconfigured prod build renders mock data.",
+      "fix": "resolveMockMode fails closed: fixture/integration only when __DEV__; production always resolves 'production'.",
+      "status": "done",
+      "verified": "runtimeFlagsFailClosed.test.ts (3 tests) green"
+    },
+    {
+      "id": "AUDIT-F03-MIGRATION-CHECKER",
+      "department": "backend / migration tooling",
+      "severity": "P2",
+      "evidence": "Audit F03 confirmed: checker grouped all .sql by prefix \u2014 every valid NNN_x.sql + NNN_x_down.sql pair flagged duplicate (32 rollback files exist).",
+      "fix": "Forward vs _down.sql partitioned; duplicate detection on forward only; orphan rollback warned.",
+      "status": "done",
+      "verified": "checker exits 0; warnings only for known pre-existing dup prefixes 289/302"
+    },
+    {
+      "id": "AUDIT-F20-F21-DISCOVERY-PROFILE",
+      "department": "discovery / profile perf + freshness",
+      "severity": "P2",
+      "evidence": "Audit F20: profile closet rendered unbounded masonry in nested scroll. F21: module failures folded into empty rows \u2014 partial outage masqueraded as empty discovery.",
+      "fix": "ClosetGrid caps preview at 12 (View-all -> MyListings); reorder mode keeps full list. staleModules tracked -> quiet 'pull to retry' note in feed header.",
+      "status": "done",
+      "verified": "tsc clean; discoveryRuntime tests green"
+    },
+    {
+      "id": "AUDIT-F15-SSRF-REBINDING",
+      "department": "backend / media import security",
+      "severity": "P0",
+      "evidence": "safeRemoteMediaFetch validated DNS then called fetch() on the hostname \u2014 a DNS-rebinding TOCTOU window let a second resolution land on a blocked address; no timeout bound request duration.",
+      "fix": "resolveValidatedAddresses() returns the validated set; a per-hop undici Agent overrides connect.lookup so the TCP connection is pinned to validated addresses only (SNI/Host unchanged). AbortSignal.timeout(remainingMs) bounds DNS+redirects+streaming under one 15s deadline (timeoutMs option). IPv6 URL.hostname brackets stripped so literals skip DNS.",
+      "status": "done",
+      "verified": "safeRemoteMediaFetch.test.ts 21/21 green incl. new pinning, rebinding-redirect and timeout tests; tsc --noEmit clean"
+    },
+    {
+      "id": "AUDIT-F02-RESIDUE-GATE",
+      "department": "frontend / release gates",
+      "severity": "P1",
+      "evidence": "check-production-residue.mjs exited 1 with 7 false positives: GALLERIA_DEMO_MODE=true inside ENABLE_RUNTIME_MOCKS branches and honest isDemo labels on degraded catch paths.",
+      "fix": "Added enclosingGateKind(): upward brace-scan evaluating every enclosing block opener with statement-boundary context \u2014 gate tokens (ENABLE_RUNTIME_MOCKS/__DEV__) suppress demo-mode/is-demo literals; catch suppresses is-demo labels only (bare-catch DEMO_MODE=true still rejected as fabrication).",
+      "status": "done",
+      "verified": "check:residue exits 0 (was 7 errors); productionResidueGate.test.ts 10/10 green pinning allowed + rejected shapes"
+    },
+    {
+      "id": "AUDIT-F04-TEST-SEPARATION",
+      "department": "backend / test infrastructure",
+      "severity": "P1",
+      "evidence": "npm test ran node --test over src/**/*.test.ts including 13 vitest-dialect files (failing); vitest.config include list had drifted 4 files stale.",
+      "fix": "scripts/run-unit-tests.mjs classifies every .test.ts by framework import \u2014 node:test files run under node --test (88 files), vitest files run via test:vitest (13 files). vitest.config.ts derives its include dynamically from the same classifier. Added test:vitest + test:all scripts.",
+      "status": "done",
+      "verified": "vitest run: 13 files / 257 tests green; unit runner collects exactly the 88 node:test files"
+    },
+    {
+      "id": "AUDIT-F16-VENDOR-SYNC-HONESTY",
+      "department": "backend / support vendor outbox",
+      "severity": "P1",
+      "evidence": "vendorSyncHandler marked every outbox entry delivered around a stub log line \u2014 no vendor call existed, so failed/unconfigured sync was reported as delivered.",
+      "fix": "New vendorClient.ts: resolveVendorClient() requires SUPPORT_VENDOR_<NAME>_API_URL+TOKEN (https or localhost) else null \u2192 entries stay pending. HttpVendorClient delivers with idempotency key + 10s timeout; 4xx\u2192VendorPermanentError\u2192skipped (dead-letter via new markOutboxSkipped), 5xx/429/network\u2192failed retryable; >5 attempts\u2192skipped. Handler takes injectable client/db for tests.",
+      "status": "done",
+      "verified": "vendorSyncHandler.test.ts 6/6 green covering unconfigured/success/retryable/permanent/max-attempts/idempotent; tsc clean"
+    },
+    {
+      "id": "AUDIT-F18-EAS-OTA-SIGNING",
+      "department": "release / EAS submit + OTA",
+      "severity": "P1",
+      "evidence": "eas.json submit.production used literal EAS_* placeholder strings (no env interpolation exists in eas.json); OTA signing conditional \u2014 production could ship unsigned; release-train publish steps never passed the signing key; keys/ dir absent.",
+      "fix": "app.config.js fail-closed: production profile without EXPO_PUBLIC_OTA_CODE_SIGNING_KEY throws; signing enabled but keys/update-certificate.pem missing throws; preview warns. New check-release-config.mjs (ota|submit|all modes) wired as check:release-config and as a gate step in release-train.yml; signing key secret now passed to eas update steps.",
+      "status": "done",
+      "verified": "gate exits 1 listing each placeholder/missing file; app.config throws for unsigned production build, passes dev"
+    },
+    {
+      "id": "AUDIT-F05-DEPENDENCY-TRIAGE",
+      "department": "dependencies / supply chain",
+      "severity": "P1",
+      "evidence": "Audit: 28 frontend + 3 backend advisories incl. runtime-reachable fastify (schema-validation bypass, X-Forwarded-* spoofing) and fast-uri SSRF chain.",
+      "fix": "npm audit fix both packages: backend fastify 5.8.x\u21925.12.5 (both advisories covered), fast-uri + js-yaml resolved \u2014 backend 5\u21922 low. Frontend 39\u219220: xmldom, browserslist, vitest-mocker, decode-uri-component resolved. Remaining are dev/build-chain only (reg-suit adm-zip+tmp, expo config-plugins/xcode uuid, @simplewebauthn breaking-14 upgrade \u2014 mitigated: passkeyService uses attestationType none so attestation-chain path is not the boundary). AppNavigator getRootState() now null-checked for @react-navigation 7.3.16.",
+      "status": "done",
+      "verified": "npm audit: backend 2 low (esbuild dev, simplewebauthn breaking-upgrade deferred w/ mitigation); frontend 20 dev-chain; tsc clean both sides"
+    },
+    {
+      "id": "AUDIT-F01-VISUAL-EVIDENCE",
+      "department": "release / visual certification",
+      "severity": "P1",
+      "evidence": "Golden-parity contract machinery exists (dimension checks, exit codes, mandatory-route list) but no native screenshot baselines have been captured \u2014 requires device capture runs. (blocked: no native device/simulator in this environment)",
+      "fix": "Deferred: baseline capture requires a scheduled device-run session on POCO M2 Pro (63b57c28).",
+      "status": "blocked",
+      "verified": "machinery verified; baselines absent"
+    },
+    {
+      "id": "AUDIT-F17-AI-LEARNED-MODEL",
+      "department": "AI / model capability",
+      "severity": "P2",
+      "evidence": "AI infrastructure is ahead of model implementation: placeholders are honestly labeled and visual search does not rank on embeddings, but no learned model/evaluation exists.",
+      "fix": "Deferred by design \u2014 requires model selection, training data and an eval harness. Meilisearch Meilisearch-export bug fixed meanwhile (hybrid path now actually engages instead of silently degrading to lexical).",
+      "status": "open",
+      "verified": "vectorSearch getMeiliClient fixed (MeiliSearch\u2192Meilisearch export rename); 5 readiness tests green"
+    },
+    {
+      "id": "AUDIT-F22-ARCHITECTURE-SCALE",
+      "department": "architecture / enforcement",
+      "severity": "P2",
+      "evidence": "backend/api/src/index.ts ~40k lines; PosterViewerScreen 1.7k, SellScreen 1.5k \u2014 structural debt exceeds current enforcement.",
+      "fix": "Deferred \u2014 staged decomposition plan needed; not a quick fix.",
+      "status": "open",
+      "verified": "re-measured during F-verification; unchanged"
+    },
+    {
+      "id": "DEVICE-UX-01-OFFER-SLIDER",
+      "status": "done",
+      "area": "commerce/offer",
+      "severity": "P1",
+      "evidence": "PanResponder stale closure (trackWidth=0 while sheet hidden) \u2014 ref metrics + 44pt wrap responder + tap-to-seek; device-verified both directions",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "DEVICE-UX-02-PRICE-FILTER-1ZE",
+      "status": "done",
+      "area": "filters",
+      "severity": "P2",
+      "evidence": "displayMode:fiat at 5 call sites; sheet shows fiat-only labels on-device",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "DEVICE-UX-03-DUP-SELLER-ROW",
+      "status": "done",
+      "area": "itemdetail",
+      "severity": "P2",
+      "evidence": "Display-only seller identity removed from CommerceTrustDossier; single navigable SellerInfoCard; device-verified",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "DEVICE-UX-04-IMAGE-SWIPE",
+      "status": "done",
+      "area": "media",
+      "severity": "P1",
+      "evidence": "pointerEvents=none on stage overlays; fullscreen pan gated to isZoomed + vertical-only dismiss; device-verified pager+fullscreen+dismiss",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "DEVICE-UX-05-DEPT-INCONSISTENCY",
+      "status": "done",
+      "area": "discovery",
+      "severity": "P2",
+      "evidence": "Three chip impls unified \u2014 HomeFeedHeader signalChip now matches categoryPill grammar exactly",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "DEVICE-UX-06-PROFILE-500",
+      "status": "done",
+      "area": "backend/users",
+      "severity": "P0",
+      "evidence": "Migration 319 DSA trader-disclosure columns; /users/seed_u1|u2/profile 200; profile renders on-device",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "DEVICE-UX-07-ORDERBOOK-BAND",
+      "status": "done",
+      "area": "coown",
+      "severity": "P2",
+      "evidence": "Bid(green)|spread|ask(red) band continuing depth-bar axis + tick-rule last-trade coloring (Polymarket grammar)",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "DEVICE-UX-08-PROFILE-HERO",
+      "status": "done",
+      "area": "profile",
+      "severity": "P2",
+      "evidence": "Big Edit/Share pair (52pt), bio budget 125\u2192200 chars / 4 lines; device-verified",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "DEVICE-UX-09-CONDITION-BADGES",
+      "status": "done",
+      "area": "cards",
+      "severity": "P2",
+      "evidence": "Removed from product/discovery cards; retained in item detail + a11y; device-verified",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "DEVICE-UX-10-GRID-DENSITY",
+      "status": "done",
+      "area": "discovery",
+      "severity": "P2",
+      "evidence": "3-col masonry on Discover/Looks/Category/VisualSearch/SearchResults; browse compact default",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "BACKEND-01-FEED-HOME-42P18",
+      "status": "done",
+      "area": "backend/feed",
+      "severity": "P0",
+      "evidence": "Shared cursorParams left unreferenced  in posters/looks for signed-in users; per-query params; /feed/home 200 + populated feed",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "BACKEND-02-FEED-FOLLOWING-AMBIG",
+      "status": "done",
+      "area": "backend/feed",
+      "severity": "P1",
+      "evidence": "Unqualified created_at over user_follows join; per-alias clauses",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "BACKEND-03-MEDIA-CHECK-VIOLATION",
+      "status": "done",
+      "area": "backend/media",
+      "severity": "P1",
+      "evidence": "deadLetterIngestJob wrote processing_failed to processing_status (enum: pending/processing/completed/failed); -> failed; deployed",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "BACKEND-04-S3-ENDPOINT-TOPOLOGY",
+      "status": "done",
+      "area": "infra/compose",
+      "severity": "P1",
+      "evidence": "S3_ENDPOINT localhost:9000 resolved to container itself; -> http://minio:9000; attestation reachable (200)",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "BACKEND-05-RECS-CONVERSATIONS",
+      "status": "done",
+      "area": "backend/recommendations",
+      "severity": "P0",
+      "evidence": "Joined nonexistent conversations; -> chat_conversations + seller via item_id->listings.seller_id",
+      "date": "2026-09-18"
+    },
+    {
+      "id": "BACKEND-06-MIGRATION-306-UUID",
+      "status": "done",
+      "area": "backend/migrations",
+      "severity": "P0",
+      "evidence": "uuid FKs vs text schema since 001; -> text; API no longer crash-loops",
+      "date": "2026-09-18"
+    },
+    {
+      "id": "AUDIT-0919-PAGINATION-STORM",
+      "status": "done",
+      "area": "frontend/context/BackendDataContext",
+      "severity": "P1",
+      "evidence": "loadMoreListings: empty page left cursor set while hasMore=false -> onEndReached refetched the same cursor forever; thrown fetch could stick isLoadingMore. Guard now includes !hasMore, cursor clears on empty pages, try/catch/finally guarantees reset.",
+      "date": "2026-09-19",
+      "regression": "frontend/src/__tests__/backendDataPagination.test.tsx (4 tests)"
+    },
+    {
+      "id": "AUDIT-0919-HOME-FEED-BLANKING",
+      "status": "done",
+      "area": "frontend/screens/HomeScreen",
+      "severity": "P1",
+      "evidence": "isSyncing alone collapsed a populated feed into skeleton on every 55s background poll / app-resume sync. Skeleton now gated on genuinely empty feeds. Dead pagination onEndReached + Loading-more footer removed: rendered feeds (ForYou page, Following) are complete lists; the listings-store cursor fetched data nothing renders.",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "AUDIT-0919-HOME-SOURCE-LIE",
+      "status": "done",
+      "area": "frontend/components/home/HomeFeedHeader",
+      "severity": "P2",
+      "evidence": "Copy implied cache/offline sources were active though BackendDataContext only ever sets api|fixture. Dead getBackendSyncStatus/feedStatus removed; labels now describe real sources only.",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "AUDIT-0919-FEED-DEDUP",
+      "status": "done",
+      "area": "frontend/utils/discoveryFeedAssembly + HomeScreen",
+      "severity": "P1",
+      "evidence": "Mixed recommendation/cursor sources could serve the same listing id twice in one grid. Within-page dedupe added to assembleDiscoveryFeed and both Home feed memo transforms.",
+      "date": "2026-09-19",
+      "regression": "frontend/src/__tests__/discoveryFeedDedup.test.ts (3 tests)"
+    },
+    {
+      "id": "AUDIT-0919-CHAT-SCROLL-ANCHOR",
+      "status": "done",
+      "area": "frontend/hooks/chat/useConversationMessages",
+      "severity": "P1",
+      "evidence": "Every incoming message called scheduleScrollToEnd \u2014 a user reading history was yanked to bottom. Scroll now only when at-bottom or own echo; decision extracted to utils/chatScrollAnchor.ts.",
+      "date": "2026-09-19",
+      "regression": "chatRuntimeBehaviour.test.ts shouldAutoScrollOnIncomingMessage (3 tests)"
+    },
+    {
+      "id": "AUDIT-0919-DISCOVERY-FEED-CONTROLS",
+      "status": "done",
+      "area": "frontend/screens/UnifiedDiscoveryScreen",
+      "severity": "P1",
+      "evidence": "Long-press feed controls (Not interested / Show less / Why am I seeing this) existed on DiscoverScene but were never wired on UnifiedDiscoveryScreen \u2014 the shipped discovery surface. Prop chain added through DiscoveryFeedView to the masonry grid; attribution-aware feedback + FeedExplanationSheet wired with real serve context.",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "AUDIT-0919-SEARCH-AUTOFOCUS",
+      "status": "done",
+      "area": "frontend/screens/SearchScreen",
+      "severity": "P2",
+      "evidence": "Dedicated search screen did not autofocus the input \u2014 keyboard never opened on the one surface whose sole job is query entry. autoFocus added (deliberately not on the discovery feed input).",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "AUDIT-0919-BLOCKED-SELLER-PDP",
+      "status": "done",
+      "area": "frontend/screens/ItemDetailScreen + CommerceActionDock + ItemDetailSellerSection",
+      "severity": "P1",
+      "evidence": "PDP rendered live Buy/Offer/Enquire/Message/Follow CTAs for viewer-blocked sellers \u2014 every path fails server-side. isSellerBlocked derived once in the screen; dock renders a Blocked state, seller row loses Message/Follow, Ask-the-seller row gated, more-from-seller rail and bundle upsell suppressed.",
+      "date": "2026-09-19",
+      "regression": "commerceDetailRuntime.test.tsx CommerceActionDock blocked gate (2 tests)"
+    },
+    {
+      "id": "AUDIT-0919-DOC-MIME-MISLABEL",
+      "status": "done",
+      "area": "frontend/services/mediaUpload + chat document send",
+      "severity": "P1",
+      "evidence": "sendDocumentMessage used the string upload overload: extension inference had no document branch so a .pdf was presigned as image/jpeg. MediaUploadOptions now accepts contentType/fileName; doc send passes DocumentPicker mimeType+name; pdf added to inference map.",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "AUDIT-0919-TRADE-STEPUP",
+      "status": "done",
+      "area": "frontend/screens/TradeConfirmScreen",
+      "severity": "P1",
+      "evidence": "Co-Own order commit had no step-up auth while Wallet/Payments/Withdraw/Convert all gate with biometrics. handleConfirm now requires biometricGate.authenticate when the user enabled biometric protection and hardware is enrolled; hold-to-submit remains the baseline otherwise.",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "AUDIT-0919-ACCOUNT-DELETION",
+      "status": "done",
+      "area": "frontend/screens/DeleteAccountScreen + backend",
+      "severity": "P0",
+      "evidence": "VERIFIED ALREADY COMPLETE: password + confirm-text + TOTP + biometric gate + 409 blocker translation + session logout + user-scoped query purge. Backend upload allowlist verified strict (image/video/audio/pdf only).",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "AUDIT-0919-EXTERNAL-EVIDENCE-GAPS",
+      "status": "blocked",
+      "area": "ops/release/backend-runtime",
+      "severity": "P0",
+      "evidence": "Not fixable from this environment: GitHub branch protection + required checks; backend unit/integration runtime evidence; worker/reconciliation proof; native device visual+a11y capture; real EAS production secrets; scale/failure drills; legal/regulatory sign-off for fractional ownership. Source-code fixes cannot substitute for operational proof.",
+      "date": "2026-09-19"
+    },
+    {
+      "id": "SEP21-FIN-A",
+      "status": "source_fixed",
+      "area": "payments/auction",
+      "severity": "P1",
+      "evidence": "Auction Pay creates Stripe intent but never presents PaymentSheet or confirms; intent stalls requires_payment_method. useAuctionDetail.ts:490-533, checkoutPaymentIntent.ts:18-65, index.ts:6578-6597.",
+      "date": "2026-09-21",
+      "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
+      "resolved_date": "2026-09-21"
+    },
+    {
+      "id": "SEP21-FIN-B",
+      "status": "source_fixed",
+      "area": "financial/coown",
+      "severity": "P1",
+      "evidence": "assertP2pTransferContextAuthorized accepts settled coOwn_trade as authorization for a second P2P payment; obsolete GBP*1000 FX; gross recipient credit. walletMoneyPath.ts:610-755.",
+      "date": "2026-09-21",
+      "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
+      "resolved_date": "2026-09-21"
+    },
+    {
+      "id": "SEP21-FIN-C",
+      "status": "source_fixed",
+      "area": "financial/auction",
+      "severity": "P1",
+      "evidence": "Auction intent lacks orderId -> canonical escrow branch skipped; legacy ledger posts GBP entries to IZE account and clears escrow instantly. auctions.ts:356-375, workerRuntime.ts:474-605.",
+      "date": "2026-09-21",
+      "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
+      "resolved_date": "2026-09-21"
+    },
+    {
+      "id": "SEP21-FIN-D",
+      "status": "source_fixed",
+      "area": "financial/coown",
+      "severity": "P2",
+      "evidence": "Actor wallet locked at coOwn.ts:3733-3740 before applyCoOwnTransfer sorted lock -> ABBA deadlock on opposite-direction trades across assets.",
+      "date": "2026-09-21",
+      "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
+      "resolved_date": "2026-09-21"
+    },
+    {
+      "id": "SEP21-FIN-E",
+      "status": "source_fixed",
+      "area": "financial/coown",
+      "severity": "P2",
+      "evidence": "Lockup policy contradictory: all order sides blocked, resale asserted on primary issuance, DRIP bypasses entirely. Contract = secondary resale restriction.",
+      "date": "2026-09-21",
+      "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
+      "resolved_date": "2026-09-21"
+    },
+    {
+      "id": "SEP21-FIN-F",
+      "status": "source_fixed",
+      "area": "financial/coown",
+      "severity": "P1",
+      "evidence": "DRIP bypasses reconciliation halt, active exit, market eligibility and capability checks that manual placement enforces.",
+      "date": "2026-09-21",
+      "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
+      "resolved_date": "2026-09-21"
+    },
+    {
+      "id": "SEP21-S1",
+      "status": "source_fixed",
+      "area": "db/migrations",
+      "severity": "P1",
+      "evidence": "Migration 326 int4 overflow aborts populated pre-326 upgrades before 330 repair can run; checksum-freeze prevents editing 326. Fix: 325b prefill migration.",
+      "date": "2026-09-21",
+      "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
+      "resolved_date": "2026-09-21"
+    },
+    {
+      "id": "SEP21-S2",
+      "status": "source_fixed",
+      "area": "search/platform",
+      "severity": "P1",
+      "evidence": "Session advisory lock via dbPool incompatible with PgBouncer transaction pooling. searchSync.ts:791-873. Fix: durable fenced lease table (mig 338).",
+      "date": "2026-09-21",
+      "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
+      "resolved_date": "2026-09-21"
+    },
+    {
+      "id": "SEP21-S3",
+      "status": "source_fixed",
+      "area": "moderation/deploy",
+      "severity": "P1",
+      "evidence": "Compose forwards MODERATION_PROVIDER but not SIGHTENGINE/AWS creds -> every listing held risk_pending; rekognition text unsupported.",
+      "date": "2026-09-21",
+      "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
+      "resolved_date": "2026-09-21"
+    },
+    {
+      "id": "SEP21-S4",
+      "status": "source_fixed",
+      "area": "moderation/media",
+      "severity": "P2",
+      "evidence": "Rekognition own-object transformToByteArray before size check, no abort deadline on Head/Get. rekognitionProvider.ts:401-439.",
+      "date": "2026-09-21",
+      "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
+      "resolved_date": "2026-09-21"
+    },
+    {
+      "id": "SEP21-S5",
+      "status": "source_fixed",
+      "area": "search/recommendations",
+      "severity": "P2",
+      "evidence": "recommendations.ts:1048 unconditionally tags item_to_item_ann regardless of actual retrieval method (exact/bytea fallback).",
+      "date": "2026-09-21",
+      "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
+      "resolved_date": "2026-09-21"
+    },
+    {
+      "id": "SEP21-S6",
+      "status": "source_fixed",
+      "area": "media/import",
+      "severity": "P2",
+      "evidence": "Transient DNS failure classified ssrf_blocked -> permanent quarantine. safeRemoteMediaFetch.ts:475-479, remoteImport.ts:418-430.",
+      "date": "2026-09-21",
+      "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
+      "resolved_date": "2026-09-21"
+    },
+    {
+      "id": "SEP21-47",
+      "status": "source_fixed",
+      "area": "search/observability",
+      "severity": "P2",
+      "evidence": "search lag metric measures task submission not visibility; outcome labels needed (submitted/completed/failed/fallback). searchSync.ts:340-351.",
+      "date": "2026-09-21",
+      "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
+      "resolved_date": "2026-09-21"
+    },
+    {
+      "id": "SEP21-48",
+      "status": "source_fixed",
+      "area": "privacy/backup",
+      "severity": "P1",
+      "evidence": "Erasure proof uses LastModified<=erased_at; snapshot-start vs upload-time gap and noncurrent versions allow false purge. backupExpiryHandler.ts:214-220.",
+      "date": "2026-09-21",
+      "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
+      "resolved_date": "2026-09-21"
+    },
+    {
+      "id": "SEP21-410",
+      "status": "source_fixed",
+      "area": "recovery/restore",
+      "severity": "P1",
+      "evidence": "Restore guard accepts ?host= query override defeating authority check. postgres-restore-verify.mjs:152-216.",
+      "date": "2026-09-21",
+      "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
+      "resolved_date": "2026-09-21"
+    },
+    {
+      "id": "SEP21-S21-01",
+      "status": "source_fixed",
+      "area": "frontend/a11y",
+      "severity": "P1",
+      "evidence": "Checkout money/action text capped at 1.3 (was 2). typography.v2.ts:271-292, CheckoutFooter.tsx:93-213.",
+      "date": "2026-09-21",
+      "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
+      "resolved_date": "2026-09-21"
+    },
+    {
+      "id": "SEP21-S21-02",
+      "status": "source_fixed",
+      "area": "frontend/editorial",
+      "severity": "P2",
+      "evidence": "Editorial hero navigates to Galleria without article identity; teaser leads to teaser. UnifiedDiscoveryScreen.tsx:480-486.",
+      "date": "2026-09-21",
+      "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
+      "resolved_date": "2026-09-21"
+    },
+    {
+      "id": "SEP21-S21-03",
+      "status": "source_fixed",
+      "area": "frontend+backend/discovery",
+      "severity": "P2",
+      "evidence": "Late Undo never retracts not_interested exclusion (recommendations.ts:916-920); pendingHides lack captured user identity.",
+      "date": "2026-09-21",
+      "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
+      "resolved_date": "2026-09-21"
+    },
+    {
+      "id": "SEP21-S21-04",
+      "status": "source_fixed",
+      "area": "frontend/moodboard",
+      "severity": "P1",
+      "evidence": "Op-by-op enqueue can leave durable prefix after failed batch; history lock releases before reconcile. useMoodboardBoard.ts:351-370, useMoodboardHistory.ts:140-152.",
+      "date": "2026-09-21",
+      "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
+      "resolved_date": "2026-09-21"
+    },
+    {
+      "id": "SEP21-S21-05",
+      "status": "source_fixed",
+      "area": "frontend/settings",
+      "severity": "P2",
+      "evidence": "Settings snapshot only loads on user id change; no focus/mutation refresh; one stale render possible. useSettingsScreenData.ts:33-57.",
+      "date": "2026-09-21",
+      "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
+      "resolved_date": "2026-09-21"
+    },
+    {
+      "id": "SEP21-OPS",
+      "status": "source_fixed",
+      "area": "ops/release",
+      "severity": "P2",
+      "evidence": "ota-rollback republish reports success without acting; SLO TTL-renewing counters not true rolling window; settings.yml missing contexts; check-release-config stale var name; infraOps test unawaited promise; country-policy oneze_internal contract drift; vendor delivery unwired; aiUsage soft budget; costMinor units; ml health shadow-vs-champion; model promotion gating; catch-up 1000 cap; weaker fetchers unconsolidated.",
+      "date": "2026-09-21",
+      "resolution": "Repaired in Sep-21 residual wave; see .flagship/reports/repair-sep21-*.md. Focused suites green, typecheck clean. Live/provider/device acceptance still pending (SEP21-EXTERNAL).",
+      "resolved_date": "2026-09-21"
+    },
+    {
+      "id": "SEP21-EXTERNAL",
+      "status": "blocked",
+      "area": "ops/evidence",
+      "severity": "P0",
+      "evidence": "Cannot run on this host: real Postgres upgrade matrix (pre-326 populated, applied-326, clean), PgBouncer reindex race, provider sandbox payment/refund, native device captures for goldens, signed OTA device proof, backup restore drill.",
+      "date": "2026-09-21"
+    }
+  ],
+  "waves": {
+    "ui_flagship_screenshots_sep26": {
+      "status": "closed_source_level",
+      "findings": {
+        "global_top_line": "GlobalUploadIndicator track painted unconditionally at root \u2014 opacity gate moved to outer track + a11y hidden when idle",
+        "seller_analytics_segmented_control": "grey pill container -> hairline tabs (creatorAnalytics grammar)",
+        "profile_identity": "edit-profile chevron row + sold/joined/location block -> quiet glyph + single meta line",
+        "my_listings": "4 stat rows + 4 boxed actions -> tab-owned counts, one value line, primary+glyph cluster",
+        "discovery_grid": "gutter 8->6, moodboard padding normalized, price-first metadata, skeleton parity",
+        "chips": "UnifiedDiscovery + DiscoverScene + HomeFeedHeader signal rail -> ~28pt compact grammar, personalized fill removed, brand-dot only",
+        "filter_sort": "ExploreStack formSheet->transparentModal (was double-chrome iOS / opaque page Android); pill scrolls -> hairline radio/checkbox rows via FilterOptionRow",
+        "seller_trust_strip": "icon+value chips -> single typographic line, response-rate removed",
+        "seller_standards": "five-metric dump -> one status line (closest gap), appeal flow intact"
+      },
+      "verification": "frontend tsc clean; 284/284 focused vitest; git diff --check clean; reports in .flagship/reports/ui-*.md",
+      "external_evidence": "native device screenshots still required for visual confirmation"
+    },
+    "ui_flagship_wave2_sep26": {
+      "status": "closed_source_level",
+      "findings": {
+        "masonry_truth": "measuredMediaRatio.ts \u2014 CachedImage onLoad feeds measured w/h into session cache; server ?? measured ?? 3:4; third truth tier reads media[] record dims",
+        "recommendations_wire_deadend": "P0 latent: /recommendations/:userId shipped snake_case ListingRow, mapper reads camelCase \u2014 every For-You item failed isDisplayReadyListing, personalized feed silently dead since inception. Fixed: toApiListing serializer + listing_images LATERAL join for real dims",
+        "discovery_composition": "search header rewritten (flat, camera in field, baseline stroke); hero editorial edge-to-edge; single 16pt gutter; chips compact",
+        "profile_hero": "avatar+identity-first, rating seam, numbers-led stat line, quiet edit glyph",
+        "my_listings": "Vinted pattern \u2014 title+CTA+tabs+hairline rows, one meta line, no stat tiles",
+        "seller_hub": "money-block-dominant, hairline rows not cards, de-iconed, duplicates merged",
+        "sheet_chrome": "footer dock was OFFSCREEN (absolute bottom of translated slab) \u2014 pinned to screen bottom; backdrop/interp/gesture/motion/handle/material all upgraded",
+        "numColumns_drift": "DiscoveryFeedView rendered 3 cols while assembly authored for 2 \u2014 heroes rendered as 2/3-width orphans; unified on DISCOVERY_FEED_COLUMNS=2"
+      },
+      "verification": "frontend+backend tsc clean; 328 frontend + 40 backend focused tests pass; diff --check clean",
+      "external_evidence": "device render + gesture feel still require native run"
+    }
   }
- ]
 }

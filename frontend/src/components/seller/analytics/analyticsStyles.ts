@@ -27,30 +27,30 @@ export function createAnalyticsStyles(colors: ThemeColors) {
       lineHeight: TypographyV2.meta.lineHeight,
     },
 
-    // ── Period segmented control (iOS-style) ──
-    periodSegmentControl: {
+    // ── Period selector: hairline tabs (matches creator analytics grammar) ──
+    periodRow: {
       flexDirection: 'row',
-      backgroundColor: colors.surfaceAlt,
-      borderRadius: Radius.full,
-      padding: 2,
+      alignItems: 'center',
+      gap: Space.sm + Space.xs,
       marginTop: Space.sm,
     },
-    periodSegmentOption: {
-      flex: 1,
-      height: Control.chrome,
-      borderRadius: Radius.full,
+    periodTab: {
       alignItems: 'center',
-      justifyContent: 'center',
+      paddingVertical: Space.xs,
+      paddingHorizontal: Space.xxs,
     },
-    periodSegmentOptionActive: {
-      backgroundColor: colors.surfaceElevated,
+    periodTabText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.semibold,
+      letterSpacing: 0.3,
     },
-    periodSegmentText: {
-      fontSize: TypographyV2.body.size,
-      fontFamily: TypographyV2.body.fontFamily,
-    },
-    periodSegmentTextActive: {
-      fontFamily: TypographyV2.bodyStrong.fontFamily,
+    periodTabIndicator: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      height: 2,
+      borderRadius: 1,
     },
     periodRowSkeleton: {
       flexDirection: 'row',

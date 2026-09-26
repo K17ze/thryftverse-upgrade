@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { useBackendData } from '../../context/BackendDataContext';
 import { useForYouFeed } from '../useForYouFeed';
 import { matchesSignal, type DynamicSignalChip } from '../../services/algorithmicSignalsService';
-import { assembleDiscoveryFeed } from '../../utils/discoveryFeedAssembly';
+import { assembleDiscoveryFeed, DISCOVERY_FEED_COLUMNS } from '../../utils/discoveryFeedAssembly';
 import type { LookApiItem } from '../../services/looksApi';
 import type { PosterStory } from '../../services/postersApi';
 import type { Moodboard } from '../../services/moodboardApi';
@@ -67,7 +67,7 @@ export function useDiscoveryFeed({
   const feedUnits = useMemo(
     () => assembleDiscoveryFeed(
       personalisedListings,
-      2,
+      DISCOVERY_FEED_COLUMNS,
       { looks, posters, moodboards },
     ),
     [personalisedListings, looks, posters, moodboards],

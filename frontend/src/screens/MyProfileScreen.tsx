@@ -150,6 +150,17 @@ export default function MyProfileScreen() {
     });
   }, [haptic, reducedMotion]);
 
+  // Rating seam → select the reviews tab and scroll it into view, same
+  // contract as the "For sale" stat (FRESH-06).
+  const handlePressReviews = useCallback(() => {
+    haptic.light();
+    setActiveTab('reviews');
+    scrollRef.current?.scrollTo({
+      y: Math.max(0, tabContentYRef.current - 64),
+      animated: !reducedMotion,
+    });
+  }, [haptic, reducedMotion]);
+
   const [showPassportModal, setShowPassportModal] = React.useState(false);
   const handleShare = () => {
     if (!user) return;
@@ -277,12 +288,17 @@ export default function MyProfileScreen() {
             sellerTrust={sellerTrust}
             responseTimeLabel={sellerTrust?.responseTimeLabel ?? null}
             followerCount={followCounts.followerCount}
+            followingCount={followCounts.followingCount}
+            rating={sellerTrust?.rating ?? myReviewSummary?.ratingAverage ?? null}
+            reviewCount={myReviewCount}
             listingCount={allOwnedListings.length}
             followCountsStatus={followCountsStatus}
             onEditProfile={() => navigation.navigate('EditProfile', {})}
             onPressSold={() => { haptic.light(); navigation.navigate('MyOrders'); }}
             onPressFollowers={() => { haptic.light(); navigation.navigate('ConnectionList', { userId: currentUser!.id, mode: 'followers' }); }}
+            onPressFollowing={() => { haptic.light(); navigation.navigate('ConnectionList', { userId: currentUser!.id, mode: 'following' }); }}
             onPressListings={handlePressListings}
+            onPressRating={myReviewCount > 0 ? handlePressReviews : undefined}
           />
 
           {/* Away-mode indicator — shown when holiday mode is enabled */}
